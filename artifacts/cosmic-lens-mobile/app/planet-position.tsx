@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { pName } from "@/lib/proInsightEngine";
 
@@ -214,6 +215,7 @@ function Row({ label, value, clrValue }: { label: string; value: string; clrValu
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function PlanetPositionScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const { kundli } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -231,7 +233,7 @@ export default function PlanetPositionScreen() {
   const sunLon = planets.find(p => p.name === "Sun")?.longitude ?? 0;
 
   return (
-    <View style={[s.root, { paddingTop: topPad }]}>
+    <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.back}>

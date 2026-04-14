@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { router } from "expo-router";
 
@@ -53,6 +54,7 @@ const STARTERS = [
 
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const { kundli, birthData } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -143,7 +145,7 @@ export default function AskScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      style={[s.root, { backgroundColor: C.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >

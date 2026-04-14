@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 
 interface Notice {
@@ -63,6 +64,7 @@ function buildNoticesFromKundli(): Notice[] {
 
 export default function NoticeScreen() {
   const insets  = useSafeAreaInsets();
+  const C = useC();
   const { kundli } = useUser();
   const topPad  = Platform.OS === "web" ? 67 : insets.top;
   const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
@@ -71,7 +73,7 @@ export default function NoticeScreen() {
 
   return (
     <ScrollView
-      style={s.root}
+      style={[s.root, { backgroundColor: C.bg }]}
       contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
       showsVerticalScrollIndicator={false}
     >

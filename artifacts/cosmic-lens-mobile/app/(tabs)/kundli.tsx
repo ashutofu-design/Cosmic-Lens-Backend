@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
@@ -752,6 +753,7 @@ const CHART_BTNS = [
 
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const { kundli } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -791,7 +793,7 @@ export default function KundliScreen() {
   // ── No kundli state
   if (!kundli) {
     return (
-      <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80}]}>
+      <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80,backgroundColor:C.bg}]}>
         <View style={s.emptyWrap}>
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#00d4ff"/></View>
           <Text style={s.emptyTitle}>No Kundli Found</Text>
@@ -831,7 +833,7 @@ export default function KundliScreen() {
   ];
 
   return (
-    <ScrollView style={s.root}
+    <ScrollView style={[s.root, { backgroundColor: C.bg }]}
       contentContainerStyle={[s.content,{paddingTop:topPad+16,paddingBottom:botPad+100}]}
       showsVerticalScrollIndicator={false}>
 

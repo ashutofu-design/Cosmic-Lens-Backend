@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import {
   computeProInsight,
@@ -148,6 +149,7 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 
 export default function InsightsScreen() {
   const insets     = useSafeAreaInsets();
+  const C = useC();
   const { kundli, moonData } = useUser();
   const topPad     = Platform.OS === "web" ? 67 : insets.top;
   const botPad     = Platform.OS === "web" ? 34 : insets.bottom;
@@ -219,7 +221,7 @@ export default function InsightsScreen() {
 
   return (
     <ScrollView
-      style={s.root}
+      style={[s.root, { backgroundColor: C.bg }]}
       contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
       showsVerticalScrollIndicator={false}
     >

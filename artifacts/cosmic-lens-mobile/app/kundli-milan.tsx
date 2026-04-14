@@ -9,6 +9,7 @@ import {
   TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 
 // ── Nakshatra / Rashi Data ────────────────────────────────────────────────────
@@ -218,6 +219,7 @@ function FormRow({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function KundliMilanScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const { kundli: p1Kundli, profiles, primaryProfileId } = useUser();
@@ -289,7 +291,7 @@ export default function KundliMilanScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={{ flex:1, backgroundColor:"#020d1a" }}>
+      <View style={{ flex:1, backgroundColor: C.bg }}>
         {/* Header */}
         <View style={[s.header, { paddingTop: topPad + 8 }]}>
           <Pressable onPress={() => router.back()} style={s.back}>

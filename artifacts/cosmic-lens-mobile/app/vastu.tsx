@@ -7,6 +7,7 @@ import {
   StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 
 // ── Vastu Data ────────────────────────────────────────────────────────────────
 
@@ -402,11 +403,12 @@ function VastuCompass() {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: C.bg }]}>
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8 }]}>
         <Pressable onPress={() => router.back()} style={s.back}>

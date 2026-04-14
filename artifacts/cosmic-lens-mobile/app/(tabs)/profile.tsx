@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 
 // ── Relation options ───────────────────────────────────────────────────────────
@@ -28,10 +29,10 @@ const RELATIONS = [
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {
-  regular:  "Inter_400Regular",
-  medium:   "Inter_500Medium",
-  semibold: "Inter_600SemiBold",
-  bold:     "Inter_700Bold",
+  regular:  "Nunito_400Regular",
+  medium:   "Nunito_500Medium",
+  semibold: "Nunito_600SemiBold",
+  bold:     "Nunito_700Bold",
 };
 
 // ── Languages ─────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ const PLANS = [
     monthlyPrice: 0, yearlyPrice: 0,
     cta: "Current Plan", ctaActive: false,
     icon: "circle" as const,
-    features: ["1 Profile","Basic Kundli Chart","3 AI Sawaal / din","Demo Insights","Basic Planet View"],
+    features: ["1 Profile","Basic Kundli Chart","3 AI Questions / day","Demo Insights","Basic Planet View"],
     featureOff: ["Full Dasha Timeline","7-Day Forecast","PDF Report","Kundli Milan"],
   },
   {
@@ -81,7 +82,7 @@ const PLANS = [
     accent: "#00d4ff", accentBg: "rgba(0,212,255,0.05)",
     border: "rgba(0,212,255,0.30)", badge: "POPULAR",
     monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
-    cta: "Pro Lein", ctaActive: true,
+    cta: "Get Pro", ctaActive: true,
     icon: "zap" as const,
     features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited AI Chat","7-Day Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
     featureOff: ["PDF Report","Kundli Milan"],
@@ -91,9 +92,9 @@ const PLANS = [
     accent: "#a78bfa", accentBg: "rgba(167,139,250,0.05)",
     border: "rgba(167,139,250,0.30)", badge: "PREMIUM",
     monthlyPrice: 399, yearlyPrice: 2999, yearlySave: 37,
-    cta: "Elite Lein", ctaActive: true,
+    cta: "Get Elite", ctaActive: true,
     icon: "star" as const,
-    features: ["Unlimited Profiles","Sab Pro Features","Monthly PDF Report","Kundli Milan (Vivah Yog)","Career & Finance Deep Analysis","Priority Astrologer Chat","Yearly Forecast"],
+    features: ["Unlimited Profiles","All Pro Features","Monthly PDF Report","Kundli Milan (Vivah Yog)","Career & Finance Deep Analysis","Priority Astrologer Chat","Yearly Forecast"],
     featureOff: [],
   },
 ];
@@ -123,6 +124,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   onSelect: (code: string) => void; onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const [query, setQuery] = useState("");
 
   const filtered = query.trim().length > 0
@@ -143,7 +145,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[lm.screen, { paddingTop: insets.top }]}>
+      <View style={[lm.screen, { paddingTop: insets.top, backgroundColor: C.bg }]}>
 
         {/* ── Header ── */}
         <View style={lm.header}>
@@ -523,6 +525,7 @@ function SettingRow({ icon, label, right, onPress, last = false }: {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { C, mode, toggle: toggleTheme } = useTheme();
   const {
     profiles, primaryProfileId,
     deleteProfile, setPrimaryProfile,
@@ -561,7 +564,7 @@ export default function ProfileScreen() {
   const deleteTarget = confirmDelete ? profiles.find(p=>p.id===confirmDelete) : null;
 
   return (
-    <View style={{ flex:1, backgroundColor:"#020d1a" }}>
+    <View style={{ flex:1, backgroundColor: C.bg }}>
 
       {/* Switching overlay */}
       {switching && (
@@ -809,6 +812,21 @@ export default function ProfileScreen() {
                   </View>
                   <Feather name="chevron-right" size={14} color="#1e3a5f" />
                 </View>
+              }
+            />
+
+            <SettingRow
+              icon={mode === "dark" ? "moon" : "sun"}
+              label={mode === "dark" ? "Dark Mode" : "Light Mode"}
+              right={
+                <Switch
+                  value={mode === "dark"}
+                  onValueChange={() => { toggleTheme(); Haptics.selectionAsync(); }}
+                  trackColor={{ false: C.switchTrackOff, true: C.accent }}
+                  thumbColor="#fff"
+                  ios_backgroundColor={C.switchTrackOff}
+                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
+                />
               }
               last
             />

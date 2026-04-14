@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useC } from "@/context/ThemeContext";
 import Svg, {
   Circle,
   Defs,
@@ -30,6 +31,7 @@ import { useUser } from "@/context/UserContext";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const { setUser } = useUser();
 
   const [mobile, setMobile]       = useState("");
@@ -89,7 +91,7 @@ export default function LoginScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: C.bg }]}>
       {/* Ambient glow top */}
       <View style={[styles.glowWrap, { pointerEvents: "none" }]}>
         <View style={styles.glowCircle} />

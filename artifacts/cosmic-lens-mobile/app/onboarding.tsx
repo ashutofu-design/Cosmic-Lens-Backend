@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 
 import { useUser } from "@/context/UserContext";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
@@ -28,6 +29,7 @@ const MONTHS = [
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const { setBirthData, setKundli } = useUser();
 
   const [name,    setName]    = useState("");
@@ -114,7 +116,7 @@ export default function OnboardingScreen() {
   const canSubmit = !loading;
 
   return (
-    <View style={[s.root, { paddingTop: topPad }]}>
+    <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={s.header}>

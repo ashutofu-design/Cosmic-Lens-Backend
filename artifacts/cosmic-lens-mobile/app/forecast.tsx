@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
@@ -116,6 +117,7 @@ function WeekChart({
 
 export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
+  const C = useC();
   const { kundli, moonData } = useUser();
   const topPad   = Platform.OS === "web" ? 67 : insets.top;
   const botPad   = Platform.OS === "web" ? 34 : insets.bottom;
@@ -206,7 +208,7 @@ export default function ForecastScreen() {
   const dasha = kundli ? computeActiveDasha(kundli, moonData?.longitude ?? 0) : null;
 
   return (
-    <View style={[s.root, { paddingTop: topPad }]}>
+    <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
       {/* Header */}
       <View style={s.header}>
         <Pressable onPress={() => router.back()} style={s.back}>

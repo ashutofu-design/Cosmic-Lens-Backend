@@ -4,6 +4,8 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useC } from "@/context/ThemeContext";
+
 type BottomTabBarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
   descriptors: Record<string, unknown>;
@@ -25,14 +27,14 @@ const TABS: {
   { name: "profile",  label: "Profile",  icon: "user",           activeColor: "#a78bfa" },
 ];
 
-const INACTIVE = "#3d5a7a";
-const BAR_H    = 64;
+const BAR_H = 64;
 
 function TabItem({
   tab, isActive, onPress, onLongPress,
 }: {
   tab: typeof TABS[0]; isActive: boolean; onPress: () => void; onLongPress: () => void;
 }) {
+  const C = useC();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim  = useRef(new Animated.Value(0)).current;
 
@@ -50,6 +52,7 @@ function TabItem({
     }
   }, [isActive]);
 
+  const INACTIVE = C.isDark ? "#3d5a7a" : "#94a3b8";
   const color = isActive ? tab.activeColor : INACTIVE;
 
   return (
@@ -58,7 +61,6 @@ function TabItem({
       onPress={onPress}
       onLongPress={onLongPress}
     >
-      {/* Active top indicator bar */}
       {isActive && (
         <Animated.View
           style={[
@@ -72,21 +74,19 @@ function TabItem({
         />
       )}
 
-      {/* Icon with scale animation */}
       <Animated.View style={[styles.iconWrap, { transform: [{ scale: scaleAnim }] }]}>
         <Feather name={tab.icon as any} size={22} color={color} />
         {tab.dot && (
-          <View style={[styles.dot, { borderColor: "#020d1a" }]} />
+          <View style={[styles.dot, { borderColor: C.navBg }]} />
         )}
       </Animated.View>
 
-      {/* Label */}
       <Text
         style={[
           styles.label,
           {
             color,
-            fontFamily: isActive ? "Inter_700Bold" : "Inter_400Regular",
+            fontFamily: isActive ? "Nunito_700Bold" : "Nunito_400Regular",
             opacity: isActive ? 1 : 0.7,
           },
         ]}
@@ -99,11 +99,20 @@ function TabItem({
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
-    <View style={[styles.bar, { paddingBottom: botPad, height: BAR_H + botPad }]}>
-      <View style={styles.topLine} />
+    <View style={[
+      styles.bar,
+      {
+        paddingBottom: botPad,
+        height: BAR_H + botPad,
+        backgroundColor: C.navBg,
+        borderTopColor: C.navBorder,
+      },
+    ]}>
+      <View style={[styles.topLine, { backgroundColor: C.isDark ? "rgba(0,200,255,0.14)" : C.border }]} />
       <View style={styles.inner}>
         {TABS.map((tab) => {
           const route = state.routes.find(r => r.name === tab.name);
@@ -141,12 +150,11 @@ const styles = StyleSheet.create({
   bar: {
     position: "absolute",
     bottom: 0, left: 0, right: 0,
-    backgroundColor: "#020d1a",
     zIndex: 100,
+    borderTopWidth: 1,
   },
   topLine: {
     height: 1,
-    backgroundColor: "rgba(0,200,255,0.14)",
   },
   inner: {
     flex: 1,

@@ -7,6 +7,7 @@ import {
   StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import type { KundliData, PlanetInfo } from "@/types";
 
@@ -382,6 +383,7 @@ function DoshCard({ dosh, defaultOpen }: { dosh: DoshResult; defaultOpen?: boole
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function DoshScreen() {
   const insets  = useSafeAreaInsets();
+  const C = useC();
   const { kundli } = useUser();
   const topPad  = Platform.OS === "web" ? 67 : insets.top;
   const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
@@ -394,7 +396,7 @@ export default function DoshScreen() {
   const strongCount  = doshas.filter(d => d.severity === "strong").length;
 
   return (
-    <View style={s.root}>
+    <View style={[s.root, { backgroundColor: C.bg }]}>
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8 }]}>
         <Pressable onPress={() => router.back()} style={s.back}>

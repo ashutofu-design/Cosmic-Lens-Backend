@@ -11,16 +11,17 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import type { BirthData } from "@/types";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
 const F = {
-  regular:  "Inter_400Regular",
-  medium:   "Inter_500Medium",
-  semibold: "Inter_600SemiBold",
-  bold:     "Inter_700Bold",
+  regular:  "Nunito_400Regular",
+  medium:   "Nunito_500Medium",
+  semibold: "Nunito_600SemiBold",
+  bold:     "Nunito_700Bold",
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -153,6 +154,7 @@ const RELATION_EMOJIS: Record<string, string> = {
 
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
+  const C = useC();
   const params = useLocalSearchParams<{ mode?: string; profileId?: string; relation?: string }>();
   const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId } = useUser();
 
@@ -245,7 +247,7 @@ export default function ProfileEditScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#020d1a" }}
+      style={{ flex: 1, backgroundColor: C.bg }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       {/* ── Header ── */}

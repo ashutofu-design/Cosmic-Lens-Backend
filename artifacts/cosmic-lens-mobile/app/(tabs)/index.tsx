@@ -249,23 +249,13 @@ export default function HomeScreen() {
 }
 
 // ── Hero Energy Card — vertical layout, fills 60% ────────────────────────────
-const CHART_SVG = 300;
-
 function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
 }) {
-  const { width: screenW } = useWindowDimensions();
   const displayScore = useCountUp(chartEnergy, 350);
   const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
-
-  // Chart fills card width, height auto-scales
-  const cardInnerW = screenW - 24; // 12 padding each side
-  const chartW     = cardInnerW - 28; // inner padding 14 each side
-  const scale      = chartW / CHART_SVG;
-  const offsetX    = -(CHART_SVG * (1 - scale)) / 2;
-  const offsetY    = -(CHART_SVG * (1 - scale)) / 2;
 
   return (
     <View style={[hero.card, { flex: 1 }]}>
@@ -294,23 +284,15 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         </View>
       </View>
 
-      {/* ── CHART — fills remaining space ── */}
-      <View style={{ flex: 1, overflow: "hidden", borderRadius: 10, marginTop: 8 }}>
-        <View style={{
-          width: CHART_SVG,
-          height: CHART_SVG,
-          transform: [{ scale }],
-          marginTop: offsetY,
-          marginLeft: offsetX,
-        }}>
-          <EnergyChart
-            targetPts={chartPts}
-            labels={chartLbls}
-            finalEnergy={chartEnergy}
-            loading={loading}
-            instant={showDemo}
-          />
-        </View>
+      {/* ── CHART — fills remaining space, no transform needed ── */}
+      <View style={{ flex: 1, marginTop: 8 }}>
+        <EnergyChart
+          targetPts={chartPts}
+          labels={chartLbls}
+          finalEnergy={chartEnergy}
+          loading={loading}
+          instant={showDemo}
+        />
       </View>
     </View>
   );

@@ -124,7 +124,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
 
   return (
     <View style={styles.card}>
-      <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" style={{ display: "flex" }}>
+      <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display: "flex" }}>
         <Defs>
           <LinearGradient id="lg" x1={PL} y1="0" x2={PL + GW} y2="0" gradientUnits="userSpaceOnUse">
             <Stop offset="0%"   stopColor="#ff3b3b" />
@@ -280,8 +280,8 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
 
 const styles = StyleSheet.create({
   card: {
+    flex: 1,
     width: "100%",
-    aspectRatio: 1,
     backgroundColor: "#040e20",
     borderRadius: 20,
     borderWidth: 1,

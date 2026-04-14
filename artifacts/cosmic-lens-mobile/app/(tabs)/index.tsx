@@ -218,89 +218,81 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 
 // ── Dosh Analysis Card ────────────────────────────────────────────────────────
 function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
-  const pulse = usePulse();
-  const glowOpacity = useOpacityPulse(0.3, 0.85, 1000);
+  const glowOpacity = useOpacityPulse(0.5, 1.0, 900);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
-      <Animated.View style={[dosh.card, { transform: [{ scale: pulse }] }]}>
-        {/* Pulsing border glow */}
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
+      <LinearGradient
+        colors={["#2d0000", "#3d0505", "#1a0000"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={dosh.card}
+      >
+        {/* Animated border glow */}
         <Animated.View style={[dosh.borderGlow, { opacity: glowOpacity }]} />
 
-        <LinearGradient
-          colors={["#1a0408", "#200610", "#180309"]}
-          style={dosh.gradient}
-        >
-          <View style={dosh.row}>
-            <View style={dosh.iconWrap}>
-              <Text style={{ fontSize: 26 }}>☿</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={dosh.titleRow}>
-                <Text style={dosh.title}>⚠️ Dosh Analysis</Text>
-                <View style={dosh.alertBadge}>
-                  <Text style={dosh.alertBadgeText}>ALERT</Text>
-                </View>
-              </View>
-              <Text style={dosh.subtitle}>
-                {kundli ? "Graha doshas detected in your chart" : "Scan your kundli for doshas"}
-              </Text>
-              <Text style={dosh.cta}>Tap to view remedies →</Text>
-            </View>
-          </View>
+        {/* Big decorative symbol */}
+        <Text style={dosh.bigSymbol}>☿</Text>
 
-          {/* Chips */}
-          <View style={dosh.chipRow}>
-            {["Kalsarp", "Manglik", "Pitra"].map(d => (
-              <View key={d} style={dosh.chip}>
-                <Text style={dosh.chipText}>{d}</Text>
-              </View>
-            ))}
+        <View style={dosh.topRow}>
+          <View style={dosh.alertBadge}>
+            <Text style={dosh.alertBadgeText}>⚠ DOSH ALERT</Text>
           </View>
-        </LinearGradient>
-      </Animated.View>
+          <View style={dosh.arrowCircle}>
+            <Feather name="arrow-right" size={14} color="#ff6b6b" />
+          </View>
+        </View>
+
+        <Text style={dosh.title}>Dosh Analysis</Text>
+        <Text style={dosh.subtitle}>
+          {kundli ? "Active doshas found — see your remedies" : "Kalsarp · Manglik · Pitra · Guru Chandal"}
+        </Text>
+
+        <View style={dosh.chipRow}>
+          {["Kalsarp", "Manglik", "Pitra"].map(d => (
+            <View key={d} style={dosh.chip}>
+              <Text style={dosh.chipText}>{d}</Text>
+            </View>
+          ))}
+        </View>
+      </LinearGradient>
     </Pressable>
   );
 }
 
-// ── Upcoming Challenges Card (merged with Hidden Issues) ──────────────────────
+// ── Risk Alert Card ───────────────────────────────────────────────────────────
 function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
   const dashaTxt = activeDasha
     ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha active`
     : "Transit & dasha analysis";
+  const glowOpacity = useOpacityPulse(0.4, 0.95, 1000);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
       <LinearGradient
-        colors={["#1f0400", "#1a0600", "#150300"]}
+        colors={["#2d0f00", "#3d1500", "#1f0800"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={bad.card}
       >
-        {/* Top row — urgency */}
+        <Animated.View style={[bad.borderGlow, { opacity: glowOpacity }]} />
+
+        {/* Decorative icon */}
+        <Text style={bad.bigSymbol}>⚡</Text>
+
         <View style={bad.topRow}>
-          <View style={bad.iconWrap}>
-            <Feather name="zap" size={20} color="#ef4444" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={bad.title}>Risk Alert</Text>
-            <Text style={bad.subtitle}>Planetary risks detected in your chart</Text>
-          </View>
           <View style={bad.urgencyBadge}>
-            <Text style={bad.urgencyText}>URGENT</Text>
+            <Text style={bad.urgencyText}>🔴 URGENT</Text>
+          </View>
+          <View style={bad.arrowCircle}>
+            <Feather name="arrow-right" size={14} color="#ff8c42" />
           </View>
         </View>
+
+        <Text style={bad.title}>Risk Alert</Text>
+        <Text style={bad.subtitle}>Planetary risks & weak houses in your kundli</Text>
 
         <View style={bad.divider} />
-
-        {/* Hidden issues row */}
-        <View style={bad.issueRow}>
-          <Feather name="alert-triangle" size={12} color="#f59e0b" />
-          <Text style={bad.issueText}>Weak planets & afflicted houses detected in kundli</Text>
-        </View>
-
-        {/* Dasha row */}
         <View style={bad.bottomRow}>
-          <Feather name="clock" size={11} color="#7f1d1d" />
+          <Feather name="clock" size={11} color="#c2410c" />
           <Text style={bad.bottomText}>{dashaTxt} · Tap for full forecast</Text>
         </View>
       </LinearGradient>
@@ -310,29 +302,37 @@ function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDash
 
 // ── Kundli Milan Premium Card ─────────────────────────────────────────────────
 function KundliMilanCard({ onPress }: { onPress: () => void }) {
-  const glowOpacity = useOpacityPulse(0.5, 1.0, 1400);
+  const glowOpacity = useOpacityPulse(0.5, 1.0, 1300);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
       <LinearGradient
-        colors={["#140a2e", "#1a0d3a", "#110830"]}
+        colors={["#1e0a3c", "#2d1060", "#120630"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={milan.card}
       >
-        <Animated.View style={[milan.glowBar, { opacity: glowOpacity }]} />
-        <View style={milan.row}>
-          <View style={milan.iconWrap}>
-            <Text style={{ fontSize: 24 }}>♥</Text>
+        <Animated.View style={[milan.borderGlow, { opacity: glowOpacity }]} />
+
+        {/* Decorative symbol */}
+        <Text style={milan.bigSymbol}>♥</Text>
+
+        <View style={milan.topRow}>
+          <View style={milan.proBadge}>
+            <Text style={milan.proBadgeText}>PRO 🔒</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <View style={milan.titleRow}>
-              <Text style={milan.title}>Kundli Milan</Text>
-              <View style={milan.proBadge}>
-                <Text style={milan.proBadgeText}>PRO 🔒</Text>
-              </View>
+          <View style={milan.arrowCircle}>
+            <Feather name="arrow-right" size={14} color="#c084fc" />
+          </View>
+        </View>
+
+        <Text style={milan.title}>Kundli Milan</Text>
+        <Text style={milan.subtitle}>36-point compatibility check for marriage</Text>
+
+        <View style={milan.scoreRow}>
+          {[72, 80, 65, 90].map((v, i) => (
+            <View key={i} style={milan.scoreBar}>
+              <View style={[milan.scoreFill, { width: `${v}%`, backgroundColor: i % 2 === 0 ? "#a855f7" : "#ec4899" }]} />
             </View>
-            <Text style={milan.subtitle}>36-point compatibility check for marriage</Text>
-            <Text style={milan.cta}>Check compatibility →</Text>
-          </View>
+          ))}
         </View>
       </LinearGradient>
     </Pressable>
@@ -385,101 +385,68 @@ const hero = StyleSheet.create({
   insightText: { fontSize: 12, fontWeight: "700" },
 });
 
-// Dosh card
+// ── Dosh card styles ──────────────────────────────────────────────────────────
 const dosh = StyleSheet.create({
   card: {
-    borderRadius: 20, overflow: "hidden",
-    shadowColor: "#ef4444", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35, shadowRadius: 18, elevation: 8,
+    borderRadius: 20, padding: 16, overflow: "hidden",
+    shadowColor: "#ff2244", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6, shadowRadius: 24, elevation: 14,
   },
   borderGlow: {
     position: "absolute", inset: 0, borderRadius: 20,
-    borderWidth: 1.5, borderColor: "#ef4444", zIndex: 1,
+    borderWidth: 2, borderColor: "#ff3355", zIndex: 1,
   },
-  gradient: { borderRadius: 20, padding: 11, gap: 8 },
-  row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  iconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  bigSymbol: {
+    position: "absolute", right: 10, top: 0,
+    fontSize: 90, opacity: 0.07, color: "#ff4466",
   },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  title:    { color: "#fca5a5", fontSize: 16, fontWeight: "800" },
-  alertBadge: { backgroundColor: "#7f1d1d", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  alertBadgeText: { color: "#fca5a5", fontSize: 8, fontWeight: "800", letterSpacing: 1 },
-  subtitle: { color: "#7f1d1d", fontSize: 12, lineHeight: 17, marginBottom: 5 },
-  cta:      { color: "#ef4444", fontSize: 12, fontWeight: "700" },
-  chipRow:  { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: {
-    backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.25)", borderRadius: 20,
-    paddingVertical: 4, paddingHorizontal: 10,
-  },
-  chipText: { color: "#f87171", fontSize: 10, fontWeight: "600" },
+  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  alertBadge:   { backgroundColor: "#ff223344", borderWidth: 1, borderColor: "#ff4455", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  alertBadgeText:{ color: "#ff8899", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#ff445566", backgroundColor: "#ff223322", alignItems: "center", justifyContent: "center" },
+  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
+  subtitle:     { color: "#ff9999", fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  chipRow:      { flexDirection: "row", gap: 7 },
+  chip:         { backgroundColor: "#ff334422", borderWidth: 1, borderColor: "#ff5566", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 13 },
+  chipText:     { color: "#ff8899", fontSize: 10, fontWeight: "700" },
 });
 
-// Bad time card (merged with hidden issues)
+// ── Risk Alert card styles ────────────────────────────────────────────────────
 const bad = StyleSheet.create({
   card: {
-    borderRadius: 18, padding: 10, borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
-    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22, shadowRadius: 16, elevation: 6,
+    borderRadius: 20, padding: 16, overflow: "hidden",
+    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 22, elevation: 12,
   },
-  topRow:    { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.25)", alignItems: "center", justifyContent: "center", flexShrink: 0,
-  },
-  title:    { color: "#fca5a5", fontSize: 14, fontWeight: "800", marginBottom: 3 },
-  subtitle: { color: "#7f1d1d", fontSize: 11 },
-  urgencyBadge: {
-    backgroundColor: "rgba(239,68,68,0.15)", borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.35)", borderRadius: 8,
-    paddingVertical: 4, paddingHorizontal: 8,
-  },
-  urgencyText: { color: "#ef4444", fontSize: 8, fontWeight: "900", letterSpacing: 1.5 },
-  divider:   { height: 1, backgroundColor: "rgba(239,68,68,0.08)", marginVertical: 6 },
-  issueRow:  { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
-  issueText: { color: "#92400e", fontSize: 10, flex: 1 },
-  bottomRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  bottomText: { color: "#7f1d1d", fontSize: 10, flex: 1 },
+  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#ff7733", zIndex: 1 },
+  bigSymbol:    { position: "absolute", right: 8, top: 0, fontSize: 85, opacity: 0.08, color: "#ff8800" },
+  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  urgencyBadge: { backgroundColor: "#ff440022", borderWidth: 1, borderColor: "#ff6633", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  urgencyText:  { color: "#ff9966", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#ff663344", backgroundColor: "#ff441122", alignItems: "center", justifyContent: "center" },
+  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
+  subtitle:     { color: "#ffaa77", fontSize: 12, lineHeight: 17, marginBottom: 12 },
+  divider:      { height: 1, backgroundColor: "#ff550018", marginBottom: 10 },
+  bottomRow:    { flexDirection: "row", alignItems: "center", gap: 6 },
+  bottomText:   { color: "#884422", fontSize: 10, flex: 1 },
 });
 
-// Kundli milan card
+// ── Kundli Milan card styles ──────────────────────────────────────────────────
 const milan = StyleSheet.create({
   card: {
-    borderRadius: 20, padding: 11, borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.3)", overflow: "hidden",
-    shadowColor: "#a78bfa", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25, shadowRadius: 18, elevation: 7,
+    borderRadius: 20, padding: 16, overflow: "hidden",
+    shadowColor: "#9933ff", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.55, shadowRadius: 24, elevation: 14,
   },
-  glowBar: {
-    position: "absolute", top: 0, left: 0, right: 0, height: 2,
-    backgroundColor: "#a78bfa", borderRadius: 2,
-  },
-  row:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 0 },
-  iconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: "rgba(167,139,250,0.12)", borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
-  },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  title:    { color: "#c4b5fd", fontSize: 16, fontWeight: "800" },
-  proBadge: {
-    backgroundColor: "rgba(167,139,250,0.2)", borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.4)", borderRadius: 8,
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  proBadgeText: { color: "#a78bfa", fontSize: 9, fontWeight: "800" },
-  subtitle: { color: "#4c1d95", fontSize: 11, lineHeight: 16, marginBottom: 5 },
-  cta:      { color: "#a78bfa", fontSize: 12, fontWeight: "700" },
-  starsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
-  starChip: {
-    backgroundColor: "rgba(167,139,250,0.07)", borderWidth: 1,
-    borderColor: "rgba(167,139,250,0.18)", borderRadius: 20,
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  starText: { color: "#6d28d9", fontSize: 9, fontWeight: "600" },
+  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#aa44ff", zIndex: 1 },
+  bigSymbol:    { position: "absolute", right: 10, top: 0, fontSize: 90, opacity: 0.09, color: "#cc66ff" },
+  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  proBadge:     { backgroundColor: "#8822ff33", borderWidth: 1, borderColor: "#aa55ff", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  proBadgeText: { color: "#dd99ff", fontSize: 10, fontWeight: "900" },
+  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#9933ff55", backgroundColor: "#7711ff22", alignItems: "center", justifyContent: "center" },
+  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
+  subtitle:     { color: "#cc99ff", fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  scoreRow:     { flexDirection: "row", gap: 5 },
+  scoreBar:     { flex: 1, height: 5, backgroundColor: "#ffffff11", borderRadius: 3, overflow: "hidden" },
+  scoreFill:    { height: "100%", borderRadius: 3 },
 });

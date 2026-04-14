@@ -51,9 +51,9 @@ function moonPhase(date: Date): string {
 }
 
 const SCORE_SUMMARIES: Record<string, string> = {
-  UP: "Aaj ka din positive energy se bhar puura hai. Naye kaam shuru karein.",
-  MIXED: "Milaajula din — kuch avsar hain, kuch sawdhaaniyaan bhi.",
-  DOWN: "Thodi challenging energy hai aaj. Ruke rahein, reactive mat hoon.",
+  UP: "Today is filled with positive energy. A great day to start new ventures.",
+  MIXED: "A mixed day — some opportunities, some things to watch out for.",
+  DOWN: "Slightly challenging energy today. Stay patient, avoid being reactive.",
 };
 
 function scoreToTrend(s: number): "UP"|"MIXED"|"DOWN" {

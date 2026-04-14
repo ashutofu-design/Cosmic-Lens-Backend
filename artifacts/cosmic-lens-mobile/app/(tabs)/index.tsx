@@ -202,9 +202,9 @@ export default function HomeScreen() {
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
           <Text style={styles.greetSub}>
-            {kundli ? `Namaste, ${kundli.name}` : "Namaste"}
+            {kundli ? `Hello, ${kundli.name}` : "Hello"}
           </Text>
-          <Text style={styles.greetTitle}>Aaj ka Cosmic Report</Text>
+          <Text style={styles.greetTitle}>Today's Cosmic Report</Text>
         </View>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}

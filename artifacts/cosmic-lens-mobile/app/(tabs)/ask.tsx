@@ -30,25 +30,25 @@ const DEMO_MESSAGES: Message[] = [
   {
     id: "d1",
     role: "assistant",
-    text: "Namaste! Main aapka Vedic Astrology assistant hoon. Apni Kundli ke baare mein kuch bhi poochho — dasha, grah, bhav, ya koi aur sawaal.",
+    text: "Hello! I'm your Vedic Astrology assistant. Ask me anything about your Kundli — dasha, planets, houses, or any other question.",
   },
   {
     id: "d2",
     role: "user",
-    text: "Mera career kaisa rahega is saal?",
+    text: "How will my career be this year?",
   },
   {
     id: "d3",
     role: "assistant",
-    text: "Kundli ke bina main sirf general information de sakta hoon. Apni janam patri banao — phir main aapke liye personalized career analysis karoonga, active dasha ke hisaab se!",
+    text: "Without a Kundli I can only give general information. Create your birth chart — then I'll give you a personalized career analysis based on your active dasha!",
   },
 ];
 
 const STARTERS = [
-  "Is saal career kaisa rahega?",
-  "Vivah ka yogya samay kya hai?",
-  "Swasthya ke baare mein batao",
-  "Dhan labh kab hoga?",
+  "How will my career be this year?",
+  "What is the right time for marriage?",
+  "Tell me about my health",
+  "When will I see financial gains?",
 ];
 
 export default function AskScreen() {
@@ -65,7 +65,7 @@ export default function AskScreen() {
           {
             id: "init",
             role: "assistant",
-            text: `Namaste! Main aapki kundli padh sakta hoon. Apne grah, dasha, ya kisi bhi jeevan kshetra ke baare mein poochho.`,
+            text: `Hello! I can read your kundli. Ask me about your planets, dasha, or any area of life.`,
           },
         ]
   );

@@ -341,13 +341,13 @@ export default function KundliMilanScreen() {
           <View>
             <Text style={s.sectionLabel}>PERSON 2 (PARTNER)</Text>
             <View style={s.formCard}>
-              <FormRow label="Naam" value={p2Name} onChangeText={setP2Name} placeholder="Partner ka naam" />
+              <FormRow label="Name" value={p2Name} onChangeText={setP2Name} placeholder="Partner's name" />
               <View style={s.divider} />
-              <FormRow label="Janam Tithi" value={p2DOB} onChangeText={setP2DOB} placeholder="DD/MM/YYYY" keyboardType="numeric" />
+              <FormRow label="Birth Date" value={p2DOB} onChangeText={setP2DOB} placeholder="DD/MM/YYYY" keyboardType="numeric" />
               <View style={s.divider} />
-              <FormRow label="Janam Samay" value={p2Time} onChangeText={setP2Time} placeholder="HH:MM AM / PM" />
+              <FormRow label="Birth Time" value={p2Time} onChangeText={setP2Time} placeholder="HH:MM AM / PM" />
               <View style={s.divider} />
-              <FormRow label="Janam Sthan" value={p2Place} onChangeText={setP2Place} placeholder="Jaise: Delhi, India" />
+              <FormRow label="Birth Place" value={p2Place} onChangeText={setP2Place} placeholder="E.g. Delhi, India" />
             </View>
           </View>
 

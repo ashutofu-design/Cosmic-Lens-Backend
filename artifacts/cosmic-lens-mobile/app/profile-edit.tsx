@@ -192,7 +192,7 @@ export default function ProfileEditScreen() {
     setSearching(true);
     setGeoResults([]);
     try { setGeoResults(await searchPlace(placeQuery)); }
-    catch { setError("Location nahi mila. Internet check karo."); }
+    catch { setError("Location not found. Check your internet connection."); }
     finally { setSearching(false); }
   }
 
@@ -210,11 +210,11 @@ export default function ProfileEditScreen() {
   }
 
   async function handleSave() {
-    if (!f.name.trim())              { setError("Naam zaroori hai."); return; }
-    if (!f.day || !f.month || !f.year) { setError("Janm tithi poori karo."); return; }
-    if (!f.hour || !f.minute)         { setError("Janm samay daalo."); return; }
-    if (!f.lat)                       { setError("Sahi jagah search karke choose karo."); return; }
-    if (tzLoading)                    { setError("Timezone confirm ho raha hai..."); return; }
+    if (!f.name.trim())              { setError("Name is required."); return; }
+    if (!f.day || !f.month || !f.year) { setError("Please complete the birth date."); return; }
+    if (!f.hour || !f.minute)         { setError("Please enter the birth time."); return; }
+    if (!f.lat)                       { setError("Please search and select a valid location."); return; }
+    if (tzLoading)                    { setError("Confirming timezone, please wait..."); return; }
     setError("");
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -237,7 +237,7 @@ export default function ProfileEditScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Chart calculation fail hua. Dobara try karo.");
+      setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -294,11 +294,11 @@ export default function ProfileEditScreen() {
         </Section>
 
         {/* ── DATE OF BIRTH ── */}
-        <Section title="Janm Tithi" icon="calendar">
+        <Section title="Birth Date" icon="calendar">
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
               <Field
-                label="DIN"
+                label="DAY"
                 value={f.day}
                 onChangeText={set("day")}
                 placeholder="DD"
@@ -308,7 +308,7 @@ export default function ProfileEditScreen() {
             </View>
             <View style={{ flex: 2 }}>
               <Field
-                label="SAAL"
+                label="YEAR"
                 value={f.year}
                 onChangeText={set("year")}
                 placeholder="YYYY"
@@ -321,19 +321,19 @@ export default function ProfileEditScreen() {
         </Section>
 
         {/* ── TIME OF BIRTH ── */}
-        <Section title="Janm Samay" icon="clock">
+        <Section title="Birth Time" icon="clock">
           {/* Warning */}
           <View style={s.infoBox}>
             <Feather name="alert-triangle" size={12} color="#f59e0b" />
             <Text style={s.infoTxt}>
-              Birth time Mahadasha ko directly affect karta hai — AM/PM sahi choose karo
+              Birth time directly affects your Mahadasha — make sure to select AM/PM correctly
             </Text>
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <View style={{ flex: 1 }}>
               <Field
-                label="GHANTA"
+                label="HOUR"
                 value={f.hour}
                 onChangeText={set("hour")}
                 placeholder="HH"
@@ -343,7 +343,7 @@ export default function ProfileEditScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Field
-                label="MINUTE"
+                label="MIN"
                 value={f.minute}
                 onChangeText={set("minute")}
                 placeholder="MM"
@@ -360,9 +360,9 @@ export default function ProfileEditScreen() {
         </Section>
 
         {/* ── PLACE OF BIRTH ── */}
-        <Section title="Janm Sthan" icon="map-pin">
+        <Section title="Birth Place" icon="map-pin">
           <View style={s.fieldWrap}>
-            <FieldLabel text="SHEHER / DESH" />
+            <FieldLabel text="CITY / COUNTRY" />
             <View style={[s.inputRow, { gap: 8 }]}>
               <Feather name="search" size={14} color="#334155" />
               <TextInput

@@ -335,15 +335,15 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
 // ════════════════════════════════════════════════════════════════════════════
 
 const TARA_DATA = [
-  { name:"Janma",       nameHindi:"जन्म",       type:"neutral", color:"#94a3b8", desc:"Karmic identity, janam kundli ka mool" },
-  { name:"Sampat",      nameHindi:"सम्पत",       type:"good",    color:"#22c55e", desc:"Dhan, samriddhi, aur sukh" },
-  { name:"Vipat",       nameHindi:"विपत",        type:"bad",     color:"#ef4444", desc:"Baadha, vighna, mushkilen" },
-  { name:"Kshema",      nameHindi:"क्षेम",       type:"good",    color:"#4ade80", desc:"Swasthya, suraksha, well-being" },
-  { name:"Pratyak",     nameHindi:"प्रत्यक",     type:"bad",     color:"#f97316", desc:"Virodh, rukawat, opposition" },
-  { name:"Sadhana",     nameHindi:"साधना",       type:"good",    color:"#34d399", desc:"Mehnat safal, sadhana phal" },
-  { name:"Naidhana",    nameHindi:"नैधन",        type:"bad",     color:"#dc2626", desc:"Ati hanikarak, sawdhan rahein" },
-  { name:"Mitra",       nameHindi:"मित्र",       type:"good",    color:"#60a5fa", desc:"Mitra, sahayog, madad milegi" },
-  { name:"Paramamitra", nameHindi:"परममित्र",    type:"great",   color:"#a78bfa", desc:"Ati shubh, param suhriday" },
+  { name:"Janma",       nameHindi:"जन्म",       type:"neutral", color:"#94a3b8", desc:"Karmic identity — the foundation of the birth chart" },
+  { name:"Sampat",      nameHindi:"सम्पत",       type:"good",    color:"#22c55e", desc:"Wealth, prosperity, and happiness" },
+  { name:"Vipat",       nameHindi:"विपत",        type:"bad",     color:"#ef4444", desc:"Obstacles, disruptions, difficulties" },
+  { name:"Kshema",      nameHindi:"क्षेम",       type:"good",    color:"#4ade80", desc:"Health, security, and well-being" },
+  { name:"Pratyak",     nameHindi:"प्रत्यक",     type:"bad",     color:"#f97316", desc:"Opposition, blockages, resistance" },
+  { name:"Sadhana",     nameHindi:"साधना",       type:"good",    color:"#34d399", desc:"Efforts bear fruit, discipline rewarded" },
+  { name:"Naidhana",    nameHindi:"नैधन",        type:"bad",     color:"#dc2626", desc:"Highly harmful — proceed with caution" },
+  { name:"Mitra",       nameHindi:"मित्र",       type:"good",    color:"#60a5fa", desc:"Friendship, cooperation, support received" },
+  { name:"Paramamitra", nameHindi:"परममित्र",    type:"great",   color:"#a78bfa", desc:"Highly auspicious — supreme well-wisher" },
 ];
 
 function computeNavatara(kundli: KundliData) {
@@ -375,10 +375,10 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
   return (
     <View style={{gap:14}}>
       <View style={t.infoBox}>
-        <Text style={t.infoTitle}>Navatara kya hai?</Text>
+        <Text style={t.infoTitle}>What is Navatara?</Text>
         <Text style={t.infoBody}>
-          Chandra ke nakshatra se shuru karke 9-9 ke cycle mein 27 nakshatras ko Tara naam diye jaate hain.
-          Janma, Sampat, Kshema, Sadhana, Mitra, Paramamitra — shubh; Vipat, Pratyak, Naidhana — ashubh.
+          Starting from the Moon's nakshatra, all 27 nakshatras are grouped into 9-star cycles called Tara.
+          Janma, Sampat, Kshema, Sadhana, Mitra, Paramamitra — auspicious; Vipat, Pratyak, Naidhana — inauspicious.
         </Text>
       </View>
 
@@ -678,11 +678,10 @@ function KPTab({ kundli }: { kundli: KundliData }) {
   return (
     <View style={{gap:14}}>
       <View style={t.infoBox}>
-        <Text style={t.infoTitle}>KP Paddhati kya hai?</Text>
+        <Text style={t.infoTitle}>What is KP Paddhati?</Text>
         <Text style={t.infoBody}>
-          Krishnamurti Paddhati (KP) mein har grah aur lagna ka Star-lord (Nakshatra Lord)
-          aur Sub-lord nikala jaata hai. Yeh precision ke liye Vimshottari dasha ke proportional
-          sub-divisions use karta hai — event timing ke liye bahut accurate mana jaata hai.
+          Krishnamurti Paddhati (KP) calculates the Star-lord (Nakshatra Lord) and Sub-lord for each planet and ascendant.
+          It uses proportional sub-divisions of Vimshottari dasha for precision — widely regarded as highly accurate for event timing.
         </Text>
       </View>
 
@@ -795,13 +794,13 @@ export default function KundliScreen() {
       <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80}]}>
         <View style={s.emptyWrap}>
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#00d4ff"/></View>
-          <Text style={s.emptyTitle}>Kundli Nahi Mili</Text>
+          <Text style={s.emptyTitle}>No Kundli Found</Text>
           <Text style={s.emptySub}>
-            Apni janam details daalo — Dasha Timeline, Ashtakavarga, Navatara, Jaimini, KP sab dikhega
+            Enter your birth details — Dasha Timeline, Ashtakavarga, Navatara, Jaimini, KP all will be shown
           </Text>
           <Pressable style={({pressed})=>[s.emptyBtn,pressed&&{opacity:0.8}]}
             onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/onboarding");}}>
-            <Text style={s.emptyBtnText}>Birth Details Daalo</Text>
+            <Text style={s.emptyBtnText}>Enter Birth Details</Text>
             <Feather name="arrow-right" size={15} color="#020d1a"/>
           </Pressable>
         </View>

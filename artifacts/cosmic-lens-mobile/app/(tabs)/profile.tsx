@@ -13,17 +13,17 @@ import { useUser, type ProfileEntry } from "@/context/UserContext";
 
 // ── Relation options ───────────────────────────────────────────────────────────
 const RELATIONS = [
-  { key: "Self",      emoji: "🧑",  label: "Apna (Self)" },
-  { key: "Husband",   emoji: "👨",  label: "Pati (Husband)" },
-  { key: "Wife",      emoji: "👩",  label: "Patni (Wife)" },
-  { key: "Son",       emoji: "👦",  label: "Beta (Son)" },
-  { key: "Daughter",  emoji: "👧",  label: "Beti (Daughter)" },
-  { key: "Father",    emoji: "👴",  label: "Pita (Father)" },
-  { key: "Mother",    emoji: "👵",  label: "Mata (Mother)" },
-  { key: "Brother",   emoji: "🧑",  label: "Bhai (Brother)" },
-  { key: "Sister",    emoji: "👱‍♀️", label: "Behen (Sister)" },
-  { key: "Friend",    emoji: "🤝",  label: "Dost (Friend)" },
-  { key: "Other",     emoji: "👥",  label: "Anya (Other)" },
+  { key: "Self",      emoji: "🧑",  label: "Self" },
+  { key: "Husband",   emoji: "👨",  label: "Husband" },
+  { key: "Wife",      emoji: "👩",  label: "Wife" },
+  { key: "Son",       emoji: "👦",  label: "Son" },
+  { key: "Daughter",  emoji: "👧",  label: "Daughter" },
+  { key: "Father",    emoji: "👴",  label: "Father" },
+  { key: "Mother",    emoji: "👵",  label: "Mother" },
+  { key: "Brother",   emoji: "🧑",  label: "Brother" },
+  { key: "Sister",    emoji: "👱‍♀️", label: "Sister" },
+  { key: "Friend",    emoji: "🤝",  label: "Friend" },
+  { key: "Other",     emoji: "👥",  label: "Other" },
 ];
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ const PLANS = [
     monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
     cta: "Pro Lein", ctaActive: true,
     icon: "zap" as const,
-    features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited AI Chat","7-Din Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
+    features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited AI Chat","7-Day Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
     featureOff: ["PDF Report","Kundli Milan"],
   },
   {
@@ -144,8 +144,8 @@ function RelationPickerModal({ visible, onSelect, onClose }: {
       <Pressable style={rp.overlay} onPress={onClose}>
         <Pressable style={rp.sheet} onPress={e => e.stopPropagation()}>
           <View style={rp.handle} />
-          <Text style={rp.title}>Kiska Kundli Add Karna Hai?</Text>
-          <Text style={rp.sub}>Sahi relation choose karo</Text>
+          <Text style={rp.title}>Whose Kundli to Add?</Text>
+          <Text style={rp.sub}>Select the relation</Text>
 
           <View style={rp.grid}>
             {RELATIONS.map(r => (
@@ -270,7 +270,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
       ) : (
         <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
           <Feather name="star" size={11} color="#00d4ff" />
-          <Text style={pc.setPrimaryText}>Primary Set Karo — Iska chart home par dikhega</Text>
+          <Text style={pc.setPrimaryText}>Set as Primary — This chart will show on home screen</Text>
         </Pressable>
       )}
     </View>
@@ -522,7 +522,7 @@ export default function ProfileScreen() {
             <Feather name="circle" size={9} color="#64748b" />
             <Text style={s.planBadgeText}>FREE PLAN</Text>
             <View style={s.planDivider} />
-            <Text style={s.planUpgrade}>Upgrade karo →</Text>
+            <Text style={s.planUpgrade}>Upgrade Now →</Text>
           </View>
         </LinearGradient>
 
@@ -559,10 +559,10 @@ export default function ProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: "#00d4ff", fontSize: 13, fontFamily: F.semibold }}>
-                  Family Member Add Karo
+                  Add Family Member
                 </Text>
                 <Text style={{ color: "#1e3a5f", fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
-                  Beta, Beti, Pati, Mata-Pita, Dost ya anya
+                  Son, Daughter, Spouse, Parents, Friend & more
                 </Text>
               </View>
               <Feather name="chevron-right" size={14} color="#1e3a5f" />
@@ -587,7 +587,7 @@ export default function ProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={sub.planName}>Free Plan — Active</Text>
-                <Text style={sub.planSub}>Upgrade karo full Jyotish access ke liye</Text>
+                <Text style={sub.planSub}>Upgrade for full Vedic astrology access</Text>
               </View>
               <LinearGradient
                 colors={["#0284c7","#00d4ff"]}
@@ -737,7 +737,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Alert.alert("Logout", "Kya aap log out karna chahte hain?", [
+              Alert.alert("Logout", "Are you sure you want to log out?", [
                 { text:"Cancel", style:"cancel" },
                 { text:"Logout", style:"destructive", onPress: handleLogout },
               ]);

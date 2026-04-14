@@ -231,33 +231,33 @@ export interface MonthForecast {
   remedy: string;
 }
 
-// Category text templates (Hindi)
+// Category text templates (English)
 const CAT_TEXTS: Record<string, Record<Trend, { main: string; caution: string; remedy: string }>> = {
   career: {
-    UP:    { main: "Career mein achi progress expected hai. Active planet ki energy aapke professional goals ko support kar rahi hai.", caution: "Overconfidence se bachein — careful planning zaroori hai.", remedy: "Roj subah Surya namaskar karein aur madhyaahn mein 5 min dhyan karein." },
-    DOWN:  { main: "Career mein kuch chunautiyan aa sakti hain. Patience aur smart decisions important rahenge.", caution: "Koi bhi bada professional decision abhi hold karein.", remedy: "Shani ko tel ka diya jalayein aur imandaari se kaam karein." },
-    MIXED: { main: "Career ka samay milaajula rahega — kuch acche aur kuch challenging moments aayenge.", caution: "Short-term decisions ko long-term goals ke saath align karein.", remedy: "Active planet ka mantra ek mala roz japein." },
+    UP:    { main: "Good career progress is expected. The active planet's energy is supporting your professional goals.", caution: "Avoid overconfidence — careful planning is essential.", remedy: "Practice Surya Namaskar each morning and spend 5 minutes in meditation at midday." },
+    DOWN:  { main: "Some challenges may arise in career. Patience and smart decisions will be important.", caution: "Hold off on any major professional decisions for now.", remedy: "Light a sesame oil lamp for Shani and work with honesty and diligence." },
+    MIXED: { main: "Career this period will be mixed — some good and some challenging moments.", caution: "Align short-term decisions with your long-term goals.", remedy: "Chant the mantra of the active planet once daily with a mala." },
   },
   relationship: {
-    UP:    { main: "Rishtey mein meethaas aur samajh badhegi. Pyaar aur trust dono strong hain.", caution: "Communication mein seedhaapan rakhein — galatfahmiyon se bachein.", remedy: "Shukravar ko safed phool Shukra ko arpit karein." },
-    DOWN:  { main: "Relationships mein kuch tanav ho sakta hai. Patience aur empathy se kaam len.", caution: "Partner ke saath bade decisions abhi na len — thoda intezaar karein.", remedy: "Roz ek glass mishri wala paani Chandra ko arpit karein." },
-    MIXED: { main: "Rishton mein stability aur instability dono ka mix rahega. Commitment zaroori hai.", caution: "Third-party opinions se rishtey ko affected mat hone den.", remedy: "Roz 'Om Shukraya Namah' 108 baar japein." },
+    UP:    { main: "Sweetness and understanding will grow in relationships. Love and trust are both strong.", caution: "Keep communication clear and direct — avoid misunderstandings.", remedy: "Offer white flowers to Venus on Fridays." },
+    DOWN:  { main: "Some tension may arise in relationships. Work with patience and empathy.", caution: "Avoid major decisions with your partner right now — wait a little.", remedy: "Offer a glass of water with sugar to the Moon daily." },
+    MIXED: { main: "Relationships will have a mix of stability and instability. Commitment is key.", caution: "Don't let third-party opinions influence your relationship.", remedy: "Chant 'Om Shukraya Namah' 108 times daily." },
   },
   finance: {
-    UP:    { main: "Dhan labh ke ache avsar hain. Smart investments is period mein fal de sakte hain.", caution: "Speculative investments mein caution rakhen — sab kuch daon par na lagayen.", remedy: "Shukravar ko 5 Guru ko haldi arpit karein." },
-    DOWN:  { main: "Arthik paksh thoda tight ho sakta hai. Unnecessary kharche rokein.", caution: "Kisi ko bhi badi matra mein loan na dein ya na lein.", remedy: "Mangalvar ko Mangal mantra — 'Om Mangalaya Namah' — japein." },
-    MIXED: { main: "Aarthik sthiti average rahegi. Income aur kharche ka balance maintain karna zaroori hai.", caution: "Investment ke faisale ek financial advisor se salah leke karein.", remedy: "Hare rang ki cheez Budh ko arpit karein." },
+    UP:    { main: "Good opportunities for financial gain. Smart investments can bear fruit in this period.", caution: "Be cautious with speculative investments — don't put everything at stake.", remedy: "Offer turmeric to Jupiter on Thursdays." },
+    DOWN:  { main: "Finances may feel a bit tight. Avoid unnecessary expenses.", caution: "Do not lend or borrow large amounts from anyone.", remedy: "Chant the Mars mantra — 'Om Mangalaya Namah' — on Tuesdays." },
+    MIXED: { main: "Financial situation will be average. Maintaining balance between income and expenses is essential.", caution: "Consult a financial advisor before making investment decisions.", remedy: "Offer something green to Mercury." },
   },
   health: {
-    UP:    { main: "Swasthya accha rahega. Energy levels oonche hain — naye fitness goals set karein.", caution: "Rest aur sleep ko ignore mat karein bawajood acchi energy ke.", remedy: "Roz morning walk zaroor karein aur taaza phal khayen." },
-    DOWN:  { main: "Swasthya thoda naazan ho sakta hai. Rest aur proper diet par focus karein.", caution: "Koi bhi badi medical procedure se pehle doosri raay lein.", remedy: "Roz surya ko jal arpit karein aur turmeric wala milk piyein." },
-    MIXED: { main: "Swasthya kaafi had tak theek rahega — bas thodi sawdhani zaroori hai.", caution: "Mental stress ko physical problems mein convert hone se rokein.", remedy: "Hanuman Chalisa roz padhein — immunity aur energy badhegi." },
+    UP:    { main: "Health will be good. Energy levels are high — set new fitness goals.", caution: "Don't neglect rest and sleep despite having good energy.", remedy: "Take a morning walk daily and eat fresh fruits." },
+    DOWN:  { main: "Health may feel slightly fragile. Focus on rest and a proper diet.", caution: "Seek a second opinion before any major medical procedure.", remedy: "Offer water to the Sun daily and drink turmeric milk." },
+    MIXED: { main: "Health will be mostly fine — just a little caution is needed.", caution: "Prevent mental stress from converting into physical problems.", remedy: "Read Hanuman Chalisa daily — it boosts immunity and energy." },
   },
 };
 
 function makeCategoryText(domain: string, planet: string, trend: Trend, score: number): { text: string; caution: string; remedy: string } {
   const cat = CAT_TEXTS[domain]?.[trend];
-  if (!cat) return { text: `Score: ${score}`, caution: "Sawdhani rakhen.", remedy: "Mantra jaap karein." };
+  if (!cat) return { text: `Score: ${score}`, caution: "Exercise caution.", remedy: "Chant a mantra daily." };
   return { text: cat.main, caution: cat.caution, remedy: cat.remedy };
 }
 

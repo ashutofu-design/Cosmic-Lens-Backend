@@ -111,6 +111,19 @@ export default function HomeScreen() {
           : "Hello — Set Up Your Kundli"}
       </Text>
 
+      {/* ── Action buttons ── */}
+      <View style={styles.btnRow}>
+        <ActionCard
+          label="7 Days Forecast"
+          icon="calendar"
+          accent="#00d4ff"
+          bg="#040e20"
+          border="rgba(0,200,255,0.25)"
+          locked={false}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
+        />
+      </View>
+
       {/* ── Energy Chart (real or demo) ── */}
       <View style={styles.chartWrap}>
         {showDemo && (
@@ -138,19 +151,6 @@ export default function HomeScreen() {
           ? "Reading cosmic signals..."
           : "Birth chart · Navatara · Ashtakavarga"}
       </Text>
-
-      {/* ── Action buttons ── */}
-      <View style={styles.btnRow}>
-        <ActionCard
-          label="7 Days Forecast"
-          icon="calendar"
-          accent="#00d4ff"
-          bg="#040e20"
-          border="rgba(0,200,255,0.25)"
-          locked={false}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
-        />
-      </View>
 
       {/* ── Cosmic Tools ── */}
       <View style={styles.toolsWrap}>

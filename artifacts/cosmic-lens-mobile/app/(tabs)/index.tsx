@@ -84,6 +84,37 @@ function useFadeSlideIn(delay = 0) {
   return { opacity, transform: [{ translateY }] };
 }
 
+// ── Shimmer sweep — makes card feel live & active ─────────────────────────────
+function useShimmer(cardWidth: number) {
+  const anim = useRef(new Animated.Value(-cardWidth)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.delay(1800),
+        Animated.timing(anim, { toValue: cardWidth * 2, duration: 800, useNativeDriver: true }),
+        Animated.delay(300),
+      ])
+    ).start();
+    return () => anim.stopAnimation();
+  }, [cardWidth]);
+  return anim;
+}
+
+// ── Blink — for live indicators ───────────────────────────────────────────────
+function useBlink(onMs = 450, offMs = 450, pauseMs = 1100) {
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 0.1, duration: offMs, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1,   duration: onMs,  useNativeDriver: true }),
+        Animated.delay(pauseMs),
+      ])
+    ).start();
+  }, []);
+  return anim;
+}
+
 // ── Score counter animation ───────────────────────────────────────────────────
 function useCountUp(target: number, delay = 200) {
   const [display, setDisplay] = useState(0);
@@ -296,79 +327,180 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   );
 }
 
-// ── Dosh Analysis Card ────────────────────────────────────────────────────────
+// ── Dosh Analysis Card — LIVE, URGENT, PREMIUM ───────────────────────────────
 function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
-  const glowOpacity = useOpacityPulse(0.45, 1.0, 850);
-  const pulse       = usePulseScale(0.012, 1100);
+  const { width: screenW }  = useWindowDimensions();
+  const cardW               = screenW - 28; // scroll padding
+  const glowOpacity         = useOpacityPulse(0.5, 1.0, 750);
+  const outerGlow           = useOpacityPulse(0.3, 0.9, 1100);
+  const shimmerX            = useShimmer(cardW);
+  const blinkDot            = useBlink(400, 400, 1200);
+  const ctaPulse            = usePulseScale(0.03, 800);
+  const warningPulse        = useOpacityPulse(0.6, 1.0, 600);
+
+  const DOSHAS = ["Kalsarp", "Manglik", "Pitra"];
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.974 : 1 }], opacity: pressed ? 0.92 : 1 }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{
+        transform: [{ scale: pressed ? 0.970 : 1 }],
+        opacity: pressed ? 0.88 : 1,
+      }]}
+    >
+      {/* Outer shadow glow — pulsing red aura */}
+      <Animated.View style={[dosh.outerGlow, { opacity: outerGlow }]} />
+
       <LinearGradient
-        colors={["#7f1d1d", "#b91c1c", "#6b1212"]}
+        colors={["#6b0f0f", "#991b1b", "#7f1d1d"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={dosh.card}
       >
+        {/* Shimmer sweep */}
+        <Animated.View style={[dosh.shimmer, { transform: [{ translateX: shimmerX }] }]} />
+
+        {/* Animated border */}
         <Animated.View style={[dosh.borderGlow, { opacity: glowOpacity }]} />
 
+        {/* Decorative astro symbol */}
         <Text style={dosh.bigSymbol}>☿</Text>
 
-        <View style={dosh.row}>
-          <View style={dosh.left}>
-            <View style={dosh.badge}>
-              <Text style={dosh.badgeText}>⚠ DOSH ALERT</Text>
-            </View>
-            <Text style={dosh.title}>Dosh Analysis</Text>
-            <Text style={dosh.subtitle}>
-              {kundli ? "Active doshas — see remedies" : "Kalsarp · Manglik · Pitra"}
-            </Text>
-            <View style={dosh.chipRow}>
-              {["Kalsarp", "Manglik", "Pitra"].map(d => (
-                <View key={d} style={dosh.chip}>
-                  <Text style={dosh.chipText}>{d}</Text>
-                </View>
-              ))}
-            </View>
+        {/* ── TOP ROW: Live badge + count + arrow ── */}
+        <View style={dosh.topRow}>
+          <View style={dosh.liveRow}>
+            {/* Blinking red dot */}
+            <Animated.View style={[dosh.liveDot, { opacity: blinkDot }]} />
+            <Text style={dosh.liveTxt}>LIVE ANALYSIS</Text>
           </View>
-          <Animated.View style={[dosh.arrowCircle, { transform: [{ scale: pulse }] }]}>
-            <Feather name="arrow-right" size={15} color="#ff6b6b" />
+          <Animated.View style={[dosh.arrowCircle, { transform: [{ scale: ctaPulse }] }]}>
+            <Feather name="chevron-right" size={16} color="#ff6b6b" />
           </Animated.View>
+        </View>
+
+        {/* ── TITLE ── */}
+        <Text style={dosh.title}>Dosh Analysis</Text>
+
+        {/* ── THREAT METER ── */}
+        <View style={dosh.meterRow}>
+          <Text style={dosh.meterLabel}>Threat Level</Text>
+          <View style={dosh.meterTrack}>
+            <Animated.View style={[dosh.meterFill, { opacity: warningPulse }]} />
+          </View>
+          <Text style={dosh.meterValue}>HIGH</Text>
+        </View>
+
+        {/* ── DOSH CHIPS ── */}
+        <View style={dosh.chipRow}>
+          {DOSHAS.map((d, i) => (
+            <View key={d} style={[dosh.chip, i === 0 && dosh.chipDanger]}>
+              <View style={[dosh.chipDot, { backgroundColor: i === 0 ? "#ff3355" : "rgba(255,255,255,0.5)" }]} />
+              <Text style={[dosh.chipText, i === 0 && { color: "#ff6b6b" }]}>{d}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* ── CTA FOOTER ── */}
+        <View style={dosh.ctaBar}>
+          <Text style={dosh.ctaTxt}>⚠ 3 issues detected in your chart</Text>
+          <View style={dosh.ctaBtn}>
+            <Text style={dosh.ctaBtnTxt}>Tap to Reveal</Text>
+            <Feather name="arrow-right" size={11} color="#ff6b6b" />
+          </View>
         </View>
       </LinearGradient>
     </Pressable>
   );
 }
 
-// ── Risk Alert Card ───────────────────────────────────────────────────────────
+// ── Risk Alert Card — LIVE, URGENT, PREMIUM ───────────────────────────────────
 function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
-  const dashaTxt    = activeDasha ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha active` : "Transit & dasha analysis";
-  const glowOpacity = useOpacityPulse(0.35, 0.9, 1000);
-  const pulse       = usePulseScale(0.012, 1200);
+  const { width: screenW } = useWindowDimensions();
+  const cardW              = screenW - 28;
+  const dashaTxt           = activeDasha
+    ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} Dasha`
+    : "Saturn Transit";
+  const glowOpacity        = useOpacityPulse(0.4, 1.0, 700);
+  const outerGlow          = useOpacityPulse(0.25, 0.85, 950);
+  const shimmerX           = useShimmer(cardW);
+  const blinkDot           = useBlink(350, 350, 1400);
+  const ctaPulse           = usePulseScale(0.03, 900);
+  const warningPulse       = useOpacityPulse(0.5, 1.0, 550);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.974 : 1 }], opacity: pressed ? 0.92 : 1 }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [{
+        transform: [{ scale: pressed ? 0.970 : 1 }],
+        opacity: pressed ? 0.88 : 1,
+      }]}
+    >
+      {/* Outer glow — pulsing orange aura */}
+      <Animated.View style={[bad.outerGlow, { opacity: outerGlow }]} />
+
       <LinearGradient
-        colors={["#7c2d12", "#c2410c", "#5c1f08"]}
+        colors={["#5c1f08", "#c2410c", "#7c2d12"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={bad.card}
       >
+        {/* Shimmer sweep */}
+        <Animated.View style={[bad.shimmer, { transform: [{ translateX: shimmerX }] }]} />
+
         <Animated.View style={[bad.borderGlow, { opacity: glowOpacity }]} />
         <Text style={bad.bigSymbol}>⚡</Text>
 
-        <View style={bad.row}>
-          <View style={bad.left}>
-            <View style={bad.badge}>
-              <Text style={bad.badgeText}>🔴 URGENT</Text>
-            </View>
-            <Text style={bad.title}>Risk Alert</Text>
-            <Text style={bad.subtitle}>Planetary risks & weak houses</Text>
-            <View style={bad.bottomRow}>
-              <Feather name="clock" size={10} color="rgba(255,255,255,0.5)" />
-              <Text style={bad.bottomText}>{dashaTxt}</Text>
-            </View>
+        {/* ── TOP ROW ── */}
+        <View style={bad.topRow}>
+          <View style={bad.liveRow}>
+            <Animated.View style={[bad.liveDot, { opacity: blinkDot }]} />
+            <Text style={bad.liveTxt}>ALERT NOW</Text>
           </View>
-          <Animated.View style={[bad.arrowCircle, { transform: [{ scale: pulse }] }]}>
-            <Feather name="arrow-right" size={15} color="#ff8c42" />
+          <Animated.View style={[bad.arrowCircle, { transform: [{ scale: ctaPulse }] }]}>
+            <Feather name="chevron-right" size={16} color="#ff8c42" />
           </Animated.View>
+        </View>
+
+        {/* ── TITLE ── */}
+        <Text style={bad.title}>Risk Alert</Text>
+
+        {/* ── ACTIVE DASHA + RISK BARS ── */}
+        <View style={bad.dashaRow}>
+          <Feather name="zap" size={11} color="#ff8c42" />
+          <Text style={bad.dashaTxt}>
+            Active: <Text style={{ color: "#ffb347", fontFamily: F.bold }}>{dashaTxt}</Text>
+          </Text>
+        </View>
+
+        {/* Risk indicators */}
+        <View style={bad.riskRow}>
+          {[
+            { label: "Sade Sati",   pct: 75, hot: true  },
+            { label: "Weak Houses", pct: 55, hot: false },
+          ].map(r => (
+            <View key={r.label} style={bad.riskItem}>
+              <View style={bad.riskHeader}>
+                <Text style={bad.riskLabel}>{r.label}</Text>
+                <Animated.View style={{ opacity: r.hot ? warningPulse : 1 }}>
+                  <Text style={[bad.riskPct, r.hot && { color: "#ff4444" }]}>{r.pct}%</Text>
+                </Animated.View>
+              </View>
+              <View style={bad.riskTrack}>
+                <Animated.View style={[
+                  bad.riskFill,
+                  { width: `${r.pct}%`, backgroundColor: r.hot ? "#ff4444" : "#f97316" },
+                  r.hot && { opacity: warningPulse },
+                ]} />
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* ── CTA FOOTER ── */}
+        <View style={bad.ctaBar}>
+          <Text style={bad.ctaTxt}>⚡ 2 active planetary risks</Text>
+          <View style={bad.ctaBtn}>
+            <Text style={bad.ctaBtnTxt}>Check Now</Text>
+            <Feather name="arrow-right" size={11} color="#ff8c42" />
+          </View>
         </View>
       </LinearGradient>
     </Pressable>
@@ -484,79 +616,124 @@ const hero = StyleSheet.create({
 const CARD_RADIUS   = 18;
 const CARD_PADDING  = 14;
 
-// ── Dosh card ─────────────────────────────────────────────────────────────────
+// ── Dosh card — premium live ───────────────────────────────────────────────────
 const dosh = StyleSheet.create({
+  outerGlow: {
+    position: "absolute", inset: -3, borderRadius: CARD_RADIUS + 3,
+    backgroundColor: "#ff1133",
+    shadowColor: "#ff1133", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 18, elevation: 0,
+  },
   card: {
     borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
-    shadowColor: "#ff2244", shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.55, shadowRadius: 20, elevation: 12,
+    shadowColor: "#ff2244", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7, shadowRadius: 24, elevation: 18,
+  },
+  shimmer: {
+    position: "absolute", top: 0, bottom: 0, width: 60, zIndex: 2,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    transform: [{ skewX: "-20deg" }],
   },
   borderGlow: {
     position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
-    borderWidth: 1.5, borderColor: "#ff3355",
+    borderWidth: 1.5, borderColor: "#ff3355", zIndex: 1,
+  },
+  bigSymbol: {
+    position: "absolute", right: 4, top: -8,
+    fontSize: 88, opacity: 0.11, color: "#ffffff",
+  },
+  topRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  liveRow:  { flexDirection: "row", alignItems: "center", gap: 6 },
+  liveDot:  { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#ff2244" },
+  liveTxt:  { color: "#ff6b6b", fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8 },
+  arrowCircle: {
+    width: 30, height: 30, borderRadius: 15, borderWidth: 1.5,
+    borderColor: "rgba(255,100,100,0.5)", backgroundColor: "rgba(255,50,50,0.2)",
+    alignItems: "center", justifyContent: "center",
+  },
+  title:    { color: "#ffffff", fontSize: 21, fontFamily: F.bold, letterSpacing: -0.6, marginBottom: 8 },
+  meterRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  meterLabel: { color: "rgba(255,255,255,0.55)", fontSize: 9.5, fontFamily: F.medium, width: 72 },
+  meterTrack: { flex: 1, height: 5, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" },
+  meterFill:  { width: "78%", height: "100%", backgroundColor: "#ff2244", borderRadius: 3 },
+  meterValue: { color: "#ff4466", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.8, width: 32 },
+  chipRow:  { flexDirection: "row", gap: 6, marginBottom: 10 },
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(255,255,255,0.11)", borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)", borderRadius: 20,
+    paddingVertical: 4, paddingHorizontal: 10,
+  },
+  chipDanger: {
+    backgroundColor: "rgba(255,34,68,0.22)", borderColor: "rgba(255,50,80,0.5)",
+  },
+  chipDot:  { width: 5, height: 5, borderRadius: 2.5 },
+  chipText: { color: "#ffffff", fontSize: 9.5, fontFamily: F.semibold },
+  ctaBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: "rgba(255,50,70,0.3)",
+  },
+  ctaTxt:    { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: F.medium },
+  ctaBtn:    { flexDirection: "row", alignItems: "center", gap: 4 },
+  ctaBtnTxt: { color: "#ff6b6b", fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
+});
+
+// ── Risk Alert card — premium live ────────────────────────────────────────────
+const bad = StyleSheet.create({
+  outerGlow: {
+    position: "absolute", inset: -3, borderRadius: CARD_RADIUS + 3,
+    backgroundColor: "#ff6600",
+    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 16, elevation: 0,
+  },
+  card: {
+    borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
+    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.65, shadowRadius: 22, elevation: 16,
+  },
+  shimmer: {
+    position: "absolute", top: 0, bottom: 0, width: 60, zIndex: 2,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    transform: [{ skewX: "-20deg" }],
+  },
+  borderGlow: {
+    position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
+    borderWidth: 1.5, borderColor: "#f97316", zIndex: 1,
   },
   bigSymbol: {
     position: "absolute", right: 6, top: -6,
-    fontSize: 80, opacity: 0.14, color: "#ffffff",
+    fontSize: 84, opacity: 0.11, color: "#ffffff",
   },
-  row:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  left: { flex: 1, gap: 5 },
-  badge: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)", borderRadius: 20,
-    paddingVertical: 4, paddingHorizontal: 11,
-  },
-  badgeText:  { color: "#ffffff", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.9 },
-  title:      { color: "#ffffff", fontSize: 20, fontFamily: F.bold, letterSpacing: -0.5 },
-  subtitle:   { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontFamily: F.medium, lineHeight: 16 },
-  chipRow:    { flexDirection: "row", gap: 6 },
-  chip: {
-    backgroundColor: "rgba(255,255,255,0.13)", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)", borderRadius: 20,
-    paddingVertical: 3, paddingHorizontal: 10,
-  },
-  chipText:   { color: "#ffffff", fontSize: 9.5, fontFamily: F.semibold },
+  topRow:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  liveRow:  { flexDirection: "row", alignItems: "center", gap: 6 },
+  liveDot:  { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#ff6600" },
+  liveTxt:  { color: "#ffb347", fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8 },
   arrowCircle: {
-    width: 34, height: 34, borderRadius: 17, borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.38)", backgroundColor: "rgba(255,255,255,0.13)",
-    alignItems: "center", justifyContent: "center", marginLeft: 10,
+    width: 30, height: 30, borderRadius: 15, borderWidth: 1.5,
+    borderColor: "rgba(255,140,66,0.5)", backgroundColor: "rgba(255,100,30,0.2)",
+    alignItems: "center", justifyContent: "center",
   },
-});
-
-// ── Risk Alert card ───────────────────────────────────────────────────────────
-const bad = StyleSheet.create({
-  card: {
-    borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
-    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.5, shadowRadius: 20, elevation: 11,
+  title:    { color: "#ffffff", fontSize: 21, fontFamily: F.bold, letterSpacing: -0.6, marginBottom: 6 },
+  dashaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  dashaTxt: { color: "rgba(255,255,255,0.65)", fontSize: 10.5, fontFamily: F.medium },
+  riskRow:  { gap: 7, marginBottom: 10 },
+  riskItem: { gap: 4 },
+  riskHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  riskLabel:  { color: "rgba(255,255,255,0.65)", fontSize: 9.5, fontFamily: F.medium },
+  riskPct:    { color: "#ff8c42", fontSize: 9.5, fontFamily: F.bold },
+  riskTrack:  { height: 4, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 3, overflow: "hidden" },
+  riskFill:   { height: "100%", borderRadius: 3 },
+  ctaBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: "rgba(255,120,30,0.3)",
   },
-  borderGlow: {
-    position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
-    borderWidth: 1.5, borderColor: "#f97316",
-  },
-  bigSymbol: {
-    position: "absolute", right: 8, top: -4,
-    fontSize: 78, opacity: 0.14, color: "#ffffff",
-  },
-  row:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  left: { flex: 1, gap: 5 },
-  badge: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)", borderRadius: 20,
-    paddingVertical: 4, paddingHorizontal: 11,
-  },
-  badgeText:  { color: "#ffffff", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.8 },
-  title:      { color: "#ffffff", fontSize: 20, fontFamily: F.bold, letterSpacing: -0.5 },
-  subtitle:   { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontFamily: F.medium },
-  bottomRow:  { flexDirection: "row", alignItems: "center", gap: 5 },
-  bottomText: { color: "rgba(255,255,255,0.48)", fontSize: 10, fontFamily: F.medium, flex: 1 },
-  arrowCircle: {
-    width: 34, height: 34, borderRadius: 17, borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.38)", backgroundColor: "rgba(255,255,255,0.13)",
-    alignItems: "center", justifyContent: "center", marginLeft: 10,
-  },
+  ctaTxt:    { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: F.medium },
+  ctaBtn:    { flexDirection: "row", alignItems: "center", gap: 4 },
+  ctaBtnTxt: { color: "#ff8c42", fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
 });
 
 // ── Kundli Milan card ─────────────────────────────────────────────────────────

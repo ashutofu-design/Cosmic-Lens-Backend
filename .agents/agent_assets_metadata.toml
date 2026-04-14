@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "gIgSKMcdYDwUSk6USscTr"
+uri = "file://qr_cosmic_lens.png"
+type = "image"
+title = "Cosmic Lens — Expo QR Code"

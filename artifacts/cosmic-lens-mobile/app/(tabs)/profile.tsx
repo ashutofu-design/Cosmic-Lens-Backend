@@ -2,196 +2,116 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-  Alert, Modal, Platform, Pressable, ScrollView,
-  StyleSheet, Switch, Text, View,
+  Alert, Animated, Modal, Platform, Pressable,
+  ScrollView, StyleSheet, Switch, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 
+// ── Font aliases ───────────────────────────────────────────────────────────────
+const F = {
+  regular:  "Inter_400Regular",
+  medium:   "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold:     "Inter_700Bold",
+};
+
+// ── Languages ─────────────────────────────────────────────────────────────────
 type LangItem = { code: string; native: string; name: string };
 const LANGUAGES: LangItem[] = [
-  { code:"hi", native:"हिंदी",      name:"Hindi"       },
-  { code:"en", native:"English",    name:"English"     },
-  { code:"mr", native:"मराठी",      name:"Marathi"     },
-  { code:"bn", native:"বাংলা",      name:"Bengali"     },
-  { code:"te", native:"తెలుగు",     name:"Telugu"      },
-  { code:"ta", native:"தமிழ்",      name:"Tamil"       },
-  { code:"gu", native:"ગુજરાતી",   name:"Gujarati"    },
-  { code:"kn", native:"ಕನ್ನಡ",     name:"Kannada"     },
+  { code:"hi", native:"हिंदी",    name:"Hindi"    },
+  { code:"en", native:"English",  name:"English"  },
+  { code:"mr", native:"मराठी",    name:"Marathi"  },
+  { code:"bn", native:"বাংলা",    name:"Bengali"  },
+  { code:"te", native:"తెలుగు",   name:"Telugu"   },
+  { code:"ta", native:"தமிழ்",    name:"Tamil"    },
+  { code:"gu", native:"ગુજરાતી", name:"Gujarati" },
+  { code:"kn", native:"ಕನ್ನಡ",   name:"Kannada"  },
 ];
 
+// ── Plans ─────────────────────────────────────────────────────────────────────
 type BillingCycle = "monthly" | "yearly";
 
 const PLANS = [
   {
-    key: "free",
-    name: "Muft",
-    nameEn: "Free",
-    badge: null,
-    accent: "#475569",
-    accentBg: "rgba(71,85,105,0.08)",
-    border: "rgba(71,85,105,0.25)",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    cta: "Current Plan",
-    ctaActive: false,
-    features: [
-      "1 Profile",
-      "Basic Kundli Chart",
-      "3 AI Sawaal / din",
-      "Demo Insights",
-      "Basic Planet View",
-    ],
-    featureOff: [
-      "Full Dasha Timeline",
-      "7-Day Forecast",
-      "PDF Report",
-    ],
+    key: "free", name: "Free",
+    accent: "#64748b", accentBg: "rgba(71,85,105,0.08)",
+    border: "rgba(71,85,105,0.22)", badge: null,
+    monthlyPrice: 0, yearlyPrice: 0,
+    cta: "Current Plan", ctaActive: false,
+    icon: "circle" as const,
+    features: ["1 Profile","Basic Kundli Chart","3 AI Sawaal / din","Demo Insights","Basic Planet View"],
+    featureOff: ["Full Dasha Timeline","7-Day Forecast","PDF Report","Kundli Milan"],
   },
   {
-    key: "pro",
-    name: "Pro",
-    nameEn: "Pro",
-    badge: "POPULAR",
-    badgeColor: "#00d4ff",
-    accent: "#00d4ff",
-    accentBg: "rgba(0,212,255,0.06)",
-    border: "rgba(0,212,255,0.35)",
-    monthlyPrice: 149,
-    yearlyPrice: 999,
-    yearlySave: 44,
-    cta: "Pro Lein",
-    ctaActive: true,
-    features: [
-      "5 Profiles",
-      "Full Kundli + Dasha Timeline",
-      "Unlimited AI Chat",
-      "7-Din ka Forecast",
-      "Planet Positions + Nakshatra",
-      "Monthly Category Insights",
-    ],
-    featureOff: [
-      "PDF Report",
-      "Kundli Milan",
-    ],
+    key: "pro", name: "Pro",
+    accent: "#00d4ff", accentBg: "rgba(0,212,255,0.05)",
+    border: "rgba(0,212,255,0.30)", badge: "POPULAR",
+    monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
+    cta: "Pro Lein", ctaActive: true,
+    icon: "zap" as const,
+    features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited AI Chat","7-Din Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
+    featureOff: ["PDF Report","Kundli Milan"],
   },
   {
-    key: "elite",
-    name: "Elite",
-    nameEn: "Elite",
-    badge: "PREMIUM",
-    badgeColor: "#a78bfa",
-    accent: "#a78bfa",
-    accentBg: "rgba(167,139,250,0.06)",
-    border: "rgba(167,139,250,0.35)",
-    monthlyPrice: 399,
-    yearlyPrice: 2999,
-    yearlySave: 37,
-    cta: "Elite Lein",
-    ctaActive: true,
-    features: [
-      "Unlimited Profiles",
-      "Sab Pro Features",
-      "Monthly PDF Horoscope Report",
-      "Kundli Milan (Vivah Yog)",
-      "Career & Finance Deep Analysis",
-      "Priority Astrologer Chat",
-      "Yearly Forecast",
-    ],
+    key: "elite", name: "Elite",
+    accent: "#a78bfa", accentBg: "rgba(167,139,250,0.05)",
+    border: "rgba(167,139,250,0.30)", badge: "PREMIUM",
+    monthlyPrice: 399, yearlyPrice: 2999, yearlySave: 37,
+    cta: "Elite Lein", ctaActive: true,
+    icon: "star" as const,
+    features: ["Unlimited Profiles","Sab Pro Features","Monthly PDF Report","Kundli Milan (Vivah Yog)","Career & Finance Deep Analysis","Priority Astrologer Chat","Yearly Forecast"],
     featureOff: [],
   },
 ];
 
-// ── Profile Card ─────────────────────────────────────────────────────────────
-function ProfileCard({
-  profile, isPrimary, canDelete,
-  onEdit, onSetPrimary, onDelete,
-}: {
-  profile: ProfileEntry;
-  isPrimary: boolean;
-  canDelete: boolean;
-  onEdit: () => void;
-  onSetPrimary: () => void;
-  onDelete: () => void;
+// ── Animated row wrapper ──────────────────────────────────────────────────────
+function PressRow({ onPress, style, children }: {
+  onPress: () => void;
+  style?: object;
+  children: React.ReactNode;
 }) {
-  const initials = profile.name
-    .split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
+  const sc = useRef(new Animated.Value(1)).current;
+  function pressIn()  { Animated.spring(sc, { toValue:0.97, useNativeDriver:true, speed:40 }).start(); }
+  function pressOut() { Animated.spring(sc, { toValue:1,    useNativeDriver:true, speed:40 }).start(); }
 
   return (
-    <View style={[pc.card, isPrimary && pc.cardPrimary]}>
-      <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
-        <View style={[pc.avatar, isPrimary && pc.avatarPrimary]}>
-          <Text style={pc.initials}>{initials}</Text>
-        </View>
-        <View style={{ flex:1, minWidth:0 }}>
-          <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-            <Text style={pc.name} numberOfLines={1}>{profile.name}</Text>
-            {isPrimary && (
-              <View style={pc.primaryBadge}>
-                <Text style={pc.primaryBadgeText}>PRIMARY</Text>
-              </View>
-            )}
-          </View>
-          <Text style={pc.sub} numberOfLines={1}>
-            {profile.gender ? `${profile.gender} · ` : ""}{profile.birthData.place}
-          </Text>
-          <Text style={pc.date}>
-            {profile.birthData.day}/{profile.birthData.month}/{profile.birthData.year}
-            {"  ·  "}
-            {String(profile.birthData.hour).padStart(2,"0")}:{String(profile.birthData.minute).padStart(2,"0")} {profile.birthData.ampm}
-          </Text>
-        </View>
-        <View style={{ flexDirection:"row", gap:4 }}>
-          {canDelete && (
-            <Pressable onPress={onDelete} style={pc.iconBtn} hitSlop={8}>
-              <Feather name="trash-2" size={15} color="#f87171" />
-            </Pressable>
-          )}
-          <Pressable onPress={onEdit} style={pc.iconBtn} hitSlop={8}>
-            <Feather name="chevron-right" size={18} color="#334155" />
-          </Pressable>
-        </View>
-      </View>
-      {!isPrimary && (
-        <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
-          <Feather name="star" size={12} color="#00d4ff" />
-          <Text style={pc.setPrimaryText}>Set as Primary</Text>
-        </Pressable>
-      )}
-      {isPrimary && (
-        <View style={pc.activeRow}>
-          <Feather name="check" size={12} color="#00a86b" />
-          <Text style={pc.activeText}>Active profile — all calculations use this chart</Text>
-        </View>
-      )}
-    </View>
+    <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
+      <Animated.View style={[style, { transform:[{ scale:sc }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
   );
 }
 
-// ── Language Picker Modal ─────────────────────────────────────────────────────
-function LangModal({ visible, current, onSelect, onClose }: {
+// ── Language Picker Sheet ─────────────────────────────────────────────────────
+function LangSheet({ visible, current, onSelect, onClose }: {
   visible: boolean; current: string;
-  onSelect: (code: string) => void; onClose: () => void;
+  onSelect: (code:string) => void; onClose: () => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={lm.overlay} onPress={onClose}>
         <Pressable style={lm.sheet} onPress={e => e.stopPropagation()}>
           <View style={lm.handle} />
-          <Text style={lm.title}>SELECT LANGUAGE</Text>
-          {LANGUAGES.map(lang => (
-            <Pressable key={lang.code} onPress={() => { onSelect(lang.code); onClose(); }}
-              style={[lm.row, lang.code === current && lm.rowActive]}>
-              <Text style={lm.native}>{lang.native}</Text>
-              <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-                <Text style={lm.langName}>{lang.name}</Text>
-                {lang.code === current && <Feather name="check" size={16} color="#00d4ff" />}
-              </View>
-            </Pressable>
-          ))}
+          <Text style={lm.heading}>BHASHA CHUNEIN</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {LANGUAGES.map(l => (
+              <Pressable key={l.code}
+                onPress={() => { onSelect(l.code); onClose(); }}
+                style={[lm.row, l.code === current && lm.rowActive]}
+              >
+                <Text style={lm.native}>{l.native}</Text>
+                <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+                  <Text style={lm.name}>{l.name}</Text>
+                  {l.code === current && <Feather name="check" size={15} color="#00d4ff" />}
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -207,19 +127,19 @@ function DeleteModal({ name, onConfirm, onCancel }: {
       <View style={dm.overlay}>
         <View style={dm.box}>
           <View style={dm.iconWrap}>
-            <Feather name="trash-2" size={18} color="#f87171" />
+            <Feather name="trash-2" size={20} color="#f87171" />
           </View>
-          <Text style={dm.title}>Delete Profile?</Text>
+          <Text style={dm.title}>Profile Delete Karein?</Text>
           <Text style={dm.body}>
-            <Text style={{ color:"#dde8f4", fontWeight:"600" }}>{name}</Text>
-            {" "}'s profile and chart data will be permanently deleted.
+            <Text style={{ color:"#dde8f4", fontFamily:F.semibold }}>{name}</Text>
+            {" "}ka chart data permanently delete ho jayega.
           </Text>
           <View style={dm.btnRow}>
             <Pressable onPress={onCancel} style={dm.cancelBtn}>
-              <Text style={{ color:"#94a3b8", fontSize:14 }}>Cancel</Text>
+              <Text style={{ color:"#64748b", fontSize:14, fontFamily:F.medium }}>Cancel</Text>
             </Pressable>
             <Pressable onPress={onConfirm} style={dm.deleteBtn}>
-              <Text style={{ color:"white", fontWeight:"700", fontSize:14 }}>Delete</Text>
+              <Text style={{ color:"#fff", fontSize:14, fontFamily:F.bold }}>Delete</Text>
             </Pressable>
           </View>
         </View>
@@ -228,82 +148,144 @@ function DeleteModal({ name, onConfirm, onCancel }: {
   );
 }
 
-// ── Subscription Plan Card ─────────────────────────────────────────────────────
-function PlanCard({
-  plan, cycle, isCurrent,
-  onPress,
-}: {
-  plan: typeof PLANS[0];
-  cycle: BillingCycle;
-  isCurrent: boolean;
-  onPress: () => void;
+// ── Profile Card ──────────────────────────────────────────────────────────────
+function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDelete }: {
+  profile: ProfileEntry; isPrimary: boolean; canDelete: boolean;
+  onEdit:()=>void; onSetPrimary:()=>void; onDelete:()=>void;
+}) {
+  const initials = profile.name.split(" ").map(w=>w[0]??"").join("").slice(0,2).toUpperCase()||"?";
+
+  return (
+    <View style={[pc.card, isPrimary && pc.cardPrimary]}>
+      <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
+        <LinearGradient
+          colors={isPrimary ? ["#0ea5e9","#00d4ff"] : ["#1e3a5f","#0a1828"]}
+          style={pc.avatar}
+        >
+          <Text style={pc.initials}>{initials}</Text>
+        </LinearGradient>
+
+        <View style={{ flex:1, minWidth:0, gap:2 }}>
+          <View style={{ flexDirection:"row", alignItems:"center", gap:7 }}>
+            <Text style={pc.name} numberOfLines={1}>{profile.name}</Text>
+            {isPrimary && (
+              <View style={pc.primaryBadge}>
+                <Feather name="star" size={8} color="#00d4ff" />
+                <Text style={pc.primaryBadgeText}>PRIMARY</Text>
+              </View>
+            )}
+          </View>
+          <Text style={pc.sub} numberOfLines={1}>
+            {profile.gender ? `${profile.gender} · ` : ""}
+            {profile.birthData.place}
+          </Text>
+          <Text style={pc.date}>
+            {profile.birthData.day}/{profile.birthData.month}/{profile.birthData.year}
+            {"  ·  "}
+            {String(profile.birthData.hour).padStart(2,"0")}:{String(profile.birthData.minute).padStart(2,"0")} {profile.birthData.ampm}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection:"row", gap:6 }}>
+          {canDelete && (
+            <Pressable onPress={onDelete} style={pc.iconBtn} hitSlop={8}>
+              <Feather name="trash-2" size={14} color="#f87171" />
+            </Pressable>
+          )}
+          <Pressable onPress={onEdit} style={pc.iconBtn} hitSlop={8}>
+            <Feather name="edit-3" size={14} color="#334155" />
+          </Pressable>
+        </View>
+      </View>
+
+      {isPrimary ? (
+        <View style={pc.activeRow}>
+          <Feather name="check-circle" size={11} color="#00a86b" />
+          <Text style={pc.activeText}>Active — sab calculations is chart se</Text>
+        </View>
+      ) : (
+        <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
+          <Feather name="star" size={11} color="#00d4ff" />
+          <Text style={pc.setPrimaryText}>Set as Primary</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+// ── Plan Card ─────────────────────────────────────────────────────────────────
+function PlanCard({ plan, cycle, isCurrent, onPress }: {
+  plan: typeof PLANS[0]; cycle: BillingCycle;
+  isCurrent: boolean; onPress: ()=>void;
 }) {
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isFree = plan.key === "free";
 
   return (
     <View style={[
-      sb.planCard,
+      pl.card,
       { borderColor: plan.border, backgroundColor: plan.accentBg },
-      isCurrent && sb.planCardCurrent,
+      isCurrent && pl.cardCurrent,
     ]}>
-      {/* Badge row */}
-      <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+      {/* Top row */}
+      <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
         <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-          <Text style={[sb.planName, { color: plan.accent }]}>{plan.name}</Text>
+          <View style={[pl.iconWrap, { backgroundColor:`${plan.accent}18`, borderColor:`${plan.accent}30` }]}>
+            <Feather name={plan.icon} size={14} color={plan.accent} />
+          </View>
+          <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
           {isCurrent && (
-            <View style={[sb.badge, { backgroundColor:`${plan.accent}20`, borderColor:`${plan.accent}40` }]}>
-              <Text style={[sb.badgeText, { color:plan.accent }]}>ACTIVE</Text>
+            <View style={[pl.badge, { backgroundColor:`${plan.accent}20`, borderColor:`${plan.accent}40` }]}>
+              <Text style={[pl.badgeText, { color: plan.accent }]}>ACTIVE</Text>
             </View>
           )}
         </View>
         {plan.badge && !isCurrent && (
-          <View style={[sb.badge, { backgroundColor:`${plan.accent}15`, borderColor:`${plan.accent}35` }]}>
-            <Text style={[sb.badgeText, { color:plan.accent }]}>{plan.badge}</Text>
+          <View style={[pl.badge, { backgroundColor:`${plan.accent}15`, borderColor:`${plan.accent}35` }]}>
+            <Text style={[pl.badgeText, { color: plan.accent }]}>{plan.badge}</Text>
           </View>
         )}
       </View>
 
       {/* Price */}
-      <View style={{ flexDirection:"row", alignItems:"flex-end", gap:4, marginBottom:4 }}>
+      <View style={{ flexDirection:"row", alignItems:"flex-end", gap:3, marginBottom:6 }}>
         {isFree ? (
-          <Text style={[sb.price, { color: plan.accent }]}>FREE</Text>
+          <Text style={[pl.price, { color: plan.accent }]}>FREE</Text>
         ) : (
           <>
-            <Text style={[sb.priceCurrency, { color: plan.accent }]}>₹</Text>
-            <Text style={[sb.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-            <Text style={sb.pricePer}>/{cycle === "yearly" ? "year" : "month"}</Text>
+            <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
+            <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
+            <Text style={pl.pricePer}>/{cycle === "yearly" ? "year" : "month"}</Text>
           </>
         )}
       </View>
 
-      {/* Yearly saving note */}
+      {/* Save pill */}
       {cycle === "yearly" && !isFree && (plan as any).yearlySave && (
-        <View style={sb.savePill}>
+        <View style={pl.savePill}>
           <Feather name="tag" size={9} color="#4ade80" />
-          <Text style={sb.saveText}>Save {(plan as any).yearlySave}% vs monthly</Text>
+          <Text style={pl.saveText}>Save {(plan as any).yearlySave}% vs monthly</Text>
         </View>
       )}
 
-      {/* Divider */}
-      <View style={[sb.separator, { backgroundColor:`${plan.accent}18`, marginTop: cycle === "yearly" && !isFree ? 12 : 14 }]} />
+      <View style={[pl.sep, { backgroundColor:`${plan.accent}18` }]} />
 
-      {/* Features ON */}
-      <View style={{ gap:7, marginTop:12 }}>
+      {/* Features */}
+      <View style={{ gap:7, marginBottom:14 }}>
         {plan.features.map(f => (
-          <View key={f} style={sb.featureRow}>
-            <View style={[sb.featureDot, { backgroundColor:`${plan.accent}25` }]}>
+          <View key={f} style={pl.featureRow}>
+            <View style={[pl.featureDot, { backgroundColor:`${plan.accent}22` }]}>
               <Feather name="check" size={9} color={plan.accent} />
             </View>
-            <Text style={sb.featureText}>{f}</Text>
+            <Text style={pl.featureText}>{f}</Text>
           </View>
         ))}
         {plan.featureOff.map(f => (
-          <View key={f} style={sb.featureRow}>
-            <View style={[sb.featureDot, { backgroundColor:"rgba(255,255,255,0.04)" }]}>
+          <View key={f} style={pl.featureRow}>
+            <View style={[pl.featureDot, { backgroundColor:"rgba(255,255,255,0.03)" }]}>
               <Feather name="minus" size={9} color="#1e3a5f" />
             </View>
-            <Text style={[sb.featureText, { color:"#1e3a5f" }]}>{f}</Text>
+            <Text style={[pl.featureText, { color:"#1e3a5f" }]}>{f}</Text>
           </View>
         ))}
       </View>
@@ -312,30 +294,56 @@ function PlanCard({
       {plan.ctaActive ? (
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPress(); }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1, marginTop:16 }]}
+          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
         >
           <LinearGradient
-            colors={plan.key === "pro"
-              ? ["#0284c7", "#00d4ff"]
-              : ["#7c3aed", "#a78bfa"]}
-            start={{ x:0, y:0 }} end={{ x:1, y:0 }}
-            style={sb.ctaBtn}
+            colors={plan.key==="pro" ? ["#0284c7","#00d4ff"] : ["#7c3aed","#a78bfa"]}
+            start={{x:0,y:0}} end={{x:1,y:0}}
+            style={pl.ctaBtn}
           >
-            <Feather name={plan.key === "pro" ? "zap" : "star"} size={14} color="#fff" />
-            <Text style={sb.ctaText}>{plan.cta}</Text>
+            <Feather name={plan.icon} size={14} color="#fff" />
+            <Text style={pl.ctaBtnText}>{plan.cta}</Text>
           </LinearGradient>
         </Pressable>
       ) : (
-        <View style={[sb.ctaBtnOutline, { borderColor:`${plan.accent}30`, marginTop:16 }]}>
+        <View style={[pl.ctaBtnOutline, { borderColor:`${plan.accent}30` }]}>
           <Feather name="check-circle" size={14} color={plan.accent} />
-          <Text style={[sb.ctaText, { color:plan.accent }]}>{plan.cta}</Text>
+          <Text style={[pl.ctaBtnText, { color: plan.accent }]}>{plan.cta}</Text>
         </View>
       )}
     </View>
   );
 }
 
-// ── Main Profile Screen ───────────────────────────────────────────────────────
+// ── Settings Row ──────────────────────────────────────────────────────────────
+function SettingRow({ icon, label, right, onPress, last = false }: {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  last?: boolean;
+}) {
+  const Wrap = onPress ? Pressable : View;
+  return (
+    <>
+      <Wrap
+        onPress={onPress}
+        style={({ pressed }: any) => [
+          st.row, onPress && pressed && { backgroundColor:"rgba(255,255,255,0.03)" },
+        ]}
+      >
+        <View style={st.iconCircle}>
+          <Feather name={icon} size={14} color="#64748b" />
+        </View>
+        <Text style={[st.label, { flex:1 }]}>{label}</Text>
+        {right ?? <Feather name="chevron-right" size={15} color="#1e3a5f" />}
+      </Wrap>
+      {!last && <View style={st.divider} />}
+    </>
+  );
+}
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const {
@@ -346,14 +354,21 @@ export default function ProfileScreen() {
   } = useUser();
 
   const [notifications,  setNotifications]  = useState(true);
+  const [dailyTip,       setDailyTip]       = useState(true);
   const [showLang,       setShowLang]       = useState(false);
   const [confirmDelete,  setConfirmDelete]  = useState<string | null>(null);
   const [switching,      setSwitching]      = useState(false);
   const [billingCycle,   setBillingCycle]   = useState<BillingCycle>("monthly");
+  const [subExpanded,    setSubExpanded]    = useState(false);
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  function handleSetPrimary(id: string) {
+  const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0];
+  const initials = (primaryProfile?.name ?? "U")
+    .split(" ").map(w=>w[0]??"").join("").slice(0,2).toUpperCase();
+
+  function handleSetPrimary(id:string) {
     setSwitching(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setTimeout(() => { setPrimaryProfile(id); setSwitching(false); }, 400);
@@ -365,17 +380,17 @@ export default function ProfileScreen() {
     router.replace("/login");
   }
 
-  const deleteTarget = confirmDelete ? profiles.find(p => p.id === confirmDelete) : null;
+  const deleteTarget = confirmDelete ? profiles.find(p=>p.id===confirmDelete) : null;
 
   return (
     <View style={{ flex:1, backgroundColor:"#020d1a" }}>
 
       {/* Switching overlay */}
       {switching && (
-        <View style={s.switchOverlay}>
-          <View style={s.switchBox}>
-            <Feather name="refresh-cw" size={24} color="#00d4ff" style={{ marginBottom:10 }} />
-            <Text style={{ color:"#00d4ff", fontSize:13, fontWeight:"600" }}>Switching profile...</Text>
+        <View style={s.overlay}>
+          <View style={s.overlayBox}>
+            <Feather name="refresh-cw" size={22} color="#00d4ff" style={{ marginBottom:10 }} />
+            <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>Profile switch ho raha hai...</Text>
           </View>
         </View>
       )}
@@ -389,8 +404,8 @@ export default function ProfileScreen() {
         />
       )}
 
-      {/* Language picker */}
-      <LangModal
+      {/* Language sheet */}
+      <LangSheet
         visible={showLang}
         current={language}
         onSelect={code => { setLanguage(code as "hi"); Haptics.selectionAsync(); }}
@@ -398,19 +413,52 @@ export default function ProfileScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={{ paddingTop: topPad + 16, paddingBottom: botPad + 80, paddingHorizontal:20, gap:28 }}
+        contentContainerStyle={{
+          paddingTop: topPad + 8,
+          paddingBottom: botPad + 90,
+          paddingHorizontal: 16,
+          gap: 20,
+        }}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── PROFILES ──────────────────────────────────────────────────── */}
+        {/* ── USER HEADER ──────────────────────────────────────────────── */}
+        <LinearGradient
+          colors={["#040e20","#071525"]}
+          style={s.header}
+        >
+          {/* Background star pattern */}
+          <Text style={s.headerBgStar}>✦</Text>
+          <Text style={[s.headerBgStar, { right:30, top:12, fontSize:14, opacity:0.04 }]}>✦</Text>
+
+          <LinearGradient colors={["#0ea5e9","#00d4ff"]} style={s.headerAvatar}>
+            <Text style={s.headerInitials}>{initials}</Text>
+          </LinearGradient>
+
+          <View style={{ alignItems:"center", gap:4 }}>
+            <Text style={s.headerName}>{primaryProfile?.name ?? "User"}</Text>
+            <Text style={s.headerSub}>
+              {profiles.length} profile{profiles.length!==1?"s":""} · {primaryProfile?.birthData.place ?? ""}
+            </Text>
+          </View>
+
+          {/* Free plan badge */}
+          <View style={s.planBadge}>
+            <Feather name="circle" size={9} color="#64748b" />
+            <Text style={s.planBadgeText}>FREE PLAN</Text>
+            <View style={s.planDivider} />
+            <Text style={s.planUpgrade}>Upgrade karo →</Text>
+          </View>
+        </LinearGradient>
+
+        {/* ── MY PROFILES ─────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>MY PROFILES</Text>
-          <View style={{ gap:12 }}>
-            {profiles.length === 0 && (
-              <Text style={{ color:"#334155", fontSize:13, textAlign:"center", paddingVertical:20 }}>
-                No profiles found. Add one below.
-              </Text>
-            )}
+          <View style={s.sectionRow}>
+            <Text style={s.sectionLabel}>MY PROFILES</Text>
+            <Text style={s.sectionCount}>{profiles.length}/1</Text>
+          </View>
+
+          <View style={{ gap:10 }}>
             {profiles.map(p => (
               <ProfileCard
                 key={p.id}
@@ -423,117 +471,193 @@ export default function ProfileScreen() {
               />
             ))}
 
-            {/* Add Profile button */}
+            {/* Add profile */}
             <Pressable
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname:"/profile-edit", params:{ mode:"add" } }); }}
               style={({ pressed }) => [s.addBtn, pressed && { opacity:0.7 }]}
             >
               <View style={s.addCircle}>
-                <Feather name="plus" size={16} color="#00d4ff" />
+                <Feather name="plus" size={15} color="#00d4ff" />
               </View>
               <View>
-                <Text style={{ color:"#00d4ff", fontSize:13, fontWeight:"600" }}>Add New Profile</Text>
-                <Text style={{ color:"#334155", fontSize:10, marginTop:2 }}>For family members or others</Text>
+                <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>Profile Add Karo</Text>
+                <Text style={{ color:"#1e3a5f", fontSize:10, fontFamily:F.regular, marginTop:1 }}>Family ya doston ke liye</Text>
               </View>
             </Pressable>
           </View>
         </View>
 
-        {/* ── SUBSCRIPTION ──────────────────────────────────────────────── */}
+        {/* ── SUBSCRIPTION ─────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>SUBSCRIPTION</Text>
-
-          {/* Billing cycle toggle */}
-          <View style={sb.cycleRow}>
-            <Pressable
-              onPress={() => { setBillingCycle("monthly"); Haptics.selectionAsync(); }}
-              style={[sb.cycleBtn, billingCycle === "monthly" && sb.cycleBtnActive]}
-            >
-              <Text style={[sb.cycleBtnText, billingCycle === "monthly" && sb.cycleBtnTextActive]}>
-                Monthly
-              </Text>
+          <View style={s.sectionRow}>
+            <Text style={s.sectionLabel}>SUBSCRIPTION</Text>
+            <Pressable onPress={() => { setSubExpanded(v=>!v); Haptics.selectionAsync(); }}>
+              <Text style={s.sectionAction}>{subExpanded ? "Chhupao ↑" : "Plans Dekho ↓"}</Text>
             </Pressable>
-            <Pressable
-              onPress={() => { setBillingCycle("yearly"); Haptics.selectionAsync(); }}
-              style={[sb.cycleBtn, billingCycle === "yearly" && sb.cycleBtnActive]}
-            >
-              <Text style={[sb.cycleBtnText, billingCycle === "yearly" && sb.cycleBtnTextActive]}>
-                Yearly
-              </Text>
-              <View style={sb.savePillInline}>
-                <Text style={sb.savePillText}>44% OFF</Text>
+          </View>
+
+          {/* Current plan banner */}
+          <LinearGradient
+            colors={["#040e20","#071525"]}
+            style={s.currentPlanBanner}
+          >
+            <View style={{ flex:1 }}>
+              <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginBottom:4 }}>
+                <View style={s.freeDot} />
+                <Text style={s.currentPlanName}>Free Plan — Active</Text>
               </View>
+              <Text style={s.currentPlanSub}>Upgrade karo full Jyotish access ke liye</Text>
+            </View>
+            <Pressable
+              onPress={() => { setSubExpanded(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              style={s.upgradeBtn}
+            >
+              <LinearGradient colors={["#0284c7","#00d4ff"]} start={{x:0,y:0}} end={{x:1,y:0}} style={s.upgradeBtnGrad}>
+                <Feather name="zap" size={11} color="#fff" />
+                <Text style={s.upgradeBtnText}>Upgrade</Text>
+              </LinearGradient>
             </Pressable>
-          </View>
+          </LinearGradient>
 
-          {/* Plan cards */}
-          <View style={{ gap:12, marginTop:14 }}>
-            {PLANS.map(plan => (
-              <PlanCard
-                key={plan.key}
-                plan={plan}
-                cycle={billingCycle}
-                isCurrent={plan.key === "free"}
-                onPress={() => {}}
-              />
-            ))}
-          </View>
+          {/* Plans expanded */}
+          {subExpanded && (
+            <View style={{ marginTop:14 }}>
+              {/* Billing toggle */}
+              <View style={sb.cycleRow}>
+                {(["monthly","yearly"] as BillingCycle[]).map(c => (
+                  <Pressable key={c}
+                    onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
+                    style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
+                  >
+                    <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
+                      {c === "monthly" ? "Monthly" : "Yearly"}
+                    </Text>
+                    {c === "yearly" && (
+                      <View style={sb.savePill}>
+                        <Text style={sb.savePillTxt}>44% OFF</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Plan cards */}
+              <View style={{ gap:12, marginTop:14 }}>
+                {PLANS.map(plan => (
+                  <PlanCard
+                    key={plan.key}
+                    plan={plan}
+                    cycle={billingCycle}
+                    isCurrent={plan.key === "free"}
+                    onPress={() => {}}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* ── SETTINGS ──────────────────────────────────────────────────── */}
+        {/* ── SETTINGS ─────────────────────────────────────────────────── */}
         <View>
           <Text style={s.sectionLabel}>SETTINGS</Text>
-          <View style={s.card}>
+          <View style={st.card}>
 
-            {/* Notifications */}
-            <View style={s.settingRow}>
-              <Feather name="bell" size={15} color="#64748b" />
-              <Text style={s.settingLabel}>Notifications</Text>
-              <Switch
-                value={notifications}
-                onValueChange={v => { setNotifications(v); Haptics.selectionAsync(); }}
-                trackColor={{ false:"#1e293b", true:"#00d4ff" }}
-                thumbColor="#fff"
-                ios_backgroundColor="#1e293b"
-              />
-            </View>
+            <SettingRow
+              icon="bell"
+              label="Notifications"
+              right={
+                <Switch
+                  value={notifications}
+                  onValueChange={v => { setNotifications(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false:"#0f1c2e", true:"#00d4ff" }}
+                  thumbColor="#fff" ios_backgroundColor="#0f1c2e"
+                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
+                />
+              }
+            />
 
-            <View style={s.divider} />
+            <SettingRow
+              icon="sunrise"
+              label="Daily Cosmic Tip"
+              right={
+                <Switch
+                  value={dailyTip}
+                  onValueChange={v => { setDailyTip(v); Haptics.selectionAsync(); }}
+                  trackColor={{ false:"#0f1c2e", true:"#00d4ff" }}
+                  thumbColor="#fff" ios_backgroundColor="#0f1c2e"
+                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
+                />
+              }
+            />
 
-            {/* Language */}
-            <Pressable style={s.settingRow} onPress={() => setShowLang(true)}>
-              <Feather name="globe" size={15} color="#64748b" />
-              <Text style={[s.settingLabel, { flex:1 }]}>Bhasha</Text>
-              <Text style={{ color:"#00d4ff", fontSize:13, fontWeight:"600", marginRight:4 }}>
-                {LANGUAGES.find(l => l.code === language)?.native ?? "हिंदी"}
-              </Text>
-              <Feather name="chevron-right" size={15} color="#334155" />
-            </Pressable>
-
-            <View style={s.divider} />
-
-            {/* Support */}
-            <View style={s.settingRow}>
-              <Feather name="message-circle" size={15} color="#64748b" />
-              <Text style={[s.settingLabel, { flex:1 }]}>Support</Text>
-              <Pressable style={{ marginRight:8 }}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-                <Feather name="message-square" size={16} color="#475569" />
-              </Pressable>
-              <Pressable onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-                <Feather name="phone" size={16} color="#475569" />
-              </Pressable>
-            </View>
-
+            <SettingRow
+              icon="globe"
+              label="Bhasha / Language"
+              onPress={() => setShowLang(true)}
+              right={
+                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+                  <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>
+                    {LANGUAGES.find(l=>l.code===language)?.native ?? "हिंदी"}
+                  </Text>
+                  <Feather name="chevron-right" size={14} color="#1e3a5f" />
+                </View>
+              }
+              last
+            />
           </View>
         </View>
 
-        {/* ── LOGOUT ────────────────────────────────────────────────────── */}
-        <Pressable onPress={handleLogout}
-          style={({ pressed }) => [s.logoutRow, pressed && { opacity:0.7 }]}>
-          <Feather name="log-out" size={15} color="#f87171" />
-          <Text style={{ color:"#f87171", fontSize:14, fontWeight:"500" }}>Logout</Text>
-        </Pressable>
+        {/* ── SUPPORT ──────────────────────────────────────────────────── */}
+        <View>
+          <Text style={s.sectionLabel}>SUPPORT & ABOUT</Text>
+          <View style={st.card}>
+            <SettingRow
+              icon="message-circle"
+              label="Help & Support"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            />
+            <SettingRow
+              icon="star"
+              label="Rate Us ⭐"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            />
+            <SettingRow
+              icon="share-2"
+              label="Share App"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            />
+            <SettingRow
+              icon="shield"
+              label="Privacy Policy"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            />
+            <SettingRow
+              icon="file-text"
+              label="Terms of Service"
+              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              last
+            />
+          </View>
+        </View>
+
+        {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
+        <View style={s.bottomSection}>
+          <Text style={s.versionText}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
+
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert("Logout", "Kya aap log out karna chahte hain?", [
+                { text:"Cancel", style:"cancel" },
+                { text:"Logout", style:"destructive", onPress: handleLogout },
+              ]);
+            }}
+            style={({ pressed }) => [s.logoutBtn, pressed && { opacity:0.75 }]}
+          >
+            <Feather name="log-out" size={14} color="#f87171" />
+            <Text style={s.logoutText}>Log Out</Text>
+          </Pressable>
+        </View>
 
       </ScrollView>
     </View>
@@ -542,44 +666,155 @@ export default function ProfileScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  sectionLabel: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#00d4ff", marginBottom:12 },
-  card: {
-    backgroundColor:"#040e20", borderRadius:16,
-    borderWidth:1, borderColor:"rgba(0,200,255,0.1)", overflow:"hidden",
-  },
-  divider: { height:1, backgroundColor:"#0a1828", marginHorizontal:16 },
-
-  settingRow: {
-    flexDirection:"row", alignItems:"center", gap:12,
-    paddingHorizontal:16, paddingVertical:14,
-  },
-  settingLabel: { color:"#dde8f4", fontSize:14 },
-
-  addBtn: {
-    flexDirection:"row", alignItems:"center", gap:12, padding:14,
-    backgroundColor:"rgba(0,212,255,0.04)",
-    borderWidth:1, borderColor:"rgba(0,212,255,0.18)",
-    borderRadius:14,
-  },
-  addCircle: {
-    width:36, height:36, borderRadius:18,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.3)",
-    alignItems:"center", justifyContent:"center",
-    backgroundColor:"rgba(0,212,255,0.06)",
-  },
-
-  logoutRow: {
-    flexDirection:"row", alignItems:"center", gap:8,
-    paddingVertical:8, paddingHorizontal:4,
-  },
-
-  switchOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor:"rgba(0,0,0,0.7)",
+  overlay: {
+    ...StyleSheet.absoluteFillObject, backgroundColor:"rgba(0,0,0,0.75)",
     alignItems:"center", justifyContent:"center", zIndex:999,
   },
-  switchBox: { alignItems:"center" },
+  overlayBox: { alignItems:"center" },
+
+  header: {
+    borderRadius:20, borderWidth:1, borderColor:"rgba(0,200,255,0.08)",
+    paddingVertical:24, paddingHorizontal:16,
+    alignItems:"center", gap:10, overflow:"hidden",
+  },
+  headerBgStar: {
+    position:"absolute", left:20, top:18,
+    fontSize:22, color:"#00d4ff", opacity:0.05,
+  },
+  headerAvatar: {
+    width:68, height:68, borderRadius:34,
+    alignItems:"center", justifyContent:"center",
+    shadowColor:"#00d4ff", shadowOpacity:0.5, shadowRadius:12, shadowOffset:{width:0,height:0},
+  },
+  headerInitials: { color:"#fff", fontSize:22, fontFamily:F.bold },
+  headerName: { color:"#dde8f4", fontSize:18, fontFamily:F.bold, letterSpacing:-0.4 },
+  headerSub: { color:"#1e3a5f", fontSize:11, fontFamily:F.medium },
+
+  planBadge: {
+    flexDirection:"row", alignItems:"center", gap:7,
+    backgroundColor:"rgba(255,255,255,0.04)",
+    borderWidth:1, borderColor:"rgba(255,255,255,0.07)",
+    borderRadius:20, paddingVertical:6, paddingHorizontal:12,
+  },
+  planBadgeText: { color:"#475569", fontSize:9.5, fontFamily:F.bold, letterSpacing:1 },
+  planDivider:   { width:1, height:10, backgroundColor:"rgba(255,255,255,0.08)" },
+  planUpgrade:   { color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+
+  sectionRow: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:12 },
+  sectionLabel: { color:"#00d4ff", fontSize:10, fontFamily:F.bold, letterSpacing:2.2 },
+  sectionCount: { color:"#1e3a5f", fontSize:10, fontFamily:F.medium },
+  sectionAction:{ color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+
+  addBtn: {
+    flexDirection:"row", alignItems:"center", gap:12,
+    padding:14, borderRadius:14,
+    backgroundColor:"rgba(0,212,255,0.03)",
+    borderWidth:1, borderColor:"rgba(0,212,255,0.14)",
+  },
+  addCircle: {
+    width:34, height:34, borderRadius:17,
+    borderWidth:1, borderColor:"rgba(0,212,255,0.25)",
+    backgroundColor:"rgba(0,212,255,0.06)",
+    alignItems:"center", justifyContent:"center",
+  },
+
+  currentPlanBanner: {
+    flexDirection:"row", alignItems:"center", gap:12,
+    borderRadius:16, borderWidth:1, borderColor:"rgba(100,116,139,0.15)",
+    padding:16,
+  },
+  freeDot: {
+    width:7, height:7, borderRadius:3.5, backgroundColor:"#475569",
+  },
+  currentPlanName: { color:"#94a3b8", fontSize:13, fontFamily:F.semibold },
+  currentPlanSub:  { color:"#1e3a5f", fontSize:10.5, fontFamily:F.regular },
+  upgradeBtn:      {},
+  upgradeBtnGrad: {
+    flexDirection:"row", alignItems:"center", gap:5,
+    paddingVertical:8, paddingHorizontal:14, borderRadius:10,
+  },
+  upgradeBtnText: { color:"#fff", fontSize:12, fontFamily:F.bold },
+
+  bottomSection: { alignItems:"center", gap:14 },
+  versionText:   { color:"#0f1c2e", fontSize:10, fontFamily:F.medium },
+  logoutBtn: {
+    flexDirection:"row", alignItems:"center", gap:8,
+    paddingVertical:12, paddingHorizontal:24,
+    backgroundColor:"rgba(248,113,113,0.07)",
+    borderWidth:1, borderColor:"rgba(248,113,113,0.15)",
+    borderRadius:14,
+  },
+  logoutText: { color:"#f87171", fontSize:14, fontFamily:F.semibold },
 });
 
+// ── Profile card ──────────────────────────────────────────────────────────────
+const pc = StyleSheet.create({
+  card: {
+    backgroundColor:"#040e20", borderRadius:16,
+    borderWidth:1, borderColor:"rgba(255,255,255,0.05)",
+    padding:14, gap:10,
+  },
+  cardPrimary: {
+    borderColor:"rgba(0,212,255,0.2)",
+    backgroundColor:"rgba(0,20,40,0.9)",
+  },
+  avatar: {
+    width:44, height:44, borderRadius:22,
+    alignItems:"center", justifyContent:"center",
+  },
+  initials: { color:"#fff", fontSize:16, fontFamily:F.bold },
+  name:     { color:"#dde8f4", fontSize:14, fontFamily:F.bold },
+  sub:      { color:"#334155", fontSize:11, fontFamily:F.medium },
+  date:     { color:"#1e3a5f", fontSize:10, fontFamily:F.regular },
+  primaryBadge: {
+    flexDirection:"row", alignItems:"center", gap:4,
+    backgroundColor:"rgba(0,212,255,0.1)", borderWidth:1,
+    borderColor:"rgba(0,212,255,0.25)", borderRadius:20,
+    paddingVertical:2, paddingHorizontal:7,
+  },
+  primaryBadgeText: { color:"#00d4ff", fontSize:8, fontFamily:F.bold, letterSpacing:0.8 },
+  iconBtn: {
+    width:30, height:30, borderRadius:8,
+    backgroundColor:"rgba(255,255,255,0.04)",
+    borderWidth:1, borderColor:"rgba(255,255,255,0.06)",
+    alignItems:"center", justifyContent:"center",
+  },
+  activeRow: {
+    flexDirection:"row", alignItems:"center", gap:6,
+    backgroundColor:"rgba(0,168,107,0.08)", borderRadius:8,
+    paddingVertical:6, paddingHorizontal:10,
+  },
+  activeText:    { color:"#00a86b", fontSize:10, fontFamily:F.medium },
+  setPrimaryBtn: {
+    flexDirection:"row", alignItems:"center", gap:6,
+    alignSelf:"flex-start",
+    backgroundColor:"rgba(0,212,255,0.07)", borderRadius:8,
+    paddingVertical:6, paddingHorizontal:10,
+    borderWidth:1, borderColor:"rgba(0,212,255,0.15)",
+  },
+  setPrimaryText: { color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+});
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+const st = StyleSheet.create({
+  card: {
+    backgroundColor:"#040e20", borderRadius:16,
+    borderWidth:1, borderColor:"rgba(255,255,255,0.05)", overflow:"hidden",
+  },
+  row: {
+    flexDirection:"row", alignItems:"center", gap:12,
+    paddingHorizontal:16, paddingVertical:13,
+  },
+  iconCircle: {
+    width:30, height:30, borderRadius:8,
+    backgroundColor:"rgba(255,255,255,0.04)",
+    alignItems:"center", justifyContent:"center",
+  },
+  label:   { color:"#c5d5e8", fontSize:13.5, fontFamily:F.medium },
+  divider: { height:1, backgroundColor:"rgba(255,255,255,0.04)", marginHorizontal:16 },
+});
+
+// ── Subscription ──────────────────────────────────────────────────────────────
 const sb = StyleSheet.create({
   cycleRow: {
     flexDirection:"row",
@@ -589,129 +824,115 @@ const sb = StyleSheet.create({
   },
   cycleBtn: {
     flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center",
-    paddingVertical:9, borderRadius:9, gap:6,
+    gap:7, paddingVertical:10, borderRadius:9,
   },
   cycleBtnActive: {
-    backgroundColor:"#0c1f35",
+    backgroundColor:"rgba(0,212,255,0.1)",
     borderWidth:1, borderColor:"rgba(0,212,255,0.25)",
   },
-  cycleBtnText:       { color:"#334155", fontSize:13, fontWeight:"600" },
-  cycleBtnTextActive: { color:"#dde8f4" },
-
-  savePillInline: {
-    backgroundColor:"rgba(74,222,128,0.15)", borderRadius:8,
-    paddingHorizontal:5, paddingVertical:2,
+  cycleTxt: { color:"#334155", fontSize:13, fontFamily:F.semibold },
+  cycleTxtActive: { color:"#00d4ff" },
+  savePill: {
+    backgroundColor:"rgba(74,222,128,0.15)", borderRadius:6,
+    paddingVertical:2, paddingHorizontal:6,
   },
-  savePillText: { color:"#4ade80", fontSize:9, fontWeight:"700" },
+  savePillTxt: { color:"#4ade80", fontSize:9, fontFamily:F.bold, letterSpacing:0.5 },
+});
 
-  planCard: {
-    borderRadius:18, borderWidth:1,
+// ── Plan card ─────────────────────────────────────────────────────────────────
+const pl = StyleSheet.create({
+  card: {
+    borderRadius:16, borderWidth:1.5,
     padding:16,
   },
-  planCardCurrent: {
-    borderWidth:1,
+  cardCurrent: { borderWidth:1 },
+  iconWrap: {
+    width:28, height:28, borderRadius:8,
+    borderWidth:1, alignItems:"center", justifyContent:"center",
   },
-
-  planName: { fontSize:17, fontWeight:"800", letterSpacing:0.3 },
-
+  planName:    { fontSize:16, fontFamily:F.bold, letterSpacing:-0.2 },
   badge: {
-    borderRadius:20, borderWidth:1,
-    paddingHorizontal:7, paddingVertical:2,
+    borderWidth:1, borderRadius:20,
+    paddingVertical:2, paddingHorizontal:8,
   },
-  badgeText: { fontSize:9, fontWeight:"800", letterSpacing:1.5 },
-
-  price: { fontSize:28, fontWeight:"800", lineHeight:32 },
-  priceCurrency: { fontSize:16, fontWeight:"700", lineHeight:30, marginBottom:2 },
-  pricePer: { color:"#334155", fontSize:13, lineHeight:30, marginBottom:2 },
-
+  badgeText: { fontSize:8.5, fontFamily:F.bold, letterSpacing:0.8 },
+  price:         { fontSize:26, fontFamily:F.bold, lineHeight:30 },
+  priceCurrency: { fontSize:15, fontFamily:F.bold, paddingBottom:3 },
+  pricePer:      { color:"#334155", fontSize:12, fontFamily:F.medium, paddingBottom:4 },
   savePill: {
-    flexDirection:"row", alignItems:"center", gap:4,
-    backgroundColor:"rgba(74,222,128,0.1)", borderRadius:8,
-    paddingHorizontal:8, paddingVertical:3, alignSelf:"flex-start",
+    flexDirection:"row", alignItems:"center", gap:5,
+    backgroundColor:"rgba(74,222,128,0.1)", borderRadius:6,
+    paddingVertical:3, paddingHorizontal:8, alignSelf:"flex-start",
   },
-  saveText: { color:"#4ade80", fontSize:10, fontWeight:"600" },
-
-  separator: { height:1 },
-
+  saveText: { color:"#4ade80", fontSize:10, fontFamily:F.semibold },
+  sep: { height:1, marginVertical:14 },
   featureRow: { flexDirection:"row", alignItems:"center", gap:8 },
   featureDot: {
-    width:18, height:18, borderRadius:9,
-    alignItems:"center", justifyContent:"center", flexShrink:0,
+    width:18, height:18, borderRadius:5,
+    alignItems:"center", justifyContent:"center",
   },
-  featureText: { color:"#94a3b8", fontSize:12, flex:1 },
-
+  featureText: { color:"#94a3b8", fontSize:12, fontFamily:F.medium, flex:1 },
   ctaBtn: {
-    flexDirection:"row", alignItems:"center", justifyContent:"center", gap:7,
-    borderRadius:12, paddingVertical:13,
+    flexDirection:"row", alignItems:"center", justifyContent:"center",
+    gap:7, paddingVertical:12, borderRadius:12,
   },
   ctaBtnOutline: {
-    flexDirection:"row", alignItems:"center", justifyContent:"center", gap:7,
-    borderRadius:12, paddingVertical:12, borderWidth:1,
+    flexDirection:"row", alignItems:"center", justifyContent:"center",
+    gap:7, paddingVertical:12, borderRadius:12,
+    borderWidth:1, backgroundColor:"rgba(255,255,255,0.03)",
   },
-  ctaText: { color:"white", fontWeight:"700", fontSize:14 },
+  ctaBtnText: { color:"#fff", fontSize:14, fontFamily:F.bold },
 });
 
-const pc = StyleSheet.create({
-  card: {
-    backgroundColor:"#040e20", borderRadius:16,
-    borderWidth:1, borderColor:"#1e293b", padding:14,
-  },
-  cardPrimary: {
-    backgroundColor:"#050f1c",
-    borderColor:"rgba(0,212,255,0.25)",
-  },
-  avatar: {
-    width:44, height:44, borderRadius:22,
-    backgroundColor:"#1e293b",
-    alignItems:"center", justifyContent:"center", flexShrink:0,
-  },
-  avatarPrimary: { backgroundColor:"#004d3a" },
-  initials: { color:"white", fontWeight:"700", fontSize:15 },
-
-  name: { color:"#dde8f4", fontSize:14, fontWeight:"600" },
-  sub:  { color:"#475569", fontSize:11, marginTop:2 },
-  date: { color:"#1e3a5f", fontSize:10, marginTop:2 },
-
-  primaryBadge: {
-    backgroundColor:"rgba(0,212,255,0.1)", borderRadius:20,
-    paddingHorizontal:6, paddingVertical:2,
-  },
-  primaryBadgeText: { color:"#00d4ff", fontSize:9, fontWeight:"700", letterSpacing:1 },
-
-  iconBtn: { padding:4 },
-
-  setPrimaryBtn: {
-    flexDirection:"row", alignItems:"center", justifyContent:"center", gap:6,
-    marginTop:10, paddingVertical:8, borderRadius:10,
-    borderWidth:1, borderColor:"#1e293b",
-  },
-  setPrimaryText: { color:"#00d4ff", fontSize:12, fontWeight:"600" },
-
-  activeRow: {
-    flexDirection:"row", alignItems:"center", justifyContent:"center", gap:5,
-    marginTop:10,
-  },
-  activeText: { color:"#00a86b", fontSize:11 },
-});
-
+// ── Language modal ────────────────────────────────────────────────────────────
 const lm = StyleSheet.create({
   overlay: { flex:1, backgroundColor:"rgba(0,0,0,0.7)", justifyContent:"flex-end" },
-  sheet: { backgroundColor:"#0b1120", borderRadius:18, borderBottomLeftRadius:0, borderBottomRightRadius:0, paddingBottom:40 },
-  handle: { width:36, height:4, backgroundColor:"#1e293b", borderRadius:2, alignSelf:"center", marginTop:12, marginBottom:20 },
-  title: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#4b6a86", textAlign:"center", marginBottom:8 },
-  row: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", paddingVertical:16, paddingHorizontal:24 },
-  rowActive: { backgroundColor:"rgba(0,212,255,0.06)" },
-  native: { color:"#dde8f4", fontSize:16 },
-  langName: { color:"#4b6a86", fontSize:13 },
+  sheet: {
+    backgroundColor:"#071525", borderTopLeftRadius:24, borderTopRightRadius:24,
+    borderTopWidth:1, borderColor:"rgba(0,212,255,0.1)",
+    paddingHorizontal:20, paddingBottom:40, maxHeight:"75%",
+  },
+  handle: {
+    width:36, height:4, borderRadius:2,
+    backgroundColor:"rgba(255,255,255,0.1)",
+    alignSelf:"center", marginVertical:12,
+  },
+  heading: {
+    color:"#00d4ff", fontSize:9, fontFamily:F.bold,
+    letterSpacing:2.5, marginBottom:16,
+  },
+  row: {
+    flexDirection:"row", justifyContent:"space-between", alignItems:"center",
+    paddingVertical:13,
+    borderBottomWidth:1, borderColor:"rgba(255,255,255,0.05)",
+  },
+  rowActive: { backgroundColor:"rgba(0,212,255,0.05)", borderRadius:10, paddingHorizontal:10 },
+  native: { color:"#dde8f4", fontSize:15, fontFamily:F.semibold },
+  name:   { color:"#334155", fontSize:12, fontFamily:F.medium },
 });
 
+// ── Delete modal ──────────────────────────────────────────────────────────────
 const dm = StyleSheet.create({
-  overlay: { flex:1, backgroundColor:"rgba(0,0,0,0.85)", alignItems:"center", justifyContent:"center", padding:24 },
-  box: { backgroundColor:"#0f172a", borderRadius:20, padding:24, borderWidth:1, borderColor:"#1e293b", width:"100%" },
-  iconWrap: { width:40, height:40, borderRadius:20, backgroundColor:"rgba(248,113,113,0.12)", alignItems:"center", justifyContent:"center", marginBottom:12 },
-  title: { color:"white", fontSize:16, fontWeight:"700", marginBottom:8 },
-  body: { color:"#64748b", fontSize:13, lineHeight:20, marginBottom:20 },
-  btnRow: { flexDirection:"row", gap:10 },
-  cancelBtn: { flex:1, paddingVertical:13, borderRadius:10, borderWidth:1, borderColor:"#1e293b", alignItems:"center" },
-  deleteBtn: { flex:1, paddingVertical:13, borderRadius:10, backgroundColor:"#7f1d1d", alignItems:"center" },
+  overlay: { flex:1, backgroundColor:"rgba(0,0,0,0.8)", alignItems:"center", justifyContent:"center" },
+  box: {
+    width:300, backgroundColor:"#071525",
+    borderRadius:20, borderWidth:1, borderColor:"rgba(248,113,113,0.2)",
+    padding:24, alignItems:"center", gap:10,
+  },
+  iconWrap: {
+    width:48, height:48, borderRadius:24,
+    backgroundColor:"rgba(248,113,113,0.1)", alignItems:"center", justifyContent:"center",
+  },
+  title: { color:"#dde8f4", fontSize:17, fontFamily:F.bold, textAlign:"center" },
+  body:  { color:"#64748b", fontSize:13, fontFamily:F.regular, textAlign:"center", lineHeight:19 },
+  btnRow: { flexDirection:"row", gap:12, marginTop:8 },
+  cancelBtn: {
+    flex:1, alignItems:"center", paddingVertical:11, borderRadius:12,
+    borderWidth:1, borderColor:"rgba(255,255,255,0.08)",
+    backgroundColor:"rgba(255,255,255,0.03)",
+  },
+  deleteBtn: {
+    flex:1, alignItems:"center", paddingVertical:11, borderRadius:12,
+    backgroundColor:"#b91c1c",
+  },
 });

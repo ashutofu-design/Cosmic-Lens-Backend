@@ -1,13 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type BottomTabBarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
   descriptors: Record<string, unknown>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   navigation: any;
 };
 
@@ -18,16 +17,85 @@ const TABS: {
   activeColor: string;
   dot?: boolean;
 }[] = [
-  { name: "index",    label: "Home",     icon: "home",        activeColor: "#00d4ff" },
-  { name: "kundli",   label: "Kundli",   icon: "star",        activeColor: "#00d4ff" },
+  { name: "index",    label: "Home",     icon: "home",           activeColor: "#00d4ff" },
+  { name: "kundli",   label: "Kundli",   icon: "star",           activeColor: "#00d4ff" },
   { name: "ask",      label: "Ask",      icon: "message-circle", activeColor: "#00d4ff" },
-  { name: "insights", label: "Insights", icon: "trending-up", activeColor: "#22c55e" },
-  { name: "notice",   label: "Notice",   icon: "bell",        activeColor: "#f87171", dot: true },
-  { name: "profile",  label: "Profile",  icon: "user",        activeColor: "#a78bfa" },
+  { name: "insights", label: "Insights", icon: "trending-up",    activeColor: "#22c55e" },
+  { name: "notice",   label: "Notice",   icon: "bell",           activeColor: "#f87171", dot: true },
+  { name: "profile",  label: "Profile",  icon: "user",           activeColor: "#a78bfa" },
 ];
 
 const INACTIVE = "#3d5a7a";
-const BAR_H    = 56;
+const BAR_H    = 64;
+
+function TabItem({
+  tab, isActive, onPress, onLongPress,
+}: {
+  tab: typeof TABS[0]; isActive: boolean; onPress: () => void; onLongPress: () => void;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim  = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isActive) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: 1.12, useNativeDriver: true, speed: 20, bounciness: 8 }),
+        Animated.timing(glowAnim,  { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 4 }),
+        Animated.timing(glowAnim,  { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [isActive]);
+
+  const color = isActive ? tab.activeColor : INACTIVE;
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.7 }]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+    >
+      {/* Active top indicator bar */}
+      {isActive && (
+        <Animated.View
+          style={[
+            styles.indicator,
+            {
+              backgroundColor: tab.activeColor,
+              shadowColor:      tab.activeColor,
+              opacity: glowAnim,
+            },
+          ]}
+        />
+      )}
+
+      {/* Icon with scale animation */}
+      <Animated.View style={[styles.iconWrap, { transform: [{ scale: scaleAnim }] }]}>
+        <Feather name={tab.icon as any} size={22} color={color} />
+        {tab.dot && (
+          <View style={[styles.dot, { borderColor: "#020d1a" }]} />
+        )}
+      </Animated.View>
+
+      {/* Label */}
+      <Text
+        style={[
+          styles.label,
+          {
+            color,
+            fontFamily: isActive ? "Inter_700Bold" : "Inter_400Regular",
+            opacity: isActive ? 1 : 0.7,
+          },
+        ]}
+      >
+        {tab.label}
+      </Text>
+    </Pressable>
+  );
+}
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
@@ -35,20 +103,18 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 
   return (
     <View style={[styles.bar, { paddingBottom: botPad, height: BAR_H + botPad }]}>
-      {/* Top hairline */}
       <View style={styles.topLine} />
-
       <View style={styles.inner}>
-        {TABS.map((tab, idx) => {
-          const route   = state.routes.find(r => r.name === tab.name);
+        {TABS.map((tab) => {
+          const route = state.routes.find(r => r.name === tab.name);
           if (!route) return null;
           const isActive = state.index === state.routes.indexOf(route);
-          const color    = isActive ? tab.activeColor : INACTIVE;
 
           return (
-            <Pressable
+            <TabItem
               key={tab.name}
-              style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.7 }]}
+              tab={tab}
+              isActive={isActive}
               onPress={() => {
                 const event = navigation.emit({
                   type: "tabPress",
@@ -63,33 +129,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               onLongPress={() =>
                 navigation.emit({ type: "tabLongPress", target: route.key })
               }
-            >
-              {/* Active top indicator */}
-              {isActive && (
-                <View
-                  style={[
-                    styles.indicator,
-                    {
-                      backgroundColor: tab.activeColor,
-                      shadowColor: tab.activeColor,
-                    },
-                  ]}
-                />
-              )}
-
-              {/* Icon + dot */}
-              <View style={styles.iconWrap}>
-                <Feather name={tab.icon as any} size={19} color={color} />
-                {tab.dot && (
-                  <View style={[styles.dot, { borderColor: "#020d1a" }]} />
-                )}
-              </View>
-
-              {/* Label */}
-              <Text style={[styles.label, { color, fontWeight: isActive ? "700" : "400" }]}>
-                {tab.label}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </View>
@@ -106,7 +146,7 @@ const styles = StyleSheet.create({
   },
   topLine: {
     height: 1,
-    backgroundColor: "rgba(0,200,255,0.12)",
+    backgroundColor: "rgba(0,200,255,0.14)",
   },
   inner: {
     flex: 1,
@@ -117,34 +157,34 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
+    paddingVertical: 7,
     position: "relative",
   },
   indicator: {
     position: "absolute",
-    top: 0, left: "22%", right: "22%",
-    height: 2,
+    top: 0, left: "18%", right: "18%",
+    height: 2.5,
     borderRadius: 2,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 4,
   },
   iconWrap: {
     position: "relative",
+    marginBottom: 2,
   },
   dot: {
     position: "absolute",
     top: -2, right: -3,
-    width: 6, height: 6,
-    borderRadius: 3,
+    width: 7, height: 7,
+    borderRadius: 3.5,
     backgroundColor: "#ef4444",
     borderWidth: 1.5,
   },
   label: {
-    fontSize: 8,
-    letterSpacing: 0.2,
-    marginTop: 2,
-    lineHeight: 10,
+    fontSize: 10,
+    letterSpacing: 0.15,
+    lineHeight: 12,
   },
 });

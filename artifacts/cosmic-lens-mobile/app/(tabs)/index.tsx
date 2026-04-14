@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -216,52 +217,80 @@ export default function HomeScreen() {
 }
 
 // ── Hero Energy Card ──────────────────────────────────────────────────────────
+// EnergyChart SVG is 300×300 (VW=300, VH=300)
+const CHART_SVG = 300;
+
 function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
 }) {
+  const { width: screenW } = useWindowDimensions();
   const displayScore = useCountUp(chartEnergy, 350);
-  const glowPulse    = useOpacityPulse(0.05, 0.18, 1800);
+  const glowPulse    = useOpacityPulse(0.05, 0.2, 1800);
+
+  // Square chart — side-by-side with score for compact hero card
+  // Chart occupies ~45% of card width as a clean square
+  const cardInnerW = screenW - 28; // scroll padding 14+14
+  const chartSide  = Math.floor(cardInnerW * 0.46);
+  const scale      = chartSide / CHART_SVG;
+  const offset     = -(CHART_SVG * (1 - scale)) / 2;
 
   return (
     <View style={hero.card}>
       {/* Ambient glow blob */}
       <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
-      <View style={hero.header}>
-        <View>
+      {/* Horizontal layout: left = score info, right = square chart */}
+      <View style={hero.body}>
+
+        {/* Left: score + label + insight */}
+        <View style={hero.left}>
           <Text style={hero.label}>TODAY ENERGY</Text>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, marginTop: 2 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
             <Text style={hero.scoreMax}>/100</Text>
           </View>
-        </View>
-        {showDemo && (
-          <View style={hero.demoBadge}>
-            <Feather name="lock" size={9} color="#3d5a7a" />
-            <Text style={hero.demoBadgeText}>DEMO MODE</Text>
+
+          {showDemo && (
+            <View style={[hero.demoBadge, { marginTop: 8 }]}>
+              <Feather name="lock" size={9} color="#3d5a7a" />
+              <Text style={hero.demoBadgeText}>DEMO</Text>
+            </View>
+          )}
+
+          {/* Insight pill below score */}
+          <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}30`, marginTop: "auto" }]}>
+            <Text style={hero.insightIcon}>{insight.icon}</Text>
+            <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
           </View>
-        )}
-      </View>
-
-      {/* Compact chart */}
-      <View style={{ height: 138, overflow: "hidden" }}>
-        <View style={{ transform: [{ scale: 0.58 }], marginTop: -62, marginLeft: -28, marginRight: -28 }}>
-          <EnergyChart
-            targetPts={chartPts}
-            labels={chartLbls}
-            finalEnergy={chartEnergy}
-            loading={loading}
-            instant={showDemo}
-          />
         </View>
-      </View>
 
-      {/* Insight pill */}
-      <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}30` }]}>
-        <Text style={hero.insightIcon}>{insight.icon}</Text>
-        <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
+        {/* Right: perfect square chart — no clipping, no overflow */}
+        <View style={{
+          width: chartSide,
+          height: chartSide,
+          overflow: "hidden",
+          borderRadius: 10,
+          backgroundColor: "rgba(0,0,0,0.15)",
+        }}>
+          <View style={{
+            width: CHART_SVG,
+            height: CHART_SVG,
+            transform: [{ scale }],
+            marginTop: offset,
+            marginLeft: offset,
+          }}>
+            <EnergyChart
+              targetPts={chartPts}
+              labels={chartLbls}
+              finalEnergy={chartEnergy}
+              loading={loading}
+              instant={showDemo}
+            />
+          </View>
+        </View>
+
       </View>
     </View>
   );
@@ -423,16 +452,20 @@ const hero = StyleSheet.create({
   },
   glow: {
     position: "absolute", top: -50, right: -50,
-    width: 180, height: 180, borderRadius: 90,
+    width: 200, height: 200, borderRadius: 100,
   },
-  header: {
-    flexDirection: "row", alignItems: "flex-start",
-    justifyContent: "space-between", marginBottom: 6,
+  // Horizontal layout: score on left, chart square on right
+  body: {
+    flexDirection: "row", alignItems: "stretch", gap: 12,
+  },
+  left: {
+    flex: 1, gap: 6,
   },
   label:    { color: "#3d5a7a", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2 },
-  score:    { fontSize: 30, fontFamily: F.bold, marginTop: 1, letterSpacing: -1 },
-  scoreMax: { fontSize: 13, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 4 },
+  score:    { fontSize: 36, fontFamily: F.bold, letterSpacing: -1.5, lineHeight: 40 },
+  scoreMax: { fontSize: 14, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 5 },
   demoBadge: {
+    alignSelf: "flex-start",
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: "rgba(2,13,26,0.85)", borderWidth: 1,
     borderColor: "rgba(0,200,255,0.15)", paddingVertical: 4,
@@ -440,11 +473,11 @@ const hero = StyleSheet.create({
   },
   demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontFamily: F.bold, letterSpacing: 1.5 },
   insightPill: {
-    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6,
-    borderWidth: 1, borderRadius: 9, paddingVertical: 6, paddingHorizontal: 12,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    borderWidth: 1, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10,
   },
-  insightIcon: { fontSize: 13 },
-  insightText: { fontSize: 11.5, fontFamily: F.semibold },
+  insightIcon: { fontSize: 12 },
+  insightText: { fontSize: 10.5, fontFamily: F.semibold, flex: 1, flexWrap: "wrap" },
 });
 
 // ── Shared card layout ────────────────────────────────────────────────────────

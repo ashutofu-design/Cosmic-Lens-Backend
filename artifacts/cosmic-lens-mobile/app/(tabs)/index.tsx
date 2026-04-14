@@ -227,22 +227,22 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* ── 3 Mini Cards Row — 40% ── */}
-      <Animated.View style={[card1Anim, { flex: 4, flexDirection: "row", paddingHorizontal: 12, gap: 8 }]}>
+      {/* ── 3 Feature Rows — 40% ── */}
+      <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
-        <Animated.View style={[card1Anim, { flex: 1 }]}>
+        <Animated.View style={card1Anim}>
           <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
         </Animated.View>
 
-        <Animated.View style={[card2Anim, { flex: 1 }]}>
+        <Animated.View style={card2Anim}>
           <BadTimeMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
         </Animated.View>
 
-        <Animated.View style={[card3Anim, { flex: 1 }]}>
+        <Animated.View style={card3Anim}>
           <MilanMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
         </Animated.View>
 
-      </Animated.View>
+      </View>
 
     </View>
   );
@@ -316,112 +316,100 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   );
 }
 
-// ── Dosh Mini Card ────────────────────────────────────────────────────────────
+// ── Dosh Mini — full-width horizontal row ─────────────────────────────────────
 function DoshMini({ onPress }: { onPress: () => void }) {
-  const blinkDot    = useBlink(400, 400, 1400);
-  const outerGlow   = useOpacityPulse(0.25, 0.75, 1000);
-  const shimmerX    = useShimmer(120);
+  const blinkDot = useBlink(400, 400, 1400);
+  const shimmerX = useShimmer(360);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
-      <Animated.View style={[mini.outerGlowRed, { opacity: outerGlow }]} />
-      <LinearGradient colors={["#6b0f0f","#991b1b","#7f1d1d"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+    <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
+      <LinearGradient colors={["#3b0a0a","#5c1111"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"#ff3355" }]} />
+        <View style={[mini.border, { borderColor:"rgba(255,51,85,0.35)" }]} />
 
-        {/* Symbol */}
-        <Text style={mini.symbol}>☿</Text>
-
-        {/* Live badge */}
-        <View style={mini.liveRow}>
-          <Animated.View style={[mini.liveDot, { backgroundColor:"#ff2244", opacity: blinkDot }]} />
-          <Text style={[mini.liveTxt, { color:"#ff6b6b" }]}>LIVE</Text>
+        {/* Icon circle */}
+        <View style={[mini.iconCircle, { backgroundColor:"rgba(255,34,68,0.18)", borderColor:"rgba(255,34,68,0.35)" }]}>
+          <Text style={mini.iconEmoji}>☿</Text>
         </View>
 
-        {/* Title */}
-        <Text style={mini.title}>Dosh{"\n"}Analysis</Text>
-
-        {/* Stat */}
-        <View style={mini.statRow}>
-          <Text style={mini.statNum}>3</Text>
-          <Text style={mini.statLbl}>doshas</Text>
+        {/* Text block */}
+        <View style={mini.textBlock}>
+          <Text style={mini.rowTitle}>Dosh Analysis</Text>
+          <Text style={mini.rowSub}>3 doshas detected in chart</Text>
         </View>
 
-        {/* Tap hint */}
-        <View style={mini.tapRow}>
-          <Text style={[mini.tapTxt, { color:"#ff6b6b" }]}>Reveal</Text>
-          <Feather name="chevron-right" size={10} color="#ff6b6b" />
+        {/* Right side */}
+        <View style={mini.rightBlock}>
+          <View style={[mini.badge, { backgroundColor:"rgba(255,34,68,0.18)", borderColor:"rgba(255,34,68,0.4)" }]}>
+            <Animated.View style={[mini.badgeDot, { backgroundColor:"#ff2244", opacity: blinkDot }]} />
+            <Text style={[mini.badgeTxt, { color:"#ff6b6b" }]}>LIVE</Text>
+          </View>
+          <Feather name="chevron-right" size={14} color="rgba(255,107,107,0.5)" />
         </View>
       </LinearGradient>
     </Pressable>
   );
 }
 
-// ── Bad Time Mini Card ────────────────────────────────────────────────────────
+// ── Bad Time Mini — full-width horizontal row ─────────────────────────────────
 function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
-  const blinkDot  = useBlink(350, 350, 1200);
-  const outerGlow = useOpacityPulse(0.2, 0.7, 900);
-  const shimmerX  = useShimmer(120);
+  const blinkDot = useBlink(350, 350, 1200);
+  const shimmerX = useShimmer(360);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
-      <Animated.View style={[mini.outerGlowOrange, { opacity: outerGlow }]} />
-      <LinearGradient colors={["#5c1f08","#c2410c","#7c2d12"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+    <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
+      <LinearGradient colors={["#2d1005","#5c2208"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"#f97316" }]} />
+        <View style={[mini.border, { borderColor:"rgba(249,115,22,0.35)" }]} />
 
-        <Text style={mini.symbol}>⚡</Text>
-
-        <View style={mini.liveRow}>
-          <Animated.View style={[mini.liveDot, { backgroundColor:"#ff6600", opacity: blinkDot }]} />
-          <Text style={[mini.liveTxt, { color:"#ffb347" }]}>ALERT</Text>
+        <View style={[mini.iconCircle, { backgroundColor:"rgba(249,115,22,0.18)", borderColor:"rgba(249,115,22,0.35)" }]}>
+          <Text style={mini.iconEmoji}>⚡</Text>
         </View>
 
-        <Text style={mini.title}>Risk{"\n"}Alert</Text>
-
-        <View style={mini.statRow}>
-          <Text style={mini.statNum}>2</Text>
-          <Text style={mini.statLbl}>risks</Text>
+        <View style={mini.textBlock}>
+          <Text style={mini.rowTitle}>Risk Alert</Text>
+          <Text style={mini.rowSub}>
+            {activeDasha ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} Dasha active` : "2 risk periods ahead"}
+          </Text>
         </View>
 
-        <View style={mini.tapRow}>
-          <Text style={[mini.tapTxt, { color:"#ff8c42" }]}>Check</Text>
-          <Feather name="chevron-right" size={10} color="#ff8c42" />
+        <View style={mini.rightBlock}>
+          <View style={[mini.badge, { backgroundColor:"rgba(249,115,22,0.18)", borderColor:"rgba(249,115,22,0.4)" }]}>
+            <Animated.View style={[mini.badgeDot, { backgroundColor:"#f97316", opacity: blinkDot }]} />
+            <Text style={[mini.badgeTxt, { color:"#fb923c" }]}>ALERT</Text>
+          </View>
+          <Feather name="chevron-right" size={14} color="rgba(251,146,60,0.5)" />
         </View>
       </LinearGradient>
     </Pressable>
   );
 }
 
-// ── Kundli Milan Mini Card ────────────────────────────────────────────────────
+// ── Kundli Milan Mini — full-width horizontal row ─────────────────────────────
 function MilanMini({ onPress }: { onPress: () => void }) {
-  const glowOpacity = useOpacityPulse(0.4, 0.9, 1300);
-  const shimmerX    = useShimmer(120);
+  const shimmerX = useShimmer(360);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
-      <Animated.View style={[mini.outerGlowPurple, { opacity: glowOpacity }]} />
-      <LinearGradient colors={["#4c1d95","#7c3aed","#3b1570"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+    <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
+      <LinearGradient colors={["#1e0a3d","#3b1570"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"#a855f7" }]} />
+        <View style={[mini.border, { borderColor:"rgba(168,85,247,0.35)" }]} />
 
-        <Text style={mini.symbol}>♥</Text>
-
-        <View style={mini.liveRow}>
-          <View style={[mini.liveDot, { backgroundColor:"#a855f7" }]} />
-          <Text style={[mini.liveTxt, { color:"#c084fc" }]}>PRO</Text>
+        <View style={[mini.iconCircle, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.35)" }]}>
+          <Text style={mini.iconEmoji}>♥</Text>
         </View>
 
-        <Text style={mini.title}>Kundli{"\n"}Milan</Text>
-
-        <View style={mini.statRow}>
-          <Text style={mini.statNum}>36</Text>
-          <Text style={mini.statLbl}>points</Text>
+        <View style={mini.textBlock}>
+          <Text style={mini.rowTitle}>Kundli Milan</Text>
+          <Text style={mini.rowSub}>36 guna match · Vivah compatibility</Text>
         </View>
 
-        <View style={mini.tapRow}>
-          <Text style={[mini.tapTxt, { color:"#c084fc" }]}>Unlock</Text>
-          <Feather name="lock" size={10} color="#c084fc" />
+        <View style={mini.rightBlock}>
+          <View style={[mini.badge, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.4)" }]}>
+            <Feather name="lock" size={8} color="#c084fc" />
+            <Text style={[mini.badgeTxt, { color:"#c084fc" }]}>PRO</Text>
+          </View>
+          <Feather name="chevron-right" size={14} color="rgba(192,132,252,0.5)" />
         </View>
       </LinearGradient>
     </Pressable>
@@ -709,53 +697,43 @@ const hero = StyleSheet.create({
   insightText: { fontSize: 10, fontFamily: F.semibold, maxWidth: 140 },
 });
 
-// ── Mini cards (compact 3-column row) ─────────────────────────────────────────
+// ── Mini cards — full-width horizontal rows ────────────────────────────────────
 const mini = StyleSheet.create({
-  outerGlowRed: {
-    position: "absolute", inset: -3, borderRadius: 17,
-    backgroundColor: "#ff1133",
-    shadowColor: "#ff1133", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
+  row: {
+    borderRadius: 14, overflow: "hidden",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
   },
-  outerGlowOrange: {
-    position: "absolute", inset: -3, borderRadius: 17,
-    backgroundColor: "#ff6600",
-    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
-  },
-  outerGlowPurple: {
-    position: "absolute", inset: -3, borderRadius: 17,
-    backgroundColor: "#9333ea",
-    shadowColor: "#9333ea", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
-  },
-  card: {
-    flex: 1, borderRadius: 16, padding: 12, overflow: "hidden",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6, shadowRadius: 16, elevation: 14,
+  rowPressed: { opacity: 0.82 },
+  rowGrad: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 13, paddingHorizontal: 14, overflow: "hidden",
   },
   shimmer: {
-    position: "absolute", top: 0, bottom: 0, width: 40, zIndex: 2,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    position: "absolute", top: 0, bottom: 0, width: 60, zIndex: 2,
+    backgroundColor: "rgba(255,255,255,0.06)",
     transform: [{ skewX: "-18deg" }],
   },
   border: {
-    position: "absolute", inset: 0, borderRadius: 16,
-    borderWidth: 1.2, zIndex: 1,
+    position: "absolute", inset: 0, borderRadius: 14,
+    borderWidth: 1, zIndex: 1,
   },
-  symbol: {
-    fontSize: 28, opacity: 0.18, color: "#fff",
-    position: "absolute", right: 6, top: 6,
+  iconCircle: {
+    width: 40, height: 40, borderRadius: 12,
+    borderWidth: 1, alignItems: "center", justifyContent: "center",
   },
-  liveRow:  { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 },
-  liveDot:  { width: 6, height: 6, borderRadius: 3 },
-  liveTxt:  { fontSize: 8, fontFamily: F.bold, letterSpacing: 1.5 },
-  title:    { color: "#ffffff", fontSize: 14, fontFamily: F.bold, letterSpacing: -0.3, lineHeight: 18, marginBottom: 8 },
-  statRow:  { flexDirection: "row", alignItems: "flex-end", gap: 4, marginBottom: "auto" as any },
-  statNum:  { color: "#ffffff", fontSize: 22, fontFamily: F.bold, lineHeight: 24 },
-  statLbl:  { color: "rgba(255,255,255,0.5)", fontSize: 9.5, fontFamily: F.medium, paddingBottom: 2 },
-  tapRow:   { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 10 },
-  tapTxt:   { fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
+  iconEmoji: { fontSize: 18 },
+  textBlock: { flex: 1, gap: 2 },
+  rowTitle: { color: "#ffffff", fontSize: 13.5, fontFamily: F.bold, letterSpacing: -0.2 },
+  rowSub:   { color: "rgba(255,255,255,0.45)", fontSize: 10.5, fontFamily: F.medium },
+  rightBlock: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderWidth: 1, borderRadius: 20,
+    paddingVertical: 3, paddingHorizontal: 8,
+  },
+  badgeDot: { width: 5, height: 5, borderRadius: 2.5 },
+  badgeTxt: { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 1 },
 });
 
 // ── Shared card layout ────────────────────────────────────────────────────────

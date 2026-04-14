@@ -197,13 +197,18 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         )}
       </View>
 
-      <EnergyChart
-        targetPts={chartPts}
-        labels={chartLbls}
-        finalEnergy={chartEnergy}
-        loading={loading}
-        instant={showDemo}
-      />
+      {/* Scale chart down so cards below are visible without scrolling */}
+      <View style={{ height: 196, overflow: "hidden" }}>
+        <View style={{ transform: [{ scale: 0.68 }], marginTop: -48, marginLeft: -16, marginRight: -16 }}>
+          <EnergyChart
+            targetPts={chartPts}
+            labels={chartLbls}
+            finalEnergy={chartEnergy}
+            loading={loading}
+            instant={showDemo}
+          />
+        </View>
+      </View>
 
       {/* Insight pill */}
       <View style={[hero.insightPill, { backgroundColor: `${insight.color}15`, borderColor: `${insight.color}35` }]}>
@@ -249,7 +254,7 @@ function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
 
           {/* Chips */}
           <View style={dosh.chipRow}>
-            {["Kalsarp", "Manglik", "Pitra", "Guru Chandal"].map(d => (
+            {["Kalsarp", "Manglik", "Pitra"].map(d => (
               <View key={d} style={dosh.chip}>
                 <Text style={dosh.chipText}>{d}</Text>
               </View>
@@ -277,13 +282,6 @@ function HiddenIssuesCard({ onPress }: { onPress: () => void }) {
           <View style={issue.arrow}>
             <Feather name="chevron-right" size={16} color="#f59e0b" />
           </View>
-        </View>
-        <View style={issue.tagRow}>
-          {["Weak Sun", "8th House", "Saturn Transit", "Afflicted Moon"].map(t => (
-            <View key={t} style={issue.tag}>
-              <Text style={issue.tagText}>{t}</Text>
-            </View>
-          ))}
         </View>
       </LinearGradient>
     </Pressable>
@@ -351,14 +349,6 @@ function KundliMilanCard({ onPress }: { onPress: () => void }) {
             <Text style={milan.cta}>Check compatibility →</Text>
           </View>
         </View>
-        {/* Stars row */}
-        <View style={milan.starsRow}>
-          {["Varna", "Vashya", "Tara", "Yoni", "Graha", "Gana", "Bhakut", "Nadi"].map(k => (
-            <View key={k} style={milan.starChip}>
-              <Text style={milan.starText}>{k}</Text>
-            </View>
-          ))}
-        </View>
       </LinearGradient>
     </Pressable>
   );
@@ -367,7 +357,7 @@ function KundliMilanCard({ onPress }: { onPress: () => void }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root:    { flex: 1 },
-  content: { paddingHorizontal: 14, gap: 12 },
+  content: { paddingHorizontal: 14, gap: 8 },
 
   greetRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
   greetSub:   { color: "#3d5a7a", fontSize: 11, fontWeight: "600" },
@@ -403,8 +393,8 @@ const hero = StyleSheet.create({
   },
   demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
   insightPill: {
-    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10,
-    borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12,
+    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4,
+    borderWidth: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12,
   },
   insightIcon: { fontSize: 14 },
   insightText: { fontSize: 12, fontWeight: "700" },
@@ -421,10 +411,10 @@ const dosh = StyleSheet.create({
     position: "absolute", inset: 0, borderRadius: 20,
     borderWidth: 1.5, borderColor: "#ef4444", zIndex: 1,
   },
-  gradient: { borderRadius: 20, padding: 16, gap: 12 },
-  row: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  gradient: { borderRadius: 20, padding: 11, gap: 8 },
+  row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   iconWrap: {
-    width: 52, height: 52, borderRadius: 14,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1,
     borderColor: "rgba(239,68,68,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
@@ -451,10 +441,10 @@ const issue = StyleSheet.create({
     shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.18, shadowRadius: 14, elevation: 5,
   },
-  gradient: { padding: 14, gap: 10 },
-  row:      { flexDirection: "row", alignItems: "center", gap: 12 },
+  gradient: { padding: 10, gap: 7 },
+  row:      { flexDirection: "row", alignItems: "center", gap: 10 },
   iconWrap: {
-    width: 46, height: 46, borderRadius: 13,
+    width: 40, height: 40, borderRadius: 11,
     backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1,
     borderColor: "rgba(245,158,11,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
@@ -477,7 +467,7 @@ const issue = StyleSheet.create({
 // Bad time card
 const bad = StyleSheet.create({
   card: {
-    borderRadius: 18, padding: 14, borderWidth: 1,
+    borderRadius: 18, padding: 10, borderWidth: 1,
     borderColor: "rgba(239,68,68,0.2)",
     shadowColor: "#dc2626", shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.22, shadowRadius: 16, elevation: 6,
@@ -496,7 +486,7 @@ const bad = StyleSheet.create({
     paddingVertical: 4, paddingHorizontal: 8,
   },
   urgencyText: { color: "#ef4444", fontSize: 8, fontWeight: "900", letterSpacing: 1.5 },
-  divider:   { height: 1, backgroundColor: "rgba(239,68,68,0.08)", marginVertical: 10 },
+  divider:   { height: 1, backgroundColor: "rgba(239,68,68,0.08)", marginVertical: 6 },
   bottomRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   bottomText: { color: "#7f1d1d", fontSize: 10, flex: 1 },
 });
@@ -504,7 +494,7 @@ const bad = StyleSheet.create({
 // Kundli milan card
 const milan = StyleSheet.create({
   card: {
-    borderRadius: 20, padding: 16, borderWidth: 1,
+    borderRadius: 20, padding: 11, borderWidth: 1,
     borderColor: "rgba(167,139,250,0.3)", overflow: "hidden",
     shadowColor: "#a78bfa", shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.25, shadowRadius: 18, elevation: 7,
@@ -513,9 +503,9 @@ const milan = StyleSheet.create({
     position: "absolute", top: 0, left: 0, right: 0, height: 2,
     backgroundColor: "#a78bfa", borderRadius: 2,
   },
-  row:      { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  row:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 0 },
   iconWrap: {
-    width: 50, height: 50, borderRadius: 14,
+    width: 44, height: 44, borderRadius: 12,
     backgroundColor: "rgba(167,139,250,0.12)", borderWidth: 1,
     borderColor: "rgba(167,139,250,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
   },

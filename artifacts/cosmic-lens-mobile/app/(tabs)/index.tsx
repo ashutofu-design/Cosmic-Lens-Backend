@@ -4,6 +4,7 @@ import * as Haptics from "expo-haptics";
 import { Redirect, router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -17,18 +18,51 @@ import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
 import { useColors } from "@/hooks/useColors";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
-import { computeActiveDasha, pName, type ActiveDashaResult } from "@/lib/proInsightEngine";
+import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
 
 const N = 12;
-
-// Demo sample energy points for no-kundli state
 const DEMO_PTS = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
 const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : "";
+
+function energyInsight(energy: number): { icon: string; text: string; color: string } {
+  if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today", color: "#22c55e" };
+  if (energy >= 55) return { icon: "✨", text: "Moderate energy, stay focused", color: "#f59e0b" };
+  if (energy >= 35) return { icon: "⚠️", text: "Energy unstable today", color: "#f97316" };
+  return { icon: "🌑", text: "Low energy — rest & introspect", color: "#ef4444" };
+}
+
+// ── Pulse animation hook ──────────────────────────────────────────────────────
+function usePulse() {
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1.025, duration: 900, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1,     duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return anim;
+}
+
+// ── Glow pulse for border ─────────────────────────────────────────────────────
+function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
+  const anim = useRef(new Animated.Value(min)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: max, duration: dur, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: min, duration: dur, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return anim;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -77,313 +111,429 @@ export default function HomeScreen() {
     return () => { cancelRef.current = true; };
   }, [kundli]);
 
-  // Auth gate — all hooks declared above this point
-  if (!isLoading && !user) {
-    return <Redirect href="/login" />;
-  }
+  if (!isLoading && !user) return <Redirect href="/login" />;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  // Active dasha (only when kundli + moon data available)
+  const showDemo    = !kundli;
+  const chartPts    = showDemo ? DEMO_PTS   : targetPts;
+  const chartLbls   = showDemo ? DEMO_LABELS : labels;
+  const chartEnergy = showDemo ? 38 : todayEnergy;
+  const insight     = energyInsight(chartEnergy);
+
   const activeDasha: ActiveDashaResult | null =
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
-
-  // Decide which chart data to show
-  const showDemo   = !kundli;
-  const chartPts   = showDemo ? DEMO_PTS   : targetPts;
-  const chartLbls  = showDemo ? DEMO_LABELS : labels;
-  const chartEnergy = showDemo ? 63 : todayEnergy;
 
   return (
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: topPad + 20, paddingBottom: botPad + 100 },
-      ]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: botPad + 100 }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Welcome */}
-      <Text style={[styles.welcome, { color: colors.textSub }]}>
-        {kundli
-          ? <>Hello, <Text style={{ color: "#cbd5e1", fontWeight: "600" }}>{kundli.name}</Text></>
-          : "Hello — Set Up Your Kundli"}
-      </Text>
-
-      {/* ── Action buttons ── */}
-      <View style={styles.btnRow}>
-        <ActionCard
-          label="7 Days Forecast"
-          icon="calendar"
-          accent="#00d4ff"
-          bg="#040e20"
-          border="rgba(0,200,255,0.25)"
-          locked={false}
+      {/* Greeting */}
+      <View style={styles.greetRow}>
+        <View>
+          <Text style={styles.greetSub}>
+            {kundli ? `Namaste, ${kundli.name}` : "Namaste"}
+          </Text>
+          <Text style={styles.greetTitle}>Aaj ka Cosmic Report</Text>
+        </View>
+        <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
-        />
+          style={styles.forecastPill}
+        >
+          <Feather name="calendar" size={12} color="#00d4ff" />
+          <Text style={styles.forecastPillText}>7 Days</Text>
+        </Pressable>
       </View>
 
-      {/* ── Energy Chart (real or demo) ── */}
-      <View style={styles.chartWrap}>
-        {showDemo && (
-          <View style={[styles.demoOverlay, { pointerEvents: "none" }]}>
-            <View style={styles.demoBadge}>
-              <Feather name="lock" size={10} color="#3d5a7a" />
-              <Text style={styles.demoBadgeText}>DEMO PREVIEW</Text>
-            </View>
-          </View>
-        )}
-        <EnergyChart
-          targetPts={chartPts}
-          labels={chartLbls}
-          finalEnergy={chartEnergy}
-          loading={!showDemo && loading && targetPts.length === 0}
-          instant={showDemo}
-        />
-      </View>
+      {/* ── HERO: Today Energy Card ── */}
+      <HeroEnergyCard
+        chartPts={chartPts}
+        chartLbls={chartLbls}
+        chartEnergy={chartEnergy}
+        insight={insight}
+        showDemo={showDemo}
+        loading={!showDemo && loading && targetPts.length === 0}
+      />
 
-      {/* Subtitle */}
-      <Text style={[styles.subtitle, { color: colors.textDim }]}>
-        {!showDemo && settled
-          ? "Birth chart · Navatara · Ashtakavarga"
-          : !showDemo && loading
-          ? "Reading cosmic signals..."
-          : "Birth chart · Navatara · Ashtakavarga"}
-      </Text>
+      {/* ── DOSH ANALYSIS (dominant) ── */}
+      <DoshCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} kundli={kundli} />
 
-      {/* ── Cosmic Tools ── */}
-      <View style={styles.toolsWrap}>
-        <Text style={styles.toolsLabel}>COSMIC TOOLS</Text>
-        <ToolCard
-          emoji="🔴"
-          title="Dosh Analysis"
-          titleHindi="ग्रह दोष विश्लेषण"
-          desc="Kalsarp, Manglik, Pitra, Guru Chandal — all doshas in one place"
-          accent="#ef4444"
-          bg="rgba(239,68,68,0.05)"
-          border="rgba(239,68,68,0.2)"
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/dosh"); }}
-        />
-        <ToolCard
-          emoji="♥"
-          title="Kundli Milan"
-          titleHindi="अष्टकूट गुण मिलान"
-          desc="36-point compatibility check for marriage matching"
-          accent="#a78bfa"
-          bg="rgba(167,139,250,0.05)"
-          border="rgba(167,139,250,0.22)"
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/kundli-milan"); }}
-        />
-        <ToolCard
-          emoji="🏠"
-          title="Vastu Shastra"
-          titleHindi="वास्तु शास्त्र"
-          desc="Vastu tips and remedies for every room in your home"
-          accent="#34d399"
-          bg="rgba(52,211,153,0.05)"
-          border="rgba(52,211,153,0.2)"
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/vastu"); }}
-        />
-      </View>
+      {/* ── HIDDEN ISSUES ── */}
+      <HiddenIssuesCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/kundli"); }} />
 
-      {/* ── Active Dasha card (real data only) ── */}
-      {activeDasha && (
-        <ActiveDashaCard dasha={activeDasha} onPress={() => {}} />
-      )}
+      {/* ── BAD TIME ALERT ── */}
+      <BadTimeCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+
+      {/* ── KUNDLI MILAN PREMIUM ── */}
+      <KundliMilanCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
     </ScrollView>
   );
 }
 
-// ── Tool Card ─────────────────────────────────────────────────────────────────
-function ToolCard({
-  emoji, title, titleHindi, desc, accent, bg, border, onPress,
-}: {
-  emoji: string; title: string; titleHindi: string; desc: string;
-  accent: string; bg: string; border: string; onPress: () => void;
+// ── Hero Energy Card ──────────────────────────────────────────────────────────
+function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
+  chartPts: number[]; chartLbls: string[]; chartEnergy: number;
+  insight: { icon: string; text: string; color: string };
+  showDemo: boolean; loading: boolean;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.toolCard,
-        { backgroundColor: bg, borderColor: border },
-        pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
-      ]}
-    >
-      <View style={[styles.toolEmoji, { backgroundColor: `${accent}12` }]}>
-        <Text style={{ fontSize: 20 }}>{emoji}</Text>
+    <View style={hero.card}>
+      {/* Ambient glow */}
+      <View style={[hero.glow, { backgroundColor: `${insight.color}18` }]} />
+
+      <View style={hero.header}>
+        <View>
+          <Text style={hero.label}>TODAY ENERGY</Text>
+          <Text style={[hero.score, { color: insight.color }]}>{chartEnergy}<Text style={hero.scoreMax}>/100</Text></Text>
+        </View>
+        {showDemo && (
+          <View style={hero.demoBadge}>
+            <Feather name="lock" size={9} color="#3d5a7a" />
+            <Text style={hero.demoBadgeText}>DEMO</Text>
+          </View>
+        )}
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.toolTitle, { color: accent }]}>{title}</Text>
-        <Text style={styles.toolHindi}>{titleHindi}</Text>
-        <Text style={styles.toolDesc} numberOfLines={2}>{desc}</Text>
+
+      <EnergyChart
+        targetPts={chartPts}
+        labels={chartLbls}
+        finalEnergy={chartEnergy}
+        loading={loading}
+        instant={showDemo}
+      />
+
+      {/* Insight pill */}
+      <View style={[hero.insightPill, { backgroundColor: `${insight.color}15`, borderColor: `${insight.color}35` }]}>
+        <Text style={hero.insightIcon}>{insight.icon}</Text>
+        <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
       </View>
-      <View style={[styles.toolArrow, { backgroundColor: `${accent}15`, borderColor: `${accent}25` }]}>
-        <Feather name="chevron-right" size={14} color={accent} />
-      </View>
-    </Pressable>
+    </View>
   );
 }
 
-// ── Action Card ──────────────────────────────────────────────────────────────
-function ActionCard({
-  label, icon, accent, bg, border, locked, onPress,
-}: {
-  label: string; icon: string; accent: string;
-  bg: string; border: string; locked?: boolean; onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionCard,
-        { backgroundColor: bg, borderColor: border, opacity: locked ? 0.45 : 1 },
-        pressed && !locked && { opacity: 0.75, transform: [{ scale: 0.97 }] },
-      ]}
-    >
-      <Feather name={icon as any} size={18} color={accent} />
-      <Text style={[styles.actionLabel, { color: accent }]}>
-        {label.toUpperCase()}
-      </Text>
-      {locked && (
-        <Feather name="lock" size={10} color={accent} style={{ opacity: 0.6 }} />
-      )}
-    </Pressable>
-  );
-}
-
-// ── Active Dasha Card ────────────────────────────────────────────────────────
-function ActiveDashaCard({ dasha, onPress }: { dasha: ActiveDashaResult; onPress: () => void }) {
-  const trend  = dasha.careerTrend;
-  const tColor = trend === "UP" ? "#22c55e" : trend === "DOWN" ? "#ef4444" : "#f59e0b";
-  const tIcon  = trend === "UP" ? "↑" : trend === "DOWN" ? "↓" : "~";
-  const tLabel = trend === "UP" ? "Growth" : trend === "DOWN" ? "Decline" : "Mixed";
+// ── Dosh Analysis Card ────────────────────────────────────────────────────────
+function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
+  const pulse = usePulse();
+  const glowOpacity = useOpacityPulse(0.3, 0.85, 1000);
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.dashaCard, pressed && { opacity: 0.85 }]}
-    >
-      <View style={styles.dashaTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.dashaTitle}>ACTIVE DASHA</Text>
-          <View style={styles.dashaPlanets}>
-            {[
-              { lbl: "MD", planet: dasha.mdPlanet, color: "#4b6a86" },
-              { lbl: "AD", planet: dasha.adPlanet, color: "#7c6ed4" },
-              { lbl: "PD", planet: dasha.pdPlanet, color: "#00d4ff" },
-            ].map(({ lbl, planet, color }, i) => (
-              <React.Fragment key={lbl}>
-                <View style={styles.dashaPlItem}>
-                  <Text style={styles.dashaPlLabel}>{lbl}</Text>
-                  <Text style={[
-                    styles.dashaPlName, { color },
-                    lbl === "PD" && {
-                      textShadowColor: `${color}66`,
-                      textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: 8,
-                    },
-                  ]}>
-                    {pName(planet)}
-                  </Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1 }]}>
+      <Animated.View style={[dosh.card, { transform: [{ scale: pulse }] }]}>
+        {/* Pulsing border glow */}
+        <Animated.View style={[dosh.borderGlow, { opacity: glowOpacity }]} />
+
+        <LinearGradient
+          colors={["#1a0408", "#200610", "#180309"]}
+          style={dosh.gradient}
+        >
+          <View style={dosh.row}>
+            <View style={dosh.iconWrap}>
+              <Text style={{ fontSize: 26 }}>☿</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={dosh.titleRow}>
+                <Text style={dosh.title}>⚠️ Dosh Analysis</Text>
+                <View style={dosh.alertBadge}>
+                  <Text style={dosh.alertBadgeText}>ALERT</Text>
                 </View>
-                {i < 2 && <Text style={styles.dashaSep}>→</Text>}
-              </React.Fragment>
+              </View>
+              <Text style={dosh.subtitle}>
+                {kundli ? "Graha doshas detected in your chart" : "Scan your kundli for doshas"}
+              </Text>
+              <Text style={dosh.cta}>Tap to view remedies →</Text>
+            </View>
+          </View>
+
+          {/* Chips */}
+          <View style={dosh.chipRow}>
+            {["Kalsarp", "Manglik", "Pitra", "Guru Chandal"].map(d => (
+              <View key={d} style={dosh.chip}>
+                <Text style={dosh.chipText}>{d}</Text>
+              </View>
             ))}
           </View>
-        </View>
-        <View style={styles.trendWrap}>
-          <View style={[styles.trendCircle, {
-            backgroundColor: `${tColor}14`,
-            borderColor: `${tColor}44`,
-            shadowColor: tColor,
-          }]}>
-            <Text style={[styles.trendIcon, { color: tColor }]}>{tIcon}</Text>
-          </View>
-          <Text style={[styles.trendLabel, { color: `${tColor}aa` }]}>{tLabel}</Text>
-        </View>
-      </View>
-      <View style={styles.dashaFooter}>
-        <Text style={styles.dashaFooterText}>Full Insights</Text>
-        <Text style={styles.dashaFooterArrow}>→</Text>
-      </View>
+        </LinearGradient>
+      </Animated.View>
     </Pressable>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// ── Hidden Issues Card ────────────────────────────────────────────────────────
+function HiddenIssuesCard({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [issue.card, pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] }]}>
+      <LinearGradient colors={["#1a1000", "#1c1100"]} style={issue.gradient}>
+        <View style={issue.row}>
+          <View style={issue.iconWrap}>
+            <Feather name="alert-triangle" size={22} color="#f59e0b" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={issue.title}>Hidden Issues in Kundli</Text>
+            <Text style={issue.subtitle}>Weak planets & afflicted houses affecting your life</Text>
+          </View>
+          <View style={issue.arrow}>
+            <Feather name="chevron-right" size={16} color="#f59e0b" />
+          </View>
+        </View>
+        <View style={issue.tagRow}>
+          {["Weak Sun", "8th House", "Saturn Transit", "Afflicted Moon"].map(t => (
+            <View key={t} style={issue.tag}>
+              <Text style={issue.tagText}>{t}</Text>
+            </View>
+          ))}
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+// ── Bad Time Alert Card ───────────────────────────────────────────────────────
+function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
+  const dashaTxt = activeDasha
+    ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha period`
+    : "Current transit & dasha analysis";
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+      <LinearGradient
+        colors={["#1f0400", "#1a0600", "#150300"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={bad.card}
+      >
+        <View style={bad.topRow}>
+          <View style={bad.iconWrap}>
+            <Feather name="zap" size={20} color="#ef4444" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={bad.title}>Upcoming Challenges</Text>
+            <Text style={bad.subtitle}>Next few days may be difficult</Text>
+          </View>
+          <View style={bad.urgencyBadge}>
+            <Text style={bad.urgencyText}>URGENT</Text>
+          </View>
+        </View>
+        <View style={bad.divider} />
+        <View style={bad.bottomRow}>
+          <Feather name="clock" size={11} color="#7f1d1d" />
+          <Text style={bad.bottomText}>{dashaTxt} · Tap for detailed forecast</Text>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+// ── Kundli Milan Premium Card ─────────────────────────────────────────────────
+function KundliMilanCard({ onPress }: { onPress: () => void }) {
+  const glowOpacity = useOpacityPulse(0.5, 1.0, 1400);
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+      <LinearGradient
+        colors={["#140a2e", "#1a0d3a", "#110830"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={milan.card}
+      >
+        <Animated.View style={[milan.glowBar, { opacity: glowOpacity }]} />
+        <View style={milan.row}>
+          <View style={milan.iconWrap}>
+            <Text style={{ fontSize: 24 }}>♥</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={milan.titleRow}>
+              <Text style={milan.title}>Kundli Milan</Text>
+              <View style={milan.proBadge}>
+                <Text style={milan.proBadgeText}>PRO 🔒</Text>
+              </View>
+            </View>
+            <Text style={milan.subtitle}>36-point compatibility check for marriage</Text>
+            <Text style={milan.cta}>Check compatibility →</Text>
+          </View>
+        </View>
+        {/* Stars row */}
+        <View style={milan.starsRow}>
+          {["Varna", "Vashya", "Tara", "Yoni", "Graha", "Gana", "Bhakut", "Nadi"].map(k => (
+            <View key={k} style={milan.starChip}>
+              <Text style={milan.starText}>{k}</Text>
+            </View>
+          ))}
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root:    { flex: 1 },
-  content: { paddingHorizontal: 16, alignItems: "center" },
+  content: { paddingHorizontal: 14, gap: 12 },
 
-  welcome: { fontSize: 12, marginBottom: 10, alignSelf: "flex-start" },
+  greetRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  greetSub:   { color: "#3d5a7a", fontSize: 11, fontWeight: "600" },
+  greetTitle: { color: "#dde8f4", fontSize: 18, fontWeight: "800", marginTop: 2 },
 
-  chartWrap: { width: "100%", maxWidth: 380, marginBottom: 10, position: "relative" },
-
-  demoOverlay: {
-    position: "absolute", top: 10, right: 12, zIndex: 10,
+  forecastPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "rgba(0,212,255,0.08)", borderWidth: 1,
+    borderColor: "rgba(0,212,255,0.25)", borderRadius: 20,
+    paddingVertical: 7, paddingHorizontal: 12,
   },
+  forecastPillText: { color: "#00d4ff", fontSize: 11, fontWeight: "700" },
+});
+
+// Hero card
+const hero = StyleSheet.create({
+  card: {
+    backgroundColor: "#040e1e", borderRadius: 20, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)", padding: 14, overflow: "hidden",
+    shadowColor: "#00d4ff", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.08, shadowRadius: 20, elevation: 4,
+  },
+  glow: { position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: 80 },
+  header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 },
+  label:    { color: "#3d5a7a", fontSize: 9, fontWeight: "800", letterSpacing: 2 },
+  score:    { fontSize: 32, fontWeight: "900", marginTop: 2 },
+  scoreMax: { fontSize: 14, color: "#1e3a5f", fontWeight: "600" },
   demoBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(2,13,26,0.85)",
-    borderWidth: 1, borderColor: "rgba(0,200,255,0.15)",
-    paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6,
+    backgroundColor: "rgba(2,13,26,0.85)", borderWidth: 1,
+    borderColor: "rgba(0,200,255,0.15)", paddingVertical: 4,
+    paddingHorizontal: 8, borderRadius: 6,
   },
-  demoBadgeText: { color: "#3d5a7a", fontSize: 7, fontWeight: "800", letterSpacing: 1.5 },
+  demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
+  insightPill: {
+    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10,
+    borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12,
+  },
+  insightIcon: { fontSize: 14 },
+  insightText: { fontSize: 12, fontWeight: "700" },
+});
 
-  subtitle: {
-    fontSize: 9, letterSpacing: 1.6, textTransform: "uppercase",
-    marginBottom: 16, lineHeight: 16, textAlign: "center",
+// Dosh card
+const dosh = StyleSheet.create({
+  card: {
+    borderRadius: 20, overflow: "hidden",
+    shadowColor: "#ef4444", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35, shadowRadius: 18, elevation: 8,
   },
+  borderGlow: {
+    position: "absolute", inset: 0, borderRadius: 20,
+    borderWidth: 1.5, borderColor: "#ef4444", zIndex: 1,
+  },
+  gradient: { borderRadius: 20, padding: 16, gap: 12 },
+  row: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  iconWrap: {
+    width: 52, height: 52, borderRadius: 14,
+    backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  title:    { color: "#fca5a5", fontSize: 16, fontWeight: "800" },
+  alertBadge: { backgroundColor: "#7f1d1d", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  alertBadgeText: { color: "#fca5a5", fontSize: 8, fontWeight: "800", letterSpacing: 1 },
+  subtitle: { color: "#7f1d1d", fontSize: 12, lineHeight: 17, marginBottom: 5 },
+  cta:      { color: "#ef4444", fontSize: 12, fontWeight: "700" },
+  chipRow:  { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: {
+    backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.25)", borderRadius: 20,
+    paddingVertical: 4, paddingHorizontal: 10,
+  },
+  chipText: { color: "#f87171", fontSize: 10, fontWeight: "600" },
+});
 
-  btnRow: { width: "100%", maxWidth: 380, flexDirection: "row", gap: 10, marginBottom: 14 },
+// Hidden issues card
+const issue = StyleSheet.create({
+  card: {
+    borderRadius: 18, overflow: "hidden", borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18, shadowRadius: 14, elevation: 5,
+  },
+  gradient: { padding: 14, gap: 10 },
+  row:      { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconWrap: {
+    width: 46, height: 46, borderRadius: 13,
+    backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  arrow: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "rgba(245,158,11,0.1)", borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.25)", alignItems: "center", justifyContent: "center",
+  },
+  title:    { color: "#fbbf24", fontSize: 14, fontWeight: "800", marginBottom: 3 },
+  subtitle: { color: "#78350f", fontSize: 11, lineHeight: 16 },
+  tagRow:   { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tag: {
+    backgroundColor: "rgba(245,158,11,0.08)", borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.2)", borderRadius: 20,
+    paddingVertical: 3, paddingHorizontal: 9,
+  },
+  tagText: { color: "#92400e", fontSize: 9, fontWeight: "700" },
+});
 
-  // ── Cosmic Tools ─────────────────────────────────────────────────────────
-  toolsWrap:  { width: "100%", maxWidth: 380, gap: 10, marginBottom: 16 },
-  toolsLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 2.5, color: "#334155", marginBottom: 2 },
-  toolCard: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    borderRadius: 14, borderWidth: 1, padding: 12,
+// Bad time card
+const bad = StyleSheet.create({
+  card: {
+    borderRadius: 18, padding: 14, borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.2)",
+    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22, shadowRadius: 16, elevation: 6,
   },
-  toolEmoji: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  toolTitle: { fontSize: 13, fontWeight: "700" },
-  toolHindi: { color: "#1e3a5f", fontSize: 9, marginTop: 1, marginBottom: 3 },
-  toolDesc:  { color: "#334155", fontSize: 11, lineHeight: 16 },
-  toolArrow: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  actionCard: {
-    flex: 1, paddingVertical: 14, paddingHorizontal: 8,
-    borderRadius: 14, borderWidth: 1,
-    alignItems: "center", justifyContent: "center", gap: 6,
+  topRow:    { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconWrap: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "rgba(239,68,68,0.12)", borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.25)", alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
-  actionLabel: { fontSize: 10, fontWeight: "700", letterSpacing: 1, textAlign: "center" },
+  title:    { color: "#fca5a5", fontSize: 14, fontWeight: "800", marginBottom: 3 },
+  subtitle: { color: "#7f1d1d", fontSize: 11 },
+  urgencyBadge: {
+    backgroundColor: "rgba(239,68,68,0.15)", borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.35)", borderRadius: 8,
+    paddingVertical: 4, paddingHorizontal: 8,
+  },
+  urgencyText: { color: "#ef4444", fontSize: 8, fontWeight: "900", letterSpacing: 1.5 },
+  divider:   { height: 1, backgroundColor: "rgba(239,68,68,0.08)", marginVertical: 10 },
+  bottomRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  bottomText: { color: "#7f1d1d", fontSize: 10, flex: 1 },
+});
 
-  // ── Active Dasha ──────────────────────────────────────────────────────────
-  dashaCard: {
-    width: "100%", maxWidth: 380,
-    backgroundColor: "#040d1e",
-    borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,212,255,0.15)",
-    padding: 14, marginBottom: 16,
-    shadowColor: "#006ec8", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 4,
+// Kundli milan card
+const milan = StyleSheet.create({
+  card: {
+    borderRadius: 20, padding: 16, borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.3)", overflow: "hidden",
+    shadowColor: "#a78bfa", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25, shadowRadius: 18, elevation: 7,
   },
-  dashaTop:     { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
-  dashaTitle:   { color: "#3d5a7a", fontSize: 8, fontWeight: "800", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 },
-  dashaPlanets: { flexDirection: "row", alignItems: "center", gap: 8 },
-  dashaPlItem:  { alignItems: "center" },
-  dashaPlLabel: { color: "#1e3a5f", fontSize: 7, fontWeight: "700", letterSpacing: 0.8, marginBottom: 2 },
-  dashaPlName:  { fontSize: 13, fontWeight: "700" },
-  dashaSep:     { color: "#1e3a5f", fontSize: 10, marginBottom: 2 },
-  trendWrap:    { alignItems: "center", gap: 3 },
-  trendCircle:  {
-    width: 40, height: 40, borderRadius: 20, borderWidth: 2,
-    alignItems: "center", justifyContent: "center",
-    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.22, shadowRadius: 10, elevation: 3,
+  glowBar: {
+    position: "absolute", top: 0, left: 0, right: 0, height: 2,
+    backgroundColor: "#a78bfa", borderRadius: 2,
   },
-  trendIcon:   { fontSize: 18, fontWeight: "900" },
-  trendLabel:  { fontSize: 8, fontWeight: "700" },
-  dashaFooter: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 4 },
-  dashaFooterText:  { color: "rgba(0,212,255,0.27)", fontSize: 9, letterSpacing: 0.5 },
-  dashaFooterArrow: { color: "rgba(0,212,255,0.27)", fontSize: 11 },
-
+  row:      { flexDirection: "row", alignItems: "flex-start", gap: 12, marginBottom: 12 },
+  iconWrap: {
+    width: 50, height: 50, borderRadius: 14,
+    backgroundColor: "rgba(167,139,250,0.12)", borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  title:    { color: "#c4b5fd", fontSize: 16, fontWeight: "800" },
+  proBadge: {
+    backgroundColor: "rgba(167,139,250,0.2)", borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.4)", borderRadius: 8,
+    paddingVertical: 3, paddingHorizontal: 8,
+  },
+  proBadgeText: { color: "#a78bfa", fontSize: 9, fontWeight: "800" },
+  subtitle: { color: "#4c1d95", fontSize: 11, lineHeight: 16, marginBottom: 5 },
+  cta:      { color: "#a78bfa", fontSize: 12, fontWeight: "700" },
+  starsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  starChip: {
+    backgroundColor: "rgba(167,139,250,0.07)", borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.18)", borderRadius: 20,
+    paddingVertical: 3, paddingHorizontal: 8,
+  },
+  starText: { color: "#6d28d9", fontSize: 9, fontWeight: "600" },
 });

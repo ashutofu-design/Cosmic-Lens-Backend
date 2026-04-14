@@ -12,7 +12,10 @@ export interface ProfileEntry {
   kundli: KundliData | null;
 }
 
-type LangCode = "en" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn";
+type LangCode =
+  | "en" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn"
+  | "ml" | "pa" | "or" | "ur" | "as" | "mai" | "ne" | "kok"
+  | "doi" | "ks" | "mni" | "brx" | "sat" | "sd" | "sa";
 
 // ── Context shape ────────────────────────────────────────────────────────────
 interface UserContextType {

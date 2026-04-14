@@ -161,10 +161,7 @@ export default function HomeScreen() {
       {/* ── DOSH ANALYSIS (dominant) ── */}
       <DoshCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} kundli={kundli} />
 
-      {/* ── HIDDEN ISSUES ── */}
-      <HiddenIssuesCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/kundli"); }} />
-
-      {/* ── BAD TIME ALERT ── */}
+      {/* ── UPCOMING CHALLENGES (includes hidden issues) ── */}
       <BadTimeCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
 
       {/* ── KUNDLI MILAN PREMIUM ── */}
@@ -266,33 +263,11 @@ function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
   );
 }
 
-// ── Hidden Issues Card ────────────────────────────────────────────────────────
-function HiddenIssuesCard({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [issue.card, pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] }]}>
-      <LinearGradient colors={["#1a1000", "#1c1100"]} style={issue.gradient}>
-        <View style={issue.row}>
-          <View style={issue.iconWrap}>
-            <Feather name="alert-triangle" size={22} color="#f59e0b" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={issue.title}>Hidden Issues in Kundli</Text>
-            <Text style={issue.subtitle}>Weak planets & afflicted houses affecting your life</Text>
-          </View>
-          <View style={issue.arrow}>
-            <Feather name="chevron-right" size={16} color="#f59e0b" />
-          </View>
-        </View>
-      </LinearGradient>
-    </Pressable>
-  );
-}
-
-// ── Bad Time Alert Card ───────────────────────────────────────────────────────
+// ── Upcoming Challenges Card (merged with Hidden Issues) ──────────────────────
 function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
   const dashaTxt = activeDasha
-    ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha period`
-    : "Current transit & dasha analysis";
+    ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha active`
+    : "Transit & dasha analysis";
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
@@ -301,22 +276,32 @@ function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDash
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={bad.card}
       >
+        {/* Top row — urgency */}
         <View style={bad.topRow}>
           <View style={bad.iconWrap}>
             <Feather name="zap" size={20} color="#ef4444" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={bad.title}>Upcoming Challenges</Text>
-            <Text style={bad.subtitle}>Next few days may be difficult</Text>
+            <Text style={bad.subtitle}>Agle kuch din mushkil ho sakte hain</Text>
           </View>
           <View style={bad.urgencyBadge}>
             <Text style={bad.urgencyText}>URGENT</Text>
           </View>
         </View>
+
         <View style={bad.divider} />
+
+        {/* Hidden issues row */}
+        <View style={bad.issueRow}>
+          <Feather name="alert-triangle" size={12} color="#f59e0b" />
+          <Text style={bad.issueText}>Weak planets & afflicted houses detected in kundli</Text>
+        </View>
+
+        {/* Dasha row */}
         <View style={bad.bottomRow}>
           <Feather name="clock" size={11} color="#7f1d1d" />
-          <Text style={bad.bottomText}>{dashaTxt} · Tap for detailed forecast</Text>
+          <Text style={bad.bottomText}>{dashaTxt} · Tap for full forecast</Text>
         </View>
       </LinearGradient>
     </Pressable>
@@ -433,38 +418,7 @@ const dosh = StyleSheet.create({
   chipText: { color: "#f87171", fontSize: 10, fontWeight: "600" },
 });
 
-// Hidden issues card
-const issue = StyleSheet.create({
-  card: {
-    borderRadius: 18, overflow: "hidden", borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.3)",
-    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18, shadowRadius: 14, elevation: 5,
-  },
-  gradient: { padding: 10, gap: 7 },
-  row:      { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconWrap: {
-    width: 40, height: 40, borderRadius: 11,
-    backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.3)", alignItems: "center", justifyContent: "center", flexShrink: 0,
-  },
-  arrow: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: "rgba(245,158,11,0.1)", borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.25)", alignItems: "center", justifyContent: "center",
-  },
-  title:    { color: "#fbbf24", fontSize: 14, fontWeight: "800", marginBottom: 3 },
-  subtitle: { color: "#78350f", fontSize: 11, lineHeight: 16 },
-  tagRow:   { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  tag: {
-    backgroundColor: "rgba(245,158,11,0.08)", borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.2)", borderRadius: 20,
-    paddingVertical: 3, paddingHorizontal: 9,
-  },
-  tagText: { color: "#92400e", fontSize: 9, fontWeight: "700" },
-});
-
-// Bad time card
+// Bad time card (merged with hidden issues)
 const bad = StyleSheet.create({
   card: {
     borderRadius: 18, padding: 10, borderWidth: 1,
@@ -487,6 +441,8 @@ const bad = StyleSheet.create({
   },
   urgencyText: { color: "#ef4444", fontSize: 8, fontWeight: "900", letterSpacing: 1.5 },
   divider:   { height: 1, backgroundColor: "rgba(239,68,68,0.08)", marginVertical: 6 },
+  issueRow:  { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  issueText: { color: "#92400e", fontSize: 10, flex: 1 },
   bottomRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   bottomText: { color: "#7f1d1d", fontSize: 10, flex: 1 },
 });

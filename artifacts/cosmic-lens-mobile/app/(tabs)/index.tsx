@@ -196,14 +196,10 @@ export default function HomeScreen() {
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
 
   return (
-    <ScrollView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: botPad + 100 }]}
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={true}
-    >
+    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: topPad, paddingBottom: botPad + 60 }]}>
+
       {/* ── Greeting ── */}
-      <Animated.View style={[styles.greetRow, greetAnim]}>
+      <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
           <Text style={styles.greetSub}>
             {kundli ? `Namaste, ${kundli.name}` : "Namaste"}
@@ -219,8 +215,8 @@ export default function HomeScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* ── Hero Energy Card ── */}
-      <Animated.View style={heroAnim}>
+      {/* ── Hero Energy Card — 60% ── */}
+      <Animated.View style={[heroAnim, { flex: 6, paddingHorizontal: 12, paddingBottom: 8 }]}>
         <HeroEnergyCard
           chartPts={chartPts}
           chartLbls={chartLbls}
@@ -231,24 +227,28 @@ export default function HomeScreen() {
         />
       </Animated.View>
 
-      {/* ── 3 Feature Cards ── */}
-      <Animated.View style={card1Anim}>
-        <DoshCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} kundli={kundli} />
+      {/* ── 3 Mini Cards Row — 40% ── */}
+      <Animated.View style={[card1Anim, { flex: 4, flexDirection: "row", paddingHorizontal: 12, gap: 8 }]}>
+
+        <Animated.View style={[card1Anim, { flex: 1 }]}>
+          <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
+        </Animated.View>
+
+        <Animated.View style={[card2Anim, { flex: 1 }]}>
+          <BadTimeMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+        </Animated.View>
+
+        <Animated.View style={[card3Anim, { flex: 1 }]}>
+          <MilanMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
+        </Animated.View>
+
       </Animated.View>
 
-      <Animated.View style={card2Anim}>
-        <BadTimeCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
-      </Animated.View>
-
-      <Animated.View style={card3Anim}>
-        <KundliMilanCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
-      </Animated.View>
-    </ScrollView>
+    </View>
   );
 }
 
-// ── Hero Energy Card ──────────────────────────────────────────────────────────
-// EnergyChart SVG is 300×300 (VW=300, VH=300)
+// ── Hero Energy Card — vertical layout, fills 60% ────────────────────────────
 const CHART_SVG = 300;
 
 function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
@@ -258,72 +258,173 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 }) {
   const { width: screenW } = useWindowDimensions();
   const displayScore = useCountUp(chartEnergy, 350);
-  const glowPulse    = useOpacityPulse(0.05, 0.2, 1800);
+  const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
 
-  // Square chart — side-by-side with score for compact hero card
-  // Chart occupies ~45% of card width as a clean square
-  const cardInnerW = screenW - 28; // scroll padding 14+14
-  const chartSide  = Math.floor(cardInnerW * 0.46);
-  const scale      = chartSide / CHART_SVG;
-  const offset     = -(CHART_SVG * (1 - scale)) / 2;
+  // Chart fills card width, height auto-scales
+  const cardInnerW = screenW - 24; // 12 padding each side
+  const chartW     = cardInnerW - 28; // inner padding 14 each side
+  const scale      = chartW / CHART_SVG;
+  const offsetX    = -(CHART_SVG * (1 - scale)) / 2;
+  const offsetY    = -(CHART_SVG * (1 - scale)) / 2;
 
   return (
-    <View style={hero.card}>
-      {/* Ambient glow blob */}
+    <View style={[hero.card, { flex: 1 }]}>
       <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
-      {/* Horizontal layout: left = score info, right = square chart */}
-      <View style={hero.body}>
-
-        {/* Left: score + label + insight */}
-        <View style={hero.left}>
+      {/* ── TOP ROW: label + score + demo badge ── */}
+      <View style={hero.topRow}>
+        <View>
           <Text style={hero.label}>TODAY ENERGY</Text>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, marginTop: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 1 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
             <Text style={hero.scoreMax}>/100</Text>
           </View>
-
+        </View>
+        <View style={{ alignItems: "flex-end", gap: 5 }}>
           {showDemo && (
-            <View style={[hero.demoBadge, { marginTop: 8 }]}>
+            <View style={hero.demoBadge}>
               <Feather name="lock" size={9} color="#3d5a7a" />
               <Text style={hero.demoBadgeText}>DEMO</Text>
             </View>
           )}
-
-          {/* Insight pill below score */}
-          <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}30`, marginTop: "auto" }]}>
+          <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}28` }]}>
             <Text style={hero.insightIcon}>{insight.icon}</Text>
             <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
           </View>
         </View>
+      </View>
 
-        {/* Right: perfect square chart — no clipping, no overflow */}
+      {/* ── CHART — fills remaining space ── */}
+      <View style={{ flex: 1, overflow: "hidden", borderRadius: 10, marginTop: 8 }}>
         <View style={{
-          width: chartSide,
-          height: chartSide,
-          overflow: "hidden",
-          borderRadius: 10,
-          backgroundColor: "rgba(0,0,0,0.15)",
+          width: CHART_SVG,
+          height: CHART_SVG,
+          transform: [{ scale }],
+          marginTop: offsetY,
+          marginLeft: offsetX,
         }}>
-          <View style={{
-            width: CHART_SVG,
-            height: CHART_SVG,
-            transform: [{ scale }],
-            marginTop: offset,
-            marginLeft: offset,
-          }}>
-            <EnergyChart
-              targetPts={chartPts}
-              labels={chartLbls}
-              finalEnergy={chartEnergy}
-              loading={loading}
-              instant={showDemo}
-            />
-          </View>
+          <EnergyChart
+            targetPts={chartPts}
+            labels={chartLbls}
+            finalEnergy={chartEnergy}
+            loading={loading}
+            instant={showDemo}
+          />
         </View>
-
       </View>
     </View>
+  );
+}
+
+// ── Dosh Mini Card ────────────────────────────────────────────────────────────
+function DoshMini({ onPress }: { onPress: () => void }) {
+  const blinkDot    = useBlink(400, 400, 1400);
+  const outerGlow   = useOpacityPulse(0.25, 0.75, 1000);
+  const shimmerX    = useShimmer(120);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
+      <Animated.View style={[mini.outerGlowRed, { opacity: outerGlow }]} />
+      <LinearGradient colors={["#6b0f0f","#991b1b","#7f1d1d"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+        <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
+        <View style={[mini.border, { borderColor:"#ff3355" }]} />
+
+        {/* Symbol */}
+        <Text style={mini.symbol}>☿</Text>
+
+        {/* Live badge */}
+        <View style={mini.liveRow}>
+          <Animated.View style={[mini.liveDot, { backgroundColor:"#ff2244", opacity: blinkDot }]} />
+          <Text style={[mini.liveTxt, { color:"#ff6b6b" }]}>LIVE</Text>
+        </View>
+
+        {/* Title */}
+        <Text style={mini.title}>Dosh{"\n"}Analysis</Text>
+
+        {/* Stat */}
+        <View style={mini.statRow}>
+          <Text style={mini.statNum}>3</Text>
+          <Text style={mini.statLbl}>doshas</Text>
+        </View>
+
+        {/* Tap hint */}
+        <View style={mini.tapRow}>
+          <Text style={[mini.tapTxt, { color:"#ff6b6b" }]}>Reveal</Text>
+          <Feather name="chevron-right" size={10} color="#ff6b6b" />
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+// ── Bad Time Mini Card ────────────────────────────────────────────────────────
+function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
+  const blinkDot  = useBlink(350, 350, 1200);
+  const outerGlow = useOpacityPulse(0.2, 0.7, 900);
+  const shimmerX  = useShimmer(120);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
+      <Animated.View style={[mini.outerGlowOrange, { opacity: outerGlow }]} />
+      <LinearGradient colors={["#5c1f08","#c2410c","#7c2d12"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+        <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
+        <View style={[mini.border, { borderColor:"#f97316" }]} />
+
+        <Text style={mini.symbol}>⚡</Text>
+
+        <View style={mini.liveRow}>
+          <Animated.View style={[mini.liveDot, { backgroundColor:"#ff6600", opacity: blinkDot }]} />
+          <Text style={[mini.liveTxt, { color:"#ffb347" }]}>ALERT</Text>
+        </View>
+
+        <Text style={mini.title}>Risk{"\n"}Alert</Text>
+
+        <View style={mini.statRow}>
+          <Text style={mini.statNum}>2</Text>
+          <Text style={mini.statLbl}>risks</Text>
+        </View>
+
+        <View style={mini.tapRow}>
+          <Text style={[mini.tapTxt, { color:"#ff8c42" }]}>Check</Text>
+          <Feather name="chevron-right" size={10} color="#ff8c42" />
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+// ── Kundli Milan Mini Card ────────────────────────────────────────────────────
+function MilanMini({ onPress }: { onPress: () => void }) {
+  const glowOpacity = useOpacityPulse(0.4, 0.9, 1300);
+  const shimmerX    = useShimmer(120);
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, transform: [{ scale: pressed ? 0.96 : 1 }], opacity: pressed ? 0.85 : 1 }]}>
+      <Animated.View style={[mini.outerGlowPurple, { opacity: glowOpacity }]} />
+      <LinearGradient colors={["#4c1d95","#7c3aed","#3b1570"]} start={{x:0,y:0}} end={{x:1,y:1}} style={mini.card}>
+        <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
+        <View style={[mini.border, { borderColor:"#a855f7" }]} />
+
+        <Text style={mini.symbol}>♥</Text>
+
+        <View style={mini.liveRow}>
+          <View style={[mini.liveDot, { backgroundColor:"#a855f7" }]} />
+          <Text style={[mini.liveTxt, { color:"#c084fc" }]}>PRO</Text>
+        </View>
+
+        <Text style={mini.title}>Kundli{"\n"}Milan</Text>
+
+        <View style={mini.statRow}>
+          <Text style={mini.statNum}>36</Text>
+          <Text style={mini.statLbl}>points</Text>
+        </View>
+
+        <View style={mini.tapRow}>
+          <Text style={[mini.tapTxt, { color:"#c084fc" }]}>Unlock</Text>
+          <Feather name="lock" size={10} color="#c084fc" />
+        </View>
+      </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -586,18 +687,14 @@ const hero = StyleSheet.create({
     position: "absolute", top: -50, right: -50,
     width: 200, height: 200, borderRadius: 100,
   },
-  // Horizontal layout: score on left, chart square on right
-  body: {
-    flexDirection: "row", alignItems: "stretch", gap: 12,
-  },
-  left: {
-    flex: 1, gap: 6,
+  topRow: {
+    flexDirection: "row", alignItems: "flex-start",
+    justifyContent: "space-between", gap: 8,
   },
   label:    { color: "#3d5a7a", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2 },
-  score:    { fontSize: 36, fontFamily: F.bold, letterSpacing: -1.5, lineHeight: 40 },
-  scoreMax: { fontSize: 14, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 5 },
+  score:    { fontSize: 38, fontFamily: F.bold, letterSpacing: -1.5, lineHeight: 42 },
+  scoreMax: { fontSize: 15, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 6 },
   demoBadge: {
-    alignSelf: "flex-start",
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: "rgba(2,13,26,0.85)", borderWidth: 1,
     borderColor: "rgba(0,200,255,0.15)", paddingVertical: 4,
@@ -609,7 +706,56 @@ const hero = StyleSheet.create({
     borderWidth: 1, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10,
   },
   insightIcon: { fontSize: 12 },
-  insightText: { fontSize: 10.5, fontFamily: F.semibold, flex: 1, flexWrap: "wrap" },
+  insightText: { fontSize: 10, fontFamily: F.semibold, maxWidth: 140 },
+});
+
+// ── Mini cards (compact 3-column row) ─────────────────────────────────────────
+const mini = StyleSheet.create({
+  outerGlowRed: {
+    position: "absolute", inset: -3, borderRadius: 17,
+    backgroundColor: "#ff1133",
+    shadowColor: "#ff1133", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
+  },
+  outerGlowOrange: {
+    position: "absolute", inset: -3, borderRadius: 17,
+    backgroundColor: "#ff6600",
+    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
+  },
+  outerGlowPurple: {
+    position: "absolute", inset: -3, borderRadius: 17,
+    backgroundColor: "#9333ea",
+    shadowColor: "#9333ea", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 14, elevation: 0,
+  },
+  card: {
+    flex: 1, borderRadius: 16, padding: 12, overflow: "hidden",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6, shadowRadius: 16, elevation: 14,
+  },
+  shimmer: {
+    position: "absolute", top: 0, bottom: 0, width: 40, zIndex: 2,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    transform: [{ skewX: "-18deg" }],
+  },
+  border: {
+    position: "absolute", inset: 0, borderRadius: 16,
+    borderWidth: 1.2, zIndex: 1,
+  },
+  symbol: {
+    fontSize: 28, opacity: 0.18, color: "#fff",
+    position: "absolute", right: 6, top: 6,
+  },
+  liveRow:  { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 },
+  liveDot:  { width: 6, height: 6, borderRadius: 3 },
+  liveTxt:  { fontSize: 8, fontFamily: F.bold, letterSpacing: 1.5 },
+  title:    { color: "#ffffff", fontSize: 14, fontFamily: F.bold, letterSpacing: -0.3, lineHeight: 18, marginBottom: 8 },
+  statRow:  { flexDirection: "row", alignItems: "flex-end", gap: 4, marginBottom: "auto" as any },
+  statNum:  { color: "#ffffff", fontSize: 22, fontFamily: F.bold, lineHeight: 24 },
+  statLbl:  { color: "rgba(255,255,255,0.5)", fontSize: 9.5, fontFamily: F.medium, paddingBottom: 2 },
+  tapRow:   { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 10 },
+  tapTxt:   { fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
 });
 
 // ── Shared card layout ────────────────────────────────────────────────────────

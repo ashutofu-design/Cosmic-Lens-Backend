@@ -223,7 +223,7 @@ function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
       <LinearGradient
-        colors={["#2d0000", "#3d0505", "#1a0000"]}
+        colors={["#7f1d1d", "#991b1b", "#6b1212"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={dosh.card}
       >
@@ -269,7 +269,7 @@ function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDash
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
       <LinearGradient
-        colors={["#2d0f00", "#3d1500", "#1f0800"]}
+        colors={["#7c2d12", "#c2410c", "#6b2200"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={bad.card}
       >
@@ -306,7 +306,7 @@ function KundliMilanCard({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
       <LinearGradient
-        colors={["#1e0a3c", "#2d1060", "#120630"]}
+        colors={["#4c1d95", "#6d28d9", "#3b1570"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={milan.card}
       >
@@ -398,17 +398,17 @@ const dosh = StyleSheet.create({
   },
   bigSymbol: {
     position: "absolute", right: 10, top: 0,
-    fontSize: 90, opacity: 0.07, color: "#ff4466",
+    fontSize: 90, opacity: 0.18, color: "#ffffff",
   },
   topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  alertBadge:   { backgroundColor: "#ff223344", borderWidth: 1, borderColor: "#ff4455", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  alertBadgeText:{ color: "#ff8899", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#ff445566", backgroundColor: "#ff223322", alignItems: "center", justifyContent: "center" },
+  alertBadge:   { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  alertBadgeText:{ color: "#ffffff", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
   title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "#ff9999", fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 14 },
   chipRow:      { flexDirection: "row", gap: 7 },
-  chip:         { backgroundColor: "#ff334422", borderWidth: 1, borderColor: "#ff5566", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 13 },
-  chipText:     { color: "#ff8899", fontSize: 10, fontWeight: "700" },
+  chip:         { backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 13 },
+  chipText:     { color: "#ffffff", fontSize: 10, fontWeight: "700" },
 });
 
 // ── Risk Alert card styles ────────────────────────────────────────────────────
@@ -418,17 +418,17 @@ const bad = StyleSheet.create({
     shadowColor: "#ff6600", shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5, shadowRadius: 22, elevation: 12,
   },
-  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#ff7733", zIndex: 1 },
-  bigSymbol:    { position: "absolute", right: 8, top: 0, fontSize: 85, opacity: 0.08, color: "#ff8800" },
+  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#f97316", zIndex: 1 },
+  bigSymbol:    { position: "absolute", right: 8, top: 0, fontSize: 85, opacity: 0.18, color: "#ffffff" },
   topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  urgencyBadge: { backgroundColor: "#ff440022", borderWidth: 1, borderColor: "#ff6633", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  urgencyText:  { color: "#ff9966", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
-  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#ff663344", backgroundColor: "#ff441122", alignItems: "center", justifyContent: "center" },
+  urgencyBadge: { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  urgencyText:  { color: "#ffffff", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
+  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
   title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "#ffaa77", fontSize: 12, lineHeight: 17, marginBottom: 12 },
-  divider:      { height: 1, backgroundColor: "#ff550018", marginBottom: 10 },
+  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 12 },
+  divider:      { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginBottom: 10 },
   bottomRow:    { flexDirection: "row", alignItems: "center", gap: 6 },
-  bottomText:   { color: "#884422", fontSize: 10, flex: 1 },
+  bottomText:   { color: "rgba(255,255,255,0.5)", fontSize: 10, flex: 1 },
 });
 
 // ── Kundli Milan card styles ──────────────────────────────────────────────────
@@ -438,14 +438,14 @@ const milan = StyleSheet.create({
     shadowColor: "#9933ff", shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.55, shadowRadius: 24, elevation: 14,
   },
-  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#aa44ff", zIndex: 1 },
-  bigSymbol:    { position: "absolute", right: 10, top: 0, fontSize: 90, opacity: 0.09, color: "#cc66ff" },
+  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#a855f7", zIndex: 1 },
+  bigSymbol:    { position: "absolute", right: 10, top: 0, fontSize: 90, opacity: 0.18, color: "#ffffff" },
   topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  proBadge:     { backgroundColor: "#8822ff33", borderWidth: 1, borderColor: "#aa55ff", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  proBadgeText: { color: "#dd99ff", fontSize: 10, fontWeight: "900" },
-  arrowCircle:  { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: "#9933ff55", backgroundColor: "#7711ff22", alignItems: "center", justifyContent: "center" },
+  proBadge:     { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  proBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "900" },
+  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
   title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "#cc99ff", fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 14 },
   scoreRow:     { flexDirection: "row", gap: 5 },
   scoreBar:     { flex: 1, height: 5, backgroundColor: "#ffffff11", borderRadius: 3, overflow: "hidden" },
   scoreFill:    { height: "100%", borderRadius: 3 },

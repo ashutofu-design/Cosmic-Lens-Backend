@@ -196,11 +196,9 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* ── Active Dasha card (real data) OR Setup prompt ── */}
-      {activeDasha ? (
+      {/* ── Active Dasha card (real data only) ── */}
+      {activeDasha && (
         <ActiveDashaCard dasha={activeDasha} onPress={() => {}} />
-      ) : (
-        <SetupKundliCard />
       )}
     </ScrollView>
   );
@@ -323,46 +321,6 @@ function ActiveDashaCard({ dasha, onPress }: { dasha: ActiveDashaResult; onPress
   );
 }
 
-// ── Setup Kundli CTA Card ────────────────────────────────────────────────────
-function SetupKundliCard() {
-  return (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        router.push("/onboarding");
-      }}
-      style={({ pressed }) => [styles.setupCard, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-    >
-      {/* Glow dots */}
-      <View style={styles.setupGlow} />
-
-      <View style={styles.setupRow}>
-        <View style={styles.setupIcon}>
-          <Feather name="star" size={20} color="#00c6ff" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.setupTitle}>Create Your Kundli</Text>
-          <Text style={styles.setupSub}>
-            Unlock real energy chart, Dasha analysis &amp; Forecast
-          </Text>
-        </View>
-        <View style={styles.setupArrowWrap}>
-          <Feather name="arrow-right" size={16} color="#020d1a" />
-        </View>
-      </View>
-
-      {/* Feature chips */}
-      <View style={styles.chipRow}>
-        {["Today Energy", "Active Dasha", "7-Day Forecast", "Planet Positions"].map(chip => (
-          <View key={chip} style={styles.chip}>
-            <Text style={styles.chipText}>{chip}</Text>
-          </View>
-        ))}
-      </View>
-    </Pressable>
-  );
-}
-
 // ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root:    { flex: 1 },
@@ -437,39 +395,4 @@ const styles = StyleSheet.create({
   dashaFooterText:  { color: "rgba(0,212,255,0.27)", fontSize: 9, letterSpacing: 0.5 },
   dashaFooterArrow: { color: "rgba(0,212,255,0.27)", fontSize: 11 },
 
-  // ── Setup Kundli Card ─────────────────────────────────────────────────────
-  setupCard: {
-    width: "100%", maxWidth: 380,
-    backgroundColor: "#031428",
-    borderRadius: 16, borderWidth: 1, borderColor: "rgba(0,198,255,0.3)",
-    padding: 16, marginBottom: 16, overflow: "hidden",
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18, shadowRadius: 24, elevation: 6,
-  },
-  setupGlow: {
-    position: "absolute", top: -30, right: -30,
-    width: 120, height: 120, borderRadius: 60,
-    backgroundColor: "rgba(0,198,255,0.07)",
-  },
-  setupRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  setupIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: "rgba(0,198,255,0.1)",
-    borderWidth: 1, borderColor: "rgba(0,198,255,0.25)",
-    alignItems: "center", justifyContent: "center",
-  },
-  setupTitle:    { color: "#dde8f4", fontSize: 15, fontWeight: "700", marginBottom: 3 },
-  setupSub:      { color: "#3d5a7a", fontSize: 11, lineHeight: 16 },
-  setupArrowWrap: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: "#00c6ff",
-    alignItems: "center", justifyContent: "center",
-  },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  chip: {
-    backgroundColor: "rgba(0,198,255,0.08)",
-    borderWidth: 1, borderColor: "rgba(0,198,255,0.18)",
-    paddingVertical: 4, paddingHorizontal: 9, borderRadius: 20,
-  },
-  chipText: { color: "#3d5a7a", fontSize: 10, fontWeight: "600" },
 });

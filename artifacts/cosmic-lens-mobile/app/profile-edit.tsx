@@ -1,22 +1,29 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
-  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  Pressable, ScrollView, StyleSheet, Text,
+  TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 import { useUser } from "@/context/UserContext";
 import type { BirthData } from "@/types";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
-const MONTHS = [
-  "Jan","Feb","Mar","Apr","May","Jun",
-  "Jul","Aug","Sep","Oct","Nov","Dec",
-];
+const F = {
+  regular:  "Inter_400Regular",
+  medium:   "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold:     "Inter_700Bold",
+};
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -27,8 +34,7 @@ async function searchPlace(q: string): Promise<GeoResult[]> {
   const rows = await r.json();
   return rows.map((x: { display_name: string; lat: string; lon: string }) => ({
     label: x.display_name.split(",").slice(0, 3).join(", "),
-    lat: parseFloat(x.lat),
-    lon: parseFloat(x.lon),
+    lat: parseFloat(x.lat), lon: parseFloat(x.lon),
     tz: Math.round((parseFloat(x.lon) / 15) * 2) / 2,
   }));
 }
@@ -44,55 +50,115 @@ function blank(): FormState {
   return { name:"", gender:"", day:"", month:"", year:"", hour:"", minute:"", ampm:"AM", place:"", lat:0, lon:0, tz:5.5 };
 }
 
-// ── Month picker ──────────────────────────────────────────────────────────────
-function MonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+// ── Reusable field label ───────────────────────────────────────────────────────
+function FieldLabel({ text }: { text: string }) {
+  return <Text style={s.label}>{text}</Text>;
+}
+
+// ── Styled text input ──────────────────────────────────────────────────────────
+function Field({
+  label, value, onChangeText, placeholder, keyboardType, maxLength,
+  icon, returnKeyType, onSubmitEditing, hint,
+}: {
+  label: string; value: string; onChangeText: (v: string) => void;
+  placeholder: string; keyboardType?: any; maxLength?: number;
+  icon?: React.ComponentProps<typeof Feather>["name"];
+  returnKeyType?: any; onSubmitEditing?: () => void;
+  hint?: string;
+}) {
+  const [focused, setFocused] = useState(false);
   return (
-    <View style={{ flexDirection:"row", flexWrap:"wrap", gap:6 }}>
-      {MONTHS.map((m, i) => {
-        const v = String(i + 1);
-        const active = value === v;
-        return (
-          <Pressable key={m} onPress={() => onChange(v)}
-            style={{ paddingHorizontal:10, paddingVertical:6, borderRadius:8,
-              backgroundColor: active ? "#00d4ff22" : "#0a1828",
-              borderWidth:1, borderColor: active ? "#00d4ff66" : "#1e293b" }}>
-            <Text style={{ color: active ? "#00d4ff" : "#475569", fontSize:12, fontWeight:"600" }}>{m}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={s.fieldWrap}>
+      <FieldLabel text={label} />
+      <View style={[s.inputRow, focused && s.inputRowFocused]}>
+        {icon && <Feather name={icon} size={15} color={focused ? "#00d4ff" : "#334155"} style={{ marginRight: 4 }} />}
+        <TextInput
+          style={s.input}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#1e3a5f"
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+      </View>
+      {hint && <Text style={s.hint}>{hint}</Text>}
     </View>
   );
 }
 
-// ── AM/PM toggle ──────────────────────────────────────────────────────────────
-function AmPmToggle({ value, onChange }: { value: "AM"|"PM"; onChange: (v:"AM"|"PM") => void }) {
+// ── Month selector ─────────────────────────────────────────────────────────────
+function MonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <View style={{ flexDirection:"row", gap:8 }}>
-      {(["AM","PM"] as const).map(v => (
-        <Pressable key={v} onPress={() => onChange(v)}
-          style={{ flex:1, paddingVertical:10, borderRadius:10, alignItems:"center",
-            backgroundColor: value===v ? "#00d4ff22" : "#0a1828",
-            borderWidth:1, borderColor: value===v ? "#00d4ff66" : "#1e293b" }}>
-          <Text style={{ color: value===v ? "#00d4ff" : "#475569", fontWeight:"700", fontSize:13 }}>{v}</Text>
+    <View>
+      <FieldLabel text="MONTH" />
+      <View style={s.monthGrid}>
+        {MONTHS.map((m, i) => {
+          const v = String(i + 1);
+          const active = value === v;
+          return (
+            <Pressable key={m} onPress={() => { onChange(v); Haptics.selectionAsync(); }}
+              style={[s.monthChip, active && s.monthChipActive]}
+            >
+              <Text style={[s.monthTxt, active && s.monthTxtActive]}>{m}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── AM / PM toggle ─────────────────────────────────────────────────────────────
+function AmPmToggle({ value, onChange }: { value: "AM" | "PM"; onChange: (v: "AM" | "PM") => void }) {
+  return (
+    <View style={s.ampmRow}>
+      {(["AM", "PM"] as const).map(v => (
+        <Pressable key={v} onPress={() => { onChange(v); Haptics.selectionAsync(); }}
+          style={[s.ampmBtn, value === v && s.ampmBtnActive]}
+        >
+          <Text style={[s.ampmTxt, value === v && s.ampmTxtActive]}>{v}</Text>
         </Pressable>
       ))}
     </View>
   );
 }
 
+// ── Section block wrapper ──────────────────────────────────────────────────────
+function Section({ title, icon, children }: {
+  title: string; icon: React.ComponentProps<typeof Feather>["name"]; children: React.ReactNode;
+}) {
+  return (
+    <View style={s.section}>
+      <View style={s.sectionHeader}>
+        <Feather name={icon} size={13} color="#00d4ff" />
+        <Text style={s.sectionTitle}>{title}</Text>
+      </View>
+      <View style={s.sectionBody}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// ── Main Screen ────────────────────────────────────────────────────────────────
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode?: string; profileId?: string }>();
   const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId } = useUser();
 
-  const isEdit   = params.mode === "edit" && !!params.profileId;
-  const profile  = isEdit ? profiles.find(p => p.id === params.profileId) : null;
+  const isEdit  = params.mode === "edit" && !!params.profileId;
+  const profile = isEdit ? profiles.find(p => p.id === params.profileId) : null;
 
-  const [f, setF]           = useState<FormState>(() => {
+  const [f, setF] = useState<FormState>(() => {
     if (profile) {
       const bd = profile.birthData;
       return {
-        name: profile.name, gender: profile.gender,
+        name: profile.name, gender: profile.gender ?? "",
         day: String(bd.day), month: String(bd.month), year: String(bd.year),
         hour: String(bd.hour), minute: String(bd.minute), ampm: bd.ampm,
         place: bd.place, lat: bd.lat, lon: bd.lon, tz: bd.tz,
@@ -101,12 +167,12 @@ export default function ProfileEditScreen() {
     return blank();
   });
 
-  const [placeQuery,  setPlaceQuery]  = useState(f.place);
-  const [geoResults,  setGeoResults]  = useState<GeoResult[]>([]);
-  const [searching,   setSearching]   = useState(false);
-  const [tzLoading,   setTzLoading]   = useState(false);
-  const [saving,      setSaving]      = useState(false);
-  const [error,       setError]       = useState("");
+  const [placeQuery, setPlaceQuery] = useState(f.place);
+  const [geoResults, setGeoResults] = useState<GeoResult[]>([]);
+  const [searching,  setSearching]  = useState(false);
+  const [tzLoading,  setTzLoading]  = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState("");
 
   const set = (key: keyof FormState) => (val: string) =>
     setF(prev => ({ ...prev, [key]: val }));
@@ -116,7 +182,7 @@ export default function ProfileEditScreen() {
     setSearching(true);
     setGeoResults([]);
     try { setGeoResults(await searchPlace(placeQuery)); }
-    catch { setError("Could not find location. Please check your internet."); }
+    catch { setError("Location nahi mila. Internet check karo."); }
     finally { setSearching(false); }
   }
 
@@ -134,39 +200,26 @@ export default function ProfileEditScreen() {
   }
 
   async function handleSave() {
-    if (!f.name.trim())   { setError("Name is required."); return; }
-    if (!f.day || !f.month || !f.year) { setError("Please enter date of birth."); return; }
-    if (!f.hour || !f.minute) { setError("Please enter birth time."); return; }
-    if (!f.lat) { setError("Please search and select a place from the list."); return; }
-    if (tzLoading) { setError("Confirming timezone..."); return; }
+    if (!f.name.trim())              { setError("Naam zaroori hai."); return; }
+    if (!f.day || !f.month || !f.year) { setError("Janm tithi poori karo."); return; }
+    if (!f.hour || !f.minute)         { setError("Janm samay daalo."); return; }
+    if (!f.lat)                       { setError("Sahi jagah search karke choose karo."); return; }
+    if (tzLoading)                    { setError("Timezone confirm ho raha hai..."); return; }
     setError("");
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const birthData: BirthData = {
-        name:   f.name.trim(),
-        day:    Number(f.day),
-        month:  Number(f.month),
-        year:   Number(f.year),
-        hour:   Number(f.hour),
-        minute: Number(f.minute),
-        ampm:   f.ampm,
-        place:  f.place,
-        lat:    f.lat,
-        lon:    f.lon,
-        tz:     f.tz,
+        name: f.name.trim(),
+        day: Number(f.day), month: Number(f.month), year: Number(f.year),
+        hour: Number(f.hour), minute: Number(f.minute), ampm: f.ampm,
+        place: f.place, lat: f.lat, lon: f.lon, tz: f.tz,
       };
       const kundli = await fetchKundliFromAPI(birthData);
 
       if (isEdit && params.profileId) {
-        updateProfile(params.profileId, {
-          name: f.name.trim(), gender: f.gender, birthData, kundli,
-        });
-        // If editing primary profile, update compat state too
-        if (params.profileId === primaryProfileId) {
-          setBirthData(birthData);
-          setKundli(kundli);
-        }
+        updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, birthData, kundli });
+        if (params.profileId === primaryProfileId) { setBirthData(birthData); setKundli(kundli); }
       } else {
         addProfile({ name: f.name.trim(), gender: f.gender, birthData, kundli });
       }
@@ -174,7 +227,7 @@ export default function ProfileEditScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
+      setError(e instanceof Error ? e.message : "Chart calculation fail hua. Dobara try karo.");
     } finally {
       setSaving(false);
     }
@@ -185,137 +238,192 @@ export default function ProfileEditScreen() {
       style={{ flex: 1, backgroundColor: "#020d1a" }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
-      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name="arrow-left" size={20} color="#64748b" />
+      {/* ── Header ── */}
+      <View style={[s.header, { paddingTop: insets.top + 10 }]}>
+        <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
+          <Feather name="arrow-left" size={20} color="#475569" />
         </Pressable>
-        <Text style={s.headerTitle}>{isEdit ? "Edit Profile" : "Add New Profile"}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerTitle}>{isEdit ? "Profile Edit Karo" : "Naya Profile"}</Text>
+          <Text style={s.headerSub}>Sahi janm vivaran se accurate chart milega</Text>
+        </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
 
-        {/* Name */}
-        <View style={s.field}>
-          <Text style={s.label}>FULL NAME</Text>
-          <TextInput
-            style={s.input} value={f.name} onChangeText={set("name")}
-            placeholder="Enter name" placeholderTextColor="#334155"
+        {/* ── PERSONAL INFO ── */}
+        <Section title="Personal Info" icon="user">
+          <Field
+            label="POORA NAAM"
+            value={f.name}
+            onChangeText={set("name")}
+            placeholder="Apna naam likhो"
+            icon="user"
           />
-        </View>
 
-        {/* Gender */}
-        <View style={s.field}>
-          <Text style={s.label}>GENDER (OPTIONAL)</Text>
-          <View style={{ flexDirection:"row", gap:8, flexWrap:"wrap" }}>
-            {["Male","Female","Other"].map(g => (
-              <Pressable key={g} onPress={() => setF(prev => ({ ...prev, gender: g }))}
-                style={{ paddingHorizontal:14, paddingVertical:8, borderRadius:10,
-                  backgroundColor: f.gender===g ? "#00d4ff22" : "#0a1828",
-                  borderWidth:1, borderColor: f.gender===g ? "#00d4ff66" : "#1e293b" }}>
-                <Text style={{ color: f.gender===g ? "#00d4ff" : "#475569", fontSize:13, fontWeight:"600" }}>{g}</Text>
-              </Pressable>
-            ))}
+          {/* Gender */}
+          <View style={s.fieldWrap}>
+            <FieldLabel text="GENDER (OPTIONAL)" />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {["Male", "Female", "Other"].map(g => (
+                <Pressable key={g}
+                  onPress={() => { setF(prev => ({ ...prev, gender: g })); Haptics.selectionAsync(); }}
+                  style={[s.genderChip, f.gender === g && s.genderChipActive]}
+                >
+                  <Text style={[s.genderTxt, f.gender === g && s.genderTxtActive]}>{g}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-        </View>
+        </Section>
 
-        {/* Date of birth */}
-        <View style={s.field}>
-          <Text style={s.label}>DATE OF BIRTH</Text>
-          <View style={{ flexDirection:"row", gap:10, marginBottom:10 }}>
-            <TextInput
-              style={[s.input, { flex:1 }]} value={f.day} onChangeText={set("day")}
-              placeholder="DD" placeholderTextColor="#334155" keyboardType="number-pad" maxLength={2}
-            />
-            <TextInput
-              style={[s.input, { flex:2 }]} value={f.year} onChangeText={set("year")}
-              placeholder="YYYY" placeholderTextColor="#334155" keyboardType="number-pad" maxLength={4}
-            />
+        {/* ── DATE OF BIRTH ── */}
+        <Section title="Janm Tithi" icon="calendar">
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="DIN"
+                value={f.day}
+                onChangeText={set("day")}
+                placeholder="DD"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <Field
+                label="SAAL"
+                value={f.year}
+                onChangeText={set("year")}
+                placeholder="YYYY"
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+            </View>
           </View>
           <MonthPicker value={f.month} onChange={set("month")} />
-        </View>
+        </Section>
 
-        {/* Time of birth */}
-        <View style={s.field}>
-          <Text style={s.label}>TIME OF BIRTH</Text>
-          <View style={s.warningBox}>
-            <Text style={s.warningText}>⚠ Birth time directly affects Mahadasha. Choose AM/PM carefully.</Text>
-          </View>
-          <View style={{ flexDirection:"row", gap:10, marginBottom:10 }}>
-            <TextInput
-              style={[s.input, { flex:1 }]} value={f.hour} onChangeText={set("hour")}
-              placeholder="HH (1–12)" placeholderTextColor="#334155" keyboardType="number-pad" maxLength={2}
-            />
-            <TextInput
-              style={[s.input, { flex:1 }]} value={f.minute} onChangeText={set("minute")}
-              placeholder="MM (0–59)" placeholderTextColor="#334155" keyboardType="number-pad" maxLength={2}
-            />
-          </View>
-          <AmPmToggle value={f.ampm} onChange={v => setF(prev => ({ ...prev, ampm: v }))} />
-        </View>
-
-        {/* Place of birth */}
-        <View style={s.field}>
-          <Text style={s.label}>PLACE OF BIRTH</Text>
-          <View style={{ flexDirection:"row", gap:8 }}>
-            <TextInput
-              style={[s.input, { flex:1 }]}
-              value={placeQuery} onChangeText={setPlaceQuery}
-              onSubmitEditing={handlePlaceSearch}
-              placeholder="City, Country" placeholderTextColor="#334155"
-              returnKeyType="search"
-            />
-            <Pressable onPress={handlePlaceSearch}
-              style={{ paddingHorizontal:14, paddingVertical:12, backgroundColor:"#00d4ff18",
-                borderRadius:10, borderWidth:1, borderColor:"#00d4ff44", justifyContent:"center" }}>
-              {searching
-                ? <ActivityIndicator size="small" color="#00d4ff" />
-                : <Text style={{ color:"#00d4ff", fontSize:12, fontWeight:"700" }}>SEARCH</Text>
-              }
-            </Pressable>
+        {/* ── TIME OF BIRTH ── */}
+        <Section title="Janm Samay" icon="clock">
+          {/* Warning */}
+          <View style={s.infoBox}>
+            <Feather name="alert-triangle" size={12} color="#f59e0b" />
+            <Text style={s.infoTxt}>
+              Birth time Mahadasha ko directly affect karta hai — AM/PM sahi choose karo
+            </Text>
           </View>
 
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="GHANTA"
+                value={f.hour}
+                onChangeText={set("hour")}
+                placeholder="HH"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="MINUTE"
+                value={f.minute}
+                onChangeText={set("minute")}
+                placeholder="MM"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+          </View>
+
+          <View style={s.fieldWrap}>
+            <FieldLabel text="AM / PM" />
+            <AmPmToggle value={f.ampm} onChange={v => setF(prev => ({ ...prev, ampm: v }))} />
+          </View>
+        </Section>
+
+        {/* ── PLACE OF BIRTH ── */}
+        <Section title="Janm Sthan" icon="map-pin">
+          <View style={s.fieldWrap}>
+            <FieldLabel text="SHEHER / DESH" />
+            <View style={[s.inputRow, { gap: 8 }]}>
+              <Feather name="search" size={14} color="#334155" />
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={placeQuery}
+                onChangeText={setPlaceQuery}
+                onSubmitEditing={handlePlaceSearch}
+                placeholder="Jaise: Mumbai, India"
+                placeholderTextColor="#1e3a5f"
+                returnKeyType="search"
+              />
+              <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
+                {searching
+                  ? <ActivityIndicator size="small" color="#00d4ff" />
+                  : <Text style={s.searchBtnTxt}>Search</Text>
+                }
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Search results */}
           {geoResults.length > 0 && (
             <View style={s.geoList}>
               {geoResults.map((g, i) => (
-                <Pressable key={i} onPress={() => selectGeo(g)}
-                  style={[s.geoItem, i < geoResults.length-1 && { borderBottomWidth:1, borderBottomColor:"#1e293b" }]}>
-                  <Text style={s.geoText} numberOfLines={2}>{g.label}</Text>
+                <Pressable key={i} onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
+                  style={[s.geoItem, i < geoResults.length - 1 && s.geoItemBorder]}
+                >
+                  <Feather name="map-pin" size={11} color="#334155" style={{ marginTop: 2 }} />
+                  <Text style={s.geoTxt} numberOfLines={2}>{g.label}</Text>
                 </Pressable>
               ))}
             </View>
           )}
 
+          {/* Selected place */}
           {f.lat !== 0 && (
-            <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginTop:6 }}>
-              <Feather name="check-circle" size={12} color="#00a86b" />
-              <Text style={{ color:"#00a86b", fontSize:11 }} numberOfLines={1}>{f.place}</Text>
-              {tzLoading && <ActivityIndicator size="small" color="#00d4ff" style={{ marginLeft:4 }} />}
+            <View style={s.selectedPlace}>
+              <Feather name="check-circle" size={13} color="#00a86b" />
+              <Text style={s.selectedPlaceTxt} numberOfLines={1}>{f.place}</Text>
+              {tzLoading && <ActivityIndicator size="small" color="#00d4ff" style={{ marginLeft: 4 }} />}
             </View>
           )}
-        </View>
+        </Section>
 
         {/* Error */}
         {!!error && (
           <View style={s.errorBox}>
-            <Text style={s.errorText}>{error}</Text>
+            <Feather name="alert-circle" size={13} color="#f87171" />
+            <Text style={s.errorTxt}>{error}</Text>
           </View>
         )}
 
-        {/* Save button */}
+        {/* ── Save button ── */}
         <Pressable
           onPress={handleSave}
           disabled={saving || tzLoading}
-          style={({ pressed }) => [s.saveBtn, (saving || tzLoading) && { opacity:0.6 }, pressed && { opacity:0.8 }]}
+          style={({ pressed }) => [{ opacity: (saving || tzLoading) ? 0.6 : pressed ? 0.85 : 1 }]}
         >
-          {saving
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={s.saveBtnText}>{isEdit ? "Save Profile" : "Create Profile"}</Text>
-          }
+          <LinearGradient
+            colors={["#0284c7", "#00d4ff"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={s.saveBtn}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : (
+                <>
+                  <Feather name={isEdit ? "check" : "user-plus"} size={16} color="#fff" />
+                  <Text style={s.saveBtnTxt}>{isEdit ? "Save Karo" : "Profile Banao"}</Text>
+                </>
+              )
+            }
+          </LinearGradient>
         </Pressable>
 
       </ScrollView>
@@ -323,46 +431,158 @@ export default function ProfileEditScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
+  // Header
   header: {
-    flexDirection:"row", alignItems:"center", gap:14,
-    paddingHorizontal:20, paddingBottom:14,
-    borderBottomWidth:1, borderBottomColor:"#0a1828",
+    flexDirection: "row", alignItems: "center", gap: 14,
+    paddingHorizontal: 20, paddingBottom: 16,
+    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
   },
-  backBtn: { padding:4 },
-  headerTitle: { fontSize:16, fontWeight:"700", color:"#dde8f4" },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { color: "#dde8f4", fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3 },
+  headerSub:   { color: "#1e3a5f", fontSize: 11, fontFamily: F.regular, marginTop: 2 },
 
-  field: { marginBottom:24 },
-  label: { fontSize:10, fontWeight:"800", letterSpacing:2, color:"#00d4ff", marginBottom:10 },
+  scroll: { padding: 20, paddingBottom: 100, gap: 14 },
+
+  // Section block
+  section: {
+    borderRadius: 16, overflow: "hidden",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "#040e1e",
+  },
+  sectionHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
+  },
+  sectionTitle: {
+    color: "#00d4ff", fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
+  },
+  sectionBody: { padding: 16, gap: 16 },
+
+  // Field
+  fieldWrap: { gap: 8 },
+  label: {
+    color: "#334155", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
+  },
+  inputRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#071525", borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12, paddingVertical: 11,
+    gap: 8,
+  },
+  inputRowFocused: {
+    borderColor: "rgba(0,212,255,0.3)",
+    backgroundColor: "#071e32",
+  },
   input: {
-    backgroundColor:"#040e20", color:"#dde8f4", fontSize:14,
-    paddingHorizontal:14, paddingVertical:12, borderRadius:10,
-    borderWidth:1, borderColor:"#1e293b",
+    flex: 1, color: "#dde8f4", fontSize: 14, fontFamily: F.medium,
+    padding: 0, margin: 0,
   },
+  hint: { color: "#1e3a5f", fontSize: 10, fontFamily: F.regular },
 
-  warningBox: {
-    backgroundColor:"#0d1a2a", borderRadius:10,
-    borderWidth:1, borderColor:"#f59e0b44", marginBottom:10,
-    paddingHorizontal:12, paddingVertical:10,
+  // Month picker
+  monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  monthChip: {
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9,
+    backgroundColor: "#071525",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
   },
-  warningText: { color:"#f59e0b", fontSize:11, lineHeight:16 },
+  monthChipActive: {
+    backgroundColor: "rgba(0,212,255,0.1)",
+    borderColor: "rgba(0,212,255,0.35)",
+  },
+  monthTxt:       { color: "#334155", fontSize: 12, fontFamily: F.semibold },
+  monthTxtActive: { color: "#00d4ff" },
 
+  // Gender chips
+  genderChip: {
+    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
+    backgroundColor: "#071525",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+  },
+  genderChipActive: {
+    backgroundColor: "rgba(0,212,255,0.1)",
+    borderColor: "rgba(0,212,255,0.35)",
+  },
+  genderTxt:       { color: "#334155", fontSize: 13, fontFamily: F.semibold },
+  genderTxtActive: { color: "#00d4ff" },
+
+  // AM/PM
+  ampmRow: { flexDirection: "row", gap: 8 },
+  ampmBtn: {
+    flex: 1, paddingVertical: 11, borderRadius: 11, alignItems: "center",
+    backgroundColor: "#071525",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+  },
+  ampmBtnActive: {
+    backgroundColor: "rgba(0,212,255,0.1)",
+    borderColor: "rgba(0,212,255,0.35)",
+  },
+  ampmTxt:       { color: "#334155", fontSize: 14, fontFamily: F.bold },
+  ampmTxtActive: { color: "#00d4ff" },
+
+  // Info box (warning)
+  infoBox: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    backgroundColor: "rgba(245,158,11,0.07)",
+    borderWidth: 1, borderColor: "rgba(245,158,11,0.2)",
+    borderRadius: 10, padding: 11,
+  },
+  infoTxt: { color: "#92672e", fontSize: 11, fontFamily: F.medium, flex: 1, lineHeight: 16 },
+
+  // Place search
+  searchBtn: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: "rgba(0,212,255,0.1)",
+    borderRadius: 8, borderWidth: 1, borderColor: "rgba(0,212,255,0.3)",
+  },
+  searchBtnTxt: { color: "#00d4ff", fontSize: 12, fontFamily: F.bold },
+
+  // Geo results
   geoList: {
-    marginTop:8, backgroundColor:"#040e20", borderRadius:12,
-    borderWidth:1, borderColor:"#1e293b", overflow:"hidden",
+    backgroundColor: "#071525", borderRadius: 12,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
   },
-  geoItem: { paddingHorizontal:14, paddingVertical:12 },
-  geoText: { color:"#94a3b8", fontSize:12, lineHeight:18 },
+  geoItem: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  geoItemBorder: { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)" },
+  geoTxt: { color: "#64748b", fontSize: 12, fontFamily: F.regular, flex: 1, lineHeight: 18 },
 
+  // Selected place confirmation
+  selectedPlace: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: "rgba(0,168,107,0.08)",
+    borderRadius: 9, borderWidth: 1, borderColor: "rgba(0,168,107,0.2)",
+    paddingHorizontal: 11, paddingVertical: 8,
+  },
+  selectedPlaceTxt: {
+    color: "#00a86b", fontSize: 11.5, fontFamily: F.medium, flex: 1,
+  },
+
+  // Error
   errorBox: {
-    backgroundColor:"#1a0a0a", borderRadius:10,
-    paddingHorizontal:14, paddingVertical:10, marginBottom:16,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(248,113,113,0.07)",
+    borderWidth: 1, borderColor: "rgba(248,113,113,0.2)",
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
   },
-  errorText: { color:"#f87171", fontSize:13 },
+  errorTxt: { color: "#f87171", fontSize: 13, fontFamily: F.medium, flex: 1 },
 
+  // Save button
   saveBtn: {
-    backgroundColor:"#00a86b", borderRadius:14,
-    paddingVertical:16, alignItems:"center", justifyContent:"center",
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 9, borderRadius: 14, paddingVertical: 15,
   },
-  saveBtnText: { color:"#fff", fontSize:16, fontWeight:"700" },
+  saveBtnTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold },
 });

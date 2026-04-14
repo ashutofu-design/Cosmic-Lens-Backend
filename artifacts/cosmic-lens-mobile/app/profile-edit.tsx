@@ -146,13 +146,23 @@ function Section({ title, icon, children }: {
 }
 
 // ── Main Screen ────────────────────────────────────────────────────────────────
+const RELATION_EMOJIS: Record<string, string> = {
+  Self:"🧑", Husband:"👨", Wife:"👩", Son:"👦", Daughter:"👧",
+  Father:"👴", Mother:"👵", Brother:"🧑", Sister:"👱‍♀️", Friend:"🤝", Other:"👥",
+};
+
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ mode?: string; profileId?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; profileId?: string; relation?: string }>();
   const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId } = useUser();
 
   const isEdit  = params.mode === "edit" && !!params.profileId;
   const profile = isEdit ? profiles.find(p => p.id === params.profileId) : null;
+
+  // relation state — preset from param, or from existing profile
+  const [relation, setRelation] = useState<string>(
+    profile?.relation ?? params.relation ?? "Self"
+  );
 
   const [f, setF] = useState<FormState>(() => {
     if (profile) {
@@ -218,10 +228,10 @@ export default function ProfileEditScreen() {
       const kundli = await fetchKundliFromAPI(birthData);
 
       if (isEdit && params.profileId) {
-        updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, birthData, kundli });
+        updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
         if (params.profileId === primaryProfileId) { setBirthData(birthData); setKundli(kundli); }
       } else {
-        addProfile({ name: f.name.trim(), gender: f.gender, birthData, kundli });
+        addProfile({ name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -244,7 +254,9 @@ export default function ProfileEditScreen() {
           <Feather name="arrow-left" size={20} color="#475569" />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>{isEdit ? "Profile Edit Karo" : "Naya Profile"}</Text>
+          <Text style={s.headerTitle}>
+            {isEdit ? "Profile Edit Karo" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation} ka Kundli`}
+          </Text>
           <Text style={s.headerSub}>Sahi janm vivaran se accurate chart milega</Text>
         </View>
       </View>

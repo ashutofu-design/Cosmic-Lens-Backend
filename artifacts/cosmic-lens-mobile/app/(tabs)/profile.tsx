@@ -11,6 +11,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 
+// ── Relation options ───────────────────────────────────────────────────────────
+const RELATIONS = [
+  { key: "Self",      emoji: "🧑",  label: "Apna (Self)" },
+  { key: "Husband",   emoji: "👨",  label: "Pati (Husband)" },
+  { key: "Wife",      emoji: "👩",  label: "Patni (Wife)" },
+  { key: "Son",       emoji: "👦",  label: "Beta (Son)" },
+  { key: "Daughter",  emoji: "👧",  label: "Beti (Daughter)" },
+  { key: "Father",    emoji: "👴",  label: "Pita (Father)" },
+  { key: "Mother",    emoji: "👵",  label: "Mata (Mother)" },
+  { key: "Brother",   emoji: "🧑",  label: "Bhai (Brother)" },
+  { key: "Sister",    emoji: "👱‍♀️", label: "Behen (Sister)" },
+  { key: "Friend",    emoji: "🤝",  label: "Dost (Friend)" },
+  { key: "Other",     emoji: "👥",  label: "Anya (Other)" },
+];
+
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {
   regular:  "Inter_400Regular",
@@ -118,6 +133,39 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   );
 }
 
+// ── Relation Picker Modal ──────────────────────────────────────────────────────
+function RelationPickerModal({ visible, onSelect, onClose }: {
+  visible: boolean;
+  onSelect: (relation: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={rp.overlay} onPress={onClose}>
+        <Pressable style={rp.sheet} onPress={e => e.stopPropagation()}>
+          <View style={rp.handle} />
+          <Text style={rp.title}>Kiska Kundli Add Karna Hai?</Text>
+          <Text style={rp.sub}>Sahi relation choose karo</Text>
+
+          <View style={rp.grid}>
+            {RELATIONS.map(r => (
+              <Pressable
+                key={r.key}
+                onPress={() => { Haptics.selectionAsync(); onSelect(r.key); }}
+                style={({ pressed }) => [rp.chip, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={rp.chipEmoji}>{r.emoji}</Text>
+                <Text style={rp.chipLabel}>{r.key}</Text>
+                <Text style={rp.chipSub}>{r.label.split("(")[1]?.replace(")", "") ?? ""}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Delete Confirm Modal ──────────────────────────────────────────────────────
 function DeleteModal({ name, onConfirm, onCancel }: {
   name: string; onConfirm: () => void; onCancel: () => void;
@@ -154,19 +202,29 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
   onEdit:()=>void; onSetPrimary:()=>void; onDelete:()=>void;
 }) {
   const initials = profile.name.split(" ").map(w=>w[0]??"").join("").slice(0,2).toUpperCase()||"?";
+  const relationInfo = RELATIONS.find(r => r.key === profile.relation);
 
   return (
     <View style={[pc.card, isPrimary && pc.cardPrimary]}>
       <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
-        <LinearGradient
-          colors={isPrimary ? ["#0ea5e9","#00d4ff"] : ["#1e3a5f","#0a1828"]}
-          style={pc.avatar}
-        >
-          <Text style={pc.initials}>{initials}</Text>
-        </LinearGradient>
+        {/* Avatar */}
+        <View>
+          <LinearGradient
+            colors={isPrimary ? ["#0ea5e9","#00d4ff"] : ["#1e3a5f","#0a1828"]}
+            style={pc.avatar}
+          >
+            <Text style={pc.initials}>{initials}</Text>
+          </LinearGradient>
+          {relationInfo && (
+            <View style={pc.emojiTag}>
+              <Text style={{ fontSize: 11 }}>{relationInfo.emoji}</Text>
+            </View>
+          )}
+        </View>
 
-        <View style={{ flex:1, minWidth:0, gap:2 }}>
-          <View style={{ flexDirection:"row", alignItems:"center", gap:7 }}>
+        <View style={{ flex:1, minWidth:0, gap:3 }}>
+          {/* Name + badges */}
+          <View style={{ flexDirection:"row", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <Text style={pc.name} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
               <View style={pc.primaryBadge}>
@@ -174,7 +232,13 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
                 <Text style={pc.primaryBadgeText}>PRIMARY</Text>
               </View>
             )}
+            {relationInfo && (
+              <View style={pc.relationBadge}>
+                <Text style={pc.relationBadgeText}>{profile.relation}</Text>
+              </View>
+            )}
           </View>
+
           <Text style={pc.sub} numberOfLines={1}>
             {profile.gender ? `${profile.gender} · ` : ""}
             {profile.birthData.place}
@@ -206,7 +270,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
       ) : (
         <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
           <Feather name="star" size={11} color="#00d4ff" />
-          <Text style={pc.setPrimaryText}>Set as Primary</Text>
+          <Text style={pc.setPrimaryText}>Primary Set Karo — Iska chart home par dikhega</Text>
         </Pressable>
       )}
     </View>
@@ -353,13 +417,14 @@ export default function ProfileScreen() {
     logout,
   } = useUser();
 
-  const [notifications,  setNotifications]  = useState(true);
-  const [dailyTip,       setDailyTip]       = useState(true);
-  const [showLang,       setShowLang]       = useState(false);
-  const [confirmDelete,  setConfirmDelete]  = useState<string | null>(null);
-  const [switching,      setSwitching]      = useState(false);
-  const [billingCycle,   setBillingCycle]   = useState<BillingCycle>("monthly");
-  const [subExpanded,    setSubExpanded]    = useState(false);
+  const [notifications,    setNotifications]    = useState(true);
+  const [dailyTip,         setDailyTip]         = useState(true);
+  const [showLang,         setShowLang]         = useState(false);
+  const [confirmDelete,    setConfirmDelete]    = useState<string | null>(null);
+  const [switching,        setSwitching]        = useState(false);
+  const [billingCycle,     setBillingCycle]     = useState<BillingCycle>("monthly");
+  const [subExpanded,      setSubExpanded]      = useState(false);
+  const [showRelationPick, setShowRelationPick] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -403,6 +468,16 @@ export default function ProfileScreen() {
           onCancel={() => setConfirmDelete(null)}
         />
       )}
+
+      {/* Relation picker */}
+      <RelationPickerModal
+        visible={showRelationPick}
+        onSelect={relation => {
+          setShowRelationPick(false);
+          router.push({ pathname: "/profile-edit", params: { mode: "add", relation } });
+        }}
+        onClose={() => setShowRelationPick(false)}
+      />
 
       {/* Language sheet */}
       <LangSheet
@@ -471,18 +546,26 @@ export default function ProfileScreen() {
               />
             ))}
 
-            {/* Add profile */}
+            {/* Add Family Member */}
             <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname:"/profile-edit", params:{ mode:"add" } }); }}
-              style={({ pressed }) => [s.addBtn, pressed && { opacity:0.7 }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowRelationPick(true);
+              }}
+              style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
             >
               <View style={s.addCircle}>
-                <Feather name="plus" size={15} color="#00d4ff" />
+                <Feather name="users" size={15} color="#00d4ff" />
               </View>
-              <View>
-                <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>Profile Add Karo</Text>
-                <Text style={{ color:"#1e3a5f", fontSize:10, fontFamily:F.regular, marginTop:1 }}>Family ya doston ke liye</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#00d4ff", fontSize: 13, fontFamily: F.semibold }}>
+                  Family Member Add Karo
+                </Text>
+                <Text style={{ color: "#1e3a5f", fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
+                  Beta, Beti, Pati, Mata-Pita, Dost ya anya
+                </Text>
               </View>
+              <Feather name="chevron-right" size={14} color="#1e3a5f" />
             </Pressable>
           </View>
         </View>
@@ -787,12 +870,25 @@ const pc = StyleSheet.create({
   activeText:    { color:"#00a86b", fontSize:10, fontFamily:F.medium },
   setPrimaryBtn: {
     flexDirection:"row", alignItems:"center", gap:6,
-    alignSelf:"flex-start",
-    backgroundColor:"rgba(0,212,255,0.07)", borderRadius:8,
-    paddingVertical:6, paddingHorizontal:10,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.15)",
+    alignSelf:"stretch",
+    backgroundColor:"rgba(0,212,255,0.06)", borderRadius:9,
+    paddingVertical:8, paddingHorizontal:12,
+    borderWidth:1, borderColor:"rgba(0,212,255,0.18)",
   },
-  setPrimaryText: { color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+  setPrimaryText: { color:"#00d4ff", fontSize:10.5, fontFamily:F.semibold, flex: 1 },
+  emojiTag: {
+    position: "absolute", bottom: -3, right: -4,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: "#040e20",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center", justifyContent: "center",
+  },
+  relationBadge: {
+    backgroundColor: "rgba(167,139,250,0.1)",
+    borderWidth: 1, borderColor: "rgba(167,139,250,0.25)",
+    borderRadius: 20, paddingVertical: 2, paddingHorizontal: 7,
+  },
+  relationBadgeText: { color: "#a78bfa", fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.5 },
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────────
@@ -909,6 +1005,49 @@ const lm = StyleSheet.create({
   rowActive: { backgroundColor:"rgba(0,212,255,0.05)", borderRadius:10, paddingHorizontal:10 },
   native: { color:"#dde8f4", fontSize:15, fontFamily:F.semibold },
   name:   { color:"#334155", fontSize:12, fontFamily:F.medium },
+});
+
+// ── Relation Picker ───────────────────────────────────────────────────────────
+const rp = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#071525",
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+    paddingHorizontal: 20, paddingBottom: 36, paddingTop: 14,
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignSelf: "center", marginBottom: 20,
+  },
+  title: {
+    color: "#dde8f4", fontSize: 17, fontFamily: F.bold,
+    letterSpacing: -0.3, textAlign: "center",
+  },
+  sub: {
+    color: "#334155", fontSize: 11.5, fontFamily: F.medium,
+    textAlign: "center", marginTop: 4, marginBottom: 20,
+  },
+  grid: {
+    flexDirection: "row", flexWrap: "wrap", gap: 10,
+  },
+  chip: {
+    width: "30%", flexGrow: 1,
+    alignItems: "center", gap: 4,
+    backgroundColor: "#040e20",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8,
+  },
+  chipEmoji: { fontSize: 22, lineHeight: 28 },
+  chipLabel: {
+    color: "#94a3b8", fontSize: 12, fontFamily: F.semibold, textAlign: "center",
+  },
+  chipSub: {
+    color: "#334155", fontSize: 9.5, fontFamily: F.regular, textAlign: "center",
+  },
 });
 
 // ── Delete modal ──────────────────────────────────────────────────────────────

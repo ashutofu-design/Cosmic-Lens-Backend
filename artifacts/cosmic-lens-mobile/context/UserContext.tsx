@@ -7,6 +7,7 @@ export interface ProfileEntry {
   id: string;
   name: string;
   gender: string;
+  relation?: string;
   birthData: BirthData;
   kundli: KundliData | null;
 }

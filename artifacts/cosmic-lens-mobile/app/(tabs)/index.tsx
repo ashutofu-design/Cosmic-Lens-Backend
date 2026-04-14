@@ -21,8 +21,16 @@ import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
 
+// ── Font aliases ──────────────────────────────────────────────────────────────
+const F = {
+  regular:  "Inter_400Regular",
+  medium:   "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold:     "Inter_700Bold",
+};
+
 const N = 12;
-const DEMO_PTS = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
+const DEMO_PTS    = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
 const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
@@ -30,27 +38,26 @@ const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   : "";
 
 function energyInsight(energy: number): { icon: string; text: string; color: string } {
-  if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today", color: "#22c55e" };
-  if (energy >= 55) return { icon: "✨", text: "Moderate energy, stay focused", color: "#f59e0b" };
-  if (energy >= 35) return { icon: "⚠️", text: "Energy unstable today", color: "#f97316" };
-  return { icon: "🌑", text: "Low energy — rest & introspect", color: "#ef4444" };
+  if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today",  color: "#22c55e" };
+  if (energy >= 55) return { icon: "✨", text: "Moderate energy, stay focused",  color: "#f59e0b" };
+  if (energy >= 35) return { icon: "⚠️", text: "Energy unstable today",          color: "#f97316" };
+  return             { icon: "🌑", text: "Low energy — rest & introspect",    color: "#ef4444" };
 }
 
-// ── Pulse animation hook ──────────────────────────────────────────────────────
-function usePulse() {
+// ── Animation hooks ───────────────────────────────────────────────────────────
+function usePulseScale(amplitude = 0.022, dur = 950) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 1.025, duration: 900, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 1,     duration: 900, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1 + amplitude, duration: dur, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1,             duration: dur, useNativeDriver: true }),
       ])
     ).start();
   }, []);
   return anim;
 }
 
-// ── Glow pulse for border ─────────────────────────────────────────────────────
 function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
   const anim = useRef(new Animated.Value(min)).current;
   useEffect(() => {
@@ -64,6 +71,38 @@ function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
   return anim;
 }
 
+function useFadeSlideIn(delay = 0) {
+  const opacity   = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity,    { toValue: 1, duration: 500, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 440, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+  return { opacity, transform: [{ translateY }] };
+}
+
+// ── Score counter animation ───────────────────────────────────────────────────
+function useCountUp(target: number, delay = 200) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      let start = 0;
+      const step = Math.ceil(target / 30);
+      const timer = setInterval(() => {
+        start = Math.min(start + step, target);
+        setDisplay(start);
+        if (start >= target) clearInterval(timer);
+      }, 30);
+      return () => clearInterval(timer);
+    }, delay);
+    return () => clearTimeout(timeout);
+  }, [target]);
+  return display;
+}
+
+// ── Home Screen ───────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
@@ -78,22 +117,16 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!kundli) return;
     cancelRef.current = false;
-    setLoading(true);
-    setTargetPts([]);
-    setLabels([]);
-    setSettled(false);
+    setLoading(true); setTargetPts([]); setLabels([]); setSettled(false);
 
     fetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
       .then(r => r.json())
       .then((data: { points: MoonHistoryPoint[] }) => {
         if (cancelRef.current) return;
-        const values: number[] = data.points.map((pt, idx) => {
+        const values = data.points.map((pt, idx) => {
           if (idx === data.points.length - 1) {
             const e = computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli);
-            if (e !== null) {
-              setTodayEnergy(e);
-              setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex });
-            }
+            if (e !== null) { setTodayEnergy(e); setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex }); }
             return e ?? 0;
           }
           return computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli) ?? 0;
@@ -101,9 +134,7 @@ export default function HomeScreen() {
         const lbls = data.points.map((pt, idx) =>
           idx === data.points.length - 1 ? "Now" : pt.label
         );
-        setTargetPts(values);
-        setLabels(lbls);
-        setLoading(false);
+        setTargetPts(values); setLabels(lbls); setLoading(false);
         setTimeout(() => { if (!cancelRef.current) setSettled(true); }, 1400);
       })
       .catch(() => { if (!cancelRef.current) setLoading(false); });
@@ -111,15 +142,22 @@ export default function HomeScreen() {
     return () => { cancelRef.current = true; };
   }, [kundli]);
 
+  // ── All hooks MUST come before any early return ───────────────────────────
+  const greetAnim = useFadeSlideIn(0);
+  const heroAnim  = useFadeSlideIn(120);
+  const card1Anim = useFadeSlideIn(220);
+  const card2Anim = useFadeSlideIn(310);
+  const card3Anim = useFadeSlideIn(400);
+
   if (!isLoading && !user) return <Redirect href="/login" />;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const showDemo    = !kundli;
-  const chartPts    = showDemo ? DEMO_PTS   : targetPts;
+  const chartPts    = showDemo ? DEMO_PTS    : targetPts;
   const chartLbls   = showDemo ? DEMO_LABELS : labels;
-  const chartEnergy = showDemo ? 38 : todayEnergy;
+  const chartEnergy = showDemo ? 38          : todayEnergy;
   const insight     = energyInsight(chartEnergy);
 
   const activeDasha: ActiveDashaResult | null =
@@ -128,11 +166,12 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={[styles.root, { backgroundColor: colors.background }]}
-      contentContainerStyle={[styles.content, { paddingTop: topPad + 16, paddingBottom: botPad + 100 }]}
+      contentContainerStyle={[styles.content, { paddingTop: topPad + 12, paddingBottom: botPad + 100 }]}
       showsVerticalScrollIndicator={false}
+      scrollEnabled={true}
     >
-      {/* Greeting */}
-      <View style={styles.greetRow}>
+      {/* ── Greeting ── */}
+      <Animated.View style={[styles.greetRow, greetAnim]}>
         <View>
           <Text style={styles.greetSub}>
             {kundli ? `Namaste, ${kundli.name}` : "Namaste"}
@@ -143,29 +182,35 @@ export default function HomeScreen() {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
           style={styles.forecastPill}
         >
-          <Feather name="calendar" size={12} color="#00d4ff" />
+          <Feather name="calendar" size={11} color="#00d4ff" />
           <Text style={styles.forecastPillText}>7 Days</Text>
         </Pressable>
-      </View>
+      </Animated.View>
 
-      {/* ── HERO: Today Energy Card ── */}
-      <HeroEnergyCard
-        chartPts={chartPts}
-        chartLbls={chartLbls}
-        chartEnergy={chartEnergy}
-        insight={insight}
-        showDemo={showDemo}
-        loading={!showDemo && loading && targetPts.length === 0}
-      />
+      {/* ── Hero Energy Card ── */}
+      <Animated.View style={heroAnim}>
+        <HeroEnergyCard
+          chartPts={chartPts}
+          chartLbls={chartLbls}
+          chartEnergy={chartEnergy}
+          insight={insight}
+          showDemo={showDemo}
+          loading={!showDemo && loading && targetPts.length === 0}
+        />
+      </Animated.View>
 
-      {/* ── DOSH ANALYSIS (dominant) ── */}
-      <DoshCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} kundli={kundli} />
+      {/* ── 3 Feature Cards ── */}
+      <Animated.View style={card1Anim}>
+        <DoshCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} kundli={kundli} />
+      </Animated.View>
 
-      {/* ── UPCOMING CHALLENGES (includes hidden issues) ── */}
-      <BadTimeCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+      <Animated.View style={card2Anim}>
+        <BadTimeCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+      </Animated.View>
 
-      {/* ── KUNDLI MILAN PREMIUM ── */}
-      <KundliMilanCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
+      <Animated.View style={card3Anim}>
+        <KundliMilanCard onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
+      </Animated.View>
     </ScrollView>
   );
 }
@@ -176,27 +221,33 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
 }) {
+  const displayScore = useCountUp(chartEnergy, 350);
+  const glowPulse    = useOpacityPulse(0.05, 0.18, 1800);
+
   return (
     <View style={hero.card}>
-      {/* Ambient glow */}
-      <View style={[hero.glow, { backgroundColor: `${insight.color}18` }]} />
+      {/* Ambient glow blob */}
+      <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
       <View style={hero.header}>
         <View>
           <Text style={hero.label}>TODAY ENERGY</Text>
-          <Text style={[hero.score, { color: insight.color }]}>{chartEnergy}<Text style={hero.scoreMax}>/100</Text></Text>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
+            <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
+            <Text style={hero.scoreMax}>/100</Text>
+          </View>
         </View>
         {showDemo && (
           <View style={hero.demoBadge}>
             <Feather name="lock" size={9} color="#3d5a7a" />
-            <Text style={hero.demoBadgeText}>DEMO</Text>
+            <Text style={hero.demoBadgeText}>DEMO MODE</Text>
           </View>
         )}
       </View>
 
-      {/* Scale chart down so cards below are visible without scrolling */}
-      <View style={{ height: 196, overflow: "hidden" }}>
-        <View style={{ transform: [{ scale: 0.68 }], marginTop: -48, marginLeft: -16, marginRight: -16 }}>
+      {/* Compact chart */}
+      <View style={{ height: 138, overflow: "hidden" }}>
+        <View style={{ transform: [{ scale: 0.58 }], marginTop: -62, marginLeft: -28, marginRight: -28 }}>
           <EnergyChart
             targetPts={chartPts}
             labels={chartLbls}
@@ -208,7 +259,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
       </View>
 
       {/* Insight pill */}
-      <View style={[hero.insightPill, { backgroundColor: `${insight.color}15`, borderColor: `${insight.color}35` }]}>
+      <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}30` }]}>
         <Text style={hero.insightIcon}>{insight.icon}</Text>
         <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
       </View>
@@ -218,41 +269,40 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 
 // ── Dosh Analysis Card ────────────────────────────────────────────────────────
 function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
-  const glowOpacity = useOpacityPulse(0.5, 1.0, 900);
+  const glowOpacity = useOpacityPulse(0.45, 1.0, 850);
+  const pulse       = usePulseScale(0.012, 1100);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.974 : 1 }], opacity: pressed ? 0.92 : 1 }]}>
       <LinearGradient
-        colors={["#7f1d1d", "#991b1b", "#6b1212"]}
+        colors={["#7f1d1d", "#b91c1c", "#6b1212"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={dosh.card}
       >
-        {/* Animated border glow */}
         <Animated.View style={[dosh.borderGlow, { opacity: glowOpacity }]} />
 
-        {/* Big decorative symbol */}
         <Text style={dosh.bigSymbol}>☿</Text>
 
-        <View style={dosh.topRow}>
-          <View style={dosh.alertBadge}>
-            <Text style={dosh.alertBadgeText}>⚠ DOSH ALERT</Text>
-          </View>
-          <View style={dosh.arrowCircle}>
-            <Feather name="arrow-right" size={14} color="#ff6b6b" />
-          </View>
-        </View>
-
-        <Text style={dosh.title}>Dosh Analysis</Text>
-        <Text style={dosh.subtitle}>
-          {kundli ? "Active doshas found — see your remedies" : "Kalsarp · Manglik · Pitra · Guru Chandal"}
-        </Text>
-
-        <View style={dosh.chipRow}>
-          {["Kalsarp", "Manglik", "Pitra"].map(d => (
-            <View key={d} style={dosh.chip}>
-              <Text style={dosh.chipText}>{d}</Text>
+        <View style={dosh.row}>
+          <View style={dosh.left}>
+            <View style={dosh.badge}>
+              <Text style={dosh.badgeText}>⚠ DOSH ALERT</Text>
             </View>
-          ))}
+            <Text style={dosh.title}>Dosh Analysis</Text>
+            <Text style={dosh.subtitle}>
+              {kundli ? "Active doshas — see remedies" : "Kalsarp · Manglik · Pitra"}
+            </Text>
+            <View style={dosh.chipRow}>
+              {["Kalsarp", "Manglik", "Pitra"].map(d => (
+                <View key={d} style={dosh.chip}>
+                  <Text style={dosh.chipText}>{d}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          <Animated.View style={[dosh.arrowCircle, { transform: [{ scale: pulse }] }]}>
+            <Feather name="arrow-right" size={15} color="#ff6b6b" />
+          </Animated.View>
         </View>
       </LinearGradient>
     </Pressable>
@@ -261,78 +311,74 @@ function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
 
 // ── Risk Alert Card ───────────────────────────────────────────────────────────
 function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
-  const dashaTxt = activeDasha
-    ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha active`
-    : "Transit & dasha analysis";
-  const glowOpacity = useOpacityPulse(0.4, 0.95, 1000);
+  const dashaTxt    = activeDasha ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} dasha active` : "Transit & dasha analysis";
+  const glowOpacity = useOpacityPulse(0.35, 0.9, 1000);
+  const pulse       = usePulseScale(0.012, 1200);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.974 : 1 }], opacity: pressed ? 0.92 : 1 }]}>
       <LinearGradient
-        colors={["#7c2d12", "#c2410c", "#6b2200"]}
+        colors={["#7c2d12", "#c2410c", "#5c1f08"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={bad.card}
       >
         <Animated.View style={[bad.borderGlow, { opacity: glowOpacity }]} />
-
-        {/* Decorative icon */}
         <Text style={bad.bigSymbol}>⚡</Text>
 
-        <View style={bad.topRow}>
-          <View style={bad.urgencyBadge}>
-            <Text style={bad.urgencyText}>🔴 URGENT</Text>
+        <View style={bad.row}>
+          <View style={bad.left}>
+            <View style={bad.badge}>
+              <Text style={bad.badgeText}>🔴 URGENT</Text>
+            </View>
+            <Text style={bad.title}>Risk Alert</Text>
+            <Text style={bad.subtitle}>Planetary risks & weak houses</Text>
+            <View style={bad.bottomRow}>
+              <Feather name="clock" size={10} color="rgba(255,255,255,0.5)" />
+              <Text style={bad.bottomText}>{dashaTxt}</Text>
+            </View>
           </View>
-          <View style={bad.arrowCircle}>
-            <Feather name="arrow-right" size={14} color="#ff8c42" />
-          </View>
-        </View>
-
-        <Text style={bad.title}>Risk Alert</Text>
-        <Text style={bad.subtitle}>Planetary risks & weak houses in your kundli</Text>
-
-        <View style={bad.divider} />
-        <View style={bad.bottomRow}>
-          <Feather name="clock" size={11} color="#c2410c" />
-          <Text style={bad.bottomText}>{dashaTxt} · Tap for full forecast</Text>
+          <Animated.View style={[bad.arrowCircle, { transform: [{ scale: pulse }] }]}>
+            <Feather name="arrow-right" size={15} color="#ff8c42" />
+          </Animated.View>
         </View>
       </LinearGradient>
     </Pressable>
   );
 }
 
-// ── Kundli Milan Premium Card ─────────────────────────────────────────────────
+// ── Kundli Milan Card ─────────────────────────────────────────────────────────
 function KundliMilanCard({ onPress }: { onPress: () => void }) {
   const glowOpacity = useOpacityPulse(0.5, 1.0, 1300);
+  const pulse       = usePulseScale(0.012, 1350);
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }], opacity: pressed ? 0.93 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.974 : 1 }], opacity: pressed ? 0.92 : 1 }]}>
       <LinearGradient
-        colors={["#4c1d95", "#6d28d9", "#3b1570"]}
+        colors={["#4c1d95", "#7c3aed", "#3b1570"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={milan.card}
       >
         <Animated.View style={[milan.borderGlow, { opacity: glowOpacity }]} />
-
-        {/* Decorative symbol */}
         <Text style={milan.bigSymbol}>♥</Text>
 
-        <View style={milan.topRow}>
-          <View style={milan.proBadge}>
-            <Text style={milan.proBadgeText}>PRO 🔒</Text>
-          </View>
-          <View style={milan.arrowCircle}>
-            <Feather name="arrow-right" size={14} color="#c084fc" />
-          </View>
-        </View>
-
-        <Text style={milan.title}>Kundli Milan</Text>
-        <Text style={milan.subtitle}>36-point compatibility check for marriage</Text>
-
-        <View style={milan.scoreRow}>
-          {[72, 80, 65, 90].map((v, i) => (
-            <View key={i} style={milan.scoreBar}>
-              <View style={[milan.scoreFill, { width: `${v}%`, backgroundColor: i % 2 === 0 ? "#a855f7" : "#ec4899" }]} />
+        <View style={milan.row}>
+          <View style={milan.left}>
+            <View style={milan.badge}>
+              <Text style={milan.badgeText}>PRO 🔒</Text>
             </View>
-          ))}
+            <Text style={milan.title}>Kundli Milan</Text>
+            <Text style={milan.subtitle}>36-point compatibility check</Text>
+            <View style={milan.scoreRow}>
+              {[72, 84, 66, 91].map((v, i) => (
+                <View key={i} style={milan.barTrack}>
+                  <View style={[milan.barFill, { width: `${v}%`, backgroundColor: i % 2 === 0 ? "#a855f7" : "#ec4899" }]} />
+                </View>
+              ))}
+            </View>
+          </View>
+          <Animated.View style={[milan.arrowCircle, { transform: [{ scale: pulse }] }]}>
+            <Feather name="arrow-right" size={15} color="#c084fc" />
+          </Animated.View>
         </View>
       </LinearGradient>
     </Pressable>
@@ -342,111 +388,176 @@ function KundliMilanCard({ onPress }: { onPress: () => void }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root:    { flex: 1 },
-  content: { paddingHorizontal: 14, gap: 8 },
+  content: { paddingHorizontal: 14, gap: 9 },
 
-  greetRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  greetSub:   { color: "#3d5a7a", fontSize: 11, fontWeight: "600" },
-  greetTitle: { color: "#dde8f4", fontSize: 18, fontWeight: "800", marginTop: 2 },
-
+  greetRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 2,
+  },
+  greetSub: {
+    color: "#3d5a7a", fontSize: 11,
+    fontFamily: F.semibold, letterSpacing: 0.2,
+  },
+  greetTitle: {
+    color: "#dde8f4", fontSize: 17,
+    fontFamily: F.bold, marginTop: 1, letterSpacing: -0.3,
+  },
   forecastPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "rgba(0,212,255,0.08)", borderWidth: 1,
-    borderColor: "rgba(0,212,255,0.25)", borderRadius: 20,
-    paddingVertical: 7, paddingHorizontal: 12,
+    backgroundColor: "rgba(0,212,255,0.07)", borderWidth: 1,
+    borderColor: "rgba(0,212,255,0.22)", borderRadius: 20,
+    paddingVertical: 7, paddingHorizontal: 11,
   },
-  forecastPillText: { color: "#00d4ff", fontSize: 11, fontWeight: "700" },
+  forecastPillText: {
+    color: "#00d4ff", fontSize: 11, fontFamily: F.bold,
+  },
 });
 
-// Hero card
+// ── Hero card ─────────────────────────────────────────────────────────────────
 const hero = StyleSheet.create({
   card: {
-    backgroundColor: "#040e1e", borderRadius: 20, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)", padding: 14, overflow: "hidden",
+    backgroundColor: "#040e1e", borderRadius: 18, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)", padding: 14, overflow: "hidden",
     shadowColor: "#00d4ff", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.08, shadowRadius: 20, elevation: 4,
+    shadowOpacity: 0.1, shadowRadius: 18, elevation: 5,
   },
-  glow: { position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: 80 },
-  header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 },
-  label:    { color: "#3d5a7a", fontSize: 9, fontWeight: "800", letterSpacing: 2 },
-  score:    { fontSize: 32, fontWeight: "900", marginTop: 2 },
-  scoreMax: { fontSize: 14, color: "#1e3a5f", fontWeight: "600" },
+  glow: {
+    position: "absolute", top: -50, right: -50,
+    width: 180, height: 180, borderRadius: 90,
+  },
+  header: {
+    flexDirection: "row", alignItems: "flex-start",
+    justifyContent: "space-between", marginBottom: 6,
+  },
+  label:    { color: "#3d5a7a", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2 },
+  score:    { fontSize: 30, fontFamily: F.bold, marginTop: 1, letterSpacing: -1 },
+  scoreMax: { fontSize: 13, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 4 },
   demoBadge: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: "rgba(2,13,26,0.85)", borderWidth: 1,
     borderColor: "rgba(0,200,255,0.15)", paddingVertical: 4,
     paddingHorizontal: 8, borderRadius: 6,
   },
-  demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontWeight: "800", letterSpacing: 1.5 },
+  demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontFamily: F.bold, letterSpacing: 1.5 },
   insightPill: {
-    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4,
-    borderWidth: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12,
+    flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6,
+    borderWidth: 1, borderRadius: 9, paddingVertical: 6, paddingHorizontal: 12,
   },
-  insightIcon: { fontSize: 14 },
-  insightText: { fontSize: 12, fontWeight: "700" },
+  insightIcon: { fontSize: 13 },
+  insightText: { fontSize: 11.5, fontFamily: F.semibold },
 });
 
-// ── Dosh card styles ──────────────────────────────────────────────────────────
+// ── Shared card layout ────────────────────────────────────────────────────────
+const CARD_RADIUS   = 18;
+const CARD_PADDING  = 14;
+
+// ── Dosh card ─────────────────────────────────────────────────────────────────
 const dosh = StyleSheet.create({
   card: {
-    borderRadius: 20, padding: 16, overflow: "hidden",
-    shadowColor: "#ff2244", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.6, shadowRadius: 24, elevation: 14,
+    borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
+    shadowColor: "#ff2244", shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.55, shadowRadius: 20, elevation: 12,
   },
   borderGlow: {
-    position: "absolute", inset: 0, borderRadius: 20,
-    borderWidth: 2, borderColor: "#ff3355", zIndex: 1,
+    position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
+    borderWidth: 1.5, borderColor: "#ff3355",
   },
   bigSymbol: {
-    position: "absolute", right: 10, top: 0,
-    fontSize: 90, opacity: 0.18, color: "#ffffff",
+    position: "absolute", right: 6, top: -6,
+    fontSize: 80, opacity: 0.14, color: "#ffffff",
   },
-  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  alertBadge:   { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  alertBadgeText:{ color: "#ffffff", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 14 },
-  chipRow:      { flexDirection: "row", gap: 7 },
-  chip:         { backgroundColor: "rgba(255,255,255,0.15)", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 13 },
-  chipText:     { color: "#ffffff", fontSize: 10, fontWeight: "700" },
+  row:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  left: { flex: 1, gap: 5 },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)", borderRadius: 20,
+    paddingVertical: 4, paddingHorizontal: 11,
+  },
+  badgeText:  { color: "#ffffff", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.9 },
+  title:      { color: "#ffffff", fontSize: 20, fontFamily: F.bold, letterSpacing: -0.5 },
+  subtitle:   { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontFamily: F.medium, lineHeight: 16 },
+  chipRow:    { flexDirection: "row", gap: 6 },
+  chip: {
+    backgroundColor: "rgba(255,255,255,0.13)", borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)", borderRadius: 20,
+    paddingVertical: 3, paddingHorizontal: 10,
+  },
+  chipText:   { color: "#ffffff", fontSize: 9.5, fontFamily: F.semibold },
+  arrowCircle: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.38)", backgroundColor: "rgba(255,255,255,0.13)",
+    alignItems: "center", justifyContent: "center", marginLeft: 10,
+  },
 });
 
-// ── Risk Alert card styles ────────────────────────────────────────────────────
+// ── Risk Alert card ───────────────────────────────────────────────────────────
 const bad = StyleSheet.create({
   card: {
-    borderRadius: 20, padding: 16, overflow: "hidden",
-    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5, shadowRadius: 22, elevation: 12,
+    borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
+    shadowColor: "#ff6600", shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.5, shadowRadius: 20, elevation: 11,
   },
-  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#f97316", zIndex: 1 },
-  bigSymbol:    { position: "absolute", right: 8, top: 0, fontSize: 85, opacity: 0.18, color: "#ffffff" },
-  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  urgencyBadge: { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  urgencyText:  { color: "#ffffff", fontSize: 10, fontWeight: "900", letterSpacing: 0.8 },
-  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 12 },
-  divider:      { height: 1, backgroundColor: "rgba(255,255,255,0.15)", marginBottom: 10 },
-  bottomRow:    { flexDirection: "row", alignItems: "center", gap: 6 },
-  bottomText:   { color: "rgba(255,255,255,0.5)", fontSize: 10, flex: 1 },
+  borderGlow: {
+    position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
+    borderWidth: 1.5, borderColor: "#f97316",
+  },
+  bigSymbol: {
+    position: "absolute", right: 8, top: -4,
+    fontSize: 78, opacity: 0.14, color: "#ffffff",
+  },
+  row:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  left: { flex: 1, gap: 5 },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)", borderRadius: 20,
+    paddingVertical: 4, paddingHorizontal: 11,
+  },
+  badgeText:  { color: "#ffffff", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.8 },
+  title:      { color: "#ffffff", fontSize: 20, fontFamily: F.bold, letterSpacing: -0.5 },
+  subtitle:   { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontFamily: F.medium },
+  bottomRow:  { flexDirection: "row", alignItems: "center", gap: 5 },
+  bottomText: { color: "rgba(255,255,255,0.48)", fontSize: 10, fontFamily: F.medium, flex: 1 },
+  arrowCircle: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.38)", backgroundColor: "rgba(255,255,255,0.13)",
+    alignItems: "center", justifyContent: "center", marginLeft: 10,
+  },
 });
 
-// ── Kundli Milan card styles ──────────────────────────────────────────────────
+// ── Kundli Milan card ─────────────────────────────────────────────────────────
 const milan = StyleSheet.create({
   card: {
-    borderRadius: 20, padding: 16, overflow: "hidden",
-    shadowColor: "#9933ff", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55, shadowRadius: 24, elevation: 14,
+    borderRadius: CARD_RADIUS, padding: CARD_PADDING, overflow: "hidden",
+    shadowColor: "#9933ff", shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.5, shadowRadius: 22, elevation: 12,
   },
-  borderGlow:   { position: "absolute", inset: 0, borderRadius: 20, borderWidth: 2, borderColor: "#a855f7", zIndex: 1 },
-  bigSymbol:    { position: "absolute", right: 10, top: 0, fontSize: 90, opacity: 0.18, color: "#ffffff" },
-  topRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  proBadge:     { backgroundColor: "rgba(255,255,255,0.18)", borderWidth: 1, borderColor: "rgba(255,255,255,0.45)", borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
-  proBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "900" },
-  arrowCircle:  { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
-  title:        { color: "#ffffff", fontSize: 22, fontWeight: "900", marginBottom: 5, letterSpacing: -0.3 },
-  subtitle:     { color: "rgba(255,255,255,0.75)", fontSize: 12, lineHeight: 17, marginBottom: 14 },
-  scoreRow:     { flexDirection: "row", gap: 5 },
-  scoreBar:     { flex: 1, height: 5, backgroundColor: "#ffffff11", borderRadius: 3, overflow: "hidden" },
-  scoreFill:    { height: "100%", borderRadius: 3 },
+  borderGlow: {
+    position: "absolute", inset: 0, borderRadius: CARD_RADIUS,
+    borderWidth: 1.5, borderColor: "#a855f7",
+  },
+  bigSymbol: {
+    position: "absolute", right: 8, top: -4,
+    fontSize: 80, opacity: 0.14, color: "#ffffff",
+  },
+  row:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  left: { flex: 1, gap: 5 },
+  badge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)", borderRadius: 20,
+    paddingVertical: 4, paddingHorizontal: 11,
+  },
+  badgeText:  { color: "#ffffff", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.5 },
+  title:      { color: "#ffffff", fontSize: 20, fontFamily: F.bold, letterSpacing: -0.5 },
+  subtitle:   { color: "rgba(255,255,255,0.72)", fontSize: 11.5, fontFamily: F.medium },
+  scoreRow:   { flexDirection: "row", gap: 5 },
+  barTrack:   { flex: 1, height: 4, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 3, overflow: "hidden" },
+  barFill:    { height: "100%", borderRadius: 3 },
+  arrowCircle: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.38)", backgroundColor: "rgba(255,255,255,0.13)",
+    alignItems: "center", justifyContent: "center", marginLeft: 10,
+  },
 });

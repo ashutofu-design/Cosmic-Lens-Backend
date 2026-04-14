@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 Flask API server for Cosmic Lens.
-Exposes POST /api/kundli, auth endpoints, and moon transit.
+Exposes POST /api/kundli, auth endpoints, moon transit, and admin routes.
+
+DATABASE SETUP (portable):
+  - Set DATABASE_URL environment variable to switch databases.
+  - PostgreSQL: postgresql://user:password@host:5432/dbname
+  - SQLite fallback used automatically if DATABASE_URL is not set.
 """
 
 import os
 import sys
-import sqlite3
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -15,39 +20,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
+from database import db, init_db
+from models import User, Kundli
 
 app = Flask(__name__)
 CORS(app)
 
-# ── SQLite user store ──────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.db")
+# ── Database init ──────────────────────────────────────────────────────────────
+init_db(app)
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# ── Admin auth helper ──────────────────────────────────────────────────────────
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "cosmic-admin-2024")
 
-def init_db():
-    conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT    NOT NULL DEFAULT '',
-            email       TEXT    UNIQUE NOT NULL,
-            password    TEXT,
-            google_id   TEXT,
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# ── Auth helpers ───────────────────────────────────────────────────────────────
-
-def user_row_to_dict(row):
-    return {"id": row["id"], "name": row["name"], "email": row["email"]}
+def require_admin():
+    """Check admin token from header. Returns None if valid, error response if not."""
+    token = request.headers.get("X-Admin-Token", "")
+    if not token or token != ADMIN_SECRET:
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
 
 # ── Auth routes ────────────────────────────────────────────────────────────────
 
@@ -77,19 +67,13 @@ def signup():
     if len(pwd) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
 
-    conn = get_db()
-    try:
-        conn.execute(
-            "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-            (name, email, generate_password_hash(pwd))
-        )
-        conn.commit()
-        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-        return jsonify(user_row_to_dict(row)), 201
-    except sqlite3.IntegrityError:
+    if User.query.filter_by(email=email).first():
         return jsonify({"error": "An account with this email already exists"}), 409
-    finally:
-        conn.close()
+
+    user = User(name=name, email=email, password=generate_password_hash(pwd))
+    db.session.add(user)
+    db.session.commit()
+    return jsonify(user.to_dict()), 201
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -101,14 +85,13 @@ def login():
     if not email or not pwd:
         return jsonify({"error": "Email and password are required"}), 400
 
-    conn = get_db()
-    try:
-        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-        if not row or not row["password"] or not check_password_hash(row["password"], pwd):
-            return jsonify({"error": "Invalid email or password"}), 401
-        return jsonify(user_row_to_dict(row))
-    finally:
-        conn.close()
+    user = User.query.filter_by(email=email).first()
+    if not user or not user.password or not check_password_hash(user.password, pwd):
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    user.last_active = datetime.utcnow()
+    db.session.commit()
+    return jsonify(user.to_dict())
 
 
 @app.route("/api/auth/google", methods=["POST"])
@@ -132,25 +115,167 @@ def google_login():
     except Exception as exc:
         return jsonify({"error": f"Google verification failed: {exc}"}), 401
 
-    conn = get_db()
-    try:
-        row = conn.execute(
-            "SELECT * FROM users WHERE email = ? OR google_id = ?", (email, google_id)
-        ).fetchone()
-        if row:
-            conn.execute("UPDATE users SET google_id = ? WHERE id = ?", (google_id, row["id"]))
-            conn.commit()
-            return jsonify(user_row_to_dict(row))
-        else:
-            conn.execute(
-                "INSERT INTO users (name, email, google_id) VALUES (?, ?, ?)",
-                (name, email, google_id)
-            )
-            conn.commit()
-            row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-            return jsonify(user_row_to_dict(row)), 201
-    finally:
-        conn.close()
+    user = User.query.filter(
+        (User.email == email) | (User.google_id == google_id)
+    ).first()
+
+    if user:
+        user.google_id   = google_id
+        user.last_active = datetime.utcnow()
+        db.session.commit()
+        return jsonify(user.to_dict())
+    else:
+        user = User(name=name, email=email, google_id=google_id)
+        db.session.add(user)
+        db.session.commit()
+        return jsonify(user.to_dict()), 201
+
+
+# ── Kundli save/load routes ────────────────────────────────────────────────────
+
+@app.route("/api/user/<int:user_id>/kundli", methods=["GET"])
+def get_user_kundli(user_id):
+    """Get saved kundli for a user."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if not user.kundli:
+        return jsonify({"kundli": None})
+    return jsonify({"kundli": user.kundli.to_dict()})
+
+
+@app.route("/api/user/<int:user_id>/kundli", methods=["POST"])
+def save_user_kundli(user_id):
+    """Save or update kundli for a user."""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json(force=True, silent=True) or {}
+    import json
+
+    if user.kundli:
+        k = user.kundli
+    else:
+        k = Kundli(user_id=user_id)
+        db.session.add(k)
+
+    k.name       = data.get("name", "")
+    k.dob        = data.get("dob", "")
+    k.tob        = data.get("tob", "")
+    k.pob        = data.get("pob", "")
+    k.lat        = data.get("lat")
+    k.lon        = data.get("lon")
+    k.tz         = data.get("tz")
+    k.chart_data = json.dumps(data.get("chart_data")) if data.get("chart_data") else None
+    k.updated_at = datetime.utcnow()
+
+    db.session.commit()
+    return jsonify({"success": True, "kundli": k.to_dict()})
+
+
+# ── Admin routes ────────────────────────────────────────────────────────────────
+
+@app.route("/api/admin/stats", methods=["GET"])
+def admin_stats():
+    """Dashboard stats — total users, PRO users, active today."""
+    err = require_admin()
+    if err:
+        return err
+
+    from datetime import timedelta
+    today = datetime.utcnow() - timedelta(hours=24)
+
+    total_users  = User.query.count()
+    pro_users    = User.query.filter_by(is_pro=True).count()
+    active_today = User.query.filter(User.last_active >= today).count()
+    total_kundli = Kundli.query.count()
+
+    return jsonify({
+        "total_users":  total_users,
+        "pro_users":    pro_users,
+        "active_today": active_today,
+        "total_kundli": total_kundli,
+    })
+
+
+@app.route("/api/admin/users", methods=["GET"])
+def admin_users():
+    """List all users with pagination."""
+    err = require_admin()
+    if err:
+        return err
+
+    page     = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 20))
+    search   = request.args.get("search", "").strip()
+
+    query = User.query
+    if search:
+        query = query.filter(
+            (User.name.ilike(f"%{search}%")) | (User.email.ilike(f"%{search}%"))
+        )
+
+    paginated = query.order_by(User.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return jsonify({
+        "users":   [u.to_admin_dict() for u in paginated.items],
+        "total":   paginated.total,
+        "page":    page,
+        "pages":   paginated.pages,
+    })
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["GET"])
+def admin_user_detail(user_id):
+    """Get full detail of one user."""
+    err = require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    result = user.to_admin_dict()
+    if user.kundli:
+        result["kundli"] = user.kundli.to_dict()
+    return jsonify(result)
+
+
+@app.route("/api/admin/users/<int:user_id>/pro", methods=["POST"])
+def admin_toggle_pro(user_id):
+    """Toggle PRO status for a user."""
+    err = require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data     = request.get_json(force=True, silent=True) or {}
+    user.is_pro = data.get("is_pro", not user.is_pro)
+    db.session.commit()
+    return jsonify({"success": True, "user_id": user_id, "is_pro": user.is_pro})
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+def admin_delete_user(user_id):
+    """Delete a user and their kundli."""
+    err = require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 # ── Existing routes ────────────────────────────────────────────────────────────

@@ -864,6 +864,23 @@ export default function KundliScreen() {
         ))}
       </View>
 
+      {/* Planet Position shortcut */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/planet-position"); }}
+        style={({ pressed }) => [s.planetBtn, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+      >
+        <View style={s.planetBtnLeft}>
+          <View style={s.planetBtnIcon}>
+            <Feather name="target" size={16} color="#f59e0b" />
+          </View>
+          <View>
+            <Text style={s.planetBtnTitle}>Planet Position</Text>
+            <Text style={s.planetBtnSub}>Live graha degrees aur rashi</Text>
+          </View>
+        </View>
+        <Feather name="chevron-right" size={16} color="#f59e0b" style={{ opacity: 0.7 }} />
+      </Pressable>
+
       {/* Tab heading */}
       <Text style={s.sectionTitle}>
         {activeTab==="Kundli"?"DASHA TIMELINE"
@@ -917,6 +934,20 @@ const s = StyleSheet.create({
   snapshotValue: { color:"#ffffff",fontSize:12,fontWeight:"500",flex:1,textAlign:"right" },
 
   sectionTitle: { color:"#00d4ff",fontSize:10,fontWeight:"800",letterSpacing:2.5 },
+
+  planetBtn: {
+    flexDirection:"row", alignItems:"center", justifyContent:"space-between",
+    backgroundColor:"rgba(245,158,11,0.06)", borderRadius:14, borderWidth:1,
+    borderColor:"rgba(245,158,11,0.25)", paddingVertical:12, paddingHorizontal:14,
+  },
+  planetBtnLeft: { flexDirection:"row", alignItems:"center", gap:12 },
+  planetBtnIcon: {
+    width:36, height:36, borderRadius:10,
+    backgroundColor:"rgba(245,158,11,0.12)", borderWidth:1, borderColor:"rgba(245,158,11,0.2)",
+    alignItems:"center", justifyContent:"center",
+  },
+  planetBtnTitle: { color:"#f59e0b", fontSize:13, fontWeight:"700" },
+  planetBtnSub:   { color:"#4b5563", fontSize:10, marginTop:1 },
 
   // Dasha tab
   navRow:  { flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:8 },

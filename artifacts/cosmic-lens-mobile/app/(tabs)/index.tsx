@@ -150,15 +150,6 @@ export default function HomeScreen() {
           locked={false}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
         />
-        <ActionCard
-          label="Planet Position"
-          icon="target"
-          accent="#f59e0b"
-          bg="#120900"
-          border="rgba(251,191,36,0.3)"
-          locked={false}
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/planet-position"); }}
-        />
       </View>
 
       {/* ── Cosmic Tools ── */}

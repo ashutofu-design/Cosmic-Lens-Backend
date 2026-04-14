@@ -282,8 +282,8 @@ function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDash
             <Feather name="zap" size={20} color="#ef4444" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={bad.title}>Upcoming Challenges</Text>
-            <Text style={bad.subtitle}>Agle kuch din mushkil ho sakte hain</Text>
+            <Text style={bad.title}>Risk Alert</Text>
+            <Text style={bad.subtitle}>Planetary risks detected in your chart</Text>
           </View>
           <View style={bad.urgencyBadge}>
             <Text style={bad.urgencyText}>URGENT</Text>

@@ -572,72 +572,79 @@ export default function ProfileScreen() {
 
         {/* ── SUBSCRIPTION ─────────────────────────────────────────────── */}
         <View>
-          <View style={s.sectionRow}>
-            <Text style={s.sectionLabel}>SUBSCRIPTION</Text>
-            <Pressable onPress={() => { setSubExpanded(v=>!v); Haptics.selectionAsync(); }}>
-              <Text style={s.sectionAction}>{subExpanded ? "Chhupao ↑" : "Plans Dekho ↓"}</Text>
-            </Pressable>
-          </View>
+          <Text style={s.sectionLabel}>SUBSCRIPTION</Text>
 
-          {/* Current plan banner */}
-          <LinearGradient
-            colors={["#040e20","#071525"]}
-            style={s.currentPlanBanner}
-          >
-            <View style={{ flex:1 }}>
-              <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginBottom:4 }}>
-                <View style={s.freeDot} />
-                <Text style={s.currentPlanName}>Free Plan — Active</Text>
-              </View>
-              <Text style={s.currentPlanSub}>Upgrade karo full Jyotish access ke liye</Text>
-            </View>
+          {/* Single container card — everything inside */}
+          <View style={sub.card}>
+
+            {/* Current plan row — tap to toggle */}
             <Pressable
-              onPress={() => { setSubExpanded(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-              style={s.upgradeBtn}
+              onPress={() => { setSubExpanded(v => !v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              style={sub.planRow}
             >
-              <LinearGradient colors={["#0284c7","#00d4ff"]} start={{x:0,y:0}} end={{x:1,y:0}} style={s.upgradeBtnGrad}>
-                <Feather name="zap" size={11} color="#fff" />
-                <Text style={s.upgradeBtnText}>Upgrade</Text>
+              <View style={sub.planDotWrap}>
+                <View style={sub.freeDot} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={sub.planName}>Free Plan — Active</Text>
+                <Text style={sub.planSub}>Upgrade karo full Jyotish access ke liye</Text>
+              </View>
+              <LinearGradient
+                colors={["#0284c7","#00d4ff"]}
+                start={{x:0,y:0}} end={{x:1,y:0}}
+                style={sub.upgradePill}
+              >
+                <Feather name="zap" size={10} color="#fff" />
+                <Text style={sub.upgradeText}>Upgrade</Text>
               </LinearGradient>
+              <Feather
+                name={subExpanded ? "chevron-up" : "chevron-down"}
+                size={14} color="#1e3a5f"
+                style={{ marginLeft: 6 }}
+              />
             </Pressable>
-          </LinearGradient>
 
-          {/* Plans expanded */}
-          {subExpanded && (
-            <View style={{ marginTop:14 }}>
-              {/* Billing toggle */}
-              <View style={sb.cycleRow}>
-                {(["monthly","yearly"] as BillingCycle[]).map(c => (
-                  <Pressable key={c}
-                    onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
-                    style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
-                  >
-                    <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
-                      {c === "monthly" ? "Monthly" : "Yearly"}
-                    </Text>
-                    {c === "yearly" && (
-                      <View style={sb.savePill}>
-                        <Text style={sb.savePillTxt}>44% OFF</Text>
-                      </View>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
+            {/* Plans — expand inside the same card */}
+            {subExpanded && (
+              <View style={sub.expandedWrap}>
+                {/* Divider */}
+                <View style={sub.divider} />
 
-              {/* Plan cards */}
-              <View style={{ gap:12, marginTop:14 }}>
-                {PLANS.map(plan => (
-                  <PlanCard
-                    key={plan.key}
-                    plan={plan}
-                    cycle={billingCycle}
-                    isCurrent={plan.key === "free"}
-                    onPress={() => {}}
-                  />
-                ))}
+                {/* Billing toggle */}
+                <View style={sb.cycleRow}>
+                  {(["monthly","yearly"] as BillingCycle[]).map(c => (
+                    <Pressable key={c}
+                      onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
+                      style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
+                    >
+                      <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
+                        {c === "monthly" ? "Monthly" : "Yearly"}
+                      </Text>
+                      {c === "yearly" && (
+                        <View style={sb.savePill}>
+                          <Text style={sb.savePillTxt}>44% OFF</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                  ))}
+                </View>
+
+                {/* Plan cards */}
+                <View style={{ gap: 10, marginTop: 12 }}>
+                  {PLANS.map(plan => (
+                    <PlanCard
+                      key={plan.key}
+                      plan={plan}
+                      cycle={billingCycle}
+                      isCurrent={plan.key === "free"}
+                      onPress={() => {}}
+                    />
+                  ))}
+                </View>
               </View>
-            </View>
-          )}
+            )}
+
+          </View>
         </View>
 
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
@@ -1005,6 +1012,37 @@ const lm = StyleSheet.create({
   rowActive: { backgroundColor:"rgba(0,212,255,0.05)", borderRadius:10, paddingHorizontal:10 },
   native: { color:"#dde8f4", fontSize:15, fontFamily:F.semibold },
   name:   { color:"#334155", fontSize:12, fontFamily:F.medium },
+});
+
+// ── Subscription card ─────────────────────────────────────────────────────────
+const sub = StyleSheet.create({
+  card: {
+    marginTop: 12,
+    backgroundColor: "#040e1e",
+    borderRadius: 16, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+  },
+  planRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  planDotWrap: {
+    width: 32, height: 32, borderRadius: 9,
+    backgroundColor: "rgba(100,116,139,0.12)",
+    borderWidth: 1, borderColor: "rgba(100,116,139,0.2)",
+    alignItems: "center", justifyContent: "center",
+  },
+  freeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#475569" },
+  planName: { color: "#94a3b8", fontSize: 13, fontFamily: F.semibold },
+  planSub:  { color: "#1e3a5f", fontSize: 10.5, fontFamily: F.regular, marginTop: 2 },
+  upgradePill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20,
+  },
+  upgradeText: { color: "#fff", fontSize: 11.5, fontFamily: F.bold },
+  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginHorizontal: 0 },
+  expandedWrap: { paddingHorizontal: 14, paddingBottom: 16, paddingTop: 14, gap: 0 },
 });
 
 // ── Relation Picker ───────────────────────────────────────────────────────────

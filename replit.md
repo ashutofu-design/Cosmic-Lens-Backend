@@ -1,8 +1,8 @@
-# Workspace
+# Cosmic Lens — Workspace
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astrology app — a mobile app with a Python Flask backend.
 
 ## Stack
 
@@ -10,18 +10,48 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Mobile app**: Expo (React Native) — `artifacts/cosmic-lens-mobile`
+- **Backend**: Python Flask — `artifacts/api-server/flask_app.py`
+- **Astrology engine**: pyswisseph (Swiss Ephemeris)
+- **Database**: SQLite (`users.db`) for user auth
+
+## Artifacts
+
+| Artifact | Path | Purpose |
+|---|---|---|
+| Cosmic Lens Mobile | `artifacts/cosmic-lens-mobile` | Expo React Native mobile app |
+| API Server | `artifacts/api-server` | Python Flask backend (astrology APIs) |
+
+## Python Backend Modules
+
+- `flask_app.py` — Main Flask server, auth, routing
+- `kundli_engine.py` — Vedic kundli calculation (Swiss Ephemeris)
+- `kp_engine.py` — KP (Krishnamurti Paddhati) astrology engine
+- `ask_engine.py` — Rule-based astrology question answering
+- `requirements.txt` — `flask`, `flask-cors`, `pyswisseph`, `gunicorn`, `python-dateutil`
+
+## Mobile App Screens
+
+- `app/(tabs)/index.tsx` — Home: today's energy chart
+- `app/(tabs)/kundli.tsx` — Kundli (birth chart)
+- `app/(tabs)/insights.tsx` — Jyotish insights
+- `app/(tabs)/ask.tsx` — Ask a question
+- `app/(tabs)/notice.tsx` — Notices
+- `app/(tabs)/profile.tsx` — User profile
+- `app/login.tsx`, `app/onboarding.tsx` — Auth flow
+- `app/forecast.tsx`, `app/planet-position.tsx` — Extra features
+- `app/dosh.tsx`, `app/kundli-milan.tsx`, `app/vastu.tsx` — Dosha, Milan, Vastu
 
 ## Key Commands
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/cosmic-lens-mobile run dev` — Run mobile app
+- `python3 artifacts/api-server/flask_app.py` — Run Flask backend
+- `pnpm run typecheck` — Full typecheck across all packages
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## API Endpoints
+
+- `GET /api/healthz` — Health check
+- `POST /api/kundli` — Calculate Vedic kundli
+- `GET /api/moon_history` — Moon position history
+- `POST /api/ask` — Ask astrology question
+- `POST /api/register`, `POST /api/login` — Auth

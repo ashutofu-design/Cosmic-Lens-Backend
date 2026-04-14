@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "Cosmic Lens Mobile"
+version = "1.0.0"
+id = "artifacts/cosmic-lens-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 18987
+
+[services.development]
+run = "pnpm --filter @workspace/cosmic-lens-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cosmic-lens-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/cosmic-lens-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "18987"
+BASE_PATH = "/mobile/"

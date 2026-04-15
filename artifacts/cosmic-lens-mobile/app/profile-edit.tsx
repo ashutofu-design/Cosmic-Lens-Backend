@@ -34,9 +34,12 @@ const YEARS_L  = Array.from({ length: CY-1900+1 }, (_, i) => { const y=CY-i; ret
 const HOURS_L  = Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
 const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
 
-const C_PRIMARY = "#FF7A00";
-const C_FOCUS   = "#6366F1";
-const C_SUCCESS = "#16A34A";
+const C_PRIMARY  = "#FF7A00";
+const C_FOCUS    = "#6366F1";
+const C_SUCCESS  = "#16A34A";
+const C_SEL_BG   = "rgba(99,102,241,0.07)";
+const C_SEL_BORD = "#6366F1";
+const C_SEL_TXT  = "#4F46E5";
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -81,7 +84,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
     <View style={[
       s.card,
       C.isDark
-        ? { backgroundColor: C.bgCard, shadowOpacity: 0.3, borderColor: C.border, borderWidth: StyleSheet.hairlineWidth }
+        ? { backgroundColor: C.bgCard, shadowOpacity: 0.28 }
         : { backgroundColor: "#FFFFFF" },
       style,
     ]}>
@@ -94,8 +97,8 @@ function CardRow({ label, icon, children }: { label: string; icon: React.Compone
   const C = useC();
   return (
     <View style={s.cardRow}>
-      <View style={[s.cardRowIcon, { backgroundColor: C.isDark ? `${C_PRIMARY}18` : "#FFF7ED" }]}>
-        <Feather name={icon} size={11} color={C_PRIMARY} />
+      <View style={[s.cardRowIcon, { backgroundColor: C.isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF" }]}>
+        <Feather name={icon} size={11} color={C_FOCUS} />
       </View>
       <Text style={[s.cardRowLabel, { color: C.isDark ? C.textMuted : "#64748B" }]}>{label}</Text>
       {children}
@@ -234,19 +237,24 @@ export default function ProfileEditScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
 
         {/* ── Header ── */}
-        <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: bgColor, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]}>
+        <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: bgColor, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.05)" }]}>
           <Pressable
             onPress={() => router.back()}
             hitSlop={10}
-            style={[s.backBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.09)" }]}
+            style={[s.backBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}
           >
-            <Feather name="arrow-left" size={17} color={C.text} />
+            <Feather name="arrow-left" size={16} color={C.isDark ? C.text : "#1E293B"} />
           </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.headerTitle, { color: C.text }]}>
-              {isEdit ? "Edit Profile" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation}'s Kundli`}
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+              <View style={s.headerAccentDot} />
+              <Text style={[s.headerTitle, { color: C.isDark ? C.text : "#0F172A" }]}>
+                {isEdit ? "Edit Profile" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation}'s Kundli`}
+              </Text>
+            </View>
+            <Text style={[s.headerSub, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
+              Fill in accurate birth details
             </Text>
-            <Text style={[s.headerSub, { color: C.textMuted }]}>Fill in accurate birth details</Text>
           </View>
         </View>
 
@@ -302,12 +310,11 @@ export default function ProfileEditScreen() {
                       style={[
                         s.chip,
                         active
-                          ? { borderColor: C_PRIMARY, backgroundColor: "#FFF7ED" }
-                          : { borderColor: C.isDark ? C.border : "#CBD5E1", backgroundColor: "transparent" },
-                        C.isDark && active && { backgroundColor: `${C_PRIMARY}18` },
+                          ? { borderColor: C_SEL_BORD, backgroundColor: C_SEL_BG }
+                          : { borderColor: C.isDark ? C.border : "#E2E8F0", backgroundColor: "transparent" },
                       ]}
                     >
-                      <Text style={[s.chipTxt, { color: active ? C_PRIMARY : C.textMuted }]}>{g}</Text>
+                      <Text style={[s.chipTxt, { color: active ? C_SEL_TXT : C.textMuted }]}>{g}</Text>
                     </Pressable>
                   );
                 })}
@@ -339,12 +346,7 @@ export default function ProfileEditScreen() {
 
             {/* Row 2 — Hour | Min | AM/PM */}
             <View style={s.fieldWrap}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <Lbl text="TIME" />
-                <Text style={{ fontSize: 9, fontFamily: F.medium, color: C_PRIMARY, opacity: 0.85 }}>
-                  ⚠ Select AM/PM carefully
-                </Text>
-              </View>
+              <Lbl text="TIME" />
               <View style={{ flexDirection: "row", gap: 6 }}>
                 <View style={{ flex: 28 }}>
                   <PickerBtn value={f.hour ? String(f.hour).padStart(2,"0") : ""} placeholder="HH" onPress={() => setHourOpen(true)} />
@@ -363,17 +365,20 @@ export default function ProfileEditScreen() {
                           style={[
                             s.ampmBtn,
                             active
-                              ? { borderColor: C_PRIMARY, backgroundColor: C.isDark ? `${C_PRIMARY}20` : "#FFF7ED" }
-                              : { borderColor: C.isDark ? C.border : "#CBD5E1", backgroundColor: C.isDark ? C.inputBg : "#F1F5F9" },
+                              ? { borderColor: C_SEL_BORD, backgroundColor: C_SEL_BG }
+                              : { borderColor: C.isDark ? C.border : "#E2E8F0", backgroundColor: C.isDark ? C.inputBg : "#F8FAFC" },
                           ]}
                         >
-                          <Text style={[s.ampmTxt, { color: active ? C_PRIMARY : C.textMuted }]}>{v}</Text>
+                          <Text style={[s.ampmTxt, { color: active ? C_SEL_TXT : C.textMuted }]}>{v}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
               </View>
+              <Text style={[s.timeHint, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
+                Affects Mahadasha calculation — verify AM/PM
+              </Text>
             </View>
           </Card>
 
@@ -394,13 +399,10 @@ export default function ProfileEditScreen() {
                   placeholderTextColor={C.textDim}
                   returnKeyType="search"
                 />
-                <Pressable
-                  onPress={handlePlaceSearch}
-                  style={[s.searchBtn, { borderColor: C_PRIMARY }]}
-                >
+                <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
                   {searching
-                    ? <ActivityIndicator size="small" color={C_PRIMARY} />
-                    : <Text style={[s.searchBtnTxt, { color: C_PRIMARY }]}>Search</Text>
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={s.searchBtnTxt}>Search</Text>
                   }
                 </Pressable>
               </View>
@@ -510,8 +512,12 @@ const s = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 2, elevation: 1,
   },
-  headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.3 },
-  headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginTop: 1 },
+  headerAccentDot: {
+    width: 4, height: 16, borderRadius: 2,
+    backgroundColor: C_FOCUS, opacity: 0.7,
+  },
+  headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.4 },
+  headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginLeft: 11 },
 
   // Scroll
   scroll: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 16, gap: 10 },
@@ -519,10 +525,10 @@ const s = StyleSheet.create({
   // Card
   card: {
     borderRadius: 16, overflow: "hidden",
-    paddingHorizontal: 14, paddingVertical: 12,
-    gap: 10,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+    paddingHorizontal: 14, paddingVertical: 13,
+    gap: 11,
+    shadowColor: "#64748B", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
   },
 
   // Card section label row
@@ -572,13 +578,15 @@ const s = StyleSheet.create({
   },
   ampmTxt: { fontSize: 13, fontFamily: F.bold },
 
+  // Time helper hint
+  timeHint: { fontSize: 10, fontFamily: F.regular, marginTop: 3 },
+
   // Place search button
   searchBtn: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 0.75,
-    backgroundColor: "transparent",
+    paddingHorizontal: 11, paddingVertical: 6,
+    borderRadius: 8, backgroundColor: C_FOCUS,
   },
-  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold },
+  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: "#FFFFFF" },
 
   // Geo dropdown
   geoList: {

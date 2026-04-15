@@ -331,31 +331,36 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
   const relationInfo = RELATIONS.find(r => r.key === profile.relation);
 
   return (
-    <View style={[pc.card, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any, isPrimary && pc.cardPrimary]}>
+    <View style={[
+      pc.card,
+      { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any,
+      isPrimary && {
+        borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.25)",
+        backgroundColor: C.isDark ? "rgba(0,20,40,0.9)" : "#FFFFFF",
+      },
+    ]}>
       <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
-        {/* Avatar */}
         <View>
           <LinearGradient
-            colors={isPrimary ? ["#0ea5e9","#f59e0b"] : [C.bgCard2, C.bgCard3]}
+            colors={isPrimary ? (C.isDark ? ["#0ea5e9","#f59e0b"] : ["#7C3AED","#a78bfa"]) : [C.bgCard2, C.bgCard3]}
             style={pc.avatar}
           >
             <Text style={pc.initials}>{initials}</Text>
           </LinearGradient>
           {relationInfo && (
-            <View style={[pc.emojiTag, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            <View style={[pc.emojiTag, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={{ fontSize: 11 }}>{relationInfo.emoji}</Text>
             </View>
           )}
         </View>
 
         <View style={{ flex:1, minWidth:0, gap:3 }}>
-          {/* Name + badges */}
           <View style={{ flexDirection:"row", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <Text style={[pc.name,{ color: C.text }]} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
               <View style={[pc.primaryBadge,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.15)" : C.warningBg, borderColor: C.isDark ? "rgba(245,158,11,0.3)" : C.warningBorder }]}>
-                <Feather name="star" size={8} color="#f59e0b" />
-                <Text style={pc.primaryBadgeText}>PRIMARY</Text>
+                <Feather name="star" size={8} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
+                <Text style={[pc.primaryBadgeText, { color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>PRIMARY</Text>
               </View>
             )}
             {relationInfo && (
@@ -369,7 +374,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
             {profile.gender ? `${profile.gender} · ` : ""}
             {profile.birthData.place}
           </Text>
-          <Text style={[pc.date,{ color: C.textDim }]}>
+          <Text style={{ color: C.textMid, fontSize: 10, fontFamily: F.medium }}>
             {profile.birthData.day}/{profile.birthData.month}/{profile.birthData.year}
             {"  ·  "}
             {String(profile.birthData.hour).padStart(2,"0")}:{String(profile.birthData.minute).padStart(2,"0")} {profile.birthData.ampm}
@@ -378,24 +383,24 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
 
         <View style={{ flexDirection:"row", gap:6 }}>
           {canDelete && (
-            <Pressable onPress={onDelete} style={[pc.iconBtn,{ backgroundColor: C.bgCard2 }]} hitSlop={8}>
+            <Pressable onPress={onDelete} style={[pc.iconBtn,{ backgroundColor: C.bgCard2, borderColor: C.border }]} hitSlop={8}>
               <Feather name="trash-2" size={14} color="#f87171" />
             </Pressable>
           )}
-          <Pressable onPress={onEdit} style={[pc.iconBtn,{ backgroundColor: C.bgCard2 }]} hitSlop={8}>
+          <Pressable onPress={onEdit} style={[pc.iconBtn,{ backgroundColor: C.bgCard2, borderColor: C.border }]} hitSlop={8}>
             <Feather name="edit-3" size={14} color={C.textMuted} />
           </Pressable>
         </View>
       </View>
 
       {isPrimary ? (
-        <View style={[pc.activeRow,{ borderTopColor: C.border }]}>
+        <View style={[pc.activeRow,{ backgroundColor: C.isDark ? "rgba(0,168,107,0.08)" : "rgba(0,168,107,0.06)" }]}>
           <Feather name="check-circle" size={11} color="#00a86b" />
           <Text style={[pc.activeText,{ color: C.textMuted }]}>Active — sab calculations is chart se</Text>
         </View>
       ) : (
-        <Pressable onPress={onSetPrimary} style={[pc.setPrimaryBtn,{ borderTopColor: C.border }]}>
-          <Feather name="star" size={11} color="#f59e0b" />
+        <Pressable onPress={onSetPrimary} style={[pc.setPrimaryBtn,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.05)", borderColor: C.isDark ? "rgba(245,158,11,0.18)" : "rgba(124,58,237,0.18)" }]}>
+          <Feather name="star" size={11} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
           <Text style={[pc.setPrimaryText,{ color: C.textMuted }]}>Set as Primary — This chart will show on home screen</Text>
         </Pressable>
       )}
@@ -626,37 +631,35 @@ export default function ProfileScreen() {
 
         {/* ── USER HEADER ──────────────────────────────────────────────── */}
         <LinearGradient
-          colors={C.isDark ? ["#040e20","#071525"] : [C.bgCard, C.bgCard2]}
+          colors={C.isDark ? ["#040e20","#071525"] : ["#F8F7FC","#F0EDF8"]}
           style={[s.header,{ borderColor: C.border }]}
         >
-          {/* Background star pattern */}
-          <Text style={s.headerBgStar}>✦</Text>
-          <Text style={[s.headerBgStar, { right:30, top:12, fontSize:14, opacity:0.04 }]}>✦</Text>
+          <Text style={[s.headerBgStar, { color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>✦</Text>
+          <Text style={[s.headerBgStar, { right:30, top:12, fontSize:14, opacity:0.04, color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>✦</Text>
 
-          <LinearGradient colors={["#0ea5e9","#f59e0b"]} style={s.headerAvatar}>
+          <LinearGradient colors={C.isDark ? ["#0ea5e9","#f59e0b"] : ["#7C3AED","#a78bfa"]} style={s.headerAvatar}>
             <Text style={s.headerInitials}>{initials}</Text>
           </LinearGradient>
 
           <View style={{ alignItems:"center", gap:4 }}>
             <Text style={[s.headerName,{ color: C.text }]}>{primaryProfile?.name ?? "User"}</Text>
-            <Text style={[s.headerSub,{ color: C.textMuted }]}>
+            <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>
               {profiles.length} profile{profiles.length!==1?"s":""} · {primaryProfile?.birthData.place ?? ""}
             </Text>
           </View>
 
-          {/* Free plan badge */}
           <View style={[s.planBadge,{ backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Feather name="circle" size={9} color={C.textMuted} />
-            <Text style={[s.planBadgeText,{ color: C.textMuted }]}>FREE PLAN</Text>
+            <Text style={{ color: C.textMuted, fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1 }}>FREE PLAN</Text>
             <View style={[s.planDivider,{ backgroundColor: C.border }]} />
-            <Text style={s.planUpgrade}>Upgrade Now →</Text>
+            <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 10, fontFamily: F.semibold }}>Upgrade Now →</Text>
           </View>
         </LinearGradient>
 
         {/* ── MY PROFILES ─────────────────────────────────────────────── */}
         <View>
           <View style={s.sectionRow}>
-            <Text style={[s.sectionLabel,{ color: C.textMuted }]}>{t.myProfiles.toUpperCase()}</Text>
+            <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.myProfiles.toUpperCase()}</Text>
             <Text style={[s.sectionCount, { color: C.textMuted }]}>{profiles.length}/1</Text>
           </View>
 
@@ -679,27 +682,38 @@ export default function ProfileScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowRelationPick(true);
               }}
-              style={({ pressed }) => [s.addBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [{
+                flexDirection: "row" as const, alignItems: "center" as const, gap: 12,
+                padding: 14, borderRadius: 14,
+                backgroundColor: C.isDark ? "rgba(245,158,11,0.03)" : "rgba(124,58,237,0.04)",
+                borderWidth: 1, borderColor: C.isDark ? "rgba(245,158,11,0.14)" : "rgba(124,58,237,0.18)",
+              }, pressed && { opacity: 0.7 }]}
             >
-              <View style={[s.addCircle,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : C.warningBg }]}>
-                <Feather name="users" size={15} color={C.isDark ? "#f59e0b" : "#92400E"} />
+              <View style={{
+                width: 34, height: 34, borderRadius: 17,
+                borderWidth: 1,
+                borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.25)",
+                backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.08)",
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Feather name="users" size={15} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: C.isDark ? "#f59e0b" : "#92400E", fontSize: 13, fontFamily: F.semibold }}>
+                <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>
                   {t.addFamilyMember}
                 </Text>
-                <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
+                <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>
                   Son, Daughter, Spouse, Parents, Friend & more
                 </Text>
               </View>
-              <Feather name="chevron-right" size={14} color={C.textDim} />
+              <Feather name="chevron-right" size={14} color={C.textMuted} />
             </Pressable>
           </View>
         </View>
 
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>{t.settings.toUpperCase()}</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.settings.toUpperCase()}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
 
             <SettingRow
@@ -722,7 +736,7 @@ export default function ProfileScreen() {
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: C.isDark ? "#f59e0b" : "#92400E", fontSize:13, fontFamily:F.semibold }}>
+                    <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize:13, fontFamily:F.semibold }}>
                       {ALL_LANG_META.find(l=>l.code===language)?.native ?? "English"}
                     </Text>
                     <Text style={{ color:C.textMuted, fontSize:10, fontFamily:F.medium }}>
@@ -740,7 +754,7 @@ export default function ProfileScreen() {
 
         {/* ── SUPPORT ──────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>SUPPORT & ABOUT</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>SUPPORT & ABOUT</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="message-circle"
@@ -773,7 +787,7 @@ export default function ProfileScreen() {
 
         {/* ── MY DATA ──────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>MY DATA</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>MY DATA</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="book-open"
@@ -792,7 +806,7 @@ export default function ProfileScreen() {
 
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
         <View style={s.bottomSection}>
-          <Text style={[s.versionText,{ color: C.textDim }]}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
+          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
 
           <Pressable
             onPress={() => {
@@ -851,7 +865,7 @@ const s = StyleSheet.create({
   planUpgrade:   { color:"#f59e0b", fontSize:10, fontFamily:F.semibold },
 
   sectionRow: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:12 },
-  sectionLabel: { color:"#f59e0b", fontSize:10, fontFamily:F.bold, letterSpacing:2.2 },
+  sectionLabel: { fontSize:10, fontFamily:F.bold, letterSpacing:2.2 },
   sectionCount: { color:"#1e3a5f", fontSize:10, fontFamily:F.medium },
   sectionAction:{ color:"#f59e0b", fontSize:10, fontFamily:F.semibold },
 

@@ -21,7 +21,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE } from "@/lib/apiConfig";
 
 type Method = "mobile" | "email";
 type EmailTab = "login" | "signup";

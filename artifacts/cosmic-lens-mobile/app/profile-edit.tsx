@@ -16,7 +16,7 @@ import { useUser } from "@/context/UserContext";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
 
-const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+import { API_BASE as BASE_URL } from "@/lib/apiConfig";
 
 const F = {
   regular:  "Nunito_400Regular",

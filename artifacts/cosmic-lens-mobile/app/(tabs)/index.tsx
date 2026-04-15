@@ -36,9 +36,7 @@ const N = 12;
 const DEMO_PTS    = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
 const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
 
-const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
+import { API_BASE as BASE_URL } from "@/lib/apiConfig";
 
 function energyInsight(energy: number): { icon: string; text: string; color: string } {
   if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today",  color: "#22c55e" };

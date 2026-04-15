@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { API_BASE } from "@/lib/apiConfig";
 
 // ── Nakshatra / Rashi Data ────────────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ export default function KundliMilanScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const { kundli: p1Kundli, profiles, primaryProfileId } = useUser();
-  const apiBase = process.env.EXPO_PUBLIC_API_BASE_URL ?? "";
+  const apiBase = API_BASE;
 
   const p1Profile = profiles.find(p => p.id === primaryProfileId);
 

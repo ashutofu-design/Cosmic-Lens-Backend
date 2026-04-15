@@ -1,8 +1,6 @@
 import type { BirthData, KundliData } from "@/types";
 
-const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-  : "";
+import { API_BASE as BASE_URL } from "./apiConfig";
 
 async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<KundliData> {
   const ctrl  = new AbortController();

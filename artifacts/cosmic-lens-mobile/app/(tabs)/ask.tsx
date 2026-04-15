@@ -20,7 +20,7 @@ import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { router } from "expo-router";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
+import { API_BASE } from "@/lib/apiConfig";
 
 interface Message {
   id: string;

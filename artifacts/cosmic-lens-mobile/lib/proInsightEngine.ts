@@ -1,5 +1,6 @@
 // ─── Minimal Active Dasha engine for Home card ───────────────────────────────
 // Ported from web app proInsightEngine.ts — only what the Home card needs.
+import { API_BASE as API_BASE_ENGINE } from "./apiConfig";
 
 export type Trend = "UP" | "DOWN" | "MIXED";
 
@@ -311,7 +312,6 @@ export function computeProInsight(kundli: any, moonLon: number): ProInsight | nu
 }
 
 const MON_ABR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const API_BASE_ENGINE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
 
 interface TransitPositions { [planet: string]: number }
 const TRANSIT_BEN = new Set(["Jupiter","Venus"]);

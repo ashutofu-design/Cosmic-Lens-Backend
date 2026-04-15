@@ -16,7 +16,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
+import { API_BASE } from "@/lib/apiConfig";
 
 const DAY_NAMES = ["Aaditya (Sun)", "Soma (Mon)", "Mangal (Tue)", "Budh (Wed)", "Guru (Thu)", "Shukra (Fri)", "Shani (Sat)"];
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

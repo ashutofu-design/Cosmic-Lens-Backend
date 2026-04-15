@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import type { UILang } from "@/lib/i18n";
+import { API_BASE } from "@/lib/apiConfig";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
 export interface ProfileEntry {
@@ -81,8 +82,6 @@ function isIndiaPlace(place: string) {
   const lower = (place ?? "").toLowerCase();
   return lower.includes("india") || lower.includes(", in") || lower.endsWith(",in");
 }
-
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function UserProvider({ children }: { children: React.ReactNode }) {

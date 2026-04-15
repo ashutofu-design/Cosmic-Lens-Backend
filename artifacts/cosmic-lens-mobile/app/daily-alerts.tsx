@@ -27,7 +27,7 @@ const F = {
   regular:  "Nunito_400Regular",
 };
 
-const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
+import { API_BASE } from "@/lib/apiConfig";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface DayAlert {

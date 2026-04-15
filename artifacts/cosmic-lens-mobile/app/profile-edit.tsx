@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text,
   TextInput, View,
 } from "react-native";
@@ -165,7 +165,16 @@ export default function ProfileEditScreen() {
   const [hourOpen,  setHourOpen]  = useState(false);
   const [minOpen,   setMinOpen]   = useState(false);
 
-  const nameRef = useRef<TextInput>(null);
+  const nameRef  = useRef<TextInput>(null);
+  const btnScale = useRef(new Animated.Value(1)).current;
+
+  function onBtnPressIn() {
+    Animated.spring(btnScale, { toValue: 0.965, useNativeDriver: true, speed: 40, bounciness: 0 }).start();
+  }
+  function onBtnPressOut() {
+    Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 28, bounciness: 4 }).start();
+  }
+
   const set = (key: keyof FormState) => (val: string) =>
     setF(prev => ({ ...prev, [key]: val }));
 
@@ -472,24 +481,28 @@ export default function ProfileEditScreen() {
           paddingBottom: insets.bottom + 10,
           borderTopColor: C.isDark ? C.border : "rgba(0,0,0,0.06)",
         }]}>
-          <Pressable
-            onPress={handleSave}
-            disabled={saving}
-            style={({ pressed }) => [{ opacity: saving ? 0.65 : pressed ? 0.88 : 1 }]}
-          >
-            <LinearGradient
-              colors={isNetworkError ? ["#DC2626", "#B91C1C"] : ["#FF7A00", "#FF3D00"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={[s.saveBtn, { shadowColor: isNetworkError ? "#DC2626" : "#FF7A00" }]}
+          <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+            <Pressable
+              onPress={handleSave}
+              onPressIn={onBtnPressIn}
+              onPressOut={onBtnPressOut}
+              disabled={saving}
+              style={{ opacity: saving ? 0.65 : 1 }}
             >
-              {saving
-                ? <ActivityIndicator color="#fff" />
-                : isNetworkError
-                ? <><Feather name="refresh-cw" size={15} color="#fff" /><Text style={s.saveTxt}>Try Again</Text></>
-                : <><Feather name={isEdit ? "check" : "user-plus"} size={15} color="#fff" /><Text style={s.saveTxt}>{isEdit ? "Save Changes" : "Create Profile"}</Text></>
-              }
-            </LinearGradient>
-          </Pressable>
+              <LinearGradient
+                colors={isNetworkError ? ["#DC2626", "#B91C1C"] : ["#FF7A00", "#FF3D00"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={[s.saveBtn, { shadowColor: isNetworkError ? "#DC2626" : "#FF7A00" }]}
+              >
+                {saving
+                  ? <ActivityIndicator color="#fff" />
+                  : isNetworkError
+                  ? <><Feather name="refresh-cw" size={15} color="#fff" /><Text style={s.saveTxt}>Try Again</Text></>
+                  : <><Feather name={isEdit ? "check" : "user-plus"} size={15} color="#fff" /><Text style={s.saveTxt}>{isEdit ? "Save Changes" : "Create Profile"}</Text></>
+                }
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
         </View>
 
       </KeyboardAvoidingView>

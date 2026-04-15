@@ -59,5 +59,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── Step 3: Start Expo with ngrok tunnel (clears cache so new domain bakes in)
-pnpm exec expo start --tunnel --clear --port "${PORT:-18987}" 2>&1 | tee -a "$LOG_FILE"
+# ── Step 3: Start Expo with ngrok tunnel — retry up to 5 times on blip ───────
+MAX_RETRIES=5
+ATTEMPT=0
+EXPO_EXIT=0
+while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+  ATTEMPT=$((ATTEMPT + 1))
+  echo "[tunnel] Starting Expo Metro (attempt $ATTEMPT / $MAX_RETRIES)..."
+  ITER_LOG="/tmp/expo-iter-${ATTEMPT}.log"
+  > "$ITER_LOG"
+  pnpm exec expo start --tunnel --clear --port "${PORT:-18987}" 2>&1 | tee -a "$LOG_FILE" "$ITER_LOG"
+  EXPO_EXIT=${PIPESTATUS[0]}
+
+  # If the log contains the ngrok body error, retry; otherwise exit
+  if grep -q "ngrok" "$ITER_LOG" 2>/dev/null && grep -q "Cannot read" "$ITER_LOG" 2>/dev/null; then
+    echo "[tunnel] ngrok transient error — retrying in 6s..."
+    pkill -f "ngrok" 2>/dev/null || true
+    sleep 6
+  else
+    exit $EXPO_EXIT
+  fi
+done
+exit $EXPO_EXIT

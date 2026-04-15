@@ -302,9 +302,9 @@ function ProInsightsPanel(){
     return(
       <View style={{flexDirection:"row",alignItems:"center",gap:8,marginTop:4}}>
         <Text style={{fontSize:14}}>{icon}</Text>
-        <Text style={{color:C.isDark?"rgba(196,181,253,0.9)":"#4C1D95",fontSize:10,
+        <Text style={{color:C.isDark?"rgba(196,181,253,0.9)":"#3B0764",fontSize:10,
           fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>{label}</Text>
-        <View style={{flex:1,height:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(109,93,246,0.25)"}}/>
+        <View style={{flex:1,height:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(109,40,217,0.45)"}}/>
       </View>
     );
   }
@@ -312,29 +312,30 @@ function ProInsightsPanel(){
   function BigCard({icon,title,desc,col,badge,idx}:{icon:string;title:string;desc:string;col:string;badge:"most"|"critical"|"decision";idx:number}){
     return(
       <Animated.View style={av(idx)}>
-        <View style={{borderRadius:16,borderWidth:1,
-          borderColor:C.isDark?`${col}35`:C.border2,
+        <View style={{borderRadius:16,borderWidth:1.5,
+          borderColor:C.isDark?`${col}35`:`${col}55`,
           padding:16,gap:10,
           backgroundColor:C.isDark?"rgba(255,255,255,0.04)":C.bgCard,
-          shadowColor:C.isDark?col:"#00000018",
-          shadowOffset:{width:0,height:C.isDark?0:2},
-          shadowOpacity:C.isDark?0.22:1,shadowRadius:C.isDark?14:8,elevation:C.isDark?5:2}}>
+          shadowColor:col,
+          shadowOffset:{width:0,height:C.isDark?0:3},
+          shadowOpacity:C.isDark?0.22:0.18,shadowRadius:C.isDark?14:10,elevation:C.isDark?5:3}}>
           <PipBadge type={badge}/>
           <View style={{flexDirection:"row",alignItems:"flex-start",gap:12}}>
             <View style={{width:44,height:44,borderRadius:13,
-              backgroundColor:C.isDark?`${col}18`:`${col}15`,
-              alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              backgroundColor:C.isDark?`${col}18`:`${col}25`,
+              alignItems:"center",justifyContent:"center",flexShrink:0,
+              borderWidth:C.isDark?0:1,borderColor:`${col}40`}}>
               <Text style={{fontSize:22}}>{icon}</Text>
             </View>
             <View style={{flex:1,gap:4}}>
               <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold",lineHeight:20}}>{title}</Text>
-              <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",lineHeight:16}}>{desc}</Text>
+              <Text style={{color:C.isDark?C.textMuted:"#374151",fontSize:11,fontFamily:"Nunito_500Medium",lineHeight:16}}>{desc}</Text>
             </View>
           </View>
-          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":C.border}}/>
+          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":`${col}30`}}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
             <View style={{width:6,height:6,borderRadius:3,backgroundColor:col}}/>
-            <Text style={{color:C.isDark?`${col}CC`:C.textMuted,fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
+            <Text style={{color:C.isDark?`${col}CC`:col,fontSize:9,fontFamily:"Nunito_700Bold"}}>
               Calculated live with your kundli data
             </Text>
           </View>
@@ -348,19 +349,19 @@ function ProInsightsPanel(){
       return(
         <Animated.View style={av(idx)}>
           <View style={{borderRadius:14,borderWidth:1,borderStyle:"dashed" as any,
-            borderColor:"rgba(139,92,246,0.35)",padding:13,gap:6,
-            backgroundColor:C.isDark?"rgba(20,5,40,0.7)":"rgba(237,233,254,0.6)"}}>
+            borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.5)",padding:13,gap:6,
+            backgroundColor:C.isDark?"rgba(20,5,40,0.7)":"rgba(237,233,254,0.92)"}}>
             <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
-              <View style={{width:36,height:36,borderRadius:10,backgroundColor:"rgba(139,92,246,0.12)",
-                alignItems:"center",justifyContent:"center",opacity:0.6}}>
+              <View style={{width:36,height:36,borderRadius:10,backgroundColor:C.isDark?"rgba(139,92,246,0.12)":"rgba(109,40,217,0.18)",
+                alignItems:"center",justifyContent:"center",opacity:C.isDark?0.6:1}}>
                 <Text style={{fontSize:18}}>{icon}</Text>
               </View>
               <View style={{flex:1,gap:3}}>
-                <Text style={{color:C.isDark?"rgba(196,181,253,0.65)":"#6d28d9",fontSize:12,
+                <Text style={{color:C.isDark?"rgba(196,181,253,0.65)":"#4C1D95",fontSize:12,
                   fontFamily:"Nunito_700Bold"}}>{title}</Text>
                 <View style={{flexDirection:"row",alignItems:"center",gap:4}}>
-                  <Feather name="lock" size={9} color={C.isDark?"#a78bfa":"#6D5DF6"}/>
-                  <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Unlock to reveal hidden truths</Text>
+                  <Feather name="lock" size={9} color={C.isDark?"#a78bfa":"#5B21B6"}/>
+                  <Text style={{color:C.isDark?"#a78bfa":"#5B21B6",fontSize:9,fontFamily:"Nunito_700Bold"}}>Unlock to reveal hidden truths</Text>
                 </View>
               </View>
             </View>
@@ -376,22 +377,23 @@ function ProInsightsPanel(){
     }
     return(
       <Animated.View style={av(idx)}>
-        <View style={{borderRadius:14,borderWidth:1,
-          borderColor:C.isDark?`${col}28`:C.border,
+        <View style={{borderRadius:14,borderWidth:1.5,
+          borderColor:C.isDark?`${col}28`:`${col}50`,
           padding:13,gap:6,
           backgroundColor:C.isDark?"rgba(255,255,255,0.035)":C.bgCard,
-          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
-          shadowOpacity:C.isDark?0:0.06,shadowRadius:4,elevation:C.isDark?0:1}}>
+          shadowColor:col,shadowOffset:{width:0,height:C.isDark?0:2},
+          shadowOpacity:C.isDark?0:0.14,shadowRadius:6,elevation:C.isDark?0:2}}>
           <View style={{flexDirection:"row",alignItems:"flex-start",gap:10}}>
             <View style={{width:36,height:36,borderRadius:10,
-              backgroundColor:C.isDark?`${col}18`:`${col}15`,
-              alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              backgroundColor:C.isDark?`${col}18`:`${col}25`,
+              alignItems:"center",justifyContent:"center",flexShrink:0,
+              borderWidth:C.isDark?0:1,borderColor:`${col}40`}}>
               <Text style={{fontSize:18}}>{icon}</Text>
             </View>
             <View style={{flex:1,gap:4}}>
               {badge&&<PipBadge type={badge}/>}
               <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",lineHeight:17}}>{title}</Text>
-              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:14}}>{desc}</Text>
+              <Text style={{color:C.isDark?C.textMuted:"#374151",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>{desc}</Text>
             </View>
           </View>
         </View>
@@ -402,18 +404,18 @@ function ProInsightsPanel(){
   function FutureCard({icon,label,col,idx}:{icon:string;label:string;col:string;idx:number}){
     return(
       <Animated.View style={[{width:"47%"},av(idx)]}>
-        <View style={{borderRadius:13,borderWidth:1,
-          borderColor:C.isDark?`${col}28`:C.border,
+        <View style={{borderRadius:13,borderWidth:1.5,
+          borderColor:C.isDark?`${col}28`:`${col}55`,
           padding:12,gap:5,
           backgroundColor:C.isDark?"rgba(255,255,255,0.035)":C.bgCard,
-          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
-          shadowOpacity:C.isDark?0:0.05,shadowRadius:3,elevation:C.isDark?0:1,
+          shadowColor:col,shadowOffset:{width:0,height:C.isDark?0:2},
+          shadowOpacity:C.isDark?0:0.15,shadowRadius:5,elevation:C.isDark?0:2,
           alignItems:"center"}}>
           <Text style={{fontSize:22}}>{icon}</Text>
           <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:15}}>{label}</Text>
-          <View style={{backgroundColor:C.isDark?`${col}18`:`${col}20`,borderRadius:8,
+          <View style={{backgroundColor:C.isDark?`${col}18`:`${col}30`,borderRadius:8,
             paddingHorizontal:8,paddingVertical:3,
-            borderWidth:1,borderColor:C.isDark?`${col}30`:`${col}50`}}>
+            borderWidth:1,borderColor:C.isDark?`${col}30`:`${col}70`}}>
             <Text style={{color:C.isDark?col:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>ON CALCULATE</Text>
           </View>
         </View>
@@ -424,21 +426,21 @@ function ProInsightsPanel(){
   function HiddenCard({icon,title,desc,idx}:{icon:string;title:string;desc:string;idx:number}){
     return(
       <Animated.View style={[{width:"47%"},av(idx)]}>
-        <View style={{borderRadius:13,borderWidth:1,borderStyle:"dashed" as any,
-          borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,93,246,0.5)",
+        <View style={{borderRadius:13,borderWidth:1.5,borderStyle:"dashed" as any,
+          borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.55)",
           padding:12,gap:5,
-          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"#F5F3FF",alignItems:"center",
-          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
-          shadowOpacity:C.isDark?0:0.05,shadowRadius:3,elevation:C.isDark?0:1}}>
+          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"#EDE9FE",alignItems:"center",
+          shadowColor:"#7c3aed",shadowOffset:{width:0,height:C.isDark?0:2},
+          shadowOpacity:C.isDark?0:0.12,shadowRadius:5,elevation:C.isDark?0:2}}>
           <View style={{width:36,height:36,borderRadius:10,
-            backgroundColor:C.isDark?"rgba(192,132,252,0.12)":"rgba(109,93,246,0.12)",
-            alignItems:"center",justifyContent:"center",opacity:0.8}}>
+            backgroundColor:C.isDark?"rgba(192,132,252,0.12)":"rgba(109,40,217,0.2)",
+            alignItems:"center",justifyContent:"center"}}>
             <Text style={{fontSize:18}}>{icon}</Text>
           </View>
           <PipBadge type="secret"/>
-          <Text style={{color:C.isDark?"rgba(240,171,252,0.7)":"#5B21B6",fontSize:10,
+          <Text style={{color:C.isDark?"rgba(240,171,252,0.7)":"#3B0764",fontSize:10,
             fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:14}}>{title}</Text>
-          <Text style={{color:C.isDark?C.textDim:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:13}}>{desc}</Text>
+          <Text style={{color:C.isDark?C.textDim:"#5B21B6",fontSize:9,fontFamily:"Nunito_500Medium",textAlign:"center",lineHeight:13}}>{desc}</Text>
         </View>
       </Animated.View>
     );
@@ -450,10 +452,10 @@ function ProInsightsPanel(){
       {/* ══ 0 ══ HERO ══════════════════════════════════════════════════════════ */}
       <Animated.View style={av(0)}>
         <LinearGradient
-          colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#f5f3ff","#ede9fe","#faf5ff"]}
+          colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#DDD6FE","#C4B5FD","#EDE9FE"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:18,padding:14,borderWidth:1,borderColor:"rgba(139,92,246,0.35)",
-            shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:0.25,shadowRadius:14,elevation:8}}>
+          style={{borderRadius:18,padding:14,borderWidth:1.5,borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.5)",
+            shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:C.isDark?0.25:0.18,shadowRadius:14,elevation:8}}>
           {/* Title row */}
           <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:6}}>
             <Text style={{fontSize:22}}>⚡</Text>
@@ -471,12 +473,12 @@ function ProInsightsPanel(){
           {/* Inline stats — replaces boxed grid */}
           <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:6,
             paddingVertical:6,borderTopWidth:1,borderBottomWidth:1,
-            borderColor:"rgba(139,92,246,0.15)",marginBottom:10}}>
+            borderColor:C.isDark?"rgba(139,92,246,0.15)":"rgba(109,40,217,0.4)",marginBottom:10}}>
             {[["36","Points"],["12","Insights"],["8","Checks"]].map(([n,l],i)=>(
               <View key={l} style={{flexDirection:"row",alignItems:"center",gap:i<2?6:0}}>
-                <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:13,fontFamily:"Nunito_700Bold"}}>{n} </Text>
-                <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{l}</Text>
-                {i<2&&<Text style={{color:C.isDark?"rgba(139,92,246,0.3)":"rgba(109,93,246,0.3)",fontSize:13,marginLeft:6}}>•</Text>}
+                <Text style={{color:C.isDark?"#a78bfa":"#4C1D95",fontSize:13,fontFamily:"Nunito_700Bold"}}>{n} </Text>
+                <Text style={{color:C.isDark?C.textMuted:"#5B21B6",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{l}</Text>
+                {i<2&&<Text style={{color:C.isDark?"rgba(139,92,246,0.3)":"rgba(109,40,217,0.5)",fontSize:13,marginLeft:6}}>•</Text>}
               </View>
             ))}
           </View>
@@ -484,12 +486,12 @@ function ProInsightsPanel(){
           {/* Compact progress bar */}
           <View style={{gap:5}}>
             <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}>
-              <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
+              <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#4C1D95",fontSize:10,fontFamily:"Nunito_700Bold"}}>
                 Compatibility Score
               </Text>
-              <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:12,fontFamily:"Nunito_700Bold"}}>72%</Text>
+              <Text style={{color:C.isDark?"#a78bfa":"#3B0764",fontSize:12,fontFamily:"Nunito_700Bold"}}>72%</Text>
             </View>
-            <View style={{height:6,borderRadius:3,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(109,93,246,0.1)",overflow:"hidden"}}>
+            <View style={{height:6,borderRadius:3,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(109,40,217,0.2)",overflow:"hidden"}}>
               <LinearGradient colors={["#6366f1","#8B5CF6","#6D5DF6"]}
                 start={{x:0,y:0}} end={{x:1,y:0}}
                 style={{width:"72%",height:"100%",borderRadius:3}}/>
@@ -515,9 +517,9 @@ function ProInsightsPanel(){
       {/* ══ 4 ══ MARRIAGE DECISION CARD (replaces Final Verdict) ══════════════ */}
       <Animated.View style={av(4)}>
         <LinearGradient
-          colors={C.isDark?["rgba(251,191,36,0.12)","rgba(249,115,22,0.08)"]:["rgba(255,249,235,0.95)","rgba(255,247,230,0.9)"]}
+          colors={C.isDark?["rgba(251,191,36,0.12)","rgba(249,115,22,0.08)"]:["#FEF3C7","#FDE68A"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:16,borderWidth:1.5,borderColor:"rgba(251,191,36,0.4)",padding:16,gap:10,
+          style={{borderRadius:16,borderWidth:1.5,borderColor:C.isDark?"rgba(251,191,36,0.4)":"rgba(180,83,9,0.55)",padding:16,gap:10,
             shadowColor:"#fbbf24",shadowOffset:{width:0,height:0},shadowOpacity:0.25,shadowRadius:16,elevation:6}}>
           <PipBadge type="decision"/>
           <View style={{flexDirection:"row",alignItems:"flex-start",gap:12}}>
@@ -604,18 +606,18 @@ function ProInsightsPanel(){
 
       {/* ══ 17 ══ SECTION: HIDDEN PREMIUM ════════════════════════════════════ */}
       <Animated.View style={av(17)}>
-        <LinearGradient colors={C.isDark?["rgba(120,40,240,0.22)","rgba(79,7,120,0.14)"]:["rgba(250,245,255,0.95)","rgba(237,233,254,0.8)"]}
+        <LinearGradient colors={C.isDark?["rgba(120,40,240,0.22)","rgba(79,7,120,0.14)"]:["#F3E8FF","#DDD6FE"]}
           start={{x:0,y:0}} end={{x:1,y:0}}
           style={{borderRadius:14,padding:14,borderWidth:1.5,
-            borderColor:"rgba(192,132,252,0.4)",gap:4}}>
+            borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.5)",gap:4}}>
           <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
             <Text style={{fontSize:18}}>⚠️</Text>
-            <Text style={{color:C.isDark?"#f0abfc":"#7e22ce",fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>
+            <Text style={{color:C.isDark?"#f0abfc":"#4C1D95",fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>
               Rare insights even astrologers don't reveal
             </Text>
             <PipBadge type="secret"/>
           </View>
-          <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:15}}>
+          <Text style={{color:C.isDark?C.textMuted:"#5B21B6",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:15}}>
             These 4 insights are hidden from most — unlocked only in Pro with your birth data
           </Text>
         </LinearGradient>

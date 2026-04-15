@@ -58,7 +58,7 @@ function computeDoshas(kundli: KundliData): DoshResult[] {
   // ── 1. Manglik Dosh ──────────────────────────────────────────────────────
   const manglikHouses = [1, 4, 7, 8, 12];
   const isManglik     = manglikHouses.includes(marsH);
-  const isAnshikMangal = marsH === 2; // some traditions include 2nd house
+  const isAnshikMangal = marsH === 2;
   results.push({
     key: "manglik",
     name: "Manglik Dosh",
@@ -118,165 +118,69 @@ function computeDoshas(kundli: KundliData): DoshResult[] {
   // ── 3. Pitra Dosh ─────────────────────────────────────────────────────────
   const pitraConditions = [
     sunH === rahuH,
-    sunH === satH,
-    satH === 9,
-    sunH === 9 && (rahuH === 9 || satH === 9),
+    sunH === ketuH,
+    (sunH === 9 && (rahuH === 9 || ketuH === 9)),
   ];
-  const pitraCount  = pitraConditions.filter(Boolean).length;
-  const pitraSev: Severity = pitraCount >= 2 ? "strong" : pitraCount === 1 ? "present" : "absent";
+  const hasPitra = pitraConditions.some(Boolean);
   results.push({
     key: "pitra",
     name: "Pitra Dosh",
     nameHindi: "पितृ दोष",
-    icon: "🏛️",
-    severity: pitraSev,
-    headline: pitraSev !== "absent"
-      ? `Sun–${sunH === rahuH ? "Rahu" : "Saturn"} conjunction — Pitra Dosh`
-      : "No Pitra Dosh Found",
-    description: pitraSev !== "absent"
-      ? "Pitra Dosh occurs when Sun–Rahu or Sun–Saturn are in the same house. It can block ancestral blessings and cause career and family obstacles."
-      : "No signs of Pitra Dosh in your chart.",
-    remedies: pitraSev !== "absent" ? [
-      "Offer tarpan to ancestors during Pitrupaksh (Shraddh)",
-      "Chant Pitra Gayatri: 'Om Pitrubhyo Namah' 108 times daily",
-      "Perform Shraddh at Gaya ji or Nashik",
-      "Feed Brahmins and offer donations",
+    icon: "👣",
+    severity: hasPitra ? "present" : "absent",
+    headline: hasPitra
+      ? "Sun–Rahu/Ketu Conjunction — Pitra Dosh Present"
+      : "No Pitra Dosh — Ancestors at Peace",
+    description: hasPitra
+      ? "Pitra Dosh forms when Sun conjuncts Rahu or Ketu. It can indicate ancestral karma and require remediation."
+      : "No Pitra Dosh detected. Sun is well-placed and free from Rahu/Ketu conjunction.",
+    remedies: hasPitra ? [
+      "Perform Pitra Tarpan on Amavasya (new moon day)",
+      "Donate food and clothing to brahmins on Pitru Paksha",
+      "Recite Pitru Stotra or Gayatri Mantra 108 times daily",
     ] : [],
-    planetNote: `Sun: House ${sunH} | Saturn: House ${satH} | Rahu: House ${rahuH}`,
+    planetNote: `Sun: House ${sunH} | Rahu: House ${rahuH}`,
   });
 
-  // ── 4. Guru Chandal Dosh ──────────────────────────────────────────────────
-  const isGuruChandal = jupH === rahuH;
-  const isGuruKetu    = jupH === ketuH;
-  results.push({
-    key: "guruchandal",
-    name: "Guru Chandal Dosh",
-    nameHindi: "गुरु चांडाल दोष",
-    icon: "⚡",
-    severity: isGuruChandal ? "present" : isGuruKetu ? "mild" : "absent",
-    headline: isGuruChandal
-      ? `Jupiter–Rahu conjunction in House ${jupH}`
-      : isGuruKetu
-      ? `Jupiter–Ketu conjunction in House ${jupH}`
-      : "No Guru Chandal Dosh",
-    description: isGuruChandal || isGuruKetu
-      ? "The conjunction of Jupiter with Rahu/Ketu weakens Jupiter's positive energy. It may create obstacles in dharma, teaching, and higher education."
-      : "Jupiter is in a separate house — free from Rahu/Ketu. Auspicious placement.",
-    remedies: (isGuruChandal || isGuruKetu) ? [
-      "Recite Vishnu Sahasranama daily",
-      "Worship the Peepal tree for Jupiter (Brihaspati)",
-      "Yellow Sapphire (Pushparagam) can be worn after proper consultation",
-      "Wear Hessonite (Gomed) after ritual consecration for Rahu",
-    ] : [],
-    planetNote: `Jupiter: House ${jupH} | Rahu: House ${rahuH} | Ketu: House ${ketuH}`,
-  });
-
-  // ── 5. Grahan Dosh ────────────────────────────────────────────────────────
-  const isSolarGrahan = (sunH === rahuH || sunH === ketuH);
-  const isLunarGrahan = (moonH === rahuH || moonH === ketuH);
-  const grahanSev: Severity = (isSolarGrahan && isLunarGrahan) ? "strong"
-    : (isSolarGrahan || isLunarGrahan) ? "present" : "absent";
-  results.push({
-    key: "grahan",
-    name: "Grahan Dosh",
-    nameHindi: "ग्रहण दोष",
-    icon: "🌑",
-    severity: grahanSev,
-    headline: grahanSev === "strong"
-      ? "Solar + Lunar Eclipse Dosh — Double Dosh"
-      : isSolarGrahan ? `Solar Eclipse Dosh — Sun in House ${sunH} with Rahu/Ketu`
-      : isLunarGrahan ? `Lunar Eclipse Dosh — Moon in House ${moonH} with Rahu/Ketu`
-      : "No Grahan Dosh",
-    description: grahanSev !== "absent"
-      ? "When Sun or Moon is conjunct Rahu/Ketu, Grahan Dosh forms. It can affect the mind, health, and ancestral connections."
-      : "Sun and Moon are free from Rahu/Ketu — Grahan Dosh absent.",
-    remedies: grahanSev !== "absent" ? [
-      "For Solar Grahan — recite Aditya Hridaya Stotra",
-      "For Lunar Grahan — offer raw milk to Lord Shiva",
-      "Rahu–Ketu mantras: 'Om Rahave Namah' / 'Om Ketave Namah'",
-      "Mantra chanting and charity on eclipse days yields special results",
-    ] : [],
-    planetNote: `Sun: House ${sunH} | Moon: House ${moonH} | Rahu: House ${rahuH} | Ketu: House ${ketuH}`,
-  });
-
-  // ── 6. Kemdrum Dosh ──────────────────────────────────────────────────────
-  const prevH = ((moonH - 2 + 12) % 12) + 1;
-  const nextH = (moonH % 12) + 1;
-  const adjacentPlanets = pl.filter(p =>
-    !["Rahu","Ketu","Moon"].includes(p.name) &&
-    (p.house === prevH || p.house === nextH || p.house === moonH)
-  );
-  const isKemdrum = adjacentPlanets.length === 0;
-  results.push({
-    key: "kemdrum",
-    name: "Kemdrum Dosh",
-    nameHindi: "केमद्रुम दोष",
-    icon: "🌙",
-    severity: isKemdrum ? "present" : "absent",
-    headline: isKemdrum
-      ? `Moon Alone in House ${moonH} — Kemdrum Dosh`
-      : `Planets Near Moon — No Dosh`,
-    description: isKemdrum
-      ? "Kemdrum Dosh occurs when no planet occupies the 2nd or 12th house from the Moon. It can cause emotional loneliness and psychological stress."
-      : "Planets are present near Moon, so Kemdrum Dosh is not formed.",
-    remedies: isKemdrum ? [
-      "Offer water to Lord Shiva and chant Mahamrityunjay mantra on Mondays",
-      "Donate white items (rice, milk, sugar) for Moon",
-      "Wear Moonstone or Pearl after proper consecration",
-      "Observe the Moon at night and chant 'Om Chandraya Namah' 108 times",
-    ] : [],
-    planetNote: `Moon: House ${moonH}`,
-  });
-
-  // ── 7. Gand Mool Dosh ─────────────────────────────────────────────────────
-  const nakshatra    = kundli.nakshatra ?? "";
-  const isGandMool   = GANDMOOL_NAKSHATRAS.includes(nakshatra);
-  const nakIdx       = NAKSHATRAS.indexOf(nakshatra);
-  const isFirstPada  = kundli.nakshatraPada === 1;
-  const isLastPada   = kundli.nakshatraPada === 4;
-  const gmSev: Severity = isGandMool && (isFirstPada || isLastPada) ? "strong"
-    : isGandMool ? "present" : "absent";
+  // ── 4. Gandmool Dosh ──────────────────────────────────────────────────────
+  const moonNak = kundli.nakshatra;
+  const isGandmool = GANDMOOL_NAKSHATRAS.includes(moonNak);
   results.push({
     key: "gandmool",
-    name: "Gand Mool Dosh",
-    nameHindi: "गंड मूल दोष",
-    icon: "⭕",
-    severity: gmSev,
-    headline: isGandMool
-      ? `${nakshatra} Nakshatra — Gand Mool (Pada ${kundli.nakshatraPada})`
-      : `${nakshatra || "Nakshatra"} — No Gand Mool Dosh`,
-    description: isGandMool
-      ? "Gand Mool Dosh occurs when Moon is in one of 6 special nakshatras: Ashwini, Ashlesha, Magha, Jyeshtha, Mula, Revati. A Shanti Puja is recommended."
-      : "Your nakshatra is auspicious — not in the Gand Mool group.",
-    remedies: isGandMool ? [
-      "Perform Gand Mool Shanti Puja (27 days after birth or at any convenient time)",
-      "Worship the ruling planet of your nakshatra",
-      "Feed Brahmins and offer dakshina on Guru Poornima",
-      `Pray to the deity of ${nakshatra} nakshatra`,
+    name: "Gandmool Dosh",
+    nameHindi: "गंडमूल दोष",
+    icon: "🌑",
+    severity: isGandmool ? "mild" : "absent",
+    headline: isGandmool
+      ? `Moon in ${moonNak} — Gandmool Nakshatra`
+      : `Moon in ${moonNak} — No Gandmool Dosh`,
+    description: isGandmool
+      ? "Gandmool Dosh occurs when Moon is in Ashwini, Ashlesha, Magha, Jyeshtha, Mula, or Revati nakshatras."
+      : "Moon is in a safe nakshatra. No Gandmool Dosh present.",
+    remedies: isGandmool ? [
+      "Perform Gandmool Shanti Pooja on the 27th day after birth",
+      "Recite Chandra Mantra daily: Om Shram Shreem Shraum Sah Chandraya Namah",
     ] : [],
-    planetNote: `Nakshatra: ${nakshatra || "Unavailable"} | Pada: ${kundli.nakshatraPada ?? "?"}`,
+    planetNote: `Moon Nakshatra: ${moonNak}`,
   });
 
-  // ── 8. Shani Dosh ─────────────────────────────────────────────────────────
-  const satSign   = pl.find(p => p.name === "Saturn")?.sign ?? "";
-  const isSatDebil = satSign === "Mesh"; // Saturn debilitated in Aries
-  const satInKendra = [1,4,7,10].includes(satH);
+  // ── 5. Shani Dosh ─────────────────────────────────────────────────────────
   const satRetrograde = pl.find(p => p.name === "Saturn")?.retrograde ?? false;
-  const shaniSev: Severity = (isSatDebil || (satInKendra && satRetrograde)) ? "present"
-    : satRetrograde ? "mild" : "absent";
+  const satSign = pl.find(p => p.name === "Saturn")?.sign ?? "";
+  const shaniSev: Severity = [1, 4, 7, 8].includes(satH) ? "present"
+    : satRetrograde ? "mild"
+    : "absent";
   results.push({
     key: "shani",
     name: "Shani Dosh",
     nameHindi: "शनि दोष",
-    icon: "⏳",
+    icon: "😶‍🌫️",
     severity: shaniSev,
-    headline: isSatDebil
-      ? `Saturn Debilitated (${satSign}) — Shani Dosh`
-      : satRetrograde
-      ? `Saturn Retrograde in House ${satH}`
-      : `Saturn in House ${satH} — Normal Position`,
+    headline: shaniSev !== "absent"
+      ? `Saturn in ${satH}th House${satRetrograde ? " (Retrograde)" : ""} — Shani Dosh`
+      : `Saturn in ${satH}th House — No Shani Dosh`,
     description: shaniSev !== "absent"
-      ? "Saturn in debilitation or retrograde creates Shani Dosh. It may cause career delays, obstacles at work, and potential health issues."
+      ? "Saturn in malefic houses or retrograde can create obstacles, delays, and karmic lessons."
       : "Saturn is well-placed. No Shani Dosh present.",
     remedies: shaniSev !== "absent" ? [
       "Light an oil lamp at a Shani temple on Saturdays",
@@ -291,11 +195,11 @@ function computeDoshas(kundli: KundliData): DoshResult[] {
 }
 
 // ── Severity config ───────────────────────────────────────────────────────────
-const SEV_CONFIG: Record<Severity, { color: string; bg: string; label: string }> = {
-  absent:  { color: "#22c55e", bg: "rgba(34,197,94,0.1)",    label: "Not Present" },
-  mild:    { color: "#fbbf24", bg: "rgba(251,191,36,0.1)",   label: "Mild"        },
-  present: { color: "#f97316", bg: "rgba(249,115,22,0.1)",   label: "Present"     },
-  strong:  { color: "#ef4444", bg: "rgba(239,68,68,0.12)",   label: "Strong"      },
+const SEV_CONFIG: Record<Severity, { color: string; bg: string; label: string; dots: number }> = {
+  absent:  { color: "#22c55e", bg: "rgba(34,197,94,0.1)",    label: "Clear",   dots: 0 },
+  mild:    { color: "#fbbf24", bg: "rgba(251,191,36,0.1)",   label: "Mild",    dots: 2 },
+  present: { color: "#f97316", bg: "rgba(249,115,22,0.1)",   label: "Present", dots: 3 },
+  strong:  { color: "#ef4444", bg: "rgba(239,68,68,0.12)",   label: "Strong",  dots: 4 },
 };
 
 // ── Demo Dosh (when no kundli) ────────────────────────────────────────────────
@@ -397,143 +301,117 @@ export default function DoshScreen() {
   const strongCount  = doshas.filter(d => d.severity === "strong").length;
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+    <ScrollView
+      style={[d.root, { backgroundColor: C.bg }]}
+      contentContainerStyle={{ paddingBottom: botPad + 20 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Header ── */}
+      <View style={[d.header, { paddingTop: topPad, borderBottomColor: C.border }]}>
+        <Pressable style={d.backBtn} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.title, { color: C.text }]}>Dosh Analysis</Text>
-          <Text style={[s.titleHindi, { color: C.textMuted }]}>ग्रह दोष विश्लेषण</Text>
+          <Text style={[d.title, { color: C.text }]}>Dosh Analysis</Text>
+          <Text style={[d.subtitle, { color: C.textMuted }]}>दोष विश्लेषण</Text>
         </View>
         {showDemo && (
-          <View style={s.demoPill}>
-            <Text style={s.demoPillText}>Demo</Text>
+          <View style={[d.demoBadge, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            <Text style={[d.demoBadgeText, { color: C.textMuted }]}>Demo</Text>
           </View>
         )}
       </View>
 
-      <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Demo banner */}
-        {showDemo && (
-          <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
-            <Feather name="lock" size={12} color={C.warningText} />
-            <Text style={[s.demoText, { color: C.warningText }]}>Apni kundli banao — exact dosh calculation ke liye</Text>
-            <Feather name="chevron-right" size={12} color={C.warningText} />
-          </Pressable>
-        )}
-
-        {/* Summary bar */}
-        <View style={s.summaryRow}>
-          <View style={[s.summaryChip, { borderColor: "rgba(239,68,68,0.3)", backgroundColor: C.isDark ? "rgba(239,68,68,0.08)" : "#FEE2E2" }]}>
-            <Text style={[s.summaryNum, { color: "#ef4444" }]}>{presentCount}</Text>
-            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Doshas Mili</Text>
-          </View>
-          <View style={[s.summaryChip, { borderColor: "rgba(249,115,22,0.3)", backgroundColor: C.isDark ? "rgba(249,115,22,0.08)" : "#FFF7ED" }]}>
-            <Text style={[s.summaryNum, { color: C.isDark ? "#f97316" : "#C2410C" }]}>{strongCount}</Text>
-            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Poorn Dosh</Text>
-          </View>
-          <View style={[s.summaryChip, { borderColor: "rgba(34,197,94,0.3)", backgroundColor: C.isDark ? "rgba(34,197,94,0.08)" : "#DCFCE7" }]}>
-            <Text style={[s.summaryNum, { color: "#22c55e" }]}>{doshas.length - presentCount}</Text>
-            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Dosh Mukt</Text>
+      <View style={d.content}>
+        {/* ── Summary ── */}
+        <View style={[d.summaryCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <View style={d.summaryRow}>
+            <View style={d.summaryItem}>
+              <Text style={[d.summaryNum, { color: presentCount > 0 ? "#f97316" : "#22c55e" }]}>{presentCount}</Text>
+              <Text style={[d.summaryLabel, { color: C.textMuted }]}>Doshas Found</Text>
+            </View>
+            <View style={[d.summaryDivider, { backgroundColor: C.border }]} />
+            <View style={d.summaryItem}>
+              <Text style={[d.summaryNum, { color: strongCount > 0 ? "#ef4444" : "#22c55e" }]}>{strongCount}</Text>
+              <Text style={[d.summaryLabel, { color: C.textMuted }]}>Needs Attention</Text>
+            </View>
+            <View style={[d.summaryDivider, { backgroundColor: C.border }]} />
+            <View style={d.summaryItem}>
+              <Text style={[d.summaryNum, { color: "#22c55e" }]}>{doshas.length - presentCount}</Text>
+              <Text style={[d.summaryLabel, { color: C.textMuted }]}>Clear</Text>
+            </View>
           </View>
         </View>
 
-        {/* Note */}
-        <Text style={[s.note, { color: C.textMuted }]}>
-          Har card pe tap karein detail aur upay dekhne ke liye.
-        </Text>
-
-        {/* Dosh cards */}
-        {doshas.map(dosh => (
-          <DoshCard
-            key={dosh.key}
-            dosh={dosh}
-            defaultOpen={dosh.severity !== "absent"}
-          />
+        {/* ── Dosh Cards ── */}
+        {doshas.map((dosh, i) => (
+          <DoshCard key={dosh.key} dosh={dosh} defaultOpen={i === 0} />
         ))}
-
-        {/* Disclaimer */}
-        <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Feather name="info" size={12} color={C.textMuted} />
-          <Text style={[s.disclaimerText, { color: C.textMuted }]}>
-            Yeh analysis Vedic Jyotish ke anusaar hai. Kisi qualified Jyotishi se vistrit salah zaroor lein.
-          </Text>
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
-const s = StyleSheet.create({
-  root:    { flex:1, backgroundColor:"#020d1a" },
-  header:  { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" },
-  back:    { width:36, height:36, alignItems:"center", justifyContent:"center" },
-  title:   { color:"#dde8f4", fontSize:17, fontWeight:"800" },
-  titleHindi: { color:"#3d5a7a", fontSize:11 },
-  demoPill: { backgroundColor:"rgba(251,191,36,0.12)", borderRadius:8, paddingHorizontal:8, paddingVertical:3, borderWidth:1, borderColor:"rgba(251,191,36,0.25)" },
-  demoPillText: { color:"#fbbf24", fontSize:10, fontWeight:"700" },
-
-  content: { paddingHorizontal:16, gap:10, paddingTop:14 },
-
-  demoBanner: {
-    flexDirection:"row", alignItems:"center", gap:8,
-    backgroundColor:"rgba(251,191,36,0.06)", borderRadius:12,
-    borderWidth:1, borderColor:"rgba(251,191,36,0.2)",
-    paddingHorizontal:14, paddingVertical:10,
-  },
-  demoText: { color:"#fbbf24", fontSize:12, flex:1 },
-
-  summaryRow: { flexDirection:"row", gap:10 },
-  summaryChip: {
-    flex:1, borderRadius:12, borderWidth:1,
-    paddingVertical:10, alignItems:"center", gap:2,
-  },
-  summaryNum:   { color:"white", fontSize:20, fontWeight:"800" },
-  summaryLabel: { color:"#475569", fontSize:10, fontWeight:"600" },
-
-  note: { color:"#1e3a5f", fontSize:11, textAlign:"center", marginVertical:4 },
-
-  disclaimer: {
-    flexDirection:"row", alignItems:"flex-start", gap:8,
-    backgroundColor:"rgba(255,255,255,0.02)", borderRadius:10,
-    padding:12, borderWidth:1, borderColor:"rgba(255,255,255,0.04)",
-    marginTop:8,
-  },
-  disclaimerText: { color:"#1e3a5f", fontSize:11, lineHeight:17, flex:1 },
-});
-
+// ── Styles ────────────────────────────────────────────────────────────────────
 const d = StyleSheet.create({
+  root:    { flex: 1 },
+  header:  {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 16, paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  title:   { fontSize: 17, fontFamily: "Nunito_700Bold" },
+  subtitle:{ fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 1 },
+  demoBadge: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 12, borderWidth: 1,
+  },
+  demoBadgeText: { fontSize: 11, fontFamily: "Nunito_500Medium" },
+
+  content: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+
+  summaryCard: {
+    borderRadius: 16, borderWidth: 1, padding: 16,
+  },
+  summaryRow: { flexDirection: "row", alignItems: "center" },
+  summaryItem: { flex: 1, alignItems: "center", gap: 4 },
+  summaryDivider: { width: 1, height: 32, marginHorizontal: 8 },
+  summaryNum: { fontSize: 22, fontFamily: "Nunito_700Bold" },
+  summaryLabel: { fontSize: 10, fontFamily: "Nunito_400Regular", textAlign: "center" },
+
   card: {
-    backgroundColor:"#040e1f", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(255,255,255,0.06)",
-    borderLeftWidth:3, padding:14, gap:6,
+    borderRadius: 16, borderWidth: 1, borderLeftWidth: 3,
+    padding: 14, gap: 6,
   },
-  cardHeader: { flexDirection:"row", alignItems:"center", gap:10 },
-  iconBubble: { width:36, height:36, borderRadius:10, alignItems:"center", justifyContent:"center", flexShrink:0 },
-  doshName:  { color:"#dde8f4", fontSize:13, fontWeight:"700" },
-  doshHindi: { color:"#334155", fontSize:10, marginTop:1 },
-  sevPill: { borderRadius:10, paddingHorizontal:8, paddingVertical:3 },
-  sevText: { fontSize:9, fontWeight:"800", letterSpacing:0.5 },
-  headline:  { fontSize:12, fontWeight:"600", marginLeft:46 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  iconBubble: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  doshName:  { fontSize: 13, fontFamily: "Nunito_700Bold" },
+  doshHindi: { fontSize: 10, fontFamily: "Nunito_400Regular", marginTop: 1 },
+  sevPill: {
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8,
+  },
+  sevText: { fontSize: 10, fontFamily: "Nunito_700Bold" },
+  headline: { fontSize: 12, fontFamily: "Nunito_600SemiBold", marginLeft: 46 },
 
-  expanded: { marginTop:6, gap:10 },
-  desc: { color:"#64748b", fontSize:12, lineHeight:19 },
-  planetNoteRow: { flexDirection:"row", alignItems:"center", gap:5 },
-  planetNote: { color:"#1e3a5f", fontSize:10, flex:1 },
+  expanded: { marginTop: 4, gap: 10 },
+  desc: { fontSize: 12, fontFamily: "Nunito_400Regular", lineHeight: 18 },
 
-  remediesWrap: { gap:8 },
-  remediesTitle: { fontSize:9, fontWeight:"800", letterSpacing:2, color:"#334155" },
-  remedyRow: { flexDirection:"row", alignItems:"flex-start", gap:10 },
+  planetNoteRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  planetNote: { fontSize: 10, fontFamily: "Nunito_400Regular" },
+
+  remediesWrap: { gap: 8 },
+  remediesTitle: { fontSize: 9, fontFamily: "Nunito_700Bold", letterSpacing: 1.5 },
+  remedyRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   remedyBullet: {
-    width:20, height:20, borderRadius:10,
-    backgroundColor:"rgba(245,158,11,0.1)",
-    alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: "rgba(249,115,22,0.15)",
+    alignItems: "center", justifyContent: "center",
   },
-  remedyNum:  { color:"#f59e0b", fontSize:10, fontWeight:"700" },
-  remedyText: { color:"#475569", fontSize:12, lineHeight:18, flex:1 },
+  remedyNum: { fontSize: 9, fontFamily: "Nunito_700Bold", color: "#f97316" },
+  remedyText: { flex: 1, fontSize: 11, fontFamily: "Nunito_400Regular", lineHeight: 16 },
 });

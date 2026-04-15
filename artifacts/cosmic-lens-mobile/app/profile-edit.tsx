@@ -78,13 +78,13 @@ function Field({
     <View style={s.fieldWrap}>
       <FieldLabel text={label} />
       <View style={[s.inputRow, focused && s.inputRowFocused]}>
-        {icon && <Feather name={icon} size={15} color={focused ? "#f59e0b" : "#334155"} style={{ marginRight: 4 }} />}
+        {icon && <Feather name={icon} size={15} color={focused ? "#FFD700" : "#A0A8C0"} style={{ marginRight: 4 }} />}
         <TextInput
           style={s.input}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#1e3a5f"
+          placeholderTextColor="#4A5280"
           keyboardType={keyboardType}
           maxLength={maxLength}
           returnKeyType={returnKeyType}
@@ -142,7 +142,7 @@ function Section({ title, icon, children }: {
   return (
     <View style={s.section}>
       <View style={s.sectionHeader}>
-        <Feather name={icon} size={13} color="#f59e0b" />
+        <Feather name={icon} size={13} color="#FFD700" />
         <Text style={s.sectionTitle}>{title}</Text>
       </View>
       <View style={s.sectionBody}>
@@ -262,14 +262,15 @@ export default function ProfileEditScreen() {
   }
 
   return (
+    <LinearGradient colors={["#0B0F2A", "#1A1040"]} style={{ flex: 1 }}>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: C.bg }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       {/* ── Header ── */}
       <View style={[s.header, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
-          <Feather name="arrow-left" size={20} color="#475569" />
+          <Feather name="arrow-left" size={20} color="#A0A8C0" />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>
@@ -325,7 +326,7 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, f.day ? s.selectBtnTextFilled : null]}>
                     {f.day ? String(f.day).padStart(2,"0") : "DD"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#334155" />
+                  <Feather name="chevron-down" size={13} color="#A0A8C0" />
                 </Pressable>
               </View>
             </View>
@@ -340,7 +341,7 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, f.year ? s.selectBtnTextFilled : null]}>
                     {f.year || "YYYY"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#334155" />
+                  <Feather name="chevron-down" size={13} color="#A0A8C0" />
                 </Pressable>
               </View>
             </View>
@@ -352,7 +353,7 @@ export default function ProfileEditScreen() {
         <Section title="Birth Time" icon="clock">
           {/* Warning */}
           <View style={s.infoBox}>
-            <Feather name="alert-triangle" size={12} color="#f59e0b" />
+            <Feather name="alert-triangle" size={14} color="#FFA500" />
             <Text style={s.infoTxt}>
               Birth time directly affects your Mahadasha — make sure to select AM/PM correctly
             </Text>
@@ -370,7 +371,7 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, f.hour ? s.selectBtnTextFilled : null]}>
                     {f.hour ? String(f.hour).padStart(2,"0") : "HH"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#334155" />
+                  <Feather name="chevron-down" size={13} color="#A0A8C0" />
                 </Pressable>
               </View>
             </View>
@@ -385,7 +386,7 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, f.minute ? s.selectBtnTextFilled : null]}>
                     {f.minute !== "" ? String(f.minute).padStart(2,"0") : "MM"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#334155" />
+                  <Feather name="chevron-down" size={13} color="#A0A8C0" />
                 </Pressable>
               </View>
             </View>
@@ -402,14 +403,14 @@ export default function ProfileEditScreen() {
           <View style={s.fieldWrap}>
             <FieldLabel text="CITY / COUNTRY" />
             <View style={[s.inputRow, { gap: 8 }]}>
-              <Feather name="search" size={14} color="#334155" />
+              <Feather name="search" size={14} color="#A0A8C0" />
               <TextInput
                 style={[s.input, { flex: 1 }]}
                 value={placeQuery}
                 onChangeText={setPlaceQuery}
                 onSubmitEditing={handlePlaceSearch}
                 placeholder="e.g. Mumbai, India"
-                placeholderTextColor="#1e3a5f"
+                placeholderTextColor="#4A5280"
                 returnKeyType="search"
               />
               <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
@@ -428,7 +429,7 @@ export default function ProfileEditScreen() {
                 <Pressable key={i} onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
                   style={[s.geoItem, i < geoResults.length - 1 && s.geoItemBorder]}
                 >
-                  <Feather name="map-pin" size={11} color="#334155" style={{ marginTop: 2 }} />
+                  <Feather name="map-pin" size={11} color="#A0A8C0" style={{ marginTop: 2 }} />
                   <Text style={s.geoTxt} numberOfLines={2}>{g.label}</Text>
                 </Pressable>
               ))}
@@ -485,6 +486,7 @@ export default function ProfileEditScreen() {
       <PickerModal visible={minOpen}  title="Select Minute (0–59)"items={MINS_L}  selected={f.minute} onSelect={v => { setF(p=>({...p,minute:v}));  setMinOpen(false);  }} onClose={() => setMinOpen(false)}  />
 
     </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
@@ -494,127 +496,130 @@ const s = StyleSheet.create({
   header: {
     flexDirection: "row", alignItems: "center", gap: 14,
     paddingHorizontal: 20, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
+    borderBottomWidth: 1, borderBottomColor: "#1F2A4D",
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 10,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1, borderColor: "#1F2A4D",
+    backgroundColor: "#121A3A",
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { color: "#dde8f4", fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3 },
-  headerSub:   { color: "#1e3a5f", fontSize: 11, fontFamily: F.regular, marginTop: 2 },
+  headerTitle: { color: "#FFFFFF", fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3 },
+  headerSub:   { color: "#8A93B2", fontSize: 11, fontFamily: F.regular, marginTop: 2 },
 
-  scroll: { padding: 20, paddingBottom: 100, gap: 14 },
+  scroll: { padding: 20, paddingBottom: 100, gap: 18 },
 
   // Section block
   section: {
-    borderRadius: 16, overflow: "hidden",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
-    backgroundColor: "#040e1e",
+    borderRadius: 18, overflow: "hidden",
+    borderWidth: 1, borderColor: "#1F2A4D",
+    backgroundColor: "#121A3A",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
   sectionHeader: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: "#1F2A4D",
   },
   sectionTitle: {
-    color: "#f59e0b", fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
+    color: "#FFD700", fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
   },
-  sectionBody: { padding: 16, gap: 16 },
+  sectionBody: { padding: 18, gap: 18 },
 
   // Field
   fieldWrap: { gap: 8 },
   label: {
-    color: "#334155", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
+    color: "#A0A8C0", fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
   },
   inputRow: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#071525", borderRadius: 12,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-    paddingHorizontal: 12, paddingVertical: 11,
+    backgroundColor: "#0F1535", borderRadius: 12,
+    borderWidth: 1, borderColor: "#2A355C",
+    paddingHorizontal: 12, paddingVertical: 13,
     gap: 8,
   },
   inputRowFocused: {
-    borderColor: "rgba(245,158,11,0.3)",
-    backgroundColor: "#071e32",
+    borderColor: "#FFD700",
+    shadowColor: "#FFD700", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25, shadowRadius: 6,
   },
   input: {
-    flex: 1, color: "#dde8f4", fontSize: 14, fontFamily: F.medium,
+    flex: 1, color: "#FFFFFF", fontSize: 14, fontFamily: F.medium,
     padding: 0, margin: 0,
   },
-  hint: { color: "#1e3a5f", fontSize: 10, fontFamily: F.regular },
+  hint: { color: "#8A93B2", fontSize: 10, fontFamily: F.regular },
 
   // Month picker
   monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   monthChip: {
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9,
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9,
+    backgroundColor: "transparent",
+    borderWidth: 1, borderColor: "#2A355C",
   },
   monthChipActive: {
-    backgroundColor: "rgba(245,158,11,0.1)",
-    borderColor: "rgba(245,158,11,0.35)",
+    backgroundColor: "rgba(255,215,0,0.1)",
+    borderColor: "#FFD700",
   },
-  monthTxt:       { color: "#334155", fontSize: 12, fontFamily: F.semibold },
-  monthTxtActive: { color: "#f59e0b" },
+  monthTxt:       { color: "#A0A8C0", fontSize: 12, fontFamily: F.semibold },
+  monthTxtActive: { color: "#FFD700" },
 
   // Gender chips
   genderChip: {
-    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center",
+    backgroundColor: "transparent",
+    borderWidth: 1, borderColor: "#2A355C",
   },
   genderChipActive: {
-    backgroundColor: "rgba(245,158,11,0.1)",
-    borderColor: "rgba(245,158,11,0.35)",
+    backgroundColor: "rgba(255,215,0,0.1)",
+    borderColor: "#FFD700",
   },
-  genderTxt:       { color: "#334155", fontSize: 13, fontFamily: F.semibold },
-  genderTxtActive: { color: "#f59e0b" },
+  genderTxt:       { color: "#A0A8C0", fontSize: 13, fontFamily: F.semibold },
+  genderTxtActive: { color: "#FFD700" },
 
   // AM/PM
   ampmRow: { flexDirection: "row", gap: 8 },
   ampmBtn: {
-    flex: 1, paddingVertical: 11, borderRadius: 11, alignItems: "center",
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    flex: 1, paddingVertical: 12, borderRadius: 11, alignItems: "center",
+    backgroundColor: "transparent",
+    borderWidth: 1, borderColor: "#2A355C",
   },
   ampmBtnActive: {
-    backgroundColor: "rgba(245,158,11,0.1)",
-    borderColor: "rgba(245,158,11,0.35)",
+    backgroundColor: "rgba(255,215,0,0.1)",
+    borderColor: "#FFD700",
   },
-  ampmTxt:       { color: "#334155", fontSize: 14, fontFamily: F.bold },
-  ampmTxtActive: { color: "#f59e0b" },
+  ampmTxt:       { color: "#A0A8C0", fontSize: 14, fontFamily: F.bold },
+  ampmTxtActive: { color: "#FFD700" },
 
   // Info box (warning)
   infoBox: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: "rgba(245,158,11,0.07)",
-    borderWidth: 1, borderColor: "rgba(245,158,11,0.2)",
-    borderRadius: 10, padding: 11,
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "rgba(255,165,0,0.1)",
+    borderWidth: 1, borderColor: "#FFA500",
+    borderRadius: 12, padding: 13,
   },
-  infoTxt: { color: "#92672e", fontSize: 11, fontFamily: F.medium, flex: 1, lineHeight: 16 },
+  infoTxt: { color: "#FFD580", fontSize: 11.5, fontFamily: F.medium, flex: 1, lineHeight: 17 },
 
   // Place search
   searchBtn: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: "rgba(245,158,11,0.1)",
-    borderRadius: 8, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)",
+    paddingHorizontal: 13, paddingVertical: 7,
+    backgroundColor: "rgba(255,215,0,0.1)",
+    borderRadius: 8, borderWidth: 1, borderColor: "#FFD700",
   },
-  searchBtnTxt: { color: "#f59e0b", fontSize: 12, fontFamily: F.bold },
+  searchBtnTxt: { color: "#FFD700", fontSize: 12, fontFamily: F.bold },
 
   // Geo results
   geoList: {
-    backgroundColor: "#071525", borderRadius: 12,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#0F1535", borderRadius: 12,
+    borderWidth: 1, borderColor: "#2A355C",
     overflow: "hidden",
   },
   geoItem: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 12,
+    paddingHorizontal: 14, paddingVertical: 13,
   },
-  geoItemBorder: { borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)" },
-  geoTxt: { color: "#64748b", fontSize: 12, fontFamily: F.regular, flex: 1, lineHeight: 18 },
+  geoItemBorder: { borderBottomWidth: 1, borderBottomColor: "#1F2A4D" },
+  geoTxt: { color: "#8A93B2", fontSize: 12, fontFamily: F.regular, flex: 1, lineHeight: 18 },
 
   // Selected place confirmation
   selectedPlace: {
@@ -639,15 +644,15 @@ const s = StyleSheet.create({
   // Select button (tap-to-open picker)
   selectBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "#071525",
-    borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "#0F1535",
+    borderRadius: 12, borderWidth: 1, borderColor: "#2A355C",
     paddingHorizontal: 12, paddingVertical: 13,
   },
   selectBtnText: {
-    color: "#1e3a5f", fontSize: 14, fontFamily: F.medium,
+    color: "#4A5280", fontSize: 14, fontFamily: F.medium,
   },
   selectBtnTextFilled: {
-    color: "#dde8f4",
+    color: "#FFFFFF",
   },
 
   // Save button

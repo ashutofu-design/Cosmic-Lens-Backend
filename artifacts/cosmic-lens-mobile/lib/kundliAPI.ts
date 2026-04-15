@@ -5,31 +5,43 @@ const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   : "";
 
 export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
-  const res = await fetch(`${BASE_URL}/api/kundli`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({
-      name:   bd.name,
-      day:    bd.day,
-      month:  bd.month,
-      year:   bd.year,
-      hour:   bd.hour,
-      minute: bd.minute,
-      ampm:   bd.ampm,
-      lat:    bd.lat,
-      lon:    bd.lon,
-      tz:     bd.tz,
-      place:  bd.place,
-    }),
-  });
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const res = await fetch(`${BASE_URL}/api/kundli`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      signal:  ctrl.signal,
+      body:    JSON.stringify({
+        name:   bd.name,
+        day:    bd.day,
+        month:  bd.month,
+        year:   bd.year,
+        hour:   bd.hour,
+        minute: bd.minute,
+        ampm:   bd.ampm,
+        lat:    bd.lat,
+        lon:    bd.lon,
+        tz:     bd.tz,
+        place:  bd.place,
+      }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error ?? "Kundli calculation failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as { error?: string }).error ?? "Kundli calculation failed");
+    }
+
+    const data = await res.json();
+    return { ...data, name: bd.name } as KundliData;
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Request timed out. Please check your connection and try again.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  return { ...data, name: bd.name } as KundliData;
 }
 
 interface NominatimResult {

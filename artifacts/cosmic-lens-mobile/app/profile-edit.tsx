@@ -232,12 +232,14 @@ export default function ProfileEditScreen() {
     setPlaceQuery(g.label);
     setGeoResults([]);
     setTzLoading(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
     try {
-      const r = await fetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`);
+      const r = await fetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`, { signal: ctrl.signal });
       const d = await r.json();
       if (typeof d.tz === "number") setF(prev => ({ ...prev, tz: d.tz }));
     } catch {}
-    finally { setTzLoading(false); }
+    finally { clearTimeout(timer); setTzLoading(false); }
   }
 
   async function handleSave() {
@@ -245,7 +247,6 @@ export default function ProfileEditScreen() {
     if (!f.day || !f.month || !f.year) { setError("Please complete the birth date."); return; }
     if (!f.hour || !f.minute)         { setError("Please enter the birth time."); return; }
     if (!f.lat)                       { setError("Please search and select a valid location."); return; }
-    if (tzLoading)                    { setError("Confirming timezone, please wait..."); return; }
     setError("");
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -483,8 +484,8 @@ export default function ProfileEditScreen() {
         {/* ── Save button ── */}
         <Pressable
           onPress={handleSave}
-          disabled={saving || tzLoading}
-          style={({ pressed }) => [{ opacity: (saving || tzLoading) ? 0.6 : pressed ? 0.85 : 1 }]}
+          disabled={saving}
+          style={({ pressed }) => [{ opacity: saving ? 0.6 : pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
             colors={["#d97706", "#f59e0b"]}

@@ -771,67 +771,24 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── MY KUNDLI ─────────────────────────────────────────────────── */}
-        {primaryProfile?.kundli && (
-          <View>
-            <Text style={[s.sectionLabel,{ color: C.textMuted }]}>MY KUNDLI</Text>
-            <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <LinearGradient
-                colors={C.isDark ? ["#0a1628","#0d1f38"] : [C.bgCard, C.bgCard2]}
-                style={{ padding: 16, gap: 14 }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={[mk.iconBox, { backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : "rgba(124,58,237,0.08)" }]}>
-                    <Text style={{ fontSize: 20 }}>📜</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: C.text, fontSize: 15, fontFamily: F.bold }}>{primaryProfile.name}</Text>
-                    <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>
-                      {primaryProfile.birthData.day}/{primaryProfile.birthData.month}/{primaryProfile.birthData.year} · {primaryProfile.birthData.place}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
-                    style={[mk.viewBtn, { borderColor: C.isDark ? "rgba(245,158,11,0.3)" : "rgba(124,58,237,0.25)" }]}
-                  >
-                    <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 10, fontFamily: F.bold }}>VIEW</Text>
-                    <Feather name="arrow-right" size={10} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
-                  </Pressable>
+        {/* ── MY DATA ──────────────────────────────────────────────────── */}
+        <View>
+          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>MY DATA</Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <SettingRow
+              icon="book-open"
+              label="My Kundli"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-kundli"); }}
+              right={
+                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{profiles.filter(p => p.kundli).length} saved</Text>
+                  <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
-
-                <View style={mk.grid}>
-                  {[
-                    { label: "Ascendant", value: primaryProfile.kundli.ascendant ?? "—", icon: "🌅" },
-                    { label: "Moon Sign", value: primaryProfile.kundli.moonSign ?? "—", icon: "🌙" },
-                    { label: "Nakshatra", value: primaryProfile.kundli.nakshatra ?? "—", icon: "⭐" },
-                    { label: "Sun Sign",  value: primaryProfile.kundli.sunSign ?? "—",  icon: "☀️" },
-                  ].map((item, i) => (
-                    <View key={i} style={[mk.cell, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : C.bgCard2, borderColor: C.border }]}>
-                      <Text style={{ fontSize: 14 }}>{item.icon}</Text>
-                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.8 }}>{item.label.toUpperCase()}</Text>
-                      <Text style={{ color: C.text, fontSize: 12.5, fontFamily: F.semibold }} numberOfLines={1}>{item.value}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                {primaryProfile.kundli.currentDasha && (
-                  <View style={[mk.dashaRow, { backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.04)", borderColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.1)" }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>CURRENT DASHA</Text>
-                      <Text style={{ color: C.text, fontSize: 13, fontFamily: F.semibold, marginTop: 2 }}>
-                        {primaryProfile.kundli.currentDasha.maha} › {primaryProfile.kundli.currentDasha.antar}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium }}>Ends</Text>
-                      <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 11, fontFamily: F.semibold }}>{primaryProfile.kundli.currentDasha.endDate}</Text>
-                    </View>
-                  </View>
-                )}
-              </LinearGradient>
-            </View>
+              }
+              last
+            />
           </View>
-        )}
+        </View>
 
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
         <View style={s.bottomSection}>
@@ -1260,26 +1217,3 @@ const dm = StyleSheet.create({
   },
 });
 
-const mk = StyleSheet.create({
-  iconBox: {
-    width: 38, height: 38, borderRadius: 12,
-    alignItems: "center", justifyContent: "center",
-  },
-  viewBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingVertical: 6, paddingHorizontal: 12,
-    borderRadius: 20, borderWidth: 1,
-  },
-  grid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 8,
-  },
-  cell: {
-    width: "47%" as any, borderRadius: 12, borderWidth: 1,
-    padding: 10, gap: 3, alignItems: "center",
-  },
-  dashaRow: {
-    flexDirection: "row", alignItems: "center",
-    borderRadius: 12, borderWidth: 1,
-    padding: 12,
-  },
-});

@@ -217,34 +217,204 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
   );
 }
 
-// ── Pro Preview Insights ──────────────────────────────────────────────────────
-function ProPreview(){
-  const C=useC();
-  const items=[
-    {icon:"❤️",label:"Emotional Match",val:"82%",col:"#f43f5e",barPct:0.82},
-    {icon:"🔥",label:"Attraction",      val:"76%",col:"#f97316",barPct:0.76},
-    {icon:"⚠️",label:"Risk Areas",      val:"2",  col:"#fbbf24",barPct:0.25},
-  ];
+// ── Animated section entrance ─────────────────────────────────────────────────
+function useFadeIn(delay=0){
+  const anim=useRef(new Animated.Value(0)).current;
+  const slide=useRef(new Animated.Value(18)).current;
+  useEffect(()=>{
+    Animated.parallel([
+      Animated.timing(anim,{toValue:1,duration:480,delay,useNativeDriver:true}),
+      Animated.timing(slide,{toValue:0,duration:420,delay,easing:Easing.out(Easing.quad),useNativeDriver:true}),
+    ]).start();
+  },[]);
+  return{opacity:anim,transform:[{translateY:slide}]};
+}
+
+// ── Glowing card shell ────────────────────────────────────────────────────────
+function GlowCard({children,style,accent="#8B5CF6",C}:{children:React.ReactNode;style?:any;accent?:string;C:any}){
   return(
-    <View style={[pv.wrap,{backgroundColor:C.isDark?"rgba(109,40,217,0.08)":"rgba(99,102,241,0.05)",borderColor:"rgba(139,92,246,0.25)"}]}>
-      <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:12}}>
-        <View style={pv.dot}/>
-        <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_700Bold",letterSpacing:1}}>SAMPLE PREVIEW</Text>
-      </View>
-      {items.map(({icon,label,val,col,barPct})=>(
-        <View key={label} style={pv.row}>
-          <Text style={{fontSize:16,width:24}}>{icon}</Text>
-          <View style={{flex:1}}>
-            <View style={{flexDirection:"row",justifyContent:"space-between",marginBottom:5}}>
-              <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
-              <Text style={{color:col,fontSize:13,fontFamily:"Nunito_700Bold"}}>{val}</Text>
-            </View>
-            <View style={[pv.bar,{backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.06)"}]}>
-              <View style={[pv.fill,{width:`${Math.round(barPct*100)}%` as any,backgroundColor:col}]}/>
-            </View>
-          </View>
+    <View style={[{borderRadius:16,borderWidth:1,borderColor:`${accent}35`,overflow:"hidden",
+      backgroundColor:C.isDark?"rgba(20,10,40,0.7)":"rgba(245,240,255,0.9)",
+      shadowColor:accent,shadowOffset:{width:0,height:0},shadowOpacity:0.25,shadowRadius:10,elevation:6},style]}>
+      <LinearGradient colors={[`${accent}14`,"transparent"]} style={{position:"absolute",top:0,left:0,right:0,height:60}}/>
+      {children}
+    </View>
+  );
+}
+
+// ── Mini arc for compatibility ────────────────────────────────────────────────
+function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
+  const r=size/2-5,circ=2*Math.PI*r;
+  return(
+    <View style={{width:size,height:size,alignItems:"center",justifyContent:"center"}}>
+      <Svg width={size} height={size} style={{position:"absolute"} as any}>
+        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={5}/>
+        <Circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={5}
+          strokeLinecap="round" strokeDasharray={`${circ*pct} ${circ}`}
+          rotation={-90} originX={size/2} originY={size/2}/>
+      </Svg>
+      <Text style={{fontSize:10,fontFamily:"Nunito_700Bold",color:col}}>{Math.round(pct*100)}%</Text>
+    </View>
+  );
+}
+
+// ── Pro Insights Panel (shown before result in Pro mode) ──────────────────────
+function ProInsightsPanel(){
+  const C=useC();
+  const s0=useFadeIn(0);
+  const s1=useFadeIn(80);
+  const s2=useFadeIn(160);
+  const s3=useFadeIn(240);
+  const s4=useFadeIn(320);
+
+  const compat=[
+    {icon:"❤️",label:"Emotional Match",pct:0.82,col:"#f43f5e"},
+    {icon:"🧠",label:"Mental Sync",     pct:0.74,col:"#818cf8"},
+    {icon:"🔥",label:"Attraction",      pct:0.76,col:"#f97316"},
+    {icon:"💬",label:"Communication",   pct:0.68,col:"#34d399"},
+  ];
+  const doshas=[
+    {icon:"⚠️",label:"Mangal Dosha",   status:"Mild",   ok:false},
+    {icon:"⚠️",label:"Nadi Dosha",     status:"Clear",  ok:true},
+    {icon:"✅",label:"Bhakoot Match",  status:"Strong", ok:true},
+  ];
+  const future=[
+    {icon:"📅",label:"Marriage Timing",   val:"2025–2027",  col:"#a78bfa"},
+    {icon:"👶",label:"Child Planning",    val:"Normal",     col:"#34d399"},
+    {icon:"💰",label:"Financial Harmony", val:"Compatible", col:"#fbbf24"},
+  ];
+  const strengths=["Deep emotional understanding between partners","Strong Venus placement for lasting bond"];
+  const challenges=["Mars energy may cause occasional friction","Communication needs conscious effort"];
+
+  return(
+    <View style={{gap:12}}>
+      {/* Header label */}
+      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},s0]}>
+        <View style={{width:6,height:6,borderRadius:3,backgroundColor:"#a78bfa"}}/>
+        <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_700Bold",letterSpacing:1.2}}>PRO DEEP INSIGHTS</Text>
+        <View style={{flex:1}}/>
+        <View style={{backgroundColor:"rgba(139,92,246,0.15)",borderRadius:8,paddingHorizontal:8,paddingVertical:3}}>
+          <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_700Bold"}}>SAMPLE</Text>
         </View>
-      ))}
+      </Animated.View>
+
+      {/* 1 ── Compatibility Breakdown */}
+      <Animated.View style={s1}>
+        <GlowCard accent="#f43f5e" C={C} style={{padding:14}}>
+          <Text style={{color:"#f9a8d4",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:12}}>
+            COMPATIBILITY BREAKDOWN
+          </Text>
+          <View style={{flexDirection:"row",justifyContent:"space-around"}}>
+            {compat.map(({icon,label,pct,col})=>(
+              <View key={label} style={{alignItems:"center",gap:6}}>
+                <MiniArc pct={pct} col={col} size={58}/>
+                <Text style={{fontSize:13}}>{icon}</Text>
+                <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_500Medium",textAlign:"center",maxWidth:55}}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        </GlowCard>
+      </Animated.View>
+
+      {/* 2 ── Dosha Check */}
+      <Animated.View style={s2}>
+        <GlowCard accent="#fbbf24" C={C} style={{padding:14}}>
+          <Text style={{color:"#fde68a",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:10}}>
+            DOSHA CHECK PREVIEW
+          </Text>
+          {doshas.map(({icon,label,status,ok})=>(
+            <View key={label} style={{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:7,
+              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <Text style={{fontSize:15}}>{icon}</Text>
+              <Text style={{flex:1,color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
+              <View style={{backgroundColor:ok?"rgba(52,211,153,0.15)":"rgba(251,191,36,0.15)",
+                borderRadius:10,paddingHorizontal:10,paddingVertical:4,borderWidth:1,
+                borderColor:ok?"rgba(52,211,153,0.3)":"rgba(251,191,36,0.3)"}}>
+                <Text style={{color:ok?"#34d399":"#fbbf24",fontSize:10,fontFamily:"Nunito_700Bold"}}>{status}</Text>
+              </View>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* 3 ── Future Insights */}
+      <Animated.View style={s3}>
+        <GlowCard accent="#818cf8" C={C} style={{padding:14}}>
+          <Text style={{color:"#c7d2fe",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:10}}>
+            FUTURE INSIGHTS
+          </Text>
+          {future.map(({icon,label,val,col})=>(
+            <View key={label} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:8,
+              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <View style={{width:36,height:36,borderRadius:10,backgroundColor:`${col}18`,
+                alignItems:"center",justifyContent:"center"}}>
+                <Text style={{fontSize:16}}>{icon}</Text>
+              </View>
+              <Text style={{flex:1,color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
+              <Text style={{color:col,fontSize:12,fontFamily:"Nunito_700Bold"}}>{val}</Text>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* 4 ── Strengths & Challenges */}
+      <Animated.View style={[{flexDirection:"row",gap:10},s4]}>
+        {/* Strengths */}
+        <GlowCard accent="#34d399" C={C} style={{flex:1,padding:12}}>
+          <Text style={{color:"#6ee7b7",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>
+            STRENGTHS 💚
+          </Text>
+          {strengths.map((s,i)=>(
+            <View key={i} style={{flexDirection:"row",gap:6,marginBottom:6}}>
+              <Text style={{color:"#34d399",fontSize:11,marginTop:1}}>•</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
+            </View>
+          ))}
+        </GlowCard>
+        {/* Challenges */}
+        <GlowCard accent="#f97316" C={C} style={{flex:1,padding:12}}>
+          <Text style={{color:"#fdba74",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>
+            CHALLENGES ⚡
+          </Text>
+          {challenges.map((s,i)=>(
+            <View key={i} style={{flexDirection:"row",gap:6,marginBottom:6}}>
+              <Text style={{color:"#f97316",fontSize:11,marginTop:1}}>•</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* 5 ── Locked hook */}
+      <Animated.View style={s4}>
+        <View style={{borderRadius:14,overflow:"hidden"}}>
+          {/* Fake hidden rows */}
+          <View style={{backgroundColor:C.isDark?"rgba(20,10,40,0.8)":"rgba(240,235,255,0.9)",
+            borderWidth:1,borderColor:"rgba(139,92,246,0.2)",padding:14,gap:8}}>
+            {[0.9,0.6,0.35].map((op,i)=>(
+              <View key={i} style={{flexDirection:"row",gap:10,alignItems:"center",opacity:op}}>
+                <View style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(139,92,246,0.15)"}}/>
+                <View style={{height:8,flex:0.6,borderRadius:4,backgroundColor:"rgba(139,92,246,0.2)"}}/>
+                <View style={{height:8,flex:0.3,borderRadius:4,backgroundColor:"rgba(139,92,246,0.15)"}}/>
+              </View>
+            ))}
+          </View>
+          {/* Gradient overlay */}
+          <LinearGradient
+            colors={C.isDark?["transparent","rgba(11,15,25,0.85)","#0B0F19"]:["transparent","rgba(248,250,252,0.9)","#F8FAFC"]}
+            style={{position:"absolute",top:0,left:0,right:0,bottom:0,alignItems:"center",justifyContent:"flex-end",paddingBottom:14}}>
+            <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+              <Text style={{fontSize:14}}>🔒</Text>
+              <Text style={{color:C.isDark?"#c4b5fd":"#6d28d9",fontSize:13,fontFamily:"Nunito_700Bold"}}>
+                + 12 more deep insights hidden
+              </Text>
+            </View>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3}}>
+              Unlock Pro to reveal all
+            </Text>
+          </LinearGradient>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -476,7 +646,7 @@ export default function KundliMilanScreen(){
           </Animated.View>
 
           {/* ── PRO Preview Insights ── */}
-          {isPro&&!result&&<ProPreview/>}
+          {isPro&&!result&&<ProInsightsPanel/>}
 
           {/* ── What You'll Get (Basic only, no result) ── */}
           {!isPro&&!result&&(
@@ -661,14 +831,6 @@ const fm=StyleSheet.create({
   btns:    {flexDirection:"row",gap:10,padding:14},
   cancelBtn:{flex:0.6,borderRadius:12,borderWidth:1,alignItems:"center",justifyContent:"center",height:44},
   addBtn:  {borderRadius:12,height:44,alignItems:"center",justifyContent:"center"},
-});
-
-const pv=StyleSheet.create({
-  wrap:{borderRadius:16,borderWidth:1,padding:16,gap:12},
-  dot: {width:6,height:6,borderRadius:3,backgroundColor:"#a78bfa"},
-  row: {flexDirection:"row",alignItems:"center",gap:12},
-  bar: {height:5,borderRadius:3,overflow:"hidden"},
-  fill:{height:5,borderRadius:3},
 });
 
 const lk=StyleSheet.create({

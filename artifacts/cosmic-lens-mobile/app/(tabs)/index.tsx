@@ -259,11 +259,8 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   const tHero = getT(language);
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
-  const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
-
   return (
     <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: Ctheme.border2, boxShadow: Ctheme.cardShadow } as any]}>
-      <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
       {/* ── TOP ROW: label + score + demo badge ── */}
       <View style={hero.topRow}>

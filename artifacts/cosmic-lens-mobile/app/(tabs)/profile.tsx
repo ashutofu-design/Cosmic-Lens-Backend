@@ -136,8 +136,9 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   const { language, isIndia } = useUser();
   const t = getT(language);
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"india" | "global">(isIndia ? "india" : "global");
 
-  const LANGUAGES = getLangList(isIndia);
+  const LANGUAGES = getLangList(tab === "india");
 
   const filtered = query.trim().length > 0
     ? LANGUAGES.filter(l =>
@@ -150,6 +151,12 @@ function LangSheet({ visible, current, onSelect, onClose }: {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onSelect(code);
     onClose();
+  }
+
+  function switchTab(t: "india" | "global") {
+    setTab(t);
+    setQuery("");
+    Haptics.selectionAsync();
   }
 
   return (
@@ -166,6 +173,30 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             <Text style={[lm.subtitle, { color: C.textMuted }]}>{t.langSubtitle}</Text>
           </View>
           <View style={{ width: 36 }} />
+        </View>
+
+        {/* ── India / Global tab switcher ── */}
+        <View style={[lm.tabRow, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+          <Pressable
+            style={[lm.tabBtn, {
+              backgroundColor: tab === "india" ? C.bgCard : "transparent",
+              borderColor:      tab === "india" ? "#f59e0b55" : "transparent",
+            }]}
+            onPress={() => switchTab("india")}
+          >
+            <Text style={lm.tabFlag}>🇮🇳</Text>
+            <Text style={[lm.tabLabel, { color: tab === "india" ? "#f59e0b" : C.textMuted }]}>India</Text>
+          </Pressable>
+          <Pressable
+            style={[lm.tabBtn, {
+              backgroundColor: tab === "global" ? C.bgCard : "transparent",
+              borderColor:      tab === "global" ? "#6366f155" : "transparent",
+            }]}
+            onPress={() => switchTab("global")}
+          >
+            <Text style={lm.tabFlag}>🌍</Text>
+            <Text style={[lm.tabLabel, { color: tab === "global" ? "#6366f1" : C.textMuted }]}>Global</Text>
+          </Pressable>
         </View>
 
         {/* ── Search bar ── */}
@@ -188,7 +219,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-          {/* ── Language grid (all supported) ── */}
+          {/* ── Language grid ── */}
           {filtered.length > 0 ? (
             <View style={lm.grid}>
               {filtered.map(l => (
@@ -1014,6 +1045,16 @@ const lm = StyleSheet.create({
   },
   title:    { color: "#dde8f4", fontSize: 16, fontFamily: F.bold },
   subtitle: { color: "#334155", fontSize: 11, fontFamily: F.regular, marginTop: 2 },
+  tabRow: {
+    flexDirection: "row", marginHorizontal: 16, marginTop: 12,
+    borderRadius: 14, borderWidth: 1, padding: 4, gap: 4,
+  },
+  tabBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+  },
+  tabFlag: { fontSize: 16 },
+  tabLabel: { fontSize: 13, fontFamily: F.bold },
   searchWrap: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "#040e1e", borderWidth: 1,

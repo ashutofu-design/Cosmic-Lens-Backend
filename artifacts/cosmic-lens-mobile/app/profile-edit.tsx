@@ -154,11 +154,11 @@ function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, onMakePrimar
             <Text style={[fm.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
               <View style={[fm.primaryBadge, {
-                backgroundColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.1)",
-                borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)",
+                backgroundColor: C.isDark ? "#16a34a" : "#16a34a",
+                borderColor: C.isDark ? "#22c55e" : "#16a34a",
               }]}>
-                <Feather name="star" size={7} color={ac} />
-                <Text style={{ color: ac, fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>PRIMARY</Text>
+                <Feather name="check-circle" size={7} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>PRIMARY</Text>
               </View>
             )}
             {!isPrimary && profile.relation && (
@@ -171,13 +171,13 @@ function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, onMakePrimar
             <Pressable
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onMakePrimary(); }}
               style={({ pressed }) => [fm.makePrimaryBtn, {
-                borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)",
-                backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.04)",
-                opacity: pressed ? 0.7 : 1,
+                borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+                backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                opacity: pressed ? 0.6 : 1,
               }]}
             >
-              <Feather name="star" size={9} color={ac} />
-              <Text style={{ color: ac, fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.3 }}>Make Primary</Text>
+              <Feather name="arrow-up-circle" size={9} color={C.textMuted} />
+              <Text style={{ color: C.textMuted, fontSize: 8.5, fontFamily: F.semibold, letterSpacing: 0.2 }}>Set as Primary</Text>
             </Pressable>
           )}
         </View>

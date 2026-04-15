@@ -115,8 +115,9 @@ export default function MyKundliScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={{ color: C.text, fontSize: 14.5, fontFamily: F.bold }} numberOfLines={1}>{profile.name}</Text>
                     {isPrimary && (
-                      <View style={[s.primaryBadge, { backgroundColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.08)" }]}>
-                        <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 8, fontFamily: F.bold, letterSpacing: 0.8 }}>PRIMARY</Text>
+                      <View style={[s.primaryBadge, { backgroundColor: "#16a34a" }]}>
+                        <Feather name="check-circle" size={8} color="#fff" />
+                        <Text style={{ color: "#fff", fontSize: 8, fontFamily: F.bold, letterSpacing: 0.8 }}>PRIMARY</Text>
                       </View>
                     )}
                   </View>
@@ -129,13 +130,13 @@ export default function MyKundliScreen() {
                     onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPrimaryProfile(profile.id); }}
                     hitSlop={6}
                     style={({ pressed }) => [s.makePrimaryBtn, {
-                      borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)",
-                      backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.04)",
-                      opacity: pressed ? 0.7 : 1,
+                      borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
+                      backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                      opacity: pressed ? 0.6 : 1,
                     }]}
                   >
-                    <Feather name="star" size={10} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
-                    <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 9, fontFamily: F.bold, letterSpacing: 0.3 }}>Make Primary</Text>
+                    <Feather name="arrow-up-circle" size={10} color={C.textMuted} />
+                    <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.semibold, letterSpacing: 0.2 }}>Set as Primary</Text>
                   </Pressable>
                 )}
               </View>
@@ -262,6 +263,7 @@ const s = StyleSheet.create({
     color: "#fff", fontSize: 15, fontFamily: F.bold,
   },
   primaryBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
     paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6,
   },
   makePrimaryBtn: {

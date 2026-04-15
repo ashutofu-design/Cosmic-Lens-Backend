@@ -32,8 +32,8 @@ const TAB_META: {
 const BAR_H = 60;
 
 // Inactive icon color — clearly visible but clearly inactive
-const INACTIVE_CLR = "#64748B";
-const INACTIVE_LABEL = "#475569";
+const INACTIVE_CLR   = "#64748B";
+const INACTIVE_LABEL = "#64748B";
 
 function TabItem({
   tab, isActive, accent, onPress, onLongPress,
@@ -65,14 +65,14 @@ function TabItem({
     }
   }, [isActive]);
 
-  // Animated bg pill color
+  // Animated bg pill color — use same hue as accent at 0→10% alpha
   const bgColor = bgAnim.interpolate({
     inputRange:  [0, 1],
-    outputRange: ["rgba(99,102,241,0)", `${accent}1A`],
+    outputRange: [`${accent}00`, `${accent}1A`],
   });
 
   const iconColor  = isActive ? accent : INACTIVE_CLR;
-  const labelColor = isActive ? "#F1F5F9" : INACTIVE_LABEL;
+  const labelColor = isActive ? accent : INACTIVE_LABEL;
 
   return (
     <Pressable
@@ -130,8 +130,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const t    = getT(language);
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
 
-  // Use zodiac accent if available, otherwise indigo
-  const accent = zodiacAccent?.accent ?? "#6366F1";
+  // Use zodiac accent if available, otherwise brand orange
+  const accent = zodiacAccent?.accent ?? "#FF7A00";
 
   return (
     <>
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     letterSpacing: 0.1,
     lineHeight: 13,
   },

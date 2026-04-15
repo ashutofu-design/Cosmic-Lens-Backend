@@ -377,6 +377,7 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
   plan: typeof PLANS[0]; cycle: BillingCycle;
   isCurrent: boolean; onPress: ()=>void;
 }) {
+  const C = useC();
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isFree = plan.key === "free";
 
@@ -441,10 +442,10 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
         ))}
         {plan.featureOff.map(f => (
           <View key={f} style={pl.featureRow}>
-            <View style={[pl.featureDot, { backgroundColor:"rgba(255,255,255,0.03)" }]}>
-              <Feather name="minus" size={9} color="#1e3a5f" />
+            <View style={[pl.featureDot, { backgroundColor: C.bgCard2 }]}>
+              <Feather name="minus" size={9} color={C.textDim} />
             </View>
-            <Text style={[pl.featureText, { color:"#1e3a5f" }]}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.textDim }]}>{f}</Text>
           </View>
         ))}
       </View>

@@ -37,7 +37,7 @@ const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padSta
 const C_PRIMARY  = "#FF7A00";
 const C_FOCUS    = "#6366F1";
 const C_SUCCESS  = "#16A34A";
-const C_SEL_BG   = "rgba(99,102,241,0.07)";
+const C_SEL_BG   = "rgba(99,102,241,0.06)";
 const C_SEL_BORD = "#6366F1";
 const C_SEL_TXT  = "#4F46E5";
 
@@ -401,7 +401,7 @@ export default function ProfileEditScreen() {
                 />
                 <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
                   {searching
-                    ? <ActivityIndicator size="small" color="#fff" />
+                    ? <ActivityIndicator size="small" color={C_FOCUS} />
                     : <Text style={s.searchBtnTxt}>Search</Text>
                   }
                 </Pressable>
@@ -579,14 +579,15 @@ const s = StyleSheet.create({
   ampmTxt: { fontSize: 13, fontFamily: F.bold },
 
   // Time helper hint
-  timeHint: { fontSize: 10, fontFamily: F.regular, marginTop: 3 },
+  timeHint: { fontSize: 11, fontFamily: F.regular, marginTop: 4, opacity: 0.75 },
 
   // Place search button
   searchBtn: {
     paddingHorizontal: 11, paddingVertical: 6,
-    borderRadius: 8, backgroundColor: C_FOCUS,
+    borderRadius: 8, backgroundColor: "transparent",
+    borderWidth: 0.75, borderColor: C_FOCUS,
   },
-  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: "#FFFFFF" },
+  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: C_FOCUS },
 
   // Geo dropdown
   geoList: {

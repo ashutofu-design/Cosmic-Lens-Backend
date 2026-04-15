@@ -39,34 +39,34 @@ export interface ThemeColors {
   isDark: boolean;
 }
 
-// ── Dark — Matte Black ─────────────────────────────────────────────────────────
+// ── Dark — Charcoal + Subtle Purple Tint ──────────────────────────────────────
 export const DARK: ThemeColors = {
-  bg:      "#141414",
-  bgCard:  "#1f1f1f",
-  bgCard2: "#262626",
-  bgCard3: "#2e2e2e",
+  bg:      "#161420",
+  bgCard:  "#1e1b2e",
+  bgCard2: "#252238",
+  bgCard3: "#2c2944",
 
-  text:      "#f0f0f0",
-  textMid:   "#c8c8c8",
-  textMuted: "#999999",
-  textDim:   "#555555",
+  text:      "#f2eeff",
+  textMid:   "#c4b8e8",
+  textMuted: "#9585c0",
+  textDim:   "#5a4e80",
 
   accent:   "#f59e0b",
   accentBg: "rgba(245,158,11,0.13)",
 
-  border:  "rgba(255,255,255,0.10)",
-  border2: "rgba(255,255,255,0.18)",
-  border3: "rgba(255,255,255,0.06)",
+  border:  "rgba(180,150,255,0.18)",
+  border2: "rgba(180,150,255,0.30)",
+  border3: "rgba(180,150,255,0.10)",
 
-  switchTrackOff: "#262626",
-  navBg:     "#141414",
-  navBorder: "rgba(255,255,255,0.10)",
-  inputBg:   "#1f1f1f",
-  inputBorder: "rgba(255,255,255,0.16)",
+  switchTrackOff: "#252238",
+  navBg:     "#161420",
+  navBorder: "rgba(180,150,255,0.18)",
+  inputBg:   "#1e1b2e",
+  inputBorder: "rgba(180,150,255,0.26)",
 
-  shimmer1: "#1f1f1f",
-  shimmer2: "#262626",
-  shimmer3: "#1f1f1f",
+  shimmer1: "#1e1b2e",
+  shimmer2: "#252238",
+  shimmer3: "#1e1b2e",
 
   statusBar: "light-content",
   isDark: true,

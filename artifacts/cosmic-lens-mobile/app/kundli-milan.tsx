@@ -302,9 +302,9 @@ function ProInsightsPanel(){
     return(
       <View style={{flexDirection:"row",alignItems:"center",gap:8,marginTop:4}}>
         <Text style={{fontSize:14}}>{icon}</Text>
-        <Text style={{color:C.isDark?"rgba(196,181,253,0.9)":"#5b21b6",fontSize:10,
+        <Text style={{color:C.isDark?"rgba(196,181,253,0.9)":"#4C1D95",fontSize:10,
           fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>{label}</Text>
-        <View style={{flex:1,height:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
+        <View style={{flex:1,height:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(109,93,246,0.25)"}}/>
       </View>
     );
   }
@@ -312,12 +312,17 @@ function ProInsightsPanel(){
   function BigCard({icon,title,desc,col,badge,idx}:{icon:string;title:string;desc:string;col:string;badge:"most"|"critical"|"decision";idx:number}){
     return(
       <Animated.View style={av(idx)}>
-        <View style={{borderRadius:16,borderWidth:1,borderColor:`${col}35`,padding:16,gap:10,
-          backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.8)",
-          shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.22,shadowRadius:14,elevation:5}}>
+        <View style={{borderRadius:16,borderWidth:1,
+          borderColor:C.isDark?`${col}35`:C.border2,
+          padding:16,gap:10,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.04)":C.bgCard,
+          shadowColor:C.isDark?col:"#00000018",
+          shadowOffset:{width:0,height:C.isDark?0:2},
+          shadowOpacity:C.isDark?0.22:1,shadowRadius:C.isDark?14:8,elevation:C.isDark?5:2}}>
           <PipBadge type={badge}/>
           <View style={{flexDirection:"row",alignItems:"flex-start",gap:12}}>
-            <View style={{width:44,height:44,borderRadius:13,backgroundColor:`${col}18`,
+            <View style={{width:44,height:44,borderRadius:13,
+              backgroundColor:C.isDark?`${col}18`:`${col}15`,
               alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <Text style={{fontSize:22}}>{icon}</Text>
             </View>
@@ -326,11 +331,10 @@ function ProInsightsPanel(){
               <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",lineHeight:16}}>{desc}</Text>
             </View>
           </View>
-          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)"}}/>
+          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":C.border}}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-            <View style={{width:6,height:6,borderRadius:3,backgroundColor:col,
-              shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:1,shadowRadius:4}}/>
-            <Text style={{color:`${col}CC`,fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:col}}/>
+            <Text style={{color:C.isDark?`${col}CC`:C.textMuted,fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
               Calculated live with your kundli data
             </Text>
           </View>
@@ -372,10 +376,15 @@ function ProInsightsPanel(){
     }
     return(
       <Animated.View style={av(idx)}>
-        <View style={{borderRadius:14,borderWidth:1,borderColor:`${col}28`,padding:13,gap:6,
-          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":"rgba(255,255,255,0.7)"}}>
+        <View style={{borderRadius:14,borderWidth:1,
+          borderColor:C.isDark?`${col}28`:C.border,
+          padding:13,gap:6,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":C.bgCard,
+          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
+          shadowOpacity:C.isDark?0:0.06,shadowRadius:4,elevation:C.isDark?0:1}}>
           <View style={{flexDirection:"row",alignItems:"flex-start",gap:10}}>
-            <View style={{width:36,height:36,borderRadius:10,backgroundColor:`${col}18`,
+            <View style={{width:36,height:36,borderRadius:10,
+              backgroundColor:C.isDark?`${col}18`:`${col}15`,
               alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <Text style={{fontSize:18}}>{icon}</Text>
             </View>
@@ -393,13 +402,19 @@ function ProInsightsPanel(){
   function FutureCard({icon,label,col,idx}:{icon:string;label:string;col:string;idx:number}){
     return(
       <Animated.View style={[{width:"47%"},av(idx)]}>
-        <View style={{borderRadius:13,borderWidth:1,borderColor:`${col}28`,padding:12,gap:5,
-          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":"rgba(255,255,255,0.7)",alignItems:"center"}}>
+        <View style={{borderRadius:13,borderWidth:1,
+          borderColor:C.isDark?`${col}28`:C.border,
+          padding:12,gap:5,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":C.bgCard,
+          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
+          shadowOpacity:C.isDark?0:0.05,shadowRadius:3,elevation:C.isDark?0:1,
+          alignItems:"center"}}>
           <Text style={{fontSize:22}}>{icon}</Text>
           <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:15}}>{label}</Text>
-          <View style={{backgroundColor:`${col}18`,borderRadius:8,paddingHorizontal:8,paddingVertical:3,
-            borderWidth:1,borderColor:`${col}30`}}>
-            <Text style={{color:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>ON CALCULATE</Text>
+          <View style={{backgroundColor:C.isDark?`${col}18`:`${col}20`,borderRadius:8,
+            paddingHorizontal:8,paddingVertical:3,
+            borderWidth:1,borderColor:C.isDark?`${col}30`:`${col}50`}}>
+            <Text style={{color:C.isDark?col:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>ON CALCULATE</Text>
           </View>
         </View>
       </Animated.View>
@@ -410,16 +425,20 @@ function ProInsightsPanel(){
     return(
       <Animated.View style={[{width:"47%"},av(idx)]}>
         <View style={{borderRadius:13,borderWidth:1,borderStyle:"dashed" as any,
-          borderColor:"rgba(192,132,252,0.4)",padding:12,gap:5,
-          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"rgba(250,245,255,0.8)",alignItems:"center"}}>
-          <View style={{width:36,height:36,borderRadius:10,backgroundColor:"rgba(192,132,252,0.12)",
-            alignItems:"center",justifyContent:"center",opacity:0.7}}>
+          borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,93,246,0.5)",
+          padding:12,gap:5,
+          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"#F5F3FF",alignItems:"center",
+          shadowColor:"#000",shadowOffset:{width:0,height:C.isDark?0:1},
+          shadowOpacity:C.isDark?0:0.05,shadowRadius:3,elevation:C.isDark?0:1}}>
+          <View style={{width:36,height:36,borderRadius:10,
+            backgroundColor:C.isDark?"rgba(192,132,252,0.12)":"rgba(109,93,246,0.12)",
+            alignItems:"center",justifyContent:"center",opacity:0.8}}>
             <Text style={{fontSize:18}}>{icon}</Text>
           </View>
           <PipBadge type="secret"/>
-          <Text style={{color:C.isDark?"rgba(240,171,252,0.7)":"#7e22ce",fontSize:10,
+          <Text style={{color:C.isDark?"rgba(240,171,252,0.7)":"#5B21B6",fontSize:10,
             fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:14}}>{title}</Text>
-          <Text style={{color:C.textDim,fontSize:8,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:12}}>{desc}</Text>
+          <Text style={{color:C.isDark?C.textDim:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:13}}>{desc}</Text>
         </View>
       </Animated.View>
     );
@@ -528,11 +547,10 @@ function ProInsightsPanel(){
               </View>
             ))}
           </View>
-          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)"}}/>
+          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":C.border}}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-            <View style={{width:6,height:6,borderRadius:3,backgroundColor:"#fbbf24",
-              shadowColor:"#fbbf24",shadowOffset:{width:0,height:0},shadowOpacity:1,shadowRadius:4}}/>
-            <Text style={{color:"rgba(251,191,36,0.9)",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:C.isDark?"#fbbf24":"#D97706"}}/>
+            <Text style={{color:C.isDark?"rgba(251,191,36,0.9)":"#92400E",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
               Real-time analysis based on your birth chart
             </Text>
           </View>
@@ -611,15 +629,17 @@ function ProInsightsPanel(){
 
       {/* ══ 22 ══ BOTTOM CTA ══════════════════════════════════════════════════ */}
       <Animated.View style={av(22)}>
-        <LinearGradient colors={C.isDark?["rgba(79,46,220,0.2)","rgba(109,40,217,0.1)"]:["rgba(238,242,255,0.9)","rgba(245,243,255,0.7)"]}
+        <LinearGradient
+          colors={C.isDark?["rgba(79,46,220,0.2)","rgba(109,40,217,0.1)"]:["#EDE9FE","#DDD6FE"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:16,padding:16,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",
+          style={{borderRadius:16,padding:16,borderWidth:1,
+            borderColor:C.isDark?"rgba(139,92,246,0.25)":"rgba(109,93,246,0.4)",
             alignItems:"center",gap:6}}>
           <Text style={{fontSize:20}}>✨</Text>
-          <Text style={{color:C.isDark?"#c4b5fd":"#4c1d95",fontSize:13,fontFamily:"Nunito_700Bold",textAlign:"center"}}>
+          <Text style={{color:C.isDark?"#c4b5fd":"#4C1D95",fontSize:13,fontFamily:"Nunito_700Bold",textAlign:"center"}}>
             All 12 sections unlock instantly
           </Text>
-          <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:15}}>
+          <Text style={{color:C.isDark?C.textMuted:"#5B21B6",fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:15}}>
             Add both kundlis and calculate — your complete relationship truth will be revealed
           </Text>
         </LinearGradient>

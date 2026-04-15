@@ -539,15 +539,6 @@ function ProInsightsPanel(){
         </LinearGradient>
       </Animated.View>
 
-      {/* ══ 5 ══ PRIMARY CTA ══════════════════════════════════════════════════ */}
-      <Animated.View style={av(5)}>
-        <ShineButton colors={["#4f46e5","#7c3aed","#a855f7"]}
-          disabled={false} loading={false}
-          text="🔓 Reveal Your Complete Relationship Future"
-          onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
-        <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",
-          textAlign:"center",marginTop:7}}>Add both kundlis above &amp; tap Calculate</Text>
-      </Animated.View>
 
       {/* ══ 6 ══ SECTION: DEEP INSIGHTS ══════════════════════════════════════ */}
       <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>

@@ -261,160 +261,106 @@ function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
 // ── Pro Insights Panel (shown before result in Pro mode) ──────────────────────
 function ProInsightsPanel(){
   const C=useC();
-  const s0=useFadeIn(0);
-  const s1=useFadeIn(80);
-  const s2=useFadeIn(160);
-  const s3=useFadeIn(240);
-  const s4=useFadeIn(320);
 
-  const compat=[
-    {icon:"❤️",label:"Emotional Match",pct:0.82,col:"#f43f5e"},
-    {icon:"🧠",label:"Mental Sync",     pct:0.74,col:"#818cf8"},
-    {icon:"🔥",label:"Attraction",      pct:0.76,col:"#f97316"},
-    {icon:"💬",label:"Communication",   pct:0.68,col:"#34d399"},
+  // 12 Pro report sections — shown as "ready to calculate" teasers
+  const sections=[
+    {icon:"⚡",title:"Risk Scan",          desc:"Dosha conflicts & danger zones",         col:"#ef4444"},
+    {icon:"💞",title:"Core Compatibility", desc:"Emotional, mental & soul bond score",     col:"#f43f5e"},
+    {icon:"🔯",title:"Dosha Engine",       desc:"Mangal, Nadi, Bhakoot deep analysis",     col:"#fbbf24"},
+    {icon:"📅",title:"Future Timeline",    desc:"Marriage timing & Dasha milestones",      col:"#818cf8"},
+    {icon:"🌙",title:"Soul & Karma",       desc:"Past-life karmic debt between you two",   col:"#a78bfa"},
+    {icon:"🧠",title:"Personality Match",  desc:"Guna, Gana & temperament fit",            col:"#34d399"},
+    {icon:"🔥",title:"Intimacy Score",     desc:"Yoni koot & physical harmony index",      col:"#f97316"},
+    {icon:"🌑",title:"Negative Energy",    desc:"Hidden curses, evil eye & Graha doshas",  col:"#6366f1"},
+    {icon:"⚖️",title:"Strengths & Challenges",desc:"What will unite & test you",           col:"#22c55e"},
+    {icon:"🌿",title:"Remedies & Advice",  desc:"Puja, stones & mantra prescriptions",     col:"#10b981"},
+    {icon:"🏆",title:"Final Verdict",      desc:"Overall match prediction by Jyotish",     col:"#fbbf24"},
+    {icon:"🔒",title:"Hidden Insights",    desc:"Secret soul compatibility (rare reading)", col:"#c084fc"},
   ];
-  const doshas=[
-    {icon:"⚠️",label:"Mangal Dosha",   status:"Mild",   ok:false},
-    {icon:"⚠️",label:"Nadi Dosha",     status:"Clear",  ok:true},
-    {icon:"✅",label:"Bhakoot Match",  status:"Strong", ok:true},
-  ];
-  const future=[
-    {icon:"📅",label:"Marriage Timing",   val:"2025–2027",  col:"#a78bfa"},
-    {icon:"👶",label:"Child Planning",    val:"Normal",     col:"#34d399"},
-    {icon:"💰",label:"Financial Harmony", val:"Compatible", col:"#fbbf24"},
-  ];
-  const strengths=["Deep emotional understanding between partners","Strong Venus placement for lasting bond"];
-  const challenges=["Mars energy may cause occasional friction","Communication needs conscious effort"];
+
+  // Staggered animation refs — valid hooks usage
+  const anims=useRef(
+    Array.from({length:sections.length+3},()=>({op:new Animated.Value(0),sl:new Animated.Value(14)}))
+  ).current;
+  useEffect(()=>{
+    Animated.parallel(
+      anims.flatMap((a,i)=>[
+        Animated.timing(a.op,{toValue:1,duration:400,delay:i*55,useNativeDriver:true}),
+        Animated.timing(a.sl,{toValue:0,duration:350,delay:i*55,easing:Easing.out(Easing.quad),useNativeDriver:true}),
+      ])
+    ).start();
+  },[]);
+  const s=(i:number)=>({opacity:anims[i].op,transform:[{translateY:anims[i].sl}]});
 
   return(
-    <View style={{gap:12}}>
-      {/* Header label */}
-      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},s0]}>
-        <View style={{width:6,height:6,borderRadius:3,backgroundColor:"#a78bfa"}}/>
-        <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_700Bold",letterSpacing:1.2}}>PRO DEEP INSIGHTS</Text>
+    <View style={{gap:14}}>
+
+      {/* ── Section title ── */}
+      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},s(0)]}>
+        <View style={{width:4,height:14,borderRadius:2,backgroundColor:"#a78bfa"}}/>
+        <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_700Bold",letterSpacing:1.4}}>
+          WHAT PRO UNLOCKS FOR YOU
+        </Text>
         <View style={{flex:1}}/>
-        <View style={{backgroundColor:"rgba(139,92,246,0.15)",borderRadius:8,paddingHorizontal:8,paddingVertical:3}}>
-          <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_700Bold"}}>SAMPLE</Text>
+        <View style={{backgroundColor:"rgba(139,92,246,0.2)",borderRadius:20,paddingHorizontal:10,paddingVertical:4,borderWidth:1,borderColor:"rgba(139,92,246,0.35)"}}>
+          <Text style={{color:"#c4b5fd",fontSize:9,fontFamily:"Nunito_700Bold"}}>12 SECTIONS</Text>
         </View>
       </Animated.View>
 
-      {/* 1 ── Compatibility Breakdown */}
-      <Animated.View style={s1}>
-        <GlowCard accent="#f43f5e" C={C} style={{padding:14}}>
-          <Text style={{color:"#f9a8d4",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:12}}>
-            COMPATIBILITY BREAKDOWN
-          </Text>
-          <View style={{flexDirection:"row",justifyContent:"space-around"}}>
-            {compat.map(({icon,label,pct,col})=>(
-              <View key={label} style={{alignItems:"center",gap:6}}>
-                <MiniArc pct={pct} col={col} size={58}/>
-                <Text style={{fontSize:13}}>{icon}</Text>
-                <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_500Medium",textAlign:"center",maxWidth:55}}>{label}</Text>
+      {/* ── 12-section grid: 2 columns ── */}
+      <Animated.View style={[{flexDirection:"row",flexWrap:"wrap",gap:10},s(1)]}>
+        {sections.map(({icon,title,desc,col},i)=>(
+          <Animated.View key={title} style={[{width:"47%"},s(i+2)]}>
+            <View style={{
+              backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)",
+              borderRadius:14,borderWidth:1,
+              borderColor:`${col}28`,
+              padding:12,gap:6,
+              ...(i===11?{borderStyle:"dashed" as any,borderColor:"rgba(192,132,252,0.35)"}:{}),
+            }}>
+              {/* Top row: icon + ready badge */}
+              <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}>
+                <View style={{width:34,height:34,borderRadius:10,backgroundColor:`${col}18`,
+                  alignItems:"center",justifyContent:"center"}}>
+                  <Text style={{fontSize:17}}>{icon}</Text>
+                </View>
+                {i===11?(
+                  <View style={{backgroundColor:"rgba(192,132,252,0.15)",borderRadius:8,
+                    paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:"rgba(192,132,252,0.3)"}}>
+                    <Text style={{color:"#c084fc",fontSize:8,fontFamily:"Nunito_700Bold"}}>SECRET</Text>
+                  </View>
+                ):(
+                  <View style={{width:8,height:8,borderRadius:4,backgroundColor:`${col}`,
+                    shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.8,shadowRadius:4}}/>
+                )}
               </View>
-            ))}
-          </View>
-        </GlowCard>
+              <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
+              <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{desc}</Text>
+            </View>
+          </Animated.View>
+        ))}
       </Animated.View>
 
-      {/* 2 ── Dosha Check */}
-      <Animated.View style={s2}>
-        <GlowCard accent="#fbbf24" C={C} style={{padding:14}}>
-          <Text style={{color:"#fde68a",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:10}}>
-            DOSHA CHECK PREVIEW
-          </Text>
-          {doshas.map(({icon,label,status,ok})=>(
-            <View key={label} style={{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:7,
-              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
-              <Text style={{fontSize:15}}>{icon}</Text>
-              <Text style={{flex:1,color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
-              <View style={{backgroundColor:ok?"rgba(52,211,153,0.15)":"rgba(251,191,36,0.15)",
-                borderRadius:10,paddingHorizontal:10,paddingVertical:4,borderWidth:1,
-                borderColor:ok?"rgba(52,211,153,0.3)":"rgba(251,191,36,0.3)"}}>
-                <Text style={{color:ok?"#34d399":"#fbbf24",fontSize:10,fontFamily:"Nunito_700Bold"}}>{status}</Text>
-              </View>
-            </View>
-          ))}
-        </GlowCard>
-      </Animated.View>
-
-      {/* 3 ── Future Insights */}
-      <Animated.View style={s3}>
-        <GlowCard accent="#818cf8" C={C} style={{padding:14}}>
-          <Text style={{color:"#c7d2fe",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.5,marginBottom:10}}>
-            FUTURE INSIGHTS
-          </Text>
-          {future.map(({icon,label,val,col})=>(
-            <View key={label} style={{flexDirection:"row",alignItems:"center",gap:12,paddingVertical:8,
-              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
-              <View style={{width:36,height:36,borderRadius:10,backgroundColor:`${col}18`,
-                alignItems:"center",justifyContent:"center"}}>
-                <Text style={{fontSize:16}}>{icon}</Text>
-              </View>
-              <Text style={{flex:1,color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
-              <Text style={{color:col,fontSize:12,fontFamily:"Nunito_700Bold"}}>{val}</Text>
-            </View>
-          ))}
-        </GlowCard>
-      </Animated.View>
-
-      {/* 4 ── Strengths & Challenges */}
-      <Animated.View style={[{flexDirection:"row",gap:10},s4]}>
-        {/* Strengths */}
-        <GlowCard accent="#34d399" C={C} style={{flex:1,padding:12}}>
-          <Text style={{color:"#6ee7b7",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>
-            STRENGTHS 💚
-          </Text>
-          {strengths.map((s,i)=>(
-            <View key={i} style={{flexDirection:"row",gap:6,marginBottom:6}}>
-              <Text style={{color:"#34d399",fontSize:11,marginTop:1}}>•</Text>
-              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
-            </View>
-          ))}
-        </GlowCard>
-        {/* Challenges */}
-        <GlowCard accent="#f97316" C={C} style={{flex:1,padding:12}}>
-          <Text style={{color:"#fdba74",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>
-            CHALLENGES ⚡
-          </Text>
-          {challenges.map((s,i)=>(
-            <View key={i} style={{flexDirection:"row",gap:6,marginBottom:6}}>
-              <Text style={{color:"#f97316",fontSize:11,marginTop:1}}>•</Text>
-              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
-            </View>
-          ))}
-        </GlowCard>
-      </Animated.View>
-
-      {/* 5 ── Locked hook */}
-      <Animated.View style={s4}>
-        <View style={{borderRadius:14,overflow:"hidden"}}>
-          {/* Fake hidden rows */}
-          <View style={{backgroundColor:C.isDark?"rgba(20,10,40,0.8)":"rgba(240,235,255,0.9)",
-            borderWidth:1,borderColor:"rgba(139,92,246,0.2)",padding:14,gap:8}}>
-            {[0.9,0.6,0.35].map((op,i)=>(
-              <View key={i} style={{flexDirection:"row",gap:10,alignItems:"center",opacity:op}}>
-                <View style={{width:28,height:28,borderRadius:8,backgroundColor:"rgba(139,92,246,0.15)"}}/>
-                <View style={{height:8,flex:0.6,borderRadius:4,backgroundColor:"rgba(139,92,246,0.2)"}}/>
-                <View style={{height:8,flex:0.3,borderRadius:4,backgroundColor:"rgba(139,92,246,0.15)"}}/>
-              </View>
-            ))}
-          </View>
-          {/* Gradient overlay */}
-          <LinearGradient
-            colors={C.isDark?["transparent","rgba(11,15,25,0.85)","#0B0F19"]:["transparent","rgba(248,250,252,0.9)","#F8FAFC"]}
-            style={{position:"absolute",top:0,left:0,right:0,bottom:0,alignItems:"center",justifyContent:"flex-end",paddingBottom:14}}>
-            <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-              <Text style={{fontSize:14}}>🔒</Text>
-              <Text style={{color:C.isDark?"#c4b5fd":"#6d28d9",fontSize:13,fontFamily:"Nunito_700Bold"}}>
-                + 12 more deep insights hidden
-              </Text>
-            </View>
-            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3}}>
-              Unlock Pro to reveal all
+      {/* ── Bottom CTA nudge ── */}
+      <Animated.View style={s(sections.length+2)}>
+        <LinearGradient
+          colors={C.isDark?["rgba(109,40,217,0.15)","rgba(124,58,237,0.08)"]:["rgba(99,102,241,0.08)","rgba(139,92,246,0.05)"]}
+          start={{x:0,y:0}} end={{x:1,y:0}}
+          style={{borderRadius:14,padding:14,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",
+            flexDirection:"row",alignItems:"center",gap:12}}>
+          <Text style={{fontSize:22}}>✨</Text>
+          <View style={{flex:1}}>
+            <Text style={{color:C.isDark?"#c4b5fd":"#5b21b6",fontSize:12,fontFamily:"Nunito_700Bold"}}>
+              Add both kundlis &amp; calculate
             </Text>
-          </LinearGradient>
-        </View>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:2}}>
+              All 12 sections will unlock instantly with your real data
+            </Text>
+          </View>
+          <Feather name="arrow-down" size={16} color="#a78bfa"/>
+        </LinearGradient>
       </Animated.View>
+
     </View>
   );
 }

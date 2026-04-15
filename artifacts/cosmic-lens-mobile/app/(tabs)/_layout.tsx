@@ -16,10 +16,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="kundli">
-        <Icon sf={{ default: "star", selected: "star.fill" }} />
-        <Label>Kundli</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ask">
         <Icon sf={{ default: "message", selected: "message.fill" }} />
         <Label>Ask</Label>
@@ -52,7 +48,7 @@ function ClassicTabLayout() {
       }}
     >
       <Tabs.Screen name="index"    options={{ title: "Home" }} />
-      <Tabs.Screen name="kundli"   options={{ title: "Kundli" }} />
+      <Tabs.Screen name="kundli"   options={{ title: "Kundli", href: null }} />
       <Tabs.Screen name="ask"      options={{ title: "Ask" }} />
       <Tabs.Screen name="insights" options={{ title: "Insights" }} />
       <Tabs.Screen name="notice"   options={{ title: "Notice" }} />

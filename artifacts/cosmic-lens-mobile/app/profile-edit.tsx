@@ -123,28 +123,75 @@ function PickerBtn({
   );
 }
 
-function FamilyMemberRow({ profile, onEdit, onDelete }: {
-  profile: ProfileEntry; onEdit: () => void; onDelete: () => void;
+function FamilyMemberRow({ profile, onView, onEdit, onDelete }: {
+  profile: ProfileEntry; onView: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const relInfo = RELATIONS.find(r => r.key === profile.relation);
+  const bd = profile.birthData;
+  const k = profile.kundli;
+  const rashi = k?.moonSign ?? "—";
+  const naksh = k?.nakshatra ?? "—";
+  const lagna = k?.ascendant ?? "—";
+  const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
+
   return (
-    <View style={s.fmRow}>
-      <View style={[s.fmAvatar, { backgroundColor: C.isDark ? C.bgCard2 : "#F1F5F9" }]}>
-        <Text style={{ fontSize: 16 }}>{relInfo?.emoji ?? "👤"}</Text>
+    <View style={fm.row}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <LinearGradient
+          colors={C.isDark ? ["#0ea5e9", "#f59e0b"] : ["#7C3AED", "#a78bfa"]}
+          style={fm.avatar}
+        >
+          <Text style={fm.initials}>{relInfo?.emoji ?? initials}</Text>
+        </LinearGradient>
+
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Text style={[fm.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+            {profile.relation && (
+              <View style={[fm.relBadge, { backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : "rgba(124,58,237,0.08)", borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)" }]}>
+                <Text style={[fm.relTxt, { color: ac }]}>{profile.relation}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[fm.meta, { color: C.textMuted }]} numberOfLines={1}>
+            {bd.day}/{bd.month}/{bd.year} · {String(bd.hour).padStart(2,"0")}:{String(bd.minute).padStart(2,"0")} {bd.ampm}
+          </Text>
+          <Text style={[fm.place, { color: C.textDim }]} numberOfLines={1}>
+            {bd.place}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: 5 }}>
+          <Pressable onPress={onView} hitSlop={6} style={[fm.iconBtn, { backgroundColor: C.isDark ? "rgba(14,165,233,0.08)" : "rgba(124,58,237,0.06)", borderColor: C.isDark ? "rgba(14,165,233,0.18)" : "rgba(124,58,237,0.12)" }]}>
+            <Feather name="eye" size={12} color={C.isDark ? "#38bdf8" : "#7C3AED"} />
+          </Pressable>
+          <Pressable onPress={onEdit} hitSlop={6} style={[fm.iconBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#F1F5F9", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
+            <Feather name="edit-3" size={12} color={C.textMuted} />
+          </Pressable>
+          <Pressable onPress={onDelete} hitSlop={6} style={[fm.iconBtn, { backgroundColor: C.isDark ? "rgba(248,113,113,0.08)" : "rgba(248,113,113,0.06)", borderColor: C.isDark ? "rgba(248,113,113,0.15)" : "rgba(248,113,113,0.12)" }]}>
+            <Feather name="trash-2" size={12} color="#f87171" />
+          </Pressable>
+        </View>
       </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[s.fmName, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
-        <Text style={[s.fmSub, { color: C.textMuted }]} numberOfLines={1}>
-          {profile.relation ?? "Family"} · {profile.birthData.place}
-        </Text>
+
+      <View style={[fm.astroRow, { backgroundColor: C.isDark ? C.bgCard2 : "#F8FAFC", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.05)" }]}>
+        <View style={fm.astroItem}>
+          <Text style={[fm.astroLabel, { color: C.textDim }]}>Rashi</Text>
+          <Text style={[fm.astroValue, { color: C.isDark ? "#facc15" : "#7C3AED" }]}>{rashi}</Text>
+        </View>
+        <View style={[fm.astroDivider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]} />
+        <View style={fm.astroItem}>
+          <Text style={[fm.astroLabel, { color: C.textDim }]}>Nakshatra</Text>
+          <Text style={[fm.astroValue, { color: C.isDark ? "#facc15" : "#7C3AED" }]}>{naksh}</Text>
+        </View>
+        <View style={[fm.astroDivider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]} />
+        <View style={fm.astroItem}>
+          <Text style={[fm.astroLabel, { color: C.textDim }]}>Lagna</Text>
+          <Text style={[fm.astroValue, { color: C.isDark ? "#facc15" : "#7C3AED" }]}>{lagna}</Text>
+        </View>
       </View>
-      <Pressable onPress={onEdit} hitSlop={8} style={[s.fmIconBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#F1F5F9", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
-        <Feather name="edit-3" size={13} color={C.textMuted} />
-      </Pressable>
-      <Pressable onPress={onDelete} hitSlop={8} style={[s.fmIconBtn, { backgroundColor: C.isDark ? "rgba(248,113,113,0.08)" : "rgba(248,113,113,0.06)", borderColor: C.isDark ? "rgba(248,113,113,0.15)" : "rgba(248,113,113,0.12)" }]}>
-        <Feather name="trash-2" size={13} color="#f87171" />
-      </Pressable>
     </View>
   );
 }
@@ -154,7 +201,7 @@ export default function ProfileEditScreen() {
   const C = useC();
   const {
     profiles, primaryProfileId, addProfile, updateProfile, deleteProfile,
-    setBirthData, setKundli, syncKundliToCloud,
+    setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile,
   } = useUser();
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
@@ -576,21 +623,38 @@ export default function ProfileEditScreen() {
             )}
           </Card>
 
-          <Card>
-            <CardRow label="FAMILY MEMBERS" icon="users" />
+          <Card style={{ paddingVertical: 10, gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <CardRow label="FAMILY MEMBERS" icon="users" />
+              <Pressable
+                onPress={openFmAdd}
+                hitSlop={8}
+                style={({ pressed }) => [fm.addBtn, {
+                  backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : "rgba(124,58,237,0.08)",
+                  borderColor: C.isDark ? "rgba(245,158,11,0.22)" : "rgba(124,58,237,0.2)",
+                }, pressed && { opacity: 0.7 }]}
+              >
+                <Feather name="plus" size={11} color={ac} />
+                <Text style={{ color: ac, fontSize: 10.5, fontFamily: F.bold }}>Add</Text>
+              </Pressable>
+            </View>
 
             {familyMembers.length === 0 ? (
-              <View style={[s.fmEmpty, { backgroundColor: C.isDark ? C.bgCard2 : "#F8FAFC", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]}>
-                <Feather name="users" size={18} color={C.textDim} />
-                <Text style={[s.fmEmptyTxt, { color: C.textMuted }]}>No family members added yet</Text>
-              </View>
+              <Pressable
+                onPress={openFmAdd}
+                style={({ pressed }) => [fm.emptyRow, { backgroundColor: C.isDark ? C.bgCard2 : "#F8FAFC", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }, pressed && { opacity: 0.7 }]}
+              >
+                <Feather name="user-plus" size={14} color={C.textDim} />
+                <Text style={{ color: C.textMuted, fontSize: 11.5, fontFamily: F.medium }}>Tap to add family members</Text>
+              </Pressable>
             ) : (
               <View style={{ gap: 0 }}>
                 {familyMembers.map((p, idx) => (
                   <React.Fragment key={p.id}>
-                    {idx > 0 && <View style={[s.fmDivider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />}
+                    {idx > 0 && <View style={[fm.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />}
                     <FamilyMemberRow
                       profile={p}
+                      onView={() => { setPrimaryProfile(p.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
                       onEdit={() => openFmEdit(p)}
                       onDelete={() => handleFmDelete(p.id)}
                     />
@@ -598,17 +662,6 @@ export default function ProfileEditScreen() {
                 ))}
               </View>
             )}
-
-            <Pressable
-              onPress={openFmAdd}
-              style={({ pressed }) => [s.fmAddBtn, {
-                backgroundColor: C.isDark ? "rgba(245,158,11,0.05)" : "rgba(124,58,237,0.04)",
-                borderColor: C.isDark ? "rgba(245,158,11,0.18)" : "rgba(124,58,237,0.18)",
-              }, pressed && { opacity: 0.7 }]}
-            >
-              <Feather name="user-plus" size={14} color={ac} />
-              <Text style={[s.fmAddTxt, { color: ac }]}>Add Family Member</Text>
-            </Pressable>
           </Card>
 
           {!!error && (
@@ -982,33 +1035,6 @@ const s = StyleSheet.create({
   },
   confirmedTxt: { fontSize: 12, fontFamily: F.semibold, flex: 1 },
 
-  fmRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 8,
-  },
-  fmAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: "center", justifyContent: "center",
-  },
-  fmName: { fontSize: 13, fontFamily: F.semibold },
-  fmSub:  { fontSize: 10.5, fontFamily: F.medium, marginTop: 1 },
-  fmIconBtn: {
-    width: 28, height: 28, borderRadius: 7,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center", justifyContent: "center",
-  },
-  fmDivider: { height: StyleSheet.hairlineWidth },
-  fmEmpty: {
-    alignItems: "center", gap: 6, paddingVertical: 18,
-    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: "dashed",
-  },
-  fmEmptyTxt: { fontSize: 12, fontFamily: F.medium },
-  fmAddBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingVertical: 11, borderRadius: 10, borderWidth: 1,
-  },
-  fmAddTxt: { fontSize: 13, fontFamily: F.semibold },
 
   errorBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
@@ -1035,6 +1061,48 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 7,
   },
   saveTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold, letterSpacing: 0.2 },
+});
+
+const fm = StyleSheet.create({
+  row: { paddingVertical: 6, gap: 6 },
+  avatar: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: "center", justifyContent: "center",
+  },
+  initials: { color: "#fff", fontSize: 13, fontFamily: F.bold },
+  name: { fontSize: 13, fontFamily: F.bold, flexShrink: 1 },
+  relBadge: {
+    borderRadius: 6, borderWidth: 0.75,
+    paddingHorizontal: 5, paddingVertical: 1,
+  },
+  relTxt: { fontSize: 8, fontFamily: F.bold, letterSpacing: 0.5 },
+  meta: { fontSize: 10, fontFamily: F.medium, marginTop: 1 },
+  place: { fontSize: 9.5, fontFamily: F.regular, marginTop: 0.5 },
+  iconBtn: {
+    width: 26, height: 26, borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center", justifyContent: "center",
+  },
+  astroRow: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 8, borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 5, paddingHorizontal: 8,
+  },
+  astroItem: { flex: 1, alignItems: "center", gap: 1 },
+  astroLabel: { fontSize: 8, fontFamily: F.bold, letterSpacing: 0.5, textTransform: "uppercase" as const },
+  astroValue: { fontSize: 10.5, fontFamily: F.bold },
+  astroDivider: { width: StyleSheet.hairlineWidth, height: 18 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
+  addBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8, borderWidth: 0.75,
+  },
+  emptyRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 14, borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth, borderStyle: "dashed" as const,
+  },
 });
 
 const bs = StyleSheet.create({

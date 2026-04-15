@@ -17,7 +17,13 @@ import type { KundliData, PlanetInfo } from "@/types";
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
-// ── Shared constants ──────────────────────────────────────────────────────────
+const F = {
+  regular:  "Nunito_400Regular",
+  medium:   "Nunito_500Medium",
+  semibold: "Nunito_600SemiBold",
+  bold:     "Nunito_700Bold",
+};
+
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const NAKSHATRAS = [
   "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
@@ -56,7 +62,6 @@ function progress(s: Date | string, e: Date | string) {
   return Math.round(((n-sv)/(ev-sv))*100);
 }
 
-// ── Pratyantar calc ───────────────────────────────────────────────────────────
 function calcPratyantar(antar: any): any[] {
   if (antar.subDashas?.length > 0) return antar.subDashas;
   const si = DASHA_SEQ.indexOf(antar.planet);
@@ -72,9 +77,6 @@ function calcPratyantar(antar: any): any[] {
   return out;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 1 — DASHA TIMELINE (existing, working)
-// ════════════════════════════════════════════════════════════════════════════
 function ProgBar({ pct, color }: { pct:number; color:string }) {
   const C = useC();
   return (
@@ -98,13 +100,13 @@ function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, 
     <View>
       <View style={s.navRow}>
         <Pressable onPress={() => { if(hasPrev){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onPrev();} }}
-          style={[s.navBtn,!hasPrev&&{opacity:0.3},{ backgroundColor: C.bgCard2 }]}>
+          style={[s.navBtn,!hasPrev&&{opacity:0.3},{ backgroundColor: C.bgCard2, borderColor: C.border, borderWidth: 1 }]}>
           <Text style={[s.navBtnText,{ color: C.text }]}>← Prev</Text>
         </Pressable>
         <Text style={[s.levelLabel,{color}]}>{LEVEL_LABEL[level]}</Text>
         {showNextBtn ? (
           <Pressable onPress={() => { if(hasNext){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onNext();} }}
-            style={[s.navBtn,!hasNext&&{opacity:0.3},{ backgroundColor: C.bgCard2 }]}>
+            style={[s.navBtn,!hasNext&&{opacity:0.3},{ backgroundColor: C.bgCard2, borderColor: C.border, borderWidth: 1 }]}>
             <Text style={[s.navBtnText,{ color: C.text }]}>Next →</Text>
           </Pressable>
         ) : <View style={{width:60}} />}
@@ -116,10 +118,10 @@ function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, 
             <Text style={[s.activeBadgeText,{color}]}>Active</Text>
           </View>}
         </View>
-        <Text style={[s.dashaDates,{ color: C.textMuted }]}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
         {pct>0 && <View style={{gap:4}}>
           <ProgBar pct={pct} color={color}/>
-          <Text style={[s.pctText,{color}]}>{pct}% complete</Text>
+          <Text style={{color, fontSize: 11, fontFamily: F.semibold}}>{pct}% complete</Text>
         </View>}
       </View>
     </View>
@@ -130,7 +132,7 @@ function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:n
   const C = useC();
   return (
     <View>
-      <Text style={[s.timelineTitle,{ color: C.textMuted }]}>MAHADASHA TIMELINE</Text>
+      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA TIMELINE</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop:8}}>
         <View style={s.timelineRow}>
           {dashas.map((d,i) => {
@@ -138,7 +140,7 @@ function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:n
             return (
               <Pressable key={i} onPress={() => {Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onSelect(i);}}
                 style={[s.timelineChip,{backgroundColor:sel?`${color}1a`:C.bgCard,borderColor:sel?color:C.border}]}>
-                <Text style={[s.timelineChipText,{color:sel?color:C.textMuted}]}>{d.planet.slice(0,2)}</Text>
+                <Text style={{color:sel?color:C.textMuted, fontSize: 12, fontFamily: F.bold}}>{d.planet.slice(0,2)}</Text>
                 {active && <View style={[s.timelineDot,{backgroundColor:color}]}/>}
               </Pressable>
             );
@@ -185,11 +187,6 @@ function DashaTab({ kundli, mahaIdx, setMahaIdx, antarIdx, setAntarIdx, pratIdx,
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 2 — ASHTAKAVARGA
-// ════════════════════════════════════════════════════════════════════════════
-
-// Standard Binnashtakavarga tables (benefic positions from each significator)
 const BAV: Record<string,Record<string,number[]>> = {
   Sun: {
     Sun:[1,2,4,7,8,9,10,11], Moon:[3,6,10,11], Mars:[1,2,4,7,8,9,10,11],
@@ -236,11 +233,9 @@ function computeBAV(kundli: KundliData) {
     if (!p) return -1;
     return Math.floor(p.longitude / 30) % 12;
   };
-
   const SAV = Array(12).fill(0);
   const BAVS: Record<string, number[]> = {};
   const PLANETS = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
-
   for (const planet of PLANETS) {
     const sigs = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Asc"];
     const bav = Array(12).fill(0);
@@ -261,6 +256,7 @@ function computeBAV(kundli: KundliData) {
 
 function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const { BAVS, SAV } = useMemo(() => computeBAV(kundli), [kundli]);
   const [selPlanet, setSelPlanet] = useState("SAV");
   const PLANETS = ["SAV","Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
@@ -270,52 +266,49 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Text style={t.infoTitle}>Ashtakavarga kya hai?</Text>
-        <Text style={[t.infoBody,{ color: C.textMuted }]}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Text style={{ color: ac, fontSize: 12, fontFamily: F.bold }}>Ashtakavarga kya hai?</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
           Har grah 8 sthanon (swayam + 7 graha) se 12 rashiyon ko benefic/malefic points deta hai.
           SAV (Sarvashtakavarga) = sabhi 7 grahas ka total. Zyada points = stronger rashi.
         </Text>
       </View>
 
-      {/* Planet selector */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{flexDirection:"row",gap:6}}>
           {PLANETS.map(p => {
             const sel = p===selPlanet;
-            const color = p==="SAV" ? "#f59e0b" : hue(p);
+            const color = p==="SAV" ? ac : hue(p);
             return (
               <Pressable key={p} onPress={()=>{setSelPlanet(p);Haptics.selectionAsync();}}
-                style={[t.planetBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, sel && {backgroundColor:`${color}15`,borderColor:`${color}40`}]}>
-                <Text style={[t.planetBtnText,{color:sel?color:C.textMuted}]}>{p==="SAV"?"SAV":p.slice(0,3)}</Text>
+                style={[tb.planetBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, sel && {backgroundColor:`${color}15`,borderColor:`${color}40`}]}>
+                <Text style={{color:sel?color:C.textMuted, fontSize: 11, fontFamily: F.bold}}>{p==="SAV"?"SAV":p.slice(0,3)}</Text>
               </Pressable>
             );
           })}
         </View>
       </ScrollView>
 
-      {/* Score header */}
       <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}>
-        <Text style={{color:C.text,fontSize:14,fontWeight:"700"}}>
+        <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>
           {selPlanet === "SAV" ? "Sarvashtakavarga" : `${selPlanet} BAV`}
         </Text>
-        <Text style={{color:C.textMuted,fontSize:12}}>Total: {total}/{selPlanet==="SAV"?336:56}</Text>
+        <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium}}>Total: {total}/{selPlanet==="SAV"?336:56}</Text>
       </View>
 
-      {/* Rashi grid */}
-      <View style={t.rashiGrid}>
+      <View style={tb.rashiGrid}>
         {RASHIS_HI.map((rashi,i) => {
           const score = scores[i] ?? 0;
           const pct   = score / maxScore;
           const color = pct >= 0.7 ? "#22c55e" : pct >= 0.5 ? "#fbbf24" : pct >= 0.3 ? "#f97316" : "#ef4444";
           return (
-            <View key={i} style={[t.rashiCell,{ backgroundColor: C.bgCard }]}>
-              <Text style={[t.rashiName,{ color: C.text }]}>{rashi}</Text>
-              <Text style={[t.rashiScore,{color}]}>{score}</Text>
-              <View style={[t.rashiBar,{ backgroundColor: C.bgCard2 }]}>
-                <View style={[t.rashiBarFill,{width:`${Math.round(pct*100)}%` as any,backgroundColor:color}]}/>
+            <View key={i} style={[tb.rashiCell,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={{color: C.textMuted, fontSize: 9, fontFamily: F.bold, textAlign: "center"}}>{rashi}</Text>
+              <Text style={{color, fontSize: 18, fontFamily: F.bold}}>{score}</Text>
+              <View style={[tb.rashiBar,{ backgroundColor: C.bgCard2 }]}>
+                <View style={[tb.rashiBarFill,{width:`${Math.round(pct*100)}%` as any,backgroundColor:color}]}/>
               </View>
-              <Text style={[t.rashiTag,{color}]}>
+              <Text style={{color, fontSize: 8, fontFamily: F.bold, letterSpacing: 0.5}}>
                 {pct>=0.7?"Uchh":pct>=0.5?"Shubh":pct>=0.3?"Madhyam":"Neech"}
               </Text>
             </View>
@@ -323,21 +316,17 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
         })}
       </View>
 
-      <View style={t.legend}>
+      <View style={tb.legend}>
         {[["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]].map(([c,l])=>(
           <View key={l} style={{flexDirection:"row",alignItems:"center",gap:5}}>
             <View style={{width:8,height:8,borderRadius:4,backgroundColor:c as string}}/>
-            <Text style={{color:C.textMuted,fontSize:10}}>{l}</Text>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:F.medium}}>{l}</Text>
           </View>
         ))}
       </View>
     </View>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 3 — NAVATARA
-// ════════════════════════════════════════════════════════════════════════════
 
 const TARA_DATA = [
   { name:"Janma",       nameHindi:"जन्म",       type:"neutral", color:"#94a3b8", desc:"Karmic identity — the foundation of the birth chart" },
@@ -354,80 +343,72 @@ const TARA_DATA = [
 function computeNavatara(kundli: KundliData) {
   const moonNakIdx = NAKSHATRAS.indexOf(kundli.nakshatra ?? "");
   if (moonNakIdx < 0) return [];
-
   const coreplanets = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   return coreplanets.map(name => {
     const p = kundli.planets.find(pl => pl.name === name);
     const lon = p?.longitude ?? 0;
     const pNakIdx = Math.floor(lon / (360/27)) % 27;
-    const count   = ((pNakIdx - moonNakIdx + 27) % 27); // 0-26
-    const taraNum = (count % 9); // 0-8 → index into TARA_DATA
+    const count   = ((pNakIdx - moonNakIdx + 27) % 27);
+    const taraNum = (count % 9);
     const tara    = TARA_DATA[taraNum];
-    return {
-      planet:   name,
-      nakIdx:   pNakIdx,
-      nakName:  NAKSHATRAS[pNakIdx],
-      taraNum:  taraNum + 1,
-      tara,
-    };
+    return { planet: name, nakIdx: pNakIdx, nakName: NAKSHATRAS[pNakIdx], taraNum: taraNum + 1, tara };
   });
 }
 
 function NavataraTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const data = useMemo(() => computeNavatara(kundli), [kundli]);
   const moonNak = kundli.nakshatra ?? "?";
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Text style={t.infoTitle}>What is Navatara?</Text>
-        <Text style={[t.infoBody,{ color: C.textMuted }]}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Text style={{ color: ac, fontSize: 12, fontFamily: F.bold }}>What is Navatara?</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
           Starting from the Moon's nakshatra, all 27 nakshatras are grouped into 9-star cycles called Tara.
           Janma, Sampat, Kshema, Sadhana, Mitra, Paramamitra — auspicious; Vipat, Pratyak, Naidhana — inauspicious.
         </Text>
       </View>
 
       <View style={{flexDirection:"row",alignItems:"center",gap:8,
-        backgroundColor:"rgba(245,158,11,0.06)",borderRadius:10,padding:10,
-        borderWidth:1,borderColor:"rgba(245,158,11,0.15)"}}>
+        backgroundColor:`${ac}0a`,borderRadius:10,padding:10,
+        borderWidth:1,borderColor:`${ac}22`}}>
         <Text style={{fontSize:16}}>🌙</Text>
         <View>
-          <Text style={{color:C.textMuted,fontSize:9,fontWeight:"800",letterSpacing:1.5}}>CHANDRA NAKSHATRA (BASE)</Text>
-          <Text style={{color:C.text,fontSize:14,fontWeight:"700",marginTop:2}}>{moonNak}</Text>
+          <Text style={{color:C.textDim,fontSize:9,fontFamily:F.bold,letterSpacing:1.5}}>CHANDRA NAKSHATRA (BASE)</Text>
+          <Text style={{color:C.text,fontSize:14,fontFamily:F.bold,marginTop:2}}>{moonNak}</Text>
         </View>
       </View>
 
-      {/* Tara legend */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{flexDirection:"row",gap:6}}>
           {TARA_DATA.map((t2,i) => (
-            <View key={i} style={[t.taraChip,{borderColor:`${t2.color}30`,backgroundColor:`${t2.color}08`}]}>
-              <Text style={[{fontSize:9,fontWeight:"700",color:t2.color}]}>{i+1}</Text>
-              <Text style={[{fontSize:9,color:t2.color}]}>{t2.name.slice(0,6)}</Text>
+            <View key={i} style={[tb.taraChip,{borderColor:`${t2.color}30`,backgroundColor:`${t2.color}08`}]}>
+              <Text style={{fontSize:9,fontFamily:F.bold,color:t2.color}}>{i+1}</Text>
+              <Text style={{fontSize:9,fontFamily:F.medium,color:t2.color}}>{t2.name.slice(0,6)}</Text>
             </View>
           ))}
         </View>
       </ScrollView>
 
-      {/* Planet tara cards */}
       <View style={{gap:10}}>
         {data.map(({ planet, nakName, taraNum, tara }) => (
-          <View key={planet} style={[t.taraCard,{borderColor:`${tara.color}25`,backgroundColor:`${tara.color}06`}]}>
-            <View style={[t.taraIcon,{backgroundColor:`${hue(planet)}15`}]}>
-              <Text style={{color:hue(planet),fontSize:12,fontWeight:"800"}}>{planet.slice(0,2)}</Text>
+          <View key={planet} style={[tb.taraCard,{borderColor:`${tara.color}25`,backgroundColor:`${tara.color}06`}]}>
+            <View style={[tb.taraIcon,{backgroundColor:`${hue(planet)}15`}]}>
+              <Text style={{color:hue(planet),fontSize:12,fontFamily:F.bold}}>{planet.slice(0,2)}</Text>
             </View>
             <View style={{flex:1}}>
               <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(planet)}</Text>
-                <View style={[t.taraBadge,{backgroundColor:`${tara.color}15`}]}>
-                  <Text style={{color:tara.color,fontSize:9,fontWeight:"800"}}>{taraNum}. {tara.name}</Text>
+                <Text style={{color:C.text,fontSize:13,fontFamily:F.bold}}>{pName(planet)}</Text>
+                <View style={[tb.taraBadge,{backgroundColor:`${tara.color}15`}]}>
+                  <Text style={{color:tara.color,fontSize:9,fontFamily:F.bold}}>{taraNum}. {tara.name}</Text>
                 </View>
               </View>
-              <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>
-                Nakshatra: <Text style={{color:C.textMuted}}>{nakName}</Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:2}}>
+                Nakshatra: {nakName}
               </Text>
-              <Text style={{color:tara.color,fontSize:11,marginTop:2}}>{tara.desc}</Text>
+              <Text style={{color:tara.color,fontSize:11,fontFamily:F.medium,marginTop:2}}>{tara.desc}</Text>
             </View>
             <Text style={{fontSize:16}}>
               {tara.type==="great"?"⭐":tara.type==="good"?"✅":tara.type==="bad"?"⚠️":"🔵"}
@@ -438,10 +419,6 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
     </View>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 4 — JAIMINI CHARA KARAKAS
-// ════════════════════════════════════════════════════════════════════════════
 
 const KARAKA_DEFS = [
   { key:"AK",  name:"Atmakaraka",    nameHindi:"आत्मकारक",   desc:"Aatma, soul, jeevana ka uddeshya",    color:"#f59e0b" },
@@ -459,76 +436,73 @@ function computeChara(kundli: KundliData) {
     const p = kundli.planets.find(pl => pl.name === name);
     if (!p) return { name, deg: 0 };
     let deg = p.longitude % 30;
-    if (name === "Rahu") deg = 30 - deg; // Rahu counts backward
+    if (name === "Rahu") deg = 30 - deg;
     return { name, deg };
   });
-  // Sort descending by degree
   const sorted = [...vals].sort((a,b) => b.deg - a.deg);
   return sorted.map((v, i) => ({ ...v, karaka: KARAKA_DEFS[i] }));
 }
 
 function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const data = useMemo(() => computeChara(kundli), [kundli]);
   const ak   = data[0];
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Text style={t.infoTitle}>Jaimini Chara Karakas kya hain?</Text>
-        <Text style={[t.infoBody,{ color: C.textMuted }]}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Text style={{ color: ac, fontSize: 12, fontFamily: F.bold }}>Jaimini Chara Karakas kya hain?</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
           Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain.
           Sabse zyada degree wala graha Atmakaraka (soul indicator) hota hai.
           Rahu ki degree ulti ginee jaati hai (30 - deg).
         </Text>
       </View>
 
-      {/* AK highlight */}
       {ak && (
-        <View style={[t.akCard,{ backgroundColor: C.bgCard },{ borderColor:`${hue(ak.name)}40`}]}>
+        <View style={[tb.akCard,{ backgroundColor: C.bgCard, borderColor:`${hue(ak.name)}40`}]}>
           <View style={{flexDirection:"row",alignItems:"center",gap:12}}>
-            <View style={[t.akPlanet,{backgroundColor:`${hue(ak.name)}15`,borderColor:`${hue(ak.name)}30`}]}>
-              <Text style={{color:hue(ak.name),fontSize:20,fontWeight:"800"}}>{ak.name.slice(0,2)}</Text>
+            <View style={[tb.akPlanet,{backgroundColor:`${hue(ak.name)}15`,borderColor:`${hue(ak.name)}30`}]}>
+              <Text style={{color:hue(ak.name),fontSize:20,fontFamily:F.bold}}>{ak.name.slice(0,2)}</Text>
             </View>
             <View>
-              <Text style={{color:C.textMuted,fontSize:10,fontWeight:"700",letterSpacing:1.5}}>ATMAKARAKA</Text>
-              <Text style={{color:C.text,fontSize:18,fontWeight:"800",marginTop:2}}>{pName(ak.name)}</Text>
-              <Text style={{color:C.textMuted,fontSize:11,marginTop:3}}>{ak.karaka?.desc}</Text>
+              <Text style={{color:C.textDim,fontSize:10,fontFamily:F.bold,letterSpacing:1.5}}>ATMAKARAKA</Text>
+              <Text style={{color:C.text,fontSize:18,fontFamily:F.bold,marginTop:2}}>{pName(ak.name)}</Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:3}}>{ak.karaka?.desc}</Text>
             </View>
           </View>
-          <Text style={{color:C.textDim,fontSize:11,marginTop:8}}>
+          <Text style={{color:C.textDim,fontSize:11,fontFamily:F.medium,marginTop:8}}>
             Degree within sign: {ak.deg.toFixed(2)}° — highest in chart
           </Text>
         </View>
       )}
 
-      {/* All karakas */}
       <View style={{gap:8}}>
         {data.map(({ name, deg, karaka }) => {
           if (!karaka) return null;
           const color = karaka.color;
           return (
-            <View key={name} style={[t.karakaRow,{ backgroundColor: C.bgCard },{borderColor:`${color}20`}]}>
-              <View style={[t.karakaRank,{backgroundColor:`${color}15`}]}>
-                <Text style={{color,fontSize:11,fontWeight:"700"}}>{karaka.key}</Text>
+            <View key={name} style={[tb.karakaRow,{ backgroundColor: C.bgCard, borderColor:`${color}20`}]}>
+              <View style={[tb.karakaRank,{backgroundColor:`${color}15`}]}>
+                <Text style={{color,fontSize:11,fontFamily:F.bold}}>{karaka.key}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
-                  <Text style={{color:C.textDim,fontSize:10}}>({deg.toFixed(1)}°)</Text>
+                  <Text style={{color:C.text,fontSize:13,fontFamily:F.bold}}>{pName(name)}</Text>
+                  <Text style={{color:C.textDim,fontSize:10,fontFamily:F.medium}}>({deg.toFixed(1)}°)</Text>
                 </View>
-                <Text style={{color,fontSize:11,fontWeight:"600"}}>{karaka.name} · {karaka.nameHindi}</Text>
-                <Text style={{color:C.textMuted,fontSize:11,marginTop:1}}>{karaka.desc}</Text>
+                <Text style={{color,fontSize:11,fontFamily:F.semibold}}>{karaka.name} · {karaka.nameHindi}</Text>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:1}}>{karaka.desc}</Text>
               </View>
             </View>
           );
         })}
       </View>
 
-      {/* Char Rashi Karakas note */}
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(167,139,250,0.2)"}]}>
-        <Text style={{color:"#a78bfa",fontSize:12,fontWeight:"700",marginBottom:4}}>Jaimini Lagna</Text>
-        <Text style={{color:C.textMuted,fontSize:12,lineHeight:19}}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor:"rgba(167,139,250,0.2)"}]}>
+        <Text style={{color:"#a78bfa",fontSize:12,fontFamily:F.bold,marginBottom:4}}>Jaimini Lagna</Text>
+        <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.regular,lineHeight:19}}>
           Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position
           jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein.
         </Text>
@@ -537,19 +511,12 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 5 — TRANSIT
-// ════════════════════════════════════════════════════════════════════════════
-
-// Approximate current transit positions using mean orbital periods
 function approxTransit(referenceDate: Date = new Date()): Record<string,number> {
-  // J2000 longitudes (approximate mean positions on Jan 1, 2000)
   const J2000_LON: Record<string,number> = {
     Sun:280.46, Moon:218.32, Mars:355.43, Mercury:280.47,
     Jupiter:34.35, Venus:181.97, Saturn:49.94,
     Rahu:125.04, Ketu:305.04,
   };
-  // Daily mean motions (degrees/day)
   const DAILY_MOT: Record<string,number> = {
     Sun:0.9856, Moon:13.1764, Mars:0.5240, Mercury:1.3833,
     Jupiter:0.0831, Venus:1.6021, Saturn:0.0335,
@@ -566,31 +533,32 @@ function approxTransit(referenceDate: Date = new Date()): Record<string,number> 
 
 function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const transits = useMemo(() => approxTransit(), []);
   const ascRashi = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(251,191,36,0.2)"}]}>
-        <Text style={{color:C.isDark?"#fbbf24":"#92400E",fontSize:11,fontWeight:"700",marginBottom:3}}>⚠️ Approximate Transit</Text>
-        <Text style={[t.infoBody,{ color: C.textMuted }]}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor: C.warningBorder }]}>
+        <Text style={{color: C.warningText, fontSize:11, fontFamily: F.bold, marginBottom:3}}>⚠️ Approximate Transit</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
           Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful.
           Exact transits ke liye Ephemeris ya jyotishi se confirm karein.
         </Text>
       </View>
 
       {moonRashi && (
-        <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(245,158,11,0.2)"}]}>
-          <Text style={{color:C.textMuted,fontSize:9,fontWeight:"800",letterSpacing:1.5}}>LIVE — CHANDRA TRANSIT (API)</Text>
-          <Text style={{color:C.text,fontSize:14,fontWeight:"700",marginTop:4}}>
+        <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor:`${ac}30`}]}>
+          <Text style={{color:C.textDim,fontSize:9,fontFamily:F.bold,letterSpacing:1.5}}>LIVE — CHANDRA TRANSIT (API)</Text>
+          <Text style={{color:C.text,fontSize:14,fontFamily:F.bold,marginTop:4}}>
             {moonRashi.name} · Bhav {((moonRashi.index - ascRashi + 12)%12)+1}
           </Text>
-          <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>Nakshatra: {moonRashi.nakshatra}</Text>
+          <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:2}}>Nakshatra: {moonRashi.nakshatra}</Text>
         </View>
       )}
 
-      <Text style={{color:C.isDark?"#f59e0b":"#92400E",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
+      <Text style={{color:ac,fontSize:10,fontFamily:F.bold,letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
       <View style={{gap:8}}>
         {CORE.map(name => {
           const lon     = transits[name] ?? 0;
@@ -606,22 +574,22 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
           const isConj  = natalR === rashi && natalR >= 0;
 
           return (
-            <View key={name} style={[t.transitRow,{ backgroundColor: C.bgCard },isConj&&{borderColor:`${pHue}40`,backgroundColor:`${pHue}05`}]}>
-              <View style={[t.transitIcon,{backgroundColor:`${pHue}15`}]}>
-                <Text style={{color:pHue,fontSize:11,fontWeight:"800"}}>{name.slice(0,2)}</Text>
+            <View key={name} style={[tb.transitRow,{ backgroundColor: C.bgCard, borderColor: C.border },isConj&&{borderColor:`${pHue}40`,backgroundColor:`${pHue}05`}]}>
+              <View style={[tb.transitIcon,{backgroundColor:`${pHue}15`}]}>
+                <Text style={{color:pHue,fontSize:11,fontFamily:F.bold}}>{name.slice(0,2)}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
+                  <Text style={{color:C.text,fontSize:13,fontFamily:F.bold}}>{pName(name)}</Text>
                   {isConj && <View style={{backgroundColor:`${pHue}20`,borderRadius:6,paddingHorizontal:5,paddingVertical:1}}>
-                    <Text style={{color:pHue,fontSize:8,fontWeight:"700"}}>NATAL CONJ</Text>
+                    <Text style={{color:pHue,fontSize:8,fontFamily:F.bold}}>NATAL CONJ</Text>
                   </View>}
                 </View>
-                <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:2}}>
                   {RASHIS_HI[rashi]} · Bhav {house} · {nakName}
                 </Text>
               </View>
-              <Text style={{color:C.textMuted,fontSize:11}}>{deg}°</Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium}}>{deg}°</Text>
             </View>
           );
         })}
@@ -630,10 +598,6 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// TAB 6 — KP (Krishnamurti Paddhati)
-// ════════════════════════════════════════════════════════════════════════════
-
 function getKPLords(longitude: number): { nakName:string; starLord:string; subLord:string; subSubLord:string } {
   const NAK_SPAN = 360 / 27;
   const nakIdx   = Math.floor(longitude / NAK_SPAN) % 27;
@@ -641,11 +605,9 @@ function getKPLords(longitude: number): { nakName:string; starLord:string; subLo
   const posInNak = longitude - nakStart;
   const starLord = NAK_LORDS[nakIdx];
   const startIdx = DASHA_SEQ.indexOf(starLord);
-
   let pos = 0;
   let subLord    = starLord;
   let subSubLord = starLord;
-
   for (let i = 0; i < 9; i++) {
     const planet = DASHA_SEQ[(startIdx + i) % 9];
     const span   = (DASHA_YRS[planet] / 120) * NAK_SPAN;
@@ -669,6 +631,7 @@ function getKPLords(longitude: number): { nakName:string; starLord:string; subLo
 
 function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   const ascLon = kundli.ascendantDeg ?? 0;
   const kpData = useMemo(() => {
@@ -683,33 +646,33 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Text style={t.infoTitle}>What is KP Paddhati?</Text>
-        <Text style={[t.infoBody,{ color: C.textMuted }]}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Text style={{ color: ac, fontSize: 12, fontFamily: F.bold }}>What is KP Paddhati?</Text>
+        <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
           Krishnamurti Paddhati (KP) calculates the Star-lord (Nakshatra Lord) and Sub-lord for each planet and ascendant.
           It uses proportional sub-divisions of Vimshottari dasha for precision — widely regarded as highly accurate for event timing.
         </Text>
       </View>
 
-      <Text style={{color:C.isDark?"#f59e0b":"#92400E",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
+      <Text style={{color:ac,fontSize:10,fontFamily:F.bold,letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
 
       <View style={{gap:8}}>
         {kpData.map(({ name, lon, kp }) => {
           const isAsc = name === "Ascendant";
-          const pHue  = isAsc ? "#f59e0b" : hue(name);
+          const pHue  = isAsc ? ac : hue(name);
           return (
-            <View key={name} style={[t.kpRow,{ backgroundColor: C.bgCard },{borderColor:`${pHue}20`}]}>
-              <View style={[t.kpIcon,{backgroundColor:`${pHue}12`}]}>
-                <Text style={{color:pHue,fontSize:10,fontWeight:"800"}}>
+            <View key={name} style={[tb.kpRow,{ backgroundColor: C.bgCard, borderColor:`${pHue}20`}]}>
+              <View style={[tb.kpIcon,{backgroundColor:`${pHue}12`}]}>
+                <Text style={{color:pHue,fontSize:10,fontFamily:F.bold}}>
                   {isAsc?"Asc":name.slice(0,2)}
                 </Text>
               </View>
               <View style={{flex:1,gap:3}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:12,fontWeight:"700"}}>
+                  <Text style={{color:C.text,fontSize:12,fontFamily:F.bold}}>
                     {isAsc?"Ascendant":pName(name)}
                   </Text>
-                  <Text style={{color:C.textDim,fontSize:10}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
+                  <Text style={{color:C.textDim,fontSize:10,fontFamily:F.medium}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
                 </View>
                 <View style={{flexDirection:"row",gap:6,flexWrap:"wrap"}}>
                   <KPLordChip label="Star" lord={kp.starLord}/>
@@ -722,9 +685,9 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         })}
       </View>
 
-      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(167,139,250,0.2)"}]}>
-        <Text style={{color:"#a78bfa",fontSize:12,fontWeight:"700",marginBottom:4}}>KP Significators</Text>
-        <Text style={{color:C.textMuted,fontSize:12,lineHeight:19}}>
+      <View style={[tb.infoBox,{ backgroundColor: C.bgCard, borderColor:"rgba(167,139,250,0.2)"}]}>
+        <Text style={{color:"#a78bfa",fontSize:12,fontFamily:F.bold,marginBottom:4}}>KP Significators</Text>
+        <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.regular,lineHeight:19}}>
           Kisi bhi ghatna ke liye dekhen: Star-lord aur Sub-lord ka relationship aur unke
           nakshatra se kaunse bhav connected hain. Agar 3 lord agree karein → event pakka.
         </Text>
@@ -737,16 +700,12 @@ function KPLordChip({ label, lord }: { label:string; lord:string }) {
   const C = useC();
   const color = hue(lord);
   return (
-    <View style={[t.kpChip,{backgroundColor:`${color}10`,borderColor:`${color}25`}]}>
-      <Text style={{color:C.textMuted,fontSize:8}}>{label}: </Text>
-      <Text style={{color,fontSize:9,fontWeight:"700"}}>{lord}</Text>
+    <View style={[tb.kpChip,{backgroundColor:`${color}10`,borderColor:`${color}25`}]}>
+      <Text style={{color:C.textMuted,fontSize:8,fontFamily:F.medium}}>{label}: </Text>
+      <Text style={{color,fontSize:9,fontFamily:F.bold}}>{lord}</Text>
     </View>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// MAIN SCREEN
-// ════════════════════════════════════════════════════════════════════════════
 
 const CHART_BTNS = [
   { label:"Kundli ✦",    tab:"Kundli",       gold:false },
@@ -761,9 +720,10 @@ export default function KundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const { kundli, language } = useUser();
-  const t = getT(language);
+  const tI18n = getT(language);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
 
   const [activeTab, setActiveTab] = useState("Kundli");
   const [mahaIdx,   setMahaIdx]   = useState(0);
@@ -771,7 +731,6 @@ export default function KundliScreen() {
   const [pratIdx,   setPratIdx]   = useState(0);
   const [moonRashi, setMoonRashi] = useState<any>(null);
 
-  // Fetch live moon transit
   useEffect(() => {
     apiFetch(`${BASE_URL}/api/moon_transit`)
       .then(r => r.json())
@@ -783,31 +742,31 @@ export default function KundliScreen() {
       }).catch(()=>{});
   }, []);
 
-  // Auto-select current dasha
   useEffect(() => {
     if (!kundli) return;
     const now=Date.now();
     const mi=kundli.dashas.findIndex((d:any)=>tsOf(d.startDate)<=now&&tsOf(d.endDate)>now);
     const mI=mi>=0?mi:0; setMahaIdx(mI);
     const subs=kundli.dashas[mI]?.subDashas??[];
-    const ai=subs.findIndex((s:any)=>tsOf(s.startDate)<=now&&tsOf(s.endDate)>now);
+    const ai=subs.findIndex((s2:any)=>tsOf(s2.startDate)<=now&&tsOf(s2.endDate)>now);
     const aI=ai>=0?ai:0; setAntarIdx(aI);
     const prats=subs[aI]?calcPratyantar(subs[aI]):[];
     const pi=prats.findIndex((p:any)=>tsOf(p.startDate)<=now&&tsOf(p.endDate)>now);
     setPratIdx(pi>=0?pi:0);
   }, [kundli]);
 
-  // ── No kundli state
   if (!kundli) {
     return (
       <CosmicBg contentStyle={{paddingTop:topPad+20,paddingBottom:botPad+80}}>
         <View style={s.emptyWrap}>
-          <View style={s.emptyIcon}><Feather name="star" size={32} color={C.isDark ? "#f59e0b" : "#92400E"}/></View>
-          <Text style={[s.emptyTitle, { color: C.text }]}>{t.noKundli}</Text>
-          <Text style={[s.emptySub, { color: C.textMuted }]}>{t.noKundliSub}</Text>
+          <View style={[s.emptyIcon, { borderColor: `${ac}40`, backgroundColor: `${ac}07` }]}>
+            <Feather name="star" size={32} color={ac}/>
+          </View>
+          <Text style={[s.emptyTitle, { color: C.text }]}>{tI18n.noKundli}</Text>
+          <Text style={[s.emptySub, { color: C.textMuted }]}>{tI18n.noKundliSub}</Text>
           <Pressable style={({pressed})=>[s.emptyBtn, { backgroundColor: C.accent },pressed&&{opacity:0.8}]}
             onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/onboarding");}}>
-            <Text style={[s.emptyBtnText, { color: "#fff" }]}>{t.createKundli}</Text>
+            <Text style={[s.emptyBtnText, { color: "#fff" }]}>{tI18n.createKundli}</Text>
             <Feather name="arrow-right" size={15} color="#fff"/>
           </Pressable>
         </View>
@@ -815,7 +774,6 @@ export default function KundliScreen() {
     );
   }
 
-  // Snapshot rows
   const dashaBalance = kundli.dashaBalance;
   const ruler        = kundli.nakshatraRuler ?? "?";
   const dbText = dashaBalance != null ? (() => {
@@ -843,16 +801,20 @@ export default function KundliScreen() {
       contentContainerStyle={[s.content,{paddingTop:topPad+16,paddingBottom:botPad+100}]}
       showsVerticalScrollIndicator={false}>
 
-      {/* Tab buttons */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:16}}>
         <View style={s.chartBtnRow}>
           {CHART_BTNS.map(({ label, tab, gold }) => {
             const active = activeTab === tab;
+            const goldColor = C.isDark ? "#facc15" : "#B45309";
             return (
               <Pressable key={tab}
                 onPress={() => { setActiveTab(tab); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                style={[s.chartBtn, { backgroundColor: C.bgCard, borderColor: C.border }, gold&&s.chartBtnGold, active&&s.chartBtnActive]}>
-                <Text style={[s.chartBtnText, { color: C.textDim }, gold&&s.chartBtnTextGold, active&&s.chartBtnTextActive]}>
+                style={[s.chartBtn, { backgroundColor: C.bgCard, borderColor: C.border },
+                  gold && { borderColor: `${goldColor}40` },
+                  active && { backgroundColor:`${ac}12`, borderColor:`${ac}55` }]}>
+                <Text style={[{ color: C.textDim, fontSize: 11, fontFamily: F.bold, letterSpacing: 0.5 },
+                  gold && { color: goldColor },
+                  active && { color: ac }]}>
                   {label}
                 </Text>
               </Pressable>
@@ -861,52 +823,48 @@ export default function KundliScreen() {
         </View>
       </ScrollView>
 
-      {/* Snapshot — always shown */}
       <View style={[s.snapshotCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-        {snapshotRows.map(({ label, value }) => (
-          <View key={label} style={[s.snapshotRow, { borderBottomColor: C.border }]}>
-            <Text style={[s.snapshotLabel, { color: C.textMuted }]}>{label}</Text>
-            <Text style={[s.snapshotValue, { color: C.text }]} numberOfLines={1}>{value}</Text>
+        {snapshotRows.map(({ label, value }, idx) => (
+          <View key={label} style={[s.snapshotRow, { borderBottomColor: C.border }, idx === snapshotRows.length - 1 && { borderBottomWidth: 0 }]}>
+            <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.8, flex: 1 }}>{label}</Text>
+            <Text style={{ color: C.text, fontSize: 12, fontFamily: F.medium, flex: 1, textAlign: "right" }} numberOfLines={1}>{value}</Text>
           </View>
         ))}
       </View>
 
-      {/* Planet Position shortcut */}
       <Pressable
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/planet-position"); }}
-        style={({ pressed }) => [s.planetBtn, { borderColor: C.border, backgroundColor: C.bgCard }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [s.linkBtn, { borderColor: C.border, backgroundColor: C.bgCard }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
       >
-        <View style={s.planetBtnLeft}>
-          <View style={[s.planetBtnIcon, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+        <View style={s.linkBtnLeft}>
+          <View style={[s.linkBtnIcon, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Feather name="target" size={16} color={C.textMid} />
           </View>
           <View>
-            <Text style={[s.planetBtnTitle, { color: C.text }]}>Planet Position</Text>
-            <Text style={[s.planetBtnSub, { color: C.textMuted }]}>Live graha degrees aur rashi</Text>
+            <Text style={{ color: C.text, fontSize: 13, fontFamily: F.bold }}>Planet Position</Text>
+            <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 1 }}>Live graha degrees aur rashi</Text>
           </View>
         </View>
         <Feather name="chevron-right" size={16} color={C.textMuted} />
       </Pressable>
 
-      {/* Daily Alerts shortcut */}
       <Pressable
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/daily-alerts"); }}
-        style={({ pressed }) => [s.planetBtn, { borderColor: C.border2, backgroundColor: C.accentBg }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [s.linkBtn, { borderColor: `${ac}30`, backgroundColor: `${ac}06` }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
       >
-        <View style={s.planetBtnLeft}>
-          <View style={[s.planetBtnIcon, { backgroundColor: C.accentBg, borderColor: C.border }]}>
-            <Feather name="bell" size={16} color={C.accent} />
+        <View style={s.linkBtnLeft}>
+          <View style={[s.linkBtnIcon, { backgroundColor: `${ac}10`, borderColor: `${ac}20` }]}>
+            <Feather name="bell" size={16} color={ac} />
           </View>
           <View>
-            <Text style={[s.planetBtnTitle, { color: C.accent }]}>Daily Alerts</Text>
-            <Text style={[s.planetBtnSub, { color: C.textMuted }]}>4-day planetary guidance · आज का संकेत</Text>
+            <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>Daily Alerts</Text>
+            <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 1 }}>4-day planetary guidance · आज का संकेत</Text>
           </View>
         </View>
-        <Feather name="chevron-right" size={16} color={C.accent} style={{ opacity: 0.7 }} />
+        <Feather name="chevron-right" size={16} color={ac} style={{ opacity: 0.7 }} />
       </Pressable>
 
-      {/* Tab heading */}
-      <Text style={s.sectionTitle}>
+      <Text style={{ color: ac, fontSize: 10, fontFamily: F.bold, letterSpacing: 2.5 }}>
         {activeTab==="Kundli"?"DASHA TIMELINE"
           :activeTab==="Ashtakavarga"?"ASHTAKAVARGA — BINNASHTAKAVARGA"
           :activeTab==="Navatara"?"NAVATARA — 9 TARA SYSTEM"
@@ -915,7 +873,6 @@ export default function KundliScreen() {
           :"KP — STAR · SUB · SUB-SUB LORD"}
       </Text>
 
-      {/* Tab content */}
       {activeTab === "Kundli" && (
         <DashaTab kundli={kundli} mahaIdx={mahaIdx} setMahaIdx={setMahaIdx}
           antarIdx={antarIdx} setAntarIdx={setAntarIdx}
@@ -931,106 +888,68 @@ export default function KundliScreen() {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// STYLES
-// ════════════════════════════════════════════════════════════════════════════
 const s = StyleSheet.create({
   root:    { flex:1 },
   content: { paddingHorizontal:16, gap:16 },
 
   emptyWrap: { flex:1, alignItems:"center", paddingHorizontal:24, gap:14, paddingTop:60 },
-  emptyIcon: { width:80,height:80,borderRadius:40,backgroundColor:"rgba(139,92,246,0.07)",borderWidth:1,borderColor:"rgba(139,92,246,0.25)",alignItems:"center",justifyContent:"center" },
-  emptyTitle: { color:"#dde8f4",fontSize:20,fontWeight:"700",textAlign:"center" },
-  emptySub:   { color:"#3d5a7a",fontSize:13,lineHeight:20,textAlign:"center" },
+  emptyIcon: { width:80,height:80,borderRadius:40,borderWidth:1,alignItems:"center",justifyContent:"center" },
+  emptyTitle: { fontSize:20,fontFamily:F.bold,textAlign:"center" },
+  emptySub:   { fontSize:13,fontFamily:F.regular,lineHeight:20,textAlign:"center" },
   emptyBtn: { flexDirection:"row",alignItems:"center",gap:8,paddingVertical:13,paddingHorizontal:24,borderRadius:14,marginTop:4 },
-  emptyBtnText: { color:"#020d1a",fontWeight:"800",fontSize:14 },
+  emptyBtnText: { fontFamily:F.bold,fontSize:14 },
 
   chartBtnRow: { flexDirection:"row",gap:8 },
-  chartBtn: { paddingVertical:9,paddingHorizontal:13,borderRadius:11,borderWidth:1.5,backgroundColor:"#0f172a",borderColor:"#1e293b" },
-  chartBtnActive: { backgroundColor:"rgba(245,158,11,0.1)",borderColor:"rgba(245,158,11,0.45)" },
-  chartBtnGold: { borderColor:"rgba(250,204,21,0.4)" },
-  chartBtnText:       { color:"#4b5563",fontSize:11,fontWeight:"700",letterSpacing:0.5 },
-  chartBtnTextActive: { color:"#f59e0b" },
-  chartBtnTextGold:   { color:"#facc15" },
+  chartBtn: { paddingVertical:9,paddingHorizontal:13,borderRadius:11,borderWidth:1.5 },
 
-  snapshotCard: { backgroundColor:"rgba(245,158,11,0.04)",borderRadius:16,borderWidth:1,borderColor:"rgba(255,255,255,0.08)",padding:14,gap:0 },
-  snapshotRow:  { flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",paddingVertical:8,borderBottomWidth:1,borderBottomColor:"#0a1828" },
-  snapshotLabel: { color:"#4b5563",fontSize:10,fontWeight:"700",letterSpacing:0.8,flex:1 },
-  snapshotValue: { color:"#ffffff",fontSize:12,fontWeight:"500",flex:1,textAlign:"right" },
+  snapshotCard: { borderRadius:16,borderWidth:1,padding:14,gap:0 },
+  snapshotRow:  { flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",paddingVertical:8,borderBottomWidth:1 },
 
-  sectionTitle: { color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5 },
-
-  planetBtn: {
+  linkBtn: {
     flexDirection:"row", alignItems:"center", justifyContent:"space-between",
-    backgroundColor:"rgba(245,158,11,0.06)", borderRadius:14, borderWidth:1,
-    borderColor:"rgba(245,158,11,0.25)", paddingVertical:12, paddingHorizontal:14,
+    borderRadius:14, borderWidth:1, paddingVertical:12, paddingHorizontal:14,
   },
-  planetBtnLeft: { flexDirection:"row", alignItems:"center", gap:12 },
-  planetBtnIcon: {
+  linkBtnLeft: { flexDirection:"row", alignItems:"center", gap:12 },
+  linkBtnIcon: {
     width:36, height:36, borderRadius:10,
-    backgroundColor:"rgba(245,158,11,0.12)", borderWidth:1, borderColor:"rgba(245,158,11,0.2)",
-    alignItems:"center", justifyContent:"center",
+    borderWidth:1, alignItems:"center", justifyContent:"center",
   },
-  planetBtnTitle: { color:"#f59e0b", fontSize:13, fontWeight:"700" },
-  planetBtnSub:   { color:"#4b5563", fontSize:10, marginTop:1 },
 
-  // Dasha tab
   navRow:  { flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:8 },
-  navBtn:  { backgroundColor:"#1a2133",paddingVertical:6,paddingHorizontal:12,borderRadius:8 },
-  navBtnText: { color:"#e5e7eb",fontSize:11,fontWeight:"600" },
-  levelLabel: { fontSize:10,fontWeight:"800",letterSpacing:1.5,textTransform:"uppercase" },
+  navBtn:  { paddingVertical:6,paddingHorizontal:12,borderRadius:8 },
+  navBtnText: { fontSize:11,fontFamily:F.semibold },
+  levelLabel: { fontSize:10,fontFamily:F.bold,letterSpacing:1.5 },
   dashaCard: { borderRadius:16,borderWidth:1.5,padding:16,gap:6 },
   dashaHeader: { flexDirection:"row",justifyContent:"space-between",alignItems:"center" },
-  dashaPlanetName: { color:"#ffffff",fontSize:22,fontWeight:"700" },
+  dashaPlanetName: { fontSize:22,fontFamily:F.bold },
   activeBadge:     { paddingVertical:3,paddingHorizontal:10,borderRadius:20 },
-  activeBadgeText: { fontSize:11,fontWeight:"700" },
-  dashaDates:      { color:"#6b7280",fontSize:12 },
-  progBg:   { height:3,borderRadius:2,backgroundColor:"#1f2937",overflow:"hidden" },
+  activeBadgeText: { fontSize:11,fontFamily:F.bold },
+  progBg:   { height:3,borderRadius:2,overflow:"hidden" },
   progFill: { height:"100%",borderRadius:2 },
-  pctText:  { fontSize:11,fontWeight:"600" },
-  timelineTitle: { color:"#4b5563",fontSize:9,fontWeight:"700",letterSpacing:1.5,textTransform:"uppercase" },
   timelineRow:   { flexDirection:"row",gap:8,paddingBottom:4 },
   timelineChip: { minWidth:44,paddingVertical:8,paddingHorizontal:8,borderRadius:12,borderWidth:1.5,alignItems:"center" },
-  timelineChipText: { fontSize:12,fontWeight:"700" },
   timelineDot: { width:6,height:6,borderRadius:3,marginTop:3 },
 });
 
-// Shared tab styles
-const t = StyleSheet.create({
-  infoBox: { backgroundColor:"rgba(255,255,255,0.02)",borderRadius:12,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",padding:12,gap:5 },
-  infoTitle: { color:"#f59e0b",fontSize:12,fontWeight:"700" },
-  infoBody:  { color:"#475569",fontSize:12,lineHeight:19 },
-
-  // Ashtakavarga
-  planetBtn: { paddingVertical:8,paddingHorizontal:12,borderRadius:10,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",backgroundColor:"rgba(255,255,255,0.02)" },
-  planetBtnText: { fontSize:11,fontWeight:"700" },
+const tb = StyleSheet.create({
+  infoBox: { borderRadius:12,borderWidth:1,padding:12,gap:5 },
+  planetBtn: { paddingVertical:8,paddingHorizontal:12,borderRadius:10,borderWidth:1 },
   rashiGrid: { flexDirection:"row",flexWrap:"wrap",gap:8 },
-  rashiCell: { width:"23%",backgroundColor:"#040e1f",borderRadius:10,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",padding:8,gap:4,alignItems:"center" },
-  rashiName:  { color:"#475569",fontSize:9,fontWeight:"700",textAlign:"center" },
-  rashiScore: { fontSize:18,fontWeight:"800" },
-  rashiBar: { width:"100%",height:3,backgroundColor:"#0f1e2e",borderRadius:2,overflow:"hidden" },
+  rashiCell: { width:"23%" as any,borderRadius:10,borderWidth:1,padding:8,gap:4,alignItems:"center" },
+  rashiBar: { width:"100%",height:3,borderRadius:2,overflow:"hidden" },
   rashiBarFill: { height:3,borderRadius:2 },
-  rashiTag: { fontSize:8,fontWeight:"700",letterSpacing:0.5 },
   legend: { flexDirection:"row",flexWrap:"wrap",gap:10,justifyContent:"center" },
-
-  // Navatara
   taraChip: { borderWidth:1,borderRadius:8,paddingHorizontal:8,paddingVertical:5,alignItems:"center",gap:2 },
   taraCard: { flexDirection:"row",alignItems:"flex-start",gap:10,borderWidth:1,borderRadius:12,padding:12 },
   taraIcon: { width:36,height:36,borderRadius:10,alignItems:"center",justifyContent:"center",flexShrink:0 },
   taraBadge: { borderRadius:8,paddingHorizontal:7,paddingVertical:2 },
-
-  // Jaimini
-  akCard: { backgroundColor:"rgba(245,158,11,0.06)",borderRadius:14,borderWidth:1,padding:14 },
+  akCard: { borderRadius:14,borderWidth:1,padding:14 },
   akPlanet: { width:52,height:52,borderRadius:14,alignItems:"center",justifyContent:"center",borderWidth:1,flexShrink:0 },
-  karakaRow: { flexDirection:"row",alignItems:"flex-start",gap:10,backgroundColor:"#040e1f",borderRadius:12,borderWidth:1,padding:12 },
+  karakaRow: { flexDirection:"row",alignItems:"flex-start",gap:10,borderRadius:12,borderWidth:1,padding:12 },
   karakaRank: { width:40,height:40,borderRadius:10,alignItems:"center",justifyContent:"center",flexShrink:0 },
-
-  // Transit
-  transitRow: { flexDirection:"row",alignItems:"center",gap:10,backgroundColor:"#040e1f",borderRadius:12,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",padding:11 },
+  transitRow: { flexDirection:"row",alignItems:"center",gap:10,borderRadius:12,borderWidth:1,padding:11 },
   transitIcon: { width:34,height:34,borderRadius:10,alignItems:"center",justifyContent:"center",flexShrink:0 },
-
-  // KP
-  kpRow:  { flexDirection:"row",alignItems:"flex-start",gap:10,backgroundColor:"#040e1f",borderRadius:12,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",padding:11 },
+  kpRow:  { flexDirection:"row",alignItems:"flex-start",gap:10,borderRadius:12,borderWidth:1,padding:11 },
   kpIcon: { width:36,height:36,borderRadius:10,alignItems:"center",justifyContent:"center",flexShrink:0 },
   kpChip: { flexDirection:"row",alignItems:"center",borderWidth:1,borderRadius:6,paddingHorizontal:6,paddingVertical:3 },
 });

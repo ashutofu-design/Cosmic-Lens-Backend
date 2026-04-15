@@ -27,4 +27,4 @@ cleanup() {
 }
 trap cleanup EXIT
 
-pnpm exec expo start --tunnel --port "${PORT:-18987}" 2>&1 | tee -a "$LOG_FILE"
+pnpm exec expo start --tunnel --clear --port "${PORT:-18987}" 2>&1 | tee -a "$LOG_FILE"

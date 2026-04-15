@@ -507,7 +507,7 @@ function SettingRow({ icon, label, right, onPress, last = false }: {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { C, mode, toggle: toggleTheme } = useTheme();
+  const { C } = useTheme();
   const {
     profiles, primaryProfileId,
     deleteProfile, setPrimaryProfile,
@@ -703,20 +703,6 @@ export default function ProfileScreen() {
               }
             />
 
-            <SettingRow
-              icon={mode === "dark" ? "moon" : "sun"}
-              label={t.darkMode}
-              right={
-                <Switch
-                  value={mode === "dark"}
-                  onValueChange={() => { toggleTheme(); Haptics.selectionAsync(); }}
-                  trackColor={{ false: C.switchTrackOff, true: C.accent }}
-                  thumbColor="#fff"
-                  ios_backgroundColor={C.switchTrackOff}
-                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
-                />
-              }
-            />
 
           </View>
         </View>

@@ -20,6 +20,7 @@ import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
+import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
@@ -138,6 +139,7 @@ function useCountUp(target: number, delay = 200) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const { toggle: toggleTheme } = useTheme();
   const { kundli, todayEnergy, setTodayEnergy, setMoonData, moonData, user, isLoading, language } = useUser();
   const t = getT(language);
 
@@ -207,13 +209,21 @@ export default function HomeScreen() {
           </Text>
           <Text style={[styles.greetTitle, { color: colors.foreground }]}>{t.todayEnergy}</Text>
         </View>
-        <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
-          style={[styles.forecastPill, { backgroundColor: colors.C.warningBg, borderColor: colors.C.warningBorder }]}
-        >
-          <Feather name="calendar" size={11} color={colors.C.warningText} />
-          <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Days</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
+            style={[styles.forecastPill, { backgroundColor: colors.C.warningBg, borderColor: colors.C.warningBorder }]}
+          >
+            <Feather name="calendar" size={11} color={colors.C.warningText} />
+            <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Days</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}
+            style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
+          >
+            <Feather name={colors.C.isDark ? "sun" : "moon"} size={15} color={colors.C.textMuted} />
+          </Pressable>
+        </View>
       </Animated.View>
 
       {/* ── Hero Energy Card — 60% ── */}
@@ -658,6 +668,11 @@ const styles = StyleSheet.create({
   },
   forecastPillText: {
     color: "#f59e0b", fontSize: 11, fontFamily: F.bold,
+  },
+  themeToggleBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
   },
 });
 

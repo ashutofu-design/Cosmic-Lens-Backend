@@ -29,7 +29,7 @@ const TAB_META: {
   { name: "profile",  labelKey: "tabProfile",  icon: "user"           },
 ];
 
-const BAR_H = 72;
+const BAR_H = 84;
 
 function TabItem({
   tab, isActive, accent, onPress, onLongPress,

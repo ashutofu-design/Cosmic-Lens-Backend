@@ -22,95 +22,128 @@ import { getT } from "@/lib/i18n";
 
 const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
-type Tab = "login" | "signup";
+type Method = "mobile" | "email";
+type EmailTab = "login" | "signup";
 
 export default function LoginScreen() {
-  const insets = useSafeAreaInsets();
-  const C = useC();
+  const insets  = useSafeAreaInsets();
+  const C       = useC();
   const { setUser, language } = useUser();
   const tr = getT(language);
 
-  const [tab,      setTab]      = useState<Tab>("login");
-  const [name,     setName]     = useState("");
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [showPwd,  setShowPwd]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState("");
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const isDark = C.isDark;
+
+  // ── Method selector ──────────────────────────────────────────────────────────
+  const [method, setMethod] = useState<Method>("mobile");
+
+  // ── Mobile state ─────────────────────────────────────────────────────────────
+  const [mobile,        setMobile]        = useState("");
+  const [mobileLoading, setMobileLoading] = useState(false);
+  const [mobileError,   setMobileError]   = useState("");
+
+  // ── Email state ───────────────────────────────────────────────────────────────
+  const [emailTab,  setEmailTab]  = useState<EmailTab>("login");
+  const [name,      setName]      = useState("");
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [showPwd,   setShowPwd]   = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailError,   setEmailError]   = useState("");
 
   const emailRef    = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   function finishLogin(u: AuthUser) {
     setUser(u);
     router.replace("/(tabs)");
   }
 
-  async function handleSubmit() {
+  // ── Mobile submit ─────────────────────────────────────────────────────────────
+  async function handleMobileSubmit() {
+    const digits = mobile.replace(/\D/g, "");
+    if (digits.length < 7) {
+      setMobileError("Valid mobile number enter karein"); return;
+    }
+    setMobileError(""); setMobileLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const res  = await fetch(`${API_BASE}/api/auth/mobile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile: digits }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMobileError(data.error || "Kuch galat hua"); return; }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      finishLogin(data as AuthUser);
+    } catch {
+      setMobileError("Network error. Connection check karein.");
+    } finally {
+      setMobileLoading(false);
+    }
+  }
+
+  // ── Email submit ──────────────────────────────────────────────────────────────
+  async function handleEmailSubmit() {
     const trimEmail = email.trim().toLowerCase();
     const trimPwd   = password.trim();
-
-    if (tab === "signup" && !name.trim()) {
-      setError("Please enter your name."); return;
+    if (emailTab === "signup" && !name.trim()) {
+      setEmailError("Please enter your name."); return;
     }
     if (!trimEmail || !trimEmail.includes("@")) {
-      setError("Please enter a valid email address."); return;
+      setEmailError("Please enter a valid email address."); return;
     }
     if (trimPwd.length < 6) {
-      setError("Password must be at least 6 characters."); return;
+      setEmailError("Password must be at least 6 characters."); return;
     }
-
-    setError(""); setLoading(true);
+    setEmailError(""); setEmailLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     try {
-      const endpoint = tab === "signup" ? "/api/auth/signup" : "/api/auth/login";
+      const endpoint = emailTab === "signup" ? "/api/auth/signup" : "/api/auth/login";
       const body: Record<string, string> = { email: trimEmail, password: trimPwd };
-      if (tab === "signup") body.name = name.trim();
-
+      if (emailTab === "signup") body.name = name.trim();
       const res  = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Something went wrong. Please try again.");
-        return;
-      }
-
+      if (!res.ok) { setEmailError(data.error || "Something went wrong."); return; }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       finishLogin(data as AuthUser);
     } catch {
-      setError("Network error. Please check your connection and try again.");
+      setEmailError("Network error. Please check your connection.");
     } finally {
-      setLoading(false);
+      setEmailLoading(false);
     }
   }
 
-  function handleGuestContinue() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace("/(tabs)");
+  // ── Demo login ────────────────────────────────────────────────────────────────
+  function handleDemoLogin() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    finishLogin({
+      id: 0,
+      name: "Demo User",
+      email: "demo@cosmic.local",
+      api_key: "",
+      is_pro: false,
+    });
   }
 
-  function switchTab(t: Tab) {
-    setTab(t); setError(""); setName(""); setEmail(""); setPassword("");
+  function switchMethod(m: Method) {
+    setMethod(m);
+    setMobileError(""); setEmailError("");
     Haptics.selectionAsync();
   }
 
-  const isDark = C.isDark;
-
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Ambient glow — purple mist */}
+      {/* Ambient glows */}
       <View style={[s.glowWrap, { pointerEvents: "none" }]}>
         <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(139,92,246,0.10)" : "rgba(139,92,246,0.06)" }]} />
       </View>
-      {/* Gold mist bottom */}
       <View style={[s.glowWrap2, { pointerEvents: "none" }]}>
         <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(245,158,11,0.04)", borderRadius: 160 }]} />
       </View>
@@ -121,7 +154,7 @@ export default function LoginScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <ScrollView
-          contentContainerStyle={[s.scroll, { paddingTop: topPad + 40, paddingBottom: botPad + 24 }]}
+          contentContainerStyle={[s.scroll, { paddingTop: topPad + 36, paddingBottom: botPad + 24 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -152,123 +185,228 @@ export default function LoginScreen() {
             <Text style={[s.subtitle, { color: C.textMuted }]}>{tr.loginSubtitle}</Text>
           </View>
 
-          {/* ── Tab switcher ── */}
-          <View style={[s.tabs, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            {(["login", "signup"] as Tab[]).map(t => (
-              <Pressable key={t} onPress={() => switchTab(t)} style={[s.tab, tab === t && s.tabActive]}>
-                <Text style={[s.tabText, { color: tab === t ? "#f59e0b" : C.textMuted }]}>
-                  {t === "login" ? tr.logIn : tr.createAccount}
-                </Text>
-              </Pressable>
-            ))}
+          {/* ── Method selector: Mobile | Email ── */}
+          <View style={[s.methodRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Pressable
+              style={[s.methodBtn, method === "mobile" && [s.methodBtnActive, { borderColor: "rgba(245,158,11,0.35)", backgroundColor: isDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.06)" }]]}
+              onPress={() => switchMethod("mobile")}
+            >
+              <Feather name="smartphone" size={15} color={method === "mobile" ? "#f59e0b" : C.textMuted} />
+              <Text style={[s.methodLabel, { color: method === "mobile" ? "#f59e0b" : C.textMuted }]}>
+                Mobile Number
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.methodBtn, method === "email" && [s.methodBtnActive, { borderColor: "rgba(139,92,246,0.35)", backgroundColor: isDark ? "rgba(139,92,246,0.08)" : "rgba(139,92,246,0.06)" }]]}
+              onPress={() => switchMethod("email")}
+            >
+              <Feather name="mail" size={15} color={method === "email" ? "#a78bfa" : C.textMuted} />
+              <Text style={[s.methodLabel, { color: method === "email" ? "#a78bfa" : C.textMuted }]}>
+                Email & Password
+              </Text>
+            </Pressable>
           </View>
 
-          {/* ── Card ── */}
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
-
-            {/* Name (signup only) */}
-            {tab === "signup" && (
-              <View style={s.fieldWrap}>
-                <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.yourName.toUpperCase()}</Text>
-                <FieldInput
-                  icon="user"
-                  value={name}
-                  onChangeText={v => { setName(v); setError(""); }}
-                  placeholder="Full name"
-                  returnKeyType="next"
-                  onSubmitEditing={() => emailRef.current?.focus()}
-                  autoCapitalize="words"
-                  isDark={isDark}
-                  inputBg={C.inputBg}
+          {/* ── MOBILE PANEL ── */}
+          {method === "mobile" && (
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
+              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>
+                MOBILE NUMBER
+              </Text>
+              {/* Phone row with +91 prefix */}
+              <View style={[
+                s.phoneRow,
+                { backgroundColor: C.inputBg, borderColor: mobileError ? "rgba(239,68,68,0.5)" : "rgba(139,92,246,0.18)" }
+              ]}>
+                <View style={[s.phonePrefix, { borderRightColor: isDark ? "rgba(139,92,246,0.18)" : "rgba(109,40,217,0.13)" }]}>
+                  <Text style={[s.phonePrefixFlag]}>🇮🇳</Text>
+                  <Text style={[s.phonePrefixCode, { color: C.textMid }]}>+91</Text>
+                </View>
+                <TextInput
+                  style={[s.phoneInput, { color: C.text }]}
+                  value={mobile}
+                  onChangeText={v => { setMobile(v.replace(/\D/g, "").slice(0, 10)); setMobileError(""); }}
+                  placeholder="10-digit number"
+                  placeholderTextColor={isDark ? "#3d2b6b" : "#b39ddb"}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  returnKeyType="done"
+                  onSubmitEditing={handleMobileSubmit}
                 />
+                {mobile.length > 0 && (
+                  <Pressable onPress={() => { setMobile(""); setMobileError(""); }} hitSlop={10}>
+                    <Feather name="x-circle" size={16} color={C.textMuted} />
+                  </Pressable>
+                )}
               </View>
-            )}
 
-            {/* Email */}
-            <View style={s.fieldWrap}>
-              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.emailAddr.toUpperCase()}</Text>
-              <FieldInput
-                ref={emailRef}
-                icon="mail"
-                value={email}
-                onChangeText={v => { setEmail(v); setError(""); }}
-                placeholder="you@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-                isDark={isDark}
-                inputBg={C.inputBg}
-              />
-            </View>
+              {!!mobileError && (
+                <View style={s.errorBox}>
+                  <Feather name="alert-circle" size={13} color="#f87171" />
+                  <Text style={s.errorText}>{mobileError}</Text>
+                </View>
+              )}
 
-            {/* Password */}
-            <View style={s.fieldWrap}>
-              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.password.toUpperCase()}</Text>
-              <FieldInput
-                ref={passwordRef}
-                icon="lock"
-                value={password}
-                onChangeText={v => { setPassword(v); setError(""); }}
-                placeholder={tab === "signup" ? "Min. 6 characters" : "Enter your password"}
-                secureTextEntry={!showPwd}
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
-                rightIcon={showPwd ? "eye-off" : "eye"}
-                onRightIconPress={() => setShowPwd(p => !p)}
-                isDark={isDark}
-                inputBg={C.inputBg}
-              />
-            </View>
+              <Text style={[s.mobileNote, { color: C.textMuted }]}>
+                Pehli baar number daalne par account automatic ban jaayega. Dubara daalne par seedha login ho jaayega.
+              </Text>
 
-            {/* Error */}
-            {!!error && (
-              <View style={s.errorBox}>
-                <Feather name="alert-circle" size={13} color="#f87171" />
-                <Text style={s.errorText}>{error}</Text>
-              </View>
-            )}
-
-            {/* Submit */}
-            <Pressable
-              onPress={handleSubmit}
-              disabled={loading}
-              style={({ pressed }) => [{ opacity: loading ? 0.75 : pressed ? 0.85 : 1 }]}
-            >
-              <LinearGradient
-                colors={["#7c3aed", "#f59e0b"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={s.ctaBtn}
+              <Pressable
+                onPress={handleMobileSubmit}
+                disabled={mobileLoading || mobile.replace(/\D/g, "").length < 7}
+                style={({ pressed }) => [{ opacity: (mobileLoading || mobile.replace(/\D/g, "").length < 7) ? 0.6 : pressed ? 0.85 : 1 }]}
               >
-                {loading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : (
-                    <>
-                      <Feather name={tab === "login" ? "log-in" : "user-plus"} size={16} color="#fff" />
-                      <Text style={s.ctaText}>
-                        {tab === "login" ? tr.logIn : tr.createAccount}
-                      </Text>
-                    </>
-                  )
-                }
-              </LinearGradient>
-            </Pressable>
-          </View>
+                <LinearGradient
+                  colors={["#f59e0b", "#d97706"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={s.ctaBtn}
+                >
+                  {mobileLoading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : (
+                      <>
+                        <Feather name="arrow-right" size={16} color="#fff" />
+                        <Text style={s.ctaText}>Continue</Text>
+                      </>
+                    )
+                  }
+                </LinearGradient>
+              </Pressable>
+            </View>
+          )}
 
-          {/* ── Guest continue ── */}
-          <View style={s.guestWrap}>
-            <View style={[s.divider]}>
+          {/* ── EMAIL PANEL ── */}
+          {method === "email" && (
+            <View style={{ width: "100%", maxWidth: 380, gap: 12 }}>
+              {/* Login / Signup sub-tabs */}
+              <View style={[s.subTabs, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                {(["login", "signup"] as EmailTab[]).map(t => (
+                  <Pressable
+                    key={t}
+                    onPress={() => { setEmailTab(t); setEmailError(""); setName(""); setEmail(""); setPassword(""); Haptics.selectionAsync(); }}
+                    style={[s.subTab, emailTab === t && s.subTabActive]}
+                  >
+                    <Text style={[s.subTabText, { color: emailTab === t ? "#a78bfa" : C.textMuted }]}>
+                      {t === "login" ? tr.logIn : tr.createAccount}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
+                {emailTab === "signup" && (
+                  <View style={s.fieldWrap}>
+                    <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.yourName.toUpperCase()}</Text>
+                    <FieldInput
+                      icon="user"
+                      value={name}
+                      onChangeText={v => { setName(v); setEmailError(""); }}
+                      placeholder="Full name"
+                      returnKeyType="next"
+                      onSubmitEditing={() => emailRef.current?.focus()}
+                      autoCapitalize="words"
+                      isDark={isDark}
+                      inputBg={C.inputBg}
+                      textColor={C.text}
+                    />
+                  </View>
+                )}
+
+                <View style={s.fieldWrap}>
+                  <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.emailAddr.toUpperCase()}</Text>
+                  <FieldInput
+                    ref={emailRef}
+                    icon="mail"
+                    value={email}
+                    onChangeText={v => { setEmail(v); setEmailError(""); }}
+                    placeholder="you@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                    isDark={isDark}
+                    inputBg={C.inputBg}
+                    textColor={C.text}
+                  />
+                </View>
+
+                <View style={s.fieldWrap}>
+                  <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.password.toUpperCase()}</Text>
+                  <FieldInput
+                    ref={passwordRef}
+                    icon="lock"
+                    value={password}
+                    onChangeText={v => { setPassword(v); setEmailError(""); }}
+                    placeholder={emailTab === "signup" ? "Min. 6 characters" : "Enter your password"}
+                    secureTextEntry={!showPwd}
+                    returnKeyType="done"
+                    onSubmitEditing={handleEmailSubmit}
+                    rightIcon={showPwd ? "eye-off" : "eye"}
+                    onRightIconPress={() => setShowPwd(p => !p)}
+                    isDark={isDark}
+                    inputBg={C.inputBg}
+                    textColor={C.text}
+                  />
+                </View>
+
+                {!!emailError && (
+                  <View style={s.errorBox}>
+                    <Feather name="alert-circle" size={13} color="#f87171" />
+                    <Text style={s.errorText}>{emailError}</Text>
+                  </View>
+                )}
+
+                <Pressable
+                  onPress={handleEmailSubmit}
+                  disabled={emailLoading}
+                  style={({ pressed }) => [{ opacity: emailLoading ? 0.75 : pressed ? 0.85 : 1 }]}
+                >
+                  <LinearGradient
+                    colors={["#7c3aed", "#a78bfa"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={s.ctaBtn}
+                  >
+                    {emailLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : (
+                        <>
+                          <Feather name={emailTab === "login" ? "log-in" : "user-plus"} size={16} color="#fff" />
+                          <Text style={s.ctaText}>
+                            {emailTab === "login" ? tr.logIn : tr.createAccount}
+                          </Text>
+                        </>
+                      )
+                    }
+                  </LinearGradient>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {/* ── DEMO LOGIN ── */}
+          <View style={[s.demoWrap]}>
+            <View style={s.divider}>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
-              <Text style={[s.divText, { color: C.textMuted }]}>or</Text>
+              <Text style={[s.divText, { color: C.textMuted }]}>ya phir</Text>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
             </View>
+
             <Pressable
-              onPress={handleGuestContinue}
-              style={({ pressed }) => [s.guestBtn, { borderColor: C.border2, backgroundColor: C.bgCard }, pressed && { opacity: 0.7 }]}
+              onPress={handleDemoLogin}
+              style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1, width: "100%", maxWidth: 380 }]}
             >
-              <Feather name="arrow-right" size={14} color={C.textMuted} />
-              <Text style={[s.guestText, { color: C.textMuted }]}>{tr.continueGuest}</Text>
+              <View style={[s.demoBtn, { borderColor: isDark ? "rgba(245,158,11,0.3)" : "rgba(217,119,6,0.25)", backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(245,158,11,0.05)" }]}>
+                <View style={s.demoIconWrap}>
+                  <Text style={{ fontSize: 14 }}>⚡</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.demoBtnTitle, { color: "#f59e0b" }]}>Demo Login</Text>
+                  <Text style={[s.demoBtnSub, { color: C.textMuted }]}>Testing ke liye — seedha andar jayein</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color="#f59e0b" />
+              </View>
             </Pressable>
+
             <Text style={[s.guestCaption, { color: C.textDim }]}>{tr.guestNote}</Text>
           </View>
 
@@ -300,10 +438,11 @@ interface FieldInputProps {
   onRightIconPress?: () => void;
   isDark: boolean;
   inputBg: string;
+  textColor: string;
 }
 
 const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
-  ({ icon, rightIcon, onRightIconPress, isDark, inputBg, ...props }, ref) => {
+  ({ icon, rightIcon, onRightIconPress, isDark, inputBg, textColor, ...props }, ref) => {
     const [focused, setFocused] = useState(false);
     return (
       <View style={[
@@ -314,7 +453,7 @@ const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
         <Feather name={icon} size={16} color={focused ? "#f59e0b" : (isDark ? "#7c6fa0" : "#9f7aea")} />
         <TextInput
           ref={ref}
-          style={[fi.input, { color: isDark ? "#f0e6ff" : "#1e0a3c" }]}
+          style={[fi.input, { color: textColor }]}
           placeholderTextColor={isDark ? "#3d2b6b" : "#b39ddb"}
           autoCorrect={false}
           onFocus={() => setFocused(true)}
@@ -337,76 +476,79 @@ const fi = StyleSheet.create({
     borderRadius: 12, borderWidth: 1,
     paddingHorizontal: 14, paddingVertical: 13,
   },
-  rowFocused: {
-    borderColor: "rgba(245,158,11,0.45)",
-  },
-  input: {
-    flex: 1, fontSize: 14,
-    fontFamily: "Nunito_500Medium",
-    padding: 0, margin: 0,
-  },
+  rowFocused: { borderColor: "rgba(245,158,11,0.45)" },
+  input: { flex: 1, fontSize: 14, fontFamily: "Nunito_500Medium", padding: 0, margin: 0 },
 });
 
 const s = StyleSheet.create({
   root: { flex: 1 },
 
-  glowWrap: {
-    position: "absolute", top: -80, left: "50%", marginLeft: -160,
-    width: 320, height: 320, zIndex: 0,
-  },
-  glowWrap2: {
-    position: "absolute", bottom: 0, right: -80,
-    width: 320, height: 320, zIndex: 0,
-  },
+  glowWrap: { position: "absolute", top: -80, left: "50%", marginLeft: -160, width: 320, height: 320, zIndex: 0 },
+  glowWrap2: { position: "absolute", bottom: 0, right: -80, width: 320, height: 320, zIndex: 0 },
   glowCircle: { width: 320, height: 320, borderRadius: 160 },
 
-  scroll: { paddingHorizontal: 20, alignItems: "center" },
+  scroll: { paddingHorizontal: 20, alignItems: "center", gap: 16 },
 
-  // Logo
-  logoWrap: { alignItems: "center", marginBottom: 24, gap: 10 },
+  logoWrap: { alignItems: "center", marginBottom: 4, gap: 8 },
   logoCircle: {
-    width: 76, height: 76, borderRadius: 38,
-    borderWidth: 1.5,
+    width: 72, height: 72, borderRadius: 36, borderWidth: 1.5,
     alignItems: "center", justifyContent: "center",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
-  title: {
-    fontSize: 26, fontFamily: "Nunito_700Bold",
-    letterSpacing: 0.4,
-  },
-  subtitle: {
-    fontSize: 12,
-    fontFamily: "Nunito_400Regular", textAlign: "center",
-  },
+  title: { fontSize: 26, fontFamily: "Nunito_700Bold", letterSpacing: 0.4 },
+  subtitle: { fontSize: 12, fontFamily: "Nunito_400Regular", textAlign: "center" },
 
-  // Tabs
-  tabs: {
+  // Method selector
+  methodRow: {
     flexDirection: "row", width: "100%", maxWidth: 380,
-    borderRadius: 14, padding: 3, marginBottom: 16,
-    borderWidth: 1,
+    borderRadius: 16, padding: 4, borderWidth: 1, gap: 4,
   },
-  tab: {
-    flex: 1, paddingVertical: 10, borderRadius: 11,
-    alignItems: "center",
+  methodBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 7, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: "transparent",
   },
-  tabActive: { backgroundColor: "rgba(245,158,11,0.10)" },
-  tabText: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
+  methodBtnActive: { borderWidth: 1 },
+  methodLabel: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
+
+  // Sub-tabs (email login/signup)
+  subTabs: {
+    flexDirection: "row", width: "100%",
+    borderRadius: 14, padding: 3, borderWidth: 1,
+  },
+  subTab: { flex: 1, paddingVertical: 9, borderRadius: 11, alignItems: "center" },
+  subTabActive: { backgroundColor: "rgba(167,139,250,0.10)" },
+  subTabText: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
 
   // Card
   card: {
-    width: "100%", maxWidth: 380,
-    borderRadius: 20, padding: 22,
-    borderWidth: 1,
-    gap: 14,
+    width: "100%", maxWidth: 380, borderRadius: 20, padding: 20,
+    borderWidth: 1, gap: 14,
     shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2, shadowRadius: 30, elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18, shadowRadius: 24, elevation: 10,
   },
   fieldWrap: { gap: 7 },
-  fieldLabel: {
-    fontSize: 10, fontFamily: "Nunito_700Bold",
-    letterSpacing: 2,
+  fieldLabel: { fontSize: 10, fontFamily: "Nunito_700Bold", letterSpacing: 2 },
+
+  // Phone input
+  phoneRow: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 12, borderWidth: 1, overflow: "hidden",
+  },
+  phonePrefix: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 12, paddingVertical: 13,
+    borderRightWidth: 1,
+  },
+  phonePrefixFlag: { fontSize: 16 },
+  phonePrefixCode: { fontSize: 14, fontFamily: "Nunito_600SemiBold" },
+  phoneInput: {
+    flex: 1, fontSize: 15, fontFamily: "Nunito_500Medium",
+    padding: 0, paddingHorizontal: 12, paddingVertical: 13,
+  },
+  mobileNote: {
+    fontSize: 11, fontFamily: "Nunito_400Regular",
+    lineHeight: 17, textAlign: "center",
   },
 
   // Error
@@ -418,7 +560,7 @@ const s = StyleSheet.create({
   },
   errorText: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "#f87171", flex: 1 },
 
-  // CTA
+  // CTA button
   ctaBtn: {
     height: 50, borderRadius: 14,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
@@ -426,32 +568,32 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4, shadowRadius: 16, elevation: 6,
   },
-  ctaText: {
-    fontSize: 15, fontFamily: "Nunito_700Bold",
-    letterSpacing: 0.3, color: "#fff",
-  },
+  ctaText: { fontSize: 15, fontFamily: "Nunito_700Bold", letterSpacing: 0.3, color: "#fff" },
 
-  // Guest
-  guestWrap: {
-    width: "100%", maxWidth: 380, marginTop: 22, gap: 12, alignItems: "center",
+  // Demo section
+  demoWrap: {
+    width: "100%", maxWidth: 380, gap: 12, alignItems: "center", marginTop: 4,
   },
   divider: { flexDirection: "row", alignItems: "center", gap: 12, width: "100%" },
   divLine: { flex: 1, height: 1 },
   divText: { fontSize: 11, fontFamily: "Nunito_400Regular" },
-  guestBtn: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingVertical: 10, paddingHorizontal: 20,
-    borderRadius: 12, borderWidth: 1,
+  demoBtn: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingVertical: 14, paddingHorizontal: 16,
+    borderRadius: 16, borderWidth: 1,
   },
-  guestText: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
-  guestCaption: {
-    fontSize: 11, fontFamily: "Nunito_400Regular", textAlign: "center",
+  demoIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    alignItems: "center", justifyContent: "center",
   },
+  demoBtnTitle: { fontSize: 14, fontFamily: "Nunito_700Bold" },
+  demoBtnSub: { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 1 },
+  guestCaption: { fontSize: 11, fontFamily: "Nunito_400Regular", textAlign: "center" },
 
   // Footer
   footer: {
     fontSize: 11, fontFamily: "Nunito_400Regular",
-    textAlign: "center",
-    marginTop: 20, paddingHorizontal: 20, lineHeight: 18,
+    textAlign: "center", paddingHorizontal: 20, lineHeight: 18, marginTop: 4,
   },
 });

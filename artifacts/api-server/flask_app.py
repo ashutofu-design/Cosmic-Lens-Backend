@@ -103,6 +103,39 @@ def login():
     return jsonify(user.to_dict())
 
 
+@app.route("/api/auth/mobile", methods=["POST"])
+def mobile_login():
+    data   = request.get_json(force=True, silent=True) or {}
+    mobile = (data.get("mobile") or "").strip().replace(" ", "").replace("-", "")
+
+    # Keep only digits
+    digits = "".join(c for c in mobile if c.isdigit())
+    if len(digits) < 7 or len(digits) > 15:
+        return jsonify({"error": "Valid mobile number enter karein (7–15 digits)"}), 400
+
+    pseudo_email = f"mobile:{digits}@cosmic.local"
+    user = User.query.filter_by(email=pseudo_email).first()
+
+    if user:
+        user.last_active = datetime.utcnow()
+        if not user.api_key:
+            user.api_key = secrets.token_hex(32)
+        db.session.commit()
+        return jsonify(user.to_dict())
+    else:
+        # Auto-create account
+        last4 = digits[-4:]
+        user = User(
+            name=f"User {last4}",
+            email=pseudo_email,
+            password=None,
+            api_key=secrets.token_hex(32),
+        )
+        db.session.add(user)
+        db.session.commit()
+        return jsonify(user.to_dict()), 201
+
+
 @app.route("/api/auth/google", methods=["POST"])
 def google_login():
     data       = request.get_json(force=True, silent=True) or {}

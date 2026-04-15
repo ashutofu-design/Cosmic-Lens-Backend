@@ -322,7 +322,7 @@ function DeleteModal({ name, onConfirm, onCancel }: {
 }
 
 // ── Profile Card ──────────────────────────────────────────────────────────────
-function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDelete }: {
+function ProfileRow({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDelete }: {
   profile: ProfileEntry; isPrimary: boolean; canDelete: boolean;
   onEdit:()=>void; onSetPrimary:()=>void; onDelete:()=>void;
 }) {
@@ -331,14 +331,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
   const relationInfo = RELATIONS.find(r => r.key === profile.relation);
 
   return (
-    <View style={[
-      pc.card,
-      { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any,
-      isPrimary && {
-        borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.25)",
-        backgroundColor: C.isDark ? "rgba(0,20,40,0.9)" : "#FFFFFF",
-      },
-    ]}>
+    <View style={pc.row}>
       <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
         <View>
           <LinearGradient
@@ -663,40 +656,36 @@ export default function ProfileScreen() {
             <Text style={[s.sectionCount, { color: C.textMuted }]}>{profiles.length}/1</Text>
           </View>
 
-          <View style={{ gap:10 }}>
-            {profiles.map(p => (
-              <ProfileCard
-                key={p.id}
-                profile={p}
-                isPrimary={p.id === primaryProfileId}
-                canDelete={p.id !== primaryProfileId && profiles.length > 1}
-                onEdit={() => router.push({ pathname:"/profile-edit", params:{ mode:"edit", profileId:p.id } })}
-                onSetPrimary={() => handleSetPrimary(p.id)}
-                onDelete={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setConfirmDelete(p.id); }}
-              />
+          <View style={[pc.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            {profiles.map((p, idx) => (
+              <React.Fragment key={p.id}>
+                {idx > 0 && <View style={[pc.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />}
+                <ProfileRow
+                  profile={p}
+                  isPrimary={p.id === primaryProfileId}
+                  canDelete={p.id !== primaryProfileId && profiles.length > 1}
+                  onEdit={() => router.push({ pathname:"/profile-edit", params:{ mode:"edit", profileId:p.id } })}
+                  onSetPrimary={() => handleSetPrimary(p.id)}
+                  onDelete={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setConfirmDelete(p.id); }}
+                />
+              </React.Fragment>
             ))}
 
-            {/* Add Family Member */}
+            <View style={[pc.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
+
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowRelationPick(true);
               }}
-              style={({ pressed }) => [{
-                flexDirection: "row" as const, alignItems: "center" as const, gap: 12,
-                padding: 14, borderRadius: 14,
-                backgroundColor: C.isDark ? "rgba(245,158,11,0.03)" : "rgba(124,58,237,0.04)",
-                borderWidth: 1, borderColor: C.isDark ? "rgba(245,158,11,0.14)" : "rgba(124,58,237,0.18)",
-              }, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [pc.addRow, pressed && { opacity: 0.7 }]}
             >
               <View style={{
                 width: 34, height: 34, borderRadius: 17,
-                borderWidth: 1,
-                borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.25)",
                 backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.08)",
                 alignItems: "center", justifyContent: "center",
               }}>
-                <Feather name="users" size={15} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
+                <Feather name="user-plus" size={14} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>
@@ -916,11 +905,18 @@ const pc = StyleSheet.create({
   card: {
     backgroundColor:"#040e20", borderRadius:16,
     borderWidth:1, borderColor:"rgba(255,255,255,0.05)",
+    overflow:"hidden",
+  },
+  row: {
     padding:14, gap:10,
   },
-  cardPrimary: {
-    borderColor:"rgba(245,158,11,0.2)",
-    backgroundColor:"rgba(0,20,40,0.9)",
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 14,
+  },
+  addRow: {
+    flexDirection:"row", alignItems:"center", gap:12,
+    padding:14,
   },
   avatar: {
     width:44, height:44, borderRadius:22,

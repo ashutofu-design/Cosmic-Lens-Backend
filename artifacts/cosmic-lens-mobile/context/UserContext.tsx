@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
+import type { UILang } from "@/lib/i18n";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
 export interface ProfileEntry {
@@ -20,10 +21,7 @@ export interface AuthUser {
   is_pro?: boolean;
 }
 
-type LangCode =
-  | "en" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn"
-  | "ml" | "pa" | "or" | "ur" | "as" | "mai" | "ne" | "kok"
-  | "doi" | "ks" | "mni" | "brx" | "sat" | "sd" | "sa";
+type LangCode = UILang;
 
 // ── Context shape ────────────────────────────────────────────────────────────
 interface UserContextType {

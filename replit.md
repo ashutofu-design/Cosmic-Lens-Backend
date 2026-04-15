@@ -94,12 +94,17 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 
 ## i18n — Multi-Language Support
 
-- `lib/i18n.ts` — Central translation system with `getT(language)` function
-- Supports 8 languages: English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada
+- `lib/i18n.ts` — Central translation system. Full translations for **23 languages**.
+- `UILang` type: `"en"|"hi"|"mr"|"bn"|"te"|"ta"|"gu"|"kn"|"ml"|"pa"|"or"|"as"|"zh"|"es"|"ar"|"fr"|"pt"|"de"|"ru"|"ja"|"id"|"ko"|"tr"`
+- `INDIA_LANG_CODES` — 12 languages shown when birth place = India (en, hi, bn, mr, ta, te, gu, kn, ml, or, pa, as)
+- `GLOBAL_LANG_CODES` — 12 languages shown for non-India users (en, zh, es, ar, fr, pt, de, ru, ja, id, ko, tr)
+- **Region detection**: `isIndia` in `UserContext` is derived from `birthData.place` (string match) or `birthData.country === "in"`. Controls which language list appears in the picker.
+- **Default**: always `"en"`. Language selection is manual — user opens picker in Profile settings.
+- **Persistence**: saved to `AsyncStorage` key `cl_language`. Loaded on app start.
+- **Fallback**: `getT(lang)` falls back to English for any unknown/unsupported code.
 - Usage pattern: `import { getT } from "@/lib/i18n"; const t = getT(language);`
-- Language persists in AsyncStorage; changing it updates all wired screens instantly
+- `UserContext` exposes `language` (LangCode), `setLanguage`, `isIndia`
 - **Wired screens**: CustomTabBar, profile.tsx, login.tsx, onboarding.tsx, index.tsx (home), kundli.tsx, ask.tsx, insights.tsx, notice.tsx
-- `UserContext` exposes `language` (LangCode) and `setLanguage` — accessible from any screen
 
 ## API Endpoints
 

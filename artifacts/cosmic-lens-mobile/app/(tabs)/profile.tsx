@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
-import { getT } from "@/lib/i18n";
+import { getT, INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
 
 // ── Relation options ───────────────────────────────────────────────────────────
 const RELATIONS = [
@@ -38,32 +38,38 @@ const F = {
 };
 
 // ── Languages ─────────────────────────────────────────────────────────────────
-type LangItem = { code: string; native: string; name: string; supported?: boolean };
-const LANGUAGES: LangItem[] = [
-  { code:"en",  native:"English",     name:"English",    supported:true },
-  { code:"hi",  native:"हिंदी",       name:"Hindi",      supported:true },
-  { code:"bn",  native:"বাংলা",       name:"Bengali",    supported:true },
-  { code:"te",  native:"తెలుగు",      name:"Telugu",     supported:true },
-  { code:"mr",  native:"मराठी",       name:"Marathi",    supported:true },
-  { code:"ta",  native:"தமிழ்",       name:"Tamil",      supported:true },
-  { code:"gu",  native:"ગુજરાતી",    name:"Gujarati",   supported:true },
-  { code:"kn",  native:"ಕನ್ನಡ",      name:"Kannada",    supported:true },
+type LangItem = { code: string; native: string; name: string };
+
+const ALL_LANG_META: LangItem[] = [
+  { code:"en",  native:"English",     name:"English"    },
+  { code:"hi",  native:"हिंदी",       name:"Hindi"      },
+  { code:"bn",  native:"বাংলা",       name:"Bengali"    },
+  { code:"mr",  native:"मराठी",       name:"Marathi"    },
+  { code:"ta",  native:"தமிழ்",       name:"Tamil"      },
+  { code:"te",  native:"తెలుగు",      name:"Telugu"     },
+  { code:"gu",  native:"ગુજરાતી",    name:"Gujarati"   },
+  { code:"kn",  native:"ಕನ್ನಡ",      name:"Kannada"    },
   { code:"ml",  native:"മലയാളം",      name:"Malayalam"  },
-  { code:"pa",  native:"ਪੰਜਾਬੀ",     name:"Punjabi"    },
   { code:"or",  native:"ଓଡ଼ିଆ",       name:"Odia"       },
-  { code:"ur",  native:"اردو",        name:"Urdu"       },
+  { code:"pa",  native:"ਪੰਜਾਬੀ",     name:"Punjabi"    },
   { code:"as",  native:"অসমীয়া",     name:"Assamese"   },
-  { code:"mai", native:"मैथिली",      name:"Maithili"   },
-  { code:"ne",  native:"नेपाली",      name:"Nepali"     },
-  { code:"kok", native:"कोंकणी",      name:"Konkani"    },
-  { code:"doi", native:"डोगरी",       name:"Dogri"      },
-  { code:"ks",  native:"کٲشُر",       name:"Kashmiri"   },
-  { code:"mni", native:"মৈতৈলোন্",   name:"Manipuri"   },
-  { code:"brx", native:"बड़ो",        name:"Bodo"       },
-  { code:"sat", native:"ᱥᱟᱱᱛᱟᱲᱤ",  name:"Santali"    },
-  { code:"sd",  native:"سنڌي",        name:"Sindhi"     },
-  { code:"sa",  native:"संस्कृतम्",   name:"Sanskrit"   },
+  { code:"zh",  native:"中文",         name:"Chinese"    },
+  { code:"es",  native:"Español",     name:"Spanish"    },
+  { code:"ar",  native:"العربية",     name:"Arabic"     },
+  { code:"fr",  native:"Français",    name:"French"     },
+  { code:"pt",  native:"Português",   name:"Portuguese" },
+  { code:"de",  native:"Deutsch",     name:"German"     },
+  { code:"ru",  native:"Русский",     name:"Russian"    },
+  { code:"ja",  native:"日本語",       name:"Japanese"   },
+  { code:"id",  native:"Indonesia",   name:"Indonesian" },
+  { code:"ko",  native:"한국어",       name:"Korean"     },
+  { code:"tr",  native:"Türkçe",      name:"Turkish"    },
 ];
+
+function getLangList(isIndia: boolean): LangItem[] {
+  const codes = isIndia ? INDIA_LANG_CODES : GLOBAL_LANG_CODES;
+  return (codes as readonly string[]).map(c => ALL_LANG_META.find(m => m.code === c)!).filter(Boolean);
+}
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
 type BillingCycle = "monthly" | "yearly";
@@ -127,9 +133,11 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 }) {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { language } = useUser();
+  const { language, isIndia } = useUser();
   const t = getT(language);
   const [query, setQuery] = useState("");
+
+  const LANGUAGES = getLangList(isIndia);
 
   const filtered = query.trim().length > 0
     ? LANGUAGES.filter(l =>
@@ -137,9 +145,6 @@ function LangSheet({ visible, current, onSelect, onClose }: {
         l.native.toLowerCase().includes(query.toLowerCase())
       )
     : LANGUAGES;
-
-  const supported  = filtered.filter(l => l.supported);
-  const others     = filtered.filter(l => !l.supported);
 
   function handleSelect(code: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -183,63 +188,31 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-          {/* ── Supported languages ── */}
-          {supported.length > 0 && (
-            <>
-              <View style={lm.groupHeader}>
-                <View style={lm.groupDot} />
-                <Text style={lm.groupLabel}>{t.supported.toUpperCase()}</Text>
-              </View>
-              <View style={lm.grid}>
-                {supported.map(l => (
-                  <Pressable key={l.code}
-                    onPress={() => handleSelect(l.code)}
-                    style={[lm.tile, { backgroundColor: C.bgCard, borderColor: C.border }, l.code === current && lm.tileActive]}
-                  >
-                    <Text style={[lm.tileNative, { color: C.text }, l.code === current && { color: "#f59e0b" }]}>
-                      {l.native}
-                    </Text>
-                    <Text style={[lm.tileEn, { color: C.textMuted }]}>{l.name}</Text>
-                    {l.code === current && (
-                      <View style={lm.checkBadge}>
-                        <Feather name="check" size={10} color="#020d1a" />
-                      </View>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-
-          {/* ── Coming soon languages ── */}
-          {others.length > 0 && (
-            <>
-              <View style={lm.groupHeader}>
-                <View style={[lm.groupDot, { backgroundColor: C.textDim }]} />
-                <Text style={[lm.groupLabel, { color: C.textDim }]}>{t.comingSoon.toUpperCase()}</Text>
-              </View>
-              <View style={lm.grid}>
-                {others.map(l => (
-                  <Pressable key={l.code}
-                    onPress={() => handleSelect(l.code)}
-                    style={[lm.tile, lm.tileComingSoon, { backgroundColor: C.bgCard, borderColor: C.border }, l.code === current && lm.tileActive]}
-                  >
-                    <Text style={[lm.tileNative, { color: C.textDim }, l.code === current && { color: "#f59e0b" }]}>
-                      {l.native}
-                    </Text>
-                    <Text style={[lm.tileEn, { color: C.textDim }]}>{l.name}</Text>
-                    {l.code === current && (
-                      <View style={lm.checkBadge}>
-                        <Feather name="check" size={10} color="#020d1a" />
-                      </View>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          )}
-
-          {filtered.length === 0 && (
+          {/* ── Language grid (all supported) ── */}
+          {filtered.length > 0 ? (
+            <View style={lm.grid}>
+              {filtered.map(l => (
+                <Pressable key={l.code}
+                  onPress={() => handleSelect(l.code)}
+                  style={[
+                    lm.tile,
+                    { backgroundColor: C.bgCard, borderColor: C.border },
+                    l.code === current && lm.tileActive,
+                  ]}
+                >
+                  <Text style={[lm.tileNative, { color: C.text }, l.code === current && { color: "#f59e0b" }]}>
+                    {l.native}
+                  </Text>
+                  <Text style={[lm.tileEn, { color: C.textMuted }]}>{l.name}</Text>
+                  {l.code === current && (
+                    <View style={lm.checkBadge}>
+                      <Feather name="check" size={10} color="#020d1a" />
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          ) : (
             <View style={{ alignItems: "center", paddingVertical: 40 }}>
               <Text style={{ color: C.textMuted, fontFamily: F.medium, fontSize: 14 }}>
                 No language found for "{query}"
@@ -718,10 +691,10 @@ export default function ProfileScreen() {
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>
-                      {LANGUAGES.find(l=>l.code===language)?.native ?? "English"}
+                      {ALL_LANG_META.find(l=>l.code===language)?.native ?? "English"}
                     </Text>
                     <Text style={{ color:C.textMuted, fontSize:10, fontFamily:F.medium }}>
-                      {LANGUAGES.find(l=>l.code===language)?.name ?? "English"}
+                      {ALL_LANG_META.find(l=>l.code===language)?.name ?? "English"}
                     </Text>
                   </View>
                   <Feather name="chevron-right" size={14} color={C.textDim} />

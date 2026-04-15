@@ -1,0 +1,117 @@
+}
+Add a "Daily Alerts" section to my React Native (Expo) astrology app.
+
+Goal:
+- Show personalized daily insights based on user's Kundli
+- Display 4 time-based cards:
+  Previous Day, Today, Tomorrow, Next Day
+- Keep UI clean, premium, and easy to read
+
+----------------------------------------
+
+1. DATA SOURCE:
+
+- Use selected Kundli profile
+- Fetch:
+  - Current planetary transit (PySwisseph)
+  - Moon position
+  - Running Dasha (Mahadasha + Antardasha)
+
+----------------------------------------
+
+2. SECTION STRUCTURE:
+
+Create a new section: "Daily Alerts"
+
+Inside show 4 cards:
+
+1. Previous Day (⏮️)
+2. Today (📍)
+3. Tomorrow (⏭️)
+4. Next Day (🔮)
+
+----------------------------------------
+
+3. EACH CARD SHOULD CONTAIN:
+
+- Title (Today / Tomorrow etc.)
+- Overall Energy:
+  - Good / Neutral / Challenging
+
+- Short Insight (2–3 lines)
+Example:
+"Aaj thoda mentally heavy feel ho sakta hai, important decisions postpone karo"
+
+- Category tags:
+  - ⚠️ Warning
+  - 💰 Opportunity
+  - ❤️ Emotional
+
+- Optional:
+  - Lucky color
+  - Lucky number
+
+----------------------------------------
+
+4. LOGIC (IMPORTANT):
+
+Generate alerts using:
+
+- Moon transit (daily driver)
+- Planetary transit (Saturn, Mars, etc.)
+- Running Dasha
+
+Combine them to generate meaningful messages
+
+----------------------------------------
+
+5. PREVIOUS DAY:
+
+- Show what kind of energy it had
+- Example:
+"Yesterday was a stressful day due to Moon in 8th house"
+
+----------------------------------------
+
+6. UI DESIGN:
+
+- Card-based layout
+- Each day as a separate card
+- Use subtle color coding:
+  - Red → challenging
+  - Green → positive
+  - Yellow → neutral
+
+- Keep design minimal and premium
+- No heavy glow or clutter
+
+----------------------------------------
+
+7. USER EXPERIENCE:
+
+- No scrolling confusion
+- Clear separation of days
+- Smooth swipe or horizontal scroll
+
+----------------------------------------
+
+8. REAL-TIME UPDATE:
+
+- Data should update daily automatically
+- Based on current date
+
+----------------------------------------
+
+9. LANGUAGE SUPPORT:
+
+- Use translation system (i18n)
+- No hardcoded text
+
+----------------------------------------
+
+FINAL RESULT:
+
+- User opens Daily Alerts
+- Sees past, present, and future (3 days ahead)
+- Gets clear guidance
+- Feels personalized exper

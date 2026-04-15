@@ -669,6 +669,172 @@ def ask_route():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Numerology API ────────────────────────────────────────────────────────────
+
+PYTHAGOREAN = {
+    'a':1,'b':2,'c':3,'d':4,'e':5,'f':6,'g':7,'h':8,'i':9,
+    'j':1,'k':2,'l':3,'m':4,'n':5,'o':6,'p':7,'q':8,'r':9,
+    's':1,'t':2,'u':3,'v':4,'w':5,'x':6,'y':7,'z':8,
+}
+VOWELS = set('aeiou')
+
+def _reduce(n):
+    """Reduce to single digit, preserving 11, 22, 33 as master numbers."""
+    while n > 9 and n not in (11, 22, 33):
+        n = sum(int(d) for d in str(n))
+    return n
+
+def _digit_sum(s):
+    return sum(int(c) for c in str(s) if c.isdigit())
+
+def _num_life_path(day, month, year):
+    return _reduce(_reduce(_digit_sum(day)) + _reduce(_digit_sum(month)) + _reduce(_digit_sum(year)))
+
+def _num_destiny(name):
+    cleaned = [c.lower() for c in name if c.isalpha()]
+    return _reduce(sum(PYTHAGOREAN.get(c, 0) for c in cleaned))
+
+def _num_soul(name):
+    cleaned = [c.lower() for c in name if c.isalpha() and c.lower() in VOWELS]
+    return _reduce(sum(PYTHAGOREAN.get(c, 0) for c in cleaned))
+
+def _num_personality(name):
+    cleaned = [c.lower() for c in name if c.isalpha() and c.lower() not in VOWELS]
+    return _reduce(sum(PYTHAGOREAN.get(c, 0) for c in cleaned))
+
+def _num_maturity(lp, destiny):
+    return _reduce(lp + destiny)
+
+def _num_personal_year(day, month, year=None):
+    from datetime import datetime
+    y = year or datetime.now().year
+    return _reduce(_digit_sum(day) + _digit_sum(month) + _digit_sum(y))
+
+def _num_personal_month(day, month, year=None):
+    from datetime import datetime
+    now = datetime.now()
+    y   = year or now.year
+    py  = _num_personal_year(day, month, y)
+    return _reduce(py + now.month)
+
+NUM_INTERP = {
+    1:  {"title":"Sun — Leadership","planet":"Surya","lucky_numbers":"1, 10, 19, 28","lucky_color":"Gold / Orange","traits":["Ambitious","Independent","Pioneering","Creative"],"desc":"You are a natural-born leader with strong willpower. Driven by originality and independence, you chart your own course.","career":"Politics, Management, Entrepreneurship, Military","love":"You need a partner who gives you space and admires your strength.","strength":"Determination, Confidence","weakness":"Ego, Stubbornness","remedy":"Offer water to the rising Sun every morning; donate wheat on Sundays."},
+    2:  {"title":"Moon — Intuition","planet":"Chandra","lucky_numbers":"2, 11, 20, 29","lucky_color":"White / Silver","traits":["Sensitive","Cooperative","Diplomatic","Emotional"],"desc":"You are a peacemaker with deep emotional intelligence. You thrive in partnerships and bring harmony wherever you go.","career":"Counseling, Arts, Music, Nursing","love":"You are a romantic and devoted partner who values emotional depth.","strength":"Empathy, Patience","weakness":"Over-sensitivity, Indecisiveness","remedy":"Observe Monday fasts; donate white cloth or rice to temples."},
+    3:  {"title":"Jupiter — Creativity","planet":"Guru","lucky_numbers":"3, 12, 21, 30","lucky_color":"Yellow / Purple","traits":["Joyful","Expressive","Optimistic","Social"],"desc":"You radiate enthusiasm and creativity. Gifted with communication skills, you inspire others and bring joy to every room.","career":"Writing, Entertainment, Teaching, Arts","love":"You are a playful, fun-loving partner who keeps the spark alive.","strength":"Optimism, Creativity","weakness":"Scattered focus, Over-indulgence","remedy":"Worship Lord Vishnu on Thursdays; donate yellow sweets or turmeric."},
+    4:  {"title":"Rahu — Stability","planet":"Rahu","lucky_numbers":"4, 13, 22, 31","lucky_color":"Electric Blue / Grey","traits":["Disciplined","Hardworking","Systematic","Reliable"],"desc":"You are the builder — disciplined, dependable, and devoted. You create solid foundations through hard work and consistency.","career":"Engineering, Architecture, Finance, Army","love":"You are a loyal and stable partner who values commitment above all.","strength":"Discipline, Reliability","weakness":"Rigidity, Resistance to change","remedy":"Donate blue clothes on Saturdays; chant Rahu beej mantra on Saturdays."},
+    5:  {"title":"Mercury — Freedom","planet":"Budha","lucky_numbers":"5, 14, 23","lucky_color":"Green / Light Blue","traits":["Adventurous","Versatile","Quick-witted","Energetic"],"desc":"You are a free spirit — versatile, curious, and always on the move. You excel wherever quick thinking and adaptability are needed.","career":"Journalism, Travel, Sales, Technology","love":"You need an adventurous partner who can keep up with your energy.","strength":"Adaptability, Intelligence","weakness":"Restlessness, Inconsistency","remedy":"Worship Lord Ganesha on Wednesdays; donate green vegetables to the needy."},
+    6:  {"title":"Venus — Love","planet":"Shukra","lucky_numbers":"6, 15, 24","lucky_color":"Pink / Light Blue","traits":["Loving","Responsible","Artistic","Nurturing"],"desc":"You are a caretaker with a deep capacity for love and beauty. Harmony, family, and service define your life's purpose.","career":"Medicine, Teaching, Art, Interior Design","love":"You are a devoted, family-first partner with a romantic heart.","strength":"Compassion, Responsibility","weakness":"Over-sacrifice, Jealousy","remedy":"Worship Goddess Lakshmi on Fridays; donate sweets and white flowers."},
+    7:  {"title":"Ketu — Wisdom","planet":"Ketu","lucky_numbers":"7, 16, 25","lucky_color":"Violet / Indigo","traits":["Analytical","Spiritual","Introspective","Mysterious"],"desc":"You are the seeker — drawn to deep knowledge, spirituality, and the mysteries of existence. Solitude fuels your wisdom.","career":"Research, Philosophy, Science, Spiritual work","love":"You seek a deep intellectual and spiritual connection with your partner.","strength":"Insight, Wisdom","weakness":"Aloofness, Over-analysis","remedy":"Worship Lord Shiva on Mondays; donate black sesame seeds on Saturdays."},
+    8:  {"title":"Saturn — Power","planet":"Shani","lucky_numbers":"8, 17, 26","lucky_color":"Dark Blue / Black","traits":["Powerful","Ambitious","Strategic","Enduring"],"desc":"You carry Saturn's weight — immense power and patience to overcome every obstacle. Great material success awaits your perseverance.","career":"Business, Banking, Politics, Administration","love":"You are an intense, protective partner; loyalty is non-negotiable for you.","strength":"Determination, Resilience","weakness":"Materialism, Control issues","remedy":"Light a mustard oil lamp on Saturdays; donate black sesame to Lord Shani."},
+    9:  {"title":"Mars — Compassion","planet":"Mangal","lucky_numbers":"9, 18, 27","lucky_color":"Red / Crimson","traits":["Courageous","Humanitarian","Passionate","Idealistic"],"desc":"You are the warrior with a heart of gold — courageous in battles, compassionate in service. You fight for truth and justice.","career":"Medicine, Law, Military, Social service","love":"You are a passionate, fiercely devoted partner who loves with full intensity.","strength":"Courage, Generosity","weakness":"Impulsiveness, Short temper","remedy":"Worship Lord Hanuman on Tuesdays; donate red lentils and jaggery."},
+    11: {"title":"Master Number — Illumination","planet":"Chandra + Surya","lucky_numbers":"11, 29, 2","lucky_color":"Silver / Gold","traits":["Intuitive","Inspirational","Visionary","Sensitive"],"desc":"You carry the Master Number 11 — a highly spiritual vibration of illumination and inspiration. You are here to uplift humanity.","career":"Spiritual leadership, Art, Healing, Counseling","love":"You seek a soulmate-level connection — deep, spiritual, and transformative.","strength":"Intuition, Inspiration","weakness":"Anxiety, Over-idealism","remedy":"Meditate at sunrise; chant 'Om Namah Shivaya' 108 times daily."},
+    22: {"title":"Master Builder — Manifestation","planet":"Shani + Surya","lucky_numbers":"22, 4","lucky_color":"Deep Blue / Gold","traits":["Visionary","Disciplined","Powerful","Practical"],"desc":"You carry Master Number 22 — the most powerful of all numbers. You can manifest grand visions into concrete reality.","career":"Architecture, Global business, Politics, Philanthropy","love":"You are a dedicated, visionary partner building a lasting legacy together.","strength":"Vision, Execution","weakness":"Perfectionism, Overwhelm","remedy":"Practice deep meditation; donate to orphanages on Saturdays."},
+    33: {"title":"Master Teacher — Divine Love","planet":"Guru + Shukra","lucky_numbers":"33, 6","lucky_color":"Gold / Pink","traits":["Selfless","Nurturing","Creative","Enlightened"],"desc":"You carry Master Number 33 — the vibration of divine love and healing. You are a rare teacher meant to uplift all of humanity.","career":"Healing arts, Spiritual teaching, Creative leadership","love":"You love unconditionally, serving your partner and family with pure devotion.","strength":"Unconditional love, Wisdom","weakness":"Martyrdom, Self-neglect","remedy":"Serve the underprivileged selflessly; light a ghee diya daily in your home."},
+}
+
+PERSONAL_YEAR_THEME = {
+    1:"New beginnings, fresh start, plant seeds for 9 years ahead",
+    2:"Partnerships, patience, cooperation — relationships bloom",
+    3:"Creativity, expression, joy — time to shine and communicate",
+    4:"Hard work, foundation-building, discipline is key",
+    5:"Change, freedom, travel — embrace the unexpected",
+    6:"Family, responsibility, service — nurture your loved ones",
+    7:"Reflection, spirituality, inner work — seek deeper truth",
+    8:"Power, ambition, finance — your efforts get rewarded",
+    9:"Completion, release, endings — prepare for a new cycle",
+    11:"Spiritual awakening, high sensitivity, divine guidance",
+    22:"Master year of manifestation — think big, build big",
+    33:"Year of deep love and teaching — serve with a full heart",
+}
+
+@app.route("/api/numerology/basic", methods=["POST"])
+def numerology_basic():
+    data  = request.get_json(force=True, silent=True) or {}
+    name  = (data.get("name") or "").strip()
+    day   = int(data.get("day", 0))
+    month = int(data.get("month", 0))
+    year  = int(data.get("year", 0))
+
+    if not name or not day or not month or not year:
+        return jsonify({"error": "name, day, month, year are required"}), 400
+
+    lp   = _num_life_path(day, month, year)
+    dest = _num_destiny(name)
+    soul = _num_soul(name)
+    py   = _num_personal_year(day, month)
+    pm   = _num_personal_month(day, month)
+
+    def interp(n):
+        return NUM_INTERP.get(n, NUM_INTERP[9])
+
+    return jsonify({
+        "life_path":    {"number": lp,   **interp(lp)},
+        "destiny":      {"number": dest, **interp(dest)},
+        "soul_urge":    {"number": soul, **interp(soul)},
+        "personal_year":{"number": py,   "theme": PERSONAL_YEAR_THEME.get(py, "")},
+        "personal_month":{"number": pm,  "theme": PERSONAL_YEAR_THEME.get(pm, "")},
+    })
+
+
+@app.route("/api/numerology/advanced", methods=["POST"])
+def numerology_advanced():
+    data  = request.get_json(force=True, silent=True) or {}
+    name  = (data.get("name") or "").strip()
+    day   = int(data.get("day", 0))
+    month = int(data.get("month", 0))
+    year  = int(data.get("year", 0))
+
+    if not name or not day or not month or not year:
+        return jsonify({"error": "name, day, month, year are required"}), 400
+
+    lp      = _num_life_path(day, month, year)
+    dest    = _num_destiny(name)
+    soul    = _num_soul(name)
+    pers    = _num_personality(name)
+    mat     = _num_maturity(lp, dest)
+    py      = _num_personal_year(day, month)
+
+    def interp(n):
+        return NUM_INTERP.get(n, NUM_INTERP[9])
+
+    # Name correction: check if destiny number is compatible with life path
+    compat = abs(lp - dest) <= 2 or (lp + dest) in (11, 22, 33)
+    name_note = ("Your name number is well-aligned with your life path." if compat
+                 else f"Adjusting your name numerologically to {lp} or {(lp+1) if lp<9 else 1} "
+                      f"could enhance your life path energy.")
+
+    # Love compat: even + even or odd + odd = strong; 1+9 = karmic
+    love_pairs = {
+        (1,1):"Both are leaders — respect each other's independence.",
+        (1,2):"Perfect — leader meets diplomat. Very harmonious.",
+        (1,9):"Karmic bond — passionate but challenging. Requires work.",
+        (2,6):"Most romantic pairing — deep, devoted, loving.",
+        (3,5):"Adventurous and fun — never a dull moment together.",
+        (4,8):"Power couple — disciplined builders of a great life.",
+        (5,7):"Intellectual soulmates — endless depth and curiosity.",
+        (6,9):"Deeply compassionate pair — love of service unites you.",
+        (7,11):"Spiritual twin flames — rare and profound connection.",
+    }
+    lp_min, lp_max = (min(lp,dest), max(lp,dest))
+    love_msg = love_pairs.get((lp_min, lp_max), f"Life Path {lp} and Destiny {dest} combine to form a unique and evolving bond. Growth is the theme of your relationships.")
+
+    return jsonify({
+        "life_path":     {"number": lp,   **interp(lp)},
+        "destiny":       {"number": dest, **interp(dest)},
+        "soul_urge":     {"number": soul, **interp(soul)},
+        "personality":   {"number": pers, **interp(pers)},
+        "maturity":      {"number": mat,  **interp(mat)},
+        "personal_year": {"number": py,   "theme": PERSONAL_YEAR_THEME.get(py, "")},
+        "name_correction":{"compatible": compat, "note": name_note},
+        "love_compatibility": {"message": love_msg},
+        "challenges": {
+            "first":  f"Life Path {lp} challenge: {interp(lp)['weakness']}",
+            "main":   f"Destiny {dest} challenge: overcome {interp(dest)['weakness']}",
+            "remedy": f"{interp(lp)['remedy']}",
+        },
+    })
+
+
 # ── Serve React frontend in production ────────────────────────────────────────
 _DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      "..", "cosmic-lens", "dist", "public")

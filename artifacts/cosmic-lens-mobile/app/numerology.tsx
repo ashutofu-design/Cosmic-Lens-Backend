@@ -1,279 +1,616 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Pressable, ScrollView, StyleSheet, Text,
-  TextInput, View,
+  Platform, Pressable, ScrollView, StyleSheet,
+  Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useUser, type ProfileEntry } from "@/context/UserContext";
 
-const F = {
-  bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
-  medium: "Nunito_500Medium", regular: "Nunito_400Regular",
+// ── Calculation helpers ───────────────────────────────────────────────────────
+const PYTH: Record<string, number> = {
+  a:1,b:2,c:3,d:4,e:5,f:6,g:7,h:8,i:9,
+  j:1,k:2,l:3,m:4,n:5,o:6,p:7,q:8,r:9,
+  s:1,t:2,u:3,v:4,w:5,x:6,y:7,z:8,
 };
+const VOWELS = new Set(["a","e","i","o","u"]);
 
-function reduceToSingle(n: number): number {
+function reduce(n: number): number {
   while (n > 9 && n !== 11 && n !== 22 && n !== 33) {
-    n = String(n).split("").reduce((a, b) => a + parseInt(b), 0);
+    n = String(n).split("").reduce((a, c) => a + parseInt(c, 10), 0);
   }
   return n;
 }
-
-function calcLifePath(dob: string): number | null {
-  const parts = dob.split("/");
-  if (parts.length !== 3) return null;
-  const [d, m, y] = parts.map(Number);
-  if (!d || !m || !y || y < 1900) return null;
-  const sum = String(d).split("").reduce((a,b)=>a+parseInt(b),0)
-            + String(m).split("").reduce((a,b)=>a+parseInt(b),0)
-            + String(y).split("").reduce((a,b)=>a+parseInt(b),0);
-  return reduceToSingle(sum);
+function digitSum(x: number): number {
+  return String(Math.abs(x)).split("").reduce((a, c) => a + parseInt(c, 10), 0);
+}
+function letterSum(name: string, vowelsOnly?: boolean, consonantsOnly?: boolean): number {
+  const chars = name.toLowerCase().replace(/[^a-z]/g, "").split("");
+  const filtered = chars.filter(c =>
+    vowelsOnly    ? VOWELS.has(c) :
+    consonantsOnly ? !VOWELS.has(c) : true
+  );
+  return filtered.reduce((a, c) => a + (PYTH[c] ?? 0), 0);
 }
 
-// Name number (Chaldean system)
-const CHALDEAN: Record<string, number> = {
-  a:1,b:2,c:3,d:4,e:5,f:8,g:3,h:5,i:1,j:1,k:2,l:3,m:4,
-  n:5,o:7,p:8,q:1,r:2,s:3,t:4,u:6,v:6,w:6,x:5,y:1,z:7,
-};
-
-function calcNameNumber(name: string): number | null {
-  const cleaned = name.toLowerCase().replace(/[^a-z]/g, "");
-  if (!cleaned) return null;
-  const sum = cleaned.split("").reduce((a, c) => a + (CHALDEAN[c] ?? 0), 0);
-  return reduceToSingle(sum);
+function calcLifePath(day: number, month: number, year: number) {
+  return reduce(reduce(digitSum(day)) + reduce(digitSum(month)) + reduce(digitSum(year)));
+}
+function calcDestiny(name: string) { return reduce(letterSum(name)); }
+function calcSoulUrge(name: string) { return reduce(letterSum(name, true)); }
+function calcPersonality(name: string) { return reduce(letterSum(name, false, true)); }
+function calcMaturity(lp: number, dest: number) { return reduce(lp + dest); }
+function calcPersonalYear(day: number, month: number) {
+  const y = new Date().getFullYear();
+  return reduce(digitSum(day) + digitSum(month) + digitSum(y));
+}
+function calcPersonalMonth(day: number, month: number) {
+  const py  = calcPersonalYear(day, month);
+  const now = new Date().getMonth() + 1;
+  return reduce(py + now);
 }
 
-const NUMBER_INFO: Record<number, {
-  title: string; planet: string; planetEmoji: string;
-  traits: string[]; career: string; love: string; color: string; lucky: string;
-}> = {
-  1: { title: "Netritva", planet: "Surya", planetEmoji: "☀️", color: "#f59e0b", lucky: "1, 10, 19, 28",
-       traits: ["Aatmvishwaas","Netritva","Swatantrata","Mahattvakaanksha"],
-       career: "Rajneeti, Prabandhan, Udyamita, Netatva ke kaarya",
-       love: "Aap dominanat partner hain. Khud ko vyakt karne wale partner se premi hain." },
-  2: { title: "Sahyog", planet: "Chandra", planetEmoji: "🌙", color: "#94a3b8", lucky: "2, 11, 20, 29",
-       traits: ["Sahvedna","Sahyog","Santulana","Kalpana"],
-       career: "Kala, Sangeet, Counseling, Karyalaya kaarya",
-       love: "Aap bahut romantic aur caring partner hain. Rishton mein harmoni chahte hain." },
-  3: { title: "Srijanatmakta", planet: "Guru", planetEmoji: "🪐", color: "#facc15", lucky: "3, 12, 21, 30",
-       traits: ["Srijanatmakta","Utsaah","Samajikta","Optimism"],
-       career: "Lekhan, Kala, Entertainment, Shiksha",
-       love: "Aap joyful aur fun-loving partner hain. Humor aapki pehchaan hai." },
-  4: { title: "Sthirta", planet: "Rahu", planetEmoji: "🌑", color: "#8b5cf6", lucky: "4, 13, 22, 31",
-       traits: ["Anushasan","Manat","Vyavastha","Vishwasneeyata"],
-       career: "Engineering, Architecture, Sena, Wित्त",
-       love: "Aap loyal aur reliable partner hain. Stability aapko chahiye." },
-  5: { title: "Swatantrata", planet: "Budha", planetEmoji: "☿️", color: "#10b981", lucky: "5, 14, 23",
-       traits: ["Swatantrata","Sahastra","Uchhalana","Buddhimatta"],
-       career: "Patrakarita, Yatra, Sales, Technology",
-       love: "Aap adventurous partner hain. Boredom se darte hain." },
-  6: { title: "Prem", planet: "Shukra", planetEmoji: "♀️", color: "#f43f5e", lucky: "6, 15, 24",
-       traits: ["Prem","Uttardayitv","Parivar prem","Saundaryapriyata"],
-       career: "Chikitsa, Shiksha, Kala, Grihasth kaarya",
-       love: "Aap deeply loving aur devoted partner hain. Parivar sabse pehle." },
-  7: { title: "Gyaan", planet: "Ketu", planetEmoji: "🌠", color: "#06b6d4", lucky: "7, 16, 25",
-       traits: ["Gyaan","Dhyaan","Rahasya","Aatmaavlochana"],
-       career: "Anveshan, Philosophy, Science, Adhyatma",
-       love: "Aap intellectual partner hain. Deep conversations chahte hain." },
-  8: { title: "Samriddhi", planet: "Shani", planetEmoji: "🪐", color: "#6366f1", lucky: "8, 17, 26",
-       traits: ["Samriddhi","Bal","Manat","Vyavasayika saflata"],
-       career: "Vyavsay, Banking, Rajneeti, Prashasan",
-       love: "Aap intense aur protective partner hain. Power dynamics matter karte hain." },
-  9: { title: "Manavta", planet: "Mangal", planetEmoji: "♂️", color: "#ef4444", lucky: "9, 18, 27",
-       traits: ["Karuna","Daan","Shaurya","Nishkaam seva"],
-       career: "Doctor, Lawyer, Sena, Seva kaarya",
-       love: "Aap passionate aur idealistic partner hain. Sach ke liye lade hain." },
-  11: { title: "Prakaash", planet: "Chandra+Surya", planetEmoji: "✨", color: "#fbbf24", lucky: "11, 29",
-        traits: ["Intuition","Ilham","Aatmik shakti","Prerna"],
-        career: "Spiritual guidance, Kala, Healing, Netritva",
-        love: "Aap deeply intuitive partner hain. Soulmate dhundhte hain." },
-  22: { title: "Vishwa Nirman", planet: "Shani+Surya", planetEmoji: "🌍", color: "#a78bfa", lucky: "22",
-        traits: ["Visionary","Sangathan","Badi soch","Nirmana"],
-        career: "Architecture, Politics, Global business",
-        love: "Aap dedicated aur visionary partner hain. Long-term goals matter karte hain." },
-  33: { title: "Vishwa Prem", planet: "Guru+Shukra", planetEmoji: "💫", color: "#34d399", lucky: "33",
-        traits: ["Nirswaarth prem","Shiksha","Seva","Upchar"],
-        career: "Healing arts, Teaching, Spiritual leadership",
-        love: "Aap unconditionally loving partner hain." },
+// ── Number interpretation data ────────────────────────────────────────────────
+interface NumInfo {
+  title: string; titleHindi: string;
+  planet: string; planetEmoji: string;
+  color: string;
+  luckyNums: string; luckyColor: string; luckyColorHex: string;
+  traits: string[]; traitsHindi: string[];
+  desc: string;
+  career: string;
+  love: string;
+  strength: string;
+  weakness: string;
+  remedy: string;
+}
+
+const NUM: Record<number, NumInfo> = {
+  1: { title:"Leadership", titleHindi:"नेतृत्व", planet:"Surya", planetEmoji:"☀️",
+       color:"#f59e0b", luckyNums:"1, 10, 19, 28", luckyColor:"Gold / Orange", luckyColorHex:"#f59e0b",
+       traits:["Ambitious","Independent","Pioneering","Creative"],
+       traitsHindi:["महत्त्वाकांक्षी","स्वतंत्र","अग्रणी","रचनात्मक"],
+       desc:"You are a natural-born leader with iron willpower. Originality and independence define your path — you were born to blaze new trails.",
+       career:"Politics, Management, Entrepreneurship, Military",
+       love:"You need a partner who respects your independence and admires your drive.",
+       strength:"Determination, Confidence", weakness:"Ego, Stubbornness",
+       remedy:"Offer water to the rising Sun each morning. Donate wheat on Sundays." },
+  2: { title:"Partnership", titleHindi:"सहयोग", planet:"Chandra", planetEmoji:"🌙",
+       color:"#94a3b8", luckyNums:"2, 11, 20, 29", luckyColor:"White / Silver", luckyColorHex:"#e2e8f0",
+       traits:["Sensitive","Cooperative","Diplomatic","Intuitive"],
+       traitsHindi:["संवेदनशील","सहयोगी","कूटनीतिज्ञ","अंतर्ज्ञानी"],
+       desc:"You are a peacemaker gifted with deep emotional intelligence. You thrive in partnerships and bring harmony to every relationship you touch.",
+       career:"Counseling, Arts, Music, Nursing, Diplomacy",
+       love:"You are a deeply romantic and devoted partner who values emotional safety.",
+       strength:"Empathy, Patience", weakness:"Over-sensitivity, Indecisiveness",
+       remedy:"Fast on Mondays and donate white cloth or rice to a temple." },
+  3: { title:"Creativity", titleHindi:"सृजनात्मकता", planet:"Guru", planetEmoji:"🪐",
+       color:"#facc15", luckyNums:"3, 12, 21, 30", luckyColor:"Yellow / Purple", luckyColorHex:"#facc15",
+       traits:["Joyful","Expressive","Optimistic","Social"],
+       traitsHindi:["आनंदमय","अभिव्यक्तिशील","आशावादी","सामाजिक"],
+       desc:"You radiate joy and creativity. Gifted with communication and charisma, you inspire and uplift everyone around you.",
+       career:"Writing, Entertainment, Teaching, Arts, Comedy",
+       love:"You are a playful, fun-loving partner who never lets the spark fade.",
+       strength:"Optimism, Creativity", weakness:"Scattered focus, Over-indulgence",
+       remedy:"Worship Lord Vishnu on Thursdays. Donate yellow sweets or turmeric." },
+  4: { title:"Foundation", titleHindi:"स्थिरता", planet:"Rahu", planetEmoji:"🌑",
+       color:"#8b5cf6", luckyNums:"4, 13, 22, 31", luckyColor:"Electric Blue / Grey", luckyColorHex:"#8b5cf6",
+       traits:["Disciplined","Hardworking","Systematic","Reliable"],
+       traitsHindi:["अनुशासित","मेहनती","व्यवस्थित","विश्वसनीय"],
+       desc:"You are the builder — patient, dependable, and devoted to creating lasting structures through hard work and discipline.",
+       career:"Engineering, Architecture, Finance, Defense",
+       love:"You are a loyal and stable partner who values commitment above all else.",
+       strength:"Discipline, Reliability", weakness:"Rigidity, Resistance to change",
+       remedy:"Donate blue clothes on Saturdays. Chant the Rahu Beej mantra." },
+  5: { title:"Freedom", titleHindi:"स्वतंत्रता", planet:"Budha", planetEmoji:"☿️",
+       color:"#10b981", luckyNums:"5, 14, 23", luckyColor:"Green / Light Blue", luckyColorHex:"#10b981",
+       traits:["Adventurous","Versatile","Quick-witted","Energetic"],
+       traitsHindi:["साहसी","बहुमुखी","तीक्ष्ण","ऊर्जावान"],
+       desc:"You are a free spirit — curious, adaptable, and always seeking the next horizon. You thrive on change and new experiences.",
+       career:"Journalism, Travel, Sales, Technology, Media",
+       love:"You need an adventurous partner who can match your restless energy.",
+       strength:"Adaptability, Intelligence", weakness:"Restlessness, Inconsistency",
+       remedy:"Worship Lord Ganesha on Wednesdays. Donate green vegetables to the needy." },
+  6: { title:"Love & Nurturing", titleHindi:"प्रेम और देखभाल", planet:"Shukra", planetEmoji:"♀️",
+       color:"#f43f5e", luckyNums:"6, 15, 24", luckyColor:"Pink / Light Blue", luckyColorHex:"#f43f5e",
+       traits:["Loving","Responsible","Artistic","Nurturing"],
+       traitsHindi:["प्रेमपूर्ण","जिम्मेदार","कलात्मक","देखभाल करने वाला"],
+       desc:"You are a caretaker with a boundless heart. Harmony, family, beauty, and service define your soul's mission in this lifetime.",
+       career:"Medicine, Teaching, Art, Interior Design, Social Work",
+       love:"You are a devoted, family-first partner with a deeply romantic soul.",
+       strength:"Compassion, Responsibility", weakness:"Over-sacrifice, Jealousy",
+       remedy:"Worship Goddess Lakshmi on Fridays. Donate sweets and white flowers." },
+  7: { title:"Wisdom & Mysticism", titleHindi:"ज्ञान और रहस्य", planet:"Ketu", planetEmoji:"🌠",
+       color:"#06b6d4", luckyNums:"7, 16, 25", luckyColor:"Violet / Indigo", luckyColorHex:"#8b5cf6",
+       traits:["Analytical","Spiritual","Introspective","Mysterious"],
+       traitsHindi:["विश्लेषणात्मक","आध्यात्मिक","अंतर्मुखी","रहस्यमय"],
+       desc:"You are the seeker — drawn to hidden truths, deeper knowledge, and the mysteries of the cosmos. Solitude and reflection fuel your wisdom.",
+       career:"Research, Philosophy, Science, Spiritual work, Psychology",
+       love:"You seek a deep intellectual and spiritual bond with your partner.",
+       strength:"Insight, Wisdom", weakness:"Aloofness, Over-analysis",
+       remedy:"Worship Lord Shiva on Mondays. Donate black sesame seeds on Saturdays." },
+  8: { title:"Power & Abundance", titleHindi:"शक्ति और समृद्धि", planet:"Shani", planetEmoji:"🪐",
+       color:"#6366f1", luckyNums:"8, 17, 26", luckyColor:"Dark Blue / Black", luckyColorHex:"#6366f1",
+       traits:["Powerful","Ambitious","Strategic","Enduring"],
+       traitsHindi:["शक्तिशाली","महत्त्वाकांक्षी","रणनीतिक","धैर्यवान"],
+       desc:"You carry Saturn's immense power. Obstacles only make you stronger. Great material success and authority await your perseverance.",
+       career:"Business, Banking, Politics, Administration, Law",
+       love:"You are an intense, protective partner — loyalty is your non-negotiable.",
+       strength:"Determination, Resilience", weakness:"Materialism, Control issues",
+       remedy:"Light a mustard-oil lamp on Saturdays. Donate black sesame to Lord Shani." },
+  9: { title:"Compassion & Service", titleHindi:"करुणा और सेवा", planet:"Mangal", planetEmoji:"♂️",
+       color:"#ef4444", luckyNums:"9, 18, 27", luckyColor:"Red / Crimson", luckyColorHex:"#ef4444",
+       traits:["Courageous","Humanitarian","Passionate","Idealistic"],
+       traitsHindi:["साहसी","मानवतावादी","जोशीला","आदर्शवादी"],
+       desc:"You are the warrior with a golden heart — courageous in battle, compassionate in service. You fight fearlessly for truth and justice.",
+       career:"Medicine, Law, Military, Social Service, Spiritual Leadership",
+       love:"You love with fierce intensity and devotion. Your partner feels truly protected.",
+       strength:"Courage, Generosity", weakness:"Impulsiveness, Short temper",
+       remedy:"Worship Lord Hanuman on Tuesdays. Donate red lentils and jaggery." },
+  11: { title:"Illumination", titleHindi:"प्रकाश", planet:"Chandra + Surya", planetEmoji:"✨",
+        color:"#fbbf24", luckyNums:"11, 29, 2", luckyColor:"Silver / Gold", luckyColorHex:"#fbbf24",
+        traits:["Intuitive","Inspirational","Visionary","Highly Sensitive"],
+        traitsHindi:["अंतर्ज्ञानी","प्रेरणादायक","दूरदर्शी","संवेदनशील"],
+        desc:"You carry the Master Number 11 — a vibration of divine illumination. You are a spiritual messenger born to uplift and inspire all of humanity.",
+        career:"Spiritual Leadership, Art, Healing, Counseling, Visionary Work",
+        love:"You seek a soul-level connection — deep, spiritual, and transformative.",
+        strength:"Intuition, Inspiration", weakness:"Anxiety, Over-idealism",
+        remedy:"Meditate at sunrise every day. Chant 'Om Namah Shivaya' 108 times." },
+  22: { title:"Master Builder", titleHindi:"महान निर्माता", planet:"Shani + Surya", planetEmoji:"🌍",
+        color:"#a78bfa", luckyNums:"22, 4", luckyColor:"Deep Blue / Gold", luckyColorHex:"#a78bfa",
+        traits:["Visionary","Disciplined","Powerful","Practical"],
+        traitsHindi:["दूरदर्शी","अनुशासित","शक्तिशाली","व्यावहारिक"],
+        desc:"You carry Master Number 22 — the most powerful of all numbers. You can bridge the spiritual and material to manifest extraordinary realities.",
+        career:"Architecture, Global Business, Politics, Large-scale Philanthropy",
+        love:"You are a dedicated, visionary partner building a lasting legacy together.",
+        strength:"Vision, Execution", weakness:"Perfectionism, Overwhelm",
+        remedy:"Practice deep meditation daily. Donate to orphanages on Saturdays." },
+  33: { title:"Master Teacher", titleHindi:"महान गुरु", planet:"Guru + Shukra", planetEmoji:"💫",
+        color:"#34d399", luckyNums:"33, 6", luckyColor:"Gold / Pink", luckyColorHex:"#34d399",
+        traits:["Selfless","Nurturing","Creative","Enlightened"],
+        traitsHindi:["निस्वार्थ","पालन-पोषण करने वाला","रचनात्मक","प्रबुद्ध"],
+        desc:"You carry Master Number 33 — the purest vibration of divine love and healing. You are a rare teacher destined to uplift all of humanity.",
+        career:"Healing Arts, Spiritual Teaching, Creative Leadership, Service",
+        love:"You love unconditionally, serving your partner and family with pure devotion.",
+        strength:"Unconditional Love, Wisdom", weakness:"Martyrdom, Self-neglect",
+        remedy:"Serve the underprivileged selflessly every week. Light a ghee lamp daily." },
 };
 
-export default function NumerologyScreen() {
-  const C = useC();
-  const insets = useSafeAreaInsets();
-  const [dob, setDob] = useState("");
-  const [name, setName] = useState("");
-  const [calculated, setCalculated] = useState(false);
+const PY_THEME: Record<number, string> = {
+  1:"New beginnings — a 9-year cycle begins. Plant the seeds of your dreams.",
+  2:"Partnerships and patience. Let relationships deepen and blossom.",
+  3:"Creativity, joy, and expression — let your inner light shine brightly.",
+  4:"Hard work and foundation-building. Discipline is your greatest asset.",
+  5:"Change, freedom, and travel. Embrace the unexpected with open arms.",
+  6:"Family, love, and responsibility. Nurture yourself and those around you.",
+  7:"Reflection, spirituality, and inner work. Seek deeper truth within.",
+  8:"Power, ambition, and finance. Your efforts will finally be rewarded.",
+  9:"Completion and release. Close old chapters; a new cycle approaches.",
+  11:"Spiritual awakening. Divine guidance is speaking — are you listening?",
+  22:"Master year of manifestation. Think big. Build something legendary.",
+  33:"Year of deep love and teaching. Serve humanity with your full heart.",
+};
 
-  const lifePath = useMemo(() => calcLifePath(dob), [dob]);
-  const nameNum  = useMemo(() => calcNameNumber(name), [name]);
+function getInfo(n: number): NumInfo {
+  return NUM[n] ?? NUM[9];
+}
 
-  function onCalculate() {
-    if (!lifePath && !nameNum) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCalculated(true);
-  }
+// ── Number badge component ─────────────────────────────────────────────────────
+function NumberBadge({ num, color, size = 68 }: { num: number; color: string; size?: number }) {
+  return (
+    <View style={[nb.wrap, { width: size, height: size, borderRadius: size / 2,
+      backgroundColor: `${color}18`, borderColor: `${color}45`, borderWidth: 2 }]}>
+      <Text style={[nb.num, { color, fontSize: size * (num > 9 ? 0.30 : 0.40) }]}>{num}</Text>
+    </View>
+  );
+}
+const nb = StyleSheet.create({
+  wrap: { alignItems:"center", justifyContent:"center", flexShrink:0 },
+  num:  { fontWeight:"900" },
+});
 
-  const lpInfo  = lifePath ? NUMBER_INFO[lifePath] : null;
-  const nnInfo  = nameNum  ? NUMBER_INFO[nameNum]  : null;
+// ── Free numerology card ───────────────────────────────────────────────────────
+function NumCard({
+  label, labelHindi, num, expanded, onToggle,
+}: { label: string; labelHindi: string; num: number; expanded: boolean; onToggle: () => void }) {
+  const C    = useC();
+  const info = getInfo(num);
 
   return (
-    <View style={{ flex: 1 }}>
-      <CosmicBg />
-      <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name="arrow-left" size={20} color={C.text} />
-        </Pressable>
-        <View>
-          <Text style={[s.title, { color: C.text }]}>Numerology</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>Ankon ka rahasya</Text>
+    <Pressable
+      onPress={onToggle}
+      style={[nc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}35` }]}
+    >
+      {/* Top row */}
+      <View style={nc.topRow}>
+        <NumberBadge num={num} color={info.color} />
+        <View style={{ flex:1 }}>
+          <Text style={[nc.tag, { color: C.textDim }]}>{label}</Text>
+          <Text style={[nc.tagHindi, { color: C.textMuted }]}>{labelHindi}</Text>
+          <Text style={[nc.titleTxt, { color: info.color }]}>{info.title}</Text>
+          <View style={nc.planetRow}>
+            <Text style={{ fontSize:12 }}>{info.planetEmoji}</Text>
+            <Text style={[nc.planetTxt, { color: C.textMuted }]}>{info.planet}</Text>
+          </View>
         </View>
-        <View style={{ width: 36 }} />
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.textMuted} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 14 }}>
-
-        {/* Input form */}
-        <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>🔢 APNA VIVARAN DARJ KAREIN</Text>
-
-          <View style={{ gap: 4 }}>
-            <Text style={[s.label, { color: C.textMuted }]}>Janm Tithi (DD/MM/YYYY)</Text>
-            <TextInput
-              style={[s.input, { color: C.text, backgroundColor: C.inputBg, borderColor: C.border }]}
-              placeholder="15/04/1990"
-              placeholderTextColor={C.textDim}
-              value={dob}
-              onChangeText={setDob}
-              keyboardType="numeric"
-            />
+      {/* Traits */}
+      <View style={nc.traits}>
+        {info.traits.map((t, i) => (
+          <View key={t} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
+            <Text style={[nc.chipTxt, { color:info.color }]}>{t}</Text>
+            <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
           </View>
+        ))}
+      </View>
 
-          <View style={{ gap: 4 }}>
-            <Text style={[s.label, { color: C.textMuted }]}>Pura Naam (English mein)</Text>
-            <TextInput
-              style={[s.input, { color: C.text, backgroundColor: C.inputBg, borderColor: C.border }]}
-              placeholder="RAHUL SHARMA"
-              placeholderTextColor={C.textDim}
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="characters"
-            />
+      {/* Description always visible */}
+      <Text style={[nc.desc, { color: C.textMuted }]}>{info.desc}</Text>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <View style={{ gap:10, marginTop:4 }}>
+          <View style={[nc.detailBlock, { borderColor: C.border }]}>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>💼 Career</Text>
+            <Text style={[nc.detailVal, { color: C.textMid }]}>{info.career}</Text>
           </View>
-
-          <Pressable
-            onPress={onCalculate}
-            style={({ pressed }) => [s.calcBtn, { opacity: pressed ? 0.8 : 1 }]}
-          >
-            <Text style={{ fontSize: 20 }}>🔢</Text>
-            <Text style={s.calcBtnText}>Calculate Karein</Text>
-          </Pressable>
-        </View>
-
-        {/* Results */}
-        {calculated && (
-          <>
-            {/* Life Path */}
-            {lpInfo && lifePath && (
-              <View style={[s.resultCard, { backgroundColor: C.bgCard, borderColor: `${lpInfo.color}40` }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 12 }}>
-                  <View style={[s.numBubble, { backgroundColor: `${lpInfo.color}18`, borderColor: `${lpInfo.color}40` }]}>
-                    <Text style={[s.numBig, { color: lpInfo.color }]}>{lifePath}</Text>
-                  </View>
-                  <View>
-                    <Text style={[s.resultLabel, { color: C.textDim }]}>LIFE PATH NUMBER</Text>
-                    <Text style={[s.resultTitle, { color: C.text }]}>{lpInfo.title}</Text>
-                    <Text style={[s.resultPlanet, { color: lpInfo.color }]}>{lpInfo.planetEmoji} {lpInfo.planet}</Text>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                  {lpInfo.traits.map(t => (
-                    <View key={t} style={[s.traitChip, { backgroundColor: `${lpInfo.color}14`, borderColor: `${lpInfo.color}30` }]}>
-                      <Text style={[s.traitText, { color: lpInfo.color }]}>{t}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={[s.infoRow, { borderTopColor: C.border3 }]}>
-                  <Text style={[s.infoLabel, { color: C.textMuted }]}>💼 Career</Text>
-                  <Text style={[s.infoVal, { color: C.textMid }]}>{lpInfo.career}</Text>
-                </View>
-                <View style={[s.infoRow, { borderTopColor: C.border3 }]}>
-                  <Text style={[s.infoLabel, { color: C.textMuted }]}>❤️ Prem Jeevan</Text>
-                  <Text style={[s.infoVal, { color: C.textMid }]}>{lpInfo.love}</Text>
-                </View>
-                <View style={[s.infoRow, { borderTopColor: C.border3 }]}>
-                  <Text style={[s.infoLabel, { color: C.textMuted }]}>🍀 Lucky Ankh</Text>
-                  <Text style={[s.infoVal, { color: lpInfo.color }]}>{lpInfo.lucky}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Name Number */}
-            {nnInfo && nameNum && (
-              <View style={[s.resultCard, { backgroundColor: C.bgCard, borderColor: `${nnInfo.color}40` }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 12 }}>
-                  <View style={[s.numBubble, { backgroundColor: `${nnInfo.color}18`, borderColor: `${nnInfo.color}40` }]}>
-                    <Text style={[s.numBig, { color: nnInfo.color }]}>{nameNum}</Text>
-                  </View>
-                  <View>
-                    <Text style={[s.resultLabel, { color: C.textDim }]}>NAAM ANKA (NAME NUMBER)</Text>
-                    <Text style={[s.resultTitle, { color: C.text }]}>{nnInfo.title}</Text>
-                    <Text style={[s.resultPlanet, { color: nnInfo.color }]}>{nnInfo.planetEmoji} {nnInfo.planet}</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {nnInfo.traits.map(t => (
-                    <View key={t} style={[s.traitChip, { backgroundColor: `${nnInfo.color}14`, borderColor: `${nnInfo.color}30` }]}>
-                      <Text style={[s.traitText, { color: nnInfo.color }]}>{t}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* All numbers guide */}
-            <Text style={[s.guideLabel, { color: C.textMuted }]}>📚 SABHI ANKHA KA ARTH</Text>
-            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              {[1,2,3,4,5,6,7,8,9].map((n, i) => {
-                const info = NUMBER_INFO[n];
-                return (
-                  <View key={n} style={[s.guideRow, { borderBottomColor: C.border3 }, i === 8 && { borderBottomWidth: 0 }]}>
-                    <View style={[s.guideNum, { backgroundColor: `${info.color}18`, borderColor: `${info.color}30` }]}>
-                      <Text style={[s.guideNumText, { color: info.color }]}>{n}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.guideName, { color: C.text }]}>{info.title}</Text>
-                      <Text style={[s.guidePlanet, { color: C.textMuted }]}>{info.planetEmoji} {info.planet}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+          <View style={[nc.detailBlock, { borderColor: C.border }]}>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>❤️ Love</Text>
+            <Text style={[nc.detailVal, { color: C.textMid }]}>{info.love}</Text>
+          </View>
+          <View style={[nc.detailBlock, { borderColor: C.border }]}>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>⚡ Strength</Text>
+            <Text style={[nc.detailVal, { color: "#22c55e" }]}>{info.strength}</Text>
+          </View>
+          <View style={[nc.detailBlock, { borderColor: C.border }]}>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>⚠️ Weakness</Text>
+            <Text style={[nc.detailVal, { color: "#f87171" }]}>{info.weakness}</Text>
+          </View>
+          <View style={[nc.detailBlock, { borderColor: C.border, backgroundColor:`${info.color}06` }]}>
+            <Text style={[nc.detailLabel, { color: info.color }]}>🙏 Remedy</Text>
+            <Text style={[nc.detailVal, { color: C.textMid }]}>{info.remedy}</Text>
+          </View>
+          <View style={nc.luckyRow}>
+            <View style={[nc.luckyPill, { backgroundColor:`${info.color}12` }]}>
+              <Text style={[nc.luckyLabel, { color: C.textDim }]}>Lucky Numbers</Text>
+              <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyNums}</Text>
             </View>
-          </>
+            <View style={[nc.luckyPill, { backgroundColor:`${info.luckyColorHex}12` }]}>
+              <View style={[nc.colorDot, { backgroundColor: info.luckyColorHex }]} />
+              <View>
+                <Text style={[nc.luckyLabel, { color: C.textDim }]}>Lucky Color</Text>
+                <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyColor}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+const nc = StyleSheet.create({
+  card:       { borderRadius:16, borderWidth:1.5, padding:16, gap:10 },
+  topRow:     { flexDirection:"row", alignItems:"flex-start", gap:12 },
+  tag:        { fontSize:9, fontWeight:"800", letterSpacing:1.8, marginBottom:1 },
+  tagHindi:   { fontSize:9, marginBottom:3 },
+  titleTxt:   { fontSize:15, fontWeight:"800", marginBottom:2 },
+  planetRow:  { flexDirection:"row", alignItems:"center", gap:4 },
+  planetTxt:  { fontSize:11 },
+  traits:     { flexDirection:"row", flexWrap:"wrap", gap:6 },
+  chip:       { flexDirection:"row", paddingHorizontal:8, paddingVertical:4, borderRadius:8, borderWidth:1 },
+  chipTxt:    { fontSize:10, fontWeight:"700" },
+  chipHindi:  { fontSize:10 },
+  desc:       { fontSize:12, lineHeight:19 },
+  detailBlock:{ borderTopWidth:1, paddingTop:8, gap:2 },
+  detailLabel:{ fontSize:9, fontWeight:"800", letterSpacing:1.2 },
+  detailVal:  { fontSize:12, lineHeight:19 },
+  luckyRow:   { flexDirection:"row", gap:10 },
+  luckyPill:  { flex:1, flexDirection:"row", alignItems:"center", gap:8, padding:10, borderRadius:12 },
+  colorDot:   { width:14, height:14, borderRadius:7 },
+  luckyLabel: { fontSize:9, fontWeight:"700", letterSpacing:0.8 },
+  luckyVal:   { fontSize:12, fontWeight:"700", marginTop:1 },
+});
+
+// ── Personal year mini card ───────────────────────────────────────────────────
+function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
+  const C    = useC();
+  const info = getInfo(py);
+  const pmInfo = getInfo(pm);
+  const year = new Date().getFullYear();
+  const month = new Date().toLocaleString("default", { month:"long" });
+
+  return (
+    <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}30` }]}>
+      <Text style={[pyc.title, { color: C.textDim }]}>⏰ PERSONAL YEAR · MONTH</Text>
+      <View style={pyc.row}>
+        <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
+          <Text style={[pyc.bigNum, { color: info.color }]}>{py}</Text>
+          <Text style={[pyc.label, { color: C.textMuted }]}>Year {year}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[py] ?? ""}</Text>
+        </View>
+        <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
+          <Text style={[pyc.bigNum, { color: pmInfo.color }]}>{pm}</Text>
+          <Text style={[pyc.label, { color: C.textMuted }]}>{month}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[pm] ?? ""}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+const pyc = StyleSheet.create({
+  card:   { borderRadius:16, borderWidth:1, padding:16, gap:10 },
+  title:  { fontSize:9, fontWeight:"800", letterSpacing:1.8 },
+  row:    { flexDirection:"row", gap:10 },
+  box:    { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4, alignItems:"center" },
+  bigNum: { fontSize:36, fontWeight:"900" },
+  label:  { fontSize:10, fontWeight:"700" },
+  theme:  { fontSize:11, lineHeight:16, textAlign:"center" },
+});
+
+// ── Locked premium card ───────────────────────────────────────────────────────
+function LockedCard({ title, emoji, color }: { title: string; emoji: string; color: string }) {
+  const C = useC();
+  return (
+    <View style={[lk.card, { backgroundColor: C.bgCard, borderColor: `${color}22` }]}>
+      <View style={lk.row}>
+        <View style={[lk.icon, { backgroundColor:`${color}15` }]}>
+          <Text style={{ fontSize:18 }}>{emoji}</Text>
+        </View>
+        <View style={{ flex:1, gap:6 }}>
+          <Text style={[lk.title, { color: C.text }]}>{title}</Text>
+          <View style={lk.blurRow}>
+            {["●●●●●●","●●●●●●●●","●●●●●"].map((b,i) => (
+              <View key={i} style={[lk.blurChip, { backgroundColor:`${color}18` }]}>
+                <Text style={{ color:`${color}40`, fontSize:9 }}>{b}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={[lk.preview, { color: C.textDim }]}>••••••••••••••••••••••••••••••••••</Text>
+        </View>
+        <View style={[lk.lockIcon, { backgroundColor:`${color}12` }]}>
+          <Feather name="lock" size={14} color={color} />
+        </View>
+      </View>
+    </View>
+  );
+}
+const lk = StyleSheet.create({
+  card:     { borderRadius:14, borderWidth:1, padding:12, opacity:0.75 },
+  row:      { flexDirection:"row", alignItems:"flex-start", gap:10 },
+  icon:     { width:40, height:40, borderRadius:12, alignItems:"center", justifyContent:"center", flexShrink:0 },
+  title:    { fontSize:13, fontWeight:"700" },
+  blurRow:  { flexDirection:"row", gap:6 },
+  blurChip: { paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
+  preview:  { fontSize:10, letterSpacing:1 },
+  lockIcon: { width:30, height:30, borderRadius:15, alignItems:"center", justifyContent:"center", flexShrink:0 },
+});
+
+// ── Profile selector ──────────────────────────────────────────────────────────
+function ProfileSelector({
+  profiles, activeId, onSelect,
+}: { profiles: ProfileEntry[]; activeId: string | null; onSelect: (id: string) => void }) {
+  const C = useC();
+  if (profiles.length <= 1) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal:-16 }}
+      contentContainerStyle={{ paddingHorizontal:16, gap:8, flexDirection:"row" }}>
+      {profiles.map(p => {
+        const active = p.id === activeId;
+        return (
+          <Pressable key={p.id} onPress={() => { onSelect(p.id); Haptics.selectionAsync(); }}
+            style={[ps.chip, { borderColor: active ? C.accent : C.border,
+              backgroundColor: active ? `${C.accent}12` : C.bgCard2 }]}>
+            <Text style={[ps.name, { color: active ? C.accent : C.textMuted }]}>{p.name}</Text>
+            {p.relation && <Text style={[ps.rel, { color: C.textDim }]}>{p.relation}</Text>}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+const ps = StyleSheet.create({
+  chip: { paddingHorizontal:12, paddingVertical:7, borderRadius:12, borderWidth:1.5, gap:1 },
+  name: { fontSize:12, fontWeight:"700" },
+  rel:  { fontSize:9 },
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────────
+export default function NumerologyScreen() {
+  const C       = useC();
+  const insets  = useSafeAreaInsets();
+  const { profiles, primaryProfileId, setPrimaryProfile } = useUser();
+  const topPad  = Platform.OS === "web" ? 67 : insets.top;
+  const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
+
+  // Local selected profile (for this screen; defaults to primary)
+  const [selectedId, setSelectedId] = useState<string | null>(primaryProfileId);
+  useEffect(() => { setSelectedId(primaryProfileId); }, [primaryProfileId]);
+
+  const profile = profiles.find(p => p.id === selectedId) ?? profiles[0] ?? null;
+  const bd      = profile?.birthData ?? null;
+
+  // Expanded cards
+  const [expLP,   setExpLP]   = useState(true);
+  const [expDest, setExpDest] = useState(false);
+  const [expSoul, setExpSoul] = useState(false);
+
+  // All calculations — instant, no API call
+  const nums = useMemo(() => {
+    if (!bd) return null;
+    const lp   = calcLifePath(bd.day, bd.month, bd.year);
+    const dest = calcDestiny(bd.name);
+    const soul = calcSoulUrge(bd.name);
+    const pers = calcPersonality(bd.name);
+    const mat  = calcMaturity(lp, dest);
+    const py   = calcPersonalYear(bd.day, bd.month);
+    const pm   = calcPersonalMonth(bd.day, bd.month);
+    return { lp, dest, soul, pers, mat, py, pm };
+  }, [bd]);
+
+  // Format DOB for display
+  const dobStr = bd
+    ? `${String(bd.day).padStart(2,"0")} / ${String(bd.month).padStart(2,"0")} / ${bd.year}`
+    : null;
+
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const dobFull = bd
+    ? `${bd.day} ${MONTHS[bd.month - 1]} ${bd.year}`
+    : null;
+
+  return (
+    <View style={[s.root, { backgroundColor: C.bg }]}>
+      {/* Header */}
+      <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
+        <Pressable onPress={() => router.back()} style={s.back}>
+          <Feather name="arrow-left" size={20} color={C.textMuted} />
+        </Pressable>
+        <View style={{ flex:1 }}>
+          <Text style={[s.title, { color: C.text }]}>Numerology</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>अंकज्योतिष — Vedic Number Science</Text>
+        </View>
+        <View style={[s.badge, { backgroundColor: `${C.accent}15` }]}>
+          <Text style={[s.badgeTxt, { color: C.accent }]}>FREE</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[s.content, { paddingBottom: botPad + 40 }]}
+      >
+        {/* Profile selector */}
+        {profiles.length > 1 && (
+          <View style={{ gap:6 }}>
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>SELECT PROFILE</Text>
+            <ProfileSelector
+              profiles={profiles} activeId={selectedId}
+              onSelect={(id) => setSelectedId(id)}
+            />
+          </View>
         )}
 
-        {/* How it works */}
-        {!calculated && (
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, gap: 10 }]}>
-            <Text style={[s.cardTitle, { color: C.textMuted }]}>💡 NUMEROLOGY KYA HAI?</Text>
-            <Text style={[s.howText, { color: C.textMid }]}>
-              Numerology ankon ke madhyam se vyakti ki shaktiyon, kamzoriyon, aur bhavishy ka adhyayan karta hai.
-              Vedic Numerology ke anusaar, har ank ek grah se juda hai jo aapke jeevan ko prabhavit karta hai.
+        {/* No profile state */}
+        {!bd && (
+          <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Text style={{ fontSize:40 }}>🔢</Text>
+            <Text style={[s.emptyTitle, { color: C.text }]}>No Kundli Profile Found</Text>
+            <Text style={[s.emptyBody, { color: C.textMuted }]}>
+              Please create a Kundli profile first. Numerology reads directly from your birth details.
             </Text>
-            <View style={s.tipRow}>
-              <Text style={{ fontSize: 18 }}>🔢</Text>
-              <Text style={[s.tipText, { color: C.textMuted }]}><Text style={{ fontFamily: F.bold }}>Life Path</Text>: Janm tithi ke sabhi ankon ka yog → personality aur jeevan path</Text>
-            </View>
-            <View style={s.tipRow}>
-              <Text style={{ fontSize: 18 }}>🅰️</Text>
-              <Text style={[s.tipText, { color: C.textMuted }]}><Text style={{ fontFamily: F.bold }}>Naam Anka</Text>: Naam ke akshar ke ank → vyaktitv aur bhagya</Text>
+            <Pressable
+              onPress={() => router.push("/profile-edit" as any)}
+              style={[s.emptyBtn, { backgroundColor: C.accent }]}
+            >
+              <Text style={s.emptyBtnTxt}>Set Up Profile →</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Profile info card */}
+        {bd && (
+          <View style={[s.profileCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={s.profileRow}>
+              <View style={[s.avatar, { backgroundColor:`${C.accent}15`, borderColor:`${C.accent}30` }]}>
+                <Text style={{ fontSize:20 }}>👤</Text>
+              </View>
+              <View style={{ flex:1 }}>
+                <Text style={[s.profileName, { color: C.text }]}>{bd.name}</Text>
+                <Text style={[s.profileDob, { color: C.textMuted }]}>🎂 {dobFull}</Text>
+                {bd.place && <Text style={[s.profilePlace, { color: C.textDim }]}>📍 {bd.place}</Text>}
+              </View>
+              <View style={[s.syncBadge, { backgroundColor:`${C.accent}10` }]}>
+                <Feather name="check-circle" size={11} color={C.accent} />
+                <Text style={[s.syncTxt, { color: C.accent }]}>Auto-synced</Text>
+              </View>
             </View>
           </View>
+        )}
+
+        {/* Free section */}
+        {nums && (
+          <>
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>🆓 FREE NUMEROLOGY</Text>
+            <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to expand full details</Text>
+
+            <NumCard
+              label="LIFE PATH NUMBER" labelHindi="जीवन पथ संख्या"
+              num={nums.lp} expanded={expLP}
+              onToggle={() => { setExpLP(v => !v); Haptics.selectionAsync(); }}
+            />
+            <NumCard
+              label="DESTINY / EXPRESSION NUMBER" labelHindi="भाग्य संख्या"
+              num={nums.dest} expanded={expDest}
+              onToggle={() => { setExpDest(v => !v); Haptics.selectionAsync(); }}
+            />
+            <NumCard
+              label="SOUL URGE NUMBER" labelHindi="आत्मा की इच्छा"
+              num={nums.soul} expanded={expSoul}
+              onToggle={() => { setExpSoul(v => !v); Haptics.selectionAsync(); }}
+            />
+
+            {/* Personal Year / Month */}
+            <PersonalYearCard py={nums.py} pm={nums.pm} />
+
+            {/* Divider + Advanced teaser */}
+            <View style={[s.divider, { borderColor: C.border }]}>
+              <View style={[s.divLine, { backgroundColor: C.border }]} />
+              <View style={[s.divBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Feather name="lock" size={10} color="#f59e0b" />
+                <Text style={[s.divTxt, { color:"#f59e0b" }]}>PREMIUM REPORT</Text>
+              </View>
+              <View style={[s.divLine, { backgroundColor: C.border }]} />
+            </View>
+
+            {/* Teaser blurb */}
+            <View style={[s.teaserCard, { backgroundColor: C.bgCard, borderColor:"rgba(245,158,11,0.25)" }]}>
+              <Text style={{ fontSize:32 }}>🔐</Text>
+              <View style={{ flex:1, gap:4 }}>
+                <Text style={[s.teaserTitle, { color: C.text }]}>Unlock Your Full Report</Text>
+                <Text style={[s.teaserBody, { color: C.textMuted }]}>
+                  Personality Number · Maturity Number · Name Correction ·
+                  Career Insights · Love Compatibility · Challenges & Remedies
+                </Text>
+              </View>
+            </View>
+
+            {/* Locked cards preview */}
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>🔒 ADVANCED NUMEROLOGY</Text>
+
+            <LockedCard title="Personality Number" emoji="🎭" color="#8b5cf6" />
+            <LockedCard title="Maturity Number" emoji="🌱" color="#10b981" />
+            <LockedCard title="Career & Finance Insights" emoji="💼" color="#f59e0b" />
+            <LockedCard title="Love Compatibility Report" emoji="❤️" color="#f43f5e" />
+            <LockedCard title="Name Correction Suggestions" emoji="✍️" color="#06b6d4" />
+            <LockedCard title="Challenges, Weak Points & Remedies" emoji="🙏" color="#f97316" />
+
+            {/* CTA */}
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/subscription" as any); }}
+              style={s.ctaBtn}
+            >
+              <View style={s.ctaInner}>
+                <Text style={{ fontSize:22 }}>⭐</Text>
+                <View style={{ flex:1 }}>
+                  <Text style={s.ctaTitle}>Unlock Full Numerology Report</Text>
+                  <Text style={s.ctaSub}>Get Personality, Maturity, Love, Career & Remedies</Text>
+                </View>
+                <Feather name="arrow-right" size={18} color="#fff" />
+              </View>
+            </Pressable>
+
+            {/* Info footer */}
+            <View style={[s.footer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Feather name="info" size={12} color={C.textMuted} />
+              <Text style={[s.footerTxt, { color: C.textMuted }]}>
+                Calculations use the Pythagorean Numerology system. Life Path, Destiny, and Soul Urge
+                numbers are derived from your Kundli profile data — no re-entry needed.
+              </Text>
+            </View>
+          </>
         )}
       </ScrollView>
     </View>
@@ -281,55 +618,51 @@ export default function NumerologyScreen() {
 }
 
 const s = StyleSheet.create({
-  topBar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 20, paddingBottom: 14,
+  root:        { flex:1 },
+  header:      { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1 },
+  back:        { width:36, height:36, alignItems:"center", justifyContent:"center" },
+  title:       { fontSize:17, fontWeight:"800" },
+  sub:         { fontSize:10, marginTop:1 },
+  badge:       { paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
+  badgeTxt:    { fontSize:9, fontWeight:"800", letterSpacing:1 },
+  content:     { paddingHorizontal:16, gap:12, paddingTop:14 },
+  sectionLabel:{ fontSize:9, fontWeight:"800", letterSpacing:2, marginBottom:-4 },
+  sectionSub:  { fontSize:11, marginTop:-8 },
+
+  emptyCard:   { borderRadius:18, borderWidth:1, padding:24, alignItems:"center", gap:14 },
+  emptyTitle:  { fontSize:16, fontWeight:"800", textAlign:"center" },
+  emptyBody:   { fontSize:13, lineHeight:20, textAlign:"center" },
+  emptyBtn:    { paddingHorizontal:24, paddingVertical:12, borderRadius:14 },
+  emptyBtnTxt: { color:"#fff", fontSize:14, fontWeight:"800" },
+
+  profileCard: { borderRadius:14, borderWidth:1, padding:14 },
+  profileRow:  { flexDirection:"row", alignItems:"center", gap:12 },
+  avatar:      { width:48, height:48, borderRadius:16, borderWidth:1.5, alignItems:"center", justifyContent:"center", flexShrink:0 },
+  profileName: { fontSize:15, fontWeight:"800" },
+  profileDob:  { fontSize:12, marginTop:2 },
+  profilePlace:{ fontSize:11, marginTop:1 },
+  syncBadge:   { flexDirection:"row", alignItems:"center", gap:4, paddingHorizontal:7, paddingVertical:3, borderRadius:8 },
+  syncTxt:     { fontSize:9, fontWeight:"700" },
+
+  divider:     { flexDirection:"row", alignItems:"center", gap:10, borderTopWidth:0 },
+  divLine:     { flex:1, height:1 },
+  divBadge:    { flexDirection:"row", alignItems:"center", gap:5, paddingHorizontal:10, paddingVertical:4, borderRadius:12, borderWidth:1 },
+  divTxt:      { fontSize:9, fontWeight:"800", letterSpacing:1 },
+
+  teaserCard:  { borderRadius:16, borderWidth:1, padding:16, flexDirection:"row", alignItems:"flex-start", gap:12 },
+  teaserTitle: { fontSize:14, fontWeight:"800" },
+  teaserBody:  { fontSize:12, lineHeight:18 },
+
+  ctaBtn: {
+    borderRadius:18, overflow:"hidden",
+    backgroundColor:"#f59e0b",
+    shadowColor:"#f59e0b", shadowOffset:{ width:0, height:6 },
+    shadowOpacity:0.4, shadowRadius:12, elevation:10,
   },
-  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontFamily: F.bold, letterSpacing: -0.3 },
-  sub: { fontSize: 11, fontFamily: F.regular, marginTop: 1 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 10 },
-  cardTitle: { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },
-  label: { fontSize: 11, fontFamily: F.semibold },
-  input: {
-    borderRadius: 10, borderWidth: 1, paddingHorizontal: 12,
-    paddingVertical: 11, fontSize: 14, fontFamily: F.medium,
-  },
-  calcBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: "#8b5cf6", borderRadius: 14, paddingVertical: 14,
-  },
-  calcBtnText: { color: "#fff", fontSize: 15, fontFamily: F.bold },
-  resultCard: { borderRadius: 16, borderWidth: 1.5, padding: 16 },
-  numBubble: {
-    width: 72, height: 72, borderRadius: 36,
-    alignItems: "center", justifyContent: "center", borderWidth: 2,
-  },
-  numBig: { fontSize: 30, fontFamily: F.bold },
-  resultLabel: { fontSize: 9, fontFamily: F.bold, letterSpacing: 1.5 },
-  resultTitle: { fontSize: 16, fontFamily: F.bold, marginTop: 2 },
-  resultPlanet: { fontSize: 12, fontFamily: F.medium, marginTop: 1 },
-  traitChip: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 10, borderWidth: 1,
-  },
-  traitText: { fontSize: 11, fontFamily: F.semibold },
-  infoRow: { paddingTop: 10, borderTopWidth: 1, gap: 3 },
-  infoLabel: { fontSize: 10, fontFamily: F.bold, letterSpacing: 0.8 },
-  infoVal: { fontSize: 12, fontFamily: F.regular, lineHeight: 18 },
-  guideLabel: { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },
-  guideRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingVertical: 10, borderBottomWidth: 1,
-  },
-  guideNum: {
-    width: 36, height: 36, borderRadius: 12,
-    alignItems: "center", justifyContent: "center", borderWidth: 1,
-  },
-  guideNumText: { fontSize: 16, fontFamily: F.bold },
-  guideName: { fontSize: 13, fontFamily: F.semibold },
-  guidePlanet: { fontSize: 10, fontFamily: F.regular, marginTop: 1 },
-  howText: { fontSize: 13, fontFamily: F.regular, lineHeight: 21 },
-  tipRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  tipText: { flex: 1, fontSize: 12, fontFamily: F.regular, lineHeight: 19 },
+  ctaInner:  { flexDirection:"row", alignItems:"center", gap:12, padding:18 },
+  ctaTitle:  { color:"#fff", fontSize:15, fontWeight:"900" },
+  ctaSub:    { color:"rgba(255,255,255,0.8)", fontSize:11, marginTop:2 },
+
+  footer:    { borderRadius:12, borderWidth:1, padding:12, flexDirection:"row", alignItems:"flex-start", gap:8 },
+  footerTxt: { fontSize:11, lineHeight:17, flex:1 },
 });

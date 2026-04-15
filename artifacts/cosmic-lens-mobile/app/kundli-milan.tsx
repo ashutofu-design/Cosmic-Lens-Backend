@@ -5,582 +5,488 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
-  Pressable, ScrollView, StyleSheet, Text,
-  TextInput, View,
+  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
-// ── Nakshatra / Rashi Data ────────────────────────────────────────────────────
-
+// ── Data Tables ───────────────────────────────────────────────────────────────
 const NAKSHATRAS = [
   "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
   "Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati",
   "Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana",
   "Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati",
 ];
-
-const RASHIS = [
-  "Mesh","Vrishabh","Mithun","Kark","Simha","Kanya",
-  "Tula","Vrishchik","Dhanu","Makar","Kumbh","Meen",
-];
-
-const ENGLISH_TO_RASHI: Record<string, string> = {
+const RASHIS = ["Mesh","Vrishabh","Mithun","Kark","Simha","Kanya","Tula","Vrishchik","Dhanu","Makar","Kumbh","Meen"];
+const ENGLISH_TO_RASHI: Record<string,string> = {
   "Aries":"Mesh","Taurus":"Vrishabh","Gemini":"Mithun","Cancer":"Kark",
   "Leo":"Simha","Virgo":"Kanya","Libra":"Tula","Scorpio":"Vrishchik",
   "Sagittarius":"Dhanu","Capricorn":"Makar","Aquarius":"Kumbh","Pisces":"Meen",
 };
-
-// Nakshatra → Nadi (0=Vata/Adi, 1=Pitta/Madhya, 2=Kapha/Antya)
-const NADI = [0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2];
-const NADI_NAMES = ["Vata (Adi)","Pitta (Madhya)","Kapha (Antya)"];
-
-// Nakshatra → Gana (0=Dev, 1=Manushya, 2=Raksha)
-const GANA = [0,1,2,1,0,1,0,0,2,2,1,1,0,2,0,2,0,2,2,1,1,0,1,2,1,1,0];
-const GANA_NAMES = ["Dev","Manushya","Raksha"];
-
-// Rashi → Varna (0=Brahmin, 1=Kshatriya, 2=Vaishya, 3=Shudra)
-const VARNA = [1,2,3,0,1,2,3,0,1,2,3,0];
-
-// Nakshatra → Yoni animal (0–14, pair must not be enemy)
-const YONI = [0,1,2,3,4,5,6,7,8,9,10,2,11,12,13,14,14,13,5,12,11,10,3,7,4,9,0];
-// Yoni enemy pairs (indices)
-const YONI_ENEMIES: [number,number][] = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,0]];
-
-function isYoniEnemy(a: number, b: number) {
-  return YONI_ENEMIES.some(([x,y]) => (a===x&&b===y)||(a===y&&b===x));
-}
-
-// Rashi lord (0=Sun,1=Moon,2=Mars,3=Mercury,4=Jupiter,5=Venus,6=Saturn,7=Rahu)
-const RASHI_LORD = [2,5,3,1,0,3,5,2,4,6,6,4];
-
-// Planet friendship matrix [planet][planet] = 2(friend), 1(neutral), 0(enemy)
+const NADI      = [0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2];
+const NADI_NAMES= ["Vata (Adi)","Pitta (Madhya)","Kapha (Antya)"];
+const GANA      = [0,1,2,1,0,1,0,0,2,2,1,1,0,2,0,2,0,2,2,1,1,0,1,2,1,1,0];
+const GANA_NAMES= ["Dev","Manushya","Raksha"];
+const VARNA     = [1,2,3,0,1,2,3,0,1,2,3,0];
+const YONI      = [0,1,2,3,4,5,6,7,8,9,10,2,11,12,13,14,14,13,5,12,11,10,3,7,4,9,0];
+const YONI_ENEMIES:[number,number][] = [[0,1],[2,3],[4,5],[6,7],[8,9],[10,11],[12,13],[14,0]];
+const RASHI_LORD= [2,5,3,1,0,3,5,2,4,6,6,4];
 const PLN_FRIEND: number[][] = [
-  [1,2,2,1,2,0,0],
-  [2,1,0,1,2,2,0],
-  [2,0,1,1,2,0,2],
-  [2,0,2,1,0,2,0],
-  [2,1,2,1,1,0,0],
-  [2,2,0,2,1,1,0],
-  [0,0,2,2,2,0,1],
+  [1,2,2,1,2,0,0],[2,1,0,1,2,2,0],[2,0,1,1,2,0,2],
+  [2,0,2,1,0,2,0],[2,1,2,1,1,0,0],[2,2,0,2,1,1,0],[0,0,2,2,2,0,1],
 ];
 
-function getGrahaMaitri(r1: number, r2: number): number {
-  const l1 = RASHI_LORD[r1] ?? 0;
-  const l2 = RASHI_LORD[r2] ?? 0;
-  if (l1 >= PLN_FRIEND.length || l2 >= PLN_FRIEND.length) return 3;
-  const ab = PLN_FRIEND[l1]?.[l2] ?? 1;
-  const ba = PLN_FRIEND[l2]?.[l1] ?? 1;
-  const total = ab + ba;
-  if (total >= 4) return 5;
-  if (total === 3) return 4;
-  if (total === 2) return 3;
-  return 0;
+function isYoniEnemy(a:number,b:number){return YONI_ENEMIES.some(([x,y])=>(a===x&&b===y)||(a===y&&b===x));}
+function getGrahaMaitri(r1:number,r2:number):number{
+  const l1=RASHI_LORD[r1]??0,l2=RASHI_LORD[r2]??0;
+  if(l1>=PLN_FRIEND.length||l2>=PLN_FRIEND.length)return 3;
+  const ab=PLN_FRIEND[l1]?.[l2]??1,ba=PLN_FRIEND[l2]?.[l1]??1,t=ab+ba;
+  return t>=4?5:t===3?4:t===2?3:0;
+}
+function getTara(n1:number,n2:number):number{
+  const fwd=((n2-n1+27)%27)+1,rev=((n1-n2+27)%27)+1,bad=[3,5,7];
+  return(!bad.includes(fwd%9||9)&&!bad.includes(rev%9||9))?3:(!bad.includes(fwd%9||9)||!bad.includes(rev%9||9))?1.5:0;
+}
+function getBhakut(r1:number,r2:number):number{
+  const diff=Math.abs(r1-r2);
+  return [[1,11],[4,8],[5,7]].some(([a,b])=>diff===a||diff===b)?0:7;
+}
+function getVasya(r1:number,r2:number):number{
+  if(r1===r2)return 2;
+  const groups=[[0,3,4],[1,6,7,9],[2,8],[5,10,11]];
+  return groups.findIndex(g=>g.includes(r1))===groups.findIndex(g=>g.includes(r2))?2:1;
 }
 
-// Tara: count from nak1 to nak2
-function getTara(n1: number, n2: number): number {
-  const fwd = ((n2 - n1 + 27) % 27) + 1;
-  const rev = ((n1 - n2 + 27) % 27) + 1;
-  const bad = [3,5,7];
-  const fwdBad = bad.includes(fwd % 9 || 9);
-  const revBad = bad.includes(rev % 9 || 9);
-  if (!fwdBad && !revBad) return 3;
-  if (!fwdBad || !revBad) return 1.5;
-  return 0;
-}
-
-// Bhakut: based on rashi relationship
-function getBhakut(r1: number, r2: number): number {
-  const diff = Math.abs(r1 - r2);
-  const rel  = Math.min(diff, 12 - diff);
-  // 2-12, 5-9, 6-8 are bad (0 pts)
-  const badPairs = [
-    [1,11],[4,8],[5,7],
-  ];
-  const bad = badPairs.some(([a,b]) => (diff===a||diff===b));
-  return bad ? 0 : 7;
-}
-
-// Vasya (simplified)
-function getVasya(r1: number, r2: number): number {
-  if (r1 === r2) return 2;
-  const groups = [[0,3,4],[1,6,7,9],[2,8],[5,10,11]];
-  const g1 = groups.findIndex(g => g.includes(r1));
-  const g2 = groups.findIndex(g => g.includes(r2));
-  return g1 === g2 ? 2 : 1;
-}
-
+interface KootItem { score:number; max:number; label:string; detail:string; bad:boolean; }
 interface AshtakootResult {
-  nadi:       { score: number; max: 8;  label: string; detail: string; bad: boolean };
-  gana:       { score: number; max: 6;  label: string; detail: string; bad: boolean };
-  bhakut:     { score: number; max: 7;  label: string; detail: string; bad: boolean };
-  maitri:     { score: number; max: 5;  label: string; detail: string; bad: boolean };
-  yoni:       { score: number; max: 4;  label: string; detail: string; bad: boolean };
-  tara:       { score: number; max: 3;  label: string; detail: string; bad: boolean };
-  vasya:      { score: number; max: 2;  label: string; detail: string; bad: boolean };
-  varna:      { score: number; max: 1;  label: string; detail: string; bad: boolean };
-  total:      number;
-  manglikDosha: boolean;
+  nadi:KootItem; gana:KootItem; bhakut:KootItem; maitri:KootItem;
+  yoni:KootItem; tara:KootItem; vasya:KootItem; varna:KootItem;
+  total:number; manglikDosha:boolean;
 }
 
-function computeAshtakoot(
-  n1: number, r1: number, mars1: boolean,
-  n2: number, r2: number, mars2: boolean,
-): AshtakootResult {
-  const nad1 = NADI[n1] ?? 0;
-  const nad2 = NADI[n2] ?? 0;
-  const nadiScore = nad1 !== nad2 ? 8 : 0;
-  const nadiLabel = nadiScore === 8 ? "Alag Nadi" : `Dono ${NADI_NAMES[nad1]} — Nadi Dosh`;
-
-  const g1 = GANA[n1] ?? 0;
-  const g2 = GANA[n2] ?? 0;
-  let ganaScore = 6;
-  if      ((g1===0&&g2===2)||(g1===2&&g2===0)) ganaScore = 1;
-  else if ((g1===1&&g2===2)||(g1===2&&g2===1)) ganaScore = 0;
-  const ganaLabel = ganaScore === 6 ? `${GANA_NAMES[g1]}+${GANA_NAMES[g2]} — Uttam`
-    : ganaScore > 0 ? `${GANA_NAMES[g1]}+${GANA_NAMES[g2]} — Madhyam`
-    : `${GANA_NAMES[g1]}+${GANA_NAMES[g2]} — Gana Dosh`;
-
-  const bhakutScore = getBhakut(r1, r2);
-  const rashiDiff   = ((r2 - r1 + 12) % 12) + 1;
-  const bhakutLabel = bhakutScore === 7 ? `${rashiDiff}-${13-rashiDiff} Shubh` : `${rashiDiff}-${13-rashiDiff} Bhakut Dosh`;
-
-  const maitriScore = getGrahaMaitri(r1, r2);
-  const maitriLabel = maitriScore >= 4 ? "Graha Mitra" : maitriScore >= 3 ? "Sam" : "Graha Shatru";
-
-  const y1 = YONI[n1] ?? 0;
-  const y2 = YONI[n2] ?? 0;
-  const enemy = isYoniEnemy(y1, y2);
-  const yoniScore = y1 === y2 ? 4 : enemy ? 0 : 2;
-  const yoniLabel = yoniScore === 4 ? "Sama Yoni" : yoniScore === 2 ? "Madhyam Yoni" : "Yoni Dosh";
-
-  const taraScore = getTara(n1, n2);
-  const taraLabel = taraScore === 3 ? "Shubh Tara" : taraScore > 0 ? "Madhyam Tara" : "Vipat Tara";
-
-  const vasya   = getVasya(r1, r2);
-  const vasLabel = vasya === 2 ? "Vasya Shubh" : "Vasya Madhyam";
-
-  const v1 = VARNA[r1] ?? 0;
-  const v2 = VARNA[r2] ?? 0;
-  const varnaScore = v1 <= v2 ? 1 : 0;
-  const varnaLabel = varnaScore ? "Varna Sahi" : "Varna Anmatch";
-
-  const total = nadiScore + ganaScore + bhakutScore + maitriScore +
-    yoniScore + taraScore + vasya + varnaScore;
-
-  const manglikDosha = mars1 !== mars2;
-
+function computeAshtakoot(n1:number,r1:number,mars1:boolean,n2:number,r2:number,mars2:boolean):AshtakootResult{
+  const nad1=NADI[n1]??0,nad2=NADI[n2]??0,nadiScore=nad1!==nad2?8:0;
+  const g1=GANA[n1]??0,g2=GANA[n2]??0;
+  let ganaScore=6;
+  if((g1===0&&g2===2)||(g1===2&&g2===0))ganaScore=1;
+  else if((g1===1&&g2===2)||(g1===2&&g2===1))ganaScore=0;
+  const bhakutScore=getBhakut(r1,r2),rashiDiff=((r2-r1+12)%12)+1;
+  const maitriScore=getGrahaMaitri(r1,r2);
+  const y1=YONI[n1]??0,y2=YONI[n2]??0,enemy=isYoniEnemy(y1,y2);
+  const yoniScore=y1===y2?4:enemy?0:2;
+  const taraScore=getTara(n1,n2);
+  const vasya=getVasya(r1,r2);
+  const v1=VARNA[r1]??0,v2=VARNA[r2]??0,varnaScore=v1<=v2?1:0;
+  const total=nadiScore+ganaScore+bhakutScore+maitriScore+yoniScore+taraScore+vasya+varnaScore;
   return {
-    nadi:   { score:nadiScore,   max:8, label:"Nadi",        detail:nadiLabel,   bad:nadiScore===0 },
-    gana:   { score:ganaScore,   max:6, label:"Gana",        detail:ganaLabel,   bad:ganaScore===0 },
-    bhakut: { score:bhakutScore, max:7, label:"Bhakut",      detail:bhakutLabel, bad:bhakutScore===0 },
-    maitri: { score:maitriScore, max:5, label:"Graha Maitri",detail:maitriLabel, bad:maitriScore<3 },
-    yoni:   { score:yoniScore,   max:4, label:"Yoni",        detail:yoniLabel,   bad:yoniScore===0 },
-    tara:   { score:taraScore,   max:3, label:"Tara",        detail:taraLabel,   bad:taraScore===0 },
-    vasya:  { score:vasya,       max:2, label:"Vasya",       detail:vasLabel,    bad:false },
-    varna:  { score:varnaScore,  max:1, label:"Varna",       detail:varnaLabel,  bad:varnaScore===0 },
-    total,
-    manglikDosha,
+    nadi:  {score:nadiScore,  max:8,label:"Nadi",         detail:nadiScore===8?`${NADI_NAMES[nad1]} ≠ ${NADI_NAMES[nad2]}`:`Dono ${NADI_NAMES[nad1]}`, bad:nadiScore===0},
+    gana:  {score:ganaScore,  max:6,label:"Gana",         detail:`${GANA_NAMES[g1]} + ${GANA_NAMES[g2]}`, bad:ganaScore===0},
+    bhakut:{score:bhakutScore,max:7,label:"Bhakut",       detail:bhakutScore===7?`${rashiDiff}–${13-rashiDiff} Shubh`:`${rashiDiff}–${13-rashiDiff} Dosh`, bad:bhakutScore===0},
+    maitri:{score:maitriScore,max:5,label:"Graha Maitri", detail:maitriScore>=4?"Graha Mitra":maitriScore>=3?"Sam":"Graha Shatru", bad:maitriScore<3},
+    yoni:  {score:yoniScore,  max:4,label:"Yoni",         detail:yoniScore===4?"Sama Yoni":yoniScore===2?"Madhyam Yoni":"Vipat Yoni", bad:yoniScore===0},
+    tara:  {score:taraScore,  max:3,label:"Tara",         detail:taraScore===3?"Shubh Tara":taraScore>0?"Madhyam Tara":"Vipat Tara", bad:taraScore===0},
+    vasya: {score:vasya,      max:2,label:"Vasya",        detail:vasya===2?"Vasya Shubh":"Vasya Madhyam", bad:false},
+    varna: {score:varnaScore, max:1,label:"Varna",        detail:varnaScore?"Varna Sahi":"Varna Anmatch", bad:varnaScore===0},
+    total, manglikDosha:mars1!==mars2,
   };
 }
 
-function getMatchGrade(total: number) {
-  if (total >= 32) return { label:"Excellent",    color:"#22c55e", emoji:"💚", desc:"Very auspicious. An ideal match for marriage." };
-  if (total >= 27) return { label:"Very Good",    color:"#4ade80", emoji:"🌿", desc:"Great compatibility. A happy marriage is possible." };
-  if (total >= 21) return { label:"Average",      color:"#fbbf24", emoji:"💛", desc:"Moderate match. Some precautions recommended." };
-  if (total >= 18) return { label:"Below Average",color:"#f97316", emoji:"🟠", desc:"Average match. Consult a Jyotishi for guidance." };
-  return              { label:"Not Compatible", color:"#ef4444", emoji:"❤️", desc:"Low score. Remedies and expert guidance strongly advised." };
+function getGrade(total:number){
+  if(total>=32)return{label:"Excellent",    emoji:"✨",colors:["#16a34a","#22c55e"] as const};
+  if(total>=27)return{label:"Very Good",    emoji:"💚",colors:["#15803d","#4ade80"] as const};
+  if(total>=21)return{label:"Average",      emoji:"💛",colors:["#b45309","#fbbf24"] as const};
+  if(total>=18)return{label:"Below Average",emoji:"🟠",colors:["#c2410c","#f97316"] as const};
+  return            {label:"Not Compatible",emoji:"🔴",colors:["#b91c1c","#ef4444"] as const};
 }
 
-// ── Form fields ───────────────────────────────────────────────────────────────
-function FormRow({
-  label, value, onChangeText, placeholder, keyboardType = "default",
-}: {
-  label: string; value: string; onChangeText: (v: string) => void;
-  placeholder?: string; keyboardType?: "default" | "numeric";
-}) {
-  const C = useC();
-  return (
-    <View style={f.row}>
-      <Text style={[f.label, { color: C.textMuted }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? label}
-        placeholderTextColor={C.textDim}
-        keyboardType={keyboardType}
-        style={[f.input, { color: C.text, borderBottomColor: C.border }]}
-      />
+const KOOT_ORDER = ["nadi","gana","bhakut","maitri","yoni","tara","vasya","varna"] as const;
+
+// ── Score Ring ────────────────────────────────────────────────────────────────
+function ScoreRing({total,color}:{total:number;color:string}){
+  const R=68,circ=2*Math.PI*R,pct=total/36;
+  return(
+    <View style={{width:160,height:160,alignItems:"center",justifyContent:"center"}}>
+      <Svg width={160} height={160} style={{position:"absolute"} as any}>
+        <Circle cx={80} cy={80} r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={10}/>
+        <Circle cx={80} cy={80} r={R} fill="none" stroke={color} strokeWidth={10}
+          strokeLinecap="round"
+          strokeDasharray={`${circ*pct} ${circ}`}
+          rotation={-90} originX={80} originY={80}/>
+      </Svg>
+      <Text style={{fontSize:44,fontFamily:"Nunito_700Bold",color,lineHeight:50}}>{total}</Text>
+      <Text style={{fontSize:13,color:"rgba(255,255,255,0.5)",fontFamily:"Nunito_500Medium"}}>out of 36</Text>
+    </View>
+  );
+}
+
+// ── Koot Row ──────────────────────────────────────────────────────────────────
+function KootRow({k,accent}:{k:KootItem;accent:string}){
+  const C=useC();
+  const pct=k.max>0?k.score/k.max:0;
+  const barColor=k.bad?"#ef4444":pct>=0.8?"#22c55e":pct>=0.5?"#fbbf24":"#f97316";
+  return(
+    <View style={[km.kootRow,{backgroundColor:C.bgCard,borderColor:k.bad?"rgba(239,68,68,0.3)":C.border}]}>
+      <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
+          {k.bad&&<View style={km.kootBadDot}/>}
+          <Text style={[km.kootLabel,{color:C.text}]}>{k.label}</Text>
+        </View>
+        <Text style={[km.kootScore,{color:barColor}]}>{k.score}<Text style={{color:C.textDim,fontSize:10}}>/{k.max}</Text></Text>
+      </View>
+      <View style={[km.kootBarBg,{backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.06)"}]}>
+        <View style={[km.kootBarFill,{width:`${Math.round(pct*100)}%` as any,backgroundColor:barColor}]}/>
+      </View>
+      <Text style={[km.kootDetail,{color:C.textMuted}]}>{k.detail}</Text>
     </View>
   );
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
-export default function KundliMilanScreen() {
-  const insets = useSafeAreaInsets();
-  const C = useC();
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const { kundli: p1Kundli, profiles, primaryProfileId } = useUser();
-  const apiBase = API_BASE;
+export default function KundliMilanScreen(){
+  const insets=useSafeAreaInsets();
+  const C=useC();
+  const topPad=Platform.OS==="web"?67:insets.top;
+  const botPad=Platform.OS==="web"?34:insets.bottom;
+  const {kundli:p1Kundli,profiles,primaryProfileId}=useUser();
+  const p1Profile=profiles.find(p=>p.id===primaryProfileId);
 
-  const p1Profile = profiles.find(p => p.id === primaryProfileId);
+  const [p2Name, setP2Name] =useState("");
+  const [p2DOB,  setP2DOB]  =useState("");
+  const [p2Time, setP2Time] =useState("");
+  const [p2Place,setP2Place]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [result, setResult] =useState<AshtakootResult|null>(null);
+  const [error,  setError]  =useState("");
 
-  // Person 2 form
-  const [p2Name,   setP2Name]   = useState("");
-  const [p2DOB,    setP2DOB]    = useState("");
-  const [p2Time,   setP2Time]   = useState("");
-  const [p2Place,  setP2Place]  = useState("");
+  const p1Nak    =NAKSHATRAS.indexOf(p1Kundli?.nakshatra??"");
+  const p1RashiEn=p1Kundli?.moonSign??"";
+  const p1RashiHi=ENGLISH_TO_RASHI[p1RashiEn]??"";
+  const p1Rashi  =RASHIS.indexOf(p1RashiHi);
+  const p1Mars   =(p1Kundli?.planets.find(p=>p.name==="Mars")?.house??0);
+  const p1Manglik=[1,4,7,8,12].includes(p1Mars);
 
-  const [loading,  setLoading]  = useState(false);
-  const [result,   setResult]   = useState<AshtakootResult | null>(null);
-  const [error,    setError]    = useState("");
-
-  // Person 1 nakshatra / rashi from kundli
-  const p1Nak   = NAKSHATRAS.indexOf(p1Kundli?.nakshatra ?? "");
-  const p1RashiEn = p1Kundli?.moonSign ?? "";
-  const p1RashiHi = ENGLISH_TO_RASHI[p1RashiEn] ?? "";
-  const p1Rashi = RASHIS.indexOf(p1RashiHi);
-  const p1Mars  = (p1Kundli?.planets.find(p => p.name === "Mars")?.house ?? 0);
-  const p1Manglik = [1,4,7,8,12].includes(p1Mars);
-
-  async function handleCalculate() {
-    if (!p1Kundli) { setError("Please create your kundli from your profile first."); return; }
-    if (!p2DOB || !p2Time || !p2Place) { setError("Please fill in all birth details for Person 2."); return; }
-
-    setError(""); setLoading(true);
-    try {
-      const [day, month, year] = p2DOB.split("/").map(Number);
-      const [hourMin, ampm]    = p2Time.trim().split(" ");
-      const [h, m]             = (hourMin ?? "").split(":").map(Number);
-      if (!day || !month || !year || !h || !m) throw new Error("Invalid date/time format. Use DD/MM/YYYY HH:MM AM");
-
-      const url = `${apiBase}/api/kundli`;
-      const body = {
-        name: p2Name || "Person 2",
-        day, month, year, hour: h, minute: m,
-        ampm: ampm ?? "AM", place: p2Place,
-      };
-      const res  = await apiFetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
-      const json = await res.json();
-
-      const p2Nak   = NAKSHATRAS.indexOf(json.nakshatra ?? "");
-      const p2RashiHi = ENGLISH_TO_RASHI[json.moonSign ?? ""] ?? "";
-      const p2Rashi = RASHIS.indexOf(p2RashiHi);
-      const p2MarsH = (json.planets as any[]).find(p => p.name === "Mars")?.house ?? 0;
-      const p2Manglik = [1,4,7,8,12].includes(p2MarsH);
-
-      if (p2Nak < 0 || p2Rashi < 0) throw new Error("Could not calculate Person 2's kundli.");
-      if (p1Nak < 0 || p1Rashi < 0) throw new Error("Could not find Person 1's nakshatra/rashi.");
-
-      const res2 = computeAshtakoot(p1Nak, p1Rashi, p1Manglik, p2Nak, p2Rashi, p2Manglik);
-      setResult(res2);
+  async function handleCalculate(){
+    if(!p1Kundli){setError("Please create your kundli from your profile first.");return;}
+    if(!p2DOB||!p2Time||!p2Place){setError("Please fill all birth details for Person 2.");return;}
+    setError("");setLoading(true);
+    try{
+      const[day,month,year]=p2DOB.split("/").map(Number);
+      const[hourMin,ampm]=p2Time.trim().split(" ");
+      const[h,m]=(hourMin??"").split(":").map(Number);
+      if(!day||!month||!year||!h)throw new Error("Use format: DD/MM/YYYY  and  HH:MM AM");
+      const res=await apiFetch(`${API_BASE}/api/kundli`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:p2Name||"Person 2",day,month,year,hour:h,minute:m,ampm:ampm??"AM",place:p2Place})});
+      const json=await res.json();
+      const p2Nak  =NAKSHATRAS.indexOf(json.nakshatra??"");
+      const p2Rashi=RASHIS.indexOf(ENGLISH_TO_RASHI[json.moonSign??""]??"");
+      const p2MarsH=(json.planets as any[]).find(p=>p.name==="Mars")?.house??0;
+      const p2Manglik=[1,4,7,8,12].includes(p2MarsH);
+      if(p2Nak<0||p2Rashi<0)throw new Error("Could not calculate Person 2's kundli.");
+      if(p1Nak<0||p1Rashi<0)throw new Error("Could not find Person 1's nakshatra/rashi.");
+      setResult(computeAshtakoot(p1Nak,p1Rashi,p1Manglik,p2Nak,p2Rashi,p2Manglik));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: any) {
-      setError(e?.message ?? "An error occurred. Please try again.");
+    }catch(e:any){
+      setError(e?.message??"An error occurred. Please try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setLoading(false);
-    }
+    }finally{setLoading(false);}
   }
 
-  const grade = result ? getMatchGrade(result.total) : null;
+  const grade=result?getGrade(result.total):null;
+  const gradeColor=grade?grade.colors[1]:"#a855f7";
 
-  const KOOT_ORDER = ["nadi","gana","bhakut","maitri","yoni","tara","vasya","varna"] as const;
+  return(
+    <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":"height"}>
+      <View style={{flex:1,backgroundColor:C.bg}}>
 
-  return (
-    <KeyboardAvoidingView style={{ flex:1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={{ flex:1, backgroundColor: C.bg }}>
-        {/* Header */}
-        <View style={[s.header, { paddingTop: topPad + 8 }]}>
-          <Pressable onPress={() => router.back()} style={s.back}>
-            <Feather name="arrow-left" size={20} color={C.textMuted} />
+        {/* ── Header ── */}
+        <LinearGradient
+          colors={C.isDark?["#1a0533","#0B0F19"]:["#ede9fe","#F8FAFC"]}
+          style={[km.header,{paddingTop:topPad+6}]}
+        >
+          <Pressable onPress={()=>router.back()} style={km.backBtn}>
+            <Feather name="arrow-left" size={20} color={C.isDark?"#c4b5fd":C.text}/>
           </Pressable>
-          <View style={{ flex:1 }}>
-            <Text style={[s.title, { color: C.text }]}>Kundli Milan</Text>
-            <Text style={[s.titleHindi, { color: C.textMuted }]}>अष्टकूट गुण मिलान</Text>
+          <View style={{flex:1}}>
+            <Text style={[km.title,{color:C.isDark?"#f3e8ff":C.text}]}>Kundli Milan</Text>
+            <Text style={[km.titleHindi,{color:C.isDark?"#7c3aed":"#7c3aed"}]}>अष्टकूट गुण मिलान • 36 Points</Text>
           </View>
-        </View>
+        </LinearGradient>
 
         <ScrollView
-          contentContainerStyle={[s.content, { paddingBottom: botPad + 40 }]}
+          contentContainerStyle={[km.scroll,{paddingBottom:botPad+40}]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Person 1 Card ── */}
-          <View>
-            <Text style={[s.sectionLabel, { color: C.textMuted }]}>PERSON 1 (AAPKA)</Text>
-            <View style={[s.p1Card, { backgroundColor: C.bgCard }]}>
-              <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
-                <View style={s.p1Avatar}>
-                  <Text style={{ fontSize:18 }}>♀</Text>
-                </View>
-                <View>
-                  <Text style={[s.p1Name, { color: C.text }]}>{p1Profile?.name ?? "Aapki Profile"}</Text>
-                  {p1Kundli ? (
-                    <Text style={[s.p1Detail, { color: C.textMuted }]}>
-                      {p1Kundli.nakshatra} Nakshatra · {p1RashiHi || p1RashiEn} Rashi
-                    </Text>
-                  ) : (
-                    <Pressable onPress={() => router.push("/onboarding")}>
-                      <Text style={{ color: C.isDark ? "#fbbf24" : "#92400E", fontSize:11 }}>Kundli nahi bani — banao →</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            </View>
-          </View>
 
-          {/* Connector */}
-          <View style={{ alignItems:"center", marginVertical: -4, zIndex:1 }}>
-            <View style={s.connector}>
-              <Text style={{ fontSize:16 }}>♥</Text>
+          {/* ── VS Card ── */}
+          <View style={[km.vsCard,{backgroundColor:C.bgCard,borderColor:C.isDark?"rgba(167,139,250,0.2)":C.border}]}>
+            {/* Person 1 */}
+            <View style={km.vsPerson}>
+              <LinearGradient colors={C.isDark?["#4c1d95","#2e1065"]:["#ede9fe","#ddd6fe"]} style={km.vsAvatar}>
+                <Text style={{fontSize:20}}>♀</Text>
+              </LinearGradient>
+              <Text style={[km.vsName,{color:C.text}]} numberOfLines={1}>{p1Profile?.name??"Aap"}</Text>
+              {p1Kundli?(
+                <Text style={[km.vsSub,{color:C.textMuted}]} numberOfLines={1}>{p1RashiHi||p1RashiEn} Rashi</Text>
+              ):(
+                <Pressable onPress={()=>router.push("/onboarding")}>
+                  <Text style={{color:"#f97316",fontSize:9,textAlign:"center"}}>Kundli banao →</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Heart divider */}
+            <View style={{alignItems:"center",gap:4}}>
+              <LinearGradient colors={["#ec4899","#f43f5e"]} style={km.vsHeart}>
+                <Text style={{fontSize:16}}>♥</Text>
+              </LinearGradient>
+              <Text style={{color:C.textDim,fontSize:9,fontFamily:"Nunito_500Medium",letterSpacing:1}}>VS</Text>
+            </View>
+
+            {/* Person 2 */}
+            <View style={km.vsPerson}>
+              <LinearGradient colors={C.isDark?["#7c2d12","#431407"]:["#fff7ed","#ffedd5"]} style={km.vsAvatar}>
+                <Text style={{fontSize:20}}>♂</Text>
+              </LinearGradient>
+              <Text style={[km.vsName,{color:C.text}]} numberOfLines={1}>{p2Name||"Partner"}</Text>
+              <Text style={[km.vsSub,{color:C.textMuted}]} numberOfLines={1}>
+                {p2Place||"Birth place"}
+              </Text>
             </View>
           </View>
 
           {/* ── Person 2 Form ── */}
-          <View>
-            <Text style={[s.sectionLabel, { color: C.textMuted }]}>PERSON 2 (PARTNER)</Text>
-            <View style={[s.formCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <FormRow label="Name" value={p2Name} onChangeText={setP2Name} placeholder="Partner's name" />
-              <View style={[s.divider, { backgroundColor: C.border }]} />
-              <FormRow label="Birth Date" value={p2DOB} onChangeText={setP2DOB} placeholder="DD/MM/YYYY" keyboardType="numeric" />
-              <View style={[s.divider, { backgroundColor: C.border }]} />
-              <FormRow label="Birth Time" value={p2Time} onChangeText={setP2Time} placeholder="HH:MM AM / PM" />
-              <View style={[s.divider, { backgroundColor: C.border }]} />
-              <FormRow label="Birth Place" value={p2Place} onChangeText={setP2Place} placeholder="E.g. Delhi, India" />
-            </View>
+          <View style={[km.formCard,{backgroundColor:C.bgCard,borderColor:C.border}]}>
+            <Text style={[km.formTitle,{color:C.textMuted}]}>PERSON 2 — PARTNER DETAILS</Text>
+
+            {[
+              {label:"Name",        value:p2Name,  set:setP2Name,  ph:"Partner's name",    kb:"default"},
+              {label:"Birth Date",  value:p2DOB,   set:setP2DOB,   ph:"DD / MM / YYYY",   kb:"numeric"},
+              {label:"Birth Time",  value:p2Time,  set:setP2Time,  ph:"HH:MM  AM / PM",   kb:"default"},
+              {label:"Birth Place", value:p2Place, set:setP2Place, ph:"E.g. Delhi, India", kb:"default"},
+            ].map(({label,value,set,ph,kb},i,arr)=>(
+              <View key={label}>
+                <View style={km.inputRow}>
+                  <Text style={[km.inputLabel,{color:C.textDim}]}>{label}</Text>
+                  <TextInput
+                    value={value}
+                    onChangeText={set as any}
+                    placeholder={ph}
+                    placeholderTextColor={C.textDim}
+                    keyboardType={kb as any}
+                    style={[km.input,{color:C.text}]}
+                  />
+                </View>
+                {i<arr.length-1&&<View style={[km.sep,{backgroundColor:C.border}]}/>}
+              </View>
+            ))}
           </View>
 
-          {error ? (
-            <View style={s.errorRow}>
-              <Feather name="alert-circle" size={13} color="#ef4444" />
-              <Text style={s.errorText}>{error}</Text>
+          {/* Error */}
+          {!!error&&(
+            <View style={km.errorRow}>
+              <Feather name="alert-circle" size={12} color="#ef4444"/>
+              <Text style={km.errorText}>{error}</Text>
             </View>
-          ) : null}
+          )}
 
-          {/* Calculate Button */}
+          {/* ── Calculate Button ── */}
           <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleCalculate(); }}
+            onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);handleCalculate();}}
             disabled={loading}
-            style={({ pressed }) => [{ opacity: pressed || loading ? 0.7 : 1 }]}
+            style={({pressed})=>({opacity:pressed||loading?0.75:1})}
           >
             <LinearGradient
-              colors={["#4f46e5","#7c3aed","#a855f7"]}
-              start={{ x:0, y:0 }} end={{ x:1, y:0 }}
-              style={s.calcBtn}
+              colors={C.isDark?["#6d28d9","#7c3aed","#a855f7"]:["#4f46e5","#7c3aed"]}
+              start={{x:0,y:0}} end={{x:1,y:0}}
+              style={km.calcBtn}
             >
-              {loading ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
+              {loading?(
+                <ActivityIndicator color="white" size="small"/>
+              ):(
                 <>
-                  <Text style={{ fontSize:16 }}>⚡</Text>
-                  <Text style={s.calcBtnText}>Calculate Compatibility</Text>
+                  <Text style={{fontSize:18}}>⚡</Text>
+                  <Text style={km.calcBtnText}>Calculate Compatibility</Text>
                 </>
               )}
             </LinearGradient>
           </Pressable>
 
           {/* ── Results ── */}
-          {result && grade && (
+          {result&&grade&&(
             <>
-              {/* Score banner */}
-              <View style={[s.scoreBanner, { borderColor:`${grade.color}40`, backgroundColor: C.bgCard }]}>
-                <Text style={{ fontSize:36 }}>{grade.emoji}</Text>
-                <View style={{ alignItems:"center", gap:4 }}>
-                  <View style={{ flexDirection:"row", alignItems:"baseline", gap:4 }}>
-                    <Text style={[s.scoreTotal, { color:grade.color }]}>{result.total}</Text>
-                    <Text style={[s.scoreMax, { color: C.textMuted }]}>/36</Text>
+              {/* Score hero */}
+              <LinearGradient
+                colors={C.isDark?["#1a0533","#0f172a"]:["#f5f3ff","#ede9fe"]}
+                style={[km.scoreHero,{borderColor:`${gradeColor}30`}]}
+              >
+                <ScoreRing total={result.total} color={gradeColor}/>
+                <View style={km.gradeInfo}>
+                  <View style={[km.gradeBadge,{backgroundColor:`${gradeColor}18`,borderColor:`${gradeColor}40`}]}>
+                    <Text style={{fontSize:14}}>{grade.emoji}</Text>
+                    <Text style={[km.gradeLabel,{color:gradeColor}]}>{grade.label}</Text>
                   </View>
-                  <Text style={[s.gradeLabel, { color:grade.color }]}>{grade.label}</Text>
-                  <Text style={[s.gradeDesc, { color: C.textMuted }]}>{grade.desc}</Text>
-                </View>
-                {result.manglikDosha && (
-                  <View style={s.manglikBadge}>
-                    <Text style={s.manglikText}>Manglik Dosh</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Score bar */}
-              <View style={[s.scoreBarWrap, { backgroundColor: C.border }]}>
-                <View style={[s.scoreBarFill, {
-                  width:`${Math.round((result.total/36)*100)}%` as any,
-                  backgroundColor: grade.color,
-                }]} />
-              </View>
-
-              {/* 8 Koots breakdown */}
-              <Text style={[s.sectionLabel, { color: C.textMuted }]}>ASHTAKOOT BREAKDOWN</Text>
-              <View style={s.kootGrid}>
-                {KOOT_ORDER.map(key => {
-                  const k = result[key];
-                  const pct = k.max > 0 ? k.score / k.max : 0;
-                  const kColor = k.bad ? "#ef4444"
-                    : pct >= 0.8 ? "#22c55e"
-                    : pct >= 0.5 ? "#fbbf24" : "#f97316";
-                  return (
-                    <View key={key} style={[s.kootCard, { backgroundColor: C.bgCard, borderColor: C.border }, k.bad && s.kootCardBad]}>
-                      <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-                        <Text style={[s.kootName, { color: C.text }]}>{k.label}</Text>
-                        <View style={[s.kootScore, { backgroundColor:`${kColor}15` }]}>
-                          <Text style={[s.kootScoreText, { color:kColor }]}>{k.score}/{k.max}</Text>
-                        </View>
-                      </View>
-                      <Text style={[s.kootDetail, { color: C.textMuted }]}>{k.detail}</Text>
-                      {/* Mini bar */}
-                      <View style={[s.kootBarBg, { backgroundColor: C.border }]}>
-                        <View style={[s.kootBarFill, { width:`${Math.round(pct*100)}%` as any, backgroundColor:kColor }]} />
-                      </View>
+                  {result.manglikDosha&&(
+                    <View style={km.manglikChip}>
+                      <View style={km.manglikDot}/>
+                      <Text style={km.manglikChipText}>Manglik Dosh</Text>
                     </View>
-                  );
-                })}
+                  )}
+                </View>
+                {/* Bar */}
+                <View style={[km.heroBar,{backgroundColor:C.isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)"}]}>
+                  <LinearGradient
+                    colors={grade.colors}
+                    start={{x:0,y:0}} end={{x:1,y:0}}
+                    style={[km.heroBarFill,{width:`${Math.round((result.total/36)*100)}%` as any}]}
+                  />
+                </View>
+              </LinearGradient>
+
+              {/* Koot breakdown */}
+              <Text style={[km.sectionLabel,{color:C.textMuted}]}>ASHTAKOOT BREAKDOWN</Text>
+              <View style={{gap:8}}>
+                {KOOT_ORDER.map(key=>(
+                  <KootRow key={key} k={result[key]} accent={gradeColor}/>
+                ))}
               </View>
 
-              {/* Manglik info */}
-              {result.manglikDosha && (
-                <View style={s.manglikCard}>
-                  <Text style={{ fontSize:16 }}>🔴</Text>
-                  <View style={{ flex:1 }}>
-                    <Text style={{ color: C.isDark ? "#f97316" : "#C2410C", fontWeight:"700", fontSize:13 }}>Manglik Dosh</Text>
-                    <Text style={{ color: C.textMuted, fontSize:11, marginTop:3, lineHeight:17 }}>
-                      One person is Manglik, the other is not. Perform Kumbh Vivah or remedies before marriage. Consult a qualified Jyotishi.
+              {/* Manglik card */}
+              {result.manglikDosha&&(
+                <View style={[km.manglikCard,{backgroundColor:C.bgCard,borderColor:"rgba(239,68,68,0.25)"}]}>
+                  <LinearGradient colors={["rgba(239,68,68,0.15)","transparent"]} style={km.manglikCardGlow}/>
+                  <Text style={{fontSize:20}}>🔴</Text>
+                  <View style={{flex:1,gap:4}}>
+                    <Text style={[km.manglikTitle,{color:"#ef4444"}]}>Manglik Dosh Present</Text>
+                    <Text style={[km.manglikDesc,{color:C.textMuted}]}>
+                      Ek vyakti Manglik hai, doosra nahi. Kumbh Vivah ya upay karein. Kisi qualified Jyotishi se zaroor milein.
                     </Text>
                   </View>
                 </View>
               )}
 
               {/* Disclaimer */}
-              <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Feather name="info" size={12} color={C.textMuted} />
-                <Text style={[s.disclaimerText, { color: C.textMuted }]}>
-                  This Ashtakoot Milan is an estimate. Always consult a qualified Jyotishi for a complete kundli analysis before marriage.
+              <View style={[km.disclaimer,{backgroundColor:C.bgCard,borderColor:C.border}]}>
+                <Feather name="info" size={11} color={C.textDim}/>
+                <Text style={[km.disclaimerText,{color:C.textDim}]}>
+                  Yeh Ashtakoot Milan ek anuman hai. Vivah se pehle kisi qualified Jyotishi se poori kundli analysis zaroor karwaein.
                 </Text>
               </View>
             </>
           )}
 
-          {/* How it works (before results) */}
-          {!result && (
-            <View style={s.howCard}>
-              <Text style={s.howTitle}>What is Ashtakoot Milan?</Text>
-              <Text style={[s.howBody, { color: C.textMuted }]}>
-                In Vedic astrology, 8 gunas (koots) give a total of 36 points:{"\n"}
-                Nadi (8) · Bhakut (7) · Gana (6) · Graha Maitri (5) · Yoni (4) · Tara (3) · Vasya (2) · Varna (1){"\n\n"}
-                18+ = Acceptable{"\n"}
-                24+ = Good{"\n"}
-                28+ = Very Good{"\n"}
-                32+ = Excellent
-              </Text>
+          {/* How it works */}
+          {!result&&(
+            <View style={[km.howCard,{backgroundColor:C.bgCard,borderColor:C.isDark?"rgba(167,139,250,0.15)":C.border}]}>
+              <Text style={[km.howTitle,{color:C.isDark?"#c4b5fd":C.text}]}>Ashtakoot Milan kya hai?</Text>
+              <View style={{gap:6,marginTop:8}}>
+                {[
+                  ["Nadi","8 pts","Sab se important — health & progeny"],
+                  ["Bhakut","7 pts","Rashi based compatibility"],
+                  ["Gana","6 pts","Nature & temperament"],
+                  ["Graha Maitri","5 pts","Planetary friendship"],
+                  ["Yoni","4 pts","Physical compatibility"],
+                  ["Tara","3 pts","Nakshatra destiny"],
+                  ["Vasya","2 pts","Mutual attraction"],
+                  ["Varna","1 pt","Spiritual compatibility"],
+                ].map(([name,pts,desc])=>(
+                  <View key={name} style={{flexDirection:"row",alignItems:"center",gap:10}}>
+                    <View style={[km.howDot,{backgroundColor:C.isDark?"rgba(167,139,250,0.3)":"rgba(99,102,241,0.15)"}]}>
+                      <Text style={{color:C.isDark?"#c4b5fd":"#4f46e5",fontSize:9,fontFamily:"Nunito_700Bold"}}>{pts}</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{name}</Text>
+                      <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{desc}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <View style={[km.howScores,{borderColor:C.border,marginTop:14}]}>
+                {[["18+","Acceptable"],["24+","Good"],["28+","Very Good"],["32+","Excellent"]].map(([n,l])=>(
+                  <View key={n} style={{alignItems:"center"}}>
+                    <Text style={{color:C.isDark?"#a78bfa":"#6d28d9",fontSize:15,fontFamily:"Nunito_700Bold"}}>{n}</Text>
+                    <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular"}}>{l}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
+
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const s = StyleSheet.create({
-  header:     { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" },
-  back:       { width:36, height:36, alignItems:"center", justifyContent:"center" },
-  title:      { color:"#dde8f4", fontSize:17, fontWeight:"800" },
-  titleHindi: { color:"#3d5a7a", fontSize:11 },
-  content:    { paddingHorizontal:16, gap:14, paddingTop:16 },
-  sectionLabel: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#334155", marginBottom:8 },
-  divider:    { height:1, backgroundColor:"#0a1828", marginHorizontal:12 },
+// ── Styles ────────────────────────────────────────────────────────────────────
+const km = StyleSheet.create({
+  header: { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:16 },
+  backBtn:{ width:36, height:36, alignItems:"center", justifyContent:"center" },
+  title:  { fontSize:18, fontFamily:"Nunito_700Bold" },
+  titleHindi:{ fontSize:11, fontFamily:"Nunito_400Regular", marginTop:2 },
 
-  p1Card: {
-    backgroundColor:"#040e20", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(245,158,11,0.2)", padding:14,
-  },
-  p1Avatar: {
-    width:44, height:44, borderRadius:22,
-    backgroundColor:"rgba(245,158,11,0.08)",
-    borderWidth:1, borderColor:"rgba(245,158,11,0.2)",
-    alignItems:"center", justifyContent:"center",
-  },
-  p1Name:   { color:"#dde8f4", fontSize:14, fontWeight:"600" },
-  p1Detail: { color:"#475569", fontSize:11, marginTop:3 },
+  scroll: { paddingHorizontal:16, gap:14, paddingTop:18 },
+  sectionLabel:{ fontSize:10, fontFamily:"Nunito_700Bold", letterSpacing:2, marginBottom:2, marginTop:4 },
 
-  connector: {
-    width:40, height:40, borderRadius:20,
-    backgroundColor:"rgba(248,113,113,0.12)",
-    borderWidth:1, borderColor:"rgba(248,113,113,0.25)",
-    alignItems:"center", justifyContent:"center", zIndex:1,
-  },
+  // VS card
+  vsCard: { borderRadius:18, borderWidth:1, padding:18, flexDirection:"row", alignItems:"center", justifyContent:"space-between" },
+  vsPerson:{ flex:1, alignItems:"center", gap:6 },
+  vsAvatar:{ width:52, height:52, borderRadius:26, alignItems:"center", justifyContent:"center" },
+  vsName:  { fontSize:13, fontFamily:"Nunito_700Bold", textAlign:"center" },
+  vsSub:   { fontSize:10, fontFamily:"Nunito_400Regular", textAlign:"center" },
+  vsHeart: { width:36, height:36, borderRadius:18, alignItems:"center", justifyContent:"center" },
 
-  formCard: {
-    backgroundColor:"#040e1f", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(255,255,255,0.07)",
-  },
+  // Form
+  formCard:  { borderRadius:16, borderWidth:1, overflow:"hidden" },
+  formTitle: { fontSize:9, fontFamily:"Nunito_700Bold", letterSpacing:2, paddingHorizontal:16, paddingTop:14, paddingBottom:8 },
+  inputRow:  { flexDirection:"row", alignItems:"center", paddingHorizontal:16, paddingVertical:13, gap:12 },
+  inputLabel:{ width:80, fontSize:11, fontFamily:"Nunito_500Medium" },
+  input:     { flex:1, fontSize:14, fontFamily:"Nunito_400Regular" },
+  sep:       { height:1, marginHorizontal:16 },
 
-  errorRow: { flexDirection:"row", alignItems:"center", gap:6 },
-  errorText: { color:"#ef4444", fontSize:12, flex:1 },
+  // Error
+  errorRow:  { flexDirection:"row", alignItems:"center", gap:6 },
+  errorText: { color:"#ef4444", fontSize:12, fontFamily:"Nunito_400Regular" },
 
-  calcBtn: {
-    flexDirection:"row", alignItems:"center", justifyContent:"center", gap:10,
-    borderRadius:14, paddingVertical:15,
-  },
-  calcBtnText: { color:"white", fontWeight:"800", fontSize:15 },
+  // Button
+  calcBtn:   { borderRadius:16, height:54, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:10 },
+  calcBtnText:{ color:"#fff", fontSize:15, fontFamily:"Nunito_700Bold" },
 
-  scoreBanner: {
-    backgroundColor:"#040e20", borderRadius:18,
-    borderWidth:1, padding:20,
-    alignItems:"center", gap:12,
-  },
-  scoreTotal:  { fontSize:44, fontWeight:"900", lineHeight:50 },
-  scoreMax:    { fontSize:18, color:"#334155", lineHeight:50 },
-  gradeLabel:  { fontSize:18, fontWeight:"800" },
-  gradeDesc:   { color:"#64748b", fontSize:12, textAlign:"center", maxWidth:240 },
-  manglikBadge:{ backgroundColor:"rgba(249,115,22,0.12)", borderRadius:8, paddingHorizontal:10, paddingVertical:4, borderWidth:1, borderColor:"rgba(249,115,22,0.3)" },
-  manglikText: { color:"#f97316", fontSize:10, fontWeight:"700" },
+  // Score hero
+  scoreHero:     { borderRadius:20, borderWidth:1, padding:24, alignItems:"center", gap:14 },
+  gradeInfo:     { alignItems:"center", gap:10 },
+  gradeBadge:    { flexDirection:"row", alignItems:"center", gap:8, borderRadius:20, borderWidth:1, paddingHorizontal:14, paddingVertical:7 },
+  gradeLabel:    { fontSize:15, fontFamily:"Nunito_700Bold" },
+  manglikChip:   { flexDirection:"row", alignItems:"center", gap:6, backgroundColor:"rgba(239,68,68,0.1)", borderRadius:12, paddingHorizontal:12, paddingVertical:5 },
+  manglikDot:    { width:6, height:6, borderRadius:3, backgroundColor:"#ef4444" },
+  manglikChipText:{ color:"#ef4444", fontSize:11, fontFamily:"Nunito_600SemiBold" },
+  heroBar:       { width:"100%", height:6, borderRadius:3, overflow:"hidden" },
+  heroBarFill:   { height:6, borderRadius:3 },
 
-  scoreBarWrap: { height:6, backgroundColor:"#0f1e2e", borderRadius:3, overflow:"hidden" },
-  scoreBarFill: { height:6, borderRadius:3 },
+  // Koot rows
+  kootRow:    { borderRadius:14, borderWidth:1, padding:14, gap:0 },
+  kootBadDot: { width:6, height:6, borderRadius:3, backgroundColor:"#ef4444" },
+  kootLabel:  { fontSize:13, fontFamily:"Nunito_600SemiBold" },
+  kootScore:  { fontSize:15, fontFamily:"Nunito_700Bold" },
+  kootBarBg:  { height:5, borderRadius:3, overflow:"hidden", marginTop:8 },
+  kootBarFill:{ height:5, borderRadius:3 },
+  kootDetail: { fontSize:11, fontFamily:"Nunito_400Regular", marginTop:5 },
 
-  kootGrid: { gap:10 },
-  kootCard: {
-    backgroundColor:"#040e20", borderRadius:12,
-    borderWidth:1, borderColor:"rgba(255,255,255,0.06)",
-    padding:12, gap:6,
-  },
-  kootCardBad: { borderColor:"rgba(239,68,68,0.2)", backgroundColor:"rgba(239,68,68,0.03)" },
-  kootName:   { color:"#dde8f4", fontSize:12, fontWeight:"700" },
-  kootScore:  { borderRadius:8, paddingHorizontal:8, paddingVertical:2 },
-  kootScoreText: { fontSize:12, fontWeight:"700" },
-  kootDetail: { color:"#475569", fontSize:11 },
-  kootBarBg:  { height:3, backgroundColor:"#0f1e2e", borderRadius:2, overflow:"hidden" },
-  kootBarFill:{ height:3, borderRadius:2 },
+  // Manglik
+  manglikCard:    { borderRadius:16, borderWidth:1, padding:14, flexDirection:"row", gap:12, alignItems:"flex-start", overflow:"hidden" },
+  manglikCardGlow:{ position:"absolute", top:0, left:0, right:0, height:60 },
+  manglikTitle:   { fontSize:13, fontFamily:"Nunito_700Bold" },
+  manglikDesc:    { fontSize:11, fontFamily:"Nunito_400Regular", lineHeight:17 },
 
-  manglikCard: {
-    flexDirection:"row", alignItems:"flex-start", gap:10,
-    backgroundColor:"rgba(249,115,22,0.06)", borderRadius:12,
-    borderWidth:1, borderColor:"rgba(249,115,22,0.2)", padding:14,
-  },
-  disclaimer: {
-    flexDirection:"row", alignItems:"flex-start", gap:8,
-    backgroundColor:"rgba(255,255,255,0.02)", borderRadius:10,
-    padding:12, borderWidth:1, borderColor:"rgba(255,255,255,0.04)",
-  },
-  disclaimerText: { color:"#1e3a5f", fontSize:11, lineHeight:17, flex:1 },
+  // Disclaimer
+  disclaimer:     { borderRadius:14, borderWidth:1, padding:12, flexDirection:"row", gap:8, alignItems:"flex-start" },
+  disclaimerText: { flex:1, fontSize:11, fontFamily:"Nunito_400Regular", lineHeight:16 },
 
-  howCard: {
-    backgroundColor:"rgba(99,102,241,0.05)", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(99,102,241,0.15)", padding:16,
-  },
-  howTitle: { color:"#a78bfa", fontSize:13, fontWeight:"700", marginBottom:8 },
-  howBody:  { color:"#475569", fontSize:12, lineHeight:20 },
-});
-
-const f = StyleSheet.create({
-  row:   { flexDirection:"row", alignItems:"center", paddingHorizontal:14, paddingVertical:12, gap:10 },
-  label: { color:"#4b6a86", fontSize:12, fontWeight:"600", width:100, flexShrink:0 },
-  input: {
-    flex:1, color:"#dde8f4", fontSize:13,
-    paddingVertical:4,
-    borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.04)",
-  },
+  // How card
+  howCard:    { borderRadius:18, borderWidth:1, padding:18 },
+  howTitle:   { fontSize:15, fontFamily:"Nunito_700Bold" },
+  howDot:     { borderRadius:8, paddingHorizontal:6, paddingVertical:3, minWidth:40, alignItems:"center" },
+  howScores:  { flexDirection:"row", justifyContent:"space-around", borderTopWidth:1, paddingTop:12 },
 });

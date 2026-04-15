@@ -81,12 +81,15 @@ function Field({
       <FieldLabel text={label} />
       <View style={[
         s.inputRow,
-        { backgroundColor: C.inputBg, borderColor: focused ? C.accent : C.border },
+        {
+          backgroundColor: C.isDark ? "#0F172A" : C.inputBg,
+          borderColor: focused ? "#6366F1" : (C.isDark ? "#334155" : C.border),
+        },
         focused && s.inputRowFocused,
       ]}>
-        {icon && <Feather name={icon} size={15} color={focused ? C.accent : C.textMuted} style={{ marginRight: 4 }} />}
+        {icon && <Feather name={icon} size={14} color={focused ? "#6366F1" : C.textMuted} style={{ marginRight: 2 }} />}
         <TextInput
-          style={[s.input, { color: C.text }]}
+          style={[s.input, { color: C.isDark ? "#E2E8F0" : C.text }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -104,28 +107,36 @@ function Field({
   );
 }
 
-// ── Month selector ─────────────────────────────────────────────────────────────
+// ── Month selector — compact 4-column grid ────────────────────────────────────
+const MONTH_ROWS = [[0,1,2,3], [4,5,6,7], [8,9,10,11]];
+
 function MonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const C = useC();
   return (
-    <View>
+    <View style={{ gap: 5 }}>
       <FieldLabel text="MONTH" />
-      <View style={s.monthGrid}>
-        {MONTHS.map((m, i) => {
-          const v = String(i + 1);
-          const active = value === v;
-          return (
-            <Pressable key={m} onPress={() => { onChange(v); Haptics.selectionAsync(); }}
-              style={[
-                s.monthChip,
-                { borderColor: active ? C.accent : C.border },
-                active && { backgroundColor: `${C.accent}18` },
-              ]}
-            >
-              <Text style={[s.monthTxt, { color: active ? C.accent : C.textMuted }]}>{m}</Text>
-            </Pressable>
-          );
-        })}
+      <View style={{ gap: 5 }}>
+        {MONTH_ROWS.map((row, ri) => (
+          <View key={ri} style={{ flexDirection: "row", gap: 5 }}>
+            {row.map(i => {
+              const v = String(i + 1);
+              const active = value === v;
+              return (
+                <Pressable
+                  key={i}
+                  onPress={() => { onChange(v); Haptics.selectionAsync(); }}
+                  style={[
+                    s.monthChip,
+                    { flex: 1, borderColor: active ? C.accent : C.border },
+                    active && { backgroundColor: `${C.accent}18` },
+                  ]}
+                >
+                  <Text style={[s.monthTxt, { color: active ? C.accent : C.textMuted }]}>{MONTHS[i]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -360,19 +371,19 @@ export default function ProfileEditScreen() {
 
         {/* ── DATE OF BIRTH ── */}
         <Section title="Birth Date" icon="calendar">
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             {/* Day */}
             <View style={{ flex: 1 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="DAY" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
                   onPress={() => { Haptics.selectionAsync(); setDayOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.day ? C.text : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.day ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.day ? String(f.day).padStart(2,"0") : "DD"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color={C.textMuted} />
+                  <Feather name="chevron-down" size={12} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -381,13 +392,13 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="YEAR" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
                   onPress={() => { Haptics.selectionAsync(); setYearOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.year ? C.text : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.year ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.year || "YYYY"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color={C.textMuted} />
+                  <Feather name="chevron-down" size={12} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -405,19 +416,19 @@ export default function ProfileEditScreen() {
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             {/* Hour */}
             <View style={{ flex: 1 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="HOUR" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
                   onPress={() => { Haptics.selectionAsync(); setHourOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.hour ? C.text : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.hour ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.hour ? String(f.hour).padStart(2,"0") : "HH"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color={C.textMuted} />
+                  <Feather name="chevron-down" size={12} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -426,13 +437,13 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="MIN" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
                   onPress={() => { Haptics.selectionAsync(); setMinOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.minute !== "" ? C.text : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.minute !== "" ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.minute !== "" ? String(f.minute).padStart(2,"0") : "MM"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color={C.textMuted} />
+                  <Feather name="chevron-down" size={12} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
@@ -448,10 +459,10 @@ export default function ProfileEditScreen() {
         <Section title="Birth Place" icon="map-pin">
           <View style={s.fieldWrap}>
             <FieldLabel text="CITY / COUNTRY" />
-            <View style={[s.inputRow, { backgroundColor: C.inputBg, borderColor: C.border, gap: 8 }]}>
+            <View style={[s.inputRow, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border, gap: 7 }]}>
               <Feather name="search" size={14} color={C.textMuted} />
               <TextInput
-                style={[s.input, { flex: 1, color: C.text }]}
+                style={[s.input, { flex: 1, color: C.isDark ? "#E2E8F0" : C.text }]}
                 value={placeQuery}
                 onChangeText={setPlaceQuery}
                 onSubmitEditing={handlePlaceSearch}
@@ -562,121 +573,121 @@ export default function ProfileEditScreen() {
 const s = StyleSheet.create({
   // Header
   header: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    paddingHorizontal: 20, paddingBottom: 16,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 16, paddingBottom: 12,
     borderBottomWidth: 1,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 10,
+    width: 34, height: 34, borderRadius: 9,
     borderWidth: 1,
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3 },
-  headerSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
+  headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.3 },
+  headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginTop: 1 },
 
-  scroll: { padding: 20, paddingBottom: 100, gap: 18 },
+  scroll: { padding: 14, paddingBottom: 90, gap: 12 },
 
   // Section block
   section: {
-    borderRadius: 18, overflow: "hidden",
+    borderRadius: 16, overflow: "hidden",
     borderWidth: 1,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 12, elevation: 4,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10, shadowRadius: 8, elevation: 3,
   },
   sectionHeader: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingVertical: 14,
+    flexDirection: "row", alignItems: "center", gap: 7,
+    paddingHorizontal: 14, paddingVertical: 10,
     borderBottomWidth: 1,
   },
   sectionTitle: {
-    fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
+    fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
   },
-  sectionBody: { padding: 18, gap: 18 },
+  sectionBody: { padding: 13, gap: 12 },
 
   // Field
-  fieldWrap: { gap: 8 },
+  fieldWrap: { gap: 5 },
   label: {
-    fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
+    fontSize: 9, fontFamily: F.bold, letterSpacing: 1.6,
   },
   inputRow: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12, paddingVertical: 13,
-    gap: 8,
+    borderRadius: 10, borderWidth: 1,
+    paddingHorizontal: 11, paddingVertical: 9,
+    gap: 7,
+    minHeight: 44,
   },
   inputRowFocused: {
-    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25, shadowRadius: 6,
+    shadowColor: "#6366F1", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28, shadowRadius: 5,
+    borderColor: "#6366F1",
   },
   input: {
-    flex: 1, fontSize: 14, fontFamily: F.medium,
+    flex: 1, fontSize: 13.5, fontFamily: F.medium,
     padding: 0, margin: 0,
+    color: "#E2E8F0",
   },
-  hint: { fontSize: 10, fontFamily: F.regular },
+  hint: { fontSize: 9.5, fontFamily: F.regular },
 
-  // Month picker
-  monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  // Month picker — 4 columns, compact chips
+  monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
   monthChip: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9,
-    borderWidth: 1,
+    paddingVertical: 6, borderRadius: 8,
+    borderWidth: 1, alignItems: "center",
   },
-  monthTxt: { fontSize: 12, fontFamily: F.semibold },
+  monthTxt: { fontSize: 11.5, fontFamily: F.semibold },
 
   // Gender chips
   genderChip: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center",
+    flex: 1, paddingVertical: 7, borderRadius: 9, alignItems: "center",
     borderWidth: 1,
   },
-  genderTxt: { fontSize: 13, fontFamily: F.semibold },
+  genderTxt: { fontSize: 12.5, fontFamily: F.semibold },
 
   // AM/PM
-  ampmRow: { flexDirection: "row", gap: 8 },
+  ampmRow: { flexDirection: "row", gap: 7 },
   ampmBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 11, alignItems: "center",
+    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
     borderWidth: 1,
   },
-  ampmTxt: { fontSize: 14, fontFamily: F.bold },
+  ampmTxt: { fontSize: 13, fontFamily: F.bold },
 
-  // Info box (warning)
+  // Info box (warning) — compact single-line style
   infoBox: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
-    backgroundColor: "rgba(255,165,0,0.1)",
-    borderWidth: 1, borderColor: "#FFA500",
-    borderRadius: 12, padding: 13,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(255,165,0,0.08)",
+    borderWidth: 1, borderColor: "rgba(255,165,0,0.35)",
+    borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8,
   },
-  infoTxt: { color: "#FFD580", fontSize: 11.5, fontFamily: F.medium, flex: 1, lineHeight: 17 },
+  infoTxt: { color: "#FFD580", fontSize: 11, fontFamily: F.medium, flex: 1, lineHeight: 15 },
 
   // Place search
   searchBtn: {
-    paddingHorizontal: 13, paddingVertical: 7,
-    backgroundColor: "rgba(255,215,0,0.1)",
-    borderRadius: 8, borderWidth: 1, borderColor: "#FFD700",
+    paddingHorizontal: 11, paddingVertical: 5,
+    backgroundColor: "rgba(255,215,0,0.08)",
+    borderRadius: 7, borderWidth: 1, borderColor: "#FFD700",
   },
-  searchBtnTxt: { color: "#FFD700", fontSize: 12, fontFamily: F.bold },
+  searchBtnTxt: { color: "#FFD700", fontSize: 11.5, fontFamily: F.bold },
 
   // Geo results
   geoList: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
+    borderRadius: 10, borderWidth: 1, overflow: "hidden",
   },
   geoItem: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 13,
+    flexDirection: "row", alignItems: "flex-start", gap: 7,
+    paddingHorizontal: 12, paddingVertical: 10,
   },
   geoItemBorder: { borderBottomWidth: 1 },
-  geoTxt: { fontSize: 12, fontFamily: F.regular, flex: 1, lineHeight: 18 },
+  geoTxt: { fontSize: 11.5, fontFamily: F.regular, flex: 1, lineHeight: 17 },
 
   // Selected place confirmation
   selectedPlace: {
     flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: "rgba(0,168,107,0.08)",
-    borderRadius: 9, borderWidth: 1, borderColor: "rgba(0,168,107,0.2)",
-    paddingHorizontal: 11, paddingVertical: 8,
+    borderRadius: 8, borderWidth: 1, borderColor: "rgba(0,168,107,0.2)",
+    paddingHorizontal: 10, paddingVertical: 6,
   },
   selectedPlaceTxt: {
-    color: "#00a86b", fontSize: 11.5, fontFamily: F.medium, flex: 1,
+    color: "#00a86b", fontSize: 11, fontFamily: F.medium, flex: 1,
   },
 
   // Error
@@ -684,36 +695,37 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "flex-start", gap: 8,
     backgroundColor: "rgba(248,113,113,0.07)",
     borderWidth: 1, borderColor: "rgba(248,113,113,0.2)",
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
   },
   errorBoxNetwork: {
     backgroundColor: "rgba(239,68,68,0.10)",
     borderColor: "rgba(239,68,68,0.30)",
   },
-  errorTxt:  { color: "#f87171", fontSize: 13, fontFamily: F.medium },
-  errorHint: { color: "#fca5a5", fontSize: 11, fontFamily: F.regular, marginTop: 4, lineHeight: 16 },
+  errorTxt:  { color: "#f87171", fontSize: 12.5, fontFamily: F.medium },
+  errorHint: { color: "#fca5a5", fontSize: 10.5, fontFamily: F.regular, marginTop: 3, lineHeight: 15 },
 
   savingStatus: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingVertical: 8, paddingHorizontal: 4,
+    paddingVertical: 6, paddingHorizontal: 4,
     justifyContent: "center",
   },
-  savingStatusTxt: { fontSize: 12, fontFamily: F.medium },
+  savingStatusTxt: { fontSize: 11.5, fontFamily: F.medium },
 
   // Select button (tap-to-open picker)
   selectBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    borderRadius: 12, borderWidth: 1,
-    paddingHorizontal: 12, paddingVertical: 13,
+    borderRadius: 10, borderWidth: 1,
+    paddingHorizontal: 11, paddingVertical: 9,
+    minHeight: 44,
   },
   selectBtnText: {
-    fontSize: 14, fontFamily: F.medium,
+    fontSize: 13.5, fontFamily: F.medium,
   },
 
   // Save button
   saveBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 9, borderRadius: 14, paddingVertical: 15,
+    gap: 8, borderRadius: 13, paddingVertical: 14,
   },
-  saveBtnTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold },
+  saveBtnTxt: { color: "#fff", fontSize: 14.5, fontFamily: F.bold },
 });

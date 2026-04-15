@@ -1,11 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Animated, LayoutAnimation, Platform, Pressable,
+  StyleSheet, Text, View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MoreDrawer from "@/components/MoreDrawer";
-import { useC, useTheme } from "@/context/ThemeContext";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 
@@ -41,78 +44,70 @@ function TabItem({
   onLongPress: () => void;
 }) {
   const C = useC();
-  const INACTIVE_CLR   = C.textMuted;
-  const INACTIVE_LABEL = C.textMuted;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const glowAnim  = useRef(new Animated.Value(0)).current;
-  const bgAnim    = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(isActive ? 1.08 : 1)).current;
 
   useEffect(() => {
-    if (isActive) {
-      Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1.14, useNativeDriver: true, speed: 22, bounciness: 9 }),
-        Animated.timing(glowAnim,  { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.timing(bgAnim,    { toValue: 1, duration: 200, useNativeDriver: false }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 4 }),
-        Animated.timing(glowAnim,  { toValue: 0, duration: 160, useNativeDriver: true }),
-        Animated.timing(bgAnim,    { toValue: 0, duration: 180, useNativeDriver: false }),
-      ]).start();
-    }
+    Animated.spring(scaleAnim, {
+      toValue: isActive ? 1.08 : 1,
+      useNativeDriver: true,
+      speed: 24,
+      bounciness: isActive ? 8 : 3,
+    }).start();
   }, [isActive]);
 
-  // Animated bg pill color — use same hue as accent at 0→10% alpha
-  const bgColor = bgAnim.interpolate({
-    inputRange:  [0, 1],
-    outputRange: [`${accent}00`, `${accent}1A`],
-  });
+  const activeColor = C.isDark ? "#FCD34D" : "#FF7A00";
 
-  const iconColor  = isActive ? accent : INACTIVE_CLR;
-  const labelColor = isActive ? accent : INACTIVE_LABEL;
+  if (isActive) {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.tabBtn, { flex: 2.6 }, pressed && { opacity: 0.75 }]}
+        onPress={onPress}
+        onLongPress={onLongPress}
+      >
+        <View
+          style={[
+            styles.chip,
+            {
+              backgroundColor: C.isDark ? `${accent}28` : `${accent}18`,
+              borderColor: C.isDark ? `${accent}72` : `${accent}55`,
+              shadowColor: accent,
+            },
+          ]}
+        >
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Feather name={tab.icon as any} size={19} color={activeColor} />
+          </Animated.View>
+          {tab.dot && (
+            <View style={[styles.chipDot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
+          )}
+          <Text style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}>
+            {tab.label}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.72 }]}
+      style={({ pressed }) => [styles.tabBtn, { flex: 1 }, pressed && { opacity: 0.65 }]}
       onPress={onPress}
       onLongPress={onLongPress}
     >
-      {/* Top accent line */}
-      {isActive && (
-        <Animated.View
-          style={[
-            styles.indicator,
-            {
-              backgroundColor: accent,
-              shadowColor: accent,
-              opacity: glowAnim,
-            },
-          ]}
-        />
-      )}
-
-      {/* Icon + optional bg pill */}
-      <Animated.View style={[styles.iconPill, { backgroundColor: bgColor }]}>
-        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Feather name={tab.icon as any} size={22} color={iconColor} />
-        </Animated.View>
-        {tab.dot && (
-          <View style={[styles.dot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
-        )}
-      </Animated.View>
-
-      <Text
-        style={[
-          styles.label,
-          {
-            color: labelColor,
-            fontFamily: isActive ? "Nunito_700Bold" : "Nunito_500Medium",
-          },
-        ]}
-      >
-        {tab.label}
-      </Text>
+      <View style={styles.inactiveWrap}>
+        <View style={{ position: "relative" }}>
+          <Feather name={tab.icon as any} size={20} color={C.textMuted} />
+          {tab.dot && (
+            <View style={[styles.dot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
+          )}
+        </View>
+        <Text
+          numberOfLines={1}
+          style={[styles.inactiveLabel, { color: C.textMuted, fontFamily: "Nunito_500Medium" }]}
+        >
+          {tab.label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -120,28 +115,40 @@ function TabItem({
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { zodiacAccent } = useTheme();
   const { language } = useUser();
+  const [showMore, setStateShowMore] = useState(false);
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const [showMore, setShowMore] = useState(false);
 
   const t    = getT(language);
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
-
-  // Active tab: gold (#F59E0B) in dark mode, orange (#FF7A00) in light mode
   const accent = C.btnGradStart;
+
+  function triggerLayoutAnim() {
+    if (Platform.OS !== "web") {
+      LayoutAnimation.configureNext({
+        duration: 220,
+        update: { type: LayoutAnimation.Types.spring, springDamping: 0.75 },
+        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.scaleX },
+      });
+    }
+  }
 
   return (
     <>
-      <MoreDrawer visible={showMore} onClose={() => setShowMore(false)} />
+      <MoreDrawer visible={showMore} onClose={() => setStateShowMore(false)} />
       <View
         style={[
           styles.bar,
           {
             paddingBottom: botPad,
             height: BAR_H + botPad,
-            backgroundColor: C.isDark ? "#0B1220" : C.navBg,
-            borderTopColor: C.isDark ? "#1E293B" : C.navBorder,
+            backgroundColor: C.isDark ? "#0C1322" : C.navBg,
+            borderTopColor: C.isDark ? `${accent}30` : C.navBorder,
+            shadowColor: C.isDark ? accent : "#000",
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: C.isDark ? 0.22 : 0.06,
+            shadowRadius: C.isDark ? 12 : 4,
+            elevation: 12,
           },
         ]}
       >
@@ -162,6 +169,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                     type: "tabPress", target: route.key, canPreventDefault: true,
                   });
                   if (!isActive && !event.defaultPrevented) {
+                    triggerLayoutAnim();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     navigation.navigate(route.name);
                   }
@@ -173,10 +181,9 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             );
           })}
 
-          {/* ── More (•••) button ── */}
           <MoreTabButton onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowMore(true);
+            setStateShowMore(true);
           }} />
         </View>
       </View>
@@ -188,15 +195,15 @@ function MoreTabButton({ onPress }: { onPress: () => void }) {
   const C = useC();
   return (
     <Pressable
-      style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.72 }]}
+      style={({ pressed }) => [styles.tabBtn, { flex: 1 }, pressed && { opacity: 0.65 }]}
       onPress={onPress}
     >
-      <View style={styles.iconPill}>
-        <Feather name="grid" size={22} color={C.textMuted} />
+      <View style={styles.inactiveWrap}>
+        <Feather name="grid" size={20} color={C.textMuted} />
+        <Text style={[styles.inactiveLabel, { color: C.textMuted, fontFamily: "Nunito_500Medium" }]}>
+          More
+        </Text>
       </View>
-      <Text style={[styles.label, { color: C.textMuted, fontFamily: "Nunito_500Medium" }]}>
-        More
-      </Text>
     </Pressable>
   );
 }
@@ -210,48 +217,56 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "stretch",
-    paddingHorizontal: 4,
+    alignItems: "center",
+    paddingHorizontal: 6,
   },
   tabBtn: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
-    position: "relative",
   },
 
-  // Top accent line for active tab
-  indicator: {
-    position: "absolute",
-    top: 0, left: "22%", right: "22%",
-    height: 2,
-    borderRadius: 2,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  // Icon pill (subtle bg when active)
-  iconPill: {
-    position: "relative",
-    width: 44, height: 34,
-    borderRadius: 11,
+  // ── Active: glowing horizontal chip ──
+  chip: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 22,
+    borderWidth: 1,
+    // iOS glow
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 10,
+    // Android glow
+    elevation: 6,
   },
-
-  dot: {
-    position: "absolute", top: 0, right: 2,
+  chipLabel: {
+    fontSize: 12,
+    letterSpacing: 0.1,
+  },
+  chipDot: {
+    position: "absolute", top: -2, right: -2,
     width: 7, height: 7, borderRadius: 3.5,
     backgroundColor: "#ef4444", borderWidth: 1.5,
   },
 
-  label: {
-    fontSize: 11,
+  // ── Inactive: stacked icon + tiny label ──
+  inactiveWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  inactiveLabel: {
+    fontSize: 9.5,
     letterSpacing: 0.1,
-    lineHeight: 14,
+    lineHeight: 12,
+  },
+
+  dot: {
+    position: "absolute", top: -1, right: -3,
+    width: 7, height: 7, borderRadius: 3.5,
+    backgroundColor: "#ef4444", borderWidth: 1.5,
   },
 });

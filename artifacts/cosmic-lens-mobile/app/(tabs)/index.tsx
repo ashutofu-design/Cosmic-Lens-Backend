@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CosmicBg } from "@/components/CosmicBg";
 import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -198,7 +199,7 @@ export default function HomeScreen() {
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: topPad, paddingBottom: botPad + 60 }]}>
+    <CosmicBg contentStyle={{ paddingTop: topPad, paddingBottom: botPad + 60 }}>
 
       {/* ── Greeting ── */}
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
@@ -246,7 +247,7 @@ export default function HomeScreen() {
 
       </View>
 
-    </View>
+    </CosmicBg>
   );
 }
 
@@ -263,7 +264,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
 
   return (
-    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: Ctheme.border2 }]}>
+    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: Ctheme.border2, boxShadow: Ctheme.cardShadow } as any]}>
       <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
       {/* ── TOP ROW: label + score + demo badge ── */}

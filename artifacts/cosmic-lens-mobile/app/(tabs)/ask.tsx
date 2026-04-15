@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -146,8 +147,9 @@ export default function AskScreen() {
   };
 
   return (
+    <CosmicBg>
     <KeyboardAvoidingView
-      style={[s.root, { backgroundColor: C.bg }]}
+      style={s.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
@@ -216,11 +218,12 @@ export default function AskScreen() {
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+    </CosmicBg>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020d1a" },
+  root: { flex: 1 },
 
   header: {
     alignItems: "center", paddingBottom: 14,

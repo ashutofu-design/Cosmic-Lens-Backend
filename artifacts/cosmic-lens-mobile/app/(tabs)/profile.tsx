@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CosmicBg } from "@/components/CosmicBg";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -324,7 +325,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
   const relationInfo = RELATIONS.find(r => r.key === profile.relation);
 
   return (
-    <View style={[pc.card, { backgroundColor: C.bgCard, borderColor: C.border }, isPrimary && pc.cardPrimary]}>
+    <View style={[pc.card, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any, isPrimary && pc.cardPrimary]}>
       <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
         {/* Avatar */}
         <View>
@@ -566,7 +567,7 @@ export default function ProfileScreen() {
   const deleteTarget = confirmDelete ? profiles.find(p=>p.id===confirmDelete) : null;
 
   return (
-    <View style={{ flex:1, backgroundColor: C.bg }}>
+    <CosmicBg>
 
       {/* Switching overlay */}
       {switching && (
@@ -797,7 +798,7 @@ export default function ProfileScreen() {
         </View>
 
       </ScrollView>
-    </View>
+    </CosmicBg>
   );
 }
 

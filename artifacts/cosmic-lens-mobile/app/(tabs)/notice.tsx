@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -74,8 +75,9 @@ export default function NoticeScreen() {
   const unread  = notices.filter((_, i) => i < 2).length;
 
   return (
+    <CosmicBg>
     <ScrollView
-      style={[s.root, { backgroundColor: C.bg }]}
+      style={s.root}
       contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
       showsVerticalScrollIndicator={false}
     >
@@ -90,7 +92,7 @@ export default function NoticeScreen() {
       </View>
 
       {/* List */}
-      <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+      <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
         {notices.map((n, i) => (
           <View key={i} style={[s.row, i < notices.length - 1 && [s.rowBorder, { borderBottomColor: C.border }]]}>
             <View style={[s.dotWrap, { backgroundColor: `${n.dot}15` }]}>
@@ -118,11 +120,12 @@ export default function NoticeScreen() {
         </Text>
       </View>
     </ScrollView>
+    </CosmicBg>
   );
 }
 
 const s = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: "#020d1a" },
+  root:       { flex: 1 },
   content:    { paddingHorizontal: 16, gap: 14 },
 
   headerRow:  { flexDirection: "row", alignItems: "center", gap: 10 },

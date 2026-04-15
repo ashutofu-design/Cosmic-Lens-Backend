@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -110,7 +111,7 @@ function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, 
           </Pressable>
         ) : <View style={{width:60}} />}
       </View>
-      <View style={[s.dashaCard,{backgroundColor:active?`${color}0d`:C.bgCard,borderColor:active?color:C.border}]}>
+      <View style={[s.dashaCard,{backgroundColor:active?`${color}0d`:C.bgCard,borderColor:active?color:C.border,boxShadow:C.cardShadow} as any]}>
         <View style={s.dashaHeader}>
           <Text style={[s.dashaPlanetName,{ color: C.text }]}>{pName(planet)}</Text>
           {active && <View style={[s.activeBadge,{backgroundColor:`${color}22`}]}>
@@ -801,7 +802,7 @@ export default function KundliScreen() {
   // ── No kundli state
   if (!kundli) {
     return (
-      <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80,backgroundColor:C.bg}]}>
+      <CosmicBg contentStyle={{paddingTop:topPad+20,paddingBottom:botPad+80}}>
         <View style={s.emptyWrap}>
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
           <Text style={s.emptyTitle}>{t.noKundli}</Text>
@@ -812,7 +813,7 @@ export default function KundliScreen() {
             <Feather name="arrow-right" size={15} color="#020d1a"/>
           </Pressable>
         </View>
-      </View>
+      </CosmicBg>
     );
   }
 
@@ -839,7 +840,8 @@ export default function KundliScreen() {
   ];
 
   return (
-    <ScrollView style={[s.root, { backgroundColor: C.bg }]}
+    <CosmicBg>
+    <ScrollView style={s.root}
       contentContainerStyle={[s.content,{paddingTop:topPad+16,paddingBottom:botPad+100}]}
       showsVerticalScrollIndicator={false}>
 
@@ -910,6 +912,7 @@ export default function KundliScreen() {
       {activeTab === "Transit"      && <TransitTab kundli={kundli} moonRashi={moonRashi} />}
       {activeTab === "KP"           && <KPTab kundli={kundli} />}
     </ScrollView>
+    </CosmicBg>
   );
 }
 
@@ -917,7 +920,7 @@ export default function KundliScreen() {
 // STYLES
 // ════════════════════════════════════════════════════════════════════════════
 const s = StyleSheet.create({
-  root:    { flex:1, backgroundColor:"#020d1a" },
+  root:    { flex:1 },
   content: { paddingHorizontal:16, gap:16 },
 
   emptyWrap: { flex:1, alignItems:"center", paddingHorizontal:24, gap:14, paddingTop:60 },

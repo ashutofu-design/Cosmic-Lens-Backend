@@ -48,6 +48,12 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - `python3 artifacts/api-server/flask_app.py` — Run Flask backend
 - `pnpm run typecheck` — Full typecheck across all packages
 
+## Cosmic Visual Design
+
+- `components/CosmicBg.tsx` — Full-screen cosmic nebula background wrapper. Used in all 6 tab screens as the root container. Renders 4 gradient orbs (violet, indigo, amber, pink) + star dots (dark mode only) absolutely behind content.
+- `ThemeContext.cardShadow` — CSS `boxShadow` string for card glow. Applied to key cards (HeroEnergyCard, ProfileCard, dashaCard, scoreCard, graphCard, noticeCard).
+- `bgCard/bgCard2/bgCard3` are now `rgba(...)` values (80–55% opacity) so the cosmic background bleeds through, creating a glassmorphism effect.
+
 ## Dark / Light Theme
 
 - `context/ThemeContext.tsx` — `DARK` / `LIGHT` palettes with `toggle()` and AsyncStorage persistence (`cl_theme` key)

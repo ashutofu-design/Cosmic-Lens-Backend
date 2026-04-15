@@ -34,6 +34,8 @@ export interface ThemeColors {
   shimmer1:       string;
   shimmer2:       string;
   shimmer3:       string;
+  // Card glow shadow (CSS boxShadow string)
+  cardShadow: string;
   // Status bar style
   statusBar: "light-content" | "dark-content";
   isDark: boolean;
@@ -42,9 +44,9 @@ export interface ThemeColors {
 // ── Dark — Charcoal + Subtle Purple Tint ──────────────────────────────────────
 export const DARK: ThemeColors = {
   bg:      "#161420",
-  bgCard:  "#1e1b2e",
-  bgCard2: "#252238",
-  bgCard3: "#2c2944",
+  bgCard:  "rgba(30,27,46,0.80)",
+  bgCard2: "rgba(37,34,56,0.65)",
+  bgCard3: "rgba(44,41,68,0.55)",
 
   text:      "#f2eeff",
   textMid:   "#c4b8e8",
@@ -64,9 +66,11 @@ export const DARK: ThemeColors = {
   inputBg:   "#1e1b2e",
   inputBorder: "rgba(180,150,255,0.26)",
 
-  shimmer1: "#1e1b2e",
-  shimmer2: "#252238",
-  shimmer3: "#1e1b2e",
+  shimmer1: "rgba(30,27,46,0.9)",
+  shimmer2: "rgba(37,34,56,0.9)",
+  shimmer3: "rgba(30,27,46,0.9)",
+
+  cardShadow: "0 4px 28px rgba(139,92,246,0.22), 0 1px 0 rgba(255,255,255,0.06) inset",
 
   statusBar: "light-content",
   isDark: true,
@@ -75,9 +79,9 @@ export const DARK: ThemeColors = {
 // ── Light — Warm Lavender + Amber Gold ────────────────────────────────────────
 export const LIGHT: ThemeColors = {
   bg:      "#faf5ff",
-  bgCard:  "#ffffff",
-  bgCard2: "#f3ebff",
-  bgCard3: "#ede0ff",
+  bgCard:  "rgba(255,255,255,0.82)",
+  bgCard2: "rgba(243,235,255,0.72)",
+  bgCard3: "rgba(237,224,255,0.62)",
 
   text:      "#1e0a3c",
   textMid:   "#6b46c1",
@@ -97,9 +101,11 @@ export const LIGHT: ThemeColors = {
   inputBg:   "#faf5ff",
   inputBorder: "rgba(109,40,217,0.13)",
 
-  shimmer1: "#f3ebff",
-  shimmer2: "#e9d8fd",
-  shimmer3: "#f3ebff",
+  shimmer1: "rgba(243,235,255,0.9)",
+  shimmer2: "rgba(233,216,253,0.9)",
+  shimmer3: "rgba(243,235,255,0.9)",
+
+  cardShadow: "0 4px 24px rgba(109,40,217,0.10), 0 1px 0 rgba(255,255,255,0.80) inset",
 
   statusBar: "dark-content",
   isDark: false,

@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { CosmicBg } from "@/components/CosmicBg";
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
@@ -226,8 +227,9 @@ export default function InsightsScreen() {
                    : "minus";
 
   return (
+    <CosmicBg>
     <ScrollView
-      style={[s.root, { backgroundColor: C.bg }]}
+      style={s.root}
       contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
       showsVerticalScrollIndicator={false}
     >
@@ -291,7 +293,7 @@ export default function InsightsScreen() {
 
       {/* Score + trend row */}
       {displayInsight && displayCat && (
-        <View style={[s.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <View style={[s.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
           <ScoreRing score={displayCat.score} color={catColor} />
           <View style={s.scoreRight}>
             <View style={s.trendRow}>
@@ -311,7 +313,7 @@ export default function InsightsScreen() {
       )}
 
       {/* 6-month forecast graph */}
-      <View style={[s.graphCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+      <View style={[s.graphCard, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
         <View style={s.graphHeader}>
           <Text style={[s.graphTitle, { color: C.textMuted }]}>6-Month Trend</Text>
           {(forecastLoading && !showDemo) && <ActivityIndicator size="small" color={catColor} />}
@@ -384,11 +386,12 @@ export default function InsightsScreen() {
         </View>
       )}
     </ScrollView>
+    </CosmicBg>
   );
 }
 
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: "#020d1a" },
+  root:    { flex: 1 },
   content: { paddingHorizontal: 16, gap: 14 },
   heading: { color: "#dde8f4", fontSize: 22, fontWeight: "700" },
 

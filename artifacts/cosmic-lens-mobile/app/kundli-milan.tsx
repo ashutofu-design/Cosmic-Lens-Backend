@@ -627,23 +627,6 @@ function ProInsightsPanel(){
         <HiddenCard idx={21} icon="🤝" title="Loyalty & Trust Index"      desc="Chances of betrayal or long-term loyalty"/>
       </View>
 
-      {/* ══ 22 ══ BOTTOM CTA ══════════════════════════════════════════════════ */}
-      <Animated.View style={av(22)}>
-        <LinearGradient
-          colors={C.isDark?["rgba(79,46,220,0.2)","rgba(109,40,217,0.1)"]:["#EDE9FE","#DDD6FE"]}
-          start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:16,padding:16,borderWidth:1,
-            borderColor:C.isDark?"rgba(139,92,246,0.25)":"rgba(109,93,246,0.4)",
-            alignItems:"center",gap:6}}>
-          <Text style={{fontSize:20}}>✨</Text>
-          <Text style={{color:C.isDark?"#c4b5fd":"#4C1D95",fontSize:13,fontFamily:"Nunito_700Bold",textAlign:"center"}}>
-            All 12 sections unlock instantly
-          </Text>
-          <Text style={{color:C.isDark?C.textMuted:"#5B21B6",fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:15}}>
-            Add both kundlis and calculate — your complete relationship truth will be revealed
-          </Text>
-        </LinearGradient>
-      </Animated.View>
 
     </View>
   );
@@ -1306,26 +1289,6 @@ export default function KundliMilanScreen(){
           {/* ── PRO Preview Insights ── */}
           {isPro&&!result&&<ProInsightsPanel/>}
 
-          {/* ── What You'll Get (Basic only, no result) ── */}
-          {!isPro&&!result&&(
-            <>
-              <Text style={[ms.secLabel,{color:C.textMuted}]}>WHAT YOU'LL GET</Text>
-              <View style={ms.previewGrid}>
-                {[
-                  {icon:"❤️",title:"Emotional Compatibility",desc:"Heart & feelings"},
-                  {icon:"🧠",title:"Mental Connection",      desc:"Thought sync"},
-                  {icon:"🔥",title:"Attraction Level",       desc:"Physical pull"},
-                  {icon:"⚖️",title:"Match Score",            desc:"Out of 36 pts"},
-                ].map(({icon,title,desc})=>(
-                  <View key={title} style={[ms.previewCard,{backgroundColor:C.bgCard,borderColor:C.border}]}>
-                    <Text style={{fontSize:20,marginBottom:4}}>{icon}</Text>
-                    <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold"}}>{title}</Text>
-                    <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",marginTop:2}}>{desc}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
 
           {/* ── CTA Buttons ── */}
           {!result&&(isPro?(
@@ -1405,18 +1368,6 @@ export default function KundliMilanScreen(){
             </>
           )}
 
-          {/* How it works */}
-          {!result&&(
-            <View style={[ms.howCard,{backgroundColor:C.bgCard,borderColor:C.isDark?"rgba(167,139,250,0.1)":C.border}]}>
-              <Text style={{color:C.isDark?"#c4b5fd":"#4f46e5",fontSize:13,fontFamily:"Nunito_700Bold",marginBottom:10}}>Ashtakoot Milan Scoring</Text>
-              {[["32+ / 36","Excellent"],["27–31","Very Good"],["21–26","Average"],["≤20","Below Avg"]].map(([pts,lbl])=>(
-                <View key={pts} style={{flexDirection:"row",justifyContent:"space-between",paddingVertical:7,borderBottomWidth:1,borderBottomColor:C.border}}>
-                  <Text style={{color:C.isDark?"#a78bfa":"#6d28d9",fontFamily:"Nunito_700Bold",fontSize:13}}>{pts}</Text>
-                  <Text style={{color:C.textMuted,fontFamily:"Nunito_400Regular",fontSize:12}}>{lbl}</Text>
-                </View>
-              ))}
-            </View>
-          )}
 
         </ScrollView>
 

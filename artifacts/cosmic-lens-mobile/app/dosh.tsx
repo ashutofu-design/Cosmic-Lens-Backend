@@ -220,6 +220,35 @@ export default function DoshScreen() {
         </View>
       </View>
 
+      {/* ── Stats bar ── */}
+      <View style={[d.statsBar, { backgroundColor: C.bgCard, borderBottomColor: C.border }]}>
+        <View style={d.statTab}>
+          <Text style={[d.statTabNum, { color: C.text }]}>9</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Total Dosh</Text>
+        </View>
+        <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
+        <View style={d.statTab}>
+          <Text style={[d.statTabNum, { color: active + mild > 0 ? "#ef4444" : "#22c55e" }]}>
+            {active + mild}
+          </Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Present</Text>
+        </View>
+        <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
+        <View style={d.statTab}>
+          <Text style={[d.statTabNum, { color: "#22c55e" }]}>{9 - active - mild}</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Not Present</Text>
+        </View>
+        {doshLoading && (
+          <>
+            <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
+            <View style={[d.statTab, { flexDirection: "row", gap: 5 }]}>
+              <ActivityIndicator size="small" color="#f59e0b" />
+              <Text style={[d.statTabLabel, { color: "#f59e0b" }]}>Scanning…</Text>
+            </View>
+          </>
+        )}
+      </View>
+
       <View style={d.content}>
         {/* ── Summary ring ── */}
         <SummaryRing active={active} mild={mild} total={9} />
@@ -336,4 +365,17 @@ const d = StyleSheet.create({
     borderRadius: 14, borderWidth: 1, padding: 12,
     flexDirection: "row", gap: 8, alignItems: "flex-start",
   },
+
+  // Stats bar
+  statsBar: {
+    flexDirection: "row", alignItems: "stretch",
+    borderBottomWidth: 1, paddingVertical: 0,
+  },
+  statTab: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    paddingVertical: 14, gap: 3,
+  },
+  statTabNum:   { fontSize: 26, fontFamily: "Nunito_700Bold", lineHeight: 30 },
+  statTabLabel: { fontSize: 10, fontFamily: "Nunito_500Medium", textTransform: "uppercase", letterSpacing: 0.8 },
+  statTabDivider: { width: 1, marginVertical: 12 },
 });

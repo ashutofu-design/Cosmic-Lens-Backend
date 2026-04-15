@@ -81,11 +81,11 @@ export const DARK: ThemeColors = {
   border3: "rgba(139,92,246,0.10)",
 
   switchTrackOff:   "#1A2135",
-  navBg:            "#0B0F19",
-  navBorder:        "rgba(139,92,246,0.18)",
-  inputBg:          "#111827",
-  inputBorder:      "rgba(139,92,246,0.22)",
-  inputFocusBorder: "rgba(139,92,246,0.75)",
+  navBg:            "#111827",
+  navBorder:        "#1F2937",
+  inputBg:          "#1F2937",
+  inputBorder:      "#374151",
+  inputFocusBorder: "#8B5CF6",
 
   shimmer1: "rgba(11,15,25,0.95)",
   shimmer2: "rgba(17,24,39,0.95)",
@@ -98,18 +98,18 @@ export const DARK: ThemeColors = {
   statusBar: "light-content",
   isDark: true,
 
-  warningBg:     "rgba(245,158,11,0.10)",
-  warningBorder: "rgba(245,158,11,0.40)",
+  warningBg:     "#451A03",
+  warningBorder: "rgba(245,158,11,0.50)",
   warningText:   "#FCD34D",
 
   // Purple selection for toggle chips (gender / AM-PM)
-  toggleSelBg:     "rgba(139,92,246,0.18)",
+  toggleSelBg:     "rgba(139,92,246,0.15)",
   toggleSelBorder: "#8B5CF6",
   toggleSelText:   "#C4B5FD",
 
   // Gold CTA gradient — luxury feel in dark mode
   btnGradStart: "#F59E0B",
-  btnGradEnd:   "#D97706",
+  btnGradEnd:   "#EA580C",
 };
 
 // ── Light — Clean White + Indigo Accents (Modern / Minimal) ───────────────────

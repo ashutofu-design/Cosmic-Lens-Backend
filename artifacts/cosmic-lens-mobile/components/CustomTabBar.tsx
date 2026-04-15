@@ -31,10 +31,6 @@ const TAB_META: {
 
 const BAR_H = 60;
 
-// Inactive icon color — clearly visible but clearly inactive
-const INACTIVE_CLR   = "#64748B";
-const INACTIVE_LABEL = "#64748B";
-
 function TabItem({
   tab, isActive, accent, onPress, onLongPress,
 }: {
@@ -45,6 +41,8 @@ function TabItem({
   onLongPress: () => void;
 }) {
   const C = useC();
+  const INACTIVE_CLR   = C.textMuted;
+  const INACTIVE_LABEL = C.textMuted;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim  = useRef(new Animated.Value(0)).current;
   const bgAnim    = useRef(new Animated.Value(0)).current;
@@ -130,8 +128,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const t    = getT(language);
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
 
-  // Light mode → orange tab accent (#FF7A00); dark mode → purple (zodiac or default)
-  const accent = C.isDark ? C.accent : C.btnGradStart;
+  // Active tab: gold (#F59E0B) in dark mode, orange (#FF7A00) in light mode
+  const accent = C.btnGradStart;
 
   return (
     <>

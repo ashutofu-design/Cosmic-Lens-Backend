@@ -201,16 +201,17 @@ function FormRow({
   label: string; value: string; onChangeText: (v: string) => void;
   placeholder?: string; keyboardType?: "default" | "numeric";
 }) {
+  const C = useC();
   return (
     <View style={f.row}>
-      <Text style={f.label}>{label}</Text>
+      <Text style={[f.label, { color: C.textMuted }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? label}
-        placeholderTextColor="#1e3a5f"
+        placeholderTextColor={C.textDim}
         keyboardType={keyboardType}
-        style={f.input}
+        style={[f.input, { color: C.text, borderBottomColor: C.border }]}
       />
     </View>
   );
@@ -295,11 +296,11 @@ export default function KundliMilanScreen() {
         {/* Header */}
         <View style={[s.header, { paddingTop: topPad + 8 }]}>
           <Pressable onPress={() => router.back()} style={s.back}>
-            <Feather name="arrow-left" size={20} color="#dde8f4" />
+            <Feather name="arrow-left" size={20} color={C.textMuted} />
           </Pressable>
           <View style={{ flex:1 }}>
-            <Text style={s.title}>Kundli Milan</Text>
-            <Text style={s.titleHindi}>अष्टकूट गुण मिलान</Text>
+            <Text style={[s.title, { color: C.text }]}>Kundli Milan</Text>
+            <Text style={[s.titleHindi, { color: C.textMuted }]}>अष्टकूट गुण मिलान</Text>
           </View>
         </View>
 
@@ -310,16 +311,16 @@ export default function KundliMilanScreen() {
         >
           {/* ── Person 1 Card ── */}
           <View>
-            <Text style={s.sectionLabel}>PERSON 1 (AAPKA)</Text>
-            <View style={s.p1Card}>
+            <Text style={[s.sectionLabel, { color: C.textMuted }]}>PERSON 1 (AAPKA)</Text>
+            <View style={[s.p1Card, { backgroundColor: C.bgCard }]}>
               <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
                 <View style={s.p1Avatar}>
                   <Text style={{ fontSize:18 }}>♀</Text>
                 </View>
                 <View>
-                  <Text style={s.p1Name}>{p1Profile?.name ?? "Aapki Profile"}</Text>
+                  <Text style={[s.p1Name, { color: C.text }]}>{p1Profile?.name ?? "Aapki Profile"}</Text>
                   {p1Kundli ? (
-                    <Text style={s.p1Detail}>
+                    <Text style={[s.p1Detail, { color: C.textMuted }]}>
                       {p1Kundli.nakshatra} Nakshatra · {p1RashiHi || p1RashiEn} Rashi
                     </Text>
                   ) : (
@@ -341,14 +342,14 @@ export default function KundliMilanScreen() {
 
           {/* ── Person 2 Form ── */}
           <View>
-            <Text style={s.sectionLabel}>PERSON 2 (PARTNER)</Text>
-            <View style={s.formCard}>
+            <Text style={[s.sectionLabel, { color: C.textMuted }]}>PERSON 2 (PARTNER)</Text>
+            <View style={[s.formCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <FormRow label="Name" value={p2Name} onChangeText={setP2Name} placeholder="Partner's name" />
-              <View style={s.divider} />
+              <View style={[s.divider, { backgroundColor: C.border }]} />
               <FormRow label="Birth Date" value={p2DOB} onChangeText={setP2DOB} placeholder="DD/MM/YYYY" keyboardType="numeric" />
-              <View style={s.divider} />
+              <View style={[s.divider, { backgroundColor: C.border }]} />
               <FormRow label="Birth Time" value={p2Time} onChangeText={setP2Time} placeholder="HH:MM AM / PM" />
-              <View style={s.divider} />
+              <View style={[s.divider, { backgroundColor: C.border }]} />
               <FormRow label="Birth Place" value={p2Place} onChangeText={setP2Place} placeholder="E.g. Delhi, India" />
             </View>
           </View>
@@ -386,15 +387,15 @@ export default function KundliMilanScreen() {
           {result && grade && (
             <>
               {/* Score banner */}
-              <View style={[s.scoreBanner, { borderColor:`${grade.color}40` }]}>
+              <View style={[s.scoreBanner, { borderColor:`${grade.color}40`, backgroundColor: C.bgCard }]}>
                 <Text style={{ fontSize:36 }}>{grade.emoji}</Text>
                 <View style={{ alignItems:"center", gap:4 }}>
                   <View style={{ flexDirection:"row", alignItems:"baseline", gap:4 }}>
                     <Text style={[s.scoreTotal, { color:grade.color }]}>{result.total}</Text>
-                    <Text style={s.scoreMax}>/36</Text>
+                    <Text style={[s.scoreMax, { color: C.textMuted }]}>/36</Text>
                   </View>
                   <Text style={[s.gradeLabel, { color:grade.color }]}>{grade.label}</Text>
-                  <Text style={s.gradeDesc}>{grade.desc}</Text>
+                  <Text style={[s.gradeDesc, { color: C.textMuted }]}>{grade.desc}</Text>
                 </View>
                 {result.manglikDosha && (
                   <View style={s.manglikBadge}>
@@ -404,7 +405,7 @@ export default function KundliMilanScreen() {
               </View>
 
               {/* Score bar */}
-              <View style={s.scoreBarWrap}>
+              <View style={[s.scoreBarWrap, { backgroundColor: C.border }]}>
                 <View style={[s.scoreBarFill, {
                   width:`${Math.round((result.total/36)*100)}%` as any,
                   backgroundColor: grade.color,
@@ -412,7 +413,7 @@ export default function KundliMilanScreen() {
               </View>
 
               {/* 8 Koots breakdown */}
-              <Text style={s.sectionLabel}>ASHTAKOOT BREAKDOWN</Text>
+              <Text style={[s.sectionLabel, { color: C.textMuted }]}>ASHTAKOOT BREAKDOWN</Text>
               <View style={s.kootGrid}>
                 {KOOT_ORDER.map(key => {
                   const k = result[key];
@@ -421,16 +422,16 @@ export default function KundliMilanScreen() {
                     : pct >= 0.8 ? "#22c55e"
                     : pct >= 0.5 ? "#fbbf24" : "#f97316";
                   return (
-                    <View key={key} style={[s.kootCard, k.bad && s.kootCardBad]}>
+                    <View key={key} style={[s.kootCard, { backgroundColor: C.bgCard, borderColor: C.border }, k.bad && s.kootCardBad]}>
                       <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-                        <Text style={s.kootName}>{k.label}</Text>
+                        <Text style={[s.kootName, { color: C.text }]}>{k.label}</Text>
                         <View style={[s.kootScore, { backgroundColor:`${kColor}15` }]}>
                           <Text style={[s.kootScoreText, { color:kColor }]}>{k.score}/{k.max}</Text>
                         </View>
                       </View>
-                      <Text style={s.kootDetail}>{k.detail}</Text>
+                      <Text style={[s.kootDetail, { color: C.textMuted }]}>{k.detail}</Text>
                       {/* Mini bar */}
-                      <View style={s.kootBarBg}>
+                      <View style={[s.kootBarBg, { backgroundColor: C.border }]}>
                         <View style={[s.kootBarFill, { width:`${Math.round(pct*100)}%` as any, backgroundColor:kColor }]} />
                       </View>
                     </View>
@@ -444,7 +445,7 @@ export default function KundliMilanScreen() {
                   <Text style={{ fontSize:16 }}>🔴</Text>
                   <View style={{ flex:1 }}>
                     <Text style={{ color:"#f97316", fontWeight:"700", fontSize:13 }}>Manglik Dosh</Text>
-                    <Text style={{ color:"#64748b", fontSize:11, marginTop:3, lineHeight:17 }}>
+                    <Text style={{ color: C.textMuted, fontSize:11, marginTop:3, lineHeight:17 }}>
                       One person is Manglik, the other is not. Perform Kumbh Vivah or remedies before marriage. Consult a qualified Jyotishi.
                     </Text>
                   </View>
@@ -452,9 +453,9 @@ export default function KundliMilanScreen() {
               )}
 
               {/* Disclaimer */}
-              <View style={s.disclaimer}>
-                <Feather name="info" size={12} color="#1e3a5f" />
-                <Text style={s.disclaimerText}>
+              <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Feather name="info" size={12} color={C.textMuted} />
+                <Text style={[s.disclaimerText, { color: C.textMuted }]}>
                   This Ashtakoot Milan is an estimate. Always consult a qualified Jyotishi for a complete kundli analysis before marriage.
                 </Text>
               </View>
@@ -465,7 +466,7 @@ export default function KundliMilanScreen() {
           {!result && (
             <View style={s.howCard}>
               <Text style={s.howTitle}>What is Ashtakoot Milan?</Text>
-              <Text style={s.howBody}>
+              <Text style={[s.howBody, { color: C.textMuted }]}>
                 In Vedic astrology, 8 gunas (koots) give a total of 36 points:{"\n"}
                 Nadi (8) · Bhakut (7) · Gana (6) · Graha Maitri (5) · Yoni (4) · Tara (3) · Vasya (2) · Varna (1){"\n\n"}
                 18+ = Acceptable{"\n"}

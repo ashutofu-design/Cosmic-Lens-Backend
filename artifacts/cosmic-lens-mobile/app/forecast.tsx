@@ -68,6 +68,7 @@ function WeekChart({
   days: DayForecast[]; scores: number[]; selected: number;
   onSelect: (i: number) => void; color: string;
 }) {
+  const C = useC();
   const W = 320, H = 90, PAD = 16;
   const chartW = W - PAD * 2;
   const pts = scores.map((s, i) => ({
@@ -97,13 +98,13 @@ function WeekChart({
           <React.Fragment key={i}>
             <Circle
               cx={p.x} cy={p.y} r={i === selected ? 7 : 4}
-              fill={i === selected ? color : "#040e1f"}
+              fill={i === selected ? color : C.bgCard}
               stroke={color} strokeWidth={i === selected ? 2 : 1.5}
               onPress={() => { onSelect(i); Haptics.selectionAsync(); }}
             />
             <SvgText
               x={p.x} y={H - 4} fontSize={9}
-              fill={i === selected ? color : "#3d5a7a"}
+              fill={i === selected ? color : C.textMuted}
               textAnchor="middle" fontWeight={i === selected ? "bold" : "normal"}
             >
               {SHORT_DAYS[days[i].date.getDay()]}
@@ -210,11 +211,11 @@ export default function ForecastScreen() {
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color="#dde8f4" />
+          <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
-        <Text style={s.headerTitle}>7 Days Forecast</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>7 Days Forecast</Text>
         {showDemo && (
           <View style={s.demoPill}>
             <Text style={s.demoPillText}>Demo</Text>
@@ -224,8 +225,8 @@ export default function ForecastScreen() {
 
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]} showsVerticalScrollIndicator={false}>
         {/* Week chart */}
-        <View style={s.chartCard}>
-          <Text style={s.chartLabel}>Daily Energy Score</Text>
+        <View style={[s.chartCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={[s.chartLabel, { color: C.textMuted }]}>Daily Energy Score</Text>
           {days.length > 0 ? (
             <WeekChart
               days={days}
@@ -236,7 +237,7 @@ export default function ForecastScreen() {
             />
           ) : (
             <View style={s.chartPlaceholder}>
-              <Text style={s.placeholderText}>Loading...</Text>
+              <Text style={[s.placeholderText, { color: C.textMuted }]}>Loading...</Text>
             </View>
           )}
         </View>
@@ -247,40 +248,40 @@ export default function ForecastScreen() {
             {/* Day header */}
             <View style={s.dayHeader}>
               <View>
-                <Text style={s.dayName}>
+                <Text style={[s.dayName, { color: C.text }]}>
                   {sel.date.toLocaleDateString("en-IN", { weekday: "long" })}
                 </Text>
-                <Text style={s.dayDate}>
+                <Text style={[s.dayDate, { color: C.textMuted }]}>
                   {sel.date.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                 </Text>
               </View>
               <View style={[s.scoreCircle, { borderColor: scoreColor }]}>
                 <Text style={[s.scoreNum, { color: scoreColor }]}>{sel.score}</Text>
-                <Text style={s.scoreLabel}>score</Text>
+                <Text style={[s.scoreLabel, { color: C.textMuted }]}>score</Text>
               </View>
             </View>
 
             {/* Summary */}
-            <View style={s.summaryCard}>
+            <View style={[s.summaryCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Feather name="sun" size={14} color={scoreColor} />
-              <Text style={s.summaryText}>{sel.summary}</Text>
+              <Text style={[s.summaryText, { color: C.textMuted }]}>{sel.summary}</Text>
             </View>
 
             {/* Moon info */}
             <View style={s.infoGrid}>
-              <View style={s.infoItem}>
+              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>🌙</Text>
-                <Text style={s.infoLabel}>Moon Rashi</Text>
-                <Text style={s.infoValue}>{sel.moonSign}</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>Moon Rashi</Text>
+                <Text style={[s.infoValue, { color: C.text }]}>{sel.moonSign}</Text>
               </View>
-              <View style={s.infoItem}>
+              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>🔮</Text>
-                <Text style={s.infoLabel}>Paksha</Text>
-                <Text style={s.infoValue}>{sel.phase}</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>Paksha</Text>
+                <Text style={[s.infoValue, { color: C.text }]}>{sel.phase}</Text>
               </View>
-              <View style={s.infoItem}>
+              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>⚡</Text>
-                <Text style={s.infoLabel}>Energy</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>Energy</Text>
                 <Text style={[s.infoValue, { color: scoreColor }]}>
                   {sel.score >= 65 ? "Uchch" : sel.score <= 40 ? "Neech" : "Madhyam"}
                 </Text>
@@ -289,13 +290,13 @@ export default function ForecastScreen() {
 
             {/* Active dasha */}
             {dasha && (
-              <View style={s.dashaCard}>
-                <Text style={s.dashaLabel}>Active Dasha</Text>
+              <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Text style={[s.dashaLabel, { color: C.textMuted }]}>Active Dasha</Text>
                 <View style={s.dashaRow}>
-                  <Text style={s.dashaItem}>{pName(dasha.mdPlanet)} MD</Text>
-                  <Feather name="chevron-right" size={10} color="#1e3a5f" />
-                  <Text style={s.dashaItem}>{pName(dasha.adPlanet)} AD</Text>
-                  <Feather name="chevron-right" size={10} color="#1e3a5f" />
+                  <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.mdPlanet)} MD</Text>
+                  <Feather name="chevron-right" size={10} color={C.textDim} />
+                  <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.adPlanet)} AD</Text>
+                  <Feather name="chevron-right" size={10} color={C.textDim} />
                   <Text style={[s.dashaItem, { color: "#f59e0b" }]}>{pName(dasha.pdPlanet)} PD</Text>
                 </View>
               </View>
@@ -307,13 +308,13 @@ export default function ForecastScreen() {
                 style={[s.navBtn, selected === 0 && s.navBtnDisabled]}
                 onPress={() => { if (selected > 0) { setSelected(selected - 1); Haptics.selectionAsync(); } }}
               >
-                <Feather name="chevron-left" size={16} color={selected === 0 ? "#1e3a5f" : "#dde8f4"} />
-                <Text style={[s.navLabel, selected === 0 && { color: "#1e3a5f" }]}>Pehle Din</Text>
+                <Feather name="chevron-left" size={16} color={selected === 0 ? C.textDim : C.text} />
+                <Text style={[s.navLabel, { color: C.text }, selected === 0 && { color: C.textDim }]}>Pehle Din</Text>
               </Pressable>
               <View style={s.navDots}>
                 {days.map((_, i) => (
                   <Pressable key={i} onPress={() => setSelected(i)}>
-                    <View style={[s.navDot, i === selected && s.navDotActive]} />
+                    <View style={[s.navDot, { backgroundColor: C.border }, i === selected && s.navDotActive]} />
                   </Pressable>
                 ))}
               </View>
@@ -321,8 +322,8 @@ export default function ForecastScreen() {
                 style={[s.navBtn, selected === 6 && s.navBtnDisabled]}
                 onPress={() => { if (selected < days.length-1) { setSelected(selected + 1); Haptics.selectionAsync(); } }}
               >
-                <Text style={[s.navLabel, selected === 6 && { color: "#1e3a5f" }]}>Agle Din</Text>
-                <Feather name="chevron-right" size={16} color={selected === 6 ? "#1e3a5f" : "#dde8f4"} />
+                <Text style={[s.navLabel, { color: C.text }, selected === 6 && { color: C.textDim }]}>Agle Din</Text>
+                <Feather name="chevron-right" size={16} color={selected === 6 ? C.textDim : C.text} />
               </Pressable>
             </View>
           </>

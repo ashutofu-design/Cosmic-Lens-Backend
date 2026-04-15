@@ -325,10 +325,11 @@ const DEMO_KUNDLI: KundliData = {
 function DoshCard({ dosh, defaultOpen }: { dosh: DoshResult; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   const sev = SEV_CONFIG[dosh.severity];
+  const C = useC();
 
   return (
     <Pressable
-      style={[d.card, { borderLeftColor: sev.color }]}
+      style={[d.card, { borderLeftColor: sev.color, backgroundColor: C.bgCard, borderColor: C.border }]}
       onPress={() => { setOpen(v => !v); Haptics.selectionAsync(); }}
     >
       {/* Header row */}
@@ -337,13 +338,13 @@ function DoshCard({ dosh, defaultOpen }: { dosh: DoshResult; defaultOpen?: boole
           <Text style={{ fontSize: 16 }}>{dosh.icon}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={d.doshName}>{dosh.name}</Text>
-          <Text style={d.doshHindi}>{dosh.nameHindi}</Text>
+          <Text style={[d.doshName, { color: C.text }]}>{dosh.name}</Text>
+          <Text style={[d.doshHindi, { color: C.textMuted }]}>{dosh.nameHindi}</Text>
         </View>
         <View style={[d.sevPill, { backgroundColor: sev.bg }]}>
           <Text style={[d.sevText, { color: sev.color }]}>{sev.label}</Text>
         </View>
-        <Feather name={open ? "chevron-up" : "chevron-down"} size={15} color="#334155" style={{ marginLeft: 8 }} />
+        <Feather name={open ? "chevron-up" : "chevron-down"} size={15} color={C.textMuted} style={{ marginLeft: 8 }} />
       </View>
 
       {/* Headline always visible */}
@@ -352,24 +353,24 @@ function DoshCard({ dosh, defaultOpen }: { dosh: DoshResult; defaultOpen?: boole
       {/* Expanded content */}
       {open && (
         <View style={d.expanded}>
-          <Text style={d.desc}>{dosh.description}</Text>
+          <Text style={[d.desc, { color: C.textMuted }]}>{dosh.description}</Text>
 
           {dosh.planetNote && (
             <View style={d.planetNoteRow}>
-              <Feather name="info" size={10} color="#1e3a5f" />
-              <Text style={d.planetNote}>{dosh.planetNote}</Text>
+              <Feather name="info" size={10} color={C.textMuted} />
+              <Text style={[d.planetNote, { color: C.textMuted }]}>{dosh.planetNote}</Text>
             </View>
           )}
 
           {dosh.remedies.length > 0 && (
             <View style={d.remediesWrap}>
-              <Text style={d.remediesTitle}>UPAY (REMEDIES)</Text>
+              <Text style={[d.remediesTitle, { color: C.textMuted }]}>UPAY (REMEDIES)</Text>
               {dosh.remedies.map((r, i) => (
                 <View key={i} style={d.remedyRow}>
                   <View style={d.remedyBullet}>
                     <Text style={d.remedyNum}>{i + 1}</Text>
                   </View>
-                  <Text style={d.remedyText}>{r}</Text>
+                  <Text style={[d.remedyText, { color: C.textMuted }]}>{r}</Text>
                 </View>
               ))}
             </View>
@@ -400,11 +401,11 @@ export default function DoshScreen() {
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8 }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color="#dde8f4" />
+          <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={s.title}>Dosh Analysis</Text>
-          <Text style={s.titleHindi}>ग्रह दोष विश्लेषण</Text>
+          <Text style={[s.title, { color: C.text }]}>Dosh Analysis</Text>
+          <Text style={[s.titleHindi, { color: C.textMuted }]}>ग्रह दोष विश्लेषण</Text>
         </View>
         {showDemo && (
           <View style={s.demoPill}>
@@ -430,20 +431,20 @@ export default function DoshScreen() {
         <View style={s.summaryRow}>
           <View style={[s.summaryChip, { borderColor: "rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }]}>
             <Text style={[s.summaryNum, { color: "#ef4444" }]}>{presentCount}</Text>
-            <Text style={s.summaryLabel}>Doshas Mili</Text>
+            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Doshas Mili</Text>
           </View>
           <View style={[s.summaryChip, { borderColor: "rgba(249,115,22,0.3)", backgroundColor: "rgba(249,115,22,0.08)" }]}>
             <Text style={[s.summaryNum, { color: "#f97316" }]}>{strongCount}</Text>
-            <Text style={s.summaryLabel}>Poorn Dosh</Text>
+            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Poorn Dosh</Text>
           </View>
           <View style={[s.summaryChip, { borderColor: "rgba(34,197,94,0.3)", backgroundColor: "rgba(34,197,94,0.08)" }]}>
             <Text style={[s.summaryNum, { color: "#22c55e" }]}>{doshas.length - presentCount}</Text>
-            <Text style={s.summaryLabel}>Dosh Mukt</Text>
+            <Text style={[s.summaryLabel, { color: C.textMuted }]}>Dosh Mukt</Text>
           </View>
         </View>
 
         {/* Note */}
-        <Text style={s.note}>
+        <Text style={[s.note, { color: C.textMuted }]}>
           Har card pe tap karein detail aur upay dekhne ke liye.
         </Text>
 
@@ -457,9 +458,9 @@ export default function DoshScreen() {
         ))}
 
         {/* Disclaimer */}
-        <View style={s.disclaimer}>
-          <Feather name="info" size={12} color="#1e3a5f" />
-          <Text style={s.disclaimerText}>
+        <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Feather name="info" size={12} color={C.textMuted} />
+          <Text style={[s.disclaimerText, { color: C.textMuted }]}>
             Yeh analysis Vedic Jyotish ke anusaar hai. Kisi qualified Jyotishi se vistrit salah zaroor lein.
           </Text>
         </View>

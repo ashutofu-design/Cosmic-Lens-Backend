@@ -300,6 +300,7 @@ const COMPASS_DIRS = [
 function RoomCard({ room }: { room: VastuRoom }) {
   const [open, setOpen] = useState(false);
   const [tab,  setTab]  = useState<"dos"|"donts"|"remedies">("dos");
+  const C = useC();
 
   return (
     <Pressable
@@ -313,33 +314,34 @@ function RoomCard({ room }: { room: VastuRoom }) {
         </View>
         <View style={{ flex:1 }}>
           <Text style={[c.roomName, { color:room.color }]}>{room.name}</Text>
-          <Text style={c.roomHindi}>{room.nameHindi}</Text>
+          <Text style={[c.roomHindi, { color: C.textMuted }]}>{room.nameHindi}</Text>
         </View>
         <View style={[c.elemPill, { backgroundColor:`${room.color}10` }]}>
           <Text style={{ fontSize:10 }}>{room.elementIcon}</Text>
           <Text style={[c.elemText, { color:room.color }]}>{room.element}</Text>
         </View>
-        <Feather name={open ? "chevron-up" : "chevron-down"} size={15} color="#334155" style={{ marginLeft:8 }} />
+        <Feather name={open ? "chevron-up" : "chevron-down"} size={15} color={C.textMuted} style={{ marginLeft:8 }} />
       </View>
 
       {/* Direction bar — always visible */}
       <View style={c.dirRow}>
-        <Feather name="compass" size={11} color="#3d5a7a" />
-        <Text style={c.dirText}>{room.idealDir}</Text>
+        <Feather name="compass" size={11} color={C.textMuted} />
+        <Text style={[c.dirText, { color: C.textMuted }]}>{room.idealDir}</Text>
       </View>
 
       {/* Expanded content */}
       {open && (
         <View style={c.expanded}>
           {/* Importance */}
-          <Text style={c.importance}>{room.importance}</Text>
+          <Text style={[c.importance, { color: C.textMuted }]}>{room.importance}</Text>
 
           {/* Tab row */}
           <View style={c.tabRow}>
             {(["dos","donts","remedies"] as const).map(t => (
               <Pressable key={t} onPress={() => setTab(t)}
-                style={[c.tabBtn, tab===t && { backgroundColor:`${room.color}15`, borderColor:`${room.color}30` }]}>
-                <Text style={[c.tabText, tab===t && { color:room.color }]}>
+                style={[c.tabBtn, { borderColor: C.border, backgroundColor: C.bgCard2 },
+                  tab===t && { backgroundColor:`${room.color}15`, borderColor:`${room.color}30` }]}>
+                <Text style={[c.tabText, { color: C.textMuted }, tab===t && { color:room.color }]}>
                   {t==="dos" ? "Do ✅" : t==="donts" ? "Don't ❌" : "Remedies 🙏"}
                 </Text>
               </Pressable>
@@ -351,7 +353,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
               {room.dos.map((d,i) => (
                 <View key={i} style={c.tipRow}>
                   <Text style={c.tipIcon}>{d.icon}</Text>
-                  <Text style={c.tipText}>{d.text}</Text>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{d.text}</Text>
                 </View>
               ))}
             </View>
@@ -370,8 +372,8 @@ function RoomCard({ room }: { room: VastuRoom }) {
             <View style={{ gap:8 }}>
               {room.remedies.map((r,i) => (
                 <View key={i} style={c.tipRow}>
-                  <View style={c.remedyNum}><Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text></View>
-                  <Text style={c.tipText}>{r}</Text>
+                  <View style={[c.remedyNum, { backgroundColor: C.bgCard2 }]}><Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text></View>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{r}</Text>
                 </View>
               ))}
             </View>
@@ -384,18 +386,19 @@ function RoomCard({ room }: { room: VastuRoom }) {
 
 // ── Compass Component ─────────────────────────────────────────────────────────
 function VastuCompass() {
+  const C = useC();
   return (
-    <View style={cp.wrap}>
-      <Text style={cp.title}>VASTU COMPASS — DIRECTIONS</Text>
+    <View style={[cp.wrap, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+      <Text style={[cp.title, { color: C.textMuted }]}>VASTU COMPASS — DIRECTIONS</Text>
       <View style={cp.grid}>
         {COMPASS_DIRS.map(d => (
           <View key={d.short} style={[cp.dir, { borderColor:`${d.color}30`, backgroundColor:`${d.color}08` }]}>
             <Text style={[cp.short, { color:d.color }]}>{d.short}</Text>
-            <Text style={cp.label}>{d.label}</Text>
+            <Text style={[cp.label, { color: C.textMuted }]}>{d.label}</Text>
           </View>
         ))}
       </View>
-      <Text style={cp.note}>NE = Ishaan (Divine), SE = Agni (Fire), SW = Nairitya, NW = Vaayu (Wind)</Text>
+      <Text style={[cp.note, { color: C.textMuted }]}>NE = Ishaan (Divine), SE = Agni (Fire), SW = Nairitya, NW = Vaayu (Wind)</Text>
     </View>
   );
 }
@@ -412,11 +415,11 @@ export default function VastuScreen() {
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8 }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color="#dde8f4" />
+          <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex:1 }}>
-          <Text style={s.title}>Vastu Shastra</Text>
-          <Text style={s.titleHindi}>वास्तु शास्त्र — Room-wise Guidance</Text>
+          <Text style={[s.title, { color: C.text }]}>Vastu Shastra</Text>
+          <Text style={[s.titleHindi, { color: C.textMuted }]}>वास्तु शास्त्र — Room-wise Guidance</Text>
         </View>
       </View>
 
@@ -428,8 +431,8 @@ export default function VastuScreen() {
         <View style={s.introCard}>
           <Text style={{ fontSize:24 }}>🏠</Text>
           <View style={{ flex:1 }}>
-            <Text style={s.introTitle}>What is Vastu Shastra?</Text>
-            <Text style={s.introBody}>
+            <Text style={[s.introTitle, { color: C.text }]}>What is Vastu Shastra?</Text>
+            <Text style={[s.introBody, { color: C.textMuted }]}>
               Vastu Shastra is an ancient Indian science of architecture. Correct directions and
               arrangements bring positive energy, happiness, health, and prosperity to your home.
             </Text>
@@ -441,7 +444,7 @@ export default function VastuScreen() {
 
         {/* Section label */}
         <Text style={s.sectionLabel}>ROOM-WISE VASTU GUIDE</Text>
-        <Text style={s.sectionSub}>Tap any card to see dos, don'ts, and remedies</Text>
+        <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
 
         {/* Room cards */}
         {ROOMS.map(room => (
@@ -449,8 +452,8 @@ export default function VastuScreen() {
         ))}
 
         {/* General tips */}
-        <View style={s.genCard}>
-          <Text style={s.genTitle}>⚡ General Vastu Tips</Text>
+        <View style={[s.genCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={[s.genTitle, { color: C.text }]}>⚡ General Vastu Tips</Text>
           {[
             "Keep the home free of clutter — blocked spaces block energy flow",
             "Ensure your home is well-lit — darkness invites negativity",
@@ -460,16 +463,16 @@ export default function VastuScreen() {
             "A running water feature (fountain or aquarium) in the North is auspicious",
           ].map((tip,i) => (
             <View key={i} style={s.genRow}>
-              <View style={s.genDot} />
-              <Text style={s.genText}>{tip}</Text>
+              <View style={[s.genDot, { backgroundColor: C.textDim }]} />
+              <Text style={[s.genText, { color: C.textMuted }]}>{tip}</Text>
             </View>
           ))}
         </View>
 
         {/* Disclaimer */}
-        <View style={s.disclaimer}>
-          <Feather name="info" size={12} color="#1e3a5f" />
-          <Text style={s.disclaimerText}>
+        <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Feather name="info" size={12} color={C.textMuted} />
+          <Text style={[s.disclaimerText, { color: C.textMuted }]}>
             This is a general Vastu guide. For your home specifically, always consult a qualified Vastu expert for personalized advice.
           </Text>
         </View>

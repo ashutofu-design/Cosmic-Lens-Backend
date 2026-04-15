@@ -1,13 +1,12 @@
 /**
  * Cosmic Lens — Global Design System
- * Single source of truth for typography, spacing, color usage, and shadows.
- * Import `G` in any screen to get consistent values.
+ * Single source of truth for typography, spacing, and static color constants.
+ * For theme-aware colors always use C.* tokens from ThemeContext.
  */
 
 export const G = {
 
-  // ── Typography ────────────────────────────────────────────────────────────
-  // Use these with fontFamily from the F alias in each screen.
+  // ── Typography scale ──────────────────────────────────────────────────────
   type: {
     pageTitle:     { fontSize: 20, letterSpacing: -0.4 },
     sectionHeader: { fontSize: 16, letterSpacing: -0.2 },
@@ -26,21 +25,25 @@ export const G = {
     bold:     "Nunito_700Bold",
   },
 
-  // ── Color palette (static, non-theme) ────────────────────────────────────
+  // ── Static brand colors (non-theme-aware) ─────────────────────────────────
+  // For theme-aware colors, always use C.* from ThemeContext instead.
   color: {
-    primary:   "#FF7A00",
-    secondary: "#6366F1",
-    success:   "#16A34A",
-    error:     "#DC2626",
-    warning:   "#F59E0B",
-    // Light mode backgrounds
-    pageBg:    "#F8FAFC",
-    cardBg:    "#FFFFFF",
-    // Text hierarchy
-    textHigh:  "#0F172A",
-    textMid:   "#334155",
-    textLow:   "#64748B",
-    textDim:   "#94A3B8",
+    // Light mode accent — cool indigo
+    indigoLight:  "#6366F1",
+    indigoDark:   "#4F46E5",
+    // Dark mode accent — violet glow
+    violetLight:  "#A78BFA",
+    violetDark:   "#8B5CF6",
+    // CTA / action — orange
+    orange:       "#FF7A00",
+    orangeDark:   "#FF4D00",
+    // CTA / action — gold (dark mode luxury)
+    gold:         "#F59E0B",
+    goldDark:     "#D97706",
+    // Semantic
+    success:      "#16A34A",
+    error:        "#DC2626",
+    warning:      "#F59E0B",
   },
 
   // ── Spacing ───────────────────────────────────────────────────────────────
@@ -59,37 +62,37 @@ export const G = {
     tabBarH:  60,
   },
 
-  // ── Card shadow — light mode ──────────────────────────────────────────────
+  // ── Elevation shadow (light mode — no glow) ───────────────────────────────
   shadow: {
     card: {
-      shadowColor:   "#64748B",
-      shadowOffset:  { width: 0, height: 4 },
-      shadowOpacity: 0.10,
-      shadowRadius:  12,
-      elevation:     4,
+      shadowColor:   "#0F172A",
+      shadowOffset:  { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius:  8,
+      elevation:     3,
     },
     strong: {
-      shadowColor:   "#64748B",
-      shadowOffset:  { width: 0, height: 6 },
-      shadowOpacity: 0.14,
+      shadowColor:   "#0F172A",
+      shadowOffset:  { width: 0, height: 4 },
+      shadowOpacity: 0.12,
       shadowRadius:  16,
-      elevation:     6,
+      elevation:     5,
     },
   },
 
   // ── Card base style ───────────────────────────────────────────────────────
   card: {
-    borderRadius:    16,
-    paddingVertical: 14,
+    borderRadius:      16,
+    paddingVertical:   14,
     paddingHorizontal: 14,
   },
 
   // ── Input base style ─────────────────────────────────────────────────────
   input: {
-    borderRadius:  10,
-    borderWidth:   0.75,
-    minHeight:     46,
+    borderRadius:      10,
+    borderWidth:       0.75,
+    minHeight:         46,
     paddingHorizontal: 12,
-    fontSize:      14,
+    fontSize:          14,
   },
 };

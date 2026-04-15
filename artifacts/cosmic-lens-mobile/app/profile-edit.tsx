@@ -34,12 +34,7 @@ const YEARS_L  = Array.from({ length: CY-1900+1 }, (_, i) => { const y=CY-i; ret
 const HOURS_L  = Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
 const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
 
-const C_PRIMARY  = "#FF7A00";
-const C_FOCUS    = "#6366F1";
-const C_SUCCESS  = "#16A34A";
-const C_SEL_BG   = "rgba(99,102,241,0.06)";
-const C_SEL_BORD = "#6366F1";
-const C_SEL_TXT  = "#4F46E5";
+const C_SUCCESS = "#16A34A";
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -97,8 +92,8 @@ function CardRow({ label, icon, children }: { label: string; icon: React.Compone
   const C = useC();
   return (
     <View style={s.cardRow}>
-      <View style={[s.cardRowIcon, { backgroundColor: C.isDark ? "rgba(99,102,241,0.15)" : "#EEF2FF" }]}>
-        <Feather name={icon} size={11} color={C_FOCUS} />
+      <View style={[s.cardRowIcon, { backgroundColor: C.accentBg }]}>
+        <Feather name={icon} size={11} color={C.accent} />
       </View>
       <Text style={[s.cardRowLabel, { color: C.isDark ? C.textMuted : "#64748B" }]}>{label}</Text>
       {children}
@@ -257,7 +252,7 @@ export default function ProfileEditScreen() {
           </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-              <View style={s.headerAccentDot} />
+              <View style={[s.headerAccentDot, { backgroundColor: C.accent }]} />
               <Text style={[s.headerTitle, { color: C.isDark ? C.text : "#0F172A" }]}>
                 {isEdit ? "Edit Profile" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation}'s Kundli`}
               </Text>
@@ -285,10 +280,10 @@ export default function ProfileEditScreen() {
               <Lbl text="FULL NAME" />
               <View style={[
                 s.inputRow,
-                { backgroundColor: C.isDark ? C.inputBg : "#F1F5F9", borderColor: nameFocused ? C_FOCUS : (C.isDark ? C.inputBorder : "#CBD5E1") },
-                nameFocused && { shadowColor: C_FOCUS, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.18, shadowRadius: 6 },
+                { backgroundColor: C.inputBg, borderColor: nameFocused ? C.inputFocusBorder : C.inputBorder },
+                nameFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
               ]}>
-                <Feather name="user" size={13} color={nameFocused ? C_FOCUS : C.textDim} />
+                <Feather name="user" size={13} color={nameFocused ? C.accent : C.textDim} />
                 <TextInput
                   ref={nameRef}
                   style={[s.inputTxt, { color: C.text }]}
@@ -320,11 +315,11 @@ export default function ProfileEditScreen() {
                       style={[
                         s.chip,
                         active
-                          ? { borderColor: C_SEL_BORD, backgroundColor: C_SEL_BG }
-                          : { borderColor: C.isDark ? C.border : "#E2E8F0", backgroundColor: "transparent" },
+                          ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                          : { borderColor: C.border, backgroundColor: "transparent" },
                       ]}
                     >
-                      <Text style={[s.chipTxt, { color: active ? C_SEL_TXT : C.textMuted }]}>{g}</Text>
+                      <Text style={[s.chipTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{g}</Text>
                     </Pressable>
                   );
                 })}
@@ -375,11 +370,11 @@ export default function ProfileEditScreen() {
                           style={[
                             s.ampmBtn,
                             active
-                              ? { borderColor: C_SEL_BORD, backgroundColor: C_SEL_BG }
-                              : { borderColor: C.isDark ? C.border : "#E2E8F0", backgroundColor: C.isDark ? C.inputBg : "#F8FAFC" },
+                              ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                              : { borderColor: C.border, backgroundColor: C.inputBg },
                           ]}
                         >
-                          <Text style={[s.ampmTxt, { color: active ? C_SEL_TXT : C.textMuted }]}>{v}</Text>
+                          <Text style={[s.ampmTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{v}</Text>
                         </Pressable>
                       );
                     })}
@@ -400,10 +395,10 @@ export default function ProfileEditScreen() {
             <View style={s.fieldWrap}>
               <View style={[
                 s.inputRow,
-                { backgroundColor: C.isDark ? C.inputBg : "#F1F5F9", borderColor: placeFocused ? C_FOCUS : (C.isDark ? C.inputBorder : "#CBD5E1"), gap: 6 },
-                placeFocused && { shadowColor: C_FOCUS, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.18, shadowRadius: 6 },
+                { backgroundColor: C.inputBg, borderColor: placeFocused ? C.inputFocusBorder : C.inputBorder, gap: 6 },
+                placeFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
               ]}>
-                <Feather name="search" size={13} color={placeFocused ? C_FOCUS : C.textDim} />
+                <Feather name="search" size={13} color={placeFocused ? C.accent : C.textDim} />
                 <TextInput
                   style={[s.inputTxt, { flex: 1, color: C.text }]}
                   value={placeQuery}
@@ -415,10 +410,10 @@ export default function ProfileEditScreen() {
                   onFocus={() => setPlaceFocused(true)}
                   onBlur={() => setPlaceFocused(false)}
                 />
-                <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
+                <Pressable onPress={handlePlaceSearch} style={[s.searchBtn, { borderColor: C.accent }]}>
                   {searching
-                    ? <ActivityIndicator size="small" color={C_FOCUS} />
-                    : <Text style={s.searchBtnTxt}>Search</Text>
+                    ? <ActivityIndicator size="small" color={C.accent} />
+                    : <Text style={[s.searchBtnTxt, { color: C.accent }]}>Search</Text>
                   }
                 </Pressable>
               </View>
@@ -433,7 +428,7 @@ export default function ProfileEditScreen() {
                     onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
                     style={[s.geoItem, i < geoResults.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}
                   >
-                    <Feather name="map-pin" size={10} color={C_FOCUS} style={{ marginTop: 1 }} />
+                    <Feather name="map-pin" size={10} color={C.accent} style={{ marginTop: 1 }} />
                     <Text style={[s.geoTxt, { color: C.isDark ? C.textMid : "#334155" }]} numberOfLines={1}>{g.label}</Text>
                   </Pressable>
                 ))}
@@ -466,7 +461,7 @@ export default function ProfileEditScreen() {
           {/* Saving status */}
           {saving && !!savingStatus && (
             <View style={s.savingRow}>
-              <ActivityIndicator size="small" color={C_PRIMARY} />
+              <ActivityIndicator size="small" color={C.btnGradStart} />
               <Text style={[s.savingTxt, { color: C.textMuted }]}>{savingStatus}</Text>
             </View>
           )}
@@ -490,9 +485,9 @@ export default function ProfileEditScreen() {
               style={{ opacity: saving ? 0.65 : 1 }}
             >
               <LinearGradient
-                colors={isNetworkError ? ["#DC2626", "#B91C1C"] : ["#FF7A00", "#FF3D00"]}
+                colors={isNetworkError ? ["#DC2626", "#B91C1C"] : [C.btnGradStart, C.btnGradEnd]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={[s.saveBtn, { shadowColor: isNetworkError ? "#DC2626" : "#FF7A00" }]}
+                style={[s.saveBtn, { shadowColor: isNetworkError ? "#DC2626" : C.btnGradStart }]}
               >
                 {saving
                   ? <ActivityIndicator color="#fff" />
@@ -534,7 +529,7 @@ const s = StyleSheet.create({
   },
   headerAccentDot: {
     width: 4, height: 16, borderRadius: 2,
-    backgroundColor: C_FOCUS, opacity: 0.7,
+    backgroundColor: "#6366F1", opacity: 0.7,
   },
   headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.4 },
   headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginLeft: 11 },
@@ -605,9 +600,9 @@ const s = StyleSheet.create({
   searchBtn: {
     paddingHorizontal: 11, paddingVertical: 6,
     borderRadius: 8, backgroundColor: "transparent",
-    borderWidth: 0.75, borderColor: C_FOCUS,
+    borderWidth: 0.75, borderColor: "#6366F1",
   },
-  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: C_FOCUS },
+  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: "#6366F1" },
 
   // Geo dropdown
   geoList: {

@@ -47,7 +47,7 @@ export interface ThemeColors {
   warningBorder: string;
   warningText:   string;
 
-  // Toggle buttons selected state (gender / AM-PM)
+  // Toggle buttons selected state (gender / AM-PM / chips)
   toggleSelBg:     string;
   toggleSelBorder: string;
   toggleSelText:   string;
@@ -57,101 +57,114 @@ export interface ThemeColors {
   btnGradEnd:   string;
 }
 
-// ── Dark — Charcoal + Subtle Purple Tint ──────────────────────────────────────
+// ── Dark — Deep Black + Purple Glow (Premium / Luxury) ────────────────────────
 export const DARK: ThemeColors = {
-  bg:      "#161420",
-  bgCard:  "rgba(30,27,46,0.80)",
-  bgCard2: "rgba(37,34,56,0.65)",
-  bgCard3: "rgba(44,41,68,0.55)",
+  // Deep black backgrounds
+  bg:      "#0B0F19",
+  bgCard:  "#111827",
+  bgCard2: "#1A2135",
+  bgCard3: "#1D2545",
 
-  text:      "#f2eeff",
-  textMid:   "#c4b8e8",
-  textMuted: "#9585c0",
-  textDim:   "#5a4e80",
+  // Clean high-contrast text
+  text:      "#F9FAFB",
+  textMid:   "#D1D5DB",
+  textMuted: "#9CA3AF",
+  textDim:   "#6B7280",
 
-  accent:   "#f59e0b",
-  accentBg: "rgba(245,158,11,0.13)",
+  // Purple accent (overridden by zodiac sign when set)
+  accent:   "#8B5CF6",
+  accentBg: "rgba(139,92,246,0.14)",
 
-  border:  "rgba(180,150,255,0.18)",
-  border2: "rgba(180,150,255,0.30)",
-  border3: "rgba(180,150,255,0.10)",
+  // Subtle purple-tinted borders
+  border:  "rgba(139,92,246,0.20)",
+  border2: "rgba(139,92,246,0.32)",
+  border3: "rgba(139,92,246,0.10)",
 
-  switchTrackOff: "#252238",
-  navBg:     "#161420",
-  navBorder: "rgba(180,150,255,0.18)",
-  inputBg:   "#1e1b2e",
-  inputBorder: "rgba(180,150,255,0.26)",
-  inputFocusBorder: "rgba(245,158,11,0.45)",
+  switchTrackOff:   "#1A2135",
+  navBg:            "#0B0F19",
+  navBorder:        "rgba(139,92,246,0.18)",
+  inputBg:          "#111827",
+  inputBorder:      "rgba(139,92,246,0.22)",
+  inputFocusBorder: "rgba(139,92,246,0.75)",
 
-  shimmer1: "rgba(30,27,46,0.9)",
-  shimmer2: "rgba(37,34,56,0.9)",
-  shimmer3: "rgba(30,27,46,0.9)",
+  shimmer1: "rgba(11,15,25,0.95)",
+  shimmer2: "rgba(17,24,39,0.95)",
+  shimmer3: "rgba(11,15,25,0.95)",
 
-  cardShadow: "0 4px 28px rgba(139,92,246,0.22), 0 1px 0 rgba(255,255,255,0.06) inset",
+  // Luxury purple glow on cards
+  cardShadow:
+    "0 4px 24px rgba(139,92,246,0.28), 0 0 0 1px rgba(139,92,246,0.10) inset",
 
   statusBar: "light-content",
   isDark: true,
 
-  warningBg:     "rgba(255,165,0,0.08)",
-  warningBorder: "rgba(255,165,0,0.35)",
-  warningText:   "#FFD580",
+  warningBg:     "rgba(245,158,11,0.10)",
+  warningBorder: "rgba(245,158,11,0.40)",
+  warningText:   "#FCD34D",
 
-  toggleSelBg:     "rgba(245,158,11,0.15)",
-  toggleSelBorder: "#f59e0b",
-  toggleSelText:   "#f59e0b",
+  // Purple selection for toggle chips (gender / AM-PM)
+  toggleSelBg:     "rgba(139,92,246,0.18)",
+  toggleSelBorder: "#8B5CF6",
+  toggleSelText:   "#C4B5FD",
 
-  btnGradStart: "#f59e0b",
-  btnGradEnd:   "#d97706",
+  // Gold CTA gradient — luxury feel in dark mode
+  btnGradStart: "#F59E0B",
+  btnGradEnd:   "#D97706",
 };
 
-// ── Light — Bold Premium Slate ─────────────────────────────────────────────────
+// ── Light — Clean White + Indigo Accents (Modern / Minimal) ───────────────────
 export const LIGHT: ThemeColors = {
-  bg:      "#F1F5F9",
+  // Soft white backgrounds
+  bg:      "#F8FAFC",
   bgCard:  "#FFFFFF",
-  bgCard2: "#F8FAFC",
-  bgCard3: "#F1F5F9",
+  bgCard2: "#F1F5F9",
+  bgCard3: "#E2E8F0",
 
-  text:      "#0F172A",   // slate-900  — headings (boldest)
-  textMid:   "#1E293B",   // slate-800  — body
-  textMuted: "#334155",   // slate-700  — labels / secondary (was 64748B — too faded)
-  textDim:   "#94A3B8",   // slate-400  — placeholder
+  // Strong readable text hierarchy
+  text:      "#0F172A",   // primary — headings
+  textMid:   "#334155",   // secondary — body
+  textMuted: "#64748B",   // subtext — labels
+  textDim:   "#94A3B8",   // placeholder / dim
 
-  accent:   "#6366F1",    // indigo-500 (overridden by zodiac)
+  // Indigo accent (overridden by zodiac sign when set)
+  accent:   "#6366F1",
   accentBg: "rgba(99,102,241,0.08)",
 
-  border:  "#CBD5E1",     // slate-300  — stronger card border (was E2E8F0)
-  border2: "#94A3B8",     // slate-400  — input border
-  border3: "#E2E8F0",     // slate-200  — subtle dividers
+  // Crisp slate borders
+  border:  "#CBD5E1",
+  border2: "#94A3B8",
+  border3: "#E2E8F0",
 
-  switchTrackOff: "#CBD5E1",
-  navBg:     "#FFFFFF",
-  navBorder: "#CBD5E1",
-  inputBg:   "#F1F5F9",       // slightly grey background for inputs
-  inputBorder: "#94A3B8",     // stronger border
+  switchTrackOff:   "#CBD5E1",
+  navBg:            "#FFFFFF",
+  navBorder:        "#CBD5E1",
+  inputBg:          "#FFFFFF",
+  inputBorder:      "#CBD5E1",
   inputFocusBorder: "#6366F1",
 
   shimmer1: "rgba(248,250,252,0.95)",
   shimmer2: "rgba(241,245,249,0.95)",
   shimmer3: "rgba(248,250,252,0.95)",
 
-  cardShadow: "0 2px 8px rgba(15,23,42,0.10), 0 8px 24px rgba(15,23,42,0.06), 0 1px 0 rgba(255,255,255,1) inset",
+  // Subtle elevation shadow — no glow in light mode
+  cardShadow:
+    "0 1px 4px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.08), 0 1px 0 #FFFFFF inset",
 
   statusBar: "dark-content",
   isDark: false,
 
-  // Warning — amber
   warningBg:     "#FEF3C7",
   warningBorder: "#F59E0B",
   warningText:   "#92400E",
 
-  // Toggle selected — red/crimson (high-contrast, bold)
-  toggleSelBg:     "#FEE2E2",
-  toggleSelBorder: "#DC2626",
-  toggleSelText:   "#DC2626",
+  // Indigo selection — clean and modern
+  toggleSelBg:     "rgba(99,102,241,0.10)",
+  toggleSelBorder: "#6366F1",
+  toggleSelText:   "#4F46E5",
 
-  // Primary button gradient — amber → orange
-  btnGradStart: "#F59E0B",
-  btnGradEnd:   "#EA580C",
+  // Orange CTA gradient — punchy and visible
+  btnGradStart: "#FF7A00",
+  btnGradEnd:   "#FF4D00",
 };
 
 // ── Context shape ─────────────────────────────────────────────────────────────
@@ -176,7 +189,7 @@ const ThemeContext = createContext<ThemeCtx>({
 const STORAGE_KEY = "cl_theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, _setMode]           = useState<ThemeMode>("dark");
+  const [mode, _setMode]                 = useState<ThemeMode>("dark");
   const [zodiacSign, _setZodiacSign]     = useState<ZodiacSign | null>(null);
   const [zodiacAccent, _setZodiacAccent] = useState<ZodiacAccent>(DEFAULT_ACCENT);
 
@@ -203,10 +216,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Merge base palette with zodiac accent override
   const C = useMemo<ThemeColors>(() => {
     const base = mode === "dark" ? DARK : LIGHT;
-    return { ...base, accent: zodiacAccent.accent, accentBg: zodiacAccent.accentBg };
+
+    // When no zodiac is selected (DEFAULT_ACCENT), use mode-appropriate purple:
+    // Light → indigo #6366F1 (cool & modern)
+    // Dark  → violet #8B5CF6 (glowing premium)
+    const isDefault = zodiacAccent === DEFAULT_ACCENT;
+    const finalAccent: ZodiacAccent = (isDefault && mode === "dark")
+      ? { accent: "#8B5CF6", accentBg: "rgba(139,92,246,0.14)" }
+      : zodiacAccent;
+
+    return { ...base, accent: finalAccent.accent, accentBg: finalAccent.accentBg };
   }, [mode, zodiacAccent]);
 
   return (

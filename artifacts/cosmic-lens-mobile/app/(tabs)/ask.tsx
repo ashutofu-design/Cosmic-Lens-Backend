@@ -129,15 +129,15 @@ export default function AskScreen() {
     return (
       <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
         {!isUser && (
-          <View style={s.avatar}>
+          <View style={[s.avatar, { backgroundColor: C.accentBg, borderColor: `${C.accent}30` }]}>
             <Text style={{ fontSize: 12 }}>🔭</Text>
           </View>
         )}
         <View style={[s.bubbleInner, isUser
-          ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#0c3257" : "#dbeafe" }]
+          ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}30` }]
           : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}>
           {item.loading ? (
-            <ActivityIndicator size="small" color="#f59e0b" />
+            <ActivityIndicator size="small" color={C.accent} />
           ) : (
             <Text style={[s.bubbleText, isUser
               ? [s.bubbleTextUser, { color: C.text }]
@@ -189,8 +189,8 @@ export default function AskScreen() {
       {messages.length <= 1 && !showDemo && (
         <View style={s.starters}>
           {STARTERS.map(q => (
-            <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={() => send(q)}>
-              <Text style={s.starterText}>{q}</Text>
+            <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: `${C.accent}30` }]} onPress={() => send(q)}>
+              <Text style={[s.starterText, { color: C.accent }]}>{q}</Text>
             </Pressable>
           ))}
         </View>
@@ -214,7 +214,8 @@ export default function AskScreen() {
           style={({ pressed }) => [s.sendBtn, pressed && { opacity: 0.7 }]}
         >
           <LinearGradient
-            colors={["#0ea5e9", "#3b82f6"]}
+            colors={[C.btnGradStart, C.btnGradEnd]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={s.sendGrad}
           >
             <Feather name={showDemo ? "lock" : "send"} size={16} color="#fff" />

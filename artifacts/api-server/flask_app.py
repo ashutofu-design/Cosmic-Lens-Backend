@@ -1200,6 +1200,65 @@ def serve_frontend(path):
     return jsonify({"error": "Frontend not built"}), 404
 
 
+@app.route("/api/qr")
+def expo_qr():
+    tunnel_url = ""
+    try:
+        import urllib.request, json as _json
+        with urllib.request.urlopen("http://localhost:4040/api/tunnels", timeout=2) as r:
+            data = _json.loads(r.read())
+            for t in data.get("tunnels", []):
+                url = t.get("public_url", "")
+                if url.startswith("http://"):
+                    tunnel_url = url.replace("http://", "exp://")
+                    break
+    except Exception:
+        pass
+    if not tunnel_url:
+        try:
+            with open("/tmp/expo-tunnel-url", "r") as f:
+                tunnel_url = f.read().strip()
+        except Exception:
+            pass
+
+    status = "Tunnel ready" if tunnel_url else "Waiting for tunnel..."
+    qr_section = ""
+    if tunnel_url:
+        qr_section = f"""
+        <div id="qr"></div>
+        <p style="font-family:monospace;font-size:14px;margin-top:12px;color:#a5b4fc;">{tunnel_url}</p>
+        <p style="color:#64748b;font-size:12px;margin-top:4px;">Open Expo Go → tap the scan icon → scan this code</p>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+        <script>new QRCode(document.getElementById("qr"), {{text:"{tunnel_url}",width:256,height:256,colorDark:"#e2e8f0",colorLight:"#0f172a"}});</script>
+        """
+    else:
+        qr_section = """
+        <p style="color:#64748b;font-size:14px;">Starting tunnel — refresh in a few seconds...</p>
+        <script>setTimeout(()=>location.reload(),3000);</script>
+        """
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Cosmic Lens — Expo QR</title>
+  <style>
+    body{{margin:0;background:#0b1220;color:#e2e8f0;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px;}}
+    h1{{font-size:20px;font-weight:700;color:#a5b4fc;margin:0;}}
+    p{{margin:0;}}
+    #qr canvas,#qr img{{border-radius:12px;padding:16px;background:#0f172a;border:2px solid #334155;}}
+  </style>
+</head>
+<body>
+  <h1>Cosmic Lens — Expo Go</h1>
+  <p style="color:#64748b;font-size:13px;">{status}</p>
+  {qr_section}
+</body>
+</html>"""
+    return html, 200, {"Content-Type": "text/html"}
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

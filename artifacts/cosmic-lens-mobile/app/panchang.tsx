@@ -182,7 +182,7 @@ export default function PanchangScreen() {
         {/* ── RAHU KAAL TAB ── */}
         {tabIdx === 1 && (
           <>
-            <View style={[s.rahuHero, { backgroundColor: "rgba(239,68,68,0.07)", borderColor: "rgba(239,68,68,0.2)" }]}>
+            <View style={[s.rahuHero, { backgroundColor: C.isDark ? "rgba(239,68,68,0.07)" : "#FEE2E2", borderColor: "rgba(239,68,68,0.2)" }]}>
               <Text style={{ fontSize: 36 }}>⛔</Text>
               <View>
                 <Text style={[s.rahuTitle, { color: "#ef4444" }]}>Rahu Kaal</Text>
@@ -238,7 +238,7 @@ export default function PanchangScreen() {
                     <Text style={[s.festDate, { color: C.textMuted }]}>{f.date}, 2026</Text>
                   </View>
                   {f.type === "rashtriya" && (
-                    <View style={[s.badge, { backgroundColor: "#3b82f620", borderColor: "#3b82f640" }]}>
+                    <View style={[s.badge, { backgroundColor: C.isDark ? "#3b82f620" : "#DBEAFE", borderColor: C.isDark ? "#3b82f640" : "#93C5FD" }]}>
                       <Text style={[s.badgeText, { color: "#60a5fa" }]}>Rashtriya</Text>
                     </View>
                   )}

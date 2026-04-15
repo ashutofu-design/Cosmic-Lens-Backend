@@ -145,7 +145,7 @@ export default function RashifalScreen() {
                       <Text style={[s.luckText, { color: C.textMuted }]}>{phal.lucky}</Text>
                     </View>
                   </View>
-                  <View style={[s.savdhanBox, { backgroundColor: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.2)" }]}>
+                  <View style={[s.savdhanBox, { backgroundColor: C.isDark ? "rgba(239,68,68,0.06)" : "#FEE2E2", borderColor: "rgba(239,68,68,0.2)" }]}>
                     <Feather name="alert-triangle" size={12} color="#ef4444" />
                     <Text style={[s.savdhanText, { color: "#ef4444" }]}>Savdhan: {phal.savdhan}</Text>
                   </View>

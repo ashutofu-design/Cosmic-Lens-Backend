@@ -170,7 +170,7 @@ export default function OnboardingScreen() {
           {/* ── Section: Full Name ────────────────────────────────────── */}
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
-              <View style={[s.cardIcon, { backgroundColor: "rgba(167,139,250,0.12)" }]}>
+              <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(167,139,250,0.12)" : "#EDE9FE" }]}>
                 <Feather name="user" size={14} color="#f59e0b" />
               </View>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.yourName.toUpperCase()}</Text>
@@ -189,7 +189,7 @@ export default function OnboardingScreen() {
           {/* ── Section: Date of Birth ────────────────────────────────── */}
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
-              <View style={[s.cardIcon, { backgroundColor: "rgba(139,92,246,0.10)" }]}>
+              <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(139,92,246,0.10)" : "#EDE9FE" }]}>
                 <Feather name="calendar" size={14} color="#f59e0b" />
               </View>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.dateOfBirth.toUpperCase()}</Text>
@@ -242,7 +242,7 @@ export default function OnboardingScreen() {
           {/* ── Section: Time of Birth ────────────────────────────────── */}
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
-              <View style={[s.cardIcon, { backgroundColor: "rgba(250,204,21,0.10)" }]}>
+              <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(250,204,21,0.10)" : C.warningBg }]}>
                 <Feather name="clock" size={14} color="#facc15" />
               </View>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.timeOfBirth.toUpperCase()}</Text>
@@ -295,7 +295,7 @@ export default function OnboardingScreen() {
           {/* ── Section: Place of Birth ───────────────────────────────── */}
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
-              <View style={[s.cardIcon, { backgroundColor: "rgba(16,185,129,0.10)" }]}>
+              <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(16,185,129,0.10)" : "#D1FAE5" }]}>
                 <Feather name="map-pin" size={14} color="#10b981" />
               </View>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.birthPlace.toUpperCase()}</Text>

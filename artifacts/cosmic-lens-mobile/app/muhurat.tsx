@@ -176,7 +176,7 @@ export default function MuhuratScreen() {
                       i === monthData.dates.length - 1 && { borderBottomWidth: 0 },
                     ]}
                   >
-                    <View style={[s.dateBox, { backgroundColor: d.good ? `${cat.color}18` : "rgba(239,68,68,0.08)", borderColor: d.good ? `${cat.color}40` : "rgba(239,68,68,0.2)" }]}>
+                    <View style={[s.dateBox, { backgroundColor: d.good ? (C.isDark ? `${cat.color}18` : `${cat.color}22`) : (C.isDark ? "rgba(239,68,68,0.08)" : "#FEE2E2"), borderColor: d.good ? `${cat.color}40` : "rgba(239,68,68,0.2)" }]}>
                       <Text style={[s.dateNum, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[1]}</Text>
                       <Text style={[s.dateMon, { color: d.good ? cat.color : "#ef4444" }]}>{d.date.split(" ")[0]}</Text>
                     </View>

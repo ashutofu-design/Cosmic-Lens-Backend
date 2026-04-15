@@ -108,7 +108,7 @@ export default function LuckyScreen() {
         <Card title="🔢 LUCKY ANKA (NUMBERS)">
           <View style={{ flexDirection: "row", gap: 10 }}>
             {lucky.numbers.map(n => (
-              <View key={n} style={[s.numCircle, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b44" }]}>
+              <View key={n} style={[s.numCircle, { backgroundColor: C.isDark ? "#f59e0b22" : C.warningBg, borderColor: C.isDark ? "#f59e0b44" : C.warningBorder }]}>
                 <Text style={[s.numText, { color: "#f59e0b" }]}>{n}</Text>
               </View>
             ))}
@@ -119,7 +119,7 @@ export default function LuckyScreen() {
         <Card title="📅 LUCKY DIN (DAYS)">
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {lucky.days.map(d => (
-              <View key={d} style={[s.chip, { backgroundColor: "#22c55e14", borderColor: "#22c55e40" }]}>
+              <View key={d} style={[s.chip, { backgroundColor: C.isDark ? "#22c55e14" : "#DCFCE7", borderColor: C.isDark ? "#22c55e40" : "#86EFAC" }]}>
                 <Text style={[s.chipText, { color: "#22c55e" }]}>{d}</Text>
               </View>
             ))}
@@ -170,7 +170,7 @@ export default function LuckyScreen() {
 
         {/* Mantra */}
         <Card title="🔔 GRAHA MANTRA">
-          <View style={[s.mantraBox, { backgroundColor: "#f59e0b08", borderColor: "#f59e0b30" }]}>
+          <View style={[s.mantraBox, { backgroundColor: C.isDark ? "#f59e0b08" : C.warningBg, borderColor: C.isDark ? "#f59e0b30" : C.warningBorder }]}>
             <Text style={[s.mantraText, { color: "#f59e0b" }]}>{lucky.mantra}</Text>
             <Text style={[s.mantraTip, { color: C.textMuted }]}>Roshandar ya Shubh muhurat mein 108 baar jaap karein</Text>
           </View>

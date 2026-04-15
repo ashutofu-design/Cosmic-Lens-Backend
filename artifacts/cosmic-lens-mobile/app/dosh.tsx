@@ -429,15 +429,15 @@ export default function DoshScreen() {
 
         {/* Summary bar */}
         <View style={s.summaryRow}>
-          <View style={[s.summaryChip, { borderColor: "rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }]}>
+          <View style={[s.summaryChip, { borderColor: "rgba(239,68,68,0.3)", backgroundColor: C.isDark ? "rgba(239,68,68,0.08)" : "#FEE2E2" }]}>
             <Text style={[s.summaryNum, { color: "#ef4444" }]}>{presentCount}</Text>
             <Text style={[s.summaryLabel, { color: C.textMuted }]}>Doshas Mili</Text>
           </View>
-          <View style={[s.summaryChip, { borderColor: "rgba(249,115,22,0.3)", backgroundColor: "rgba(249,115,22,0.08)" }]}>
+          <View style={[s.summaryChip, { borderColor: "rgba(249,115,22,0.3)", backgroundColor: C.isDark ? "rgba(249,115,22,0.08)" : "#FFF7ED" }]}>
             <Text style={[s.summaryNum, { color: "#f97316" }]}>{strongCount}</Text>
             <Text style={[s.summaryLabel, { color: C.textMuted }]}>Poorn Dosh</Text>
           </View>
-          <View style={[s.summaryChip, { borderColor: "rgba(34,197,94,0.3)", backgroundColor: "rgba(34,197,94,0.08)" }]}>
+          <View style={[s.summaryChip, { borderColor: "rgba(34,197,94,0.3)", backgroundColor: C.isDark ? "rgba(34,197,94,0.08)" : "#DCFCE7" }]}>
             <Text style={[s.summaryNum, { color: "#22c55e" }]}>{doshas.length - presentCount}</Text>
             <Text style={[s.summaryLabel, { color: C.textMuted }]}>Dosh Mukt</Text>
           </View>

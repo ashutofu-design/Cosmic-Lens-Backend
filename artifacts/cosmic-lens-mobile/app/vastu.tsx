@@ -376,7 +376,7 @@ function VastuCompass() {
           <Text style={[cp.heading, { color: C.text }]}>Vastu Compass</Text>
           <Text style={[cp.subhead, { color: C.textMuted }]}>वास्तु कम्पास</Text>
         </View>
-        <View style={[cp.badge, { backgroundColor: isLive ? "#16a34a18" : "#64748b18" }]}>
+        <View style={[cp.badge, { backgroundColor: isLive ? (C.isDark ? "#16a34a18" : "#DCFCE7") : (C.isDark ? "#64748b18" : "#F1F5F9") }]}>
           <View style={[cp.dot, { backgroundColor: isLive ? "#22c55e" : "#64748b" }]} />
           <Text style={[cp.badgeTxt, { color: isLive ? "#22c55e" : "#94a3b8" }]}>
             {isLive ? "LIVE" : "STATIC"}

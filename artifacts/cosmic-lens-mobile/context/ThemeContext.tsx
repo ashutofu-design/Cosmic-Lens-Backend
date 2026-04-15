@@ -76,36 +76,36 @@ export const DARK: ThemeColors = {
   isDark: true,
 };
 
-// ── Light — Warm Lavender + Amber Gold ────────────────────────────────────────
+// ── Light — Premium Slate + Indigo ────────────────────────────────────────────
 export const LIGHT: ThemeColors = {
-  bg:      "#faf5ff",
-  bgCard:  "rgba(255,255,255,0.82)",
-  bgCard2: "rgba(243,235,255,0.72)",
-  bgCard3: "rgba(237,224,255,0.62)",
+  bg:      "#F5F7FB",
+  bgCard:  "#FFFFFF",
+  bgCard2: "#F8FAFC",
+  bgCard3: "#F1F5F9",
 
-  text:      "#1e0a3c",
-  textMid:   "#6b46c1",
-  textMuted: "#9f7aea",
-  textDim:   "#d8b4fe",
+  text:      "#0F172A",   // slate-900  — headings
+  textMid:   "#334155",   // slate-700  — body
+  textMuted: "#64748B",   // slate-500  — secondary
+  textDim:   "#94A3B8",   // slate-400  — placeholder / dim
 
-  accent:   "#d97706",
-  accentBg: "rgba(217,119,6,0.09)",
+  accent:   "#6366F1",    // indigo-500 — primary action
+  accentBg: "rgba(99,102,241,0.08)",
 
-  border:  "rgba(109,40,217,0.09)",
-  border2: "rgba(109,40,217,0.16)",
-  border3: "rgba(109,40,217,0.05)",
+  border:  "#E2E8F0",     // slate-200
+  border2: "#CBD5E1",     // slate-300
+  border3: "#F1F5F9",     // slate-100
 
-  switchTrackOff: "#e9d8fd",
-  navBg:     "#ffffff",
-  navBorder: "rgba(109,40,217,0.09)",
-  inputBg:   "#faf5ff",
-  inputBorder: "rgba(109,40,217,0.13)",
+  switchTrackOff: "#E2E8F0",
+  navBg:     "#FFFFFF",
+  navBorder: "#E2E8F0",
+  inputBg:   "#F8FAFC",
+  inputBorder: "#CBD5E1",
 
-  shimmer1: "rgba(243,235,255,0.9)",
-  shimmer2: "rgba(233,216,253,0.9)",
-  shimmer3: "rgba(243,235,255,0.9)",
+  shimmer1: "rgba(248,250,252,0.95)",
+  shimmer2: "rgba(241,245,249,0.95)",
+  shimmer3: "rgba(248,250,252,0.95)",
 
-  cardShadow: "0 4px 24px rgba(109,40,217,0.10), 0 1px 0 rgba(255,255,255,0.80) inset",
+  cardShadow: "0 1px 3px rgba(15,23,42,0.06), 0 4px 20px rgba(99,102,241,0.08), 0 1px 0 rgba(255,255,255,1) inset",
 
   statusBar: "dark-content",
   isDark: false,

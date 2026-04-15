@@ -154,7 +154,7 @@ export default function LoginScreen() {
           {/* ── Logo ── */}
           <View style={s.logoWrap}>
             <View style={[s.logoCircle, {
-              backgroundColor: isDark ? "#1a1330" : "#f3ebff",
+              backgroundColor: isDark ? "#1a1330" : "#F1F5F9",
               borderColor: "rgba(245,158,11,0.45)",
               shadowColor: "#f59e0b",
             }]}>
@@ -190,7 +190,7 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
             <Pressable
-              style={[s.methodBtn, method === "email" && [s.methodBtnActive, { borderColor: "rgba(139,92,246,0.35)", backgroundColor: isDark ? "rgba(139,92,246,0.08)" : "rgba(139,92,246,0.06)" }]]}
+              style={[s.methodBtn, method === "email" && [s.methodBtnActive, { borderColor: "rgba(99,102,241,0.35)", backgroundColor: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.06)" }]]}
               onPress={() => switchMethod("email")}
             >
               <Feather name="mail" size={15} color={method === "email" ? "#a78bfa" : C.textMuted} />
@@ -209,9 +209,9 @@ export default function LoginScreen() {
               {/* Phone row with +91 prefix */}
               <View style={[
                 s.phoneRow,
-                { backgroundColor: C.inputBg, borderColor: mobileError ? "rgba(239,68,68,0.5)" : "rgba(139,92,246,0.18)" }
+                { backgroundColor: C.inputBg, borderColor: mobileError ? "rgba(239,68,68,0.5)" : C.inputBorder }
               ]}>
-                <View style={[s.phonePrefix, { borderRightColor: isDark ? "rgba(139,92,246,0.18)" : "rgba(109,40,217,0.13)" }]}>
+                <View style={[s.phonePrefix, { borderRightColor: isDark ? "rgba(139,92,246,0.18)" : "#CBD5E1" }]}>
                   <Text style={[s.phonePrefixFlag]}>🇮🇳</Text>
                   <Text style={[s.phonePrefixCode, { color: C.textMid }]}>+91</Text>
                 </View>
@@ -220,7 +220,7 @@ export default function LoginScreen() {
                   value={mobile}
                   onChangeText={v => { setMobile(v.replace(/\D/g, "").slice(0, 10)); setMobileError(""); }}
                   placeholder="10-digit number"
-                  placeholderTextColor={isDark ? "#3d2b6b" : "#b39ddb"}
+                  placeholderTextColor={isDark ? "#3d2b6b" : "#94A3B8"}
                   keyboardType="number-pad"
                   maxLength={10}
                   returnKeyType="done"
@@ -441,13 +441,15 @@ const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
       <View style={[
         fi.row,
         { backgroundColor: inputBg },
-        focused ? fi.rowFocused : { borderColor: isDark ? "rgba(139,92,246,0.18)" : "rgba(109,40,217,0.13)" },
+        focused
+          ? { borderColor: isDark ? "rgba(245,158,11,0.45)" : "rgba(99,102,241,0.45)" }
+          : { borderColor: isDark ? "rgba(139,92,246,0.18)" : "#CBD5E1" },
       ]}>
-        <Feather name={icon} size={16} color={focused ? "#f59e0b" : (isDark ? "#7c6fa0" : "#9f7aea")} />
+        <Feather name={icon} size={16} color={focused ? (isDark ? "#f59e0b" : "#6366F1") : (isDark ? "#7c6fa0" : "#64748B")} />
         <TextInput
           ref={ref}
           style={[fi.input, { color: textColor }]}
-          placeholderTextColor={isDark ? "#3d2b6b" : "#b39ddb"}
+          placeholderTextColor={isDark ? "#3d2b6b" : "#94A3B8"}
           autoCorrect={false}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -455,7 +457,7 @@ const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
         />
         {rightIcon && (
           <Pressable onPress={onRightIconPress} hitSlop={10}>
-            <Feather name={rightIcon} size={16} color={isDark ? "#7c6fa0" : "#9f7aea"} />
+            <Feather name={rightIcon} size={16} color={isDark ? "#7c6fa0" : "#64748B"} />
           </Pressable>
         )}
       </View>

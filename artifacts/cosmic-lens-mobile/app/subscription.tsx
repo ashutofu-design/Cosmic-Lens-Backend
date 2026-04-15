@@ -191,14 +191,14 @@ export default function SubscriptionScreen() {
 
         {/* ── Hero banner ── */}
         <LinearGradient
-          colors={isDark ? ["#1a1330", "#0c0818"] : ["#f3ebff", "#faf5ff"]}
+          colors={isDark ? ["#1a1330", "#0c0818"] : ["#EEF2FF", "#F5F7FB"]}
           style={s.heroBanner}
         >
           <View style={s.heroIconRow}>
             <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>
               <Text style={{ fontSize: 22 }}>⭐</Text>
             </View>
-            <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(167,139,250,0.12)" : "rgba(167,139,250,0.10)" }]}>
+            <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.09)" }]}>
               <Text style={{ fontSize: 22 }}>🔭</Text>
             </View>
             <View style={[s.heroIcon, { backgroundColor: isDark ? "rgba(245,158,11,0.12)" : "rgba(245,158,11,0.10)" }]}>

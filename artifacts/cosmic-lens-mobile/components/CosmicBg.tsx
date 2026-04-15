@@ -113,8 +113,8 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
         </>
       ) : (
         <LinearGradient
-          colors={["rgba(139,92,246,0.06)", "rgba(109,40,217,0.03)", "transparent"]}
-          style={[s.wash, { top: 0, height: H * 0.40 }]}
+          colors={["rgba(99,102,241,0.05)", "rgba(99,102,241,0.02)", "transparent"]}
+          style={[s.wash, { top: 0, height: H * 0.35 }]}
           start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
         />
       )}

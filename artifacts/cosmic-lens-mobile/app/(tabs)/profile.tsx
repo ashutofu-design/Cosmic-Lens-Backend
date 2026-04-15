@@ -539,8 +539,6 @@ export default function ProfileScreen() {
   const [showLang,         setShowLang]         = useState(false);
   const [confirmDelete,    setConfirmDelete]    = useState<string | null>(null);
   const [switching,        setSwitching]        = useState(false);
-  const [billingCycle,     setBillingCycle]     = useState<BillingCycle>("monthly");
-  const [showSubModal,     setShowSubModal]     = useState(false);
   const [showRelationPick, setShowRelationPick] = useState(false);
 
   const t = getT(language);
@@ -605,67 +603,6 @@ export default function ProfileScreen() {
         onClose={() => setShowLang(false)}
       />
 
-      {/* Subscription Modal */}
-      <Modal visible={showSubModal} transparent animationType="slide" onRequestClose={() => setShowSubModal(false)}>
-        <View style={subm.overlay}>
-          <View style={[subm.sheet, { backgroundColor: C.bg }]}>
-            {/* Handle bar */}
-            <View style={subm.handle} />
-
-            {/* Header */}
-            <View style={subm.header}>
-              <View>
-                <Text style={[subm.title, { color: C.text }]}>{t.subscription}</Text>
-                <Text style={[subm.subtitle, { color: C.textMuted }]}>Apna plan choose karein</Text>
-              </View>
-              <Pressable onPress={() => setShowSubModal(false)} style={subm.closeBtn} hitSlop={12}>
-                <Feather name="x" size={18} color={C.textMuted} />
-              </Pressable>
-            </View>
-
-            {/* Current plan strip */}
-            <View style={[subm.currentStrip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <View style={sub.freeDot} />
-              <View style={{ flex: 1 }}>
-                <Text style={[subm.currentPlan, { color: C.text }]}>Free Plan — Active</Text>
-                <Text style={[subm.currentSub, { color: C.textMuted }]}>Upgrade for full Vedic astrology access</Text>
-              </View>
-            </View>
-
-            {/* Billing cycle toggle */}
-            <View style={sb.cycleRow}>
-              {(["monthly","yearly"] as BillingCycle[]).map(c => (
-                <Pressable key={c}
-                  onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
-                  style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
-                >
-                  <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
-                    {c === "monthly" ? "Monthly" : "Yearly"}
-                  </Text>
-                  {c === "yearly" && (
-                    <View style={sb.savePill}>
-                      <Text style={sb.savePillTxt}>44% OFF</Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Plan cards */}
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
-              {PLANS.map(plan => (
-                <PlanCard
-                  key={plan.key}
-                  plan={plan}
-                  cycle={billingCycle}
-                  isCurrent={plan.key === "free"}
-                  onPress={() => {}}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       <ScrollView
         contentContainerStyle={{
@@ -758,10 +695,10 @@ export default function ProfileScreen() {
             <SettingRow
               icon="star"
               label={t.subscription}
-              onPress={() => { setShowSubModal(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <View style={[sub.freeDotSm]} />
+                  <View style={{ width:7, height:7, borderRadius:3.5, backgroundColor:"#64748b" }} />
                   <Text style={{ color:"#64748b", fontSize:12, fontFamily:F.medium }}>Free Plan</Text>
                   <Feather name="chevron-right" size={14} color="#1e3a5f" />
                 </View>

@@ -260,19 +260,21 @@ function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
 
 // ── Pro Insights Panel + Shared sub-components ───────────────────────────────
 function PipBadge({type}:{type:"most"|"critical"|"premium"|"secret"|"decision"|null|undefined}){
+  const C=useC();
   if(!type)return null;
-  const M:{[k:string]:{bg:string;bdr:string;txt:string;lbl:string}}={
-    most:    {bg:"rgba(244,63,94,0.18)",  bdr:"rgba(244,63,94,0.5)",    txt:"#fb7185",lbl:"MOST IMPORTANT"},
-    critical:{bg:"rgba(239,68,68,0.16)",  bdr:"rgba(239,68,68,0.45)",   txt:"#f87171",lbl:"CRITICAL CHECK"},
-    decision:{bg:"rgba(249,115,22,0.16)", bdr:"rgba(249,115,22,0.45)",  txt:"#fb923c",lbl:"DECISION CARD"},
-    premium: {bg:"rgba(139,92,246,0.16)", bdr:"rgba(139,92,246,0.4)",   txt:"#c4b5fd",lbl:"PREMIUM"},
-    secret:  {bg:"rgba(192,132,252,0.16)",bdr:"rgba(192,132,252,0.4)",  txt:"#e879f9",lbl:"SECRET"},
+  type BadgeSpec={bg:string;bdr:string;txtD:string;txtL:string;lbl:string};
+  const M:{[k:string]:BadgeSpec}={
+    most:    {bg:"rgba(244,63,94,0.15)",  bdr:"rgba(244,63,94,0.45)",   txtD:"#fb7185",txtL:"#be123c",lbl:"MOST IMPORTANT"},
+    critical:{bg:"rgba(239,68,68,0.13)",  bdr:"rgba(239,68,68,0.40)",   txtD:"#f87171",txtL:"#dc2626",lbl:"CRITICAL CHECK"},
+    decision:{bg:"rgba(249,115,22,0.13)", bdr:"rgba(249,115,22,0.40)",  txtD:"#fb923c",txtL:"#ea580c",lbl:"DECISION CARD"},
+    premium: {bg:"rgba(109,93,246,0.12)", bdr:"rgba(109,93,246,0.38)",  txtD:"#c4b5fd",txtL:"#6D5DF6",lbl:"PREMIUM"},
+    secret:  {bg:"rgba(147,51,234,0.12)", bdr:"rgba(147,51,234,0.38)",  txtD:"#e879f9",txtL:"#9333ea",lbl:"SECRET"},
   };
   const b=M[type]; if(!b)return null;
   return(
     <View style={{backgroundColor:b.bg,borderRadius:6,paddingHorizontal:7,paddingVertical:3,
       borderWidth:1,borderColor:b.bdr,alignSelf:"flex-start"}}>
-      <Text style={{color:b.txt,fontSize:8,fontFamily:"Nunito_700Bold",letterSpacing:0.9}}>{b.lbl}</Text>
+      <Text style={{color:C.isDark?b.txtD:b.txtL,fontSize:8,fontFamily:"Nunito_700Bold",letterSpacing:0.9}}>{b.lbl}</Text>
     </View>
   );
 }
@@ -353,8 +355,8 @@ function ProInsightsPanel(){
                 <Text style={{color:C.isDark?"rgba(196,181,253,0.65)":"#6d28d9",fontSize:12,
                   fontFamily:"Nunito_700Bold"}}>{title}</Text>
                 <View style={{flexDirection:"row",alignItems:"center",gap:4}}>
-                  <Feather name="lock" size={9} color="#a78bfa"/>
-                  <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Unlock to reveal hidden truths</Text>
+                  <Feather name="lock" size={9} color={C.isDark?"#a78bfa":"#6D5DF6"}/>
+                  <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Unlock to reveal hidden truths</Text>
                 </View>
               </View>
             </View>
@@ -453,9 +455,9 @@ function ProInsightsPanel(){
             borderColor:"rgba(139,92,246,0.15)",marginBottom:10}}>
             {[["36","Points"],["12","Insights"],["8","Checks"]].map(([n,l],i)=>(
               <View key={l} style={{flexDirection:"row",alignItems:"center",gap:i<2?6:0}}>
-                <Text style={{color:"#a78bfa",fontSize:13,fontFamily:"Nunito_700Bold"}}>{n} </Text>
+                <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:13,fontFamily:"Nunito_700Bold"}}>{n} </Text>
                 <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{l}</Text>
-                {i<2&&<Text style={{color:"rgba(139,92,246,0.3)",fontSize:13,marginLeft:6}}>•</Text>}
+                {i<2&&<Text style={{color:C.isDark?"rgba(139,92,246,0.3)":"rgba(109,93,246,0.3)",fontSize:13,marginLeft:6}}>•</Text>}
               </View>
             ))}
           </View>
@@ -466,10 +468,10 @@ function ProInsightsPanel(){
               <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
                 Compatibility Score
               </Text>
-              <Text style={{color:"#a78bfa",fontSize:12,fontFamily:"Nunito_700Bold"}}>72%</Text>
+              <Text style={{color:C.isDark?"#a78bfa":"#6D5DF6",fontSize:12,fontFamily:"Nunito_700Bold"}}>72%</Text>
             </View>
-            <View style={{height:6,borderRadius:3,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(99,102,241,0.1)",overflow:"hidden"}}>
-              <LinearGradient colors={["#6366f1","#a78bfa","#c084fc"]}
+            <View style={{height:6,borderRadius:3,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(109,93,246,0.1)",overflow:"hidden"}}>
+              <LinearGradient colors={["#6366f1","#8B5CF6","#6D5DF6"]}
                 start={{x:0,y:0}} end={{x:1,y:0}}
                 style={{width:"72%",height:"100%",borderRadius:3}}/>
             </View>
@@ -1138,7 +1140,7 @@ export default function KundliMilanScreen(){
         <LinearGradient
           colors={C.isDark
             ?isPro?["#240041","#0B0F19"]:["#1a0533","#0B0F19"]
-            :["#ede9fe","#F8FAFC"]}
+            :["#EDE9FE","#F8F9FC"]}
           style={[ms.header,{paddingTop:topPad+4}]}>
           <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
             <Pressable onPress={()=>router.back()} style={ms.backBtn}>

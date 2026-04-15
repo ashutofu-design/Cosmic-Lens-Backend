@@ -890,6 +890,23 @@ export default function KundliScreen() {
         <Feather name="chevron-right" size={16} color="#f59e0b" style={{ opacity: 0.7 }} />
       </Pressable>
 
+      {/* Daily Alerts shortcut */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/daily-alerts"); }}
+        style={({ pressed }) => [s.planetBtn, { borderColor:"rgba(99,102,241,0.35)", backgroundColor:"rgba(99,102,241,0.06)" }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+      >
+        <View style={s.planetBtnLeft}>
+          <View style={[s.planetBtnIcon, { backgroundColor:"rgba(99,102,241,0.12)", borderColor:"rgba(99,102,241,0.25)" }]}>
+            <Feather name="bell" size={16} color="#818cf8" />
+          </View>
+          <View>
+            <Text style={[s.planetBtnTitle, { color:"#818cf8" }]}>Daily Alerts</Text>
+            <Text style={[s.planetBtnSub, { color: C.textMuted }]}>4-day planetary guidance · आज का संकेत</Text>
+          </View>
+        </View>
+        <Feather name="chevron-right" size={16} color="#818cf8" style={{ opacity: 0.7 }} />
+      </Pressable>
+
       {/* Tab heading */}
       <Text style={s.sectionTitle}>
         {activeTab==="Kundli"?"DASHA TIMELINE"

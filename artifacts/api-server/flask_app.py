@@ -839,6 +839,262 @@ def numerology_advanced():
 _DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      "..", "cosmic-lens", "dist", "public")
 
+@app.route("/api/daily_alerts", methods=["POST"])
+def daily_alerts():
+    """
+    Generate personalized 4-day daily alert cards for the Cosmic Lens app.
+    POST body: {
+      "lagna_deg": float,        # ascendant degree (sidereal)
+      "nakshatra": str,          # natal moon nakshatra name
+      "mahadasha": str,          # current mahadasha lord
+      "antardasha": str,         # current antardasha lord (optional)
+      "moon_lon": float          # natal moon longitude (optional, for fallback)
+    }
+    Returns: { "days": [ { label, emoji, date, energy, score, insight,
+                           tags, lucky_color, lucky_number, moon_sign,
+                           moon_nakshatra, dasha_note } ] }
+    """
+    import swisseph as swe
+    from datetime import datetime, timedelta
+    import math, random
+
+    data       = request.get_json(force=True, silent=True) or {}
+    lagna_deg  = float(data.get("lagna_deg", 0))
+    birth_nak  = data.get("nakshatra", "")
+    mahadasha  = data.get("mahadasha", "")
+    antardasha = data.get("antardasha", "")
+
+    RASHI_EN = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    RASHI_HI = ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या",
+                "तुला","वृश्चिक","धनु","मकर","कुम्भ","मीन"]
+
+    NAKSHATRAS = [
+        "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
+        "Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati",
+        "Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana",
+        "Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati",
+    ]
+    # Tara names and base scores (index 0–8 cycled)
+    TARA_INFO = [
+        ("Janma", 50),      # 0 — mixed
+        ("Sampat", 82),     # 1 — good
+        ("Vipat", 25),      # 2 — challenging
+        ("Kshema", 78),     # 3 — good
+        ("Pratyari", 32),   # 4 — challenging
+        ("Sadhaka", 90),    # 5 — very good
+        ("Naidhana", 10),   # 6 — very challenging
+        ("Mitra", 75),      # 7 — good
+        ("Ati-Mitra", 95),  # 8 — excellent
+    ]
+
+    # Moon house scores (relative to lagna)
+    HOUSE_SCORES = {1:70,2:52,3:58,4:72,5:82,6:35,7:65,8:28,9:80,10:75,11:85,12:32}
+
+    # Benefic/malefic dasha lords
+    BENEFIC = {"Jupiter","Venus","Moon","Mercury"}
+    MALEFIC  = {"Saturn","Mars","Rahu","Ketu","Sun"}
+
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    lagna_rashi  = int(lagna_deg / 30) % 12
+    birth_nak_idx = NAKSHATRAS.index(birth_nak) if birth_nak in NAKSHATRAS else -1
+
+    # Dasha lord nature bonus/penalty
+    dasha_bonus = 0
+    if mahadasha in BENEFIC:   dasha_bonus += 8
+    elif mahadasha in MALEFIC: dasha_bonus -= 8
+    if antardasha in BENEFIC:  dasha_bonus += 4
+    elif antardasha in MALEFIC:dasha_bonus -= 4
+
+    # Insight message pools
+    GOOD_INSIGHTS = [
+        ("Aaj ka din aapke liye shubh hai. Naye kaam shuru karne ka sahi samay hai.", "Today is auspicious. Start new ventures with confidence."),
+        ("Moon ki position aapke liye anukool hai. Career mein progress milegi.", "The Moon's placement favors you today — career progress is indicated."),
+        ("Jupiter ka ashirvaad aaj aap par hai. Important decisions le sakte hain.", "Jupiter blesses your day. Take important decisions with clarity."),
+        ("Aaj aapki communication skills peak par hain. Meetings aur negotiations sahi rahenge.", "Communication is sharp today. Meetings and negotiations will go your way."),
+        ("Positive energy ka pravaah ho raha hai. Health aur relationship dono achhe rahenge.", "Positive planetary flow today. Health and relationships are both favorable."),
+        ("Aaj luck aapka saath dega. Naye log milenge jo helpful honge.", "Luck is on your side. You may meet helpful people who open new doors."),
+        ("Moon Tara aapke janma nakshatra se saadhaka stithi mein hai. Yeh din safal rahega.", "The Moon forms a Sadhaka Tara with your natal star — success is favored today."),
+    ]
+    NEUTRAL_INSIGHTS = [
+        ("Din theek thak rahega. Bade faisale avoid karein, routine mein focus rakhein.", "A steady, moderate day. Focus on routine tasks; avoid major decisions."),
+        ("Aaj mixed energy hai. Kuch kaam ban jayenge, kuch mein thodi der lagegi.", "Mixed energy today. Some tasks will flow easily, others need patience."),
+        ("Moon transit bata raha hai ki aaj average energy hai. Stability maintain rakhein.", "Moon's transit indicates average energy. Maintain stability and stay grounded."),
+        ("Aaj ka din neutral hai. Planning aur preparation ke liye achha samay hai.", "A neutral day — ideal for planning, organizing, and preparation."),
+        ("Na zyada anukool, na pratikal. Steady progress possible hai.", "Neither highly favorable nor challenging. Steady progress is possible."),
+    ]
+    CHALLENGING_INSIGHTS = [
+        ("Aaj thoda mentally heavy feel ho sakta hai. Important decisions postpone karein.", "Today may feel mentally heavy. Postpone important decisions if possible."),
+        ("Moon ki position aaj dushtana mein hai. Patience rakhein, reactivity se bachein.", "Moon is in a dushtana position today. Stay patient and avoid reactive decisions."),
+        ("Shani ya Mangal ka prabhav hai aaj. Arguments aur accidents se bachein.", "Saturn or Mars influence today. Avoid arguments and be careful while traveling."),
+        ("Aaj energy low rahegi. Rest aur reflection ke liye sahi samay hai.", "Energy is lower today. Rest, reflect, and avoid overcommitting."),
+        ("Vipat Tara chal raha hai — thoda sochsamajh kar kadam rakhein.", "Vipat Tara is active — tread carefully and think before acting."),
+        ("Naidhana Tara ka prabhav hai. Major new beginnings aaj avoid karein.", "Naidhana Tara is active. Avoid major new beginnings or financial commitments today."),
+    ]
+
+    LUCKY_COLORS = {
+        "good":        [("Peela","#eab308"),("Hari","#22c55e"),("Neela","#3b82f6"),("Sona","#f59e0b")],
+        "neutral":     [("Safed","#e2e8f0"),("Violet","#8b5cf6"),("Peach","#fb923c"),("Sky","#7dd3fc")],
+        "challenging": [("Laal","#ef4444"),("Maroon","#991b1b"),("Bhura","#92400e"),("Slate","#64748b")],
+    }
+    LUCKY_NUMBERS = {
+        "good":        [[1,9],[3,6],[2,7],[5,9],[1,4]],
+        "neutral":     [[2,5],[4,8],[3,7],[6,9],[1,6]],
+        "challenging": [[4,7],[8,2],[3,9],[5,8],[2,6]],
+    }
+
+    TAG_POOLS = {
+        "good":        [["💰 Opportunity","✨ Positive"],["💰 Opportunity","❤️ Favorable"],["✨ Positive","💡 Growth"]],
+        "neutral":     [["🔄 Mixed","💡 Planning"],["🔄 Mixed","⚖️ Balance"],["💡 Reflection","⚖️ Balance"]],
+        "challenging": [["⚠️ Warning","❤️ Emotional"],["⚠️ Caution","🧘 Rest"],["⚠️ Warning","🔄 Introspect"]],
+    }
+
+    DAY_META = [
+        {"offset": -1, "label": "Previous Day", "label_hi": "कल था",      "emoji": "⏮️"},
+        {"offset":  0, "label": "Today",         "label_hi": "आज",         "emoji": "📍"},
+        {"offset":  1, "label": "Tomorrow",      "label_hi": "कल",         "emoji": "⏭️"},
+        {"offset":  2, "label": "Day After",     "label_hi": "परसों",      "emoji": "🔮"},
+    ]
+
+    today_utc = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+    results   = []
+
+    for meta in DAY_META:
+        day = today_utc + timedelta(days=meta["offset"])
+        jd  = swe.julday(day.year, day.month, day.day, 12.0)
+
+        # ── Moon position ──
+        moon_res    = swe.calc_ut(jd, swe.MOON, flags)
+        moon_lon    = moon_res[0][0] % 360
+        moon_rashi  = int(moon_lon / 30) % 12
+        moon_nak_idx= int(moon_lon / (360/27)) % 27
+        moon_nak    = NAKSHATRAS[moon_nak_idx]
+
+        # ── Tara (nakshatra relationship) ──
+        tara_score = 50
+        if birth_nak_idx >= 0:
+            tara_pos   = ((moon_nak_idx - birth_nak_idx + 27) % 27) % 9
+            tara_name, tara_score = TARA_INFO[tara_pos]
+        else:
+            tara_name = "Unknown"
+
+        # ── Moon house relative to lagna ──
+        moon_house  = (moon_rashi - lagna_rashi + 12) % 12 + 1
+        house_score = HOUSE_SCORES.get(moon_house, 50)
+
+        # ── Key transit aspects (Saturn & Mars) ──
+        try:
+            saturn_res = swe.calc_ut(jd, swe.SATURN, flags)
+            saturn_lon = saturn_res[0][0] % 360
+            saturn_rashi = int(saturn_lon / 30) % 12
+        except Exception:
+            saturn_rashi = -1
+
+        try:
+            mars_res   = swe.calc_ut(jd, swe.MARS, flags)
+            mars_lon   = mars_res[0][0] % 360
+            mars_rashi = int(mars_lon / 30) % 12
+        except Exception:
+            mars_rashi = -1
+
+        try:
+            jupiter_res   = swe.calc_ut(jd, swe.JUPITER, flags)
+            jupiter_rashi = int(jupiter_res[0][0] % 360 / 30) % 12
+        except Exception:
+            jupiter_rashi = -1
+
+        # Saturn 3rd, 7th, 10th aspect on moon sign → challenging
+        saturn_aspect = False
+        if saturn_rashi >= 0:
+            rel = (moon_rashi - saturn_rashi + 12) % 12
+            if rel in (2, 6, 9):  # Saturn 3rd/7th/10th aspect
+                saturn_aspect = True
+
+        # Mars 4th, 7th, 8th aspect on moon sign → warning
+        mars_aspect = False
+        if mars_rashi >= 0:
+            rel = (moon_rashi - mars_rashi + 12) % 12
+            if rel in (3, 6, 7):  # Mars aspects
+                mars_aspect = True
+
+        # Jupiter 5th, 7th, 9th aspect on moon sign → bonus
+        jupiter_aspect = False
+        if jupiter_rashi >= 0:
+            rel = (moon_rashi - jupiter_rashi + 12) % 12
+            if rel in (4, 6, 8):  # Jupiter aspects
+                jupiter_aspect = True
+
+        aspect_adj  = 0
+        if saturn_aspect: aspect_adj -= 10
+        if mars_aspect:   aspect_adj -= 8
+        if jupiter_aspect:aspect_adj += 10
+
+        # ── Composite score ──
+        raw_score = (tara_score * 0.50 + house_score * 0.35 + 50 * 0.15)
+        score     = int(max(5, min(98, raw_score + dasha_bonus + aspect_adj)))
+
+        # ── Energy level ──
+        if score >= 65:   energy_key = "good";        energy_label = "Good";        energy_color = "#22c55e"
+        elif score >= 42: energy_key = "neutral";     energy_label = "Neutral";     energy_color = "#f59e0b"
+        else:             energy_key = "challenging"; energy_label = "Challenging"; energy_color = "#ef4444"
+
+        # ── Insight message ──
+        seed = abs(hash(f"{day.date()}{birth_nak}{lagna_rashi}")) % 10000
+        rng  = random.Random(seed)
+
+        if energy_key == "good":
+            pair = rng.choice(GOOD_INSIGHTS)
+        elif energy_key == "neutral":
+            pair = rng.choice(NEUTRAL_INSIGHTS)
+        else:
+            pair = rng.choice(CHALLENGING_INSIGHTS)
+
+        # ── Dasha note ──
+        dasha_note = ""
+        if mahadasha:
+            if mahadasha in BENEFIC:
+                dasha_note = f"{mahadasha} Mahadasha — favorable planetary period active."
+            else:
+                dasha_note = f"{mahadasha} Mahadasha — exercise caution during this period."
+
+        # ── Lucky color + number ──
+        lc_list   = LUCKY_COLORS[energy_key]
+        ln_list   = LUCKY_NUMBERS[energy_key]
+        lc_name, lc_hex = rng.choice(lc_list)
+        ln_pair   = rng.choice(ln_list)
+        tags      = rng.choice(TAG_POOLS[energy_key])
+
+        results.append({
+            "offset":         meta["offset"],
+            "label":          meta["label"],
+            "label_hi":       meta["label_hi"],
+            "emoji":          meta["emoji"],
+            "date":           day.strftime("%Y-%m-%d"),
+            "date_display":   day.strftime("%d %b"),
+            "weekday":        day.strftime("%A"),
+            "energy":         energy_label,
+            "energy_color":   energy_color,
+            "score":          score,
+            "insight_hi":     pair[0],
+            "insight_en":     pair[1],
+            "moon_sign":      RASHI_EN[moon_rashi],
+            "moon_sign_hi":   RASHI_HI[moon_rashi],
+            "moon_house":     moon_house,
+            "moon_nakshatra": moon_nak,
+            "tara":           tara_name,
+            "saturn_aspect":  saturn_aspect,
+            "mars_aspect":    mars_aspect,
+            "jupiter_aspect": jupiter_aspect,
+            "tags":           tags,
+            "lucky_color_name": lc_name,
+            "lucky_color_hex":  lc_hex,
+            "lucky_numbers":    ln_pair,
+            "dasha_note":       dasha_note,
+        })
+
+    return jsonify({"days": results})
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):

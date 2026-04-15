@@ -308,31 +308,34 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 function DoshMini({ onPress }: { onPress: () => void }) {
   const blinkDot = useBlink(400, 400, 1400);
   const shimmerX = useShimmer(360);
+  const { C } = useColors();
+  const grad = C.isDark
+    ? (["#3b0a0a","#5c1111"] as const)
+    : (["#fff0f0","#ffe2e6"] as const);
+  const titleClr = C.isDark ? "#ffffff" : "#be123c";
+  const subClr   = C.isDark ? "rgba(255,255,255,0.45)" : "rgba(190,18,60,0.6)";
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
-      <LinearGradient colors={["#3b0a0a","#5c1111"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
+      <LinearGradient colors={grad} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"rgba(255,51,85,0.35)" }]} />
+        <View style={[mini.border, { borderColor: C.isDark ? "rgba(255,51,85,0.35)" : "rgba(255,51,85,0.20)" }]} />
 
-        {/* Icon circle */}
         <View style={[mini.iconCircle, { backgroundColor:"rgba(255,34,68,0.18)", borderColor:"rgba(255,34,68,0.35)" }]}>
           <Text style={mini.iconEmoji}>☿</Text>
         </View>
 
-        {/* Text block */}
         <View style={mini.textBlock}>
-          <Text style={mini.rowTitle}>Dosh Analysis</Text>
-          <Text style={mini.rowSub}>3 doshas detected in chart</Text>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>Dosh Analysis</Text>
+          <Text style={[mini.rowSub, { color: subClr }]}>3 doshas detected in chart</Text>
         </View>
 
-        {/* Right side */}
         <View style={mini.rightBlock}>
           <View style={[mini.badge, { backgroundColor:"rgba(255,34,68,0.18)", borderColor:"rgba(255,34,68,0.4)" }]}>
             <Animated.View style={[mini.badgeDot, { backgroundColor:"#ff2244", opacity: blinkDot }]} />
             <Text style={[mini.badgeTxt, { color:"#ff6b6b" }]}>LIVE</Text>
           </View>
-          <Feather name="chevron-right" size={14} color="rgba(255,107,107,0.5)" />
+          <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(255,107,107,0.5)" : "rgba(190,18,60,0.5)"} />
         </View>
       </LinearGradient>
     </Pressable>
@@ -343,20 +346,26 @@ function DoshMini({ onPress }: { onPress: () => void }) {
 function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
   const blinkDot = useBlink(350, 350, 1200);
   const shimmerX = useShimmer(360);
+  const { C } = useColors();
+  const grad = C.isDark
+    ? (["#2d1005","#5c2208"] as const)
+    : (["#fff5ec","#ffe8d0"] as const);
+  const titleClr = C.isDark ? "#ffffff" : "#c2410c";
+  const subClr   = C.isDark ? "rgba(255,255,255,0.45)" : "rgba(194,65,12,0.6)";
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
-      <LinearGradient colors={["#2d1005","#5c2208"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
+      <LinearGradient colors={grad} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"rgba(249,115,22,0.35)" }]} />
+        <View style={[mini.border, { borderColor: C.isDark ? "rgba(249,115,22,0.35)" : "rgba(249,115,22,0.22)" }]} />
 
         <View style={[mini.iconCircle, { backgroundColor:"rgba(249,115,22,0.18)", borderColor:"rgba(249,115,22,0.35)" }]}>
           <Text style={mini.iconEmoji}>⚡</Text>
         </View>
 
         <View style={mini.textBlock}>
-          <Text style={mini.rowTitle}>Risk Alert</Text>
-          <Text style={mini.rowSub}>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>Risk Alert</Text>
+          <Text style={[mini.rowSub, { color: subClr }]}>
             {activeDasha ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} Dasha active` : "2 risk periods ahead"}
           </Text>
         </View>
@@ -366,7 +375,7 @@ function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDash
             <Animated.View style={[mini.badgeDot, { backgroundColor:"#f97316", opacity: blinkDot }]} />
             <Text style={[mini.badgeTxt, { color:"#fb923c" }]}>ALERT</Text>
           </View>
-          <Feather name="chevron-right" size={14} color="rgba(251,146,60,0.5)" />
+          <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(251,146,60,0.5)" : "rgba(194,65,12,0.5)"} />
         </View>
       </LinearGradient>
     </Pressable>
@@ -376,20 +385,26 @@ function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDash
 // ── Kundli Milan Mini — full-width horizontal row ─────────────────────────────
 function MilanMini({ onPress }: { onPress: () => void }) {
   const shimmerX = useShimmer(360);
+  const { C } = useColors();
+  const grad = C.isDark
+    ? (["#1e0a3d","#3b1570"] as const)
+    : (["#f5f0ff","#ede0fe"] as const);
+  const titleClr = C.isDark ? "#ffffff" : "#6d28d9";
+  const subClr   = C.isDark ? "rgba(255,255,255,0.45)" : "rgba(109,40,217,0.6)";
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
-      <LinearGradient colors={["#1e0a3d","#3b1570"]} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
+      <LinearGradient colors={grad} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor:"rgba(168,85,247,0.35)" }]} />
+        <View style={[mini.border, { borderColor: C.isDark ? "rgba(168,85,247,0.35)" : "rgba(168,85,247,0.22)" }]} />
 
         <View style={[mini.iconCircle, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.35)" }]}>
           <Text style={mini.iconEmoji}>♥</Text>
         </View>
 
         <View style={mini.textBlock}>
-          <Text style={mini.rowTitle}>Kundli Milan</Text>
-          <Text style={mini.rowSub}>36 guna match · Vivah compatibility</Text>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>Kundli Milan</Text>
+          <Text style={[mini.rowSub, { color: subClr }]}>36 guna match · Vivah compatibility</Text>
         </View>
 
         <View style={mini.rightBlock}>
@@ -397,7 +412,7 @@ function MilanMini({ onPress }: { onPress: () => void }) {
             <Feather name="lock" size={8} color="#c084fc" />
             <Text style={[mini.badgeTxt, { color:"#c084fc" }]}>PRO</Text>
           </View>
-          <Feather name="chevron-right" size={14} color="rgba(192,132,252,0.5)" />
+          <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(192,132,252,0.5)" : "rgba(109,40,217,0.5)"} />
         </View>
       </LinearGradient>
     </Pressable>

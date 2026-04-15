@@ -5,6 +5,7 @@ import Svg, {
   LinearGradient, Stop,
 } from "react-native-svg";
 import { gradColor } from "@/lib/todayEnergyCalc";
+import { useC } from "@/context/ThemeContext";
 
 const N   = 12;
 const VW  = 300;
@@ -44,10 +45,11 @@ interface EnergyChartProps {
   labels: string[];
   finalEnergy: number | null;
   loading?: boolean;
-  instant?: boolean; // skip animation, render immediately
+  instant?: boolean;
 }
 
 export default function EnergyChart({ targetPts, labels, finalEnergy, loading, instant }: EnergyChartProps) {
+  const C = useC();
   const [animPts, setAnimPts]   = useState<number[]>(instant && targetPts.length > 0 ? [...targetPts] : Array(N).fill(0));
   const [animate, setAnimate]   = useState(instant && targetPts.length > 0);
   const [areaVis, setAreaVis]   = useState(instant && targetPts.length > 0);
@@ -62,7 +64,6 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
       return;
     }
 
-    // instant mode: snap to final values immediately
     if (instant) {
       setAnimPts([...targetPts]);
       setAnimate(true);
@@ -120,10 +121,23 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
   const fillPath = areaFill(animPts);
   const lx       = px(N - 1);
   const ly       = py(animPts[N - 1] ?? 0);
-  const finalClr = gradColor(1); // green for final
+  const finalClr = gradColor(1);
+
+  // Theme-aware colors
+  const gridLineStrong = C.isDark ? "#0d1e35" : "rgba(160,120,220,0.18)";
+  const gridLineDash   = C.isDark ? "#0a1828" : "rgba(160,120,220,0.10)";
+  const axisLabel      = C.isDark ? "#1a3050" : "#9f7aea";
+  const headerLabel    = C.isDark ? "#3d5a7a" : "#9f7aea";
+  const scoreText      = C.isDark ? "#dde8f4" : "#1e0a3c";
+  const scoreSub       = C.isDark ? "#2a3f5a" : "#7c5cbf";
+  const footerText     = C.isDark ? "#1a3050" : "#b4a0d8";
+  const glowCircle     = C.isDark ? "#0050bb" : "#c4b5fd";
+  const calloutFill    = C.isDark ? "#071a0e" : "rgba(255,255,255,0.92)";
+  const cardBg         = C.isDark ? "#040e20" : "rgba(255,255,255,0.82)";
+  const cardBorder     = C.isDark ? "rgba(0,200,255,0.18)" : "rgba(168,85,247,0.18)";
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: cardBorder }]}>
       <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display: "flex" }}>
         <Defs>
           <LinearGradient id="lg" x1={PL} y1="0" x2={PL + GW} y2="0" gradientUnits="userSpaceOnUse">
@@ -139,19 +153,19 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           </LinearGradient>
         </Defs>
 
-        {/* Dark atmospheric glow */}
-        <Circle cx={VW / 2} cy={BOT + 30} r={80} fill="#0050bb" opacity={0.14} />
+        {/* Atmospheric glow */}
+        <Circle cx={VW / 2} cy={BOT + 30} r={80} fill={glowCircle} opacity={C.isDark ? 0.14 : 0.08} />
 
         {/* Header */}
-        <SvgText x={PL} y={14} fill="#3d5a7a" fontSize={7} fontWeight="500" letterSpacing={2.2}>
+        <SvgText x={PL} y={14} fill={headerLabel} fontSize={7} fontWeight="500" letterSpacing={2.2}>
           TODAY'S ENERGY
         </SvgText>
 
         {/* Score number */}
-        <SvgText x={PL} y={40} fill="#dde8f4" fontSize={28} fontWeight="200" letterSpacing={-1.5}>
+        <SvgText x={PL} y={40} fill={scoreText} fontSize={28} fontWeight="200" letterSpacing={-1.5}>
           {loading ? "—" : (finalEnergy ?? "—")}
         </SvgText>
-        <SvgText x={PL + 41} y={40} fill="#2a3f5a" fontSize={11} fontWeight="400">
+        <SvgText x={PL + 41} y={40} fill={scoreSub} fontSize={11} fontWeight="400">
           /100
         </SvgText>
 
@@ -160,11 +174,11 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           <G key={v}>
             <Line
               x1={PL} y1={gy} x2={PL + GW} y2={gy}
-              stroke={v === 0 || v === 100 ? "#0d1e35" : "#0a1828"}
+              stroke={v === 0 || v === 100 ? gridLineStrong : gridLineDash}
               strokeWidth={v === 0 || v === 100 ? 1 : 0.8}
               strokeDasharray={v === 0 || v === 100 ? undefined : "4,10"}
             />
-            <SvgText x={PL - 7} y={gy + 3.5} textAnchor="end" fill="#1a3050" fontSize={8.5}>
+            <SvgText x={PL - 7} y={gy + 3.5} textAnchor="end" fill={axisLabel} fontSize={8.5}>
               {v}
             </SvgText>
           </G>
@@ -176,7 +190,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
             key={j}
             x1={PL + (j / 5) * GW} y1={PT}
             x2={PL + (j / 5) * GW} y2={BOT}
-            stroke="#0a1828" strokeWidth={0.7} strokeDasharray="4,10"
+            stroke={gridLineDash} strokeWidth={0.7} strokeDasharray="4,10"
           />
         ))}
 
@@ -185,7 +199,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           <Path d={fillPath} fill="url(#af)" opacity={areaVis ? 1 : 0} />
         )}
 
-        {/* Bloom layer (simulated by thick semi-transparent path) */}
+        {/* Bloom layer */}
         {targetPts.length > 0 && (
           <Path d={linePath} fill="none" stroke="url(#lg)" strokeWidth={16} opacity={0.12} strokeLinecap="butt" strokeLinejoin="miter" />
         )}
@@ -223,7 +237,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
         {targetPts.length > 0 && animate && finalEnergy != null && (
           <G>
             <Rect x={lx - 54} y={ly - 15} width={40} height={22} rx={7}
-              fill="#071a0e" stroke={finalClr} strokeOpacity={0.75} strokeWidth={1} />
+              fill={calloutFill} stroke={finalClr} strokeOpacity={0.75} strokeWidth={1} />
             <SvgText x={lx - 34} y={ly + 2.5} textAnchor="middle" fill={finalClr} fontSize={12} fontWeight="800">
               {finalEnergy}
             </SvgText>
@@ -252,7 +266,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
             <SvgText key={idx}
               x={px(idx)} y={BOT + BAR_MAX + 20}
               textAnchor="middle"
-              fill={isNow ? finalClr : "#1a3050"}
+              fill={isNow ? finalClr : axisLabel}
               fontSize={isNow ? 8.5 : 7.5}
               fontWeight={isNow ? "700" : "400"}
               opacity={animate ? 1 : 0}
@@ -263,13 +277,13 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
         })}
 
         {/* Footer */}
-        <SvgText x={VW / 2} y={VH - 8} textAnchor="middle" fill="#1a3050" fontSize={6.5} letterSpacing={2.5}>
+        <SvgText x={VW / 2} y={VH - 8} textAnchor="middle" fill={footerText} fontSize={6.5} letterSpacing={2.5}>
           NAVATARA  •  MOON TRANSIT  •  ASHTAKAVARGA
         </SvgText>
 
         {/* Loading state */}
         {loading && (
-          <SvgText x={VW / 2} y={VH / 2} textAnchor="middle" fill="#3d5a7a" fontSize={11}>
+          <SvgText x={VW / 2} y={VH / 2} textAnchor="middle" fill={headerLabel} fontSize={11}>
             Reading cosmic signals...
           </SvgText>
         )}
@@ -282,10 +296,8 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     width: "100%",
-    backgroundColor: "#040e20",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(0,200,255,0.18)",
     overflow: "hidden",
     shadowColor: "#006ec8",
     shadowOffset: { width: 0, height: 0 },

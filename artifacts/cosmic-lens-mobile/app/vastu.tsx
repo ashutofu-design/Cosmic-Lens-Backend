@@ -1,13 +1,460 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Magnetometer } from "expo-sensors";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Platform, Pressable, ScrollView,
+  Animated, Dimensions, Platform, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from "react-native";
+import Svg, {
+  Circle, Defs, G, Line, LinearGradient as SvgLinearGradient,
+  Path, Polygon, RadialGradient, Stop, Text as SvgText,
+} from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+
+// ── Compass constants ──────────────────────────────────────────────────────────
+const WW   = Dimensions.get("window").width;
+const SIZE = Math.min(WW - 40, 320);
+const CX   = SIZE / 2;
+const CY   = SIZE / 2;
+
+const BEZEL_OUTER_R  = SIZE * 0.490;
+const BEZEL_RING_R   = SIZE * 0.477;
+const BEZEL_INNER_R  = SIZE * 0.458;
+const ROSE_OUTER_R   = SIZE * 0.435;
+const ROSE_INNER_R   = SIZE * 0.178;
+const CENTER_R       = SIZE * 0.148;
+const LABEL_R        = SIZE * 0.370;
+const HINDI_R        = SIZE * 0.285;
+
+// ── Vastu direction data ───────────────────────────────────────────────────────
+const DIRS = [
+  { deg:   0, short: "N",  hindi: "उत्तर", sub: "Uttar",    elem: "Vaayu",  color: "#f59e0b" },
+  { deg:  45, short: "NE", hindi: "ईशान",  sub: "Ishaan",   elem: "Divya",  color: "#a78bfa" },
+  { deg:  90, short: "E",  hindi: "पूर्व",  sub: "Poorv",    elem: "Surya",  color: "#fbbf24" },
+  { deg: 135, short: "SE", hindi: "अग्नि",  sub: "Agni",     elem: "Agni",   color: "#f97316" },
+  { deg: 180, short: "S",  hindi: "दक्षिण", sub: "Dakshin",  elem: "Yama",   color: "#ef4444" },
+  { deg: 225, short: "SW", hindi: "नैऋत्य", sub: "Nairitya", elem: "Prithvi",color: "#84cc16" },
+  { deg: 270, short: "W",  hindi: "पश्चिम", sub: "Paschim",  elem: "Jal",    color: "#38bdf8" },
+  { deg: 315, short: "NW", hindi: "वायव्य", sub: "Vaayu",    elem: "Vayu",   color: "#34d399" },
+];
+
+// Compass bearing → SVG angle in radians (0° bearing = top)
+function toRad(bearing: number) { return ((bearing - 90) * Math.PI) / 180; }
+
+// Arc path for a donut sector
+function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a1: number) {
+  const s0 = toRad(a0), s1 = toRad(a1);
+  const laf = a1 - a0 > 180 ? 1 : 0;
+  const x1 = cx + r1 * Math.cos(s0), y1 = cy + r1 * Math.sin(s0);
+  const x2 = cx + r2 * Math.cos(s0), y2 = cy + r2 * Math.sin(s0);
+  const x3 = cx + r2 * Math.cos(s1), y3 = cy + r2 * Math.sin(s1);
+  const x4 = cx + r1 * Math.cos(s1), y4 = cy + r1 * Math.sin(s1);
+  return `M${x1},${y1} L${x2},${y2} A${r2},${r2},0,${laf},1,${x3},${y3} L${x4},${y4} A${r1},${r1},0,${laf},0,${x1},${y1}Z`;
+}
+
+// ── Compass Rose (rotates) ─────────────────────────────────────────────────────
+function CompassRose() {
+  const innerR = ROSE_INNER_R;
+  const outerR = ROSE_OUTER_R;
+
+  return (
+    <Svg width={SIZE} height={SIZE}>
+      <Defs>
+        {DIRS.map(d => (
+          <SvgLinearGradient key={`g-${d.short}`} id={`g-${d.short}`} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0"   stopColor={d.color} stopOpacity="1"    />
+            <Stop offset="1"   stopColor={d.color} stopOpacity="0.45" />
+          </SvgLinearGradient>
+        ))}
+        <RadialGradient id="ring-shine" cx="38%" cy="32%" r="70%">
+          <Stop offset="0"   stopColor="#f9d76b" stopOpacity="0.25" />
+          <Stop offset="1"   stopColor="#f9d76b" stopOpacity="0"    />
+        </RadialGradient>
+      </Defs>
+
+      {/* Direction sectors */}
+      {DIRS.map(d => {
+        const isCardinal = d.deg % 90 === 0;
+        const mid        = toRad(d.deg);
+        const lx         = CX + LABEL_R * Math.cos(mid);
+        const ly         = CY + LABEL_R * Math.sin(mid);
+        const hx         = CX + HINDI_R  * Math.cos(mid);
+        const hy         = CY + HINDI_R  * Math.sin(mid);
+        const path       = wedgePath(CX, CY, innerR, outerR, d.deg - 22.4, d.deg + 22.4);
+
+        return (
+          <G key={d.short}>
+            {/* Sector fill */}
+            <Path d={path} fill={`url(#g-${d.short})`} opacity={isCardinal ? 1 : 0.8} />
+            {/* Sector border */}
+            <Path d={path} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="0.8" />
+
+            {/* Cardinal arrow tip */}
+            {isCardinal && (() => {
+              const tip   = CX + (outerR + SIZE * 0.028) * Math.cos(mid);
+              const tipY  = CY + (outerR + SIZE * 0.028) * Math.sin(mid);
+              const bx1   = CX + outerR * Math.cos(mid - 0.16);
+              const by1   = CY + outerR * Math.sin(mid - 0.16);
+              const bx2   = CX + outerR * Math.cos(mid + 0.16);
+              const by2   = CY + outerR * Math.sin(mid + 0.16);
+              return (
+                <Polygon
+                  points={`${tip},${tipY} ${bx1},${by1} ${bx2},${by2}`}
+                  fill={d.color}
+                  stroke="#000"
+                  strokeWidth="0.5"
+                />
+              );
+            })()}
+
+            {/* Short code (N / NE / etc.) */}
+            <SvgText
+              x={lx} y={ly}
+              textAnchor="middle" alignmentBaseline="middle"
+              fill={isCardinal ? "#fff" : "#ffffffdd"}
+              fontSize={isCardinal ? SIZE * 0.062 : SIZE * 0.046}
+              fontWeight="900"
+            >
+              {d.short}
+            </SvgText>
+
+            {/* Hindi name */}
+            <SvgText
+              x={hx} y={hy}
+              textAnchor="middle" alignmentBaseline="middle"
+              fill={d.color}
+              fontSize={SIZE * 0.034}
+              fontWeight="600"
+            >
+              {d.hindi}
+            </SvgText>
+          </G>
+        );
+      })}
+
+      {/* Shine overlay */}
+      <Circle cx={CX} cy={CY} r={outerR} fill="url(#ring-shine)" />
+
+      {/* Inner separator ring */}
+      <Circle cx={CX} cy={CY} r={innerR}  fill="none" stroke="#f9d76b" strokeWidth="1.5" opacity="0.6" />
+      <Circle cx={CX} cy={CY} r={outerR}  fill="none" stroke="#f9d76b" strokeWidth="1"   opacity="0.3" />
+    </Svg>
+  );
+}
+
+// ── Compass Bezel (fixed outer ring) ──────────────────────────────────────────
+function CompassBezel() {
+  const ticks: React.ReactElement[] = [];
+  for (let i = 0; i < 72; i++) {
+    const bearing = i * 5;
+    const isMajor = i % 9 === 0;      // every 45°
+    const isHalf  = i % 9 === 4 || i % 9 === 5; // mid-way marks
+    const ang     = toRad(bearing);
+    const rOuter  = BEZEL_RING_R;
+    const rInner  = isMajor ? BEZEL_INNER_R - SIZE * 0.038
+                  : isHalf  ? BEZEL_INNER_R - SIZE * 0.018
+                             : BEZEL_INNER_R - SIZE * 0.012;
+    ticks.push(
+      <Line
+        key={i}
+        x1={CX + rOuter * Math.cos(ang)} y1={CY + rOuter * Math.sin(ang)}
+        x2={CX + rInner * Math.cos(ang)} y2={CY + rInner * Math.sin(ang)}
+        stroke={isMajor ? "#f9d76b" : isHalf ? "#d4a017" : "#8a6020"}
+        strokeWidth={isMajor ? 2.2 : isHalf ? 1.4 : 0.8}
+      />
+    );
+  }
+
+  return (
+    <Svg width={SIZE} height={SIZE}>
+      <Defs>
+        {/* Background deep radial */}
+        <RadialGradient id="bg" cx="50%" cy="38%" r="65%">
+          <Stop offset="0"   stopColor="#18243d" />
+          <Stop offset="1"   stopColor="#060e1c" />
+        </RadialGradient>
+        {/* Gold ring gradient */}
+        <SvgLinearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0"   stopColor="#f9e17b" />
+          <Stop offset="0.35" stopColor="#e8c84b" />
+          <Stop offset="0.65" stopColor="#c07b27" />
+          <Stop offset="1"   stopColor="#7a4800" />
+        </SvgLinearGradient>
+        {/* Highlight arc */}
+        <SvgLinearGradient id="goldShine" x1="0" y1="0" x2="0.5" y2="1">
+          <Stop offset="0"   stopColor="#fff8dc" stopOpacity="0.5" />
+          <Stop offset="1"   stopColor="#fff8dc" stopOpacity="0" />
+        </SvgLinearGradient>
+      </Defs>
+
+      {/* Background circle */}
+      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R} fill="url(#bg)" />
+
+      {/* Outer gold ring */}
+      <Circle
+        cx={CX} cy={CY} r={BEZEL_OUTER_R}
+        fill="none" stroke="url(#gold)"
+        strokeWidth={SIZE * 0.024}
+      />
+      {/* Shine arc on top of ring */}
+      <Circle
+        cx={CX} cy={CY} r={BEZEL_OUTER_R}
+        fill="none" stroke="url(#goldShine)"
+        strokeWidth={SIZE * 0.014}
+        strokeDasharray={`${BEZEL_OUTER_R * Math.PI * 0.55} ${BEZEL_OUTER_R * Math.PI * 1.45}`}
+        strokeDashoffset={BEZEL_OUTER_R * Math.PI * 0.85}
+      />
+      {/* Inner bezel accent ring */}
+      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R} fill="none" stroke="#c49a2a" strokeWidth="1" opacity="0.55" />
+
+      {/* Tick marks */}
+      {ticks}
+
+      {/* Degree labels at every 45° */}
+      {DIRS.map(d => {
+        const ang  = toRad(d.deg);
+        const r    = BEZEL_INNER_R - SIZE * 0.054;
+        const lx   = CX + r * Math.cos(ang);
+        const ly   = CY + r * Math.sin(ang);
+        return (
+          <SvgText
+            key={d.short}
+            x={lx} y={ly}
+            textAnchor="middle" alignmentBaseline="middle"
+            fill="#f9d76b"
+            fontSize={SIZE * 0.032}
+            fontWeight="700"
+            opacity="0.85"
+          >
+            {d.deg === 0 ? "000" : d.deg.toString().padStart(3, "0")}°
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+}
+
+// ── Center Jewel (fixed) ───────────────────────────────────────────────────────
+function CompassCenter() {
+  return (
+    <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <RadialGradient id="jewel" cx="38%" cy="32%" r="70%">
+          <Stop offset="0"   stopColor="#fff0a0" />
+          <Stop offset="0.45" stopColor="#d4a017" />
+          <Stop offset="1"   stopColor="#5a3200" />
+        </RadialGradient>
+        <SvgLinearGradient id="jewelRing" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0"   stopColor="#f9e17b" />
+          <Stop offset="1"   stopColor="#7a4800" />
+        </SvgLinearGradient>
+      </Defs>
+
+      {/* Outer glow */}
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.022} fill="#f59e0b" opacity="0.09" />
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.012} fill="#f59e0b" opacity="0.12" />
+
+      {/* Jewel base */}
+      <Circle cx={CX} cy={CY} r={CENTER_R}           fill="url(#jewel)"   />
+      <Circle cx={CX} cy={CY} r={CENTER_R}           fill="none" stroke="url(#jewelRing)" strokeWidth="2.5" />
+      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.012} fill="none" stroke="#f9d76b66" strokeWidth="1" />
+
+      {/* Om symbol */}
+      <SvgText
+        x={CX} y={CY + SIZE * 0.006}
+        textAnchor="middle" alignmentBaseline="middle"
+        fill="#060e1c"
+        fontSize={SIZE * 0.092}
+        fontWeight="900"
+      >
+        ॐ
+      </SvgText>
+
+      {/* Center pivot dot */}
+      <Circle cx={CX} cy={CY} r={3.5} fill="#f9d76b" />
+    </Svg>
+  );
+}
+
+// ── North pointer (fixed red triangle at top) ──────────────────────────────────
+function NorthPointer() {
+  const tipY   = SIZE * 0.028;
+  const baseY  = SIZE * 0.068;
+  const halfW  = SIZE * 0.032;
+  return (
+    <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <SvgLinearGradient id="redArrow" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0"  stopColor="#ff6464" />
+          <Stop offset="1"  stopColor="#b91c1c" />
+        </SvgLinearGradient>
+      </Defs>
+      {/* Shadow */}
+      <Polygon
+        points={`${CX},${tipY + 2} ${CX - halfW + 2},${baseY + 2} ${CX + halfW + 2},${baseY + 2}`}
+        fill="#00000044"
+      />
+      {/* Red arrow body */}
+      <Polygon
+        points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
+        fill="url(#redArrow)"
+      />
+      {/* Gold outline */}
+      <Polygon
+        points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
+        fill="none" stroke="#f9d76b" strokeWidth="1.2"
+      />
+    </Svg>
+  );
+}
+
+// ── Magnetometer hook ──────────────────────────────────────────────────────────
+function useMagnetometerHeading() {
+  const [heading,  setHeading]  = useState(0);
+  const [isLive,   setIsLive]   = useState(false);
+  const contRef  = useRef(0);
+  const animVal  = useRef(new Animated.Value(0)).current;
+
+  const update = useCallback((raw: number) => {
+    let diff = raw - (contRef.current % 360);
+    if (diff >  180) diff -= 360;
+    if (diff < -180) diff += 360;
+    contRef.current += diff;
+    setHeading(((raw % 360) + 360) % 360);
+    Animated.spring(animVal, {
+      toValue:         -contRef.current,
+      tension:         22,
+      friction:        7,
+      useNativeDriver: true,
+    }).start();
+  }, [animVal]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    Magnetometer.setUpdateInterval(120);
+    const sub = Magnetometer.addListener(({ x, y }) => {
+      let angle = Math.atan2(y, x) * (180 / Math.PI);
+      angle = (360 - angle) % 360;
+      setIsLive(true);
+      update(angle);
+    });
+    return () => sub.remove();
+  }, [update]);
+
+  const rotateStyle = {
+    transform: [{
+      rotate: animVal.interpolate({
+        inputRange:  [-36000, 36000],
+        outputRange: ["-36000deg", "36000deg"],
+        extrapolate: "extend",
+      }),
+    }],
+  };
+
+  return { heading, isLive, rotateStyle };
+}
+
+// ── Premium Vastu Compass ──────────────────────────────────────────────────────
+function VastuCompass() {
+  const C = useC();
+  const { heading, isLive, rotateStyle } = useMagnetometerHeading();
+
+  const currentDir = DIRS.reduce((best, d) => {
+    const diffBest = Math.abs(((heading - best.deg + 540) % 360) - 180);
+    const diffCurr = Math.abs(((heading - d.deg   + 540) % 360) - 180);
+    return diffCurr < diffBest ? d : best;
+  });
+
+  return (
+    <View style={[cp.outer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+      {/* ── Header row ── */}
+      <View style={cp.headerRow}>
+        <View>
+          <Text style={[cp.heading, { color: C.text }]}>Vastu Compass</Text>
+          <Text style={[cp.subhead, { color: C.textMuted }]}>वास्तु कम्पास</Text>
+        </View>
+        <View style={[cp.badge, { backgroundColor: isLive ? "#16a34a18" : "#64748b18" }]}>
+          <View style={[cp.dot, { backgroundColor: isLive ? "#22c55e" : "#64748b" }]} />
+          <Text style={[cp.badgeTxt, { color: isLive ? "#22c55e" : "#94a3b8" }]}>
+            {isLive ? "LIVE" : "STATIC"}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Heading display ── */}
+      <View style={cp.hdgRow}>
+        <Text style={[cp.hdgNum, { color: isLive ? currentDir.color : C.textMuted }]}>
+          {isLive ? `${Math.round(heading).toString().padStart(3, "0")}°` : "---°"}
+        </Text>
+        <View>
+          <Text style={[cp.hdgDir, { color: isLive ? currentDir.color : C.textMuted }]}>
+            {isLive ? `${currentDir.short} · ${currentDir.sub}` : "Sensor inactive"}
+          </Text>
+          <Text style={[cp.hdgHindi, { color: C.textMuted }]}>
+            {isLive ? currentDir.hindi : "Move device to activate"}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Compass graphic ── */}
+      <View style={[cp.compassWrap, { width: SIZE, height: SIZE }]}>
+        {/* Layer 1: Fixed outer bezel */}
+        <View style={StyleSheet.absoluteFill}>
+          <CompassBezel />
+        </View>
+
+        {/* Layer 2: Rotating rose */}
+        <Animated.View style={[StyleSheet.absoluteFill, rotateStyle]}>
+          <CompassRose />
+        </Animated.View>
+
+        {/* Layer 3: Fixed center jewel */}
+        <View style={StyleSheet.absoluteFill}>
+          <CompassCenter />
+        </View>
+
+        {/* Layer 4: Fixed north pointer */}
+        <NorthPointer />
+      </View>
+
+      {/* ── Legend ── */}
+      <View style={cp.legend}>
+        {DIRS.filter(d => d.deg % 90 === 0).map(d => (
+          <View key={d.short} style={cp.legendItem}>
+            <View style={[cp.legendDot, { backgroundColor: d.color }]} />
+            <Text style={[cp.legendTxt, { color: C.textMuted }]}>{d.short} · {d.sub}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={[cp.note, { color: C.textMuted }]}>
+        🔴 Red arrow = North · Compass rose rotates with device · NE = Ishaan (most auspicious)
+      </Text>
+    </View>
+  );
+}
+
+const cp = StyleSheet.create({
+  outer:      { borderRadius: 20, borderWidth: 1, padding: 16, gap: 14, overflow: "hidden" },
+  headerRow:  { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  heading:    { fontSize: 16, fontWeight: "800" },
+  subhead:    { fontSize: 11, marginTop: 2 },
+  badge:      { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  dot:        { width: 6, height: 6, borderRadius: 3 },
+  badgeTxt:   { fontSize: 10, fontWeight: "700", letterSpacing: 1.2 },
+  hdgRow:     { flexDirection: "row", alignItems: "center", gap: 14 },
+  hdgNum:     { fontSize: 36, fontWeight: "900", fontVariant: ["tabular-nums"] as any, minWidth: 80 },
+  hdgDir:     { fontSize: 15, fontWeight: "700" },
+  hdgHindi:   { fontSize: 12, marginTop: 2 },
+  compassWrap:{ alignSelf: "center", position: "relative" },
+  legend:     { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot:  { width: 8, height: 8, borderRadius: 4 },
+  legendTxt:  { fontSize: 11 },
+  note:       { fontSize: 11, lineHeight: 17, textAlign: "center" },
+});
 
 // ── Vastu Data ────────────────────────────────────────────────────────────────
 
@@ -285,17 +732,6 @@ const ROOMS: VastuRoom[] = [
   },
 ];
 
-const COMPASS_DIRS = [
-  { short:"N",  label:"Uttar",   color:"#f59e0b" },
-  { short:"NE", label:"Ishaan",  color:"#a78bfa" },
-  { short:"E",  label:"Poorv",   color:"#fbbf24" },
-  { short:"SE", label:"Agni",    color:"#f97316" },
-  { short:"S",  label:"Dakshin", color:"#ef4444" },
-  { short:"SW", label:"Nairitya",color:"#64748b" },
-  { short:"W",  label:"Paschim", color:"#60a5fa" },
-  { short:"NW", label:"Vaayu",   color:"#34d399" },
-];
-
 // ── Room Card ─────────────────────────────────────────────────────────────────
 function RoomCard({ room }: { room: VastuRoom }) {
   const [open, setOpen] = useState(false);
@@ -323,7 +759,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
         <Feather name={open ? "chevron-up" : "chevron-down"} size={15} color={C.textMuted} style={{ marginLeft:8 }} />
       </View>
 
-      {/* Direction bar — always visible */}
+      {/* Direction bar */}
       <View style={c.dirRow}>
         <Feather name="compass" size={11} color={C.textMuted} />
         <Text style={[c.dirText, { color: C.textMuted }]}>{room.idealDir}</Text>
@@ -332,10 +768,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
       {/* Expanded content */}
       {open && (
         <View style={c.expanded}>
-          {/* Importance */}
           <Text style={[c.importance, { color: C.textMuted }]}>{room.importance}</Text>
-
-          {/* Tab row */}
           <View style={c.tabRow}>
             {(["dos","donts","remedies"] as const).map(t => (
               <Pressable key={t} onPress={() => setTab(t)}
@@ -347,7 +780,6 @@ function RoomCard({ room }: { room: VastuRoom }) {
               </Pressable>
             ))}
           </View>
-
           {tab === "dos" && (
             <View style={{ gap:8 }}>
               {room.dos.map((d,i) => (
@@ -372,7 +804,9 @@ function RoomCard({ room }: { room: VastuRoom }) {
             <View style={{ gap:8 }}>
               {room.remedies.map((r,i) => (
                 <View key={i} style={c.tipRow}>
-                  <View style={[c.remedyNum, { backgroundColor: C.bgCard2 }]}><Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text></View>
+                  <View style={[c.remedyNum, { backgroundColor: C.bgCard2 }]}>
+                    <Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text>
+                  </View>
                   <Text style={[c.tipText, { color: C.textMuted }]}>{r}</Text>
                 </View>
               ))}
@@ -384,36 +818,16 @@ function RoomCard({ room }: { room: VastuRoom }) {
   );
 }
 
-// ── Compass Component ─────────────────────────────────────────────────────────
-function VastuCompass() {
-  const C = useC();
-  return (
-    <View style={[cp.wrap, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-      <Text style={[cp.title, { color: C.textMuted }]}>VASTU COMPASS — DIRECTIONS</Text>
-      <View style={cp.grid}>
-        {COMPASS_DIRS.map(d => (
-          <View key={d.short} style={[cp.dir, { borderColor:`${d.color}30`, backgroundColor:`${d.color}08` }]}>
-            <Text style={[cp.short, { color:d.color }]}>{d.short}</Text>
-            <Text style={[cp.label, { color: C.textMuted }]}>{d.label}</Text>
-          </View>
-        ))}
-      </View>
-      <Text style={[cp.note, { color: C.textMuted }]}>NE = Ishaan (Divine), SE = Agni (Fire), SW = Nairitya, NW = Vaayu (Wind)</Text>
-    </View>
-  );
-}
-
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
-  const C = useC();
+  const C      = useC();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 8 }]}>
+      <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
@@ -428,28 +842,26 @@ export default function VastuScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Intro */}
-        <View style={s.introCard}>
+        <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={{ fontSize:24 }}>🏠</Text>
           <View style={{ flex:1 }}>
             <Text style={[s.introTitle, { color: C.text }]}>What is Vastu Shastra?</Text>
             <Text style={[s.introBody, { color: C.textMuted }]}>
-              Vastu Shastra is an ancient Indian science of architecture. Correct directions and
-              arrangements bring positive energy, happiness, health, and prosperity to your home.
+              Vastu Shastra is an ancient Indian science of architecture. Correct directions bring
+              positive energy, happiness, health, and prosperity to your home.
             </Text>
           </View>
         </View>
 
-        {/* Compass */}
+        {/* ── Premium Compass ── */}
         <VastuCompass />
 
         {/* Section label */}
-        <Text style={s.sectionLabel}>ROOM-WISE VASTU GUIDE</Text>
+        <Text style={[s.sectionLabel, { color: C.accent }]}>ROOM-WISE VASTU GUIDE</Text>
         <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
 
         {/* Room cards */}
-        {ROOMS.map(room => (
-          <RoomCard key={room.key} room={room} />
-        ))}
+        {ROOMS.map(room => <RoomCard key={room.key} room={room} />)}
 
         {/* General tips */}
         <View style={[s.genCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -473,7 +885,8 @@ export default function VastuScreen() {
         <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="info" size={12} color={C.textMuted} />
           <Text style={[s.disclaimerText, { color: C.textMuted }]}>
-            This is a general Vastu guide. For your home specifically, always consult a qualified Vastu expert for personalized advice.
+            This is a general Vastu guide. For your home specifically, always consult a qualified
+            Vastu expert for personalized advice.
           </Text>
         </View>
       </ScrollView>
@@ -481,75 +894,45 @@ export default function VastuScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:    { flex:1, backgroundColor:"#020d1a" },
-  header:  { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" },
-  back:    { width:36, height:36, alignItems:"center", justifyContent:"center" },
-  title:   { color:"#dde8f4", fontSize:17, fontWeight:"800" },
-  titleHindi: { color:"#3d5a7a", fontSize:10, marginTop:1 },
-  content: { paddingHorizontal:16, gap:12, paddingTop:14 },
-  sectionLabel: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#f59e0b", marginBottom:2 },
-  sectionSub:   { color:"#1e3a5f", fontSize:11, marginBottom:4, marginTop:-6 },
-
-  introCard: {
-    flexDirection:"row", alignItems:"flex-start", gap:12,
-    backgroundColor:"rgba(245,158,11,0.04)", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(245,158,11,0.15)", padding:14,
-  },
-  introTitle: { color:"#dde8f4", fontSize:13, fontWeight:"700", marginBottom:5 },
-  introBody:  { color:"#475569", fontSize:12, lineHeight:19 },
-
-  genCard: {
-    backgroundColor:"rgba(255,255,255,0.02)", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(255,255,255,0.06)", padding:14, gap:10,
-  },
-  genTitle: { color:"#dde8f4", fontSize:13, fontWeight:"700", marginBottom:4 },
-  genRow:   { flexDirection:"row", alignItems:"flex-start", gap:10 },
-  genDot:   { width:6, height:6, borderRadius:3, backgroundColor:"#334155", marginTop:5, flexShrink:0 },
-  genText:  { color:"#475569", fontSize:12, lineHeight:19, flex:1 },
-
-  disclaimer: {
-    flexDirection:"row", alignItems:"flex-start", gap:8,
-    backgroundColor:"rgba(255,255,255,0.02)", borderRadius:10,
-    padding:12, borderWidth:1, borderColor:"rgba(255,255,255,0.04)",
-  },
-  disclaimerText: { color:"#1e3a5f", fontSize:11, lineHeight:17, flex:1 },
+  root:       { flex:1 },
+  header:     { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1 },
+  back:       { width:36, height:36, alignItems:"center", justifyContent:"center" },
+  title:      { fontSize:17, fontWeight:"800" },
+  titleHindi: { fontSize:10, marginTop:1 },
+  content:    { paddingHorizontal:16, gap:12, paddingTop:14 },
+  sectionLabel:{ fontSize:10, fontWeight:"800", letterSpacing:2.5, marginBottom:2 },
+  sectionSub: { fontSize:11, marginBottom:4, marginTop:-6 },
+  introCard:  { flexDirection:"row", alignItems:"flex-start", gap:12, borderRadius:14, borderWidth:1, padding:14 },
+  introTitle: { fontSize:13, fontWeight:"700", marginBottom:5 },
+  introBody:  { fontSize:12, lineHeight:19 },
+  genCard:    { borderRadius:14, borderWidth:1, padding:14, gap:10 },
+  genTitle:   { fontSize:13, fontWeight:"700", marginBottom:4 },
+  genRow:     { flexDirection:"row", alignItems:"flex-start", gap:10 },
+  genDot:     { width:6, height:6, borderRadius:3, marginTop:5, flexShrink:0 },
+  genText:    { fontSize:12, lineHeight:19, flex:1 },
+  disclaimer: { flexDirection:"row", alignItems:"flex-start", gap:8, borderRadius:10, padding:12, borderWidth:1 },
+  disclaimerText: { fontSize:11, lineHeight:17, flex:1 },
 });
 
 const c = StyleSheet.create({
-  card: { borderRadius:14, borderWidth:1, padding:14, gap:8 },
+  card:       { borderRadius:14, borderWidth:1, padding:14, gap:8 },
   cardHeader: { flexDirection:"row", alignItems:"center", gap:10 },
   iconBubble: { width:44, height:44, borderRadius:12, alignItems:"center", justifyContent:"center", flexShrink:0 },
   roomName:   { fontSize:13, fontWeight:"700" },
-  roomHindi:  { color:"#334155", fontSize:10, marginTop:2 },
+  roomHindi:  { fontSize:10, marginTop:2 },
   elemPill:   { flexDirection:"row", alignItems:"center", gap:4, borderRadius:8, paddingHorizontal:7, paddingVertical:3 },
   elemText:   { fontSize:9, fontWeight:"700" },
   dirRow:     { flexDirection:"row", alignItems:"center", gap:6 },
-  dirText:    { color:"#3d5a7a", fontSize:11, flex:1 },
-  importance: { color:"#475569", fontSize:12, lineHeight:19 },
+  dirText:    { fontSize:11, flex:1 },
+  importance: { fontSize:12, lineHeight:19 },
   expanded:   { gap:12 },
   tabRow:     { flexDirection:"row", gap:6 },
-  tabBtn:     {
-    flex:1, alignItems:"center", paddingVertical:8, borderRadius:8,
-    borderWidth:1, borderColor:"rgba(255,255,255,0.06)",
-    backgroundColor:"rgba(255,255,255,0.02)",
-  },
-  tabText:    { color:"#334155", fontSize:10, fontWeight:"600" },
+  tabBtn:     { flex:1, paddingVertical:6, alignItems:"center", borderRadius:8, borderWidth:1 },
+  tabText:    { fontSize:11, fontWeight:"600" },
   tipRow:     { flexDirection:"row", alignItems:"flex-start", gap:8 },
-  tipIcon:    { fontSize:13, lineHeight:20, flexShrink:0 },
-  tipText:    { color:"#94a3b8", fontSize:12, lineHeight:19, flex:1 },
-  remedyNum:  { width:20, height:20, borderRadius:10, backgroundColor:"rgba(255,255,255,0.06)", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 },
-});
-
-const cp = StyleSheet.create({
-  wrap:  { backgroundColor:"#040e1f", borderRadius:14, borderWidth:1, borderColor:"rgba(255,255,255,0.06)", padding:14, gap:10 },
-  title: { fontSize:9, fontWeight:"800", letterSpacing:2, color:"#334155", textAlign:"center" },
-  grid:  { flexDirection:"row", flexWrap:"wrap", gap:6, justifyContent:"center" },
-  dir: {
-    width:"22%", borderRadius:10, borderWidth:1, padding:8,
-    alignItems:"center", gap:2,
-  },
-  short: { fontSize:14, fontWeight:"800" },
-  label: { color:"#475569", fontSize:10 },
-  note:  { color:"#1e3a5f", fontSize:10, textAlign:"center", lineHeight:16 },
+  tipIcon:    { fontSize:13, marginTop:1, flexShrink:0 },
+  tipText:    { fontSize:12, lineHeight:19, flex:1 },
+  remedyNum:  { width:20, height:20, borderRadius:10, alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 },
 });

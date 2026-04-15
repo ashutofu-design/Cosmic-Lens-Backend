@@ -52,6 +52,7 @@ function fmtPDDate(d: Date): string {
 
 // ── 6-month line chart ────────────────────────────────────────────────────────
 function LineChart({ months, scores, color }: { months: string[]; scores: number[]; color: string }) {
+  const C = useC();
   const W = 300, H = 120, PAD_L = 30, PAD_R = 12, PAD_T = 10, PAD_B = 28;
   const chartW = W - PAD_L - PAD_R;
   const chartH = H - PAD_T - PAD_B;
@@ -88,7 +89,7 @@ function LineChart({ months, scores, color }: { months: string[]; scores: number
           key={v}
           x1={PAD_L} y1={PAD_T + (1 - v/100)*chartH}
           x2={W - PAD_R} y2={PAD_T + (1 - v/100)*chartH}
-          stroke="rgba(255,255,255,0.05)" strokeWidth={1}
+          stroke={C.border3} strokeWidth={1}
         />
       ))}
       {/* Area fill */}
@@ -108,7 +109,7 @@ function LineChart({ months, scores, color }: { months: string[]; scores: number
           </SvgText>
           <SvgText
             x={p.x} y={H - 6}
-            fontSize={9} fill="#3d5a7a"
+            fontSize={9} fill={C.textDim}
             textAnchor="middle"
           >
             {months[i]}
@@ -120,7 +121,7 @@ function LineChart({ months, scores, color }: { months: string[]; scores: number
         <SvgText
           key={v}
           x={PAD_L - 4} y={PAD_T + (1 - v/100)*chartH + 3.5}
-          fontSize={7} fill="#1e3a5f" textAnchor="end"
+          fontSize={7} fill={C.textDim} textAnchor="end"
         >
           {v}
         </SvgText>
@@ -131,12 +132,13 @@ function LineChart({ months, scores, color }: { months: string[]; scores: number
 
 // ── Score Ring ────────────────────────────────────────────────────────────────
 function ScoreRing({ score, color }: { score: number; color: string }) {
+  const C = useC();
   const R = 28, STROKE = 5;
   const circ = 2 * Math.PI * R;
   const dash = (score / 100) * circ;
   return (
     <Svg width={70} height={70}>
-      <Circle cx={35} cy={35} r={R} fill="none" stroke="#071525" strokeWidth={STROKE} />
+      <Circle cx={35} cy={35} r={R} fill="none" stroke={C.border} strokeWidth={STROKE} />
       <Circle
         cx={35} cy={35} r={R} fill="none"
         stroke={color} strokeWidth={STROKE}

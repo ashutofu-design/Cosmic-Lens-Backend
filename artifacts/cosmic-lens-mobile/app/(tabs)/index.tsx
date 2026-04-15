@@ -273,14 +273,14 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           <Text style={[hero.label, { color: Ctheme.textMuted }]}>{tHero.todayEnergy.toUpperCase()}</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 1 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
-            <Text style={hero.scoreMax}>/100</Text>
+            <Text style={[hero.scoreMax, { color: Ctheme.textDim }]}>/100</Text>
           </View>
         </View>
         <View style={{ alignItems: "flex-end", gap: 5 }}>
           {showDemo && (
-            <View style={hero.demoBadge}>
-              <Feather name="lock" size={9} color="#3d5a7a" />
-              <Text style={hero.demoBadgeText}>DEMO</Text>
+            <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
+              <Feather name="lock" size={9} color={Ctheme.textDim} />
+              <Text style={[hero.demoBadgeText, { color: Ctheme.textDim }]}>DEMO</Text>
             </View>
           )}
           <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}28` }]}>

@@ -154,29 +154,29 @@ function LangSheet({ visible, current, onSelect, onClose }: {
         {/* ── Header ── */}
         <View style={lm.header}>
           <Pressable onPress={onClose} style={lm.backBtn}>
-            <Feather name="x" size={18} color="#64748b" />
+            <Feather name="x" size={18} color={C.textMuted} />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={lm.title}>{t.selectLanguage}</Text>
-            <Text style={lm.subtitle}>{t.langSubtitle}</Text>
+            <Text style={[lm.title, { color: C.text }]}>{t.selectLanguage}</Text>
+            <Text style={[lm.subtitle, { color: C.textMuted }]}>{t.langSubtitle}</Text>
           </View>
           <View style={{ width: 36 }} />
         </View>
 
         {/* ── Search bar ── */}
-        <View style={lm.searchWrap}>
-          <Feather name="search" size={14} color="#334155" />
+        <View style={[lm.searchWrap, { backgroundColor: C.inputBg, borderColor: C.border }]}>
+          <Feather name="search" size={14} color={C.textMuted} />
           <TextInput
-            style={lm.searchInput}
+            style={[lm.searchInput, { color: C.text }]}
             value={query}
             onChangeText={setQuery}
             placeholder={t.langSearch}
-            placeholderTextColor="#1e3a5f"
+            placeholderTextColor={C.textDim}
             autoCorrect={false}
           />
           {query.length > 0 && (
             <Pressable onPress={() => setQuery("")}>
-              <Feather name="x-circle" size={14} color="#334155" />
+              <Feather name="x-circle" size={14} color={C.textMuted} />
             </Pressable>
           )}
         </View>
@@ -194,12 +194,12 @@ function LangSheet({ visible, current, onSelect, onClose }: {
                 {supported.map(l => (
                   <Pressable key={l.code}
                     onPress={() => handleSelect(l.code)}
-                    style={[lm.tile, l.code === current && lm.tileActive]}
+                    style={[lm.tile, { backgroundColor: C.bgCard, borderColor: C.border }, l.code === current && lm.tileActive]}
                   >
-                    <Text style={[lm.tileNative, l.code === current && { color: "#f59e0b" }]}>
+                    <Text style={[lm.tileNative, { color: C.text }, l.code === current && { color: "#f59e0b" }]}>
                       {l.native}
                     </Text>
-                    <Text style={lm.tileEn}>{l.name}</Text>
+                    <Text style={[lm.tileEn, { color: C.textMuted }]}>{l.name}</Text>
                     {l.code === current && (
                       <View style={lm.checkBadge}>
                         <Feather name="check" size={10} color="#020d1a" />
@@ -215,19 +215,19 @@ function LangSheet({ visible, current, onSelect, onClose }: {
           {others.length > 0 && (
             <>
               <View style={lm.groupHeader}>
-                <View style={[lm.groupDot, { backgroundColor: "#334155" }]} />
-                <Text style={[lm.groupLabel, { color: "#334155" }]}>{t.comingSoon.toUpperCase()}</Text>
+                <View style={[lm.groupDot, { backgroundColor: C.textDim }]} />
+                <Text style={[lm.groupLabel, { color: C.textDim }]}>{t.comingSoon.toUpperCase()}</Text>
               </View>
               <View style={lm.grid}>
                 {others.map(l => (
                   <Pressable key={l.code}
                     onPress={() => handleSelect(l.code)}
-                    style={[lm.tile, lm.tileComingSoon, l.code === current && lm.tileActive]}
+                    style={[lm.tile, lm.tileComingSoon, { backgroundColor: C.bgCard, borderColor: C.border }, l.code === current && lm.tileActive]}
                   >
-                    <Text style={[lm.tileNative, { color: "#475569" }, l.code === current && { color: "#f59e0b" }]}>
+                    <Text style={[lm.tileNative, { color: C.textDim }, l.code === current && { color: "#f59e0b" }]}>
                       {l.native}
                     </Text>
-                    <Text style={[lm.tileEn, { color: "#1e3a5f" }]}>{l.name}</Text>
+                    <Text style={[lm.tileEn, { color: C.textDim }]}>{l.name}</Text>
                     {l.code === current && (
                       <View style={lm.checkBadge}>
                         <Feather name="check" size={10} color="#020d1a" />
@@ -241,7 +241,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 
           {filtered.length === 0 && (
             <View style={{ alignItems: "center", paddingVertical: 40 }}>
-              <Text style={{ color: "#334155", fontFamily: F.medium, fontSize: 14 }}>
+              <Text style={{ color: C.textMuted, fontFamily: F.medium, fontSize: 14 }}>
                 No language found for "{query}"
               </Text>
             </View>
@@ -258,24 +258,25 @@ function RelationPickerModal({ visible, onSelect, onClose }: {
   onSelect: (relation: string) => void;
   onClose: () => void;
 }) {
+  const C = useC();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={rp.overlay} onPress={onClose}>
-        <Pressable style={rp.sheet} onPress={e => e.stopPropagation()}>
-          <View style={rp.handle} />
-          <Text style={rp.title}>Whose Kundli to Add?</Text>
-          <Text style={rp.sub}>Select the relation</Text>
+        <Pressable style={[rp.sheet, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={e => e.stopPropagation()}>
+          <View style={[rp.handle, { backgroundColor: C.border2 }]} />
+          <Text style={[rp.title, { color: C.text }]}>Whose Kundli to Add?</Text>
+          <Text style={[rp.sub, { color: C.textMuted }]}>Select the relation</Text>
 
           <View style={rp.grid}>
             {RELATIONS.map(r => (
               <Pressable
                 key={r.key}
                 onPress={() => { Haptics.selectionAsync(); onSelect(r.key); }}
-                style={({ pressed }) => [rp.chip, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [rp.chip, { backgroundColor: C.bgCard2, borderColor: C.border }, pressed && { opacity: 0.7 }]}
               >
                 <Text style={rp.chipEmoji}>{r.emoji}</Text>
-                <Text style={rp.chipLabel}>{r.key}</Text>
-                <Text style={rp.chipSub}>{r.label.split("(")[1]?.replace(")", "") ?? ""}</Text>
+                <Text style={[rp.chipLabel, { color: C.textMid }]}>{r.key}</Text>
+                <Text style={[rp.chipSub, { color: C.textMuted }]}>{r.label.split("(")[1]?.replace(")", "") ?? ""}</Text>
               </Pressable>
             ))}
           </View>
@@ -289,21 +290,22 @@ function RelationPickerModal({ visible, onSelect, onClose }: {
 function DeleteModal({ name, onConfirm, onCancel }: {
   name: string; onConfirm: () => void; onCancel: () => void;
 }) {
+  const C = useC();
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
       <View style={dm.overlay}>
-        <View style={dm.box}>
+        <View style={[dm.box, { backgroundColor: C.bgCard, borderColor: "rgba(248,113,113,0.25)" }]}>
           <View style={dm.iconWrap}>
             <Feather name="trash-2" size={20} color="#f87171" />
           </View>
-          <Text style={dm.title}>Profile Delete Karein?</Text>
-          <Text style={dm.body}>
-            <Text style={{ color:"#dde8f4", fontFamily:F.semibold }}>{name}</Text>
+          <Text style={[dm.title, { color: C.text }]}>Profile Delete Karein?</Text>
+          <Text style={[dm.body, { color: C.textMuted }]}>
+            <Text style={{ color: C.textMid, fontFamily:F.semibold }}>{name}</Text>
             {" "}ka chart data permanently delete ho jayega.
           </Text>
           <View style={dm.btnRow}>
-            <Pressable onPress={onCancel} style={dm.cancelBtn}>
-              <Text style={{ color:"#64748b", fontSize:14, fontFamily:F.medium }}>Cancel</Text>
+            <Pressable onPress={onCancel} style={[dm.cancelBtn, { borderColor: C.border }]}>
+              <Text style={{ color: C.textMuted, fontSize:14, fontFamily:F.medium }}>Cancel</Text>
             </Pressable>
             <Pressable onPress={onConfirm} style={dm.deleteBtn}>
               <Text style={{ color:"#fff", fontSize:14, fontFamily:F.bold }}>Delete</Text>
@@ -336,7 +338,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
             <Text style={pc.initials}>{initials}</Text>
           </LinearGradient>
           {relationInfo && (
-            <View style={pc.emojiTag}>
+            <View style={[pc.emojiTag, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
               <Text style={{ fontSize: 11 }}>{relationInfo.emoji}</Text>
             </View>
           )}

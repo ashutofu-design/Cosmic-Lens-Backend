@@ -133,11 +133,15 @@ export default function AskScreen() {
             <Text style={{ fontSize: 12 }}>🔭</Text>
           </View>
         )}
-        <View style={[s.bubbleInner, isUser ? s.bubbleInnerUser : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}>
+        <View style={[s.bubbleInner, isUser
+          ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#0c3257" : "#dbeafe" }]
+          : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}>
           {item.loading ? (
             <ActivityIndicator size="small" color="#f59e0b" />
           ) : (
-            <Text style={[s.bubbleText, isUser ? s.bubbleTextUser : [s.bubbleTextAssist, { color: C.textMid }]]}>
+            <Text style={[s.bubbleText, isUser
+              ? [s.bubbleTextUser, { color: C.text }]
+              : [s.bubbleTextAssist, { color: C.textMid }]]}>
               {item.text}
             </Text>
           )}

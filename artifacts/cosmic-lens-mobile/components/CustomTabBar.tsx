@@ -185,15 +185,16 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 }
 
 function MoreTabButton({ onPress }: { onPress: () => void }) {
+  const C = useC();
   return (
     <Pressable
       style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.72 }]}
       onPress={onPress}
     >
       <View style={styles.iconPill}>
-        <Feather name="grid" size={20} color={INACTIVE_CLR} />
+        <Feather name="grid" size={20} color={C.textMuted} />
       </View>
-      <Text style={[styles.label, { color: INACTIVE_LABEL, fontFamily: "Nunito_500Medium" }]}>
+      <Text style={[styles.label, { color: C.textMuted, fontFamily: "Nunito_500Medium" }]}>
         More
       </Text>
     </Pressable>

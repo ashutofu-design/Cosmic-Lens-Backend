@@ -1095,6 +1095,95 @@ def daily_alerts():
     return jsonify({"days": results})
 
 
+def _get_expo_tunnel_url():
+    import glob, re, os
+    # Read the live tunnel URL from the Metro bundler log
+    for log_path in sorted(glob.glob("/tmp/logs/artifactscosmic-lens-mobile*.log"), reverse=True):
+        try:
+            with open(log_path, "r") as f:
+                content = f.read()
+            m = re.search(r"exp://[^\s\n]+", content)
+            if m:
+                return m.group(0).strip()
+        except Exception:
+            pass
+    # Fallback: construct from Replit Expo domain
+    expo_domain = os.environ.get("REPLIT_EXPO_DEV_DOMAIN", "")
+    return f"exp://{expo_domain}" if expo_domain else ""
+
+
+@app.route("/api/open")
+def open_in_expo():
+    expo_url = _get_expo_tunnel_url()
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Cosmic Lens</title>
+  <style>
+    * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+    body {{
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 24px;
+    }}
+    .card {{
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 24px;
+      padding: 40px 32px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+    }}
+    .logo {{ font-size: 56px; margin-bottom: 16px; }}
+    h1 {{ color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 8px; }}
+    p {{ color: rgba(255,255,255,0.6); font-size: 14px; margin-bottom: 32px; line-height: 1.5; }}
+    .btn {{
+      display: block;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      text-decoration: none;
+      font-size: 17px;
+      font-weight: 700;
+      padding: 18px 24px;
+      border-radius: 16px;
+      margin-bottom: 16px;
+      letter-spacing: 0.3px;
+    }}
+    .url-box {{
+      background: rgba(0,0,0,0.3);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-top: 20px;
+    }}
+    .url-label {{ color: rgba(255,255,255,0.4); font-size: 11px; margin-bottom: 4px; }}
+    .url-text {{ color: rgba(255,255,255,0.7); font-size: 12px; word-break: break-all; }}
+    .step {{ color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 12px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🔮</div>
+    <h1>Cosmic Lens</h1>
+    <p>Tap the button below to open the app directly in Expo Go on your phone.</p>
+    <a class="btn" href="{expo_url}">✨ Open in Expo Go</a>
+    <p class="step">Safari mein tap karein → Expo Go automatically open hoga</p>
+    <div class="url-box">
+      <div class="url-label">Direct URL</div>
+      <div class="url-text">{expo_url}</div>
+    </div>
+  </div>
+</body>
+</html>"""
+    from flask import Response
+    return Response(html, mimetype="text/html")
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):

@@ -533,8 +533,6 @@ export default function ProfileScreen() {
     logout,
   } = useUser();
 
-  const [notifications,    setNotifications]    = useState(true);
-  const [dailyTip,         setDailyTip]         = useState(true);
   const [showLang,         setShowLang]         = useState(false);
   const [confirmDelete,    setConfirmDelete]    = useState<string | null>(null);
   const [switching,        setSwitching]        = useState(false);
@@ -767,34 +765,6 @@ export default function ProfileScreen() {
         <View>
           <Text style={s.sectionLabel}>SETTINGS</Text>
           <View style={st.card}>
-
-            <SettingRow
-              icon="bell"
-              label="Notifications"
-              right={
-                <Switch
-                  value={notifications}
-                  onValueChange={v => { setNotifications(v); Haptics.selectionAsync(); }}
-                  trackColor={{ false:"#0f1c2e", true:"#f59e0b" }}
-                  thumbColor="#fff" ios_backgroundColor="#0f1c2e"
-                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
-                />
-              }
-            />
-
-            <SettingRow
-              icon="sunrise"
-              label="Daily Cosmic Tip"
-              right={
-                <Switch
-                  value={dailyTip}
-                  onValueChange={v => { setDailyTip(v); Haptics.selectionAsync(); }}
-                  trackColor={{ false:"#0f1c2e", true:"#f59e0b" }}
-                  thumbColor="#fff" ios_backgroundColor="#0f1c2e"
-                  style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
-                />
-              }
-            />
 
             <SettingRow
               icon="globe"

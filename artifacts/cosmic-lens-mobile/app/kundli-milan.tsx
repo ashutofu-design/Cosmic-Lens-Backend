@@ -1078,7 +1078,6 @@ export default function KundliMilanScreen(){
   const [p2,setP2]=useState<PersonData|null>(null);
   const [result,setResult]=useState<Result|null>(null);
   const [calcLoading,setCalcLoading]=useState(false);
-  const [slotsExpanded,setSlotsExpanded]=useState(true);
 
   // Pro glow animation
   const glowAnim=useRef(new Animated.Value(0)).current;
@@ -1108,13 +1107,9 @@ export default function KundliMilanScreen(){
   const canCalculate=!!person1&&!!p2;
 
   function handleDone(who:"self"|"partner",data:PersonData){
-    const newP1=who==="self"?data:p1;
-    const newP2=who==="partner"?data:p2;
     if(who==="self")setP1(data); else setP2(data);
-    setAddingFor(null); setResult(null);
-    // Auto-collapse once both slots are filled
-    const p1Filled=!!(newP1??autoP1), p2Filled=!!newP2;
-    if(p1Filled&&p2Filled) setSlotsExpanded(false);
+    setAddingFor(null);
+    setResult(null);
   }
   async function handleCalculate(){
     if(!person1||!p2)return;
@@ -1198,118 +1193,99 @@ export default function KundliMilanScreen(){
             </Animated.View>
           )}
 
-          {/* ── Kundli Slots ── */}
-          <Animated.View style={{gap:8,transform:[{scale:scaleAnim}]}}>
-            {canCalculate&&!slotsExpanded?(
-              /* ── COMPACT HEADER — both kundlis filled ── */
-              <Pressable onPress={()=>setSlotsExpanded(true)}
-                style={({pressed})=>({opacity:pressed?0.8:1})}>
-                <LinearGradient
-                  colors={isPro
-                    ?["rgba(109,40,217,0.18)","rgba(124,58,237,0.10)"]
-                    :C.isDark?["rgba(255,255,255,0.05)","rgba(255,255,255,0.03)"]:["rgba(99,102,241,0.06)","rgba(99,102,241,0.03)"]}
-                  start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={{borderRadius:14,borderWidth:1,
-                    borderColor:isPro?"rgba(139,92,246,0.4)":C.border,
-                    paddingHorizontal:14,paddingVertical:11,
-                    flexDirection:"row",alignItems:"center",gap:0,
-                    ...(isPro?{shadowColor:"#7c3aed",shadowOffset:{width:0,height:0},shadowOpacity:0.3,shadowRadius:8,elevation:4}:{}),
-                  }}>
-                  {/* Person 1 */}
-                  <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1}}>
-                    <View style={{width:28,height:28,borderRadius:8,
-                      backgroundColor:isPro?"rgba(167,139,250,0.15)":"rgba(99,102,241,0.1)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>♀</Text>
-                    </View>
-                    <View style={{gap:1}}>
-                      <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold"}} numberOfLines={1}>
-                        {person1!.name}
-                      </Text>
-                      <View style={{flexDirection:"row",alignItems:"center",gap:3}}>
-                        <Feather name="check-circle" size={10} color={isPro?"#a78bfa":"#6366f1"}/>
-                        <Text style={{color:isPro?"#a78bfa":"#6366f1",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Added</Text>
-                      </View>
-                    </View>
-                  </View>
+          {/* ── Compact Kundli Slots ── always one row, max ~50px ── */}
+          <Animated.View style={{transform:[{scale:scaleAnim}],gap:8}}>
 
-                  {/* Heart divider */}
-                  <LinearGradient colors={isPro?["#7c3aed","#ec4899"]:["#ec4899","#f43f5e"]}
-                    style={{width:26,height:26,borderRadius:13,alignItems:"center",justifyContent:"center",marginHorizontal:6}}>
-                    <Text style={{fontSize:12}}>♥</Text>
-                  </LinearGradient>
+            <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
 
-                  {/* Person 2 */}
-                  <View style={{flexDirection:"row",alignItems:"center",gap:6,flex:1,justifyContent:"flex-end"}}>
-                    <View style={{gap:1,alignItems:"flex-end"}}>
-                      <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold"}} numberOfLines={1}>
-                        {p2!.name}
-                      </Text>
-                      <View style={{flexDirection:"row",alignItems:"center",gap:3}}>
-                        <Feather name="check-circle" size={10} color={isPro?"#f9a8d4":"#ec4899"}/>
-                        <Text style={{color:isPro?"#f9a8d4":"#ec4899",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Added</Text>
-                      </View>
-                    </View>
-                    <View style={{width:28,height:28,borderRadius:8,
-                      backgroundColor:isPro?"rgba(249,168,212,0.15)":"rgba(236,72,153,0.1)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>♂</Text>
-                    </View>
-                  </View>
-
-                  {/* Edit button */}
-                  <Pressable onPress={()=>setSlotsExpanded(true)} hitSlop={10}
-                    style={{marginLeft:10,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.05)",
-                      borderRadius:8,paddingHorizontal:8,paddingVertical:5,flexDirection:"row",alignItems:"center",gap:4}}>
-                    <Feather name="edit-2" size={10} color={C.textMuted}/>
-                    <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_600SemiBold"}}>Edit</Text>
-                  </Pressable>
-                </LinearGradient>
-              </Pressable>
-            ):(
-              /* ── FULL EXPANDED SLOT UI ── */
-              <>
-                {autoP1?(
-                  <KundliSlot who="self" locked isPro={isPro} filled={autoP1} onAdd={()=>{}}/>
-                ):(
-                  <>
-                    <KundliSlot who="self" isPro={isPro} filled={p1}
-                      onAdd={()=>{setAddingFor("self");setResult(null);}}
-                      onClear={()=>{setP1(null);setResult(null);setSlotsExpanded(true);}}/>
-                    {addingFor==="self"&&(
-                      <AddKundliForm title="YOUR BIRTH DETAILS"
-                        onDone={d=>handleDone("self",d)} onCancel={()=>setAddingFor(null)}/>
-                    )}
-                  </>
-                )}
-
-                <View style={{alignItems:"center",marginVertical:-2,zIndex:1}}>
-                  <LinearGradient colors={isPro?["#7c3aed","#ec4899"]:["#ec4899","#f43f5e"]} style={ms.heart}>
-                    <Text style={{fontSize:14}}>♥</Text>
-                  </LinearGradient>
+              {/* SLOT 1 — You */}
+              {person1?(
+                <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:6,
+                  backgroundColor:isPro?"rgba(167,139,250,0.12)":"rgba(99,102,241,0.08)",
+                  borderRadius:22,paddingHorizontal:11,paddingVertical:8,
+                  borderWidth:1,borderColor:isPro?"rgba(139,92,246,0.35)":C.border}}>
+                  <Text style={{fontSize:13}}>{autoP1?"🔒":"👤"}</Text>
+                  <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                    {person1.name}
+                  </Text>
+                  <Feather name="check-circle" size={12} color={isPro?"#a78bfa":"#6366f1"}/>
                 </View>
+              ):(
+                <Pressable onPress={()=>{setAddingFor("self");setResult(null);}}
+                  style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",
+                    alignItems:"center",justifyContent:"center",gap:5,
+                    backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(99,102,241,0.05)",
+                    borderRadius:22,paddingVertical:9,borderWidth:1,
+                    borderStyle:"dashed" as any,
+                    borderColor:isPro?"rgba(139,92,246,0.4)":C.border})}>
+                  <Feather name="plus" size={12} color={isPro?"#a78bfa":C.textMuted}/>
+                  <Text style={{color:isPro?"#a78bfa":C.textMuted,fontSize:11,fontFamily:"Nunito_600SemiBold"}}>
+                    Your Kundli
+                  </Text>
+                </Pressable>
+              )}
 
-                <KundliSlot who="partner" isPro={isPro} filled={p2}
-                  onAdd={()=>{setAddingFor("partner");setResult(null);}}
-                  onClear={()=>{setP2(null);setResult(null);setSlotsExpanded(true);}}/>
-                {addingFor==="partner"&&(
-                  <AddKundliForm title="PARTNER'S BIRTH DETAILS"
-                    onDone={d=>handleDone("partner",d)} onCancel={()=>setAddingFor(null)}/>
-                )}
+              {/* Heart divider */}
+              <View style={{width:22,height:22,borderRadius:11,alignItems:"center",justifyContent:"center",
+                backgroundColor:isPro?"rgba(139,92,246,0.15)":"rgba(236,72,153,0.1)"}}>
+                <Text style={{fontSize:10}}>♥</Text>
+              </View>
 
-                {/* Collapse button — only visible when both filled */}
-                {canCalculate&&slotsExpanded&&(
-                  <Pressable onPress={()=>{setAddingFor(null);setSlotsExpanded(false);}}
-                    style={({pressed})=>({opacity:pressed?0.7:1,alignSelf:"center",
-                      flexDirection:"row",alignItems:"center",gap:4,
-                      paddingHorizontal:12,paddingVertical:5,borderRadius:20,
-                      backgroundColor:C.isDark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.04)"})}>
-                    <Feather name="chevron-up" size={12} color={C.textMuted}/>
-                    <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_500Medium"}}>Collapse</Text>
-                  </Pressable>
-                )}
-              </>
+              {/* SLOT 2 — Partner */}
+              {p2?(
+                <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:6,
+                  backgroundColor:isPro?"rgba(249,168,212,0.1)":"rgba(236,72,153,0.07)",
+                  borderRadius:22,paddingHorizontal:11,paddingVertical:8,
+                  borderWidth:1,borderColor:isPro?"rgba(249,168,212,0.3)":"rgba(236,72,153,0.2)"}}>
+                  <Text style={{fontSize:13}}>💑</Text>
+                  <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                    {p2.name}
+                  </Text>
+                  <Feather name="check-circle" size={12} color={isPro?"#f9a8d4":"#ec4899"}/>
+                </View>
+              ):(
+                <Pressable onPress={()=>{setAddingFor("partner");setResult(null);}}
+                  style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",
+                    alignItems:"center",justifyContent:"center",gap:5,
+                    backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(236,72,153,0.04)",
+                    borderRadius:22,paddingVertical:9,borderWidth:1,
+                    borderStyle:"dashed" as any,
+                    borderColor:isPro?"rgba(249,168,212,0.35)":"rgba(236,72,153,0.2)"})} >
+                  <Feather name="plus" size={12} color={isPro?"#f9a8d4":"#ec4899"}/>
+                  <Text style={{color:isPro?"#f9a8d4":"#ec4899",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>
+                    Partner
+                  </Text>
+                </Pressable>
+              )}
+
+              {/* Edit — only when both filled */}
+              {canCalculate&&(
+                <Pressable
+                  onPress={()=>{
+                    if(!autoP1)setP1(null);
+                    setP2(null);
+                    setResult(null);
+                    Haptics.selectionAsync();
+                  }}
+                  style={({pressed})=>({opacity:pressed?0.7:1,
+                    paddingHorizontal:10,paddingVertical:8,borderRadius:20,
+                    backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",
+                    borderWidth:1,borderColor:C.border})}>
+                  <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Edit</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {/* Inline forms */}
+            {addingFor==="self"&&!autoP1&&(
+              <AddKundliForm title="YOUR BIRTH DETAILS"
+                onDone={d=>handleDone("self",d)} onCancel={()=>setAddingFor(null)}/>
             )}
+            {addingFor==="partner"&&(
+              <AddKundliForm title="PARTNER'S BIRTH DETAILS"
+                onDone={d=>handleDone("partner",d)} onCancel={()=>setAddingFor(null)}/>
+            )}
+
           </Animated.View>
 
           {/* ── PRO Preview Insights ── */}

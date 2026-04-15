@@ -8,8 +8,11 @@ if (__DEV__) {
   console.log("[CosmicLens] EXPO_PUBLIC_DOMAIN:", process.env.EXPO_PUBLIC_DOMAIN);
   console.log("[CosmicLens] API_BASE resolved to:", API_BASE);
 
-  fetch(`${API_BASE}/api/healthz`, { signal: AbortSignal.timeout(8000) })
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  fetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
     .then(r => r.json())
     .then(d => console.log("[CosmicLens] healthz OK:", JSON.stringify(d)))
-    .catch(e => console.error("[CosmicLens] healthz FAILED:", e.message, "→ URL was:", `${API_BASE}/api/healthz`));
+    .catch(e => console.error("[CosmicLens] healthz FAILED:", e.message, "→", `${API_BASE}/api/healthz`))
+    .finally(() => clearTimeout(timer));
 }

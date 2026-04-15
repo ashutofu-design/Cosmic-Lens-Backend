@@ -349,8 +349,8 @@ function ProInsightsPanel(){
       return(
         <Animated.View style={av(idx)}>
           <View style={{borderRadius:14,borderWidth:1,borderStyle:"dashed" as any,
-            borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.5)",padding:13,gap:6,
-            backgroundColor:C.isDark?"rgba(20,5,40,0.7)":"rgba(237,233,254,0.92)"}}>
+            borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.35)",padding:13,gap:6,
+            backgroundColor:C.isDark?"rgba(20,5,40,0.7)":"#FFFFFF"}}>
             <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
               <View style={{width:36,height:36,borderRadius:10,backgroundColor:C.isDark?"rgba(139,92,246,0.12)":"rgba(109,40,217,0.18)",
                 alignItems:"center",justifyContent:"center",opacity:C.isDark?0.6:1}}>
@@ -427,13 +427,13 @@ function ProInsightsPanel(){
     return(
       <Animated.View style={[{width:"47%"},av(idx)]}>
         <View style={{borderRadius:13,borderWidth:1.5,borderStyle:"dashed" as any,
-          borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.55)",
+          borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.4)",
           padding:12,gap:5,
-          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"#EDE9FE",alignItems:"center",
+          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"#FFFFFF",alignItems:"center",
           shadowColor:"#7c3aed",shadowOffset:{width:0,height:C.isDark?0:2},
-          shadowOpacity:C.isDark?0:0.12,shadowRadius:5,elevation:C.isDark?0:2}}>
+          shadowOpacity:C.isDark?0:0.1,shadowRadius:5,elevation:C.isDark?0:2}}>
           <View style={{width:36,height:36,borderRadius:10,
-            backgroundColor:C.isDark?"rgba(192,132,252,0.12)":"rgba(109,40,217,0.2)",
+            backgroundColor:C.isDark?"rgba(192,132,252,0.12)":"rgba(109,40,217,0.1)",
             alignItems:"center",justifyContent:"center"}}>
             <Text style={{fontSize:18}}>{icon}</Text>
           </View>
@@ -606,10 +606,10 @@ function ProInsightsPanel(){
 
       {/* ══ 17 ══ SECTION: HIDDEN PREMIUM ════════════════════════════════════ */}
       <Animated.View style={av(17)}>
-        <LinearGradient colors={C.isDark?["rgba(120,40,240,0.22)","rgba(79,7,120,0.14)"]:["#F3E8FF","#DDD6FE"]}
+        <LinearGradient colors={C.isDark?["rgba(120,40,240,0.22)","rgba(79,7,120,0.14)"]:["#FFFFFF","#F5F3FF"]}
           start={{x:0,y:0}} end={{x:1,y:0}}
           style={{borderRadius:14,padding:14,borderWidth:1.5,
-            borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.5)",gap:4}}>
+            borderColor:C.isDark?"rgba(192,132,252,0.4)":"rgba(109,40,217,0.4)",gap:4}}>
           <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
             <Text style={{fontSize:18}}>⚠️</Text>
             <Text style={{color:C.isDark?"#f0abfc":"#4C1D95",fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>

@@ -55,11 +55,11 @@ const STARS: [number, number, number, number][] = [
   [0.87, 0.58, 4, 0.72], [0.11, 0.88, 4, 0.76],
 ];
 
-// Milky Way: faint diagonal streak of star clusters
+// Milky Way: very faint diagonal dust lanes — tiny wisps only
 const MILKY: [number, number, number][] = [
-  [0.20, 0.15, 0.08], [0.28, 0.22, 0.10], [0.35, 0.29, 0.09],
-  [0.42, 0.36, 0.11], [0.50, 0.44, 0.10], [0.57, 0.51, 0.09],
-  [0.64, 0.58, 0.08], [0.71, 0.65, 0.07], [0.78, 0.72, 0.08],
+  [0.20, 0.15, 0.03], [0.28, 0.22, 0.04], [0.35, 0.29, 0.03],
+  [0.42, 0.36, 0.04], [0.50, 0.44, 0.03], [0.57, 0.51, 0.03],
+  [0.64, 0.58, 0.03], [0.71, 0.65, 0.02], [0.78, 0.72, 0.03],
 ];
 
 export function CosmicBg({ children, style, contentStyle }: Props) {
@@ -68,19 +68,19 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
   return (
     <View style={[s.root, { backgroundColor: C.bg }, style]}>
 
-      {/* ── Milky Way diagonal band (dark mode) ── */}
+      {/* ── Milky Way diagonal dust lane (dark mode) ── */}
       {C.isDark && MILKY.map(([x, y, o], i) => (
         <View
           key={`mw${i}`}
           style={{
             position: "absolute",
-            width: W * 0.28,
-            height: W * 0.28,
-            borderRadius: W * 0.14,
-            backgroundColor: `rgba(180,190,255,${o})`,
-            left: W * x - W * 0.14,
-            top: H * y - W * 0.14,
-            opacity: 0.5,
+            width: W * 0.12,
+            height: W * 0.12,
+            borderRadius: W * 0.06,
+            backgroundColor: `rgba(190,200,255,${o})`,
+            left: W * x - W * 0.06,
+            top: H * y - W * 0.06,
+            opacity: 0.6,
           }}
         />
       ))}
@@ -100,15 +100,15 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
             style={[s.wash, { bottom: 0, height: H * 0.40 }]}
             start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
           />
-          {/* Warm amber core glow — center-right */}
+          {/* Very faint warm tint — far corner, barely visible */}
           <View style={{
             position: "absolute",
-            width: W * 0.70,
-            height: W * 0.70,
-            borderRadius: W * 0.35,
-            backgroundColor: "rgba(180,80,20,0.06)",
-            top: H * 0.20,
-            right: -W * 0.20,
+            width: W * 0.30,
+            height: W * 0.30,
+            borderRadius: W * 0.15,
+            backgroundColor: "rgba(180,80,20,0.03)",
+            top: H * 0.55,
+            right: W * 0.05,
           }} />
         </>
       ) : (

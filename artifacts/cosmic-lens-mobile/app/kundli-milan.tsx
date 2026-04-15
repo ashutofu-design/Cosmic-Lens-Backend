@@ -259,106 +259,166 @@ function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
 }
 
 // ── Pro Insights Panel (shown before result in Pro mode) ──────────────────────
+// badge types: "most" | "critical" | "premium" | "secret" | null
+// locked: blur overlay with unlock message
+type ProSection={icon:string;title:string;desc:string;col:string;badge?:"most"|"critical"|"premium"|"secret";locked?:boolean;};
+
 function ProInsightsPanel(){
   const C=useC();
 
-  // 12 Pro report sections — shown as "ready to calculate" teasers
-  const sections=[
-    {icon:"⚡",title:"Risk Scan",          desc:"Dosha conflicts & danger zones",         col:"#ef4444"},
-    {icon:"💞",title:"Core Compatibility", desc:"Emotional, mental & soul bond score",     col:"#f43f5e"},
-    {icon:"🔯",title:"Dosha Engine",       desc:"Mangal, Nadi, Bhakoot deep analysis",     col:"#fbbf24"},
-    {icon:"📅",title:"Future Timeline",    desc:"Marriage timing & Dasha milestones",      col:"#818cf8"},
-    {icon:"🌙",title:"Soul & Karma",       desc:"Past-life karmic debt between you two",   col:"#a78bfa"},
-    {icon:"🧠",title:"Personality Match",  desc:"Guna, Gana & temperament fit",            col:"#34d399"},
-    {icon:"🔥",title:"Intimacy Score",     desc:"Yoni koot & physical harmony index",      col:"#f97316"},
-    {icon:"🌑",title:"Negative Energy",    desc:"Hidden curses, evil eye & Graha doshas",  col:"#6366f1"},
-    {icon:"⚖️",title:"Strengths & Challenges",desc:"What will unite & test you",           col:"#22c55e"},
-    {icon:"🌿",title:"Remedies & Advice",  desc:"Puja, stones & mantra prescriptions",     col:"#10b981"},
-    {icon:"🏆",title:"Final Verdict",      desc:"Overall match prediction by Jyotish",     col:"#fbbf24"},
-    {icon:"🔒",title:"Hidden Insights",    desc:"Secret soul compatibility (rare reading)", col:"#c084fc"},
+  // Ordered for max impact — Core Compat + Risk first
+  const sections:ProSection[]=[
+    {icon:"💞",title:"Core Compatibility",     desc:"See if your hearts, minds & souls are truly aligned",             col:"#f43f5e", badge:"most"},
+    {icon:"⚡",title:"Risk Scan",               desc:"Hidden risks that may silently damage your relationship",          col:"#ef4444", badge:"critical"},
+    {icon:"🔯",title:"Dosha Engine",            desc:"Mangal, Nadi & Bhakoot — the 3 doshas that can break a marriage",  col:"#fbbf24", badge:"critical"},
+    {icon:"📅",title:"Future Timeline",         desc:"When is the right time to marry? Dasha & star alignment",          col:"#818cf8", badge:"premium"},
+    {icon:"🌙",title:"Soul & Karma",            desc:"Karmic connection from past life — if any exists between you",      col:"#a78bfa", locked:true},
+    {icon:"🧠",title:"Personality Match",       desc:"Are your temperaments made to last, or clash over time?",          col:"#34d399", badge:"premium"},
+    {icon:"🔥",title:"Intimacy Score",          desc:"Physical & emotional closeness — the Yoni Koot truth",             col:"#f97316", badge:"premium"},
+    {icon:"🌑",title:"Negative Energy",         desc:"Dark planetary influences hiding in your bond",                     col:"#6366f1", locked:true},
+    {icon:"⚖️",title:"Strengths & Challenges", desc:"What will bring you closer — and what will test you the most",      col:"#22c55e", badge:"premium"},
+    {icon:"🌿",title:"Remedies & Advice",       desc:"Puja, gemstones & mantras to strengthen your bond",                col:"#10b981", badge:"premium"},
+    {icon:"🏆",title:"Final Verdict",           desc:"The complete Jyotish judgment on your match — out of 36",          col:"#fbbf24", badge:"most"},
+    {icon:"🔮",title:"Hidden Insights",         desc:"Rare soul-level reading only visible in Pro",                       col:"#c084fc", badge:"secret"},
   ];
 
-  // Staggered animation refs — valid hooks usage
+  // Stagger: 2 (header+hero) + 12 cards + 1 CTA = 15 total
+  const TOTAL=15;
   const anims=useRef(
-    Array.from({length:sections.length+3},()=>({op:new Animated.Value(0),sl:new Animated.Value(14)}))
+    Array.from({length:TOTAL},()=>({op:new Animated.Value(0),sl:new Animated.Value(16)}))
   ).current;
   useEffect(()=>{
     Animated.parallel(
       anims.flatMap((a,i)=>[
-        Animated.timing(a.op,{toValue:1,duration:400,delay:i*55,useNativeDriver:true}),
-        Animated.timing(a.sl,{toValue:0,duration:350,delay:i*55,easing:Easing.out(Easing.quad),useNativeDriver:true}),
+        Animated.timing(a.op,{toValue:1,duration:420,delay:i*60,useNativeDriver:true}),
+        Animated.timing(a.sl,{toValue:0,duration:360,delay:i*60,easing:Easing.out(Easing.quad),useNativeDriver:true}),
       ])
     ).start();
   },[]);
-  const s=(i:number)=>({opacity:anims[i].op,transform:[{translateY:anims[i].sl}]});
+  const anim=(i:number)=>({opacity:anims[i]?.op??new Animated.Value(1),transform:[{translateY:anims[i]?.sl??new Animated.Value(0)}]});
+
+  function Badge({type}:{type:ProSection["badge"]}){
+    if(!type) return null;
+    const map:{[k:string]:{bg:string;border:string;text:string;label:string}}={
+      most:    {bg:"rgba(244,63,94,0.15)",   border:"rgba(244,63,94,0.4)",   text:"#fb7185", label:"MOST IMPORTANT"},
+      critical:{bg:"rgba(239,68,68,0.15)",   border:"rgba(239,68,68,0.4)",   text:"#f87171", label:"CRITICAL CHECK"},
+      premium: {bg:"rgba(139,92,246,0.15)",  border:"rgba(139,92,246,0.35)", text:"#c4b5fd", label:"PREMIUM"},
+      secret:  {bg:"rgba(192,132,252,0.15)", border:"rgba(192,132,252,0.35)",text:"#e879f9", label:"SECRET"},
+    };
+    const b=map[type];
+    if(!b) return null;
+    return(
+      <View style={{backgroundColor:b.bg,borderRadius:6,paddingHorizontal:6,paddingVertical:2,
+        borderWidth:1,borderColor:b.border,alignSelf:"flex-start"}}>
+        <Text style={{color:b.text,fontSize:7,fontFamily:"Nunito_700Bold",letterSpacing:0.8}}>{b.label}</Text>
+      </View>
+    );
+  }
 
   return(
-    <View style={{gap:14}}>
+    <View style={{gap:16}}>
 
-      {/* ── Section title ── */}
-      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},s(0)]}>
-        <View style={{width:4,height:14,borderRadius:2,backgroundColor:"#a78bfa"}}/>
-        <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_700Bold",letterSpacing:1.4}}>
-          WHAT PRO UNLOCKS FOR YOU
-        </Text>
-        <View style={{flex:1}}/>
-        <View style={{backgroundColor:"rgba(139,92,246,0.2)",borderRadius:20,paddingHorizontal:10,paddingVertical:4,borderWidth:1,borderColor:"rgba(139,92,246,0.35)"}}>
-          <Text style={{color:"#c4b5fd",fontSize:9,fontFamily:"Nunito_700Bold"}}>12 SECTIONS</Text>
-        </View>
+      {/* ── Hero Section ── */}
+      <Animated.View style={anim(0)}>
+        <LinearGradient
+          colors={C.isDark?["#1a003a","#0d0020","#0B0F19"]:["#f5f3ff","#ede9fe","#ddd6fe"]}
+          start={{x:0,y:0}} end={{x:1,y:1}}
+          style={{borderRadius:18,padding:20,borderWidth:1,borderColor:"rgba(139,92,246,0.3)",
+            shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:0.25,shadowRadius:16,elevation:8}}>
+          {/* Glow orb */}
+          <View style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:50,
+            backgroundColor:"rgba(139,92,246,0.12)"}}/>
+          <View style={{alignItems:"center",gap:8}}>
+            <Text style={{fontSize:28}}>⚡</Text>
+            <Text style={{color:C.isDark?"#f5f3ff":"#3b0764",fontSize:18,fontFamily:"Nunito_700Bold",
+              textAlign:"center",lineHeight:26}}>
+              Your Relationship Truth Revealed
+            </Text>
+            <Text style={{color:C.isDark?"rgba(196,181,253,0.85)":"#5b21b6",fontSize:12,
+              fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:18,maxWidth:280}}>
+              Discover hidden compatibility, risks &amp; future insights before marriage
+            </Text>
+            {/* Stats row */}
+            <View style={{flexDirection:"row",gap:16,marginTop:4}}>
+              {[{n:"36",l:"Points"},{n:"12",l:"Sections"},{n:"8",l:"Koots"}].map(({n,l})=>(
+                <View key={l} style={{alignItems:"center"}}>
+                  <Text style={{color:"#a78bfa",fontSize:18,fontFamily:"Nunito_700Bold"}}>{n}</Text>
+                  <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_500Medium"}}>{l}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </LinearGradient>
       </Animated.View>
 
-      {/* ── 12-section grid: 2 columns ── */}
-      <Animated.View style={[{flexDirection:"row",flexWrap:"wrap",gap:10},s(1)]}>
-        {sections.map(({icon,title,desc,col},i)=>(
-          <Animated.View key={title} style={[{width:"47%"},s(i+2)]}>
+      {/* ── "What's Inside" label ── */}
+      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},anim(1)]}>
+        <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
+        <Text style={{color:"#a78bfa",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.4}}>
+          WHAT'S INSIDE YOUR REPORT
+        </Text>
+        <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
+      </Animated.View>
+
+      {/* ── 12-section 2-col grid ── */}
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
+        {sections.map(({icon,title,desc,col,badge,locked},i)=>(
+          <Animated.View key={title} style={[{width:"47%"},anim(i+2)]}>
             <View style={{
-              backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)",
+              backgroundColor:C.isDark
+                ?locked?"rgba(15,5,30,0.9)":"rgba(255,255,255,0.04)"
+                :locked?"rgba(235,225,255,0.7)":"rgba(0,0,0,0.03)",
               borderRadius:14,borderWidth:1,
-              borderColor:`${col}28`,
-              padding:12,gap:6,
-              ...(i===11?{borderStyle:"dashed" as any,borderColor:"rgba(192,132,252,0.35)"}:{}),
+              borderColor:locked?"rgba(139,92,246,0.35)":`${col}30`,
+              padding:12,gap:5,overflow:"hidden",minHeight:110,
             }}>
-              {/* Top row: icon + ready badge */}
+              {/* Icon row */}
               <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}>
-                <View style={{width:34,height:34,borderRadius:10,backgroundColor:`${col}18`,
+                <View style={{width:34,height:34,borderRadius:10,
+                  backgroundColor:locked?"rgba(139,92,246,0.15)":`${col}18`,
                   alignItems:"center",justifyContent:"center"}}>
                   <Text style={{fontSize:17}}>{icon}</Text>
                 </View>
-                {i===11?(
-                  <View style={{backgroundColor:"rgba(192,132,252,0.15)",borderRadius:8,
-                    paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:"rgba(192,132,252,0.3)"}}>
-                    <Text style={{color:"#c084fc",fontSize:8,fontFamily:"Nunito_700Bold"}}>SECRET</Text>
-                  </View>
-                ):(
-                  <View style={{width:8,height:8,borderRadius:4,backgroundColor:`${col}`,
-                    shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.8,shadowRadius:4}}/>
-                )}
+                {!locked&&<View style={{width:7,height:7,borderRadius:4,backgroundColor:col,
+                  shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.9,shadowRadius:5}}/>}
               </View>
-              <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
-              <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{desc}</Text>
+
+              {locked?(
+                /* Locked overlay */
+                <>
+                  <Text style={{color:C.isDark?"rgba(196,181,253,0.6)":"#6d28d9",fontSize:11,
+                    fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
+                  <View style={{backgroundColor:"rgba(139,92,246,0.12)",borderRadius:8,
+                    padding:7,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",marginTop:2}}>
+                    <Text style={{color:C.isDark?"#c4b5fd":"#5b21b6",fontSize:9,
+                      fontFamily:"Nunito_600SemiBold",textAlign:"center",lineHeight:13}}>
+                      🔒 Unlock to reveal{"\n"}hidden truths
+                    </Text>
+                  </View>
+                </>
+              ):(
+                <>
+                  <Badge type={badge}/>
+                  <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
+                  <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{desc}</Text>
+                </>
+              )}
             </View>
           </Animated.View>
         ))}
-      </Animated.View>
+      </View>
 
-      {/* ── Bottom CTA nudge ── */}
-      <Animated.View style={s(sections.length+2)}>
-        <LinearGradient
-          colors={C.isDark?["rgba(109,40,217,0.15)","rgba(124,58,237,0.08)"]:["rgba(99,102,241,0.08)","rgba(139,92,246,0.05)"]}
-          start={{x:0,y:0}} end={{x:1,y:0}}
-          style={{borderRadius:14,padding:14,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",
-            flexDirection:"row",alignItems:"center",gap:12}}>
-          <Text style={{fontSize:22}}>✨</Text>
-          <View style={{flex:1}}>
-            <Text style={{color:C.isDark?"#c4b5fd":"#5b21b6",fontSize:12,fontFamily:"Nunito_700Bold"}}>
-              Add both kundlis &amp; calculate
-            </Text>
-            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:2}}>
-              All 12 sections will unlock instantly with your real data
-            </Text>
-          </View>
-          <Feather name="arrow-down" size={16} color="#a78bfa"/>
-        </LinearGradient>
+      {/* ── CTA Button ── */}
+      <Animated.View style={anim(14)}>
+        <ShineButton
+          colors={["#4f46e5","#7c3aed","#a855f7"]}
+          disabled={false} loading={false}
+          text="✨ Unlock Full Compatibility Report"
+          onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
+        <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",
+          textAlign:"center",marginTop:8}}>
+          Add both kundlis above &amp; calculate to reveal all 12 sections
+        </Text>
       </Animated.View>
 
     </View>

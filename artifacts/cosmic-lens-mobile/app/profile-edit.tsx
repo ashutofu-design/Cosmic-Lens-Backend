@@ -156,7 +156,8 @@ export default function ProfileEditScreen() {
   const [savingStatus, setSavingStatus] = useState("");
   const [error,        setError]        = useState("");
   const [isNetworkError, setIsNetworkError] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
+  const [nameFocused,  setNameFocused]  = useState(false);
+  const [placeFocused, setPlaceFocused] = useState(false);
 
   const [dayOpen,   setDayOpen]   = useState(false);
   const [monthOpen, setMonthOpen] = useState(false);
@@ -388,8 +389,12 @@ export default function ProfileEditScreen() {
 
             {/* Search input */}
             <View style={s.fieldWrap}>
-              <View style={[s.inputRow, { backgroundColor: C.isDark ? C.inputBg : "#F1F5F9", borderColor: C.isDark ? C.inputBorder : "#CBD5E1", gap: 6 }]}>
-                <Feather name="search" size={13} color={C.textDim} />
+              <View style={[
+                s.inputRow,
+                { backgroundColor: C.isDark ? C.inputBg : "#F1F5F9", borderColor: placeFocused ? C_FOCUS : (C.isDark ? C.inputBorder : "#CBD5E1"), gap: 6 },
+                placeFocused && { shadowColor: C_FOCUS, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.18, shadowRadius: 6 },
+              ]}>
+                <Feather name="search" size={13} color={placeFocused ? C_FOCUS : C.textDim} />
                 <TextInput
                   style={[s.inputTxt, { flex: 1, color: C.text }]}
                   value={placeQuery}
@@ -398,6 +403,8 @@ export default function ProfileEditScreen() {
                   placeholder="City, Country"
                   placeholderTextColor={C.textDim}
                   returnKeyType="search"
+                  onFocus={() => setPlaceFocused(true)}
+                  onBlur={() => setPlaceFocused(false)}
                 />
                 <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
                   {searching
@@ -528,7 +535,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 13,
     gap: 11,
     shadowColor: "#64748B", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
+    shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
   },
 
   // Card section label row

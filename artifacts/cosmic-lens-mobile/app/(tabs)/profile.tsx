@@ -322,7 +322,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
           <View style={{ flexDirection:"row", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             <Text style={[pc.name,{ color: C.text }]} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
-              <View style={[pc.primaryBadge,{ backgroundColor: "rgba(245,158,11,0.15)", borderColor: "rgba(245,158,11,0.3)" }]}>
+              <View style={[pc.primaryBadge,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.15)" : C.warningBg, borderColor: C.isDark ? "rgba(245,158,11,0.3)" : C.warningBorder }]}>
                 <Feather name="star" size={8} color="#f59e0b" />
                 <Text style={pc.primaryBadgeText}>PRIMARY</Text>
               </View>
@@ -650,7 +650,7 @@ export default function ProfileScreen() {
               }}
               style={({ pressed }) => [s.addBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, pressed && { opacity: 0.7 }]}
             >
-              <View style={[s.addCircle,{ backgroundColor: "rgba(245,158,11,0.1)" }]}>
+              <View style={[s.addCircle,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : C.warningBg }]}>
                 <Feather name="users" size={15} color="#f59e0b" />
               </View>
               <View style={{ flex: 1 }}>

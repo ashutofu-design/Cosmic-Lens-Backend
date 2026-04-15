@@ -166,12 +166,12 @@ export default function AskScreen() {
 
       {/* Demo banner */}
       {showDemo && (
-        <Pressable style={s.demoBanner} onPress={() => router.push("/onboarding")}>
-          <Feather name="lock" size={12} color="#fbbf24" />
-          <Text style={s.demoText}>
+        <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
+          <Feather name="lock" size={12} color={C.warningText} />
+          <Text style={[s.demoText, { color: C.warningText }]}>
             Kundli banao — personalized answers ke liye tap karein
           </Text>
-          <Feather name="chevron-right" size={12} color="#fbbf24" />
+          <Feather name="chevron-right" size={12} color={C.warningText} />
         </Pressable>
       )}
 

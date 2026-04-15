@@ -64,11 +64,12 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
   plan: typeof PLANS[0]; cycle: BillingCycle;
   isCurrent: boolean; onPress: () => void;
 }) {
+  const C = useC();
   const price  = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isFree = plan.key === "free";
 
   return (
-    <View style={[pl.card, { borderColor: plan.border, backgroundColor: plan.accentBg }, isCurrent && pl.cardCurrent]}>
+    <View style={[pl.card, { borderColor: C.isDark ? plan.border : `${plan.accent}30`, backgroundColor: C.isDark ? plan.accentBg : C.bgCard }, isCurrent && pl.cardCurrent]}>
       {/* Top row */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -124,10 +125,10 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
         ))}
         {plan.featureOff.map(f => (
           <View key={f} style={pl.featureRow}>
-            <View style={[pl.featureDot, { backgroundColor: "rgba(255,255,255,0.03)" }]}>
-              <Feather name="minus" size={9} color="#1e3a5f" />
+            <View style={[pl.featureDot, { backgroundColor: C.bgCard2 }]}>
+              <Feather name="minus" size={9} color={C.textMuted} />
             </View>
-            <Text style={[pl.featureText, { color: "#475569" }]}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.textMuted }]}>{f}</Text>
           </View>
         ))}
       </View>
@@ -266,7 +267,7 @@ export default function SubscriptionScreen() {
               { icon: "📄", text: "PDF Report" },
               { icon: "🌟", text: "Nakshatra Analysis" },
             ].map(b => (
-              <View key={b.text} style={[s.benefitItem, { backgroundColor: isDark ? "rgba(245,158,11,0.05)" : "rgba(245,158,11,0.04)", borderColor: C.border }]}>
+              <View key={b.text} style={[s.benefitItem, { backgroundColor: isDark ? "rgba(245,158,11,0.05)" : C.warningBg, borderColor: isDark ? "rgba(245,158,11,0.20)" : C.warningBorder }]}>
                 <Text style={{ fontSize: 18 }}>{b.icon}</Text>
                 <Text style={[s.benefitText, { color: C.textMid }]}>{b.text}</Text>
               </View>

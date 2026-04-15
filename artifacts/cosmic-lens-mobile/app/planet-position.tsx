@@ -128,6 +128,7 @@ function PlanetCard({
   lagnaIdx: number;
   sunLon: number;
 }) {
+  const C = useC();
   const [open, setOpen] = useState(false);
   const clr = PLANET_CLR[planet.name] ?? "#f59e0b";
   const nak = nakshatra(planet.longitude);
@@ -150,7 +151,7 @@ function PlanetCard({
 
   return (
     <Pressable
-      style={[s.card, { borderColor: open ? `${clr}55` : "rgba(255,255,255,0.05)" }]}
+      style={[s.card, { backgroundColor: C.bgCard, borderColor: open ? `${clr}55` : C.border }]}
       onPress={() => { setOpen(!open); Haptics.selectionAsync(); }}
     >
       {/* Header row */}
@@ -164,7 +165,7 @@ function PlanetCard({
             {planet.retrograde && <Text style={s.retroBadge}>℞</Text>}
             {combustLabel !== "" && <Text style={s.combustBadge}>☁️ Asta</Text>}
           </View>
-          <Text style={s.cardSub}>
+          <Text style={[s.cardSub, { color: C.textMuted }]}>
             {SIGNS_SHORT[Math.floor(planet.longitude/30)%12]} · {degFmt} · H{planet.house}
           </Text>
         </View>
@@ -172,14 +173,14 @@ function PlanetCard({
           <View style={[s.statusBadge, { borderColor: `${status.color}44` }]}>
             <Text style={[s.statusText, { color: status.color }]}>{status.label.split(" ")[0]}</Text>
           </View>
-          <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color="#3d5a7a" />
+          <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={C.textMuted} />
         </View>
       </View>
 
       {/* Expanded details */}
       {open && (
         <View style={s.details}>
-          <View style={s.divider} />
+          <View style={[s.divider, { backgroundColor: C.border }]} />
 
           <Row label="Rashi (Sign)" value={SIGNS[Math.floor(planet.longitude/30)%12]} />
           <Row label="Nakshatra" value={`${nak.name} Pada ${nak.pada}`} />
@@ -193,8 +194,8 @@ function PlanetCard({
 
           {karaka.length > 0 && (
             <View style={s.karakaRow}>
-              <Text style={s.karakaLabel}>Karaka:</Text>
-              <Text style={s.karakaValue}>{karaka.join(", ")}</Text>
+              <Text style={[s.karakaLabel, { color: C.textMuted }]}>Karaka:</Text>
+              <Text style={[s.karakaValue, { color: C.textMid }]}>{karaka.join(", ")}</Text>
             </View>
           )}
         </View>
@@ -204,10 +205,11 @@ function PlanetCard({
 }
 
 function Row({ label, value, clrValue }: { label: string; value: string; clrValue?: string }) {
+  const C = useC();
   return (
-    <View style={s.row}>
-      <Text style={s.rowLabel}>{label}</Text>
-      <Text style={[s.rowValue, clrValue ? { color: clrValue } : {}]}>{value}</Text>
+    <View style={[s.row, { borderBottomColor: C.border }]}>
+      <Text style={[s.rowLabel, { color: C.textMuted }]}>{label}</Text>
+      <Text style={[s.rowValue, { color: C.textMid }, clrValue ? { color: clrValue } : {}]}>{value}</Text>
     </View>
   );
 }
@@ -235,13 +237,13 @@ export default function PlanetPositionScreen() {
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={[s.header, { borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color="#dde8f4" />
+          <Feather name="arrow-left" size={20} color={C.textMid} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Planet Position</Text>
-          <Text style={s.headerSub}>Lagna: {lagnaSign}</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>Planet Position</Text>
+          <Text style={[s.headerSub, { color: C.textMuted }]}>Lagna: {lagnaSign}</Text>
         </View>
         {showDemo && (
           <View style={s.demoPill}>
@@ -253,10 +255,10 @@ export default function PlanetPositionScreen() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]} showsVerticalScrollIndicator={false}>
         {/* Demo banner */}
         {showDemo && (
-          <Pressable style={s.demoBanner} onPress={() => router.push("/onboarding")}>
-            <Feather name="lock" size={12} color="#fbbf24" />
-            <Text style={s.demoText}>Sample data — Apni kundli banao exact positions ke liye</Text>
-            <Feather name="chevron-right" size={12} color="#fbbf24" />
+          <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
+            <Feather name="lock" size={12} color={C.warningText} />
+            <Text style={[s.demoText, { color: C.warningText }]}>Sample data — Apni kundli banao exact positions ke liye</Text>
+            <Feather name="chevron-right" size={12} color={C.warningText} />
           </Pressable>
         )}
 
@@ -266,7 +268,7 @@ export default function PlanetPositionScreen() {
         ))}
 
         {/* Legend */}
-        <View style={s.legend}>
+        <View style={[s.legend, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           {[
             { label: "Kendra", color: "#4ade80", desc: "Houses 1,4,7,10" },
             { label: "Trikona", color: "#f59e0b", desc: "Houses 5,9" },
@@ -275,8 +277,8 @@ export default function PlanetPositionScreen() {
           ].map(l => (
             <View key={l.label} style={s.legendItem}>
               <View style={[s.legendDot, { backgroundColor: l.color }]} />
-              <Text style={s.legendLabel}>{l.label}</Text>
-              <Text style={s.legendDesc}>{l.desc}</Text>
+              <Text style={[s.legendLabel, { color: C.textMuted }]}>{l.label}</Text>
+              <Text style={[s.legendDesc, { color: C.textMid }]}>{l.desc}</Text>
             </View>
           ))}
         </View>

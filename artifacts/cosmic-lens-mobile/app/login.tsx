@@ -181,7 +181,7 @@ export default function LoginScreen() {
           {/* ── Method selector: Mobile | Email ── */}
           <View style={[s.methodRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Pressable
-              style={[s.methodBtn, method === "mobile" && [s.methodBtnActive, { borderColor: "rgba(245,158,11,0.35)", backgroundColor: isDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.06)" }]]}
+              style={[s.methodBtn, method === "mobile" && [s.methodBtnActive, { borderColor: isDark ? "rgba(245,158,11,0.35)" : C.warningBorder, backgroundColor: isDark ? "rgba(245,158,11,0.08)" : C.warningBg }]]}
               onPress={() => switchMethod("mobile")}
             >
               <Feather name="smartphone" size={15} color={method === "mobile" ? "#f59e0b" : C.textMuted} />
@@ -190,7 +190,7 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
             <Pressable
-              style={[s.methodBtn, method === "email" && [s.methodBtnActive, { borderColor: "rgba(99,102,241,0.35)", backgroundColor: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.06)" }]]}
+              style={[s.methodBtn, method === "email" && [s.methodBtnActive, { borderColor: isDark ? "rgba(99,102,241,0.35)" : C.border2, backgroundColor: isDark ? "rgba(99,102,241,0.08)" : C.accentBg }]]}
               onPress={() => switchMethod("email")}
             >
               <Feather name="mail" size={15} color={method === "email" ? "#a78bfa" : C.textMuted} />
@@ -203,7 +203,7 @@ export default function LoginScreen() {
           {/* ── MOBILE PANEL ── */}
           {method === "mobile" && (
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2, shadowColor: isDark ? "#7c3aed" : "#0F172A", shadowOpacity: isDark ? 0.18 : 0.12 }]}>
-              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>
+              <Text style={[s.fieldLabel, { color: C.warningText }]}>
                 MOBILE NUMBER
               </Text>
               {/* Phone row with +91 prefix */}
@@ -289,7 +289,7 @@ export default function LoginScreen() {
               <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2, shadowColor: isDark ? "#7c3aed" : "#0F172A", shadowOpacity: isDark ? 0.18 : 0.12 }]}>
                 {emailTab === "signup" && (
                   <View style={s.fieldWrap}>
-                    <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.yourName.toUpperCase()}</Text>
+                    <Text style={[s.fieldLabel, { color: C.warningText }]}>{tr.yourName.toUpperCase()}</Text>
                     <FieldInput
                       icon="user"
                       value={name}
@@ -306,7 +306,7 @@ export default function LoginScreen() {
                 )}
 
                 <View style={s.fieldWrap}>
-                  <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.emailAddr.toUpperCase()}</Text>
+                  <Text style={[s.fieldLabel, { color: C.warningText }]}>{tr.emailAddr.toUpperCase()}</Text>
                   <FieldInput
                     ref={emailRef}
                     icon="mail"
@@ -324,7 +324,7 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={s.fieldWrap}>
-                  <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.password.toUpperCase()}</Text>
+                  <Text style={[s.fieldLabel, { color: C.warningText }]}>{tr.password.toUpperCase()}</Text>
                   <FieldInput
                     ref={passwordRef}
                     icon="lock"
@@ -388,7 +388,7 @@ export default function LoginScreen() {
               onPress={handleDemoLogin}
               style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1, width: "100%", maxWidth: 380 }]}
             >
-              <View style={[s.demoBtn, { borderColor: isDark ? "rgba(245,158,11,0.3)" : "rgba(217,119,6,0.25)", backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(245,158,11,0.05)" }]}>
+              <View style={[s.demoBtn, { borderColor: isDark ? "rgba(245,158,11,0.3)" : C.warningBorder, backgroundColor: isDark ? "rgba(245,158,11,0.06)" : C.warningBg }]}>
                 <View style={s.demoIconWrap}>
                   <Text style={{ fontSize: 14 }}>⚡</Text>
                 </View>

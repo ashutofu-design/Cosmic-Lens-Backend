@@ -740,7 +740,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
 
   return (
     <Pressable
-      style={[c.card, { borderColor: room.border, backgroundColor: room.bg }]}
+      style={[c.card, { borderColor: C.isDark ? room.border : `${room.color}30`, backgroundColor: C.isDark ? room.bg : C.bgCard }]}
       onPress={() => { setOpen(v => !v); Haptics.selectionAsync(); }}
     >
       {/* Header */}

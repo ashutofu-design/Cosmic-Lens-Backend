@@ -292,10 +292,10 @@ export default function InsightsScreen() {
 
       {/* Demo lock banner */}
       {showDemo && (
-        <Pressable style={s.demoBanner} onPress={() => router.push("/onboarding")}>
-          <Feather name="lock" size={12} color="#fbbf24" />
-          <Text style={s.demoText}>Sample data — Apni kundli banao personalized insights ke liye</Text>
-          <Feather name="chevron-right" size={12} color="#fbbf24" />
+        <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
+          <Feather name="lock" size={12} color={C.warningText} />
+          <Text style={[s.demoText, { color: C.warningText }]}>Sample data — Apni kundli banao personalized insights ke liye</Text>
+          <Feather name="chevron-right" size={12} color={C.warningText} />
         </Pressable>
       )}
 

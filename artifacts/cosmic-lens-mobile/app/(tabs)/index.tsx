@@ -209,10 +209,10 @@ export default function HomeScreen() {
         </View>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
-          style={styles.forecastPill}
+          style={[styles.forecastPill, { backgroundColor: colors.C.warningBg, borderColor: colors.C.warningBorder }]}
         >
-          <Feather name="calendar" size={11} color="#f59e0b" />
-          <Text style={styles.forecastPillText}>7 Days</Text>
+          <Feather name="calendar" size={11} color={colors.C.warningText} />
+          <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Days</Text>
         </Pressable>
       </Animated.View>
 

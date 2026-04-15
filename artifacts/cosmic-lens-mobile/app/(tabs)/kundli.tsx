@@ -874,18 +874,18 @@ export default function KundliScreen() {
       {/* Planet Position shortcut */}
       <Pressable
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/planet-position"); }}
-        style={({ pressed }) => [s.planetBtn, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [s.planetBtn, { borderColor: C.border, backgroundColor: C.bgCard }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
       >
         <View style={s.planetBtnLeft}>
-          <View style={s.planetBtnIcon}>
-            <Feather name="target" size={16} color="#f59e0b" />
+          <View style={[s.planetBtnIcon, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            <Feather name="target" size={16} color={C.textMid} />
           </View>
           <View>
-            <Text style={s.planetBtnTitle}>Planet Position</Text>
+            <Text style={[s.planetBtnTitle, { color: C.text }]}>Planet Position</Text>
             <Text style={[s.planetBtnSub, { color: C.textMuted }]}>Live graha degrees aur rashi</Text>
           </View>
         </View>
-        <Feather name="chevron-right" size={16} color="#f59e0b" style={{ opacity: 0.7 }} />
+        <Feather name="chevron-right" size={16} color={C.textMuted} />
       </Pressable>
 
       {/* Daily Alerts shortcut */}

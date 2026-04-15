@@ -399,7 +399,7 @@ export default function DoshScreen() {
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
       {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 8 }]}>
+      <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
@@ -420,10 +420,10 @@ export default function DoshScreen() {
       >
         {/* Demo banner */}
         {showDemo && (
-          <Pressable style={s.demoBanner} onPress={() => router.push("/onboarding")}>
-            <Feather name="lock" size={12} color="#fbbf24" />
-            <Text style={s.demoText}>Apni kundli banao — exact dosh calculation ke liye</Text>
-            <Feather name="chevron-right" size={12} color="#fbbf24" />
+          <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
+            <Feather name="lock" size={12} color={C.warningText} />
+            <Text style={[s.demoText, { color: C.warningText }]}>Apni kundli banao — exact dosh calculation ke liye</Text>
+            <Feather name="chevron-right" size={12} color={C.warningText} />
           </Pressable>
         )}
 

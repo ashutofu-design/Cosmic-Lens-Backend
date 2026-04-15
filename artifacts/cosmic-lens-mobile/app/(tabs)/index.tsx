@@ -556,7 +556,7 @@ function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDash
         <View style={bad.dashaRow}>
           <Feather name="zap" size={11} color="#ff8c42" />
           <Text style={bad.dashaTxt}>
-            Active: <Text style={{ color: "#ffb347", fontFamily: F.bold }}>{dashaTxt}</Text>
+            Active: <Text style={{ color: C.isDark ? "#ffb347" : "#92400E", fontFamily: F.bold }}>{dashaTxt}</Text>
           </Text>
         </View>
 

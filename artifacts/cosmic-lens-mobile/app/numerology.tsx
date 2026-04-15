@@ -559,8 +559,8 @@ export default function NumerologyScreen() {
             <View style={[s.divider, { borderColor: C.border }]}>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
               <View style={[s.divBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Feather name="lock" size={10} color="#f59e0b" />
-                <Text style={[s.divTxt, { color:"#f59e0b" }]}>PREMIUM REPORT</Text>
+                <Feather name="lock" size={10} color={C.isDark ? "#f59e0b" : "#92400E"} />
+                <Text style={[s.divTxt, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>PREMIUM REPORT</Text>
               </View>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
             </View>

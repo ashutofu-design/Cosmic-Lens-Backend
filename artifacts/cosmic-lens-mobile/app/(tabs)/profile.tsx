@@ -549,8 +549,8 @@ export default function ProfileScreen() {
       {switching && (
         <View style={s.overlay}>
           <View style={s.overlayBox}>
-            <Feather name="refresh-cw" size={22} color="#f59e0b" style={{ marginBottom:10 }} />
-            <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>Profile switch ho raha hai...</Text>
+            <Feather name="refresh-cw" size={22} color={C.isDark ? "#f59e0b" : "#92400E"} style={{ marginBottom:10 }} />
+            <Text style={{ color: C.isDark ? "#f59e0b" : "#92400E", fontSize:13, fontFamily:F.semibold }}>Profile switch ho raha hai...</Text>
           </View>
         </View>
       )}
@@ -651,10 +651,10 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.addBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, pressed && { opacity: 0.7 }]}
             >
               <View style={[s.addCircle,{ backgroundColor: C.isDark ? "rgba(245,158,11,0.1)" : C.warningBg }]}>
-                <Feather name="users" size={15} color="#f59e0b" />
+                <Feather name="users" size={15} color={C.isDark ? "#f59e0b" : "#92400E"} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: "#f59e0b", fontSize: 13, fontFamily: F.semibold }}>
+                <Text style={{ color: C.isDark ? "#f59e0b" : "#92400E", fontSize: 13, fontFamily: F.semibold }}>
                   {t.addFamilyMember}
                 </Text>
                 <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
@@ -691,7 +691,7 @@ export default function ProfileScreen() {
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>
+                    <Text style={{ color: C.isDark ? "#f59e0b" : "#92400E", fontSize:13, fontFamily:F.semibold }}>
                       {ALL_LANG_META.find(l=>l.code===language)?.native ?? "English"}
                     </Text>
                     <Text style={{ color:C.textMuted, fontSize:10, fontFamily:F.medium }}>

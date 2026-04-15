@@ -573,7 +573,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
   return (
     <View style={{gap:14}}>
       <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(251,191,36,0.2)"}]}>
-        <Text style={{color:"#fbbf24",fontSize:11,fontWeight:"700",marginBottom:3}}>⚠️ Approximate Transit</Text>
+        <Text style={{color:C.isDark?"#fbbf24":"#92400E",fontSize:11,fontWeight:"700",marginBottom:3}}>⚠️ Approximate Transit</Text>
         <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful.
           Exact transits ke liye Ephemeris ya jyotishi se confirm karein.
@@ -590,7 +590,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
         </View>
       )}
 
-      <Text style={{color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
+      <Text style={{color:C.isDark?"#f59e0b":"#92400E",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
       <View style={{gap:8}}>
         {CORE.map(name => {
           const lon     = transits[name] ?? 0;
@@ -691,7 +691,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         </Text>
       </View>
 
-      <Text style={{color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
+      <Text style={{color:C.isDark?"#f59e0b":"#92400E",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
 
       <View style={{gap:8}}>
         {kpData.map(({ name, lon, kp }) => {
@@ -802,7 +802,7 @@ export default function KundliScreen() {
     return (
       <CosmicBg contentStyle={{paddingTop:topPad+20,paddingBottom:botPad+80}}>
         <View style={s.emptyWrap}>
-          <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
+          <View style={s.emptyIcon}><Feather name="star" size={32} color={C.isDark ? "#f59e0b" : "#92400E"}/></View>
           <Text style={[s.emptyTitle, { color: C.text }]}>{t.noKundli}</Text>
           <Text style={[s.emptySub, { color: C.textMuted }]}>{t.noKundliSub}</Text>
           <Pressable style={({pressed})=>[s.emptyBtn, { backgroundColor: C.accent },pressed&&{opacity:0.8}]}

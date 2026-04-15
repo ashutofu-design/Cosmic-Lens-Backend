@@ -393,10 +393,10 @@ export default function LoginScreen() {
                   <Text style={{ fontSize: 14 }}>⚡</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.demoBtnTitle, { color: "#f59e0b" }]}>Demo Login</Text>
+                  <Text style={[s.demoBtnTitle, { color: isDark ? "#f59e0b" : "#92400E" }]}>Demo Login</Text>
                   <Text style={[s.demoBtnSub, { color: C.textMuted }]}>Testing ke liye — seedha andar jayein</Text>
                 </View>
-                <Feather name="chevron-right" size={16} color="#f59e0b" />
+                <Feather name="chevron-right" size={16} color={isDark ? "#f59e0b" : "#92400E"} />
               </View>
             </Pressable>
 
@@ -406,9 +406,9 @@ export default function LoginScreen() {
           {/* Footer */}
           <Text style={[s.footer, { color: C.textMuted }]}>
             By continuing, you agree to our{" "}
-            <Text style={{ color: "#f59e0b" }}>Terms of Service</Text>
+            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>Terms of Service</Text>
             {" "}and{" "}
-            <Text style={{ color: "#f59e0b" }}>Privacy Policy</Text>
+            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>Privacy Policy</Text>
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

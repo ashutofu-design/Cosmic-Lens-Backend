@@ -220,7 +220,7 @@ function DayCard({
               <Text style={[dc.detailTxt, { color: "#ef4444" }]}>⚠ Shani drishti</Text>
             )}
             {item.mars_aspect && (
-              <Text style={[dc.detailTxt, { color: "#f97316" }]}>⚠ Mangal drishti</Text>
+              <Text style={[dc.detailTxt, { color: C.isDark ? "#f97316" : "#C2410C" }]}>⚠ Mangal drishti</Text>
             )}
             {item.jupiter_aspect && (
               <Text style={[dc.detailTxt, { color: "#22c55e" }]}>✓ Guru drishti</Text>

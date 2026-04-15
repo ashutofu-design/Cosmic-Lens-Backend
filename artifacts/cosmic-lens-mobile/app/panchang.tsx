@@ -148,7 +148,7 @@ export default function PanchangScreen() {
                 <Text style={{ fontSize: 24 }}>🌅</Text>
                 <View>
                   <Text style={[s.sunLabel, { color: C.textMuted }]}>Sunrise</Text>
-                  <Text style={[s.sunVal, { color: "#f59e0b" }]}>{SUNRISE}</Text>
+                  <Text style={[s.sunVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{SUNRISE}</Text>
                 </View>
               </View>
               <View style={[s.sunDivider, { backgroundColor: C.border }]} />
@@ -173,7 +173,7 @@ export default function PanchangScreen() {
             {/* Subah muhurt note */}
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>🌟 BRAHMA MUHURTA</Text>
-              <Text style={[s.cardVal, { color: "#f59e0b" }]}>04:38 AM – 05:26 AM</Text>
+              <Text style={[s.cardVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>04:38 AM – 05:26 AM</Text>
               <Text style={[s.cardTip, { color: C.textMuted }]}>Puja, dhyan aur naye kaaryon ke liye param shubh samay</Text>
             </View>
           </>

@@ -297,7 +297,7 @@ export default function ForecastScreen() {
                   <Feather name="chevron-right" size={10} color={C.textDim} />
                   <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.adPlanet)} AD</Text>
                   <Feather name="chevron-right" size={10} color={C.textDim} />
-                  <Text style={[s.dashaItem, { color: "#f59e0b" }]}>{pName(dasha.pdPlanet)} PD</Text>
+                  <Text style={[s.dashaItem, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{pName(dasha.pdPlanet)} PD</Text>
                 </View>
               </View>
             )}

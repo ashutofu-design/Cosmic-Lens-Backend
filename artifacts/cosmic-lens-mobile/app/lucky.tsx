@@ -109,7 +109,7 @@ export default function LuckyScreen() {
           <View style={{ flexDirection: "row", gap: 10 }}>
             {lucky.numbers.map(n => (
               <View key={n} style={[s.numCircle, { backgroundColor: C.isDark ? "#f59e0b22" : C.warningBg, borderColor: C.isDark ? "#f59e0b44" : C.warningBorder }]}>
-                <Text style={[s.numText, { color: "#f59e0b" }]}>{n}</Text>
+                <Text style={[s.numText, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{n}</Text>
               </View>
             ))}
           </View>
@@ -171,7 +171,7 @@ export default function LuckyScreen() {
         {/* Mantra */}
         <Card title="🔔 GRAHA MANTRA">
           <View style={[s.mantraBox, { backgroundColor: C.isDark ? "#f59e0b08" : C.warningBg, borderColor: C.isDark ? "#f59e0b30" : C.warningBorder }]}>
-            <Text style={[s.mantraText, { color: "#f59e0b" }]}>{lucky.mantra}</Text>
+            <Text style={[s.mantraText, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{lucky.mantra}</Text>
             <Text style={[s.mantraTip, { color: C.textMuted }]}>Roshandar ya Shubh muhurat mein 108 baar jaap karein</Text>
           </View>
         </Card>

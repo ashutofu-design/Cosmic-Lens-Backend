@@ -326,7 +326,7 @@ export default function KundliMilanScreen() {
                     </Text>
                   ) : (
                     <Pressable onPress={() => router.push("/onboarding")}>
-                      <Text style={{ color:"#fbbf24", fontSize:11 }}>Kundli nahi bani — banao →</Text>
+                      <Text style={{ color: C.isDark ? "#fbbf24" : "#92400E", fontSize:11 }}>Kundli nahi bani — banao →</Text>
                     </Pressable>
                   )}
                 </View>
@@ -445,7 +445,7 @@ export default function KundliMilanScreen() {
                 <View style={s.manglikCard}>
                   <Text style={{ fontSize:16 }}>🔴</Text>
                   <View style={{ flex:1 }}>
-                    <Text style={{ color:"#f97316", fontWeight:"700", fontSize:13 }}>Manglik Dosh</Text>
+                    <Text style={{ color: C.isDark ? "#f97316" : "#C2410C", fontWeight:"700", fontSize:13 }}>Manglik Dosh</Text>
                     <Text style={{ color: C.textMuted, fontSize:11, marginTop:3, lineHeight:17 }}>
                       One person is Manglik, the other is not. Perform Kumbh Vivah or remedies before marriage. Consult a qualified Jyotishi.
                     </Text>

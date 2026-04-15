@@ -417,8 +417,8 @@ export default function InsightsScreen() {
           </View>
           <View style={[s.textCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.textCardHeader}>
-              <Feather name="alert-triangle" size={13} color="#fbbf24" />
-              <Text style={[s.textCardTitle, { color: "#fbbf24" }]}>Sawdhani</Text>
+              <Feather name="alert-triangle" size={13} color={C.isDark ? "#fbbf24" : "#92400E"} />
+              <Text style={[s.textCardTitle, { color: C.isDark ? "#fbbf24" : "#92400E" }]}>Sawdhani</Text>
             </View>
             <Text style={[s.textCardBody, { color: C.textMuted }]}>{displayForecast.caution}</Text>
           </View>

@@ -250,7 +250,7 @@ export default function OnboardingScreen() {
 
             {/* Warning */}
             <View style={[s.warnBox, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
-              <Feather name="alert-triangle" size={11} color="#f59e0b" style={{ marginTop: 1 }} />
+              <Feather name="alert-triangle" size={11} color={C.isDark ? "#f59e0b" : "#92400E"} style={{ marginTop: 1 }} />
               <Text style={[s.warnText, { color: C.warningText }]}>{t.timeTip}</Text>
             </View>
 
@@ -335,7 +335,7 @@ export default function OnboardingScreen() {
                       pressed && { backgroundColor: C.accentBg },
                     ]}
                   >
-                    <Feather name="map-pin" size={11} color="#f59e0b" style={{ marginTop: 2 }} />
+                    <Feather name="map-pin" size={11} color={C.isDark ? "#f59e0b" : "#92400E"} style={{ marginTop: 2 }} />
                     <Text style={[s.suggestText, { color: C.textMuted }]} numberOfLines={2}>{item.label}</Text>
                   </Pressable>
                 ))}

@@ -434,7 +434,7 @@ export default function DoshScreen() {
             <Text style={[s.summaryLabel, { color: C.textMuted }]}>Doshas Mili</Text>
           </View>
           <View style={[s.summaryChip, { borderColor: "rgba(249,115,22,0.3)", backgroundColor: C.isDark ? "rgba(249,115,22,0.08)" : "#FFF7ED" }]}>
-            <Text style={[s.summaryNum, { color: "#f97316" }]}>{strongCount}</Text>
+            <Text style={[s.summaryNum, { color: C.isDark ? "#f97316" : "#C2410C" }]}>{strongCount}</Text>
             <Text style={[s.summaryLabel, { color: C.textMuted }]}>Poorn Dosh</Text>
           </View>
           <View style={[s.summaryChip, { borderColor: "rgba(34,197,94,0.3)", backgroundColor: C.isDark ? "rgba(34,197,94,0.08)" : "#DCFCE7" }]}>

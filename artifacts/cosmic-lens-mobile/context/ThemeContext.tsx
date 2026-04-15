@@ -114,55 +114,48 @@ export const DARK: ThemeColors = {
 
 // ── Light — Premium White + Strong Purple Accents ─────────────────────────────
 export const LIGHT: ThemeColors = {
-  // Clean neutral — lavender only in explicit accent cards
   bg:      "#F5F5F8",
   bgCard:  "#FFFFFF",
-  bgCard2: "#F3F4F6",
-  bgCard3: "#E5E7EB",
+  bgCard2: "#EEF0F4",
+  bgCard3: "#E2E4EA",
 
-  // High-contrast readable text hierarchy
-  text:      "#111827",   // primary headings — near-black
-  textMid:   "#374151",   // body text
-  textMuted: "#6B7280",   // secondary labels
-  textDim:   "#9CA3AF",   // placeholder / dim
+  text:      "#0F172A",
+  textMid:   "#1E293B",
+  textMuted: "#475569",
+  textDim:   "#64748B",
 
-  // Strong purple accent
   accent:   "#6D5DF6",
-  accentBg: "rgba(109,93,246,0.08)",
+  accentBg: "rgba(109,93,246,0.10)",
 
-  // Clear visible borders
-  border:  "#E5E7EB",
-  border2: "#D1D5DB",
-  border3: "#F3F4F6",
+  border:  "#D1D5DB",
+  border2: "#B8BCC5",
+  border3: "#E5E7EB",
 
-  switchTrackOff:   "#D1D5DB",
+  switchTrackOff:   "#CBD5E1",
   navBg:            "#FFFFFF",
-  navBorder:        "#E5E7EB",
-  inputBg:          "#F9FAFB",
-  inputBorder:      "#E5E7EB",
+  navBorder:        "#D1D5DB",
+  inputBg:          "#F1F5F9",
+  inputBorder:      "#CBD5E1",
   inputFocusBorder: "#6D5DF6",
 
   shimmer1: "rgba(248,249,252,0.95)",
   shimmer2: "rgba(243,244,248,0.95)",
   shimmer3: "rgba(248,249,252,0.95)",
 
-  // Visible card shadow for depth
   cardShadow:
-    "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px #E5E7EB",
+    "0 2px 6px rgba(0,0,0,0.08), 0 4px 20px rgba(0,0,0,0.10), 0 0 0 1px #D1D5DB",
 
   statusBar: "dark-content",
   isDark: false,
 
   warningBg:     "#FEF3C7",
-  warningBorder: "#F59E0B",
-  warningText:   "#92400E",
+  warningBorder: "#D97706",
+  warningText:   "#78350F",
 
-  // Strong purple selection
-  toggleSelBg:     "rgba(109,93,246,0.08)",
+  toggleSelBg:     "rgba(109,93,246,0.10)",
   toggleSelBorder: "#6D5DF6",
-  toggleSelText:   "#4F46E5",
+  toggleSelText:   "#4338CA",
 
-  // Strong purple CTA gradient — matches accent
   btnGradStart: "#6D5DF6",
   btnGradEnd:   "#8B5CF6",
 };

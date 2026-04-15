@@ -50,6 +50,11 @@ const PLANET_HUE: Record<string,string> = {
   Rahu:"#f59e0b", Ketu:"#fb923c",
 };
 const hue = (p: string) => PLANET_HUE[p] ?? "#f59e0b";
+const oa = (isDark: boolean, hexAlpha: string): string => {
+  if (isDark) return hexAlpha;
+  const n = parseInt(hexAlpha, 16);
+  return Math.min(255, Math.round(n * 2.2)).toString(16).padStart(2, '0');
+};
 function formatDate(d: Date | string) {
   const dt = new Date(d);
   return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
@@ -79,15 +84,16 @@ function calcPratyantar(antar: any): any[] {
 
 function SectionHeader({ title, icon, C }: { title: string; icon?: string; C: any }) {
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
       {icon && (
-        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${ac}12`, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${ac}${o("12")}`, alignItems: "center", justifyContent: "center" }}>
           <Feather name={icon as any} size={13} color={ac} />
         </View>
       )}
-      <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 2, flex: 1 }}>{title}</Text>
-      <View style={{ flex: 1, height: 1, backgroundColor: `${ac}15`, marginLeft: 8 }} />
+      <Text style={{ color: ac, fontSize: 12, fontFamily: F.bold, letterSpacing: 2, flex: 1 }}>{title}</Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: `${ac}${o("20")}`, marginLeft: 8 }} />
     </View>
   );
 }
@@ -121,32 +127,33 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
   const color = hue(planet);
   const pct = progress(startDate, endDate);
   const yrs = ((tsOf(endDate) - tsOf(startDate)) / (365.25 * 86400 * 1000)).toFixed(0);
+  const o = (v: string) => oa(C.isDark, v);
   return (
     <View style={{
       borderRadius: 18, borderWidth: 1.5, overflow: "hidden",
-      backgroundColor: active ? `${color}06` : C.bgCard,
-      borderColor: active ? `${color}45` : C.border,
-      boxShadow: active ? `0 6px 24px ${color}18` : C.cardShadow,
+      backgroundColor: active ? `${color}${o("08")}` : C.bgCard,
+      borderColor: active ? `${color}${o("50")}` : C.border,
+      boxShadow: active ? `0 6px 24px ${color}${o("20")}` : C.cardShadow,
     } as any}>
-      <View style={{ backgroundColor: `${color}10`, paddingVertical: 8, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: `${color}15` }}>
+      <View style={{ backgroundColor: `${color}${o("12")}`, paddingVertical: 9, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: `${color}${o("18")}` }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Feather name="sun" size={12} color={color} />
-          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA</Text>
+          <Feather name="sun" size={13} color={color} />
+          <Text style={{ color, fontSize: 11, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA</Text>
         </View>
-        <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.medium }}>{yrs} years</Text>
+        <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.bold }}>{yrs} years</Text>
       </View>
       <View style={{ borderLeftWidth: 4, borderLeftColor: color, padding: 18, gap: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <NavArrow dir="left" enabled={hasPrev} onPress={onPrev} C={C} />
           <View style={{ alignItems: "center", flex: 1, gap: 4 }}>
-            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: `${color}12`, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: `${color}30` }}>
+            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: `${color}${o("15")}`, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: `${color}${o("35")}` }}>
               <Text style={{ color, fontSize: 20, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
             </View>
             <Text style={{ color: C.text, fontSize: 22, fontFamily: F.bold }}>{pName(planet)}</Text>
-            <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+            <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
             {active && (
-              <View style={{ backgroundColor: `${color}15`, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: `${color}30`, marginTop: 2 }}>
-                <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>● ACTIVE NOW</Text>
+              <View style={{ backgroundColor: `${color}${o("18")}`, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: `${color}${o("35")}`, marginTop: 2 }}>
+                <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1 }}>● ACTIVE NOW</Text>
               </View>
             )}
           </View>
@@ -156,11 +163,11 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
           <View style={{ gap: 5, marginTop: 4 }}>
             <ProgBar pct={pct} color={color} />
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium }}>{formatDate(startDate)}</Text>
-              <View style={{ backgroundColor: `${color}12`, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
-                <Text style={{ color, fontSize: 11, fontFamily: F.bold }}>{pct}%</Text>
+              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(startDate)}</Text>
+              <View style={{ backgroundColor: `${color}${o("15")}`, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ color, fontSize: 12, fontFamily: F.bold }}>{pct}%</Text>
               </View>
-              <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium }}>{formatDate(endDate)}</Text>
+              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(endDate)}</Text>
             </View>
           </View>
         )}
@@ -176,34 +183,35 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   const C = useC();
   const color = hue(planet);
   const pct = progress(startDate, endDate);
+  const o = (v: string) => oa(C.isDark, v);
   return (
     <View style={{
       borderRadius: 14, borderWidth: 1, overflow: "hidden",
-      backgroundColor: active ? `${color}05` : C.bgCard,
-      borderColor: active ? `${color}35` : C.border,
+      backgroundColor: active ? `${color}${o("06")}` : C.bgCard,
+      borderColor: active ? `${color}${o("40")}` : C.border,
       marginLeft: 12,
     }}>
       <View style={{ borderLeftWidth: 3, borderLeftColor: color, padding: 14, gap: 8 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
-          <Feather name="moon" size={10} color={color} />
-          <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.2 }}>ANTARDASHA</Text>
+          <Feather name="moon" size={11} color={color} />
+          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.2 }}>ANTARDASHA</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <NavArrow dir="left" enabled={hasPrev} onPress={onPrev} C={C} />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginHorizontal: 10 }}>
-            <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: `${color}12`, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: `${color}25` }}>
+            <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: `${color}${o("15")}`, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: `${color}${o("30")}` }}>
               <Text style={{ color, fontSize: 14, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold }}>{pName(planet)}</Text>
                 {active && (
-                  <View style={{ backgroundColor: `${color}15`, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 }}>
-                    <Text style={{ color, fontSize: 8, fontFamily: F.bold }}>ACTIVE</Text>
+                  <View style={{ backgroundColor: `${color}${o("18")}`, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 }}>
+                    <Text style={{ color, fontSize: 9, fontFamily: F.bold }}>ACTIVE</Text>
                   </View>
                 )}
               </View>
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.semibold, marginTop: 2 }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
             </View>
           </View>
           <NavArrow dir="right" enabled={hasNext} onPress={onNext} C={C} />
@@ -214,7 +222,7 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
               <View style={{ flex: 1 }}>
                 <ProgBar pct={pct} color={color} />
               </View>
-              <Text style={{ color, fontSize: 10, fontFamily: F.bold, minWidth: 30, textAlign: "right" }}>{pct}%</Text>
+              <Text style={{ color, fontSize: 11, fontFamily: F.bold, minWidth: 30, textAlign: "right" }}>{pct}%</Text>
             </View>
           </View>
         )}
@@ -230,17 +238,18 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   const C = useC();
   const color = hue(planet);
   const pct = progress(startDate, endDate);
+  const o = (v: string) => oa(C.isDark, v);
   return (
     <View style={{
       borderRadius: 12, borderWidth: 1, overflow: "hidden",
-      backgroundColor: active ? `${color}04` : C.bgCard,
-      borderColor: active ? `${color}25` : C.border,
+      backgroundColor: active ? `${color}${o("06")}` : C.bgCard,
+      borderColor: active ? `${color}${o("30")}` : C.border,
       marginLeft: 28,
     }}>
       <View style={{ borderLeftWidth: 2, borderLeftColor: color, paddingVertical: 10, paddingHorizontal: 12, gap: 6 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
-          <Feather name="star" size={9} color={color} />
-          <Text style={{ color, fontSize: 8, fontFamily: F.bold, letterSpacing: 1 }}>PRATYANTARDASHA</Text>
+          <Feather name="star" size={10} color={color} />
+          <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>PRATYANTARDASHA</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Pressable
@@ -249,7 +258,7 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
             <Feather name="chevron-left" size={14} color={C.textMuted} />
           </Pressable>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, justifyContent: "center" }}>
-            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${color}10`, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${color}${o("12")}`, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ color, fontSize: 11, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
             </View>
             <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>{pName(planet)}</Text>
@@ -261,13 +270,13 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
             <Feather name="chevron-right" size={14} color={C.textMuted} />
           </Pressable>
         </View>
-        <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium, textAlign: "center" }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+        <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.semibold, textAlign: "center" }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
         {pct > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ flex: 1 }}>
               <ProgBar pct={pct} color={color} />
             </View>
-            <Text style={{ color, fontSize: 9, fontFamily: F.bold }}>{pct}%</Text>
+            <Text style={{ color, fontSize: 10, fontFamily: F.bold }}>{pct}%</Text>
           </View>
         )}
       </View>
@@ -279,7 +288,7 @@ function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:n
   const C = useC();
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA TIMELINE</Text>
+      <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA TIMELINE</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
           {dashas.map((d,i) => {
@@ -289,11 +298,11 @@ function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:n
                 style={{
                   minWidth: 50, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 14,
                   borderWidth: sel ? 2 : 1.5, alignItems: "center", gap: 3,
-                  backgroundColor: sel ? `${color}18` : C.bgCard,
+                  backgroundColor: sel ? `${color}${oa(C.isDark,"18")}` : C.bgCard,
                   borderColor: sel ? color : C.border,
                 }}>
                 <Text style={{ color: sel ? color : C.textMuted, fontSize: 13, fontFamily: F.bold }}>{d.planet.slice(0,2)}</Text>
-                <Text style={{ color: sel ? color : C.textDim, fontSize: 8, fontFamily: F.medium }}>{new Date(d.startDate).getFullYear()}</Text>
+                <Text style={{ color: sel ? color : C.textMid, fontSize: 9, fontFamily: F.semibold }}>{new Date(d.startDate).getFullYear()}</Text>
                 {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />}
               </Pressable>
             );
@@ -410,6 +419,7 @@ function computeBAV(kundli: KundliData) {
 function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   const { BAVS, SAV } = useMemo(() => computeBAV(kundli), [kundli]);
   const [selPlanet, setSelPlanet] = useState("SAV");
   const PLANETS = ["SAV","Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
@@ -421,8 +431,8 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, padding: 0, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>Ashtakavarga kya hai?</Text>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>Ashtakavarga kya hai?</Text>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Har grah 8 sthanon se 12 rashiyon ko benefic/malefic points deta hai.
             SAV = sabhi 7 grahas ka total. Zyada points = stronger rashi.
           </Text>
@@ -438,8 +448,8 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
               <Pressable key={p} onPress={()=>{setSelPlanet(p);Haptics.selectionAsync();}}
                 style={{
                   paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, borderWidth: sel ? 2 : 1,
-                  backgroundColor: sel ? `${color}15` : C.bgCard,
-                  borderColor: sel ? `${color}60` : C.border,
+                  backgroundColor: sel ? `${color}${o("18")}` : C.bgCard,
+                  borderColor: sel ? `${color}${o("60")}` : C.border,
                 }}>
                 <Text style={{color:sel?color:C.textMuted, fontSize: 12, fontFamily: F.bold}}>{p==="SAV"?"SAV":p.slice(0,3)}</Text>
               </Pressable>
@@ -450,13 +460,14 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
 
       <View style={{
         flexDirection:"row", alignItems:"center", justifyContent:"space-between",
-        backgroundColor: `${ac}08`, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12,
+        backgroundColor: `${ac}${o("10")}`, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 14,
+        borderWidth: 1, borderColor: `${ac}${o("20")}`,
       }}>
-        <Text style={{color:C.text,fontSize:15,fontFamily:F.bold}}>
+        <Text style={{color:C.text,fontSize:16,fontFamily:F.bold}}>
           {selPlanet === "SAV" ? "Sarvashtakavarga" : `${selPlanet} BAV`}
         </Text>
-        <View style={{ backgroundColor: `${ac}15`, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8 }}>
-          <Text style={{color:ac,fontSize:12,fontFamily:F.bold}}>{total}/{selPlanet==="SAV"?336:56}</Text>
+        <View style={{ backgroundColor: `${ac}${o("18")}`, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8 }}>
+          <Text style={{color:ac,fontSize:13,fontFamily:F.bold}}>{total}/{selPlanet==="SAV"?336:56}</Text>
         </View>
       </View>
 
@@ -470,13 +481,13 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
               width: "23%" as any, borderRadius: 12, borderWidth: 1, padding: 10, gap: 5,
               alignItems: "center", backgroundColor: C.bgCard, borderColor: C.border,
             }}>
-              <Text style={{color: C.textMuted, fontSize: 9, fontFamily: F.bold, textAlign: "center"}}>{rashi}</Text>
+              <Text style={{color: C.textMid, fontSize: 10, fontFamily: F.bold, textAlign: "center"}}>{rashi}</Text>
               <Text style={{color, fontSize: 22, fontFamily: F.bold}}>{score}</Text>
-              <View style={{ width: "100%", height: 4, borderRadius: 2, backgroundColor: C.bgCard2, overflow: "hidden" }}>
-                <View style={{ height: 4, borderRadius: 2, width: `${Math.round(pct*100)}%` as any, backgroundColor: color }} />
+              <View style={{ width: "100%", height: 5, borderRadius: 3, backgroundColor: C.bgCard2, overflow: "hidden" }}>
+                <View style={{ height: 5, borderRadius: 3, width: `${Math.round(pct*100)}%` as any, backgroundColor: color }} />
               </View>
-              <View style={{ backgroundColor: `${color}15`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{color, fontSize: 8, fontFamily: F.bold}}>
+              <View style={{ backgroundColor: `${color}${o("18")}`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{color, fontSize: 9, fontFamily: F.bold}}>
                   {pct>=0.7?"Uchh":pct>=0.5?"Shubh":pct>=0.3?"Madhyam":"Neech"}
                 </Text>
               </View>
@@ -489,7 +500,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
         {[["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]].map(([c,l])=>(
           <View key={l} style={{flexDirection:"row",alignItems:"center",gap:5}}>
             <View style={{width:10,height:10,borderRadius:5,backgroundColor:c as string}}/>
-            <Text style={{color:C.textMuted,fontSize:10,fontFamily:F.medium}}>{l}</Text>
+            <Text style={{color:C.textMid,fontSize:11,fontFamily:F.semibold}}>{l}</Text>
           </View>
         ))}
       </View>
@@ -527,6 +538,7 @@ function computeNavatara(kundli: KundliData) {
 function NavataraTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   const data = useMemo(() => computeNavatara(kundli), [kundli]);
   const moonNak = kundli.nakshatra ?? "?";
 
@@ -534,8 +546,8 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>What is Navatara?</Text>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>What is Navatara?</Text>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Starting from the Moon's nakshatra, 27 nakshatras are grouped into 9-star cycles called Tara.
           </Text>
         </View>
@@ -543,14 +555,14 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
 
       <View style={{
         flexDirection: "row", alignItems: "center", gap: 10,
-        backgroundColor: `${ac}08`, borderRadius: 14, padding: 14,
-        borderWidth: 1, borderColor: `${ac}20`,
+        backgroundColor: `${ac}${o("10")}`, borderRadius: 14, padding: 14,
+        borderWidth: 1, borderColor: `${ac}${o("25")}`,
       }}>
-        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${ac}${o("18")}`, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ fontSize: 20 }}>🌙</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.5 }}>CHANDRA NAKSHATRA (BASE)</Text>
+          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>CHANDRA NAKSHATRA (BASE)</Text>
           <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold, marginTop: 2 }}>{moonNak}</Text>
         </View>
       </View>
@@ -558,9 +570,9 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{flexDirection:"row",gap:6}}>
           {TARA_DATA.map((t2,i) => (
-            <View key={i} style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", gap: 2, borderColor: `${t2.color}30`, backgroundColor: `${t2.color}08` }}>
-              <Text style={{ fontSize: 10, fontFamily: F.bold, color: t2.color }}>{i+1}</Text>
-              <Text style={{ fontSize: 9, fontFamily: F.medium, color: t2.color }}>{t2.name.slice(0,6)}</Text>
+            <View key={i} style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", gap: 2, borderColor: `${t2.color}${o("35")}`, backgroundColor: `${t2.color}${o("10")}` }}>
+              <Text style={{ fontSize: 11, fontFamily: F.bold, color: t2.color }}>{i+1}</Text>
+              <Text style={{ fontSize: 10, fontFamily: F.bold, color: t2.color }}>{t2.name.slice(0,6)}</Text>
             </View>
           ))}
         </View>
@@ -570,23 +582,23 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
         {data.map(({ planet, nakName, taraNum, tara }) => (
           <View key={planet} style={{
             flexDirection: "row", alignItems: "flex-start", gap: 12, borderWidth: 1, borderRadius: 14, padding: 14, overflow: "hidden",
-            borderColor: `${tara.color}20`, backgroundColor: C.bgCard,
+            borderColor: `${tara.color}${o("25")}`, backgroundColor: C.bgCard,
           }}>
             <View style={{ borderLeftWidth: 3, borderLeftColor: tara.color, position: "absolute", left: 0, top: 0, bottom: 0 }} />
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${hue(planet)}12`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${hue(planet)}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Text style={{ color: hue(planet), fontSize: 14, fontFamily: F.bold }}>{planet.slice(0,2)}</Text>
             </View>
             <View style={{flex:1}}>
               <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
                 <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(planet)}</Text>
-                <View style={{ backgroundColor: `${tara.color}15`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: `${tara.color}25` }}>
-                  <Text style={{color:tara.color,fontSize:9,fontFamily:F.bold}}>{taraNum}. {tara.name}</Text>
+                <View style={{ backgroundColor: `${tara.color}${o("18")}`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: `${tara.color}${o("30")}` }}>
+                  <Text style={{color:tara.color,fontSize:10,fontFamily:F.bold}}>{taraNum}. {tara.name}</Text>
                 </View>
               </View>
-              <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:3}}>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
                 Nakshatra: {nakName}
               </Text>
-              <Text style={{color:tara.color,fontSize:11,fontFamily:F.medium,marginTop:2}}>{tara.desc}</Text>
+              <Text style={{color:tara.color,fontSize:11,fontFamily:F.semibold,marginTop:2}}>{tara.desc}</Text>
             </View>
             <Text style={{fontSize:18}}>
               {tara.type==="great"?"⭐":tara.type==="good"?"✅":tara.type==="bad"?"⚠️":"🔵"}
@@ -624,6 +636,7 @@ function computeChara(kundli: KundliData) {
 function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   const data = useMemo(() => computeChara(kundli), [kundli]);
   const ak   = data[0];
 
@@ -631,8 +644,8 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>Jaimini Chara Karakas kya hain?</Text>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>Jaimini Chara Karakas kya hain?</Text>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain.
             Sabse zyada degree wala graha Atmakaraka hota hai.
           </Text>
@@ -642,29 +655,29 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
       {ak && (
         <View style={{
           borderRadius: 16, borderWidth: 1.5, padding: 0, overflow: "hidden",
-          backgroundColor: C.bgCard, borderColor: `${hue(ak.name)}40`,
-          boxShadow: `0 4px 20px ${hue(ak.name)}15`,
+          backgroundColor: C.bgCard, borderColor: `${hue(ak.name)}${o("45")}`,
+          boxShadow: `0 4px 20px ${hue(ak.name)}${o("18")}`,
         } as any}>
           <View style={{ borderLeftWidth: 4, borderLeftColor: hue(ak.name), padding: 16, gap: 10 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
               <View style={{
                 width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center",
                 borderWidth: 1.5, flexShrink: 0,
-                backgroundColor: `${hue(ak.name)}12`, borderColor: `${hue(ak.name)}30`,
+                backgroundColor: `${hue(ak.name)}${o("15")}`, borderColor: `${hue(ak.name)}${o("35")}`,
               }}>
                 <Text style={{ color: hue(ak.name), fontSize: 22, fontFamily: F.bold }}>{ak.name.slice(0,2)}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Feather name="award" size={12} color={hue(ak.name)} />
-                  <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>ATMAKARAKA</Text>
+                  <Feather name="award" size={13} color={hue(ak.name)} />
+                  <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>ATMAKARAKA</Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 20, fontFamily: F.bold, marginTop: 2 }}>{pName(ak.name)}</Text>
-                <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium, marginTop: 3 }}>{ak.karaka?.desc}</Text>
+                <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold, marginTop: 3 }}>{ak.karaka?.desc}</Text>
               </View>
             </View>
-            <View style={{ backgroundColor: `${hue(ak.name)}08`, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 }}>
-              <Text style={{ color: C.textDim, fontSize: 11, fontFamily: F.medium }}>
+            <View style={{ backgroundColor: `${hue(ak.name)}${o("10")}`, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: `${hue(ak.name)}${o("18")}` }}>
+              <Text style={{ color: C.textMid, fontSize: 12, fontFamily: F.semibold }}>
                 Degree within sign: <Text style={{ color: hue(ak.name), fontFamily: F.bold }}>{ak.deg.toFixed(2)}°</Text> — highest in chart
               </Text>
             </View>
@@ -680,34 +693,34 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
             <View key={name} style={{
               flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 14,
               borderWidth: 1, padding: 14, overflow: "hidden",
-              backgroundColor: C.bgCard, borderColor: `${color}20`,
+              backgroundColor: C.bgCard, borderColor: `${color}${o("25")}`,
             }}>
               <View style={{ borderLeftWidth: 3, borderLeftColor: color, position: "absolute", left: 0, top: 0, bottom: 0 }} />
               <View style={{
                 width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center",
-                flexShrink: 0, backgroundColor: `${color}12`,
+                flexShrink: 0, backgroundColor: `${color}${o("15")}`,
               }}>
-                <Text style={{ color, fontSize: 12, fontFamily: F.bold }}>{karaka.key}</Text>
+                <Text style={{ color, fontSize: 13, fontFamily: F.bold }}>{karaka.key}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                   <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(name)}</Text>
-                  <View style={{ backgroundColor: `${color}10`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                    <Text style={{color:C.textDim,fontSize:10,fontFamily:F.medium}}>{deg.toFixed(1)}°</Text>
+                  <View style={{ backgroundColor: `${color}${o("12")}`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: `${color}${o("18")}` }}>
+                    <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{deg.toFixed(1)}°</Text>
                   </View>
                 </View>
-                <Text style={{color,fontSize:11,fontFamily:F.semibold,marginTop:2}}>{karaka.name} · {karaka.nameHindi}</Text>
-                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:2}}>{karaka.desc}</Text>
+                <Text style={{color,fontSize:12,fontFamily:F.bold,marginTop:2}}>{karaka.name} · {karaka.nameHindi}</Text>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:2}}>{karaka.desc}</Text>
               </View>
             </View>
           );
         })}
       </View>
 
-      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: "rgba(167,139,250,0.2)", backgroundColor: C.bgCard, overflow: "hidden" }}>
+      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.isDark ? "rgba(167,139,250,0.2)" : "rgba(167,139,250,0.35)", backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
-          <Text style={{color:"#a78bfa",fontSize:12,fontFamily:F.bold}}>Jaimini Lagna</Text>
-          <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.regular,lineHeight:19}}>
+          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>Jaimini Lagna</Text>
+          <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
             Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position
             jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein.
           </Text>
@@ -740,6 +753,7 @@ function approxTransit(referenceDate: Date = new Date()): Record<string,number> 
 function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   const transits = useMemo(() => approxTransit(), []);
   const ascRashi = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
@@ -750,9 +764,9 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
         <View style={{ borderLeftWidth: 3, borderLeftColor: C.warningBorder, padding: 14, gap: 4 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="alert-triangle" size={13} color={C.warningText} />
-            <Text style={{ color: C.warningText, fontSize: 12, fontFamily: F.bold }}>Approximate Transit</Text>
+            <Text style={{ color: C.warningText, fontSize: 13, fontFamily: F.bold }}>Approximate Transit</Text>
           </View>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful.
           </Text>
         </View>
@@ -760,17 +774,17 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
 
       {moonRashi && (
         <View style={{
-          borderRadius: 14, borderWidth: 1, borderColor: `${ac}30`, backgroundColor: C.bgCard, overflow: "hidden",
+          borderRadius: 14, borderWidth: 1, borderColor: `${ac}${o("35")}`, backgroundColor: C.bgCard, overflow: "hidden",
         }}>
           <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e" }} />
-              <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.5 }}>LIVE — CHANDRA TRANSIT</Text>
+              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>LIVE — CHANDRA TRANSIT</Text>
             </View>
             <Text style={{color:C.text,fontSize:16,fontFamily:F.bold,marginTop:2}}>
               {moonRashi.name} · Bhav {((moonRashi.index - ascRashi + 12)%12)+1}
             </Text>
-            <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium}}>Nakshatra: {moonRashi.nakshatra}</Text>
+            <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.semibold}}>Nakshatra: {moonRashi.nakshatra}</Text>
           </View>
         </View>
       )}
@@ -793,29 +807,29 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
             <View key={name} style={{
               flexDirection: "row", alignItems: "center", gap: 12,
               borderRadius: 14, borderWidth: 1, padding: 14, overflow: "hidden",
-              backgroundColor: isConj ? `${pHue}05` : C.bgCard,
-              borderColor: isConj ? `${pHue}40` : C.border,
+              backgroundColor: isConj ? `${pHue}${o("06")}` : C.bgCard,
+              borderColor: isConj ? `${pHue}${o("45")}` : C.border,
             }}>
               <View style={{ borderLeftWidth: 3, borderLeftColor: pHue, position: "absolute", left: 0, top: 0, bottom: 0 }} />
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${pHue}12`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Text style={{color:pHue,fontSize:13,fontFamily:F.bold}}>{name.slice(0,2)}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                   <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(name)}</Text>
                   {isConj && (
-                    <View style={{backgroundColor:`${pHue}18`,borderRadius:6,paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:`${pHue}30`}}>
-                      <Text style={{color:pHue,fontSize:8,fontFamily:F.bold}}>NATAL CONJ</Text>
+                    <View style={{backgroundColor:`${pHue}${o("20")}`,borderRadius:6,paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:`${pHue}${o("35")}`}}>
+                      <Text style={{color:pHue,fontSize:9,fontFamily:F.bold}}>NATAL CONJ</Text>
                     </View>
                   )}
                 </View>
-                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.medium,marginTop:3}}>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
                   {RASHIS_HI[rashi]} · Bhav {house} · {nakName}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={{color:pHue,fontSize:14,fontFamily:F.bold}}>{deg}°</Text>
-                <Text style={{color:C.textDim,fontSize:9,fontFamily:F.medium}}>H{house}</Text>
+                <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>H{house}</Text>
               </View>
             </View>
           );
@@ -859,6 +873,7 @@ function getKPLords(longitude: number): { nakName:string; starLord:string; subLo
 function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   const ascLon = kundli.ascendantDeg ?? 0;
   const kpData = useMemo(() => {
@@ -875,8 +890,8 @@ function KPTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>What is KP Paddhati?</Text>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.regular, lineHeight: 19 }}>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>What is KP Paddhati?</Text>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Krishnamurti Paddhati uses proportional sub-divisions of Vimshottari dasha for precision timing of events.
           </Text>
         </View>
@@ -890,21 +905,21 @@ function KPTab({ kundli }: { kundli: KundliData }) {
             <View key={name} style={{
               flexDirection: "row", alignItems: "flex-start", gap: 12,
               borderRadius: 14, borderWidth: 1, padding: 14, overflow: "hidden",
-              backgroundColor: C.bgCard, borderColor: `${pHue}20`,
+              backgroundColor: C.bgCard, borderColor: `${pHue}${o("25")}`,
             }}>
               <View style={{ borderLeftWidth: 3, borderLeftColor: pHue, position: "absolute", left: 0, top: 0, bottom: 0 }} />
-              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${pHue}10`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Text style={{color:pHue,fontSize:11,fontFamily:F.bold}}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Text style={{color:pHue,fontSize:12,fontFamily:F.bold}}>
                   {isAsc?"Asc":name.slice(0,2)}
                 </Text>
               </View>
               <View style={{flex:1,gap:6}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:13,fontFamily:F.bold}}>
+                  <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>
                     {isAsc?"Ascendant":pName(name)}
                   </Text>
-                  <View style={{ backgroundColor: `${pHue}10`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                    <Text style={{color:C.textDim,fontSize:10,fontFamily:F.medium}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
+                  <View style={{ backgroundColor: `${pHue}${o("12")}`, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: `${pHue}${o("18")}` }}>
+                    <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
                   </View>
                 </View>
                 <View style={{flexDirection:"row",gap:6,flexWrap:"wrap"}}>
@@ -918,10 +933,10 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         })}
       </View>
 
-      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: "rgba(167,139,250,0.2)", backgroundColor: C.bgCard, overflow: "hidden" }}>
+      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.isDark ? "rgba(167,139,250,0.2)" : "rgba(167,139,250,0.35)", backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
-          <Text style={{color:"#a78bfa",fontSize:12,fontFamily:F.bold}}>KP Significators</Text>
-          <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.regular,lineHeight:19}}>
+          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>KP Significators</Text>
+          <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
             Kisi bhi ghatna ke liye dekhen: Star-lord aur Sub-lord ka relationship.
             Agar 3 lord agree karein → event pakka.
           </Text>
@@ -934,13 +949,14 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 function KPLordChip({ label, lord }: { label:string; lord:string }) {
   const C = useC();
   const color = hue(lord);
+  const o = (v: string) => oa(C.isDark, v);
   return (
     <View style={{
       flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 8,
       paddingHorizontal: 8, paddingVertical: 4, gap: 3,
-      backgroundColor: `${color}10`, borderColor: `${color}25`,
+      backgroundColor: `${color}${o("12")}`, borderColor: `${color}${o("30")}`,
     }}>
-      <Text style={{color:C.textMuted,fontSize:9,fontFamily:F.medium}}>{label}:</Text>
+      <Text style={{color:C.textMid,fontSize:9,fontFamily:F.semibold}}>{label}:</Text>
       <Text style={{color,fontSize:10,fontFamily:F.bold}}>{lord}</Text>
     </View>
   );
@@ -963,6 +979,7 @@ export default function KundliScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
 
   const [activeTab, setActiveTab] = useState("Kundli");
   const [mahaIdx,   setMahaIdx]   = useState(0);
@@ -998,7 +1015,7 @@ export default function KundliScreen() {
     return (
       <CosmicBg contentStyle={{paddingTop:topPad+20,paddingBottom:botPad+80}}>
         <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 24, gap: 16, paddingTop: 60 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, borderWidth: 1.5, alignItems: "center", justifyContent: "center", borderColor: `${ac}40`, backgroundColor: `${ac}07` }}>
+          <View style={{ width: 88, height: 88, borderRadius: 44, borderWidth: 1.5, alignItems: "center", justifyContent: "center", borderColor: `${ac}${o("45")}`, backgroundColor: `${ac}${o("10")}` }}>
             <Feather name="star" size={36} color={ac}/>
           </View>
           <Text style={{ color: C.text, fontSize: 22, fontFamily: F.bold, textAlign: "center" }}>{tI18n.noKundli}</Text>
@@ -1054,11 +1071,11 @@ export default function KundliScreen() {
                   flexDirection: "row", alignItems: "center", gap: 6,
                   paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12,
                   borderWidth: active ? 2 : 1.5,
-                  backgroundColor: active ? `${ac}15` : C.bgCard,
-                  borderColor: active ? `${ac}60` : C.border,
+                  backgroundColor: active ? `${ac}${o("18")}` : C.bgCard,
+                  borderColor: active ? `${ac}${o("60")}` : C.border,
                 }}>
-                <Feather name={icon as any} size={12} color={active ? ac : C.textDim} />
-                <Text style={{ color: active ? ac : C.textDim, fontSize: 12, fontFamily: F.bold }}>
+                <Feather name={icon as any} size={12} color={active ? ac : C.textMid} />
+                <Text style={{ color: active ? ac : C.textMid, fontSize: 12, fontFamily: F.bold }}>
                   {label}
                 </Text>
               </Pressable>
@@ -1073,7 +1090,7 @@ export default function KundliScreen() {
         boxShadow: C.cardShadow,
       } as any}>
         <View style={{
-          backgroundColor: `${ac}10`, paddingVertical: 10, paddingHorizontal: 16,
+          backgroundColor: `${ac}${o("12")}`, paddingVertical: 10, paddingHorizontal: 16,
           borderBottomWidth: 1, borderBottomColor: C.border,
           flexDirection: "row", alignItems: "center", gap: 8,
         }}>
@@ -1084,13 +1101,13 @@ export default function KundliScreen() {
           {snapshotRows.map(({ label, value, icon }, idx) => (
             <View key={label} style={{
               flexDirection: "row", alignItems: "center", paddingVertical: 10, paddingHorizontal: 14, gap: 10,
-              backgroundColor: idx % 2 === 0 ? "transparent" : `${ac}04`,
+              backgroundColor: idx % 2 === 0 ? "transparent" : `${ac}${o("05")}`,
               borderBottomWidth: idx < snapshotRows.length - 1 ? 1 : 0,
               borderBottomColor: C.border,
             }}>
-              <Feather name={icon as any} size={12} color={C.textDim} />
-              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, flex: 1 }}>{label}</Text>
-              <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }} numberOfLines={1}>{value}</Text>
+              <Feather name={icon as any} size={12} color={C.textMid} />
+              <Text style={{ color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, flex: 1 }}>{label}</Text>
+              <Text style={{ color: C.text, fontSize: 13, fontFamily: F.semibold }} numberOfLines={1}>{value}</Text>
             </View>
           ))}
         </View>
@@ -1122,11 +1139,11 @@ export default function KundliScreen() {
           style={({ pressed }) => [{
             flexDirection: "row", alignItems: "center", justifyContent: "space-between",
             borderRadius: 14, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 16,
-            borderColor: `${ac}30`, backgroundColor: `${ac}06`,
+            borderColor: `${ac}${o("35")}`, backgroundColor: `${ac}${o("08")}`,
           }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ width: 38, height: 38, borderRadius: 11, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: `${ac}10`, borderColor: `${ac}25` }}>
+            <View style={{ width: 38, height: 38, borderRadius: 11, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: `${ac}${o("12")}`, borderColor: `${ac}${o("30")}` }}>
               <Feather name="bell" size={16} color={ac} />
             </View>
             <View>

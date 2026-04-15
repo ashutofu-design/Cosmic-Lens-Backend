@@ -805,10 +805,10 @@ export default function KundliScreen() {
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
           <Text style={[s.emptyTitle, { color: C.text }]}>{t.noKundli}</Text>
           <Text style={[s.emptySub, { color: C.textMuted }]}>{t.noKundliSub}</Text>
-          <Pressable style={({pressed})=>[s.emptyBtn,pressed&&{opacity:0.8}]}
+          <Pressable style={({pressed})=>[s.emptyBtn, { backgroundColor: C.accent },pressed&&{opacity:0.8}]}
             onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/onboarding");}}>
-            <Text style={s.emptyBtnText}>{t.createKundli}</Text>
-            <Feather name="arrow-right" size={15} color="#020d1a"/>
+            <Text style={[s.emptyBtnText, { color: "#fff" }]}>{t.createKundli}</Text>
+            <Feather name="arrow-right" size={15} color="#fff"/>
           </Pressable>
         </View>
       </CosmicBg>
@@ -891,18 +891,18 @@ export default function KundliScreen() {
       {/* Daily Alerts shortcut */}
       <Pressable
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/daily-alerts"); }}
-        style={({ pressed }) => [s.planetBtn, { borderColor:"rgba(99,102,241,0.35)", backgroundColor:"rgba(99,102,241,0.06)" }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [s.planetBtn, { borderColor: C.border2, backgroundColor: C.accentBg }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
       >
         <View style={s.planetBtnLeft}>
-          <View style={[s.planetBtnIcon, { backgroundColor:"rgba(99,102,241,0.12)", borderColor:"rgba(99,102,241,0.25)" }]}>
-            <Feather name="bell" size={16} color="#818cf8" />
+          <View style={[s.planetBtnIcon, { backgroundColor: C.accentBg, borderColor: C.border }]}>
+            <Feather name="bell" size={16} color={C.accent} />
           </View>
           <View>
-            <Text style={[s.planetBtnTitle, { color:"#818cf8" }]}>Daily Alerts</Text>
+            <Text style={[s.planetBtnTitle, { color: C.accent }]}>Daily Alerts</Text>
             <Text style={[s.planetBtnSub, { color: C.textMuted }]}>4-day planetary guidance · आज का संकेत</Text>
           </View>
         </View>
-        <Feather name="chevron-right" size={16} color="#818cf8" style={{ opacity: 0.7 }} />
+        <Feather name="chevron-right" size={16} color={C.accent} style={{ opacity: 0.7 }} />
       </Pressable>
 
       {/* Tab heading */}
@@ -942,7 +942,7 @@ const s = StyleSheet.create({
   emptyIcon: { width:80,height:80,borderRadius:40,backgroundColor:"rgba(139,92,246,0.07)",borderWidth:1,borderColor:"rgba(139,92,246,0.25)",alignItems:"center",justifyContent:"center" },
   emptyTitle: { color:"#dde8f4",fontSize:20,fontWeight:"700",textAlign:"center" },
   emptySub:   { color:"#3d5a7a",fontSize:13,lineHeight:20,textAlign:"center" },
-  emptyBtn: { flexDirection:"row",alignItems:"center",gap:8,backgroundColor:"#a78bfa",paddingVertical:13,paddingHorizontal:24,borderRadius:14,marginTop:4 },
+  emptyBtn: { flexDirection:"row",alignItems:"center",gap:8,paddingVertical:13,paddingHorizontal:24,borderRadius:14,marginTop:4 },
   emptyBtnText: { color:"#020d1a",fontWeight:"800",fontSize:14 },
 
   chartBtnRow: { flexDirection:"row",gap:8 },

@@ -157,8 +157,8 @@ function LangSheet({ visible, current, onSelect, onClose }: {
       <View style={[lm.screen, { paddingTop: insets.top, backgroundColor: C.bg }]}>
 
         {/* ── Header ── */}
-        <View style={lm.header}>
-          <Pressable onPress={onClose} style={lm.backBtn}>
+        <View style={[lm.header, { borderColor: C.border }]}>
+          <Pressable onPress={onClose} style={[lm.backBtn, { backgroundColor: C.bgCard2 }]}>
             <Feather name="x" size={18} color={C.textMuted} />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center" }}>
@@ -305,7 +305,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
         {/* Avatar */}
         <View>
           <LinearGradient
-            colors={isPrimary ? ["#0ea5e9","#f59e0b"] : ["#1e3a5f","#0a1828"]}
+            colors={isPrimary ? ["#0ea5e9","#f59e0b"] : [C.bgCard2, C.bgCard3]}
             style={pc.avatar}
           >
             <Text style={pc.initials}>{initials}</Text>
@@ -415,7 +415,7 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
           <>
             <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
             <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-            <Text style={pl.pricePer}>/{cycle === "yearly" ? "year" : "month"}</Text>
+            <Text style={[pl.pricePer, { color: C.textMuted }]}>/{cycle === "yearly" ? "year" : "month"}</Text>
           </>
         )}
       </View>
@@ -437,7 +437,7 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
             <View style={[pl.featureDot, { backgroundColor:`${plan.accent}22` }]}>
               <Feather name="check" size={9} color={plan.accent} />
             </View>
-            <Text style={pl.featureText}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.textMid }]}>{f}</Text>
           </View>
         ))}
         {plan.featureOff.map(f => (

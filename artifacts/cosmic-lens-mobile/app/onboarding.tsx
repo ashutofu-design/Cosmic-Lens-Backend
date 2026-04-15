@@ -138,13 +138,13 @@ export default function OnboardingScreen() {
           onPress={() => router.back()}
           style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.5 }]}
         >
-          <Feather name="arrow-left" size={20} color="#64748b" />
+          <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <Pressable
           onPress={() => router.replace("/(tabs)")}
           style={({ pressed }) => [s.skipBtn, pressed && { opacity: 0.5 }]}
         >
-          <Text style={s.skipText}>{t.skip}</Text>
+          <Text style={[s.skipText, { color: C.textMuted }]}>{t.skip}</Text>
         </Pressable>
       </View>
 
@@ -158,27 +158,27 @@ export default function OnboardingScreen() {
           {/* ── Hero section ─────────────────────────────────────────── */}
           <View style={s.hero}>
             <LinearGradient
-              colors={["rgba(139,92,246,0.18)", "rgba(120,80,255,0.10)"]}
-              style={s.heroIcon}
+              colors={[C.accentBg, "transparent"]}
+              style={[s.heroIcon, { borderColor: C.border2 }]}
             >
               <Feather name="star" size={26} color="#f59e0b" />
             </LinearGradient>
-            <Text style={s.heroTitle}>{t.birthDetails}</Text>
-            <Text style={s.heroSub}>{t.birthSubtitle}</Text>
+            <Text style={[s.heroTitle, { color: C.text }]}>{t.birthDetails}</Text>
+            <Text style={[s.heroSub, { color: C.textMuted }]}>{t.birthSubtitle}</Text>
           </View>
 
           {/* ── Section: Full Name ────────────────────────────────────── */}
-          <View style={s.card}>
+          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: "rgba(167,139,250,0.12)" }]}>
                 <Feather name="user" size={14} color="#f59e0b" />
               </View>
-              <Text style={s.cardTitle}>{t.yourName.toUpperCase()}</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.yourName.toUpperCase()}</Text>
             </View>
             <TextInput
-              style={s.input}
+              style={[s.input, { backgroundColor: C.inputBg, borderColor: C.inputBorder, color: C.text }]}
               placeholder="Enter full name"
-              placeholderTextColor="#334155"
+              placeholderTextColor={C.textDim}
               value={name}
               onChangeText={setName}
               returnKeyType="next"
@@ -187,125 +187,125 @@ export default function OnboardingScreen() {
           </View>
 
           {/* ── Section: Date of Birth ────────────────────────────────── */}
-          <View style={s.card}>
+          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: "rgba(139,92,246,0.10)" }]}>
                 <Feather name="calendar" size={14} color="#f59e0b" />
               </View>
-              <Text style={s.cardTitle}>{t.dateOfBirth.toUpperCase()}</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.dateOfBirth.toUpperCase()}</Text>
             </View>
             <View style={s.dateRow}>
               {/* Day */}
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>{t.day}</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{t.day}</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDayPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: day ? "#e2e8f0" : "#334155" }]}>
+                  <Text style={[s.datePickerText, { color: day ? C.text : C.textDim }]}>
                     {day ? String(day).padStart(2,"0") : "DD"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
 
               {/* Month */}
               <View style={[s.dateCell, { flex: 2 }]}>
-                <Text style={s.dateLabel}>{t.month}</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{t.month}</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMonthPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: month ? "#e2e8f0" : "#334155" }]}>
+                  <Text style={[s.datePickerText, { color: month ? C.text : C.textDim }]}>
                     {month ? MONTHS[parseInt(month) - 1] : "Select"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
 
               {/* Year */}
               <View style={[s.dateCell, { flex: 1.8 }]}>
-                <Text style={s.dateLabel}>{t.year}</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{t.year}</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setYearPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: year ? "#e2e8f0" : "#334155" }]}>
+                  <Text style={[s.datePickerText, { color: year ? C.text : C.textDim }]}>
                     {year || "YYYY"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
             </View>
           </View>
 
           {/* ── Section: Time of Birth ────────────────────────────────── */}
-          <View style={s.card}>
+          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: "rgba(250,204,21,0.10)" }]}>
                 <Feather name="clock" size={14} color="#facc15" />
               </View>
-              <Text style={s.cardTitle}>{t.timeOfBirth.toUpperCase()}</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.timeOfBirth.toUpperCase()}</Text>
             </View>
 
             {/* Warning */}
-            <View style={s.warnBox}>
+            <View style={[s.warnBox, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
               <Feather name="alert-triangle" size={11} color="#f59e0b" style={{ marginTop: 1 }} />
-              <Text style={s.warnText}>{t.timeTip}</Text>
+              <Text style={[s.warnText, { color: C.warningText }]}>{t.timeTip}</Text>
             </View>
 
             <View style={s.dateRow}>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>Hour</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>Hour</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHourPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: hour ? "#e2e8f0" : "#334155" }]}>
+                  <Text style={[s.datePickerText, { color: hour ? C.text : C.textDim }]}>
                     {hour ? String(hour).padStart(2,"0") : "HH"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>{t.minute}</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{t.minute}</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMinPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: minute ? "#e2e8f0" : "#334155" }]}>
+                  <Text style={[s.datePickerText, { color: minute ? C.text : C.textDim }]}>
                     {minute !== "" ? String(minute).padStart(2,"0") : "MM"}
                   </Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>AM / PM</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>AM / PM</Text>
                 <Pressable
-                  style={s.datePickerBtn}
+                  style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAmpmPickerOpen(true); }}
                 >
-                  <Text style={[s.datePickerText, { color: "#e2e8f0" }]}>{ampm}</Text>
-                  <Feather name="chevron-down" size={13} color="#475569" />
+                  <Text style={[s.datePickerText, { color: C.text }]}>{ampm}</Text>
+                  <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
             </View>
           </View>
 
           {/* ── Section: Place of Birth ───────────────────────────────── */}
-          <View style={s.card}>
+          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: "rgba(16,185,129,0.10)" }]}>
                 <Feather name="map-pin" size={14} color="#10b981" />
               </View>
-              <Text style={s.cardTitle}>{t.birthPlace.toUpperCase()}</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.birthPlace.toUpperCase()}</Text>
             </View>
 
             <View style={s.placeRow}>
               <TextInput
-                style={[s.input, { flex: 1, marginBottom: 0 }]}
+                style={[s.input, { flex: 1, marginBottom: 0, backgroundColor: C.inputBg, borderColor: C.inputBorder, color: C.text }]}
                 placeholder={t.searchCity}
-                placeholderTextColor="#334155"
+                placeholderTextColor={C.textDim}
                 value={placeQuery}
                 onChangeText={v => { setPlaceQuery(v); setSelectedLat(null); setSelectedPlace(""); }}
                 onSubmitEditing={doSearchPlace}
@@ -313,30 +313,30 @@ export default function OnboardingScreen() {
               />
               <Pressable
                 onPress={doSearchPlace}
-                style={({ pressed }) => [s.searchBtn, pressed && { opacity: 0.7 }]}
+                style={({ pressed }) => [s.searchBtn, { backgroundColor: C.accent }, pressed && { opacity: 0.7 }]}
               >
                 {searching
-                  ? <ActivityIndicator size="small" color="#020d1a" />
-                  : <Feather name="search" size={15} color="#020d1a" />
+                  ? <ActivityIndicator size="small" color={C.isDark ? "#020d1a" : "#fff"} />
+                  : <Feather name="search" size={15} color={C.isDark ? "#020d1a" : "#fff"} />
                 }
               </Pressable>
             </View>
 
             {/* Suggestions */}
             {suggestions.length > 0 && (
-              <View style={s.suggestBox}>
+              <View style={[s.suggestBox, { backgroundColor: C.bgCard, borderColor: C.inputBorder }]}>
                 {suggestions.map((item, i) => (
                   <Pressable
                     key={i}
                     onPress={() => selectPlace(item)}
                     style={({ pressed }) => [
                       s.suggestItem,
-                      i < suggestions.length - 1 && s.suggestBorder,
-                      pressed && { backgroundColor: "rgba(139,92,246,0.06)" },
+                      i < suggestions.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border },
+                      pressed && { backgroundColor: C.accentBg },
                     ]}
                   >
                     <Feather name="map-pin" size={11} color="#f59e0b" style={{ marginTop: 2 }} />
-                    <Text style={s.suggestText} numberOfLines={2}>{item.label}</Text>
+                    <Text style={[s.suggestText, { color: C.textMuted }]} numberOfLines={2}>{item.label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -348,7 +348,7 @@ export default function OnboardingScreen() {
                 <Feather name="check-circle" size={13} color="#10b981" />
                 <Text style={s.confirmedText}>
                   {selectedPlace}{"  "}
-                  <Text style={{ color: "#334155" }}>
+                  <Text style={{ color: C.textDim }}>
                     (UTC{(selectedTz ?? 0) >= 0 ? "+" : ""}{selectedTz})
                   </Text>
                 </Text>
@@ -371,14 +371,14 @@ export default function OnboardingScreen() {
             style={({ pressed }) => [pressed && canSubmit && { opacity: 0.88 }]}
           >
             <LinearGradient
-              colors={loading ? ["#0a1828","#0a1828"] : ["#7c3aed","#a78bfa"]}
+              colors={loading ? [C.bgCard2, C.bgCard2] : [C.btnGradStart, C.btnGradEnd]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={[s.submitBtn, loading && { borderWidth: 1, borderColor: "#1e3a5f" }]}
+              style={[s.submitBtn, loading && { borderWidth: 1, borderColor: C.border }]}
             >
               {loading ? (
                 <View style={s.submitInner}>
-                  <ActivityIndicator size="small" color="#f59e0b" />
-                  <Text style={[s.submitText, { color: "#a78bfa" }]}>{t.generatingKundli}</Text>
+                  <ActivityIndicator size="small" color={C.accent} />
+                  <Text style={[s.submitText, { color: C.accent }]}>{t.generatingKundli}</Text>
                 </View>
               ) : (
                 <View style={s.submitInner}>
@@ -391,8 +391,8 @@ export default function OnboardingScreen() {
 
           {/* ── Trust badge ───────────────────────────────────────────── */}
           <View style={s.trustRow}>
-            <Feather name="lock" size={11} color="#1e3a5f" />
-            <Text style={s.trustText}>
+            <Feather name="lock" size={11} color={C.textDim} />
+            <Text style={[s.trustText, { color: C.textDim }]}>
               Your data is encrypted and private. Never shared with anyone.
             </Text>
           </View>
@@ -468,7 +468,7 @@ export default function OnboardingScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: "#020d1a" },
+  root:   { flex: 1 },
   scroll: { paddingHorizontal: 18, paddingTop: 8, gap: 14 },
 
   // Header
@@ -478,55 +478,51 @@ const s = StyleSheet.create({
   },
   backBtn: { padding: 8 },
   skipBtn: { paddingVertical: 6, paddingHorizontal: 12 },
-  skipText: { color: "#334155", fontSize: 13, fontWeight: "600" },
+  skipText: { fontSize: 13, fontWeight: "600" },
 
   // Hero
   hero: { alignItems: "center", paddingVertical: 20, gap: 10 },
   heroIcon: {
     width: 64, height: 64, borderRadius: 32,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "rgba(139,92,246,0.25)",
+    borderWidth: 1,
     shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
-  heroTitle: { color: "#dde8f4", fontSize: 22, fontWeight: "800", letterSpacing: 0.3 },
+  heroTitle: { fontSize: 22, fontWeight: "800", letterSpacing: 0.3 },
   heroSub: {
-    color: "#334155", fontSize: 13, lineHeight: 20,
+    fontSize: 13, lineHeight: 20,
     textAlign: "center", paddingHorizontal: 8,
   },
 
   // Cards
   card: {
-    backgroundColor: "#040e1f",
     borderRadius: 18, padding: 16,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
     gap: 12,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 3,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
   },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   cardIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  cardTitle: { color: "#1e4a6e", fontSize: 10, fontWeight: "800", letterSpacing: 2 },
+  cardTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 2 },
 
   // Input
   input: {
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "#0f2540",
-    borderRadius: 12, color: "#e2e8f0",
+    borderWidth: 1,
+    borderRadius: 12,
     fontSize: 15, paddingVertical: 13, paddingHorizontal: 14,
   },
 
   // Date cells
   dateRow:  { flexDirection: "row", gap: 8 },
   dateCell: { gap: 5 },
-  dateLabel: { color: "#1e3a5f", fontSize: 9, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
+  dateLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
   dateInput: {
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "#0f2540",
-    borderRadius: 12, color: "#e2e8f0",
+    borderWidth: 1,
+    borderRadius: 12,
     fontSize: 15, paddingVertical: 13, paddingHorizontal: 8,
   },
   datePickerBtn: {
-    backgroundColor: "#071525",
-    borderWidth: 1, borderColor: "#0f2540",
+    borderWidth: 1,
     borderRadius: 12, paddingVertical: 13, paddingHorizontal: 12,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
@@ -535,29 +531,26 @@ const s = StyleSheet.create({
   // Warning
   warnBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 7,
-    backgroundColor: "rgba(245,158,11,0.07)",
-    borderWidth: 1, borderColor: "rgba(245,158,11,0.20)",
+    borderWidth: 1,
     borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9,
   },
-  warnText: { color: "#d97706", fontSize: 11, lineHeight: 16, flex: 1 },
+  warnText: { fontSize: 11, lineHeight: 16, flex: 1 },
 
   // Place
   placeRow: { flexDirection: "row", gap: 10, alignItems: "center" },
   searchBtn: {
-    backgroundColor: "#a78bfa",
     width: 44, height: 44, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
     shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4,
   },
 
   suggestBox: {
-    backgroundColor: "#071525",
-    borderRadius: 12, borderWidth: 1, borderColor: "#0f2540",
+    borderRadius: 12, borderWidth: 1,
     overflow: "hidden",
   },
   suggestItem: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingHorizontal: 14, paddingVertical: 13 },
-  suggestBorder: { borderBottomWidth: 1, borderBottomColor: "#0a1828" },
-  suggestText: { color: "#64748b", fontSize: 13, flex: 1 },
+  suggestBorder: { borderBottomWidth: 1 },
+  suggestText: { fontSize: 13, flex: 1 },
 
   confirmedRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   confirmedText: { color: "#10b981", fontSize: 12, flex: 1 },
@@ -584,6 +577,5 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "flex-start", gap: 7,
     justifyContent: "center", paddingHorizontal: 20,
   },
-  trustText: { color: "#1e3a5f", fontSize: 11, textAlign: "center", lineHeight: 16, flex: 1 },
+  trustText: { fontSize: 11, textAlign: "center", lineHeight: 16, flex: 1 },
 });
-

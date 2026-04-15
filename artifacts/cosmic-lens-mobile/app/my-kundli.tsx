@@ -54,7 +54,7 @@ export default function MyKundliScreen() {
 
   function handleEdit(profileId: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: "/profile-edit", params: { mode: "edit", id: profileId } });
+    router.push("/profile-edit");
   }
 
   return (
@@ -84,7 +84,7 @@ export default function MyKundliScreen() {
               Add a profile with birth details to generate your first kundli
             </Text>
             <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: "/profile-edit", params: { mode: "add", relation: "Self" } }); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/profile-edit"); }}
               style={({ pressed }) => [s.addBtnEmpty, { backgroundColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.08)", borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)", opacity: pressed ? 0.8 : 1 }]}
             >
               <Feather name="plus" size={14} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
@@ -180,7 +180,7 @@ export default function MyKundliScreen() {
 
         {kundliProfiles.length > 0 && (
           <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push({ pathname: "/profile-edit", params: { mode: "add", relation: "Self" } }); }}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/profile-edit"); }}
             style={({ pressed }) => [s.addBtn, { borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)", opacity: pressed ? 0.8 : 1 }]}
           >
             <View style={[s.addCircle, { backgroundColor: C.isDark ? "rgba(245,158,11,0.08)" : "rgba(124,58,237,0.06)", borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)" }]}>

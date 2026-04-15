@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform,
   Pressable, ScrollView, StyleSheet, Text,
   TextInput, View,
 } from "react-native";
@@ -12,13 +12,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
-import { useUser } from "@/context/UserContext";
+import { useUser, type ProfileEntry } from "@/context/UserContext";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
-// ── Constants ──────────────────────────────────────────────────────────────────
 const F = {
   regular:  "Nunito_400Regular",
   medium:   "Nunito_500Medium",
@@ -35,6 +34,20 @@ const HOURS_L  = Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padS
 const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
 
 const C_SUCCESS = "#16A34A";
+
+const RELATIONS = [
+  { key: "Husband",   emoji: "👨" },
+  { key: "Wife",      emoji: "👩" },
+  { key: "Son",       emoji: "👦" },
+  { key: "Daughter",  emoji: "👧" },
+  { key: "Father",    emoji: "👴" },
+  { key: "Mother",    emoji: "👵" },
+  { key: "Brother",   emoji: "🧑" },
+  { key: "Sister",    emoji: "👱‍♀️" },
+  { key: "Friend",    emoji: "🤝" },
+  { key: "Other",     emoji: "👥" },
+];
+const RELATION_ITEMS = RELATIONS.map(r => ({ label: `${r.emoji}  ${r.key}`, value: r.key }));
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -61,13 +74,6 @@ function blank(): FormState {
   return { name:"", gender:"", day:"", month:"", year:"", hour:"", minute:"", ampm:"AM", place:"", lat:0, lon:0, tz:5.5 };
 }
 
-const RELATION_EMOJIS: Record<string, string> = {
-  Self:"🧑", Husband:"👨", Wife:"👩", Son:"👦", Daughter:"👧",
-  Father:"👴", Mother:"👵", Brother:"🧑", Sister:"👱‍♀️", Friend:"🤝", Other:"👥",
-};
-
-// ── Shared sub-components ──────────────────────────────────────────────────────
-
 function Lbl({ text }: { text: string }) {
   const C = useC();
   return <Text style={[s.lbl, { color: C.isDark ? C.textMuted : "#64748B" }]}>{text}</Text>;
@@ -88,7 +94,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: object }
   );
 }
 
-function CardRow({ label, icon, children }: { label: string; icon: React.ComponentProps<typeof Feather>["name"]; children?: React.ReactNode }) {
+function CardRow({ label, icon }: { label: string; icon: React.ComponentProps<typeof Feather>["name"] }) {
   const C = useC();
   return (
     <View style={s.cardRow}>
@@ -96,7 +102,6 @@ function CardRow({ label, icon, children }: { label: string; icon: React.Compone
         <Feather name={icon} size={11} color={C.accent} />
       </View>
       <Text style={[s.cardRowLabel, { color: C.isDark ? C.textMuted : "#64748B" }]}>{label}</Text>
-      {children}
     </View>
   );
 }
@@ -118,23 +123,48 @@ function PickerBtn({
   );
 }
 
-// ── Main screen ────────────────────────────────────────────────────────────────
+function FamilyMemberRow({ profile, onEdit, onDelete }: {
+  profile: ProfileEntry; onEdit: () => void; onDelete: () => void;
+}) {
+  const C = useC();
+  const relInfo = RELATIONS.find(r => r.key === profile.relation);
+  return (
+    <View style={s.fmRow}>
+      <View style={[s.fmAvatar, { backgroundColor: C.isDark ? C.bgCard2 : "#F1F5F9" }]}>
+        <Text style={{ fontSize: 16 }}>{relInfo?.emoji ?? "👤"}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[s.fmName, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+        <Text style={[s.fmSub, { color: C.textMuted }]} numberOfLines={1}>
+          {profile.relation ?? "Family"} · {profile.birthData.place}
+        </Text>
+      </View>
+      <Pressable onPress={onEdit} hitSlop={8} style={[s.fmIconBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#F1F5F9", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
+        <Feather name="edit-3" size={13} color={C.textMuted} />
+      </Pressable>
+      <Pressable onPress={onDelete} hitSlop={8} style={[s.fmIconBtn, { backgroundColor: C.isDark ? "rgba(248,113,113,0.08)" : "rgba(248,113,113,0.06)", borderColor: C.isDark ? "rgba(248,113,113,0.15)" : "rgba(248,113,113,0.12)" }]}>
+        <Feather name="trash-2" size={13} color="#f87171" />
+      </Pressable>
+    </View>
+  );
+}
+
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const params = useLocalSearchParams<{ mode?: string; profileId?: string; relation?: string }>();
-  const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId, syncKundliToCloud } = useUser();
+  const {
+    profiles, primaryProfileId, addProfile, updateProfile, deleteProfile,
+    setBirthData, setKundli, syncKundliToCloud,
+  } = useUser();
 
-  const isEdit  = params.mode === "edit" && !!params.profileId;
-  const profile = isEdit ? profiles.find(p => p.id === params.profileId) : null;
-
-  const [relation] = useState<string>(profile?.relation ?? params.relation ?? "Self");
+  const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
+  const familyMembers = profiles.filter(p => p.id !== (primaryProfile?.id ?? ""));
 
   const [f, setF] = useState<FormState>(() => {
-    if (profile) {
-      const bd = profile.birthData;
+    if (primaryProfile) {
+      const bd = primaryProfile.birthData;
       return {
-        name: profile.name, gender: profile.gender ?? "",
+        name: primaryProfile.name, gender: primaryProfile.gender ?? "",
         day: String(bd.day), month: String(bd.month), year: String(bd.year),
         hour: String(bd.hour), minute: String(bd.minute), ampm: bd.ampm,
         place: bd.place, lat: bd.lat, lon: bd.lon, tz: bd.tz,
@@ -160,6 +190,28 @@ export default function ProfileEditScreen() {
   const [hourOpen,  setHourOpen]  = useState(false);
   const [minOpen,   setMinOpen]   = useState(false);
 
+  const [fmVisible, setFmVisible] = useState(false);
+  const [fmEditId, setFmEditId]   = useState<string | null>(null);
+  const [fmForm, setFmForm]       = useState<FormState>(blank);
+  const [fmRelation, setFmRelation] = useState("Father");
+  const [fmPlaceQuery, setFmPlaceQuery] = useState("");
+  const [fmGeoResults, setFmGeoResults] = useState<GeoResult[]>([]);
+  const [fmSearching,  setFmSearching]  = useState(false);
+  const [fmTzLoading,  setFmTzLoading]  = useState(false);
+  const [fmSaving,     setFmSaving]     = useState(false);
+  const [fmError,      setFmError]      = useState("");
+  const [fmPlaceFocused, setFmPlaceFocused] = useState(false);
+  const [fmNameFocused, setFmNameFocused]   = useState(false);
+
+  const [fmDayOpen,   setFmDayOpen]   = useState(false);
+  const [fmMonthOpen, setFmMonthOpen] = useState(false);
+  const [fmYearOpen,  setFmYearOpen]  = useState(false);
+  const [fmHourOpen,  setFmHourOpen]  = useState(false);
+  const [fmMinOpen,   setFmMinOpen]   = useState(false);
+  const [fmRelOpen,   setFmRelOpen]   = useState(false);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const nameRef  = useRef<TextInput>(null);
   const btnScale = useRef(new Animated.Value(1)).current;
 
@@ -172,6 +224,8 @@ export default function ProfileEditScreen() {
 
   const set = (key: keyof FormState) => (val: string) =>
     setF(prev => ({ ...prev, [key]: val }));
+  const fmSet = (key: keyof FormState) => (val: string) =>
+    setFmForm(prev => ({ ...prev, [key]: val }));
 
   async function handlePlaceSearch() {
     if (placeQuery.trim().length < 2) return;
@@ -213,14 +267,12 @@ export default function ProfileEditScreen() {
       setSavingStatus("Connecting to server…");
       const kundli = await fetchKundliFromAPI(birthData);
       setSavingStatus("Saving…");
-      if (isEdit && params.profileId) {
-        updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
-        if (params.profileId === primaryProfileId) {
-          setBirthData(birthData); setKundli(kundli);
-          syncKundliToCloud(birthData, kundli).catch(() => {});
-        }
+      if (primaryProfile) {
+        updateProfile(primaryProfile.id, { name: f.name.trim(), gender: f.gender, birthData, kundli });
+        setBirthData(birthData); setKundli(kundli);
+        syncKundliToCloud(birthData, kundli).catch(() => {});
       } else {
-        addProfile({ name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
+        addProfile({ name: f.name.trim(), gender: f.gender, relation: "Self", birthData, kundli });
         syncKundliToCloud(birthData, kundli).catch(() => {});
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -235,13 +287,105 @@ export default function ProfileEditScreen() {
     }
   }
 
+  function openFmAdd() {
+    setFmEditId(null);
+    setFmForm(blank());
+    setFmRelation("Father");
+    setFmPlaceQuery("");
+    setFmGeoResults([]);
+    setFmError("");
+    setFmVisible(true);
+  }
+
+  function openFmEdit(p: ProfileEntry) {
+    setFmEditId(p.id);
+    const bd = p.birthData;
+    setFmForm({
+      name: p.name, gender: p.gender ?? "",
+      day: String(bd.day), month: String(bd.month), year: String(bd.year),
+      hour: String(bd.hour), minute: String(bd.minute), ampm: bd.ampm,
+      place: bd.place, lat: bd.lat, lon: bd.lon, tz: bd.tz,
+    });
+    setFmRelation(p.relation ?? "Other");
+    setFmPlaceQuery(bd.place);
+    setFmGeoResults([]);
+    setFmError("");
+    setFmVisible(true);
+  }
+
+  async function handleFmPlaceSearch() {
+    if (fmPlaceQuery.trim().length < 2) return;
+    setFmSearching(true); setFmGeoResults([]);
+    try { setFmGeoResults(await searchPlace(fmPlaceQuery)); }
+    catch { setFmError("Location not found."); }
+    finally { setFmSearching(false); }
+  }
+
+  async function fmSelectGeo(g: GeoResult) {
+    setFmForm(prev => ({ ...prev, place: g.label, lat: g.lat, lon: g.lon, tz: g.tz }));
+    setFmPlaceQuery(g.label); setFmGeoResults([]);
+    setFmTzLoading(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const r = await apiFetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`, { signal: ctrl.signal });
+      const d = await r.json();
+      if (typeof d.tz === "number") setFmForm(prev => ({ ...prev, tz: d.tz }));
+    } catch {}
+    finally { clearTimeout(timer); setFmTzLoading(false); }
+  }
+
+  async function handleFmSave() {
+    if (!fmForm.name.trim())                        { setFmError("Name is required."); return; }
+    if (!fmForm.day || !fmForm.month || !fmForm.year) { setFmError("Please complete the birth date."); return; }
+    if (!fmForm.hour || !fmForm.minute)              { setFmError("Please enter the birth time."); return; }
+    if (!fmForm.lat)                                  { setFmError("Please select a birth location."); return; }
+    setFmError(""); setFmSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const birthData: BirthData = {
+        name: fmForm.name.trim(),
+        day: Number(fmForm.day), month: Number(fmForm.month), year: Number(fmForm.year),
+        hour: Number(fmForm.hour), minute: Number(fmForm.minute), ampm: fmForm.ampm,
+        place: fmForm.place, lat: fmForm.lat, lon: fmForm.lon, tz: fmForm.tz,
+      };
+      const kundli = await fetchKundliFromAPI(birthData);
+      if (fmEditId) {
+        updateProfile(fmEditId, { name: fmForm.name.trim(), gender: fmForm.gender, relation: fmRelation, birthData, kundli });
+      } else {
+        addProfile({ name: fmForm.name.trim(), gender: fmForm.gender, relation: fmRelation, birthData, kundli });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setFmVisible(false);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Chart calculation failed.";
+      setFmError(/network|timed out|connection|failed to fetch/i.test(msg)
+        ? "Could not reach the server. Check your connection." : msg);
+    } finally {
+      setFmSaving(false);
+    }
+  }
+
+  function handleFmDelete(id: string) {
+    setConfirmDeleteId(id);
+  }
+
+  function confirmDelete() {
+    if (confirmDeleteId) {
+      deleteProfile(confirmDeleteId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    setConfirmDeleteId(null);
+  }
+
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const bgColor = C.isDark ? C.bg : "#F8FAFC";
+  const deleteTarget = confirmDeleteId ? profiles.find(p => p.id === confirmDeleteId) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
 
-        {/* ── Header ── */}
         <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: bgColor, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.05)" }]}>
           <Pressable
             onPress={() => router.back()}
@@ -254,28 +398,24 @@ export default function ProfileEditScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
               <View style={[s.headerAccentDot, { backgroundColor: C.accent }]} />
               <Text style={[s.headerTitle, { color: C.isDark ? C.text : "#0F172A" }]}>
-                {isEdit ? "Edit Profile" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation}'s Kundli`}
+                Edit Profile
               </Text>
             </View>
             <Text style={[s.headerSub, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
-              Fill in accurate birth details
+              Manage your profile & family members
             </Text>
           </View>
         </View>
 
-        {/* ── Scrollable body ── */}
         <ScrollView
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
 
-          {/* ══ CARD 1 — Personal Info ══ */}
           <Card>
-            {/* Section label */}
             <CardRow label="PERSONAL INFO" icon="user" />
 
-            {/* Name */}
             <View style={s.fieldWrap}>
               <Lbl text="FULL NAME" />
               <View style={[
@@ -299,10 +439,8 @@ export default function ProfileEditScreen() {
               </View>
             </View>
 
-            {/* Divider */}
             <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
 
-            {/* Gender */}
             <View style={s.fieldWrap}>
               <Lbl text="GENDER (OPTIONAL)" />
               <View style={{ flexDirection: "row", gap: 6 }}>
@@ -327,11 +465,9 @@ export default function ProfileEditScreen() {
             </View>
           </Card>
 
-          {/* ══ CARD 2 — Birth Details (Date + Time merged) ══ */}
           <Card>
             <CardRow label="BIRTH DATE & TIME" icon="calendar" />
 
-            {/* Row 1 — Day | Month | Year */}
             <View style={s.fieldWrap}>
               <Lbl text="DATE" />
               <View style={{ flexDirection: "row", gap: 6 }}>
@@ -349,7 +485,6 @@ export default function ProfileEditScreen() {
 
             <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
 
-            {/* Row 2 — Hour | Min | AM/PM */}
             <View style={s.fieldWrap}>
               <Lbl text="TIME" />
               <View style={{ flexDirection: "row", gap: 6 }}>
@@ -387,11 +522,9 @@ export default function ProfileEditScreen() {
             </View>
           </Card>
 
-          {/* ══ CARD 3 — Birth Place ══ */}
           <Card>
             <CardRow label="BIRTH PLACE" icon="map-pin" />
 
-            {/* Search input */}
             <View style={s.fieldWrap}>
               <View style={[
                 s.inputRow,
@@ -410,16 +543,15 @@ export default function ProfileEditScreen() {
                   onFocus={() => setPlaceFocused(true)}
                   onBlur={() => setPlaceFocused(false)}
                 />
-                <Pressable onPress={handlePlaceSearch} style={[s.searchBtn, { borderColor: C.accent }]}>
+                <Pressable onPress={handlePlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
                   {searching
-                    ? <ActivityIndicator size="small" color={C.accent} />
-                    : <Text style={[s.searchBtnTxt, { color: C.accent }]}>Search</Text>
+                    ? <ActivityIndicator size="small" color={ac} />
+                    : <Text style={[s.searchBtnTxt, { color: ac }]}>Search</Text>
                   }
                 </Pressable>
               </View>
             </View>
 
-            {/* Search results */}
             {geoResults.length > 0 && (
               <View style={[s.geoList, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
                 {geoResults.map((g, i) => (
@@ -428,14 +560,13 @@ export default function ProfileEditScreen() {
                     onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
                     style={[s.geoItem, i < geoResults.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}
                   >
-                    <Feather name="map-pin" size={10} color={C.accent} style={{ marginTop: 1 }} />
+                    <Feather name="map-pin" size={10} color={ac} style={{ marginTop: 1 }} />
                     <Text style={[s.geoTxt, { color: C.isDark ? C.textMid : "#334155" }]} numberOfLines={1}>{g.label}</Text>
                   </Pressable>
                 ))}
               </View>
             )}
 
-            {/* Confirmed location */}
             {f.lat !== 0 && (
               <View style={[s.confirmedPlace, { backgroundColor: C.isDark ? "rgba(22,163,74,0.12)" : "#F0FDF4", borderColor: C.isDark ? "rgba(22,163,74,0.3)" : "#BBF7D0" }]}>
                 <Feather name="check-circle" size={12} color={C_SUCCESS} />
@@ -445,7 +576,41 @@ export default function ProfileEditScreen() {
             )}
           </Card>
 
-          {/* Error */}
+          <Card>
+            <CardRow label="FAMILY MEMBERS" icon="users" />
+
+            {familyMembers.length === 0 ? (
+              <View style={[s.fmEmpty, { backgroundColor: C.isDark ? C.bgCard2 : "#F8FAFC", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]}>
+                <Feather name="users" size={18} color={C.textDim} />
+                <Text style={[s.fmEmptyTxt, { color: C.textMuted }]}>No family members added yet</Text>
+              </View>
+            ) : (
+              <View style={{ gap: 0 }}>
+                {familyMembers.map((p, idx) => (
+                  <React.Fragment key={p.id}>
+                    {idx > 0 && <View style={[s.fmDivider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />}
+                    <FamilyMemberRow
+                      profile={p}
+                      onEdit={() => openFmEdit(p)}
+                      onDelete={() => handleFmDelete(p.id)}
+                    />
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
+
+            <Pressable
+              onPress={openFmAdd}
+              style={({ pressed }) => [s.fmAddBtn, {
+                backgroundColor: C.isDark ? "rgba(245,158,11,0.05)" : "rgba(124,58,237,0.04)",
+                borderColor: C.isDark ? "rgba(245,158,11,0.18)" : "rgba(124,58,237,0.18)",
+              }, pressed && { opacity: 0.7 }]}
+            >
+              <Feather name="user-plus" size={14} color={ac} />
+              <Text style={[s.fmAddTxt, { color: ac }]}>Add Family Member</Text>
+            </Pressable>
+          </Card>
+
           {!!error && (
             <View style={[s.errorBox, isNetworkError && { borderColor: "rgba(220,38,38,0.35)", backgroundColor: "rgba(220,38,38,0.07)" }]}>
               <Feather name={isNetworkError ? "wifi-off" : "alert-circle"} size={12} color="#DC2626" />
@@ -458,7 +623,6 @@ export default function ProfileEditScreen() {
             </View>
           )}
 
-          {/* Saving status */}
           {saving && !!savingStatus && (
             <View style={s.savingRow}>
               <ActivityIndicator size="small" color={C.btnGradStart} />
@@ -466,11 +630,9 @@ export default function ProfileEditScreen() {
             </View>
           )}
 
-          {/* Scroll padding so content clears sticky button */}
           <View style={{ height: 8 }} />
         </ScrollView>
 
-        {/* ── Sticky Save Button ── */}
         <View style={[s.stickyBottom, {
           backgroundColor: bgColor,
           paddingBottom: insets.bottom + 10,
@@ -493,7 +655,7 @@ export default function ProfileEditScreen() {
                   ? <ActivityIndicator color="#fff" />
                   : isNetworkError
                   ? <><Feather name="refresh-cw" size={15} color="#fff" /><Text style={s.saveTxt}>Try Again</Text></>
-                  : <><Feather name={isEdit ? "check" : "user-plus"} size={15} color="#fff" /><Text style={s.saveTxt}>{isEdit ? "Save Changes" : "Create Profile"}</Text></>
+                  : <><Feather name="check" size={15} color="#fff" /><Text style={s.saveTxt}>Save Profile</Text></>
                 }
               </LinearGradient>
             </Pressable>
@@ -502,19 +664,228 @@ export default function ProfileEditScreen() {
 
       </KeyboardAvoidingView>
 
-      {/* ── Pickers ── */}
       <PickerModal visible={dayOpen}   title="Select Day"           items={DAYS_L}   selected={f.day}    onSelect={v => { set("day")(v);    setDayOpen(false);   }} onClose={() => setDayOpen(false)}   />
       <PickerModal visible={monthOpen} title="Select Month"          items={MONTHS_L} selected={f.month}  onSelect={v => { set("month")(v);  setMonthOpen(false); }} onClose={() => setMonthOpen(false)} />
       <PickerModal visible={yearOpen}  title="Select Birth Year"     items={YEARS_L}  selected={f.year}   onSelect={v => { set("year")(v);   setYearOpen(false);  }} onClose={() => setYearOpen(false)}  />
       <PickerModal visible={hourOpen}  title="Select Hour (1–12)"    items={HOURS_L}  selected={f.hour}   onSelect={v => { set("hour")(v);   setHourOpen(false);  }} onClose={() => setHourOpen(false)}  />
       <PickerModal visible={minOpen}   title="Select Minute (0–59)"  items={MINS_L}   selected={f.minute} onSelect={v => { set("minute")(v); setMinOpen(false);   }} onClose={() => setMinOpen(false)}   />
+
+      {/* ── Family Member Bottom Sheet ── */}
+      <Modal visible={fmVisible} transparent animationType="slide" onRequestClose={() => setFmVisible(false)}>
+        <Pressable style={bs.overlay} onPress={() => !fmSaving && setFmVisible(false)}>
+          <Pressable style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]} onPress={e => e.stopPropagation()}>
+            <View style={[bs.handle, { backgroundColor: C.isDark ? C.border2 : "#D4D4D8" }]} />
+
+            <Text style={[bs.title, { color: C.text }]}>
+              {fmEditId ? "Edit Family Member" : "Add Family Member"}
+            </Text>
+
+            <ScrollView
+              style={{ maxHeight: 420 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={{ gap: 12 }}>
+                <View style={s.fieldWrap}>
+                  <Lbl text="NAME" />
+                  <View style={[
+                    s.inputRow,
+                    { backgroundColor: C.inputBg, borderColor: fmNameFocused ? C.inputFocusBorder : C.inputBorder },
+                  ]}>
+                    <Feather name="user" size={13} color={fmNameFocused ? C.accent : C.textDim} />
+                    <TextInput
+                      style={[s.inputTxt, { color: C.text }]}
+                      value={fmForm.name}
+                      onChangeText={v => { fmSet("name")(v); setFmError(""); }}
+                      placeholder="Full name"
+                      placeholderTextColor={C.textDim}
+                      autoCapitalize="words"
+                      returnKeyType="done"
+                      onFocus={() => setFmNameFocused(true)}
+                      onBlur={() => setFmNameFocused(false)}
+                    />
+                  </View>
+                </View>
+
+                <View style={s.fieldWrap}>
+                  <Lbl text="RELATION" />
+                  <PickerBtn value={fmRelation} placeholder="Select" onPress={() => setFmRelOpen(true)} />
+                </View>
+
+                <View style={s.fieldWrap}>
+                  <Lbl text="DATE OF BIRTH" />
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <View style={{ flex: 22 }}>
+                      <PickerBtn value={fmForm.day ? String(fmForm.day).padStart(2,"0") : ""} placeholder="DD" onPress={() => setFmDayOpen(true)} />
+                    </View>
+                    <View style={{ flex: 36 }}>
+                      <PickerBtn value={fmForm.month ? MONTHS[Number(fmForm.month)-1] : ""} placeholder="Month" onPress={() => setFmMonthOpen(true)} />
+                    </View>
+                    <View style={{ flex: 42 }}>
+                      <PickerBtn value={fmForm.year} placeholder="Year" onPress={() => setFmYearOpen(true)} />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.fieldWrap}>
+                  <Lbl text="TIME OF BIRTH" />
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <View style={{ flex: 28 }}>
+                      <PickerBtn value={fmForm.hour ? String(fmForm.hour).padStart(2,"0") : ""} placeholder="HH" onPress={() => setFmHourOpen(true)} />
+                    </View>
+                    <View style={{ flex: 28 }}>
+                      <PickerBtn value={fmForm.minute !== "" ? String(fmForm.minute).padStart(2,"0") : ""} placeholder="MM" onPress={() => setFmMinOpen(true)} />
+                    </View>
+                    <View style={{ flex: 44 }}>
+                      <View style={{ flexDirection: "row", gap: 4 }}>
+                        {(["AM", "PM"] as const).map(v => {
+                          const active = fmForm.ampm === v;
+                          return (
+                            <Pressable
+                              key={v}
+                              onPress={() => { setFmForm(prev => ({ ...prev, ampm: v })); Haptics.selectionAsync(); }}
+                              style={[
+                                s.ampmBtn,
+                                active
+                                  ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                                  : { borderColor: C.border, backgroundColor: C.inputBg },
+                              ]}
+                            >
+                              <Text style={[s.ampmTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{v}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.fieldWrap}>
+                  <Lbl text="BIRTH PLACE" />
+                  <View style={[
+                    s.inputRow,
+                    { backgroundColor: C.inputBg, borderColor: fmPlaceFocused ? C.inputFocusBorder : C.inputBorder, gap: 6 },
+                  ]}>
+                    <Feather name="search" size={13} color={fmPlaceFocused ? C.accent : C.textDim} />
+                    <TextInput
+                      style={[s.inputTxt, { flex: 1, color: C.text }]}
+                      value={fmPlaceQuery}
+                      onChangeText={setFmPlaceQuery}
+                      onSubmitEditing={handleFmPlaceSearch}
+                      placeholder="City, Country"
+                      placeholderTextColor={C.textDim}
+                      returnKeyType="search"
+                      onFocus={() => setFmPlaceFocused(true)}
+                      onBlur={() => setFmPlaceFocused(false)}
+                    />
+                    <Pressable onPress={handleFmPlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
+                      {fmSearching
+                        ? <ActivityIndicator size="small" color={ac} />
+                        : <Text style={[s.searchBtnTxt, { color: ac }]}>Search</Text>
+                      }
+                    </Pressable>
+                  </View>
+                </View>
+
+                {fmGeoResults.length > 0 && (
+                  <View style={[s.geoList, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
+                    {fmGeoResults.map((g, i) => (
+                      <Pressable
+                        key={i}
+                        onPress={() => { fmSelectGeo(g); Haptics.selectionAsync(); }}
+                        style={[s.geoItem, i < fmGeoResults.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}
+                      >
+                        <Feather name="map-pin" size={10} color={ac} style={{ marginTop: 1 }} />
+                        <Text style={[s.geoTxt, { color: C.isDark ? C.textMid : "#334155" }]} numberOfLines={1}>{g.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                {fmForm.lat !== 0 && (
+                  <View style={[s.confirmedPlace, { backgroundColor: C.isDark ? "rgba(22,163,74,0.12)" : "#F0FDF4", borderColor: C.isDark ? "rgba(22,163,74,0.3)" : "#BBF7D0" }]}>
+                    <Feather name="check-circle" size={12} color={C_SUCCESS} />
+                    <Text style={[s.confirmedTxt, { color: C_SUCCESS }]} numberOfLines={1}>{fmForm.place}</Text>
+                    {fmTzLoading && <ActivityIndicator size="small" color={C_SUCCESS} style={{ marginLeft: 4 }} />}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {!!fmError && (
+              <View style={[s.errorBox, { marginTop: 8 }]}>
+                <Feather name="alert-circle" size={12} color="#DC2626" />
+                <Text style={s.errorTxt}>{fmError}</Text>
+              </View>
+            )}
+
+            <View style={[bs.btnRow, { borderTopColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]}>
+              <Pressable
+                onPress={() => setFmVisible(false)}
+                disabled={fmSaving}
+                style={[bs.cancelBtn, { borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}
+              >
+                <Text style={[bs.cancelTxt, { color: C.textMuted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleFmSave}
+                disabled={fmSaving}
+                style={{ flex: 1, opacity: fmSaving ? 0.65 : 1 }}
+              >
+                <LinearGradient
+                  colors={[C.btnGradStart, C.btnGradEnd]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={bs.saveBtn}
+                >
+                  {fmSaving
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <><Feather name={fmEditId ? "check" : "user-plus"} size={14} color="#fff" /><Text style={bs.saveTxt}>{fmEditId ? "Update" : "Add"}</Text></>
+                  }
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* FM picker modals */}
+      <PickerModal visible={fmDayOpen}   title="Select Day"        items={DAYS_L}        selected={fmForm.day}    onSelect={v => { fmSet("day")(v);    setFmDayOpen(false);   }} onClose={() => setFmDayOpen(false)}   />
+      <PickerModal visible={fmMonthOpen} title="Select Month"      items={MONTHS_L}      selected={fmForm.month}  onSelect={v => { fmSet("month")(v);  setFmMonthOpen(false); }} onClose={() => setFmMonthOpen(false)} />
+      <PickerModal visible={fmYearOpen}  title="Select Birth Year" items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
+      <PickerModal visible={fmHourOpen}  title="Select Hour"       items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
+      <PickerModal visible={fmMinOpen}   title="Select Minute"     items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
+      <PickerModal visible={fmRelOpen}   title="Select Relation"   items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
+
+      {/* Delete Confirm */}
+      {confirmDeleteId && deleteTarget && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setConfirmDeleteId(null)}>
+          <View style={del.overlay}>
+            <View style={[del.box, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF", borderColor: "rgba(248,113,113,0.25)" }]}>
+              <View style={del.iconWrap}>
+                <Feather name="trash-2" size={20} color="#f87171" />
+              </View>
+              <Text style={[del.title, { color: C.text }]}>Delete Member?</Text>
+              <Text style={[del.body, { color: C.textMuted }]}>
+                <Text style={{ color: C.textMid, fontFamily: F.semibold }}>{deleteTarget.name}</Text>
+                {" "}ka chart data permanently delete ho jayega.
+              </Text>
+              <View style={del.btnRow}>
+                <Pressable onPress={() => setConfirmDeleteId(null)} style={[del.cancelBtn, { borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
+                  <Text style={{ color: C.textMuted, fontSize: 14, fontFamily: F.medium }}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={confirmDelete} style={del.deleteBtn}>
+                  <Text style={{ color: "#fff", fontSize: 14, fontFamily: F.bold }}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  // Header
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 16, paddingBottom: 10,
@@ -534,10 +905,8 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.4 },
   headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginLeft: 11 },
 
-  // Scroll
   scroll: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 16, gap: 10 },
 
-  // Card
   card: {
     borderRadius: 16, overflow: "hidden",
     paddingHorizontal: 14, paddingVertical: 13,
@@ -546,19 +915,15 @@ const s = StyleSheet.create({
     shadowOpacity: 0.10, shadowRadius: 12, elevation: 4,
   },
 
-  // Card section label row
   cardRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   cardRowIcon: { width: 22, height: 22, borderRadius: 7, alignItems: "center", justifyContent: "center" },
   cardRowLabel: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.4 },
 
-  // Divider
   divider: { height: StyleSheet.hairlineWidth, marginVertical: 2 },
 
-  // Field wrapper
   fieldWrap: { gap: 5 },
   lbl: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.3 },
 
-  // Text input row
   inputRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 10, borderWidth: 0.75,
@@ -570,7 +935,6 @@ const s = StyleSheet.create({
     padding: 0, margin: 0,
   },
 
-  // Picker button (day/month/year/hour/min)
   pickerBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     borderRadius: 10, borderWidth: 0.75,
@@ -579,32 +943,27 @@ const s = StyleSheet.create({
   },
   pickerTxt: { flex: 1, fontSize: 13, fontFamily: F.semibold },
 
-  // Gender chip
   chip: {
     flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: "center",
     borderWidth: 0.75,
   },
   chipTxt: { fontSize: 12.5, fontFamily: F.bold },
 
-  // AM/PM
   ampmBtn: {
     flex: 1, height: 44, borderRadius: 10, alignItems: "center",
     justifyContent: "center", borderWidth: 0.75,
   },
   ampmTxt: { fontSize: 13, fontFamily: F.bold },
 
-  // Time helper hint
   timeHint: { fontSize: 11, fontFamily: F.regular, marginTop: 4, opacity: 0.75 },
 
-  // Place search button
   searchBtn: {
     paddingHorizontal: 11, paddingVertical: 6,
     borderRadius: 8, backgroundColor: "transparent",
-    borderWidth: 0.75, borderColor: "#6366F1",
+    borderWidth: 0.75,
   },
-  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold, color: "#6366F1" },
+  searchBtnTxt: { fontSize: 11.5, fontFamily: F.bold },
 
-  // Geo dropdown
   geoList: {
     borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden",
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
@@ -616,7 +975,6 @@ const s = StyleSheet.create({
   },
   geoTxt: { fontSize: 12, fontFamily: F.medium, flex: 1 },
 
-  // Confirmed place
   confirmedPlace: {
     flexDirection: "row", alignItems: "center", gap: 7,
     borderRadius: 9, borderWidth: 0.75,
@@ -624,7 +982,34 @@ const s = StyleSheet.create({
   },
   confirmedTxt: { fontSize: 12, fontFamily: F.semibold, flex: 1 },
 
-  // Error
+  fmRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 8,
+  },
+  fmAvatar: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: "center", justifyContent: "center",
+  },
+  fmName: { fontSize: 13, fontFamily: F.semibold },
+  fmSub:  { fontSize: 10.5, fontFamily: F.medium, marginTop: 1 },
+  fmIconBtn: {
+    width: 28, height: 28, borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center", justifyContent: "center",
+  },
+  fmDivider: { height: StyleSheet.hairlineWidth },
+  fmEmpty: {
+    alignItems: "center", gap: 6, paddingVertical: 18,
+    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: "dashed",
+  },
+  fmEmptyTxt: { fontSize: 12, fontFamily: F.medium },
+  fmAddBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 11, borderRadius: 10, borderWidth: 1,
+  },
+  fmAddTxt: { fontSize: 13, fontFamily: F.semibold },
+
   errorBox: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
     backgroundColor: "rgba(220,38,38,0.05)",
@@ -634,14 +1019,12 @@ const s = StyleSheet.create({
   errorTxt:  { color: "#DC2626", fontSize: 12.5, fontFamily: F.semibold },
   errorHint: { color: "#EF4444", fontSize: 10.5, fontFamily: F.regular, marginTop: 3, lineHeight: 15 },
 
-  // Saving
   savingRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
     paddingVertical: 4,
   },
   savingTxt: { fontSize: 12, fontFamily: F.medium },
 
-  // Sticky bottom
   stickyBottom: {
     paddingHorizontal: 14, paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -652,4 +1035,60 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 7,
   },
   saveTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold, letterSpacing: 0.2 },
+});
+
+const bs = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end",
+  },
+  sheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 18, paddingBottom: 28, paddingTop: 12,
+    maxHeight: "85%",
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    alignSelf: "center", marginBottom: 16,
+  },
+  title: {
+    fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3,
+    marginBottom: 16,
+  },
+  btnRow: {
+    flexDirection: "row", gap: 10, marginTop: 14,
+    paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  cancelBtn: {
+    flex: 0.5, alignItems: "center", paddingVertical: 13, borderRadius: 12,
+    borderWidth: 1,
+  },
+  cancelTxt: { fontSize: 14, fontFamily: F.medium },
+  saveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 7, paddingVertical: 13, borderRadius: 12,
+  },
+  saveTxt: { color: "#fff", fontSize: 14, fontFamily: F.bold },
+});
+
+const del = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", alignItems: "center", justifyContent: "center" },
+  box: {
+    width: 300, borderRadius: 20, borderWidth: 1,
+    padding: 24, alignItems: "center", gap: 10,
+  },
+  iconWrap: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: "rgba(248,113,113,0.1)", alignItems: "center", justifyContent: "center",
+  },
+  title: { fontSize: 17, fontFamily: F.bold, textAlign: "center" },
+  body:  { fontSize: 13, fontFamily: F.regular, textAlign: "center", lineHeight: 19 },
+  btnRow: { flexDirection: "row", gap: 12, marginTop: 8 },
+  cancelBtn: {
+    flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 12,
+    borderWidth: 1, backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  deleteBtn: {
+    flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 12,
+    backgroundColor: "#b91c1c",
+  },
 });

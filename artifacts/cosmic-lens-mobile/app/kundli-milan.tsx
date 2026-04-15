@@ -452,9 +452,9 @@ function ProInsightsPanel(){
       {/* ══ 0 ══ HERO ══════════════════════════════════════════════════════════ */}
       <Animated.View style={av(0)}>
         <LinearGradient
-          colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#DDD6FE","#C4B5FD","#EDE9FE"]}
+          colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#EDE9FE","#DDD6FE","#F5F3FF"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:18,padding:14,borderWidth:1.5,borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.5)",
+          style={{borderRadius:18,padding:14,borderWidth:1.5,borderColor:C.isDark?"rgba(139,92,246,0.35)":"rgba(109,40,217,0.45)",
             shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:C.isDark?0.25:0.18,shadowRadius:14,elevation:8}}>
           {/* Title row */}
           <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:6}}>

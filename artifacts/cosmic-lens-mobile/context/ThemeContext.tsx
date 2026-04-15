@@ -32,6 +32,7 @@ export interface ThemeColors {
   navBorder:      string;
   inputBg:        string;
   inputBorder:    string;
+  inputFocusBorder: string;
   shimmer1:       string;
   shimmer2:       string;
   shimmer3:       string;
@@ -40,6 +41,20 @@ export interface ThemeColors {
   // Status bar style
   statusBar: "light-content" | "dark-content";
   isDark: boolean;
+
+  // Warning / info box
+  warningBg:     string;
+  warningBorder: string;
+  warningText:   string;
+
+  // Toggle buttons selected state (gender / AM-PM)
+  toggleSelBg:     string;
+  toggleSelBorder: string;
+  toggleSelText:   string;
+
+  // Primary button gradient stops [start, end]
+  btnGradStart: string;
+  btnGradEnd:   string;
 }
 
 // ── Dark — Charcoal + Subtle Purple Tint ──────────────────────────────────────
@@ -66,6 +81,7 @@ export const DARK: ThemeColors = {
   navBorder: "rgba(180,150,255,0.18)",
   inputBg:   "#1e1b2e",
   inputBorder: "rgba(180,150,255,0.26)",
+  inputFocusBorder: "rgba(245,158,11,0.45)",
 
   shimmer1: "rgba(30,27,46,0.9)",
   shimmer2: "rgba(37,34,56,0.9)",
@@ -75,41 +91,67 @@ export const DARK: ThemeColors = {
 
   statusBar: "light-content",
   isDark: true,
+
+  warningBg:     "rgba(255,165,0,0.08)",
+  warningBorder: "rgba(255,165,0,0.35)",
+  warningText:   "#FFD580",
+
+  toggleSelBg:     "rgba(245,158,11,0.15)",
+  toggleSelBorder: "#f59e0b",
+  toggleSelText:   "#f59e0b",
+
+  btnGradStart: "#f59e0b",
+  btnGradEnd:   "#d97706",
 };
 
-// ── Light — Premium Slate + Indigo ────────────────────────────────────────────
+// ── Light — Bold Premium Slate ─────────────────────────────────────────────────
 export const LIGHT: ThemeColors = {
-  bg:      "#F5F7FB",
+  bg:      "#F1F5F9",
   bgCard:  "#FFFFFF",
   bgCard2: "#F8FAFC",
   bgCard3: "#F1F5F9",
 
-  text:      "#0F172A",   // slate-900  — headings
-  textMid:   "#334155",   // slate-700  — body
-  textMuted: "#64748B",   // slate-500  — secondary
-  textDim:   "#94A3B8",   // slate-400  — placeholder / dim
+  text:      "#0F172A",   // slate-900  — headings (boldest)
+  textMid:   "#1E293B",   // slate-800  — body
+  textMuted: "#334155",   // slate-700  — labels / secondary (was 64748B — too faded)
+  textDim:   "#94A3B8",   // slate-400  — placeholder
 
-  accent:   "#6366F1",    // indigo-500 — primary action (overridden by zodiac)
+  accent:   "#6366F1",    // indigo-500 (overridden by zodiac)
   accentBg: "rgba(99,102,241,0.08)",
 
-  border:  "#E2E8F0",     // slate-200
-  border2: "#CBD5E1",     // slate-300
-  border3: "#F1F5F9",     // slate-100
+  border:  "#CBD5E1",     // slate-300  — stronger card border (was E2E8F0)
+  border2: "#94A3B8",     // slate-400  — input border
+  border3: "#E2E8F0",     // slate-200  — subtle dividers
 
-  switchTrackOff: "#E2E8F0",
+  switchTrackOff: "#CBD5E1",
   navBg:     "#FFFFFF",
-  navBorder: "#E2E8F0",
-  inputBg:   "#F8FAFC",
-  inputBorder: "#CBD5E1",
+  navBorder: "#CBD5E1",
+  inputBg:   "#F1F5F9",       // slightly grey background for inputs
+  inputBorder: "#94A3B8",     // stronger border
+  inputFocusBorder: "#6366F1",
 
   shimmer1: "rgba(248,250,252,0.95)",
   shimmer2: "rgba(241,245,249,0.95)",
   shimmer3: "rgba(248,250,252,0.95)",
 
-  cardShadow: "0 1px 3px rgba(15,23,42,0.06), 0 4px 20px rgba(99,102,241,0.08), 0 1px 0 rgba(255,255,255,1) inset",
+  cardShadow: "0 2px 8px rgba(15,23,42,0.10), 0 8px 24px rgba(15,23,42,0.06), 0 1px 0 rgba(255,255,255,1) inset",
 
   statusBar: "dark-content",
   isDark: false,
+
+  // Warning — amber
+  warningBg:     "#FEF3C7",
+  warningBorder: "#F59E0B",
+  warningText:   "#92400E",
+
+  // Toggle selected — red/crimson (high-contrast, bold)
+  toggleSelBg:     "#FEE2E2",
+  toggleSelBorder: "#DC2626",
+  toggleSelText:   "#DC2626",
+
+  // Primary button gradient — amber → orange
+  btnGradStart: "#F59E0B",
+  btnGradEnd:   "#EA580C",
 };
 
 // ── Context shape ─────────────────────────────────────────────────────────────

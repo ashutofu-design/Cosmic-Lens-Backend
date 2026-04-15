@@ -202,7 +202,7 @@ export default function LoginScreen() {
 
           {/* ── MOBILE PANEL ── */}
           {method === "mobile" && (
-            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
+            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2, shadowColor: isDark ? "#7c3aed" : "#0F172A", shadowOpacity: isDark ? 0.18 : 0.12 }]}>
               <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>
                 MOBILE NUMBER
               </Text>
@@ -211,7 +211,7 @@ export default function LoginScreen() {
                 s.phoneRow,
                 { backgroundColor: C.inputBg, borderColor: mobileError ? "rgba(239,68,68,0.5)" : C.inputBorder }
               ]}>
-                <View style={[s.phonePrefix, { borderRightColor: isDark ? "rgba(139,92,246,0.18)" : "#CBD5E1" }]}>
+                <View style={[s.phonePrefix, { borderRightColor: C.border }]}>
                   <Text style={[s.phonePrefixFlag]}>🇮🇳</Text>
                   <Text style={[s.phonePrefixCode, { color: C.textMid }]}>+91</Text>
                 </View>
@@ -250,9 +250,9 @@ export default function LoginScreen() {
                 style={({ pressed }) => [{ opacity: (mobileLoading || mobile.replace(/\D/g, "").length < 7) ? 0.6 : pressed ? 0.85 : 1 }]}
               >
                 <LinearGradient
-                  colors={["#f59e0b", "#d97706"]}
+                  colors={[C.btnGradStart, C.btnGradEnd]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={s.ctaBtn}
+                  style={[s.ctaBtn, !isDark && { shadowColor: "#EA580C", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }]}
                 >
                   {mobileLoading
                     ? <ActivityIndicator size="small" color="#fff" />
@@ -286,7 +286,7 @@ export default function LoginScreen() {
                 ))}
               </View>
 
-              <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
+              <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2, shadowColor: isDark ? "#7c3aed" : "#0F172A", shadowOpacity: isDark ? 0.18 : 0.12 }]}>
                 {emailTab === "signup" && (
                   <View style={s.fieldWrap}>
                     <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.yourName.toUpperCase()}</Text>
@@ -436,16 +436,18 @@ interface FieldInputProps {
 
 const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
   ({ icon, rightIcon, onRightIconPress, isDark, inputBg, textColor, ...props }, ref) => {
+    const C = useC();
     const [focused, setFocused] = useState(false);
     return (
       <View style={[
         fi.row,
-        { backgroundColor: inputBg },
+        { backgroundColor: C.inputBg },
         focused
-          ? { borderColor: isDark ? "rgba(245,158,11,0.45)" : "rgba(99,102,241,0.45)" }
-          : { borderColor: isDark ? "rgba(139,92,246,0.18)" : "#CBD5E1" },
+          ? { borderColor: C.inputFocusBorder }
+          : { borderColor: C.inputBorder },
+        focused && { shadowColor: C.inputFocusBorder, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 5 },
       ]}>
-        <Feather name={icon} size={16} color={focused ? (isDark ? "#f59e0b" : "#6366F1") : (isDark ? "#7c6fa0" : "#64748B")} />
+        <Feather name={icon} size={16} color={focused ? C.inputFocusBorder : C.textMuted} />
         <TextInput
           ref={ref}
           style={[fi.input, { color: textColor }]}

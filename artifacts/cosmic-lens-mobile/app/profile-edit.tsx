@@ -61,7 +61,7 @@ function blank(): FormState {
 // ── Reusable field label ───────────────────────────────────────────────────────
 function FieldLabel({ text }: { text: string }) {
   const C = useC();
-  return <Text style={[s.label, { color: C.textMuted }]}>{text}</Text>;
+  return <Text style={[s.label, { color: C.text, opacity: C.isDark ? 0.65 : 1 }]}>{text}</Text>;
 }
 
 // ── Styled text input ──────────────────────────────────────────────────────────
@@ -83,14 +83,14 @@ function Field({
       <View style={[
         s.inputRow,
         {
-          backgroundColor: C.isDark ? "#0F172A" : C.inputBg,
-          borderColor: focused ? "#6366F1" : (C.isDark ? "#334155" : C.border),
+          backgroundColor: C.inputBg,
+          borderColor: focused ? C.inputFocusBorder : C.inputBorder,
         },
-        focused && s.inputRowFocused,
+        focused && { shadowColor: C.inputFocusBorder, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 5 },
       ]}>
-        {icon && <Feather name={icon} size={14} color={focused ? "#6366F1" : C.textMuted} style={{ marginRight: 2 }} />}
+        {icon && <Feather name={icon} size={14} color={focused ? C.inputFocusBorder : C.textMuted} style={{ marginRight: 2 }} />}
         <TextInput
-          style={[s.input, { color: C.isDark ? "#E2E8F0" : C.text }]}
+          style={[s.input, { color: C.text }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -154,10 +154,12 @@ function AmPmToggle({ value, onChange }: { value: "AM" | "PM"; onChange: (v: "AM
           <Pressable key={v} onPress={() => { onChange(v); Haptics.selectionAsync(); }}
             style={[
               s.ampmBtn,
-              { borderColor: active ? C.accent : C.border, backgroundColor: active ? `${C.accent}18` : "transparent" },
+              active
+                ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                : { borderColor: C.border, backgroundColor: "transparent" },
             ]}
           >
-            <Text style={[s.ampmTxt, { color: active ? C.accent : C.textMuted }]}>{v}</Text>
+            <Text style={[s.ampmTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{v}</Text>
           </Pressable>
         );
       })}
@@ -171,10 +173,10 @@ function Section({ title, icon, children }: {
 }) {
   const C = useC();
   return (
-    <View style={[s.section, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-      <View style={[s.sectionHeader, { borderBottomColor: C.border }]}>
+    <View style={[s.section, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
+      <View style={[s.sectionHeader, { borderBottomColor: C.border, backgroundColor: C.isDark ? "transparent" : "#F8FAFC" }]}>
         <Feather name={icon} size={13} color={C.accent} />
-        <Text style={[s.sectionTitle, { color: C.accent }]}>{title}</Text>
+        <Text style={[s.sectionTitle, { color: C.isDark ? C.accent : "#334155" }]}>{title}</Text>
       </View>
       <View style={s.sectionBody}>
         {children}
@@ -360,10 +362,12 @@ export default function ProfileEditScreen() {
                     onPress={() => { setF(prev => ({ ...prev, gender: g })); Haptics.selectionAsync(); }}
                     style={[
                       s.genderChip,
-                      { borderColor: active ? C.accent : C.border, backgroundColor: active ? `${C.accent}18` : "transparent" },
+                      active
+                        ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                        : { borderColor: C.border, backgroundColor: "transparent" },
                     ]}
                   >
-                    <Text style={[s.genderTxt, { color: active ? C.accent : C.textMuted }]}>{g}</Text>
+                    <Text style={[s.genderTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{g}</Text>
                   </Pressable>
                 );
               })}
@@ -379,10 +383,10 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="DAY" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.selectionAsync(); setDayOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.day ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.day ? C.text : C.textDim }]}>
                     {f.day ? String(f.day).padStart(2,"0") : "DD"}
                   </Text>
                   <Feather name="chevron-down" size={11} color={C.textMuted} />
@@ -394,10 +398,10 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="MONTH" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.selectionAsync(); setMonthOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.month ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.month ? C.text : C.textDim }]}>
                     {f.month ? MONTHS[Number(f.month) - 1] : "Mon"}
                   </Text>
                   <Feather name="chevron-down" size={11} color={C.textMuted} />
@@ -409,10 +413,10 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="YEAR" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.selectionAsync(); setYearOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.year ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.year ? C.text : C.textDim }]}>
                     {f.year || "YYYY"}
                   </Text>
                   <Feather name="chevron-down" size={11} color={C.textMuted} />
@@ -425,9 +429,9 @@ export default function ProfileEditScreen() {
         {/* ── TIME OF BIRTH ── */}
         <Section title="Birth Time" icon="clock">
           {/* Warning strip */}
-          <View style={s.infoBox}>
-            <Feather name="alert-triangle" size={12} color="#FFA500" />
-            <Text style={s.infoTxt} numberOfLines={1}>
+          <View style={[s.infoBox, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
+            <Feather name="alert-triangle" size={12} color={C.warningBorder} />
+            <Text style={[s.infoTxt, { color: C.warningText }]} numberOfLines={1}>
               Birth time affects Mahadasha — select AM/PM correctly
             </Text>
           </View>
@@ -439,10 +443,10 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="HOUR" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.selectionAsync(); setHourOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.hour ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.hour ? C.text : C.textDim }]}>
                     {f.hour ? String(f.hour).padStart(2,"0") : "HH"}
                   </Text>
                   <Feather name="chevron-down" size={11} color={C.textMuted} />
@@ -454,10 +458,10 @@ export default function ProfileEditScreen() {
               <View style={s.fieldWrap}>
                 <FieldLabel text="MIN" />
                 <Pressable
-                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  style={[s.selectBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.selectionAsync(); setMinOpen(true); }}
                 >
-                  <Text style={[s.selectBtnText, { color: f.minute !== "" ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                  <Text style={[s.selectBtnText, { color: f.minute !== "" ? C.text : C.textDim }]}>
                     {f.minute !== "" ? String(f.minute).padStart(2,"0") : "MM"}
                   </Text>
                   <Feather name="chevron-down" size={11} color={C.textMuted} />
@@ -478,10 +482,10 @@ export default function ProfileEditScreen() {
         <Section title="Birth Place" icon="map-pin">
           <View style={s.fieldWrap}>
             <FieldLabel text="CITY / COUNTRY" />
-            <View style={[s.inputRow, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border, gap: 7 }]}>
+            <View style={[s.inputRow, { backgroundColor: C.inputBg, borderColor: C.inputBorder, gap: 7 }]}>
               <Feather name="search" size={14} color={C.textMuted} />
               <TextInput
-                style={[s.input, { flex: 1, color: C.isDark ? "#E2E8F0" : C.text }]}
+                style={[s.input, { flex: 1, color: C.text }]}
                 value={placeQuery}
                 onChangeText={setPlaceQuery}
                 onSubmitEditing={handlePlaceSearch}
@@ -552,9 +556,9 @@ export default function ProfileEditScreen() {
           style={({ pressed }) => [{ opacity: saving ? 0.6 : pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
-            colors={isNetworkError ? ["#dc2626", "#ef4444"] : ["#d97706", "#f59e0b"]}
+            colors={isNetworkError ? ["#dc2626", "#ef4444"] : [C.btnGradStart, C.btnGradEnd]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={s.saveBtn}
+            style={[s.saveBtn, !C.isDark && { shadowColor: "#EA580C", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 }]}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
@@ -611,8 +615,8 @@ const s = StyleSheet.create({
   section: {
     borderRadius: 14, overflow: "hidden",
     borderWidth: 1,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 6, elevation: 2,
+    shadowColor: "#0F172A", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
   },
   sectionHeader: {
     flexDirection: "row", alignItems: "center", gap: 7,
@@ -644,7 +648,6 @@ const s = StyleSheet.create({
   input: {
     flex: 1, fontSize: 13.5, fontFamily: F.medium,
     padding: 0, margin: 0,
-    color: "#E2E8F0",
   },
   hint: { fontSize: 9.5, fontFamily: F.regular },
 
@@ -674,19 +677,18 @@ const s = StyleSheet.create({
   // Info box (warning) — compact single-line strip
   infoBox: {
     flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: "rgba(255,165,0,0.08)",
-    borderWidth: 1, borderColor: "rgba(255,165,0,0.35)",
+    borderWidth: 1,
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
   },
-  infoTxt: { color: "#FFD580", fontSize: 10.5, fontFamily: F.medium, flex: 1, lineHeight: 14 },
+  infoTxt: { fontSize: 10.5, fontFamily: F.medium, flex: 1, lineHeight: 14 },
 
   // Place search
   searchBtn: {
     paddingHorizontal: 11, paddingVertical: 5,
-    backgroundColor: "rgba(255,215,0,0.08)",
-    borderRadius: 7, borderWidth: 1, borderColor: "#FFD700",
+    backgroundColor: "rgba(99,102,241,0.10)",
+    borderRadius: 7, borderWidth: 1, borderColor: "#6366F1",
   },
-  searchBtnTxt: { color: "#FFD700", fontSize: 11.5, fontFamily: F.bold },
+  searchBtnTxt: { color: "#6366F1", fontSize: 11.5, fontFamily: F.bold },
 
   // Geo results
   geoList: {

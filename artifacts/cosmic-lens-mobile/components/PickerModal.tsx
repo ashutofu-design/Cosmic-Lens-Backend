@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useC } from "@/context/ThemeContext";
+
 export interface PickerItem {
   label: string;
   value: string;
@@ -28,17 +30,25 @@ interface Props {
 export default function PickerModal({
   visible, title, items, selected, onSelect, onClose,
 }: Props) {
+  const C = useC();
   const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={s.overlay} onPress={onClose} />
-      <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
-        <View style={s.handle} />
-        <View style={s.headerRow}>
-          <Text style={s.title}>{title}</Text>
+      <View style={[
+        s.sheet,
+        {
+          backgroundColor: C.bgCard,
+          borderColor: C.border,
+          paddingBottom: insets.bottom + 8,
+        },
+      ]}>
+        <View style={[s.handle, { backgroundColor: C.border }]} />
+        <View style={[s.headerRow, { borderBottomColor: C.border }]}>
+          <Text style={[s.title, { color: C.textMuted }]}>{title}</Text>
           <Pressable onPress={onClose} hitSlop={12}>
-            <Feather name="x" size={18} color="#475569" />
+            <Feather name="x" size={18} color={C.textMuted} />
           </Pressable>
         </View>
         <FlatList
@@ -54,7 +64,8 @@ export default function PickerModal({
               <Pressable
                 style={({ pressed }) => [
                   s.item,
-                  active && s.itemActive,
+                  { borderBottomColor: C.border3 },
+                  active && { backgroundColor: `${C.accent}10` },
                   pressed && { opacity: 0.7 },
                 ]}
                 onPress={() => {
@@ -62,11 +73,11 @@ export default function PickerModal({
                   onSelect(item.value);
                 }}
               >
-                <Text style={[s.itemText, active && s.itemTextActive]}>
+                <Text style={[s.itemText, { color: active ? C.text : C.textMuted, fontFamily: active ? "Nunito_700Bold" : "Nunito_500Medium" }]}>
                   {item.label}
                 </Text>
                 {active && (
-                  <Feather name="check" size={15} color="#f59e0b" />
+                  <Feather name="check" size={15} color={C.accent} />
                 )}
               </Pressable>
             );
@@ -85,39 +96,30 @@ const s = StyleSheet.create({
   sheet: {
     position: "absolute",
     bottom: 0, left: 0, right: 0,
-    backgroundColor: "#071525",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
     paddingHorizontal: 4,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.12)",
     alignSelf: "center", marginTop: 12, marginBottom: 4,
   },
   headerRow: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)",
+    borderBottomWidth: 1,
   },
   title: {
-    color: "#94a3b8", fontSize: 12,
+    fontSize: 12,
     fontFamily: "Nunito_700Bold", letterSpacing: 1.5, textTransform: "uppercase",
   },
   item: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 20, height: 52,
-    borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
-  },
-  itemActive: {
-    backgroundColor: "rgba(245,158,11,0.07)",
+    borderBottomWidth: 1,
   },
   itemText: {
-    color: "#64748b", fontSize: 15, fontFamily: "Nunito_500Medium",
-  },
-  itemTextActive: {
-    color: "#e2e8f0", fontFamily: "Nunito_700Bold",
+    fontSize: 15,
   },
 });

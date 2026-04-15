@@ -537,13 +537,13 @@ function ProInsightsPanel(){
           {/* YES / WAIT / RISK pills */}
           <View style={{flexDirection:"row",gap:8}}>
             {[
-              {l:"✅  YES",   col:"#22c55e", bg:"rgba(34,197,94,0.12)",  bdr:"rgba(34,197,94,0.35)"},
-              {l:"⏳  WAIT",  col:"#fbbf24", bg:"rgba(251,191,36,0.15)", bdr:"rgba(251,191,36,0.4)"},
-              {l:"⚠️  RISK",  col:"#ef4444", bg:"rgba(239,68,68,0.12)",  bdr:"rgba(239,68,68,0.35)"},
-            ].map(({l,col,bg,bdr})=>(
+              {l:"✅  YES",  colD:"#22c55e", colL:"#15803D", bg:"rgba(34,197,94,0.12)",  bdr:"rgba(34,197,94,0.4)"},
+              {l:"⏳  WAIT", colD:"#fbbf24", colL:"#B45309", bg:"rgba(251,191,36,0.18)", bdr:"rgba(180,83,9,0.4)"},
+              {l:"⚠️  RISK", colD:"#ef4444", colL:"#B91C1C", bg:"rgba(239,68,68,0.12)",  bdr:"rgba(239,68,68,0.4)"},
+            ].map(({l,colD,colL,bg,bdr})=>(
               <View key={l} style={{flex:1,borderRadius:10,backgroundColor:bg,borderWidth:1,
                 borderColor:bdr,paddingVertical:8,alignItems:"center"}}>
-                <Text style={{color:col,fontSize:11,fontFamily:"Nunito_700Bold"}}>{l}</Text>
+                <Text style={{color:C.isDark?colD:colL,fontSize:11,fontFamily:"Nunito_700Bold"}}>{l}</Text>
               </View>
             ))}
           </View>

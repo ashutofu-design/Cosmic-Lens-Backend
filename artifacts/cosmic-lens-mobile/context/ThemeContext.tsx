@@ -114,11 +114,11 @@ export const DARK: ThemeColors = {
 
 // ── Light — Premium White + Strong Purple Accents ─────────────────────────────
 export const LIGHT: ThemeColors = {
-  // Soft non-blinding white backgrounds
-  bg:      "#F8F9FC",
-  bgCard:  "#FFFFFF",
-  bgCard2: "#F3F4F8",
-  bgCard3: "#EAECF4",
+  // Soft lavender-tinted backgrounds — not pure white
+  bg:      "#F0ECFF",
+  bgCard:  "#FAF8FF",
+  bgCard2: "#EDE8FF",
+  bgCard3: "#E0D9FF",
 
   // High-contrast readable text hierarchy
   text:      "#111827",   // primary headings — near-black

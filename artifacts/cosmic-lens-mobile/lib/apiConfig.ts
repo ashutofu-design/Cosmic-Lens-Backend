@@ -1,17 +1,15 @@
-const HARDCODED_FALLBACK = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
+const REPLIT_DOMAIN = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
 
-const domain = process.env.EXPO_PUBLIC_DOMAIN || HARDCODED_FALLBACK;
+const domain = process.env.EXPO_PUBLIC_DOMAIN || REPLIT_DOMAIN;
 
 export const API_BASE = `https://${domain}`;
 
-/** Headers added to every API request. Includes bypass for tunnel services. */
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   "Accept": "application/json",
   "bypass-tunnel-reminder": "true",
 };
 
-/** Central fetch wrapper — adds tunnel bypass headers automatically. */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   return fetch(url, {
     ...init,

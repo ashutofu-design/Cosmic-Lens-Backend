@@ -259,6 +259,9 @@ export default function ProfileEditScreen() {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const [secOpen, setSecOpen] = useState<Record<string,boolean>>({ personal: false, birth: false, place: false });
+  const toggleSec = (k: string) => { Haptics.selectionAsync(); setSecOpen(prev => ({ ...prev, [k]: !prev[k] })); };
+
   const nameRef  = useRef<TextInput>(null);
   const btnScale = useRef(new Animated.Value(1)).current;
 
@@ -460,165 +463,207 @@ export default function ProfileEditScreen() {
           showsVerticalScrollIndicator={false}
         >
 
-          <Card>
-            <CardRow label="PERSONAL INFO" icon="user" />
-
-            <View style={s.fieldWrap}>
-              <Lbl text="FULL NAME" />
-              <View style={[
-                s.inputRow,
-                { backgroundColor: C.inputBg, borderColor: nameFocused ? C.inputFocusBorder : C.inputBorder },
-                nameFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
-              ]}>
-                <Feather name="user" size={13} color={nameFocused ? C.accent : C.textDim} />
-                <TextInput
-                  ref={nameRef}
-                  style={[s.inputTxt, { color: C.text }]}
-                  value={f.name}
-                  onChangeText={v => { set("name")(v); setError(""); }}
-                  placeholder="Full name"
-                  placeholderTextColor={C.textDim}
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  onFocus={() => setNameFocused(true)}
-                  onBlur={() => setNameFocused(false)}
-                />
+          {/* ── PERSONAL INFO (collapsible) ── */}
+          <Card style={{ paddingVertical: 10, gap: 0 }}>
+            <Pressable onPress={() => toggleSec("personal")} style={sec.header}>
+              <CardRow label="PERSONAL INFO" icon="user" />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {!secOpen.personal && f.name ? (
+                  <Text style={[sec.preview, { color: C.textMuted }]} numberOfLines={1}>
+                    {f.name}{f.gender ? ` · ${f.gender}` : ""}
+                  </Text>
+                ) : null}
+                <Feather name={secOpen.personal ? "chevron-up" : "chevron-down"} size={14} color={C.textDim} />
               </View>
-            </View>
-
-            <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
-
-            <View style={s.fieldWrap}>
-              <Lbl text="GENDER (OPTIONAL)" />
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                {["Male", "Female", "Other"].map(g => {
-                  const active = f.gender === g;
-                  return (
-                    <Pressable
-                      key={g}
-                      onPress={() => { setF(prev => ({ ...prev, gender: g })); Haptics.selectionAsync(); }}
-                      style={[
-                        s.chip,
-                        active
-                          ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
-                          : { borderColor: C.border, backgroundColor: "transparent" },
-                      ]}
-                    >
-                      <Text style={[s.chipTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{g}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-          </Card>
-
-          <Card>
-            <CardRow label="BIRTH DATE & TIME" icon="calendar" />
-
-            <View style={s.fieldWrap}>
-              <Lbl text="DATE" />
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                <View style={{ flex: 22 }}>
-                  <PickerBtn value={f.day ? String(f.day).padStart(2,"0") : ""} placeholder="DD" onPress={() => setDayOpen(true)} />
+            </Pressable>
+            {secOpen.personal && (
+              <View style={{ gap: 11, paddingTop: 10 }}>
+                <View style={s.fieldWrap}>
+                  <Lbl text="FULL NAME" />
+                  <View style={[
+                    s.inputRow,
+                    { backgroundColor: C.inputBg, borderColor: nameFocused ? C.inputFocusBorder : C.inputBorder },
+                    nameFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
+                  ]}>
+                    <Feather name="user" size={13} color={nameFocused ? C.accent : C.textDim} />
+                    <TextInput
+                      ref={nameRef}
+                      style={[s.inputTxt, { color: C.text }]}
+                      value={f.name}
+                      onChangeText={v => { set("name")(v); setError(""); }}
+                      placeholder="Full name"
+                      placeholderTextColor={C.textDim}
+                      autoCapitalize="words"
+                      returnKeyType="done"
+                      onFocus={() => setNameFocused(true)}
+                      onBlur={() => setNameFocused(false)}
+                    />
+                  </View>
                 </View>
-                <View style={{ flex: 36 }}>
-                  <PickerBtn value={f.month ? MONTHS[Number(f.month)-1] : ""} placeholder="Month" onPress={() => setMonthOpen(true)} />
-                </View>
-                <View style={{ flex: 42 }}>
-                  <PickerBtn value={f.year} placeholder="Year" onPress={() => setYearOpen(true)} />
-                </View>
-              </View>
-            </View>
 
-            <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
+                <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
 
-            <View style={s.fieldWrap}>
-              <Lbl text="TIME" />
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                <View style={{ flex: 28 }}>
-                  <PickerBtn value={f.hour ? String(f.hour).padStart(2,"0") : ""} placeholder="HH" onPress={() => setHourOpen(true)} />
-                </View>
-                <View style={{ flex: 28 }}>
-                  <PickerBtn value={f.minute !== "" ? String(f.minute).padStart(2,"0") : ""} placeholder="MM" onPress={() => setMinOpen(true)} />
-                </View>
-                <View style={{ flex: 44 }}>
-                  <View style={{ flexDirection: "row", gap: 4 }}>
-                    {(["AM", "PM"] as const).map(v => {
-                      const active = f.ampm === v;
+                <View style={s.fieldWrap}>
+                  <Lbl text="GENDER (OPTIONAL)" />
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    {["Male", "Female", "Other"].map(g => {
+                      const active = f.gender === g;
                       return (
                         <Pressable
-                          key={v}
-                          onPress={() => { setF(prev => ({ ...prev, ampm: v })); Haptics.selectionAsync(); }}
+                          key={g}
+                          onPress={() => { setF(prev => ({ ...prev, gender: g })); Haptics.selectionAsync(); }}
                           style={[
-                            s.ampmBtn,
+                            s.chip,
                             active
                               ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
-                              : { borderColor: C.border, backgroundColor: C.inputBg },
+                              : { borderColor: C.border, backgroundColor: "transparent" },
                           ]}
                         >
-                          <Text style={[s.ampmTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{v}</Text>
+                          <Text style={[s.chipTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{g}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
               </View>
-              <Text style={[s.timeHint, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
-                Affects Mahadasha calculation — verify AM/PM
-              </Text>
-            </View>
+            )}
           </Card>
 
-          <Card>
-            <CardRow label="BIRTH PLACE" icon="map-pin" />
-
-            <View style={s.fieldWrap}>
-              <View style={[
-                s.inputRow,
-                { backgroundColor: C.inputBg, borderColor: placeFocused ? C.inputFocusBorder : C.inputBorder, gap: 6 },
-                placeFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
-              ]}>
-                <Feather name="search" size={13} color={placeFocused ? C.accent : C.textDim} />
-                <TextInput
-                  style={[s.inputTxt, { flex: 1, color: C.text }]}
-                  value={placeQuery}
-                  onChangeText={setPlaceQuery}
-                  onSubmitEditing={handlePlaceSearch}
-                  placeholder="City, Country"
-                  placeholderTextColor={C.textDim}
-                  returnKeyType="search"
-                  onFocus={() => setPlaceFocused(true)}
-                  onBlur={() => setPlaceFocused(false)}
-                />
-                <Pressable onPress={handlePlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
-                  {searching
-                    ? <ActivityIndicator size="small" color={ac} />
-                    : <Text style={[s.searchBtnTxt, { color: ac }]}>Search</Text>
-                  }
-                </Pressable>
+          {/* ── BIRTH DATE & TIME (collapsible) ── */}
+          <Card style={{ paddingVertical: 10, gap: 0 }}>
+            <Pressable onPress={() => toggleSec("birth")} style={sec.header}>
+              <CardRow label="BIRTH DATE & TIME" icon="calendar" />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {!secOpen.birth && f.day && f.month && f.year ? (
+                  <Text style={[sec.preview, { color: C.textMuted }]} numberOfLines={1}>
+                    {String(f.day).padStart(2,"0")}/{MONTHS[Number(f.month)-1]}/{f.year} · {String(f.hour||"--").padStart(2,"0")}:{String(f.minute??"--").padStart(2,"0")} {f.ampm}
+                  </Text>
+                ) : null}
+                <Feather name={secOpen.birth ? "chevron-up" : "chevron-down"} size={14} color={C.textDim} />
               </View>
-            </View>
+            </Pressable>
+            {secOpen.birth && (
+              <View style={{ gap: 11, paddingTop: 10 }}>
+                <View style={s.fieldWrap}>
+                  <Lbl text="DATE" />
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <View style={{ flex: 22 }}>
+                      <PickerBtn value={f.day ? String(f.day).padStart(2,"0") : ""} placeholder="DD" onPress={() => setDayOpen(true)} />
+                    </View>
+                    <View style={{ flex: 36 }}>
+                      <PickerBtn value={f.month ? MONTHS[Number(f.month)-1] : ""} placeholder="Month" onPress={() => setMonthOpen(true)} />
+                    </View>
+                    <View style={{ flex: 42 }}>
+                      <PickerBtn value={f.year} placeholder="Year" onPress={() => setYearOpen(true)} />
+                    </View>
+                  </View>
+                </View>
 
-            {geoResults.length > 0 && (
-              <View style={[s.geoList, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
-                {geoResults.map((g, i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
-                    style={[s.geoItem, i < geoResults.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}
-                  >
-                    <Feather name="map-pin" size={10} color={ac} style={{ marginTop: 1 }} />
-                    <Text style={[s.geoTxt, { color: C.isDark ? C.textMid : "#334155" }]} numberOfLines={1}>{g.label}</Text>
-                  </Pressable>
-                ))}
+                <View style={[s.divider, { backgroundColor: C.isDark ? C.border : "rgba(0,0,0,0.06)" }]} />
+
+                <View style={s.fieldWrap}>
+                  <Lbl text="TIME" />
+                  <View style={{ flexDirection: "row", gap: 6 }}>
+                    <View style={{ flex: 28 }}>
+                      <PickerBtn value={f.hour ? String(f.hour).padStart(2,"0") : ""} placeholder="HH" onPress={() => setHourOpen(true)} />
+                    </View>
+                    <View style={{ flex: 28 }}>
+                      <PickerBtn value={f.minute !== "" ? String(f.minute).padStart(2,"0") : ""} placeholder="MM" onPress={() => setMinOpen(true)} />
+                    </View>
+                    <View style={{ flex: 44 }}>
+                      <View style={{ flexDirection: "row", gap: 4 }}>
+                        {(["AM", "PM"] as const).map(v => {
+                          const active = f.ampm === v;
+                          return (
+                            <Pressable
+                              key={v}
+                              onPress={() => { setF(prev => ({ ...prev, ampm: v })); Haptics.selectionAsync(); }}
+                              style={[
+                                s.ampmBtn,
+                                active
+                                  ? { borderColor: C.toggleSelBorder, backgroundColor: C.toggleSelBg }
+                                  : { borderColor: C.border, backgroundColor: C.inputBg },
+                              ]}
+                            >
+                              <Text style={[s.ampmTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{v}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={[s.timeHint, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
+                    Affects Mahadasha calculation — verify AM/PM
+                  </Text>
+                </View>
               </View>
             )}
+          </Card>
 
-            {f.lat !== 0 && (
-              <View style={[s.confirmedPlace, { backgroundColor: C.isDark ? "rgba(22,163,74,0.12)" : "#F0FDF4", borderColor: C.isDark ? "rgba(22,163,74,0.3)" : "#BBF7D0" }]}>
-                <Feather name="check-circle" size={12} color={C_SUCCESS} />
-                <Text style={[s.confirmedTxt, { color: C_SUCCESS }]} numberOfLines={1}>{f.place}</Text>
-                {tzLoading && <ActivityIndicator size="small" color={C_SUCCESS} style={{ marginLeft: 4 }} />}
+          {/* ── BIRTH PLACE (collapsible) ── */}
+          <Card style={{ paddingVertical: 10, gap: 0 }}>
+            <Pressable onPress={() => toggleSec("place")} style={sec.header}>
+              <CardRow label="BIRTH PLACE" icon="map-pin" />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                {!secOpen.place && f.place ? (
+                  <Text style={[sec.preview, { color: C.textMuted }]} numberOfLines={1}>
+                    {f.place.length > 22 ? f.place.slice(0, 22) + "…" : f.place}
+                  </Text>
+                ) : null}
+                <Feather name={secOpen.place ? "chevron-up" : "chevron-down"} size={14} color={C.textDim} />
+              </View>
+            </Pressable>
+            {secOpen.place && (
+              <View style={{ gap: 11, paddingTop: 10 }}>
+                <View style={s.fieldWrap}>
+                  <View style={[
+                    s.inputRow,
+                    { backgroundColor: C.inputBg, borderColor: placeFocused ? C.inputFocusBorder : C.inputBorder, gap: 6 },
+                    placeFocused && { shadowColor: C.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.20, shadowRadius: 7 },
+                  ]}>
+                    <Feather name="search" size={13} color={placeFocused ? C.accent : C.textDim} />
+                    <TextInput
+                      style={[s.inputTxt, { flex: 1, color: C.text }]}
+                      value={placeQuery}
+                      onChangeText={setPlaceQuery}
+                      onSubmitEditing={handlePlaceSearch}
+                      placeholder="City, Country"
+                      placeholderTextColor={C.textDim}
+                      returnKeyType="search"
+                      onFocus={() => setPlaceFocused(true)}
+                      onBlur={() => setPlaceFocused(false)}
+                    />
+                    <Pressable onPress={handlePlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
+                      {searching
+                        ? <ActivityIndicator size="small" color={ac} />
+                        : <Text style={[s.searchBtnTxt, { color: ac }]}>Search</Text>
+                      }
+                    </Pressable>
+                  </View>
+                </View>
+
+                {geoResults.length > 0 && (
+                  <View style={[s.geoList, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
+                    {geoResults.map((g, i) => (
+                      <Pressable
+                        key={i}
+                        onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
+                        style={[s.geoItem, i < geoResults.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}
+                      >
+                        <Feather name="map-pin" size={10} color={ac} style={{ marginTop: 1 }} />
+                        <Text style={[s.geoTxt, { color: C.isDark ? C.textMid : "#334155" }]} numberOfLines={1}>{g.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                {f.lat !== 0 && (
+                  <View style={[s.confirmedPlace, { backgroundColor: C.isDark ? "rgba(22,163,74,0.12)" : "#F0FDF4", borderColor: C.isDark ? "rgba(22,163,74,0.3)" : "#BBF7D0" }]}>
+                    <Feather name="check-circle" size={12} color={C_SUCCESS} />
+                    <Text style={[s.confirmedTxt, { color: C_SUCCESS }]} numberOfLines={1}>{f.place}</Text>
+                    {tzLoading && <ActivityIndicator size="small" color={C_SUCCESS} style={{ marginLeft: 4 }} />}
+                  </View>
+                )}
               </View>
             )}
           </Card>
@@ -1061,6 +1106,13 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.3, shadowRadius: 14, elevation: 7,
   },
   saveTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold, letterSpacing: 0.2 },
+});
+
+const sec = StyleSheet.create({
+  header: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  preview: { fontSize: 11, fontFamily: F.medium, maxWidth: 160 },
 });
 
 const fm = StyleSheet.create({

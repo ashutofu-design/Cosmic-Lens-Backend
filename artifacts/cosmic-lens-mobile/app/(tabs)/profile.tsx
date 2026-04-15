@@ -13,7 +13,6 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { getT, INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
-import { ZODIAC_EMOJI, ZODIAC_ACCENTS } from "@/lib/zodiac";
 
 // ── Relation options ───────────────────────────────────────────────────────────
 const RELATIONS = [
@@ -507,7 +506,7 @@ function SettingRow({ icon, label, right, onPress, last = false }: {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { C, mode, toggle: toggleTheme, zodiacSign } = useTheme();
+  const { C, mode, toggle: toggleTheme } = useTheme();
   const {
     profiles, primaryProfileId,
     deleteProfile, setPrimaryProfile,
@@ -718,38 +717,6 @@ export default function ProfileScreen() {
               }
             />
 
-            {/* ── Zodiac Accent Row ── */}
-            <View style={st.row}>
-              <View style={[st.iconCircle, { backgroundColor: zodiacSign ? `${ZODIAC_ACCENTS[zodiacSign].accent}18` : C.accentBg }]}>
-                <Text style={{ fontSize: 15 }}>
-                  {zodiacSign ? ZODIAC_EMOJI[zodiacSign] : "✨"}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[st.label, { color: C.text }]}>Zodiac Accent</Text>
-                <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.regular }}>
-                  {zodiacSign ? `${zodiacSign} theme active` : "Enter birth date to activate"}
-                </Text>
-              </View>
-              {zodiacSign ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                  <View style={{
-                    width: 22, height: 22, borderRadius: 11,
-                    backgroundColor: ZODIAC_ACCENTS[zodiacSign].accent,
-                    shadowColor: ZODIAC_ACCENTS[zodiacSign].accent,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.55,
-                    shadowRadius: 5,
-                    elevation: 4,
-                  }} />
-                  <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium }}>
-                    {ZODIAC_ACCENTS[zodiacSign].accent}
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.border, borderWidth: 1.5, borderColor: C.border2, borderStyle: "dashed" }} />
-              )}
-            </View>
           </View>
         </View>
 

@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import Svg, { Circle, Defs, Ellipse, RadialGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -139,15 +140,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Ambient glows */}
-      <View style={[s.glowWrap, { pointerEvents: "none" }]}>
-        <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(139,92,246,0.10)" : "rgba(139,92,246,0.06)" }]} />
-      </View>
-      <View style={[s.glowWrap2, { pointerEvents: "none" }]}>
-        <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(245,158,11,0.04)", borderRadius: 160 }]} />
-      </View>
-
+    <CosmicBg>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -419,7 +412,7 @@ export default function LoginScreen() {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </CosmicBg>
   );
 }
 

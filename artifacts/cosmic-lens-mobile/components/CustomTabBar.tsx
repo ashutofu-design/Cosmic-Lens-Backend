@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     paddingHorizontal: 4,
   },
   tabBtn: {

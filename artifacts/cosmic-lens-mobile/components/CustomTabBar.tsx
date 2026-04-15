@@ -130,8 +130,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const t    = getT(language);
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
 
-  // Use the already-merged accent from ThemeContext (zodiac sign OR mode default)
-  const accent = C.accent;
+  // Light mode → orange tab accent (#FF7A00); dark mode → purple (zodiac or default)
+  const accent = C.isDark ? C.accent : C.btnGradStart;
 
   return (
     <>

@@ -137,8 +137,8 @@ export const LIGHT: ThemeColors = {
 
   switchTrackOff:   "#CBD5E1",
   navBg:            "#FFFFFF",
-  navBorder:        "#CBD5E1",
-  inputBg:          "#FFFFFF",
+  navBorder:        "#E2E8F0",
+  inputBg:          "#F1F5F9",
   inputBorder:      "#CBD5E1",
   inputFocusBorder: "#6366F1",
 
@@ -158,13 +158,13 @@ export const LIGHT: ThemeColors = {
   warningText:   "#92400E",
 
   // Indigo selection — clean and modern
-  toggleSelBg:     "rgba(99,102,241,0.10)",
+  toggleSelBg:     "rgba(99,102,241,0.06)",
   toggleSelBorder: "#6366F1",
   toggleSelText:   "#4F46E5",
 
   // Orange CTA gradient — punchy and visible
   btnGradStart: "#FF7A00",
-  btnGradEnd:   "#FF4D00",
+  btnGradEnd:   "#FF3D00",
 };
 
 // ── Context shape ─────────────────────────────────────────────────────────────

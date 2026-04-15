@@ -203,10 +203,10 @@ export default function HomeScreen() {
       {/* ── Greeting ── */}
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
-          <Text style={styles.greetSub}>
+          <Text style={[styles.greetSub, { color: colors.mutedForeground }]}>
             {kundli ? `Hello, ${kundli.name}` : "Hello"}
           </Text>
-          <Text style={styles.greetTitle}>{t.todayEnergy}</Text>
+          <Text style={[styles.greetTitle, { color: colors.foreground }]}>{t.todayEnergy}</Text>
         </View>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
@@ -258,17 +258,18 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 }) {
   const { language } = useUser();
   const tHero = getT(language);
+  const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
   const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
 
   return (
-    <View style={[hero.card, { flex: 1 }]}>
+    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: Ctheme.border2 }]}>
       <Animated.View style={[hero.glow, { backgroundColor: insight.color, opacity: glowPulse }]} />
 
       {/* ── TOP ROW: label + score + demo badge ── */}
       <View style={hero.topRow}>
         <View>
-          <Text style={hero.label}>{tHero.todayEnergy.toUpperCase()}</Text>
+          <Text style={[hero.label, { color: Ctheme.textMuted }]}>{tHero.todayEnergy.toUpperCase()}</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 1 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
             <Text style={hero.scoreMax}>/100</Text>

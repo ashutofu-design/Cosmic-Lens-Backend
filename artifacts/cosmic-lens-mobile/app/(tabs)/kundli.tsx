@@ -856,11 +856,11 @@ export default function KundliScreen() {
       </ScrollView>
 
       {/* Snapshot — always shown */}
-      <View style={s.snapshotCard}>
+      <View style={[s.snapshotCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         {snapshotRows.map(({ label, value }) => (
-          <View key={label} style={s.snapshotRow}>
-            <Text style={s.snapshotLabel}>{label}</Text>
-            <Text style={s.snapshotValue} numberOfLines={1}>{value}</Text>
+          <View key={label} style={[s.snapshotRow, { borderBottomColor: C.border }]}>
+            <Text style={[s.snapshotLabel, { color: C.textMuted }]}>{label}</Text>
+            <Text style={[s.snapshotValue, { color: C.text }]} numberOfLines={1}>{value}</Text>
           </View>
         ))}
       </View>

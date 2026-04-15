@@ -648,7 +648,7 @@ export default function ProfileScreen() {
         <View>
           <View style={s.sectionRow}>
             <Text style={s.sectionLabel}>{t.myProfiles.toUpperCase()}</Text>
-            <Text style={s.sectionCount}>{profiles.length}/1</Text>
+            <Text style={[s.sectionCount, { color: C.textMuted }]}>{profiles.length}/1</Text>
           </View>
 
           <View style={{ gap:10 }}>

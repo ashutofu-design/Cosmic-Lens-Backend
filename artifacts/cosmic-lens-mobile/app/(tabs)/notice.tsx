@@ -90,19 +90,19 @@ export default function NoticeScreen() {
       </View>
 
       {/* List */}
-      <View style={s.card}>
+      <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         {notices.map((n, i) => (
-          <View key={i} style={[s.row, i < notices.length - 1 && s.rowBorder]}>
+          <View key={i} style={[s.row, i < notices.length - 1 && [s.rowBorder, { borderBottomColor: C.border }]]}>
             <View style={[s.dotWrap, { backgroundColor: `${n.dot}15` }]}>
               <Feather name={n.icon} size={14} color={n.dot} />
             </View>
             <View style={s.body}>
               <View style={s.titleRow}>
-                <Text style={s.title}>{n.title}</Text>
+                <Text style={[s.title, { color: C.text }]}>{n.title}</Text>
                 {i < unread && <View style={s.newDot} />}
               </View>
-              <Text style={s.desc}>{n.desc}</Text>
-              <Text style={s.time}>{n.time}</Text>
+              <Text style={[s.desc, { color: C.textMuted }]}>{n.desc}</Text>
+              <Text style={[s.time, { color: C.textMuted }]}>{n.time}</Text>
             </View>
           </View>
         ))}

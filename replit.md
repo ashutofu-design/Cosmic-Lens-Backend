@@ -48,6 +48,19 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - `python3 artifacts/api-server/flask_app.py` — Run Flask backend
 - `pnpm run typecheck` — Full typecheck across all packages
 
+## Dark / Light Theme
+
+- `context/ThemeContext.tsx` — `DARK` / `LIGHT` palettes with `toggle()` and AsyncStorage persistence (`cl_theme` key)
+- `hooks/useColors.ts` — Wrapper exposing named aliases (`background`, `card`, `foreground`, `mutedForeground`, `border`, `primary`) plus raw `C` object
+- Theme-aware screens (inline dynamic styles using `C.*`):
+  - **index.tsx** — root bg, greeting text, HeroEnergyCard bg/border/label
+  - **insights.tsx** — heading, dashaCard, category tabs, scoreCard, graphCard, textCards, body text
+  - **ask.tsx** — header title/sub, assistant bubble, starter chips, input bar
+  - **kundli.tsx** — root bg, snapshotCard bg/border/text
+  - **notice.tsx** — root bg, card bg/border, row borders, title/desc/time text
+  - **profile.tsx** — root bg, sectionCount
+- Pattern: screens using `useColors()` access `C` via `{ C }` destructure; screens that import `useC` directly use it standalone
+
 ## i18n — Multi-Language Support
 
 - `lib/i18n.ts` — Central translation system with `getT(language)` function

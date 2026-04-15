@@ -232,7 +232,7 @@ export default function InsightsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <Text style={s.heading}>{t.insightsTitle}</Text>
+      <Text style={[s.heading, { color: C.text }]}>{t.insightsTitle}</Text>
 
       {/* Demo lock banner */}
       {showDemo && (
@@ -245,8 +245,8 @@ export default function InsightsScreen() {
 
       {/* Dasha Phase card */}
       {displayInsight && (
-        <View style={s.dashaCard}>
-          <Text style={s.dashaLabel}>Active Dasha Phase</Text>
+        <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={[s.dashaLabel, { color: C.textMuted }]}>Active Dasha Phase</Text>
           <View style={s.dashaRow}>
             {[
               { lbl: "MD", planet: displayInsight.mdPlanet, clr: "#4b6a86" },
@@ -279,11 +279,11 @@ export default function InsightsScreen() {
           return (
             <Pressable
               key={c.key}
-              style={[s.tab, active && { borderColor: c.color, backgroundColor: `${c.color}12` }]}
+              style={[s.tab, { backgroundColor: C.bgCard, borderColor: C.border }, active && { borderColor: c.color, backgroundColor: `${c.color}12` }]}
               onPress={() => { setCat(c.key); Haptics.selectionAsync(); }}
             >
               <Text style={s.tabIcon}>{c.icon}</Text>
-              <Text style={[s.tabLabel, active && { color: c.color }]}>{c.label}</Text>
+              <Text style={[s.tabLabel, { color: C.textMuted }, active && { color: c.color }]}>{c.label}</Text>
             </Pressable>
           );
         })}
@@ -291,7 +291,7 @@ export default function InsightsScreen() {
 
       {/* Score + trend row */}
       {displayInsight && displayCat && (
-        <View style={s.scoreCard}>
+        <View style={[s.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <ScoreRing score={displayCat.score} color={catColor} />
           <View style={s.scoreRight}>
             <View style={s.trendRow}>
@@ -300,20 +300,20 @@ export default function InsightsScreen() {
                 {displayCat.trend === "UP" ? "Accha" : displayCat.trend === "DOWN" ? "Chunautiyan" : "Average"} phase
               </Text>
             </View>
-            <Text style={s.activePlanetText}>
+            <Text style={[s.activePlanetText, { color: C.textMuted }]}>
               Active: <Text style={{ color: PLANET_CLR[displayCat.activePlanet] ?? catColor }}>
                 {pName(displayCat.activePlanet)}
               </Text>
             </Text>
-            <Text style={s.catText}>{displayCat.text}</Text>
+            <Text style={[s.catText, { color: C.textMuted }]}>{displayCat.text}</Text>
           </View>
         </View>
       )}
 
       {/* 6-month forecast graph */}
-      <View style={s.graphCard}>
+      <View style={[s.graphCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <View style={s.graphHeader}>
-          <Text style={s.graphTitle}>6-Month Trend</Text>
+          <Text style={[s.graphTitle, { color: C.textMuted }]}>6-Month Trend</Text>
           {(forecastLoading && !showDemo) && <ActivityIndicator size="small" color={catColor} />}
         </View>
         {displayForecast ? (
@@ -352,26 +352,26 @@ export default function InsightsScreen() {
       {/* Text insight cards */}
       {displayForecast && (
         <View style={s.textCards}>
-          <View style={s.textCard}>
+          <View style={[s.textCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.textCardHeader}>
               <Feather name="compass" size={13} color={catColor} />
               <Text style={[s.textCardTitle, { color: catColor }]}>Kaisa rahega?</Text>
             </View>
-            <Text style={s.textCardBody}>{displayForecast.howItWillGo}</Text>
+            <Text style={[s.textCardBody, { color: C.textMuted }]}>{displayForecast.howItWillGo}</Text>
           </View>
-          <View style={s.textCard}>
+          <View style={[s.textCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.textCardHeader}>
               <Feather name="alert-triangle" size={13} color="#fbbf24" />
               <Text style={[s.textCardTitle, { color: "#fbbf24" }]}>Sawdhani</Text>
             </View>
-            <Text style={s.textCardBody}>{displayForecast.caution}</Text>
+            <Text style={[s.textCardBody, { color: C.textMuted }]}>{displayForecast.caution}</Text>
           </View>
-          <View style={s.textCard}>
+          <View style={[s.textCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.textCardHeader}>
               <Feather name="sun" size={13} color="#4ade80" />
               <Text style={[s.textCardTitle, { color: "#4ade80" }]}>Upay</Text>
             </View>
-            <Text style={s.textCardBody}>{displayForecast.remedy}</Text>
+            <Text style={[s.textCardBody, { color: C.textMuted }]}>{displayForecast.remedy}</Text>
           </View>
         </View>
       )}

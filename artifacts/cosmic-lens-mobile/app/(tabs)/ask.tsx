@@ -132,7 +132,7 @@ export default function AskScreen() {
             <Text style={{ fontSize: 12 }}>🔭</Text>
           </View>
         )}
-        <View style={[s.bubbleInner, isUser ? s.bubbleInnerUser : s.bubbleInnerAssistant]}>
+        <View style={[s.bubbleInner, isUser ? s.bubbleInnerUser : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}>
           {item.loading ? (
             <ActivityIndicator size="small" color="#f59e0b" />
           ) : (
@@ -152,10 +152,10 @@ export default function AskScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 12 }]}>
+      <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
         <View style={s.headerDot} />
-        <Text style={s.headerTitle}>Jyotish AI</Text>
-        <Text style={s.headerSub}>Vedic Astrology Assistant</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>Jyotish AI</Text>
+        <Text style={[s.headerSub, { color: C.textMuted }]}>Vedic Astrology Assistant</Text>
       </View>
 
       {/* Demo banner */}
@@ -183,7 +183,7 @@ export default function AskScreen() {
       {messages.length <= 1 && !showDemo && (
         <View style={s.starters}>
           {STARTERS.map(q => (
-            <Pressable key={q} style={s.starter} onPress={() => send(q)}>
+            <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={() => send(q)}>
               <Text style={s.starterText}>{q}</Text>
             </Pressable>
           ))}
@@ -191,13 +191,13 @@ export default function AskScreen() {
       )}
 
       {/* Input row */}
-      <View style={[s.inputRow, { paddingBottom: botPad + 100 }]}>
+      <View style={[s.inputRow, { paddingBottom: botPad + 100, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
-          style={s.input}
+          style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}
           onChangeText={setInput}
           placeholder={t.askPlaceholder}
-          placeholderTextColor="#1e3a5f"
+          placeholderTextColor={C.textMuted}
           multiline
           editable={!showDemo}
           onSubmitEditing={() => send(input)}

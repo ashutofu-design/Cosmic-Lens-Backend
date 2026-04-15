@@ -32,8 +32,14 @@ export function ExpandingChip() {
 
         {/* Expanding chip bar */}
         <div
-          className="flex items-center border-t border-[#1E293B]"
-          style={{ height: 72, background: "#111827", paddingBottom: 6 }}
+          className="flex items-center"
+          style={{
+            height: 72,
+            paddingBottom: 6,
+            background: "linear-gradient(180deg, #0F1929 0%, #111827 100%)",
+            borderTop: "1px solid rgba(245,158,11,0.18)",
+            boxShadow: "0 -4px 24px rgba(245,158,11,0.07), inset 0 1px 0 rgba(245,158,11,0.12)",
+          }}
         >
           {tabs.map((tab, i) => {
             const isActive = i === active;
@@ -51,21 +57,40 @@ export function ExpandingChip() {
                 }}
               >
                 {isActive ? (
-                  /* Active: horizontal chip with icon + label */
+                  /* Active: glowing chip */
                   <div
                     className="flex items-center gap-1.5 px-3 py-2 rounded-2xl"
                     style={{
-                      background: "rgba(245,158,11,0.15)",
-                      border: "1px solid rgba(245,158,11,0.25)",
+                      background: "rgba(245,158,11,0.18)",
+                      border: "1px solid rgba(245,158,11,0.45)",
+                      boxShadow: "0 0 12px rgba(245,158,11,0.35), inset 0 0 8px rgba(245,158,11,0.08)",
                     }}
                   >
-                    <span className="text-base leading-none" style={{ color: "#F59E0B" }}>{tab.icon}</span>
-                    <span className="text-[11px] font-bold leading-none" style={{ color: "#F59E0B" }}>{tab.label}</span>
+                    <span
+                      className="text-base leading-none"
+                      style={{
+                        color: "#FCD34D",
+                        filter: "drop-shadow(0 0 6px rgba(245,158,11,0.9))",
+                      }}
+                    >{tab.icon}</span>
+                    <span
+                      className="text-[11px] font-bold leading-none"
+                      style={{
+                        color: "#FCD34D",
+                        textShadow: "0 0 8px rgba(245,158,11,0.8)",
+                      }}
+                    >{tab.label}</span>
                   </div>
                 ) : (
-                  /* Inactive: icon stacked above small muted label */
+                  /* Inactive: icon + small label, subtle glow */
                   <div className="flex flex-col items-center justify-center gap-[3px]">
-                    <span className="text-[17px] leading-none" style={{ color: "#94A3B8" }}>{tab.icon}</span>
+                    <span
+                      className="text-[17px] leading-none"
+                      style={{
+                        color: "#94A3B8",
+                        filter: "drop-shadow(0 0 3px rgba(148,163,184,0.3))",
+                      }}
+                    >{tab.icon}</span>
                     <span className="text-[9px] leading-none" style={{ color: "#94A3B8" }}>{tab.label}</span>
                   </div>
                 )}

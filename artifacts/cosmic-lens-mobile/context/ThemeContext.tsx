@@ -39,34 +39,34 @@ export interface ThemeColors {
   isDark: boolean;
 }
 
-// ── Dark — Deep Indigo Cosmic (readable) ──────────────────────────────────────
+// ── Dark — Matte Black ─────────────────────────────────────────────────────────
 export const DARK: ThemeColors = {
-  bg:      "#13102e",
-  bgCard:  "#1e1a40",
-  bgCard2: "#252050",
-  bgCard3: "#2e2860",
+  bg:      "#141414",
+  bgCard:  "#1f1f1f",
+  bgCard2: "#262626",
+  bgCard3: "#2e2e2e",
 
-  text:      "#f5f0ff",
-  textMid:   "#c9b8f0",
-  textMuted: "#a08cc8",
-  textDim:   "#6a5494",
+  text:      "#f0f0f0",
+  textMid:   "#c8c8c8",
+  textMuted: "#999999",
+  textDim:   "#555555",
 
   accent:   "#f59e0b",
   accentBg: "rgba(245,158,11,0.13)",
 
-  border:  "rgba(160,120,255,0.22)",
-  border2: "rgba(160,120,255,0.36)",
-  border3: "rgba(160,120,255,0.12)",
+  border:  "rgba(255,255,255,0.10)",
+  border2: "rgba(255,255,255,0.18)",
+  border3: "rgba(255,255,255,0.06)",
 
-  switchTrackOff: "#252050",
-  navBg:     "#13102e",
-  navBorder: "rgba(160,120,255,0.24)",
-  inputBg:   "#1e1a40",
-  inputBorder: "rgba(160,120,255,0.30)",
+  switchTrackOff: "#262626",
+  navBg:     "#141414",
+  navBorder: "rgba(255,255,255,0.10)",
+  inputBg:   "#1f1f1f",
+  inputBorder: "rgba(255,255,255,0.16)",
 
-  shimmer1: "#1e1a40",
-  shimmer2: "#252050",
-  shimmer3: "#1e1a40",
+  shimmer1: "#1f1f1f",
+  shimmer2: "#262626",
+  shimmer3: "#1f1f1f",
 
   statusBar: "light-content",
   isDark: true,

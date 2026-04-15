@@ -277,8 +277,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
       {/* ── TOP ROW: label + score + demo badge ── */}
       <View style={hero.topRow}>
         <View>
-          <Text style={[hero.label, { color: Ctheme.textMuted }]}>{tHero.todayEnergy.toUpperCase()}</Text>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
             <Text style={[hero.scoreMax, { color: Ctheme.textDim }]}>/100</Text>
           </View>

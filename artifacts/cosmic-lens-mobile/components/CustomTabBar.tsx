@@ -29,7 +29,7 @@ const TAB_META: {
   { name: "profile",  labelKey: "tabProfile",  icon: "user"           },
 ];
 
-const BAR_H = 60;
+const BAR_H = 72;
 
 function TabItem({
   tab, isActive, accent, onPress, onLongPress,
@@ -95,7 +95,7 @@ function TabItem({
       {/* Icon + optional bg pill */}
       <Animated.View style={[styles.iconPill, { backgroundColor: bgColor }]}>
         <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-          <Feather name={tab.icon as any} size={20} color={iconColor} />
+          <Feather name={tab.icon as any} size={22} color={iconColor} />
         </Animated.View>
         {tab.dot && (
           <View style={[styles.dot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
@@ -192,7 +192,7 @@ function MoreTabButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
     >
       <View style={styles.iconPill}>
-        <Feather name="grid" size={20} color={C.textMuted} />
+        <Feather name="grid" size={22} color={C.textMuted} />
       </View>
       <Text style={[styles.label, { color: C.textMuted, fontFamily: "Nunito_500Medium" }]}>
         More
@@ -217,30 +217,30 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 5,
+    paddingVertical: 8,
     position: "relative",
   },
 
   // Top accent line for active tab
   indicator: {
     position: "absolute",
-    top: 0, left: "20%", right: "20%",
-    height: 2.5,
+    top: 0, left: "22%", right: "22%",
+    height: 2,
     borderRadius: 2,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.7,
+    shadowRadius: 6,
+    elevation: 4,
   },
 
   // Icon pill (subtle bg when active)
   iconPill: {
     position: "relative",
-    width: 40, height: 30,
-    borderRadius: 10,
+    width: 44, height: 34,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 1,
+    marginBottom: 2,
   },
 
   dot: {
@@ -250,8 +250,8 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    fontSize: 10.5,
+    fontSize: 11,
     letterSpacing: 0.1,
-    lineHeight: 13,
+    lineHeight: 14,
   },
 });

@@ -95,31 +95,18 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
         {item.headline}
       </Text>
 
-      {/* Expanded content */}
-      {open && (
+      {/* Expanded content — only remedies */}
+      {open && item.remedies.length > 0 && (
         <View style={d.expanded}>
-          <Text style={[d.desc, { color: C.textMuted }]}>{item.description}</Text>
-
-          {item.planet_note ? (
-            <View style={d.noteRow}>
-              <Feather name="info" size={10} color={C.textDim} />
-              <Text style={[d.noteText, { color: C.textDim }]}>{item.planet_note}</Text>
+          <Text style={[d.remediesTitle, { color: C.textMuted }]}>UPAY (REMEDIES)</Text>
+          {item.remedies.map((r, i) => (
+            <View key={i} style={d.remedyRow}>
+              <View style={[d.remedyBullet, { backgroundColor: `${cfg.color}20` }]}>
+                <Text style={[d.remedyNum, { color: cfg.color }]}>{i + 1}</Text>
+              </View>
+              <Text style={[d.remedyText, { color: C.textMuted }]}>{r}</Text>
             </View>
-          ) : null}
-
-          {item.remedies.length > 0 && (
-            <View style={d.remediesWrap}>
-              <Text style={[d.remediesTitle, { color: C.textMuted }]}>UPAY (REMEDIES)</Text>
-              {item.remedies.map((r, i) => (
-                <View key={i} style={d.remedyRow}>
-                  <View style={[d.remedyBullet, { backgroundColor: `${cfg.color}20` }]}>
-                    <Text style={[d.remedyNum, { color: cfg.color }]}>{i + 1}</Text>
-                  </View>
-                  <Text style={[d.remedyText, { color: C.textMuted }]}>{r}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          ))}
         </View>
       )}
     </Pressable>

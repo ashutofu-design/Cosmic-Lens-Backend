@@ -419,34 +419,401 @@ function ProInsightsPanel(){
   );
 }
 
-// ── Locked Blur Card ──────────────────────────────────────────────────────────
-function LockedCard({C}:{C:any}){
-  return(
-    <View style={[lk.wrap,{backgroundColor:C.bgCard,borderColor:"rgba(139,92,246,0.2)"}]}>
-      {/* Fake blurred rows */}
-      {[0.9,0.6,0.4].map((op,i)=>(
-        <View key={i} style={[lk.fakeRow,{opacity:op}]}>
-          <View style={[lk.fakeLabel,{backgroundColor:C.isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)"}]}/>
-          <View style={[lk.fakeBar,{backgroundColor:C.isDark?"rgba(139,92,246,0.25)":"rgba(99,102,241,0.15)",width:`${70-i*15}%` as any}]}/>
-        </View>
-      ))}
-      {/* Overlay */}
-      <View style={lk.overlay}>
-        <LinearGradient
-          colors={C.isDark?["transparent","rgba(11,15,25,0.92)","#0B0F19"]:["transparent","rgba(248,250,252,0.92)","#F8FAFC"]}
-          style={{...StyleSheet.absoluteFillObject}}/>
-        <View style={lk.lockContent}>
-          <View style={lk.lockCircle}>
-            <Feather name="lock" size={20} color="#a78bfa"/>
+// ── Pro Result Report — 12 sections ──────────────────────────────────────────
+function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;grad:[string,string]};C:any}){
+  // Derived metrics (0-100)
+  const pct=(n:number,d:number)=>Math.round(Math.min((n/d)*100,100));
+  const emotional  = Math.round((pct(result.nadi.score,8)*0.45+pct(result.tara.score,3)*0.3+pct(result.maitri.score,5)*0.25));
+  const mental     = pct(result.maitri.score,5);
+  const intimacy   = Math.round((pct(result.yoni.score,4)*0.6+pct(result.maitri.score,5)*0.4));
+  const comm       = Math.round((pct(result.gana.score,6)*0.5+pct(result.vasya.score,2)*0.5));
+  const soulBond   = pct(result.nadi.score,8);
+  const karmaLink  = pct(result.tara.score,3);
+  const personality= pct(result.gana.score,6);
+  const badCount   = [result.nadi,result.gana,result.bhakut,result.maitri,result.yoni,result.tara,result.varna].filter(k=>k.bad).length;
+  const riskLevel  = result.total>=27?"Low":result.total>=21?"Moderate":"High";
+  const riskCol    = result.total>=27?"#22c55e":result.total>=21?"#fbbf24":"#ef4444";
+
+  // Staggered fade-in (12 sections) — must not call hook inside map
+  const anims=useRef(
+    Array.from({length:12},()=>({op:new Animated.Value(0),sl:new Animated.Value(16)}))
+  ).current;
+  useEffect(()=>{
+    Animated.parallel(
+      anims.flatMap((a,i)=>[
+        Animated.timing(a.op,{toValue:1,duration:480,delay:i*70,useNativeDriver:true}),
+        Animated.timing(a.sl,{toValue:0,duration:400,delay:i*70,easing:Easing.out(Easing.quad),useNativeDriver:true}),
+      ])
+    ).start();
+  },[]);
+  const s=anims.map(a=>({opacity:a.op,transform:[{translateY:a.sl}]}));
+
+  function SectionLabel({text,col="#a78bfa"}:{text:string;col?:string}){
+    return(
+      <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:10}}>
+        <View style={{width:3,height:14,borderRadius:2,backgroundColor:col}}/>
+        <Text style={{color:col,fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.8}}>{text}</Text>
+      </View>
+    );
+  }
+  function BarRow({label,pct:p,col,icon}:{label:string;pct:number;col:string;icon:string}){
+    return(
+      <View style={{gap:5,marginBottom:10}}>
+        <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}>
+          <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+            <Text style={{fontSize:13}}>{icon}</Text>
+            <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
           </View>
-          <Text style={{color:"#fff",fontSize:14,fontFamily:"Nunito_700Bold",textAlign:"center",marginTop:10}}>
-            Unlock Full Compatibility Report
-          </Text>
-          <Text style={{color:"rgba(255,255,255,0.55)",fontSize:11,fontFamily:"Nunito_400Regular",textAlign:"center",marginTop:4}}>
-            Detailed Koot · Dosha · Timing · Remedies
-          </Text>
+          <Text style={{color:col,fontSize:13,fontFamily:"Nunito_700Bold"}}>{p}%</Text>
+        </View>
+        <View style={{height:6,borderRadius:3,backgroundColor:"rgba(255,255,255,0.07)",overflow:"hidden"}}>
+          <LinearGradient colors={[col,col+"99"]} start={{x:0,y:0}} end={{x:1,y:0}}
+            style={{height:6,width:`${p}%` as any,borderRadius:3}}/>
         </View>
       </View>
+    );
+  }
+  function StatusChip({label,ok,warn=false}:{label:string;ok:boolean;warn?:boolean}){
+    const col=ok?"#22c55e":warn?"#fbbf24":"#ef4444";
+    return(
+      <View style={{backgroundColor:`${col}18`,borderRadius:10,borderWidth:1,borderColor:`${col}35`,
+        paddingHorizontal:10,paddingVertical:4}}>
+        <Text style={{color:col,fontSize:10,fontFamily:"Nunito_700Bold"}}>{ok?"✓ Clear":warn?"~ Mild":"✗ Present"}</Text>
+      </View>
+    );
+  }
+
+  return(
+    <View style={{gap:12}}>
+
+      {/* ── 1. Relationship Risk Scan ── */}
+      <Animated.View style={s[0]}>
+        <GlowCard accent={riskCol} C={C} style={{padding:14}}>
+          <SectionLabel text="1 · RELATIONSHIP RISK SCAN" col={riskCol}/>
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <View>
+              <Text style={{color:C.text,fontSize:22,fontFamily:"Nunito_700Bold"}}>Risk Level</Text>
+              <Text style={{color:riskCol,fontSize:16,fontFamily:"Nunito_700Bold",marginTop:2}}>{riskLevel}</Text>
+            </View>
+            <View style={{width:64,height:64,borderRadius:32,borderWidth:2,borderColor:riskCol,
+              backgroundColor:`${riskCol}15`,alignItems:"center",justifyContent:"center"}}>
+              <Text style={{fontSize:24}}>{result.total>=27?"🛡️":result.total>=21?"⚡":"⚠️"}</Text>
+            </View>
+          </View>
+          {[
+            {label:"Compatibility Mismatch",ok:result.total>=21,warn:result.total>=18},
+            {label:"Dosha Conflict",        ok:!result.manglik&&result.nadi.score>0&&result.bhakut.score>0,warn:result.manglik},
+            {label:"Long-term Stability",   ok:result.total>=27,warn:result.total>=21},
+          ].map(({label,ok,warn})=>(
+            <View key={label} style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+              paddingVertical:8,borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_500Medium"}}>{label}</Text>
+              <StatusChip label={label} ok={ok} warn={warn}/>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 2. Core Compatibility ── */}
+      <Animated.View style={s[1]}>
+        <GlowCard accent="#f43f5e" C={C} style={{padding:14}}>
+          <SectionLabel text="2 · CORE COMPATIBILITY" col="#f9a8d4"/>
+          <BarRow label="Emotional Bond"    pct={emotional}  col="#f43f5e" icon="❤️"/>
+          <BarRow label="Mental Connection" pct={mental}     col="#818cf8" icon="🧠"/>
+          <BarRow label="Intimacy Harmony"  pct={intimacy}   col="#f97316" icon="🔥"/>
+          <BarRow label="Communication"     pct={comm}       col="#34d399" icon="💬"/>
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 3. Dosha Engine ── */}
+      <Animated.View style={s[2]}>
+        <GlowCard accent="#fbbf24" C={C} style={{padding:14}}>
+          <SectionLabel text="3 · DOSHA ENGINE" col="#fde68a"/>
+          {[
+            {icon:"♂️", label:"Manglik Dosh",   ok:!result.manglik,         warn:result.manglik,    desc:result.manglik?"One partner is Manglik":"No Manglik conflict"},
+            {icon:"🌊", label:"Nadi Dosh",       ok:!result.nadi.bad,        warn:false,             desc:result.nadi.detail},
+            {icon:"🌙", label:"Bhakoot Dosh",    ok:!result.bhakut.bad,      warn:false,             desc:result.bhakut.detail},
+            {icon:"☯️", label:"Gana Dosh",       ok:!result.gana.bad,        warn:result.gana.score===1,desc:result.gana.detail},
+            {icon:"✨", label:"Graha Maitri",    ok:result.maitri.score>=3,  warn:result.maitri.score===3,desc:result.maitri.detail},
+          ].map(({icon,label,ok,warn,desc})=>(
+            <View key={label} style={{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:9,
+              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <Text style={{fontSize:15,width:22}}>{icon}</Text>
+              <View style={{flex:1}}>
+                <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
+                <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:2}}>{desc}</Text>
+              </View>
+              <StatusChip label={label} ok={ok} warn={warn}/>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 4. Future Timeline ── */}
+      <Animated.View style={s[3]}>
+        <GlowCard accent="#818cf8" C={C} style={{padding:14}}>
+          <SectionLabel text="4 · FUTURE TIMELINE" col="#c7d2fe"/>
+          {[
+            {icon:"💍",label:"Marriage Timing",
+             val:result.bhakut.score===7&&result.total>=24?"2025–2026 auspicious":result.total>=21?"2026–2027 moderate":"Delay advised — seek guidance",
+             col:result.bhakut.score===7?"#22c55e":"#fbbf24"},
+            {icon:"👶",label:"Child Planning",
+             val:result.yoni.score===4?"Natural timing expected":result.yoni.score>0?"Slight patience recommended":"Medical/expert consultation advised",
+             col:result.yoni.score===4?"#22c55e":result.yoni.score>0?"#fbbf24":"#f97316"},
+            {icon:"💰",label:"Financial Harmony",
+             val:result.vasya.score===2?"Strong financial alignment":"Moderate — budget planning helps",
+             col:result.vasya.score===2?"#22c55e":"#fbbf24"},
+            {icon:"🏡",label:"Family Acceptance",
+             val:result.gana.score>=4?"Highly likely":"May need time and effort",
+             col:result.gana.score>=4?"#22c55e":"#fbbf24"},
+          ].map(({icon,label,val,col})=>(
+            <View key={label} style={{flexDirection:"row",gap:12,paddingVertical:9,alignItems:"flex-start",
+              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <View style={{width:36,height:36,borderRadius:10,backgroundColor:`${col}18`,
+                alignItems:"center",justifyContent:"center"}}>
+                <Text style={{fontSize:16}}>{icon}</Text>
+              </View>
+              <View style={{flex:1}}>
+                <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{label}</Text>
+                <Text style={{color:col,fontSize:11,fontFamily:"Nunito_500Medium",marginTop:3,lineHeight:16}}>{val}</Text>
+              </View>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 5. Soul & Karma Analysis ── */}
+      <Animated.View style={s[4]}>
+        <GlowCard accent="#a78bfa" C={C} style={{padding:14}}>
+          <SectionLabel text="5 · SOUL & KARMA ANALYSIS" col="#c4b5fd"/>
+          <View style={{flexDirection:"row",justifyContent:"space-around",marginBottom:14}}>
+            <View style={{alignItems:"center",gap:6}}>
+              <MiniArc pct={soulBond/100} col="#a78bfa" size={64}/>
+              <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Soul Bond</Text>
+              <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
+                {soulBond>=75?"Deep karmic tie":"Growing connection"}
+              </Text>
+            </View>
+            <View style={{width:1,backgroundColor:"rgba(255,255,255,0.07)"}}/>
+            <View style={{alignItems:"center",gap:6}}>
+              <MiniArc pct={karmaLink/100} col="#34d399" size={64}/>
+              <Text style={{color:"#34d399",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Karma Link</Text>
+              <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
+                {karmaLink>=75?"Positive past life":"Neutral karma"}
+              </Text>
+            </View>
+          </View>
+          <View style={{backgroundColor:"rgba(167,139,250,0.08)",borderRadius:10,padding:10,gap:4}}>
+            <Text style={{color:"#c4b5fd",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Nadi Nakshatra Bond</Text>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:16}}>
+              {result.nadi.score===8
+                ?"Alag nadi — auspicious for healthy progeny and long life together."
+                :"Sama nadi — strong emotional mirroring, some health caution advised."}
+            </Text>
+          </View>
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 6. Personality Match ── */}
+      <Animated.View style={s[5]}>
+        <GlowCard accent="#34d399" C={C} style={{padding:14}}>
+          <SectionLabel text="6 · PERSONALITY MATCH" col="#6ee7b7"/>
+          <BarRow label="Nature & Temperament" pct={personality} col="#34d399" icon="☯️"/>
+          <BarRow label="Social Alignment"      pct={pct(result.vasya.score,2)} col="#a78bfa" icon="🤝"/>
+          <BarRow label="Lifestyle Harmony"     pct={pct(result.varna.score,1)*100>0?80:45} col="#fbbf24" icon="🌿"/>
+          <View style={{backgroundColor:"rgba(52,211,153,0.08)",borderRadius:10,padding:10,marginTop:4}}>
+            <Text style={{color:"#6ee7b7",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Gana Compatibility</Text>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
+              {result.gana.score===6?"Excellent — both share similar life approach and values."
+               :result.gana.score>0?"Moderate — differences exist but can be harmonised with effort."
+               :"Challenging — temperament differences need active work."}
+            </Text>
+          </View>
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 7. Intimacy Compatibility ── */}
+      <Animated.View style={s[6]}>
+        <GlowCard accent="#f97316" C={C} style={{padding:14}}>
+          <SectionLabel text="7 · INTIMACY COMPATIBILITY" col="#fdba74"/>
+          <BarRow label="Physical Harmony"     pct={pct(result.yoni.score,4)} col="#f97316" icon="🌺"/>
+          <BarRow label="Energetic Attraction" pct={pct(result.maitri.score,5)} col="#f43f5e" icon="⚡"/>
+          <View style={{backgroundColor:"rgba(249,115,22,0.08)",borderRadius:10,padding:10,marginTop:4}}>
+            <Text style={{color:"#fdba74",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Yoni Analysis</Text>
+            <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
+              {result.yoni.score===4?"Same Yoni — exceptional physical and energetic alignment."
+               :result.yoni.score>0?"Complementary energies — good compatibility with some adjustments."
+               :"Different energies — patience and understanding will strengthen this bond."}
+            </Text>
+          </View>
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 8. Negative Energy Check ── */}
+      <Animated.View style={s[7]}>
+        <GlowCard accent={badCount>=3?"#ef4444":"#fbbf24"} C={C} style={{padding:14}}>
+          <SectionLabel text="8 · NEGATIVE ENERGY CHECK" col={badCount>=3?"#fca5a5":"#fde68a"}/>
+          <View style={{flexDirection:"row",alignItems:"center",gap:14,marginBottom:12}}>
+            <View style={{width:52,height:52,borderRadius:26,
+              backgroundColor:badCount===0?"rgba(34,197,94,0.15)":badCount<=2?"rgba(251,191,36,0.15)":"rgba(239,68,68,0.15)",
+              borderWidth:1,borderColor:badCount===0?"rgba(34,197,94,0.4)":badCount<=2?"rgba(251,191,36,0.4)":"rgba(239,68,68,0.4)",
+              alignItems:"center",justifyContent:"center"}}>
+              <Text style={{fontSize:22}}>{badCount===0?"🌟":badCount<=2?"⚡":"🔴"}</Text>
+            </View>
+            <View>
+              <Text style={{color:C.text,fontSize:15,fontFamily:"Nunito_700Bold"}}>{badCount} Concern{badCount!==1?"s":""} Found</Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",marginTop:2}}>
+                {badCount===0?"Excellent — no major negative patterns."
+                 :badCount<=2?"Minor concerns — manageable with awareness."
+                 :"Multiple concerns — remedies strongly advised."}
+              </Text>
+            </View>
+          </View>
+          {[result.nadi,result.bhakut,result.gana,result.yoni].filter(k=>k.bad).map(k=>(
+            <View key={k.label} style={{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:7,
+              borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.05)"}}>
+              <Text style={{fontSize:14}}>⚠️</Text>
+              <Text style={{color:"#fca5a5",fontSize:12,fontFamily:"Nunito_600SemiBold",flex:1}}>{k.label} Dosh Detected</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{k.detail}</Text>
+            </View>
+          ))}
+          {badCount===0&&(
+            <View style={{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:7,
+              borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.05)"}}>
+              <Text style={{fontSize:14}}>✅</Text>
+              <Text style={{color:"#22c55e",fontSize:12,fontFamily:"Nunito_600SemiBold"}}>No major negative patterns found</Text>
+            </View>
+          )}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 9. Strengths & Challenges ── */}
+      <Animated.View style={[{flexDirection:"row",gap:10},s[8]]}>
+        <GlowCard accent="#22c55e" C={C} style={{flex:1,padding:12}}>
+          <Text style={{color:"#86efac",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>STRENGTHS 💚</Text>
+          {[
+            result.nadi.score===8?"Nadi alag — auspicious progeny":"Nadi matched — deep empathy",
+            result.maitri.score>=4?"Planetary friendship is strong":"Shared planetary energies",
+            result.tara.score>0?"Tara nakshatra is favourable":"Moderate tara destiny",
+            result.bhakut.score===7?"Bhakoot shubh — no rashi conflict":"Rashi energies align",
+          ].slice(0,result.total>=27?4:2).map((s,i)=>(
+            <View key={i} style={{flexDirection:"row",gap:5,marginBottom:5}}>
+              <Text style={{color:"#22c55e",fontSize:11,marginTop:1}}>•</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
+            </View>
+          ))}
+        </GlowCard>
+        <GlowCard accent="#f97316" C={C} style={{flex:1,padding:12}}>
+          <Text style={{color:"#fdba74",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>CHALLENGES ⚡</Text>
+          {[
+            result.nadi.bad?"Nadi dosh — health awareness needed":"Minor temperament differences",
+            result.gana.bad?"Gana clash — nature divergence":"Communication practice needed",
+            result.bhakut.bad?"Bhakoot dosh — timing caution":"Some patience during conflicts",
+            result.yoni.bad?"Yoni mismatch — energy adjustment":"Regular quality time needed",
+          ].slice(0,badCount>=2?4:2).map((s,i)=>(
+            <View key={i} style={{flexDirection:"row",gap:5,marginBottom:5}}>
+              <Text style={{color:"#f97316",fontSize:11,marginTop:1}}>•</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",flex:1,lineHeight:15}}>{s}</Text>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 10. Remedies & Advice ── */}
+      <Animated.View style={s[9]}>
+        <GlowCard accent="#a78bfa" C={C} style={{padding:14}}>
+          <SectionLabel text="10 · REMEDIES & ADVICE" col="#c4b5fd"/>
+          {[
+            ...(result.manglik?[{icon:"🔴",text:"Kumbh Vivah or Mangal puja recommended before marriage."}]:[]),
+            ...(result.nadi.bad?[{icon:"🌊",text:"Fast on Ekadashi — avoid Nadi imbalance with Shiva puja."}]:[]),
+            ...(result.bhakut.bad?[{icon:"🌙",text:"Chant Chandra mantra — Om Chandraya Namah 108 times."}]:[]),
+            ...(result.gana.bad?[{icon:"☯️",text:"Perform Rudrabhishek together before marriage."}]:[]),
+            {icon:"💎",text:"Both should wear compatible gemstones — consult a Jyotishi."},
+            {icon:"🙏",text:"Joint puja and regular reading of Sunderkand will strengthen bond."},
+          ].slice(0,5).map(({icon,text},i)=>(
+            <View key={i} style={{flexDirection:"row",gap:10,paddingVertical:9,
+              borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+              <View style={{width:30,height:30,borderRadius:8,backgroundColor:"rgba(167,139,250,0.15)",
+                alignItems:"center",justifyContent:"center"}}>
+                <Text style={{fontSize:14}}>{icon}</Text>
+              </View>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",flex:1,lineHeight:17}}>{text}</Text>
+            </View>
+          ))}
+        </GlowCard>
+      </Animated.View>
+
+      {/* ── 11. Final Verdict ── */}
+      <Animated.View style={s[10]}>
+        <LinearGradient
+          colors={result.total>=27?["#14532d","#166534"]:result.total>=21?["#78350f","#92400e"]:["#7f1d1d","#991b1b"]}
+          style={{borderRadius:18,padding:18,borderWidth:1,borderColor:`${g.col}40`,
+            shadowColor:g.col,shadowOffset:{width:0,height:0},shadowOpacity:0.3,shadowRadius:12,elevation:8}}>
+          <View style={{alignItems:"center",gap:12}}>
+            <Text style={{fontSize:32}}>
+              {result.total>=32?"🌟":result.total>=27?"💚":result.total>=21?"💛":"❤️‍🩹"}
+            </Text>
+            <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_700Bold",textAlign:"center"}}>Final Verdict</Text>
+            <View style={{backgroundColor:"rgba(255,255,255,0.12)",borderRadius:12,paddingHorizontal:20,paddingVertical:8,borderWidth:1,borderColor:"rgba(255,255,255,0.2)"}}>
+              <Text style={{color:"#fff",fontSize:18,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{g.label}</Text>
+            </View>
+            <Text style={{color:"rgba(255,255,255,0.75)",fontSize:12,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:19,maxWidth:260}}>
+              {result.total>=32?"Exceptional match. Stars align strongly in your favour. A joyful and fulfilling union is indicated."
+               :result.total>=27?"Very positive match. With mutual respect and love, this relationship has great potential."
+               :result.total>=21?"Moderate match. Awareness, effort, and expert guidance will help this bond flourish."
+               :"Challenging match. Remedies, patience, and consulting a Jyotishi are strongly advised before proceeding."}
+            </Text>
+            <Text style={{color:"rgba(255,255,255,0.5)",fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center"}}>
+              Ashtakoot Score: {result.total}/36 · {badCount} concern{badCount!==1?"s":""} detected
+            </Text>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
+      {/* ── 12. Hidden Insights (Locked) ── */}
+      <Animated.View style={s[11]}>
+        <View style={{borderRadius:16,overflow:"hidden"}}>
+          <View style={{backgroundColor:C.isDark?"rgba(20,10,40,0.85)":"rgba(240,235,255,0.9)",
+            borderWidth:1,borderColor:"rgba(139,92,246,0.25)",padding:14,gap:8}}>
+            <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:4}}>
+              <View style={{width:4,height:4,borderRadius:2,backgroundColor:"#a78bfa"}}/>
+              <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>12 · HIDDEN INSIGHTS</Text>
+            </View>
+            {[
+              ["🔮","Past Life Connection Score"],
+              ["🧬","Ancestral Karma Patterns"],
+              ["🌌","Nakshatra Dream Compatibility"],
+              ["💠","Advanced Dosha Reversal Plan"],
+            ].map(([ic,lb],i)=>(
+              <View key={i} style={{flexDirection:"row",gap:10,alignItems:"center",
+                opacity:0.7-i*0.15,paddingVertical:5}}>
+                <View style={{width:32,height:32,borderRadius:8,backgroundColor:"rgba(139,92,246,0.12)"}}/>
+                <View style={{height:9,flex:0.7,borderRadius:4,backgroundColor:"rgba(139,92,246,0.18)"}}/>
+                <View style={{height:9,flex:0.25,borderRadius:4,backgroundColor:"rgba(139,92,246,0.12)"}}/>
+              </View>
+            ))}
+          </View>
+          <LinearGradient
+            colors={C.isDark?["transparent","rgba(11,15,25,0.9)","#0B0F19"]:["transparent","rgba(248,250,252,0.92)","#F8FAFC"]}
+            style={{position:"absolute",top:0,left:0,right:0,bottom:0,alignItems:"center",justifyContent:"flex-end",paddingBottom:16}}>
+            <View style={{alignItems:"center",gap:6}}>
+              <View style={{width:44,height:44,borderRadius:22,backgroundColor:"rgba(109,40,217,0.2)",
+                borderWidth:1,borderColor:"rgba(139,92,246,0.4)",alignItems:"center",justifyContent:"center"}}>
+                <Feather name="lock" size={18} color="#a78bfa"/>
+              </View>
+              <Text style={{color:"#c4b5fd",fontSize:13,fontFamily:"Nunito_700Bold"}}>+ 12 Hidden Deep Insights</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>Tap below to unlock everything</Text>
+            </View>
+          </LinearGradient>
+        </View>
+      </Animated.View>
+
+      {/* Unlock CTA */}
+      <ShineButton colors={["#6366F1","#8B5CF6","#a855f7"]}
+        disabled={false} loading={false}
+        text="Unlock Complete Report"
+        onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
+
     </View>
   );
 }
@@ -720,16 +1087,8 @@ export default function KundliMilanScreen(){
                 </View>
               </LinearGradient>
 
-              {/* Pro locked section */}
-              {isPro&&<LockedCard C={C}/>}
-
-              {/* Pro CTA */}
-              {isPro&&(
-                <ShineButton colors={["#6366F1","#8B5CF6","#a855f7"]}
-                  disabled={false} loading={false}
-                  text="Unlock Full Compatibility Report"
-                  onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
-              )}
+              {/* Pro: Full 12-section report */}
+              {isPro&&g&&<ProResultReport result={result} g={g} C={C}/>}
 
               {/* Recalculate */}
               <Pressable onPress={()=>{setResult(null);Haptics.selectionAsync();}}
@@ -831,16 +1190,6 @@ const fm=StyleSheet.create({
   btns:    {flexDirection:"row",gap:10,padding:14},
   cancelBtn:{flex:0.6,borderRadius:12,borderWidth:1,alignItems:"center",justifyContent:"center",height:44},
   addBtn:  {borderRadius:12,height:44,alignItems:"center",justifyContent:"center"},
-});
-
-const lk=StyleSheet.create({
-  wrap:    {borderRadius:16,borderWidth:1,overflow:"hidden",padding:16,gap:10,minHeight:180},
-  fakeRow: {flexDirection:"row",alignItems:"center",gap:12,paddingVertical:6},
-  fakeLabel:{height:10,width:90,borderRadius:5},
-  fakeBar:  {height:8,borderRadius:4},
-  overlay: {position:"absolute",top:0,left:0,right:0,bottom:0,alignItems:"center",justifyContent:"center"},
-  lockContent:{alignItems:"center",paddingTop:60},
-  lockCircle:{width:50,height:50,borderRadius:25,backgroundColor:"rgba(109,40,217,0.3)",borderWidth:1,borderColor:"rgba(139,92,246,0.5)",alignItems:"center",justifyContent:"center"},
 });
 
 const sb=StyleSheet.create({

@@ -7,6 +7,11 @@ LT_LOG="/tmp/lt-api.log"
 > "$LOG_FILE"
 > "$LT_LOG"
 
+# Kill any stale tunnel processes from a previous run
+pkill -f "lt --port" 2>/dev/null || true
+pkill -f "ngrok"     2>/dev/null || true
+sleep 2
+
 # ── Step 1: Start localtunnel for Flask API (port 8080) ──────────────────────
 echo "[tunnel] Starting public API tunnel on port 8080..."
 lt --port 8080 > "$LT_LOG" 2>&1 &

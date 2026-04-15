@@ -173,10 +173,12 @@ function Section({ title, icon, children }: {
 }) {
   const C = useC();
   return (
-    <View style={[s.section, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
-      <View style={[s.sectionHeader, { borderBottomColor: C.border, backgroundColor: C.isDark ? "transparent" : "#F8FAFC" }]}>
-        <Feather name={icon} size={13} color={C.accent} />
-        <Text style={[s.sectionTitle, { color: C.isDark ? C.accent : "#334155" }]}>{title}</Text>
+    <View style={[s.section, C.isDark && { backgroundColor: C.bgCard, shadowOpacity: 0.25 }]}>
+      <View style={[s.sectionHeader, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)" }]}>
+        <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: `${C.accent}18`, alignItems: "center", justifyContent: "center" }}>
+          <Feather name={icon} size={12} color={C.accent} />
+        </View>
+        <Text style={[s.sectionTitle, { color: C.isDark ? C.textMuted : "#475569" }]}>{title}</Text>
       </View>
       <View style={s.sectionBody}>
         {children}
@@ -314,18 +316,22 @@ export default function ProfileEditScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={{ flex: 1, backgroundColor: C.isDark ? C.bg : "#F8FAFC" }}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       {/* ── Header ── */}
-      <View style={[s.header, { paddingTop: insets.top + 10, borderBottomColor: C.border }]}>
+      <View style={[s.header, {
+        paddingTop: insets.top + 10,
+        backgroundColor: C.isDark ? C.bg : "#F8FAFC",
+        borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.07)",
+      }]}>
         <Pressable onPress={() => router.back()}
-          style={[s.backBtn, { backgroundColor: C.bgCard2, borderColor: C.border }]}
+          style={[s.backBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.10)" }]}
           hitSlop={10}
         >
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+          <Feather name="arrow-left" size={18} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: C.text }]}>
@@ -504,13 +510,13 @@ export default function ProfileEditScreen() {
 
           {/* Search results */}
           {geoResults.length > 0 && (
-            <View style={[s.geoList, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={[s.geoList, C.isDark && { backgroundColor: C.bgCard }]}>
               {geoResults.map((g, i) => (
                 <Pressable key={i} onPress={() => { selectGeo(g); Haptics.selectionAsync(); }}
                   style={[s.geoItem, i < geoResults.length - 1 && [s.geoItemBorder, { borderBottomColor: C.border }]]}
                 >
-                  <Feather name="map-pin" size={11} color={C.textMuted} style={{ marginTop: 2 }} />
-                  <Text style={[s.geoTxt, { color: C.textMuted }]} numberOfLines={2}>{g.label}</Text>
+                  <Feather name="map-pin" size={11} color={C.isDark ? C.textMuted : "#6366F1"} style={{ marginTop: 2 }} />
+                  <Text style={[s.geoTxt, { color: C.isDark ? C.textMuted : "#334155" }]} numberOfLines={2}>{g.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -556,9 +562,9 @@ export default function ProfileEditScreen() {
           style={({ pressed }) => [{ opacity: saving ? 0.6 : pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
-            colors={isNetworkError ? ["#dc2626", "#ef4444"] : [C.btnGradStart, C.btnGradEnd]}
+            colors={isNetworkError ? ["#dc2626", "#ef4444"] : ["#FF7A00", "#FF3D00"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={[s.saveBtn, !C.isDark && { shadowColor: "#EA580C", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 }]}
+            style={[s.saveBtn, { shadowColor: isNetworkError ? "#dc2626" : "#FF7A00", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 16, elevation: 8 }]}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
@@ -597,157 +603,161 @@ export default function ProfileEditScreen() {
 const s = StyleSheet.create({
   // Header
   header: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: 16, paddingBottom: 12,
-    borderBottomWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 14,
+    paddingHorizontal: 18, paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   backBtn: {
-    width: 34, height: 34, borderRadius: 9,
-    borderWidth: 1,
+    width: 38, height: 38, borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center", justifyContent: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 1,
   },
-  headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.3 },
-  headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginTop: 1 },
+  headerTitle: { fontSize: 17, fontFamily: F.bold, letterSpacing: -0.4 },
+  headerSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
 
-  scroll: { padding: 12, paddingBottom: 90, gap: 10 },
+  scroll: { padding: 16, paddingBottom: 100, gap: 14 },
 
-  // Section block
+  // Section card — floating, shadow-only depth
   section: {
-    borderRadius: 14, overflow: "hidden",
-    borderWidth: 1,
-    shadowColor: "#0F172A", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 3,
+    borderRadius: 18, overflow: "hidden",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07, shadowRadius: 16, elevation: 4,
   },
   sectionHeader: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    paddingHorizontal: 13, paddingVertical: 9,
-    borderBottomWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 16, paddingVertical: 12,
   },
   sectionTitle: {
-    fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
+    fontSize: 11, fontFamily: F.bold, letterSpacing: 1.4,
   },
-  sectionBody: { padding: 11, gap: 10 },
+  sectionBody: { paddingHorizontal: 16, paddingBottom: 18, paddingTop: 6, gap: 12 },
 
   // Field
-  fieldWrap: { gap: 4 },
+  fieldWrap: { gap: 6 },
   label: {
-    fontSize: 9, fontFamily: F.bold, letterSpacing: 1.6,
+    fontSize: 10, fontFamily: F.bold, letterSpacing: 1.4,
   },
   inputRow: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 10, paddingVertical: 8,
-    gap: 7,
-    minHeight: 42,
+    borderRadius: 12, borderWidth: 1.5,
+    paddingHorizontal: 12, paddingVertical: 0,
+    gap: 8,
+    minHeight: 48,
   },
   inputRowFocused: {
     shadowColor: "#6366F1", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.28, shadowRadius: 5,
-    borderColor: "#6366F1",
+    shadowOpacity: 0.2, shadowRadius: 8,
   },
   input: {
-    flex: 1, fontSize: 13.5, fontFamily: F.medium,
+    flex: 1, fontSize: 14, fontFamily: F.semibold,
     padding: 0, margin: 0,
   },
-  hint: { fontSize: 9.5, fontFamily: F.regular },
+  hint: { fontSize: 10, fontFamily: F.regular },
 
   // Month picker — 4 columns, compact chips
   monthGrid: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
   monthChip: {
-    paddingVertical: 6, borderRadius: 8,
-    borderWidth: 1, alignItems: "center",
+    paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1.5, alignItems: "center",
   },
-  monthTxt: { fontSize: 11.5, fontFamily: F.semibold },
+  monthTxt: { fontSize: 12, fontFamily: F.semibold },
 
   // Gender chips
   genderChip: {
-    flex: 1, paddingVertical: 7, borderRadius: 9, alignItems: "center",
-    borderWidth: 1,
+    flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center",
+    borderWidth: 1.5,
   },
-  genderTxt: { fontSize: 12.5, fontFamily: F.semibold },
+  genderTxt: { fontSize: 13, fontFamily: F.bold },
 
   // AM/PM
-  ampmRow: { flexDirection: "row", gap: 5 },
+  ampmRow: { flexDirection: "row", gap: 8 },
   ampmBtn: {
-    flex: 1, paddingVertical: 0, borderRadius: 9, alignItems: "center",
-    justifyContent: "center", borderWidth: 1, minHeight: 42,
+    flex: 1, paddingVertical: 0, borderRadius: 12, alignItems: "center",
+    justifyContent: "center", borderWidth: 1.5, minHeight: 48,
   },
-  ampmTxt: { fontSize: 12.5, fontFamily: F.bold },
+  ampmTxt: { fontSize: 14, fontFamily: F.bold },
 
   // Info box (warning) — compact single-line strip
   infoBox: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    borderWidth: 1,
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
   },
-  infoTxt: { fontSize: 10.5, fontFamily: F.medium, flex: 1, lineHeight: 14 },
+  infoTxt: { fontSize: 11, fontFamily: F.semibold, flex: 1, lineHeight: 15 },
 
   // Place search
   searchBtn: {
-    paddingHorizontal: 11, paddingVertical: 5,
+    paddingHorizontal: 14, paddingVertical: 7,
     backgroundColor: "rgba(99,102,241,0.10)",
-    borderRadius: 7, borderWidth: 1, borderColor: "#6366F1",
+    borderRadius: 10, borderWidth: 1.5, borderColor: "#6366F1",
   },
-  searchBtnTxt: { color: "#6366F1", fontSize: 11.5, fontFamily: F.bold },
+  searchBtnTxt: { color: "#6366F1", fontSize: 12, fontFamily: F.bold },
 
   // Geo results
   geoList: {
-    borderRadius: 10, borderWidth: 1, overflow: "hidden",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
+    overflow: "hidden",
   },
   geoItem: {
-    flexDirection: "row", alignItems: "flex-start", gap: 7,
-    paddingHorizontal: 12, paddingVertical: 10,
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12,
   },
-  geoItemBorder: { borderBottomWidth: 1 },
-  geoTxt: { fontSize: 11.5, fontFamily: F.regular, flex: 1, lineHeight: 17 },
+  geoItemBorder: { borderBottomWidth: StyleSheet.hairlineWidth },
+  geoTxt: { fontSize: 12, fontFamily: F.regular, flex: 1, lineHeight: 18 },
 
   // Selected place confirmation
   selectedPlace: {
-    flexDirection: "row", alignItems: "center", gap: 7,
-    backgroundColor: "rgba(0,168,107,0.08)",
-    borderRadius: 8, borderWidth: 1, borderColor: "rgba(0,168,107,0.2)",
-    paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(0,168,107,0.07)",
+    borderRadius: 10, borderWidth: 1.5, borderColor: "rgba(0,168,107,0.25)",
+    paddingHorizontal: 12, paddingVertical: 8,
   },
   selectedPlaceTxt: {
-    color: "#00a86b", fontSize: 11, fontFamily: F.medium, flex: 1,
+    color: "#00a86b", fontSize: 12, fontFamily: F.semibold, flex: 1,
   },
 
   // Error
   errorBox: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: "rgba(248,113,113,0.07)",
-    borderWidth: 1, borderColor: "rgba(248,113,113,0.2)",
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    backgroundColor: "rgba(239,68,68,0.06)",
+    borderWidth: 1.5, borderColor: "rgba(239,68,68,0.25)",
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
   },
   errorBoxNetwork: {
-    backgroundColor: "rgba(239,68,68,0.10)",
-    borderColor: "rgba(239,68,68,0.30)",
+    backgroundColor: "rgba(239,68,68,0.09)",
+    borderColor: "rgba(239,68,68,0.35)",
   },
-  errorTxt:  { color: "#f87171", fontSize: 12.5, fontFamily: F.medium },
-  errorHint: { color: "#fca5a5", fontSize: 10.5, fontFamily: F.regular, marginTop: 3, lineHeight: 15 },
+  errorTxt:  { color: "#dc2626", fontSize: 13, fontFamily: F.semibold },
+  errorHint: { color: "#ef4444", fontSize: 11, fontFamily: F.regular, marginTop: 4, lineHeight: 16 },
 
   savingStatus: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingVertical: 6, paddingHorizontal: 4,
+    paddingVertical: 8, paddingHorizontal: 4,
     justifyContent: "center",
   },
-  savingStatusTxt: { fontSize: 11.5, fontFamily: F.medium },
+  savingStatusTxt: { fontSize: 12, fontFamily: F.medium },
 
   // Select button (tap-to-open picker)
   selectBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    borderRadius: 9, borderWidth: 1,
-    paddingHorizontal: 10, paddingVertical: 0,
-    minHeight: 42,
+    borderRadius: 12, borderWidth: 1.5,
+    paddingHorizontal: 12, paddingVertical: 0,
+    minHeight: 48,
   },
   selectBtnText: {
-    fontSize: 13.5, fontFamily: F.medium,
+    fontSize: 14, fontFamily: F.semibold,
   },
 
-  // Save button
+  // Save button — tall, vivid gradient, strong shadow
   saveBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, borderRadius: 13, paddingVertical: 14,
+    gap: 10, borderRadius: 16, height: 54,
   },
-  saveBtnTxt: { color: "#fff", fontSize: 14.5, fontFamily: F.bold },
+  saveBtnTxt: { color: "#fff", fontSize: 15, fontFamily: F.bold, letterSpacing: 0.3 },
 });

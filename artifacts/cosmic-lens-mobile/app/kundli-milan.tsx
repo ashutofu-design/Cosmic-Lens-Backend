@@ -460,6 +460,24 @@ function ProInsightsPanel(){
                 </View>
               ))}
             </View>
+
+            {/* Progress Bar — sample compatibility score */}
+            <View style={{width:"100%",gap:6,marginTop:4}}>
+              <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}>
+                <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
+                  Compatibility Score
+                </Text>
+                <Text style={{color:"#a78bfa",fontSize:13,fontFamily:"Nunito_700Bold"}}>72%</Text>
+              </View>
+              <View style={{height:8,borderRadius:4,backgroundColor:C.isDark?"rgba(255,255,255,0.08)":"rgba(99,102,241,0.12)",overflow:"hidden"}}>
+                <LinearGradient colors={["#6366f1","#a78bfa","#c084fc"]}
+                  start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={{width:"72%",height:"100%",borderRadius:4}}/>
+              </View>
+              <Text style={{color:C.textDim,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center"}}>
+                Sample — real score calculates with your kundli data
+              </Text>
+            </View>
           </View>
         </LinearGradient>
       </Animated.View>
@@ -473,10 +491,53 @@ function ProInsightsPanel(){
         desc="Are your hearts, minds & souls truly aligned for a lifetime together?"/>
       <BigCard idx={3} icon="⚠️" col="#ef4444" badge="critical"
         title="Risk Scan"
-        desc="Hidden risks that can silently damage your relationship over time"/>
-      <BigCard idx={4} icon="🏆" col="#fbbf24" badge="decision"
-        title="Final Verdict"
-        desc="Should you marry, wait, or rethink this relationship?"/>
+        desc="This insight may change your decision — hidden risks revealed"/>
+
+      {/* ══ 4 ══ MARRIAGE DECISION CARD (replaces Final Verdict) ══════════════ */}
+      <Animated.View style={av(4)}>
+        <LinearGradient
+          colors={C.isDark?["rgba(251,191,36,0.12)","rgba(249,115,22,0.08)"]:["rgba(255,249,235,0.95)","rgba(255,247,230,0.9)"]}
+          start={{x:0,y:0}} end={{x:1,y:1}}
+          style={{borderRadius:16,borderWidth:1.5,borderColor:"rgba(251,191,36,0.4)",padding:16,gap:10,
+            shadowColor:"#fbbf24",shadowOffset:{width:0,height:0},shadowOpacity:0.25,shadowRadius:16,elevation:6}}>
+          <PipBadge type="decision"/>
+          <View style={{flexDirection:"row",alignItems:"flex-start",gap:12}}>
+            <View style={{width:44,height:44,borderRadius:13,backgroundColor:"rgba(251,191,36,0.18)",
+              alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Text style={{fontSize:22}}>💍</Text>
+            </View>
+            <View style={{flex:1,gap:4}}>
+              <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold",lineHeight:20}}>
+                Marriage Decision
+              </Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",lineHeight:16}}>
+                Should you marry, wait, or rethink? Vedic Jyotish final answer
+              </Text>
+            </View>
+          </View>
+          {/* YES / WAIT / RISK pills */}
+          <View style={{flexDirection:"row",gap:8}}>
+            {[
+              {l:"✅  YES",   col:"#22c55e", bg:"rgba(34,197,94,0.12)",  bdr:"rgba(34,197,94,0.35)"},
+              {l:"⏳  WAIT",  col:"#fbbf24", bg:"rgba(251,191,36,0.15)", bdr:"rgba(251,191,36,0.4)"},
+              {l:"⚠️  RISK",  col:"#ef4444", bg:"rgba(239,68,68,0.12)",  bdr:"rgba(239,68,68,0.35)"},
+            ].map(({l,col,bg,bdr})=>(
+              <View key={l} style={{flex:1,borderRadius:10,backgroundColor:bg,borderWidth:1,
+                borderColor:bdr,paddingVertical:8,alignItems:"center"}}>
+                <Text style={{color:col,fontSize:11,fontFamily:"Nunito_700Bold"}}>{l}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)"}}/>
+          <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:"#fbbf24",
+              shadowColor:"#fbbf24",shadowOffset:{width:0,height:0},shadowOpacity:1,shadowRadius:4}}/>
+            <Text style={{color:"rgba(251,191,36,0.9)",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
+              Real-time analysis based on your birth chart
+            </Text>
+          </View>
+        </LinearGradient>
+      </Animated.View>
 
       {/* ══ 5 ══ PRIMARY CTA ══════════════════════════════════════════════════ */}
       <Animated.View style={av(5)}>
@@ -492,28 +553,28 @@ function ProInsightsPanel(){
       <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>
       <SmallCard idx={7}  icon="🧠" col="#34d399" badge="premium"
         title="Personality Match"
-        desc="Will your temperaments support or clash over time?"/>
+        desc="This insight may change your decision — see if you truly understand each other"/>
       <SmallCard idx={8}  icon="🌙" col="#a78bfa" locked
         title="Soul & Karma"
-        desc="Is this a past-life connection or just attraction?"/>
+        desc="Are you destined? Or is this just timing? Real-time analysis based on your birth chart"/>
       <SmallCard idx={9}  icon="🔥" col="#f97316" badge="premium"
         title="Intimacy Score"
-        desc="Physical & emotional bonding strength"/>
+        desc="Physical & emotional bonding — the truth most couples never discover"/>
 
       {/* ══ 10 ══ SECTION: ADVANCED ANALYSIS ════════════════════════════════ */}
       <Animated.View style={av(10)}><SectionHead label="ADVANCED ANALYSIS" icon="🔯"/></Animated.View>
       <SmallCard idx={11} icon="🔯" col="#fbbf24" badge="critical"
         title="Dosha Engine"
-        desc="Mangal, Nadi & Bhakoot — deep conflict analysis"/>
+        desc="Mangal, Nadi & Bhakoot — conflicts that silently destroy marriages"/>
       <SmallCard idx={12} icon="🌑" col="#6366f1" locked
         title="Negative Energy"
-        desc="Hidden doshas, evil eye & unseen planetary influences"/>
+        desc="Hidden doshas even your astrologer may have missed — don't ignore this"/>
       <SmallCard idx={13} icon="⚖️" col="#22c55e" badge="premium"
         title="Strengths & Challenges"
-        desc="What will bring you closer — and what may break you"/>
+        desc="What will keep you together — and what may quietly pull you apart"/>
       <SmallCard idx={14} icon="🌿" col="#10b981" badge="premium"
         title="Remedies & Advice"
-        desc="Exact puja, stones & mantras to fix your relationship"/>
+        desc="Exact pujas, stones & mantras to remove obstacles before they grow"/>
 
       {/* ══ 15 ══ SECTION: FUTURE INSIGHTS ══════════════════════════════════ */}
       <Animated.View style={av(15)}><SectionHead label="FUTURE INSIGHTS" icon="📅"/></Animated.View>
@@ -526,16 +587,20 @@ function ProInsightsPanel(){
 
       {/* ══ 17 ══ SECTION: HIDDEN PREMIUM ════════════════════════════════════ */}
       <Animated.View style={av(17)}>
-        <LinearGradient colors={C.isDark?["rgba(109,40,217,0.18)","rgba(79,7,120,0.12)"]:["rgba(245,243,255,0.9)","rgba(237,233,254,0.7)"]}
+        <LinearGradient colors={C.isDark?["rgba(120,40,240,0.22)","rgba(79,7,120,0.14)"]:["rgba(250,245,255,0.95)","rgba(237,233,254,0.8)"]}
           start={{x:0,y:0}} end={{x:1,y:0}}
-          style={{borderRadius:14,paddingHorizontal:14,paddingVertical:10,borderWidth:1,
-            borderColor:"rgba(192,132,252,0.3)",flexDirection:"row",alignItems:"center",gap:8}}>
-          <Text style={{fontSize:16}}>🔥</Text>
-          <View style={{flex:1}}>
-            <Text style={{color:C.isDark?"#f0abfc":"#7e22ce",fontSize:11,fontFamily:"Nunito_700Bold"}}>HIDDEN PREMIUM</Text>
-            <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",marginTop:1}}>Exclusive insights that most astrologers never reveal</Text>
+          style={{borderRadius:14,padding:14,borderWidth:1.5,
+            borderColor:"rgba(192,132,252,0.4)",gap:4}}>
+          <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+            <Text style={{fontSize:18}}>⚠️</Text>
+            <Text style={{color:C.isDark?"#f0abfc":"#7e22ce",fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>
+              Rare insights even astrologers don't reveal
+            </Text>
+            <PipBadge type="secret"/>
           </View>
-          <PipBadge type="secret"/>
+          <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:15}}>
+            These 4 insights are hidden from most — unlocked only in Pro with your birth data
+          </Text>
         </LinearGradient>
       </Animated.View>
       <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
@@ -1115,7 +1180,7 @@ export default function KundliMilanScreen(){
         </LinearGradient>
 
         <ScrollView
-          contentContainerStyle={[ms.scroll,{paddingBottom:botPad+40}]}
+          contentContainerStyle={[ms.scroll,{paddingBottom:isPro&&!result?botPad+90:botPad+40}]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
 
@@ -1363,6 +1428,30 @@ export default function KundliMilanScreen(){
           )}
 
         </ScrollView>
+
+        {/* ── STICKY BOTTOM CTA (Pro, no result yet) ─────────────────────────── */}
+        {isPro&&!result&&(
+          <View style={{position:"absolute",bottom:0,left:0,right:0,
+            paddingHorizontal:16,paddingBottom:botPad+10,paddingTop:10,
+            backgroundColor:C.isDark?"rgba(11,15,25,0.92)":"rgba(255,255,255,0.92)",
+            borderTopWidth:1,borderTopColor:C.isDark?"rgba(139,92,246,0.2)":C.border}}>
+            <ShineButton
+              colors={["#4f46e5","#7c3aed","#a855f7"]}
+              disabled={false} loading={false}
+              text="🔓 Reveal Your Complete Relationship Future"
+              onPress={()=>{
+                if(canCalculate)handleCalculate();
+                else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              }}/>
+            {!canCalculate&&(
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",
+                textAlign:"center",marginTop:6}}>
+                Add both kundlis above to unlock your report
+              </Text>
+            )}
+          </View>
+        )}
+
       </View>
     </KeyboardAvoidingView>
   );

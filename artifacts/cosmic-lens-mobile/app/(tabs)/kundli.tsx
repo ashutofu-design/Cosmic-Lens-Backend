@@ -102,68 +102,174 @@ function ProgBar({ pct, color }: { pct:number; color:string }) {
 }
 
 type Level = "Mahadasha"|"Antardasha"|"Pratyantardasha";
-const LEVEL_LABEL: Record<Level,string> = { Mahadasha:"MAHADASHA", Antardasha:"ANTARDASHA", Pratyantardasha:"PRATYANTAR" };
-const LEVEL_ICON: Record<Level,string> = { Mahadasha:"sun", Antardasha:"moon", Pratyantardasha:"star" };
 
-function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, hasPrev, hasNext, showNextBtn=true }: {
-  level:Level; planet:string; startDate:any; endDate:any; active:boolean;
-  onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean; showNextBtn?:boolean;
+function NavArrow({ dir, enabled, onPress, C }: { dir: "left"|"right"; enabled: boolean; onPress: ()=>void; C: any }) {
+  return (
+    <Pressable
+      onPress={() => { if (enabled) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress(); } }}
+      style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: C.bgCard2, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center", opacity: enabled ? 1 : 0.25 }}>
+      <Feather name={dir === "left" ? "chevron-left" : "chevron-right"} size={14} color={C.text} />
+    </Pressable>
+  );
+}
+
+function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, hasPrev, hasNext }: {
+  planet:string; startDate:any; endDate:any; active:boolean;
+  onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
 }) {
   const C = useC();
   const color = hue(planet);
-  const pct   = progress(startDate, endDate);
+  const pct = progress(startDate, endDate);
+  const yrs = ((tsOf(endDate) - tsOf(startDate)) / (365.25 * 86400 * 1000)).toFixed(0);
   return (
-    <View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <Pressable onPress={() => { if(hasPrev){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onPrev();} }}
-          style={{ paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, backgroundColor: C.bgCard2, borderWidth: 1, borderColor: C.border, opacity: hasPrev ? 1 : 0.3 }}>
-          <Text style={{ color: C.text, fontSize: 11, fontFamily: F.semibold }}>← Prev</Text>
-        </Pressable>
+    <View style={{
+      borderRadius: 18, borderWidth: 1.5, overflow: "hidden",
+      backgroundColor: active ? `${color}06` : C.bgCard,
+      borderColor: active ? `${color}45` : C.border,
+      boxShadow: active ? `0 6px 24px ${color}18` : C.cardShadow,
+    } as any}>
+      <View style={{ backgroundColor: `${color}10`, paddingVertical: 8, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: `${color}15` }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Feather name={LEVEL_ICON[level] as any} size={12} color={color} />
-          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{LEVEL_LABEL[level]}</Text>
+          <Feather name="sun" size={12} color={color} />
+          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA</Text>
         </View>
-        {showNextBtn ? (
-          <Pressable onPress={() => { if(hasNext){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onNext();} }}
-            style={{ paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10, backgroundColor: C.bgCard2, borderWidth: 1, borderColor: C.border, opacity: hasNext ? 1 : 0.3 }}>
-            <Text style={{ color: C.text, fontSize: 11, fontFamily: F.semibold }}>Next →</Text>
-          </Pressable>
-        ) : <View style={{width:70}} />}
+        <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.medium }}>{yrs} years</Text>
       </View>
-      <View style={{
-        borderRadius: 16, borderWidth: 1.5, padding: 0, overflow: "hidden",
-        backgroundColor: active ? `${color}08` : C.bgCard,
-        borderColor: active ? `${color}50` : C.border,
-        boxShadow: active ? `0 4px 20px ${color}20` : C.cardShadow,
-      } as any}>
-        <View style={{ borderLeftWidth: 4, borderLeftColor: color, padding: 16, gap: 8 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: `${color}15`, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: `${color}30` }}>
-                <Text style={{ color, fontSize: 16, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
-              </View>
-              <View>
-                <Text style={{ color: C.text, fontSize: 20, fontFamily: F.bold }}>{pName(planet)}</Text>
-                <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium, marginTop: 1 }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
-              </View>
+      <View style={{ borderLeftWidth: 4, borderLeftColor: color, padding: 18, gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <NavArrow dir="left" enabled={hasPrev} onPress={onPrev} C={C} />
+          <View style={{ alignItems: "center", flex: 1, gap: 4 }}>
+            <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: `${color}12`, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: `${color}30` }}>
+              <Text style={{ color, fontSize: 20, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
             </View>
+            <Text style={{ color: C.text, fontSize: 22, fontFamily: F.bold }}>{pName(planet)}</Text>
+            <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
             {active && (
-              <View style={{ backgroundColor: `${color}18`, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: `${color}30` }}>
-                <Text style={{ color, fontSize: 10, fontFamily: F.bold }}>ACTIVE</Text>
+              <View style={{ backgroundColor: `${color}15`, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: `${color}30`, marginTop: 2 }}>
+                <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>● ACTIVE NOW</Text>
               </View>
             )}
           </View>
-          {pct > 0 && (
-            <View style={{ gap: 4, marginTop: 4 }}>
-              <ProgBar pct={pct} color={color}/>
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.medium }}>{formatDate(startDate)}</Text>
-                <Text style={{ color, fontSize: 11, fontFamily: F.bold }}>{pct}%</Text>
-                <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.medium }}>{formatDate(endDate)}</Text>
-              </View>
-            </View>
-          )}
+          <NavArrow dir="right" enabled={hasNext} onPress={onNext} C={C} />
         </View>
+        {pct > 0 && (
+          <View style={{ gap: 5, marginTop: 4 }}>
+            <ProgBar pct={pct} color={color} />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium }}>{formatDate(startDate)}</Text>
+              <View style={{ backgroundColor: `${color}12`, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ color, fontSize: 11, fontFamily: F.bold }}>{pct}%</Text>
+              </View>
+              <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium }}>{formatDate(endDate)}</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, hasPrev, hasNext }: {
+  planet:string; startDate:any; endDate:any; active:boolean;
+  onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
+}) {
+  const C = useC();
+  const color = hue(planet);
+  const pct = progress(startDate, endDate);
+  return (
+    <View style={{
+      borderRadius: 14, borderWidth: 1, overflow: "hidden",
+      backgroundColor: active ? `${color}05` : C.bgCard,
+      borderColor: active ? `${color}35` : C.border,
+      marginLeft: 12,
+    }}>
+      <View style={{ borderLeftWidth: 3, borderLeftColor: color, padding: 14, gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+          <Feather name="moon" size={10} color={color} />
+          <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.2 }}>ANTARDASHA</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <NavArrow dir="left" enabled={hasPrev} onPress={onPrev} C={C} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, marginHorizontal: 10 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: `${color}12`, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: `${color}25` }}>
+              <Text style={{ color, fontSize: 14, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold }}>{pName(planet)}</Text>
+                {active && (
+                  <View style={{ backgroundColor: `${color}15`, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 }}>
+                    <Text style={{ color, fontSize: 8, fontFamily: F.bold }}>ACTIVE</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+            </View>
+          </View>
+          <NavArrow dir="right" enabled={hasNext} onPress={onNext} C={C} />
+        </View>
+        {pct > 0 && (
+          <View style={{ gap: 3, marginTop: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <ProgBar pct={pct} color={color} />
+              </View>
+              <Text style={{ color, fontSize: 10, fontFamily: F.bold, minWidth: 30, textAlign: "right" }}>{pct}%</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, hasPrev, hasNext }: {
+  planet:string; startDate:any; endDate:any; active:boolean;
+  onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
+}) {
+  const C = useC();
+  const color = hue(planet);
+  const pct = progress(startDate, endDate);
+  return (
+    <View style={{
+      borderRadius: 12, borderWidth: 1, overflow: "hidden",
+      backgroundColor: active ? `${color}04` : C.bgCard,
+      borderColor: active ? `${color}25` : C.border,
+      marginLeft: 28,
+    }}>
+      <View style={{ borderLeftWidth: 2, borderLeftColor: color, paddingVertical: 10, paddingHorizontal: 12, gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
+          <Feather name="star" size={9} color={color} />
+          <Text style={{ color, fontSize: 8, fontFamily: F.bold, letterSpacing: 1 }}>PRATYANTARDASHA</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Pressable
+            onPress={() => { if (hasPrev) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPrev(); } }}
+            style={{ opacity: hasPrev ? 1 : 0.2, padding: 2 }}>
+            <Feather name="chevron-left" size={14} color={C.textMuted} />
+          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, justifyContent: "center" }}>
+            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: `${color}10`, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color, fontSize: 11, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
+            </View>
+            <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>{pName(planet)}</Text>
+            {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />}
+          </View>
+          <Pressable
+            onPress={() => { if (hasNext) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onNext(); } }}
+            style={{ opacity: hasNext ? 1 : 0.2, padding: 2 }}>
+            <Feather name="chevron-right" size={14} color={C.textMuted} />
+          </Pressable>
+        </View>
+        <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.medium, textAlign: "center" }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+        {pct > 0 && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ flex: 1 }}>
+              <ProgBar pct={pct} color={color} />
+            </View>
+            <Text style={{ color, fontSize: 9, fontFamily: F.bold }}>{pct}%</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -216,19 +322,19 @@ function DashaTab({ kundli, mahaIdx, setMahaIdx, antarIdx, setAntarIdx, pratIdx,
   const pratyantars=antar?calcPratyantar(antar):[];
   const pratyantar=pratyantars[pratIdx]??pratyantars[0];
   return (
-    <View style={{gap:18}}>
-      {maha && <DashaCard level="Mahadasha" planet={maha.planet} startDate={maha.startDate} endDate={maha.endDate}
+    <View style={{gap:14}}>
+      {maha && <MahadashaCard planet={maha.planet} startDate={maha.startDate} endDate={maha.endDate}
         active={isNow(maha.startDate,maha.endDate)}
         onPrev={()=>changeMaha(mahaIdx-1)} onNext={()=>changeMaha(mahaIdx+1)}
         hasPrev={mahaIdx>0} hasNext={mahaIdx<kundli.dashas.length-1} />}
-      {antar && <DashaCard level="Antardasha" planet={antar.planet} startDate={antar.startDate} endDate={antar.endDate}
+      {antar && <AntardashaCard planet={antar.planet} startDate={antar.startDate} endDate={antar.endDate}
         active={isNow(antar.startDate,antar.endDate)}
         onPrev={()=>setAntarIdx(antarIdx-1)} onNext={()=>setAntarIdx(antarIdx+1)}
         hasPrev={antarIdx>0} hasNext={antarIdx<subDashas.length-1} />}
-      {pratyantar && <DashaCard level="Pratyantardasha" planet={pratyantar.planet} startDate={pratyantar.startDate} endDate={pratyantar.endDate}
+      {pratyantar && <PratyantarCard planet={pratyantar.planet} startDate={pratyantar.startDate} endDate={pratyantar.endDate}
         active={isNow(pratyantar.startDate,pratyantar.endDate)}
         onPrev={()=>setPratIdx(pratIdx-1)} onNext={()=>setPratIdx(pratIdx+1)}
-        hasPrev={pratIdx>0} hasNext={pratIdx<pratyantars.length-1} showNextBtn={false} />}
+        hasPrev={pratIdx>0} hasNext={pratIdx<pratyantars.length-1} />}
       <TimelineStrip dashas={kundli.dashas} selected={mahaIdx} onSelect={changeMaha} />
     </View>
   );

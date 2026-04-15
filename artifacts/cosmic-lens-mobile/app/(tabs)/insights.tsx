@@ -260,12 +260,12 @@ export default function InsightsScreen() {
                     <Text style={[s.dashaPlanetName, { color: d.clr }]}>{pName(d.planet)}</Text>
                   </View>
                 </View>
-                {i < 2 && <Feather name="chevron-right" size={14} color="#1e3a5f" style={{ marginTop: 14 }} />}
+                {i < 2 && <Feather name="chevron-right" size={14} color={C.textDim} style={{ marginTop: 14 }} />}
               </React.Fragment>
             ))}
           </View>
           {displayInsight.pdStart && displayInsight.pdEnd && (
-            <Text style={s.dashaDate}>
+            <Text style={[s.dashaDate,{ color: C.textMuted }]}>
               PD: {formatDate(displayInsight.pdStart)} — {formatDate(displayInsight.pdEnd)}
             </Text>
           )}
@@ -330,7 +330,7 @@ export default function InsightsScreen() {
       {/* Upcoming PD chips */}
       {displayInsight && displayInsight.upcomingPDs.length > 0 && (
         <View style={s.pdSection}>
-          <Text style={s.sectionTitle}>Upcoming Pratyantardasha</Text>
+          <Text style={[s.sectionTitle,{ color: C.textMuted }]}>Upcoming Pratyantardasha</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pdRow}>
             {displayInsight.upcomingPDs.map((pd, i) => {
               const clr = PLANET_CLR[pd.planet] ?? "#f59e0b";
@@ -339,9 +339,9 @@ export default function InsightsScreen() {
                 <View key={i} style={[s.pdChip, { borderColor: `${clr}44`, backgroundColor: `${clr}10` }, isActive && { borderColor: clr }]}>
                   {isActive && <View style={[s.pdActiveDot, { backgroundColor: clr }]} />}
                   <Text style={[s.pdPlanet, { color: clr }]}>{pName(pd.planet)}</Text>
-                  <Text style={s.pdDates}>{fmtPDDate(pd.start)}</Text>
-                  <Text style={s.pdDatesTo}>–</Text>
-                  <Text style={s.pdDates}>{fmtPDDate(pd.end)}</Text>
+                  <Text style={[s.pdDates,{ color: C.textMuted }]}>{fmtPDDate(pd.start)}</Text>
+                  <Text style={[s.pdDatesTo,{ color: C.textDim }]}>–</Text>
+                  <Text style={[s.pdDates,{ color: C.textMuted }]}>{fmtPDDate(pd.end)}</Text>
                 </View>
               );
             })}
@@ -380,7 +380,7 @@ export default function InsightsScreen() {
       {displayForecast && (
         <View style={[s.avgBadge, { borderColor: `${catColor}40`, backgroundColor: `${catColor}08` }]}>
           <Text style={[s.avgScore, { color: catColor }]}>{displayForecast.avgScore}</Text>
-          <Text style={s.avgLabel}>6-month average score</Text>
+          <Text style={[s.avgLabel,{ color: C.textMuted }]}>6-month average score</Text>
         </View>
       )}
     </ScrollView>

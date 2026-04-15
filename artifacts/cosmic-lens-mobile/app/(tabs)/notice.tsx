@@ -81,7 +81,7 @@ export default function NoticeScreen() {
     >
       {/* Header */}
       <View style={s.headerRow}>
-        <Text style={s.heading}>{t.noticeTitle}</Text>
+        <Text style={[s.heading,{ color: C.text }]}>{t.noticeTitle}</Text>
         {unread > 0 && (
           <View style={s.badge}>
             <Text style={s.badgeText}>{unread} new</Text>
@@ -110,8 +110,8 @@ export default function NoticeScreen() {
 
       {/* Footer */}
       <View style={s.footer}>
-        <Feather name="bell-off" size={12} color="#1e3a5f" />
-        <Text style={s.footerText}>
+        <Feather name="bell-off" size={12} color={C.textDim} />
+        <Text style={[s.footerText,{ color: C.textDim }]}>
           {kundli
             ? "Aur notifications kundli update hone par aayenge"
             : "Kundli banao — personalized alerts milenge"}

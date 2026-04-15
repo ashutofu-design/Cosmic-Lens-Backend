@@ -77,8 +77,9 @@ function calcPratyantar(antar: any): any[] {
 // TAB 1 — DASHA TIMELINE (existing, working)
 // ════════════════════════════════════════════════════════════════════════════
 function ProgBar({ pct, color }: { pct:number; color:string }) {
+  const C = useC();
   return (
-    <View style={s.progBg}>
+    <View style={[s.progBg, { backgroundColor: C.bgCard2 }]}>
       <View style={[s.progFill, { width:`${pct}%` as any, backgroundColor:color }]} />
     </View>
   );
@@ -91,31 +92,32 @@ function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, 
   level:Level; planet:string; startDate:any; endDate:any; active:boolean;
   onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean; showNextBtn?:boolean;
 }) {
+  const C = useC();
   const color = hue(planet);
   const pct   = progress(startDate, endDate);
   return (
     <View>
       <View style={s.navRow}>
         <Pressable onPress={() => { if(hasPrev){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onPrev();} }}
-          style={[s.navBtn,!hasPrev&&{opacity:0.3}]}>
-          <Text style={s.navBtnText}>← Prev</Text>
+          style={[s.navBtn,!hasPrev&&{opacity:0.3},{ backgroundColor: C.bgCard2 }]}>
+          <Text style={[s.navBtnText,{ color: C.text }]}>← Prev</Text>
         </Pressable>
         <Text style={[s.levelLabel,{color}]}>{LEVEL_LABEL[level]}</Text>
         {showNextBtn ? (
           <Pressable onPress={() => { if(hasNext){Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onNext();} }}
-            style={[s.navBtn,!hasNext&&{opacity:0.3}]}>
-            <Text style={s.navBtnText}>Next →</Text>
+            style={[s.navBtn,!hasNext&&{opacity:0.3},{ backgroundColor: C.bgCard2 }]}>
+            <Text style={[s.navBtnText,{ color: C.text }]}>Next →</Text>
           </Pressable>
         ) : <View style={{width:60}} />}
       </View>
-      <View style={[s.dashaCard,{backgroundColor:active?`${color}0d`:"#0d1117",borderColor:active?color:"#1f2937"}]}>
+      <View style={[s.dashaCard,{backgroundColor:active?`${color}0d`:C.bgCard,borderColor:active?color:C.border}]}>
         <View style={s.dashaHeader}>
-          <Text style={s.dashaPlanetName}>{pName(planet)}</Text>
+          <Text style={[s.dashaPlanetName,{ color: C.text }]}>{pName(planet)}</Text>
           {active && <View style={[s.activeBadge,{backgroundColor:`${color}22`}]}>
             <Text style={[s.activeBadgeText,{color}]}>Active</Text>
           </View>}
         </View>
-        <Text style={s.dashaDates}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+        <Text style={[s.dashaDates,{ color: C.textMuted }]}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
         {pct>0 && <View style={{gap:4}}>
           <ProgBar pct={pct} color={color}/>
           <Text style={[s.pctText,{color}]}>{pct}% complete</Text>
@@ -126,17 +128,18 @@ function DashaCard({ level, planet, startDate, endDate, active, onPrev, onNext, 
 }
 
 function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:number;onSelect:(i:number)=>void }) {
+  const C = useC();
   return (
     <View>
-      <Text style={s.timelineTitle}>MAHADASHA TIMELINE</Text>
+      <Text style={[s.timelineTitle,{ color: C.textMuted }]}>MAHADASHA TIMELINE</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop:8}}>
         <View style={s.timelineRow}>
           {dashas.map((d,i) => {
             const active=isNow(d.startDate,d.endDate), sel=i===selected, color=hue(d.planet);
             return (
               <Pressable key={i} onPress={() => {Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onSelect(i);}}
-                style={[s.timelineChip,{backgroundColor:sel?`${color}1a`:"#0d1117",borderColor:sel?color:"#1f2937"}]}>
-                <Text style={[s.timelineChipText,{color:sel?color:"#4b5563"}]}>{d.planet.slice(0,2)}</Text>
+                style={[s.timelineChip,{backgroundColor:sel?`${color}1a`:C.bgCard,borderColor:sel?color:C.border}]}>
+                <Text style={[s.timelineChipText,{color:sel?color:C.textMuted}]}>{d.planet.slice(0,2)}</Text>
                 {active && <View style={[s.timelineDot,{backgroundColor:color}]}/>}
               </Pressable>
             );
@@ -258,6 +261,7 @@ function computeBAV(kundli: KundliData) {
 }
 
 function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
+  const C = useC();
   const { BAVS, SAV } = useMemo(() => computeBAV(kundli), [kundli]);
   const [selPlanet, setSelPlanet] = useState("SAV");
   const PLANETS = ["SAV","Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
@@ -267,9 +271,9 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
 
   return (
     <View style={{gap:14}}>
-      <View style={t.infoBox}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={t.infoTitle}>Ashtakavarga kya hai?</Text>
-        <Text style={t.infoBody}>
+        <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Har grah 8 sthanon (swayam + 7 graha) se 12 rashiyon ko benefic/malefic points deta hai.
           SAV (Sarvashtakavarga) = sabhi 7 grahas ka total. Zyada points = stronger rashi.
         </Text>
@@ -283,8 +287,8 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
             const color = p==="SAV" ? "#f59e0b" : hue(p);
             return (
               <Pressable key={p} onPress={()=>{setSelPlanet(p);Haptics.selectionAsync();}}
-                style={[t.planetBtn, sel && {backgroundColor:`${color}15`,borderColor:`${color}40`}]}>
-                <Text style={[t.planetBtnText,{color:sel?color:"#475569"}]}>{p==="SAV"?"SAV":p.slice(0,3)}</Text>
+                style={[t.planetBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, sel && {backgroundColor:`${color}15`,borderColor:`${color}40`}]}>
+                <Text style={[t.planetBtnText,{color:sel?color:C.textMuted}]}>{p==="SAV"?"SAV":p.slice(0,3)}</Text>
               </Pressable>
             );
           })}
@@ -293,10 +297,10 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
 
       {/* Score header */}
       <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}>
-        <Text style={{color:"#dde8f4",fontSize:14,fontWeight:"700"}}>
+        <Text style={{color:C.text,fontSize:14,fontWeight:"700"}}>
           {selPlanet === "SAV" ? "Sarvashtakavarga" : `${selPlanet} BAV`}
         </Text>
-        <Text style={{color:"#475569",fontSize:12}}>Total: {total}/{selPlanet==="SAV"?336:56}</Text>
+        <Text style={{color:C.textMuted,fontSize:12}}>Total: {total}/{selPlanet==="SAV"?336:56}</Text>
       </View>
 
       {/* Rashi grid */}
@@ -306,10 +310,10 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
           const pct   = score / maxScore;
           const color = pct >= 0.7 ? "#22c55e" : pct >= 0.5 ? "#fbbf24" : pct >= 0.3 ? "#f97316" : "#ef4444";
           return (
-            <View key={i} style={t.rashiCell}>
-              <Text style={t.rashiName}>{rashi}</Text>
+            <View key={i} style={[t.rashiCell,{ backgroundColor: C.bgCard }]}>
+              <Text style={[t.rashiName,{ color: C.text }]}>{rashi}</Text>
               <Text style={[t.rashiScore,{color}]}>{score}</Text>
-              <View style={t.rashiBar}>
+              <View style={[t.rashiBar,{ backgroundColor: C.bgCard2 }]}>
                 <View style={[t.rashiBarFill,{width:`${Math.round(pct*100)}%` as any,backgroundColor:color}]}/>
               </View>
               <Text style={[t.rashiTag,{color}]}>
@@ -324,7 +328,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
         {[["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]].map(([c,l])=>(
           <View key={l} style={{flexDirection:"row",alignItems:"center",gap:5}}>
             <View style={{width:8,height:8,borderRadius:4,backgroundColor:c as string}}/>
-            <Text style={{color:"#475569",fontSize:10}}>{l}</Text>
+            <Text style={{color:C.textMuted,fontSize:10}}>{l}</Text>
           </View>
         ))}
       </View>
@@ -371,14 +375,15 @@ function computeNavatara(kundli: KundliData) {
 }
 
 function NavataraTab({ kundli }: { kundli: KundliData }) {
+  const C = useC();
   const data = useMemo(() => computeNavatara(kundli), [kundli]);
   const moonNak = kundli.nakshatra ?? "?";
 
   return (
     <View style={{gap:14}}>
-      <View style={t.infoBox}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={t.infoTitle}>What is Navatara?</Text>
-        <Text style={t.infoBody}>
+        <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Starting from the Moon's nakshatra, all 27 nakshatras are grouped into 9-star cycles called Tara.
           Janma, Sampat, Kshema, Sadhana, Mitra, Paramamitra — auspicious; Vipat, Pratyak, Naidhana — inauspicious.
         </Text>
@@ -389,8 +394,8 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
         borderWidth:1,borderColor:"rgba(245,158,11,0.15)"}}>
         <Text style={{fontSize:16}}>🌙</Text>
         <View>
-          <Text style={{color:"#3d5a7a",fontSize:9,fontWeight:"800",letterSpacing:1.5}}>CHANDRA NAKSHATRA (BASE)</Text>
-          <Text style={{color:"#dde8f4",fontSize:14,fontWeight:"700",marginTop:2}}>{moonNak}</Text>
+          <Text style={{color:C.textMuted,fontSize:9,fontWeight:"800",letterSpacing:1.5}}>CHANDRA NAKSHATRA (BASE)</Text>
+          <Text style={{color:C.text,fontSize:14,fontWeight:"700",marginTop:2}}>{moonNak}</Text>
         </View>
       </View>
 
@@ -415,13 +420,13 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
             </View>
             <View style={{flex:1}}>
               <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                <Text style={{color:"#dde8f4",fontSize:13,fontWeight:"700"}}>{pName(planet)}</Text>
+                <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(planet)}</Text>
                 <View style={[t.taraBadge,{backgroundColor:`${tara.color}15`}]}>
                   <Text style={{color:tara.color,fontSize:9,fontWeight:"800"}}>{taraNum}. {tara.name}</Text>
                 </View>
               </View>
-              <Text style={{color:"#475569",fontSize:11,marginTop:2}}>
-                Nakshatra: <Text style={{color:"#64748b"}}>{nakName}</Text>
+              <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>
+                Nakshatra: <Text style={{color:C.textMuted}}>{nakName}</Text>
               </Text>
               <Text style={{color:tara.color,fontSize:11,marginTop:2}}>{tara.desc}</Text>
             </View>
@@ -464,14 +469,15 @@ function computeChara(kundli: KundliData) {
 }
 
 function JaiminiTab({ kundli }: { kundli: KundliData }) {
+  const C = useC();
   const data = useMemo(() => computeChara(kundli), [kundli]);
   const ak   = data[0];
 
   return (
     <View style={{gap:14}}>
-      <View style={t.infoBox}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={t.infoTitle}>Jaimini Chara Karakas kya hain?</Text>
-        <Text style={t.infoBody}>
+        <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain.
           Sabse zyada degree wala graha Atmakaraka (soul indicator) hota hai.
           Rahu ki degree ulti ginee jaati hai (30 - deg).
@@ -480,18 +486,18 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
 
       {/* AK highlight */}
       {ak && (
-        <View style={[t.akCard,{borderColor:`${hue(ak.name)}40`}]}>
+        <View style={[t.akCard,{ backgroundColor: C.bgCard },{ borderColor:`${hue(ak.name)}40`}]}>
           <View style={{flexDirection:"row",alignItems:"center",gap:12}}>
             <View style={[t.akPlanet,{backgroundColor:`${hue(ak.name)}15`,borderColor:`${hue(ak.name)}30`}]}>
               <Text style={{color:hue(ak.name),fontSize:20,fontWeight:"800"}}>{ak.name.slice(0,2)}</Text>
             </View>
             <View>
-              <Text style={{color:"#94a3b8",fontSize:10,fontWeight:"700",letterSpacing:1.5}}>ATMAKARAKA</Text>
-              <Text style={{color:"#dde8f4",fontSize:18,fontWeight:"800",marginTop:2}}>{pName(ak.name)}</Text>
-              <Text style={{color:"#64748b",fontSize:11,marginTop:3}}>{ak.karaka?.desc}</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontWeight:"700",letterSpacing:1.5}}>ATMAKARAKA</Text>
+              <Text style={{color:C.text,fontSize:18,fontWeight:"800",marginTop:2}}>{pName(ak.name)}</Text>
+              <Text style={{color:C.textMuted,fontSize:11,marginTop:3}}>{ak.karaka?.desc}</Text>
             </View>
           </View>
-          <Text style={{color:"#1e3a5f",fontSize:11,marginTop:8}}>
+          <Text style={{color:C.textDim,fontSize:11,marginTop:8}}>
             Degree within sign: {ak.deg.toFixed(2)}° — highest in chart
           </Text>
         </View>
@@ -503,17 +509,17 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
           if (!karaka) return null;
           const color = karaka.color;
           return (
-            <View key={name} style={[t.karakaRow,{borderColor:`${color}20`}]}>
+            <View key={name} style={[t.karakaRow,{ backgroundColor: C.bgCard },{borderColor:`${color}20`}]}>
               <View style={[t.karakaRank,{backgroundColor:`${color}15`}]}>
                 <Text style={{color,fontSize:11,fontWeight:"700"}}>{karaka.key}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:"#dde8f4",fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
-                  <Text style={{color:"#1e3a5f",fontSize:10}}>({deg.toFixed(1)}°)</Text>
+                  <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
+                  <Text style={{color:C.textDim,fontSize:10}}>({deg.toFixed(1)}°)</Text>
                 </View>
                 <Text style={{color,fontSize:11,fontWeight:"600"}}>{karaka.name} · {karaka.nameHindi}</Text>
-                <Text style={{color:"#475569",fontSize:11,marginTop:1}}>{karaka.desc}</Text>
+                <Text style={{color:C.textMuted,fontSize:11,marginTop:1}}>{karaka.desc}</Text>
               </View>
             </View>
           );
@@ -521,9 +527,9 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
       </View>
 
       {/* Char Rashi Karakas note */}
-      <View style={[t.infoBox,{borderColor:"rgba(167,139,250,0.2)"}]}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(167,139,250,0.2)"}]}>
         <Text style={{color:"#a78bfa",fontSize:12,fontWeight:"700",marginBottom:4}}>Jaimini Lagna</Text>
-        <Text style={{color:"#475569",fontSize:12,lineHeight:19}}>
+        <Text style={{color:C.textMuted,fontSize:12,lineHeight:19}}>
           Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position
           jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein.
         </Text>
@@ -560,27 +566,28 @@ function approxTransit(referenceDate: Date = new Date()): Record<string,number> 
 }
 
 function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
+  const C = useC();
   const transits = useMemo(() => approxTransit(), []);
   const ascRashi = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
 
   return (
     <View style={{gap:14}}>
-      <View style={[t.infoBox,{borderColor:"rgba(251,191,36,0.2)"}]}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(251,191,36,0.2)"}]}>
         <Text style={{color:"#fbbf24",fontSize:11,fontWeight:"700",marginBottom:3}}>⚠️ Approximate Transit</Text>
-        <Text style={t.infoBody}>
+        <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful.
           Exact transits ke liye Ephemeris ya jyotishi se confirm karein.
         </Text>
       </View>
 
       {moonRashi && (
-        <View style={[t.infoBox,{borderColor:"rgba(245,158,11,0.2)"}]}>
-          <Text style={{color:"#3d5a7a",fontSize:9,fontWeight:"800",letterSpacing:1.5}}>LIVE — CHANDRA TRANSIT (API)</Text>
-          <Text style={{color:"#dde8f4",fontSize:14,fontWeight:"700",marginTop:4}}>
+        <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(245,158,11,0.2)"}]}>
+          <Text style={{color:C.textMuted,fontSize:9,fontWeight:"800",letterSpacing:1.5}}>LIVE — CHANDRA TRANSIT (API)</Text>
+          <Text style={{color:C.text,fontSize:14,fontWeight:"700",marginTop:4}}>
             {moonRashi.name} · Bhav {((moonRashi.index - ascRashi + 12)%12)+1}
           </Text>
-          <Text style={{color:"#475569",fontSize:11,marginTop:2}}>Nakshatra: {moonRashi.nakshatra}</Text>
+          <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>Nakshatra: {moonRashi.nakshatra}</Text>
         </View>
       )}
 
@@ -595,28 +602,27 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
           const nakName = NAKSHATRAS[nIdx];
           const pHue    = hue(name);
 
-          // Find natal position
           const natal   = kundli.planets.find(p => p.name === name);
           const natalR  = natal ? Math.floor(natal.longitude/30)%12 : -1;
           const isConj  = natalR === rashi && natalR >= 0;
 
           return (
-            <View key={name} style={[t.transitRow,isConj&&{borderColor:`${pHue}40`,backgroundColor:`${pHue}05`}]}>
+            <View key={name} style={[t.transitRow,{ backgroundColor: C.bgCard },isConj&&{borderColor:`${pHue}40`,backgroundColor:`${pHue}05`}]}>
               <View style={[t.transitIcon,{backgroundColor:`${pHue}15`}]}>
                 <Text style={{color:pHue,fontSize:11,fontWeight:"800"}}>{name.slice(0,2)}</Text>
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:"#dde8f4",fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
+                  <Text style={{color:C.text,fontSize:13,fontWeight:"700"}}>{pName(name)}</Text>
                   {isConj && <View style={{backgroundColor:`${pHue}20`,borderRadius:6,paddingHorizontal:5,paddingVertical:1}}>
                     <Text style={{color:pHue,fontSize:8,fontWeight:"700"}}>NATAL CONJ</Text>
                   </View>}
                 </View>
-                <Text style={{color:"#475569",fontSize:11,marginTop:2}}>
+                <Text style={{color:C.textMuted,fontSize:11,marginTop:2}}>
                   {RASHIS_HI[rashi]} · Bhav {house} · {nakName}
                 </Text>
               </View>
-              <Text style={{color:"#334155",fontSize:11}}>{deg}°</Text>
+              <Text style={{color:C.textMuted,fontSize:11}}>{deg}°</Text>
             </View>
           );
         })}
@@ -663,13 +669,12 @@ function getKPLords(longitude: number): { nakName:string; starLord:string; subLo
 }
 
 function KPTab({ kundli }: { kundli: KundliData }) {
+  const C = useC();
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   const ascLon = kundli.ascendantDeg ?? 0;
   const kpData = useMemo(() => {
     const rows: Array<{name:string;lon:number;kp:ReturnType<typeof getKPLords>}> = [];
-    // Ascendant
     rows.push({ name:"Ascendant", lon:ascLon, kp:getKPLords(ascLon) });
-    // All planets
     for (const name of CORE) {
       const p = kundli.planets.find(pl => pl.name === name);
       if (p) rows.push({ name, lon:p.longitude, kp:getKPLords(p.longitude) });
@@ -679,9 +684,9 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 
   return (
     <View style={{gap:14}}>
-      <View style={t.infoBox}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Text style={t.infoTitle}>What is KP Paddhati?</Text>
-        <Text style={t.infoBody}>
+        <Text style={[t.infoBody,{ color: C.textMuted }]}>
           Krishnamurti Paddhati (KP) calculates the Star-lord (Nakshatra Lord) and Sub-lord for each planet and ascendant.
           It uses proportional sub-divisions of Vimshottari dasha for precision — widely regarded as highly accurate for event timing.
         </Text>
@@ -694,7 +699,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
           const isAsc = name === "Ascendant";
           const pHue  = isAsc ? "#f59e0b" : hue(name);
           return (
-            <View key={name} style={[t.kpRow,{borderColor:`${pHue}20`}]}>
+            <View key={name} style={[t.kpRow,{ backgroundColor: C.bgCard },{borderColor:`${pHue}20`}]}>
               <View style={[t.kpIcon,{backgroundColor:`${pHue}12`}]}>
                 <Text style={{color:pHue,fontSize:10,fontWeight:"800"}}>
                   {isAsc?"Asc":name.slice(0,2)}
@@ -702,10 +707,10 @@ function KPTab({ kundli }: { kundli: KundliData }) {
               </View>
               <View style={{flex:1,gap:3}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:"#dde8f4",fontSize:12,fontWeight:"700"}}>
+                  <Text style={{color:C.text,fontSize:12,fontWeight:"700"}}>
                     {isAsc?"Ascendant":pName(name)}
                   </Text>
-                  <Text style={{color:"#1e3a5f",fontSize:10}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
+                  <Text style={{color:C.textDim,fontSize:10}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
                 </View>
                 <View style={{flexDirection:"row",gap:6,flexWrap:"wrap"}}>
                   <KPLordChip label="Star" lord={kp.starLord}/>
@@ -718,9 +723,9 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         })}
       </View>
 
-      <View style={[t.infoBox,{borderColor:"rgba(167,139,250,0.2)"}]}>
+      <View style={[t.infoBox,{ backgroundColor: C.bgCard },{borderColor:"rgba(167,139,250,0.2)"}]}>
         <Text style={{color:"#a78bfa",fontSize:12,fontWeight:"700",marginBottom:4}}>KP Significators</Text>
-        <Text style={{color:"#475569",fontSize:12,lineHeight:19}}>
+        <Text style={{color:C.textMuted,fontSize:12,lineHeight:19}}>
           Kisi bhi ghatna ke liye dekhen: Star-lord aur Sub-lord ka relationship aur unke
           nakshatra se kaunse bhav connected hain. Agar 3 lord agree karein → event pakka.
         </Text>
@@ -730,10 +735,11 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 }
 
 function KPLordChip({ label, lord }: { label:string; lord:string }) {
+  const C = useC();
   const color = hue(lord);
   return (
     <View style={[t.kpChip,{backgroundColor:`${color}10`,borderColor:`${color}25`}]}>
-      <Text style={{color:"#475569",fontSize:8}}>{label}: </Text>
+      <Text style={{color:C.textMuted,fontSize:8}}>{label}: </Text>
       <Text style={{color,fontSize:9,fontWeight:"700"}}>{lord}</Text>
     </View>
   );

@@ -136,7 +136,7 @@ export default function AskScreen() {
           {item.loading ? (
             <ActivityIndicator size="small" color="#f59e0b" />
           ) : (
-            <Text style={[s.bubbleText, isUser ? s.bubbleTextUser : s.bubbleTextAssist]}>
+            <Text style={[s.bubbleText, isUser ? s.bubbleTextUser : [s.bubbleTextAssist, { color: C.textMid }]]}>
               {item.text}
             </Text>
           )}

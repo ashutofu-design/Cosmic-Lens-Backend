@@ -319,11 +319,12 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
   profile: ProfileEntry; isPrimary: boolean; canDelete: boolean;
   onEdit:()=>void; onSetPrimary:()=>void; onDelete:()=>void;
 }) {
+  const C = useC();
   const initials = profile.name.split(" ").map(w=>w[0]??"").join("").slice(0,2).toUpperCase()||"?";
   const relationInfo = RELATIONS.find(r => r.key === profile.relation);
 
   return (
-    <View style={[pc.card, isPrimary && pc.cardPrimary]}>
+    <View style={[pc.card, { backgroundColor: C.bgCard, borderColor: C.border }, isPrimary && pc.cardPrimary]}>
       <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
         {/* Avatar */}
         <View>
@@ -343,25 +344,25 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
         <View style={{ flex:1, minWidth:0, gap:3 }}>
           {/* Name + badges */}
           <View style={{ flexDirection:"row", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            <Text style={pc.name} numberOfLines={1}>{profile.name}</Text>
+            <Text style={[pc.name,{ color: C.text }]} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
-              <View style={pc.primaryBadge}>
+              <View style={[pc.primaryBadge,{ backgroundColor: "rgba(245,158,11,0.15)", borderColor: "rgba(245,158,11,0.3)" }]}>
                 <Feather name="star" size={8} color="#f59e0b" />
                 <Text style={pc.primaryBadgeText}>PRIMARY</Text>
               </View>
             )}
             {relationInfo && (
-              <View style={pc.relationBadge}>
-                <Text style={pc.relationBadgeText}>{profile.relation}</Text>
+              <View style={[pc.relationBadge,{ backgroundColor: C.bgCard2, borderColor: C.border }]}>
+                <Text style={[pc.relationBadgeText,{ color: C.textMuted }]}>{profile.relation}</Text>
               </View>
             )}
           </View>
 
-          <Text style={pc.sub} numberOfLines={1}>
+          <Text style={[pc.sub,{ color: C.textMuted }]} numberOfLines={1}>
             {profile.gender ? `${profile.gender} · ` : ""}
             {profile.birthData.place}
           </Text>
-          <Text style={pc.date}>
+          <Text style={[pc.date,{ color: C.textDim }]}>
             {profile.birthData.day}/{profile.birthData.month}/{profile.birthData.year}
             {"  ·  "}
             {String(profile.birthData.hour).padStart(2,"0")}:{String(profile.birthData.minute).padStart(2,"0")} {profile.birthData.ampm}
@@ -370,25 +371,25 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
 
         <View style={{ flexDirection:"row", gap:6 }}>
           {canDelete && (
-            <Pressable onPress={onDelete} style={pc.iconBtn} hitSlop={8}>
+            <Pressable onPress={onDelete} style={[pc.iconBtn,{ backgroundColor: C.bgCard2 }]} hitSlop={8}>
               <Feather name="trash-2" size={14} color="#f87171" />
             </Pressable>
           )}
-          <Pressable onPress={onEdit} style={pc.iconBtn} hitSlop={8}>
-            <Feather name="edit-3" size={14} color="#334155" />
+          <Pressable onPress={onEdit} style={[pc.iconBtn,{ backgroundColor: C.bgCard2 }]} hitSlop={8}>
+            <Feather name="edit-3" size={14} color={C.textMuted} />
           </Pressable>
         </View>
       </View>
 
       {isPrimary ? (
-        <View style={pc.activeRow}>
+        <View style={[pc.activeRow,{ borderTopColor: C.border }]}>
           <Feather name="check-circle" size={11} color="#00a86b" />
-          <Text style={pc.activeText}>Active — sab calculations is chart se</Text>
+          <Text style={[pc.activeText,{ color: C.textMuted }]}>Active — sab calculations is chart se</Text>
         </View>
       ) : (
-        <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
+        <Pressable onPress={onSetPrimary} style={[pc.setPrimaryBtn,{ borderTopColor: C.border }]}>
           <Feather name="star" size={11} color="#f59e0b" />
-          <Text style={pc.setPrimaryText}>Set as Primary — This chart will show on home screen</Text>
+          <Text style={[pc.setPrimaryText,{ color: C.textMuted }]}>Set as Primary — This chart will show on home screen</Text>
         </Pressable>
       )}
     </View>
@@ -505,22 +506,23 @@ function SettingRow({ icon, label, right, onPress, last = false }: {
   onPress?: () => void;
   last?: boolean;
 }) {
+  const C = useC();
   const Wrap = onPress ? Pressable : View;
   return (
     <>
       <Wrap
         onPress={onPress}
         style={({ pressed }: any) => [
-          st.row, onPress && pressed && { backgroundColor:"rgba(255,255,255,0.03)" },
+          st.row, onPress && pressed && { backgroundColor: C.bgCard2 },
         ]}
       >
-        <View style={st.iconCircle}>
-          <Feather name={icon} size={14} color="#64748b" />
+        <View style={[st.iconCircle,{ backgroundColor: C.bgCard2 }]}>
+          <Feather name={icon} size={14} color={C.textMuted} />
         </View>
-        <Text style={[st.label, { flex:1 }]}>{label}</Text>
-        {right ?? <Feather name="chevron-right" size={15} color="#1e3a5f" />}
+        <Text style={[st.label, { flex:1, color: C.text }]}>{label}</Text>
+        {right ?? <Feather name="chevron-right" size={15} color={C.textDim} />}
       </Wrap>
-      {!last && <View style={st.divider} />}
+      {!last && <View style={[st.divider,{ backgroundColor: C.border }]} />}
     </>
   );
 }
@@ -616,8 +618,8 @@ export default function ProfileScreen() {
 
         {/* ── USER HEADER ──────────────────────────────────────────────── */}
         <LinearGradient
-          colors={["#040e20","#071525"]}
-          style={s.header}
+          colors={C.isDark ? ["#040e20","#071525"] : [C.bgCard, C.bgCard2]}
+          style={[s.header,{ borderColor: C.border }]}
         >
           {/* Background star pattern */}
           <Text style={s.headerBgStar}>✦</Text>
@@ -628,17 +630,17 @@ export default function ProfileScreen() {
           </LinearGradient>
 
           <View style={{ alignItems:"center", gap:4 }}>
-            <Text style={s.headerName}>{primaryProfile?.name ?? "User"}</Text>
-            <Text style={s.headerSub}>
+            <Text style={[s.headerName,{ color: C.text }]}>{primaryProfile?.name ?? "User"}</Text>
+            <Text style={[s.headerSub,{ color: C.textMuted }]}>
               {profiles.length} profile{profiles.length!==1?"s":""} · {primaryProfile?.birthData.place ?? ""}
             </Text>
           </View>
 
           {/* Free plan badge */}
-          <View style={s.planBadge}>
-            <Feather name="circle" size={9} color="#64748b" />
-            <Text style={s.planBadgeText}>FREE PLAN</Text>
-            <View style={s.planDivider} />
+          <View style={[s.planBadge,{ backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            <Feather name="circle" size={9} color={C.textMuted} />
+            <Text style={[s.planBadgeText,{ color: C.textMuted }]}>FREE PLAN</Text>
+            <View style={[s.planDivider,{ backgroundColor: C.border }]} />
             <Text style={s.planUpgrade}>Upgrade Now →</Text>
           </View>
         </LinearGradient>
@@ -646,7 +648,7 @@ export default function ProfileScreen() {
         {/* ── MY PROFILES ─────────────────────────────────────────────── */}
         <View>
           <View style={s.sectionRow}>
-            <Text style={s.sectionLabel}>{t.myProfiles.toUpperCase()}</Text>
+            <Text style={[s.sectionLabel,{ color: C.textMuted }]}>{t.myProfiles.toUpperCase()}</Text>
             <Text style={[s.sectionCount, { color: C.textMuted }]}>{profiles.length}/1</Text>
           </View>
 
@@ -669,28 +671,28 @@ export default function ProfileScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowRelationPick(true);
               }}
-              style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [s.addBtn,{ backgroundColor: C.bgCard, borderColor: C.border }, pressed && { opacity: 0.7 }]}
             >
-              <View style={s.addCircle}>
+              <View style={[s.addCircle,{ backgroundColor: "rgba(245,158,11,0.1)" }]}>
                 <Feather name="users" size={15} color="#f59e0b" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: "#f59e0b", fontSize: 13, fontFamily: F.semibold }}>
                   {t.addFamilyMember}
                 </Text>
-                <Text style={{ color: "#1e3a5f", fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
+                <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
                   Son, Daughter, Spouse, Parents, Friend & more
                 </Text>
               </View>
-              <Feather name="chevron-right" size={14} color="#1e3a5f" />
+              <Feather name="chevron-right" size={14} color={C.textDim} />
             </Pressable>
           </View>
         </View>
 
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>{t.settings.toUpperCase()}</Text>
-          <View style={st.card}>
+          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>{t.settings.toUpperCase()}</Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
 
             <SettingRow
               icon="star"
@@ -698,9 +700,9 @@ export default function ProfileScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <View style={{ width:7, height:7, borderRadius:3.5, backgroundColor:"#64748b" }} />
-                  <Text style={{ color:"#64748b", fontSize:12, fontFamily:F.medium }}>Free Plan</Text>
-                  <Feather name="chevron-right" size={14} color="#1e3a5f" />
+                  <View style={{ width:7, height:7, borderRadius:3.5, backgroundColor:C.textDim }} />
+                  <Text style={{ color:C.textMuted, fontSize:12, fontFamily:F.medium }}>Free Plan</Text>
+                  <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
               }
             />
@@ -715,11 +717,11 @@ export default function ProfileScreen() {
                     <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>
                       {LANGUAGES.find(l=>l.code===language)?.native ?? "English"}
                     </Text>
-                    <Text style={{ color:"#334155", fontSize:10, fontFamily:F.medium }}>
+                    <Text style={{ color:C.textMuted, fontSize:10, fontFamily:F.medium }}>
                       {LANGUAGES.find(l=>l.code===language)?.name ?? "English"}
                     </Text>
                   </View>
-                  <Feather name="chevron-right" size={14} color="#1e3a5f" />
+                  <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
               }
             />
@@ -744,8 +746,8 @@ export default function ProfileScreen() {
 
         {/* ── SUPPORT ──────────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>SUPPORT & ABOUT</Text>
-          <View style={st.card}>
+          <Text style={[s.sectionLabel,{ color: C.textMuted }]}>SUPPORT & ABOUT</Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="message-circle"
               label="Help & Support"
@@ -777,7 +779,7 @@ export default function ProfileScreen() {
 
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
         <View style={s.bottomSection}>
-          <Text style={s.versionText}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
+          <Text style={[s.versionText,{ color: C.textDim }]}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
 
           <Pressable
             onPress={() => {

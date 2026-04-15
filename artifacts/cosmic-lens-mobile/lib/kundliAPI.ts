@@ -84,20 +84,15 @@ export interface PlaceSuggestion {
 }
 
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
-  const url =
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`;
-  const r = await fetch(url, { headers: { "Accept-Language": "en" } });
-  const rows = (await r.json()) as NominatimResult[];
-  return rows.map(x => {
-    const lat = parseFloat(x.lat);
-    const lon = parseFloat(x.lon);
-    const tz  = Math.round((lon / 15) * 2) / 2;
-    return {
-      label:       x.display_name.split(",").slice(0, 3).join(", "),
-      lat, lon, tz,
-      countryCode: (x.address?.country_code ?? "").toLowerCase(),
-    };
-  });
+  const r = await apiFetch(`${BASE_URL}/api/geocode?q=${encodeURIComponent(query)}`);
+  const rows = await r.json();
+  return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
+    label: x.label,
+    lat: x.lat,
+    lon: x.lon,
+    tz: x.tz,
+    countryCode: "",
+  }));
 }
 
 export async function fetchTimezone(lat: number, lon: number): Promise<number> {

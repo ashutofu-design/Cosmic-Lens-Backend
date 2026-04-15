@@ -12,6 +12,7 @@ DATABASE SETUP (portable):
 import os
 import sys
 import secrets
+import urllib.parse
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -53,6 +54,29 @@ def auth_config():
 @app.route("/api/healthz", methods=["GET"])
 def healthz():
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/api/geocode", methods=["GET"])
+def geocode():
+    import urllib.request, json as _json
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q)}&format=json&limit=6&addressdetails=1"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "CosmicLens/1.0",
+        "Accept-Language": "en",
+    })
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        rows = _json.loads(resp.read())
+    results = []
+    for x in rows:
+        lat = float(x.get("lat", 0))
+        lon = float(x.get("lon", 0))
+        tz = round((lon / 15) * 2) / 2
+        label = ", ".join(x.get("display_name", "").split(",")[:3])
+        results.append({"label": label, "lat": lat, "lon": lon, "tz": tz})
+    return jsonify(results)
 
 
 @app.route("/api/auth/signup", methods=["POST"])

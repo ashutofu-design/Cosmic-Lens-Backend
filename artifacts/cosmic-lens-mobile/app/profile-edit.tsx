@@ -52,14 +52,15 @@ const RELATION_ITEMS = RELATIONS.map(r => ({ label: `${r.emoji}  ${r.key}`, valu
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
 async function searchPlace(q: string): Promise<GeoResult[]> {
-  const r = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`,
+  const r = await apiFetch(
+    `${BASE_URL}/api/geocode?q=${encodeURIComponent(q)}`,
   );
   const rows = await r.json();
-  return rows.map((x: { display_name: string; lat: string; lon: string }) => ({
-    label: x.display_name.split(",").slice(0, 3).join(", "),
-    lat: parseFloat(x.lat), lon: parseFloat(x.lon),
-    tz: Math.round((parseFloat(x.lon) / 15) * 2) / 2,
+  return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
+    label: x.label,
+    lat: x.lat,
+    lon: x.lon,
+    tz: x.tz,
   }));
 }
 

@@ -431,53 +431,51 @@ function ProInsightsPanel(){
         <LinearGradient
           colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#f5f3ff","#ede9fe","#faf5ff"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:20,padding:22,borderWidth:1,borderColor:"rgba(139,92,246,0.35)",
-            shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.3,shadowRadius:20,elevation:10}}>
-          {/* Background orbs */}
-          <View style={{position:"absolute",top:-24,right:-24,width:110,height:110,borderRadius:55,
-            backgroundColor:"rgba(139,92,246,0.1)"}}/>
-          <View style={{position:"absolute",bottom:-18,left:-18,width:80,height:80,borderRadius:40,
-            backgroundColor:"rgba(236,72,153,0.07)"}}/>
-          <View style={{alignItems:"center",gap:10}}>
-            <Text style={{fontSize:34}}>⚡</Text>
-            <Text style={{color:C.isDark?"#f5f3ff":"#3b0764",fontSize:19,fontFamily:"Nunito_700Bold",
-              textAlign:"center",lineHeight:28}}>
-              Your Relationship Truth Revealed
-            </Text>
-            <Text style={{color:C.isDark?"rgba(196,181,253,0.85)":"#5b21b6",fontSize:12,
-              fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:19,maxWidth:290}}>
-              Know if this relationship will succeed, struggle, or break over time
-            </Text>
-            {/* Stats */}
-            <View style={{flexDirection:"row",gap:0,marginTop:6,
-              backgroundColor:C.isDark?"rgba(255,255,255,0.05)":"rgba(99,102,241,0.06)",
-              borderRadius:16,borderWidth:1,borderColor:"rgba(139,92,246,0.2)",overflow:"hidden"}}>
-              {[{n:"36",l:"Points Match"},{n:"12",l:"Deep Insights"},{n:"8",l:"Compat Checks"}].map(({n,l},i)=>(
-                <View key={l} style={{flex:1,alignItems:"center",paddingVertical:12,paddingHorizontal:4,
-                  borderRightWidth:i<2?1:0,borderRightColor:"rgba(139,92,246,0.15)"}}>
-                  <Text style={{color:"#a78bfa",fontSize:20,fontFamily:"Nunito_700Bold"}}>{n}</Text>
-                  <Text style={{color:C.textMuted,fontSize:8,fontFamily:"Nunito_500Medium",textAlign:"center",lineHeight:11}}>{l}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Progress Bar — sample compatibility score */}
-            <View style={{width:"100%",gap:6,marginTop:4}}>
-              <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}>
-                <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
-                  Compatibility Score
-                </Text>
-                <Text style={{color:"#a78bfa",fontSize:13,fontFamily:"Nunito_700Bold"}}>72%</Text>
-              </View>
-              <View style={{height:8,borderRadius:4,backgroundColor:C.isDark?"rgba(255,255,255,0.08)":"rgba(99,102,241,0.12)",overflow:"hidden"}}>
-                <LinearGradient colors={["#6366f1","#a78bfa","#c084fc"]}
-                  start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={{width:"72%",height:"100%",borderRadius:4}}/>
-              </View>
-              <Text style={{color:C.textDim,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center"}}>
-                Sample — real score calculates with your kundli data
+          style={{borderRadius:18,padding:14,borderWidth:1,borderColor:"rgba(139,92,246,0.35)",
+            shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:0.25,shadowRadius:14,elevation:8}}>
+          {/* Title row */}
+          <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:6}}>
+            <Text style={{fontSize:22}}>⚡</Text>
+            <View style={{flex:1}}>
+              <Text style={{color:C.isDark?"#f5f3ff":"#3b0764",fontSize:15,fontFamily:"Nunito_700Bold",lineHeight:22}}>
+                Your Relationship Truth Revealed
+              </Text>
+              <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,
+                fontFamily:"Nunito_400Regular",lineHeight:15,marginTop:2}}>
+                Know if this will succeed, struggle, or break over time
               </Text>
             </View>
+          </View>
+
+          {/* Inline stats — replaces boxed grid */}
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:6,
+            paddingVertical:6,borderTopWidth:1,borderBottomWidth:1,
+            borderColor:"rgba(139,92,246,0.15)",marginBottom:10}}>
+            {[["36","Points"],["12","Insights"],["8","Checks"]].map(([n,l],i)=>(
+              <View key={l} style={{flexDirection:"row",alignItems:"center",gap:i<2?6:0}}>
+                <Text style={{color:"#a78bfa",fontSize:13,fontFamily:"Nunito_700Bold"}}>{n} </Text>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{l}</Text>
+                {i<2&&<Text style={{color:"rgba(139,92,246,0.3)",fontSize:13,marginLeft:6}}>•</Text>}
+              </View>
+            ))}
+          </View>
+
+          {/* Compact progress bar */}
+          <View style={{gap:5}}>
+            <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center"}}>
+              <Text style={{color:C.isDark?"rgba(196,181,253,0.8)":"#5b21b6",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
+                Compatibility Score
+              </Text>
+              <Text style={{color:"#a78bfa",fontSize:12,fontFamily:"Nunito_700Bold"}}>72%</Text>
+            </View>
+            <View style={{height:6,borderRadius:3,backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(99,102,241,0.1)",overflow:"hidden"}}>
+              <LinearGradient colors={["#6366f1","#a78bfa","#c084fc"]}
+                start={{x:0,y:0}} end={{x:1,y:0}}
+                style={{width:"72%",height:"100%",borderRadius:3}}/>
+            </View>
+            <Text style={{color:C.textDim,fontSize:8,fontFamily:"Nunito_400Regular"}}>
+              Sample preview — real score from your kundli
+            </Text>
           </View>
         </LinearGradient>
       </Animated.View>
@@ -539,6 +537,14 @@ function ProInsightsPanel(){
         </LinearGradient>
       </Animated.View>
 
+
+      {/* ══ 5 ══ CTA after Top Insights ══════════════════════════════════════ */}
+      <Animated.View style={av(5)}>
+        <ShineButton colors={["#4f46e5","#7c3aed","#a855f7"]}
+          disabled={false} loading={false}
+          text="🔓 Reveal Your Complete Relationship Future"
+          onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
+      </Animated.View>
 
       {/* ══ 6 ══ SECTION: DEEP INSIGHTS ══════════════════════════════════════ */}
       <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>
@@ -1204,15 +1210,13 @@ export default function KundliMilanScreen(){
               ):(
                 <Pressable onPress={()=>{setAddingFor("self");setResult(null);}}
                   style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",
-                    alignItems:"center",justifyContent:"center",gap:5,
+                    alignItems:"center",justifyContent:"center",gap:4,
                     backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(99,102,241,0.05)",
                     borderRadius:22,paddingVertical:9,borderWidth:1,
                     borderStyle:"dashed" as any,
                     borderColor:isPro?"rgba(139,92,246,0.4)":C.border})}>
-                  <Feather name="plus" size={12} color={isPro?"#a78bfa":C.textMuted}/>
-                  <Text style={{color:isPro?"#a78bfa":C.textMuted,fontSize:11,fontFamily:"Nunito_600SemiBold"}}>
-                    Your Kundli
-                  </Text>
+                  <Text style={{fontSize:11}}>👤</Text>
+                  <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium"}}>Not Added</Text>
                 </Pressable>
               )}
 
@@ -1237,15 +1241,13 @@ export default function KundliMilanScreen(){
               ):(
                 <Pressable onPress={()=>{setAddingFor("partner");setResult(null);}}
                   style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",
-                    alignItems:"center",justifyContent:"center",gap:5,
+                    alignItems:"center",justifyContent:"center",gap:4,
                     backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(236,72,153,0.04)",
                     borderRadius:22,paddingVertical:9,borderWidth:1,
                     borderStyle:"dashed" as any,
                     borderColor:isPro?"rgba(249,168,212,0.35)":"rgba(236,72,153,0.2)"})} >
-                  <Feather name="plus" size={12} color={isPro?"#f9a8d4":"#ec4899"}/>
-                  <Text style={{color:isPro?"#f9a8d4":"#ec4899",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>
-                    Partner
-                  </Text>
+                  <Text style={{fontSize:11}}>❤️</Text>
+                  <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium"}}>Not Added</Text>
                 </Pressable>
               )}
 

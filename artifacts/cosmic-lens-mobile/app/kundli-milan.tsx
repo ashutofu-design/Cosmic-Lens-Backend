@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 // ── Nakshatra / Rashi Data ────────────────────────────────────────────────────
 
@@ -264,7 +264,7 @@ export default function KundliMilanScreen() {
         day, month, year, hour: h, minute: m,
         ampm: ampm ?? "AM", place: p2Place,
       };
-      const res  = await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+      const res  = await apiFetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
       const json = await res.json();
 
       const p2Nak   = NAKSHATRAS.indexOf(json.nakshatra ?? "");

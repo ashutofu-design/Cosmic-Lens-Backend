@@ -36,7 +36,7 @@ const N = 12;
 const DEMO_PTS    = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
 const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
 
-import { API_BASE as BASE_URL } from "@/lib/apiConfig";
+import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
 function energyInsight(energy: number): { icon: string; text: string; color: string } {
   if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today",  color: "#22c55e" };
@@ -152,7 +152,7 @@ export default function HomeScreen() {
     cancelRef.current = false;
     setLoading(true); setTargetPts([]); setLabels([]); setSettled(false);
 
-    fetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
+    apiFetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
       .then(r => r.json())
       .then((data: { points: MoonHistoryPoint[] }) => {
         if (cancelRef.current) return;

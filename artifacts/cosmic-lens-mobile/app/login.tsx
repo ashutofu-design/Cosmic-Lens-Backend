@@ -21,7 +21,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 type Method = "mobile" | "email";
 type EmailTab = "login" | "signup";
@@ -70,7 +70,7 @@ export default function LoginScreen() {
     setMobileError(""); setMobileLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const res  = await fetch(`${API_BASE}/api/auth/mobile`, {
+      const res = await apiFetch(`${API_BASE}/api/auth/mobile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mobile: digits }),
@@ -105,7 +105,7 @@ export default function LoginScreen() {
       const endpoint = emailTab === "signup" ? "/api/auth/signup" : "/api/auth/login";
       const body: Record<string, string> = { email: trimEmail, password: trimPwd };
       if (emailTab === "signup") body.name = name.trim();
-      const res  = await fetch(`${API_BASE}${endpoint}`, {
+      const res = await apiFetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

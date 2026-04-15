@@ -1,6 +1,6 @@
 // ─── Minimal Active Dasha engine for Home card ───────────────────────────────
 // Ported from web app proInsightEngine.ts — only what the Home card needs.
-import { API_BASE as API_BASE_ENGINE } from "./apiConfig";
+import { API_BASE as API_BASE_ENGINE, apiFetch } from "./apiConfig";
 
 export type Trend = "UP" | "DOWN" | "MIXED";
 
@@ -362,7 +362,7 @@ export async function generatePDForecast(
 
   let transitData: TransitPositions[] = midMonthDates.map(() => ({}));
   try {
-    const res = await fetch(`${API_BASE_ENGINE}/api/transits`, {
+    const res = await apiFetch(`${API_BASE_ENGINE}/api/transits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dates: midMonthDates }),

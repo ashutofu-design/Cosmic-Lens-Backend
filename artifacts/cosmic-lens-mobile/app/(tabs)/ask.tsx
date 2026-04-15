@@ -20,7 +20,7 @@ import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { router } from "expo-router";
 
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 interface Message {
   id: string;
@@ -99,7 +99,7 @@ export default function AskScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       try {
-        const res = await fetch(`${API_BASE}/api/ask`, {
+        const res = await apiFetch(`${API_BASE}/api/ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ question: text.trim(), kundli, birthData }),

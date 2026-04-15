@@ -15,7 +15,7 @@ import { getT } from "@/lib/i18n";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
-import { API_BASE as BASE_URL } from "@/lib/apiConfig";
+import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
 // ── Shared constants ──────────────────────────────────────────────────────────
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -773,7 +773,7 @@ export default function KundliScreen() {
 
   // Fetch live moon transit
   useEffect(() => {
-    fetch(`${BASE_URL}/api/moon_transit`)
+    apiFetch(`${BASE_URL}/api/moon_transit`)
       .then(r => r.json())
       .then(d => {
         if (typeof d.rashiIndex === "number") {

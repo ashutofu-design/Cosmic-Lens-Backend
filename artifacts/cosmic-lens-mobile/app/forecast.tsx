@@ -16,7 +16,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 const DAY_NAMES = ["Aaditya (Sun)", "Soma (Mon)", "Mangal (Tue)", "Budh (Wed)", "Guru (Thu)", "Shukra (Fri)", "Shani (Sat)"];
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -156,7 +156,7 @@ export default function ForecastScreen() {
     }
 
     setLoading(true);
-    fetch(`${API_BASE}/api/transits`, {
+    apiFetch(`${API_BASE}/api/transits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dates }),

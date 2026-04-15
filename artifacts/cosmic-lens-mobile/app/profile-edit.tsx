@@ -16,7 +16,7 @@ import { useUser } from "@/context/UserContext";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
 
-import { API_BASE as BASE_URL } from "@/lib/apiConfig";
+import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -248,7 +248,7 @@ export default function ProfileEditScreen() {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);
     try {
-      const r = await fetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`, { signal: ctrl.signal });
+      const r = await apiFetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`, { signal: ctrl.signal });
       const d = await r.json();
       if (typeof d.tz === "number") setF(prev => ({ ...prev, tz: d.tz }));
     } catch {}

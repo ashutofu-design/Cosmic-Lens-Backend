@@ -27,7 +27,7 @@ const F = {
   regular:  "Nunito_400Regular",
 };
 
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface DayAlert {
@@ -398,7 +398,7 @@ export default function DailyAlertsScreen() {
     try {
       const ctrl = new AbortController();
       const timeout = setTimeout(() => ctrl.abort(), 12000);
-      const res = await fetch(`${API_BASE}/api/daily_alerts`, {
+      const res = await apiFetch(`${API_BASE}/api/daily_alerts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

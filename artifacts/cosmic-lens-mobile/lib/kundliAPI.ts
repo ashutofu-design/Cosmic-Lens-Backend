@@ -1,16 +1,14 @@
 import type { BirthData, KundliData } from "@/types";
 
-import { API_BASE as BASE_URL } from "./apiConfig";
+import { API_BASE as BASE_URL, apiFetch } from "./apiConfig";
 
 async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<KundliData> {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(`${BASE_URL}/api/kundli`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      signal:  ctrl.signal,
-      body:    JSON.stringify({
+    const res = await apiFetch(`${BASE_URL}/api/kundli`, {
+      method: "POST",
+      body: JSON.stringify({
         name:   bd.name,
         day:    bd.day,
         month:  bd.month,
@@ -23,6 +21,7 @@ async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<Kun
         tz:     bd.tz,
         place:  bd.place,
       }),
+      signal: ctrl.signal,
     });
 
     if (!res.ok) {
@@ -43,7 +42,7 @@ async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<Kun
 }
 
 export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
-  const TIMEOUTS  = [20_000, 28_000, 35_000]; // progressive timeouts per attempt
+  const TIMEOUTS  = [20_000, 28_000, 35_000];
   const MAX_TRIES = 3;
   let lastErr: Error = new Error("Kundli calculation failed.");
 
@@ -61,7 +60,6 @@ export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
       } else {
         lastErr = e instanceof Error ? e : new Error(msg);
       }
-      // Wait before retrying (0s, 1.5s, 3s)
       if (attempt < MAX_TRIES - 1) {
         await new Promise(r => setTimeout(r, attempt * 1500));
       }
@@ -104,7 +102,7 @@ export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
 
 export async function fetchTimezone(lat: number, lon: number): Promise<number> {
   try {
-    const r = await fetch(`${BASE_URL}/api/timezone?lat=${lat}&lon=${lon}`);
+    const r = await apiFetch(`${BASE_URL}/api/timezone?lat=${lat}&lon=${lon}`);
     const d = await r.json();
     if (typeof d.tz === "number") return d.tz;
   } catch { /* fallback */ }

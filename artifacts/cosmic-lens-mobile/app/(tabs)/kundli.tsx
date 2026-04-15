@@ -974,7 +974,8 @@ const CHART_BTNS = [
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, language } = useUser();
+  const { kundli, language, profiles, primaryProfileId } = useUser();
+  const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const tI18n = getT(language);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -1057,8 +1058,31 @@ export default function KundliScreen() {
   return (
     <CosmicBg>
     <ScrollView style={{ flex: 1 }}
-      contentContainerStyle={{ paddingHorizontal: 16, gap: 18, paddingTop: topPad + 16, paddingBottom: botPad + 100 }}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 18, paddingTop: topPad + 8, paddingBottom: botPad + 100 }}
       showsVerticalScrollIndicator={false}>
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
+          style={{
+            width: 36, height: 36, borderRadius: 11,
+            alignItems: "center", justifyContent: "center",
+            backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border,
+          }}
+        >
+          <Feather name="arrow-left" size={16} color={C.text} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }} numberOfLines={1}>
+            {primaryProfile?.name ?? "Kundli"}
+          </Text>
+          {primaryProfile?.birthData && (
+            <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium }}>
+              {`${primaryProfile.birthData.day}/${primaryProfile.birthData.month}/${primaryProfile.birthData.year} · ${String(primaryProfile.birthData.hour).padStart(2,"0")}:${String(primaryProfile.birthData.minute).padStart(2,"0")} ${primaryProfile.birthData.ampm}`}
+            </Text>
+          )}
+        </View>
+      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:2}}>
         <View style={{ flexDirection: "row", gap: 8 }}>

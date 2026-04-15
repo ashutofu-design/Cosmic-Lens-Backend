@@ -96,10 +96,6 @@ export default function MyKundliScreen() {
         {kundliProfiles.map((profile) => {
           const k = profile.kundli!;
           const isPrimary = profile.id === primaryProfileId;
-          const bd = profile.birthData;
-          const dobStr = `${bd.day}/${bd.month}/${bd.year}`;
-          const tobStr = `${String(bd.hour).padStart(2,"0")}:${String(bd.minute).padStart(2,"0")} ${bd.ampm}`;
-
           return (
             <View
               key={profile.id}
@@ -124,13 +120,24 @@ export default function MyKundliScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium, marginTop: 1 }}>
-                    {dobStr} · {tobStr}
-                  </Text>
-                  <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.medium }} numberOfLines={1}>
-                    {bd.place}
-                  </Text>
+                  {profile.relation && profile.relation !== "Self" && (
+                    <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium, marginTop: 1 }}>{profile.relation}</Text>
+                  )}
                 </View>
+                {!isPrimary && (
+                  <Pressable
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPrimaryProfile(profile.id); }}
+                    hitSlop={6}
+                    style={({ pressed }) => [s.makePrimaryBtn, {
+                      borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)",
+                      backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.04)",
+                      opacity: pressed ? 0.7 : 1,
+                    }]}
+                  >
+                    <Feather name="star" size={10} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
+                    <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 9, fontFamily: F.bold, letterSpacing: 0.3 }}>Make Primary</Text>
+                  </Pressable>
+                )}
               </View>
 
               <View style={[s.infoStrip, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : C.bgCard2, borderColor: C.border }]}>
@@ -256,6 +263,11 @@ const s = StyleSheet.create({
   },
   primaryBadge: {
     paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6,
+  },
+  makePrimaryBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingVertical: 5, paddingHorizontal: 8,
+    borderRadius: 8, borderWidth: 1,
   },
   infoStrip: {
     flexDirection: "row", alignItems: "center",

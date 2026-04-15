@@ -1,0 +1,155 @@
+Upgrade the Kundli Milan Pro screen into an ultra-premium, high-conversion experience with deep insights, strong emotional hooks, and structured layout.
+
+----------------------------------------
+
+1. ABOVE THE FOLD (NO SCROLL – HIGH IMPACT ZONE)
+
+Display only the most powerful elements:
+
+- Hero Section:
+  Title: "⚡ Your Relationship Truth Revealed"
+  Subtitle: "Know if this relationship will succeed, struggle, or break over time"
+
+- Insight Stats:
+  - 36 Points Match Score
+  - 12 Deep Insights
+  - 8 Compatibility Checks
+
+- Top Insights (Larger Cards):
+  1. Core Compatibility (❤️ MOST IMPORTANT)
+     Text: "Are your hearts, minds & souls truly aligned?"
+
+  2. Risk Scan (⚠️ CRITICAL CHECK)
+     Text: "Hidden risks that can silently damage your relationship"
+
+  3. Final Verdict (🔥 DECISION CARD)
+     Text: "Should you marry, wait, or rethink this relationship?"
+
+- Primary CTA (Always visible):
+  "🔓 Reveal Your Complete Relationship Future"
+
+----------------------------------------
+
+2. STRUCTURED SCROLL (SMART CONTENT FLOW)
+
+Divide remaining content into powerful sections:
+
+----------------------------------------
+
+SECTION: DEEP INSIGHTS
+
+- Personality Match
+  "Will your temperaments support or clash over time?"
+
+- Soul & Karma (LOCKED 🔒)
+  "Is this a past-life connection or just attraction?"
+
+- Intimacy Score
+  "Physical & emotional bonding strength"
+
+----------------------------------------
+
+SECTION: ADVANCED ANALYSIS
+
+- Dosha Engine
+  "Mangal, Nadi & Bhakoot — deep conflict analysis"
+
+- Negative Energy (LOCKED 🔒)
+  "Hidden doshas, evil eye & unseen influences"
+
+- Strengths & Challenges
+  "What will bring you closer — and what may break you"
+
+- Remedies & Advice
+  "Exact actions to fix or strengthen your relationship"
+
+----------------------------------------
+
+SECTION: FUTURE INSIGHTS
+
+- Marriage Timing
+- Child Planning (Delay / Early / Normal)
+- Financial Compatibility
+- Life Stability
+
+----------------------------------------
+
+SECTION: HIDDEN PREMIUM (HIGH CURIOSITY 🔥)
+
+- Karmic Relationship Check
+  "Are you meant to meet in this lifetime?"
+
+- Past Life Connection
+  "Spiritual bond from previous birth"
+
+- Divorce / Separation Risk
+  "Probability based on planetary conflict"
+
+- Loyalty & Trust Index
+  "Chances of betrayal or long-term loyalty"
+
+----------------------------------------
+
+3. VISUAL HIERARCHY
+
+- Use badges:
+  - MOST IMPORTANT
+  - CRITICAL CHECK
+  - PREMIUM
+  - SECRET
+
+- Add glow effect on important cards
+- Use blur + lock for premium curiosity
+- Top 3 cards bigger than others
+
+----------------------------------------
+
+4. SMART CONDITIONAL UI
+
+IF kundli NOT added:
+- Show Add Your Kundli + Add Partner
+
+IF kundli ADDED:
+- Replace with compact bar:
+  "👤 You ✓   ❤️ Partner ✓   [Edit]"
+
+----------------------------------------
+
+5. SCROLL OPTIMIZATION
+
+- Show only top insights initially
+- Group remaining content into sections
+- Avoid long flat scrolling
+
+----------------------------------------
+
+6. MICRO INTERACTIONS
+
+- Card hover glow
+- Unlock shimmer animation
+- Progress animations for scores
+
+----------------------------------------
+
+7. PSYCHOLOGICAL TRIGGERS
+
+- Curiosity (locked insights)
+- Fear (risk / divorce probability)
+- Desire (love, intimacy, future)
+- Authority (vedic logic)
+
+----------------------------------------
+
+FINAL GOAL:
+
+- Make user emotionally hooked
+- Reduce scrolling fatigue
+- Push user toward unlocking full report
+
+----------------------------------------
+
+RESULT:
+
+- Ultra premium experience
+- Addictive UI
+- High conversion produ

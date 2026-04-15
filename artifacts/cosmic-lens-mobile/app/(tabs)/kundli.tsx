@@ -805,8 +805,8 @@ export default function KundliScreen() {
       <CosmicBg contentStyle={{paddingTop:topPad+20,paddingBottom:botPad+80}}>
         <View style={s.emptyWrap}>
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
-          <Text style={s.emptyTitle}>{t.noKundli}</Text>
-          <Text style={s.emptySub}>{t.noKundliSub}</Text>
+          <Text style={[s.emptyTitle, { color: C.text }]}>{t.noKundli}</Text>
+          <Text style={[s.emptySub, { color: C.textMuted }]}>{t.noKundliSub}</Text>
           <Pressable style={({pressed})=>[s.emptyBtn,pressed&&{opacity:0.8}]}
             onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/onboarding");}}>
             <Text style={s.emptyBtnText}>{t.createKundli}</Text>
@@ -853,8 +853,8 @@ export default function KundliScreen() {
             return (
               <Pressable key={tab}
                 onPress={() => { setActiveTab(tab); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                style={[s.chartBtn, gold&&s.chartBtnGold, active&&s.chartBtnActive]}>
-                <Text style={[s.chartBtnText, gold&&s.chartBtnTextGold, active&&s.chartBtnTextActive]}>
+                style={[s.chartBtn, { backgroundColor: C.bgCard, borderColor: C.border }, gold&&s.chartBtnGold, active&&s.chartBtnActive]}>
+                <Text style={[s.chartBtnText, { color: C.textDim }, gold&&s.chartBtnTextGold, active&&s.chartBtnTextActive]}>
                   {label}
                 </Text>
               </Pressable>
@@ -884,7 +884,7 @@ export default function KundliScreen() {
           </View>
           <View>
             <Text style={s.planetBtnTitle}>Planet Position</Text>
-            <Text style={s.planetBtnSub}>Live graha degrees aur rashi</Text>
+            <Text style={[s.planetBtnSub, { color: C.textMuted }]}>Live graha degrees aur rashi</Text>
           </View>
         </View>
         <Feather name="chevron-right" size={16} color="#f59e0b" style={{ opacity: 0.7 }} />

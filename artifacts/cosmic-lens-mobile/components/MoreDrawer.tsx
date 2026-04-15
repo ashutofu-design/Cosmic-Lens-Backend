@@ -115,6 +115,7 @@ export default function MoreDrawer({
             s.drawer,
             {
               backgroundColor: C.bg,
+              borderLeftColor: C.border,
               paddingTop: insets.top + 8,
               paddingBottom: insets.bottom + 16,
               transform: [{ translateX: slideX }],

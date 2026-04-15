@@ -123,9 +123,9 @@ function PickerBtn({
   );
 }
 
-function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, canDelete }: {
+function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, onMakePrimary, canDelete }: {
   profile: ProfileEntry; isPrimary: boolean; canDelete: boolean;
-  onView: () => void; onEdit: () => void; onDelete: () => void;
+  onView: () => void; onEdit: () => void; onDelete: () => void; onMakePrimary?: () => void;
 }) {
   const C = useC();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
@@ -167,6 +167,19 @@ function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, canDelete }:
               </View>
             )}
           </View>
+          {!isPrimary && onMakePrimary && (
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onMakePrimary(); }}
+              style={({ pressed }) => [fm.makePrimaryBtn, {
+                borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)",
+                backgroundColor: C.isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.04)",
+                opacity: pressed ? 0.7 : 1,
+              }]}
+            >
+              <Feather name="star" size={9} color={ac} />
+              <Text style={{ color: ac, fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.3 }}>Make Primary</Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={{ flexDirection: "row", gap: 5 }}>
@@ -432,6 +445,7 @@ export default function ProfileEditScreen() {
                   onView={() => { setPrimaryProfile(p.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
                   onEdit={() => openFmEdit(p)}
                   onDelete={() => handleFmDelete(p.id)}
+                  onMakePrimary={() => { setPrimaryProfile(p.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
                 />
               </React.Fragment>
             ))}
@@ -823,6 +837,12 @@ const fm = StyleSheet.create({
     paddingHorizontal: 5, paddingVertical: 1,
   },
   relTxt: { fontSize: 8, fontFamily: F.bold, letterSpacing: 0.5 },
+  makePrimaryBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingVertical: 4, paddingHorizontal: 7,
+    borderRadius: 7, borderWidth: 1, marginTop: 3,
+    alignSelf: "flex-start",
+  },
   iconBtn: {
     width: 26, height: 26, borderRadius: 7,
     borderWidth: StyleSheet.hairlineWidth,

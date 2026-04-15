@@ -33,11 +33,7 @@ export function ExpandingChip() {
         {/* Expanding chip bar */}
         <div
           className="flex items-center border-t border-[#1E293B]"
-          style={{
-            height: 72,
-            background: "#111827",
-            paddingBottom: 8,
-          }}
+          style={{ height: 72, background: "#111827", paddingBottom: 6 }}
         >
           {tabs.map((tab, i) => {
             const isActive = i === active;
@@ -47,7 +43,7 @@ export function ExpandingChip() {
                 onClick={() => setActive(i)}
                 className="flex items-center justify-center transition-all duration-200 h-full"
                 style={{
-                  flex: isActive ? 2.5 : 1,
+                  flex: isActive ? 2.6 : 1,
                   border: "none",
                   background: "transparent",
                   cursor: "pointer",
@@ -55,6 +51,7 @@ export function ExpandingChip() {
                 }}
               >
                 {isActive ? (
+                  /* Active: horizontal chip with icon + label */
                   <div
                     className="flex items-center gap-1.5 px-3 py-2 rounded-2xl"
                     style={{
@@ -66,7 +63,11 @@ export function ExpandingChip() {
                     <span className="text-[11px] font-bold leading-none" style={{ color: "#F59E0B" }}>{tab.label}</span>
                   </div>
                 ) : (
-                  <span className="text-[18px] leading-none" style={{ color: "#475569" }}>{tab.icon}</span>
+                  /* Inactive: icon stacked above small muted label */
+                  <div className="flex flex-col items-center justify-center gap-[3px]">
+                    <span className="text-[17px] leading-none" style={{ color: "#475569" }}>{tab.icon}</span>
+                    <span className="text-[9px] leading-none" style={{ color: "#374151" }}>{tab.label}</span>
+                  </div>
                 )}
               </button>
             );

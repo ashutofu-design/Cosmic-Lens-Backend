@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet } from "react-native";
 import Svg, {
   Path, G, Circle, Text as SvgText, Line, Defs,
@@ -38,9 +38,39 @@ function areaFill(vals: number[]): string {
   return `${line} L ${last},${BOT} L ${first},${BOT} Z`;
 }
 
+function shapeJourney(rawPts: number[]): number[] {
+  if (rawPts.length === 0) return [];
+  const final = rawPts[rawPts.length - 1];
+  const len = rawPts.length;
+  const shaped: number[] = [];
+
+  for (let i = 0; i < len; i++) {
+    const t = i / (len - 1);
+
+    const envelope = Math.pow(t, 1.4);
+
+    const rawNorm = rawPts[i] / 100;
+    const wiggle = (rawNorm - 0.5) * 0.35;
+
+    const base = final * envelope;
+    const startOffset = (1 - t) * 8;
+    let val = base + wiggle * final - startOffset;
+
+    val = Math.max(2, Math.min(98, val));
+
+    if (i === len - 1) val = final;
+
+    shaped.push(Math.round(val));
+  }
+
+  return shaped;
+}
+
 const YGRID = [
   { v: 100, y: PT },
+  { v:  75, y: PT + GH * 0.25 },
   { v:  50, y: PT + GH * 0.50 },
+  { v:  25, y: PT + GH * 0.75 },
   { v:   0, y: BOT },
 ];
 
@@ -56,13 +86,16 @@ interface EnergyChartProps {
 
 export default function EnergyChart({ targetPts, labels, finalEnergy, loading, instant }: EnergyChartProps) {
   const C = useC();
-  const [animPts, setAnimPts]   = useState<number[]>(instant && targetPts.length > 0 ? [...targetPts] : Array(N).fill(0));
-  const [animate, setAnimate]   = useState(instant && targetPts.length > 0);
-  const [areaVis, setAreaVis]   = useState(instant && targetPts.length > 0);
+
+  const journeyPts = useMemo(() => shapeJourney(targetPts), [targetPts]);
+
+  const [animPts, setAnimPts]   = useState<number[]>(instant && journeyPts.length > 0 ? [...journeyPts] : Array(N).fill(0));
+  const [animate, setAnimate]   = useState(instant && journeyPts.length > 0);
+  const [areaVis, setAreaVis]   = useState(instant && journeyPts.length > 0);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
-    if (targetPts.length === 0) {
+    if (journeyPts.length === 0) {
       cancelAnimationFrame(rafRef.current);
       setAnimPts(Array(N).fill(0));
       setAnimate(false);
@@ -71,7 +104,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
     }
 
     if (instant) {
-      setAnimPts([...targetPts]);
+      setAnimPts([...journeyPts]);
       setAnimate(true);
       setAreaVis(true);
       return;
@@ -83,7 +116,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
     setAreaVis(false);
 
     let cancelled = false;
-    const values = targetPts;
+    const values = journeyPts;
 
     const tid = setTimeout(() => {
       if (cancelled) return;
@@ -121,7 +154,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
       cancelAnimationFrame(rafRef.current);
       clearTimeout(tid);
     };
-  }, [targetPts, instant]);
+  }, [journeyPts, instant]);
 
   const linePath = smoothPath(animPts);
   const fillPath = areaFill(animPts);
@@ -129,10 +162,10 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
   const ly       = py(animPts[N - 1] ?? 0);
   const finalClr = gradColor(1);
 
-  const gridLine   = C.isDark ? "rgba(255,255,255,0.04)" : "rgba(140,100,200,0.08)";
-  const axisLabel  = C.isDark ? "rgba(255,255,255,0.15)" : "rgba(140,100,200,0.4)";
+  const gridLine   = C.isDark ? "rgba(255,255,255,0.05)" : "rgba(140,100,200,0.08)";
+  const gridStrong = C.isDark ? "rgba(255,255,255,0.07)" : "rgba(140,100,200,0.12)";
+  const axisLabel  = C.isDark ? "rgba(255,255,255,0.18)" : "rgba(140,100,200,0.4)";
   const footerText = C.isDark ? "rgba(255,255,255,0.10)" : "rgba(140,100,200,0.35)";
-  const glowOrb    = C.isDark ? "#0050bb" : "#c4b5fd";
   const calloutBg  = C.isDark ? "rgba(0,20,10,0.85)" : "rgba(255,255,255,0.92)";
 
   return (
@@ -147,40 +180,35 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
             <Stop offset="100%" stopColor="#00ff99" />
           </LinearGradient>
           <LinearGradient id="af" x1="0" y1={PT} x2="0" y2={BOT} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%"   stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={areaVis ? 0.14 : 0} />
+            <Stop offset="0%"   stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={areaVis ? 0.18 : 0} />
+            <Stop offset="50%"  stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={areaVis ? 0.06 : 0} />
             <Stop offset="100%" stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity="0" />
           </LinearGradient>
-          <LinearGradient id="glowGrad" x1="0" y1={PT} x2="0" y2={BOT + 30} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%"   stopColor={C.isDark ? "#00ff99" : "#a78bfa"} stopOpacity="0.08" />
-            <Stop offset="100%" stopColor={C.isDark ? "#00ff99" : "#a78bfa"} stopOpacity="0" />
-          </LinearGradient>
         </Defs>
-
-        <Circle cx={VW * 0.7} cy={BOT - 20} r={100} fill={glowOrb} opacity={C.isDark ? 0.06 : 0.04} />
 
         {YGRID.map(({ v, y: gy }) => (
           <G key={v}>
             <Line
               x1={PL} y1={gy} x2={PL + GW} y2={gy}
-              stroke={gridLine}
+              stroke={v === 0 || v === 100 ? gridStrong : gridLine}
               strokeWidth={v === 0 || v === 100 ? 0.8 : 0.5}
-              strokeDasharray={v === 50 ? "3,8" : undefined}
+              strokeDasharray={v === 0 || v === 100 ? undefined : "3,8"}
             />
-            <SvgText x={PL - 6} y={gy + 3} textAnchor="end" fill={axisLabel} fontSize={7.5}>
+            <SvgText x={PL - 6} y={gy + 3} textAnchor="end" fill={axisLabel} fontSize={7}>
               {v}
             </SvgText>
           </G>
         ))}
 
-        {targetPts.length > 0 && (
+        {journeyPts.length > 0 && (
           <Path d={fillPath} fill="url(#af)" opacity={areaVis ? 1 : 0} />
         )}
 
-        {targetPts.length > 0 && (
-          <Path d={linePath} fill="none" stroke="url(#lg)" strokeWidth={20} opacity={0.08} strokeLinecap="round" strokeLinejoin="round" />
+        {journeyPts.length > 0 && (
+          <Path d={linePath} fill="none" stroke="url(#lg)" strokeWidth={14} opacity={0.06} strokeLinecap="round" strokeLinejoin="round" />
         )}
 
-        {targetPts.length > 0 && (
+        {journeyPts.length > 0 && (
           <Path d={linePath} fill="none" stroke="url(#lg)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
         )}
 
@@ -191,26 +219,26 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           const x = px(i), y = py(v);
           return (
             <G key={i} opacity={animate ? 1 : 0}>
-              <Circle cx={x} cy={y} r={5} fill={color} opacity={0.12} />
-              <Circle cx={x} cy={y} r={2.2} fill={color} />
+              <Circle cx={x} cy={y} r={4} fill={color} opacity={0.10} />
+              <Circle cx={x} cy={y} r={2} fill={color} />
             </G>
           );
         })}
 
-        {targetPts.length > 0 && animate && (
+        {journeyPts.length > 0 && animate && (
           <G>
-            <Circle cx={lx} cy={ly} r={14}  fill={finalClr} opacity={0.08} />
-            <Circle cx={lx} cy={ly} r={9}   fill={finalClr} opacity={0.15} />
-            <Circle cx={lx} cy={ly} r={5.5} fill={finalClr} opacity={0.9} />
-            <Circle cx={lx} cy={ly} r={2}   fill="white"    opacity={0.95} />
+            <Circle cx={lx} cy={ly} r={12}  fill={finalClr} opacity={0.07} />
+            <Circle cx={lx} cy={ly} r={7}   fill={finalClr} opacity={0.14} />
+            <Circle cx={lx} cy={ly} r={4.5} fill={finalClr} opacity={0.9} />
+            <Circle cx={lx} cy={ly} r={1.8} fill="white"    opacity={0.95} />
           </G>
         )}
 
-        {targetPts.length > 0 && animate && finalEnergy != null && (
+        {journeyPts.length > 0 && animate && finalEnergy != null && (
           <G>
             <Rect x={lx - 52} y={ly - 14} width={38} height={21} rx={7}
-              fill={calloutBg} stroke={finalClr} strokeOpacity={0.6} strokeWidth={0.8} />
-            <SvgText x={lx - 33} y={ly + 2.5} textAnchor="middle" fill={finalClr} fontSize={11.5} fontWeight="800">
+              fill={calloutBg} stroke={finalClr} strokeOpacity={0.5} strokeWidth={0.8} />
+            <SvgText x={lx - 33} y={ly + 2.5} textAnchor="middle" fill={finalClr} fontSize={11} fontWeight="800">
               {finalEnergy}
             </SvgText>
           </G>

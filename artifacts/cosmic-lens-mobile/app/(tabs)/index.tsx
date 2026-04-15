@@ -34,7 +34,7 @@ const F = {
 };
 
 const N = 12;
-const DEMO_PTS    = [42, 55, 38, 61, 70, 65, 48, 72, 68, 54, 60, 63];
+const DEMO_PTS    = [12, 18, 25, 30, 28, 35, 42, 38, 50, 55, 48, 38];
 const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";

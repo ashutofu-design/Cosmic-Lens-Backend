@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
@@ -754,7 +755,8 @@ const CHART_BTNS = [
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli } = useUser();
+  const { kundli, language } = useUser();
+  const t = getT(language);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -796,13 +798,11 @@ export default function KundliScreen() {
       <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80,backgroundColor:C.bg}]}>
         <View style={s.emptyWrap}>
           <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
-          <Text style={s.emptyTitle}>No Kundli Found</Text>
-          <Text style={s.emptySub}>
-            Enter your birth details — Dasha Timeline, Ashtakavarga, Navatara, Jaimini, KP all will be shown
-          </Text>
+          <Text style={s.emptyTitle}>{t.noKundli}</Text>
+          <Text style={s.emptySub}>{t.noKundliSub}</Text>
           <Pressable style={({pressed})=>[s.emptyBtn,pressed&&{opacity:0.8}]}
             onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/onboarding");}}>
-            <Text style={s.emptyBtnText}>Enter Birth Details</Text>
+            <Text style={s.emptyBtnText}>{t.createKundli}</Text>
             <Feather name="arrow-right" size={15} color="#020d1a"/>
           </Pressable>
         </View>

@@ -18,6 +18,7 @@ import Svg, { Circle, Defs, Ellipse, RadialGradient, Stop } from "react-native-s
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 
 const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
@@ -26,7 +27,8 @@ type Tab = "login" | "signup";
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { setUser } = useUser();
+  const { setUser, language } = useUser();
+  const tr = getT(language);
 
   const [tab,      setTab]      = useState<Tab>("login");
   const [name,     setName]     = useState("");
@@ -147,7 +149,7 @@ export default function LoginScreen() {
               </Svg>
             </View>
             <Text style={[s.title, { color: C.text }]}>Cosmic Lens</Text>
-            <Text style={[s.subtitle, { color: C.textMuted }]}>Your personal Vedic astrology guide</Text>
+            <Text style={[s.subtitle, { color: C.textMuted }]}>{tr.loginSubtitle}</Text>
           </View>
 
           {/* ── Tab switcher ── */}
@@ -155,7 +157,7 @@ export default function LoginScreen() {
             {(["login", "signup"] as Tab[]).map(t => (
               <Pressable key={t} onPress={() => switchTab(t)} style={[s.tab, tab === t && s.tabActive]}>
                 <Text style={[s.tabText, { color: tab === t ? "#f59e0b" : C.textMuted }]}>
-                  {t === "login" ? "Log In" : "Create Account"}
+                  {t === "login" ? tr.logIn : tr.createAccount}
                 </Text>
               </Pressable>
             ))}
@@ -167,7 +169,7 @@ export default function LoginScreen() {
             {/* Name (signup only) */}
             {tab === "signup" && (
               <View style={s.fieldWrap}>
-                <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>YOUR NAME</Text>
+                <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.yourName.toUpperCase()}</Text>
                 <FieldInput
                   icon="user"
                   value={name}
@@ -184,7 +186,7 @@ export default function LoginScreen() {
 
             {/* Email */}
             <View style={s.fieldWrap}>
-              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>EMAIL ADDRESS</Text>
+              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.emailAddr.toUpperCase()}</Text>
               <FieldInput
                 ref={emailRef}
                 icon="mail"
@@ -202,7 +204,7 @@ export default function LoginScreen() {
 
             {/* Password */}
             <View style={s.fieldWrap}>
-              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>PASSWORD</Text>
+              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>{tr.password.toUpperCase()}</Text>
               <FieldInput
                 ref={passwordRef}
                 icon="lock"
@@ -244,7 +246,7 @@ export default function LoginScreen() {
                     <>
                       <Feather name={tab === "login" ? "log-in" : "user-plus"} size={16} color="#fff" />
                       <Text style={s.ctaText}>
-                        {tab === "login" ? "Log In" : "Create Account"}
+                        {tab === "login" ? tr.logIn : tr.createAccount}
                       </Text>
                     </>
                   )
@@ -265,11 +267,9 @@ export default function LoginScreen() {
               style={({ pressed }) => [s.guestBtn, { borderColor: C.border2, backgroundColor: C.bgCard }, pressed && { opacity: 0.7 }]}
             >
               <Feather name="arrow-right" size={14} color={C.textMuted} />
-              <Text style={[s.guestText, { color: C.textMuted }]}>Continue without account</Text>
+              <Text style={[s.guestText, { color: C.textMuted }]}>{tr.continueGuest}</Text>
             </Pressable>
-            <Text style={[s.guestCaption, { color: C.textDim }]}>
-              Your charts will be saved locally on this device only
-            </Text>
+            <Text style={[s.guestCaption, { color: C.textDim }]}>{tr.guestNote}</Text>
           </View>
 
           {/* Footer */}

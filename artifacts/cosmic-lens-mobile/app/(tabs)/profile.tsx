@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 
 // ── Relation options ───────────────────────────────────────────────────────────
 const RELATIONS = [
@@ -125,6 +126,8 @@ function LangSheet({ visible, current, onSelect, onClose }: {
 }) {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const { language } = useUser();
+  const t = getT(language);
   const [query, setQuery] = useState("");
 
   const filtered = query.trim().length > 0
@@ -153,8 +156,8 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             <Feather name="x" size={18} color="#64748b" />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={lm.title}>Select Language</Text>
-            <Text style={lm.subtitle}>App language will change instantly</Text>
+            <Text style={lm.title}>{t.selectLanguage}</Text>
+            <Text style={lm.subtitle}>{t.langSubtitle}</Text>
           </View>
           <View style={{ width: 36 }} />
         </View>
@@ -166,7 +169,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             style={lm.searchInput}
             value={query}
             onChangeText={setQuery}
-            placeholder="Search language..."
+            placeholder={t.langSearch}
             placeholderTextColor="#1e3a5f"
             autoCorrect={false}
           />
@@ -184,7 +187,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             <>
               <View style={lm.groupHeader}>
                 <View style={lm.groupDot} />
-                <Text style={lm.groupLabel}>FULLY SUPPORTED</Text>
+                <Text style={lm.groupLabel}>{t.supported.toUpperCase()}</Text>
               </View>
               <View style={lm.grid}>
                 {supported.map(l => (
@@ -212,7 +215,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             <>
               <View style={lm.groupHeader}>
                 <View style={[lm.groupDot, { backgroundColor: "#334155" }]} />
-                <Text style={[lm.groupLabel, { color: "#334155" }]}>COMING SOON</Text>
+                <Text style={[lm.groupLabel, { color: "#334155" }]}>{t.comingSoon.toUpperCase()}</Text>
               </View>
               <View style={lm.grid}>
                 {others.map(l => (
@@ -540,6 +543,7 @@ export default function ProfileScreen() {
   const [subExpanded,      setSubExpanded]      = useState(false);
   const [showRelationPick, setShowRelationPick] = useState(false);
 
+  const t = getT(language);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -643,7 +647,7 @@ export default function ProfileScreen() {
         {/* ── MY PROFILES ─────────────────────────────────────────────── */}
         <View>
           <View style={s.sectionRow}>
-            <Text style={s.sectionLabel}>MY PROFILES</Text>
+            <Text style={s.sectionLabel}>{t.myProfiles.toUpperCase()}</Text>
             <Text style={s.sectionCount}>{profiles.length}/1</Text>
           </View>
 
@@ -673,7 +677,7 @@ export default function ProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: "#f59e0b", fontSize: 13, fontFamily: F.semibold }}>
-                  Add Family Member
+                  {t.addFamilyMember}
                 </Text>
                 <Text style={{ color: "#1e3a5f", fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
                   Son, Daughter, Spouse, Parents, Friend & more
@@ -686,7 +690,7 @@ export default function ProfileScreen() {
 
         {/* ── SUBSCRIPTION ─────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>SUBSCRIPTION</Text>
+          <Text style={s.sectionLabel}>{t.subscription.toUpperCase()}</Text>
 
           {/* Single container card — everything inside */}
           <View style={sub.card}>
@@ -763,12 +767,12 @@ export default function ProfileScreen() {
 
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
         <View>
-          <Text style={s.sectionLabel}>SETTINGS</Text>
+          <Text style={s.sectionLabel}>{t.settings.toUpperCase()}</Text>
           <View style={st.card}>
 
             <SettingRow
               icon="globe"
-              label="Language"
+              label={t.language}
               onPress={() => setShowLang(true)}
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
@@ -787,7 +791,7 @@ export default function ProfileScreen() {
 
             <SettingRow
               icon={mode === "dark" ? "moon" : "sun"}
-              label={mode === "dark" ? "Dark Mode" : "Light Mode"}
+              label={t.darkMode}
               right={
                 <Switch
                   value={mode === "dark"}
@@ -851,7 +855,7 @@ export default function ProfileScreen() {
             style={({ pressed }) => [s.logoutBtn, pressed && { opacity:0.75 }]}
           >
             <Feather name="log-out" size={14} color="#f87171" />
-            <Text style={s.logoutText}>Log Out</Text>
+            <Text style={s.logoutText}>{t.logOut}</Text>
           </Pressable>
         </View>
 

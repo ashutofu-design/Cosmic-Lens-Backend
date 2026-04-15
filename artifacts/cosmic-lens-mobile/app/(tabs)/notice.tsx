@@ -4,6 +4,7 @@ import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 
 interface Notice {
   dot: string;
@@ -65,7 +66,8 @@ function buildNoticesFromKundli(): Notice[] {
 export default function NoticeScreen() {
   const insets  = useSafeAreaInsets();
   const C = useC();
-  const { kundli } = useUser();
+  const { kundli, language } = useUser();
+  const t = getT(language);
   const topPad  = Platform.OS === "web" ? 67 : insets.top;
   const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
   const notices = DEMO_NOTICES;
@@ -79,7 +81,7 @@ export default function NoticeScreen() {
     >
       {/* Header */}
       <View style={s.headerRow}>
-        <Text style={s.heading}>Notices</Text>
+        <Text style={s.heading}>{t.noticeTitle}</Text>
         {unread > 0 && (
           <View style={s.badge}>
             <Text style={s.badgeText}>{unread} new</Text>

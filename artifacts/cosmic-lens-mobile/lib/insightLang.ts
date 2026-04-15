@@ -2,7 +2,7 @@
 // INSIGHT LANGUAGE PACKS — Full 7-language support for generated insight text
 // ══════════════════════════════════════════════════════════════════════════════
 
-export type LangCode = "hi" | "ta" | "te" | "bn" | "mr" | "gu" | "en";
+export type LangCode = "hi" | "ta" | "te" | "bn" | "mr" | "gu" | "kn" | "en";
 
 const fill = (tpl: string, v: Record<string, string>) =>
   tpl.replace(/\{(\w+)\}/g, (_, k) => v[k] ?? k);

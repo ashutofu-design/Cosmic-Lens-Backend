@@ -48,6 +48,15 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - `python3 artifacts/api-server/flask_app.py` — Run Flask backend
 - `pnpm run typecheck` — Full typecheck across all packages
 
+## i18n — Multi-Language Support
+
+- `lib/i18n.ts` — Central translation system with `getT(language)` function
+- Supports 8 languages: English, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada
+- Usage pattern: `import { getT } from "@/lib/i18n"; const t = getT(language);`
+- Language persists in AsyncStorage; changing it updates all wired screens instantly
+- **Wired screens**: CustomTabBar, profile.tsx, login.tsx, onboarding.tsx, index.tsx (home), kundli.tsx, ask.tsx, insights.tsx, notice.tsx
+- `UserContext` exposes `language` (LangCode) and `setLanguage` — accessible from any screen
+
 ## API Endpoints
 
 - `GET /api/healthz` — Health check

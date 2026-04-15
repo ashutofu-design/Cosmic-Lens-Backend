@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 import { router } from "expo-router";
 
 const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN ?? ""}`;
@@ -55,7 +56,8 @@ const STARTERS = [
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData } = useUser();
+  const { kundli, birthData, language } = useUser();
+  const t = getT(language);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
@@ -194,7 +196,7 @@ export default function AskScreen() {
           style={s.input}
           value={input}
           onChangeText={setInput}
-          placeholder={showDemo ? "Pehle kundli banao..." : "Sawaal poochho..."}
+          placeholder={t.askPlaceholder}
           placeholderTextColor="#1e3a5f"
           multiline
           editable={!showDemo}

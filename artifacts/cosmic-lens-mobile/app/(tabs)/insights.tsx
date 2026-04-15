@@ -15,6 +15,7 @@ import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 import {
   computeProInsight,
   generatePDForecast,
@@ -26,11 +27,11 @@ import {
 
 type Category = "career" | "relationship" | "finance" | "health";
 
-const CATEGORIES: { key: Category; label: string; icon: string; color: string }[] = [
-  { key: "career",       label: "Career",       icon: "💼", color: "#f59e0b" },
-  { key: "relationship", label: "Rishte",        icon: "💞", color: "#ec4899" },
-  { key: "finance",      label: "Dhan",          icon: "💰", color: "#4ade80" },
-  { key: "health",       label: "Swasthya",      icon: "🌿", color: "#fbbf24" },
+const CATEGORY_META: { key: Category; icon: string; color: string }[] = [
+  { key: "career",       icon: "💼", color: "#f59e0b" },
+  { key: "relationship", icon: "💞", color: "#ec4899" },
+  { key: "finance",      icon: "💰", color: "#4ade80" },
+  { key: "health",       icon: "🌿", color: "#fbbf24" },
 ];
 
 const PLANET_CLR: Record<string, string> = {
@@ -150,7 +151,12 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 export default function InsightsScreen() {
   const insets     = useSafeAreaInsets();
   const C = useC();
-  const { kundli, moonData } = useUser();
+  const { kundli, moonData, language } = useUser();
+  const t = getT(language);
+  const CATEGORIES = CATEGORY_META.map(c => ({
+    ...c,
+    label: t[c.key as "career" | "finance" | "relationship" | "health"],
+  }));
   const topPad     = Platform.OS === "web" ? 67 : insets.top;
   const botPad     = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo   = !kundli;
@@ -226,7 +232,7 @@ export default function InsightsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <Text style={s.heading}>Insights</Text>
+      <Text style={s.heading}>{t.insightsTitle}</Text>
 
       {/* Demo lock banner */}
       {showDemo && (

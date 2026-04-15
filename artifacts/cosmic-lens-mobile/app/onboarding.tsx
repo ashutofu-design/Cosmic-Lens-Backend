@@ -19,6 +19,7 @@ import { useC } from "@/context/ThemeContext";
 import PickerModal from "@/components/PickerModal";
 
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
 
 const MONTHS = [
@@ -37,7 +38,8 @@ const MINS   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { setBirthData, setKundli, syncKundliToCloud } = useUser();
+  const { setBirthData, setKundli, syncKundliToCloud, language } = useUser();
+  const t = getT(language);
 
   const [name,    setName]    = useState("");
   const [day,     setDay]     = useState("");
@@ -142,7 +144,7 @@ export default function OnboardingScreen() {
           onPress={() => router.replace("/(tabs)")}
           style={({ pressed }) => [s.skipBtn, pressed && { opacity: 0.5 }]}
         >
-          <Text style={s.skipText}>Skip</Text>
+          <Text style={s.skipText}>{t.skip}</Text>
         </Pressable>
       </View>
 
@@ -161,10 +163,8 @@ export default function OnboardingScreen() {
             >
               <Feather name="star" size={26} color="#f59e0b" />
             </LinearGradient>
-            <Text style={s.heroTitle}>Birth Details</Text>
-            <Text style={s.heroSub}>
-              Accurate birth details are needed for a correct Kundli.{"\n"}This data is kept private and secure.
-            </Text>
+            <Text style={s.heroTitle}>{t.birthDetails}</Text>
+            <Text style={s.heroSub}>{t.birthSubtitle}</Text>
           </View>
 
           {/* ── Section: Full Name ────────────────────────────────────── */}
@@ -173,7 +173,7 @@ export default function OnboardingScreen() {
               <View style={[s.cardIcon, { backgroundColor: "rgba(167,139,250,0.12)" }]}>
                 <Feather name="user" size={14} color="#f59e0b" />
               </View>
-              <Text style={s.cardTitle}>YOUR NAME</Text>
+              <Text style={s.cardTitle}>{t.yourName.toUpperCase()}</Text>
             </View>
             <TextInput
               style={s.input}
@@ -192,12 +192,12 @@ export default function OnboardingScreen() {
               <View style={[s.cardIcon, { backgroundColor: "rgba(139,92,246,0.10)" }]}>
                 <Feather name="calendar" size={14} color="#f59e0b" />
               </View>
-              <Text style={s.cardTitle}>DATE OF BIRTH</Text>
+              <Text style={s.cardTitle}>{t.dateOfBirth.toUpperCase()}</Text>
             </View>
             <View style={s.dateRow}>
               {/* Day */}
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>Day</Text>
+                <Text style={s.dateLabel}>{t.day}</Text>
                 <Pressable
                   style={s.datePickerBtn}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDayPickerOpen(true); }}
@@ -211,7 +211,7 @@ export default function OnboardingScreen() {
 
               {/* Month */}
               <View style={[s.dateCell, { flex: 2 }]}>
-                <Text style={s.dateLabel}>Month</Text>
+                <Text style={s.dateLabel}>{t.month}</Text>
                 <Pressable
                   style={s.datePickerBtn}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMonthPickerOpen(true); }}
@@ -225,7 +225,7 @@ export default function OnboardingScreen() {
 
               {/* Year */}
               <View style={[s.dateCell, { flex: 1.8 }]}>
-                <Text style={s.dateLabel}>Year</Text>
+                <Text style={s.dateLabel}>{t.year}</Text>
                 <Pressable
                   style={s.datePickerBtn}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setYearPickerOpen(true); }}
@@ -245,15 +245,13 @@ export default function OnboardingScreen() {
               <View style={[s.cardIcon, { backgroundColor: "rgba(250,204,21,0.10)" }]}>
                 <Feather name="clock" size={14} color="#facc15" />
               </View>
-              <Text style={s.cardTitle}>TIME OF BIRTH</Text>
+              <Text style={s.cardTitle}>{t.timeOfBirth.toUpperCase()}</Text>
             </View>
 
             {/* Warning */}
             <View style={s.warnBox}>
               <Feather name="alert-triangle" size={11} color="#f59e0b" style={{ marginTop: 1 }} />
-              <Text style={s.warnText}>
-                Birth time directly affects Mahadasha. Please verify AM or PM carefully.
-              </Text>
+              <Text style={s.warnText}>{t.timeTip}</Text>
             </View>
 
             <View style={s.dateRow}>
@@ -270,7 +268,7 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={s.dateLabel}>Minute</Text>
+                <Text style={s.dateLabel}>{t.minute}</Text>
                 <Pressable
                   style={s.datePickerBtn}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMinPickerOpen(true); }}
@@ -300,16 +298,16 @@ export default function OnboardingScreen() {
               <View style={[s.cardIcon, { backgroundColor: "rgba(16,185,129,0.10)" }]}>
                 <Feather name="map-pin" size={14} color="#10b981" />
               </View>
-              <Text style={s.cardTitle}>PLACE OF BIRTH</Text>
+              <Text style={s.cardTitle}>{t.birthPlace.toUpperCase()}</Text>
             </View>
 
             <View style={s.placeRow}>
               <TextInput
                 style={[s.input, { flex: 1, marginBottom: 0 }]}
-                placeholder="Enter city name..."
+                placeholder={t.searchCity}
                 placeholderTextColor="#334155"
                 value={placeQuery}
-                onChangeText={t => { setPlaceQuery(t); setSelectedLat(null); setSelectedPlace(""); }}
+                onChangeText={v => { setPlaceQuery(v); setSelectedLat(null); setSelectedPlace(""); }}
                 onSubmitEditing={doSearchPlace}
                 returnKeyType="search"
               />
@@ -380,12 +378,12 @@ export default function OnboardingScreen() {
               {loading ? (
                 <View style={s.submitInner}>
                   <ActivityIndicator size="small" color="#f59e0b" />
-                  <Text style={[s.submitText, { color: "#a78bfa" }]}>Generating Kundli...</Text>
+                  <Text style={[s.submitText, { color: "#a78bfa" }]}>{t.generatingKundli}</Text>
                 </View>
               ) : (
                 <View style={s.submitInner}>
                   <Feather name="star" size={16} color="#fff" />
-                  <Text style={[s.submitText, { color: "#fff" }]}>Create My Kundli</Text>
+                  <Text style={[s.submitText, { color: "#fff" }]}>{t.generateKundli}</Text>
                 </View>
               )}
             </LinearGradient>

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
@@ -138,7 +139,8 @@ function useCountUp(target: number, delay = 200) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { kundli, todayEnergy, setTodayEnergy, setMoonData, moonData, user, isLoading } = useUser();
+  const { kundli, todayEnergy, setTodayEnergy, setMoonData, moonData, user, isLoading, language } = useUser();
+  const t = getT(language);
 
   const [targetPts, setTargetPts] = useState<number[]>([]);
   const [labels,    setLabels]    = useState<string[]>([]);
@@ -204,7 +206,7 @@ export default function HomeScreen() {
           <Text style={styles.greetSub}>
             {kundli ? `Hello, ${kundli.name}` : "Hello"}
           </Text>
-          <Text style={styles.greetTitle}>Today's Cosmic Report</Text>
+          <Text style={styles.greetTitle}>{t.todayEnergy}</Text>
         </View>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
@@ -254,6 +256,8 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
 }) {
+  const { language } = useUser();
+  const tHero = getT(language);
   const displayScore = useCountUp(chartEnergy, 350);
   const glowPulse    = useOpacityPulse(0.06, 0.22, 1800);
 
@@ -264,7 +268,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
       {/* ── TOP ROW: label + score + demo badge ── */}
       <View style={hero.topRow}>
         <View>
-          <Text style={hero.label}>TODAY ENERGY</Text>
+          <Text style={hero.label}>{tHero.todayEnergy.toUpperCase()}</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 1 }}>
             <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
             <Text style={hero.scoreMax}>/100</Text>

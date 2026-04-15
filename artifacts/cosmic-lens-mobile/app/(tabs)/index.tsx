@@ -228,11 +228,11 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* ── Hero Energy Card — 65% ── */}
-      <Animated.View style={[heroAnim, { flex: 7, paddingHorizontal: 12, paddingBottom: 8 }]}>
+      {/* ── Hero Energy Card — immersive ── */}
+      <Animated.View style={[heroAnim, { flex: 7, paddingHorizontal: 8, paddingBottom: 6 }]}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
-          style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] }]}
+          style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.988 : 1 }] }]}
         >
           <HeroEnergyCard
             chartPts={chartPts}
@@ -266,43 +266,35 @@ export default function HomeScreen() {
   );
 }
 
-// ── Hero Energy Card — vertical layout, fills 60% ────────────────────────────
 function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
 }) {
-  const { language } = useUser();
-  const tHero = getT(language);
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
   return (
-    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: `${insight.color}50`, borderWidth: 1.5, shadowColor: insight.color, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } } as any]}>
+    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: `${insight.color}30`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.18, shadowRadius: 20, shadowOffset: { width: 0, height: 0 } } as any]}>
 
-      {/* ── TOP ROW: label + score + demo badge ── */}
+      {/* ── Centered score — single hero value ── */}
       <View style={hero.topRow}>
-        <View>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3 }}>
-            <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
-            <Text style={[hero.scoreMax, { color: Ctheme.textDim }]}>/100</Text>
-          </View>
-        </View>
-        <View style={{ alignItems: "flex-end", gap: 5 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={[hero.label, { color: Ctheme.isDark ? "rgba(255,255,255,0.35)" : "#9f7aea" }]}>TODAY'S ENERGY</Text>
           {showDemo && (
             <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
-              <Feather name="lock" size={9} color={Ctheme.textDim} />
+              <Feather name="lock" size={8} color={Ctheme.textDim} />
               <Text style={[hero.demoBadgeText, { color: Ctheme.textDim }]}>DEMO</Text>
             </View>
           )}
-          <View style={[hero.insightPill, { backgroundColor: `${insight.color}12`, borderColor: `${insight.color}28` }]}>
-            <Text style={hero.insightIcon}>{insight.icon}</Text>
-            <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
-          </View>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2 }}>
+          <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
+          <Text style={[hero.scoreMax, { color: Ctheme.textDim }]}>/100</Text>
         </View>
       </View>
 
-      {/* ── CHART — fills remaining space ── */}
-      <View style={{ flex: 1, marginTop: 8 }}>
+      {/* ── CHART — fills remaining space, immersive ── */}
+      <View style={{ flex: 1 }}>
         <EnergyChart
           targetPts={chartPts}
           labels={chartLbls}
@@ -312,10 +304,16 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         />
       </View>
 
-      {/* ── Tap hint ── */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 6, gap: 3 }}>
-        <Text style={{ fontSize: 10, fontFamily: F.medium, color: `${insight.color}90` }}>View 7-day forecast</Text>
-        <Feather name="chevron-right" size={10} color={`${insight.color}80`} />
+      {/* ── Bottom: insight + tap hint ── */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={[hero.insightPill, { backgroundColor: `${insight.color}10`, borderColor: `${insight.color}20` }]}>
+          <Text style={hero.insightIcon}>{insight.icon}</Text>
+          <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+          <Text style={{ fontSize: 9.5, fontFamily: F.medium, color: `${insight.color}70` }}>7-day forecast</Text>
+          <Feather name="chevron-right" size={10} color={`${insight.color}60`} />
+        </View>
       </View>
     </View>
   );
@@ -688,38 +686,33 @@ const styles = StyleSheet.create({
   },
 });
 
-// ── Hero card ─────────────────────────────────────────────────────────────────
 const hero = StyleSheet.create({
   card: {
-    backgroundColor: "#040e1e", borderRadius: 18, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)", padding: 14, overflow: "hidden",
+    backgroundColor: "#040e1e", borderRadius: 16, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)", paddingHorizontal: 10,
+    paddingTop: 10, paddingBottom: 8, overflow: "hidden", gap: 4,
     shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.1, shadowRadius: 18, elevation: 5,
   },
-  glow: {
-    position: "absolute", top: -50, right: -50,
-    width: 200, height: 200, borderRadius: 100,
-  },
   topRow: {
-    flexDirection: "row", alignItems: "flex-start",
-    justifyContent: "space-between", gap: 8,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between",
   },
-  label:    { color: "#3d5a7a", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2 },
-  score:    { fontSize: 38, fontFamily: F.bold, letterSpacing: -1.5, lineHeight: 42 },
-  scoreMax: { fontSize: 15, color: "#1e3a5f", fontFamily: F.semibold, paddingBottom: 6 },
+  label:    { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 2 },
+  score:    { fontSize: 28, fontFamily: F.bold, letterSpacing: -1, lineHeight: 32 },
+  scoreMax: { fontSize: 12, fontFamily: F.semibold, paddingBottom: 3 },
   demoBadge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(2,13,26,0.85)", borderWidth: 1,
-    borderColor: "rgba(0,200,255,0.15)", paddingVertical: 4,
-    paddingHorizontal: 8, borderRadius: 6,
+    flexDirection: "row", alignItems: "center", gap: 3,
+    borderWidth: 1, paddingVertical: 2,
+    paddingHorizontal: 6, borderRadius: 5,
   },
-  demoBadgeText: { color: "#3d5a7a", fontSize: 8, fontFamily: F.bold, letterSpacing: 1.5 },
+  demoBadgeText: { fontSize: 7, fontFamily: F.bold, letterSpacing: 1.2 },
   insightPill: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    borderWidth: 1, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderWidth: 1, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8,
   },
-  insightIcon: { fontSize: 12 },
-  insightText: { fontSize: 10, fontFamily: F.semibold, maxWidth: 140 },
+  insightIcon: { fontSize: 11 },
+  insightText: { fontSize: 9.5, fontFamily: F.semibold, maxWidth: 140 },
 });
 
 // ── Mini cards — full-width horizontal rows ────────────────────────────────────

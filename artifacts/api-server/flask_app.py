@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
+from dosh_engine import analyze_doshas
 from database import db, init_db
 from models import User, Kundli
 
@@ -637,6 +638,30 @@ def kp_kundli():
 
     try:
         result = calculate_kp(data)
+        return jsonify(result)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/dosh-analysis", methods=["POST"])
+def dosh_analysis():
+    """
+    Full 9-dosh Vedic analysis.
+    Body: { planets: [...], nakshatra: str }
+    planets: [{ name, house, longitude, sign, retrograde }, ...]
+    Returns: { total_dosh, active_count, mild_count, none_count, dosh_list }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    planets   = data.get("planets")
+    nakshatra = data.get("nakshatra", "")
+
+    if not planets or not isinstance(planets, list):
+        return jsonify({"error": "planets array is required"}), 400
+
+    try:
+        result = analyze_doshas(planets, nakshatra)
         return jsonify(result)
     except Exception as exc:
         import traceback

@@ -24,6 +24,27 @@ export interface AuthUser {
 
 type LangCode = UILang;
 
+// ── Dosh result types ──────────────────────────────────────────────────────────
+export interface DoshItem {
+  key: string;
+  name: string;
+  name_hindi: string;
+  icon: string;
+  status: "Active" | "Mild" | "None";
+  headline: string;
+  description: string;
+  remedies: string[];
+  planet_note: string;
+}
+
+export interface DoshAnalysisResult {
+  total_dosh: number;
+  active_count: number;
+  mild_count: number;
+  none_count: number;
+  dosh_list: DoshItem[];
+}
+
 // ── Context shape ────────────────────────────────────────────────────────────
 interface UserContextType {
   user: AuthUser | null;
@@ -49,6 +70,10 @@ interface UserContextType {
 
   // Cloud sync
   syncKundliToCloud: (bd: BirthData, k: KundliData) => Promise<void>;
+
+  // Dosh Analysis (auto-computed for primary kundli)
+  doshData: DoshAnalysisResult | null;
+  doshLoading: boolean;
 
   // Other
   todayEnergy: number | null;
@@ -92,6 +117,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [todayEnergy, _setTodayEnergy] = useState<number | null>(null);
   const [moonData,    _setMoonData]    = useState<{ longitude: number; rashiIndex: number } | null>(null);
   const [isLoading,   setIsLoading]    = useState(true);
+  const [doshData,    _setDoshData]    = useState<DoshAnalysisResult | null>(null);
+  const [doshLoading, _setDoshLoading] = useState(false);
 
   // ── Load persisted data on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -243,6 +270,36 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setTodayEnergy = useCallback((e: number | null) => { _setTodayEnergy(e); }, []);
   const setMoonData    = useCallback((m: { longitude: number; rashiIndex: number } | null) => { _setMoonData(m); }, []);
 
+  // ── Auto dosh analysis when primary kundli changes ─────────────────────────
+  const doshKundliRef = useRef<string | null>(null);
+  useEffect(() => {
+    const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
+    const kundli = primaryProfile?.kundli ?? null;
+    if (!kundli?.planets?.length) { _setDoshData(null); return; }
+
+    // Fingerprint kundli to avoid redundant fetches
+    const fp = JSON.stringify(kundli.planets.map(p => `${p.name}:${p.house}`).sort());
+    if (fp === doshKundliRef.current) return;
+    doshKundliRef.current = fp;
+
+    _setDoshLoading(true);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+
+    fetch(`${API_BASE}/api/dosh-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planets: kundli.planets, nakshatra: kundli.nakshatra ?? "" }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => { _setDoshData(data as DoshAnalysisResult); })
+      .catch(() => { /* silent — dosh.tsx falls back to local calc */ })
+      .finally(() => { clearTimeout(timer); _setDoshLoading(false); });
+
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [profiles, primaryId]);
+
   // ── Cloud sync ─────────────────────────────────────────────────────────────
   const userRef = useRef<AuthUser | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -272,6 +329,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     _setUser(null); _setProfiles([]); _setPrimaryId(null);
     _setTodayEnergy(null); _setMoonData(null);
+    _setDoshData(null); doshKundliRef.current = null;
     Promise.all(Object.values(KEYS).map(k => AsyncStorage.removeItem(k))).catch(() => {});
   }, []);
 
@@ -282,6 +340,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       addProfile, updateProfile, deleteProfile, setPrimaryProfile,
       language, setLanguage, isIndia,
       syncKundliToCloud,
+      doshData, doshLoading,
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,
     }}>

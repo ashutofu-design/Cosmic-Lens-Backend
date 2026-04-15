@@ -540,7 +540,7 @@ export default function ProfileScreen() {
   const [confirmDelete,    setConfirmDelete]    = useState<string | null>(null);
   const [switching,        setSwitching]        = useState(false);
   const [billingCycle,     setBillingCycle]     = useState<BillingCycle>("monthly");
-  const [subExpanded,      setSubExpanded]      = useState(false);
+  const [showSubModal,     setShowSubModal]     = useState(false);
   const [showRelationPick, setShowRelationPick] = useState(false);
 
   const t = getT(language);
@@ -604,6 +604,68 @@ export default function ProfileScreen() {
         onSelect={code => { setLanguage(code as "hi"); Haptics.selectionAsync(); }}
         onClose={() => setShowLang(false)}
       />
+
+      {/* Subscription Modal */}
+      <Modal visible={showSubModal} transparent animationType="slide" onRequestClose={() => setShowSubModal(false)}>
+        <View style={subm.overlay}>
+          <View style={[subm.sheet, { backgroundColor: C.bg }]}>
+            {/* Handle bar */}
+            <View style={subm.handle} />
+
+            {/* Header */}
+            <View style={subm.header}>
+              <View>
+                <Text style={[subm.title, { color: C.text }]}>{t.subscription}</Text>
+                <Text style={[subm.subtitle, { color: C.textMuted }]}>Apna plan choose karein</Text>
+              </View>
+              <Pressable onPress={() => setShowSubModal(false)} style={subm.closeBtn} hitSlop={12}>
+                <Feather name="x" size={18} color={C.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Current plan strip */}
+            <View style={[subm.currentStrip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <View style={sub.freeDot} />
+              <View style={{ flex: 1 }}>
+                <Text style={[subm.currentPlan, { color: C.text }]}>Free Plan — Active</Text>
+                <Text style={[subm.currentSub, { color: C.textMuted }]}>Upgrade for full Vedic astrology access</Text>
+              </View>
+            </View>
+
+            {/* Billing cycle toggle */}
+            <View style={sb.cycleRow}>
+              {(["monthly","yearly"] as BillingCycle[]).map(c => (
+                <Pressable key={c}
+                  onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
+                  style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
+                >
+                  <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
+                    {c === "monthly" ? "Monthly" : "Yearly"}
+                  </Text>
+                  {c === "yearly" && (
+                    <View style={sb.savePill}>
+                      <Text style={sb.savePillTxt}>44% OFF</Text>
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Plan cards */}
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 24 }}>
+              {PLANS.map(plan => (
+                <PlanCard
+                  key={plan.key}
+                  plan={plan}
+                  cycle={billingCycle}
+                  isCurrent={plan.key === "free"}
+                  onPress={() => {}}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView
         contentContainerStyle={{
@@ -688,87 +750,23 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── SUBSCRIPTION ─────────────────────────────────────────────── */}
-        <View>
-          <Text style={s.sectionLabel}>{t.subscription.toUpperCase()}</Text>
-
-          {/* Single container card — everything inside */}
-          <View style={sub.card}>
-
-            {/* Current plan row — tap to toggle */}
-            <Pressable
-              onPress={() => { setSubExpanded(v => !v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-              style={sub.planRow}
-            >
-              <View style={sub.planDotWrap}>
-                <View style={sub.freeDot} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={sub.planName}>Free Plan — Active</Text>
-                <Text style={sub.planSub}>Upgrade for full Vedic astrology access</Text>
-              </View>
-              <LinearGradient
-                colors={["#d97706","#f59e0b"]}
-                start={{x:0,y:0}} end={{x:1,y:0}}
-                style={sub.upgradePill}
-              >
-                <Feather name="zap" size={10} color="#fff" />
-                <Text style={sub.upgradeText}>Upgrade</Text>
-              </LinearGradient>
-              <Feather
-                name={subExpanded ? "chevron-up" : "chevron-down"}
-                size={14} color="#1e3a5f"
-                style={{ marginLeft: 6 }}
-              />
-            </Pressable>
-
-            {/* Plans — expand inside the same card */}
-            {subExpanded && (
-              <View style={sub.expandedWrap}>
-                {/* Divider */}
-                <View style={sub.divider} />
-
-                {/* Billing toggle */}
-                <View style={sb.cycleRow}>
-                  {(["monthly","yearly"] as BillingCycle[]).map(c => (
-                    <Pressable key={c}
-                      onPress={() => { setBillingCycle(c); Haptics.selectionAsync(); }}
-                      style={[sb.cycleBtn, billingCycle===c && sb.cycleBtnActive]}
-                    >
-                      <Text style={[sb.cycleTxt, billingCycle===c && sb.cycleTxtActive]}>
-                        {c === "monthly" ? "Monthly" : "Yearly"}
-                      </Text>
-                      {c === "yearly" && (
-                        <View style={sb.savePill}>
-                          <Text style={sb.savePillTxt}>44% OFF</Text>
-                        </View>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* Plan cards */}
-                <View style={{ gap: 10, marginTop: 12 }}>
-                  {PLANS.map(plan => (
-                    <PlanCard
-                      key={plan.key}
-                      plan={plan}
-                      cycle={billingCycle}
-                      isCurrent={plan.key === "free"}
-                      onPress={() => {}}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-
-          </View>
-        </View>
-
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
         <View>
           <Text style={s.sectionLabel}>{t.settings.toUpperCase()}</Text>
           <View style={st.card}>
+
+            <SettingRow
+              icon="star"
+              label={t.subscription}
+              onPress={() => { setShowSubModal(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              right={
+                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
+                  <View style={[sub.freeDotSm]} />
+                  <Text style={{ color:"#64748b", fontSize:12, fontFamily:F.medium }}>Free Plan</Text>
+                  <Feather name="chevron-right" size={14} color="#1e3a5f" />
+                </View>
+              }
+            />
 
             <SettingRow
               icon="globe"

@@ -228,20 +228,25 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* ── Hero Energy Card — 60% ── */}
-      <Animated.View style={[heroAnim, { flex: 6, paddingHorizontal: 12, paddingBottom: 8 }]}>
-        <HeroEnergyCard
-          chartPts={chartPts}
-          chartLbls={chartLbls}
-          chartEnergy={chartEnergy}
-          insight={insight}
-          showDemo={showDemo}
-          loading={!showDemo && loading && targetPts.length === 0}
-        />
+      {/* ── Hero Energy Card — 65% ── */}
+      <Animated.View style={[heroAnim, { flex: 7, paddingHorizontal: 12, paddingBottom: 8 }]}>
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
+          style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] }]}
+        >
+          <HeroEnergyCard
+            chartPts={chartPts}
+            chartLbls={chartLbls}
+            chartEnergy={chartEnergy}
+            insight={insight}
+            showDemo={showDemo}
+            loading={!showDemo && loading && targetPts.length === 0}
+          />
+        </Pressable>
       </Animated.View>
 
-      {/* ── 3 Feature Rows — 40% ── */}
-      <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
+      {/* ── 3 Feature Rows — 35% ── */}
+      <View style={{ flex: 3, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
         <Animated.View style={card1Anim}>
           <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
@@ -272,7 +277,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
   return (
-    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: Ctheme.border2, boxShadow: Ctheme.cardShadow } as any]}>
+    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: `${insight.color}50`, borderWidth: 1.5, shadowColor: insight.color, shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 0 } } as any]}>
 
       {/* ── TOP ROW: label + score + demo badge ── */}
       <View style={hero.topRow}>
@@ -296,7 +301,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         </View>
       </View>
 
-      {/* ── CHART — fills remaining space, no transform needed ── */}
+      {/* ── CHART — fills remaining space ── */}
       <View style={{ flex: 1, marginTop: 8 }}>
         <EnergyChart
           targetPts={chartPts}
@@ -305,6 +310,12 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           loading={loading}
           instant={showDemo}
         />
+      </View>
+
+      {/* ── Tap hint ── */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 6, gap: 3 }}>
+        <Text style={{ fontSize: 10, fontFamily: F.medium, color: `${insight.color}90` }}>View 7-day forecast</Text>
+        <Feather name="chevron-right" size={10} color={`${insight.color}80`} />
       </View>
     </View>
   );

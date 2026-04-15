@@ -258,92 +258,205 @@ function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
   );
 }
 
-// ── Pro Insights Panel (shown before result in Pro mode) ──────────────────────
-// badge types: "most" | "critical" | "premium" | "secret" | null
-// locked: blur overlay with unlock message
-type ProSection={icon:string;title:string;desc:string;col:string;badge?:"most"|"critical"|"premium"|"secret";locked?:boolean;};
+// ── Pro Insights Panel + Shared sub-components ───────────────────────────────
+function PipBadge({type}:{type:"most"|"critical"|"premium"|"secret"|"decision"|null|undefined}){
+  if(!type)return null;
+  const M:{[k:string]:{bg:string;bdr:string;txt:string;lbl:string}}={
+    most:    {bg:"rgba(244,63,94,0.18)",  bdr:"rgba(244,63,94,0.5)",    txt:"#fb7185",lbl:"MOST IMPORTANT"},
+    critical:{bg:"rgba(239,68,68,0.16)",  bdr:"rgba(239,68,68,0.45)",   txt:"#f87171",lbl:"CRITICAL CHECK"},
+    decision:{bg:"rgba(249,115,22,0.16)", bdr:"rgba(249,115,22,0.45)",  txt:"#fb923c",lbl:"DECISION CARD"},
+    premium: {bg:"rgba(139,92,246,0.16)", bdr:"rgba(139,92,246,0.4)",   txt:"#c4b5fd",lbl:"PREMIUM"},
+    secret:  {bg:"rgba(192,132,252,0.16)",bdr:"rgba(192,132,252,0.4)",  txt:"#e879f9",lbl:"SECRET"},
+  };
+  const b=M[type]; if(!b)return null;
+  return(
+    <View style={{backgroundColor:b.bg,borderRadius:6,paddingHorizontal:7,paddingVertical:3,
+      borderWidth:1,borderColor:b.bdr,alignSelf:"flex-start"}}>
+      <Text style={{color:b.txt,fontSize:8,fontFamily:"Nunito_700Bold",letterSpacing:0.9}}>{b.lbl}</Text>
+    </View>
+  );
+}
 
 function ProInsightsPanel(){
   const C=useC();
 
-  // Ordered for max impact — Core Compat + Risk first
-  const sections:ProSection[]=[
-    {icon:"💞",title:"Core Compatibility",     desc:"See if your hearts, minds & souls are truly aligned",             col:"#f43f5e", badge:"most"},
-    {icon:"⚡",title:"Risk Scan",               desc:"Hidden risks that may silently damage your relationship",          col:"#ef4444", badge:"critical"},
-    {icon:"🔯",title:"Dosha Engine",            desc:"Mangal, Nadi & Bhakoot — the 3 doshas that can break a marriage",  col:"#fbbf24", badge:"critical"},
-    {icon:"📅",title:"Future Timeline",         desc:"When is the right time to marry? Dasha & star alignment",          col:"#818cf8", badge:"premium"},
-    {icon:"🌙",title:"Soul & Karma",            desc:"Karmic connection from past life — if any exists between you",      col:"#a78bfa", locked:true},
-    {icon:"🧠",title:"Personality Match",       desc:"Are your temperaments made to last, or clash over time?",          col:"#34d399", badge:"premium"},
-    {icon:"🔥",title:"Intimacy Score",          desc:"Physical & emotional closeness — the Yoni Koot truth",             col:"#f97316", badge:"premium"},
-    {icon:"🌑",title:"Negative Energy",         desc:"Dark planetary influences hiding in your bond",                     col:"#6366f1", locked:true},
-    {icon:"⚖️",title:"Strengths & Challenges", desc:"What will bring you closer — and what will test you the most",      col:"#22c55e", badge:"premium"},
-    {icon:"🌿",title:"Remedies & Advice",       desc:"Puja, gemstones & mantras to strengthen your bond",                col:"#10b981", badge:"premium"},
-    {icon:"🏆",title:"Final Verdict",           desc:"The complete Jyotish judgment on your match — out of 36",          col:"#fbbf24", badge:"most"},
-    {icon:"🔮",title:"Hidden Insights",         desc:"Rare soul-level reading only visible in Pro",                       col:"#c084fc", badge:"secret"},
-  ];
-
-  // Stagger: 2 (header+hero) + 12 cards + 1 CTA = 15 total
-  const TOTAL=15;
+  // ── Stagger: 23 total animated elements ──
+  const TOTAL=23;
   const anims=useRef(
-    Array.from({length:TOTAL},()=>({op:new Animated.Value(0),sl:new Animated.Value(16)}))
+    Array.from({length:TOTAL},()=>({op:new Animated.Value(0),sl:new Animated.Value(18)}))
   ).current;
   useEffect(()=>{
     Animated.parallel(
       anims.flatMap((a,i)=>[
-        Animated.timing(a.op,{toValue:1,duration:420,delay:i*60,useNativeDriver:true}),
-        Animated.timing(a.sl,{toValue:0,duration:360,delay:i*60,easing:Easing.out(Easing.quad),useNativeDriver:true}),
+        Animated.timing(a.op,{toValue:1,duration:420,delay:i*55,useNativeDriver:true}),
+        Animated.timing(a.sl,{toValue:0,duration:360,delay:i*55,easing:Easing.out(Easing.quad),useNativeDriver:true}),
       ])
     ).start();
   },[]);
-  const anim=(i:number)=>({opacity:anims[i]?.op??new Animated.Value(1),transform:[{translateY:anims[i]?.sl??new Animated.Value(0)}]});
+  const av=(i:number)=>({opacity:anims[i]?.op,transform:[{translateY:anims[i]?.sl}]});
 
-  function Badge({type}:{type:ProSection["badge"]}){
-    if(!type) return null;
-    const map:{[k:string]:{bg:string;border:string;text:string;label:string}}={
-      most:    {bg:"rgba(244,63,94,0.15)",   border:"rgba(244,63,94,0.4)",   text:"#fb7185", label:"MOST IMPORTANT"},
-      critical:{bg:"rgba(239,68,68,0.15)",   border:"rgba(239,68,68,0.4)",   text:"#f87171", label:"CRITICAL CHECK"},
-      premium: {bg:"rgba(139,92,246,0.15)",  border:"rgba(139,92,246,0.35)", text:"#c4b5fd", label:"PREMIUM"},
-      secret:  {bg:"rgba(192,132,252,0.15)", border:"rgba(192,132,252,0.35)",text:"#e879f9", label:"SECRET"},
-    };
-    const b=map[type];
-    if(!b) return null;
+  // ── Helpers ──
+  function SectionHead({label,icon}:{label:string;icon:string}){
     return(
-      <View style={{backgroundColor:b.bg,borderRadius:6,paddingHorizontal:6,paddingVertical:2,
-        borderWidth:1,borderColor:b.border,alignSelf:"flex-start"}}>
-        <Text style={{color:b.text,fontSize:7,fontFamily:"Nunito_700Bold",letterSpacing:0.8}}>{b.label}</Text>
+      <View style={{flexDirection:"row",alignItems:"center",gap:8,marginTop:4}}>
+        <Text style={{fontSize:14}}>{icon}</Text>
+        <Text style={{color:C.isDark?"rgba(196,181,253,0.9)":"#5b21b6",fontSize:10,
+          fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>{label}</Text>
+        <View style={{flex:1,height:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
       </View>
     );
   }
 
-  return(
-    <View style={{gap:16}}>
+  function BigCard({icon,title,desc,col,badge,idx}:{icon:string;title:string;desc:string;col:string;badge:"most"|"critical"|"decision";idx:number}){
+    return(
+      <Animated.View style={av(idx)}>
+        <View style={{borderRadius:16,borderWidth:1,borderColor:`${col}35`,padding:16,gap:10,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(255,255,255,0.8)",
+          shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.22,shadowRadius:14,elevation:5}}>
+          <PipBadge type={badge}/>
+          <View style={{flexDirection:"row",alignItems:"flex-start",gap:12}}>
+            <View style={{width:44,height:44,borderRadius:13,backgroundColor:`${col}18`,
+              alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Text style={{fontSize:22}}>{icon}</Text>
+            </View>
+            <View style={{flex:1,gap:4}}>
+              <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold",lineHeight:20}}>{title}</Text>
+              <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",lineHeight:16}}>{desc}</Text>
+            </View>
+          </View>
+          <View style={{height:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)"}}/>
+          <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:col,
+              shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:1,shadowRadius:4}}/>
+            <Text style={{color:`${col}CC`,fontSize:9,fontFamily:"Nunito_600SemiBold"}}>
+              Calculated live with your kundli data
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  }
 
-      {/* ── Hero Section ── */}
-      <Animated.View style={anim(0)}>
+  function SmallCard({icon,title,desc,col,locked,badge,idx}:{icon:string;title:string;desc:string;col:string;locked?:boolean;badge?:"premium"|"secret"|"critical";idx:number}){
+    if(locked){
+      return(
+        <Animated.View style={av(idx)}>
+          <View style={{borderRadius:14,borderWidth:1,borderStyle:"dashed" as any,
+            borderColor:"rgba(139,92,246,0.35)",padding:13,gap:6,
+            backgroundColor:C.isDark?"rgba(20,5,40,0.7)":"rgba(237,233,254,0.6)"}}>
+            <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+              <View style={{width:36,height:36,borderRadius:10,backgroundColor:"rgba(139,92,246,0.12)",
+                alignItems:"center",justifyContent:"center",opacity:0.6}}>
+                <Text style={{fontSize:18}}>{icon}</Text>
+              </View>
+              <View style={{flex:1,gap:3}}>
+                <Text style={{color:C.isDark?"rgba(196,181,253,0.65)":"#6d28d9",fontSize:12,
+                  fontFamily:"Nunito_700Bold"}}>{title}</Text>
+                <View style={{flexDirection:"row",alignItems:"center",gap:4}}>
+                  <Feather name="lock" size={9} color="#a78bfa"/>
+                  <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_600SemiBold"}}>Unlock to reveal hidden truths</Text>
+                </View>
+              </View>
+            </View>
+            {/* fake blurred lines */}
+            {[0.5,0.3].map((op,k)=>(
+              <View key={k} style={{height:6,borderRadius:3,opacity:op,
+                backgroundColor:C.isDark?"rgba(139,92,246,0.25)":"rgba(99,102,241,0.2)",
+                width:`${65-k*15}%` as any}}/>
+            ))}
+          </View>
+        </Animated.View>
+      );
+    }
+    return(
+      <Animated.View style={av(idx)}>
+        <View style={{borderRadius:14,borderWidth:1,borderColor:`${col}28`,padding:13,gap:6,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":"rgba(255,255,255,0.7)"}}>
+          <View style={{flexDirection:"row",alignItems:"flex-start",gap:10}}>
+            <View style={{width:36,height:36,borderRadius:10,backgroundColor:`${col}18`,
+              alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Text style={{fontSize:18}}>{icon}</Text>
+            </View>
+            <View style={{flex:1,gap:4}}>
+              {badge&&<PipBadge type={badge}/>}
+              <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",lineHeight:17}}>{title}</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:14}}>{desc}</Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  function FutureCard({icon,label,col,idx}:{icon:string;label:string;col:string;idx:number}){
+    return(
+      <Animated.View style={[{width:"47%"},av(idx)]}>
+        <View style={{borderRadius:13,borderWidth:1,borderColor:`${col}28`,padding:12,gap:5,
+          backgroundColor:C.isDark?"rgba(255,255,255,0.035)":"rgba(255,255,255,0.7)",alignItems:"center"}}>
+          <Text style={{fontSize:22}}>{icon}</Text>
+          <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:15}}>{label}</Text>
+          <View style={{backgroundColor:`${col}18`,borderRadius:8,paddingHorizontal:8,paddingVertical:3,
+            borderWidth:1,borderColor:`${col}30`}}>
+            <Text style={{color:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>ON CALCULATE</Text>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  function HiddenCard({icon,title,desc,idx}:{icon:string;title:string;desc:string;idx:number}){
+    return(
+      <Animated.View style={[{width:"47%"},av(idx)]}>
+        <View style={{borderRadius:13,borderWidth:1,borderStyle:"dashed" as any,
+          borderColor:"rgba(192,132,252,0.4)",padding:12,gap:5,
+          backgroundColor:C.isDark?"rgba(30,5,50,0.7)":"rgba(250,245,255,0.8)",alignItems:"center"}}>
+          <View style={{width:36,height:36,borderRadius:10,backgroundColor:"rgba(192,132,252,0.12)",
+            alignItems:"center",justifyContent:"center",opacity:0.7}}>
+            <Text style={{fontSize:18}}>{icon}</Text>
+          </View>
+          <PipBadge type="secret"/>
+          <Text style={{color:C.isDark?"rgba(240,171,252,0.7)":"#7e22ce",fontSize:10,
+            fontFamily:"Nunito_700Bold",textAlign:"center",lineHeight:14}}>{title}</Text>
+          <Text style={{color:C.textDim,fontSize:8,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:12}}>{desc}</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  return(
+    <View style={{gap:14}}>
+
+      {/* ══ 0 ══ HERO ══════════════════════════════════════════════════════════ */}
+      <Animated.View style={av(0)}>
         <LinearGradient
-          colors={C.isDark?["#1a003a","#0d0020","#0B0F19"]:["#f5f3ff","#ede9fe","#ddd6fe"]}
+          colors={C.isDark?["#1e0040","#0d001a","#0B0F19"]:["#f5f3ff","#ede9fe","#faf5ff"]}
           start={{x:0,y:0}} end={{x:1,y:1}}
-          style={{borderRadius:18,padding:20,borderWidth:1,borderColor:"rgba(139,92,246,0.3)",
-            shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:0.25,shadowRadius:16,elevation:8}}>
-          {/* Glow orb */}
-          <View style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:50,
-            backgroundColor:"rgba(139,92,246,0.12)"}}/>
-          <View style={{alignItems:"center",gap:8}}>
-            <Text style={{fontSize:28}}>⚡</Text>
-            <Text style={{color:C.isDark?"#f5f3ff":"#3b0764",fontSize:18,fontFamily:"Nunito_700Bold",
-              textAlign:"center",lineHeight:26}}>
+          style={{borderRadius:20,padding:22,borderWidth:1,borderColor:"rgba(139,92,246,0.35)",
+            shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.3,shadowRadius:20,elevation:10}}>
+          {/* Background orbs */}
+          <View style={{position:"absolute",top:-24,right:-24,width:110,height:110,borderRadius:55,
+            backgroundColor:"rgba(139,92,246,0.1)"}}/>
+          <View style={{position:"absolute",bottom:-18,left:-18,width:80,height:80,borderRadius:40,
+            backgroundColor:"rgba(236,72,153,0.07)"}}/>
+          <View style={{alignItems:"center",gap:10}}>
+            <Text style={{fontSize:34}}>⚡</Text>
+            <Text style={{color:C.isDark?"#f5f3ff":"#3b0764",fontSize:19,fontFamily:"Nunito_700Bold",
+              textAlign:"center",lineHeight:28}}>
               Your Relationship Truth Revealed
             </Text>
             <Text style={{color:C.isDark?"rgba(196,181,253,0.85)":"#5b21b6",fontSize:12,
-              fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:18,maxWidth:280}}>
-              Discover hidden compatibility, risks &amp; future insights before marriage
+              fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:19,maxWidth:290}}>
+              Know if this relationship will succeed, struggle, or break over time
             </Text>
-            {/* Stats row */}
-            <View style={{flexDirection:"row",gap:16,marginTop:4}}>
-              {[{n:"36",l:"Points"},{n:"12",l:"Sections"},{n:"8",l:"Koots"}].map(({n,l})=>(
-                <View key={l} style={{alignItems:"center"}}>
-                  <Text style={{color:"#a78bfa",fontSize:18,fontFamily:"Nunito_700Bold"}}>{n}</Text>
-                  <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_500Medium"}}>{l}</Text>
+            {/* Stats */}
+            <View style={{flexDirection:"row",gap:0,marginTop:6,
+              backgroundColor:C.isDark?"rgba(255,255,255,0.05)":"rgba(99,102,241,0.06)",
+              borderRadius:16,borderWidth:1,borderColor:"rgba(139,92,246,0.2)",overflow:"hidden"}}>
+              {[{n:"36",l:"Points Match"},{n:"12",l:"Deep Insights"},{n:"8",l:"Compat Checks"}].map(({n,l},i)=>(
+                <View key={l} style={{flex:1,alignItems:"center",paddingVertical:12,paddingHorizontal:4,
+                  borderRightWidth:i<2?1:0,borderRightColor:"rgba(139,92,246,0.15)"}}>
+                  <Text style={{color:"#a78bfa",fontSize:20,fontFamily:"Nunito_700Bold"}}>{n}</Text>
+                  <Text style={{color:C.textMuted,fontSize:8,fontFamily:"Nunito_500Medium",textAlign:"center",lineHeight:11}}>{l}</Text>
                 </View>
               ))}
             </View>
@@ -351,74 +464,101 @@ function ProInsightsPanel(){
         </LinearGradient>
       </Animated.View>
 
-      {/* ── "What's Inside" label ── */}
-      <Animated.View style={[{flexDirection:"row",alignItems:"center",gap:8},anim(1)]}>
-        <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
-        <Text style={{color:"#a78bfa",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:1.4}}>
-          WHAT'S INSIDE YOUR REPORT
-        </Text>
-        <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(139,92,246,0.2)":"rgba(99,102,241,0.15)"}}/>
-      </Animated.View>
+      {/* ══ 1 ══ SECTION: TOP INSIGHTS ════════════════════════════════════════ */}
+      <Animated.View style={av(1)}><SectionHead label="TOP INSIGHTS" icon="🔥"/></Animated.View>
 
-      {/* ── 12-section 2-col grid ── */}
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-        {sections.map(({icon,title,desc,col,badge,locked},i)=>(
-          <Animated.View key={title} style={[{width:"47%"},anim(i+2)]}>
-            <View style={{
-              backgroundColor:C.isDark
-                ?locked?"rgba(15,5,30,0.9)":"rgba(255,255,255,0.04)"
-                :locked?"rgba(235,225,255,0.7)":"rgba(0,0,0,0.03)",
-              borderRadius:14,borderWidth:1,
-              borderColor:locked?"rgba(139,92,246,0.35)":`${col}30`,
-              padding:12,gap:5,overflow:"hidden",minHeight:110,
-            }}>
-              {/* Icon row */}
-              <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}}>
-                <View style={{width:34,height:34,borderRadius:10,
-                  backgroundColor:locked?"rgba(139,92,246,0.15)":`${col}18`,
-                  alignItems:"center",justifyContent:"center"}}>
-                  <Text style={{fontSize:17}}>{icon}</Text>
-                </View>
-                {!locked&&<View style={{width:7,height:7,borderRadius:4,backgroundColor:col,
-                  shadowColor:col,shadowOffset:{width:0,height:0},shadowOpacity:0.9,shadowRadius:5}}/>}
-              </View>
+      {/* ══ 2-4 ══ THREE BIG CARDS ════════════════════════════════════════════ */}
+      <BigCard idx={2} icon="❤️" col="#f43f5e" badge="most"
+        title="Core Compatibility"
+        desc="Are your hearts, minds & souls truly aligned for a lifetime together?"/>
+      <BigCard idx={3} icon="⚠️" col="#ef4444" badge="critical"
+        title="Risk Scan"
+        desc="Hidden risks that can silently damage your relationship over time"/>
+      <BigCard idx={4} icon="🏆" col="#fbbf24" badge="decision"
+        title="Final Verdict"
+        desc="Should you marry, wait, or rethink this relationship?"/>
 
-              {locked?(
-                /* Locked overlay */
-                <>
-                  <Text style={{color:C.isDark?"rgba(196,181,253,0.6)":"#6d28d9",fontSize:11,
-                    fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
-                  <View style={{backgroundColor:"rgba(139,92,246,0.12)",borderRadius:8,
-                    padding:7,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",marginTop:2}}>
-                    <Text style={{color:C.isDark?"#c4b5fd":"#5b21b6",fontSize:9,
-                      fontFamily:"Nunito_600SemiBold",textAlign:"center",lineHeight:13}}>
-                      🔒 Unlock to reveal{"\n"}hidden truths
-                    </Text>
-                  </View>
-                </>
-              ):(
-                <>
-                  <Badge type={badge}/>
-                  <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",lineHeight:15}}>{title}</Text>
-                  <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{desc}</Text>
-                </>
-              )}
-            </View>
-          </Animated.View>
-        ))}
-      </View>
-
-      {/* ── CTA Button ── */}
-      <Animated.View style={anim(14)}>
-        <ShineButton
-          colors={["#4f46e5","#7c3aed","#a855f7"]}
+      {/* ══ 5 ══ PRIMARY CTA ══════════════════════════════════════════════════ */}
+      <Animated.View style={av(5)}>
+        <ShineButton colors={["#4f46e5","#7c3aed","#a855f7"]}
           disabled={false} loading={false}
-          text="✨ Unlock Full Compatibility Report"
+          text="🔓 Reveal Your Complete Relationship Future"
           onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
         <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",
-          textAlign:"center",marginTop:8}}>
-          Add both kundlis above &amp; calculate to reveal all 12 sections
-        </Text>
+          textAlign:"center",marginTop:7}}>Add both kundlis above &amp; tap Calculate</Text>
+      </Animated.View>
+
+      {/* ══ 6 ══ SECTION: DEEP INSIGHTS ══════════════════════════════════════ */}
+      <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>
+      <SmallCard idx={7}  icon="🧠" col="#34d399" badge="premium"
+        title="Personality Match"
+        desc="Will your temperaments support or clash over time?"/>
+      <SmallCard idx={8}  icon="🌙" col="#a78bfa" locked
+        title="Soul & Karma"
+        desc="Is this a past-life connection or just attraction?"/>
+      <SmallCard idx={9}  icon="🔥" col="#f97316" badge="premium"
+        title="Intimacy Score"
+        desc="Physical & emotional bonding strength"/>
+
+      {/* ══ 10 ══ SECTION: ADVANCED ANALYSIS ════════════════════════════════ */}
+      <Animated.View style={av(10)}><SectionHead label="ADVANCED ANALYSIS" icon="🔯"/></Animated.View>
+      <SmallCard idx={11} icon="🔯" col="#fbbf24" badge="critical"
+        title="Dosha Engine"
+        desc="Mangal, Nadi & Bhakoot — deep conflict analysis"/>
+      <SmallCard idx={12} icon="🌑" col="#6366f1" locked
+        title="Negative Energy"
+        desc="Hidden doshas, evil eye & unseen planetary influences"/>
+      <SmallCard idx={13} icon="⚖️" col="#22c55e" badge="premium"
+        title="Strengths & Challenges"
+        desc="What will bring you closer — and what may break you"/>
+      <SmallCard idx={14} icon="🌿" col="#10b981" badge="premium"
+        title="Remedies & Advice"
+        desc="Exact puja, stones & mantras to fix your relationship"/>
+
+      {/* ══ 15 ══ SECTION: FUTURE INSIGHTS ══════════════════════════════════ */}
+      <Animated.View style={av(15)}><SectionHead label="FUTURE INSIGHTS" icon="📅"/></Animated.View>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
+        <FutureCard idx={16} icon="💍" label="Marriage Timing"     col="#a78bfa"/>
+        <FutureCard idx={16} icon="👶" label="Child Planning"      col="#34d399"/>
+        <FutureCard idx={16} icon="💰" label="Financial Compat"    col="#fbbf24"/>
+        <FutureCard idx={16} icon="🏠" label="Life Stability"      col="#818cf8"/>
+      </View>
+
+      {/* ══ 17 ══ SECTION: HIDDEN PREMIUM ════════════════════════════════════ */}
+      <Animated.View style={av(17)}>
+        <LinearGradient colors={C.isDark?["rgba(109,40,217,0.18)","rgba(79,7,120,0.12)"]:["rgba(245,243,255,0.9)","rgba(237,233,254,0.7)"]}
+          start={{x:0,y:0}} end={{x:1,y:0}}
+          style={{borderRadius:14,paddingHorizontal:14,paddingVertical:10,borderWidth:1,
+            borderColor:"rgba(192,132,252,0.3)",flexDirection:"row",alignItems:"center",gap:8}}>
+          <Text style={{fontSize:16}}>🔥</Text>
+          <View style={{flex:1}}>
+            <Text style={{color:C.isDark?"#f0abfc":"#7e22ce",fontSize:11,fontFamily:"Nunito_700Bold"}}>HIDDEN PREMIUM</Text>
+            <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",marginTop:1}}>Exclusive insights that most astrologers never reveal</Text>
+          </View>
+          <PipBadge type="secret"/>
+        </LinearGradient>
+      </Animated.View>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
+        <HiddenCard idx={18} icon="🔮" title="Karmic Relationship Check" desc="Are you meant to meet in this lifetime?"/>
+        <HiddenCard idx={19} icon="🌀" title="Past Life Connection"       desc="Spiritual bond from a previous birth"/>
+        <HiddenCard idx={20} icon="💔" title="Divorce / Separation Risk"  desc="Probability based on planetary conflict"/>
+        <HiddenCard idx={21} icon="🤝" title="Loyalty & Trust Index"      desc="Chances of betrayal or long-term loyalty"/>
+      </View>
+
+      {/* ══ 22 ══ BOTTOM CTA ══════════════════════════════════════════════════ */}
+      <Animated.View style={av(22)}>
+        <LinearGradient colors={C.isDark?["rgba(79,46,220,0.2)","rgba(109,40,217,0.1)"]:["rgba(238,242,255,0.9)","rgba(245,243,255,0.7)"]}
+          start={{x:0,y:0}} end={{x:1,y:1}}
+          style={{borderRadius:16,padding:16,borderWidth:1,borderColor:"rgba(139,92,246,0.25)",
+            alignItems:"center",gap:6}}>
+          <Text style={{fontSize:20}}>✨</Text>
+          <Text style={{color:C.isDark?"#c4b5fd":"#4c1d95",fontSize:13,fontFamily:"Nunito_700Bold",textAlign:"center"}}>
+            All 12 sections unlock instantly
+          </Text>
+          <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:15}}>
+            Add both kundlis and calculate — your complete relationship truth will be revealed
+          </Text>
+        </LinearGradient>
       </Animated.View>
 
     </View>

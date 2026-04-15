@@ -242,12 +242,17 @@ export default function ProfileEditScreen() {
     finally { clearTimeout(timer); setTzLoading(false); }
   }
 
+  const [savingStatus, setSavingStatus] = useState("");
+  const [isNetworkError, setIsNetworkError] = useState(false);
+
   async function handleSave() {
-    if (!f.name.trim())              { setError("Name is required."); return; }
+    if (!f.name.trim())                { setError("Name is required."); return; }
     if (!f.day || !f.month || !f.year) { setError("Please complete the birth date."); return; }
-    if (!f.hour || !f.minute)         { setError("Please enter the birth time."); return; }
-    if (!f.lat)                       { setError("Please search and select a valid location."); return; }
+    if (!f.hour || !f.minute)          { setError("Please enter the birth time."); return; }
+    if (!f.lat)                        { setError("Please search and select a valid location."); return; }
     setError("");
+    setIsNetworkError(false);
+    setSavingStatus("Calculating chart…");
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
@@ -257,7 +262,10 @@ export default function ProfileEditScreen() {
         hour: Number(f.hour), minute: Number(f.minute), ampm: f.ampm,
         place: f.place, lat: f.lat, lon: f.lon, tz: f.tz,
       };
+
+      setSavingStatus("Connecting to server…");
       const kundli = await fetchKundliFromAPI(birthData);
+      setSavingStatus("Saving profile…");
 
       if (isEdit && params.profileId) {
         updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
@@ -273,9 +281,20 @@ export default function ProfileEditScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
+      const msg = e instanceof Error ? e.message : "Chart calculation failed. Please try again.";
+      const isNet = msg.toLowerCase().includes("network") ||
+                    msg.toLowerCase().includes("timed out") ||
+                    msg.toLowerCase().includes("connection") ||
+                    msg.toLowerCase().includes("failed to fetch");
+      setIsNetworkError(isNet);
+      setError(
+        isNet
+          ? "Could not reach the server. Please check your internet connection and tap Try Again."
+          : msg
+      );
     } finally {
       setSaving(false);
+      setSavingStatus("");
     }
   }
 
@@ -475,25 +494,47 @@ export default function ProfileEditScreen() {
 
         {/* Error */}
         {!!error && (
-          <View style={s.errorBox}>
-            <Feather name="alert-circle" size={13} color="#f87171" />
-            <Text style={s.errorTxt}>{error}</Text>
+          <View style={[s.errorBox, isNetworkError && s.errorBoxNetwork]}>
+            <Feather name={isNetworkError ? "wifi-off" : "alert-circle"} size={13} color="#f87171" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.errorTxt}>{error}</Text>
+              {isNetworkError && (
+                <Text style={s.errorHint}>
+                  Tip: Make sure your phone has a stable internet connection (Wi-Fi recommended).
+                </Text>
+              )}
+            </View>
           </View>
         )}
 
-        {/* ── Save button ── */}
+        {/* Saving status */}
+        {saving && !!savingStatus && (
+          <View style={s.savingStatus}>
+            <ActivityIndicator size="small" color="#f59e0b" />
+            <Text style={[s.savingStatusTxt, { color: C.textMuted }]}>{savingStatus}</Text>
+          </View>
+        )}
+
+        {/* ── Save / Retry button ── */}
         <Pressable
           onPress={handleSave}
           disabled={saving}
           style={({ pressed }) => [{ opacity: saving ? 0.6 : pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
-            colors={["#d97706", "#f59e0b"]}
+            colors={isNetworkError ? ["#dc2626", "#ef4444"] : ["#d97706", "#f59e0b"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={s.saveBtn}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
+              : isNetworkError
+              ? (
+                <>
+                  <Feather name="refresh-cw" size={16} color="#fff" />
+                  <Text style={s.saveBtnTxt}>Try Again</Text>
+                </>
+              )
               : (
                 <>
                   <Feather name={isEdit ? "check" : "user-plus"} size={16} color="#fff" />
@@ -640,12 +681,24 @@ const s = StyleSheet.create({
 
   // Error
   errorBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
     backgroundColor: "rgba(248,113,113,0.07)",
     borderWidth: 1, borderColor: "rgba(248,113,113,0.2)",
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
   },
-  errorTxt: { color: "#f87171", fontSize: 13, fontFamily: F.medium, flex: 1 },
+  errorBoxNetwork: {
+    backgroundColor: "rgba(239,68,68,0.10)",
+    borderColor: "rgba(239,68,68,0.30)",
+  },
+  errorTxt:  { color: "#f87171", fontSize: 13, fontFamily: F.medium },
+  errorHint: { color: "#fca5a5", fontSize: 11, fontFamily: F.regular, marginTop: 4, lineHeight: 16 },
+
+  savingStatus: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 8, paddingHorizontal: 4,
+    justifyContent: "center",
+  },
+  savingStatusTxt: { fontSize: 12, fontFamily: F.medium },
 
   // Select button (tap-to-open picker)
   selectBtn: {

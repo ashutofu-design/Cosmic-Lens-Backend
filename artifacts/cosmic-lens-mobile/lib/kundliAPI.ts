@@ -4,13 +4,13 @@ const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
   : "";
 
-export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
+async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<KundliData> {
   const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${BASE_URL}/api/kundli`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       signal:  ctrl.signal,
       body:    JSON.stringify({
         name:   bd.name,
@@ -36,12 +36,40 @@ export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
     return { ...data, name: bd.name } as KundliData;
   } catch (e: unknown) {
     if (e instanceof Error && e.name === "AbortError") {
-      throw new Error("Request timed out. Please check your connection and try again.");
+      throw new Error("TIMEOUT");
     }
     throw e;
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
+  const TIMEOUTS  = [20_000, 28_000, 35_000]; // progressive timeouts per attempt
+  const MAX_TRIES = 3;
+  let lastErr: Error = new Error("Kundli calculation failed.");
+
+  for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+    try {
+      return await attemptKundliFetch(bd, TIMEOUTS[attempt]);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "TIMEOUT") {
+        lastErr = new Error(
+          attempt < MAX_TRIES - 1
+            ? "Request timed out — retrying…"
+            : "Connection timed out. Please check your internet and try again."
+        );
+      } else {
+        lastErr = e instanceof Error ? e : new Error(msg);
+      }
+      // Wait before retrying (0s, 1.5s, 3s)
+      if (attempt < MAX_TRIES - 1) {
+        await new Promise(r => setTimeout(r, attempt * 1500));
+      }
+    }
+  }
+  throw lastErr;
 }
 
 interface NominatimResult {

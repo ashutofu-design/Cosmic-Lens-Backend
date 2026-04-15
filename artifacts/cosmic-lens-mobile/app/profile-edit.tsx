@@ -27,10 +27,11 @@ const F = {
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const CY     = new Date().getFullYear();
-const DAYS_L = Array.from({ length: 31 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
-const YEARS_L= Array.from({ length: CY-1900+1 }, (_, i) => { const y=CY-i; return { label: String(y), value: String(y) }; });
-const HOURS_L= Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
-const MINS_L = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
+const DAYS_L  = Array.from({ length: 31 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
+const MONTHS_L= MONTHS.map((m, i) => ({ label: m, value: String(i+1) }));
+const YEARS_L = Array.from({ length: CY-1900+1 }, (_, i) => { const y=CY-i; return { label: String(y), value: String(y) }; });
+const HOURS_L = Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
+const MINS_L  = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -221,10 +222,11 @@ export default function ProfileEditScreen() {
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
 
-  const [dayOpen,  setDayOpen]  = useState(false);
-  const [yearOpen, setYearOpen] = useState(false);
-  const [hourOpen, setHourOpen] = useState(false);
-  const [minOpen,  setMinOpen]  = useState(false);
+  const [dayOpen,   setDayOpen]   = useState(false);
+  const [monthOpen, setMonthOpen] = useState(false);
+  const [yearOpen,  setYearOpen]  = useState(false);
+  const [hourOpen,  setHourOpen]  = useState(false);
+  const [minOpen,   setMinOpen]   = useState(false);
 
   const set = (key: keyof FormState) => (val: string) =>
     setF(prev => ({ ...prev, [key]: val }));
@@ -371,9 +373,9 @@ export default function ProfileEditScreen() {
 
         {/* ── DATE OF BIRTH ── */}
         <Section title="Birth Date" icon="calendar">
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {/* Day */}
-            <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {/* Day — 25% */}
+            <View style={{ flex: 25 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="DAY" />
                 <Pressable
@@ -383,12 +385,27 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, { color: f.day ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.day ? String(f.day).padStart(2,"0") : "DD"}
                   </Text>
-                  <Feather name="chevron-down" size={12} color={C.textMuted} />
+                  <Feather name="chevron-down" size={11} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
-            {/* Year */}
-            <View style={{ flex: 2 }}>
+            {/* Month — 35% */}
+            <View style={{ flex: 35 }}>
+              <View style={s.fieldWrap}>
+                <FieldLabel text="MONTH" />
+                <Pressable
+                  style={[s.selectBtn, { backgroundColor: C.isDark ? "#0F172A" : C.inputBg, borderColor: C.isDark ? "#334155" : C.border }]}
+                  onPress={() => { Haptics.selectionAsync(); setMonthOpen(true); }}
+                >
+                  <Text style={[s.selectBtnText, { color: f.month ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
+                    {f.month ? MONTHS[Number(f.month) - 1] : "Mon"}
+                  </Text>
+                  <Feather name="chevron-down" size={11} color={C.textMuted} />
+                </Pressable>
+              </View>
+            </View>
+            {/* Year — 40% */}
+            <View style={{ flex: 40 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="YEAR" />
                 <Pressable
@@ -398,27 +415,27 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, { color: f.year ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.year || "YYYY"}
                   </Text>
-                  <Feather name="chevron-down" size={12} color={C.textMuted} />
+                  <Feather name="chevron-down" size={11} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
           </View>
-          <MonthPicker value={f.month} onChange={set("month")} />
         </Section>
 
         {/* ── TIME OF BIRTH ── */}
         <Section title="Birth Time" icon="clock">
-          {/* Warning */}
+          {/* Warning strip */}
           <View style={s.infoBox}>
-            <Feather name="alert-triangle" size={14} color="#FFA500" />
-            <Text style={s.infoTxt}>
-              Birth time directly affects your Mahadasha — make sure to select AM/PM correctly
+            <Feather name="alert-triangle" size={12} color="#FFA500" />
+            <Text style={s.infoTxt} numberOfLines={1}>
+              Birth time affects Mahadasha — select AM/PM correctly
             </Text>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          {/* Hour + Minute + AM/PM — single row */}
+          <View style={{ flexDirection: "row", gap: 6 }}>
             {/* Hour */}
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 28 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="HOUR" />
                 <Pressable
@@ -428,12 +445,12 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, { color: f.hour ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.hour ? String(f.hour).padStart(2,"0") : "HH"}
                   </Text>
-                  <Feather name="chevron-down" size={12} color={C.textMuted} />
+                  <Feather name="chevron-down" size={11} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
             {/* Minute */}
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 28 }}>
               <View style={s.fieldWrap}>
                 <FieldLabel text="MIN" />
                 <Pressable
@@ -443,15 +460,17 @@ export default function ProfileEditScreen() {
                   <Text style={[s.selectBtnText, { color: f.minute !== "" ? (C.isDark ? "#E2E8F0" : C.text) : C.textDim }]}>
                     {f.minute !== "" ? String(f.minute).padStart(2,"0") : "MM"}
                   </Text>
-                  <Feather name="chevron-down" size={12} color={C.textMuted} />
+                  <Feather name="chevron-down" size={11} color={C.textMuted} />
                 </Pressable>
               </View>
             </View>
-          </View>
-
-          <View style={s.fieldWrap}>
-            <FieldLabel text="AM / PM" />
-            <AmPmToggle value={f.ampm} onChange={v => setF(prev => ({ ...prev, ampm: v }))} />
+            {/* AM / PM */}
+            <View style={{ flex: 44 }}>
+              <View style={s.fieldWrap}>
+                <FieldLabel text="AM / PM" />
+                <AmPmToggle value={f.ampm} onChange={v => setF(prev => ({ ...prev, ampm: v }))} />
+              </View>
+            </View>
           </View>
         </Section>
 
@@ -559,10 +578,11 @@ export default function ProfileEditScreen() {
       </ScrollView>
 
       {/* ── Pickers ── */}
-      <PickerModal visible={dayOpen}  title="Select Day"          items={DAYS_L}  selected={f.day}    onSelect={v => { setF(p=>({...p,day:v}));    setDayOpen(false);  }} onClose={() => setDayOpen(false)}  />
-      <PickerModal visible={yearOpen} title="Select Birth Year"   items={YEARS_L} selected={f.year}   onSelect={v => { setF(p=>({...p,year:v}));   setYearOpen(false); }} onClose={() => setYearOpen(false)} />
-      <PickerModal visible={hourOpen} title="Select Hour (1–12)"  items={HOURS_L} selected={f.hour}   onSelect={v => { setF(p=>({...p,hour:v}));   setHourOpen(false); }} onClose={() => setHourOpen(false)} />
-      <PickerModal visible={minOpen}  title="Select Minute (0–59)"items={MINS_L}  selected={f.minute} onSelect={v => { setF(p=>({...p,minute:v}));  setMinOpen(false);  }} onClose={() => setMinOpen(false)}  />
+      <PickerModal visible={dayOpen}   title="Select Day"           items={DAYS_L}   selected={f.day}    onSelect={v => { setF(p=>({...p,day:v}));    setDayOpen(false);   }} onClose={() => setDayOpen(false)}   />
+      <PickerModal visible={monthOpen} title="Select Month"          items={MONTHS_L} selected={f.month}  onSelect={v => { setF(p=>({...p,month:v}));  setMonthOpen(false); }} onClose={() => setMonthOpen(false)} />
+      <PickerModal visible={yearOpen}  title="Select Birth Year"     items={YEARS_L}  selected={f.year}   onSelect={v => { setF(p=>({...p,year:v}));   setYearOpen(false);  }} onClose={() => setYearOpen(false)}  />
+      <PickerModal visible={hourOpen}  title="Select Hour (1–12)"    items={HOURS_L}  selected={f.hour}   onSelect={v => { setF(p=>({...p,hour:v}));   setHourOpen(false);  }} onClose={() => setHourOpen(false)}  />
+      <PickerModal visible={minOpen}   title="Select Minute (0–59)"  items={MINS_L}   selected={f.minute} onSelect={v => { setF(p=>({...p,minute:v}));  setMinOpen(false);   }} onClose={() => setMinOpen(false)}   />
 
     </KeyboardAvoidingView>
     </View>
@@ -585,36 +605,36 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.3 },
   headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginTop: 1 },
 
-  scroll: { padding: 14, paddingBottom: 90, gap: 12 },
+  scroll: { padding: 12, paddingBottom: 90, gap: 10 },
 
   // Section block
   section: {
-    borderRadius: 16, overflow: "hidden",
+    borderRadius: 14, overflow: "hidden",
     borderWidth: 1,
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10, shadowRadius: 8, elevation: 3,
+    shadowOpacity: 0.08, shadowRadius: 6, elevation: 2,
   },
   sectionHeader: {
     flexDirection: "row", alignItems: "center", gap: 7,
-    paddingHorizontal: 14, paddingVertical: 10,
+    paddingHorizontal: 13, paddingVertical: 9,
     borderBottomWidth: 1,
   },
   sectionTitle: {
     fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.8,
   },
-  sectionBody: { padding: 13, gap: 12 },
+  sectionBody: { padding: 11, gap: 10 },
 
   // Field
-  fieldWrap: { gap: 5 },
+  fieldWrap: { gap: 4 },
   label: {
     fontSize: 9, fontFamily: F.bold, letterSpacing: 1.6,
   },
   inputRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 11, paddingVertical: 9,
+    paddingHorizontal: 10, paddingVertical: 8,
     gap: 7,
-    minHeight: 44,
+    minHeight: 42,
   },
   inputRowFocused: {
     shadowColor: "#6366F1", shadowOffset: { width: 0, height: 0 },
@@ -644,21 +664,21 @@ const s = StyleSheet.create({
   genderTxt: { fontSize: 12.5, fontFamily: F.semibold },
 
   // AM/PM
-  ampmRow: { flexDirection: "row", gap: 7 },
+  ampmRow: { flexDirection: "row", gap: 5 },
   ampmBtn: {
-    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
-    borderWidth: 1,
+    flex: 1, paddingVertical: 0, borderRadius: 9, alignItems: "center",
+    justifyContent: "center", borderWidth: 1, minHeight: 42,
   },
-  ampmTxt: { fontSize: 13, fontFamily: F.bold },
+  ampmTxt: { fontSize: 12.5, fontFamily: F.bold },
 
-  // Info box (warning) — compact single-line style
+  // Info box (warning) — compact single-line strip
   infoBox: {
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flexDirection: "row", alignItems: "center", gap: 7,
     backgroundColor: "rgba(255,165,0,0.08)",
     borderWidth: 1, borderColor: "rgba(255,165,0,0.35)",
-    borderRadius: 10, paddingHorizontal: 11, paddingVertical: 8,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
   },
-  infoTxt: { color: "#FFD580", fontSize: 11, fontFamily: F.medium, flex: 1, lineHeight: 15 },
+  infoTxt: { color: "#FFD580", fontSize: 10.5, fontFamily: F.medium, flex: 1, lineHeight: 14 },
 
   // Place search
   searchBtn: {
@@ -714,9 +734,9 @@ const s = StyleSheet.create({
   // Select button (tap-to-open picker)
   selectBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 11, paddingVertical: 9,
-    minHeight: 44,
+    borderRadius: 9, borderWidth: 1,
+    paddingHorizontal: 10, paddingVertical: 0,
+    minHeight: 42,
   },
   selectBtnText: {
     fontSize: 13.5, fontFamily: F.medium,

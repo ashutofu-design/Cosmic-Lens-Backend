@@ -96,14 +96,21 @@ export default function MyKundliScreen() {
         {kundliProfiles.map((profile) => {
           const k = profile.kundli!;
           const isPrimary = profile.id === primaryProfileId;
+          const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+          const astroLine = [k.moonSign, k.nakshatra, k.ascendant].filter(Boolean).join(" \u2022 ") || "—";
           return (
-            <View
+            <Pressable
               key={profile.id}
-              style={[s.card, { backgroundColor: C.bgCard, borderColor: isPrimary ? (C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)") : C.border }]}
+              onPress={() => handleView(profile.id)}
+              style={({ pressed }) => [s.card, {
+                backgroundColor: C.bgCard,
+                borderColor: isPrimary ? (C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)") : C.border,
+                opacity: pressed ? 0.85 : 1,
+              }]}
             >
               <View style={s.cardHeader}>
                 <LinearGradient
-                  colors={C.isDark ? ["#0ea5e9","#f59e0b"] : ["#7C3AED","#6D28D9"]}
+                  colors={isPrimary ? (C.isDark ? ["#f59e0b","#ef4444"] : ["#7C3AED","#6D28D9"]) : (C.isDark ? ["#0ea5e9","#f59e0b"] : ["#7C3AED","#a78bfa"])}
                   style={s.avatar}
                 >
                   <Text style={s.avatarText}>
@@ -113,76 +120,38 @@ export default function MyKundliScreen() {
 
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={{ color: C.text, fontSize: 14.5, fontFamily: F.bold }} numberOfLines={1}>{profile.name}</Text>
+                    <Text style={{ color: C.text, fontSize: 13.5, fontFamily: F.bold, flexShrink: 1 }} numberOfLines={1}>{profile.name}</Text>
                     {isPrimary && (
-                      <View style={[s.primaryBadge, { backgroundColor: "#16a34a" }]}>
-                        <Feather name="check-circle" size={8} color="#fff" />
-                        <Text style={{ color: "#fff", fontSize: 8, fontFamily: F.bold, letterSpacing: 0.8 }}>PRIMARY</Text>
+                      <View style={[s.primaryBadge, { backgroundColor: `${ac}15` }]}>
+                        <Feather name="star" size={7} color={ac} />
+                        <Text style={{ color: ac, fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>PRIMARY</Text>
                       </View>
                     )}
+                    {!isPrimary && profile.relation && profile.relation !== "Self" && (
+                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, borderWidth: 0.75, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>{profile.relation}</Text>
+                    )}
                   </View>
-                  {profile.relation && profile.relation !== "Self" && (
-                    <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium, marginTop: 1 }}>{profile.relation}</Text>
-                  )}
+                  <Text style={{ color: isPrimary ? (C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED") : C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }} numberOfLines={1}>{astroLine}</Text>
                 </View>
-                {!isPrimary && (
+
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Pressable
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setPrimaryProfile(profile.id); }}
+                    onPress={() => handleEdit(profile.id)}
                     hitSlop={6}
-                    style={({ pressed }) => [s.makePrimaryBtn, {
-                      borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)",
-                      backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-                      opacity: pressed ? 0.6 : 1,
-                    }]}
+                    style={({ pressed }) => [s.iconBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", opacity: pressed ? 0.6 : 1 }]}
                   >
-                    <Feather name="arrow-up-circle" size={10} color={C.textMuted} />
-                    <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.semibold, letterSpacing: 0.2 }}>Set as Primary</Text>
+                    <Feather name="edit-2" size={12} color={C.textMuted} />
                   </Pressable>
-                )}
+                  <Pressable
+                    onPress={() => handleDelete(profile.id)}
+                    hitSlop={6}
+                    style={({ pressed }) => [s.iconBtn, { backgroundColor: "rgba(239,68,68,0.06)", opacity: pressed ? 0.6 : 1 }]}
+                  >
+                    <Feather name="trash-2" size={12} color="#EF4444" />
+                  </Pressable>
+                </View>
               </View>
-
-              <View style={[s.infoStrip, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : C.bgCard2, borderColor: C.border }]}>
-                {[
-                  { label: "Rashi", value: k.moonSign ?? "—" },
-                  { label: "Nakshatra", value: k.nakshatra ?? "—" },
-                  { label: "Lagna", value: k.ascendant ?? "—" },
-                ].map((item, i) => (
-                  <React.Fragment key={i}>
-                    {i > 0 && <View style={{ width: 1, height: 20, backgroundColor: C.border }} />}
-                    <View style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ color: C.textDim, fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.8 }}>{item.label.toUpperCase()}</Text>
-                      <Text style={{ color: C.text, fontSize: 11.5, fontFamily: F.semibold, marginTop: 1 }} numberOfLines={1}>{item.value}</Text>
-                    </View>
-                  </React.Fragment>
-                ))}
-              </View>
-
-              <View style={s.actionRow}>
-                <Pressable
-                  onPress={() => handleView(profile.id)}
-                  style={({ pressed }) => [s.actionBtn, { backgroundColor: C.isDark ? "rgba(245,158,11,0.08)" : "rgba(124,58,237,0.06)", borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)", opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <Feather name="eye" size={13} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
-                  <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 11, fontFamily: F.semibold }}>View</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => handleEdit(profile.id)}
-                  style={({ pressed }) => [s.actionBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : C.bgCard2, borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <Feather name="edit-2" size={13} color={C.textMuted} />
-                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.semibold }}>Edit</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => handleDelete(profile.id)}
-                  style={({ pressed }) => [s.actionBtn, { backgroundColor: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.15)", opacity: pressed ? 0.7 : 1 }]}
-                >
-                  <Feather name="trash-2" size={13} color="#EF4444" />
-                  <Text style={{ color: "#EF4444", fontSize: 11, fontFamily: F.semibold }}>Delete</Text>
-                </Pressable>
-              </View>
-            </View>
+            </Pressable>
           );
         })}
 
@@ -249,38 +218,26 @@ const s = StyleSheet.create({
     borderRadius: 12, borderWidth: 1, marginTop: 6,
   },
   card: {
-    borderRadius: 16, borderWidth: 1, overflow: "hidden",
-    padding: 14, gap: 12,
+    borderRadius: 14, borderWidth: 1, overflow: "hidden",
+    paddingVertical: 10, paddingHorizontal: 12,
   },
   cardHeader: {
-    flexDirection: "row", alignItems: "center", gap: 12,
+    flexDirection: "row", alignItems: "center", gap: 10,
   },
   avatar: {
-    width: 42, height: 42, borderRadius: 21,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
   },
   avatarText: {
-    color: "#fff", fontSize: 15, fontFamily: F.bold,
+    color: "#fff", fontSize: 13, fontFamily: F.bold,
   },
   primaryBadge: {
     flexDirection: "row", alignItems: "center", gap: 3,
-    paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6,
+    paddingVertical: 2, paddingHorizontal: 6, borderRadius: 6,
   },
-  makePrimaryBtn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingVertical: 5, paddingHorizontal: 8,
-    borderRadius: 8, borderWidth: 1,
-  },
-  infoStrip: {
-    flexDirection: "row", alignItems: "center",
-    borderRadius: 10, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 4,
-  },
-  actionRow: {
-    flexDirection: "row", gap: 8,
-  },
-  actionBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 5, paddingVertical: 9, borderRadius: 10, borderWidth: 1,
+  iconBtn: {
+    width: 28, height: 28, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
   },
   addBtn: {
     flexDirection: "row", alignItems: "center", gap: 12,

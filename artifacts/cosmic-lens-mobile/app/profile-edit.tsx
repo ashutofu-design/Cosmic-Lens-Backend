@@ -104,83 +104,61 @@ function HeroCard({ profile, onView, onEdit }: {
   const k = profile.kundli;
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const rows = [
-    { label: "Rashi", value: k?.moonSign ?? "—", icon: "moon" },
-    { label: "Nakshatra", value: k?.nakshatra ?? "—", icon: "star" },
-    { label: "Lagna", value: k?.ascendant ?? "—", icon: "sunrise" },
-  ];
+  const [menuOpen, setMenuOpen] = useState(false);
+  const astroLine = [k?.moonSign, k?.nakshatra, k?.ascendant].filter(Boolean).join(" \u2022 ") || "—";
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <Pressable
-        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
+        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
         onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()}
         onPress={onView}
       >
-        <LinearGradient
-          colors={C.isDark ? ["#1A1D2E", "#0F1117"] : ["#F8F5FF", "#FFFFFF"]}
-          style={[hero.card, {
-            borderColor: C.isDark ? `${ac}30` : `${ac}25`,
-            shadowColor: ac,
-          }]}
-        >
-          <View style={hero.topRow}>
-            <LinearGradient colors={C.isDark ? ["#f59e0b", "#ef4444"] : ["#7C3AED", "#6D28D9"]} style={hero.avatar}>
-              <Text style={hero.avatarTxt}>{initials}</Text>
+        <View style={[card.wrap, {
+          backgroundColor: C.isDark ? "rgba(26,33,53,0.9)" : "#FFFFFF",
+          borderColor: C.isDark ? `${ac}25` : `${ac}18`,
+        }]}>
+          <View style={card.row}>
+            <LinearGradient colors={C.isDark ? ["#f59e0b", "#ef4444"] : ["#7C3AED", "#6D28D9"]} style={card.avatar}>
+              <Text style={card.avatarTxt}>{initials}</Text>
             </LinearGradient>
-            <View style={{ flex: 1, gap: 3 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text style={[hero.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
-                <View style={hero.badge}>
-                  <Feather name="star" size={8} color="#f59e0b" />
-                  <Text style={hero.badgeTxt}>PRIMARY</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+                <View style={[card.badge, { backgroundColor: `${ac}15` }]}>
+                  <Feather name="star" size={7} color={ac} />
+                  <Text style={[card.badgeTxt, { color: ac }]}>PRIMARY</Text>
                 </View>
               </View>
-              {profile.relation && profile.relation !== "Self" && (
-                <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{profile.relation}</Text>
-              )}
+              <Text style={[card.astro, { color: C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED" }]} numberOfLines={1}>{astroLine}</Text>
             </View>
-          </View>
-
-          <View style={[hero.astroWrap, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "rgba(124,58,237,0.03)", borderColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(124,58,237,0.08)" }]}>
-            {rows.map((r, i) => (
-              <View key={r.label} style={[hero.astroRowItem, i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={[hero.astroIcon, { backgroundColor: `${ac}15` }]}>
-                    <Feather name={r.icon as any} size={11} color={ac} />
-                  </View>
-                  <Text style={[hero.astroLabel, { color: C.textMuted }]}>{r.label}</Text>
-                </View>
-                <Text style={[hero.astroVal, { color: C.isDark ? "#facc15" : "#7C3AED" }]}>{r.value}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 10 }}>
             <Pressable
-              onPress={onView}
-              style={({ pressed }) => [hero.actionBtn, {
-                backgroundColor: C.isDark ? "rgba(14,165,233,0.1)" : "rgba(124,58,237,0.08)",
-                borderColor: C.isDark ? "rgba(14,165,233,0.22)" : "rgba(124,58,237,0.15)",
-                opacity: pressed ? 0.7 : 1,
-              }]}
+              onPress={() => { Haptics.selectionAsync(); setMenuOpen(!menuOpen); }}
+              hitSlop={10}
+              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}
             >
-              <Feather name="eye" size={13} color={C.isDark ? "#38bdf8" : "#7C3AED"} />
-              <Text style={{ color: C.isDark ? "#38bdf8" : "#7C3AED", fontSize: 12, fontFamily: F.semibold }}>View Kundli</Text>
-            </Pressable>
-            <Pressable
-              onPress={onEdit}
-              style={({ pressed }) => [hero.actionBtn, {
-                backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-                borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-                opacity: pressed ? 0.7 : 1,
-              }]}
-            >
-              <Feather name="edit-3" size={13} color={C.textMuted} />
-              <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold }}>Edit</Text>
+              <Feather name="more-vertical" size={15} color={C.textMuted} />
             </Pressable>
           </View>
-        </LinearGradient>
+
+          {menuOpen && (
+            <View style={[card.menuDrop, {
+              backgroundColor: C.isDark ? "#1E2340" : "#FFFFFF",
+              borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+              shadowColor: "#000",
+            }]}>
+              <Pressable onPress={() => { setMenuOpen(false); onView(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
+                <Feather name="eye" size={13} color={C.isDark ? "#38bdf8" : "#7C3AED"} />
+                <Text style={[card.menuTxt, { color: C.text }]}>View Kundli</Text>
+              </Pressable>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
+              <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
+                <Feather name="edit-3" size={13} color={ac} />
+                <Text style={[card.menuTxt, { color: C.text }]}>Edit Profile</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -196,72 +174,63 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
   const [menuOpen, setMenuOpen] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const astroLine = [k?.moonSign, k?.nakshatra, k?.ascendant].filter(Boolean).join(" \u2022 ") || "—";
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
       <Pressable
-        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
+        onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
         onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()}
         onPress={onView}
       >
-        <View style={[sec.card, {
+        <View style={[card.wrap, {
           backgroundColor: C.isDark ? "rgba(26,33,53,0.85)" : "#FFFFFF",
           borderColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
         }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <LinearGradient colors={C.isDark ? ["#0ea5e9", "#f59e0b"] : ["#7C3AED", "#a78bfa"]} style={sec.avatar}>
-              <Text style={sec.avatarTxt}>{initials}</Text>
+          <View style={card.row}>
+            <LinearGradient colors={C.isDark ? ["#0ea5e9", "#f59e0b"] : ["#7C3AED", "#a78bfa"]} style={card.avatar}>
+              <Text style={card.avatarTxt}>{initials}</Text>
             </LinearGradient>
             <View style={{ flex: 1 }}>
-              <Text style={[sec.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
-              {profile.relation && profile.relation !== "Self" && (
-                <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium, marginTop: 1 }}>{profile.relation}</Text>
-              )}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+                {profile.relation && profile.relation !== "Self" && (
+                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>{profile.relation}</Text>
+                )}
+              </View>
+              <Text style={[card.astro, { color: C.textMuted }]} numberOfLines={1}>{astroLine}</Text>
             </View>
             <Pressable
               onPress={() => { Haptics.selectionAsync(); setMenuOpen(!menuOpen); }}
               hitSlop={10}
-              style={[sec.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}
+              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}
             >
               <Feather name="more-vertical" size={15} color={C.textMuted} />
             </Pressable>
           </View>
 
           {menuOpen && (
-            <View style={[sec.menuDrop, {
+            <View style={[card.menuDrop, {
               backgroundColor: C.isDark ? "#1E2340" : "#FFFFFF",
               borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
               shadowColor: "#000",
             }]}>
-              <Pressable onPress={() => { setMenuOpen(false); onMakePrimary(); }} style={({ pressed }) => [sec.menuItem, pressed && { opacity: 0.6 }]}>
+              <Pressable onPress={() => { setMenuOpen(false); onMakePrimary(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="star" size={13} color="#f59e0b" />
-                <Text style={[sec.menuTxt, { color: C.text }]}>Set as Primary</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>Set as Primary</Text>
               </Pressable>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
-              <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [sec.menuItem, pressed && { opacity: 0.6 }]}>
+              <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="edit-3" size={13} color={ac} />
-                <Text style={[sec.menuTxt, { color: C.text }]}>Edit Profile</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>Edit Profile</Text>
               </Pressable>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
-              <Pressable onPress={() => { setMenuOpen(false); onDelete(); }} style={({ pressed }) => [sec.menuItem, pressed && { opacity: 0.6 }]}>
+              <Pressable onPress={() => { setMenuOpen(false); onDelete(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="trash-2" size={13} color="#f87171" />
-                <Text style={[sec.menuTxt, { color: "#f87171" }]}>Delete</Text>
+                <Text style={[card.menuTxt, { color: "#f87171" }]}>Delete</Text>
               </Pressable>
             </View>
           )}
-
-          <View style={{ gap: 0 }}>
-            {[
-              { label: "Rashi", value: k?.moonSign ?? "—" },
-              { label: "Nakshatra", value: k?.nakshatra ?? "—" },
-              { label: "Lagna", value: k?.ascendant ?? "—" },
-            ].map((r, i, arr) => (
-              <View key={r.label} style={[sec.dataRow, i < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" }]}>
-                <Text style={[sec.dataLabel, { color: C.textDim }]}>{r.label}</Text>
-                <Text style={[sec.dataVal, { color: C.text }]}>{r.value}</Text>
-              </View>
-            ))}
-          </View>
         </View>
       </Pressable>
     </Animated.View>
@@ -464,8 +433,8 @@ export default function ProfileEditScreen() {
           )}
 
           {familyMembers.length > 0 && (
-            <View style={{ gap: 4, marginTop: 6 }}>
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 4 }}>OTHER PROFILES</Text>
+            <View style={{ gap: 6, marginTop: 4 }}>
+              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 0 }}>OTHER PROFILES</Text>
               {familyMembers.map((p) => (
                 <SecondaryCard
                   key={p.id}
@@ -770,7 +739,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.4 },
   headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginLeft: 11 },
 
-  scroll: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 16, gap: 10 },
+  scroll: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 16, gap: 6 },
 
   fieldWrap: { gap: 5 },
   lbl: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.3 },
@@ -845,72 +814,41 @@ const s = StyleSheet.create({
 
 });
 
-const hero = StyleSheet.create({
-  card: {
-    borderRadius: 20, borderWidth: 1.5, padding: 18, gap: 16,
-    shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 8,
+const card = StyleSheet.create({
+  wrap: {
+    borderRadius: 14, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12,
   },
-  topRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: {
-    width: 50, height: 50, borderRadius: 25,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
   },
-  avatarTxt: { color: "#fff", fontSize: 19, fontFamily: F.bold },
-  name: { fontSize: 17, fontFamily: F.bold, flexShrink: 1 },
+  avatarTxt: { color: "#fff", fontSize: 13, fontFamily: F.bold },
+  name: { fontSize: 13.5, fontFamily: F.bold, flexShrink: 1 },
   badge: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(245,158,11,0.12)",
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
   },
-  badgeTxt: { color: "#f59e0b", fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.8 },
-  astroWrap: {
-    borderRadius: 14, borderWidth: 1, overflow: "hidden",
+  badgeTxt: { fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 },
+  relTag: {
+    fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5,
+    borderWidth: 0.75, borderRadius: 5,
+    paddingHorizontal: 5, paddingVertical: 1,
   },
-  astroRowItem: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingVertical: 11, paddingHorizontal: 14,
-  },
-  astroIcon: {
-    width: 26, height: 26, borderRadius: 8,
-    alignItems: "center", justifyContent: "center",
-  },
-  astroLabel: { fontSize: 11.5, fontFamily: F.semibold },
-  astroVal: { fontSize: 14, fontFamily: F.bold },
-  actionBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 7, paddingVertical: 11, borderRadius: 12, borderWidth: 1,
-  },
-});
-
-const sec = StyleSheet.create({
-  card: {
-    borderRadius: 16, borderWidth: 1, padding: 14, gap: 12,
-  },
-  avatar: {
-    width: 38, height: 38, borderRadius: 19,
-    alignItems: "center", justifyContent: "center",
-  },
-  avatarTxt: { color: "#fff", fontSize: 14, fontFamily: F.bold },
-  name: { fontSize: 14, fontFamily: F.bold },
+  astro: { fontSize: 11.5, fontFamily: F.medium, marginTop: 2 },
   menuBtn: {
-    width: 32, height: 32, borderRadius: 10,
+    width: 30, height: 30, borderRadius: 9,
     alignItems: "center", justifyContent: "center",
   },
   menuDrop: {
-    borderRadius: 14, borderWidth: 1, overflow: "hidden",
+    borderRadius: 12, borderWidth: 1, overflow: "hidden", marginTop: 6,
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
   },
   menuItem: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    paddingVertical: 12, paddingHorizontal: 16,
+    paddingVertical: 11, paddingHorizontal: 14,
   },
-  menuTxt: { fontSize: 13, fontFamily: F.semibold },
-  dataRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingVertical: 7, paddingHorizontal: 4,
-  },
-  dataLabel: { fontSize: 11, fontFamily: F.medium },
-  dataVal: { fontSize: 12.5, fontFamily: F.bold },
+  menuTxt: { fontSize: 12.5, fontFamily: F.semibold },
 });
 
 const fab = StyleSheet.create({

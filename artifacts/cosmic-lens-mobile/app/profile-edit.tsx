@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
 
 const BASE_URL = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -25,6 +26,11 @@ const F = {
 };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const CY     = new Date().getFullYear();
+const DAYS_L = Array.from({ length: 31 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
+const YEARS_L= Array.from({ length: CY-1900+1 }, (_, i) => { const y=CY-i; return { label: String(y), value: String(y) }; });
+const HOURS_L= Array.from({ length: 12 }, (_, i) => ({ label: String(i+1).padStart(2,"0"), value: String(i+1) }));
+const MINS_L = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -156,7 +162,7 @@ export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const params = useLocalSearchParams<{ mode?: string; profileId?: string; relation?: string }>();
-  const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId } = useUser();
+  const { profiles, addProfile, updateProfile, setBirthData, setKundli, primaryProfileId, syncKundliToCloud } = useUser();
 
   const isEdit  = params.mode === "edit" && !!params.profileId;
   const profile = isEdit ? profiles.find(p => p.id === params.profileId) : null;
@@ -185,6 +191,11 @@ export default function ProfileEditScreen() {
   const [tzLoading,  setTzLoading]  = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
+
+  const [dayOpen,  setDayOpen]  = useState(false);
+  const [yearOpen, setYearOpen] = useState(false);
+  const [hourOpen, setHourOpen] = useState(false);
+  const [minOpen,  setMinOpen]  = useState(false);
 
   const set = (key: keyof FormState) => (val: string) =>
     setF(prev => ({ ...prev, [key]: val }));
@@ -231,9 +242,14 @@ export default function ProfileEditScreen() {
 
       if (isEdit && params.profileId) {
         updateProfile(params.profileId, { name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
-        if (params.profileId === primaryProfileId) { setBirthData(birthData); setKundli(kundli); }
+        if (params.profileId === primaryProfileId) {
+          setBirthData(birthData); setKundli(kundli);
+          syncKundliToCloud(birthData, kundli).catch(() => {});
+        }
       } else {
         addProfile({ name: f.name.trim(), gender: f.gender, relation, birthData, kundli });
+        // Sync primary profile to cloud
+        if (!isEdit) syncKundliToCloud(birthData, kundli).catch(() => {});
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -257,9 +273,9 @@ export default function ProfileEditScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>
-            {isEdit ? "Profile Edit Karo" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation} ka Kundli`}
+            {isEdit ? "Edit Profile" : `${RELATION_EMOJIS[relation] ?? "👤"} ${relation}'s Kundli`}
           </Text>
-          <Text style={s.headerSub}>Sahi janm vivaran se accurate chart milega</Text>
+          <Text style={s.headerSub}>Accurate birth details ensure a precise chart</Text>
         </View>
       </View>
 
@@ -272,10 +288,10 @@ export default function ProfileEditScreen() {
         {/* ── PERSONAL INFO ── */}
         <Section title="Personal Info" icon="user">
           <Field
-            label="POORA NAAM"
+            label="FULL NAME"
             value={f.name}
             onChangeText={set("name")}
-            placeholder="Apna naam likhो"
+            placeholder="Enter full name"
             icon="user"
           />
 
@@ -298,25 +314,35 @@ export default function ProfileEditScreen() {
         {/* ── DATE OF BIRTH ── */}
         <Section title="Birth Date" icon="calendar">
           <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* Day */}
             <View style={{ flex: 1 }}>
-              <Field
-                label="DAY"
-                value={f.day}
-                onChangeText={set("day")}
-                placeholder="DD"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
+              <View style={s.fieldWrap}>
+                <FieldLabel text="DAY" />
+                <Pressable
+                  style={s.selectBtn}
+                  onPress={() => { Haptics.selectionAsync(); setDayOpen(true); }}
+                >
+                  <Text style={[s.selectBtnText, f.day ? s.selectBtnTextFilled : null]}>
+                    {f.day ? String(f.day).padStart(2,"0") : "DD"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#334155" />
+                </Pressable>
+              </View>
             </View>
+            {/* Year */}
             <View style={{ flex: 2 }}>
-              <Field
-                label="YEAR"
-                value={f.year}
-                onChangeText={set("year")}
-                placeholder="YYYY"
-                keyboardType="number-pad"
-                maxLength={4}
-              />
+              <View style={s.fieldWrap}>
+                <FieldLabel text="YEAR" />
+                <Pressable
+                  style={s.selectBtn}
+                  onPress={() => { Haptics.selectionAsync(); setYearOpen(true); }}
+                >
+                  <Text style={[s.selectBtnText, f.year ? s.selectBtnTextFilled : null]}>
+                    {f.year || "YYYY"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#334155" />
+                </Pressable>
+              </View>
             </View>
           </View>
           <MonthPicker value={f.month} onChange={set("month")} />
@@ -333,25 +359,35 @@ export default function ProfileEditScreen() {
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* Hour */}
             <View style={{ flex: 1 }}>
-              <Field
-                label="HOUR"
-                value={f.hour}
-                onChangeText={set("hour")}
-                placeholder="HH"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
+              <View style={s.fieldWrap}>
+                <FieldLabel text="HOUR" />
+                <Pressable
+                  style={s.selectBtn}
+                  onPress={() => { Haptics.selectionAsync(); setHourOpen(true); }}
+                >
+                  <Text style={[s.selectBtnText, f.hour ? s.selectBtnTextFilled : null]}>
+                    {f.hour ? String(f.hour).padStart(2,"0") : "HH"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#334155" />
+                </Pressable>
+              </View>
             </View>
+            {/* Minute */}
             <View style={{ flex: 1 }}>
-              <Field
-                label="MIN"
-                value={f.minute}
-                onChangeText={set("minute")}
-                placeholder="MM"
-                keyboardType="number-pad"
-                maxLength={2}
-              />
+              <View style={s.fieldWrap}>
+                <FieldLabel text="MIN" />
+                <Pressable
+                  style={s.selectBtn}
+                  onPress={() => { Haptics.selectionAsync(); setMinOpen(true); }}
+                >
+                  <Text style={[s.selectBtnText, f.minute ? s.selectBtnTextFilled : null]}>
+                    {f.minute !== "" ? String(f.minute).padStart(2,"0") : "MM"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#334155" />
+                </Pressable>
+              </View>
             </View>
           </View>
 
@@ -372,7 +408,7 @@ export default function ProfileEditScreen() {
                 value={placeQuery}
                 onChangeText={setPlaceQuery}
                 onSubmitEditing={handlePlaceSearch}
-                placeholder="Jaise: Mumbai, India"
+                placeholder="e.g. Mumbai, India"
                 placeholderTextColor="#1e3a5f"
                 returnKeyType="search"
               />
@@ -433,7 +469,7 @@ export default function ProfileEditScreen() {
               : (
                 <>
                   <Feather name={isEdit ? "check" : "user-plus"} size={16} color="#fff" />
-                  <Text style={s.saveBtnTxt}>{isEdit ? "Save Karo" : "Profile Banao"}</Text>
+                  <Text style={s.saveBtnTxt}>{isEdit ? "Save Changes" : "Create Profile"}</Text>
                 </>
               )
             }
@@ -441,6 +477,13 @@ export default function ProfileEditScreen() {
         </Pressable>
 
       </ScrollView>
+
+      {/* ── Pickers ── */}
+      <PickerModal visible={dayOpen}  title="Select Day"          items={DAYS_L}  selected={f.day}    onSelect={v => { setF(p=>({...p,day:v}));    setDayOpen(false);  }} onClose={() => setDayOpen(false)}  />
+      <PickerModal visible={yearOpen} title="Select Birth Year"   items={YEARS_L} selected={f.year}   onSelect={v => { setF(p=>({...p,year:v}));   setYearOpen(false); }} onClose={() => setYearOpen(false)} />
+      <PickerModal visible={hourOpen} title="Select Hour (1–12)"  items={HOURS_L} selected={f.hour}   onSelect={v => { setF(p=>({...p,hour:v}));   setHourOpen(false); }} onClose={() => setHourOpen(false)} />
+      <PickerModal visible={minOpen}  title="Select Minute (0–59)"items={MINS_L}  selected={f.minute} onSelect={v => { setF(p=>({...p,minute:v}));  setMinOpen(false);  }} onClose={() => setMinOpen(false)}  />
+
     </KeyboardAvoidingView>
   );
 }
@@ -592,6 +635,20 @@ const s = StyleSheet.create({
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
   },
   errorTxt: { color: "#f87171", fontSize: 13, fontFamily: F.medium, flex: 1 },
+
+  // Select button (tap-to-open picker)
+  selectBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "#071525",
+    borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 12, paddingVertical: 13,
+  },
+  selectBtnText: {
+    color: "#1e3a5f", fontSize: 14, fontFamily: F.medium,
+  },
+  selectBtnTextFilled: {
+    color: "#dde8f4",
+  },
 
   // Save button
   saveBtn: {

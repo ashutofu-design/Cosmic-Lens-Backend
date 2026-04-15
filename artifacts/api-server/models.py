@@ -11,23 +11,25 @@ from datetime import datetime
 class User(db.Model):
     __tablename__ = "users"
 
-    id         = db.Column(db.Integer, primary_key=True)
-    name       = db.Column(db.String(200), nullable=False, default="")
-    email      = db.Column(db.String(255), unique=True, nullable=False)
-    password   = db.Column(db.Text, nullable=True)
-    google_id  = db.Column(db.String(200), nullable=True)
-    is_pro     = db.Column(db.Boolean, default=False, nullable=False)
-    is_admin   = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    id          = db.Column(db.Integer, primary_key=True)
+    name        = db.Column(db.String(200), nullable=False, default="")
+    email       = db.Column(db.String(255), unique=True, nullable=False)
+    password    = db.Column(db.Text, nullable=True)
+    google_id   = db.Column(db.String(200), nullable=True)
+    api_key     = db.Column(db.String(64), unique=True, nullable=True)
+    is_pro      = db.Column(db.Boolean, default=False, nullable=False)
+    is_admin    = db.Column(db.Boolean, default=False, nullable=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
     last_active = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    kundli     = db.relationship("Kundli", backref="user", uselist=False, cascade="all, delete-orphan")
+    kundli = db.relationship("Kundli", backref="user", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self):
         return {
             "id":         self.id,
             "name":       self.name,
             "email":      self.email,
+            "api_key":    self.api_key,
             "is_pro":     self.is_pro,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

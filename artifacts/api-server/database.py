@@ -35,5 +35,22 @@ def init_db(app):
     db.init_app(app)
     with app.app_context():
         db.create_all()
+        # Safe migration: add api_key column if it doesn't exist
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                if "postgresql" in url:
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key VARCHAR(64) UNIQUE"
+                    ))
+                else:
+                    # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
+                    try:
+                        conn.execute(text("ALTER TABLE users ADD COLUMN api_key VARCHAR(64)"))
+                    except Exception:
+                        pass
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] Migration note: {e}")
     db_type = "PostgreSQL" if "postgresql" in url else "SQLite"
     print(f"[DB] Connected to {db_type}")

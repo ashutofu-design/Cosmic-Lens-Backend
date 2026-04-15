@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
@@ -12,6 +12,14 @@ export interface ProfileEntry {
   kundli: KundliData | null;
 }
 
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  api_key: string;
+  is_pro?: boolean;
+}
+
 type LangCode =
   | "en" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn"
   | "ml" | "pa" | "or" | "ur" | "as" | "mai" | "ne" | "kok"
@@ -19,7 +27,7 @@ type LangCode =
 
 // ── Context shape ────────────────────────────────────────────────────────────
 interface UserContextType {
-  user: { name: string; email: string } | null;
+  user: AuthUser | null;
 
   // Single-profile compat (derived from primary)
   birthData: BirthData | null;
@@ -40,11 +48,14 @@ interface UserContextType {
   setLanguage: (l: LangCode) => void;
   isIndia: boolean;
 
+  // Cloud sync
+  syncKundliToCloud: (bd: BirthData, k: KundliData) => Promise<void>;
+
   // Other
   todayEnergy: number | null;
   moonData: { longitude: number; rashiIndex: number } | null;
   isLoading: boolean;
-  setUser: (u: { name: string; email: string } | null) => void;
+  setUser: (u: AuthUser | null) => void;
   setTodayEnergy: (e: number | null) => void;
   setMoonData: (m: { longitude: number; rashiIndex: number } | null) => void;
   logout: () => void;
@@ -54,13 +65,14 @@ const UserContext = createContext<UserContextType | null>(null);
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 const KEYS = {
-  user:       "cl_user",
+  user:       "cl_user_v2",
   profiles:   "cl_profiles_v2",
   primaryId:  "cl_primaryId_v2",
   language:   "cl_language",
   // legacy keys (for migration)
   birthData:  "cl_birthData",
   kundli:     "cl_kundli",
+  legacyUser: "cl_user",
 };
 
 function uid() {
@@ -72,9 +84,11 @@ function isIndiaPlace(place: string) {
   return lower.includes("india") || lower.includes(", in") || lower.endsWith(",in");
 }
 
+const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user,        _setUser]        = useState<{ name: string; email: string } | null>(null);
+  const [user,        _setUser]        = useState<AuthUser | null>(null);
   const [profiles,    _setProfiles]    = useState<ProfileEntry[]>([]);
   const [primaryId,   _setPrimaryId]   = useState<string | null>(null);
   const [language,    _setLanguage]    = useState<LangCode>("en");
@@ -86,16 +100,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [u, ps, pid, lang, legacyBD, legacyK] = await Promise.all([
+        const [u, ps, pid, lang, legacyBD, legacyK, legacyUser] = await Promise.all([
           AsyncStorage.getItem(KEYS.user),
           AsyncStorage.getItem(KEYS.profiles),
           AsyncStorage.getItem(KEYS.primaryId),
           AsyncStorage.getItem(KEYS.language),
           AsyncStorage.getItem(KEYS.birthData),
           AsyncStorage.getItem(KEYS.kundli),
+          AsyncStorage.getItem(KEYS.legacyUser),
         ]);
 
-        if (u)    _setUser(JSON.parse(u));
+        // Load user — migrate legacy (name+email only) to new AuthUser format
+        if (u) {
+          _setUser(JSON.parse(u));
+        } else if (legacyUser) {
+          const old = JSON.parse(legacyUser);
+          // Old format only had name/email — treat as guest
+          if (!old.id) {
+            // just a guest, don't restore
+          }
+        }
+
         if (lang) _setLanguage(JSON.parse(lang));
 
         let loadedProfiles: ProfileEntry[] = [];
@@ -146,7 +171,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     _setProfiles(prev => {
       const pid = primaryId ?? prev[0]?.id ?? null;
       if (!pid) {
-        // Create first profile
         const entry: ProfileEntry = { id: uid(), name: d.name, gender: "", birthData: d, kundli: null };
         const next = [entry];
         AsyncStorage.setItem(KEYS.profiles, JSON.stringify(next)).catch(() => {});
@@ -193,7 +217,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     _setProfiles(prev => {
       const next = prev.filter(p => p.id !== id);
       AsyncStorage.setItem(KEYS.profiles, JSON.stringify(next)).catch(() => {});
-      // Reset primary if needed
       _setPrimaryId(prevId => {
         if (prevId !== id) return prevId;
         const fallback = next[0]?.id ?? null;
@@ -209,7 +232,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(KEYS.primaryId, id).catch(() => {});
   }, []);
 
-  const setUser = useCallback((u: { name: string; email: string } | null) => {
+  const setUser = useCallback((u: AuthUser | null) => {
     _setUser(u);
     if (u) AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
     else   AsyncStorage.removeItem(KEYS.user).catch(() => {});
@@ -223,6 +246,32 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setTodayEnergy = useCallback((e: number | null) => { _setTodayEnergy(e); }, []);
   const setMoonData    = useCallback((m: { longitude: number; rashiIndex: number } | null) => { _setMoonData(m); }, []);
 
+  // ── Cloud sync ─────────────────────────────────────────────────────────────
+  const userRef = useRef<AuthUser | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  const syncKundliToCloud = useCallback(async (bd: BirthData, k: KundliData) => {
+    const currentUser = userRef.current;
+    if (!currentUser?.id || !currentUser?.api_key) return;
+    const payload = {
+      name: bd.name,
+      dob:  `${String(bd.day).padStart(2,"0")}/${String(bd.month).padStart(2,"0")}/${bd.year}`,
+      tob:  `${String(bd.hour).padStart(2,"0")}:${String(bd.minute).padStart(2,"0")} ${bd.ampm}`,
+      pob:  bd.place,
+      lat:  bd.lat,
+      lon:  bd.lon,
+      tz:   bd.tz,
+      chart_data: k,
+    };
+    try {
+      await fetch(`${API_BASE}/api/user/${currentUser.id}/kundli`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": currentUser.api_key },
+        body: JSON.stringify(payload),
+      });
+    } catch { /* silent — local data is the source of truth */ }
+  }, []);
+
   const logout = useCallback(() => {
     _setUser(null); _setProfiles([]); _setPrimaryId(null);
     _setTodayEnergy(null); _setMoonData(null);
@@ -235,6 +284,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       profiles, primaryProfileId: primaryId,
       addProfile, updateProfile, deleteProfile, setPrimaryProfile,
       language, setLanguage, isIndia,
+      syncKundliToCloud,
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,
     }}>

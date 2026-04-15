@@ -2,12 +2,10 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+import PickerModal from "@/components/PickerModal";
 
 import { useUser } from "@/context/UserContext";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
@@ -27,10 +26,18 @@ const MONTHS = [
   "July","August","September","October","November","December",
 ];
 
+const currentYear = new Date().getFullYear();
+const DAYS   = Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1).padStart(2,"0"), value: String(i + 1) }));
+const YEARS  = Array.from({ length: currentYear - 1900 + 1 }, (_, i) => {
+  const y = currentYear - i; return { label: String(y), value: String(y) };
+});
+const HOURS  = Array.from({ length: 12 }, (_, i) => ({ label: String(i + 1).padStart(2,"0"), value: String(i + 1) }));
+const MINS   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart(2,"0"), value: String(i) }));
+
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { setBirthData, setKundli } = useUser();
+  const { setBirthData, setKundli, syncKundliToCloud } = useUser();
 
   const [name,    setName]    = useState("");
   const [day,     setDay]     = useState("");
@@ -51,7 +58,11 @@ export default function OnboardingScreen() {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
 
+  const [dayPickerOpen,   setDayPickerOpen]   = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [yearPickerOpen,  setYearPickerOpen]  = useState(false);
+  const [hourPickerOpen,  setHourPickerOpen]  = useState(false);
+  const [minPickerOpen,   setMinPickerOpen]   = useState(false);
   const [ampmPickerOpen,  setAmpmPickerOpen]  = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -104,6 +115,7 @@ export default function OnboardingScreen() {
       const kundli = await fetchKundliFromAPI(bd);
       setBirthData(bd);
       setKundli(kundli);
+      syncKundliToCloud(bd, kundli).catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (e: unknown) {
@@ -186,16 +198,15 @@ export default function OnboardingScreen() {
               {/* Day */}
               <View style={[s.dateCell, { flex: 1 }]}>
                 <Text style={s.dateLabel}>Day</Text>
-                <TextInput
-                  style={s.dateInput}
-                  placeholder="DD"
-                  placeholderTextColor="#334155"
-                  value={day}
-                  onChangeText={setDay}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  textAlign="center"
-                />
+                <Pressable
+                  style={s.datePickerBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDayPickerOpen(true); }}
+                >
+                  <Text style={[s.datePickerText, { color: day ? "#e2e8f0" : "#334155" }]}>
+                    {day ? String(day).padStart(2,"0") : "DD"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#475569" />
+                </Pressable>
               </View>
 
               {/* Month */}
@@ -213,18 +224,17 @@ export default function OnboardingScreen() {
               </View>
 
               {/* Year */}
-              <View style={[s.dateCell, { flex: 1.5 }]}>
-                <Text style={s.dateLabel}>Birth Year</Text>
-                <TextInput
-                  style={s.dateInput}
-                  placeholder="YYYY"
-                  placeholderTextColor="#334155"
-                  value={year}
-                  onChangeText={setYear}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  textAlign="center"
-                />
+              <View style={[s.dateCell, { flex: 1.8 }]}>
+                <Text style={s.dateLabel}>Year</Text>
+                <Pressable
+                  style={s.datePickerBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setYearPickerOpen(true); }}
+                >
+                  <Text style={[s.datePickerText, { color: year ? "#e2e8f0" : "#334155" }]}>
+                    {year || "YYYY"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#475569" />
+                </Pressable>
               </View>
             </View>
           </View>
@@ -249,29 +259,27 @@ export default function OnboardingScreen() {
             <View style={s.dateRow}>
               <View style={[s.dateCell, { flex: 1 }]}>
                 <Text style={s.dateLabel}>Hour</Text>
-                <TextInput
-                  style={s.dateInput}
-                  placeholder="HH"
-                  placeholderTextColor="#334155"
-                  value={hour}
-                  onChangeText={setHour}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  textAlign="center"
-                />
+                <Pressable
+                  style={s.datePickerBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHourPickerOpen(true); }}
+                >
+                  <Text style={[s.datePickerText, { color: hour ? "#e2e8f0" : "#334155" }]}>
+                    {hour ? String(hour).padStart(2,"0") : "HH"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#475569" />
+                </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
                 <Text style={s.dateLabel}>Minute</Text>
-                <TextInput
-                  style={s.dateInput}
-                  placeholder="MM"
-                  placeholderTextColor="#334155"
-                  value={minute}
-                  onChangeText={setMinute}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  textAlign="center"
-                />
+                <Pressable
+                  style={s.datePickerBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMinPickerOpen(true); }}
+                >
+                  <Text style={[s.datePickerText, { color: minute ? "#e2e8f0" : "#334155" }]}>
+                    {minute !== "" ? String(minute).padStart(2,"0") : "MM"}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color="#475569" />
+                </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
                 <Text style={s.dateLabel}>AM / PM</Text>
@@ -394,6 +402,16 @@ export default function OnboardingScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* ── Day Picker ────────────────────────────────────────────────── */}
+      <PickerModal
+        visible={dayPickerOpen}
+        title="Select Day"
+        items={DAYS}
+        selected={day}
+        onSelect={v => { setDay(v); setDayPickerOpen(false); }}
+        onClose={() => setDayPickerOpen(false)}
+      />
+
       {/* ── Month Picker Modal ─────────────────────────────────────────── */}
       <PickerModal
         visible={monthPickerOpen}
@@ -404,58 +422,49 @@ export default function OnboardingScreen() {
         onClose={() => setMonthPickerOpen(false)}
       />
 
+      {/* ── Year Picker ───────────────────────────────────────────────── */}
+      <PickerModal
+        visible={yearPickerOpen}
+        title="Select Birth Year"
+        items={YEARS}
+        selected={year}
+        onSelect={v => { setYear(v); setYearPickerOpen(false); }}
+        onClose={() => setYearPickerOpen(false)}
+      />
+
+      {/* ── Hour Picker ───────────────────────────────────────────────── */}
+      <PickerModal
+        visible={hourPickerOpen}
+        title="Select Hour (1–12)"
+        items={HOURS}
+        selected={hour}
+        onSelect={v => { setHour(v); setHourPickerOpen(false); }}
+        onClose={() => setHourPickerOpen(false)}
+      />
+
+      {/* ── Minute Picker ─────────────────────────────────────────────── */}
+      <PickerModal
+        visible={minPickerOpen}
+        title="Select Minute (0–59)"
+        items={MINS}
+        selected={minute}
+        onSelect={v => { setMinute(v); setMinPickerOpen(false); }}
+        onClose={() => setMinPickerOpen(false)}
+      />
+
       {/* ── AM/PM Picker Modal ────────────────────────────────────────── */}
       <PickerModal
         visible={ampmPickerOpen}
         title="AM or PM?"
-        items={[{ label: "AM — Morning (Midnight to Noon)", value: "AM" }, { label: "PM — Evening (After Noon)", value: "PM" }]}
+        items={[
+          { label: "AM — Morning  (Midnight to Noon)", value: "AM" },
+          { label: "PM — Evening  (Noon to Midnight)", value: "PM" },
+        ]}
         selected={ampm}
         onSelect={v => { setAmpm(v as "AM"|"PM"); setAmpmPickerOpen(false); }}
         onClose={() => setAmpmPickerOpen(false)}
       />
     </View>
-  );
-}
-
-// ── Picker Modal ──────────────────────────────────────────────────────────────
-function PickerModal({
-  visible, title, items, selected, onSelect, onClose,
-}: {
-  visible: boolean;
-  title: string;
-  items: { label: string; value: string }[];
-  selected: string;
-  onSelect: (v: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={pm.overlay} onPress={onClose} />
-      <View style={pm.sheet}>
-        <View style={pm.handle} />
-        <Text style={pm.title}>{title}</Text>
-        <FlatList
-          data={items}
-          keyExtractor={i => i.value}
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [
-                pm.item,
-                item.value === selected && pm.itemSel,
-                pressed && { opacity: 0.7 },
-              ]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSelect(item.value); }}
-            >
-              <Text style={[pm.itemText, item.value === selected && pm.itemTextSel]}>
-                {item.label}
-              </Text>
-              {item.value === selected && <Feather name="check" size={14} color="#00c6ff" />}
-            </Pressable>
-          )}
-          style={{ maxHeight: 360 }}
-        />
-      </View>
-    </Modal>
   );
 }
 
@@ -580,21 +589,3 @@ const s = StyleSheet.create({
   trustText: { color: "#1e3a5f", fontSize: 11, textAlign: "center", lineHeight: 16, flex: 1 },
 });
 
-const pm = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)" },
-  sheet: {
-    backgroundColor: "#071525",
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 20, paddingBottom: 44, paddingTop: 16,
-    borderTopWidth: 1, borderColor: "rgba(0,200,255,0.12)",
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: "#0f2540", alignSelf: "center", marginBottom: 16,
-  },
-  title:        { color: "#64748b", fontSize: 14, fontWeight: "700", marginBottom: 12, letterSpacing: 0.3 },
-  item:         { paddingVertical: 15, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#0a1828" },
-  itemSel:      { backgroundColor: "rgba(0,198,255,0.06)" },
-  itemText:     { color: "#475569", fontSize: 15 },
-  itemTextSel:  { color: "#00c6ff", fontWeight: "700" },
-});

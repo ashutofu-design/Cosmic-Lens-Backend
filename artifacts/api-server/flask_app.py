@@ -11,6 +11,7 @@ DATABASE SETUP (portable):
 
 import os
 import sys
+import secrets
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -70,7 +71,11 @@ def signup():
     if User.query.filter_by(email=email).first():
         return jsonify({"error": "An account with this email already exists"}), 409
 
-    user = User(name=name, email=email, password=generate_password_hash(pwd))
+    user = User(
+        name=name, email=email,
+        password=generate_password_hash(pwd),
+        api_key=secrets.token_hex(32),
+    )
     db.session.add(user)
     db.session.commit()
     return jsonify(user.to_dict()), 201
@@ -88,6 +93,10 @@ def login():
     user = User.query.filter_by(email=email).first()
     if not user or not user.password or not check_password_hash(user.password, pwd):
         return jsonify({"error": "Invalid email or password"}), 401
+
+    # Generate api_key if user doesn't have one (backfill)
+    if not user.api_key:
+        user.api_key = secrets.token_hex(32)
 
     user.last_active = datetime.utcnow()
     db.session.commit()
@@ -131,25 +140,43 @@ def google_login():
         return jsonify(user.to_dict()), 201
 
 
+# ── API key auth helper ────────────────────────────────────────────────────────
+
+def get_authed_user(user_id: int):
+    """Validate X-API-Key header for a given user_id. Returns (user, error_response)."""
+    api_key = request.headers.get("X-API-Key", "").strip()
+    user    = User.query.get(user_id)
+    if not user:
+        return None, (jsonify({"error": "User not found"}), 404)
+    if not api_key or user.api_key != api_key:
+        return None, (jsonify({"error": "Unauthorized — invalid API key"}), 401)
+    return user, None
+
+
 # ── Kundli save/load routes ────────────────────────────────────────────────────
 
 @app.route("/api/user/<int:user_id>/kundli", methods=["GET"])
 def get_user_kundli(user_id):
     """Get saved kundli for a user."""
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    user, err = get_authed_user(user_id)
+    if err: return err
     if not user.kundli:
         return jsonify({"kundli": None})
-    return jsonify({"kundli": user.kundli.to_dict()})
+    # Return full chart_data too so the app can restore the chart
+    import json
+    k = user.kundli
+    d = k.to_dict()
+    if k.chart_data:
+        try: d["chart_data"] = json.loads(k.chart_data)
+        except Exception: pass
+    return jsonify({"kundli": d})
 
 
 @app.route("/api/user/<int:user_id>/kundli", methods=["POST"])
 def save_user_kundli(user_id):
     """Save or update kundli for a user."""
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    user, err = get_authed_user(user_id)
+    if err: return err
 
     data = request.get_json(force=True, silent=True) or {}
     import json
@@ -171,7 +198,7 @@ def save_user_kundli(user_id):
     k.updated_at = datetime.utcnow()
 
     db.session.commit()
-    return jsonify({"success": True, "kundli": k.to_dict()})
+    return jsonify({"success": True})
 
 
 # ── Admin routes ────────────────────────────────────────────────────────────────

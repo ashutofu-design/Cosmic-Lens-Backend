@@ -78,7 +78,7 @@ function Field({
     <View style={s.fieldWrap}>
       <FieldLabel text={label} />
       <View style={[s.inputRow, focused && s.inputRowFocused]}>
-        {icon && <Feather name={icon} size={15} color={focused ? "#00d4ff" : "#334155"} style={{ marginRight: 4 }} />}
+        {icon && <Feather name={icon} size={15} color={focused ? "#f59e0b" : "#334155"} style={{ marginRight: 4 }} />}
         <TextInput
           style={s.input}
           value={value}
@@ -142,7 +142,7 @@ function Section({ title, icon, children }: {
   return (
     <View style={s.section}>
       <View style={s.sectionHeader}>
-        <Feather name={icon} size={13} color="#00d4ff" />
+        <Feather name={icon} size={13} color="#f59e0b" />
         <Text style={s.sectionTitle}>{title}</Text>
       </View>
       <View style={s.sectionBody}>
@@ -414,7 +414,7 @@ export default function ProfileEditScreen() {
               />
               <Pressable onPress={handlePlaceSearch} style={s.searchBtn}>
                 {searching
-                  ? <ActivityIndicator size="small" color="#00d4ff" />
+                  ? <ActivityIndicator size="small" color="#f59e0b" />
                   : <Text style={s.searchBtnTxt}>Search</Text>
                 }
               </Pressable>
@@ -440,7 +440,7 @@ export default function ProfileEditScreen() {
             <View style={s.selectedPlace}>
               <Feather name="check-circle" size={13} color="#00a86b" />
               <Text style={s.selectedPlaceTxt} numberOfLines={1}>{f.place}</Text>
-              {tzLoading && <ActivityIndicator size="small" color="#00d4ff" style={{ marginLeft: 4 }} />}
+              {tzLoading && <ActivityIndicator size="small" color="#f59e0b" style={{ marginLeft: 4 }} />}
             </View>
           )}
         </Section>
@@ -460,7 +460,7 @@ export default function ProfileEditScreen() {
           style={({ pressed }) => [{ opacity: (saving || tzLoading) ? 0.6 : pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
-            colors={["#0284c7", "#00d4ff"]}
+            colors={["#d97706", "#f59e0b"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={s.saveBtn}
           >
@@ -519,7 +519,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
   },
   sectionTitle: {
-    color: "#00d4ff", fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
+    color: "#f59e0b", fontSize: 10, fontFamily: F.bold, letterSpacing: 2,
   },
   sectionBody: { padding: 16, gap: 16 },
 
@@ -536,7 +536,7 @@ const s = StyleSheet.create({
     gap: 8,
   },
   inputRowFocused: {
-    borderColor: "rgba(0,212,255,0.3)",
+    borderColor: "rgba(245,158,11,0.3)",
     backgroundColor: "#071e32",
   },
   input: {
@@ -553,11 +553,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
   },
   monthChipActive: {
-    backgroundColor: "rgba(0,212,255,0.1)",
-    borderColor: "rgba(0,212,255,0.35)",
+    backgroundColor: "rgba(245,158,11,0.1)",
+    borderColor: "rgba(245,158,11,0.35)",
   },
   monthTxt:       { color: "#334155", fontSize: 12, fontFamily: F.semibold },
-  monthTxtActive: { color: "#00d4ff" },
+  monthTxtActive: { color: "#f59e0b" },
 
   // Gender chips
   genderChip: {
@@ -566,11 +566,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
   },
   genderChipActive: {
-    backgroundColor: "rgba(0,212,255,0.1)",
-    borderColor: "rgba(0,212,255,0.35)",
+    backgroundColor: "rgba(245,158,11,0.1)",
+    borderColor: "rgba(245,158,11,0.35)",
   },
   genderTxt:       { color: "#334155", fontSize: 13, fontFamily: F.semibold },
-  genderTxtActive: { color: "#00d4ff" },
+  genderTxtActive: { color: "#f59e0b" },
 
   // AM/PM
   ampmRow: { flexDirection: "row", gap: 8 },
@@ -580,11 +580,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
   },
   ampmBtnActive: {
-    backgroundColor: "rgba(0,212,255,0.1)",
-    borderColor: "rgba(0,212,255,0.35)",
+    backgroundColor: "rgba(245,158,11,0.1)",
+    borderColor: "rgba(245,158,11,0.35)",
   },
   ampmTxt:       { color: "#334155", fontSize: 14, fontFamily: F.bold },
-  ampmTxtActive: { color: "#00d4ff" },
+  ampmTxtActive: { color: "#f59e0b" },
 
   // Info box (warning)
   infoBox: {
@@ -598,10 +598,10 @@ const s = StyleSheet.create({
   // Place search
   searchBtn: {
     paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: "rgba(0,212,255,0.1)",
-    borderRadius: 8, borderWidth: 1, borderColor: "rgba(0,212,255,0.3)",
+    backgroundColor: "rgba(245,158,11,0.1)",
+    borderRadius: 8, borderWidth: 1, borderColor: "rgba(245,158,11,0.3)",
   },
-  searchBtnTxt: { color: "#00d4ff", fontSize: 12, fontFamily: F.bold },
+  searchBtnTxt: { color: "#f59e0b", fontSize: 12, fontFamily: F.bold },
 
   // Geo results
   geoList: {

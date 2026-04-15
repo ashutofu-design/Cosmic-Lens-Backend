@@ -530,9 +530,9 @@ const d = StyleSheet.create({
   remedyRow: { flexDirection:"row", alignItems:"flex-start", gap:10 },
   remedyBullet: {
     width:20, height:20, borderRadius:10,
-    backgroundColor:"rgba(0,212,255,0.1)",
+    backgroundColor:"rgba(245,158,11,0.1)",
     alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1,
   },
-  remedyNum:  { color:"#00d4ff", fontSize:10, fontWeight:"700" },
+  remedyNum:  { color:"#f59e0b", fontSize:10, fontWeight:"700" },
   remedyText: { color:"#475569", fontSize:12, lineHeight:18, flex:1 },
 });

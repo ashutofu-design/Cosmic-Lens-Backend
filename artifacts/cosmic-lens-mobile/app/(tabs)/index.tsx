@@ -210,7 +210,7 @@ export default function HomeScreen() {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
           style={styles.forecastPill}
         >
-          <Feather name="calendar" size={11} color="#00d4ff" />
+          <Feather name="calendar" size={11} color="#f59e0b" />
           <Text style={styles.forecastPillText}>7 Days</Text>
         </Pressable>
       </Animated.View>
@@ -636,12 +636,12 @@ const styles = StyleSheet.create({
   },
   forecastPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "rgba(0,212,255,0.07)", borderWidth: 1,
-    borderColor: "rgba(0,212,255,0.22)", borderRadius: 20,
+    backgroundColor: "rgba(245,158,11,0.07)", borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.22)", borderRadius: 20,
     paddingVertical: 7, paddingHorizontal: 11,
   },
   forecastPillText: {
-    color: "#00d4ff", fontSize: 11, fontFamily: F.bold,
+    color: "#f59e0b", fontSize: 11, fontFamily: F.bold,
   },
 });
 
@@ -650,7 +650,7 @@ const hero = StyleSheet.create({
   card: {
     backgroundColor: "#040e1e", borderRadius: 18, borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)", padding: 14, overflow: "hidden",
-    shadowColor: "#00d4ff", shadowOffset: { width: 0, height: 0 },
+    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.1, shadowRadius: 18, elevation: 5,
   },
   glow: {

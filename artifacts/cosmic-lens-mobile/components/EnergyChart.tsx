@@ -130,7 +130,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
             <Stop offset="0%"   stopColor="#ff3b3b" />
             <Stop offset="25%"  stopColor="#ff8c00" />
             <Stop offset="45%"  stopColor="#ffd700" />
-            <Stop offset="60%"  stopColor="#00d4ff" />
+            <Stop offset="60%"  stopColor="#f59e0b" />
             <Stop offset="100%" stopColor="#00ff99" />
           </LinearGradient>
           <LinearGradient id="af" x1="0" y1={PT} x2="0" y2={BOT} gradientUnits="userSpaceOnUse">

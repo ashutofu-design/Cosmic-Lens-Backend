@@ -39,9 +39,9 @@ const ROOMS: VastuRoom[] = [
     nameHindi:"मुख्य द्वार",
     emoji:"🚪",
     idealDir:"North, East, or North-East (NE) — Best Directions",
-    color:"#00d4ff",
-    bg:"rgba(0,212,255,0.05)",
-    border:"rgba(0,212,255,0.2)",
+    color:"#f59e0b",
+    bg:"rgba(245,158,11,0.05)",
+    border:"rgba(245,158,11,0.2)",
     element:"Vaayu",
     elementIcon:"🌬️",
     importance:"The main door is the gateway for positive energy and prosperity. Its direction is the most important Vastu factor for the entire home.",
@@ -286,7 +286,7 @@ const ROOMS: VastuRoom[] = [
 ];
 
 const COMPASS_DIRS = [
-  { short:"N",  label:"Uttar",   color:"#00d4ff" },
+  { short:"N",  label:"Uttar",   color:"#f59e0b" },
   { short:"NE", label:"Ishaan",  color:"#a78bfa" },
   { short:"E",  label:"Poorv",   color:"#fbbf24" },
   { short:"SE", label:"Agni",    color:"#f97316" },
@@ -485,13 +485,13 @@ const s = StyleSheet.create({
   title:   { color:"#dde8f4", fontSize:17, fontWeight:"800" },
   titleHindi: { color:"#3d5a7a", fontSize:10, marginTop:1 },
   content: { paddingHorizontal:16, gap:12, paddingTop:14 },
-  sectionLabel: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#00d4ff", marginBottom:2 },
+  sectionLabel: { fontSize:10, fontWeight:"800", letterSpacing:2.5, color:"#f59e0b", marginBottom:2 },
   sectionSub:   { color:"#1e3a5f", fontSize:11, marginBottom:4, marginTop:-6 },
 
   introCard: {
     flexDirection:"row", alignItems:"flex-start", gap:12,
-    backgroundColor:"rgba(0,212,255,0.04)", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.15)", padding:14,
+    backgroundColor:"rgba(245,158,11,0.04)", borderRadius:14,
+    borderWidth:1, borderColor:"rgba(245,158,11,0.15)", padding:14,
   },
   introTitle: { color:"#dde8f4", fontSize:13, fontWeight:"700", marginBottom:5 },
   introBody:  { color:"#475569", fontSize:12, lineHeight:19 },

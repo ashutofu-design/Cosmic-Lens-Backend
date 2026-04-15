@@ -41,9 +41,9 @@ const RASHIS_HI = [
 const PLANET_HUE: Record<string,string> = {
   Sun:"#f59e0b", Moon:"#94a3b8", Mars:"#ef4444", Mercury:"#10b981",
   Jupiter:"#facc15", Venus:"#ec4899", Saturn:"#a78bfa",
-  Rahu:"#00d4ff", Ketu:"#fb923c",
+  Rahu:"#f59e0b", Ketu:"#fb923c",
 };
-const hue = (p: string) => PLANET_HUE[p] ?? "#00d4ff";
+const hue = (p: string) => PLANET_HUE[p] ?? "#f59e0b";
 function formatDate(d: Date | string) {
   const dt = new Date(d);
   return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
@@ -279,7 +279,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
         <View style={{flexDirection:"row",gap:6}}>
           {PLANETS.map(p => {
             const sel = p===selPlanet;
-            const color = p==="SAV" ? "#00d4ff" : hue(p);
+            const color = p==="SAV" ? "#f59e0b" : hue(p);
             return (
               <Pressable key={p} onPress={()=>{setSelPlanet(p);Haptics.selectionAsync();}}
                 style={[t.planetBtn, sel && {backgroundColor:`${color}15`,borderColor:`${color}40`}]}>
@@ -384,8 +384,8 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
       </View>
 
       <View style={{flexDirection:"row",alignItems:"center",gap:8,
-        backgroundColor:"rgba(0,212,255,0.06)",borderRadius:10,padding:10,
-        borderWidth:1,borderColor:"rgba(0,212,255,0.15)"}}>
+        backgroundColor:"rgba(245,158,11,0.06)",borderRadius:10,padding:10,
+        borderWidth:1,borderColor:"rgba(245,158,11,0.15)"}}>
         <Text style={{fontSize:16}}>🌙</Text>
         <View>
           <Text style={{color:"#3d5a7a",fontSize:9,fontWeight:"800",letterSpacing:1.5}}>CHANDRA NAKSHATRA (BASE)</Text>
@@ -445,7 +445,7 @@ const KARAKA_DEFS = [
   { key:"MK",  name:"Matrakaraka",   nameHindi:"मातृकारक",   desc:"Mata, griha sukh, emotions",          color:"#94a3b8" },
   { key:"PK",  name:"Putrakaraka",   nameHindi:"पुत्रकारक",  desc:"Santaan, creativity, intelligence",   color:"#ec4899" },
   { key:"GK",  name:"Gnatikaraka",   nameHindi:"ज्ञातिकारक", desc:"Karyasthali, shatru, competition",    color:"#a78bfa" },
-  { key:"DK",  name:"Darakaraka",    nameHindi:"दारकारक",    desc:"Life partner, vivah, relationships",  color:"#00d4ff" },
+  { key:"DK",  name:"Darakaraka",    nameHindi:"दारकारक",    desc:"Life partner, vivah, relationships",  color:"#f59e0b" },
 ];
 
 function computeChara(kundli: KundliData) {
@@ -574,7 +574,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
       </View>
 
       {moonRashi && (
-        <View style={[t.infoBox,{borderColor:"rgba(0,212,255,0.2)"}]}>
+        <View style={[t.infoBox,{borderColor:"rgba(245,158,11,0.2)"}]}>
           <Text style={{color:"#3d5a7a",fontSize:9,fontWeight:"800",letterSpacing:1.5}}>LIVE — CHANDRA TRANSIT (API)</Text>
           <Text style={{color:"#dde8f4",fontSize:14,fontWeight:"700",marginTop:4}}>
             {moonRashi.name} · Bhav {((moonRashi.index - ascRashi + 12)%12)+1}
@@ -583,7 +583,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
         </View>
       )}
 
-      <Text style={{color:"#00d4ff",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
+      <Text style={{color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>GRAHA TRANSIT (AAJKAL)</Text>
       <View style={{gap:8}}>
         {CORE.map(name => {
           const lon     = transits[name] ?? 0;
@@ -686,12 +686,12 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         </Text>
       </View>
 
-      <Text style={{color:"#00d4ff",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
+      <Text style={{color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5}}>STAR-LORD · SUB-LORD · SUB-SUB-LORD</Text>
 
       <View style={{gap:8}}>
         {kpData.map(({ name, lon, kp }) => {
           const isAsc = name === "Ascendant";
-          const pHue  = isAsc ? "#00d4ff" : hue(name);
+          const pHue  = isAsc ? "#f59e0b" : hue(name);
           return (
             <View key={name} style={[t.kpRow,{borderColor:`${pHue}20`}]}>
               <View style={[t.kpIcon,{backgroundColor:`${pHue}12`}]}>
@@ -795,7 +795,7 @@ export default function KundliScreen() {
     return (
       <View style={[s.root,{paddingTop:topPad+20,paddingBottom:botPad+80,backgroundColor:C.bg}]}>
         <View style={s.emptyWrap}>
-          <View style={s.emptyIcon}><Feather name="star" size={32} color="#00d4ff"/></View>
+          <View style={s.emptyIcon}><Feather name="star" size={32} color="#f59e0b"/></View>
           <Text style={s.emptyTitle}>No Kundli Found</Text>
           <Text style={s.emptySub}>
             Enter your birth details — Dasha Timeline, Ashtakavarga, Navatara, Jaimini, KP all will be shown
@@ -915,26 +915,26 @@ const s = StyleSheet.create({
   content: { paddingHorizontal:16, gap:16 },
 
   emptyWrap: { flex:1, alignItems:"center", paddingHorizontal:24, gap:14, paddingTop:60 },
-  emptyIcon: { width:80,height:80,borderRadius:40,backgroundColor:"rgba(0,198,255,0.07)",borderWidth:1,borderColor:"rgba(0,198,255,0.25)",alignItems:"center",justifyContent:"center" },
+  emptyIcon: { width:80,height:80,borderRadius:40,backgroundColor:"rgba(139,92,246,0.07)",borderWidth:1,borderColor:"rgba(139,92,246,0.25)",alignItems:"center",justifyContent:"center" },
   emptyTitle: { color:"#dde8f4",fontSize:20,fontWeight:"700",textAlign:"center" },
   emptySub:   { color:"#3d5a7a",fontSize:13,lineHeight:20,textAlign:"center" },
-  emptyBtn: { flexDirection:"row",alignItems:"center",gap:8,backgroundColor:"#00c6ff",paddingVertical:13,paddingHorizontal:24,borderRadius:14,marginTop:4 },
+  emptyBtn: { flexDirection:"row",alignItems:"center",gap:8,backgroundColor:"#a78bfa",paddingVertical:13,paddingHorizontal:24,borderRadius:14,marginTop:4 },
   emptyBtnText: { color:"#020d1a",fontWeight:"800",fontSize:14 },
 
   chartBtnRow: { flexDirection:"row",gap:8 },
   chartBtn: { paddingVertical:9,paddingHorizontal:13,borderRadius:11,borderWidth:1.5,backgroundColor:"#0f172a",borderColor:"#1e293b" },
-  chartBtnActive: { backgroundColor:"rgba(0,212,255,0.1)",borderColor:"rgba(0,212,255,0.45)" },
+  chartBtnActive: { backgroundColor:"rgba(245,158,11,0.1)",borderColor:"rgba(245,158,11,0.45)" },
   chartBtnGold: { borderColor:"rgba(250,204,21,0.4)" },
   chartBtnText:       { color:"#4b5563",fontSize:11,fontWeight:"700",letterSpacing:0.5 },
-  chartBtnTextActive: { color:"#00d4ff" },
+  chartBtnTextActive: { color:"#f59e0b" },
   chartBtnTextGold:   { color:"#facc15" },
 
-  snapshotCard: { backgroundColor:"rgba(0,212,255,0.04)",borderRadius:16,borderWidth:1,borderColor:"rgba(255,255,255,0.08)",padding:14,gap:0 },
+  snapshotCard: { backgroundColor:"rgba(245,158,11,0.04)",borderRadius:16,borderWidth:1,borderColor:"rgba(255,255,255,0.08)",padding:14,gap:0 },
   snapshotRow:  { flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",paddingVertical:8,borderBottomWidth:1,borderBottomColor:"#0a1828" },
   snapshotLabel: { color:"#4b5563",fontSize:10,fontWeight:"700",letterSpacing:0.8,flex:1 },
   snapshotValue: { color:"#ffffff",fontSize:12,fontWeight:"500",flex:1,textAlign:"right" },
 
-  sectionTitle: { color:"#00d4ff",fontSize:10,fontWeight:"800",letterSpacing:2.5 },
+  sectionTitle: { color:"#f59e0b",fontSize:10,fontWeight:"800",letterSpacing:2.5 },
 
   planetBtn: {
     flexDirection:"row", alignItems:"center", justifyContent:"space-between",
@@ -974,7 +974,7 @@ const s = StyleSheet.create({
 // Shared tab styles
 const t = StyleSheet.create({
   infoBox: { backgroundColor:"rgba(255,255,255,0.02)",borderRadius:12,borderWidth:1,borderColor:"rgba(255,255,255,0.06)",padding:12,gap:5 },
-  infoTitle: { color:"#00d4ff",fontSize:12,fontWeight:"700" },
+  infoTitle: { color:"#f59e0b",fontSize:12,fontWeight:"700" },
   infoBody:  { color:"#475569",fontSize:12,lineHeight:19 },
 
   // Ashtakavarga

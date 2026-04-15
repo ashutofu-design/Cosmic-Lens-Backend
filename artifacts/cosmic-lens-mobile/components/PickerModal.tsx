@@ -66,7 +66,7 @@ export default function PickerModal({
                   {item.label}
                 </Text>
                 {active && (
-                  <Feather name="check" size={15} color="#00d4ff" />
+                  <Feather name="check" size={15} color="#f59e0b" />
                 )}
               </Pressable>
             );
@@ -112,7 +112,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)",
   },
   itemActive: {
-    backgroundColor: "rgba(0,212,255,0.07)",
+    backgroundColor: "rgba(245,158,11,0.07)",
   },
   itemText: {
     color: "#64748b", fontSize: 15, fontFamily: "Nunito_500Medium",

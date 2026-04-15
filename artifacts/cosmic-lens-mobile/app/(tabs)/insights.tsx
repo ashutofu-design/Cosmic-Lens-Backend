@@ -27,7 +27,7 @@ import {
 type Category = "career" | "relationship" | "finance" | "health";
 
 const CATEGORIES: { key: Category; label: string; icon: string; color: string }[] = [
-  { key: "career",       label: "Career",       icon: "💼", color: "#00d4ff" },
+  { key: "career",       label: "Career",       icon: "💼", color: "#f59e0b" },
   { key: "relationship", label: "Rishte",        icon: "💞", color: "#ec4899" },
   { key: "finance",      label: "Dhan",          icon: "💰", color: "#4ade80" },
   { key: "health",       label: "Swasthya",      icon: "🌿", color: "#fbbf24" },
@@ -36,7 +36,7 @@ const CATEGORIES: { key: Category; label: string; icon: string; color: string }[
 const PLANET_CLR: Record<string, string> = {
   Sun:"#f59e0b", Moon:"#94a3b8", Mars:"#ef4444", Mercury:"#10b981",
   Jupiter:"#facc15", Venus:"#ec4899", Saturn:"#a78bfa",
-  Rahu:"#00d4ff", Ketu:"#fb923c",
+  Rahu:"#f59e0b", Ketu:"#fb923c",
 };
 
 function formatDate(d: Date | null): string {
@@ -245,7 +245,7 @@ export default function InsightsScreen() {
             {[
               { lbl: "MD", planet: displayInsight.mdPlanet, clr: "#4b6a86" },
               { lbl: "AD", planet: displayInsight.adPlanet, clr: "#7c6ed4" },
-              { lbl: "PD", planet: displayInsight.pdPlanet, clr: "#00d4ff" },
+              { lbl: "PD", planet: displayInsight.pdPlanet, clr: "#f59e0b" },
             ].map((d, i) => (
               <React.Fragment key={d.lbl}>
                 <View style={s.dashaItem}>
@@ -327,7 +327,7 @@ export default function InsightsScreen() {
           <Text style={s.sectionTitle}>Upcoming Pratyantardasha</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pdRow}>
             {displayInsight.upcomingPDs.map((pd, i) => {
-              const clr = PLANET_CLR[pd.planet] ?? "#00d4ff";
+              const clr = PLANET_CLR[pd.planet] ?? "#f59e0b";
               const isActive = i === 0;
               return (
                 <View key={i} style={[s.pdChip, { borderColor: `${clr}44`, backgroundColor: `${clr}10` }, isActive && { borderColor: clr }]}>

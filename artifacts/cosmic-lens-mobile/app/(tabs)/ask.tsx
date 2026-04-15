@@ -132,7 +132,7 @@ export default function AskScreen() {
         )}
         <View style={[s.bubbleInner, isUser ? s.bubbleInnerUser : s.bubbleInnerAssistant]}>
           {item.loading ? (
-            <ActivityIndicator size="small" color="#00d4ff" />
+            <ActivityIndicator size="small" color="#f59e0b" />
           ) : (
             <Text style={[s.bubbleText, isUser ? s.bubbleTextUser : s.bubbleTextAssist]}>
               {item.text}
@@ -248,7 +248,7 @@ const s = StyleSheet.create({
 
   avatar: {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: "rgba(0,212,255,0.12)", borderWidth: 1, borderColor: "rgba(0,212,255,0.2)",
+    backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1, borderColor: "rgba(245,158,11,0.2)",
     alignItems: "center", justifyContent: "center",
     alignSelf: "flex-end",
   },
@@ -273,9 +273,9 @@ const s = StyleSheet.create({
   },
   starter: {
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(0,212,255,0.15)",
+    backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(245,158,11,0.15)",
   },
-  starterText: { color: "#00d4ff", fontSize: 12 },
+  starterText: { color: "#f59e0b", fontSize: 12 },
 
   inputRow: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,

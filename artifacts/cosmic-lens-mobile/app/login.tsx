@@ -28,13 +28,13 @@ export default function LoginScreen() {
   const C = useC();
   const { setUser } = useUser();
 
-  const [tab,       setTab]       = useState<Tab>("login");
-  const [name,      setName]      = useState("");
-  const [email,     setEmail]     = useState("");
-  const [password,  setPassword]  = useState("");
-  const [showPwd,   setShowPwd]   = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState("");
+  const [tab,      setTab]      = useState<Tab>("login");
+  const [name,     setName]     = useState("");
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd,  setShowPwd]  = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState("");
 
   const emailRef    = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -100,11 +100,17 @@ export default function LoginScreen() {
     Haptics.selectionAsync();
   }
 
+  const isDark = C.isDark;
+
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Ambient glow */}
+      {/* Ambient glow — purple mist */}
       <View style={[s.glowWrap, { pointerEvents: "none" }]}>
-        <View style={s.glowCircle} />
+        <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(139,92,246,0.10)" : "rgba(139,92,246,0.06)" }]} />
+      </View>
+      {/* Gold mist bottom */}
+      <View style={[s.glowWrap2, { pointerEvents: "none" }]}>
+        <View style={[s.glowCircle, { backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(245,158,11,0.04)", borderRadius: 160 }]} />
       </View>
 
       <KeyboardAvoidingView
@@ -119,32 +125,36 @@ export default function LoginScreen() {
         >
           {/* ── Logo ── */}
           <View style={s.logoWrap}>
-            <View style={s.logoCircle}>
+            <View style={[s.logoCircle, {
+              backgroundColor: isDark ? "#1a1330" : "#f3ebff",
+              borderColor: "rgba(245,158,11,0.45)",
+              shadowColor: "#f59e0b",
+            }]}>
               <Svg width={36} height={36} viewBox="0 0 38 38" fill="none">
                 <Defs>
                   <RadialGradient id="rg1" cx="35%" cy="35%" r="65%">
-                    <Stop offset="0%" stopColor="#00c6ff" stopOpacity="0.9" />
-                    <Stop offset="100%" stopColor="#0a3a5c" />
+                    <Stop offset="0%" stopColor="#f59e0b" stopOpacity="0.95" />
+                    <Stop offset="100%" stopColor="#7c3aed" />
                   </RadialGradient>
                 </Defs>
-                <Circle cx={19} cy={19} r={17} stroke="#00c6ff" strokeWidth={1} strokeOpacity={0.45} strokeDasharray="4 3" />
+                <Circle cx={19} cy={19} r={17} stroke="#f59e0b" strokeWidth={1} strokeOpacity={0.4} strokeDasharray="4 3" />
                 <Circle cx={19} cy={19} r={7}  fill="url(#rg1)" />
-                <Ellipse cx={19} cy={19} rx={13} ry={4} stroke="#00c6ff" strokeWidth={1} strokeOpacity={0.65} fill="none" />
-                <Circle cx={7}  cy={9}  r={1}   fill="#00d4ff" opacity={0.8} />
-                <Circle cx={31} cy={9}  r={0.7} fill="#00d4ff" opacity={0.6} />
-                <Circle cx={5}  cy={27} r={0.7} fill="#00d4ff" opacity={0.5} />
-                <Circle cx={33} cy={26} r={1}   fill="#00d4ff" opacity={0.7} />
+                <Ellipse cx={19} cy={19} rx={13} ry={4} stroke="#a78bfa" strokeWidth={1} strokeOpacity={0.7} fill="none" />
+                <Circle cx={7}  cy={9}  r={1}   fill="#f59e0b" opacity={0.8} />
+                <Circle cx={31} cy={9}  r={0.7} fill="#f59e0b" opacity={0.6} />
+                <Circle cx={5}  cy={27} r={0.7} fill="#a78bfa" opacity={0.6} />
+                <Circle cx={33} cy={26} r={1}   fill="#f59e0b" opacity={0.7} />
               </Svg>
             </View>
-            <Text style={s.title}>Cosmic Lens</Text>
-            <Text style={s.subtitle}>Your personal Vedic astrology guide</Text>
+            <Text style={[s.title, { color: C.text }]}>Cosmic Lens</Text>
+            <Text style={[s.subtitle, { color: C.textMuted }]}>Your personal Vedic astrology guide</Text>
           </View>
 
           {/* ── Tab switcher ── */}
-          <View style={s.tabs}>
+          <View style={[s.tabs, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             {(["login", "signup"] as Tab[]).map(t => (
               <Pressable key={t} onPress={() => switchTab(t)} style={[s.tab, tab === t && s.tabActive]}>
-                <Text style={[s.tabText, tab === t && s.tabTextActive]}>
+                <Text style={[s.tabText, { color: tab === t ? "#f59e0b" : C.textMuted }]}>
                   {t === "login" ? "Log In" : "Create Account"}
                 </Text>
               </Pressable>
@@ -152,12 +162,12 @@ export default function LoginScreen() {
           </View>
 
           {/* ── Card ── */}
-          <View style={s.card}>
+          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border2 }]}>
 
             {/* Name (signup only) */}
             {tab === "signup" && (
               <View style={s.fieldWrap}>
-                <Text style={s.fieldLabel}>YOUR NAME</Text>
+                <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>YOUR NAME</Text>
                 <FieldInput
                   icon="user"
                   value={name}
@@ -166,13 +176,15 @@ export default function LoginScreen() {
                   returnKeyType="next"
                   onSubmitEditing={() => emailRef.current?.focus()}
                   autoCapitalize="words"
+                  isDark={isDark}
+                  inputBg={C.inputBg}
                 />
               </View>
             )}
 
             {/* Email */}
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>EMAIL ADDRESS</Text>
+              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>EMAIL ADDRESS</Text>
               <FieldInput
                 ref={emailRef}
                 icon="mail"
@@ -183,12 +195,14 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 returnKeyType="next"
                 onSubmitEditing={() => passwordRef.current?.focus()}
+                isDark={isDark}
+                inputBg={C.inputBg}
               />
             </View>
 
             {/* Password */}
             <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>PASSWORD</Text>
+              <Text style={[s.fieldLabel, { color: "rgba(245,158,11,0.85)" }]}>PASSWORD</Text>
               <FieldInput
                 ref={passwordRef}
                 icon="lock"
@@ -200,6 +214,8 @@ export default function LoginScreen() {
                 onSubmitEditing={handleSubmit}
                 rightIcon={showPwd ? "eye-off" : "eye"}
                 onRightIconPress={() => setShowPwd(p => !p)}
+                isDark={isDark}
+                inputBg={C.inputBg}
               />
             </View>
 
@@ -218,7 +234,7 @@ export default function LoginScreen() {
               style={({ pressed }) => [{ opacity: loading ? 0.75 : pressed ? 0.85 : 1 }]}
             >
               <LinearGradient
-                colors={["#006aff", "#00c6ff"]}
+                colors={["#7c3aed", "#f59e0b"]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={s.ctaBtn}
               >
@@ -239,29 +255,29 @@ export default function LoginScreen() {
 
           {/* ── Guest continue ── */}
           <View style={s.guestWrap}>
-            <View style={s.divider}>
-              <View style={s.divLine} />
-              <Text style={s.divText}>or</Text>
-              <View style={s.divLine} />
+            <View style={[s.divider]}>
+              <View style={[s.divLine, { backgroundColor: C.border }]} />
+              <Text style={[s.divText, { color: C.textMuted }]}>or</Text>
+              <View style={[s.divLine, { backgroundColor: C.border }]} />
             </View>
             <Pressable
               onPress={handleGuestContinue}
-              style={({ pressed }) => [s.guestBtn, pressed && { opacity: 0.7 }]}
+              style={({ pressed }) => [s.guestBtn, { borderColor: C.border2, backgroundColor: C.bgCard }, pressed && { opacity: 0.7 }]}
             >
-              <Feather name="arrow-right" size={14} color="#475569" />
-              <Text style={s.guestText}>Continue without account</Text>
+              <Feather name="arrow-right" size={14} color={C.textMuted} />
+              <Text style={[s.guestText, { color: C.textMuted }]}>Continue without account</Text>
             </Pressable>
-            <Text style={s.guestCaption}>
+            <Text style={[s.guestCaption, { color: C.textDim }]}>
               Your charts will be saved locally on this device only
             </Text>
           </View>
 
           {/* Footer */}
-          <Text style={s.footer}>
+          <Text style={[s.footer, { color: C.textMuted }]}>
             By continuing, you agree to our{" "}
-            <Text style={{ color: "#00d4ff" }}>Terms of Service</Text>
+            <Text style={{ color: "#f59e0b" }}>Terms of Service</Text>
             {" "}and{" "}
-            <Text style={{ color: "#00d4ff" }}>Privacy Policy</Text>
+            <Text style={{ color: "#f59e0b" }}>Privacy Policy</Text>
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -282,19 +298,24 @@ interface FieldInputProps {
   secureTextEntry?: boolean;
   rightIcon?: React.ComponentProps<typeof Feather>["name"];
   onRightIconPress?: () => void;
-  ref?: React.RefObject<TextInput>;
+  isDark: boolean;
+  inputBg: string;
 }
 
 const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
-  ({ icon, rightIcon, onRightIconPress, ...props }, ref) => {
+  ({ icon, rightIcon, onRightIconPress, isDark, inputBg, ...props }, ref) => {
     const [focused, setFocused] = useState(false);
     return (
-      <View style={[fi.row, focused && fi.rowFocused]}>
-        <Feather name={icon} size={16} color={focused ? "#00c6ff" : "#334155"} />
+      <View style={[
+        fi.row,
+        { backgroundColor: inputBg },
+        focused ? fi.rowFocused : { borderColor: isDark ? "rgba(139,92,246,0.18)" : "rgba(109,40,217,0.13)" },
+      ]}>
+        <Feather name={icon} size={16} color={focused ? "#f59e0b" : (isDark ? "#7c6fa0" : "#9f7aea")} />
         <TextInput
           ref={ref}
-          style={fi.input}
-          placeholderTextColor="#1e3a5f"
+          style={[fi.input, { color: isDark ? "#f0e6ff" : "#1e0a3c" }]}
+          placeholderTextColor={isDark ? "#3d2b6b" : "#b39ddb"}
           autoCorrect={false}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -302,7 +323,7 @@ const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
         />
         {rightIcon && (
           <Pressable onPress={onRightIconPress} hitSlop={10}>
-            <Feather name={rightIcon} size={16} color="#334155" />
+            <Feather name={rightIcon} size={16} color={isDark ? "#7c6fa0" : "#9f7aea"} />
           </Pressable>
         )}
       </View>
@@ -313,16 +334,14 @@ const FieldInput = React.forwardRef<TextInput, FieldInputProps>(
 const fi = StyleSheet.create({
   row: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: "#071525",
-    borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+    borderRadius: 12, borderWidth: 1,
     paddingHorizontal: 14, paddingVertical: 13,
   },
   rowFocused: {
-    borderColor: "rgba(0,212,255,0.35)",
-    backgroundColor: "#071e32",
+    borderColor: "rgba(245,158,11,0.45)",
   },
   input: {
-    flex: 1, color: "#dde8f4", fontSize: 14,
+    flex: 1, fontSize: 14,
     fontFamily: "Nunito_500Medium",
     padding: 0, margin: 0,
   },
@@ -330,64 +349,64 @@ const fi = StyleSheet.create({
 
 const s = StyleSheet.create({
   root: { flex: 1 },
+
   glowWrap: {
-    position: "absolute", top: -60, left: "50%", marginLeft: -160,
+    position: "absolute", top: -80, left: "50%", marginLeft: -160,
     width: 320, height: 320, zIndex: 0,
   },
-  glowCircle: {
-    width: 320, height: 320, borderRadius: 160,
-    backgroundColor: "rgba(0,198,255,0.07)",
+  glowWrap2: {
+    position: "absolute", bottom: 0, right: -80,
+    width: 320, height: 320, zIndex: 0,
   },
+  glowCircle: { width: 320, height: 320, borderRadius: 160 },
+
   scroll: { paddingHorizontal: 20, alignItems: "center" },
 
   // Logo
   logoWrap: { alignItems: "center", marginBottom: 24, gap: 10 },
   logoCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: "#041424",
-    borderWidth: 1.5, borderColor: "rgba(0,198,255,0.35)",
+    width: 76, height: 76, borderRadius: 38,
+    borderWidth: 1.5,
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.22, shadowRadius: 20, elevation: 8,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
   title: {
     fontSize: 26, fontFamily: "Nunito_700Bold",
-    letterSpacing: 0.4, color: "#e0f4ff",
+    letterSpacing: 0.4,
   },
   subtitle: {
-    fontSize: 12, color: "#475569",
+    fontSize: 12,
     fontFamily: "Nunito_400Regular", textAlign: "center",
   },
 
   // Tabs
   tabs: {
     flexDirection: "row", width: "100%", maxWidth: 380,
-    backgroundColor: "rgba(255,255,255,0.04)",
     borderRadius: 14, padding: 3, marginBottom: 16,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
   },
   tab: {
     flex: 1, paddingVertical: 10, borderRadius: 11,
     alignItems: "center",
   },
-  tabActive: { backgroundColor: "rgba(0,198,255,0.12)" },
-  tabText: { fontSize: 13, fontFamily: "Nunito_600SemiBold", color: "#475569" },
-  tabTextActive: { color: "#00d4ff" },
+  tabActive: { backgroundColor: "rgba(245,158,11,0.10)" },
+  tabText: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
 
   // Card
   card: {
     width: "100%", maxWidth: 380,
-    backgroundColor: "rgba(255,255,255,0.04)",
     borderRadius: 20, padding: 22,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
     gap: 14,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35, shadowRadius: 28, elevation: 12,
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2, shadowRadius: 30, elevation: 12,
   },
   fieldWrap: { gap: 7 },
   fieldLabel: {
     fontSize: 10, fontFamily: "Nunito_700Bold",
-    letterSpacing: 2, color: "rgba(0,198,255,0.7)",
+    letterSpacing: 2,
   },
 
   // Error
@@ -399,12 +418,13 @@ const s = StyleSheet.create({
   },
   errorText: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "#f87171", flex: 1 },
 
-  // CTA button
+  // CTA
   ctaBtn: {
     height: 50, borderRadius: 14,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3, shadowRadius: 14, elevation: 6,
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4, shadowRadius: 16, elevation: 6,
   },
   ctaText: {
     fontSize: 15, fontFamily: "Nunito_700Bold",
@@ -416,27 +436,22 @@ const s = StyleSheet.create({
     width: "100%", maxWidth: 380, marginTop: 22, gap: 12, alignItems: "center",
   },
   divider: { flexDirection: "row", alignItems: "center", gap: 12, width: "100%" },
-  divLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.07)" },
-  divText: { fontSize: 11, color: "#334155", fontFamily: "Nunito_400Regular" },
+  divLine: { flex: 1, height: 1 },
+  divText: { fontSize: 11, fontFamily: "Nunito_400Regular" },
   guestBtn: {
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingVertical: 10, paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: 12, borderWidth: 1,
   },
-  guestText: {
-    fontSize: 13, fontFamily: "Nunito_600SemiBold", color: "#475569",
-  },
+  guestText: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
   guestCaption: {
-    fontSize: 11, fontFamily: "Nunito_400Regular",
-    color: "#1e3a5f", textAlign: "center",
+    fontSize: 11, fontFamily: "Nunito_400Regular", textAlign: "center",
   },
 
   // Footer
   footer: {
     fontSize: 11, fontFamily: "Nunito_400Regular",
-    color: "#334155", textAlign: "center",
+    textAlign: "center",
     marginTop: 20, paddingHorizontal: 20, lineHeight: 18,
   },
 });

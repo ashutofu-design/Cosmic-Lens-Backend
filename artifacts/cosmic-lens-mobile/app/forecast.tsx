@@ -203,7 +203,7 @@ export default function ForecastScreen() {
   const sel = days[selected];
   const scoreColor = sel
     ? (sel.score >= 65 ? "#4ade80" : sel.score <= 40 ? "#ef4444" : "#fbbf24")
-    : "#00d4ff";
+    : "#f59e0b";
 
   const dasha = kundli ? computeActiveDasha(kundli, moonData?.longitude ?? 0) : null;
 
@@ -232,7 +232,7 @@ export default function ForecastScreen() {
               scores={days.map(d => d.score)}
               selected={selected}
               onSelect={setSelected}
-              color="#00d4ff"
+              color="#f59e0b"
             />
           ) : (
             <View style={s.chartPlaceholder}>
@@ -296,7 +296,7 @@ export default function ForecastScreen() {
                   <Feather name="chevron-right" size={10} color="#1e3a5f" />
                   <Text style={s.dashaItem}>{pName(dasha.adPlanet)} AD</Text>
                   <Feather name="chevron-right" size={10} color="#1e3a5f" />
-                  <Text style={[s.dashaItem, { color: "#00d4ff" }]}>{pName(dasha.pdPlanet)} PD</Text>
+                  <Text style={[s.dashaItem, { color: "#f59e0b" }]}>{pName(dasha.pdPlanet)} PD</Text>
                 </View>
               </View>
             )}
@@ -414,7 +414,7 @@ const s = StyleSheet.create({
   navLabel:  { color: "#dde8f4", fontSize: 12 },
   navDots:   { flexDirection: "row", gap: 6 },
   navDot:    { width: 6, height: 6, borderRadius: 3, backgroundColor: "#1e3a5f" },
-  navDotActive: { backgroundColor: "#00d4ff", width: 16 },
+  navDotActive: { backgroundColor: "#f59e0b", width: 16 },
 
   unlockBanner: {
     backgroundColor: "rgba(251,191,36,0.06)", borderRadius: 16,

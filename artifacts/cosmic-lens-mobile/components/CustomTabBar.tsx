@@ -19,9 +19,9 @@ const TABS: {
   activeColor: string;
   dot?: boolean;
 }[] = [
-  { name: "index",    label: "Home",     icon: "home",           activeColor: "#00d4ff" },
-  { name: "kundli",   label: "Kundli",   icon: "star",           activeColor: "#00d4ff" },
-  { name: "ask",      label: "Ask",      icon: "message-circle", activeColor: "#00d4ff" },
+  { name: "index",    label: "Home",     icon: "home",           activeColor: "#f59e0b" },
+  { name: "kundli",   label: "Kundli",   icon: "star",           activeColor: "#f59e0b" },
+  { name: "ask",      label: "Ask",      icon: "message-circle", activeColor: "#f59e0b" },
   { name: "insights", label: "Insights", icon: "trending-up",    activeColor: "#22c55e" },
   { name: "notice",   label: "Notice",   icon: "bell",           activeColor: "#f87171", dot: true },
   { name: "profile",  label: "Profile",  icon: "user",           activeColor: "#a78bfa" },

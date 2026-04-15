@@ -66,7 +66,7 @@ const KARAKA: Record<string, string[]> = {
 const PLANET_CLR: Record<string, string> = {
   Sun:"#f59e0b", Moon:"#94a3b8", Mars:"#ef4444", Mercury:"#10b981",
   Jupiter:"#facc15", Venus:"#ec4899", Saturn:"#a78bfa",
-  Rahu:"#00d4ff", Ketu:"#fb923c",
+  Rahu:"#f59e0b", Ketu:"#fb923c",
 };
 const PLANET_GLYPH: Record<string, string> = {
   Sun:"☉", Moon:"☽", Mars:"♂", Mercury:"☿", Jupiter:"♃",
@@ -87,13 +87,13 @@ function signStatus(planet: string, lon: number): { label: string; color: string
   const sign = SIGNS_SHORT[signIdx];
   if (EXALT[planet]?.sign === sign) return { label: "Uchch (Exalted)", color: "#4ade80" };
   if (DEBIL[planet] === sign)        return { label: "Neech (Debilitated)", color: "#ef4444" };
-  if (OWN[planet]?.includes(sign))   return { label: "Svagriha (Own)", color: "#00d4ff" };
+  if (OWN[planet]?.includes(sign))   return { label: "Svagriha (Own)", color: "#f59e0b" };
   return { label: "Saamaanya (Normal)", color: "#3d5a7a" };
 }
 
 function houseCategory(h: number): { label: string; color: string } {
   if ([1,4,7,10].includes(h))  return { label: "Kendra", color: "#4ade80" };
-  if ([5,9].includes(h))       return { label: "Trikona", color: "#00d4ff" };
+  if ([5,9].includes(h))       return { label: "Trikona", color: "#f59e0b" };
   if ([6,8,12].includes(h))    return { label: "Dusthana", color: "#ef4444" };
   return { label: "Madhyam", color: "#fbbf24" };
 }
@@ -129,7 +129,7 @@ function PlanetCard({
   sunLon: number;
 }) {
   const [open, setOpen] = useState(false);
-  const clr = PLANET_CLR[planet.name] ?? "#00d4ff";
+  const clr = PLANET_CLR[planet.name] ?? "#f59e0b";
   const nak = nakshatra(planet.longitude);
   const status = signStatus(planet.name, planet.longitude);
   const houseCat = houseCategory(planet.house);
@@ -269,7 +269,7 @@ export default function PlanetPositionScreen() {
         <View style={s.legend}>
           {[
             { label: "Kendra", color: "#4ade80", desc: "Houses 1,4,7,10" },
-            { label: "Trikona", color: "#00d4ff", desc: "Houses 5,9" },
+            { label: "Trikona", color: "#f59e0b", desc: "Houses 5,9" },
             { label: "Dusthana", color: "#ef4444", desc: "Houses 6,8,12" },
             { label: "Madhyam", color: "#fbbf24", desc: "Others" },
           ].map(l => (

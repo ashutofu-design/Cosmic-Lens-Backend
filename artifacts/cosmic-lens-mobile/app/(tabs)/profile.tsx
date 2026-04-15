@@ -79,8 +79,8 @@ const PLANS = [
   },
   {
     key: "pro", name: "Pro",
-    accent: "#00d4ff", accentBg: "rgba(0,212,255,0.05)",
-    border: "rgba(0,212,255,0.30)", badge: "POPULAR",
+    accent: "#f59e0b", accentBg: "rgba(245,158,11,0.05)",
+    border: "rgba(245,158,11,0.30)", badge: "POPULAR",
     monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
     cta: "Get Pro", ctaActive: true,
     icon: "zap" as const,
@@ -192,7 +192,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
                     onPress={() => handleSelect(l.code)}
                     style={[lm.tile, l.code === current && lm.tileActive]}
                   >
-                    <Text style={[lm.tileNative, l.code === current && { color: "#00d4ff" }]}>
+                    <Text style={[lm.tileNative, l.code === current && { color: "#f59e0b" }]}>
                       {l.native}
                     </Text>
                     <Text style={lm.tileEn}>{l.name}</Text>
@@ -220,7 +220,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
                     onPress={() => handleSelect(l.code)}
                     style={[lm.tile, lm.tileComingSoon, l.code === current && lm.tileActive]}
                   >
-                    <Text style={[lm.tileNative, { color: "#475569" }, l.code === current && { color: "#00d4ff" }]}>
+                    <Text style={[lm.tileNative, { color: "#475569" }, l.code === current && { color: "#f59e0b" }]}>
                       {l.native}
                     </Text>
                     <Text style={[lm.tileEn, { color: "#1e3a5f" }]}>{l.name}</Text>
@@ -325,7 +325,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
         {/* Avatar */}
         <View>
           <LinearGradient
-            colors={isPrimary ? ["#0ea5e9","#00d4ff"] : ["#1e3a5f","#0a1828"]}
+            colors={isPrimary ? ["#0ea5e9","#f59e0b"] : ["#1e3a5f","#0a1828"]}
             style={pc.avatar}
           >
             <Text style={pc.initials}>{initials}</Text>
@@ -343,7 +343,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
             <Text style={pc.name} numberOfLines={1}>{profile.name}</Text>
             {isPrimary && (
               <View style={pc.primaryBadge}>
-                <Feather name="star" size={8} color="#00d4ff" />
+                <Feather name="star" size={8} color="#f59e0b" />
                 <Text style={pc.primaryBadgeText}>PRIMARY</Text>
               </View>
             )}
@@ -384,7 +384,7 @@ function ProfileCard({ profile, isPrimary, canDelete, onEdit, onSetPrimary, onDe
         </View>
       ) : (
         <Pressable onPress={onSetPrimary} style={pc.setPrimaryBtn}>
-          <Feather name="star" size={11} color="#00d4ff" />
+          <Feather name="star" size={11} color="#f59e0b" />
           <Text style={pc.setPrimaryText}>Set as Primary — This chart will show on home screen</Text>
         </Pressable>
       )}
@@ -476,7 +476,7 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
           style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
         >
           <LinearGradient
-            colors={plan.key==="pro" ? ["#0284c7","#00d4ff"] : ["#7c3aed","#a78bfa"]}
+            colors={plan.key==="pro" ? ["#d97706","#f59e0b"] : ["#7c3aed","#a78bfa"]}
             start={{x:0,y:0}} end={{x:1,y:0}}
             style={pl.ctaBtn}
           >
@@ -570,8 +570,8 @@ export default function ProfileScreen() {
       {switching && (
         <View style={s.overlay}>
           <View style={s.overlayBox}>
-            <Feather name="refresh-cw" size={22} color="#00d4ff" style={{ marginBottom:10 }} />
-            <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>Profile switch ho raha hai...</Text>
+            <Feather name="refresh-cw" size={22} color="#f59e0b" style={{ marginBottom:10 }} />
+            <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>Profile switch ho raha hai...</Text>
           </View>
         </View>
       )}
@@ -622,7 +622,7 @@ export default function ProfileScreen() {
           <Text style={s.headerBgStar}>✦</Text>
           <Text style={[s.headerBgStar, { right:30, top:12, fontSize:14, opacity:0.04 }]}>✦</Text>
 
-          <LinearGradient colors={["#0ea5e9","#00d4ff"]} style={s.headerAvatar}>
+          <LinearGradient colors={["#0ea5e9","#f59e0b"]} style={s.headerAvatar}>
             <Text style={s.headerInitials}>{initials}</Text>
           </LinearGradient>
 
@@ -671,10 +671,10 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}
             >
               <View style={s.addCircle}>
-                <Feather name="users" size={15} color="#00d4ff" />
+                <Feather name="users" size={15} color="#f59e0b" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: "#00d4ff", fontSize: 13, fontFamily: F.semibold }}>
+                <Text style={{ color: "#f59e0b", fontSize: 13, fontFamily: F.semibold }}>
                   Add Family Member
                 </Text>
                 <Text style={{ color: "#1e3a5f", fontSize: 10, fontFamily: F.regular, marginTop: 2 }}>
@@ -706,7 +706,7 @@ export default function ProfileScreen() {
                 <Text style={sub.planSub}>Upgrade for full Vedic astrology access</Text>
               </View>
               <LinearGradient
-                colors={["#0284c7","#00d4ff"]}
+                colors={["#d97706","#f59e0b"]}
                 start={{x:0,y:0}} end={{x:1,y:0}}
                 style={sub.upgradePill}
               >
@@ -775,7 +775,7 @@ export default function ProfileScreen() {
                 <Switch
                   value={notifications}
                   onValueChange={v => { setNotifications(v); Haptics.selectionAsync(); }}
-                  trackColor={{ false:"#0f1c2e", true:"#00d4ff" }}
+                  trackColor={{ false:"#0f1c2e", true:"#f59e0b" }}
                   thumbColor="#fff" ios_backgroundColor="#0f1c2e"
                   style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
                 />
@@ -789,7 +789,7 @@ export default function ProfileScreen() {
                 <Switch
                   value={dailyTip}
                   onValueChange={v => { setDailyTip(v); Haptics.selectionAsync(); }}
-                  trackColor={{ false:"#0f1c2e", true:"#00d4ff" }}
+                  trackColor={{ false:"#0f1c2e", true:"#f59e0b" }}
                   thumbColor="#fff" ios_backgroundColor="#0f1c2e"
                   style={{ transform:[{ scaleX:0.85 },{ scaleY:0.85 }] }}
                 />
@@ -803,7 +803,7 @@ export default function ProfileScreen() {
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color:"#00d4ff", fontSize:13, fontFamily:F.semibold }}>
+                    <Text style={{ color:"#f59e0b", fontSize:13, fontFamily:F.semibold }}>
                       {LANGUAGES.find(l=>l.code===language)?.native ?? "English"}
                     </Text>
                     <Text style={{ color:"#334155", fontSize:10, fontFamily:F.medium }}>
@@ -905,12 +905,12 @@ const s = StyleSheet.create({
   },
   headerBgStar: {
     position:"absolute", left:20, top:18,
-    fontSize:22, color:"#00d4ff", opacity:0.05,
+    fontSize:22, color:"#f59e0b", opacity:0.05,
   },
   headerAvatar: {
     width:68, height:68, borderRadius:34,
     alignItems:"center", justifyContent:"center",
-    shadowColor:"#00d4ff", shadowOpacity:0.5, shadowRadius:12, shadowOffset:{width:0,height:0},
+    shadowColor:"#f59e0b", shadowOpacity:0.5, shadowRadius:12, shadowOffset:{width:0,height:0},
   },
   headerInitials: { color:"#fff", fontSize:22, fontFamily:F.bold },
   headerName: { color:"#dde8f4", fontSize:18, fontFamily:F.bold, letterSpacing:-0.4 },
@@ -924,23 +924,23 @@ const s = StyleSheet.create({
   },
   planBadgeText: { color:"#475569", fontSize:9.5, fontFamily:F.bold, letterSpacing:1 },
   planDivider:   { width:1, height:10, backgroundColor:"rgba(255,255,255,0.08)" },
-  planUpgrade:   { color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+  planUpgrade:   { color:"#f59e0b", fontSize:10, fontFamily:F.semibold },
 
   sectionRow: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:12 },
-  sectionLabel: { color:"#00d4ff", fontSize:10, fontFamily:F.bold, letterSpacing:2.2 },
+  sectionLabel: { color:"#f59e0b", fontSize:10, fontFamily:F.bold, letterSpacing:2.2 },
   sectionCount: { color:"#1e3a5f", fontSize:10, fontFamily:F.medium },
-  sectionAction:{ color:"#00d4ff", fontSize:10, fontFamily:F.semibold },
+  sectionAction:{ color:"#f59e0b", fontSize:10, fontFamily:F.semibold },
 
   addBtn: {
     flexDirection:"row", alignItems:"center", gap:12,
     padding:14, borderRadius:14,
-    backgroundColor:"rgba(0,212,255,0.03)",
-    borderWidth:1, borderColor:"rgba(0,212,255,0.14)",
+    backgroundColor:"rgba(245,158,11,0.03)",
+    borderWidth:1, borderColor:"rgba(245,158,11,0.14)",
   },
   addCircle: {
     width:34, height:34, borderRadius:17,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.25)",
-    backgroundColor:"rgba(0,212,255,0.06)",
+    borderWidth:1, borderColor:"rgba(245,158,11,0.25)",
+    backgroundColor:"rgba(245,158,11,0.06)",
     alignItems:"center", justifyContent:"center",
   },
 
@@ -981,7 +981,7 @@ const pc = StyleSheet.create({
     padding:14, gap:10,
   },
   cardPrimary: {
-    borderColor:"rgba(0,212,255,0.2)",
+    borderColor:"rgba(245,158,11,0.2)",
     backgroundColor:"rgba(0,20,40,0.9)",
   },
   avatar: {
@@ -994,11 +994,11 @@ const pc = StyleSheet.create({
   date:     { color:"#1e3a5f", fontSize:10, fontFamily:F.regular },
   primaryBadge: {
     flexDirection:"row", alignItems:"center", gap:4,
-    backgroundColor:"rgba(0,212,255,0.1)", borderWidth:1,
-    borderColor:"rgba(0,212,255,0.25)", borderRadius:20,
+    backgroundColor:"rgba(245,158,11,0.1)", borderWidth:1,
+    borderColor:"rgba(245,158,11,0.25)", borderRadius:20,
     paddingVertical:2, paddingHorizontal:7,
   },
-  primaryBadgeText: { color:"#00d4ff", fontSize:8, fontFamily:F.bold, letterSpacing:0.8 },
+  primaryBadgeText: { color:"#f59e0b", fontSize:8, fontFamily:F.bold, letterSpacing:0.8 },
   iconBtn: {
     width:30, height:30, borderRadius:8,
     backgroundColor:"rgba(255,255,255,0.04)",
@@ -1014,11 +1014,11 @@ const pc = StyleSheet.create({
   setPrimaryBtn: {
     flexDirection:"row", alignItems:"center", gap:6,
     alignSelf:"stretch",
-    backgroundColor:"rgba(0,212,255,0.06)", borderRadius:9,
+    backgroundColor:"rgba(245,158,11,0.06)", borderRadius:9,
     paddingVertical:8, paddingHorizontal:12,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.18)",
+    borderWidth:1, borderColor:"rgba(245,158,11,0.18)",
   },
-  setPrimaryText: { color:"#00d4ff", fontSize:10.5, fontFamily:F.semibold, flex: 1 },
+  setPrimaryText: { color:"#f59e0b", fontSize:10.5, fontFamily:F.semibold, flex: 1 },
   emojiTag: {
     position: "absolute", bottom: -3, right: -4,
     width: 18, height: 18, borderRadius: 9,
@@ -1066,11 +1066,11 @@ const sb = StyleSheet.create({
     gap:7, paddingVertical:10, borderRadius:9,
   },
   cycleBtnActive: {
-    backgroundColor:"rgba(0,212,255,0.1)",
-    borderWidth:1, borderColor:"rgba(0,212,255,0.25)",
+    backgroundColor:"rgba(245,158,11,0.1)",
+    borderWidth:1, borderColor:"rgba(245,158,11,0.25)",
   },
   cycleTxt: { color:"#334155", fontSize:13, fontFamily:F.semibold },
-  cycleTxtActive: { color:"#00d4ff" },
+  cycleTxtActive: { color:"#f59e0b" },
   savePill: {
     backgroundColor:"rgba(74,222,128,0.15)", borderRadius:6,
     paddingVertical:2, paddingHorizontal:6,
@@ -1155,9 +1155,9 @@ const lm = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 16, paddingTop: 18, paddingBottom: 10,
   },
-  groupDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: "#00d4ff" },
+  groupDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" },
   groupLabel: {
-    color: "#00d4ff", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2,
+    color: "#f59e0b", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2,
   },
   grid: {
     flexDirection: "row", flexWrap: "wrap",
@@ -1169,8 +1169,8 @@ const lm = StyleSheet.create({
     padding: 14, position: "relative",
   },
   tileActive: {
-    borderColor: "#00d4ff",
-    backgroundColor: "rgba(0,212,255,0.06)",
+    borderColor: "#f59e0b",
+    backgroundColor: "rgba(245,158,11,0.06)",
   },
   tileComingSoon: { opacity: 0.55 },
   tileNative: { color: "#dde8f4", fontSize: 18, fontFamily: F.semibold, marginBottom: 4 },
@@ -1178,7 +1178,7 @@ const lm = StyleSheet.create({
   checkBadge: {
     position: "absolute", top: 8, right: 8,
     width: 18, height: 18, borderRadius: 9,
-    backgroundColor: "#00d4ff",
+    backgroundColor: "#f59e0b",
     alignItems: "center", justifyContent: "center",
   },
 });

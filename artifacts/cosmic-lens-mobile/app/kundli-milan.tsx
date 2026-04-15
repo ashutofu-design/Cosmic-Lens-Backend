@@ -492,12 +492,12 @@ const s = StyleSheet.create({
 
   p1Card: {
     backgroundColor:"#040e20", borderRadius:14,
-    borderWidth:1, borderColor:"rgba(0,212,255,0.2)", padding:14,
+    borderWidth:1, borderColor:"rgba(245,158,11,0.2)", padding:14,
   },
   p1Avatar: {
     width:44, height:44, borderRadius:22,
-    backgroundColor:"rgba(0,212,255,0.08)",
-    borderWidth:1, borderColor:"rgba(0,212,255,0.2)",
+    backgroundColor:"rgba(245,158,11,0.08)",
+    borderWidth:1, borderColor:"rgba(245,158,11,0.2)",
     alignItems:"center", justifyContent:"center",
   },
   p1Name:   { color:"#dde8f4", fontSize:14, fontWeight:"600" },

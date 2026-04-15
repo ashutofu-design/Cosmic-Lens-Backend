@@ -156,10 +156,10 @@ export default function OnboardingScreen() {
           {/* ── Hero section ─────────────────────────────────────────── */}
           <View style={s.hero}>
             <LinearGradient
-              colors={["rgba(0,198,255,0.18)", "rgba(120,80,255,0.10)"]}
+              colors={["rgba(139,92,246,0.18)", "rgba(120,80,255,0.10)"]}
               style={s.heroIcon}
             >
-              <Feather name="star" size={26} color="#00c6ff" />
+              <Feather name="star" size={26} color="#f59e0b" />
             </LinearGradient>
             <Text style={s.heroTitle}>Birth Details</Text>
             <Text style={s.heroSub}>
@@ -171,7 +171,7 @@ export default function OnboardingScreen() {
           <View style={s.card}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: "rgba(167,139,250,0.12)" }]}>
-                <Feather name="user" size={14} color="#a78bfa" />
+                <Feather name="user" size={14} color="#f59e0b" />
               </View>
               <Text style={s.cardTitle}>YOUR NAME</Text>
             </View>
@@ -189,8 +189,8 @@ export default function OnboardingScreen() {
           {/* ── Section: Date of Birth ────────────────────────────────── */}
           <View style={s.card}>
             <View style={s.cardHeader}>
-              <View style={[s.cardIcon, { backgroundColor: "rgba(0,198,255,0.10)" }]}>
-                <Feather name="calendar" size={14} color="#00c6ff" />
+              <View style={[s.cardIcon, { backgroundColor: "rgba(139,92,246,0.10)" }]}>
+                <Feather name="calendar" size={14} color="#f59e0b" />
               </View>
               <Text style={s.cardTitle}>DATE OF BIRTH</Text>
             </View>
@@ -334,10 +334,10 @@ export default function OnboardingScreen() {
                     style={({ pressed }) => [
                       s.suggestItem,
                       i < suggestions.length - 1 && s.suggestBorder,
-                      pressed && { backgroundColor: "rgba(0,198,255,0.06)" },
+                      pressed && { backgroundColor: "rgba(139,92,246,0.06)" },
                     ]}
                   >
-                    <Feather name="map-pin" size={11} color="#00c6ff" style={{ marginTop: 2 }} />
+                    <Feather name="map-pin" size={11} color="#f59e0b" style={{ marginTop: 2 }} />
                     <Text style={s.suggestText} numberOfLines={2}>{item.label}</Text>
                   </Pressable>
                 ))}
@@ -373,14 +373,14 @@ export default function OnboardingScreen() {
             style={({ pressed }) => [pressed && canSubmit && { opacity: 0.88 }]}
           >
             <LinearGradient
-              colors={loading ? ["#0a1828","#0a1828"] : ["#006aff","#00c6ff"]}
+              colors={loading ? ["#0a1828","#0a1828"] : ["#7c3aed","#a78bfa"]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={[s.submitBtn, loading && { borderWidth: 1, borderColor: "#1e3a5f" }]}
             >
               {loading ? (
                 <View style={s.submitInner}>
-                  <ActivityIndicator size="small" color="#00c6ff" />
-                  <Text style={[s.submitText, { color: "#00c6ff" }]}>Generating Kundli...</Text>
+                  <ActivityIndicator size="small" color="#f59e0b" />
+                  <Text style={[s.submitText, { color: "#a78bfa" }]}>Generating Kundli...</Text>
                 </View>
               ) : (
                 <View style={s.submitInner}>
@@ -487,8 +487,8 @@ const s = StyleSheet.create({
   heroIcon: {
     width: 64, height: 64, borderRadius: 32,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "rgba(0,198,255,0.25)",
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
+    borderWidth: 1, borderColor: "rgba(139,92,246,0.25)",
+    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
   },
   heroTitle: { color: "#dde8f4", fontSize: 22, fontWeight: "800", letterSpacing: 0.3 },
   heroSub: {
@@ -546,10 +546,10 @@ const s = StyleSheet.create({
   // Place
   placeRow: { flexDirection: "row", gap: 10, alignItems: "center" },
   searchBtn: {
-    backgroundColor: "#00c6ff",
+    backgroundColor: "#a78bfa",
     width: 44, height: 44, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4,
+    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4,
   },
 
   suggestBox: {
@@ -576,7 +576,7 @@ const s = StyleSheet.create({
   // Submit
   submitBtn: {
     borderRadius: 16, paddingVertical: 17, marginTop: 4,
-    shadowColor: "#00c6ff", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.22, shadowRadius: 18, elevation: 6,
+    shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.22, shadowRadius: 18, elevation: 6,
   },
   submitInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   submitText:  { fontSize: 16, fontWeight: "800", letterSpacing: 0.3 },

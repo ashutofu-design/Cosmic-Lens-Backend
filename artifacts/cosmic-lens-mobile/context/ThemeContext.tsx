@@ -39,54 +39,68 @@ export interface ThemeColors {
   isDark: boolean;
 }
 
+// ── Dark — Deep Cosmic Purple + Gold ──────────────────────────────────────────
 export const DARK: ThemeColors = {
-  bg:      "#020d1a",
-  bgCard:  "#040e1e",
-  bgCard2: "#071525",
-  bgCard3: "#0a1f35",
-  text:      "#dde8f4",
-  textMid:   "#94a3b8",
-  textMuted: "#475569",
-  textDim:   "#1e3a5f",
-  accent:    "#00d4ff",
-  accentBg:  "rgba(0,212,255,0.08)",
-  border:  "rgba(255,255,255,0.06)",
-  border2: "rgba(255,255,255,0.10)",
-  border3: "rgba(255,255,255,0.04)",
-  switchTrackOff: "#0f1c2e",
-  navBg:     "#040e1e",
-  navBorder: "rgba(255,255,255,0.06)",
-  inputBg:   "#040e1e",
-  inputBorder: "rgba(255,255,255,0.08)",
-  shimmer1: "#040e1e",
-  shimmer2: "#071525",
-  shimmer3: "#040e1e",
+  bg:      "#0c0818",
+  bgCard:  "#120e22",
+  bgCard2: "#1a1330",
+  bgCard3: "#201840",
+
+  text:      "#f0e6ff",
+  textMid:   "#b39ddb",
+  textMuted: "#7c6fa0",
+  textDim:   "#3d2b6b",
+
+  accent:   "#f59e0b",
+  accentBg: "rgba(245,158,11,0.10)",
+
+  border:  "rgba(139,92,246,0.12)",
+  border2: "rgba(139,92,246,0.22)",
+  border3: "rgba(139,92,246,0.06)",
+
+  switchTrackOff: "#1a1330",
+  navBg:     "#0c0818",
+  navBorder: "rgba(139,92,246,0.14)",
+  inputBg:   "#120e22",
+  inputBorder: "rgba(139,92,246,0.18)",
+
+  shimmer1: "#120e22",
+  shimmer2: "#1a1330",
+  shimmer3: "#120e22",
+
   statusBar: "light-content",
   isDark: true,
 };
 
+// ── Light — Warm Lavender + Amber Gold ────────────────────────────────────────
 export const LIGHT: ThemeColors = {
-  bg:      "#f0f4ff",
+  bg:      "#faf5ff",
   bgCard:  "#ffffff",
-  bgCard2: "#f8faff",
-  bgCard3: "#edf2fb",
-  text:      "#0f172a",
-  textMid:   "#475569",
-  textMuted: "#94a3b8",
-  textDim:   "#cbd5e1",
-  accent:    "#0284c7",
-  accentBg:  "rgba(2,132,199,0.08)",
-  border:  "rgba(0,0,0,0.07)",
-  border2: "rgba(0,0,0,0.12)",
-  border3: "rgba(0,0,0,0.04)",
-  switchTrackOff: "#e2e8f0",
+  bgCard2: "#f3ebff",
+  bgCard3: "#ede0ff",
+
+  text:      "#1e0a3c",
+  textMid:   "#6b46c1",
+  textMuted: "#9f7aea",
+  textDim:   "#d8b4fe",
+
+  accent:   "#d97706",
+  accentBg: "rgba(217,119,6,0.09)",
+
+  border:  "rgba(109,40,217,0.09)",
+  border2: "rgba(109,40,217,0.16)",
+  border3: "rgba(109,40,217,0.05)",
+
+  switchTrackOff: "#e9d8fd",
   navBg:     "#ffffff",
-  navBorder: "rgba(0,0,0,0.06)",
-  inputBg:   "#ffffff",
-  inputBorder: "rgba(0,0,0,0.10)",
-  shimmer1: "#f0f4ff",
-  shimmer2: "#e2eaf8",
-  shimmer3: "#f0f4ff",
+  navBorder: "rgba(109,40,217,0.09)",
+  inputBg:   "#faf5ff",
+  inputBorder: "rgba(109,40,217,0.13)",
+
+  shimmer1: "#f3ebff",
+  shimmer2: "#e9d8fd",
+  shimmer3: "#f3ebff",
+
   statusBar: "dark-content",
   isDark: false,
 };

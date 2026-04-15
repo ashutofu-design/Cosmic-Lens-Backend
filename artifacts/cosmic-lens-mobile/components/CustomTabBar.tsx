@@ -20,14 +20,14 @@ type BottomTabBarProps = {
 
 const TAB_META: {
   name: string;
-  labelKey: "tabHome"|"tabAsk"|"tabFuture"|"tabNotice"|"tabProfile";
+  labelKey: "tabHome"|"tabLifeMap"|"tabAsk"|"tabFuture"|"tabNotice"|"tabProfile";
   icon: string;
   dot?: boolean;
 }[] = [
   { name: "index",    labelKey: "tabHome",     icon: "home"           },
+  { name: "lifemap",  labelKey: "tabLifeMap",  icon: "map"            },
   { name: "ask",      labelKey: "tabAsk",      icon: "message-circle" },
   { name: "insights", labelKey: "tabFuture",   icon: "bar-chart-2"   },
-  { name: "notice",   labelKey: "tabNotice",   icon: "bell", dot: true },
   { name: "profile",  labelKey: "tabProfile",  icon: "user"           },
 ];
 

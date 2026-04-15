@@ -18,6 +18,7 @@ export interface Translations {
   tabHome:      string;
   tabKundli:    string;
   tabAsk:       string;
+  tabLifeMap:   string;
   tabFuture:    string;
   tabNotice:    string;
   tabProfile:   string;
@@ -114,6 +115,16 @@ export interface Translations {
   askSend:         string;
   askSuggestions:  string;
 
+  // ── Life Map ──────────────────────────────────────────────
+  lifeMapTitle:      string;
+  lifeMapSubtitle:   string;
+  lifeMapRelSub:     string;
+  lifeMapCarSub:     string;
+  lifeMapHealthSub:  string;
+  lifeMapFinSub:     string;
+  lifeMapComing:     string;
+  lifeMapComingSub:  string;
+
   // ── Future ────────────────────────────────────────────────
   futureTitle:     string;
   futureSubtitle:  string;
@@ -141,7 +152,7 @@ const T: Record<UILang, Translations> = {
   // ── ENGLISH (default) ───────────────────────────────────────────────────────
   en: {
     tabHome: "Home", tabKundli: "Kundli", tabAsk: "Ask",
-    tabFuture: "Future", tabNotice: "Notice", tabProfile: "Profile",
+    tabLifeMap: "Life Map", tabFuture: "Future", tabNotice: "Notice", tabProfile: "Profile",
 
     save: "Save", cancel: "Cancel", skip: "Skip", back: "Back",
     next: "Next", done: "Done", retry: "Retry", search: "Search",
@@ -189,6 +200,11 @@ const T: Record<UILang, Translations> = {
     askTitle: "Ask Jyotish AI", askPlaceholder: "Ask anything about your chart...",
     askSend: "Send", askSuggestions: "Try asking...",
 
+    lifeMapTitle: "Life Map", lifeMapSubtitle: "Your life, mapped by the stars",
+    lifeMapRelSub: "Love, compatibility & bonds", lifeMapCarSub: "Growth, success & purpose",
+    lifeMapHealthSub: "Body, mind & vitality", lifeMapFinSub: "Wealth, stability & flow",
+    lifeMapComing: "More dimensions coming", lifeMapComingSub: "Education, Travel, Spirituality & more",
+
     futureTitle: "Future Timeline", futureSubtitle: "Your next 6 months decoded",
     career: "Career", finance: "Finance", relationship: "Relationship", health: "Health",
 
@@ -201,7 +217,7 @@ const T: Record<UILang, Translations> = {
   // ── HINDI ───────────────────────────────────────────────────────────────────
   hi: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "पूछें",
-    tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabLifeMap: "लाइफ मैप", tabLifeMap: "लाइफ मॅप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "सहेजें", cancel: "रद्द करें", skip: "छोड़ें", back: "वापस",
     next: "आगे", done: "हो गया", retry: "दोबारा कोशिश करें", search: "खोजें",
@@ -249,6 +265,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ज्योतिष AI से पूछें", askPlaceholder: "अपनी कुंडली के बारे में कुछ भी पूछें...",
     askSend: "भेजें", askSuggestions: "ये पूछें...",
 
+    lifeMapTitle: "लाइफ मैप", lifeMapSubtitle: "सितारों द्वारा मैप किया जीवन",
+    lifeMapRelSub: "प्रेम, अनुकूलता और बंधन", lifeMapCarSub: "विकास, सफलता और उद्देश्य",
+    lifeMapHealthSub: "शरीर, मन और ऊर्जा", lifeMapFinSub: "धन, स्थिरता और प्रवाह",
+    lifeMapComing: "और आयाम आ रहे हैं", lifeMapComingSub: "शिक्षा, यात्रा, अध्यात्म और अधिक",
     futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "अगले 6 महीने डिकोड", career: "करियर",
     finance: "वित्त", relationship: "संबंध", health: "स्वास्थ्य",
 
@@ -261,7 +281,7 @@ const T: Record<UILang, Translations> = {
   // ── MARATHI ─────────────────────────────────────────────────────────────────
   mr: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "विचारा",
-    tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabLifeMap: "लाइफ मैप", tabLifeMap: "लाइफ मॅप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "जतन करा", cancel: "रद्द करा", skip: "वगळा", back: "मागे",
     next: "पुढे", done: "झाले", retry: "पुन्हा प्रयत्न करा", search: "शोधा",
@@ -309,6 +329,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ज्योतिष AI ला विचारा", askPlaceholder: "तुमच्या चार्टबद्दल काहीही विचारा...",
     askSend: "पाठवा", askSuggestions: "हे विचारून पाहा...",
 
+    lifeMapTitle: "लाइफ मॅप", lifeMapSubtitle: "ताऱ्यांनी मॅप केलेले जीवन",
+    lifeMapRelSub: "प्रेम, सुसंगतता आणि बंध", lifeMapCarSub: "वाढ, यश आणि उद्देश",
+    lifeMapHealthSub: "शरीर, मन आणि ऊर्जा", lifeMapFinSub: "संपत्ती, स्थिरता आणि प्रवाह",
+    lifeMapComing: "अधिक आयाम येत आहेत", lifeMapComingSub: "शिक्षण, प्रवास, अध्यात्म आणि अधिक",
     futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "पुढचे 6 महिने डिकोड", career: "करिअर",
     finance: "वित्त", relationship: "नाते", health: "आरोग्य",
 
@@ -321,7 +345,7 @@ const T: Record<UILang, Translations> = {
   // ── BENGALI ─────────────────────────────────────────────────────────────────
   bn: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "জিজ্ঞেস করুন",
-    tabFuture: "ভবিষ্যৎ", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
+    tabLifeMap: "লাইফ ম্যাপ", tabLifeMap: "লাইফ মেপ", tabFuture: "ভবিষ্যৎ", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
 
     save: "সংরক্ষণ করুন", cancel: "বাতিল করুন", skip: "এড়িয়ে যান", back: "পিছনে",
     next: "পরবর্তী", done: "সম্পন্ন", retry: "আবার চেষ্টা করুন", search: "খোঁজুন",
@@ -369,6 +393,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "জ্যোতিষ AI কে জিজ্ঞেস করুন", askPlaceholder: "আপনার চার্ট সম্পর্কে যা খুশি জিজ্ঞেস করুন...",
     askSend: "পাঠান", askSuggestions: "এগুলো জিজ্ঞেস করে দেখুন...",
 
+    lifeMapTitle: "লাইফ ম্যাপ", lifeMapSubtitle: "তারার দ্বারা ম্যাপ করা জীবন",
+    lifeMapRelSub: "প্রেম, সামঞ্জস্য ও বন্ধন", lifeMapCarSub: "বৃদ্ধি, সাফল্য ও উদ্দেশ্য",
+    lifeMapHealthSub: "শরীর, মন ও শক্তি", lifeMapFinSub: "সম্পদ, স্থিতি ও প্রবাহ",
+    lifeMapComing: "আরও মাত্রা আসছে", lifeMapComingSub: "শিক্ষা, ভ্রমণ, আধ্যাত্মিকতা ও আরও",
     futureTitle: "ভবিষ্যৎ টাইমলাইন", futureSubtitle: "আগামী ৬ মাস ডিকোড", career: "ক্যারিয়ার",
     finance: "অর্থ", relationship: "সম্পর্ক", health: "স্বাস্থ্য",
 
@@ -381,7 +409,7 @@ const T: Record<UILang, Translations> = {
   // ── TELUGU ──────────────────────────────────────────────────────────────────
   te: {
     tabHome: "హోమ్", tabKundli: "కుండలి", tabAsk: "అడగండి",
-    tabFuture: "భవిష్యత్", tabNotice: "నోటీసు", tabProfile: "ప్రొఫైల్",
+    tabLifeMap: "లైఫ్ మ్యాప్", tabFuture: "భవిష్యత్", tabNotice: "నోటీసు", tabProfile: "ప్రొఫైల్",
 
     save: "సేవ్ చేయండి", cancel: "రద్దు చేయండి", skip: "దాటవేయండి", back: "వెనుకకు",
     next: "తదుపరి", done: "పూర్తయింది", retry: "మళ్ళీ ప్రయత్నించండి", search: "వెతకండి",
@@ -429,6 +457,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "జ్యోతిష్య AI ని అడగండి", askPlaceholder: "మీ చార్ట్ గురించి ఏదైనా అడగండి...",
     askSend: "పంపండి", askSuggestions: "ఇవి అడిగి చూడండి...",
 
+    lifeMapTitle: "లైఫ్ మ్యాప్", lifeMapSubtitle: "నక్షత్రాలతో మ్యాప్ చేయబడిన జీవితం",
+    lifeMapRelSub: "ప్రేమ, అనుకూలత మరియు బంధాలు", lifeMapCarSub: "వృద్ధి, విజయం మరియు ఉద్దేశ్యం",
+    lifeMapHealthSub: "శరీరం, మనసు మరియు శక్తి", lifeMapFinSub: "సంపద, స్థిరత్వం మరియు ప్రవాహం",
+    lifeMapComing: "మరిన్ని కోణాలు వస్తున్నాయి", lifeMapComingSub: "విద్య, ప్రయాణం, ఆధ్యాత్మికత మరియు మరిన్ని",
     futureTitle: "భవిష్యత్ టైమ్‌లైన్", futureSubtitle: "మీ తదుపరి 6 నెలలు డీకోడ్", career: "కెరీర్",
     finance: "ఆర్థికం", relationship: "సంబంధం", health: "ఆరోగ్యం",
 
@@ -441,7 +473,7 @@ const T: Record<UILang, Translations> = {
   // ── TAMIL ───────────────────────────────────────────────────────────────────
   ta: {
     tabHome: "முகப்பு", tabKundli: "ஜாதகம்", tabAsk: "கேளுங்கள்",
-    tabFuture: "எதிர்காலம்", tabNotice: "அறிவிப்பு", tabProfile: "சுயவிவரம்",
+    tabLifeMap: "லைஃப் மேப்", tabFuture: "எதிர்காலம்", tabNotice: "அறிவிப்பு", tabProfile: "சுயவிவரம்",
 
     save: "சேமிக்கவும்", cancel: "ரத்து செய்யவும்", skip: "தவிர்க்கவும்", back: "பின்செல்",
     next: "அடுத்து", done: "முடிந்தது", retry: "மீண்டும் முயற்சிக்கவும்", search: "தேடவும்",
@@ -489,6 +521,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ஜோதிட AI ஐ கேளுங்கள்", askPlaceholder: "உங்கள் சார்ட் பற்றி எதுவும் கேளுங்கள்...",
     askSend: "அனுப்பவும்", askSuggestions: "இவற்றை கேளுங்கள்...",
 
+    lifeMapTitle: "லைஃப் மேப்", lifeMapSubtitle: "நட்சத்திரங்களால் வரைபடமான வாழ்க்கை",
+    lifeMapRelSub: "காதல், பொருத்தம் மற்றும் பிணைப்பு", lifeMapCarSub: "வளர்ச்சி, வெற்றி மற்றும் நோக்கம்",
+    lifeMapHealthSub: "உடல், மனம் மற்றும் உயிர்ச்சக்தி", lifeMapFinSub: "செல்வம், நிலைத்தன்மை மற்றும் ஓட்டம்",
+    lifeMapComing: "மேலும் பரிமாணங்கள் வருகின்றன", lifeMapComingSub: "கல்வி, பயணம், ஆன்மீகம் மற்றும் மேலும்",
     futureTitle: "எதிர்காலம் டைம்லைன்", futureSubtitle: "அடுத்த 6 மாதங்கள் டிகோடு", career: "தொழில்",
     finance: "நிதி", relationship: "உறவு", health: "ஆரோக்கியம்",
 
@@ -501,7 +537,7 @@ const T: Record<UILang, Translations> = {
   // ── GUJARATI ────────────────────────────────────────────────────────────────
   gu: {
     tabHome: "હોમ", tabKundli: "કુંડળી", tabAsk: "પૂછો",
-    tabFuture: "ભવિષ્ય", tabNotice: "સૂચના", tabProfile: "પ્રોફાઇલ",
+    tabLifeMap: "લાઇફ મેપ", tabFuture: "ભવિષ્ય", tabNotice: "સૂચના", tabProfile: "પ્રોફાઇલ",
 
     save: "સાચવો", cancel: "રદ કરો", skip: "છોડો", back: "પાછળ",
     next: "આગળ", done: "થઈ ગયું", retry: "ફરી પ્રયાસ કરો", search: "શોધો",
@@ -549,6 +585,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "જ્યોતિષ AI ને પૂછો", askPlaceholder: "તમારા ચાર્ટ વિશે કંઈ પણ પૂછો...",
     askSend: "મોકલો", askSuggestions: "આ પૂછો...",
 
+    lifeMapTitle: "લાઇફ મેપ", lifeMapSubtitle: "તારાઓ દ્વારા મેપ કરેલ જીવન",
+    lifeMapRelSub: "પ્રેમ, સુસંગતતા અને બંધન", lifeMapCarSub: "વૃદ્ધિ, સફળતા અને હેતુ",
+    lifeMapHealthSub: "શરીર, મન અને ઊર્જા", lifeMapFinSub: "સંપત્તિ, સ્થિરતા અને પ્રવાહ",
+    lifeMapComing: "વધુ પરિમાણો આવી રહ્યા છે", lifeMapComingSub: "શિક્ષણ, મુસાફરી, અધ્યાત્મ અને વધુ",
     futureTitle: "ભવિષ્ય ટાઇમલાઇન", futureSubtitle: "આગામી 6 મહિના ડીકોડ", career: "કારકિર્દી",
     finance: "નાણાં", relationship: "સંબંધ", health: "આરોગ્ય",
 
@@ -561,7 +601,7 @@ const T: Record<UILang, Translations> = {
   // ── KANNADA ─────────────────────────────────────────────────────────────────
   kn: {
     tabHome: "ಹೋಮ್", tabKundli: "ಕುಂಡಲಿ", tabAsk: "ಕೇಳಿ",
-    tabFuture: "ಭವಿಷ್ಯ", tabNotice: "ಸೂಚನೆ", tabProfile: "ಪ್ರೊಫೈಲ್",
+    tabLifeMap: "ಲೈಫ್ ಮ್ಯಾಪ್", tabFuture: "ಭವಿಷ್ಯ", tabNotice: "ಸೂಚನೆ", tabProfile: "ಪ್ರೊಫೈಲ್",
 
     save: "ಉಳಿಸಿ", cancel: "ರದ್ದು ಮಾಡಿ", skip: "ಬಿಟ್ಟುಬಿಡಿ", back: "ಹಿಂದಕ್ಕೆ",
     next: "ಮುಂದೆ", done: "ಮುಗಿಯಿತು", retry: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", search: "ಹುಡುಕಿ",
@@ -609,6 +649,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ಜ್ಯೋತಿಷ AI ಕೇಳಿ", askPlaceholder: "ನಿಮ್ಮ ಚಾರ್ಟ್ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ...",
     askSend: "ಕಳುಹಿಸಿ", askSuggestions: "ಕೇಳಿ ನೋಡಿ...",
 
+    lifeMapTitle: "ಲೈಫ್ ಮ್ಯಾಪ್", lifeMapSubtitle: "ನಕ್ಷತ್ರಗಳಿಂದ ಮ್ಯಾಪ್ ಮಾಡಿದ ಜೀವನ",
+    lifeMapRelSub: "ಪ್ರೀತಿ, ಹೊಂದಾಣಿಕೆ ಮತ್ತು ಬಂಧಗಳು", lifeMapCarSub: "ಬೆಳವಣಿಗೆ, ಯಶಸ್ಸು ಮತ್ತು ಉದ್ದೇಶ",
+    lifeMapHealthSub: "ದೇಹ, ಮನಸ್ಸು ಮತ್ತು ಶಕ್ತಿ", lifeMapFinSub: "ಸಂಪತ್ತು, ಸ್ಥಿರತೆ ಮತ್ತು ಹರಿವು",
+    lifeMapComing: "ಇನ್ನಷ್ಟು ಆಯಾಮಗಳು ಬರುತ್ತಿವೆ", lifeMapComingSub: "ಶಿಕ್ಷಣ, ಪ್ರಯಾಣ, ಆಧ್ಯಾತ್ಮಿಕತೆ ಮತ್ತು ಇನ್ನಷ್ಟು",
     futureTitle: "ಭವಿಷ್ಯ ಟೈಮ್‌ಲೈನ್", futureSubtitle: "ಮುಂದಿನ 6 ತಿಂಗಳು ಡಿಕೋಡ್", career: "ವೃತ್ತಿ",
     finance: "ಹಣಕಾಸು", relationship: "ಸಂಬಂಧ", health: "ಆರೋಗ್ಯ",
 
@@ -621,7 +665,7 @@ const T: Record<UILang, Translations> = {
   // ── MALAYALAM ───────────────────────────────────────────────────────────────
   ml: {
     tabHome: "ഹോം", tabKundli: "കുണ്ഡലി", tabAsk: "ചോദിക്കൂ",
-    tabFuture: "ഭാവി", tabNotice: "അറിയിപ്പ്", tabProfile: "പ്രൊഫൈൽ",
+    tabLifeMap: "ലൈഫ് മാപ്പ്", tabFuture: "ഭാവി", tabNotice: "അറിയിപ്പ്", tabProfile: "പ്രൊഫൈൽ",
 
     save: "സേവ് ചെയ്യൂ", cancel: "റദ്ദ് ചെയ്യൂ", skip: "ഒഴിവാക്കൂ", back: "തിരിക",
     next: "അടുത്തത്", done: "പൂർത്തിയായി", retry: "വീണ്ടും ശ്രമിക്കൂ", search: "തിരയൂ",
@@ -669,6 +713,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ജ്യോതിഷ AI യോട് ചോദിക്കൂ", askPlaceholder: "നിങ്ങളുടെ ചാർട്ടിനെ കുറിച്ച് എന്തും ചോദിക്കൂ...",
     askSend: "അയക്കൂ", askSuggestions: "ഇവ ചോദിക്കൂ...",
 
+    lifeMapTitle: "ലൈഫ് മാപ്പ്", lifeMapSubtitle: "നക്ഷത്രങ്ങളാൽ മാപ്പ് ചെയ്ത ജീവിതം",
+    lifeMapRelSub: "പ്രണയം, പൊരുത്തം, ബന്ധങ്ങൾ", lifeMapCarSub: "വളർച്ച, വിജയം, ഉദ്ദേശ്യം",
+    lifeMapHealthSub: "ശരീരം, മനസ്സ്, ഊർജ്ജം", lifeMapFinSub: "സമ്പത്ത്, സ്ഥിരത, പ്രവാഹം",
+    lifeMapComing: "കൂടുതൽ മാനങ്ങൾ വരുന്നു", lifeMapComingSub: "വിദ്യാഭ്യാസം, യാത്ര, ആത്മീയത, കൂടുതൽ",
     futureTitle: "ഭാവി ടൈംലൈൻ", futureSubtitle: "അടുത്ത 6 മാസം ഡീകോഡ്", career: "കരിയർ",
     finance: "ധനം", relationship: "ബന്ധം", health: "ആരോഗ്യം",
 
@@ -681,7 +729,7 @@ const T: Record<UILang, Translations> = {
   // ── PUNJABI ─────────────────────────────────────────────────────────────────
   pa: {
     tabHome: "ਹੋਮ", tabKundli: "ਕੁੰਡਲੀ", tabAsk: "ਪੁੱਛੋ",
-    tabFuture: "ਭਵਿੱਖ", tabNotice: "ਸੂਚਨਾ", tabProfile: "ਪ੍ਰੋਫਾਈਲ",
+    tabLifeMap: "ਲਾਈਫ ਮੈਪ", tabFuture: "ਭਵਿੱਖ", tabNotice: "ਸੂਚਨਾ", tabProfile: "ਪ੍ਰੋਫਾਈਲ",
 
     save: "ਸੇਵ ਕਰੋ", cancel: "ਰੱਦ ਕਰੋ", skip: "ਛੱਡੋ", back: "ਵਾਪਸ",
     next: "ਅਗਲਾ", done: "ਹੋ ਗਿਆ", retry: "ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ", search: "ਲੱਭੋ",
@@ -729,6 +777,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ਜੋਤਿਸ਼ AI ਤੋਂ ਪੁੱਛੋ", askPlaceholder: "ਆਪਣੇ ਚਾਰਟ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ...",
     askSend: "ਭੇਜੋ", askSuggestions: "ਇਹ ਪੁੱਛ ਕੇ ਦੇਖੋ...",
 
+    lifeMapTitle: "ਲਾਈਫ ਮੈਪ", lifeMapSubtitle: "ਤਾਰਿਆਂ ਦੁਆਰਾ ਮੈਪ ਕੀਤੀ ਜ਼ਿੰਦਗੀ",
+    lifeMapRelSub: "ਪਿਆਰ, ਅਨੁਕੂਲਤਾ ਅਤੇ ਬੰਧਨ", lifeMapCarSub: "ਵਿਕਾਸ, ਸਫਲਤਾ ਅਤੇ ਉਦੇਸ਼",
+    lifeMapHealthSub: "ਸਰੀਰ, ਮਨ ਅਤੇ ਊਰਜਾ", lifeMapFinSub: "ਧਨ, ਸਥਿਰਤਾ ਅਤੇ ਪ੍ਰਵਾਹ",
+    lifeMapComing: "ਹੋਰ ਆਯਾਮ ਆ ਰਹੇ ਹਨ", lifeMapComingSub: "ਸਿੱਖਿਆ, ਯਾਤਰਾ, ਅਧਿਆਤਮ ਅਤੇ ਹੋਰ",
     futureTitle: "ਭਵਿੱਖ ਟਾਈਮਲਾਈਨ", futureSubtitle: "ਅਗਲੇ 6 ਮਹੀਨੇ ਡੀਕੋਡ", career: "ਕਰੀਅਰ",
     finance: "ਵਿੱਤ", relationship: "ਸੰਬੰਧ", health: "ਸਿਹਤ",
 
@@ -741,7 +793,7 @@ const T: Record<UILang, Translations> = {
   // ── ODIA ────────────────────────────────────────────────────────────────────
   or: {
     tabHome: "ହୋମ", tabKundli: "କୁଣ୍ଡଳୀ", tabAsk: "ପଚାରନ୍ତୁ",
-    tabFuture: "ଭବିଷ୍ୟତ", tabNotice: "ବିଜ୍ଞପ୍ତି", tabProfile: "ପ୍ରୋଫାଇଲ",
+    tabLifeMap: "ଲାଇଫ ମ୍ୟାପ", tabFuture: "ଭବିଷ୍ୟତ", tabNotice: "ବିଜ୍ଞପ୍ତି", tabProfile: "ପ୍ରୋଫାଇଲ",
 
     save: "ସଂରକ୍ଷଣ କରନ୍ତୁ", cancel: "ବାତିଲ କରନ୍ତୁ", skip: "ଛାଡ଼ନ୍ତୁ", back: "ପଛକୁ",
     next: "ପରବର୍ତ୍ତୀ", done: "ସଂପୂର୍ଣ୍ଣ", retry: "ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ", search: "ଖୋଜନ୍ତୁ",
@@ -789,6 +841,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ଜ୍ୟୋତିଷ AI କୁ ପଚାରନ୍ତୁ", askPlaceholder: "ଆପଣଙ୍କ ଚାର୍ଟ ବିଷୟରେ ଯାହା ଚାହୁଁଛି ପଚାରନ୍ତୁ...",
     askSend: "ପଠାନ୍ତୁ", askSuggestions: "ଏହା ପଚାରନ୍ତୁ...",
 
+    lifeMapTitle: "ଲାଇଫ ମ୍ୟାପ", lifeMapSubtitle: "ତାରାମାନଙ୍କ ଦ୍ୱାରା ମ୍ୟାପ କରାଯାଇଥିବା ଜୀବନ",
+    lifeMapRelSub: "ପ୍ରେମ, ସୁସଙ୍ଗତତା ଏବଂ ବନ୍ଧନ", lifeMapCarSub: "ଅଭିବୃଦ୍ଧି, ସଫଳତା ଏବଂ ଉଦ୍ଦେଶ୍ୟ",
+    lifeMapHealthSub: "ଶରୀର, ମନ ଏବଂ ଶକ୍ତି", lifeMapFinSub: "ସମ୍ପଦ, ସ୍ଥିରତା ଏବଂ ପ୍ରବାହ",
+    lifeMapComing: "ଅଧିକ ମାତ୍ରା ଆସୁଛି", lifeMapComingSub: "ଶିକ୍ଷା, ଯାତ୍ରା, ଅଧ୍ୟାତ୍ମ ଏବଂ ଅଧିକ",
     futureTitle: "ଭବିଷ୍ୟତ ଟାଇମଲାଇନ", futureSubtitle: "ଆଗାମୀ 6 ମାସ ଡିକୋଡ", career: "କ୍ୟାରିୟର",
     finance: "ଅର୍ଥ", relationship: "ସମ୍ପର୍କ", health: "ସ୍ବାସ୍ଥ୍ୟ",
 
@@ -801,7 +857,7 @@ const T: Record<UILang, Translations> = {
   // ── ASSAMESE ────────────────────────────────────────────────────────────────
   as: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "সুধক",
-    tabFuture: "ভবিষ্যৎ", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
+    tabLifeMap: "লাইফ ম্যাপ", tabLifeMap: "লাইফ মেপ", tabFuture: "ভবিষ্যৎ", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
 
     save: "সংৰক্ষণ কৰক", cancel: "বাতিল কৰক", skip: "এৰক", back: "পিছলৈ",
     next: "পৰৱৰ্তী", done: "সম্পূৰ্ণ", retry: "পুনৰ চেষ্টা কৰক", search: "বিচাৰক",
@@ -849,6 +905,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "জ্যোতিষ AI ক সুধক", askPlaceholder: "আপোনাৰ চাৰ্টৰ বিষয়ে যি মন যায় সুধক...",
     askSend: "পঠাওক", askSuggestions: "এইবোৰ সুধক...",
 
+    lifeMapTitle: "লাইফ মেপ", lifeMapSubtitle: "তৰাৰ দ্বাৰা মেপ কৰা জীৱন",
+    lifeMapRelSub: "প্ৰেম, সুসঙ্গতা আৰু বন্ধন", lifeMapCarSub: "বিকাশ, সাফল্য আৰু উদ্দেশ্য",
+    lifeMapHealthSub: "শৰীৰ, মন আৰু শক্তি", lifeMapFinSub: "সম্পদ, স্থিৰতা আৰু প্ৰবাহ",
+    lifeMapComing: "অধিক মাত্ৰা আহি আছে", lifeMapComingSub: "শিক্ষা, ভ্ৰমণ, আধ্যাত্মিকতা আৰু অধিক",
     futureTitle: "ভৱিষ্যত টাইমলাইন", futureSubtitle: "পৰৱৰ্তী ৬ মাহ ডিকোড", career: "কেৰিয়াৰ",
     finance: "বিত্ত", relationship: "সম্পৰ্ক", health: "স্বাস্থ্য",
 
@@ -861,7 +921,7 @@ const T: Record<UILang, Translations> = {
   // ── CHINESE SIMPLIFIED ───────────────────────────────────────────────────────
   zh: {
     tabHome: "首页", tabKundli: "星盘", tabAsk: "咨询",
-    tabFuture: "未来", tabNotice: "通知", tabProfile: "我的",
+    tabLifeMap: "生命地图", tabLifeMap: "ライフマップ", tabFuture: "未来", tabNotice: "通知", tabProfile: "我的",
 
     save: "保存", cancel: "取消", skip: "跳过", back: "返回",
     next: "下一步", done: "完成", retry: "重试", search: "搜索",
@@ -909,6 +969,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "咨询吠陀AI", askPlaceholder: "询问您星盘的任何问题...",
     askSend: "发送", askSuggestions: "试着问...",
 
+    lifeMapTitle: "生命地图", lifeMapSubtitle: "星辰映照的人生",
+    lifeMapRelSub: "爱情、缘分与羁绊", lifeMapCarSub: "成长、成功与目标",
+    lifeMapHealthSub: "身体、心灵与活力", lifeMapFinSub: "财富、稳定与流通",
+    lifeMapComing: "更多维度即将推出", lifeMapComingSub: "教育、旅行、灵性等",
     futureTitle: "未来时间线", futureSubtitle: "解码你的未来6个月", career: "事业",
     finance: "财务", relationship: "感情", health: "健康",
 
@@ -920,7 +984,7 @@ const T: Record<UILang, Translations> = {
   // ── SPANISH ─────────────────────────────────────────────────────────────────
   es: {
     tabHome: "Inicio", tabKundli: "Kundli", tabAsk: "Preguntar",
-    tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
+    tabLifeMap: "Mapa Vital", tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
 
     save: "Guardar", cancel: "Cancelar", skip: "Omitir", back: "Atrás",
     next: "Siguiente", done: "Listo", retry: "Reintentar", search: "Buscar",
@@ -968,6 +1032,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consultar IA Jyotish", askPlaceholder: "Pregunta cualquier cosa sobre tu carta...",
     askSend: "Enviar", askSuggestions: "Intenta preguntar...",
 
+    lifeMapTitle: "Mapa Vital", lifeMapSubtitle: "Tu vida, mapeada por las estrellas",
+    lifeMapRelSub: "Amor, compatibilidad y vínculos", lifeMapCarSub: "Crecimiento, éxito y propósito",
+    lifeMapHealthSub: "Cuerpo, mente y vitalidad", lifeMapFinSub: "Riqueza, estabilidad y flujo",
+    lifeMapComing: "Más dimensiones próximamente", lifeMapComingSub: "Educación, Viajes, Espiritualidad y más",
     futureTitle: "Línea del Futuro", futureSubtitle: "Tus próximos 6 meses decodificados", career: "Carrera",
     finance: "Finanzas", relationship: "Relaciones", health: "Salud",
 
@@ -980,7 +1048,7 @@ const T: Record<UILang, Translations> = {
   // ── ARABIC ──────────────────────────────────────────────────────────────────
   ar: {
     tabHome: "الرئيسية", tabKundli: "الكوندلي", tabAsk: "اسأل",
-    tabFuture: "المستقبل", tabNotice: "إشعارات", tabProfile: "الملف",
+    tabLifeMap: "خريطة الحياة", tabFuture: "المستقبل", tabNotice: "إشعارات", tabProfile: "الملف",
 
     save: "حفظ", cancel: "إلغاء", skip: "تخطي", back: "رجوع",
     next: "التالي", done: "تم", retry: "إعادة المحاولة", search: "بحث",
@@ -1028,6 +1096,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "اسأل ذكاء جيوتيش", askPlaceholder: "اسأل أي شيء عن مخططك...",
     askSend: "إرسال", askSuggestions: "جرّب السؤال...",
 
+    lifeMapTitle: "خريطة الحياة", lifeMapSubtitle: "حياتك مرسومة بالنجوم",
+    lifeMapRelSub: "الحب والتوافق والروابط", lifeMapCarSub: "النمو والنجاح والهدف",
+    lifeMapHealthSub: "الجسم والعقل والحيوية", lifeMapFinSub: "الثروة والاستقرار والتدفق",
+    lifeMapComing: "المزيد من الأبعاد قادمة", lifeMapComingSub: "التعليم والسفر والروحانية والمزيد",
     futureTitle: "الجدول الزمني للمستقبل", futureSubtitle: "فك شفرة الأشهر الستة القادمة", career: "المسيرة المهنية",
     finance: "المالية", relationship: "العلاقات", health: "الصحة",
 
@@ -1040,7 +1112,7 @@ const T: Record<UILang, Translations> = {
   // ── FRENCH ──────────────────────────────────────────────────────────────────
   fr: {
     tabHome: "Accueil", tabKundli: "Kundli", tabAsk: "Demander",
-    tabFuture: "Futur", tabNotice: "Avis", tabProfile: "Profil",
+    tabLifeMap: "Carte de Vie", tabFuture: "Futur", tabNotice: "Avis", tabProfile: "Profil",
 
     save: "Enregistrer", cancel: "Annuler", skip: "Passer", back: "Retour",
     next: "Suivant", done: "Terminé", retry: "Réessayer", search: "Rechercher",
@@ -1088,6 +1160,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consulter l'IA Jyotish", askPlaceholder: "Posez n'importe quelle question sur votre thème...",
     askSend: "Envoyer", askSuggestions: "Essayez de demander...",
 
+    lifeMapTitle: "Carte de Vie", lifeMapSubtitle: "Votre vie, cartographiée par les étoiles",
+    lifeMapRelSub: "Amour, compatibilité et liens", lifeMapCarSub: "Croissance, succès et objectif",
+    lifeMapHealthSub: "Corps, esprit et vitalité", lifeMapFinSub: "Richesse, stabilité et flux",
+    lifeMapComing: "Plus de dimensions à venir", lifeMapComingSub: "Éducation, Voyages, Spiritualité et plus",
     futureTitle: "Chronologie Future", futureSubtitle: "Vos 6 prochains mois décodés", career: "Carrière",
     finance: "Finances", relationship: "Relations", health: "Santé",
 
@@ -1100,7 +1176,7 @@ const T: Record<UILang, Translations> = {
   // ── PORTUGUESE ──────────────────────────────────────────────────────────────
   pt: {
     tabHome: "Início", tabKundli: "Kundli", tabAsk: "Perguntar",
-    tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
+    tabLifeMap: "Mapa da Vida", tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
 
     save: "Salvar", cancel: "Cancelar", skip: "Pular", back: "Voltar",
     next: "Próximo", done: "Concluído", retry: "Tentar novamente", search: "Pesquisar",
@@ -1148,6 +1224,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consultar IA Jyotish", askPlaceholder: "Pergunte qualquer coisa sobre seu mapa...",
     askSend: "Enviar", askSuggestions: "Tente perguntar...",
 
+    lifeMapTitle: "Mapa da Vida", lifeMapSubtitle: "Sua vida, mapeada pelas estrelas",
+    lifeMapRelSub: "Amor, compatibilidade e vínculos", lifeMapCarSub: "Crescimento, sucesso e propósito",
+    lifeMapHealthSub: "Corpo, mente e vitalidade", lifeMapFinSub: "Riqueza, estabilidade e fluxo",
+    lifeMapComing: "Mais dimensões em breve", lifeMapComingSub: "Educação, Viagens, Espiritualidade e mais",
     futureTitle: "Linha do Futuro", futureSubtitle: "Seus próximos 6 meses decodificados", career: "Carreira",
     finance: "Finanças", relationship: "Relacionamentos", health: "Saúde",
 
@@ -1160,7 +1240,7 @@ const T: Record<UILang, Translations> = {
   // ── GERMAN ──────────────────────────────────────────────────────────────────
   de: {
     tabHome: "Start", tabKundli: "Kundli", tabAsk: "Fragen",
-    tabFuture: "Zukunft", tabNotice: "Hinweise", tabProfile: "Profil",
+    tabLifeMap: "Lebenskarte", tabFuture: "Zukunft", tabNotice: "Hinweise", tabProfile: "Profil",
 
     save: "Speichern", cancel: "Abbrechen", skip: "Überspringen", back: "Zurück",
     next: "Weiter", done: "Fertig", retry: "Wiederholen", search: "Suchen",
@@ -1208,6 +1288,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Jyotish KI fragen", askPlaceholder: "Stellen Sie Fragen zu Ihrem Horoskop...",
     askSend: "Senden", askSuggestions: "Versuchen Sie zu fragen...",
 
+    lifeMapTitle: "Lebenskarte", lifeMapSubtitle: "Dein Leben, kartiert von den Sternen",
+    lifeMapRelSub: "Liebe, Kompatibilität und Bindungen", lifeMapCarSub: "Wachstum, Erfolg und Zweck",
+    lifeMapHealthSub: "Körper, Geist und Vitalität", lifeMapFinSub: "Wohlstand, Stabilität und Fluss",
+    lifeMapComing: "Weitere Dimensionen folgen", lifeMapComingSub: "Bildung, Reisen, Spiritualität und mehr",
     futureTitle: "Zukunfts-Timeline", futureSubtitle: "Deine nächsten 6 Monate entschlüsselt", career: "Karriere",
     finance: "Finanzen", relationship: "Beziehungen", health: "Gesundheit",
 
@@ -1220,7 +1304,7 @@ const T: Record<UILang, Translations> = {
   // ── RUSSIAN ─────────────────────────────────────────────────────────────────
   ru: {
     tabHome: "Главная", tabKundli: "Кундли", tabAsk: "Спросить",
-    tabFuture: "Будущее", tabNotice: "Уведомления", tabProfile: "Профиль",
+    tabLifeMap: "Карта Жизни", tabFuture: "Будущее", tabNotice: "Уведомления", tabProfile: "Профиль",
 
     save: "Сохранить", cancel: "Отмена", skip: "Пропустить", back: "Назад",
     next: "Далее", done: "Готово", retry: "Повторить", search: "Поиск",
@@ -1268,6 +1352,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Спросить ИИ Джйотиш", askPlaceholder: "Спросите что-нибудь о вашей карте...",
     askSend: "Отправить", askSuggestions: "Попробуйте спросить...",
 
+    lifeMapTitle: "Карта Жизни", lifeMapSubtitle: "Ваша жизнь, нарисованная звёздами",
+    lifeMapRelSub: "Любовь, совместимость и связи", lifeMapCarSub: "Рост, успех и цель",
+    lifeMapHealthSub: "Тело, разум и энергия", lifeMapFinSub: "Богатство, стабильность и поток",
+    lifeMapComing: "Больше измерений скоро", lifeMapComingSub: "Образование, Путешествия, Духовность и другое",
     futureTitle: "Хронология Будущего", futureSubtitle: "Ваши следующие 6 месяцев расшифрованы", career: "Карьера",
     finance: "Финансы", relationship: "Отношения", health: "Здоровье",
 
@@ -1280,7 +1368,7 @@ const T: Record<UILang, Translations> = {
   // ── JAPANESE ────────────────────────────────────────────────────────────────
   ja: {
     tabHome: "ホーム", tabKundli: "クンドリ", tabAsk: "質問",
-    tabFuture: "未来", tabNotice: "お知らせ", tabProfile: "プロフィール",
+    tabLifeMap: "生命地图", tabLifeMap: "ライフマップ", tabFuture: "未来", tabNotice: "お知らせ", tabProfile: "プロフィール",
 
     save: "保存", cancel: "キャンセル", skip: "スキップ", back: "戻る",
     next: "次へ", done: "完了", retry: "再試行", search: "検索",
@@ -1328,6 +1416,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "ジョーティシュAIに質問", askPlaceholder: "チャートについて何でも質問してください...",
     askSend: "送信", askSuggestions: "質問してみましょう...",
 
+    lifeMapTitle: "ライフマップ", lifeMapSubtitle: "星に導かれた人生の地図",
+    lifeMapRelSub: "愛、相性、絆", lifeMapCarSub: "成長、成功、目的",
+    lifeMapHealthSub: "体、心、活力", lifeMapFinSub: "富、安定、流れ",
+    lifeMapComing: "さらなる次元が近日公開", lifeMapComingSub: "教育、旅行、スピリチュアリティなど",
     futureTitle: "未来タイムライン", futureSubtitle: "次の6ヶ月を解読", career: "キャリア",
     finance: "財務", relationship: "人間関係", health: "健康",
 
@@ -1340,7 +1432,7 @@ const T: Record<UILang, Translations> = {
   // ── INDONESIAN ──────────────────────────────────────────────────────────────
   id: {
     tabHome: "Beranda", tabKundli: "Kundli", tabAsk: "Tanya",
-    tabFuture: "Masa Depan", tabNotice: "Pemberitahuan", tabProfile: "Profil",
+    tabLifeMap: "Peta Hidup", tabFuture: "Masa Depan", tabNotice: "Pemberitahuan", tabProfile: "Profil",
 
     save: "Simpan", cancel: "Batal", skip: "Lewati", back: "Kembali",
     next: "Berikutnya", done: "Selesai", retry: "Coba lagi", search: "Cari",
@@ -1388,6 +1480,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Tanya AI Jyotish", askPlaceholder: "Tanyakan apa saja tentang peta Anda...",
     askSend: "Kirim", askSuggestions: "Coba tanyakan...",
 
+    lifeMapTitle: "Peta Hidup", lifeMapSubtitle: "Hidupmu, dipetakan oleh bintang",
+    lifeMapRelSub: "Cinta, kecocokan & ikatan", lifeMapCarSub: "Pertumbuhan, kesuksesan & tujuan",
+    lifeMapHealthSub: "Tubuh, pikiran & vitalitas", lifeMapFinSub: "Kekayaan, stabilitas & arus",
+    lifeMapComing: "Lebih banyak dimensi segera", lifeMapComingSub: "Pendidikan, Perjalanan, Spiritualitas & lainnya",
     futureTitle: "Timeline Masa Depan", futureSubtitle: "6 bulan ke depan didekode", career: "Karier",
     finance: "Keuangan", relationship: "Hubungan", health: "Kesehatan",
 
@@ -1400,7 +1496,7 @@ const T: Record<UILang, Translations> = {
   // ── KOREAN ──────────────────────────────────────────────────────────────────
   ko: {
     tabHome: "홈", tabKundli: "쿤들리", tabAsk: "질문",
-    tabFuture: "미래", tabNotice: "알림", tabProfile: "프로필",
+    tabLifeMap: "라이프 맵", tabFuture: "미래", tabNotice: "알림", tabProfile: "프로필",
 
     save: "저장", cancel: "취소", skip: "건너뛰기", back: "뒤로",
     next: "다음", done: "완료", retry: "다시 시도", search: "검색",
@@ -1448,6 +1544,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "조티시 AI에게 질문", askPlaceholder: "차트에 대해 무엇이든 물어보세요...",
     askSend: "보내기", askSuggestions: "물어보세요...",
 
+    lifeMapTitle: "라이프 맵", lifeMapSubtitle: "별이 그린 당신의 삶",
+    lifeMapRelSub: "사랑, 호환성, 유대", lifeMapCarSub: "성장, 성공, 목적",
+    lifeMapHealthSub: "몸, 마음, 활력", lifeMapFinSub: "부, 안정, 흐름",
+    lifeMapComing: "더 많은 차원이 곧 공개됩니다", lifeMapComingSub: "교육, 여행, 영성 등",
     futureTitle: "미래 타임라인", futureSubtitle: "다음 6개월 해독", career: "커리어",
     finance: "재무", relationship: "관계", health: "건강",
 
@@ -1460,7 +1560,7 @@ const T: Record<UILang, Translations> = {
   // ── TURKISH ─────────────────────────────────────────────────────────────────
   tr: {
     tabHome: "Ana Sayfa", tabKundli: "Kundli", tabAsk: "Sor",
-    tabFuture: "Gelecek", tabNotice: "Bildirimler", tabProfile: "Profil",
+    tabLifeMap: "Yaşam Haritası", tabFuture: "Gelecek", tabNotice: "Bildirimler", tabProfile: "Profil",
 
     save: "Kaydet", cancel: "İptal", skip: "Atla", back: "Geri",
     next: "İleri", done: "Bitti", retry: "Tekrar dene", search: "Ara",
@@ -1508,6 +1608,10 @@ const T: Record<UILang, Translations> = {
     askTitle: "Jyotish AI'ya sor", askPlaceholder: "Haritanız hakkında her şeyi sorun...",
     askSend: "Gönder", askSuggestions: "Sormayı deneyin...",
 
+    lifeMapTitle: "Yaşam Haritası", lifeMapSubtitle: "Yıldızlar tarafından haritalanan hayatın",
+    lifeMapRelSub: "Aşk, uyumluluk ve bağlar", lifeMapCarSub: "Büyüme, başarı ve amaç",
+    lifeMapHealthSub: "Beden, zihin ve canlılık", lifeMapFinSub: "Zenginlik, istikrar ve akış",
+    lifeMapComing: "Daha fazla boyut yakında", lifeMapComingSub: "Eğitim, Seyahat, Maneviyat ve daha fazlası",
     futureTitle: "Gelecek Zaman Çizelgesi", futureSubtitle: "Önümüzdeki 6 ay çözüldü", career: "Kariyer",
     finance: "Finans", relationship: "İlişkiler", health: "Sağlık",
 

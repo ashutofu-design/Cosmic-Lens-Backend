@@ -16,6 +16,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="lifemap">
+        <Icon sf={{ default: "map", selected: "map.fill" }} />
+        <Label>Life Map</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ask">
         <Icon sf={{ default: "message", selected: "message.fill" }} />
         <Label>Ask</Label>
@@ -23,10 +27,6 @@ function NativeTabLayout() {
       <NativeTabs.Trigger name="insights">
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
         <Label>Future</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="notice">
-        <Icon sf={{ default: "bell", selected: "bell.fill" }} />
-        <Label>Notice</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -49,9 +49,10 @@ function ClassicTabLayout() {
     >
       <Tabs.Screen name="index"    options={{ title: "Home" }} />
       <Tabs.Screen name="kundli"   options={{ title: "Kundli", href: null }} />
+      <Tabs.Screen name="lifemap"  options={{ title: "Life Map" }} />
       <Tabs.Screen name="ask"      options={{ title: "Ask" }} />
       <Tabs.Screen name="insights" options={{ title: "Future" }} />
-      <Tabs.Screen name="notice"   options={{ title: "Notice" }} />
+      <Tabs.Screen name="notice"   options={{ title: "Notice", href: null }} />
       <Tabs.Screen name="profile"  options={{ title: "Profile" }} />
     </Tabs>
   );

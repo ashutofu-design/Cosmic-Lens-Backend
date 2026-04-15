@@ -753,11 +753,6 @@ export default function ProfileScreen() {
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             />
             <SettingRow
-              icon="book-open"
-              label="My Kundli 📜"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
-            />
-            <SettingRow
               icon="share-2"
               label="Share App"
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}

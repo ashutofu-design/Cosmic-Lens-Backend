@@ -228,8 +228,8 @@ export default function HomeScreen() {
         </View>
       </Animated.View>
 
-      {/* ── Hero Energy Card ── */}
-      <Animated.View style={[heroAnim, { flex: 5.5, paddingHorizontal: 12, paddingBottom: 8 }]}>
+      {/* ── Hero Energy Card — 65% ── */}
+      <Animated.View style={[heroAnim, { flex: 7, paddingHorizontal: 12, paddingBottom: 8 }]}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
           style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] }]}
@@ -245,8 +245,8 @@ export default function HomeScreen() {
         </Pressable>
       </Animated.View>
 
-      {/* ── 3 Feature Rows ── */}
-      <View style={{ flex: 2.5, paddingHorizontal: 12, paddingBottom: 4, justifyContent: "space-around" }}>
+      {/* ── 3 Feature Rows — 35% ── */}
+      <View style={{ flex: 3, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
         <Animated.View style={card1Anim}>
           <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
@@ -262,71 +262,9 @@ export default function HomeScreen() {
 
       </View>
 
-      {/* ── Life Areas ── */}
-      <View style={{ flex: 2, paddingBottom: 4 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, marginBottom: 6 }}>
-          <Feather name="compass" size={13} color={colors.C.isDark ? "#f59e0b" : "#7C3AED"} />
-          <Text style={{ color: colors.C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 11, fontFamily: F.bold, letterSpacing: 1.5, marginLeft: 6 }}>LIFE AREAS</Text>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}
-        >
-          {LIFE_AREAS.map((area, i) => (
-            <Pressable
-              key={area.key}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] })}
-            >
-              <LinearGradient
-                colors={colors.C.isDark ? area.darkGrad : area.lightGrad}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={la.chip}
-              >
-                <View style={[la.iconBox, { backgroundColor: colors.C.isDark ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.7)" }]}>
-                  <Text style={{ fontSize: 18 }}>{area.icon}</Text>
-                </View>
-                <Text style={[la.label, { color: colors.C.isDark ? "#ffffff" : "#1F2937" }]}>{area.label}</Text>
-                <Feather name="chevron-right" size={10} color={colors.C.isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)"} />
-              </LinearGradient>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
     </CosmicBg>
   );
 }
-
-// ── Life Areas data ───────────────────────────────────────────────────────────
-const LIFE_AREAS = [
-  { key: "career",    icon: "💼", label: "Career",    darkGrad: ["#1e3a5f","#0f2942"] as const, lightGrad: ["#EFF6FF","#DBEAFE"] as const },
-  { key: "love",      icon: "❤️", label: "Love",      darkGrad: ["#4c1130","#3b0d24"] as const, lightGrad: ["#FFF1F2","#FFE4E6"] as const },
-  { key: "wealth",    icon: "💰", label: "Wealth",    darkGrad: ["#3d3200","#2d2500"] as const, lightGrad: ["#FFFBEB","#FEF3C7"] as const },
-  { key: "health",    icon: "🏥", label: "Health",    darkGrad: ["#064e3b","#053f30"] as const, lightGrad: ["#ECFDF5","#D1FAE5"] as const },
-  { key: "education", icon: "📚", label: "Education", darkGrad: ["#312e81","#252360"] as const, lightGrad: ["#EEF2FF","#E0E7FF"] as const },
-  { key: "family",    icon: "👨‍👩‍👧‍👦", label: "Family",    darkGrad: ["#4a1942","#3a1034"] as const, lightGrad: ["#FDF4FF","#FAE8FF"] as const },
-  { key: "spiritual", icon: "🧘", label: "Spiritual", darkGrad: ["#2e1065","#1e0a44"] as const, lightGrad: ["#F5F3FF","#EDE9FE"] as const },
-  { key: "property",  icon: "🏠", label: "Property",  darkGrad: ["#422006","#331a05"] as const, lightGrad: ["#FFF7ED","#FFEDD5"] as const },
-];
-
-const la = StyleSheet.create({
-  chip: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-    minWidth: 130,
-  },
-  iconBox: {
-    width: 32, height: 32, borderRadius: 10,
-    alignItems: "center", justifyContent: "center",
-  },
-  label: {
-    fontSize: 12.5, fontFamily: F.semibold, flex: 1,
-  },
-});
 
 // ── Hero Energy Card — vertical layout, fills 60% ────────────────────────────
 function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {

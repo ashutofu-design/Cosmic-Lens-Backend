@@ -65,8 +65,8 @@ export function ExpandingChip() {
                 ) : (
                   /* Inactive: icon stacked above small muted label */
                   <div className="flex flex-col items-center justify-center gap-[3px]">
-                    <span className="text-[17px] leading-none" style={{ color: "#475569" }}>{tab.icon}</span>
-                    <span className="text-[9px] leading-none" style={{ color: "#64748B" }}>{tab.label}</span>
+                    <span className="text-[17px] leading-none" style={{ color: "#94A3B8" }}>{tab.icon}</span>
+                    <span className="text-[9px] leading-none" style={{ color: "#94A3B8" }}>{tab.label}</span>
                   </div>
                 )}
               </button>

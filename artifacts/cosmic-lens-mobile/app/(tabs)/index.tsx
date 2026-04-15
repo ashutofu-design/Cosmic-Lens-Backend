@@ -205,9 +205,11 @@ export default function HomeScreen() {
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
           <Text style={[styles.greetSub, { color: colors.mutedForeground }]}>
-            {kundli ? `Hello, ${kundli.name}` : "Hello"}
+            {kundli ? "Namaste 🙏" : "Hello"}
           </Text>
-          <Text style={[styles.greetTitle, { color: colors.foreground }]}>{t.todayEnergy}</Text>
+          <Text style={[styles.greetTitle, { color: colors.foreground }]}>
+            {kundli ? kundli.name : t.todayEnergy}
+          </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Pressable

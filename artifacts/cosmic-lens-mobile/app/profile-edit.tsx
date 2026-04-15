@@ -167,12 +167,6 @@ function ProfileRow({ profile, isPrimary, onView, onEdit, onDelete, canDelete }:
               </View>
             )}
           </View>
-          <Text style={[fm.meta, { color: C.textMuted }]} numberOfLines={1}>
-            {bd.day}/{bd.month}/{bd.year} · {String(bd.hour).padStart(2,"0")}:{String(bd.minute).padStart(2,"0")} {bd.ampm}
-          </Text>
-          <Text style={[fm.place, { color: C.textDim }]} numberOfLines={1}>
-            {bd.place}
-          </Text>
         </View>
 
         <View style={{ flexDirection: "row", gap: 5 }}>
@@ -829,8 +823,6 @@ const fm = StyleSheet.create({
     paddingHorizontal: 5, paddingVertical: 1,
   },
   relTxt: { fontSize: 8, fontFamily: F.bold, letterSpacing: 0.5 },
-  meta: { fontSize: 10, fontFamily: F.medium, marginTop: 1 },
-  place: { fontSize: 9.5, fontFamily: F.regular, marginTop: 0.5 },
   iconBtn: {
     width: 26, height: 26, borderRadius: 7,
     borderWidth: StyleSheet.hairlineWidth,

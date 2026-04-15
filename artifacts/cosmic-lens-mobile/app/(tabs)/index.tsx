@@ -215,7 +215,7 @@ export default function HomeScreen() {
             style={[styles.forecastPill, { backgroundColor: colors.C.warningBg, borderColor: colors.C.warningBorder }]}
           >
             <Feather name="calendar" size={11} color={colors.C.warningText} />
-            <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Days</Text>
+            <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Day Energy Forecast</Text>
           </Pressable>
           <Pressable
             onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}

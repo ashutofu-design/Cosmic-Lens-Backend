@@ -1,9 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import MoreDrawer from "@/components/MoreDrawer";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -90,41 +91,65 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const C = useC();
   const { language } = useUser();
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const [showMore, setShowMore] = useState(false);
 
   const t = getT(language);
-
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
 
   return (
-    <View style={[
-      styles.bar,
-      { paddingBottom: botPad, height: BAR_H + botPad, backgroundColor: C.navBg, borderTopColor: C.navBorder },
-    ]}>
-      <View style={[styles.topLine, { backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : C.border }]} />
-      <View style={styles.inner}>
-        {TABS.map((tab) => {
-          const route = state.routes.find(r => r.name === tab.name);
-          if (!route) return null;
-          const isActive = state.index === state.routes.indexOf(route);
+    <>
+      <MoreDrawer visible={showMore} onClose={() => setShowMore(false)} />
+      <View style={[
+        styles.bar,
+        { paddingBottom: botPad, height: BAR_H + botPad, backgroundColor: C.navBg, borderTopColor: C.navBorder },
+      ]}>
+        <View style={[styles.topLine, { backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : C.border }]} />
+        <View style={styles.inner}>
+          {TABS.map((tab) => {
+            const route = state.routes.find(r => r.name === tab.name);
+            if (!route) return null;
+            const isActive = state.index === state.routes.indexOf(route);
 
-          return (
-            <TabItem
-              key={tab.name}
-              tab={tab}
-              isActive={isActive}
-              onPress={() => {
-                const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-                if (!isActive && !event.defaultPrevented) {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate(route.name);
-                }
-              }}
-              onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
-            />
-          );
-        })}
+            return (
+              <TabItem
+                key={tab.name}
+                tab={tab}
+                isActive={isActive}
+                onPress={() => {
+                  const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+                  if (!isActive && !event.defaultPrevented) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    navigation.navigate(route.name);
+                  }
+                }}
+                onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
+              />
+            );
+          })}
+
+          {/* ── More (•••) button ── */}
+          <MoreTabButton onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowMore(true); }} />
+        </View>
       </View>
-    </View>
+    </>
+  );
+}
+
+function MoreTabButton({ onPress }: { onPress: () => void }) {
+  const C = useC();
+  const INACTIVE = C.isDark ? "#3d2b6b" : "#9f7aea";
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.tabBtn, pressed && { opacity: 0.7 }]}
+      onPress={onPress}
+    >
+      <View style={styles.iconWrap}>
+        <Feather name="grid" size={22} color={INACTIVE} />
+      </View>
+      <Text style={[styles.label, { color: INACTIVE, fontFamily: "Nunito_400Regular", opacity: 0.7 }]}>
+        More
+      </Text>
+    </Pressable>
   );
 }
 

@@ -22,6 +22,31 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 | Cosmic Lens Mobile | `artifacts/cosmic-lens-mobile` | Expo React Native mobile app |
 | API Server | `artifacts/api-server` | Python Flask backend (astrology APIs) |
 
+## Mobile App — Screen Inventory
+
+### Tabs (bottom nav)
+- `index.tsx` — Home / Today's Energy
+- `kundli.tsx` — Kundli chart
+- `ask.tsx` — AI Jyotish chat
+- `insights.tsx` — Energy charts / SVG
+- `notice.tsx` — Notifications
+- `profile.tsx` — Profile management
+
+### "More" Drawer Feature Screens (app/*.tsx)
+- `rashifal.tsx` — Daily/Weekly Rashifal for 12 signs
+- `lucky.tsx` — Lucky Color, Number, Day, Gemstone, Deity, Mantra
+- `panchang.tsx` — Tithi/Nakshatra/Yoga + Rahu Kaal + Festival calendar
+- `kundli-milan.tsx` — 36 guna matching + Rashi compatibility (existing)
+- `muhurat.tsx` — Shubh Muhurat finder (8 categories, monthly dates)
+- `numerology.tsx` — Life Path + Name Number calculator (Chaldean system)
+- `remedies.tsx` — Graha Upay (9 planets: mantra, daan, gemstone, upay)
+- `vastu.tsx` — Vastu tips by room/direction (existing)
+- `dosh.tsx` — Dosha analysis (existing)
+- `forecast.tsx` — Forecast (existing)
+
+### Drawer Component
+- `components/MoreDrawer.tsx` — Side drawer with animated slide-from-right, organized categories
+
 ## Python Backend Modules
 
 - `flask_app.py` — Main Flask server, auth, routing

@@ -1192,6 +1192,16 @@ const fm=StyleSheet.create({
   addBtn:  {borderRadius:12,height:44,alignItems:"center",justifyContent:"center"},
 });
 
+const lk=StyleSheet.create({
+  wrap:    {borderRadius:16,borderWidth:1,overflow:"hidden",padding:16,gap:10,minHeight:180},
+  fakeRow: {flexDirection:"row",alignItems:"center",gap:12,paddingVertical:6},
+  fakeLabel:{height:10,width:90,borderRadius:5},
+  fakeBar:  {height:8,borderRadius:4},
+  overlay: {position:"absolute",top:0,left:0,right:0,bottom:0,alignItems:"center",justifyContent:"center"},
+  lockContent:{alignItems:"center",paddingTop:60},
+  lockCircle:{width:50,height:50,borderRadius:25,backgroundColor:"rgba(109,40,217,0.3)",borderWidth:1,borderColor:"rgba(139,92,246,0.5)",alignItems:"center",justifyContent:"center"},
+});
+
 const sb=StyleSheet.create({
   btn:  {borderRadius:16,height:56,alignItems:"center",justifyContent:"center",overflow:"hidden"},
   shine:{position:"absolute",top:0,bottom:0,left:0,width:80,alignItems:"center",justifyContent:"center"},

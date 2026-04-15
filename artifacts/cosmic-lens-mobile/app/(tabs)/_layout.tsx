@@ -22,7 +22,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="insights">
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
-        <Label>Insights</Label>
+        <Label>Future</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="notice">
         <Icon sf={{ default: "bell", selected: "bell.fill" }} />
@@ -50,7 +50,7 @@ function ClassicTabLayout() {
       <Tabs.Screen name="index"    options={{ title: "Home" }} />
       <Tabs.Screen name="kundli"   options={{ title: "Kundli", href: null }} />
       <Tabs.Screen name="ask"      options={{ title: "Ask" }} />
-      <Tabs.Screen name="insights" options={{ title: "Insights" }} />
+      <Tabs.Screen name="insights" options={{ title: "Future" }} />
       <Tabs.Screen name="notice"   options={{ title: "Notice" }} />
       <Tabs.Screen name="profile"  options={{ title: "Profile" }} />
     </Tabs>

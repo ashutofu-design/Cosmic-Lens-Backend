@@ -18,7 +18,7 @@ export interface Translations {
   tabHome:      string;
   tabKundli:    string;
   tabAsk:       string;
-  tabInsights:  string;
+  tabFuture:    string;
   tabNotice:    string;
   tabProfile:   string;
 
@@ -114,8 +114,9 @@ export interface Translations {
   askSend:         string;
   askSuggestions:  string;
 
-  // ── Insights ──────────────────────────────────────────────
-  insightsTitle:   string;
+  // ── Future ────────────────────────────────────────────────
+  futureTitle:     string;
+  futureSubtitle:  string;
   career:          string;
   finance:         string;
   relationship:    string;
@@ -140,7 +141,7 @@ const T: Record<UILang, Translations> = {
   // ── ENGLISH (default) ───────────────────────────────────────────────────────
   en: {
     tabHome: "Home", tabKundli: "Kundli", tabAsk: "Ask",
-    tabInsights: "Insights", tabNotice: "Notice", tabProfile: "Profile",
+    tabFuture: "Future", tabNotice: "Notice", tabProfile: "Profile",
 
     save: "Save", cancel: "Cancel", skip: "Skip", back: "Back",
     next: "Next", done: "Done", retry: "Retry", search: "Search",
@@ -188,8 +189,8 @@ const T: Record<UILang, Translations> = {
     askTitle: "Ask Jyotish AI", askPlaceholder: "Ask anything about your chart...",
     askSend: "Send", askSuggestions: "Try asking...",
 
-    insightsTitle: "Cosmic Insights", career: "Career",
-    finance: "Finance", relationship: "Relationship", health: "Health",
+    futureTitle: "Future Timeline", futureSubtitle: "Your next 6 months decoded",
+    career: "Career", finance: "Finance", relationship: "Relationship", health: "Health",
 
     noticeTitle: "Notices", noNotices: "No notices yet",
 
@@ -200,7 +201,7 @@ const T: Record<UILang, Translations> = {
   // ── HINDI ───────────────────────────────────────────────────────────────────
   hi: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "पूछें",
-    tabInsights: "अंतर्दृष्टि", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "सहेजें", cancel: "रद्द करें", skip: "छोड़ें", back: "वापस",
     next: "आगे", done: "हो गया", retry: "दोबारा कोशिश करें", search: "खोजें",
@@ -248,7 +249,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ज्योतिष AI से पूछें", askPlaceholder: "अपनी कुंडली के बारे में कुछ भी पूछें...",
     askSend: "भेजें", askSuggestions: "ये पूछें...",
 
-    insightsTitle: "ब्रह्मांडीय अंतर्दृष्टि", career: "करियर",
+    futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "अगले 6 महीने डिकोड", career: "करियर",
     finance: "वित्त", relationship: "संबंध", health: "स्वास्थ्य",
 
     noticeTitle: "सूचनाएं", noNotices: "अभी कोई सूचना नहीं",
@@ -260,7 +261,7 @@ const T: Record<UILang, Translations> = {
   // ── MARATHI ─────────────────────────────────────────────────────────────────
   mr: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "विचारा",
-    tabInsights: "अंतर्दृष्टी", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "जतन करा", cancel: "रद्द करा", skip: "वगळा", back: "मागे",
     next: "पुढे", done: "झाले", retry: "पुन्हा प्रयत्न करा", search: "शोधा",
@@ -308,7 +309,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ज्योतिष AI ला विचारा", askPlaceholder: "तुमच्या चार्टबद्दल काहीही विचारा...",
     askSend: "पाठवा", askSuggestions: "हे विचारून पाहा...",
 
-    insightsTitle: "ब्रह्मांडीय अंतर्दृष्टी", career: "करिअर",
+    futureTitle: "भविष्य टाइमलाइन", futureSubtitle: "पुढचे 6 महिने डिकोड", career: "करिअर",
     finance: "वित्त", relationship: "नाते", health: "आरोग्य",
 
     noticeTitle: "सूचना", noNotices: "अजून कोणतीही सूचना नाही",
@@ -320,7 +321,7 @@ const T: Record<UILang, Translations> = {
   // ── BENGALI ─────────────────────────────────────────────────────────────────
   bn: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "জিজ্ঞেস করুন",
-    tabInsights: "অন্তর্দৃষ্টি", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
+    tabFuture: "ভবিষ্যৎ", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
 
     save: "সংরক্ষণ করুন", cancel: "বাতিল করুন", skip: "এড়িয়ে যান", back: "পিছনে",
     next: "পরবর্তী", done: "সম্পন্ন", retry: "আবার চেষ্টা করুন", search: "খোঁজুন",
@@ -368,7 +369,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "জ্যোতিষ AI কে জিজ্ঞেস করুন", askPlaceholder: "আপনার চার্ট সম্পর্কে যা খুশি জিজ্ঞেস করুন...",
     askSend: "পাঠান", askSuggestions: "এগুলো জিজ্ঞেস করে দেখুন...",
 
-    insightsTitle: "মহাজাগতিক অন্তর্দৃষ্টি", career: "ক্যারিয়ার",
+    futureTitle: "ভবিষ্যৎ টাইমলাইন", futureSubtitle: "আগামী ৬ মাস ডিকোড", career: "ক্যারিয়ার",
     finance: "অর্থ", relationship: "সম্পর্ক", health: "স্বাস্থ্য",
 
     noticeTitle: "বিজ্ঞপ্তি", noNotices: "এখনো কোনো বিজ্ঞপ্তি নেই",
@@ -380,7 +381,7 @@ const T: Record<UILang, Translations> = {
   // ── TELUGU ──────────────────────────────────────────────────────────────────
   te: {
     tabHome: "హోమ్", tabKundli: "కుండలి", tabAsk: "అడగండి",
-    tabInsights: "అంతర్దృష్టి", tabNotice: "నోటీసు", tabProfile: "ప్రొఫైల్",
+    tabFuture: "భవిష్యత్", tabNotice: "నోటీసు", tabProfile: "ప్రొఫైల్",
 
     save: "సేవ్ చేయండి", cancel: "రద్దు చేయండి", skip: "దాటవేయండి", back: "వెనుకకు",
     next: "తదుపరి", done: "పూర్తయింది", retry: "మళ్ళీ ప్రయత్నించండి", search: "వెతకండి",
@@ -428,7 +429,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "జ్యోతిష్య AI ని అడగండి", askPlaceholder: "మీ చార్ట్ గురించి ఏదైనా అడగండి...",
     askSend: "పంపండి", askSuggestions: "ఇవి అడిగి చూడండి...",
 
-    insightsTitle: "విశ్వ అంతర్దృష్టి", career: "కెరీర్",
+    futureTitle: "భవిష్యత్ టైమ్‌లైన్", futureSubtitle: "మీ తదుపరి 6 నెలలు డీకోడ్", career: "కెరీర్",
     finance: "ఆర్థికం", relationship: "సంబంధం", health: "ఆరోగ్యం",
 
     noticeTitle: "నోటీసులు", noNotices: "ఇంకా నోటీసులు లేవు",
@@ -440,7 +441,7 @@ const T: Record<UILang, Translations> = {
   // ── TAMIL ───────────────────────────────────────────────────────────────────
   ta: {
     tabHome: "முகப்பு", tabKundli: "ஜாதகம்", tabAsk: "கேளுங்கள்",
-    tabInsights: "நுண்ணறிவு", tabNotice: "அறிவிப்பு", tabProfile: "சுயவிவரம்",
+    tabFuture: "எதிர்காலம்", tabNotice: "அறிவிப்பு", tabProfile: "சுயவிவரம்",
 
     save: "சேமிக்கவும்", cancel: "ரத்து செய்யவும்", skip: "தவிர்க்கவும்", back: "பின்செல்",
     next: "அடுத்து", done: "முடிந்தது", retry: "மீண்டும் முயற்சிக்கவும்", search: "தேடவும்",
@@ -488,7 +489,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ஜோதிட AI ஐ கேளுங்கள்", askPlaceholder: "உங்கள் சார்ட் பற்றி எதுவும் கேளுங்கள்...",
     askSend: "அனுப்பவும்", askSuggestions: "இவற்றை கேளுங்கள்...",
 
-    insightsTitle: "பிரபஞ்ச நுண்ணறிவு", career: "தொழில்",
+    futureTitle: "எதிர்காலம் டைம்லைன்", futureSubtitle: "அடுத்த 6 மாதங்கள் டிகோடு", career: "தொழில்",
     finance: "நிதி", relationship: "உறவு", health: "ஆரோக்கியம்",
 
     noticeTitle: "அறிவிப்புகள்", noNotices: "இன்னும் அறிவிப்புகள் இல்லை",
@@ -500,7 +501,7 @@ const T: Record<UILang, Translations> = {
   // ── GUJARATI ────────────────────────────────────────────────────────────────
   gu: {
     tabHome: "હોમ", tabKundli: "કુંડળી", tabAsk: "પૂછો",
-    tabInsights: "અંતર્દૃષ્ટિ", tabNotice: "સૂચના", tabProfile: "પ્રોફાઇલ",
+    tabFuture: "ભવિષ્ય", tabNotice: "સૂચના", tabProfile: "પ્રોફાઇલ",
 
     save: "સાચવો", cancel: "રદ કરો", skip: "છોડો", back: "પાછળ",
     next: "આગળ", done: "થઈ ગયું", retry: "ફરી પ્રયાસ કરો", search: "શોધો",
@@ -548,7 +549,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "જ્યોતિષ AI ને પૂછો", askPlaceholder: "તમારા ચાર્ટ વિશે કંઈ પણ પૂછો...",
     askSend: "મોકલો", askSuggestions: "આ પૂછો...",
 
-    insightsTitle: "બ્રહ્માંડ અંતર્દૃષ્ટિ", career: "કારકિર્દી",
+    futureTitle: "ભવિષ્ય ટાઇમલાઇન", futureSubtitle: "આગામી 6 મહિના ડીકોડ", career: "કારકિર્દી",
     finance: "નાણાં", relationship: "સંબંધ", health: "આરોગ્ય",
 
     noticeTitle: "સૂચનાઓ", noNotices: "હજી કોઈ સૂચના નથી",
@@ -560,7 +561,7 @@ const T: Record<UILang, Translations> = {
   // ── KANNADA ─────────────────────────────────────────────────────────────────
   kn: {
     tabHome: "ಹೋಮ್", tabKundli: "ಕುಂಡಲಿ", tabAsk: "ಕೇಳಿ",
-    tabInsights: "ಒಳನೋಟ", tabNotice: "ಸೂಚನೆ", tabProfile: "ಪ್ರೊಫೈಲ್",
+    tabFuture: "ಭವಿಷ್ಯ", tabNotice: "ಸೂಚನೆ", tabProfile: "ಪ್ರೊಫೈಲ್",
 
     save: "ಉಳಿಸಿ", cancel: "ರದ್ದು ಮಾಡಿ", skip: "ಬಿಟ್ಟುಬಿಡಿ", back: "ಹಿಂದಕ್ಕೆ",
     next: "ಮುಂದೆ", done: "ಮುಗಿಯಿತು", retry: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", search: "ಹುಡುಕಿ",
@@ -608,7 +609,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ಜ್ಯೋತಿಷ AI ಕೇಳಿ", askPlaceholder: "ನಿಮ್ಮ ಚಾರ್ಟ್ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ...",
     askSend: "ಕಳುಹಿಸಿ", askSuggestions: "ಕೇಳಿ ನೋಡಿ...",
 
-    insightsTitle: "ಬ್ರಹ್ಮಾಂಡ ಒಳನೋಟ", career: "ವೃತ್ತಿ",
+    futureTitle: "ಭವಿಷ್ಯ ಟೈಮ್‌ಲೈನ್", futureSubtitle: "ಮುಂದಿನ 6 ತಿಂಗಳು ಡಿಕೋಡ್", career: "ವೃತ್ತಿ",
     finance: "ಹಣಕಾಸು", relationship: "ಸಂಬಂಧ", health: "ಆರೋಗ್ಯ",
 
     noticeTitle: "ಸೂಚನೆಗಳು", noNotices: "ಇನ್ನೂ ಯಾವುದೇ ಸೂಚನೆಗಳಿಲ್ಲ",
@@ -620,7 +621,7 @@ const T: Record<UILang, Translations> = {
   // ── MALAYALAM ───────────────────────────────────────────────────────────────
   ml: {
     tabHome: "ഹോം", tabKundli: "കുണ്ഡലി", tabAsk: "ചോദിക്കൂ",
-    tabInsights: "ഉൾക്കാഴ്ചകൾ", tabNotice: "അറിയിപ്പ്", tabProfile: "പ്രൊഫൈൽ",
+    tabFuture: "ഭാവി", tabNotice: "അറിയിപ്പ്", tabProfile: "പ്രൊഫൈൽ",
 
     save: "സേവ് ചെയ്യൂ", cancel: "റദ്ദ് ചെയ്യൂ", skip: "ഒഴിവാക്കൂ", back: "തിരിക",
     next: "അടുത്തത്", done: "പൂർത്തിയായി", retry: "വീണ്ടും ശ്രമിക്കൂ", search: "തിരയൂ",
@@ -668,7 +669,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ജ്യോതിഷ AI യോട് ചോദിക്കൂ", askPlaceholder: "നിങ്ങളുടെ ചാർട്ടിനെ കുറിച്ച് എന്തും ചോദിക്കൂ...",
     askSend: "അയക്കൂ", askSuggestions: "ഇവ ചോദിക്കൂ...",
 
-    insightsTitle: "പ്രപഞ്ച ഉൾക്കാഴ്ചകൾ", career: "കരിയർ",
+    futureTitle: "ഭാവി ടൈംലൈൻ", futureSubtitle: "അടുത്ത 6 മാസം ഡീകോഡ്", career: "കരിയർ",
     finance: "ധനം", relationship: "ബന്ധം", health: "ആരോഗ്യം",
 
     noticeTitle: "അറിയിപ്പുകൾ", noNotices: "ഇനിയും അറിയിപ്പുകൾ ഇല്ല",
@@ -680,7 +681,7 @@ const T: Record<UILang, Translations> = {
   // ── PUNJABI ─────────────────────────────────────────────────────────────────
   pa: {
     tabHome: "ਹੋਮ", tabKundli: "ਕੁੰਡਲੀ", tabAsk: "ਪੁੱਛੋ",
-    tabInsights: "ਸੂਝ", tabNotice: "ਸੂਚਨਾ", tabProfile: "ਪ੍ਰੋਫਾਈਲ",
+    tabFuture: "ਭਵਿੱਖ", tabNotice: "ਸੂਚਨਾ", tabProfile: "ਪ੍ਰੋਫਾਈਲ",
 
     save: "ਸੇਵ ਕਰੋ", cancel: "ਰੱਦ ਕਰੋ", skip: "ਛੱਡੋ", back: "ਵਾਪਸ",
     next: "ਅਗਲਾ", done: "ਹੋ ਗਿਆ", retry: "ਮੁੜ ਕੋਸ਼ਿਸ਼ ਕਰੋ", search: "ਲੱਭੋ",
@@ -728,7 +729,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ਜੋਤਿਸ਼ AI ਤੋਂ ਪੁੱਛੋ", askPlaceholder: "ਆਪਣੇ ਚਾਰਟ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ...",
     askSend: "ਭੇਜੋ", askSuggestions: "ਇਹ ਪੁੱਛ ਕੇ ਦੇਖੋ...",
 
-    insightsTitle: "ਬ੍ਰਹਿਮੰਡੀ ਸੂਝ", career: "ਕਰੀਅਰ",
+    futureTitle: "ਭਵਿੱਖ ਟਾਈਮਲਾਈਨ", futureSubtitle: "ਅਗਲੇ 6 ਮਹੀਨੇ ਡੀਕੋਡ", career: "ਕਰੀਅਰ",
     finance: "ਵਿੱਤ", relationship: "ਸੰਬੰਧ", health: "ਸਿਹਤ",
 
     noticeTitle: "ਸੂਚਨਾਵਾਂ", noNotices: "ਅਜੇ ਕੋਈ ਸੂਚਨਾ ਨਹੀਂ",
@@ -740,7 +741,7 @@ const T: Record<UILang, Translations> = {
   // ── ODIA ────────────────────────────────────────────────────────────────────
   or: {
     tabHome: "ହୋମ", tabKundli: "କୁଣ୍ଡଳୀ", tabAsk: "ପଚାରନ୍ତୁ",
-    tabInsights: "ଅନ୍ତର୍ଦୃଷ୍ଟି", tabNotice: "ବିଜ୍ଞପ୍ତି", tabProfile: "ପ୍ରୋଫାଇଲ",
+    tabFuture: "ଭବିଷ୍ୟତ", tabNotice: "ବିଜ୍ଞପ୍ତି", tabProfile: "ପ୍ରୋଫାଇଲ",
 
     save: "ସଂରକ୍ଷଣ କରନ୍ତୁ", cancel: "ବାତିଲ କରନ୍ତୁ", skip: "ଛାଡ଼ନ୍ତୁ", back: "ପଛକୁ",
     next: "ପରବର୍ତ୍ତୀ", done: "ସଂପୂର୍ଣ୍ଣ", retry: "ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ", search: "ଖୋଜନ୍ତୁ",
@@ -788,7 +789,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ଜ୍ୟୋତିଷ AI କୁ ପଚାରନ୍ତୁ", askPlaceholder: "ଆପଣଙ୍କ ଚାର୍ଟ ବିଷୟରେ ଯାହା ଚାହୁଁଛି ପଚାରନ୍ତୁ...",
     askSend: "ପଠାନ୍ତୁ", askSuggestions: "ଏହା ପଚାରନ୍ତୁ...",
 
-    insightsTitle: "ବ୍ରହ୍ମାଣ୍ଡ ଅନ୍ତର୍ଦୃଷ୍ଟି", career: "କ୍ୟାରିୟର",
+    futureTitle: "ଭବିଷ୍ୟତ ଟାଇମଲାଇନ", futureSubtitle: "ଆଗାମୀ 6 ମାସ ଡିକୋଡ", career: "କ୍ୟାରିୟର",
     finance: "ଅର୍ଥ", relationship: "ସମ୍ପର୍କ", health: "ସ୍ବାସ୍ଥ୍ୟ",
 
     noticeTitle: "ବିଜ୍ଞପ୍ତି", noNotices: "ଏ ପର୍ଯ୍ୟନ୍ତ କୌଣସି ବିଜ୍ଞପ୍ତି ନାହିଁ",
@@ -800,7 +801,7 @@ const T: Record<UILang, Translations> = {
   // ── ASSAMESE ────────────────────────────────────────────────────────────────
   as: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "সুধক",
-    tabInsights: "অন্তর্দৃষ্টি", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
+    tabFuture: "ভবিষ্যৎ", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
 
     save: "সংৰক্ষণ কৰক", cancel: "বাতিল কৰক", skip: "এৰক", back: "পিছলৈ",
     next: "পৰৱৰ্তী", done: "সম্পূৰ্ণ", retry: "পুনৰ চেষ্টা কৰক", search: "বিচাৰক",
@@ -848,7 +849,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "জ্যোতিষ AI ক সুধক", askPlaceholder: "আপোনাৰ চাৰ্টৰ বিষয়ে যি মন যায় সুধক...",
     askSend: "পঠাওক", askSuggestions: "এইবোৰ সুধক...",
 
-    insightsTitle: "ব্ৰহ্মাণ্ডীয় অন্তর্দৃষ্টি", career: "কেৰিয়াৰ",
+    futureTitle: "ভৱিষ্যত টাইমলাইন", futureSubtitle: "পৰৱৰ্তী ৬ মাহ ডিকোড", career: "কেৰিয়াৰ",
     finance: "বিত্ত", relationship: "সম্পৰ্ক", health: "স্বাস্থ্য",
 
     noticeTitle: "জাননী", noNotices: "এতিয়ালৈকে কোনো জাননী নাই",
@@ -860,7 +861,7 @@ const T: Record<UILang, Translations> = {
   // ── CHINESE SIMPLIFIED ───────────────────────────────────────────────────────
   zh: {
     tabHome: "首页", tabKundli: "星盘", tabAsk: "咨询",
-    tabInsights: "洞察", tabNotice: "通知", tabProfile: "我的",
+    tabFuture: "未来", tabNotice: "通知", tabProfile: "我的",
 
     save: "保存", cancel: "取消", skip: "跳过", back: "返回",
     next: "下一步", done: "完成", retry: "重试", search: "搜索",
@@ -908,7 +909,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "咨询吠陀AI", askPlaceholder: "询问您星盘的任何问题...",
     askSend: "发送", askSuggestions: "试着问...",
 
-    insightsTitle: "宇宙洞察", career: "事业",
+    futureTitle: "未来时间线", futureSubtitle: "解码你的未来6个月", career: "事业",
     finance: "财务", relationship: "感情", health: "健康",
 
     noticeTitle: "通知", noNotices: "暂无通知",
@@ -919,7 +920,7 @@ const T: Record<UILang, Translations> = {
   // ── SPANISH ─────────────────────────────────────────────────────────────────
   es: {
     tabHome: "Inicio", tabKundli: "Kundli", tabAsk: "Preguntar",
-    tabInsights: "Insights", tabNotice: "Avisos", tabProfile: "Perfil",
+    tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
 
     save: "Guardar", cancel: "Cancelar", skip: "Omitir", back: "Atrás",
     next: "Siguiente", done: "Listo", retry: "Reintentar", search: "Buscar",
@@ -967,7 +968,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consultar IA Jyotish", askPlaceholder: "Pregunta cualquier cosa sobre tu carta...",
     askSend: "Enviar", askSuggestions: "Intenta preguntar...",
 
-    insightsTitle: "Insights Cósmicos", career: "Carrera",
+    futureTitle: "Línea del Futuro", futureSubtitle: "Tus próximos 6 meses decodificados", career: "Carrera",
     finance: "Finanzas", relationship: "Relaciones", health: "Salud",
 
     noticeTitle: "Avisos", noNotices: "Sin avisos aún",
@@ -979,7 +980,7 @@ const T: Record<UILang, Translations> = {
   // ── ARABIC ──────────────────────────────────────────────────────────────────
   ar: {
     tabHome: "الرئيسية", tabKundli: "الكوندلي", tabAsk: "اسأل",
-    tabInsights: "رؤى", tabNotice: "إشعارات", tabProfile: "الملف",
+    tabFuture: "المستقبل", tabNotice: "إشعارات", tabProfile: "الملف",
 
     save: "حفظ", cancel: "إلغاء", skip: "تخطي", back: "رجوع",
     next: "التالي", done: "تم", retry: "إعادة المحاولة", search: "بحث",
@@ -1027,7 +1028,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "اسأل ذكاء جيوتيش", askPlaceholder: "اسأل أي شيء عن مخططك...",
     askSend: "إرسال", askSuggestions: "جرّب السؤال...",
 
-    insightsTitle: "رؤى كونية", career: "المسيرة المهنية",
+    futureTitle: "الجدول الزمني للمستقبل", futureSubtitle: "فك شفرة الأشهر الستة القادمة", career: "المسيرة المهنية",
     finance: "المالية", relationship: "العلاقات", health: "الصحة",
 
     noticeTitle: "الإشعارات", noNotices: "لا توجد إشعارات بعد",
@@ -1039,7 +1040,7 @@ const T: Record<UILang, Translations> = {
   // ── FRENCH ──────────────────────────────────────────────────────────────────
   fr: {
     tabHome: "Accueil", tabKundli: "Kundli", tabAsk: "Demander",
-    tabInsights: "Perspectives", tabNotice: "Avis", tabProfile: "Profil",
+    tabFuture: "Futur", tabNotice: "Avis", tabProfile: "Profil",
 
     save: "Enregistrer", cancel: "Annuler", skip: "Passer", back: "Retour",
     next: "Suivant", done: "Terminé", retry: "Réessayer", search: "Rechercher",
@@ -1087,7 +1088,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consulter l'IA Jyotish", askPlaceholder: "Posez n'importe quelle question sur votre thème...",
     askSend: "Envoyer", askSuggestions: "Essayez de demander...",
 
-    insightsTitle: "Perspectives Cosmiques", career: "Carrière",
+    futureTitle: "Chronologie Future", futureSubtitle: "Vos 6 prochains mois décodés", career: "Carrière",
     finance: "Finances", relationship: "Relations", health: "Santé",
 
     noticeTitle: "Avis", noNotices: "Pas encore d'avis",
@@ -1099,7 +1100,7 @@ const T: Record<UILang, Translations> = {
   // ── PORTUGUESE ──────────────────────────────────────────────────────────────
   pt: {
     tabHome: "Início", tabKundli: "Kundli", tabAsk: "Perguntar",
-    tabInsights: "Insights", tabNotice: "Avisos", tabProfile: "Perfil",
+    tabFuture: "Futuro", tabNotice: "Avisos", tabProfile: "Perfil",
 
     save: "Salvar", cancel: "Cancelar", skip: "Pular", back: "Voltar",
     next: "Próximo", done: "Concluído", retry: "Tentar novamente", search: "Pesquisar",
@@ -1147,7 +1148,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Consultar IA Jyotish", askPlaceholder: "Pergunte qualquer coisa sobre seu mapa...",
     askSend: "Enviar", askSuggestions: "Tente perguntar...",
 
-    insightsTitle: "Insights Cósmicos", career: "Carreira",
+    futureTitle: "Linha do Futuro", futureSubtitle: "Seus próximos 6 meses decodificados", career: "Carreira",
     finance: "Finanças", relationship: "Relacionamentos", health: "Saúde",
 
     noticeTitle: "Avisos", noNotices: "Sem avisos ainda",
@@ -1159,7 +1160,7 @@ const T: Record<UILang, Translations> = {
   // ── GERMAN ──────────────────────────────────────────────────────────────────
   de: {
     tabHome: "Start", tabKundli: "Kundli", tabAsk: "Fragen",
-    tabInsights: "Einblicke", tabNotice: "Hinweise", tabProfile: "Profil",
+    tabFuture: "Zukunft", tabNotice: "Hinweise", tabProfile: "Profil",
 
     save: "Speichern", cancel: "Abbrechen", skip: "Überspringen", back: "Zurück",
     next: "Weiter", done: "Fertig", retry: "Wiederholen", search: "Suchen",
@@ -1207,7 +1208,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Jyotish KI fragen", askPlaceholder: "Stellen Sie Fragen zu Ihrem Horoskop...",
     askSend: "Senden", askSuggestions: "Versuchen Sie zu fragen...",
 
-    insightsTitle: "Kosmische Einblicke", career: "Karriere",
+    futureTitle: "Zukunfts-Timeline", futureSubtitle: "Deine nächsten 6 Monate entschlüsselt", career: "Karriere",
     finance: "Finanzen", relationship: "Beziehungen", health: "Gesundheit",
 
     noticeTitle: "Hinweise", noNotices: "Noch keine Hinweise",
@@ -1219,7 +1220,7 @@ const T: Record<UILang, Translations> = {
   // ── RUSSIAN ─────────────────────────────────────────────────────────────────
   ru: {
     tabHome: "Главная", tabKundli: "Кундли", tabAsk: "Спросить",
-    tabInsights: "Инсайты", tabNotice: "Уведомления", tabProfile: "Профиль",
+    tabFuture: "Будущее", tabNotice: "Уведомления", tabProfile: "Профиль",
 
     save: "Сохранить", cancel: "Отмена", skip: "Пропустить", back: "Назад",
     next: "Далее", done: "Готово", retry: "Повторить", search: "Поиск",
@@ -1267,7 +1268,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Спросить ИИ Джйотиш", askPlaceholder: "Спросите что-нибудь о вашей карте...",
     askSend: "Отправить", askSuggestions: "Попробуйте спросить...",
 
-    insightsTitle: "Космические Инсайты", career: "Карьера",
+    futureTitle: "Хронология Будущего", futureSubtitle: "Ваши следующие 6 месяцев расшифрованы", career: "Карьера",
     finance: "Финансы", relationship: "Отношения", health: "Здоровье",
 
     noticeTitle: "Уведомления", noNotices: "Уведомлений пока нет",
@@ -1279,7 +1280,7 @@ const T: Record<UILang, Translations> = {
   // ── JAPANESE ────────────────────────────────────────────────────────────────
   ja: {
     tabHome: "ホーム", tabKundli: "クンドリ", tabAsk: "質問",
-    tabInsights: "インサイト", tabNotice: "お知らせ", tabProfile: "プロフィール",
+    tabFuture: "未来", tabNotice: "お知らせ", tabProfile: "プロフィール",
 
     save: "保存", cancel: "キャンセル", skip: "スキップ", back: "戻る",
     next: "次へ", done: "完了", retry: "再試行", search: "検索",
@@ -1327,7 +1328,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "ジョーティシュAIに質問", askPlaceholder: "チャートについて何でも質問してください...",
     askSend: "送信", askSuggestions: "質問してみましょう...",
 
-    insightsTitle: "宇宙のインサイト", career: "キャリア",
+    futureTitle: "未来タイムライン", futureSubtitle: "次の6ヶ月を解読", career: "キャリア",
     finance: "財務", relationship: "人間関係", health: "健康",
 
     noticeTitle: "お知らせ", noNotices: "まだお知らせはありません",
@@ -1339,7 +1340,7 @@ const T: Record<UILang, Translations> = {
   // ── INDONESIAN ──────────────────────────────────────────────────────────────
   id: {
     tabHome: "Beranda", tabKundli: "Kundli", tabAsk: "Tanya",
-    tabInsights: "Wawasan", tabNotice: "Pemberitahuan", tabProfile: "Profil",
+    tabFuture: "Masa Depan", tabNotice: "Pemberitahuan", tabProfile: "Profil",
 
     save: "Simpan", cancel: "Batal", skip: "Lewati", back: "Kembali",
     next: "Berikutnya", done: "Selesai", retry: "Coba lagi", search: "Cari",
@@ -1387,7 +1388,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Tanya AI Jyotish", askPlaceholder: "Tanyakan apa saja tentang peta Anda...",
     askSend: "Kirim", askSuggestions: "Coba tanyakan...",
 
-    insightsTitle: "Wawasan Kosmik", career: "Karier",
+    futureTitle: "Timeline Masa Depan", futureSubtitle: "6 bulan ke depan didekode", career: "Karier",
     finance: "Keuangan", relationship: "Hubungan", health: "Kesehatan",
 
     noticeTitle: "Pemberitahuan", noNotices: "Belum ada pemberitahuan",
@@ -1399,7 +1400,7 @@ const T: Record<UILang, Translations> = {
   // ── KOREAN ──────────────────────────────────────────────────────────────────
   ko: {
     tabHome: "홈", tabKundli: "쿤들리", tabAsk: "질문",
-    tabInsights: "인사이트", tabNotice: "알림", tabProfile: "프로필",
+    tabFuture: "미래", tabNotice: "알림", tabProfile: "프로필",
 
     save: "저장", cancel: "취소", skip: "건너뛰기", back: "뒤로",
     next: "다음", done: "완료", retry: "다시 시도", search: "검색",
@@ -1447,7 +1448,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "조티시 AI에게 질문", askPlaceholder: "차트에 대해 무엇이든 물어보세요...",
     askSend: "보내기", askSuggestions: "물어보세요...",
 
-    insightsTitle: "우주 인사이트", career: "커리어",
+    futureTitle: "미래 타임라인", futureSubtitle: "다음 6개월 해독", career: "커리어",
     finance: "재무", relationship: "관계", health: "건강",
 
     noticeTitle: "알림", noNotices: "알림이 아직 없습니다",
@@ -1459,7 +1460,7 @@ const T: Record<UILang, Translations> = {
   // ── TURKISH ─────────────────────────────────────────────────────────────────
   tr: {
     tabHome: "Ana Sayfa", tabKundli: "Kundli", tabAsk: "Sor",
-    tabInsights: "Öngörüler", tabNotice: "Bildirimler", tabProfile: "Profil",
+    tabFuture: "Gelecek", tabNotice: "Bildirimler", tabProfile: "Profil",
 
     save: "Kaydet", cancel: "İptal", skip: "Atla", back: "Geri",
     next: "İleri", done: "Bitti", retry: "Tekrar dene", search: "Ara",
@@ -1507,7 +1508,7 @@ const T: Record<UILang, Translations> = {
     askTitle: "Jyotish AI'ya sor", askPlaceholder: "Haritanız hakkında her şeyi sorun...",
     askSend: "Gönder", askSuggestions: "Sormayı deneyin...",
 
-    insightsTitle: "Kozmik Öngörüler", career: "Kariyer",
+    futureTitle: "Gelecek Zaman Çizelgesi", futureSubtitle: "Önümüzdeki 6 ay çözüldü", career: "Kariyer",
     finance: "Finans", relationship: "İlişkiler", health: "Sağlık",
 
     noticeTitle: "Bildirimler", noNotices: "Henüz bildirim yok",

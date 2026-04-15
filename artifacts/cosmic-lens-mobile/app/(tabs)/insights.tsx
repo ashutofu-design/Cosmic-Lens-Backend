@@ -282,7 +282,8 @@ export default function InsightsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <Text style={[s.heading, { color: C.text }]}>{t.insightsTitle}</Text>
+      <Text style={[s.heading, { color: C.text }]}>{t.futureTitle}</Text>
+      <Text style={[s.subtitle, { color: C.textDim }]}>{t.futureSubtitle}</Text>
 
       {/* ── YOUR COSMIC THEME ── */}
       <View style={s.themeSection}>
@@ -448,6 +449,7 @@ const s = StyleSheet.create({
   root:    { flex: 1 },
   content: { paddingHorizontal: 16, gap: 14 },
   heading: { color: "#dde8f4", fontSize: 22, fontWeight: "700" },
+  subtitle: { fontSize: 13, fontWeight: "400", marginTop: 4, marginBottom: 4, opacity: 0.7 },
 
   demoBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,

@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext, useCallback, useContext,
-  useEffect, useState,
+  useEffect, useMemo, useState,
 } from "react";
-import { Appearance } from "react-native";
+
+import { DEFAULT_ACCENT, type ZodiacAccent, type ZodiacSign } from "@/lib/zodiac";
 
 export type ThemeMode = "dark" | "light";
 
@@ -18,7 +19,7 @@ export interface ThemeColors {
   textMid:   string;
   textMuted: string;
   textDim:   string;
-  // Accent
+  // Accent (overridden by zodiac when available)
   accent:   string;
   accentBg: string;
   // Borders
@@ -88,7 +89,7 @@ export const LIGHT: ThemeColors = {
   textMuted: "#64748B",   // slate-500  — secondary
   textDim:   "#94A3B8",   // slate-400  — placeholder / dim
 
-  accent:   "#6366F1",    // indigo-500 — primary action
+  accent:   "#6366F1",    // indigo-500 — primary action (overridden by zodiac)
   accentBg: "rgba(99,102,241,0.08)",
 
   border:  "#E2E8F0",     // slate-200
@@ -111,22 +112,31 @@ export const LIGHT: ThemeColors = {
   isDark: false,
 };
 
+// ── Context shape ─────────────────────────────────────────────────────────────
 interface ThemeCtx {
   mode: ThemeMode;
   C: ThemeColors;
-  setMode: (m: ThemeMode) => void;
-  toggle: () => void;
+  setMode:          (m: ThemeMode) => void;
+  toggle:           () => void;
+  // Zodiac accent
+  zodiacSign:       ZodiacSign | null;
+  zodiacAccent:     ZodiacAccent;
+  setZodiacAccent:  (sign: ZodiacSign | null, accent: ZodiacAccent) => void;
 }
 
 const ThemeContext = createContext<ThemeCtx>({
   mode: "dark", C: DARK,
   setMode: () => {}, toggle: () => {},
+  zodiacSign: null, zodiacAccent: DEFAULT_ACCENT,
+  setZodiacAccent: () => {},
 });
 
 const STORAGE_KEY = "cl_theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, _setMode] = useState<ThemeMode>("dark");
+  const [mode, _setMode]           = useState<ThemeMode>("dark");
+  const [zodiacSign, _setZodiacSign]     = useState<ZodiacSign | null>(null);
+  const [zodiacAccent, _setZodiacAccent] = useState<ZodiacAccent>(DEFAULT_ACCENT);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(v => {
@@ -143,10 +153,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMode(mode === "dark" ? "light" : "dark");
   }, [mode, setMode]);
 
-  const C = mode === "dark" ? DARK : LIGHT;
+  const setZodiacAccent = useCallback(
+    (sign: ZodiacSign | null, accent: ZodiacAccent) => {
+      _setZodiacSign(sign);
+      _setZodiacAccent(accent);
+    },
+    []
+  );
+
+  // Merge base palette with zodiac accent override
+  const C = useMemo<ThemeColors>(() => {
+    const base = mode === "dark" ? DARK : LIGHT;
+    return { ...base, accent: zodiacAccent.accent, accentBg: zodiacAccent.accentBg };
+  }, [mode, zodiacAccent]);
 
   return (
-    <ThemeContext.Provider value={{ mode, C, setMode, toggle }}>
+    <ThemeContext.Provider value={{ mode, C, setMode, toggle, zodiacSign, zodiacAccent, setZodiacAccent }}>
       {children}
     </ThemeContext.Provider>
   );

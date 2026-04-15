@@ -79,9 +79,17 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - `ThemeContext.cardShadow` — CSS `boxShadow` string for card glow. Applied to key cards (HeroEnergyCard, ProfileCard, dashaCard, scoreCard, graphCard, noticeCard).
 - `bgCard/bgCard2/bgCard3` are now `rgba(...)` values (80–55% opacity) so the cosmic background bleeds through, creating a glassmorphism effect.
 
+## Zodiac Accent Theming
+
+- `lib/zodiac.ts` — Pure utility: `getZodiacSign(day, month)` → `ZodiacSign`, `ZODIAC_ACCENTS` map (12 signs → `{ accent, accentBg }`), `ZODIAC_EMOJI`, `DEFAULT_ACCENT` (indigo fallback).
+- `components/ZodiacBridge.tsx` — Zero-UI component. Reads `birthData` from UserContext, computes zodiac sign + accent, calls `setZodiacAccent` on ThemeContext. Mounted inside `_layout.tsx` between ThemeProvider and UserProvider.
+- `ThemeContext.setZodiacAccent(sign, accent)` — Overrides `C.accent` and `C.accentBg` in the merged palette. All screens using `C.accent` automatically receive the zodiac color.
+- **Fallback**: if no birth data → default indigo accent `#6366F1`.
+- **Profile screen**: Zodiac Accent row in Settings section shows current sign emoji + glow dot + hex color.
+
 ## Dark / Light Theme
 
-- `context/ThemeContext.tsx` — `DARK` / `LIGHT` palettes with `toggle()` and AsyncStorage persistence (`cl_theme` key)
+- `context/ThemeContext.tsx` — `DARK` / `LIGHT` palettes with `toggle()` and AsyncStorage persistence (`cl_theme` key). Now also carries zodiac accent state.
 - `hooks/useColors.ts` — Wrapper exposing named aliases (`background`, `card`, `foreground`, `mutedForeground`, `border`, `primary`) plus raw `C` object
 - Theme-aware screens (inline dynamic styles using `C.*`):
   - **index.tsx** — root bg, greeting text, HeroEnergyCard bg/border/label

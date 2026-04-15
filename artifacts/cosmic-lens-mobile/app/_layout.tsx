@@ -14,6 +14,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ZodiacBridge } from "@/components/ZodiacBridge";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { UserProvider } from "@/context/UserContext";
 
@@ -59,6 +60,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <UserProvider>
+              <ZodiacBridge />
               <GestureHandlerRootView>
                 <KeyboardProvider>
                   <RootLayoutNav />

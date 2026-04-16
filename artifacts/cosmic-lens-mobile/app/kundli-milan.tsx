@@ -1211,87 +1211,57 @@ export default function KundliMilanScreen(){
           {!isPro&&!result&&(
             <View style={{gap:22}}>
 
-              {/* ── 1. Compact Person Slots ── */}
-              <View style={{flexDirection:"row",gap:10}}>
+              {/* ── 1. Ultra-compact Person Slots (single row, ~48px) ── */}
+              <View style={{flexDirection:"row",gap:8}}>
                 {/* Person 1 */}
                 {person1?(
-                  <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:8,
-                    backgroundColor:C.isDark?"rgba(99,102,241,0.1)":"rgba(99,102,241,0.06)",
-                    borderRadius:16,paddingHorizontal:12,paddingVertical:11,
-                    borderWidth:1,borderColor:C.isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.15)"}}>
-                    <View style={{width:34,height:34,borderRadius:17,backgroundColor:C.isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.1)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>👤</Text>
-                    </View>
-                    <View style={{flex:1}}>
-                      <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold"}} numberOfLines={1}>{person1.name}</Text>
-                      <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular"}} numberOfLines={1}>
-                        {EN2R[person1.moonSign??""]??person1.moonSign}
-                      </Text>
-                    </View>
-                    <Feather name="check-circle" size={13} color="#6366f1"/>
+                  <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
+                    backgroundColor:C.isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.05)",
+                    borderRadius:14,paddingHorizontal:10,gap:7,
+                    borderWidth:0.5,borderColor:C.isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.12)"}}>
+                    <Text style={{fontSize:13}}>👤</Text>
+                    <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>{person1.name}</Text>
+                    <Feather name="check-circle" size={12} color="#6366f1"/>
                     {!autoP1&&(
-                      <Pressable onPress={()=>{setP1(null);setAddingFor(null);}} hitSlop={8} style={{padding:2}}>
-                        <Feather name="x" size={12} color={C.textDim}/>
+                      <Pressable onPress={()=>{setP1(null);setAddingFor(null);}} hitSlop={10} style={{padding:2}}>
+                        <Feather name="x" size={11} color={C.textDim}/>
                       </Pressable>
                     )}
                   </View>
                 ):(
                   <Pressable onPress={()=>setAddingFor("self")}
-                    style={({pressed})=>({opacity:pressed?0.7:1,flex:1,alignItems:"center",gap:6,
-                      backgroundColor:C.isDark?"rgba(255,255,255,0.03)":"rgba(99,102,241,0.03)",
-                      borderRadius:16,paddingVertical:12,
-                      borderWidth:1,borderStyle:"dashed" as any,
-                      borderColor:C.isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.15)"})}>
-                    <View style={{width:34,height:34,borderRadius:17,backgroundColor:C.isDark?"rgba(99,102,241,0.12)":"rgba(99,102,241,0.08)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>👤</Text>
-                    </View>
-                    <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_500Medium"}}>Person 1</Text>
-                    <View style={{backgroundColor:C.isDark?"rgba(99,102,241,0.15)":"rgba(99,102,241,0.08)",
-                      paddingHorizontal:12,paddingVertical:3,borderRadius:10}}>
-                      <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
-                    </View>
+                    style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                      borderRadius:14,paddingHorizontal:10,gap:7,
+                      borderWidth:0.5,borderStyle:"dashed" as any,
+                      borderColor:C.isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.18)"})}>
+                    <Text style={{fontSize:13}}>👤</Text>
+                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 1</Text>
+                    <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
                   </Pressable>
                 )}
 
                 {/* Person 2 */}
                 {p2?(
-                  <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:8,
-                    backgroundColor:C.isDark?"rgba(236,72,153,0.08)":"rgba(236,72,153,0.05)",
-                    borderRadius:16,paddingHorizontal:12,paddingVertical:11,
-                    borderWidth:1,borderColor:C.isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.15)"}}>
-                    <View style={{width:34,height:34,borderRadius:17,backgroundColor:C.isDark?"rgba(236,72,153,0.15)":"rgba(236,72,153,0.08)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>💑</Text>
-                    </View>
-                    <View style={{flex:1}}>
-                      <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold"}} numberOfLines={1}>{p2.name}</Text>
-                      <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular"}} numberOfLines={1}>
-                        {EN2R[p2.moonSign]??p2.moonSign}
-                      </Text>
-                    </View>
-                    <Feather name="check-circle" size={13} color="#ec4899"/>
-                    <Pressable onPress={()=>{setP2(null);setAddingFor(null);}} hitSlop={8} style={{padding:2}}>
-                      <Feather name="x" size={12} color={C.textDim}/>
+                  <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
+                    backgroundColor:C.isDark?"rgba(236,72,153,0.06)":"rgba(236,72,153,0.04)",
+                    borderRadius:14,paddingHorizontal:10,gap:7,
+                    borderWidth:0.5,borderColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.1)"}}>
+                    <Text style={{fontSize:13}}>💑</Text>
+                    <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>{p2.name}</Text>
+                    <Feather name="check-circle" size={12} color="#ec4899"/>
+                    <Pressable onPress={()=>{setP2(null);setAddingFor(null);}} hitSlop={10} style={{padding:2}}>
+                      <Feather name="x" size={11} color={C.textDim}/>
                     </Pressable>
                   </View>
                 ):(
                   <Pressable onPress={()=>setAddingFor("partner")}
-                    style={({pressed})=>({opacity:pressed?0.7:1,flex:1,alignItems:"center",gap:6,
-                      backgroundColor:C.isDark?"rgba(255,255,255,0.03)":"rgba(236,72,153,0.03)",
-                      borderRadius:16,paddingVertical:12,
-                      borderWidth:1,borderStyle:"dashed" as any,
-                      borderColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.12)"})}>
-                    <View style={{width:34,height:34,borderRadius:17,backgroundColor:C.isDark?"rgba(236,72,153,0.1)":"rgba(236,72,153,0.06)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:14}}>💑</Text>
-                    </View>
-                    <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_500Medium"}}>Person 2</Text>
-                    <View style={{backgroundColor:C.isDark?"rgba(236,72,153,0.12)":"rgba(236,72,153,0.06)",
-                      paddingHorizontal:12,paddingVertical:3,borderRadius:10}}>
-                      <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
-                    </View>
+                    style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                      borderRadius:14,paddingHorizontal:10,gap:7,
+                      borderWidth:0.5,borderStyle:"dashed" as any,
+                      borderColor:C.isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+                    <Text style={{fontSize:13}}>💑</Text>
+                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
+                    <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
                   </Pressable>
                 )}
               </View>

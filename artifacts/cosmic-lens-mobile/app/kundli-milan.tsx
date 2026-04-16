@@ -1214,6 +1214,18 @@ export default function KundliMilanScreen(){
           {!isPro&&!result&&(
             <View style={{gap:16}}>
 
+              {/* ── Partner Input Slots ── */}
+              <View style={{gap:10}}>
+                {addingFor==="self"
+                  ?<AddKundliForm title="Aapki Kundli" onDone={(d)=>handleDone("self",d)} onCancel={()=>setAddingFor(null)}/>
+                  :<KundliSlot who="self" filled={person1} isPro={false}
+                      onAdd={()=>setAddingFor("self")} onClear={()=>setP1(null)}/>}
+                {addingFor==="partner"
+                  ?<AddKundliForm title="Partner ki Kundli" onDone={(d)=>handleDone("partner",d)} onCancel={()=>setAddingFor(null)}/>
+                  :<KundliSlot who="partner" filled={p2} isPro={false}
+                      onAdd={()=>setAddingFor("partner")} onClear={()=>setP2(null)}/>}
+              </View>
+
               {/* ── Top CTA: Check Now ── */}
               <View>
                 <Pressable

@@ -1378,9 +1378,9 @@ export default function KundliMilanScreen(){
 
                   <Pressable onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
                     style={({pressed})=>({opacity:pressed?0.85:1,marginTop:2})}>
-                    <LinearGradient colors={["#6d28d9","#8b5cf6","#a855f7"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                    <LinearGradient colors={["#ea580c","#f59e0b","#facc15"]} start={{x:0,y:0}} end={{x:1,y:0}}
                       style={{paddingVertical:13,borderRadius:14,alignItems:"center",
-                        shadowColor:"#8b5cf6",shadowOffset:{width:0,height:4},shadowOpacity:0.35,shadowRadius:12}}>
+                        shadowColor:"#f59e0b",shadowOffset:{width:0,height:4},shadowOpacity:0.4,shadowRadius:12}}>
                       <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                         <Text style={{color:"#fff",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>Unlock Full Report</Text>
                         <Text style={{fontSize:14}}>✨</Text>

@@ -1207,69 +1207,181 @@ export default function KundliMilanScreen(){
             </Animated.View>
           )}
 
-          {/* ── BASIC MODE: Show both forms inline ── */}
+          {/* ── BASIC MODE: Value-first engagement design ── */}
           {!isPro&&!result&&(
-            <View style={{gap:14}}>
-              {!person1&&!autoP1?(
-                <AddKundliForm title="PERSON 1 — YOUR BIRTH DETAILS"
-                  onDone={d=>handleDone("self",d)} onCancel={()=>{}}/>
-              ):(
-                <View style={{flexDirection:"row",alignItems:"center",gap:10,
-                  backgroundColor:"rgba(99,102,241,0.08)",borderRadius:16,paddingHorizontal:14,paddingVertical:12,
-                  borderWidth:1,borderColor:"rgba(99,102,241,0.2)"}}>
-                  <View style={{width:38,height:38,borderRadius:19,backgroundColor:"rgba(99,102,241,0.12)",
-                    alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"rgba(99,102,241,0.3)"}}>
-                    <Text style={{fontSize:16}}>👤</Text>
+            <View style={{gap:20}}>
+
+              {/* ── Compact Person Slots ── */}
+              <View style={{gap:8}}>
+                {/* Person 1 */}
+                {person1?(
+                  <View style={{flexDirection:"row",alignItems:"center",gap:10,
+                    backgroundColor:C.isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.06)",
+                    borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                    borderWidth:1,borderColor:C.isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.15)"}}>
+                    <View style={{width:36,height:36,borderRadius:18,backgroundColor:C.isDark?"rgba(99,102,241,0.15)":"rgba(99,102,241,0.1)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:15}}>👤</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_700Bold"}}>{person1.name}</Text>
+                      <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>
+                        {EN2R[person1.moonSign??""]??person1.moonSign} · {person1.nakshatra}
+                      </Text>
+                    </View>
+                    <Feather name="check-circle" size={14} color="#6366f1"/>
+                    {!autoP1&&(
+                      <Pressable onPress={()=>{setP1(null);setAddingFor(null);}} style={{padding:4}}>
+                        <Feather name="x" size={14} color={C.textDim}/>
+                      </Pressable>
+                    )}
                   </View>
-                  <View style={{flex:1,gap:2}}>
-                    <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold"}}>{person1?.name}</Text>
-                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>
-                      {EN2R[person1?.moonSign??""]??person1?.moonSign} · {person1?.nakshatra}
-                    </Text>
-                  </View>
-                  <Feather name="check-circle" size={16} color="#6366f1"/>
-                  {!autoP1&&(
-                    <Pressable onPress={()=>{setP1(null);}} style={{padding:4}}>
+                ):(
+                  <Pressable onPress={()=>{setAddingFor("self");}}
+                    style={({pressed})=>({opacity:pressed?0.7:1,flexDirection:"row",alignItems:"center",gap:10,
+                      backgroundColor:C.isDark?"rgba(255,255,255,0.03)":"rgba(99,102,241,0.04)",
+                      borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                      borderWidth:1,borderStyle:"dashed" as any,
+                      borderColor:C.isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.2)"})}>
+                    <View style={{width:36,height:36,borderRadius:18,backgroundColor:C.isDark?"rgba(99,102,241,0.1)":"rgba(99,102,241,0.08)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:15}}>👤</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_600SemiBold"}}>Person 1</Text>
+                      <Text style={{color:C.textDim,fontSize:10,fontFamily:"Nunito_400Regular"}}>Tap to add birth details</Text>
+                    </View>
+                    <View style={{backgroundColor:C.isDark?"rgba(99,102,241,0.15)":"rgba(99,102,241,0.1)",
+                      paddingHorizontal:10,paddingVertical:4,borderRadius:10}}>
+                      <Text style={{color:"#6366f1",fontSize:10,fontFamily:"Nunito_700Bold"}}>+ ADD</Text>
+                    </View>
+                  </Pressable>
+                )}
+
+                {/* Person 2 */}
+                {p2?(
+                  <View style={{flexDirection:"row",alignItems:"center",gap:10,
+                    backgroundColor:C.isDark?"rgba(236,72,153,0.07)":"rgba(236,72,153,0.05)",
+                    borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                    borderWidth:1,borderColor:C.isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.15)"}}>
+                    <View style={{width:36,height:36,borderRadius:18,backgroundColor:C.isDark?"rgba(236,72,153,0.12)":"rgba(236,72,153,0.08)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:15}}>💑</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_700Bold"}}>{p2.name}</Text>
+                      <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>
+                        {EN2R[p2.moonSign]??p2.moonSign} · {p2.nakshatra}
+                      </Text>
+                    </View>
+                    <Feather name="check-circle" size={14} color="#ec4899"/>
+                    <Pressable onPress={()=>{setP2(null);setAddingFor(null);}} style={{padding:4}}>
                       <Feather name="x" size={14} color={C.textDim}/>
                     </Pressable>
-                  )}
-                </View>
-              )}
-
-              {!p2?(
-                <AddKundliForm title="PERSON 2 — PARTNER'S BIRTH DETAILS"
-                  onDone={d=>handleDone("partner",d)} onCancel={()=>{}}/>
-              ):(
-                <View style={{flexDirection:"row",alignItems:"center",gap:10,
-                  backgroundColor:"rgba(236,72,153,0.07)",borderRadius:16,paddingHorizontal:14,paddingVertical:12,
-                  borderWidth:1,borderColor:"rgba(236,72,153,0.2)"}}>
-                  <View style={{width:38,height:38,borderRadius:19,backgroundColor:"rgba(236,72,153,0.1)",
-                    alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"rgba(236,72,153,0.25)"}}>
-                    <Text style={{fontSize:16}}>💑</Text>
                   </View>
-                  <View style={{flex:1,gap:2}}>
-                    <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold"}}>{p2.name}</Text>
-                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>
-                      {EN2R[p2.moonSign]??p2.moonSign} · {p2.nakshatra}
-                    </Text>
-                  </View>
-                  <Feather name="check-circle" size={16} color="#ec4899"/>
-                  <Pressable onPress={()=>{setP2(null);}} style={{padding:4}}>
-                    <Feather name="x" size={14} color={C.textDim}/>
+                ):(
+                  <Pressable onPress={()=>{setAddingFor("partner");}}
+                    style={({pressed})=>({opacity:pressed?0.7:1,flexDirection:"row",alignItems:"center",gap:10,
+                      backgroundColor:C.isDark?"rgba(255,255,255,0.03)":"rgba(236,72,153,0.04)",
+                      borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                      borderWidth:1,borderStyle:"dashed" as any,
+                      borderColor:C.isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.15)"})}>
+                    <View style={{width:36,height:36,borderRadius:18,backgroundColor:C.isDark?"rgba(236,72,153,0.08)":"rgba(236,72,153,0.06)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:15}}>💑</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_600SemiBold"}}>Person 2</Text>
+                      <Text style={{color:C.textDim,fontSize:10,fontFamily:"Nunito_400Regular"}}>Tap to add partner details</Text>
+                    </View>
+                    <View style={{backgroundColor:C.isDark?"rgba(236,72,153,0.12)":"rgba(236,72,153,0.08)",
+                      paddingHorizontal:10,paddingVertical:4,borderRadius:10}}>
+                      <Text style={{color:"#ec4899",fontSize:10,fontFamily:"Nunito_700Bold"}}>+ ADD</Text>
+                    </View>
                   </Pressable>
-                </View>
-              )}
+                )}
 
-              <Pressable onPress={handleCalculate} disabled={!canCalculate||calcLoading}
-                style={({pressed})=>({opacity:pressed||!canCalculate||calcLoading?0.4:1,marginTop:4})}>
-                <LinearGradient colors={["#4f46e5","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.basicBtn}>
+                {/* Inline form when tapped */}
+                {addingFor==="self"&&!autoP1&&!person1&&(
+                  <AddKundliForm title="YOUR BIRTH DETAILS"
+                    onDone={d=>handleDone("self",d)} onCancel={()=>setAddingFor(null)}/>
+                )}
+                {addingFor==="partner"&&!p2&&(
+                  <AddKundliForm title="PARTNER'S BIRTH DETAILS"
+                    onDone={d=>handleDone("partner",d)} onCancel={()=>setAddingFor(null)}/>
+                )}
+              </View>
+
+              {/* ── Hook Text ── */}
+              <View style={{alignItems:"center",paddingVertical:4}}>
+                <Text style={{color:C.isDark?"#c4b5fd":"#7c3aed",fontSize:15,fontFamily:"Nunito_700Bold",textAlign:"center"}}>
+                  Discover how strong your{"\n"}relationship truly is
+                </Text>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",textAlign:"center",marginTop:4}}>
+                  Ancient Ashtakoot wisdom meets modern insight
+                </Text>
+              </View>
+
+              {/* ── What You'll Discover ── */}
+              <View style={{gap:12}}>
+                <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold",textTransform:"uppercase",
+                  letterSpacing:1.2,textAlign:"center"}}>
+                  What You'll Discover
+                </Text>
+
+                <View style={{flexDirection:"row",flexWrap:"wrap",gap:10,justifyContent:"center"}}>
+                  {([
+                    {icon:"💫",label:"Soul Sync",color:"#f59e0b",desc:"Nadi — soul frequency"},
+                    {icon:"🔥",label:"Attraction Power",color:"#ef4444",desc:"Yoni — chemistry"},
+                    {icon:"⭐",label:"Destiny Link",color:"#8b5cf6",desc:"Tara — cosmic align"},
+                    {icon:"🤝",label:"Intimacy Match",color:"#ec4899",desc:"Maitri — closeness"},
+                    {icon:"💖",label:"Emotional Bond",color:"#f472b6",desc:"Gana — temperament"},
+                    {icon:"⚡",label:"Personality Energy",color:"#6366f1",desc:"Bhakut — harmony"},
+                    {icon:"🌙",label:"Life Alignment",color:"#14b8a6",desc:"Vasya — support"},
+                    {icon:"🔮",label:"Energy Flow",color:"#a855f7",desc:"Varna — balance"},
+                  ] as const).map((item,i)=>(
+                    <View key={i} style={{width:"47%",
+                      backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(99,102,241,0.04)",
+                      borderRadius:16,padding:14,gap:6,
+                      borderWidth:1,borderColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.04)"}}>
+                      <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                        <View style={{width:32,height:32,borderRadius:16,alignItems:"center",justifyContent:"center",
+                          backgroundColor:`${item.color}15`,
+                          shadowColor:item.color,shadowOffset:{width:0,height:0},shadowOpacity:C.isDark?0.4:0.15,shadowRadius:8}}>
+                          <Text style={{fontSize:15}}>{item.icon}</Text>
+                        </View>
+                        <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>{item.label}</Text>
+                      </View>
+                      <Text style={{color:C.textDim,fontSize:10,fontFamily:"Nunito_400Regular"}}>{item.desc}</Text>
+                      <View style={{height:3,borderRadius:2,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",overflow:"hidden"}}>
+                        <View style={{width:"65%",height:"100%",borderRadius:2,backgroundColor:`${item.color}50`}}/>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* ── CTA Button ── */}
+              <Pressable onPress={()=>{
+                  if(canCalculate){handleCalculate();}
+                  else if(!person1&&!autoP1){setAddingFor("self");}
+                  else if(!p2){setAddingFor("partner");}
+                }}
+                style={({pressed})=>({opacity:pressed?0.85:1,marginTop:4})}>
+                <LinearGradient colors={["#4f46e5","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={{paddingVertical:16,borderRadius:18,alignItems:"center",justifyContent:"center",
+                    shadowColor:"#7c3aed",shadowOffset:{width:0,height:4},shadowOpacity:0.35,shadowRadius:12}}>
                   {calcLoading?<ActivityIndicator color="#fff" size="small"/>:(
-                    <Text style={ms.basicBtnTxt}>
-                      {canCalculate?"Start Matching ✨":!person1&&!p2?"Enter details above":!person1?"Add your details first":"Add partner details"}
-                    </Text>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <Feather name={canCalculate?"heart":"plus-circle"} size={18} color="#fff"/>
+                      <Text style={{color:"#fff",fontSize:15,fontFamily:"Nunito_700Bold"}}>
+                        {canCalculate?"See Full Matching ✨":"Add Details & See Full Matching"}
+                      </Text>
+                    </View>
                   )}
                 </LinearGradient>
               </Pressable>
+
             </View>
           )}
 

@@ -201,7 +201,7 @@ export default function HomeScreen() {
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
 
   return (
-    <CosmicBg contentStyle={{ paddingTop: topPad, paddingBottom: botPad + 60 }}>
+    <CosmicBg contentStyle={{ paddingTop: topPad, paddingBottom: botPad + 100 }}>
 
       {/* ── Greeting ── */}
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
@@ -231,7 +231,7 @@ export default function HomeScreen() {
       </Animated.View>
 
       {/* ── Hero Energy Card — immersive ── */}
-      <Animated.View style={[heroAnim, { flex: 7, paddingHorizontal: 8, paddingBottom: 6 }]}>
+      <Animated.View style={[heroAnim, { flex: 6, paddingHorizontal: 8, paddingBottom: 6 }]}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
           style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.988 : 1 }] }]}
@@ -248,7 +248,7 @@ export default function HomeScreen() {
       </Animated.View>
 
       {/* ── 3 Feature Rows — 35% ── */}
-      <View style={{ flex: 3, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
+      <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
         <Animated.View style={card1Anim}>
           <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />

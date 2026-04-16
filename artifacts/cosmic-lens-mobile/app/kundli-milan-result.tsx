@@ -285,6 +285,34 @@ export default function KundliMilanResultScreen() {
     ? "Moderate match. Awareness and effort will help this bond grow."
     : "Challenging match. Remedies and guidance strongly recommended.";
 
+  // ── Build detailed written analysis ──
+  const strengths: string[] = [];
+  const challenges: string[] = [];
+  if (result.nadi.score === 8) strengths.push("Different Nadi types create natural physical and emotional balance — a strong foundation for healthy children and long life together.");
+  else challenges.push("Same Nadi (Nadi Dosha) — both partners share the same constitutional energy. This can affect health and progeny; remedies like Maha Mrityunjaya Jaap are recommended.");
+  if (result.gana.score >= 5) strengths.push("Gana harmony shows your inner natures are well-matched — temperaments flow together without friction in daily life.");
+  else if (result.gana.score === 0) challenges.push("Major Gana mismatch (Dev–Rakshasa) — fundamentally different temperaments. Conscious patience and spiritual practice are essential.");
+  if (result.bhakut.score === 7) strengths.push("Bhakut is auspicious — your Rashi positions promote prosperity, family growth, and mutual welfare.");
+  else challenges.push("Bhakut Dosha present — Rashi placement may bring tension in finances, family, or progeny. Mantra remedies can offset this.");
+  if (result.maitri.score >= 4) strengths.push("Strong Graha Maitri — the lords of your Moon signs are friendly, ensuring deep mental compatibility and shared values.");
+  else if (result.maitri.score < 3) challenges.push("Graha Maitri is weak — the planetary lords of your Rashis are not naturally friendly, requiring effort to build mutual understanding.");
+  if (result.yoni.score >= 3) strengths.push("Yoni match indicates strong physical attraction and intimate compatibility — chemistry comes naturally.");
+  else if (result.yoni.score === 0) challenges.push("Hostile Yoni — instinctive natures clash. Open communication about needs and boundaries is crucial.");
+  if (result.tara.score === 3) strengths.push("Tara Koot is auspicious — destiny favours this union; major life events tend to unfold positively.");
+  if (result.manglik) challenges.push("Manglik Dosha imbalance detected — only one partner is Manglik. Performing Kumbh Vivah or Mangal Shanti before marriage is advised.");
+  if (strengths.length === 0) strengths.push("Every relationship has hidden strengths. Focus on shared values, communication, and mutual respect to discover yours.");
+  if (challenges.length === 0) challenges.push("No major doshas detected — this is a smooth match astrologically. Continue nurturing it with care and devotion.");
+
+  const marriageOutlook = result.total >= 32
+    ? "This is one of the highest-rated matches in Vedic astrology. Marriage between you is likely to bring lasting joy, prosperity, healthy progeny, and spiritual growth. Family harmony and emotional security will be natural to your bond. Sacred rituals and pujas will further elevate this beautiful connection."
+    : result.total >= 27
+    ? "A very promising marriage match. With love, communication, and respect for each other's space, this relationship can blossom into a deeply fulfilling lifelong partnership. Minor differences can be smoothed over through shared rituals like daily prayers and gratitude practice."
+    : result.total >= 21
+    ? "An average match that requires conscious effort. Focus on understanding each other's emotional needs, practice patience, and consider remedies like Vivah Yog rituals. With dedication, this bond can grow stronger over time."
+    : "A challenging match in classical Vedic terms. Strongly recommend consulting a qualified astrologer before marriage. Remedies like Kumbh Vivah, Maha Mrityunjaya Jaap, and Navagraha Shanti can significantly improve outcomes. Love alone may not be enough — spiritual practice together is essential.";
+
+  const compatibilityInsight = `Out of the maximum 36 Gunas in Ashtakoot Milan, your union scores ${result.total} (${pctTotal}% match). In Vedic tradition, scores above 18 are considered acceptable for marriage, above 24 are good, and above 28 are excellent. Your match falls in the "${g.label.toLowerCase()}" range, which means ${result.total >= 24 ? "the cosmic forces support your union and the foundation is solid" : "while astrological challenges exist, sincere effort and remedies can transform this relationship"}. Remember: astrology guides — love, respect, and commitment build the marriage.`;
+
   return (
     <View style={[st.root, { backgroundColor: C.bg }]}>
       <LinearGradient
@@ -383,6 +411,80 @@ export default function KundliMilanResultScreen() {
             </View>
           )}
         </Animated.View>
+
+        {/* ── Compatibility Insight (rich paragraph) ── */}
+        <View style={[st.analysisCard, {
+          backgroundColor: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)",
+          borderColor: isDark ? "rgba(139,92,246,0.25)" : "rgba(99,102,241,0.18)",
+        }]}>
+          <View style={st.analysisHead}>
+            <Text style={{ fontSize: 18 }}>📜</Text>
+            <Text style={[st.analysisTitle, { color: isDark ? "#c4b5fd" : "#4338ca" }]}>
+              Astrological Insight
+            </Text>
+          </View>
+          <Text style={[st.analysisBody, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
+            {compatibilityInsight}
+          </Text>
+        </View>
+
+        {/* ── Strengths ── */}
+        <View style={[st.analysisCard, {
+          backgroundColor: isDark ? "rgba(34,197,94,0.08)" : "rgba(34,197,94,0.05)",
+          borderColor: isDark ? "rgba(34,197,94,0.25)" : "rgba(34,197,94,0.18)",
+        }]}>
+          <View style={st.analysisHead}>
+            <Text style={{ fontSize: 18 }}>✨</Text>
+            <Text style={[st.analysisTitle, { color: isDark ? "#86efac" : "#15803d" }]}>
+              Your Strengths Together
+            </Text>
+          </View>
+          {strengths.map((s, i) => (
+            <View key={i} style={st.bulletRow}>
+              <View style={[st.bulletDot, { backgroundColor: isDark ? "#86efac" : "#16a34a" }]} />
+              <Text style={[st.bulletText, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
+                {s}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* ── Challenges ── */}
+        <View style={[st.analysisCard, {
+          backgroundColor: isDark ? "rgba(251,146,60,0.08)" : "rgba(251,146,60,0.05)",
+          borderColor: isDark ? "rgba(251,146,60,0.25)" : "rgba(251,146,60,0.20)",
+        }]}>
+          <View style={st.analysisHead}>
+            <Text style={{ fontSize: 18 }}>⚖️</Text>
+            <Text style={[st.analysisTitle, { color: isDark ? "#fdba74" : "#c2410c" }]}>
+              Areas to Be Mindful Of
+            </Text>
+          </View>
+          {challenges.map((c, i) => (
+            <View key={i} style={st.bulletRow}>
+              <View style={[st.bulletDot, { backgroundColor: isDark ? "#fdba74" : "#ea580c" }]} />
+              <Text style={[st.bulletText, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
+                {c}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* ── Marriage Outlook (long paragraph) ── */}
+        <View style={[st.analysisCard, {
+          backgroundColor: isDark ? "rgba(236,72,153,0.08)" : "rgba(236,72,153,0.05)",
+          borderColor: isDark ? "rgba(236,72,153,0.25)" : "rgba(236,72,153,0.18)",
+        }]}>
+          <View style={st.analysisHead}>
+            <Text style={{ fontSize: 18 }}>💍</Text>
+            <Text style={[st.analysisTitle, { color: isDark ? "#f9a8d4" : "#be185d" }]}>
+              Marriage Outlook
+            </Text>
+          </View>
+          <Text style={[st.analysisBody, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
+            {marriageOutlook}
+          </Text>
+        </View>
 
         <View style={st.sectionHeader}>
           <View style={[st.sectionLine, { backgroundColor: isDark ? "rgba(139,92,246,0.3)" : "rgba(99,102,241,0.2)" }]} />
@@ -497,6 +599,16 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(239,68,68,0.25)",
   },
   manglikDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#ef4444" },
+
+  analysisCard: {
+    borderRadius: 18, borderWidth: 1, padding: 18, gap: 12, marginTop: 16,
+  },
+  analysisHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  analysisTitle: { fontSize: 15, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.3 },
+  analysisBody: { fontSize: 13, fontFamily: "Nunito_400Regular", lineHeight: 21 },
+  bulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  bulletDot: { width: 6, height: 6, borderRadius: 3, marginTop: 8 },
+  bulletText: { flex: 1, fontSize: 12.5, fontFamily: "Nunito_400Regular", lineHeight: 19 },
 
   sectionHeader: {
     flexDirection: "row", alignItems: "center", gap: 12,

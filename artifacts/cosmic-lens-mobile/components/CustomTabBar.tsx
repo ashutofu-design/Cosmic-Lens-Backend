@@ -162,7 +162,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
     }
   }
 
-  const barBg = C.isDark ? "rgba(8,16,32,0.82)" : "rgba(255,255,255,0.60)";
+  const barBg = C.isDark ? "rgba(8,16,32,0.95)" : "rgba(255,255,255,0.94)";
   const blurTint = C.isDark ? "dark" : "light";
 
   return (

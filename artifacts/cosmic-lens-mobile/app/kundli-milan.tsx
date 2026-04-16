@@ -1209,7 +1209,7 @@ export default function KundliMilanScreen(){
 
           {/* ── BASIC MODE: Premium conversion screen ── */}
           {!isPro&&!result&&(
-            <View style={{gap:22}}>
+            <View style={{gap:16}}>
 
               {/* ── 1. Ultra-compact Person Slots (single row, ~48px) ── */}
               <View style={{flexDirection:"row",gap:8}}>
@@ -1277,14 +1277,15 @@ export default function KundliMilanScreen(){
               )}
 
               {/* ── 2. Hook Section ── */}
-              <View style={{alignItems:"center",paddingVertical:6}}>
-                <Text style={{fontSize:22}}>💫</Text>
-                <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:18,fontFamily:"Nunito_800ExtraBold",
-                  textAlign:"center",marginTop:6,lineHeight:26}}>
-                  Discover the truth about{"\n"}your relationship
-                </Text>
-                <Text style={{color:C.textMuted,fontSize:12,fontFamily:"Nunito_400Regular",textAlign:"center",marginTop:6}}>
-                  Ancient Kundli Milan meets modern insights
+              <View style={{alignItems:"center",paddingVertical:2}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                  <Text style={{fontSize:14}}>✦</Text>
+                  <Text style={{color:C.isDark?"#f3e8ff":"#5b21b6",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
+                    Will This Relationship Work?
+                  </Text>
+                </View>
+                <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",marginTop:3}}>
+                  Ancient Vedic wisdom meets modern insights
                 </Text>
               </View>
 

@@ -1109,6 +1109,7 @@ export default function KundliMilanScreen(){
   }:null;
   const person1=autoP1??p1;
   const canCalculate=!!person1&&!!p2;
+  const isPro=plan==="pro";
 
   function handleDone(who:"self"|"partner",data:PersonData){
     if(who==="self")setP1(data); else setP2(data);
@@ -1118,6 +1119,16 @@ export default function KundliMilanScreen(){
   async function handleCalculate(){
     if(!person1||!p2)return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if(!isPro){
+      router.push({
+        pathname: "/kundli-milan-result" as any,
+        params: {
+          p1Name: person1.name, p1Nak: person1.nakshatra, p1Moon: person1.moonSign, p1Mang: String(person1.manglik),
+          p2Name: p2.name, p2Nak: p2.nakshatra, p2Moon: p2.moonSign, p2Mang: String(p2.manglik),
+        },
+      });
+      return;
+    }
     setCalcLoading(true);
     await new Promise(r=>setTimeout(r,700));
     setResult(compute(person1,p2));
@@ -1126,7 +1137,6 @@ export default function KundliMilanScreen(){
   }
 
   const g=result?grade(result.total):null;
-  const isPro=plan==="pro";
 
   return(
     <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS==="ios"?"padding":"height"}>
@@ -1305,7 +1315,7 @@ export default function KundliMilanScreen(){
               <LinearGradient colors={["#4f46e5","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.basicBtn}>
                 {calcLoading?<ActivityIndicator color="#fff" size="small"/>:(
                   <Text style={ms.basicBtnTxt}>
-                    {canCalculate?"Check Compatibility":!person1&&!p2?"Add Both Kundlis":!person1?"Add Your Kundli":"Add Partner Kundli"}
+                    {canCalculate?"Start Matching ✨":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
                   </Text>
                 )}
               </LinearGradient>

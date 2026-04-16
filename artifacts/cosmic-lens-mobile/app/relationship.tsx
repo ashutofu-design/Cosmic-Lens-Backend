@@ -481,55 +481,6 @@ export default function RelationshipScreen() {
           </Text>
         </Animated.View>
 
-        {/* ── Hook: Will This Relationship Work? ── */}
-        <View style={{alignItems:"center",marginBottom:4}}>
-          <View style={{flexDirection:"row",alignItems:"center",gap:5}}>
-            <Text style={{fontSize:12}}>✦</Text>
-            <Text style={{color:isDark?"#f3e8ff":"#5b21b6",fontSize:14,fontFamily:"Nunito_800ExtraBold"}}>
-              Will This Relationship Work?
-            </Text>
-          </View>
-          <Text style={{color:isDark?"rgba(203,213,225,0.55)":"#64748B",fontSize:10,fontFamily:"Nunito_400Regular",marginTop:2}}>
-            Ancient Vedic wisdom meets modern insights
-          </Text>
-        </View>
-
-        {/* ── What You'll Discover ── */}
-        <View style={{gap:8,marginBottom:10}}>
-          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
-            <View style={{height:1,flex:1,backgroundColor:isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
-            <Text style={{color:isDark?"#a78bfa":"#7c3aed",fontSize:10,fontFamily:"Nunito_700Bold",
-              textTransform:"uppercase",letterSpacing:1.5}}>
-              What You'll Discover
-            </Text>
-            <View style={{height:1,flex:1,backgroundColor:isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
-          </View>
-
-          <View style={{flexDirection:"row",flexWrap:"wrap",gap:7,justifyContent:"center"}}>
-            {([
-              {icon:"🔮",label:"Soul Sync",color:"#f59e0b"},
-              {icon:"🧲",label:"Attraction",color:"#ef4444"},
-              {icon:"⭐",label:"Destiny",color:"#8b5cf6"},
-              {icon:"🔥",label:"Intimacy",color:"#ec4899"},
-              {icon:"🤝",label:"Emotional",color:"#3b82f6"},
-              {icon:"⚡",label:"Personality",color:"#6366f1"},
-              {icon:"🌙",label:"Alignment",color:"#14b8a6"},
-              {icon:"💫",label:"Energy",color:"#a855f7"},
-            ] as const).map((item,i)=>(
-              <View key={i} style={{width:"22%",
-                backgroundColor:isDark?"#111827":"#1A2135",
-                borderRadius:12,paddingVertical:10,paddingHorizontal:4,alignItems:"center",gap:4,
-                borderWidth:1,borderColor:"rgba(255,255,255,0.08)"}}>
-                <View style={{width:26,height:26,borderRadius:13,alignItems:"center",justifyContent:"center",
-                  backgroundColor:`${item.color}20`}}>
-                  <Text style={{fontSize:12}}>{item.icon}</Text>
-                </View>
-                <Text style={{color:"#E5E7EB",fontSize:8,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
         {/* ── Smart Person Slots ── */}
         <View style={{flexDirection:"row",gap:8,marginBottom:14}}>
 

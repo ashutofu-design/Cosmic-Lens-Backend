@@ -1219,7 +1219,7 @@ export default function KundliMilanScreen(){
                 <Pressable
                   onPress={()=>{handleCalculate();}}
                   disabled={!person1||!p2||calcLoading}
-                  style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
+                  style={({pressed})=>({opacity:(!person1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
                     borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
                   <LinearGradient colors={["#FFD89B","#FFB347"]} start={{x:0,y:0}} end={{x:1,y:0}}
                     style={{paddingVertical:18,alignItems:"center",

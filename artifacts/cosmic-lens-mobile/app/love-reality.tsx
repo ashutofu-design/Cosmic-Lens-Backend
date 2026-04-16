@@ -134,6 +134,9 @@ function FeatureCard({
         if (feature.key === "love-compat") {
           const url = partnerId ? `/love-compatibility?partnerId=${partnerId}` : "/love-compatibility";
           router.push(url as any);
+        } else if (feature.key === "breakup") {
+          const url = partnerId ? `/breakup-chances?partnerId=${partnerId}` : "/breakup-chances";
+          router.push(url as any);
         }
       }}>
         <View style={[s.card, {

@@ -54,7 +54,7 @@ const OPTIONS: MainOption[] = [
     emoji: "💍",
     gradient: ["#6366f1", "#818cf8", "#a78bfa"],
     glowColor: "#6366f1",
-    route: "/marriage-compat",
+    route: "/kundli-milan",
     desc: "For serious & marriage decisions",
     items: ["Kundli Milan (Pro)"],
   },

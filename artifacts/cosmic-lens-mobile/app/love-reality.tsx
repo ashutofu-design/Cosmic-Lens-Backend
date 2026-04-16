@@ -127,7 +127,10 @@ function FeatureCard({
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }, { translateY: slideAnim }], opacity: fadeAnim }}>
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}>
+      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        if (feature.key === "love-compat") router.push("/love-compatibility");
+      }}>
         <View style={[s.card, {
           shadowColor: feature.iconColor,
           shadowOpacity: isDark ? 0.3 : 0.12,

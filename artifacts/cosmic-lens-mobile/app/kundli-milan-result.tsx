@@ -255,15 +255,12 @@ export default function KundliMilanResultScreen() {
   const botPad = insets.bottom;
   const isDark = C.isDark;
 
-  const params = useLocalSearchParams<{
-    p1Name: string; p1Nak: string; p1Moon: string; p1Mang: string;
-    p2Name: string; p2Nak: string; p2Moon: string; p2Mang: string;
-  }>();
+  const params = useLocalSearchParams<{ p1Name?: string; p2Name?: string }>();
 
-  // ── Try backend result first (Swiss Ephemeris accurate) ──
+  // ── Backend result only (Swiss Ephemeris accurate) ──
   const backendData = MilanResultStore.get();
 
-  let result: Result;
+  let result: Result | null = null;
   let p1DisplayName = params.p1Name || "Person 1";
   let p2DisplayName = params.p2Name || "Person 2";
   let backendAnalysis: {
@@ -292,27 +289,44 @@ export default function KundliMilanResultScreen() {
     p1DisplayName = backendData.p1?.name || params.p1Name || "Person 1";
     p2DisplayName = backendData.p2?.name || params.p2Name || "Person 2";
     backendAnalysis = backendData.analysis ?? null;
-  } else {
-    // Fallback: client-side computation from URL params
-    result = compute(
-      params.p1Nak ?? "", params.p1Moon ?? "", params.p1Mang === "true",
-      params.p2Nak ?? "", params.p2Moon ?? "", params.p2Mang === "true",
-    );
   }
 
-  const g = grade(result.total);
-  const pctTotal = Math.round((result.total / 36) * 100);
-
+  // ── Hooks must be declared before any conditional return ──
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroScale = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
+    if (!result) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Animated.parallel([
       Animated.timing(heroFade, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.spring(heroScale, { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 6 }),
     ]).start();
   }, []);
+
+  // ── No backend data: show error screen ──
+  if (!result) {
+    return (
+      <View style={{ flex:1, backgroundColor:C.bg, justifyContent:"center", alignItems:"center", padding:32 }}>
+        <Text style={{ fontSize:40, marginBottom:16 }}>⚠️</Text>
+        <Text style={{ color:C.text, fontSize:18, fontFamily:"Nunito_700Bold", textAlign:"center", marginBottom:8 }}>
+          Result Not Found
+        </Text>
+        <Text style={{ color:C.textMuted, fontSize:14, fontFamily:"Nunito_400Regular", textAlign:"center", marginBottom:32 }}>
+          Koi result nahi mila. Wapas jao aur dobara calculate karein.
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={{ backgroundColor:C.isDark?"#f59e0b":"#7C3AED", paddingHorizontal:32, paddingVertical:14, borderRadius:14 }}
+        >
+          <Text style={{ color:"#fff", fontFamily:"Nunito_700Bold", fontSize:16 }}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const g = grade(result.total);
+  const pctTotal = Math.round((result.total / 36) * 100);
 
   const verdict = result.total >= 32
     ? "Stars align strongly. An exceptional and harmonious union."

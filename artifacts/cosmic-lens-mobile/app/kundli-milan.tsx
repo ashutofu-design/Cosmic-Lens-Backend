@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform,
+  ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Modal, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1131,52 +1131,73 @@ export default function KundliMilanScreen(){
   async function handleCalculate(){
     if(!person1||!p2)return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if(!isPro){
-      // ── Backend Ashtakoot (Swiss Ephemeris) ──
-      const bd1=p1Profile?.birthData;
-      const bd2=p2Profile?.birthData;
-      if(bd1&&bd2){
-        setCalcLoading(true);
-        try{
-          const ctrl=new AbortController();
-          const timer=setTimeout(()=>ctrl.abort(),18000);
-          const resp=await fetch(`${API_BASE}/api/kundli-milan`,{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({
-              p1:{...bd1,name:person1.name},
-              p2:{...bd2,name:p2.name},
-            }),
-            signal:ctrl.signal,
-          });
-          clearTimeout(timer);
-          if(resp.ok){
-            const json=await resp.json();
-            MilanResultStore.set(json);
-            router.push("/kundli-milan-result" as any);
-            setCalcLoading(false);
-            return;
-          }
-        }catch(e){
-          // fallback to client-side below
-        }
-        setCalcLoading(false);
-      }
-      // ── Fallback: client-side (no full birth data) ──
-      router.push({
-        pathname: "/kundli-milan-result" as any,
-        params: {
-          p1Name: person1.name, p1Nak: person1.nakshatra, p1Moon: person1.moonSign, p1Mang: String(person1.manglik),
-          p2Name: p2.name, p2Nak: p2.nakshatra, p2Moon: p2.moonSign, p2Mang: String(p2.manglik),
-        },
-      });
+
+    const bd1=p1Profile?.birthData;
+    const bd2=p2Profile?.birthData;
+
+    if(!bd1||!bd2){
+      Alert.alert(
+        "Birth Data Missing",
+        "Accurate calculation ke liye dono logon ka poora birth data chahiye — date, time, aur place. Profile edit karke update karein.",
+        [{text:"OK"}]
+      );
       return;
     }
+
     setCalcLoading(true);
-    await new Promise(r=>setTimeout(r,700));
-    setResult(compute(person1,p2));
-    setCalcLoading(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    MilanResultStore.clear();
+
+    try{
+      const ctrl=new AbortController();
+      const timer=setTimeout(()=>ctrl.abort(),18000);
+      const resp=await fetch(`${API_BASE}/api/kundli-milan`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          p1:{...bd1,name:person1.name},
+          p2:{...bd2,name:p2.name},
+        }),
+        signal:ctrl.signal,
+      });
+      clearTimeout(timer);
+
+      if(!resp.ok){
+        const errData=await resp.json().catch(()=>({}));
+        throw new Error(errData.error||`Server error ${resp.status}`);
+      }
+
+      const json=await resp.json();
+      MilanResultStore.set(json);
+
+      if(isPro){
+        // Pro: transform backend result for inline ProResultReport
+        const bk:Record<string,any>={};
+        for(const k of json.koots) bk[k.key]=k;
+        const r:Result={
+          nadi:   bk.nadi   ??{score:0,max:8, label:"Nadi",         detail:"-",bad:true},
+          gana:   bk.gana   ??{score:0,max:6, label:"Gana",         detail:"-",bad:true},
+          bhakut: bk.bhakut ??{score:0,max:7, label:"Bhakut",       detail:"-",bad:true},
+          maitri: bk.maitri ??{score:0,max:5, label:"Graha Maitri", detail:"-",bad:true},
+          yoni:   bk.yoni   ??{score:0,max:4, label:"Yoni",         detail:"-",bad:true},
+          tara:   bk.tara   ??{score:0,max:3, label:"Tara",         detail:"-",bad:true},
+          vasya:  bk.vasya  ??{score:0,max:2, label:"Vasya",        detail:"-",bad:false},
+          varna:  bk.varna  ??{score:0,max:1, label:"Varna",        detail:"-",bad:true},
+          total:  json.total??0,
+          manglik:json.manglik_dosh??false,
+        };
+        setResult(r);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }else{
+        router.push("/kundli-milan-result" as any);
+      }
+    }catch(e:any){
+      const msg=e?.name==="AbortError"
+        ?"Request timed out. Internet connection check karein aur dobara try karein."
+        :(e?.message??"Backend se connect nahi ho pa raha. Dobara try karein.");
+      Alert.alert("Calculation Failed",msg,[{text:"OK"}]);
+    }finally{
+      setCalcLoading(false);
+    }
   }
 
   const g=result?grade(result.total):null;

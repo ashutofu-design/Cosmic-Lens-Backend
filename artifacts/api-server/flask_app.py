@@ -2145,6 +2145,555 @@ def payment_return():
     return resp
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# LOVE COMPATIBILITY ENGINE — D1 + D9 + Dasha + Transit, zero templates
+# All reasons derived from actual kundli data: positions, dignities, houses,
+# aspects, dashas, real-time transits. Output AI-consumable strict JSON.
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/love-compatibility", methods=["POST"])
+def love_compatibility():
+    """
+    Strict structure:
+      {
+        "score": 0-100,
+        "factors": {emotional, attraction, communication, karmic, stability},
+        "reasons": [raw astrology phrases]
+      }
+    Input body: { "p1": <birth_data>, "p2": <birth_data> }
+    """
+    import swisseph as swe
+    from datetime import datetime as _dt
+
+    data = request.get_json(force=True, silent=True) or {}
+    if "p1" not in data or "p2" not in data:
+        return jsonify({"error": "Missing p1 or p2"}), 400
+
+    try:
+        k1 = calculate_kundli(data["p1"])
+        k2 = calculate_kundli(data["p2"])
+    except Exception as exc:
+        return jsonify({"error": f"Kundli calculation failed: {exc}"}), 500
+
+    SIGNS_LC = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    SIGN_LORDS_LC = ["Mars","Venus","Mercury","Moon","Sun","Mercury",
+                     "Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"]
+
+    # classical 7-planet friendship — values: 2 friend, 1 neutral, 0 enemy
+    # order: Sun Moon Mars Mercury Jupiter Venus Saturn
+    PLN_IDX = {"Sun":0,"Moon":1,"Mars":2,"Mercury":3,"Jupiter":4,"Venus":5,"Saturn":6}
+    PLN_FRIEND_LC = [
+        [1,2,2,1,2,0,0],  # Sun
+        [2,1,0,1,2,2,0],  # Moon
+        [2,0,1,1,2,0,2],  # Mars  (Merc neutral kept 1)
+        [2,0,2,1,0,2,0],  # Mercury
+        [2,1,2,1,1,0,0],  # Jupiter
+        [2,2,0,2,1,1,0],  # Venus  (Sat own)
+        [0,0,2,2,2,0,1],  # Saturn
+    ]
+    EXALT_LC = {"Sun":0,"Moon":1,"Mars":9,"Mercury":5,"Jupiter":3,"Venus":11,"Saturn":6}
+    DEBIL_LC = {"Sun":6,"Moon":7,"Mars":3,"Mercury":11,"Jupiter":9,"Venus":5,"Saturn":0}
+    OWN_LC   = {"Sun":[4],"Moon":[3],"Mars":[0,7],"Mercury":[2,5],
+                "Jupiter":[8,11],"Venus":[1,6],"Saturn":[9,10]}
+    BENEFIC  = {"Jupiter","Venus","Mercury","Moon"}
+    MALEFIC  = {"Saturn","Mars","Rahu","Ketu"}
+    MANGLIK_HOUSES = {1,4,7,8,12}
+
+    def sidx(sign_name):
+        try:    return SIGNS_LC.index(sign_name)
+        except: return 0
+
+    def getp(k, name):
+        for p in k.get("planets", []):
+            if p["name"] == name: return p
+        return None
+
+    def vargap(k, chart, name):
+        v = (k.get("divisionalCharts") or {}).get(chart) or {}
+        for p in v.get("planets", []):
+            if p["name"] == name: return p
+        return None
+
+    def dignity_score(planet_name, sign_index):
+        if EXALT_LC.get(planet_name) == sign_index: return 2
+        if DEBIL_LC.get(planet_name) == sign_index: return -2
+        if sign_index in OWN_LC.get(planet_name, []): return 1
+        lord = SIGN_LORDS_LC[sign_index]
+        if planet_name in PLN_IDX and lord in PLN_IDX:
+            f = PLN_FRIEND_LC[PLN_IDX[planet_name]][PLN_IDX[lord]]
+            return 1 if f == 2 else -1 if f == 0 else 0
+        return 0
+
+    def dignity_word(d):
+        return {2:"exalted",1:"own-sign",0:"neutral",-1:"enemy-sign",-2:"debilitated"}.get(d,"neutral")
+
+    def aspects_planet(k, target_planet):
+        """Return list of planet-names that aspect `target_planet` in D1 (Vedic aspects)."""
+        tgt = getp(k, target_planet)
+        if not tgt: return []
+        ts  = sidx(tgt["sign"])
+        hits = []
+        for p in k.get("planets", []):
+            if p["name"] == target_planet: continue
+            ps = sidx(p["sign"])
+            d  = (ts - ps + 12) % 12
+            ok = d == 6
+            if p["name"] == "Mars":    ok = ok or d in (3,7)
+            if p["name"] == "Jupiter": ok = ok or d in (4,8)
+            if p["name"] == "Saturn":  ok = ok or d in (2,9)
+            if p["name"] in ("Rahu","Ketu"): ok = ok or d in (4,8)
+            if ok: hits.append(p["name"])
+        return hits
+
+    def aspects_house(k, house_num):
+        """Return list of planet names aspecting the given house (1-12) of kundli k."""
+        asc = sidx(k.get("ascendant", "Aries"))
+        tgt_sign = (asc + house_num - 1) % 12
+        hits = []
+        for p in k.get("planets", []):
+            ps = sidx(p["sign"])
+            d  = (tgt_sign - ps + 12) % 12
+            ok = d == 6
+            if p["name"] == "Mars":    ok = ok or d in (3,7)
+            if p["name"] == "Jupiter": ok = ok or d in (4,8)
+            if p["name"] == "Saturn":  ok = ok or d in (2,9)
+            if p["name"] in ("Rahu","Ketu"): ok = ok or d in (4,8)
+            if ok: hits.append(p["name"])
+        return hits
+
+    def occupants(k, house_num):
+        return [p["name"] for p in k.get("planets", []) if p["house"] == house_num]
+
+    def name_of(k):  return k.get("name") or "partner"
+
+    reasons = []
+
+    # ── 1. EMOTIONAL (Moon) ────────────────────────────────────────────────────
+    def score_emotional():
+        m1, m2 = getp(k1,"Moon"), getp(k2,"Moon")
+        if not m1 or not m2: return 50
+        s1, s2 = sidx(m1["sign"]), sidx(m2["sign"])
+        l1, l2 = SIGN_LORDS_LC[s1], SIGN_LORDS_LC[s2]
+        f = PLN_FRIEND_LC[PLN_IDX[l1]][PLN_IDX[l2]] + PLN_FRIEND_LC[PLN_IDX[l2]][PLN_IDX[l1]]
+        base = {4:85, 3:72, 2:58, 1:45, 0:30}.get(f, 50)
+        if f >= 3: reasons.append(f"Moon signs {m1['sign']} & {m2['sign']} — lords {l1}/{l2} friendly, emotional harmony")
+        elif f <= 1: reasons.append(f"Moon signs {m1['sign']} & {m2['sign']} — lords {l1}/{l2} hostile, emotional mismatch")
+
+        # D1 house placement
+        for label, m, k in [(name_of(k1), m1, k1), (name_of(k2), m2, k2)]:
+            if m["house"] in (6,8,12):
+                base -= 8
+                reasons.append(f"{label}'s Moon in dusthana house {m['house']} — inner insecurity / mood swings")
+            elif m["house"] in (1,4,7,10):
+                base += 4
+                reasons.append(f"{label}'s Moon in kendra house {m['house']} — emotionally grounded")
+            # D9 moon
+            m9 = vargap(k, "D9", "Moon")
+            if m9:
+                d9_dig = dignity_score("Moon", m9["signIndex"])
+                if d9_dig >= 1:
+                    base += 5
+                    reasons.append(f"{label}'s Moon {dignity_word(d9_dig)} in D9 Navamsa — deep emotional stability")
+                elif d9_dig <= -1:
+                    base -= 6
+                    reasons.append(f"{label}'s Moon {dignity_word(d9_dig)} in D9 Navamsa — vulnerable emotional core")
+            # Affliction check
+            afflictors = [a for a in aspects_planet(k, "Moon") if a in ("Saturn","Rahu","Ketu","Mars")]
+            same_house = [p["name"] for p in k["planets"] if p["name"] in ("Saturn","Rahu","Ketu","Mars") and p["house"] == m["house"]]
+            all_af = set(afflictors) | set(same_house)
+            if all_af:
+                base -= 4 * len(all_af)
+                reasons.append(f"{label}'s Moon afflicted by {', '.join(sorted(all_af))} — emotional friction")
+
+        return max(0, min(100, base))
+
+    # ── 2. ATTRACTION (Venus × Mars) ───────────────────────────────────────────
+    def score_attraction():
+        v1, m1 = getp(k1,"Venus"), getp(k1,"Mars")
+        v2, m2 = getp(k2,"Venus"), getp(k2,"Mars")
+        if not all([v1,m1,v2,m2]): return 50
+        base = 55
+
+        # Cross Venus-Mars: p1 Venus × p2 Mars and vice versa
+        for a_label, a, b_label, b in [
+            (name_of(k1)+"'s Venus", v1, name_of(k2)+"'s Mars", m2),
+            (name_of(k2)+"'s Venus", v2, name_of(k1)+"'s Mars", m1),
+        ]:
+            d = (sidx(a["sign"]) - sidx(b["sign"]) + 12) % 12
+            if d == 0:
+                base += 12; reasons.append(f"{a_label} conjunct {b_label} in {a['sign']} — magnetic attraction")
+            elif d == 6:
+                base += 8;  reasons.append(f"{a_label} opposite {b_label} (7th axis) — polarity chemistry")
+            elif d in (4,8):
+                base += 4;  reasons.append(f"{a_label} in trine with {b_label} — graceful romantic flow")
+
+        # Venus dignity
+        for lbl, v, kref in [(name_of(k1), v1, k1), (name_of(k2), v2, k2)]:
+            vd = dignity_score("Venus", sidx(v["sign"]))
+            if vd >= 1:
+                base += 6; reasons.append(f"{lbl}'s Venus {dignity_word(vd)} in {v['sign']} — strong romantic nature")
+            elif vd <= -1:
+                base -= 6; reasons.append(f"{lbl}'s Venus {dignity_word(vd)} in {v['sign']} — love style struggles")
+            # Venus in D9
+            v9 = vargap(kref, "D9", "Venus")
+            if v9:
+                d9d = dignity_score("Venus", v9["signIndex"])
+                if d9d >= 1:
+                    base += 4; reasons.append(f"{lbl}'s Venus {dignity_word(d9d)} in D9 — lasting romantic fulfilment")
+                elif d9d <= -1:
+                    base -= 4; reasons.append(f"{lbl}'s Venus {dignity_word(d9d)} in D9 — romantic disappointments")
+
+        # Mars dignity (passion / aggression balance)
+        for lbl, m in [(name_of(k1), m1), (name_of(k2), m2)]:
+            md = dignity_score("Mars", sidx(m["sign"]))
+            if md <= -1:
+                base -= 5; reasons.append(f"{lbl}'s Mars {dignity_word(md)} in {m['sign']} — aggression / temper friction")
+            elif md >= 1:
+                base += 3; reasons.append(f"{lbl}'s Mars {dignity_word(md)} in {m['sign']} — healthy passion drive")
+            if m["house"] in MANGLIK_HOUSES:
+                base -= 3; reasons.append(f"{lbl}'s Mars in house {m['house']} — manglik placement, intense energy")
+
+        return max(0, min(100, base))
+
+    # ── 3. COMMUNICATION (Mercury + 3rd house) ─────────────────────────────────
+    def score_communication():
+        me1, me2 = getp(k1,"Mercury"), getp(k2,"Mercury")
+        if not me1 or not me2: return 50
+        base = 55
+
+        for lbl, me, k in [(name_of(k1), me1, k1), (name_of(k2), me2, k2)]:
+            md = dignity_score("Mercury", sidx(me["sign"]))
+            if md >= 1:
+                base += 6; reasons.append(f"{lbl}'s Mercury {dignity_word(md)} in {me['sign']} — clear articulate expression")
+            elif md <= -1:
+                base -= 6; reasons.append(f"{lbl}'s Mercury {dignity_word(md)} in {me['sign']} — communication distortions")
+            # affliction
+            af = [a for a in aspects_planet(k, "Mercury") if a in ("Saturn","Rahu","Ketu","Mars")]
+            same = [p["name"] for p in k["planets"] if p["name"] in ("Saturn","Rahu","Ketu") and p["house"] == me["house"]]
+            all_af = set(af) | set(same)
+            if all_af:
+                base -= 3 * len(all_af)
+                reasons.append(f"{lbl}'s Mercury afflicted by {', '.join(sorted(all_af))} — speech misunderstandings")
+            # 3rd house condition
+            h3 = occupants(k, 3)
+            mal3 = [p for p in h3 if p in MALEFIC]
+            ben3 = [p for p in h3 if p in BENEFIC]
+            if ben3:
+                base += 3; reasons.append(f"{lbl}'s 3rd house has {', '.join(ben3)} — warmth in daily conversation")
+            if mal3:
+                base -= 3; reasons.append(f"{lbl}'s 3rd house has {', '.join(mal3)} — blunt or harsh speech style")
+
+        # Gana koot from nakshatra
+        GANA = [0,1,2, 1,0,1, 0,0,2, 2,1,1, 0,2,0, 2,0,2, 2,1,1, 0,1,2, 1,1,0]
+        GANA_N = ["Deva","Manushya","Rakshasa"]
+        NAK = ["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
+               "Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati",
+               "Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana",
+               "Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"]
+        try:
+            n1, n2 = NAK.index(k1["nakshatra"]), NAK.index(k2["nakshatra"])
+            g1, g2 = GANA[n1], GANA[n2]
+            if g1 == g2:
+                base += 5; reasons.append(f"Same gana ({GANA_N[g1]}) — matched mental temperament")
+            elif {g1, g2} == {0, 2}:
+                base -= 8; reasons.append(f"Gana clash ({GANA_N[g1]}/{GANA_N[g2]}) — opposing thought styles")
+        except ValueError:
+            pass
+
+        return max(0, min(100, base))
+
+    # ── 4. KARMIC (Rahu/Ketu on 1-7 axis, Venus, Moon) ─────────────────────────
+    def score_karmic():
+        base = 50
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            r, ke = getp(k,"Rahu"), getp(k,"Ketu")
+            if ke and ke["house"] == 7:
+                base += 10; reasons.append(f"{lbl}'s Ketu in 7th — strong karmic partnership, past-life detachment to resolve")
+            if r and r["house"] == 7:
+                base += 6; reasons.append(f"{lbl}'s Rahu in 7th — unusual attractions, karmic magnetism in partner")
+            if ke and ke["house"] == 1:
+                base += 4; reasons.append(f"{lbl}'s Ketu in 1st — inward soul lesson around self vs partner")
+            if r and r["house"] == 1:
+                base += 3; reasons.append(f"{lbl}'s Rahu in 1st — identity amplified by partner dynamics")
+            # Rahu influencing Venus or Moon
+            for tgt in ("Venus","Moon"):
+                tp = getp(k, tgt)
+                if not tp: continue
+                if r and (r["house"] == tp["house"] or r["sign"] == tp["sign"]):
+                    base += 5; reasons.append(f"{lbl}'s Rahu with {tgt} in {tp['sign']} — karmic intensity around love/emotion")
+                elif "Rahu" in aspects_planet(k, tgt):
+                    base += 3; reasons.append(f"{lbl}'s Rahu aspects {tgt} — obsessive/addictive relational pull")
+            # D9 1-7 axis
+            for n in ("Rahu","Ketu"):
+                pd9 = vargap(k, "D9", n)
+                if pd9 and pd9["house"] in (1,7):
+                    base += 4; reasons.append(f"{lbl}'s {n} on D9 1-7 axis (house {pd9['house']}) — destined marriage karma")
+        return max(0, min(100, base))
+
+    # ── 5. STABILITY (7th house + D9 + doshas) ─────────────────────────────────
+    def score_stability():
+        base = 60
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            asc = sidx(k.get("ascendant", "Aries"))
+            seventh_sign = (asc + 6) % 12
+            seventh_lord = SIGN_LORDS_LC[seventh_sign]
+            seventh_lord_p = getp(k, seventh_lord)
+            occ7 = occupants(k, 7)
+
+            ben7 = [p for p in occ7 if p in BENEFIC]
+            mal7 = [p for p in occ7 if p in MALEFIC]
+            if ben7:
+                base += 6; reasons.append(f"{lbl}'s 7th house holds {', '.join(ben7)} — benefics supporting marriage")
+            if mal7:
+                base -= 6; reasons.append(f"{lbl}'s 7th house holds {', '.join(mal7)} — friction in partnership area")
+
+            # Saturn influence on 7th
+            asp7 = aspects_house(k, 7)
+            if "Saturn" in asp7 and "Saturn" not in occ7:
+                base -= 5; reasons.append(f"{lbl}'s Saturn aspects 7th house — delay or duty in marriage")
+
+            # 7th lord placement
+            if seventh_lord_p:
+                if seventh_lord_p["house"] in (1,4,5,7,9,10,11):
+                    base += 5; reasons.append(f"{lbl}'s 7th lord {seventh_lord} in house {seventh_lord_p['house']} — well-placed for marriage")
+                elif seventh_lord_p["house"] in (6,8,12):
+                    base -= 7; reasons.append(f"{lbl}'s 7th lord {seventh_lord} in dusthana house {seventh_lord_p['house']} — marital instability risk")
+                lord_dig = dignity_score(seventh_lord, sidx(seventh_lord_p["sign"]))
+                if lord_dig >= 1:
+                    base += 4; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(lord_dig)} — strong marriage karma")
+                elif lord_dig <= -1:
+                    base -= 4; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(lord_dig)} — weak marriage foundation")
+
+            # D9 7th lord
+            d9l_sign = vargap(k, "D9", seventh_lord)
+            if d9l_sign:
+                d9d = dignity_score(seventh_lord, d9l_sign["signIndex"])
+                if d9d >= 1:
+                    base += 4; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(d9d)} in D9 — durable bond in marriage")
+                elif d9d <= -1:
+                    base -= 4; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(d9d)} in D9 — D9 weakness in marriage area")
+
+        # Bhakoot dosha
+        mo1, mo2 = getp(k1,"Moon"), getp(k2,"Moon")
+        if mo1 and mo2:
+            s1, s2 = sidx(mo1["sign"]), sidx(mo2["sign"])
+            diff = min((s1-s2)%12, (s2-s1)%12)
+            pair = tuple(sorted([(s1-s2)%12+1, (s2-s1)%12+1]))
+            # bad pairs: 6-8, 2-12, 5-9
+            if pair in [(6,8),(2,12),(5,9)]:
+                base -= 10; reasons.append(f"Bhakoot dosha — Moon signs form {pair[0]}-{pair[1]} axis, prosperity strain")
+
+        # Nadi dosha
+        NADI = [0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2]
+        NAK = ["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
+               "Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati",
+               "Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana",
+               "Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"]
+        try:
+            n1, n2 = NAK.index(k1["nakshatra"]), NAK.index(k2["nakshatra"])
+            if NADI[n1] == NADI[n2]:
+                base -= 8; reasons.append(f"Nadi dosha — same nadi nakshatra, genetic/health compatibility concern")
+        except ValueError:
+            pass
+
+        return max(0, min(100, base))
+
+    # ── 6. DOSHA CHECK (severity) ──────────────────────────────────────────────
+    def score_dosha():
+        """Returns (severity_0_10, individual dosha reasons)."""
+        severity = 0
+        m1, m2 = getp(k1,"Mars"), getp(k2,"Mars")
+        mang1 = m1 and m1["house"] in MANGLIK_HOUSES
+        mang2 = m2 and m2["house"] in MANGLIK_HOUSES
+        if mang1 and mang2:
+            reasons.append(f"Both partners manglik (Mars in house {m1['house']}/{m2['house']}) — dosha self-cancels")
+        elif mang1 or mang2:
+            severity += 4
+            who = name_of(k1) if mang1 else name_of(k2)
+            mref = m1 if mang1 else m2
+            reasons.append(f"Manglik dosha on {who} side — Mars in house {mref['house']}, possible friction / remedies advised")
+
+        # Bhakoot & Nadi already reasoned in stability — just add severity weight
+        mo1, mo2 = getp(k1,"Moon"), getp(k2,"Moon")
+        if mo1 and mo2:
+            s1,s2 = sidx(mo1["sign"]), sidx(mo2["sign"])
+            pair = tuple(sorted([(s1-s2)%12+1, (s2-s1)%12+1]))
+            if pair in [(6,8),(2,12),(5,9)]: severity += 3
+        NADI = [0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1,2]
+        NAK = ["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
+               "Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati",
+               "Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana",
+               "Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"]
+        try:
+            n1,n2 = NAK.index(k1["nakshatra"]), NAK.index(k2["nakshatra"])
+            if NADI[n1] == NADI[n2]: severity += 3
+        except ValueError:
+            pass
+        return min(10, severity)
+
+    # ── 7. DASHA SUPPORT ───────────────────────────────────────────────────────
+    def score_dasha():
+        base = 55
+        RELATIONSHIP_PLANETS = {"Venus", "Moon"}
+        STRESS_PLANETS = {"Saturn", "Rahu", "Ketu"}
+
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            cd = k.get("currentDasha") or {}
+            md, ad = cd.get("maha"), cd.get("antar")
+            if not md: continue
+            asc = sidx(k.get("ascendant","Aries"))
+            seventh_lord = SIGN_LORDS_LC[(asc + 6) % 12]
+
+            for role, planet in [("MD", md), ("AD", ad)]:
+                if not planet: continue
+                if planet in RELATIONSHIP_PLANETS or planet == seventh_lord:
+                    base += 7 if role == "MD" else 4
+                    reasons.append(f"{lbl} running {planet} {role} — relationship karma active now")
+                elif planet in STRESS_PLANETS:
+                    base -= 6 if role == "MD" else 3
+                    reasons.append(f"{lbl} running {planet} {role} — strain on partnership timing")
+        return max(0, min(100, base))
+
+    # ── 8. TRANSIT IMPACT (real-time) ──────────────────────────────────────────
+    def score_transit():
+        base = 55
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        now = _dt.utcnow()
+        jd  = swe.julday(now.year, now.month, now.day, now.hour + now.minute/60.0)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        transits = {}
+        for pname, pid in [("Jupiter",swe.JUPITER),("Saturn",swe.SATURN),
+                           ("Mars",swe.MARS),("Sun",swe.SUN),("Venus",swe.VENUS),
+                           ("Mercury",swe.MERCURY),("Rahu",swe.MEAN_NODE)]:
+            try:
+                r = swe.calc_ut(jd, pid, flags)
+                transits[pname] = int((r[0][0] % 360) // 30)
+            except Exception: pass
+        if "Rahu" in transits:
+            transits["Ketu"] = (transits["Rahu"] + 6) % 12
+
+        def vedic_aspect_signs(planet, t_sign):
+            out = [(t_sign + 6) % 12]
+            if planet == "Jupiter": out += [(t_sign+4)%12, (t_sign+8)%12]
+            if planet == "Saturn":  out += [(t_sign+2)%12, (t_sign+9)%12]
+            if planet == "Mars":    out += [(t_sign+3)%12, (t_sign+7)%12]
+            if planet in ("Rahu","Ketu"): out += [(t_sign+4)%12, (t_sign+8)%12]
+            return out
+
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            asc = sidx(k.get("ascendant","Aries"))
+            seventh_sign = (asc + 6) % 12
+            venus = getp(k,"Venus");  moon = getp(k,"Moon")
+            venus_sign = sidx(venus["sign"]) if venus else None
+            moon_sign  = sidx(moon["sign"]) if moon else None
+
+            for tp, tsign in transits.items():
+                aspects = vedic_aspect_signs(tp, tsign)
+                for target_name, tgt in [("7th house", seventh_sign),
+                                         ("Venus", venus_sign),
+                                         ("Moon", moon_sign)]:
+                    if tgt is None: continue
+                    if tgt in aspects:
+                        if tp == "Jupiter":
+                            base += 4; reasons.append(f"{lbl}: Jupiter transiting {SIGNS_LC[tsign]} aspects {target_name} — blessings on love")
+                        elif tp == "Saturn":
+                            base -= 4; reasons.append(f"{lbl}: Saturn transiting {SIGNS_LC[tsign]} aspects {target_name} — test / delay")
+                        elif tp == "Rahu":
+                            base -= 2; reasons.append(f"{lbl}: Rahu transit aspects {target_name} — confusion / obsession risk")
+                        elif tp == "Ketu":
+                            base -= 2; reasons.append(f"{lbl}: Ketu transit aspects {target_name} — detachment / karmic release")
+                        elif tp == "Venus" and target_name in ("7th house","Moon"):
+                            base += 2; reasons.append(f"{lbl}: Venus transit aspects {target_name} — romantic window opening")
+        return max(0, min(100, base))
+
+    # ── 9. D9 DEEP CHECK ───────────────────────────────────────────────────────
+    def score_d9():
+        base = 55
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            asc = sidx(k.get("ascendant","Aries"))
+            seventh_lord = SIGN_LORDS_LC[(asc + 6) % 12]
+
+            # spouse nature from D9 7th lord placement
+            d9 = (k.get("divisionalCharts") or {}).get("D9") or {}
+            d9_asc = d9.get("ascendantSignIndex", 0)
+            d9_7th = (d9_asc + 6) % 12
+            # who is in D9 7th
+            d9_7th_occ = [p["name"] for p in d9.get("planets", []) if p.get("signIndex") == d9_7th]
+            if d9_7th_occ:
+                ben = [p for p in d9_7th_occ if p in BENEFIC]
+                mal = [p for p in d9_7th_occ if p in MALEFIC]
+                if ben:
+                    base += 5; reasons.append(f"{lbl}'s D9 7th house has {', '.join(ben)} — nurturing spouse quality")
+                if mal:
+                    base -= 5; reasons.append(f"{lbl}'s D9 7th house has {', '.join(mal)} — challenging spouse dynamic")
+
+            # 7th lord in D9
+            d9_7L = vargap(k, "D9", seventh_lord)
+            if d9_7L:
+                dg = dignity_score(seventh_lord, d9_7L["signIndex"])
+                if dg >= 1:
+                    base += 5; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(dg)} in D9 — marriage dharma secured")
+                elif dg <= -1:
+                    base -= 5; reasons.append(f"{lbl}'s 7th lord {seventh_lord} {dignity_word(dg)} in D9 — spouse-related karma strained")
+        return max(0, min(100, base))
+
+    # ── 10. FINAL SCORE ────────────────────────────────────────────────────────
+    emo = score_emotional()
+    att = score_attraction()
+    com = score_communication()
+    kar = score_karmic()
+    sta = score_stability()
+    dashaS = score_dasha()
+    tran   = score_transit()
+    d9s    = score_d9()
+    dosha_severity = score_dosha()
+
+    # merge stability with D9 (D9 deepens stability) → weighted mix
+    stability_final = round(sta * 0.55 + d9s * 0.45)
+    dasha_transit   = round(dashaS * 0.55 + tran * 0.45)
+
+    weighted = (
+        emo * 0.20 +
+        att * 0.15 +
+        com * 0.15 +
+        kar * 0.10 +
+        stability_final * 0.25 +
+        dasha_transit   * 0.25
+    )
+    # normalize sum of weights (1.10) back to 100 scale, then apply dosha
+    weighted = weighted / 1.10
+    final_score = max(0, min(100, round(weighted - dosha_severity)))
+
+    def bucket(v): return "strong" if v >= 67 else "medium" if v >= 45 else "weak"
+
+    # Dedupe reasons preserving order
+    seen = set(); unique_reasons = []
+    for r in reasons:
+        if r not in seen:
+            seen.add(r); unique_reasons.append(r)
+
+    return jsonify({
+        "score": final_score,
+        "factors": {
+            "emotional":     bucket(emo),
+            "attraction":    bucket(att),
+            "communication": bucket(com),
+            "karmic":        bucket(kar),
+            "stability":     bucket(stability_final),
+        },
+        "reasons": unique_reasons,
+        "breakdown": {
+            "emotional":     emo,
+            "attraction":    att,
+            "communication": com,
+            "karmic":        kar,
+            "stability":     stability_final,
+            "dasha_transit": dasha_transit,
+            "dosha_severity": dosha_severity,
+        },
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

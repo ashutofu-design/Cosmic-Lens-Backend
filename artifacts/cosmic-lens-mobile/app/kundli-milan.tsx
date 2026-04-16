@@ -1219,13 +1219,15 @@ export default function KundliMilanScreen(){
                 <Pressable
                   onPress={()=>{p1&&p2&&handleMatch();Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
                   disabled={!p1||!p2||loading}
-                  style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.85:1,overflow:"hidden",borderRadius:16})}>
-                  <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                    style={{paddingVertical:16,alignItems:"center",
-                      shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.4,shadowRadius:12}}>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                      <Feather name="zap" size={16} color="#fff"/>
-                      <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.4}}>
+                  style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
+                    borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
+                  <LinearGradient colors={["#0b0b0f","#1a1625","#0b0b0f"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                    style={{paddingVertical:17,alignItems:"center",
+                      shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.35,shadowRadius:14}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                      <Feather name="zap" size={16} color="#f59e0b"/>
+                      <Text style={{color:"#fbbf24",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.6,
+                        textShadowColor:"rgba(251,191,36,0.5)",textShadowOffset:{width:0,height:0},textShadowRadius:8}}>
                         Check Now
                       </Text>
                     </View>

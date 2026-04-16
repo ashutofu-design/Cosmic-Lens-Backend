@@ -20,7 +20,7 @@ METRO_PID=$!
 
 echo "[startup] Waiting for Metro tunnel to establish..."
 EXPO_URL=""
-for i in $(seq 1 60); do
+for i in $(seq 1 45); do
   if curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -qo '"public_url"'; then
     EXPO_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | python3 -c "
 import sys,json
@@ -39,6 +39,34 @@ except: pass
   fi
   sleep 2
 done
+
+if [ -z "$EXPO_URL" ]; then
+  echo "[startup] Tunnel failed — restarting Metro in --tunnel mode (retry)..."
+  kill "$METRO_PID" 2>/dev/null || true
+  sleep 2
+  pnpm exec expo start --tunnel --port "$METRO_PORT" 2>&1 | tee "$LOG_FILE" &
+  METRO_PID=$!
+
+  for i in $(seq 1 45); do
+    if curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -qo '"public_url"'; then
+      EXPO_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | python3 -c "
+import sys,json
+try:
+  d=json.load(sys.stdin)
+  for t in d.get('tunnels',[]):
+    if 'https' in t.get('public_url',''):
+      print('exp://' + t['public_url'].replace('https://',''))
+      break
+except: pass
+" 2>/dev/null)
+      if [ -n "$EXPO_URL" ]; then
+        echo "[startup] Metro tunnel ready (retry): $EXPO_URL"
+        break
+      fi
+    fi
+    sleep 2
+  done
+fi
 
 if [ -z "$EXPO_URL" ]; then
   EXPO_URL="exp://${REPLIT_DEV_DOMAIN}"

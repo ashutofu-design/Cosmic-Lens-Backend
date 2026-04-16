@@ -522,18 +522,122 @@ def moon_history():
 @app.route("/api/transits", methods=["POST"])
 def planet_transits():
     """
-    Accept {"dates": ["YYYY-MM-DD", ...]}
-    Return sidereal longitudes for Jupiter, Saturn, Rahu, Ketu, Sun, Mars
-    for each requested date (using noon UTC).
+    Full Vedic transit engine with sign-based aspects, Sade Sati detection,
+    and per-domain impact scoring.
+
+    Request body:
+      {
+        "dates": ["YYYY-MM-DD", ...],           -- required, max 12
+        "natal": {                              -- optional; omit for positions-only
+          "moon_sign":          int (0-11),
+          "pd_planet":          str,
+          "pd_planet_sign":     int (0-11),
+          "lagna_sign":         int (0-11),
+          "domain_house_signs": {
+            "career": int, "finance": int,
+            "relationship": int, "health": int
+          }
+        }
+      }
+
+    Response per date entry:
+      {
+        "date":          str,
+        "positions":     {planet: longitude_float | null, ...},
+        "domain_impact": {"career":int, "finance":int,
+                          "relationship":int, "health":int},  -- only if natal given
+        "reasons":       [str, ...],                           -- only if natal given
+        "sade_sati":     bool,                                 -- only if natal given
+        "error":         null | str
+      }
     """
     import swisseph as swe
-    from datetime import datetime
+    import logging
 
-    data = request.get_json(force=True, silent=True) or {}
+    logger = logging.getLogger(__name__)
+
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+    except Exception as exc:
+        logger.error("Transit API: JSON parse failure: %s", exc)
+        return jsonify({"error": "Invalid JSON body", "results": []}), 400
+
     dates = data.get("dates", [])
     if not dates or not isinstance(dates, list):
-        return jsonify({"error": "Provide dates as a list of YYYY-MM-DD strings"}), 400
+        return jsonify({"error": "Provide 'dates' as a list of YYYY-MM-DD strings", "results": []}), 400
 
+    natal = data.get("natal")
+    if natal:
+        try:
+            moon_sign   = int(natal["moon_sign"]) % 12
+            pd_planet   = str(natal.get("pd_planet", ""))
+            pd_sign     = int(natal["pd_planet_sign"]) % 12
+            lagna_sign  = int(natal["lagna_sign"]) % 12
+            raw_dhs     = natal.get("domain_house_signs", {})
+            domain_hsigns = {k: int(v) % 12 for k, v in raw_dhs.items()}
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.error("Transit API: bad natal payload: %s", exc)
+            return jsonify({"error": f"Invalid natal data: {exc}", "results": []}), 400
+    else:
+        moon_sign = pd_planet = pd_sign = lagna_sign = domain_hsigns = None
+
+    DOMAINS = ["career", "finance", "relationship", "health"]
+
+    SIGN_NAMES = [
+        "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+        "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+    ]
+    HOUSE_NAMES = {
+        1:"1st",2:"2nd",3:"3rd",4:"4th",5:"5th",6:"6th",
+        7:"7th",8:"8th",9:"9th",10:"10th",11:"11th",12:"12th",
+    }
+
+    def sign_to_house(sign: int, lagna: int) -> int:
+        return (sign - lagna + 12) % 12 + 1
+
+    def vedic_aspected_signs(planet_name: str, t_sign: int) -> list:
+        sigs = [(t_sign + 6) % 12]                              # 7th — all planets
+        if planet_name == "Jupiter":
+            sigs += [(t_sign + 4) % 12, (t_sign + 8) % 12]    # 5th, 9th
+        elif planet_name == "Saturn":
+            sigs += [(t_sign + 2) % 12, (t_sign + 9) % 12]    # 3rd, 10th
+        elif planet_name == "Mars":
+            sigs += [(t_sign + 3) % 12, (t_sign + 7) % 12]    # 4th, 8th
+        elif planet_name in ("Rahu", "Ketu"):
+            sigs += [(t_sign + 4) % 12, (t_sign + 8) % 12]    # 5th, 9th
+        return sigs
+
+    def aspect_num(from_sign: int, to_sign: int) -> int:
+        return (to_sign - from_sign + 12) % 12 + 1
+
+    ASPECT_LABEL = {
+        "Jupiter": {5: "5th trine", 7: "7th opposition", 9: "9th trine"},
+        "Saturn":  {3: "3rd",       7: "7th opposition", 10: "10th"},
+        "Mars":    {4: "4th",       7: "7th opposition",  8: "8th"},
+        "Rahu":    {5: "5th",       7: "7th opposition",  9: "9th"},
+        "Ketu":    {5: "5th",       7: "7th opposition",  9: "9th"},
+    }
+
+    DOMAIN_BIAS = {
+        ("Jupiter","career"):        +10, ("Jupiter","finance"):       +8,
+        ("Jupiter","relationship"):  +9,  ("Jupiter","health"):        +7,
+        ("Saturn", "career"):        -9,  ("Saturn", "finance"):       -9,
+        ("Saturn", "relationship"):  -8,  ("Saturn", "health"):        -11,
+        ("Mars",   "career"):        +6,  ("Mars",   "finance"):       +3,
+        ("Mars",   "relationship"):  -7,  ("Mars",   "health"):        -8,
+        ("Venus",  "career"):        +3,  ("Venus",  "finance"):       +7,
+        ("Venus",  "relationship"):  +9,  ("Venus",  "health"):        +4,
+        ("Mercury","career"):        +5,  ("Mercury","finance"):       +5,
+        ("Mercury","relationship"):  +3,  ("Mercury","health"):        +2,
+        ("Sun",    "career"):        +6,  ("Sun",    "finance"):       +2,
+        ("Sun",    "relationship"):  -2,  ("Sun",    "health"):        +3,
+        ("Rahu",   "career"):        -4,  ("Rahu",   "finance"):       -6,
+        ("Rahu",   "relationship"):  -8,  ("Rahu",   "health"):        -7,
+        ("Ketu",   "career"):        -5,  ("Ketu",   "finance"):       -4,
+        ("Ketu",   "relationship"):  -6,  ("Ketu",   "health"):        -6,
+    }
+
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
     flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
 
     planet_map = {
@@ -541,15 +645,26 @@ def planet_transits():
         "Saturn":  swe.SATURN,
         "Sun":     swe.SUN,
         "Mars":    swe.MARS,
+        "Venus":   swe.VENUS,
+        "Mercury": swe.MERCURY,
     }
 
     results = []
-    for date_str in dates[:12]:            # cap at 12 dates
+
+    for date_str in dates[:12]:
+        entry = {"date": date_str, "positions": {}, "error": None}
+        calc_error = False
+
         try:
             d  = datetime.strptime(date_str.strip(), "%Y-%m-%d")
-            jd = swe.julday(d.year, d.month, d.day, 12.0)   # noon UTC
-        except ValueError:
-            results.append({"date": date_str, "error": "bad date format"})
+            jd = swe.julday(d.year, d.month, d.day, 12.0)
+        except ValueError as exc:
+            msg = f"Bad date format '{date_str}'"
+            logger.warning("Transit API: %s — %s", msg, exc)
+            entry["error"] = msg
+            if natal:
+                entry.update({"domain_impact": {k: 0 for k in DOMAINS}, "reasons": [], "sade_sati": False})
+            results.append(entry)
             continue
 
         positions = {}
@@ -557,20 +672,117 @@ def planet_transits():
             try:
                 res = swe.calc_ut(jd, pid, flags)
                 positions[name] = round(res[0][0] % 360, 3)
-            except Exception:
-                positions[name] = 0.0
+            except Exception as exc:
+                logger.error("Transit API: swe.calc_ut failed for %s on %s: %s", name, date_str, exc)
+                positions[name] = None
+                calc_error = True
 
-        # Rahu (Mean Node) + Ketu
         try:
             rahu_res = swe.calc_ut(jd, swe.MEAN_NODE, flags)
             rahu_lon = rahu_res[0][0] % 360
             positions["Rahu"] = round(rahu_lon, 3)
             positions["Ketu"] = round((rahu_lon + 180) % 360, 3)
-        except Exception:
-            positions["Rahu"] = 0.0
-            positions["Ketu"] = 0.0
+        except Exception as exc:
+            logger.error("Transit API: Rahu/Ketu calc failed on %s: %s", date_str, exc)
+            positions["Rahu"] = None
+            positions["Ketu"] = None
+            calc_error = True
 
-        results.append({"date": date_str, "positions": positions})
+        entry["positions"] = positions
+        if calc_error:
+            entry["error"] = "Partial ephemeris failure — some planet positions unavailable"
+
+        if natal and moon_sign is not None and domain_hsigns is not None:
+            impact    = {d: 0 for d in DOMAINS}
+            reasons   = []
+            sade_sati = False
+
+            for planet_name, lon in positions.items():
+                if lon is None:
+                    continue
+
+                t_sign   = int(lon // 30) % 12
+                t_name   = SIGN_NAMES[t_sign]
+                aspected = vedic_aspected_signs(planet_name, t_sign)
+
+                if planet_name == "Saturn":
+                    ss_signs = {
+                        (moon_sign + 11) % 12: "rising",
+                        moon_sign:             "peak",
+                        (moon_sign +  1) % 12: "setting",
+                    }
+                    if t_sign in ss_signs:
+                        sade_sati = True
+                        phase = ss_signs[t_sign]
+                        h_from_moon = sign_to_house(t_sign, moon_sign)
+                        reasons.append(
+                            f"Sade Sati ({phase} phase): Saturn in {t_name} "
+                            f"({HOUSE_NAMES[h_from_moon]} from natal Moon) — "
+                            f"karmic pressure on health, finances and relationships"
+                        )
+                        impact["health"]       += -15
+                        impact["finance"]      += -10
+                        impact["relationship"] += -10
+                        impact["career"]       += -8
+
+                asp_labels = ASPECT_LABEL.get(planet_name, {})
+
+                for asp_sign in aspected:
+                    a_num = aspect_num(t_sign, asp_sign)
+                    a_lbl = asp_labels.get(a_num, f"{a_num}th")
+                    asp_name = SIGN_NAMES[asp_sign]
+
+                    for domain in DOMAINS:
+                        dh_sign = domain_hsigns.get(domain)
+                        if dh_sign is None:
+                            continue
+
+                        hit_house = (asp_sign == dh_sign)
+                        hit_moon  = (asp_sign == moon_sign)
+                        hit_pd    = (asp_sign == pd_sign)
+
+                        if not (hit_house or hit_moon or hit_pd):
+                            continue
+
+                        delta = DOMAIN_BIAS.get((planet_name, domain), 0)
+                        if delta == 0:
+                            continue
+
+                        impact[domain] += delta
+
+                        targets = []
+                        if hit_house and lagna_sign is not None:
+                            h_num = sign_to_house(dh_sign, lagna_sign)
+                            targets.append(
+                                f"{HOUSE_NAMES.get(h_num, str(h_num))} house ({domain})"
+                            )
+                        if hit_moon:
+                            targets.append("natal Moon")
+                        if hit_pd and pd_planet:
+                            targets.append(f"natal {pd_planet} (PD lord)")
+
+                        if targets:
+                            direction = "supporting" if delta > 0 else "stressing"
+                            reasons.append(
+                                f"{planet_name} ({a_lbl} aspect from {t_name}) "
+                                f"{direction} your {' and '.join(targets)} "
+                                f"[{'+' if delta > 0 else ''}{delta} {domain}]"
+                            )
+
+            for d in DOMAINS:
+                impact[d] = max(-30, min(20, impact[d]))
+
+            seen, unique = set(), []
+            for r in reasons:
+                if r not in seen:
+                    seen.add(r)
+                    unique.append(r)
+
+            entry["domain_impact"] = impact
+            entry["reasons"]       = unique
+            entry["sade_sati"]     = sade_sati
+
+        results.append(entry)
 
     return jsonify(results)
 

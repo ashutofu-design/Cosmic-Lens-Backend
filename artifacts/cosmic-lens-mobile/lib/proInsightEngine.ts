@@ -1,5 +1,3 @@
-// ─── Minimal Active Dasha engine for Home card ───────────────────────────────
-// Ported from web app proInsightEngine.ts — only what the Home card needs.
 import { API_BASE as API_BASE_ENGINE, apiFetch } from "./apiConfig";
 
 export type Trend = "UP" | "DOWN" | "MIXED";
@@ -13,7 +11,7 @@ export function pName(planet: string): string {
   return P_HI[planet] ?? planet;
 }
 
-// ── Dignity tables ────────────────────────────────────────────────────────────
+// ── Dignity tables ─────────────────────────────────────────────────────────────
 const EXALT: Record<string, number>  = { Sun:0, Moon:1, Mars:9, Mercury:5, Jupiter:3, Venus:11, Saturn:6, Rahu:1, Ketu:7 };
 const DEBIL: Record<string, number>  = { Sun:6, Moon:7, Mars:3, Mercury:11, Jupiter:9, Venus:5, Saturn:0, Rahu:7, Ketu:1 };
 const OWN:   Record<string, number[]> = {
@@ -49,7 +47,7 @@ const DOMAIN_SIGS: Record<string, string[]> = { career:["Sun","Saturn"], finance
 const DOMAIN_HSE:  Record<string, number[]>  = { career:[10,6], finance:[2,11], relationship:[7,5], health:[1,6] };
 const DOMAIN_PRIMARY_HSE: Record<string, number> = { career:10, finance:2, relationship:7, health:1 };
 
-function signOf(lon: number): number { return Math.floor((lon % 360) / 30); }
+export function signOf(lon: number): number { return Math.floor((lon % 360) / 30); }
 
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d;
@@ -197,7 +195,7 @@ export interface ActiveDashaResult {
   careerTrend: Trend; careerScore: number;
 }
 
-// ─── Extended types for Insights tab ─────────────────────────────────────────
+// ─── Extended types for Insights tab ──────────────────────────────────────────
 
 export interface PDForecast {
   planet: string;
@@ -209,7 +207,6 @@ export interface CategoryInsight {
   score: number;
   trend: Trend;
   activePlanet: string;
-  text: string;
 }
 
 export interface ProInsight {
@@ -227,39 +224,60 @@ export interface MonthForecast {
   scores: number[];
   trend: Trend;
   avgScore: number;
-  howItWillGo: string;
-  caution: string;
-  remedy: string;
+  reasons: string[];
+  sadeSati: boolean;
+  transitError: boolean;
 }
 
-// Category text templates (English)
-const CAT_TEXTS: Record<string, Record<Trend, { main: string; caution: string; remedy: string }>> = {
-  career: {
-    UP:    { main: "Good career progress is expected. The active planet's energy is supporting your professional goals.", caution: "Avoid overconfidence — careful planning is essential.", remedy: "Practice Surya Namaskar each morning and spend 5 minutes in meditation at midday." },
-    DOWN:  { main: "Some challenges may arise in career. Patience and smart decisions will be important.", caution: "Hold off on any major professional decisions for now.", remedy: "Light a sesame oil lamp for Shani and work with honesty and diligence." },
-    MIXED: { main: "Career this period will be mixed — some good and some challenging moments.", caution: "Align short-term decisions with your long-term goals.", remedy: "Chant the mantra of the active planet once daily with a mala." },
-  },
-  relationship: {
-    UP:    { main: "Sweetness and understanding will grow in relationships. Love and trust are both strong.", caution: "Keep communication clear and direct — avoid misunderstandings.", remedy: "Offer white flowers to Venus on Fridays." },
-    DOWN:  { main: "Some tension may arise in relationships. Work with patience and empathy.", caution: "Avoid major decisions with your partner right now — wait a little.", remedy: "Offer a glass of water with sugar to the Moon daily." },
-    MIXED: { main: "Relationships will have a mix of stability and instability. Commitment is key.", caution: "Don't let third-party opinions influence your relationship.", remedy: "Chant 'Om Shukraya Namah' 108 times daily." },
-  },
-  finance: {
-    UP:    { main: "Good opportunities for financial gain. Smart investments can bear fruit in this period.", caution: "Be cautious with speculative investments — don't put everything at stake.", remedy: "Offer turmeric to Jupiter on Thursdays." },
-    DOWN:  { main: "Finances may feel a bit tight. Avoid unnecessary expenses.", caution: "Do not lend or borrow large amounts from anyone.", remedy: "Chant the Mars mantra — 'Om Mangalaya Namah' — on Tuesdays." },
-    MIXED: { main: "Financial situation will be average. Maintaining balance between income and expenses is essential.", caution: "Consult a financial advisor before making investment decisions.", remedy: "Offer something green to Mercury." },
-  },
-  health: {
-    UP:    { main: "Health will be good. Energy levels are high — set new fitness goals.", caution: "Don't neglect rest and sleep despite having good energy.", remedy: "Take a morning walk daily and eat fresh fruits." },
-    DOWN:  { main: "Health may feel slightly fragile. Focus on rest and a proper diet.", caution: "Seek a second opinion before any major medical procedure.", remedy: "Offer water to the Sun daily and drink turmeric milk." },
-    MIXED: { main: "Health will be mostly fine — just a little caution is needed.", caution: "Prevent mental stress from converting into physical problems.", remedy: "Read Hanuman Chalisa daily — it boosts immunity and energy." },
-  },
-};
+// ── Natal strength descriptions (rule-based, no templates) ────────────────────
 
-function makeCategoryText(domain: string, planet: string, trend: Trend, score: number): { text: string; caution: string; remedy: string } {
-  const cat = CAT_TEXTS[domain]?.[trend];
-  if (!cat) return { text: `Score: ${score}`, caution: "Exercise caution.", remedy: "Chant a mantra daily." };
-  return { text: cat.main, caution: cat.caution, remedy: cat.remedy };
+export function buildNatalReasons(
+  pdPlanet: string,
+  adPlanet: string,
+  mdPlanet: string,
+  domain: string,
+  kundli: any,
+): string[] {
+  const reasons: string[] = [];
+
+  const pd = kundli.planets.find((p: any) => p.name === pdPlanet);
+  if (pd) {
+    const str = calcPlanetStrength(pdPlanet, kundli);
+    const lagna = signOf(kundli.ascendantDeg ?? 0);
+    const EXALT_SIGN: Record<string,number> = { Sun:0, Moon:1, Mars:9, Mercury:5, Jupiter:3, Venus:11, Saturn:6, Rahu:1, Ketu:7 };
+    const DEBIL_SIGN: Record<string,number> = { Sun:6, Moon:7, Mars:3, Mercury:11, Jupiter:9, Venus:5, Saturn:0, Rahu:7, Ketu:1 };
+    const pdSign = signOf(pd.longitude);
+    if (EXALT_SIGN[pdPlanet] === pdSign)
+      reasons.push(`PD lord ${pName(pdPlanet)} is exalted — natal strength very high for ${domain}`);
+    else if (DEBIL_SIGN[pdPlanet] === pdSign)
+      reasons.push(`PD lord ${pName(pdPlanet)} is debilitated — natal ${domain} energy is weakened`);
+    if (pd.retrograde)
+      reasons.push(`PD lord ${pName(pdPlanet)} is retrograde — results may be delayed or internalised`);
+    if ([1,4,7,10].includes(pd.house))
+      reasons.push(`PD lord ${pName(pdPlanet)} placed in kendra (house ${pd.house}) — strong foundation for ${domain}`);
+    else if ([5,9].includes(pd.house))
+      reasons.push(`PD lord ${pName(pdPlanet)} in trikona (house ${pd.house}) — dharmic support for ${domain}`);
+    else if ([6,8,12].includes(pd.house))
+      reasons.push(`PD lord ${pName(pdPlanet)} in dusthana (house ${pd.house}) — obstacles in ${domain} area`);
+    if (str >= 25)
+      reasons.push(`Natal PD lord ${pName(pdPlanet)} is strongly dignified — base score for ${domain} boosted`);
+    else if (str <= -20)
+      reasons.push(`Natal PD lord ${pName(pdPlanet)} is under significant stress — ${domain} baseline lowered`);
+  }
+
+  const adData = kundli.planets.find((p: any) => p.name === adPlanet);
+  if (adData) {
+    const adStr = calcPlanetStrength(adPlanet, kundli);
+    if (adStr >= 20)
+      reasons.push(`AD lord ${pName(adPlanet)} is well-placed — supportive secondary influence on ${domain}`);
+    else if (adStr <= -15)
+      reasons.push(`AD lord ${pName(adPlanet)} is challenged — friction from secondary dasha layer`);
+  }
+
+  if ((DOMAIN_SIGS[domain] ?? []).includes(pdPlanet))
+    reasons.push(`${pName(pdPlanet)} is a natural significator of ${domain} — direct activation`);
+
+  return reasons;
 }
 
 function calcUpcomingPDs(ctx: { md: any; ad: any; pd: any | null }): PDForecast[] {
@@ -285,18 +303,13 @@ export function computeProInsight(kundli: any, moonLon: number): ProInsight | nu
   const pdPlanet = pd?.planet ?? ad.planet;
   const adPlanet = ad.planet;
 
-  const pdStr = calcPlanetStrength(pdPlanet, kundli);
-  const adStr = calcPlanetStrength(adPlanet, kundli);
-  const mdStr = calcPlanetStrength(md.planet, kundli);
-
   const makeCategory = (domain: "career" | "relationship" | "finance" | "health"): CategoryInsight => {
     const pdD   = calcDomainScore(pdPlanet, domain, kundli);
     const adD   = calcDomainScore(adPlanet, domain, kundli);
     const final = pdD * 0.7 + adD * 0.3;
     const s100  = toScore100(final);
     const trend = toTrend(s100);
-    const txts  = makeCategoryText(domain, pdPlanet, trend, s100);
-    return { score: s100, trend, activePlanet: pdPlanet, text: txts.text };
+    return { score: s100, trend, activePlanet: pdPlanet };
   };
 
   return {
@@ -313,24 +326,14 @@ export function computeProInsight(kundli: any, moonLon: number): ProInsight | nu
 
 const MON_ABR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-interface TransitPositions { [planet: string]: number }
-const TRANSIT_BEN = new Set(["Jupiter","Venus"]);
-const TRANSIT_MAL = new Set(["Saturn","Rahu","Ketu","Mars"]);
-
-function calcMonthlyTransitAdj(
-  transitPos: TransitPositions,
-  natalPDSign: number,
-  domainHouseSign: number,
-): number {
-  let adj = 0;
-  for (const [planet, lon] of Object.entries(transitPos)) {
-    const tSign = signOf(lon);
-    if (tSign === natalPDSign || tSign === domainHouseSign) {
-      if (TRANSIT_BEN.has(planet)) adj += 5;
-      else if (TRANSIT_MAL.has(planet)) adj -= 7;
-    }
-  }
-  return Math.max(-21, Math.min(15, adj));
+// ── Transit API response types ─────────────────────────────────────────────────
+interface TransitEntry {
+  date: string;
+  positions: Record<string, number | null>;
+  domain_impact?: Record<string, number>;
+  reasons?: string[];
+  sade_sati?: boolean;
+  error?: string | null;
 }
 
 export async function generatePDForecast(
@@ -341,52 +344,110 @@ export async function generatePDForecast(
   kundli: any,
   category: "career" | "relationship" | "finance" | "health",
 ): Promise<MonthForecast> {
-  const pdBase  = calcDomainScore(pdPlanet, category, kundli);
-  const adBase  = calcDomainScore(adPlanet, category, kundli);
-  const weighted = pdBase * 0.7 + adBase * 0.3;
+  const pdBase    = calcDomainScore(pdPlanet, category, kundli);
+  const adBase    = calcDomainScore(adPlanet, category, kundli);
+  const weighted  = pdBase * 0.7 + adBase * 0.3;
   const baseScore = toScore100(weighted);
 
-  const pdData        = kundli.planets.find((p: any) => p.name === pdPlanet);
-  const natalPDSign   = pdData ? signOf(pdData.longitude) : 0;
-  const lagna         = signOf(kundli.ascendantDeg ?? 0);
-  const keyHouseNum   = (DOMAIN_PRIMARY_HSE[category] ?? 1);
-  const domainHouseSgn = (lagna + keyHouseNum - 1) % 12;
+  const pdData       = kundli.planets.find((p: any) => p.name === pdPlanet);
+  const natalPDSign  = pdData ? signOf(pdData.longitude) : 0;
+  const lagna        = signOf(kundli.ascendantDeg ?? 0);
+  const moonPlanet   = kundli.planets.find((p: any) => p.name === "Moon");
+  const moonSign     = moonPlanet ? signOf(moonPlanet.longitude) : 0;
+
+  const domainHouseSigns: Record<string,number> = {
+    career:       (lagna + (DOMAIN_PRIMARY_HSE["career"]       ?? 1) - 1) % 12,
+    finance:      (lagna + (DOMAIN_PRIMARY_HSE["finance"]      ?? 1) - 1) % 12,
+    relationship: (lagna + (DOMAIN_PRIMARY_HSE["relationship"] ?? 1) - 1) % 12,
+    health:       (lagna + (DOMAIN_PRIMARY_HSE["health"]       ?? 1) - 1) % 12,
+  };
 
   const midMonthDates: string[] = [];
   for (let i = 0; i < 6; i++) {
     const d = new Date(pdStart.getFullYear(), pdStart.getMonth() + i, 15);
     midMonthDates.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-15`
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-15`
     );
   }
 
-  let transitData: TransitPositions[] = midMonthDates.map(() => ({}));
+  const natalPayload = {
+    moon_sign:          moonSign,
+    pd_planet:          pdPlanet,
+    pd_planet_sign:     natalPDSign,
+    lagna_sign:         lagna,
+    domain_house_signs: domainHouseSigns,
+  };
+
+  let transitEntries: TransitEntry[] = [];
+  let transitError = false;
+
   try {
     const res = await apiFetch(`${API_BASE_ENGINE}/api/transits`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dates: midMonthDates }),
+      body: JSON.stringify({ dates: midMonthDates, natal: natalPayload }),
     });
-    if (res.ok) {
-      const data: { date: string; positions: TransitPositions }[] = await res.json();
-      transitData = data.map(d => d.positions ?? {});
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => `HTTP ${res.status}`);
+      console.error("[Transit API] HTTP error:", res.status, errBody);
+      transitError = true;
+    } else {
+      const data: TransitEntry[] = await res.json();
+      transitEntries = data;
+      const anyCalcError = data.some(e => e.error != null);
+      if (anyCalcError) {
+        console.warn("[Transit API] Partial errors in response:", data.filter(e => e.error).map(e => `${e.date}: ${e.error}`));
+        transitError = anyCalcError;
+      }
     }
-  } catch { /* use empty transit data */ }
+  } catch (err) {
+    console.error("[Transit API] Network / parse failure:", err);
+    transitError = true;
+  }
 
   const months: string[] = [];
   const scores: number[] = [];
+  const allReasons: string[] = [];
+  let sadeSati = false;
+
   for (let i = 0; i < 6; i++) {
     const monthIdx = (pdStart.getMonth() + i) % 12;
     months.push(MON_ABR[monthIdx]);
-    const adj = calcMonthlyTransitAdj(transitData[i] ?? {}, natalPDSign, domainHouseSgn);
+
+    const entry = transitEntries[i];
+    let adj = 0;
+
+    if (!transitError && entry && !entry.error && entry.domain_impact) {
+      adj = entry.domain_impact[category] ?? 0;
+    }
+
+    if (!transitError && entry) {
+      if (entry.sade_sati) sadeSati = true;
+      for (const r of (entry.reasons ?? [])) {
+        if (!allReasons.includes(r)) allReasons.push(r);
+      }
+    }
+
     scores.push(Math.max(4, Math.min(96, baseScore + adj)));
+  }
+
+  const natalReasons = buildNatalReasons(pdPlanet, adPlanet, mdPlanet, category, kundli);
+  for (const r of natalReasons) {
+    if (!allReasons.includes(r)) allReasons.push(r);
   }
 
   const avgScore = Math.round(scores.reduce((s, x) => s + x, 0) / 6);
   const trend    = toTrend(avgScore);
-  const txts     = makeCategoryText(category, pdPlanet, trend, avgScore);
 
-  return { months, scores, trend, avgScore, howItWillGo: txts.text, caution: txts.caution, remedy: txts.remedy };
+  return {
+    months,
+    scores,
+    trend,
+    avgScore,
+    reasons: allReasons,
+    sadeSati,
+    transitError,
+  };
 }
 
 export function computeActiveDasha(kundli: any, moonLon: number): ActiveDashaResult | null {
@@ -397,11 +458,6 @@ export function computeActiveDasha(kundli: any, moonLon: number): ActiveDashaRes
   const pdPlanet = pd?.planet ?? ad.planet;
   const adPlanet = ad.planet;
 
-  const pdStr = calcPlanetStrength(pdPlanet, kundli);
-  const adStr = calcPlanetStrength(adPlanet, kundli);
-  const mdStr = calcPlanetStrength(md.planet, kundli);
-  const tStr  = calcTransitScore(moonLon, kundli);
-
   const pdD   = calcDomainScore(pdPlanet, "career", kundli);
   const adD   = calcDomainScore(adPlanet, "career", kundli);
   const final = pdD * 0.7 + adD * 0.3;
@@ -409,7 +465,7 @@ export function computeActiveDasha(kundli: any, moonLon: number): ActiveDashaRes
 
   return {
     mdPlanet: md.planet, adPlanet, pdPlanet,
-    careerTrend:  toTrend(s100),
-    careerScore:  s100,
+    careerTrend: toTrend(s100),
+    careerScore: s100,
   };
 }

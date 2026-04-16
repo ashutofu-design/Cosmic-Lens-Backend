@@ -1382,7 +1382,7 @@ export default function KundliMilanScreen(){
                       style={{paddingVertical:13,borderRadius:14,alignItems:"center",
                         shadowColor:"#f59e0b",shadowOffset:{width:0,height:4},shadowOpacity:0.4,shadowRadius:12}}>
                       <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                        <Text style={{color:"#fff",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>Unlock Full Report</Text>
+                        <Text style={{color:"#1a1a1a",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>Unlock Full Report</Text>
                         <Text style={{fontSize:14}}>✨</Text>
                       </View>
                     </LinearGradient>

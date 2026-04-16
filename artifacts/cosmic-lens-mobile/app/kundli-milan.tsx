@@ -1245,9 +1245,9 @@ export default function KundliMilanScreen(){
                     {icon:"💫",label:"Energy Flow",sub:"Nadi",color:"#a855f7",desc:"Deepest soul-level resonance"},
                   ] as const).map((item,i)=>(
                     <View key={i} style={{width:"47%",
-                      backgroundColor:C.isDark?"rgba(255,255,255,0.035)":"#fff",
+                      backgroundColor:C.isDark?"#111827":"#1A2135",
                       borderRadius:16,padding:13,gap:4,
-                      borderWidth:1,borderColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)",
+                      borderWidth:1,borderColor:C.isDark?"rgba(255,255,255,0.08)":"rgba(255,255,255,0.08)",
                       shadowColor:item.color,shadowOffset:{width:0,height:2},shadowOpacity:C.isDark?0.2:0.08,shadowRadius:10}}>
                       <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
                         <View style={{width:30,height:30,borderRadius:15,alignItems:"center",justifyContent:"center",
@@ -1255,11 +1255,11 @@ export default function KundliMilanScreen(){
                           <Text style={{fontSize:14}}>{item.icon}</Text>
                         </View>
                         <View style={{flex:1}}>
-                          <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold"}}>{item.label}</Text>
-                          <Text style={{color:C.isDark?"rgba(167,139,250,0.7)":"#7c3aed",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>{item.sub}</Text>
+                          <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_700Bold"}}>{item.label}</Text>
+                          <Text style={{color:"rgba(167,139,250,0.7)",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>{item.sub}</Text>
                         </View>
                       </View>
-                      <Text style={{color:C.textDim,fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{item.desc}</Text>
+                      <Text style={{color:"#9CA3AF",fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{item.desc}</Text>
                     </View>
                   ))}
                 </View>

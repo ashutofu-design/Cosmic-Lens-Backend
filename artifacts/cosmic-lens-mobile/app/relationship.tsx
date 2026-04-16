@@ -498,30 +498,30 @@ export default function RelationshipScreen() {
             <Animated.View style={{flex:1,opacity:Animated.add(0.3,Animated.multiply(p1Glow,1))}}>
               <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:isDark?"rgba(99,102,241,0.12)":"rgba(99,102,241,0.08)",
+                backgroundColor:"rgba(99,102,241,0.12)",
                 borderWidth:1,
-                borderColor:isDark?"rgba(99,102,241,0.4)":"rgba(99,102,241,0.25)"}}>
+                borderColor:"rgba(99,102,241,0.35)"}}>
                 <View style={{width:24,height:24,borderRadius:12,
-                  backgroundColor:isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.12)",
+                  backgroundColor:"rgba(99,102,241,0.2)",
                   alignItems:"center",justifyContent:"center"}}>
                   <Text style={{fontSize:11}}>👤</Text>
                 </View>
-                <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                <Text style={{color:"#E5E7EB",fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
                   {primaryProfile?.name || "You"}
                 </Text>
-                <Feather name="check-circle" size={12} color="#6366f1"/>
+                <Feather name="check-circle" size={12} color="#818cf8"/>
               </View>
             </Animated.View>
           ) : (
             <Pressable onPress={()=>router.push("/kundli-milan" as any)}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.05)",
+                backgroundColor:"rgba(99,102,241,0.08)",
                 borderWidth:0.5,borderStyle:"dashed" as any,
-                borderColor:isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.18)"})}>
+                borderColor:"rgba(99,102,241,0.25)"})}>
               <Text style={{fontSize:13}}>👤</Text>
-              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>You</Text>
-              <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>You</Text>
+              <Text style={{color:"#818cf8",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
             </Pressable>
           )}
 
@@ -534,18 +534,18 @@ export default function RelationshipScreen() {
             }}
               style={({pressed})=>({opacity:pressed?0.85:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:isDark?"rgba(236,72,153,0.1)":"rgba(236,72,153,0.06)",
+                backgroundColor:"rgba(236,72,153,0.1)",
                 borderWidth:1,
-                borderColor:isDark?"rgba(236,72,153,0.35)":"rgba(236,72,153,0.2)"})}>
+                borderColor:"rgba(236,72,153,0.3)"})}>
               <View style={{width:24,height:24,borderRadius:12,
-                backgroundColor:isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.1)",
+                backgroundColor:"rgba(236,72,153,0.18)",
                 alignItems:"center",justifyContent:"center"}}>
                 <Text style={{fontSize:11}}>💑</Text>
               </View>
-              <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+              <Text style={{color:"#E5E7EB",fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
                 {selectedP2.name}
               </Text>
-              <Text style={{color:"#ec4899",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>Change</Text>
+              <Text style={{color:"#f472b6",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>Change</Text>
             </Pressable>
           ) : otherProfiles.length > 0 ? (
             <Pressable onPress={()=>{
@@ -554,23 +554,23 @@ export default function RelationshipScreen() {
             }}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:isDark?"rgba(236,72,153,0.06)":"rgba(236,72,153,0.04)",
+                backgroundColor:"rgba(236,72,153,0.06)",
                 borderWidth:0.5,
-                borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+                borderColor:"rgba(236,72,153,0.2)"})}>
               <Text style={{fontSize:13}}>💑</Text>
-              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Select Partner</Text>
-              <Feather name="chevron-down" size={12} color="#ec4899"/>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Select Partner</Text>
+              <Feather name="chevron-down" size={12} color="#f472b6"/>
             </Pressable>
           ) : (
             <Pressable onPress={()=>router.push("/kundli-milan" as any)}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:isDark?"rgba(236,72,153,0.05)":"rgba(236,72,153,0.04)",
+                backgroundColor:"rgba(236,72,153,0.05)",
                 borderWidth:0.5,borderStyle:"dashed" as any,
-                borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+                borderColor:"rgba(236,72,153,0.2)"})}>
               <Text style={{fontSize:13}}>💑</Text>
-              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
-              <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
+              <Text style={{color:"#f472b6",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
             </Pressable>
           )}
         </View>

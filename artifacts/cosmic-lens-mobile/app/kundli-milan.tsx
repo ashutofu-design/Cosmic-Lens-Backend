@@ -1224,7 +1224,7 @@ export default function KundliMilanScreen(){
               <View style={{gap:10}}>
                 <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
                   <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
-                  <Text style={{color:C.isDark?"#a78bfa":"#7c3aed",fontSize:10,fontFamily:"Nunito_700Bold",
+                  <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:10,fontFamily:"Nunito_700Bold",
                     textTransform:"uppercase",letterSpacing:1.5}}>
                     What You'll Discover
                   </Text>

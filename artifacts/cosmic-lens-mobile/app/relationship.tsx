@@ -427,12 +427,6 @@ export default function RelationshipScreen() {
     );
     entrance.start();
     glow.start();
-    if(hasP1){
-      Animated.loop(Animated.sequence([
-        Animated.timing(p1Glow,{toValue:0.7,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),
-        Animated.timing(p1Glow,{toValue:0.25,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),
-      ])).start();
-    }
     return () => { glow.stop(); };
   }, []);
 
@@ -495,7 +489,7 @@ export default function RelationshipScreen() {
 
           {/* ─ PERSON 1: Auto-loaded from primary profile ─ */}
           {hasP1 ? (
-            <Animated.View style={{flex:1,opacity:Animated.add(0.3,Animated.multiply(p1Glow,1))}}>
+            <View style={{flex:1}}>
               <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
                 backgroundColor:"#151b2e",

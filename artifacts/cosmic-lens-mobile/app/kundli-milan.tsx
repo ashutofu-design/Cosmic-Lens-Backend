@@ -1334,26 +1334,26 @@ export default function KundliMilanScreen(){
 
               {/* ── 4. Pro Upgrade Teaser ── */}
               <View style={{borderRadius:20,overflow:"hidden",
-                borderWidth:1,borderColor:C.isDark?"rgba(139,92,246,0.3)":"rgba(139,92,246,0.15)"}}>
-                <LinearGradient colors={C.isDark?["rgba(88,28,135,0.3)","rgba(30,27,75,0.5)"]:["rgba(237,233,254,0.9)","rgba(243,232,255,0.7)"]}
-                  style={{padding:16,gap:12}}>
+                borderWidth:1,borderColor:C.isDark?"rgba(245,158,11,0.2)":"rgba(234,88,12,0.12)"}}>
+                <LinearGradient colors={C.isDark?["rgba(88,28,135,0.25)","rgba(30,27,75,0.45)"]:["rgba(237,233,254,0.9)","rgba(243,232,255,0.7)"]}
+                  style={{padding:16,gap:14}}>
 
                   <View style={{gap:4}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
-                      <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:15,fontFamily:"Nunito_800ExtraBold",flex:1}}>
+                      <Text style={{color:C.isDark?"#fbbf24":"#92400e",fontSize:15,fontFamily:"Nunito_800ExtraBold",flex:1}}>
                         Unlock Your Full Relationship Report 🔒
                       </Text>
-                      <View style={{backgroundColor:"#7c3aed",paddingHorizontal:8,paddingVertical:3,borderRadius:8}}>
+                      <View style={{backgroundColor:C.isDark?"#b45309":"#ea580c",paddingHorizontal:8,paddingVertical:3,borderRadius:8}}>
                         <Text style={{color:"#fff",fontSize:8,fontFamily:"Nunito_700Bold"}}>PRO</Text>
                       </View>
                     </View>
-                    <Text style={{color:C.isDark?"rgba(167,139,250,0.6)":"rgba(91,33,182,0.5)",
+                    <Text style={{color:C.isDark?"rgba(251,191,36,0.5)":"rgba(146,64,14,0.45)",
                       fontSize:10,fontFamily:"Nunito_500Medium"}}>
                       See what you're missing about your relationship
                     </Text>
                   </View>
 
-                  <View style={{gap:6}}>
+                  <View style={{gap:5}}>
                     {([
                       "Your true emotional & physical compatibility score",
                       "Where this relationship is truly heading",
@@ -1366,10 +1366,10 @@ export default function KundliMilanScreen(){
                       "Personalized remedies to improve your relationship",
                     ]).map((txt,i)=>(
                       <View key={i} style={{flexDirection:"row",alignItems:"center",gap:8,
-                        backgroundColor:C.isDark?"rgba(139,92,246,0.06)":"rgba(139,92,246,0.04)",
+                        backgroundColor:C.isDark?"rgba(245,158,11,0.04)":"rgba(234,88,12,0.03)",
                         borderRadius:10,paddingHorizontal:10,paddingVertical:7,
-                        borderWidth:0.5,borderColor:C.isDark?"rgba(139,92,246,0.12)":"rgba(139,92,246,0.08)"}}>
-                        <Feather name="lock" size={10} color={C.isDark?"rgba(167,139,250,0.45)":"rgba(124,58,237,0.3)"}/>
+                        borderWidth:0.5,borderColor:C.isDark?"rgba(245,158,11,0.1)":"rgba(234,88,12,0.08)"}}>
+                        <Feather name="lock" size={10} color={C.isDark?"rgba(251,191,36,0.4)":"rgba(180,83,9,0.3)"}/>
                         <Text style={{color:C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.32)",
                           fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{txt}</Text>
                       </View>
@@ -1377,13 +1377,14 @@ export default function KundliMilanScreen(){
                   </View>
 
                   <Pressable onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-                    style={({pressed})=>({opacity:pressed?0.85:1,marginTop:2})}>
-                    <LinearGradient colors={["#ea580c","#f59e0b","#facc15"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                      style={{paddingVertical:13,borderRadius:14,alignItems:"center",
-                        shadowColor:"#f59e0b",shadowOffset:{width:0,height:4},shadowOpacity:0.4,shadowRadius:12}}>
-                      <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                        <Text style={{color:"#1a1a1a",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>Unlock Full Report</Text>
-                        <Text style={{fontSize:14}}>✨</Text>
+                    style={({pressed})=>({opacity:pressed?0.85:1,marginTop:4})}>
+                    <LinearGradient colors={["#ea580c","#f59e0b","#eab308"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                      style={{paddingVertical:15,borderRadius:16,alignItems:"center",
+                        shadowColor:"#f59e0b",shadowOffset:{width:0,height:5},shadowOpacity:0.5,shadowRadius:14}}>
+                      <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                        <Feather name="unlock" size={16} color="#451a03"/>
+                        <Text style={{color:"#451a03",fontSize:15,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.3}}>Unlock Full Report</Text>
+                        <Text style={{fontSize:15}}>✨</Text>
                       </View>
                     </LinearGradient>
                   </Pressable>

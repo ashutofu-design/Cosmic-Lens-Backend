@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -186,7 +187,8 @@ export default function HomeScreen() {
 
   if (!isLoading && !user) return <Redirect href="/login" />;
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const androidStatusBar = StatusBar.currentHeight ?? 24;
+  const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidStatusBar) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const showDemo    = !kundli;

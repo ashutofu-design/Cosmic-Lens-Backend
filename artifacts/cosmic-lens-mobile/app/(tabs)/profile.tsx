@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Alert, Animated, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, Switch, Text, TextInput, View,
+  ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -386,7 +386,8 @@ export default function ProfileScreen() {
   const [showLang, setShowLang] = useState(false);
 
   const t = getT(language);
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const androidSB = StatusBar.currentHeight ?? 24;
+  const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0];

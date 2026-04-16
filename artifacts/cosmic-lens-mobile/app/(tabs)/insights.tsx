@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
@@ -206,7 +207,8 @@ export default function InsightsScreen() {
     ...c,
     label: t[c.key as "career" | "finance" | "relationship" | "health"],
   }));
-  const topPad     = Platform.OS === "web" ? 67 : insets.top;
+  const androidSB  = StatusBar.currentHeight ?? 24;
+  const topPad     = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad     = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo   = !kundli;
 

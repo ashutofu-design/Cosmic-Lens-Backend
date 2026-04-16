@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -59,7 +60,8 @@ export default function AskScreen() {
   const C = useC();
   const { kundli, birthData, language } = useUser();
   const t = getT(language);
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const androidSB = StatusBar.currentHeight ?? 24;
+  const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 

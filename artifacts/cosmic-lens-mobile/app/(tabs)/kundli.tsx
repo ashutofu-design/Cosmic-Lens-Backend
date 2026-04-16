@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  StatusBar, StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -977,7 +977,8 @@ export default function KundliScreen() {
   const { kundli, language, profiles, primaryProfileId } = useUser();
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const tI18n = getT(language);
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const androidSB = StatusBar.currentHeight ?? 24;
+  const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v: string) => oa(C.isDark, v);

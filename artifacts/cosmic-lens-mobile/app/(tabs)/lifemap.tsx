@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
@@ -255,7 +256,8 @@ export default function LifeMapScreen() {
   const { language } = useUser();
   const t = getT(language);
   const insets = useSafeAreaInsets();
-  const topPad = insets.top;
+  const androidSB = StatusBar.currentHeight ?? 24;
+  const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = insets.bottom;
   const isDark = C.isDark;
   const ac = isDark ? "#f59e0b" : "#7C3AED";

@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
@@ -69,7 +69,8 @@ export default function NoticeScreen() {
   const C = useC();
   const { kundli, language } = useUser();
   const t = getT(language);
-  const topPad  = Platform.OS === "web" ? 67 : insets.top;
+  const androidSB = StatusBar.currentHeight ?? 24;
+  const topPad  = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad  = Platform.OS === "web" ? 34 : insets.bottom;
   const notices = DEMO_NOTICES;
   const unread  = notices.filter((_, i) => i < 2).length;

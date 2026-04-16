@@ -493,6 +493,31 @@ export default function RelationshipScreen() {
           </Text>
         </Animated.View>
 
+        {/* ── Compact Kundli Slots ── */}
+        <View style={{flexDirection:"row",gap:8,marginBottom:24}}>
+          <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+            style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+              borderRadius:14,paddingHorizontal:10,gap:7,
+              backgroundColor:isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.05)",
+              borderWidth:0.5,borderStyle:"dashed" as any,
+              borderColor:isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.18)"})}>
+            <Text style={{fontSize:13}}>👤</Text>
+            <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 1</Text>
+            <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+          </Pressable>
+
+          <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+            style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+              borderRadius:14,paddingHorizontal:10,gap:7,
+              backgroundColor:isDark?"rgba(236,72,153,0.05)":"rgba(236,72,153,0.04)",
+              borderWidth:0.5,borderStyle:"dashed" as any,
+              borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+            <Text style={{fontSize:13}}>💑</Text>
+            <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
+            <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+          </Pressable>
+        </View>
+
         <View style={s.optionsList}>
           {OPTIONS.map((opt, i) => (
             <OptionCard key={opt.key} option={opt} index={i} isDark={isDark} />

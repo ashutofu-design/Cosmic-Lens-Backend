@@ -14,6 +14,40 @@ echo "[startup] API accessible at: https://$REPLIT_API_DOMAIN"
 echo "[startup] No external tunnel needed — using stable Replit domain"
 
 METRO_PORT="${PORT:-18987}"
+
+# Re-authenticate Expo before starting tunnel
+node -e "
+const https = require('https');
+const data = JSON.stringify({ username: 'Satyayatra', password: 'Scorpio@2030' });
+const req = https.request({
+  hostname: 'api.expo.dev',
+  path: '/v2/auth/loginAsync',
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'Content-Length': data.length }
+}, (res) => {
+  let body = '';
+  res.on('data', d => body += d);
+  res.on('end', () => {
+    const parsed = JSON.parse(body);
+    const secret = parsed.data.sessionSecret;
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+    const stateDir = path.join(os.homedir(), '.expo');
+    fs.mkdirSync(stateDir, { recursive: true });
+    const statePath = path.join(stateDir, 'state.json');
+    let state = {};
+    try { state = JSON.parse(fs.readFileSync(statePath, 'utf8')); } catch(e) {}
+    state.auth = { sessionSecret: secret, userId: 'Satyayatra', username: 'Satyayatra', currentConnection: 'Username-Password-Authentication' };
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+    console.log('[auth] Expo session restored');
+  });
+});
+req.write(data);
+req.end();
+" 2>/dev/null
+sleep 2
+
 echo "[startup] Starting Metro on port $METRO_PORT with --tunnel mode..."
 pnpm exec expo start --tunnel --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!

@@ -214,7 +214,7 @@ function OptionCard({
 
         <View style={[
           s.card,
-          { borderRadius: bRadius, backgroundColor: isDark ? "#111827" : "#f8f8ff" },
+          { borderRadius: bRadius, backgroundColor: "#111827" },
           {
             shadowColor: option.glowColor,
             shadowOpacity: isDark ? 0.5 : (isHL ? 0.25 : 0.1),
@@ -223,77 +223,36 @@ function OptionCard({
             elevation: 14,
           },
         ]}>
-          {!isDark && Platform.OS !== "web" ? (
-            <BlurView
-              intensity={60}
-              tint="light"
-              style={StyleSheet.absoluteFill}
-            />
-          ) : null}
+          <LinearGradient
+            colors={loveWarm
+              ? ["#1a0a10", "#111827", "#110d14"]
+              : ["#0d0f1e", "#111827", "#0f0d1a"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
+          />
 
-          {isDark ? (
+          <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
             <LinearGradient
-              colors={loveWarm
-                ? ["#1a0a10", "#111827", "#110d14"]
-                : ["#0d0f1e", "#111827", "#0f0d1a"]}
+              colors={[`${c1}20`, `${c2}10`, "transparent"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
+              style={StyleSheet.absoluteFill}
             />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, {
-              backgroundColor: isHL ? "rgba(255,242,248,0.96)" : "rgba(248,248,255,0.95)",
-              borderRadius: bRadius,
-            }]} />
-          )}
+          </Animated.View>
 
-          {isDark && (
-            <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
-              <LinearGradient
-                colors={[`${c1}20`, `${c2}10`, "transparent"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
-          )}
-
-          {!isDark && (
-            <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
-              <LinearGradient
-                colors={[`${c1}18`, `${c2}0A`, "transparent"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
-          )}
-
-          {isDark && (
-            <LinearGradient
-              colors={[`${option.glowColor}10`, "transparent"]}
-              start={{ x: 0.5, y: 1 }}
-              end={{ x: 0.5, y: 0.2 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
-            />
-          )}
+          <LinearGradient
+            colors={[`${option.glowColor}10`, "transparent"]}
+            start={{ x: 0.5, y: 1 }}
+            end={{ x: 0.5, y: 0.2 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
+          />
 
           <View style={[StyleSheet.absoluteFill, {
             borderRadius: bRadius,
-            borderWidth: isDark ? 1 : 0.5,
-            borderColor: isDark
-              ? "rgba(255,255,255,0.1)"
-              : `${option.glowColor}${isHL ? "20" : "0C"}`,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.1)",
           }]} />
-
-          {!isDark && (
-            <LinearGradient
-              colors={["rgba(255,255,255,0.5)", "transparent"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: bRadius, height: "35%" }]}
-            />
-          )}
 
           {isHL && option.badge && (
             <View style={s.badgeWrap}>
@@ -337,14 +296,14 @@ function OptionCard({
                 <Text style={[
                   s.cardTitle,
                   isHL && s.cardTitleHL,
-                  { color: isDark ? "#FFFFFF" : "#0F172A", fontFamily: "Nunito_800ExtraBold" },
+                  { color: "#FFFFFF", fontFamily: "Nunito_800ExtraBold" },
                 ]}>
                   {option.title}
                 </Text>
                 <Text style={[
                   s.cardSub,
                   isHL && s.cardSubHL,
-                  { color: isDark ? "#A0A7B8" : "#64748B", fontFamily: "Nunito_500Medium" },
+                  { color: "#A0A7B8", fontFamily: "Nunito_500Medium" },
                 ]} numberOfLines={1}>
                   {option.subtitle}
                 </Text>
@@ -352,7 +311,7 @@ function OptionCard({
 
               <Animated.View style={{
                 transform: [{ scale: arrowPulse }],
-                opacity: isDark ? Animated.add(0.3, Animated.multiply(arrowGlow, 0.7)) : arrowGlow,
+                opacity: Animated.add(0.3, Animated.multiply(arrowGlow, 0.7)),
               }}>
                 <LinearGradient
                   colors={[c1, c2]}
@@ -373,10 +332,10 @@ function OptionCard({
 
             <View style={s.descRow}>
               <View style={[s.descTag, {
-                backgroundColor: isDark ? `${option.glowColor}18` : `${option.glowColor}0A`,
-                borderColor: isDark ? `${option.glowColor}35` : `${option.glowColor}14`,
+                backgroundColor: `${option.glowColor}18`,
+                borderColor: `${option.glowColor}35`,
               }]}>
-                <Text style={[s.descText, { color: isDark ? option.glowColor : option.glowColor, fontFamily: "Nunito_600SemiBold" }]}>
+                <Text style={[s.descText, { color: option.glowColor, fontFamily: "Nunito_600SemiBold" }]}>
                   {option.desc}
                 </Text>
               </View>
@@ -384,15 +343,9 @@ function OptionCard({
 
             <View style={s.itemsRow}>
               {option.items.map((item, i) => {
-                const chipBg = isDark
-                  ? "rgba(255,255,255,0.08)"
-                  : isHL ? `${option.glowColor}08` : "rgba(0,0,0,0.03)";
-                const chipBorder = isDark
-                  ? "rgba(255,255,255,0.14)"
-                  : isHL ? `${option.glowColor}14` : "rgba(0,0,0,0.05)";
-                const chipColor = isDark
-                  ? "#E5E7EB"
-                  : isHL ? "#475569" : "#64748B";
+                const chipBg = "rgba(255,255,255,0.08)";
+                const chipBorder = "rgba(255,255,255,0.14)";
+                const chipColor = "#E5E7EB";
 
                 return (
                   <Animated.View key={i} style={isHL ? {
@@ -417,8 +370,8 @@ function OptionCard({
 
             {option.depthLine ? (
               <View style={{flexDirection:"row",alignItems:"center",gap:5,marginTop:2,paddingHorizontal:2}}>
-                <Feather name="zap" size={10} color={isDark ? option.glowColor : option.glowColor}/>
-                <Text style={{color:isDark?"#A0A7B8":"#64748B",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
+                <Feather name="zap" size={10} color={option.glowColor}/>
+                <Text style={{color:"#A0A7B8",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
                   {option.depthLine}
                 </Text>
               </View>

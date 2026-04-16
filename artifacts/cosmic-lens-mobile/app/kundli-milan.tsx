@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Modal, Platform,
@@ -1067,6 +1067,7 @@ export default function KundliMilanScreen(){
   const botPad=Platform.OS==="web"?34:insets.bottom;
   const {kundli:primaryKundli,profiles,primaryProfileId}=useUser();
   const p1Profile=profiles.find(p=>p.id===primaryProfileId);
+  const params=useLocalSearchParams<{partnerId?:string}>();
 
   const [plan,setPlan]=useState<"basic"|"pro">("basic");
   const [showUnlock,setShowUnlock]=useState(false);
@@ -1075,6 +1076,21 @@ export default function KundliMilanScreen(){
   const [p2,setP2]=useState<PersonData|null>(null);
   const [result,setResult]=useState<Result|null>(null);
   const [calcLoading,setCalcLoading]=useState(false);
+
+  // Auto-load partner from relationship page selection (URL param)
+  useEffect(()=>{
+    if(!params.partnerId)return;
+    const prof=profiles.find(p=>p.id===params.partnerId);
+    if(prof?.kundli){
+      const marsH=prof.kundli.planets.find((p:any)=>p.name==="Mars")?.house??0;
+      setP2({
+        name:prof.name,
+        nakshatra:prof.kundli.nakshatra,
+        moonSign:prof.kundli.moonSign,
+        manglik:[1,4,7,8,12].includes(marsH),
+      });
+    }
+  },[params.partnerId,profiles]);
 
   // Pro glow animation
   const glowAnim=useRef(new Animated.Value(0)).current;
@@ -1214,17 +1230,60 @@ export default function KundliMilanScreen(){
           {!isPro&&!result&&(
             <View style={{gap:16}}>
 
-              {/* ── Partner Input Slots ── */}
-              <View style={{gap:10}}>
-                {addingFor==="self"
-                  ?<AddKundliForm title="Aapki Kundli" onDone={(d)=>handleDone("self",d)} onCancel={()=>setAddingFor(null)}/>
-                  :<KundliSlot who="self" filled={person1} isPro={false}
-                      onAdd={()=>setAddingFor("self")} onClear={()=>setP1(null)}/>}
-                {addingFor==="partner"
-                  ?<AddKundliForm title="Partner ki Kundli" onDone={(d)=>handleDone("partner",d)} onCancel={()=>setAddingFor(null)}/>
-                  :<KundliSlot who="partner" filled={p2} isPro={false}
-                      onAdd={()=>setAddingFor("partner")} onClear={()=>setP2(null)}/>}
-              </View>
+              {/* ── Selected Partner Pill (if loaded from relationship) ── */}
+              {p2&&(
+                <View style={{flexDirection:"row",alignItems:"center",gap:10,
+                  backgroundColor:C.isDark?"rgba(236,72,153,0.10)":"rgba(236,72,153,0.07)",
+                  borderWidth:1,borderColor:C.isDark?"rgba(236,72,153,0.28)":"rgba(236,72,153,0.20)",
+                  borderRadius:14,paddingHorizontal:12,paddingVertical:10}}>
+                  <View style={{width:32,height:32,borderRadius:16,
+                    backgroundColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.12)",
+                    alignItems:"center",justifyContent:"center"}}>
+                    <Text style={{fontSize:15}}>💑</Text>
+                  </View>
+                  <View style={{flex:1}}>
+                    <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.5)",
+                      fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:0.8,textTransform:"uppercase"}}>
+                      Matching with
+                    </Text>
+                    <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
+                      {p1Profile?.name||"You"}  ✦  {p2.name}
+                    </Text>
+                  </View>
+                  <Pressable onPress={()=>router.back()}
+                    style={({pressed})=>({opacity:pressed?0.6:1,padding:6})}>
+                    <Feather name="edit-2" size={13} color={C.isDark?"#f472b6":"#db2777"}/>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* ── No Partner Selected: CTA to Relationship page ── */}
+              {!p2&&(
+                <Pressable onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/relationship" as any);}}
+                  style={({pressed})=>({opacity:pressed?0.85:1,
+                    backgroundColor:C.isDark?"rgba(236,72,153,0.10)":"rgba(236,72,153,0.06)",
+                    borderWidth:1,borderStyle:"dashed" as any,
+                    borderColor:C.isDark?"rgba(236,72,153,0.35)":"rgba(236,72,153,0.30)",
+                    borderRadius:16,padding:16,gap:8})}>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
+                    <View style={{width:38,height:38,borderRadius:19,
+                      backgroundColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.12)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:18}}>💑</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
+                        Partner Select Karein
+                      </Text>
+                      <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",
+                        fontSize:10.5,fontFamily:"Nunito_500Medium",marginTop:2}}>
+                        Relationship page se partner chunein matching ke liye
+                      </Text>
+                    </View>
+                    <Feather name="arrow-right" size={16} color={C.isDark?"#f472b6":"#db2777"}/>
+                  </View>
+                </Pressable>
+              )}
 
               {/* ── Top CTA: Check Now ── */}
               <View>

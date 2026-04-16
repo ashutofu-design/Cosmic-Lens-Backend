@@ -70,10 +70,12 @@ function OptionCard({
   option,
   index,
   isDark,
+  partnerId,
 }: {
   option: MainOption;
   index: number;
   isDark: boolean;
+  partnerId?: string | null;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -198,7 +200,8 @@ function OptionCard({
         onPressOut={handlePressOut}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push(option.route as any);
+          const url = partnerId ? `${option.route}?partnerId=${partnerId}` : option.route;
+          router.push(url as any);
         }}
       >
         {isDark && (
@@ -632,7 +635,7 @@ export default function RelationshipScreen() {
 
         <View style={s.optionsList}>
           {OPTIONS.map((opt, i) => (
-            <OptionCard key={opt.key} option={opt} index={i} isDark={isDark} />
+            <OptionCard key={opt.key} option={opt} index={i} isDark={isDark} partnerId={selectedP2?.id} />
           ))}
         </View>
       </ScrollView>

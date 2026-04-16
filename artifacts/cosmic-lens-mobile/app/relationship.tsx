@@ -69,20 +69,20 @@ const LOVE_FEATURES: Feature[] = [
     gradient: ["#f97316", "#fb923c"],
   },
   {
-    key: "future-outcome",
-    title: "Future Outcome",
-    subtitle: "Where is this headed?",
-    emoji: "🔮",
-    iconColor: "#c084fc",
-    gradient: ["#a855f7", "#c084fc"],
-  },
-  {
     key: "will-return",
     title: "Will X Return?",
     subtitle: "Chances of reconnection",
     emoji: "🪃",
     iconColor: "#fbbf24",
     gradient: ["#f59e0b", "#fbbf24"],
+  },
+  {
+    key: "future-outcome",
+    title: "Future Outcome",
+    subtitle: "Where is this relationship headed?",
+    emoji: "🔮",
+    iconColor: "#c084fc",
+    gradient: ["#a855f7", "#c084fc"],
   },
 ];
 
@@ -139,7 +139,7 @@ function FeatureCard({
     const arrow = Animated.loop(
       Animated.sequence([
         Animated.timing(arrowPulse, {
-          toValue: 1.1,
+          toValue: 1.12,
           duration: 1300,
           delay: index * 100,
           easing: Easing.inOut(Easing.sin),
@@ -197,10 +197,10 @@ function FeatureCard({
             s.featureCard,
             {
               shadowColor: feature.iconColor,
-              shadowOpacity: isDark ? 0.35 : 0.15,
-              shadowRadius: 20,
-              shadowOffset: { width: 0, height: 6 },
-              elevation: 8,
+              shadowOpacity: isDark ? 0.3 : 0.12,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 7,
             },
           ]}
         >
@@ -230,8 +230,8 @@ function FeatureCard({
             <LinearGradient
               colors={
                 isDark
-                  ? [`${feature.iconColor}22`, `${feature.iconColor}08`, "transparent"]
-                  : [`${feature.iconColor}12`, `${feature.iconColor}04`, "transparent"]
+                  ? [`${feature.iconColor}20`, `${feature.iconColor}08`, "transparent"]
+                  : [`${feature.iconColor}10`, `${feature.iconColor}04`, "transparent"]
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -245,7 +245,7 @@ function FeatureCard({
               {
                 borderRadius: 20,
                 borderWidth: isDark ? 1 : 0.5,
-                borderColor: isDark ? `${feature.iconColor}30` : `${feature.iconColor}10`,
+                borderColor: isDark ? `${feature.iconColor}28` : `${feature.iconColor}0C`,
               },
             ]}
           />
@@ -311,7 +311,7 @@ function FeatureCard({
               style={{
                 transform: [{ scale: arrowPulse }],
                 shadowColor: feature.iconColor,
-                shadowOpacity: isDark ? 0.5 : 0.25,
+                shadowOpacity: isDark ? 0.5 : 0.2,
                 shadowRadius: 12,
                 shadowOffset: { width: 0, height: 3 },
                 elevation: 6,
@@ -333,13 +333,17 @@ function FeatureCard({
   );
 }
 
-function SectionHeader({
+function SectionBlock({
   title,
   subtitle,
   emoji,
   gradient,
   isDark,
   delay,
+  features,
+  sectionDelay,
+  highlighted,
+  highlightTag,
 }: {
   title: string;
   subtitle: string;
@@ -347,9 +351,14 @@ function SectionHeader({
   gradient: [string, string];
   isDark: boolean;
   delay: number;
+  features: Feature[];
+  sectionDelay: number;
+  highlighted?: boolean;
+  highlightTag?: string;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-16)).current;
+  const glowPulse = useRef(new Animated.Value(0.15)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -367,79 +376,200 @@ function SectionHeader({
         bounciness: 5,
       }),
     ]).start();
+
+    if (highlighted) {
+      const glow = Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowPulse, {
+            toValue: 0.35,
+            duration: 2500,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(glowPulse, {
+            toValue: 0.12,
+            duration: 2500,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      glow.start();
+      return () => glow.stop();
+    }
   }, []);
+
+  const [g1, g2] = gradient;
 
   return (
     <Animated.View
-      style={[s.sectionHeader, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+      style={[
+        s.sectionWrap,
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+      ]}
     >
-      <View style={s.sectionBadgeRow}>
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={s.sectionBadge}
-        >
-          <Text style={s.sectionBadgeEmoji}>{emoji}</Text>
-          <Text style={s.sectionBadgeText}>{title.toUpperCase()}</Text>
-        </LinearGradient>
+      <View
+        style={[
+          s.sectionContainer,
+          {
+            shadowColor: highlighted ? g1 : "transparent",
+            shadowOpacity: isDark && highlighted ? 0.25 : 0,
+            shadowRadius: highlighted ? 24 : 0,
+            shadowOffset: { width: 0, height: highlighted ? 8 : 0 },
+            elevation: highlighted ? 6 : 0,
+          },
+        ]}
+      >
+        {Platform.OS !== "web" ? (
+          <BlurView
+            intensity={isDark ? 25 : 40}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: isDark
+                ? highlighted ? "rgba(20,12,30,0.65)" : "rgba(10,16,32,0.5)"
+                : highlighted ? "rgba(255,245,250,0.92)" : "rgba(248,250,255,0.9)",
+              borderRadius: 24,
+            },
+          ]}
+        />
+
+        {highlighted && (
+          <Animated.View
+            style={[
+              StyleSheet.absoluteFill,
+              { overflow: "hidden", borderRadius: 24, opacity: glowPulse },
+            ]}
+          >
+            <LinearGradient
+              colors={isDark ? [`${g1}18`, `${g2}08`, "transparent"] : [`${g1}0C`, "transparent"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        )}
+
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: 24,
+              borderWidth: isDark ? 1 : 0.5,
+              borderColor: isDark
+                ? highlighted ? `${g1}30` : "rgba(255,255,255,0.06)"
+                : highlighted ? `${g1}18` : "rgba(0,0,0,0.04)",
+            },
+          ]}
+        />
+
+        <View style={s.sectionInner}>
+          <View style={s.sectionHeaderRow}>
+            <LinearGradient
+              colors={gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.sectionBadge}
+            >
+              <Text style={s.sectionBadgeEmoji}>{emoji}</Text>
+              <Text style={s.sectionBadgeText}>{title.toUpperCase()}</Text>
+            </LinearGradient>
+
+            {highlighted && highlightTag && (
+              <View style={[s.hotTag, {
+                backgroundColor: isDark ? "rgba(239,68,68,0.15)" : "rgba(239,68,68,0.1)",
+                borderColor: isDark ? "rgba(239,68,68,0.3)" : "rgba(239,68,68,0.2)",
+              }]}>
+                <Text style={s.hotTagText}>🔥 {highlightTag}</Text>
+              </View>
+            )}
+          </View>
+
+          <Text
+            style={[
+              s.sectionTitle,
+              {
+                color: isDark ? "#fff" : "#0F172A",
+                fontFamily: "Nunito_700Bold",
+              },
+            ]}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[
+              s.sectionSub,
+              {
+                color: isDark ? "rgba(203,213,225,0.5)" : "#64748B",
+                fontFamily: "Nunito_400Regular",
+              },
+            ]}
+          >
+            {subtitle}
+          </Text>
+
+          <View style={s.sectionDivider}>
+            <LinearGradient
+              colors={[
+                "transparent",
+                isDark ? `${g1}25` : `${g1}15`,
+                "transparent",
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.sectionDividerLine}
+            />
+          </View>
+
+          <View style={s.featureList}>
+            {features.map((f, i) => (
+              <FeatureCard
+                key={f.key}
+                feature={f}
+                index={i}
+                isDark={isDark}
+                sectionDelay={sectionDelay}
+              />
+            ))}
+          </View>
+        </View>
       </View>
-      <Text
-        style={[
-          s.sectionTitle,
-          {
-            color: isDark ? "#fff" : "#0F172A",
-            fontFamily: "Nunito_700Bold",
-          },
-        ]}
-      >
-        {title}
-      </Text>
-      <Text
-        style={[
-          s.sectionSub,
-          {
-            color: isDark ? "rgba(203,213,225,0.5)" : "#64748B",
-            fontFamily: "Nunito_400Regular",
-          },
-        ]}
-      >
-        {subtitle}
-      </Text>
     </Animated.View>
   );
 }
 
-function SectionDivider({ isDark }: { isDark: boolean }) {
+function SectionSpacer({ isDark }: { isDark: boolean }) {
   return (
-    <View style={s.dividerWrap}>
+    <View style={s.spacerWrap}>
       <LinearGradient
         colors={[
           "transparent",
-          isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+          isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
           "transparent",
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={s.dividerLine}
+        style={s.spacerLine}
       />
-      <View
-        style={[
-          s.dividerDot,
-          {
-            backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
-          },
-        ]}
-      />
+      <View style={[s.spacerIcon, {
+        backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+      }]}>
+        <Text style={{ fontSize: 10 }}>✦</Text>
+      </View>
       <LinearGradient
         colors={[
           "transparent",
-          isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+          isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
           "transparent",
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={s.dividerLine}
+        style={s.spacerLine}
       />
     </View>
   );
@@ -560,51 +690,51 @@ export default function RelationshipScreen() {
           >
             Discover your love destiny & marriage potential
           </Text>
+
+          <View style={s.pathHint}>
+            <View style={[s.pathCard, {
+              backgroundColor: isDark ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.06)",
+              borderColor: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.1)",
+            }]}>
+              <Text style={[s.pathEmoji]}>💍</Text>
+              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.6)" : "#475569", fontFamily: "Nunito_600SemiBold" }]}>Marriage</Text>
+            </View>
+            <View style={[s.pathDot, { backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)" }]} />
+            <View style={[s.pathCard, {
+              backgroundColor: isDark ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.06)",
+              borderColor: isDark ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.1)",
+            }]}>
+              <Text style={[s.pathEmoji]}>🔥</Text>
+              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.6)" : "#475569", fontFamily: "Nunito_600SemiBold" }]}>Love / BF-GF</Text>
+            </View>
+          </View>
         </Animated.View>
 
-        <SectionHeader
+        <SectionBlock
           title="Marriage Compatibility"
           subtitle="Check long-term marriage potential"
           emoji="💍"
           gradient={["#6366f1", "#818cf8"]}
           isDark={isDark}
           delay={200}
+          features={MARRIAGE_FEATURES}
+          sectionDelay={350}
         />
 
-        <View style={s.featureList}>
-          {MARRIAGE_FEATURES.map((f, i) => (
-            <FeatureCard
-              key={f.key}
-              feature={f}
-              index={i}
-              isDark={isDark}
-              sectionDelay={300}
-            />
-          ))}
-        </View>
+        <SectionSpacer isDark={isDark} />
 
-        <SectionDivider isDark={isDark} />
-
-        <SectionHeader
+        <SectionBlock
           title="Love Reality Check"
           subtitle="Know the truth about your relationship"
           emoji="🔥"
           gradient={["#ef4444", "#f97316"]}
           isDark={isDark}
-          delay={500}
+          delay={450}
+          features={LOVE_FEATURES}
+          sectionDelay={600}
+          highlighted
+          highlightTag="Most Used"
         />
-
-        <View style={s.featureList}>
-          {LOVE_FEATURES.map((f, i) => (
-            <FeatureCard
-              key={f.key}
-              feature={f}
-              index={i}
-              isDark={isDark}
-              sectionDelay={600}
-            />
-          ))}
-        </View>
 
         <View
           style={[
@@ -680,7 +810,7 @@ export default function RelationshipScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20 },
+  content: { paddingHorizontal: 16 },
 
   topBar: {
     position: "absolute",
@@ -701,35 +831,64 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
 
-  heroWrap: { alignItems: "center", marginBottom: 28, gap: 8 },
+  heroWrap: { alignItems: "center", marginBottom: 24, gap: 8 },
   heroEmojiWrap: { alignItems: "center", justifyContent: "center", marginBottom: 8 },
   heroEmojiCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.15)",
   },
-  heroEmoji: { fontSize: 38 },
+  heroEmoji: { fontSize: 36 },
   heroEmojiGlow: {
     position: "absolute",
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "rgba(255,77,141,0.15)",
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "rgba(255,77,141,0.12)",
     zIndex: -1,
   },
-  heroTitle: { fontSize: 30, letterSpacing: -0.5, textAlign: "center" },
-  heroSub: { fontSize: 14, textAlign: "center", letterSpacing: 0.2 },
+  heroTitle: { fontSize: 28, letterSpacing: -0.5, textAlign: "center" },
+  heroSub: { fontSize: 13.5, textAlign: "center", letterSpacing: 0.2, maxWidth: 260 },
 
-  sectionHeader: { marginBottom: 14, marginTop: 6 },
-  sectionBadgeRow: { marginBottom: 10 },
+  pathHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+  },
+  pathCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  pathEmoji: { fontSize: 14 },
+  pathLabel: { fontSize: 11.5, letterSpacing: 0.1 },
+  pathDot: { width: 4, height: 4, borderRadius: 2 },
+
+  sectionWrap: { marginBottom: 6 },
+  sectionContainer: {
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  sectionInner: { padding: 18, paddingTop: 16 },
+
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
   sectionBadge: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -738,14 +897,30 @@ const s = StyleSheet.create({
   sectionBadgeEmoji: { fontSize: 11 },
   sectionBadgeText: {
     color: "#fff",
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: "Nunito_800ExtraBold",
     letterSpacing: 1.6,
   },
-  sectionTitle: { fontSize: 22, letterSpacing: -0.3 },
-  sectionSub: { fontSize: 13, marginTop: 3, letterSpacing: 0.15 },
+  sectionTitle: { fontSize: 21, letterSpacing: -0.3 },
+  sectionSub: { fontSize: 12.5, marginTop: 3, letterSpacing: 0.15 },
 
-  featureList: { gap: 14, marginBottom: 8 },
+  hotTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  hotTagText: {
+    fontSize: 9,
+    fontFamily: "Nunito_700Bold",
+    color: "#ef4444",
+    letterSpacing: 0.3,
+  },
+
+  sectionDivider: { marginVertical: 14 },
+  sectionDividerLine: { height: 1 },
+
+  featureList: { gap: 12 },
 
   featureCard: {
     borderRadius: 20,
@@ -754,24 +929,24 @@ const s = StyleSheet.create({
   featureRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 18,
-    paddingVertical: 20,
+    padding: 16,
+    paddingVertical: 18,
     gap: 14,
   },
   featureIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  featureEmoji: { fontSize: 22 },
-  featureText: { flex: 1, gap: 4 },
+  featureEmoji: { fontSize: 21 },
+  featureText: { flex: 1, gap: 3 },
   featureTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  featureTitle: { fontSize: 16.5, letterSpacing: -0.2 },
-  featureSub: { fontSize: 12, letterSpacing: 0.1 },
+  featureTitle: { fontSize: 16, letterSpacing: -0.2 },
+  featureSub: { fontSize: 11.5, letterSpacing: 0.1 },
 
   proBadge: {
     paddingHorizontal: 8,
@@ -795,14 +970,21 @@ const s = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
 
-  dividerWrap: {
+  spacerWrap: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 22,
-    gap: 10,
+    marginVertical: 18,
+    gap: 8,
+    paddingHorizontal: 20,
   },
-  dividerLine: { flex: 1, height: 1 },
-  dividerDot: { width: 5, height: 5, borderRadius: 3 },
+  spacerLine: { flex: 1, height: 1 },
+  spacerIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   comingSoonCard: {
     borderRadius: 20,

@@ -560,14 +560,6 @@ function ProInsightsPanel(){
       </Animated.View>
 
 
-      {/* ══ 5 ══ CTA after Top Insights ══════════════════════════════════════ */}
-      <Animated.View style={av(5)}>
-        <ShineButton colors={["#4f46e5","#7c3aed","#a855f7"]}
-          disabled={false} loading={false}
-          text="🔓 Reveal Your Complete Relationship Future"
-          onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
-      </Animated.View>
-
       {/* ══ 6 ══ SECTION: DEEP INSIGHTS ══════════════════════════════════════ */}
       <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>
       <SmallCard idx={7}  icon="🧠" col="#34d399" badge="premium"
@@ -1405,28 +1397,6 @@ export default function KundliMilanScreen(){
 
         </ScrollView>
 
-        {/* ── STICKY BOTTOM CTA (Pro, no result yet) ─────────────────────────── */}
-        {isPro&&!result&&(
-          <View style={{position:"absolute",bottom:0,left:0,right:0,
-            paddingHorizontal:16,paddingBottom:botPad+10,paddingTop:10,
-            backgroundColor:C.isDark?"rgba(11,15,25,0.92)":"rgba(255,255,255,0.92)",
-            borderTopWidth:1,borderTopColor:C.isDark?"rgba(139,92,246,0.2)":C.border}}>
-            <ShineButton
-              colors={["#4f46e5","#7c3aed","#a855f7"]}
-              disabled={false} loading={false}
-              text="🔓 Reveal Your Complete Relationship Future"
-              onPress={()=>{
-                if(canCalculate)handleCalculate();
-                else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              }}/>
-            {!canCalculate&&(
-              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",
-                textAlign:"center",marginTop:6}}>
-                Add both kundlis above to unlock your report
-              </Text>
-            )}
-          </View>
-        )}
 
       </View>
     </KeyboardAvoidingView>

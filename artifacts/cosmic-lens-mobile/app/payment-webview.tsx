@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 
 const F = {
@@ -39,6 +40,7 @@ const PLAN_PRICES: Record<string, number> = {
 
 export default function PaymentWebviewScreen() {
   const C      = useC();
+  const t      = useT();
   const insets = useSafeAreaInsets();
   const { user, setUser, refreshUser } = useUser();
   const isDark = C.isDark;
@@ -197,7 +199,7 @@ export default function PaymentWebviewScreen() {
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
           <Text style={{ fontSize: 18 }}>←</Text>
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>Secure Payment</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.paymentTitle}</Text>
         <View style={[s.cfBadge, { borderColor: isDark ? "rgba(245,158,11,0.3)" : "rgba(245,158,11,0.4)" }]}>
           <Text style={{ fontSize: 9, color: isDark ? "#f59e0b" : "#d97706", fontFamily: F.bold, letterSpacing: 0.5 }}>
             🔒 Cashfree

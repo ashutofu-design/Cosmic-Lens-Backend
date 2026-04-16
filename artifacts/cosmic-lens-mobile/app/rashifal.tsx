@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   bold: "Nunito_700Bold",
@@ -48,16 +49,16 @@ const PHAL: Record<string, { aaj: string; hafta: string; lucky: string; savdhan:
   meen:      { aaj: "Bhakti aur spirituality ka din. Sapne sach ho sakte hain. Kala aur sangeet mein man lagega. Kisi roohaani anubhav ka yog.", hafta: "Aatmik unnati hogi. Dharmarth kaaryon mein bhaagidaari. Kalpana ko haaqikat mein badlne ka waqt. Swasthya ka dhyan rakhein.", lucky: "Peela/Sea Green rang, Guruvaar, Ank 3", savdhan: "Dhokhebaaz logon se sachait rahein." },
 };
 
-const TABS = ["Aaj", "Is Hafta", "Is Mahine"];
-
 export default function RashifalScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tabIdx, setTabIdx] = useState(params.tab === "weekly" ? 1 : 0);
   const [expanded, setExpanded] = useState<string | null>(null);
   const { profiles } = useUser();
   const userRashi = profiles[0]?.rashi ?? null;
+  const TABS = [t.daily, t.weekly, t.monthly];
 
   return (
     <View style={{ flex: 1 }}>
@@ -67,8 +68,8 @@ export default function RashifalScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View>
-          <Text style={[s.title, { color: C.text }]}>Rashifal</Text>
-          <Text style={[s.subtitle, { color: C.textMuted }]}>Aapka rashifal aaj</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.rashifalTitle}</Text>
+          <Text style={[s.subtitle, { color: C.textMuted }]}>{t.todaysRashifal}</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>

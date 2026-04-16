@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -153,6 +154,7 @@ const PLANETS = [
 
 export default function RemediesScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string>("surya");
   const planet = PLANETS.find(p => p.id === selected)!;
@@ -165,7 +167,7 @@ export default function RemediesScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View>
-          <Text style={[s.title, { color: C.text }]}>Graha Upay</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.remediesTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>Mantra, Daan aur Remedies</Text>
         </View>
         <View style={{ width: 36 }} />

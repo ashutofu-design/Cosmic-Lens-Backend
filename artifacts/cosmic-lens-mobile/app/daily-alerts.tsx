@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { computeActiveDasha } from "@/lib/proInsightEngine";
 
@@ -363,6 +364,7 @@ const es = StyleSheet.create({
 export default function DailyAlertsScreen() {
   const insets  = useSafeAreaInsets();
   const C       = useC();
+  const t       = useT();
   const { width } = useWindowDimensions();
   const { profiles, primaryProfileId } = useUser();
 
@@ -442,7 +444,7 @@ export default function DailyAlertsScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.title, { color: C.text }]}>Daily Alerts</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.alertsTitle}</Text>
           <Text style={[s.subtitle, { color: C.textMuted }]}>
             दैनिक ग्रह संकेत — Daily Planetary Guidance
           </Text>

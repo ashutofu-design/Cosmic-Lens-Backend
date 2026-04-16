@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -63,6 +64,7 @@ const card = StyleSheet.create({
 
 export default function LuckyScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { profiles } = useUser();
   const rashi = (profiles[0]?.rashi ?? "mesh") as RashiKey;
@@ -82,7 +84,7 @@ export default function LuckyScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View>
-          <Text style={[s.title, { color: C.text }]}>Lucky Guide</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.luckyTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>{rashiMeta.emoji} {rashiMeta.name} · {today}</Text>
         </View>
         <View style={{ width: 36 }} />

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -80,14 +81,14 @@ const FESTIVALS_2026 = [
   { date: "Dec 25", name: "Christmas", emoji: "🎄", type: "tyohar" },
 ];
 
-const TABS = ["Panchang", "Rahu Kaal", "Tyohar & Vrat"];
-
 export default function PanchangScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
   const initTab = params.tab === "rahu" ? 1 : params.tab === "festivals" ? 2 : 0;
   const [tabIdx, setTabIdx] = useState(initTab);
+  const TABS = [t.panchangTitle, t.rahukaal, t.festivals];
 
   const today = new Date();
   const panchang = useMemo(() => getPanchang(today), []);
@@ -118,7 +119,7 @@ export default function PanchangScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View>
-          <Text style={[s.title, { color: C.text }]}>Panchang</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.panchangTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>{dateStr}</Text>
         </View>
         <View style={{ width: 36 }} />
@@ -126,13 +127,13 @@ export default function PanchangScreen() {
 
       {/* Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 12 }}>
-        {TABS.map((t, i) => (
+        {TABS.map((tab, i) => (
           <Pressable
-            key={t}
+            key={tab}
             onPress={() => { Haptics.selectionAsync(); setTabIdx(i); }}
             style={[s.tab, { borderColor: C.border }, tabIdx === i && { backgroundColor: "#a78bfa", borderColor: "#a78bfa" }]}
           >
-            <Text style={[s.tabText, { color: tabIdx === i ? "#fff" : C.textMuted }]}>{t}</Text>
+            <Text style={[s.tabText, { color: tabIdx === i ? "#fff" : C.textMuted }]}>{tab}</Text>
           </Pressable>
         ))}
       </ScrollView>

@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
 const PYTH: Record<string, number> = {
@@ -422,6 +423,7 @@ const ps = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function NumerologyScreen() {
   const C       = useC();
+  const t       = useT();
   const insets  = useSafeAreaInsets();
   const { profiles, primaryProfileId, setPrimaryProfile } = useUser();
   const topPad  = Platform.OS === "web" ? 67 : insets.top;
@@ -470,7 +472,7 @@ export default function NumerologyScreen() {
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex:1 }}>
-          <Text style={[s.title, { color: C.text }]}>Numerology</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.numerologyTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>अंकज्योतिष — Vedic Number Science</Text>
         </View>
         <View style={[s.badge, { backgroundColor: `${C.accent}15` }]}>

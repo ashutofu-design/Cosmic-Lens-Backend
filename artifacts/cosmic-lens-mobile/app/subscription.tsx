@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {
@@ -172,6 +173,7 @@ function planExpiryLabel(expiry: string | null | undefined): string {
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
+  const t      = useT();
   const { user } = useUser();
   const isDark = C.isDark;
 
@@ -208,7 +210,7 @@ export default function SubscriptionScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Subscription</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.subscriptionTitle}</Text>
           <Text style={[s.headerSub, { color: C.textMuted }]}>Apna plan choose karein</Text>
         </View>
       </View>

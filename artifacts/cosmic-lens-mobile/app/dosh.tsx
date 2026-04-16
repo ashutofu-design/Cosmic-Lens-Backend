@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import type { DoshItem } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import Svg, { Circle } from "react-native-svg";
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -170,6 +171,7 @@ function SummaryRing({ active, mild, total }: { active: number; mild: number; to
 export default function DoshScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { kundli, doshData, doshLoading } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -194,7 +196,7 @@ export default function DoshScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[d.title, { color: C.text }]}>Dosh Analysis</Text>
+          <Text style={[d.title, { color: C.text }]}>{t.doshTitle}</Text>
           <Text style={[d.subtitle, { color: C.textMuted }]}>नौ दोष विश्लेषण (9 Doshas)</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>

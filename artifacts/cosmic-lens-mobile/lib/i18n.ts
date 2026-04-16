@@ -217,7 +217,7 @@ const T: Record<UILang, Translations> = {
   // ── HINDI ───────────────────────────────────────────────────────────────────
   hi: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "पूछें",
-    tabLifeMap: "लाइफ मैप", tabLifeMap: "लाइफ मॅप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabLifeMap: "लाइफ मैप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "सहेजें", cancel: "रद्द करें", skip: "छोड़ें", back: "वापस",
     next: "आगे", done: "हो गया", retry: "दोबारा कोशिश करें", search: "खोजें",
@@ -281,7 +281,7 @@ const T: Record<UILang, Translations> = {
   // ── MARATHI ─────────────────────────────────────────────────────────────────
   mr: {
     tabHome: "होम", tabKundli: "कुंडली", tabAsk: "विचारा",
-    tabLifeMap: "लाइफ मैप", tabLifeMap: "लाइफ मॅप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
+    tabLifeMap: "लाइफ मॅप", tabFuture: "भविष्य", tabNotice: "सूचना", tabProfile: "प्रोफाइल",
 
     save: "जतन करा", cancel: "रद्द करा", skip: "वगळा", back: "मागे",
     next: "पुढे", done: "झाले", retry: "पुन्हा प्रयत्न करा", search: "शोधा",
@@ -345,7 +345,7 @@ const T: Record<UILang, Translations> = {
   // ── BENGALI ─────────────────────────────────────────────────────────────────
   bn: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "জিজ্ঞেস করুন",
-    tabLifeMap: "লাইফ ম্যাপ", tabLifeMap: "লাইফ মেপ", tabFuture: "ভবিষ্যৎ", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
+    tabLifeMap: "লাইফ ম্যাপ", tabFuture: "ভবিষ্যৎ", tabNotice: "বিজ্ঞপ্তি", tabProfile: "প্রোফাইল",
 
     save: "সংরক্ষণ করুন", cancel: "বাতিল করুন", skip: "এড়িয়ে যান", back: "পিছনে",
     next: "পরবর্তী", done: "সম্পন্ন", retry: "আবার চেষ্টা করুন", search: "খোঁজুন",

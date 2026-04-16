@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { MilanResultStore } from "@/lib/milanResultStore";
 
@@ -1064,6 +1065,7 @@ function ShineButton({onPress,disabled,loading,text,colors}:{onPress():void;disa
 export default function KundliMilanScreen(){
   const insets=useSafeAreaInsets();
   const C=useC();
+  const t=useT();
   const topPad=Platform.OS==="web"?67:insets.top;
   const botPad=Platform.OS==="web"?34:insets.bottom;
   const {kundli:primaryKundli,profiles,primaryProfileId}=useUser();
@@ -1226,7 +1228,7 @@ export default function KundliMilanScreen(){
               <Feather name="arrow-left" size={20} color={C.isDark?"#c4b5fd":C.text}/>
             </Pressable>
             <View style={{flex:1}}>
-              <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>Kundli Milan</Text>
+              <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>{t.kundliMilanTitle}</Text>
               <Text style={{color:"#7c3aed",fontSize:10,fontFamily:"Nunito_400Regular"}}>अष्टकूट गुण मिलान</Text>
             </View>
             <Pressable

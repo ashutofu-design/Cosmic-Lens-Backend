@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { pName } from "@/lib/proInsightEngine";
 
 // ── Static tables ─────────────────────────────────────────────────────────────
@@ -218,6 +219,7 @@ function Row({ label, value, clrValue }: { label: string; value: string; clrValu
 export default function PlanetPositionScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { kundli } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -242,7 +244,7 @@ export default function PlanetPositionScreen() {
           <Feather name="arrow-left" size={20} color={C.textMid} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Planet Position</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.planetTitle}</Text>
           <Text style={[s.headerSub, { color: C.textMuted }]}>Lagna: {lagnaSign}</Text>
         </View>
         {showDemo && (

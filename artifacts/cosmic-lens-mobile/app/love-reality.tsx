@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 interface Feature {
   key: string;
@@ -203,6 +204,7 @@ function FeatureCard({
 
 export default function LoveRealityScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -257,7 +259,7 @@ export default function LoveRealityScreen() {
             <View style={[s.heroEmojiGlow, { backgroundColor: "rgba(239,68,68,0.12)" }]} />
           </View>
           <Text style={[s.heroTitle, { color: isDark ? "#fff" : "#0F172A", fontFamily: "Nunito_700Bold" }]}>
-            Love Reality Check
+            {t.loveTitle}
           </Text>
           <Text style={[s.heroSub, { color: isDark ? "rgba(203,213,225,0.5)" : "#64748B", fontFamily: "Nunito_400Regular" }]}>
             Know the truth about your relationship

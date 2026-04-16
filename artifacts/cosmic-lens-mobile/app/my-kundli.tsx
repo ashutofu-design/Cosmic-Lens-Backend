@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 
 const F = {
@@ -23,6 +24,7 @@ const F = {
 export default function MyKundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { profiles, primaryProfileId, deleteProfile, setPrimaryProfile } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -67,7 +69,7 @@ export default function MyKundliScreen() {
           <Feather name="arrow-left" size={18} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.pageTitle, { color: C.text }]}>My Kundli</Text>
+          <Text style={[s.pageTitle, { color: C.text }]}>{t.myKundliTitle}</Text>
           <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{kundliProfiles.length} kundli saved</Text>
         </View>
       </View>

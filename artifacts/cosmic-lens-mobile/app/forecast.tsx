@@ -14,6 +14,7 @@ import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
@@ -119,6 +120,7 @@ function WeekChart({
 export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { kundli, moonData } = useUser();
   const topPad   = Platform.OS === "web" ? 67 : insets.top;
   const botPad   = Platform.OS === "web" ? 34 : insets.bottom;
@@ -215,7 +217,7 @@ export default function ForecastScreen() {
         <Pressable onPress={() => router.back()} style={s.back}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>7 Days Forecast</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.forecastTitle}</Text>
         {showDemo && (
           <View style={s.demoPill}>
             <Text style={s.demoPillText}>Demo</Text>

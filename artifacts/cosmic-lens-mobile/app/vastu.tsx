@@ -13,6 +13,7 @@ import Svg, {
 } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 // ── Compass constants ──────────────────────────────────────────────────────────
 const WW   = Dimensions.get("window").width;
@@ -822,6 +823,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
+  const t      = useT();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -832,7 +834,7 @@ export default function VastuScreen() {
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex:1 }}>
-          <Text style={[s.title, { color: C.text }]}>Vastu Shastra</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.vastuTitle}</Text>
           <Text style={[s.titleHindi, { color: C.textMuted }]}>वास्तु शास्त्र — Room-wise Guidance</Text>
         </View>
       </View>

@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
@@ -241,6 +242,7 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
 export default function ProfileEditScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const {
     profiles, primaryProfileId, addProfile, updateProfile, deleteProfile,
     setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile,
@@ -411,7 +413,7 @@ export default function ProfileEditScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
               <View style={[s.headerAccentDot, { backgroundColor: C.accent }]} />
               <Text style={[s.headerTitle, { color: C.isDark ? C.text : "#0F172A" }]}>
-                Edit Profile
+                {t.editProfileTitle}
               </Text>
             </View>
             <Text style={[s.headerSub, { color: C.isDark ? C.textDim : "#94A3B8" }]}>

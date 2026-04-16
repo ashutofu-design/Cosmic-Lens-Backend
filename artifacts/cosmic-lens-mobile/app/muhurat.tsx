@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CosmicBg from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -103,6 +104,7 @@ const MUHURAT_DATA: Record<string, MuhuratData> = {
 
 export default function MuhuratScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string>("shadi");
 
@@ -117,7 +119,7 @@ export default function MuhuratScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View>
-          <Text style={[s.title, { color: C.text }]}>Shubh Muhurat</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.muhuratTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>Har kaarya ke liye shubh samay</Text>
         </View>
         <View style={{ width: 36 }} />

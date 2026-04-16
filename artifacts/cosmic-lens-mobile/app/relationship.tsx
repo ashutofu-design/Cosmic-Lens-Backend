@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 
 interface MainOption {
@@ -395,6 +396,7 @@ function OptionCard({
 
 export default function RelationshipScreen() {
   const C = useC();
+  const t = useT();
   const { profiles, primaryProfileId } = useUser();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;

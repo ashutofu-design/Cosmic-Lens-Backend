@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { MilanResultStore } from "@/lib/milanResultStore";
 
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
@@ -249,6 +250,7 @@ function KootCard({
 
 export default function KundliMilanResultScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -391,7 +393,7 @@ export default function KundliMilanResultScreen() {
           </View>
         </Pressable>
         <Text style={[st.headerTitle, { color: isDark ? "#f3e8ff" : "#0F172A" }]}>
-          Match Results
+          {t.milanResult}
         </Text>
         <View style={{ width: 42 }} />
       </View>

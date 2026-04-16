@@ -303,7 +303,7 @@ function OptionCard({
                 <Text style={[
                   s.cardSub,
                   isHL && s.cardSubHL,
-                  { color: "#A0A7B8", fontFamily: "Nunito_500Medium" },
+                  { color: "#D1D5DB", fontFamily: "Nunito_600SemiBold" },
                 ]} numberOfLines={1}>
                   {option.subtitle}
                 </Text>
@@ -335,7 +335,7 @@ function OptionCard({
                 backgroundColor: `${option.glowColor}18`,
                 borderColor: `${option.glowColor}35`,
               }]}>
-                <Text style={[s.descText, { color: option.glowColor, fontFamily: "Nunito_600SemiBold" }]}>
+                <Text style={[s.descText, { color: option.glowColor, fontFamily: "Nunito_700Bold" }]}>
                   {option.desc}
                 </Text>
               </View>
@@ -345,7 +345,7 @@ function OptionCard({
               {option.items.map((item, i) => {
                 const chipBg = "rgba(255,255,255,0.08)";
                 const chipBorder = "rgba(255,255,255,0.14)";
-                const chipColor = "#E5E7EB";
+                const chipColor = "#F3F4F6";
 
                 return (
                   <Animated.View key={i} style={isHL ? {
@@ -360,7 +360,7 @@ function OptionCard({
                     }]}>
                       <Text style={[s.itemText, {
                         color: chipColor,
-                        fontFamily: "Nunito_500Medium",
+                        fontFamily: "Nunito_700Bold",
                       }]}>{item}</Text>
                     </View>
                   </Animated.View>
@@ -371,7 +371,7 @@ function OptionCard({
             {option.depthLine ? (
               <View style={{flexDirection:"row",alignItems:"center",gap:5,marginTop:2,paddingHorizontal:2}}>
                 <Feather name="zap" size={10} color={option.glowColor}/>
-                <Text style={{color:"#A0A7B8",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
+                <Text style={{color:"#D1D5DB",fontSize:10,fontFamily:"Nunito_700Bold"}}>
                   {option.depthLine}
                 </Text>
               </View>

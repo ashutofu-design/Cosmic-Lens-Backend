@@ -1342,7 +1342,7 @@ export default function KundliMilanScreen(){
                   </Pressable>
                 </LinearGradient>
               </View>
-
+              )}
 
             </View>
           )}

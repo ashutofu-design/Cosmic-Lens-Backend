@@ -229,10 +229,10 @@ function CategoryCard({
 
   const cardBg = isDark
     ? isPrimary ? "rgba(50,10,30,0.7)" : "rgba(15,23,42,0.65)"
-    : isPrimary ? "rgba(255,235,245,0.92)" : "rgba(255,255,255,0.88)";
+    : isPrimary ? "rgba(255,230,242,0.95)" : "rgba(255,255,255,0.92)";
   const borderCol = isDark
     ? `${cat.glowColor}${isPrimary ? "55" : "35"}`
-    : `${cat.glowColor}${isPrimary ? "18" : "10"}`;
+    : `${cat.glowColor}${isPrimary ? "22" : "12"}`;
 
   function handlePressIn() {
     Animated.parallel([
@@ -263,10 +263,11 @@ function CategoryCard({
           {
             borderColor: borderCol,
             borderWidth: isDark ? (isPrimary ? 1.5 : 1) : (isPrimary ? 0.5 : 0),
-            shadowColor: isDark ? cat.glowColor : "rgba(0,0,0,0.15)",
-            shadowOpacity: isDark ? (isPrimary ? 0.45 : 0.25) : (isPrimary ? 0.35 : 0.2),
-            shadowRadius: isDark ? (isPrimary ? 22 : 14) : (isPrimary ? 20 : 12),
-            shadowOffset: { width: 0, height: isDark ? 4 : 6 },
+            shadowColor: isDark ? cat.glowColor : (isPrimary ? cat.glowColor : "rgba(80,60,120,0.25)"),
+            shadowOpacity: isDark ? (isPrimary ? 0.45 : 0.25) : (isPrimary ? 0.4 : 0.28),
+            shadowRadius: isDark ? (isPrimary ? 22 : 14) : (isPrimary ? 24 : 16),
+            shadowOffset: { width: 0, height: isDark ? 4 : (isPrimary ? 8 : 6) },
+            elevation: isDark ? (isPrimary ? 8 : 5) : (isPrimary ? 10 : 7),
           },
         ]}>
           {Platform.OS !== "web" ? (
@@ -285,7 +286,7 @@ function CategoryCard({
             <LinearGradient
               colors={isDark
                 ? [`${cat.glowColor}20`, `${cat.glowColor}08`, "transparent"]
-                : [`${cat.glowColor}12`, `${cat.glowColor}06`, "transparent"]}
+                : [`${cat.glowColor}15`, `${cat.glowColor}08`, "transparent"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
@@ -336,7 +337,7 @@ function CategoryCard({
                 </Text>
                 <View style={[
                   s.badge,
-                  { backgroundColor: isDark ? `${cat.glowColor}18` : `${cat.glowColor}12`, borderColor: `${cat.glowColor}30` },
+                  { backgroundColor: isDark ? `${cat.glowColor}18` : `${cat.glowColor}15`, borderColor: isDark ? `${cat.glowColor}30` : `${cat.glowColor}35` },
                 ]}>
                   <Text style={[s.badgeLabel, { color: cat.glowColor }]}>{cat.badge}</Text>
                 </View>
@@ -349,14 +350,18 @@ function CategoryCard({
               </Text>
             </View>
 
-            <View style={[s.arrowBtn, { shadowColor: cat.glowColor }]}>
+            <View style={[s.arrowBtn, {
+              shadowColor: cat.glowColor,
+              shadowOpacity: isDark ? 0.5 : 0.35,
+              shadowRadius: isDark ? 10 : 12,
+            }]}>
               <LinearGradient
-                colors={isDark ? [c1, c2] : [`${c1}50`, `${c2}35`]}
+                colors={isDark ? [c1, c2] : [c1, c2]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[s.arrowGrad, isPrimary && s.arrowGradPrimary]}
               >
-                <Feather name="chevron-right" size={isPrimary ? 18 : 15} color={isDark ? "#fff" : c2} />
+                <Feather name="chevron-right" size={isPrimary ? 18 : 15} color="#fff" />
               </LinearGradient>
             </View>
           </View>
@@ -432,19 +437,24 @@ export default function LifeMapScreen() {
         <View style={[
           s.footerCard,
           {
-            borderColor: isDark ? `${ac}20` : `${ac}15`,
-            shadowColor: ac,
+            borderColor: isDark ? `${ac}20` : `${ac}12`,
+            borderWidth: isDark ? 1 : 0,
+            shadowColor: isDark ? ac : "rgba(80,60,120,0.2)",
+            shadowOpacity: isDark ? 0.08 : 0.2,
+            shadowRadius: isDark ? 8 : 14,
+            shadowOffset: { width: 0, height: isDark ? 2 : 4 },
+            elevation: isDark ? 2 : 5,
           },
         ]}>
           {Platform.OS !== "web" ? (
             <BlurView
-              intensity={isDark ? 25 : 35}
+              intensity={isDark ? 25 : 40}
               tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
           ) : null}
           <View style={[StyleSheet.absoluteFill, {
-            backgroundColor: isDark ? "rgba(15,23,42,0.5)" : "rgba(255,255,255,0.6)",
+            backgroundColor: isDark ? "rgba(15,23,42,0.5)" : "rgba(255,255,255,0.85)",
             borderRadius: 16,
           }]} />
 

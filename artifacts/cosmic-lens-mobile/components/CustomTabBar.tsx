@@ -147,7 +147,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 
   const gradientTopColors: [string, string, string] = C.isDark
     ? ["#f59e0b88", "#8B5CF655", "#f59e0b44"]
-    : ["#7C3AED66", "#6D5DF644", "#7C3AED33"];
+    : ["#7C3AED55", "#6D5DF644", "#7C3AED55"];
 
   function triggerLayoutAnim() {
     if (Platform.OS !== "web") {
@@ -171,6 +171,11 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           {
             paddingBottom: botPad,
             height: BAR_H + botPad,
+            shadowColor: C.isDark ? "#000" : "rgba(80,60,140,0.25)",
+            shadowOffset: { width: 0, height: C.isDark ? -2 : -4 },
+            shadowOpacity: C.isDark ? 0.3 : 0.2,
+            shadowRadius: C.isDark ? 8 : 16,
+            elevation: C.isDark ? 10 : 15,
           },
         ]}
       >

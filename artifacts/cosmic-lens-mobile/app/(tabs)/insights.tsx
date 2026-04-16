@@ -287,12 +287,6 @@ export default function InsightsScreen() {
       <Text style={[s.heading, { color: C.text }]}>{t.futureTitle}</Text>
       <Text style={[s.subtitle, { color: C.textDim }]}>{t.futureSubtitle}</Text>
 
-      {/* ── YOUR COSMIC THEME ── */}
-      <View style={s.themeSection}>
-        <Text style={[s.sectionCap, { color: C.textDim }]}>COSMIC PERSONALIZATION</Text>
-        <CosmicThemeCard />
-      </View>
-
       {/* Demo lock banner */}
       {showDemo && (
         <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>

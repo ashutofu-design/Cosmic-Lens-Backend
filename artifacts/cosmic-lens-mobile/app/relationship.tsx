@@ -693,35 +693,22 @@ export default function RelationshipScreen() {
 
           <View style={s.pathHint}>
             <View style={[s.pathCard, {
-              backgroundColor: isDark ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.06)",
-              borderColor: isDark ? "rgba(99,102,241,0.2)" : "rgba(99,102,241,0.1)",
+              backgroundColor: isDark ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.07)",
+              borderColor: isDark ? "rgba(239,68,68,0.25)" : "rgba(239,68,68,0.15)",
             }]}>
-              <Text style={[s.pathEmoji]}>💍</Text>
-              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.6)" : "#475569", fontFamily: "Nunito_600SemiBold" }]}>Marriage</Text>
+              <Text style={[s.pathEmoji]}>🔥</Text>
+              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.7)" : "#475569", fontFamily: "Nunito_700Bold" }]}>Love / BF-GF</Text>
             </View>
             <View style={[s.pathDot, { backgroundColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)" }]} />
             <View style={[s.pathCard, {
-              backgroundColor: isDark ? "rgba(239,68,68,0.1)" : "rgba(239,68,68,0.06)",
-              borderColor: isDark ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.1)",
+              backgroundColor: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)",
+              borderColor: isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
             }]}>
-              <Text style={[s.pathEmoji]}>🔥</Text>
-              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.6)" : "#475569", fontFamily: "Nunito_600SemiBold" }]}>Love / BF-GF</Text>
+              <Text style={[s.pathEmoji]}>💍</Text>
+              <Text style={[s.pathLabel, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748B", fontFamily: "Nunito_600SemiBold" }]}>Marriage</Text>
             </View>
           </View>
         </Animated.View>
-
-        <SectionBlock
-          title="Marriage Compatibility"
-          subtitle="Check long-term marriage potential"
-          emoji="💍"
-          gradient={["#6366f1", "#818cf8"]}
-          isDark={isDark}
-          delay={200}
-          features={MARRIAGE_FEATURES}
-          sectionDelay={350}
-        />
-
-        <SectionSpacer isDark={isDark} />
 
         <SectionBlock
           title="Love Reality Check"
@@ -729,11 +716,24 @@ export default function RelationshipScreen() {
           emoji="🔥"
           gradient={["#ef4444", "#f97316"]}
           isDark={isDark}
-          delay={450}
+          delay={200}
           features={LOVE_FEATURES}
-          sectionDelay={600}
+          sectionDelay={350}
           highlighted
           highlightTag="Most Used"
+        />
+
+        <SectionSpacer isDark={isDark} />
+
+        <SectionBlock
+          title="Marriage Compatibility"
+          subtitle="Check long-term marriage potential"
+          emoji="💍"
+          gradient={["#6366f1", "#818cf8"]}
+          isDark={isDark}
+          delay={550}
+          features={MARRIAGE_FEATURES}
+          sectionDelay={650}
         />
 
         <View

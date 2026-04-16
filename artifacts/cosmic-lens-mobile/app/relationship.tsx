@@ -3,10 +3,11 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,6 +19,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useUser, type ProfileEntry } from "@/context/UserContext";
 
 interface MainOption {
   key: string;
@@ -413,11 +415,23 @@ function OptionCard({
 
 export default function RelationshipScreen() {
   const C = useC();
+  const { profiles, primaryProfileId } = useUser();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = insets.bottom;
   const isDark = C.isDark;
+
+  const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
+  const hasP1 = !!primaryProfile?.kundli;
+  const otherProfiles = profiles.filter(p => p.id !== primaryProfile?.id);
+
+  const [selectedP2, setSelectedP2] = useState<ProfileEntry | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const p1Glow = useRef(new Animated.Value(0)).current;
+  const p2Glow = useRef(new Animated.Value(0)).current;
+  const p2Scale = useRef(new Animated.Value(1)).current;
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(-25)).current;
@@ -436,6 +450,12 @@ export default function RelationshipScreen() {
     );
     entrance.start();
     glow.start();
+    if(hasP1){
+      Animated.loop(Animated.sequence([
+        Animated.timing(p1Glow,{toValue:0.7,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),
+        Animated.timing(p1Glow,{toValue:0.25,duration:2000,easing:Easing.inOut(Easing.sin),useNativeDriver:true}),
+      ])).start();
+    }
     return () => { glow.stop(); };
   }, []);
 
@@ -493,30 +513,154 @@ export default function RelationshipScreen() {
           </Text>
         </Animated.View>
 
-        {/* ── Compact Kundli Slots ── */}
+        {/* ── Smart Person Slots ── */}
         <View style={{flexDirection:"row",gap:8,marginBottom:14}}>
-          <Pressable onPress={()=>router.push("/kundli-milan" as any)}
-            style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-              borderRadius:14,paddingHorizontal:10,gap:7,
-              backgroundColor:isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.05)",
-              borderWidth:0.5,borderStyle:"dashed" as any,
-              borderColor:isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.18)"})}>
-            <Text style={{fontSize:13}}>👤</Text>
-            <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 1</Text>
-            <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
-          </Pressable>
 
-          <Pressable onPress={()=>router.push("/kundli-milan" as any)}
-            style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-              borderRadius:14,paddingHorizontal:10,gap:7,
-              backgroundColor:isDark?"rgba(236,72,153,0.05)":"rgba(236,72,153,0.04)",
-              borderWidth:0.5,borderStyle:"dashed" as any,
-              borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
-            <Text style={{fontSize:13}}>💑</Text>
-            <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
-            <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
-          </Pressable>
+          {/* ─ PERSON 1: Auto-loaded from primary profile ─ */}
+          {hasP1 ? (
+            <Animated.View style={{flex:1,opacity:Animated.add(0.3,Animated.multiply(p1Glow,1))}}>
+              <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
+                borderRadius:14,paddingHorizontal:10,gap:7,
+                backgroundColor:isDark?"rgba(99,102,241,0.12)":"rgba(99,102,241,0.08)",
+                borderWidth:1,
+                borderColor:isDark?"rgba(99,102,241,0.4)":"rgba(99,102,241,0.25)"}}>
+                <View style={{width:24,height:24,borderRadius:12,
+                  backgroundColor:isDark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.12)",
+                  alignItems:"center",justifyContent:"center"}}>
+                  <Text style={{fontSize:11}}>👤</Text>
+                </View>
+                <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                  {primaryProfile?.name || "You"}
+                </Text>
+                <Feather name="check-circle" size={12} color="#6366f1"/>
+              </View>
+            </Animated.View>
+          ) : (
+            <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                borderRadius:14,paddingHorizontal:10,gap:7,
+                backgroundColor:isDark?"rgba(99,102,241,0.08)":"rgba(99,102,241,0.05)",
+                borderWidth:0.5,borderStyle:"dashed" as any,
+                borderColor:isDark?"rgba(99,102,241,0.25)":"rgba(99,102,241,0.18)"})}>
+              <Text style={{fontSize:13}}>👤</Text>
+              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>You</Text>
+              <Text style={{color:"#6366f1",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+            </Pressable>
+          )}
+
+          {/* ─ PERSON 2: Smart — select from saved / add new ─ */}
+          {selectedP2 ? (
+            <Pressable onPress={()=>{
+              Haptics.selectionAsync();
+              if(otherProfiles.length>0) setPickerOpen(true);
+              else { setSelectedP2(null); }
+            }}
+              style={({pressed})=>({opacity:pressed?0.85:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                borderRadius:14,paddingHorizontal:10,gap:7,
+                backgroundColor:isDark?"rgba(236,72,153,0.1)":"rgba(236,72,153,0.06)",
+                borderWidth:1,
+                borderColor:isDark?"rgba(236,72,153,0.35)":"rgba(236,72,153,0.2)"})}>
+              <View style={{width:24,height:24,borderRadius:12,
+                backgroundColor:isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.1)",
+                alignItems:"center",justifyContent:"center"}}>
+                <Text style={{fontSize:11}}>💑</Text>
+              </View>
+              <Text style={{color:C.text,fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                {selectedP2.name}
+              </Text>
+              <Text style={{color:"#ec4899",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>Change</Text>
+            </Pressable>
+          ) : otherProfiles.length > 0 ? (
+            <Pressable onPress={()=>{
+              Haptics.selectionAsync();
+              setPickerOpen(true);
+            }}
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                borderRadius:14,paddingHorizontal:10,gap:7,
+                backgroundColor:isDark?"rgba(236,72,153,0.06)":"rgba(236,72,153,0.04)",
+                borderWidth:0.5,
+                borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+              <Text style={{fontSize:13}}>💑</Text>
+              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Select Partner</Text>
+              <Feather name="chevron-down" size={12} color="#ec4899"/>
+            </Pressable>
+          ) : (
+            <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
+                borderRadius:14,paddingHorizontal:10,gap:7,
+                backgroundColor:isDark?"rgba(236,72,153,0.05)":"rgba(236,72,153,0.04)",
+                borderWidth:0.5,borderStyle:"dashed" as any,
+                borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+              <Text style={{fontSize:13}}>💑</Text>
+              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"#64748B",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
+              <Text style={{color:"#ec4899",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
+            </Pressable>
+          )}
         </View>
+
+        {/* ── Profile Picker Modal ── */}
+        <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={()=>setPickerOpen(false)}>
+          <Pressable style={{flex:1,backgroundColor:"rgba(0,0,0,0.55)",justifyContent:"flex-end"}}
+            onPress={()=>setPickerOpen(false)}>
+            <Pressable onPress={()=>{}} style={{
+              backgroundColor:isDark?"#1A2135":"#fff",
+              borderTopLeftRadius:24,borderTopRightRadius:24,
+              paddingTop:16,paddingBottom:40,paddingHorizontal:20,maxHeight:380}}>
+              <View style={{width:40,height:4,borderRadius:2,backgroundColor:isDark?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.12)",
+                alignSelf:"center",marginBottom:16}}/>
+              <Text style={{color:C.text,fontSize:15,fontFamily:"Nunito_800ExtraBold",marginBottom:14}}>
+                Select Partner
+              </Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {otherProfiles.map((prof)=>(
+                  <Pressable key={prof.id} onPress={()=>{
+                    setSelectedP2(prof);
+                    setPickerOpen(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Animated.sequence([
+                      Animated.timing(p2Scale,{toValue:1.05,duration:120,useNativeDriver:true}),
+                      Animated.timing(p2Scale,{toValue:1,duration:180,useNativeDriver:true}),
+                    ]).start();
+                  }}
+                    style={({pressed})=>({opacity:pressed?0.7:1,flexDirection:"row",alignItems:"center",gap:10,
+                      paddingVertical:11,paddingHorizontal:12,borderRadius:14,marginBottom:6,
+                      backgroundColor:selectedP2?.id===prof.id
+                        ?(isDark?"rgba(236,72,153,0.12)":"rgba(236,72,153,0.08)")
+                        :(isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)"),
+                      borderWidth:selectedP2?.id===prof.id?1:0.5,
+                      borderColor:selectedP2?.id===prof.id
+                        ?(isDark?"rgba(236,72,153,0.3)":"rgba(236,72,153,0.2)")
+                        :(isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)")})}>
+                    <View style={{width:32,height:32,borderRadius:16,
+                      backgroundColor:isDark?"rgba(236,72,153,0.12)":"rgba(236,72,153,0.08)",
+                      alignItems:"center",justifyContent:"center"}}>
+                      <Text style={{fontSize:14}}>💑</Text>
+                    </View>
+                    <View style={{flex:1}}>
+                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_700Bold"}}>{prof.name}</Text>
+                      {prof.relation ? (
+                        <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{prof.relation}</Text>
+                      ) : null}
+                    </View>
+                    {selectedP2?.id===prof.id && <Feather name="check-circle" size={14} color="#ec4899"/>}
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <Pressable onPress={()=>{
+                setPickerOpen(false);
+                router.push("/kundli-milan" as any);
+              }}
+                style={({pressed})=>({opacity:pressed?0.7:1,flexDirection:"row",alignItems:"center",justifyContent:"center",
+                  gap:6,marginTop:10,paddingVertical:11,borderRadius:14,
+                  backgroundColor:isDark?"rgba(236,72,153,0.08)":"rgba(236,72,153,0.05)",
+                  borderWidth:0.5,borderStyle:"dashed" as any,
+                  borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
+                <Feather name="plus" size={13} color="#ec4899"/>
+                <Text style={{color:"#ec4899",fontSize:12,fontFamily:"Nunito_700Bold"}}>Add New Partner</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <View style={s.optionsList}>
           {OPTIONS.map((opt, i) => (

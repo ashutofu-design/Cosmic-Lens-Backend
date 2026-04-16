@@ -1215,29 +1215,37 @@ export default function KundliMilanScreen(){
             <View style={{gap:16}}>
 
               {/* ── Top CTA: Check Now ── */}
-              <Pressable
-                onPress={()=>{p1&&p2&&handleMatch();Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-                disabled={!p1||!p2||loading}
-                style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.85:1,overflow:"hidden",borderRadius:16})}>
-                <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={{paddingVertical:16,alignItems:"center",
-                    shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.4,shadowRadius:12}}>
-                  <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                    <Feather name="zap" size={16} color="#fff"/>
-                    <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.4}}>
-                      Check Now
-                    </Text>
-                  </View>
-                </LinearGradient>
-              </Pressable>
+              <View>
+                <Pressable
+                  onPress={()=>{p1&&p2&&handleMatch();Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+                  disabled={!p1||!p2||loading}
+                  style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.85:1,overflow:"hidden",borderRadius:16})}>
+                  <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                    style={{paddingVertical:16,alignItems:"center",
+                      shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.4,shadowRadius:12}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <Feather name="zap" size={16} color="#fff"/>
+                      <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.4}}>
+                        Check Now
+                      </Text>
+                    </View>
+                  </LinearGradient>
+                </Pressable>
+                <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.5)",
+                  fontSize:11,fontFamily:"Nunito_500Medium",textAlign:"center",marginTop:8}}>
+                  Get your compatibility score in seconds
+                </Text>
+              </View>
 
               {/* ── Section Title ── */}
-              <View style={{alignItems:"center",gap:4,marginTop:4}}>
-                <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:12,fontFamily:"Nunito_800ExtraBold",
-                  textTransform:"uppercase",letterSpacing:2}}>
-                  What You'll Discover
+              <View style={{alignItems:"center",gap:6,marginTop:8}}>
+                <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:15,fontFamily:"Nunito_800ExtraBold",
+                  textTransform:"uppercase",letterSpacing:2.5,
+                  textShadowColor:C.isDark?"rgba(251,191,36,0.5)":"rgba(180,83,9,0.25)",
+                  textShadowOffset:{width:0,height:0},textShadowRadius:10}}>
+                  ✦ What You'll Discover ✦
                 </Text>
-                <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",
+                <Text style={{color:C.isDark?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.55)",
                   fontSize:11,fontFamily:"Nunito_500Medium"}}>
                   Based on 36 Gun Milan (Ashtakoot matching)
                 </Text>
@@ -1256,17 +1264,18 @@ export default function KundliMilanScreen(){
                   {icon:"💫",title:"Energy Flow",koot:"Nadi",desc:"Deep soul compatibility",color:"#a855f7"},
                 ] as const).map((item,i)=>(
                   <View key={i} style={{width:"48%",
-                    backgroundColor:C.isDark?"#111827":"#1A2135",
+                    backgroundColor:C.isDark?"#111827":"#ffffff",
                     borderRadius:14,padding:12,gap:6,
-                    borderWidth:1,borderColor:"rgba(255,255,255,0.07)",
-                    shadowColor:"#000",shadowOffset:{width:0,height:3},shadowOpacity:0.25,shadowRadius:6,elevation:3}}>
+                    borderWidth:1,borderColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.06)",
+                    shadowColor:"#000",shadowOffset:{width:0,height:3},
+                    shadowOpacity:C.isDark?0.25:0.08,shadowRadius:6,elevation:3}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
                       <View style={{width:32,height:32,borderRadius:10,alignItems:"center",justifyContent:"center",
                         backgroundColor:`${item.color}22`}}>
                         <Text style={{fontSize:16}}>{item.icon}</Text>
                       </View>
                       <View style={{flex:1}}>
-                        <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
+                        <Text style={{color:C.isDark?"#F3F4F6":"#1f2937",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
                           {item.title}
                         </Text>
                         <Text style={{color:item.color,fontSize:8,fontFamily:"Nunito_700Bold",
@@ -1275,12 +1284,27 @@ export default function KundliMilanScreen(){
                         </Text>
                       </View>
                     </View>
-                    <Text style={{color:"#9CA3AF",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
+                    <Text style={{color:C.isDark?"#9CA3AF":"#6B7280",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
                       {item.desc}
                     </Text>
                   </View>
                 ))}
               </View>
+
+              {/* ── Pro Push Line ── */}
+              <Pressable onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+                style={({pressed})=>({opacity:pressed?0.85:1,marginTop:2,overflow:"hidden",borderRadius:14})}>
+                <LinearGradient colors={C.isDark?["rgba(124,58,237,0.18)","rgba(219,39,119,0.18)"]:["rgba(124,58,237,0.1)","rgba(219,39,119,0.1)"]}
+                  start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={{paddingVertical:12,paddingHorizontal:14,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,
+                    borderWidth:1,borderColor:C.isDark?"rgba(168,85,247,0.35)":"rgba(124,58,237,0.25)",borderRadius:14}}>
+                  <Text style={{fontSize:14}}>✨</Text>
+                  <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
+                    Unlock deeper insights with Pro
+                  </Text>
+                  <Feather name="arrow-right" size={14} color={C.isDark?"#e9d5ff":"#5b21b6"}/>
+                </LinearGradient>
+              </Pressable>
 
             </View>
           )}

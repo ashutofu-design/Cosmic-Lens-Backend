@@ -189,7 +189,7 @@ function OptionCard({
   }
 
   const cardBg = isDark
-    ? isHL ? "rgba(35,10,20,0.8)" : "rgba(12,16,34,0.65)"
+    ? "#121826"
     : isHL ? "rgba(255,242,248,0.96)" : "rgba(248,248,255,0.95)";
 
   const bRadius = isHL ? 28 : 22;
@@ -269,9 +269,9 @@ function OptionCard({
 
           <View style={[StyleSheet.absoluteFill, {
             borderRadius: bRadius,
-            borderWidth: isDark ? 1.5 : 0.5,
+            borderWidth: isDark ? 1 : 0.5,
             borderColor: isDark
-              ? `${option.glowColor}${isHL ? "50" : "22"}`
+              ? "rgba(255,255,255,0.12)"
               : `${option.glowColor}${isHL ? "20" : "0C"}`,
           }]} />
 
@@ -326,22 +326,22 @@ function OptionCard({
                 <Text style={[
                   s.cardTitle,
                   isHL && s.cardTitleHL,
-                  { color: isDark ? "#fff" : "#0F172A", fontFamily: "Nunito_700Bold" },
+                  { color: isDark ? "#FFFFFF" : "#0F172A", fontFamily: "Nunito_800ExtraBold" },
                 ]}>
                   {option.title}
                 </Text>
                 <Text style={[
                   s.cardSub,
                   isHL && s.cardSubHL,
-                  { color: isDark ? "rgba(203,213,225,0.7)" : "#64748B", fontFamily: "Nunito_500Medium" },
-                ]} numberOfLines={2}>
+                  { color: isDark ? "#A0A7B8" : "#64748B", fontFamily: "Nunito_500Medium" },
+                ]} numberOfLines={1}>
                   {option.subtitle}
                 </Text>
               </View>
 
               <Animated.View style={{
                 transform: [{ scale: arrowPulse }],
-                opacity: arrowGlow,
+                opacity: isDark ? Animated.add(0.3, Animated.multiply(arrowGlow, 0.7)) : arrowGlow,
               }}>
                 <LinearGradient
                   colors={[c1, c2]}
@@ -362,10 +362,10 @@ function OptionCard({
 
             <View style={s.descRow}>
               <View style={[s.descTag, {
-                backgroundColor: isDark ? `${option.glowColor}14` : `${option.glowColor}0A`,
-                borderColor: isDark ? `${option.glowColor}28` : `${option.glowColor}14`,
+                backgroundColor: isDark ? `${option.glowColor}18` : `${option.glowColor}0A`,
+                borderColor: isDark ? `${option.glowColor}35` : `${option.glowColor}14`,
               }]}>
-                <Text style={[s.descText, { color: isDark ? `${option.glowColor}CC` : option.glowColor, fontFamily: "Nunito_600SemiBold" }]}>
+                <Text style={[s.descText, { color: isDark ? option.glowColor : option.glowColor, fontFamily: "Nunito_600SemiBold" }]}>
                   {option.desc}
                 </Text>
               </View>
@@ -374,13 +374,13 @@ function OptionCard({
             <View style={s.itemsRow}>
               {option.items.map((item, i) => {
                 const chipBg = isDark
-                  ? isHL ? `${option.glowColor}0E` : "rgba(255,255,255,0.05)"
+                  ? "rgba(255,255,255,0.08)"
                   : isHL ? `${option.glowColor}08` : "rgba(0,0,0,0.03)";
                 const chipBorder = isDark
-                  ? isHL ? `${option.glowColor}22` : "rgba(255,255,255,0.08)"
+                  ? "rgba(255,255,255,0.14)"
                   : isHL ? `${option.glowColor}14` : "rgba(0,0,0,0.05)";
                 const chipColor = isDark
-                  ? isHL ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.5)"
+                  ? "#E5E7EB"
                   : isHL ? "#475569" : "#64748B";
 
                 return (
@@ -406,8 +406,8 @@ function OptionCard({
 
             {option.depthLine ? (
               <View style={{flexDirection:"row",alignItems:"center",gap:5,marginTop:2,paddingHorizontal:2}}>
-                <Feather name="zap" size={10} color={isDark ? `${option.glowColor}AA` : option.glowColor}/>
-                <Text style={{color:isDark?"rgba(203,213,225,0.55)":"#64748B",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                <Feather name="zap" size={10} color={isDark ? option.glowColor : option.glowColor}/>
+                <Text style={{color:isDark?"#A0A7B8":"#64748B",fontSize:10,fontFamily:"Nunito_600SemiBold"}}>
                   {option.depthLine}
                 </Text>
               </View>

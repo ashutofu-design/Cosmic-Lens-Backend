@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -1062,6 +1063,326 @@ function ShineButton({onPress,disabled,loading,text,colors}:{onPress():void;disa
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// PRO KUNDLI SECTION — Dynamic personalized hooks (4 layers)
+// ──────────────────────────────────────────────────────────────
+interface ProSignals {
+  karmic: boolean; emotionalGap: boolean; attraction: boolean;
+  stability: boolean; conflict: boolean;
+  breakup: "low"|"medium"|"high";
+  marriage: "strong"|"average"|"weak";
+  manglikImbalance: boolean;
+  nameA: string; nameB: string;
+  total: number;
+}
+
+function buildSignals(p1: PersonData, p2: PersonData): ProSignals {
+  const r = compute(p1, p2);
+  const manglikImbalance = p1.manglik !== p2.manglik;
+  return {
+    karmic: r.nadi.score === 0 || r.yoni.score === 0 || manglikImbalance || r.tara.score === 0,
+    emotionalGap: r.gana.score <= 1 || r.maitri.score < 3,
+    attraction: r.yoni.score >= 3 && r.maitri.score >= 4,
+    stability: r.bhakut.score === 7 && r.maitri.score >= 4 && r.total >= 27,
+    conflict: r.bhakut.score === 0 || r.gana.score === 0 || r.yoni.score === 0,
+    breakup: r.total < 18 || (r.nadi.bad && r.bhakut.bad) ? "high" : r.total < 24 ? "medium" : "low",
+    marriage: r.total >= 28 ? "strong" : r.total >= 21 ? "average" : "weak",
+    manglikImbalance,
+    nameA: p1.name, nameB: p2.name,
+    total: r.total,
+  };
+}
+
+function pickHook<T>(arr:T[], seed:number):T { return arr[seed % arr.length]!; }
+
+interface HookItem { key:string; emoji:string; title:string; text:string; }
+function buildProHooks(s: ProSignals): HookItem[] {
+  const seed = (s.total * 17 + s.nameA.length * 31 + s.nameB.length * 13) >>> 0;
+  const A = s.nameA, B = s.nameB;
+
+  const emotional = s.emotionalGap && s.karmic
+    ? pickHook([
+        `${A} aur ${B} ke beech ek connection hai — par feelings ek hi taal par nahi chalti. Iska asli reason chhupa hai`,
+        `Dono ka bond asli hai, lekin ek andekha emotional gap hai jo baar-baar dil ko kheenchta hai —`,
+      ], seed)
+    : s.attraction
+    ? pickHook([
+        `Ek gehra emotional pull hai jo ${A} ko ${B} ki taraf khinchta rahta hai — aur yeh pull kisi aam vajah se nahi`,
+        `Dono ki Moon energy aapas me baat karti hai — yahan ek silent understanding hai jo words se`,
+      ], seed+1)
+    : s.emotionalGap
+    ? pickHook([
+        `Upar se sab theek lagta hai, par ek unspoken distance hai jo ${A} aur ${B} mehsoos karte hain`,
+        `Ek feeling-gap chhupa hua hai — roz ke pyar me yeh nahi dikhta, lekin crucial moments me`,
+      ], seed+2)
+    : pickHook([
+        `${A} aur ${B} ka emotional rhythm surprisingly aligned hai — iska asli raaz aapki Chandra`,
+        `Dono ke feelings ek hi frequency par hain — aur iski wajah sirf pyar nahi, kuch aur`,
+      ], seed+3);
+
+  const marriageFuture = s.marriage === "strong"
+    ? pickHook([
+        `Shaadi ke baad ka safar unusual tareeke se smooth dikhta hai — ek specific planetary support yahan`,
+        `Is jodi ka future marriage ek solid foundation par khada hai — par asli turning point kab aayega`,
+      ], seed+4)
+    : s.marriage === "average"
+    ? pickHook([
+        `Shaadi possible hai, lekin ek specific year me liya gaya decision is rishte ki direction`,
+        `Marriage timing par ek important window khul rahi hai — miss kiya to wait`,
+      ], seed+5)
+    : pickHook([
+        `Shaadi ka rasta hai par usme ek hidden delay baitha hai — yeh kab clear hoga aur kaunsa`,
+        `Future marriage par ek particular dasha ka chhaya hai — agle 18 mahine critical`,
+      ], seed+6);
+
+  const risks = s.breakup === "high"
+    ? pickHook([
+        `Agle 6–12 mahine me ek trigger-point aa sakta hai jo rishte ko hila de — yeh kab aur kaise`,
+        `Ek repeating pattern exists yahan — aur yeh random nahi, iska root ek specific planetary`,
+      ], seed+7)
+    : s.conflict
+    ? pickHook([
+        `Chhote-chhote jhagde random nahi lagte — ek cycle chal raha hai jo specific dates par`,
+        `Ek friction pattern dikh raha hai jo aam couples me nahi hota — iska source aur fix`,
+      ], seed+8)
+    : s.breakup === "medium"
+    ? pickHook([
+        `Risk medium level par hai — par ek choti si chook ise badha sakti hai, aur woh`,
+        `Rishte me ek gray-zone hai jahan dono partners unknowingly distance`,
+      ], seed+9)
+    : pickHook([
+        `Breakup risk bahut kam hai, par ek specific phase aata hai jab dono ko`,
+        `Natural risks minimal hain — sirf ek external influence se bachna hoga, aur woh`,
+      ], seed+10);
+
+  const karmicBond = s.karmic
+    ? pickHook([
+        `Yeh connection normal nahi hai — ek purva-janma ka karmic thread yahan active hai jo`,
+        `${A} aur ${B} ek karmic loan lekar mile hain — iska poora matlab aur resolution`,
+      ], seed+11)
+    : s.manglikImbalance
+    ? pickHook([
+        `Mangal ki energy ek partner me strong hai doosre me nahi — yeh imbalance exactly kaise`,
+        `Ek Mangal-based karmic pattern hai jo sirf married life me surface karta hai —`,
+      ], seed+12)
+    : pickHook([
+        `Karmic weight halka hai — par ek sookshm dhaaga dono ko jodta hai jiska source`,
+        `Past-life bond subtle hai, fir bhi certain moments me aap dono ko ek strange familiarity`,
+      ], seed+13);
+
+  const strengths = s.stability
+    ? pickHook([
+        `Is rishte me ek silent force hai jo ise tootne nahi deti — chahe kitne fights ho, ek`,
+        `Aap dono ki combined kundli me ek rare yoga ban raha hai jo long-term loyalty`,
+      ], seed+14)
+    : s.attraction
+    ? pickHook([
+        `Aap dono ki biggest taaqat physical ya emotional nahi — yeh kuch aur hai jo aapne`,
+        `Ek unexpected strength is bond me chhupi hai — zyadatar couples ise late realize`,
+      ], seed+15)
+    : pickHook([
+        `Challenges ke bawajood ek hidden anchor hai jo is rishte ko stable rakhta hai —`,
+        `Aapke chart me ek subtle planetary shield hai jo is bond ko crises me`,
+      ], seed+16);
+
+  const conflictTriggers = s.conflict
+    ? pickHook([
+        `Repeated fights ka trigger ek specific planet hai — aur woh kis ghar me baitha hai`,
+        `Jhagde ka pattern same ghoomta hai — iska precise root aur shaant karne ka tareeka`,
+      ], seed+17)
+    : s.breakup === "medium"
+    ? pickHook([
+        `Conflict points kam hain par ek sensitive area hai jahan dono ki bolti alag hoti`,
+        `Friction ka source chhupa hai — seedha dikhta nahi, par har bada decision use`,
+      ], seed+18)
+    : pickHook([
+        `Natural clashes minimal hain — par ek specific situation me dono ki energy collide`,
+        `Triggers thorey hain, lekin ek specific dasha ke dauran ye tez ho`,
+      ], seed+19);
+
+  const stability = s.stability
+    ? pickHook([
+        `Long-term stability strong hai, par ek subtle phase aayega jab patience`,
+        `Is jodi ki tikau shakti impressive hai — par ek external factor jo aap na socho`,
+      ], seed+20)
+    : s.marriage === "weak"
+    ? pickHook([
+        `Natural stability kam hai — par ek specific remedy ise dramatically badal sakti`,
+        `Bond tikau banane ke liye ek precise jyotish upaay available hai jo`,
+      ], seed+21)
+    : pickHook([
+        `Stability average hai — ek specific saal ke baad rishta settle hota hai, par us`,
+        `Tikau kitna hoga, yeh ek chhoti si decision par tik ja raha hai jo aap`,
+      ], seed+22);
+
+  const finalOutcome = s.marriage === "strong" && !s.conflict
+    ? pickHook([
+        `Long-term outcome bright hai, par ek specific choice jo 2 saal ke andar lenge`,
+        `Is rishte ka destiny positive hai — sirf ek hidden warning point hai jise`,
+      ], seed+23)
+    : s.breakup === "high"
+    ? pickHook([
+        `Current path par rishta critical hai — ek specific remedy direction`,
+        `Bina intervention ke trajectory risky hai — par ek mantra-based fix hai jo`,
+      ], seed+24)
+    : s.marriage === "average"
+    ? pickHook([
+        `Outcome aapke haath me hai — ek specific year me liya gaya decision 20 saal`,
+        `Middle-path hai — but 3 key actions jo agle 6 mahine me hain woh poori`,
+      ], seed+25)
+    : pickHook([
+        `Rishta ek crossroad par hai — ek choti si guidance se poori taraf badal sakta`,
+        `Final picture mixed hai — par ek specific jyotish remedy ise sharply positive`,
+      ], seed+26);
+
+  return [
+    { key:"emotional",  emoji:"❤️",  title:"Emotional Compatibility", text:emotional },
+    { key:"marriage",   emoji:"💍", title:"Marriage Future",          text:marriageFuture },
+    { key:"risks",      emoji:"⚠️",  title:"Hidden Risks",             text:risks },
+    { key:"karmic",     emoji:"🕉️", title:"Karmic Bond",              text:karmicBond },
+    { key:"strengths",  emoji:"✨", title:"Strength Factors",          text:strengths },
+    { key:"triggers",   emoji:"⚡", title:"Conflict Triggers",         text:conflictTriggers },
+    { key:"stability",  emoji:"🛡️", title:"Long-term Stability",      text:stability },
+    { key:"final",      emoji:"🔮", title:"Final Outcome",             text:finalOutcome },
+  ];
+}
+
+function LockedHook({ item, isDark }:{ item:HookItem; isDark:boolean }) {
+  const cut = Math.min(item.text.length, Math.max(40, Math.floor(item.text.length * 0.62)));
+  const visible = item.text.slice(0, cut);
+  const hidden = item.text.slice(cut) + " Poori detail aur remedy Pro report me dikhegi.";
+  return (
+    <View style={{
+      backgroundColor: isDark ? "rgba(245,158,11,0.06)" : "rgba(124,58,237,0.05)",
+      borderColor: isDark ? "rgba(245,158,11,0.28)" : "rgba(124,58,237,0.22)",
+      borderWidth: 1, borderRadius: 14, padding: 12, gap: 8, overflow: "hidden",
+    }}>
+      <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+        <Text style={{fontSize:15}}>{item.emoji}</Text>
+        <Text style={{color:isDark?"#fcd34d":"#6d28d9",fontSize:13,fontFamily:"Nunito_800ExtraBold",flex:1}}>
+          {item.title}
+        </Text>
+        <View style={{
+          flexDirection:"row",alignItems:"center",gap:3,
+          paddingHorizontal:6,paddingVertical:2,borderRadius:8,borderWidth:1,
+          backgroundColor:isDark?"rgba(245,158,11,0.15)":"rgba(124,58,237,0.12)",
+          borderColor:isDark?"rgba(245,158,11,0.4)":"rgba(124,58,237,0.3)",
+        }}>
+          <Feather name="lock" size={8} color={isDark?"#f59e0b":"#7C3AED"}/>
+          <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:8,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.6}}>PRO</Text>
+        </View>
+      </View>
+      <Text style={{color:isDark?"rgba(226,232,240,0.88)":"#1e293b",fontSize:12,fontFamily:"Nunito_400Regular",lineHeight:19}}>
+        {visible}
+      </Text>
+      <View style={{position:"relative",borderRadius:8,overflow:"hidden",minHeight:42,justifyContent:"center"}}>
+        <Text style={{color:isDark?"rgba(226,232,240,0.88)":"#1e293b",fontSize:12,fontFamily:"Nunito_400Regular",lineHeight:19,paddingHorizontal:2}} numberOfLines={3}>
+          {hidden}
+        </Text>
+        <BlurView intensity={Platform.OS==="ios"?22:18} tint={isDark?"dark":"light"} style={StyleSheet.absoluteFillObject}/>
+        <LinearGradient
+          colors={isDark?["rgba(8,14,30,0)","rgba(8,14,30,0.55)"]:["rgba(255,255,255,0)","rgba(255,255,255,0.6)"]}
+          style={StyleSheet.absoluteFillObject} pointerEvents="none"/>
+        <View style={{...StyleSheet.absoluteFillObject,alignItems:"center",justifyContent:"center"}} pointerEvents="none">
+          <Text style={{fontSize:16}}>🔒</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData|null; isDark:boolean }) {
+  const canBuild = !!p1 && !!p2;
+  const hooks: HookItem[] = canBuild ? buildProHooks(buildSignals(p1!, p2!)) : [];
+
+  const unlockList = [
+    "Emotional Compatibility — what truly connects or disconnects you",
+    "Marriage Future — real direction of this relationship",
+    "Hidden Risks — patterns creating problems",
+    "Karmic Bond — deeper purpose of this connection",
+    "Strength Factors — what holds this together",
+    "Conflict Triggers — what causes repeated issues",
+    "Long-term Stability — will it last or break",
+    "Final Outcome — actual future direction",
+  ];
+
+  return (
+    <View style={{gap:14}}>
+      {/* LAYER 1 — TOP MESSAGE */}
+      <View style={{
+        backgroundColor:isDark?"rgba(124,58,237,0.10)":"rgba(124,58,237,0.05)",
+        borderWidth:1,borderColor:isDark?"rgba(167,139,250,0.28)":"rgba(124,58,237,0.20)",
+        borderRadius:16,padding:14,gap:8,
+      }}>
+        <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+          <Text style={{fontSize:16}}>🪔</Text>
+          <Text style={{color:isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.2}}>
+            Your Personalised Analysis
+          </Text>
+        </View>
+        <Text style={{color:isDark?"rgba(226,232,240,0.85)":"#334155",fontSize:12.5,fontFamily:"Nunito_400Regular",lineHeight:19}}>
+          Yeh analysis aapki asli kundli par based hai aur un patterns ko reveal karta hai jo seedha aapke rishte par asar dalte hain.
+          {"\n\n"}Is connection ke sabse important sach neeche chhupe hain.
+          {"\n"}Unlock karke poori picture dekhein.
+        </Text>
+      </View>
+
+      {/* LAYER 2 — WHAT YOU WILL UNLOCK */}
+      <View style={{
+        backgroundColor:isDark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)",
+        borderWidth:1,borderColor:isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)",
+        borderRadius:16,padding:14,gap:10,
+      }}>
+        <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+          <Feather name="unlock" size={14} color={isDark?"#f59e0b":"#7C3AED"}/>
+          <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:12,fontFamily:"Nunito_800ExtraBold",letterSpacing:1.5}}>
+            WHAT YOU WILL UNLOCK
+          </Text>
+        </View>
+        <View style={{gap:6}}>
+          {unlockList.map((txt,i)=>(
+            <View key={i} style={{flexDirection:"row",alignItems:"flex-start",gap:8}}>
+              <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:12,fontFamily:"Nunito_700Bold",marginTop:1}}>•</Text>
+              <Text style={{color:isDark?"rgba(226,232,240,0.82)":"#334155",fontSize:11.5,fontFamily:"Nunito_500Medium",flex:1,lineHeight:17}}>
+                {txt}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* LAYER 3 — LOCKED DYNAMIC HOOKS */}
+      {canBuild ? (
+        <View style={{gap:10}}>
+          <View style={{flexDirection:"row",alignItems:"center",gap:10,marginTop:2}}>
+            <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
+            <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:10,fontFamily:"Nunito_800ExtraBold",letterSpacing:1.8}}>
+              🔒 LOCKED PREVIEW
+            </Text>
+            <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
+          </View>
+          {hooks.map(h => <LockedHook key={h.key} item={h} isDark={isDark}/>)}
+        </View>
+      ) : (
+        <View style={{
+          backgroundColor:isDark?"rgba(245,158,11,0.08)":"rgba(124,58,237,0.06)",
+          borderWidth:1,borderStyle:"dashed" as any,
+          borderColor:isDark?"rgba(245,158,11,0.35)":"rgba(124,58,237,0.3)",
+          borderRadius:14,padding:14,alignItems:"center",gap:6,
+        }}>
+          <Text style={{fontSize:22}}>💑</Text>
+          <Text style={{color:isDark?"#fcd34d":"#6d28d9",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
+            Add Both Kundlis to Unlock Preview
+          </Text>
+          <Text style={{color:isDark?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.55)",fontSize:11,fontFamily:"Nunito_500Medium",textAlign:"center"}}>
+            Dono ki birth details add karein — phir aapki personal hooks generate hongi
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function KundliMilanScreen(){
   const insets=useSafeAreaInsets();
   const C=useC();
@@ -1418,12 +1739,17 @@ export default function KundliMilanScreen(){
           )}
 
 
+          {/* ── PRO SECTION: 4-Layer Personalized Hooks ── */}
+          {isPro&&!result&&(
+            <ProKundliSection p1={p1} p2={p2} isDark={C.isDark}/>
+          )}
+
           {/* ── PRO CTA Buttons ── */}
           {isPro&&!result&&(
             <ShineButton
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate} loading={calcLoading}
-              text={canCalculate?"Unlock Deep Match Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
+              text={canCalculate?"Unlock Full Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
               onPress={handleCalculate}/>
           )}
 

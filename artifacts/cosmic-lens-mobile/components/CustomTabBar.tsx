@@ -70,7 +70,7 @@ function TabItem({
   if (isActive) {
     return (
       <Pressable
-        style={({ pressed }) => [styles.tabBtn, { flex: 2.6 }, pressed && { opacity: 0.75 }]}
+        style={({ pressed }) => [styles.tabBtn, { flex: 1.9, minWidth: 0 }, pressed && { opacity: 0.75 }]}
         onPress={onPress}
         onLongPress={onLongPress}
       >
@@ -101,7 +101,10 @@ function TabItem({
             {tab.dot && (
               <View style={[styles.chipDot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
             )}
-            <Text style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}>
+            <Text
+              numberOfLines={1}
+              style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}
+            >
               {tab.label}
             </Text>
           </LinearGradient>
@@ -112,7 +115,7 @@ function TabItem({
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.tabBtn, { flex: 1 }, pressed && { opacity: 0.5 }]}
+      style={({ pressed }) => [styles.tabBtn, { flex: 1, minWidth: 0 }, pressed && { opacity: 0.5 }]}
       onPress={onPress}
       onLongPress={onLongPress}
     >
@@ -240,7 +243,7 @@ function MoreTabButton({ onPress }: { onPress: () => void }) {
   const inactiveColor = C.isDark ? "rgba(148,163,184,0.55)" : "rgba(100,116,139,0.6)";
   return (
     <Pressable
-      style={({ pressed }) => [styles.tabBtn, { flex: 1 }, pressed && { opacity: 0.5 }]}
+      style={({ pressed }) => [styles.tabBtn, { flex: 1, minWidth: 0 }, pressed && { opacity: 0.5 }]}
       onPress={onPress}
     >
       <View style={styles.inactiveWrap}>
@@ -269,32 +272,35 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: 3,
   },
   tabBtn: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
+    paddingHorizontal: 2,
   },
 
   pillGlow: {
-    borderRadius: 24,
+    borderRadius: 22,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
+    maxWidth: "100%",
   },
   pillGradient: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
   chipLabel: {
-    fontSize: 12,
-    letterSpacing: 0.2,
+    fontSize: 11.5,
+    letterSpacing: 0.1,
+    flexShrink: 1,
   },
   chipDot: {
     position: "absolute", top: -2, right: -2,
@@ -309,8 +315,10 @@ const styles = StyleSheet.create({
   },
   inactiveLabel: {
     fontSize: 9.5,
-    letterSpacing: 0.1,
+    letterSpacing: 0,
     lineHeight: 12,
+    textAlign: "center",
+    paddingHorizontal: 1,
   },
 
   dot: {

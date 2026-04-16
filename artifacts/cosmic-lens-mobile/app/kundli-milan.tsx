@@ -1206,14 +1206,16 @@ export default function KundliMilanScreen(){
             <View style={{gap:16}}>
 
               {/* ── Hook Section ── */}
-              <View style={{alignItems:"center",paddingVertical:2}}>
+              <View style={{alignItems:"center",paddingVertical:6,paddingHorizontal:12,
+                backgroundColor:C.isDark?"rgba(124,58,237,0.08)":"rgba(124,58,237,0.06)",
+                borderRadius:16,borderWidth:1,borderColor:C.isDark?"rgba(139,92,246,0.15)":"rgba(124,58,237,0.1)"}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                   <Text style={{fontSize:14}}>✦</Text>
-                  <Text style={{color:C.isDark?"#f3e8ff":"#5b21b6",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
+                  <Text style={{color:C.isDark?"#e9d5ff":"#4c1d95",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
                     Will This Relationship Work?
                   </Text>
                 </View>
-                <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",marginTop:3}}>
+                <Text style={{color:C.isDark?"#c4b5fd":"#6d28d9",fontSize:11,fontFamily:"Nunito_500Medium",marginTop:3}}>
                   Ancient Vedic wisdom meets modern insights
                 </Text>
               </View>

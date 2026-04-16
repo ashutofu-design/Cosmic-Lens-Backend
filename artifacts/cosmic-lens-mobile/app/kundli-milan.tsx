@@ -1264,18 +1264,18 @@ export default function KundliMilanScreen(){
                   {icon:"💫",title:"Energy Flow",koot:"Nadi",desc:"Deep soul compatibility",color:"#a855f7"},
                 ] as const).map((item,i)=>(
                   <View key={i} style={{width:"48%",
-                    backgroundColor:C.isDark?"#111827":"#ffffff",
+                    backgroundColor:"#111827",
                     borderRadius:14,padding:12,gap:6,
-                    borderWidth:1,borderColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.06)",
+                    borderWidth:1,borderColor:"rgba(255,255,255,0.08)",
                     shadowColor:"#000",shadowOffset:{width:0,height:3},
-                    shadowOpacity:C.isDark?0.25:0.08,shadowRadius:6,elevation:3}}>
+                    shadowOpacity:0.3,shadowRadius:6,elevation:3}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
                       <View style={{width:32,height:32,borderRadius:10,alignItems:"center",justifyContent:"center",
                         backgroundColor:`${item.color}22`}}>
                         <Text style={{fontSize:16}}>{item.icon}</Text>
                       </View>
                       <View style={{flex:1}}>
-                        <Text style={{color:C.isDark?"#F3F4F6":"#1f2937",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
+                        <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
                           {item.title}
                         </Text>
                         <Text style={{color:item.color,fontSize:8,fontFamily:"Nunito_700Bold",
@@ -1284,7 +1284,7 @@ export default function KundliMilanScreen(){
                         </Text>
                       </View>
                     </View>
-                    <Text style={{color:C.isDark?"#9CA3AF":"#6B7280",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
+                    <Text style={{color:"#9CA3AF",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
                       {item.desc}
                     </Text>
                   </View>

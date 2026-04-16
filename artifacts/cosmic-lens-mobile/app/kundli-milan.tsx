@@ -1215,7 +1215,7 @@ export default function KundliMilanScreen(){
                     Will This Relationship Work?
                   </Text>
                 </View>
-                <Text style={{color:C.isDark?"#c4b5fd":"#6d28d9",fontSize:11,fontFamily:"Nunito_500Medium",marginTop:3}}>
+                <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:11,fontFamily:"Nunito_600SemiBold",marginTop:3}}>
                   Ancient Vedic wisdom meets modern insights
                 </Text>
               </View>

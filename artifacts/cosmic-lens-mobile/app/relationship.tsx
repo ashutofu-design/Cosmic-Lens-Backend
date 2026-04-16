@@ -505,7 +505,7 @@ export default function RelationshipScreen() {
                 </Text>
                 <Feather name="check-circle" size={12} color="#818cf8"/>
               </View>
-            </Animated.View>
+            </View>
           ) : (
             <Pressable onPress={()=>router.push("/kundli-milan" as any)}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,

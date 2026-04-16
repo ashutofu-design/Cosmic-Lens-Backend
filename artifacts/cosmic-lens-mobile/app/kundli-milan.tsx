@@ -1267,20 +1267,20 @@ export default function KundliMilanScreen(){
 
               {/* ── 4. Pro Upgrade Teaser ── */}
               <View style={{borderRadius:20,overflow:"hidden",
-                borderWidth:1,borderColor:C.isDark?"rgba(245,158,11,0.2)":"rgba(234,88,12,0.12)"}}>
-                <LinearGradient colors={C.isDark?["rgba(88,28,135,0.25)","rgba(30,27,75,0.45)"]:["#fef3c7","#fff7ed"]}
+                borderWidth:1,borderColor:C.isDark?"rgba(245,158,11,0.35)":"rgba(234,88,12,0.25)"}}>
+                <LinearGradient colors={C.isDark?["#1a0d04","#111827"]:["#1a0d04","#111827"]}
                   style={{padding:16,gap:14}}>
 
                   <View style={{gap:4}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
-                      <Text style={{color:C.isDark?"#fbbf24":"#78350f",fontSize:15,fontFamily:"Nunito_800ExtraBold",flex:1}}>
+                      <Text style={{color:"#fbbf24",fontSize:15,fontFamily:"Nunito_800ExtraBold",flex:1}}>
                         Unlock Your Full Relationship Report 🔒
                       </Text>
-                      <View style={{backgroundColor:C.isDark?"#b45309":"#ea580c",paddingHorizontal:8,paddingVertical:3,borderRadius:8}}>
+                      <View style={{backgroundColor:"#b45309",paddingHorizontal:8,paddingVertical:3,borderRadius:8}}>
                         <Text style={{color:"#fff",fontSize:8,fontFamily:"Nunito_700Bold"}}>PRO</Text>
                       </View>
                     </View>
-                    <Text style={{color:C.isDark?"rgba(251,191,36,0.5)":"#92400e",
+                    <Text style={{color:"rgba(251,191,36,0.7)",
                       fontSize:10,fontFamily:"Nunito_500Medium"}}>
                       See what you're missing about your relationship
                     </Text>
@@ -1299,11 +1299,11 @@ export default function KundliMilanScreen(){
                       "Personalized remedies to improve your relationship",
                     ]).map((txt,i)=>(
                       <View key={i} style={{flexDirection:"row",alignItems:"center",gap:8,
-                        backgroundColor:C.isDark?"rgba(245,158,11,0.04)":"rgba(180,83,9,0.06)",
+                        backgroundColor:"rgba(245,158,11,0.08)",
                         borderRadius:10,paddingHorizontal:10,paddingVertical:7,
-                        borderWidth:0.5,borderColor:C.isDark?"rgba(245,158,11,0.1)":"rgba(180,83,9,0.12)"}}>
-                        <Feather name="lock" size={10} color={C.isDark?"rgba(251,191,36,0.4)":"#b45309"}/>
-                        <Text style={{color:C.isDark?"rgba(255,255,255,0.4)":"#78350f",
+                        borderWidth:0.5,borderColor:"rgba(245,158,11,0.18)"}}>
+                        <Feather name="lock" size={10} color="#f59e0b"/>
+                        <Text style={{color:"#E5E7EB",
                           fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{txt}</Text>
                       </View>
                     ))}

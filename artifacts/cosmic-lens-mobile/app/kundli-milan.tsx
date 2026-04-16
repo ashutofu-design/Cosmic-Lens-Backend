@@ -1300,7 +1300,7 @@ export default function KundliMilanScreen(){
                     borderWidth:1,borderColor:C.isDark?"rgba(168,85,247,0.35)":"rgba(124,58,237,0.25)",borderRadius:14}}>
                   <Text style={{fontSize:14}}>✨</Text>
                   <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
-                    Unlock deeper insights with Pro
+                    When Vedic meets Tech
                   </Text>
                   <Feather name="arrow-right" size={14} color={C.isDark?"#e9d5ff":"#5b21b6"}/>
                 </LinearGradient>

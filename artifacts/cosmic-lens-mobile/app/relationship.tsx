@@ -498,11 +498,11 @@ export default function RelationshipScreen() {
             <Animated.View style={{flex:1,opacity:Animated.add(0.3,Animated.multiply(p1Glow,1))}}>
               <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:"rgba(99,102,241,0.12)",
+                backgroundColor:"#151b2e",
                 borderWidth:1,
-                borderColor:"rgba(99,102,241,0.35)"}}>
+                borderColor:"#2d3555"}}>
                 <View style={{width:24,height:24,borderRadius:12,
-                  backgroundColor:"rgba(99,102,241,0.2)",
+                  backgroundColor:"#1e2744",
                   alignItems:"center",justifyContent:"center"}}>
                   <Text style={{fontSize:11}}>👤</Text>
                 </View>
@@ -516,9 +516,9 @@ export default function RelationshipScreen() {
             <Pressable onPress={()=>router.push("/kundli-milan" as any)}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:"rgba(99,102,241,0.08)",
+                backgroundColor:"#131929",
                 borderWidth:0.5,borderStyle:"dashed" as any,
-                borderColor:"rgba(99,102,241,0.25)"})}>
+                borderColor:"#2d3555"})}>
               <Text style={{fontSize:13}}>👤</Text>
               <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>You</Text>
               <Text style={{color:"#818cf8",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
@@ -534,11 +534,11 @@ export default function RelationshipScreen() {
             }}
               style={({pressed})=>({opacity:pressed?0.85:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:"rgba(236,72,153,0.1)",
+                backgroundColor:"#1a1525",
                 borderWidth:1,
-                borderColor:"rgba(236,72,153,0.3)"})}>
+                borderColor:"#3d2545"})}>
               <View style={{width:24,height:24,borderRadius:12,
-                backgroundColor:"rgba(236,72,153,0.18)",
+                backgroundColor:"#2a1a35",
                 alignItems:"center",justifyContent:"center"}}>
                 <Text style={{fontSize:11}}>💑</Text>
               </View>
@@ -554,9 +554,9 @@ export default function RelationshipScreen() {
             }}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:"rgba(236,72,153,0.06)",
+                backgroundColor:"#161020",
                 borderWidth:0.5,
-                borderColor:"rgba(236,72,153,0.2)"})}>
+                borderColor:"#2d1f3a"})}>
               <Text style={{fontSize:13}}>💑</Text>
               <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Select Partner</Text>
               <Feather name="chevron-down" size={12} color="#f472b6"/>
@@ -565,9 +565,9 @@ export default function RelationshipScreen() {
             <Pressable onPress={()=>router.push("/kundli-milan" as any)}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
-                backgroundColor:"rgba(236,72,153,0.05)",
+                backgroundColor:"#141020",
                 borderWidth:0.5,borderStyle:"dashed" as any,
-                borderColor:"rgba(236,72,153,0.2)"})}>
+                borderColor:"#2d1f3a"})}>
               <Text style={{fontSize:13}}>💑</Text>
               <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
               <Text style={{color:"#f472b6",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>

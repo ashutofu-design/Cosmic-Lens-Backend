@@ -47,6 +47,7 @@ const CATEGORIES: Category[] = [
     badgeIcon: "🔥",
     subtitle: "Love & marriage future insights",
     primary: true,
+    route: "/relationship",
   },
   {
     key: "career",

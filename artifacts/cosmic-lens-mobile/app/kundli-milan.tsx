@@ -1069,6 +1069,7 @@ export default function KundliMilanScreen(){
   const p1Profile=profiles.find(p=>p.id===primaryProfileId);
 
   const [plan,setPlan]=useState<"basic"|"pro">("basic");
+  const [showUnlock,setShowUnlock]=useState(false);
   const [addingFor,setAddingFor]=useState<"self"|"partner"|null>(null);
   const [p1,setP1]=useState<PersonData|null>(null);
   const [p2,setP2]=useState<PersonData|null>(null);
@@ -1158,11 +1159,11 @@ export default function KundliMilanScreen(){
               <Text style={{color:"#7c3aed",fontSize:10,fontFamily:"Nunito_400Regular"}}>अष्टकूट गुण मिलान</Text>
             </View>
             <Pressable
-              onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+              onPress={()=>{setShowUnlock(v=>!v);Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
               style={({pressed})=>({opacity:pressed?0.8:1,overflow:"hidden",borderRadius:10})}>
               <LinearGradient colors={["#f59e0b","#ea580c"]} start={{x:0,y:0}} end={{x:1,y:0}}
                 style={{paddingHorizontal:10,paddingVertical:6,borderRadius:10}}>
-                <Text style={{color:"#fff",fontSize:9,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.5}}>🔓 Unlock</Text>
+                <Text style={{color:"#fff",fontSize:9,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.5}}>{showUnlock?"✕ Hide":"🔓 Unlock"}</Text>
               </LinearGradient>
             </Pressable>
           </View>
@@ -1210,7 +1211,7 @@ export default function KundliMilanScreen(){
           )}
 
           {/* ── BASIC MODE: Premium conversion screen ── */}
-          {!isPro&&!result&&(
+          {!isPro&&!result&&showUnlock&&(
             <View style={{gap:16}}>
 
               {/* ── Unified Unlock Section ── */}

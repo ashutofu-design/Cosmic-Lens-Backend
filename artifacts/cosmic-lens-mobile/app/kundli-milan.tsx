@@ -1171,15 +1171,11 @@ export default function KundliMilanScreen(){
               </Pressable>
               <Pressable
                 onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-                style={[ms.segBtn,{overflow:"hidden"},plan==="pro"&&{backgroundColor:"#6d28d9"}]}>
-                {plan==="pro"?(
-                  <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                    style={[StyleSheet.absoluteFillObject,{borderRadius:14}]}/>
-                ):null}
-                {plan==="pro"&&(
-                  <View style={{position:"absolute",top:-8,left:"25%",right:"25%",height:16,borderRadius:8,backgroundColor:"rgba(219,39,119,0.3)"}}/>
-                )}
-                <Text style={[ms.segTxt,{color:plan==="pro"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>✨ Pro</Text>
+                style={[ms.segBtn,{overflow:"hidden"}]}>
+                <LinearGradient colors={plan==="pro"?["#7c3aed","#db2777"]:["rgba(124,58,237,0.4)","rgba(219,39,119,0.4)"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={[StyleSheet.absoluteFillObject,{borderRadius:14}]}/>
+                <View style={{position:"absolute",top:-8,left:"25%",right:"25%",height:16,borderRadius:8,backgroundColor:plan==="pro"?"rgba(219,39,119,0.3)":"rgba(219,39,119,0.15)"}}/>
+                <Text style={[ms.segTxt,{color:"#fff"}]}>✨ Pro</Text>
               </Pressable>
             </View>
           </View>

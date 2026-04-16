@@ -1269,19 +1269,6 @@ export default function KundliMilanScreen(){
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
 
-          {/* ── Pro Badge ── */}
-          {isPro&&(
-            <Animated.View style={[ms.proBanner,{opacity:glowAnim,transform:[{scale:scaleAnim}]}]}>
-              <LinearGradient colors={["#4c1d95","#6d28d9","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.proBannerGrad}>
-                <View style={ms.proBannerInner}>
-                  <Text style={{fontSize:16}}>✨</Text>
-                  <Text style={{color:"#fff",fontSize:13,fontFamily:"Nunito_700Bold",flex:1}}>PRO INSIGHTS UNLOCKED</Text>
-                  <View style={ms.proLiveDot}/>
-                  <Text style={{color:"rgba(255,255,255,0.7)",fontSize:10,fontFamily:"Nunito_500Medium"}}>LIVE</Text>
-                </View>
-              </LinearGradient>
-            </Animated.View>
-          )}
 
           {/* ── BASIC MODE: Hook + Discovery (always visible) ── */}
           {!isPro&&!result&&(
@@ -1438,10 +1425,6 @@ export default function KundliMilanScreen(){
 
             </View>
           )}
-
-
-          {/* ── PRO Preview Insights ── */}
-          {isPro&&!result&&<ProInsightsPanel/>}
 
 
           {/* ── PRO CTA Buttons ── */}

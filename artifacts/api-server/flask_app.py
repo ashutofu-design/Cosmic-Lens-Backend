@@ -3108,6 +3108,558 @@ def breakup_chances():
     })
 
 
+@app.route("/api/loyalty-check", methods=["POST"])
+def loyalty_check():
+    """
+    Ultra-advanced Vedic + KP Loyalty Engine — BOTH kundlis required.
+    Body: { p1, p2 }
+    Returns:
+      {
+        loyalty_score: 0-100,
+        loyalty_level: "high|moderate|unstable|risky",
+        behavior_type: "loyal|tempted|emotionally unstable|dual-nature",
+        time_factor:   "temporary_phase|long_term_pattern",
+        factors: { venus, moon, "7th_house", rahu, dasha, kp },
+        reasons: [ ... ]
+      }
+    Scoring: start 50 · Venus ±20 · Moon ±15 · 7th ±15 · Rahu -20 · Cross -10 · Dasha ±10 · KP -10
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if "p1" not in data or "p2" not in data:
+        return jsonify({"error": "Missing p1 or p2"}), 400
+
+    try:
+        k1 = calculate_kundli(data["p1"])
+        k2 = calculate_kundli(data["p2"])
+    except Exception as exc:
+        return jsonify({"error": f"Kundli calculation failed: {exc}"}), 500
+
+    SIGNS_L  = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    LORDS_L  = ["Mars","Venus","Mercury","Moon","Sun","Mercury",
+                "Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"]
+    EXALT_L  = {"Sun":0,"Moon":1,"Mars":9,"Mercury":5,"Jupiter":3,"Venus":11,"Saturn":6}
+    DEBIL_L  = {"Sun":6,"Moon":7,"Mars":3,"Mercury":11,"Jupiter":9,"Venus":5,"Saturn":0}
+    OWN_L    = {"Sun":[4],"Moon":[3],"Mars":[0,7],"Mercury":[2,5],
+                "Jupiter":[8,11],"Venus":[1,6],"Saturn":[9,10]}
+    MALEFIC_L = {"Saturn","Mars","Rahu","Ketu","Sun"}
+
+    KP_SEQ   = ["Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury"]
+    KP_YEARS = {"Ketu":7,"Venus":20,"Sun":6,"Moon":10,"Mars":7,
+                "Rahu":18,"Jupiter":16,"Saturn":19,"Mercury":17}
+    NAK_LORDS = (["Ketu","Venus","Sun","Moon","Mars","Rahu","Jupiter","Saturn","Mercury"] * 3)
+    NAK_SPAN  = 360.0 / 27.0
+
+    def sidx(sn):
+        try: return SIGNS_L.index(sn)
+        except: return 0
+
+    def getp(k, name):
+        for p in k.get("planets", []):
+            if p["name"] == name: return p
+        return None
+
+    def getvargap(k, chart, name):
+        v = (k.get("divisionalCharts") or {}).get(chart) or {}
+        for p in v.get("planets", []):
+            if p["name"] == name: return p
+        return None
+
+    def dignity(pl, si):
+        if EXALT_L.get(pl) == si: return 2
+        if DEBIL_L.get(pl) == si: return -2
+        if si in OWN_L.get(pl, []): return 1
+        return 0
+
+    def dword(d):
+        return {2:"exalted",1:"own-sign",0:"neutral",-2:"debilitated"}.get(d,"neutral")
+
+    def aspects_planet(k, target):
+        tgt = getp(k, target)
+        if not tgt: return []
+        ts = sidx(tgt["sign"])
+        hits = []
+        for p in k.get("planets", []):
+            if p["name"] == target: continue
+            ps = sidx(p["sign"])
+            d = (ts - ps + 12) % 12
+            ok = d == 6
+            if p["name"] == "Mars":    ok = ok or d in (3,7)
+            if p["name"] == "Jupiter": ok = ok or d in (4,8)
+            if p["name"] == "Saturn":  ok = ok or d in (2,9)
+            if p["name"] in ("Rahu","Ketu"): ok = ok or d in (4,8)
+            if ok: hits.append(p["name"])
+        return hits
+
+    def aspects_house(k, hnum):
+        asc = sidx(k.get("ascendant","Aries"))
+        tgt_sign = (asc + hnum - 1) % 12
+        hits = []
+        for p in k.get("planets", []):
+            ps = sidx(p["sign"])
+            d = (tgt_sign - ps + 12) % 12
+            ok = d == 6
+            if p["name"] == "Mars":    ok = ok or d in (3,7)
+            if p["name"] == "Jupiter": ok = ok or d in (4,8)
+            if p["name"] == "Saturn":  ok = ok or d in (2,9)
+            if p["name"] in ("Rahu","Ketu"): ok = ok or d in (4,8)
+            if ok: hits.append(p["name"])
+        return hits
+
+    def occupants(k, hnum):
+        return [p["name"] for p in k.get("planets", []) if p["house"] == hnum]
+
+    def kp_sub_lord(lon):
+        lon = lon % 360.0
+        nak_idx = int(lon // NAK_SPAN)
+        pos = lon - nak_idx * NAK_SPAN
+        nak_lord = NAK_LORDS[nak_idx]
+        start = KP_SEQ.index(nak_lord)
+        frac = 0.0
+        for i in range(9):
+            sl = KP_SEQ[(start + i) % 9]
+            sp = NAK_SPAN * (KP_YEARS[sl] / 120.0)
+            if pos <= frac + sp + 1e-9:
+                return {"nak_lord": nak_lord, "sub_lord": sl}
+            frac += sp
+        return {"nak_lord": nak_lord, "sub_lord": KP_SEQ[(start + 8) % 9]}
+
+    def name_of(k): return k.get("name") or "partner"
+
+    reasons = []
+
+    # ── 1. CROSS-COMPATIBILITY (−10 max penalty) ─────────────────────────────
+    # Compare Venus↔Mars (attraction sync) and Moon↔Moon (emotional sync)
+    # and Rahu/Ketu cross-hits.
+    def cross_mismatch():
+        pen = 0
+        v1 = getp(k1, "Venus"); v2 = getp(k2, "Venus")
+        m1 = getp(k1, "Moon");  m2 = getp(k2, "Moon")
+        ma1 = getp(k1, "Mars"); ma2 = getp(k2, "Mars")
+        r1 = getp(k1, "Rahu");  r2 = getp(k2, "Rahu")
+        k1_ = getp(k1, "Ketu"); k2_ = getp(k2, "Ketu")
+
+        # Venus element vs partner Mars element (fire/earth/air/water harmony)
+        ELEM = [0,1,2,3]*3  # 0=fire,1=earth,2=air,3=water by sign%4
+        def elem(si): return si % 4
+        harm_fire_air = {(0,2),(2,0)}     # fire↔air
+        harm_earth_water = {(1,3),(3,1)}  # earth↔water
+        pairs = [
+            ("A's Venus vs B's Mars", v1, ma2),
+            ("B's Venus vs A's Mars", v2, ma1),
+        ]
+        for lbl, a, b in pairs:
+            if not a or not b: continue
+            ea, eb = elem(sidx(a["sign"])), elem(sidx(b["sign"]))
+            if ea == eb:
+                reasons.append(f"{lbl}: same element — natural attraction sync")
+            elif (ea,eb) in harm_fire_air or (ea,eb) in harm_earth_water:
+                reasons.append(f"{lbl}: complementary elements — healthy spark")
+            else:
+                pen += 3
+                reasons.append(f"{lbl}: element mismatch — attraction drifts over time")
+
+        # Moon-Moon emotional sync (6/8/12 apart from each other = tension)
+        if m1 and m2:
+            d = abs(sidx(m1["sign"]) - sidx(m2["sign"]))
+            d = min(d, 12 - d)
+            if d in (5, 6, 7):
+                pen += 4
+                reasons.append("Moon-Moon axis shows emotional mismatch between partners")
+            elif d in (0, 3, 4):
+                reasons.append("Moon-Moon axis in supportive rhythm — emotional sync good")
+
+        # Partner Rahu sitting on self Venus/Moon
+        def rahu_cross(own_k_lbl, own_v, own_m, partner_rahu, partner_ketu):
+            out = 0
+            for nm, pl in [("Venus", own_v), ("Moon", own_m)]:
+                if not pl: continue
+                ps = sidx(pl["sign"])
+                for nodep, nodelbl in [(partner_rahu,"Rahu"), (partner_ketu,"Ketu")]:
+                    if not nodep: continue
+                    if sidx(nodep["sign"]) == ps:
+                        out += 2
+                        reasons.append(
+                            f"{own_k_lbl}'s {nm} conjunct partner's {nodelbl} — karmic obsession / drifting pull"
+                        )
+            return out
+        pen += rahu_cross(name_of(k1), v1, m1, r2, k2_)
+        pen += rahu_cross(name_of(k2), v2, m2, r1, k1_)
+
+        return min(10, pen)
+
+    # ── 2. VENUS (±20) ───────────────────────────────────────────────────────
+    def venus_section():
+        total = 0
+        per_person_state = {}
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            pts = 0
+            v = getp(k, "Venus")
+            if not v: continue
+            si = sidx(v["sign"])
+            d = dignity("Venus", si)
+            # D1 dignity
+            if d >= 2:
+                pts += 10; reasons.append(f"{lbl}'s Venus exalted in {v['sign']} — deep committed love nature")
+            elif d == 1:
+                pts += 6;  reasons.append(f"{lbl}'s Venus in own-sign {v['sign']} — natural loyalty in love")
+            elif d <= -2:
+                pts -= 10; reasons.append(f"{lbl}'s Venus debilitated in {v['sign']} — weak love nature, easily swayed")
+            # D9 Venus dignity
+            v9 = getvargap(k, "D9", "Venus")
+            if v9:
+                d9 = dignity("Venus", v9["signIndex"])
+                if d9 >= 2:
+                    pts += 4; reasons.append(f"{lbl}'s D9 Venus exalted — marriage love is sincere")
+                elif d9 <= -2:
+                    pts -= 4; reasons.append(f"{lbl}'s D9 Venus debilitated — struggle to maintain marital devotion")
+            # Afflictions
+            same_sign = {q["name"] for q in k.get("planets", []) if q["sign"] == v["sign"]}
+            if "Rahu" in same_sign:
+                pts -= 8; reasons.append(f"{lbl}'s Venus conjunct Rahu — illusion / attraction outside relationship")
+            if "Mars" in same_sign:
+                pts -= 3; reasons.append(f"{lbl}'s Venus conjunct Mars — impulsive passion, fiery attractions")
+            if "Saturn" in same_sign:
+                pts -= 3; reasons.append(f"{lbl}'s Venus conjunct Saturn — cold / distant in love expression")
+            asp = aspects_planet(k, "Venus")
+            if "Rahu" in asp and "Rahu" not in same_sign:
+                pts -= 4; reasons.append(f"{lbl}'s Venus aspected by Rahu — hidden attractions, fantasy-driven")
+            if "Saturn" in asp and "Saturn" not in same_sign:
+                pts -= 2; reasons.append(f"{lbl}'s Venus aspected by Saturn — love feels heavy / delayed")
+
+            total += pts
+            # derive readable state
+            if pts >= 6:   st = "strong and loyal"
+            elif pts >= 0: st = "stable"
+            elif pts >= -5:st = "weak"
+            else:          st = "afflicted / temptation-prone"
+            per_person_state[lbl] = st
+
+        total = max(-20, min(20, total))
+        # Combined one-line factor
+        people_txt = " · ".join(f"{who}: {st}" for who, st in per_person_state.items())
+        return total, people_txt
+
+    # ── 3. MOON (±15) ────────────────────────────────────────────────────────
+    def moon_section():
+        total = 0
+        per = {}
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            pts = 0
+            m = getp(k, "Moon")
+            if not m: continue
+            si = sidx(m["sign"])
+            d = dignity("Moon", si)
+            if d >= 2:
+                pts += 8; reasons.append(f"{lbl}'s Moon exalted in {m['sign']} — strong emotional loyalty")
+            elif d == 1:
+                pts += 5; reasons.append(f"{lbl}'s Moon in own sign — emotionally anchored")
+            elif d <= -2:
+                pts -= 8; reasons.append(f"{lbl}'s Moon debilitated in {m['sign']} — emotional instability, mood-driven")
+            same = {q["name"] for q in k.get("planets", []) if q["sign"] == m["sign"]}
+            if "Saturn" in same:
+                pts -= 4; reasons.append(f"{lbl}'s Moon conjunct Saturn — emotional coldness / depressive loyalty")
+            if "Rahu" in same:
+                pts -= 5; reasons.append(f"{lbl}'s Moon conjunct Rahu — restless emotions, craving for novelty")
+            if "Ketu" in same:
+                pts -= 3; reasons.append(f"{lbl}'s Moon conjunct Ketu — emotional detachment, sudden pull-outs")
+            asp = aspects_planet(k, "Moon")
+            if "Saturn" in asp and "Saturn" not in same:
+                pts -= 2; reasons.append(f"{lbl}'s Moon aspected by Saturn — emotional suppression")
+            if "Mars" in asp:
+                pts -= 1; reasons.append(f"{lbl}'s Moon influenced by Mars — emotional outbursts")
+            # Dependency: Moon in 7th/8th/12th = codependent/secretive
+            if m["house"] in (8, 12):
+                pts -= 2; reasons.append(f"{lbl}'s Moon in house {m['house']} — hidden emotional undercurrents")
+            # D9 Moon
+            m9 = getvargap(k, "D9", "Moon")
+            if m9:
+                d9 = dignity("Moon", m9["signIndex"])
+                if d9 >= 2:
+                    pts += 3; reasons.append(f"{lbl}'s D9 Moon strong — marital emotions stay loyal")
+                elif d9 <= -2:
+                    pts -= 3; reasons.append(f"{lbl}'s D9 Moon debilitated — inner mind wavers in marriage")
+
+            total += pts
+            if pts >= 5:  st = "stable and loyal"
+            elif pts >= 0:st = "steady"
+            else:         st = "unstable / afflicted"
+            per[lbl] = st
+
+        total = max(-15, min(15, total))
+        return total, " · ".join(f"{who}: {st}" for who, st in per.items())
+
+    # ── 4. 7TH HOUSE (±15) ───────────────────────────────────────────────────
+    def seventh_section():
+        total = 0
+        per = {}
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            pts = 5  # baseline +5 commitment credit
+            asc = sidx(k.get("ascendant","Aries"))
+            lord = LORDS_L[(asc + 6) % 12]
+            lord_p = getp(k, lord)
+            # occupants & aspects
+            occ7 = occupants(k, 7)
+            asp7 = aspects_house(k, 7)
+            mal_in = [x for x in occ7 if x in MALEFIC_L]
+            mal_asp = [x for x in asp7 if x in MALEFIC_L and x not in occ7]
+            if mal_in:
+                pts -= 3 * min(2, len(mal_in))
+                reasons.append(f"{lbl}'s 7th occupied by {', '.join(mal_in)} — malefic influence on commitment")
+            if "Rahu" in mal_in or "Rahu" in mal_asp:
+                pts -= 3
+                reasons.append(f"{lbl}'s Rahu on 7th axis — dual-relationship tendency")
+            if "Saturn" in mal_asp:
+                pts -= 2
+                reasons.append(f"{lbl}'s Saturn aspects 7th — commitment feels burdensome")
+            if "Jupiter" in asp7:
+                pts += 4
+                reasons.append(f"{lbl}'s Jupiter aspects 7th — blessing of sincere commitment")
+            if "Venus" in occ7:
+                pts += 3
+                reasons.append(f"{lbl}'s Venus in 7th — devoted romantic nature")
+            if "Moon" in occ7:
+                pts += 2
+                reasons.append(f"{lbl}'s Moon in 7th — emotionally attached to partnership")
+            # 7th lord condition
+            if lord_p:
+                lsi = sidx(lord_p["sign"])
+                ld = dignity(lord, lsi)
+                if lord_p["house"] in (6,8,12):
+                    pts -= 4
+                    reasons.append(f"{lbl}'s 7th lord {lord} in dusthana {lord_p['house']} — commitment weakened")
+                if ld >= 1:
+                    pts += 3
+                    reasons.append(f"{lbl}'s 7th lord {lord} {dword(ld)} — commitment strength supported")
+                elif ld <= -2:
+                    pts -= 4
+                    reasons.append(f"{lbl}'s 7th lord {lord} debilitated — low commitment capacity")
+            # D9 Lagna strength (marriage body) — Jupiter/Venus influence
+            d9 = k.get("divisionalCharts", {}).get("D9") or {}
+            d9p = d9.get("planets", [])
+            d9_7 = [q["name"] for q in d9p if q["house"] == 7]
+            if any(x in ("Rahu","Ketu","Saturn") for x in d9_7):
+                pts -= 3
+                reasons.append(f"{lbl}'s D9 7th house has malefic — marriage loyalty tested")
+            if "Jupiter" in d9_7 or "Venus" in d9_7:
+                pts += 2
+                reasons.append(f"{lbl}'s D9 7th has benefic — marital devotion supported")
+
+            total += pts
+            if pts >= 6:  st = "strong commitment"
+            elif pts >= 0:st = "moderate commitment"
+            else:         st = "weak commitment / tested"
+            per[lbl] = st
+
+        total = max(-15, min(15, total))
+        return total, " · ".join(f"{who}: {st}" for who, st in per.items())
+
+    # ── 5. RAHU IMPACT (−20 max, never positive) ─────────────────────────────
+    def rahu_section():
+        pen = 0
+        per = {}
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            local = 0
+            r = getp(k, "Rahu")
+            if not r: continue
+            h = r["house"]
+            # Rahu with Venus/Moon
+            v = getp(k, "Venus"); m = getp(k, "Moon")
+            if v and v["sign"] == r["sign"]:
+                local += 7; reasons.append(f"{lbl}'s Rahu+Venus — strong cheating driver / illusion in love")
+            if m and m["sign"] == r["sign"]:
+                local += 6; reasons.append(f"{lbl}'s Rahu+Moon — mental restlessness for novelty")
+            # Rahu in sensitive houses
+            if h == 7:
+                local += 5; reasons.append(f"{lbl}'s Rahu in 7th — karmic dual-partnership trigger")
+            elif h == 5:
+                local += 3; reasons.append(f"{lbl}'s Rahu in 5th — craves thrill in romance")
+            elif h == 12:
+                local += 4; reasons.append(f"{lbl}'s Rahu in 12th — secretive pleasures tendency")
+            # Rahu aspects on love planets
+            rahu_asp = aspects_planet(k, "Venus")
+            moon_asp = aspects_planet(k, "Moon")
+            if "Rahu" in rahu_asp: local += 2
+            if "Rahu" in moon_asp: local += 2
+            pen += local
+            if   local >= 10: st = "strong cheating driver"
+            elif local >= 6:  st = "temptation-prone"
+            elif local >= 3:  st = "mild restlessness"
+            else:             st = "benign"
+            per[lbl] = st
+        pen = min(20, pen)
+        return -pen, " · ".join(f"{who}: {st}" for who, st in per.items())
+
+    # ── 6. DASHA (±10) ───────────────────────────────────────────────────────
+    ATTR = {"Venus","Rahu","Mars"}
+    DET  = {"Saturn","Ketu"}
+    def dasha_section():
+        total = 0
+        per = {}
+        nontransient = 0
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            cd = k.get("currentDasha") or {}
+            md, ad, pd = cd.get("maha"), cd.get("antar"), cd.get("pratyantar")
+            local_state = []
+            for role, w, pl in [("MD", 4, md), ("AD", 2, ad), ("PD", 1, pd)]:
+                if not pl: continue
+                if pl in ATTR:
+                    total -= w
+                    local_state.append(f"{pl} {role} attraction phase")
+                    reasons.append(f"{lbl}: {pl} {role} — attraction / temptation phase active")
+                elif pl in DET:
+                    total -= int(w * 0.6)
+                    local_state.append(f"{pl} {role} detachment phase")
+                    reasons.append(f"{lbl}: {pl} {role} — detachment / coldness phase")
+                elif pl in ("Jupiter","Moon"):
+                    total += w
+                    local_state.append(f"{pl} {role} loyal phase")
+                    reasons.append(f"{lbl}: {pl} {role} — supportive loyal period")
+            per[lbl] = ", ".join(local_state) if local_state else "neutral period"
+        total = max(-10, min(10, total))
+        return total, " · ".join(f"{who}: {st}" for who, st in per.items())
+
+    # ── 7. KP CONFIRMATION (−10 max) ─────────────────────────────────────────
+    def kp_section():
+        pen = 0
+        per = {}
+        for lbl, k in [(name_of(k1), k1), (name_of(k2), k2)]:
+            cd = k.get("currentDasha") or {}
+            md = cd.get("maha")
+            if not md:
+                per[lbl] = "no active MD"
+                continue
+            md_p = getp(k, md)
+            if not md_p:
+                per[lbl] = "no data"
+                continue
+            sub = kp_sub_lord(md_p.get("longitude", 0.0))
+            sl = sub["sub_lord"]
+            sl_p = getp(k, sl)
+            sl_house = sl_p["house"] if sl_p else None
+            # sub-lord's dispositor house
+            disp_house = None
+            if sl_p:
+                disp = LORDS_L[sidx(sl_p["sign"])]
+                dp = getp(k, disp)
+                disp_house = dp["house"] if dp else None
+
+            hit = None
+            for h in (sl_house, disp_house):
+                if h in (12, 7, 5):
+                    hit = h; break
+            if hit == 12:
+                pen += 6
+                reasons.append(f"{lbl}'s KP sub-lord {sl} (of {md} MD) tied to 12th — secret affair signature")
+                per[lbl] = f"sub-lord {sl} → 12th (hidden behaviour)"
+            elif hit == 7:
+                pen += 4
+                reasons.append(f"{lbl}'s KP sub-lord {sl} tied to 7th — dual-relationship trigger")
+                per[lbl] = f"sub-lord {sl} → 7th (relationship pull)"
+            elif hit == 5:
+                pen += 2
+                reasons.append(f"{lbl}'s KP sub-lord {sl} tied to 5th — romance-chase activation")
+                per[lbl] = f"sub-lord {sl} → 5th (romance)"
+            else:
+                reasons.append(f"{lbl}'s KP sub-lord {sl} not tied to 5/7/12 — no cheating signature")
+                per[lbl] = f"sub-lord {sl} — neutral"
+        pen = min(10, pen)
+        return -pen, " · ".join(f"{who}: {st}" for who, st in per.items())
+
+    # ── RUN ALL ──────────────────────────────────────────────────────────────
+    v_pts,   v_txt   = venus_section()
+    m_pts,   m_txt   = moon_section()
+    s_pts,   s_txt   = seventh_section()
+    r_pts,   r_txt   = rahu_section()      # negative or 0
+    cross_pen        = cross_mismatch()    # positive 0..10
+    d_pts,   d_txt   = dasha_section()
+    kp_pts,  kp_txt  = kp_section()        # negative or 0
+
+    start = 50
+    raw = start + v_pts + m_pts + s_pts + r_pts - cross_pen + d_pts + kp_pts
+    loyalty_score = max(0, min(100, round(raw)))
+
+    # Level
+    if   loyalty_score >= 75: level = "high"
+    elif loyalty_score >= 55: level = "moderate"
+    elif loyalty_score >= 35: level = "unstable"
+    else:                     level = "risky"
+
+    # Behavior classification
+    # Look for Rahu+Venus signature in either chart
+    def has_rahu_venus(k):
+        v = getp(k, "Venus"); r = getp(k, "Rahu")
+        if v and r and v["sign"] == r["sign"]: return True
+        return "Rahu" in aspects_planet(k, "Venus")
+    def moon_weak(k):
+        m = getp(k, "Moon")
+        if not m: return False
+        return dignity("Moon", sidx(m["sign"])) <= -2 or \
+               any(q["name"] in ("Saturn","Rahu","Ketu") and q["sign"] == m["sign"]
+                   for q in k.get("planets", []))
+
+    rahu_venus_flag = has_rahu_venus(k1) or has_rahu_venus(k2)
+    moon_weak_flag  = moon_weak(k1) or moon_weak(k2)
+    # KP signature + Rahu on 7th axis → dual-nature
+    dual_flag = False
+    for k in (k1, k2):
+        r = getp(k, "Rahu")
+        if r and r["house"] in (1,7) and kp_pts <= -4:
+            dual_flag = True; break
+
+    if dual_flag:
+        behavior = "dual-nature"
+    elif rahu_venus_flag and loyalty_score < 65:
+        behavior = "tempted"
+    elif moon_weak_flag and loyalty_score < 60:
+        behavior = "emotionally unstable"
+    else:
+        behavior = "loyal"
+
+    # Time factor: natal vs only transient
+    natal_negative = (v_pts < -4) or (m_pts < -4) or (s_pts < -4) or (r_pts <= -10) or (cross_pen >= 6) or (kp_pts <= -4)
+    transient_negative = (d_pts <= -4)
+    if natal_negative:
+        time_factor = "long_term_pattern"
+    elif transient_negative:
+        time_factor = "temporary_phase"
+    else:
+        time_factor = "temporary_phase"
+
+    factors = {
+        "venus":     v_txt or "stable",
+        "moon":      m_txt or "stable",
+        "7th_house": s_txt or "stable",
+        "rahu":      r_txt or "benign",
+        "dasha":     d_txt or "neutral",
+        "kp":        kp_txt or "neutral",
+    }
+
+    seen = set(); unique_reasons = []
+    for r in reasons:
+        if r not in seen:
+            seen.add(r); unique_reasons.append(r)
+
+    return jsonify({
+        "loyalty_score":  loyalty_score,
+        "loyalty_level":  level,
+        "behavior_type":  behavior,
+        "time_factor":    time_factor,
+        "factors":        factors,
+        "reasons":        unique_reasons,
+        "breakdown": {
+            "venus":  v_pts,
+            "moon":   m_pts,
+            "seventh": s_pts,
+            "rahu":   r_pts,
+            "cross":  -cross_pen,
+            "dasha":  d_pts,
+            "kp":     kp_pts,
+            "start":  start,
+        },
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

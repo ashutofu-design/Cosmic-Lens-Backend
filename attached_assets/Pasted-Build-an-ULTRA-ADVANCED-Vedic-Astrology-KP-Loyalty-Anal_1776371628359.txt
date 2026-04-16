@@ -1,0 +1,175 @@
+Build an ULTRA-ADVANCED Vedic Astrology + KP Loyalty Analysis Engine.
+
+The system must deeply evaluate emotional loyalty, temptation, dual-relationship tendencies, and long-term commitment using BOTH kundlis.
+
+This must NOT be a surface-level analysis.
+
+----------------------------------------
+
+INPUT:
+- Person 1 + Person 2 Kundli (D1 + D9)
+- Planet positions (sign, house, degree)
+- Nakshatra + KP sub-lord
+- Vimshottari Dasha (MD, AD, PD)
+- Current Transits
+
+----------------------------------------
+
+OUTPUT:
+
+{
+  "loyalty_score": number (0–100),
+  "loyalty_level": "high / moderate / unstable / risky",
+  "behavior_type": "loyal / tempted / emotionally unstable / dual-nature",
+  "time_factor": "temporary_phase / long_term_pattern",
+  "factors": {
+    "venus": "...",
+    "moon": "...",
+    "7th_house": "...",
+    "rahu": "...",
+    "dasha": "...",
+    "kp": "..."
+  },
+  "reasons": [ ...real astrology reasons... ]
+}
+
+----------------------------------------
+
+IMPLEMENT FULL SYSTEM:
+
+----------------------------------------
+1. CROSS-COMPATIBILITY CHECK (NEW)
+----------------------------------------
+Compare both charts:
+
+- Person A Venus vs Person B Mars
+- Moon vs Moon emotional sync
+- Rahu/Ketu connections between charts
+
+Detect:
+- External attraction tendency
+- Emotional mismatch leading to drifting
+
+----------------------------------------
+2. VENUS (CORE LOVE NATURE – 25%)
+----------------------------------------
+Check:
+- D1 + D9 Venus dignity
+- Conjunction with Rahu → illusion / attraction outside
+- Mars → impulsive passion
+- Saturn → cold / distant love
+
+----------------------------------------
+3. MOON (EMOTIONAL LOYALTY – 20%)
+----------------------------------------
+Check:
+- Moon stability (affliction)
+- Emotional dependency
+- D9 Moon condition
+
+----------------------------------------
+4. 7TH HOUSE + 7TH LORD (COMMITMENT – 20%)
+----------------------------------------
+Check:
+- 7th house strength
+- Malefic influence
+- D9 marriage indicators
+
+----------------------------------------
+5. RAHU IMPACT (CHEATING DRIVER – 15%)
+----------------------------------------
+Check:
+- Rahu with Venus/Moon
+- Rahu in 5th/7th
+- Rahu aspect on love planets
+
+----------------------------------------
+6. DASHA (TIME-BASED BEHAVIOR – 10%)
+----------------------------------------
+Check:
+- Current MD/AD/PD
+
+Rules:
+- Venus/Rahu/Mars → attraction phase
+- Saturn/Ketu → detachment phase
+
+----------------------------------------
+7. KP CONFIRMATION (5%)
+----------------------------------------
+Check:
+- Dasha planet → sub-lord
+
+If sub-lord connected to:
+- 5th → romance
+- 7th → relationship
+- 12th → secret affair
+
+----------------------------------------
+8. BEHAVIOR CLASSIFICATION (NEW)
+----------------------------------------
+Based on all factors:
+
+- Loyal → stable + strong Venus/Moon
+- Tempted → Rahu + Venus influence
+- Emotionally unstable → weak Moon
+- Dual-nature → Rahu + 7th + KP confirmation
+
+----------------------------------------
+9. TIME FACTOR (NEW)
+----------------------------------------
+Determine:
+
+- Temporary phase → only dasha/transit causing issue
+- Long-term pattern → natal chart issue
+
+----------------------------------------
+10. SCORING SYSTEM
+----------------------------------------
+
+Start: 50
+
+Venus:
++20 strong / -20 weak
+
+Moon:
++15 / -15
+
+7th house:
++15 / -15
+
+Rahu:
+-20 if strong
+
+Cross mismatch:
+-10
+
+Dasha:
+±10
+
+KP:
+-10
+
+Clamp: 0–100
+
+----------------------------------------
+11. REASONS ARRAY
+----------------------------------------
+
+Return real logic:
+
+- "Venus is conjunct Rahu indicating attraction outside relationship"
+- "Moon is afflicted causing emotional instability"
+- "7th house is weak reducing commitment"
+- "KP sub-lord linked to 12th house indicating hidden behavior"
+
+----------------------------------------
+
+STRICT RULES:
+
+- NO generic text
+- NO hardcoding
+- MUST be deterministic
+- MUST use BOTH kundlis
+- MUST support AI explanation layer
+
+----------------------------------------

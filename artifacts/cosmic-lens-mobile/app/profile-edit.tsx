@@ -53,16 +53,25 @@ const RELATION_ITEMS = RELATIONS.map(r => ({ label: `${r.emoji}  ${r.key}`, valu
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
 async function searchPlace(q: string): Promise<GeoResult[]> {
-  const r = await apiFetch(
-    `${BASE_URL}/api/geocode?q=${encodeURIComponent(q)}`,
-  );
-  const rows = await r.json();
-  return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
-    label: x.label,
-    lat: x.lat,
-    lon: x.lon,
-    tz: x.tz,
-  }));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await apiFetch(
+      `${BASE_URL}/api/geocode?q=${encodeURIComponent(q)}`,
+      { signal: ctrl.signal },
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
+      label: x.label,
+      lat: x.lat,
+      lon: x.lon,
+      tz: x.tz,
+    }));
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 type FormState = {
@@ -325,10 +334,21 @@ export default function ProfileEditScreen() {
 
   async function handleFmPlaceSearch() {
     if (fmPlaceQuery.trim().length < 2) return;
-    setFmSearching(true); setFmGeoResults([]);
-    try { setFmGeoResults(await searchPlace(fmPlaceQuery)); }
-    catch { setFmError("Location not found."); }
-    finally { setFmSearching(false); }
+    setFmSearching(true); setFmGeoResults([]); setFmError("");
+    try {
+      const results = await searchPlace(fmPlaceQuery);
+      setFmGeoResults(results);
+      if (results.length === 0) {
+        setFmError("No matching place found. Try different spelling or a nearby city.");
+      }
+    } catch (e: any) {
+      const msg = e?.name === "AbortError"
+        ? "Search timed out. Check your internet and try again."
+        : "Search failed. Please try again.";
+      setFmError(msg);
+    } finally {
+      setFmSearching(false);
+    }
   }
 
   async function fmSelectGeo(g: GeoResult) {

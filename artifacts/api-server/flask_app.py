@@ -58,24 +58,60 @@ def healthz():
 
 @app.route("/api/geocode", methods=["GET"])
 def geocode():
-    import urllib.request, json as _json
+    import urllib.request, urllib.error, json as _json
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return jsonify([])
-    url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q)}&format=json&limit=6&addressdetails=1"
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "CosmicLens/1.0",
-        "Accept-Language": "en",
-    })
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        rows = _json.loads(resp.read())
+
+    def _fetch(provider_url: str, timeout: int = 12):
+        req = urllib.request.Request(provider_url, headers={
+            "User-Agent": "CosmicLens/1.0 (support@cosmiclens.app)",
+            "Accept-Language": "en",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _json.loads(resp.read())
+
+    # Primary: Nominatim (OSM). With retry on transient failure.
+    nom_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(q)}&format=json&limit=6&addressdetails=1"
+    rows = None
+    last_err = None
+    for attempt in range(2):
+        try:
+            rows = _fetch(nom_url, timeout=12)
+            break
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            last_err = str(e)
+            continue
+
+    # Fallback: Open-Meteo Geocoding API (fast, reliable, no API key)
+    if rows is None:
+        try:
+            fb_url = f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(q)}&count=6&language=en&format=json"
+            fb = _fetch(fb_url, timeout=10)
+            fb_rows = fb.get("results") or []
+            results = []
+            for x in fb_rows:
+                lat = float(x.get("latitude", 0))
+                lon = float(x.get("longitude", 0))
+                tz = round((lon / 15) * 2) / 2
+                parts = [x.get("name"), x.get("admin1"), x.get("country")]
+                label = ", ".join(p for p in parts if p)
+                if label:
+                    results.append({"label": label, "lat": lat, "lon": lon, "tz": tz})
+            return jsonify(results)
+        except Exception as e:
+            app.logger.warning(f"geocode fallback failed for '{q}': {last_err} / {e}")
+            return jsonify([]), 200  # Return empty rather than 500, so client shows "no results"
+
     results = []
     for x in rows:
         lat = float(x.get("lat", 0))
         lon = float(x.get("lon", 0))
         tz = round((lon / 15) * 2) / 2
         label = ", ".join(x.get("display_name", "").split(",")[:3])
-        results.append({"label": label, "lat": lat, "lon": lon, "tz": tz})
+        if label:
+            results.append({"label": label, "lat": lat, "lon": lon, "tz": tz})
     return jsonify(results)
 
 

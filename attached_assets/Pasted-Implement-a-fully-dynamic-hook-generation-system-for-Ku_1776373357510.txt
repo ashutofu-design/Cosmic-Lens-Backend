@@ -1,0 +1,117 @@
+Implement a fully dynamic hook generation system for Kundli Milan (Basic + Pro).
+
+GOAL:
+Hooks must NOT be static. Every hook must be generated based on real kundli analysis so that each user sees a unique, personal, and believable insight.
+
+----------------------------------------
+
+DATA INPUT:
+Use both Person A (primary kundli) and Person B:
+- Planet positions (D1 + D9)
+- 7th house analysis
+- Venus, Moon, Mars condition
+- Dasha (MD, AD, PD)
+- Dosha presence (Manglik, Karmic, etc.)
+- Emotional compatibility (Moon relation)
+- Karmic indicators (Ketu, Saturn influence)
+- Stability factors (Jupiter, 7th lord strength)
+
+----------------------------------------
+
+STEP 1: EXTRACT KEY SIGNALS
+
+Backend should compute flags like:
+
+- karmic_connection = true/false
+- emotional_gap = true/false
+- strong_attraction = true/false
+- stability_strong = true/false
+- conflict_pattern = true/false
+- breakup_risk = low/medium/high
+- marriage_support = strong/average/weak
+
+----------------------------------------
+
+STEP 2: GENERATE HOOK (DYNAMIC)
+
+Based on signals, generate 1 hook line per section.
+
+RULES:
+- No "may", "might", "ho sakta hai"
+- Use confident + curiosity tone
+- Create intrigue, not full answer
+- Keep it human and personal
+
+----------------------------------------
+
+EXAMPLES (DO NOT HARDCODE — USE AS STYLE):
+
+IF karmic_connection = true:
+"This is not a normal connection — something deeper is influencing both of you…"
+
+IF emotional_gap = true:
+"You both feel connected — but something doesn’t align emotionally…"
+
+IF strong_attraction = true:
+"There is a strong pull here that keeps bringing you back together…"
+
+IF conflict_pattern = true:
+"A repeating pattern exists here — and it’s not random…"
+
+IF stability_strong = true:
+"There is a force in this connection that keeps it from breaking easily…"
+
+----------------------------------------
+
+STEP 3: COMBINE SIGNALS (ADVANCED)
+
+If multiple signals:
+
+Example:
+karmic + conflict →
+"A strong karmic bond exists — but it comes with challenges that repeat…"
+
+----------------------------------------
+
+STEP 4: APPLY UI LOGIC
+
+- Show 60–70% of hook text
+- Remaining 30–40% blurred/faded
+- Add 🔒 at end
+
+Example UI:
+"This connection is not normal — something deeper is in… 🔒"
+
+----------------------------------------
+
+STEP 5: PER SECTION HOOKS
+
+Generate separate hooks for:
+
+- Emotional Compatibility
+- Marriage Future
+- Strengths
+- Risk Analysis
+- Karmic Bond
+- Final Outcome
+
+Each MUST be different and based on actual data.
+
+----------------------------------------
+
+FINAL RESULT:
+
+- Every user sees different hooks
+- Hooks feel personal and real
+- Creates curiosity + trust
+- Drives upgrade to Pro
+
+----------------------------------------
+
+IMPORTANT:
+
+- DO NOT use static text
+- DO NOT repeat same hook for all users
+- ALWAYS generate from kundli logic
+
+END

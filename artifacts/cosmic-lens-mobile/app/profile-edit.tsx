@@ -397,7 +397,7 @@ export default function ProfileEditScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: bgColor }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
 
         <View style={[s.header, { paddingTop: insets.top + 8, backgroundColor: bgColor, borderBottomColor: C.isDark ? C.border : "rgba(0,0,0,0.05)" }]}>
           <Pressable
@@ -482,6 +482,10 @@ export default function ProfileEditScreen() {
 
       {/* ── Edit / Add Bottom Sheet ── */}
       <Modal visible={fmVisible} transparent animationType="slide" onRequestClose={() => setFmVisible(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
         <Pressable style={bs.overlay} onPress={() => !fmSaving && setFmVisible(false)}>
           <Pressable style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]} onPress={e => e.stopPropagation()}>
             <View style={[bs.handle, { backgroundColor: C.isDark ? C.border2 : "#D4D4D8" }]} />
@@ -491,9 +495,9 @@ export default function ProfileEditScreen() {
             </Text>
 
             <ScrollView
-              style={{ maxHeight: 420 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 20 }}
             >
               <View style={{ gap: 12 }}>
                 <View style={s.fieldWrap}>
@@ -681,6 +685,7 @@ export default function ProfileEditScreen() {
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* FM picker modals */}

@@ -154,7 +154,7 @@ export default function AskScreen() {
     <CosmicBg>
     <KeyboardAvoidingView
       style={s.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
     >
       {/* Header */}
@@ -197,7 +197,7 @@ export default function AskScreen() {
       )}
 
       {/* Input row */}
-      <View style={[s.inputRow, { paddingBottom: botPad + 100, backgroundColor: C.bg, borderTopColor: C.border }]}>
+      <View style={[s.inputRow, { paddingBottom: botPad + 90, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
           style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}

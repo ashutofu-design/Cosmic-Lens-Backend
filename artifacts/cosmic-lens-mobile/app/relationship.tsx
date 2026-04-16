@@ -519,7 +519,7 @@ export default function RelationshipScreen() {
               </View>
             </View>
           ) : (
-            <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+            <Pressable onPress={()=>{Haptics.selectionAsync();router.push("/profile-edit" as any);}}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
                 backgroundColor:"#131929",
@@ -568,7 +568,7 @@ export default function RelationshipScreen() {
               <Feather name="chevron-down" size={12} color="#f472b6"/>
             </Pressable>
           ) : (
-            <Pressable onPress={()=>router.push("/kundli-milan" as any)}
+            <Pressable onPress={()=>{Haptics.selectionAsync();router.push("/profile-edit" as any);}}
               style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
                 borderRadius:14,paddingHorizontal:10,gap:7,
                 backgroundColor:"#141020",
@@ -631,7 +631,8 @@ export default function RelationshipScreen() {
               </ScrollView>
               <Pressable onPress={()=>{
                 setPickerOpen(false);
-                router.push("/kundli-milan" as any);
+                Haptics.selectionAsync();
+                router.push("/profile-edit" as any);
               }}
                 style={({pressed})=>({opacity:pressed?0.7:1,flexDirection:"row",alignItems:"center",justifyContent:"center",
                   gap:6,marginTop:10,paddingVertical:11,borderRadius:14,
@@ -669,7 +670,7 @@ export default function RelationshipScreen() {
                       : `Partner '${selectedP2.name}' does not have a kundli yet. Please create their kundli from the Kundli screen first.`;
                   Alert.alert("Kundli required", msg, [
                     { text: "Cancel", style: "cancel" },
-                    { text: "Open Kundli", onPress: () => router.push("/kundli-milan" as any) },
+                    { text: "Add Kundli", onPress: () => router.push("/profile-edit" as any) },
                   ]);
                 }}
               />

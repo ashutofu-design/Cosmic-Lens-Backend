@@ -1159,8 +1159,8 @@ export default function KundliMilanScreen(){
             </View>
           </View>
 
-          {/* ── Segmented Basic / Pro Toggle ── */}
-          <View style={{alignItems:"center",paddingTop:12,paddingBottom:4}}>
+          {/* ── Segmented Basic / Pro Toggle + Unlock ── */}
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",paddingTop:12,paddingBottom:4,gap:10}}>
             <View style={[ms.segWrap,{backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.05)"}]}>
               <Pressable
                 onPress={()=>{setPlan("basic");Haptics.selectionAsync();}}
@@ -1178,6 +1178,14 @@ export default function KundliMilanScreen(){
                 <Text style={[ms.segTxt,{color:"#fff"}]}>✨ Pro</Text>
               </Pressable>
             </View>
+            <Pressable
+              onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+              style={({pressed})=>({opacity:pressed?0.8:1,overflow:"hidden",borderRadius:12,})}>
+              <LinearGradient colors={["#f59e0b","#ea580c"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                style={{paddingHorizontal:12,paddingVertical:8,borderRadius:12}}>
+                <Text style={{color:"#fff",fontSize:9,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.5}}>🔓 Unlock</Text>
+              </LinearGradient>
+            </Pressable>
           </View>
 
         </LinearGradient>

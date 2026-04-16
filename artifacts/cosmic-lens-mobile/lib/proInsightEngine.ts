@@ -49,6 +49,50 @@ const DOMAIN_PRIMARY_HSE: Record<string, number> = { career:10, finance:2, relat
 
 export function signOf(lon: number): number { return Math.floor((lon % 360) / 30); }
 
+// ── Divisional chart mapping ───────────────────────────────────────────────────
+// Relationship → D9 (Navamsha), Career → D10 (Dashamsha), Finance/Health → D1.
+// The backend `kundli.divisionalCharts.{D9,D10}` gives sign placements for all
+// 9 planets + ascendant in those charts. We build a pseudo-kundli here so all
+// existing strength/aspect helpers work unchanged on the divisional chart.
+const DOMAIN_CHART: Record<string, "D1" | "D9" | "D10"> = {
+  career:       "D10",
+  relationship: "D9",
+  finance:      "D1",
+  health:       "D1",
+};
+
+export function chartForDomain(domain: string): "D1" | "D9" | "D10" {
+  return DOMAIN_CHART[domain] ?? "D1";
+}
+
+function getDomainChart(kundli: any, domain: string): any {
+  const which = chartForDomain(domain);
+  if (which === "D1") return kundli;
+
+  const varga = kundli?.divisionalCharts?.[which];
+  if (!varga || !Array.isArray(varga.planets)) return kundli;  // graceful fallback
+
+  // Build a pseudo-kundli: signs become sign-start longitudes (×30) so
+  // signOf(), aspect math and dignity helpers all behave correctly; house
+  // numbers come from the varga itself; retrograde copied from D1 (not a
+  // divisional concept — retrograde is physical motion).
+  const ascIdx = varga.ascendantSignIndex ?? 0;
+  const planets = varga.planets.map((vp: any) => {
+    const d1 = (kundli.planets ?? []).find((x: any) => x.name === vp.name);
+    return {
+      name:       vp.name,
+      longitude:  vp.signIndex * 30,
+      house:      vp.house,
+      retrograde: d1?.retrograde ?? false,
+    };
+  });
+  return {
+    ascendantDeg: ascIdx * 30,
+    nakshatra:    kundli.nakshatra,     // nakshatra is D1-only
+    planets,
+  };
+}
+
 function toDate(d: unknown): Date {
   if (d instanceof Date) return d;
   return new Date(d as string);
@@ -154,11 +198,14 @@ function hasAspect(pName: string, pSign: number, targetSign: number): boolean {
 }
 
 function calcDomainScore(planet: string, domain: string, kundli: any): number {
-  const base = calcPlanetStrength(planet, kundli);
+  // Relationship judged on D9, career on D10, others on D1. All helpers
+  // (strength, aspect, house, conjunction) run on the domain-appropriate chart.
+  const chart = getDomainChart(kundli, domain);
+  const base = calcPlanetStrength(planet, chart);
   const sig  = (DOMAIN_SIGS[domain] ?? []).includes(planet) ? 10 : 0;
-  const pd   = kundli.planets.find((p: any) => p.name === planet);
+  const pd   = chart.planets.find((p: any) => p.name === planet);
   const hse  = pd && (DOMAIN_HSE[domain] ?? []).includes(pd.house) ? 8 : 0;
-  const lagna     = signOf(kundli.ascendantDeg ?? 0);
+  const lagna     = signOf(chart.ascendantDeg ?? 0);
   const houseSign = (lagna + (DOMAIN_PRIMARY_HSE[domain] ?? 1) - 1) % 12;
   const asp5 = pd && hasAspect(planet, signOf(pd.longitude), houseSign) ? 5 : 0;
   return base + sig + hse + asp5;
@@ -240,38 +287,44 @@ export function buildNatalReasons(
 ): string[] {
   const reasons: string[] = [];
 
-  const pd = kundli.planets.find((p: any) => p.name === pdPlanet);
+  // Use domain-appropriate chart (D9 for relationship, D10 for career) so
+  // dignity, house placement, and retrograde comments reflect the varga
+  // responsible for that life area.
+  const chart     = getDomainChart(kundli, domain);
+  const chartName = chartForDomain(domain);
+  const chartTag  = chartName === "D1" ? "" : ` in ${chartName}`;
+
+  const pd = chart.planets.find((p: any) => p.name === pdPlanet);
   if (pd) {
-    const str = calcPlanetStrength(pdPlanet, kundli);
-    const lagna = signOf(kundli.ascendantDeg ?? 0);
+    const str = calcPlanetStrength(pdPlanet, chart);
     const EXALT_SIGN: Record<string,number> = { Sun:0, Moon:1, Mars:9, Mercury:5, Jupiter:3, Venus:11, Saturn:6, Rahu:1, Ketu:7 };
     const DEBIL_SIGN: Record<string,number> = { Sun:6, Moon:7, Mars:3, Mercury:11, Jupiter:9, Venus:5, Saturn:0, Rahu:7, Ketu:1 };
     const pdSign = signOf(pd.longitude);
     if (EXALT_SIGN[pdPlanet] === pdSign)
-      reasons.push(`PD lord ${pName(pdPlanet)} is exalted — natal strength very high for ${domain}`);
+      reasons.push(`PD lord ${pName(pdPlanet)} is exalted${chartTag} — natal strength very high for ${domain}`);
     else if (DEBIL_SIGN[pdPlanet] === pdSign)
-      reasons.push(`PD lord ${pName(pdPlanet)} is debilitated — natal ${domain} energy is weakened`);
+      reasons.push(`PD lord ${pName(pdPlanet)} is debilitated${chartTag} — natal ${domain} energy is weakened`);
     if (pd.retrograde)
       reasons.push(`PD lord ${pName(pdPlanet)} is retrograde — results may be delayed or internalised`);
     if ([1,4,7,10].includes(pd.house))
-      reasons.push(`PD lord ${pName(pdPlanet)} placed in kendra (house ${pd.house}) — strong foundation for ${domain}`);
+      reasons.push(`PD lord ${pName(pdPlanet)} placed in kendra (house ${pd.house}${chartTag}) — strong foundation for ${domain}`);
     else if ([5,9].includes(pd.house))
-      reasons.push(`PD lord ${pName(pdPlanet)} in trikona (house ${pd.house}) — dharmic support for ${domain}`);
+      reasons.push(`PD lord ${pName(pdPlanet)} in trikona (house ${pd.house}${chartTag}) — dharmic support for ${domain}`);
     else if ([6,8,12].includes(pd.house))
-      reasons.push(`PD lord ${pName(pdPlanet)} in dusthana (house ${pd.house}) — obstacles in ${domain} area`);
+      reasons.push(`PD lord ${pName(pdPlanet)} in dusthana (house ${pd.house}${chartTag}) — obstacles in ${domain} area`);
     if (str >= 25)
-      reasons.push(`Natal PD lord ${pName(pdPlanet)} is strongly dignified — base score for ${domain} boosted`);
+      reasons.push(`Natal PD lord ${pName(pdPlanet)}${chartTag} is strongly dignified — base score for ${domain} boosted`);
     else if (str <= -20)
-      reasons.push(`Natal PD lord ${pName(pdPlanet)} is under significant stress — ${domain} baseline lowered`);
+      reasons.push(`Natal PD lord ${pName(pdPlanet)}${chartTag} is under significant stress — ${domain} baseline lowered`);
   }
 
-  const adData = kundli.planets.find((p: any) => p.name === adPlanet);
+  const adData = chart.planets.find((p: any) => p.name === adPlanet);
   if (adData) {
-    const adStr = calcPlanetStrength(adPlanet, kundli);
+    const adStr = calcPlanetStrength(adPlanet, chart);
     if (adStr >= 20)
-      reasons.push(`AD lord ${pName(adPlanet)} is well-placed — supportive secondary influence on ${domain}`);
+      reasons.push(`AD lord ${pName(adPlanet)}${chartTag} is well-placed — supportive secondary influence on ${domain}`);
     else if (adStr <= -15)
-      reasons.push(`AD lord ${pName(adPlanet)} is challenged — friction from secondary dasha layer`);
+      reasons.push(`AD lord ${pName(adPlanet)}${chartTag} is challenged — friction from secondary dasha layer`);
   }
 
   if ((DOMAIN_SIGS[domain] ?? []).includes(pdPlanet))
@@ -349,18 +402,29 @@ export async function generatePDForecast(
   const weighted  = pdBase * 0.7 + adBase * 0.3;
   const baseScore = toScore100(weighted);
 
-  const pdData       = kundli.planets.find((p: any) => p.name === pdPlanet);
-  const natalPDSign  = pdData ? signOf(pdData.longitude) : 0;
   const lagna        = signOf(kundli.ascendantDeg ?? 0);
-  const moonPlanet   = kundli.planets.find((p: any) => p.name === "Moon");
+  const moonPlanet   = (kundli.planets ?? []).find((p: any) => p.name === "Moon");
   const moonSign     = moonPlanet ? signOf(moonPlanet.longitude) : 0;
 
-  const domainHouseSigns: Record<string,number> = {
-    career:       (lagna + (DOMAIN_PRIMARY_HSE["career"]       ?? 1) - 1) % 12,
-    finance:      (lagna + (DOMAIN_PRIMARY_HSE["finance"]      ?? 1) - 1) % 12,
-    relationship: (lagna + (DOMAIN_PRIMARY_HSE["relationship"] ?? 1) - 1) % 12,
-    health:       (lagna + (DOMAIN_PRIMARY_HSE["health"]       ?? 1) - 1) % 12,
-  };
+  // Build per-domain natal context: relationship on D9, career on D10, else D1.
+  // Each domain carries its own PD-lord sign, primary-house sign, and lagna
+  // drawn from the chart that classically governs that area of life.
+  const DOMAINS = ["career", "finance", "relationship", "health"] as const;
+  const domainContext: Record<string, { pd_sign: number; house_sign: number; lagna_sign: number; chart: "D1"|"D9"|"D10" }> = {} as any;
+  for (const d of DOMAINS) {
+    const ch       = getDomainChart(kundli, d);
+    const chartId  = chartForDomain(d);
+    const pdInCh   = (ch.planets ?? []).find((p: any) => p.name === pdPlanet);
+    const chLagna  = signOf(ch.ascendantDeg ?? 0);
+    const pdSignCh = pdInCh ? signOf(pdInCh.longitude) : 0;
+    const houseSgn = (chLagna + (DOMAIN_PRIMARY_HSE[d] ?? 1) - 1) % 12;
+    domainContext[d] = {
+      pd_sign:    pdSignCh,
+      house_sign: houseSgn,
+      lagna_sign: chLagna,
+      chart:      chartId,
+    };
+  }
 
   const midMonthDates: string[] = [];
   for (let i = 0; i < 6; i++) {
@@ -371,11 +435,10 @@ export async function generatePDForecast(
   }
 
   const natalPayload = {
-    moon_sign:          moonSign,
-    pd_planet:          pdPlanet,
-    pd_planet_sign:     natalPDSign,
-    lagna_sign:         lagna,
-    domain_house_signs: domainHouseSigns,
+    moon_sign:      moonSign,        // D1 — Sade Sati reference
+    pd_planet:      pdPlanet,
+    lagna_sign:     lagna,           // D1 lagna — reason labels fallback
+    domain_context: domainContext,   // per-domain D9/D10/D1 overrides
   };
 
   let transitEntries: TransitEntry[] = [];

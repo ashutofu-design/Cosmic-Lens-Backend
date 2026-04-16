@@ -566,22 +566,50 @@ def planet_transits():
     if not dates or not isinstance(dates, list):
         return jsonify({"error": "Provide 'dates' as a list of YYYY-MM-DD strings", "results": []}), 400
 
+    DOMAINS = ["career", "finance", "relationship", "health"]
+
+    # per-domain natal context: supports divisional-chart overrides (D9/D10) so
+    # relationship is judged on Navamsha signs and career on Dashamsha signs.
+    # Shape: {domain: {"pd_sign":0-11, "house_sign":0-11, "lagna_sign":0-11, "chart":"D1|D9|D10"}}
     natal = data.get("natal")
+    domain_ctx = None
     if natal:
         try:
             moon_sign   = int(natal["moon_sign"]) % 12
             pd_planet   = str(natal.get("pd_planet", ""))
-            pd_sign     = int(natal["pd_planet_sign"]) % 12
-            lagna_sign  = int(natal["lagna_sign"]) % 12
-            raw_dhs     = natal.get("domain_house_signs", {})
-            domain_hsigns = {k: int(v) % 12 for k, v in raw_dhs.items()}
+            lagna_sign  = int(natal["lagna_sign"]) % 12      # D1 lagna, for reason labels
+
+            raw_ctx = natal.get("domain_context")
+            if isinstance(raw_ctx, dict):
+                domain_ctx = {}
+                for d in DOMAINS:
+                    dc = raw_ctx.get(d) or {}
+                    domain_ctx[d] = {
+                        "pd_sign":    (int(dc["pd_sign"])    % 12) if dc.get("pd_sign")    is not None else None,
+                        "house_sign": (int(dc["house_sign"]) % 12) if dc.get("house_sign") is not None else None,
+                        "lagna_sign": (int(dc["lagna_sign"]) % 12) if dc.get("lagna_sign") is not None else lagna_sign,
+                        "chart":      str(dc.get("chart", "D1")).upper(),
+                    }
+                # legacy flat fields not required in this path
+                pd_sign = None
+            else:
+                # legacy flat payload — synthesize domain_ctx so everything is D1
+                pd_sign      = int(natal["pd_planet_sign"]) % 12
+                raw_dhs      = natal.get("domain_house_signs", {}) or {}
+                domain_ctx   = {}
+                for d in DOMAINS:
+                    hs = raw_dhs.get(d)
+                    domain_ctx[d] = {
+                        "pd_sign":    pd_sign,
+                        "house_sign": (int(hs) % 12) if hs is not None else None,
+                        "lagna_sign": lagna_sign,
+                        "chart":      "D1",
+                    }
         except (KeyError, TypeError, ValueError) as exc:
             logger.error("Transit API: bad natal payload: %s", exc)
             return jsonify({"error": f"Invalid natal data: {exc}", "results": []}), 400
     else:
-        moon_sign = pd_planet = pd_sign = lagna_sign = domain_hsigns = None
-
-    DOMAINS = ["career", "finance", "relationship", "health"]
+        moon_sign = pd_planet = lagna_sign = None
 
     SIGN_NAMES = [
         "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -692,7 +720,7 @@ def planet_transits():
         if calc_error:
             entry["error"] = "Partial ephemeris failure — some planet positions unavailable"
 
-        if natal and moon_sign is not None and domain_hsigns is not None:
+        if natal and moon_sign is not None and domain_ctx is not None:
             impact    = {d: 0 for d in DOMAINS}
             reasons   = []
             sade_sati = False
@@ -705,6 +733,7 @@ def planet_transits():
                 t_name   = SIGN_NAMES[t_sign]
                 aspected = vedic_aspected_signs(planet_name, t_sign)
 
+                # Sade Sati — always judged on D1 Moon sign (not a divisional concept)
                 if planet_name == "Saturn":
                     ss_signs = {
                         (moon_sign + 11) % 12: "rising",
@@ -730,16 +759,17 @@ def planet_transits():
                 for asp_sign in aspected:
                     a_num = aspect_num(t_sign, asp_sign)
                     a_lbl = asp_labels.get(a_num, f"{a_num}th")
-                    asp_name = SIGN_NAMES[asp_sign]
 
                     for domain in DOMAINS:
-                        dh_sign = domain_hsigns.get(domain)
-                        if dh_sign is None:
-                            continue
+                        ctx = domain_ctx.get(domain) or {}
+                        dh_sign   = ctx.get("house_sign")
+                        pd_s      = ctx.get("pd_sign")
+                        d_lagna   = ctx.get("lagna_sign", lagna_sign)
+                        chart_lbl = ctx.get("chart", "D1")
 
-                        hit_house = (asp_sign == dh_sign)
-                        hit_moon  = (asp_sign == moon_sign)
-                        hit_pd    = (asp_sign == pd_sign)
+                        hit_house = dh_sign is not None and asp_sign == dh_sign
+                        hit_moon  = asp_sign == moon_sign
+                        hit_pd    = pd_s is not None and asp_sign == pd_s
 
                         if not (hit_house or hit_moon or hit_pd):
                             continue
@@ -750,16 +780,20 @@ def planet_transits():
 
                         impact[domain] += delta
 
+                        # Chart tag helps UI explain WHY divisional chart is used
+                        # (e.g. "your D10 10th house" for career)
+                        chart_tag = f" [{chart_lbl}]" if chart_lbl != "D1" else ""
+
                         targets = []
-                        if hit_house and lagna_sign is not None:
-                            h_num = sign_to_house(dh_sign, lagna_sign)
+                        if hit_house and d_lagna is not None:
+                            h_num = sign_to_house(dh_sign, d_lagna)
                             targets.append(
-                                f"{HOUSE_NAMES.get(h_num, str(h_num))} house ({domain})"
+                                f"{HOUSE_NAMES.get(h_num, str(h_num))}{chart_tag} house ({domain})"
                             )
                         if hit_moon:
                             targets.append("natal Moon")
                         if hit_pd and pd_planet:
-                            targets.append(f"natal {pd_planet} (PD lord)")
+                            targets.append(f"natal {pd_planet}{chart_tag} (PD lord)")
 
                         if targets:
                             direction = "supporting" if delta > 0 else "stressing"

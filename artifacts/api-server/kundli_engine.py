@@ -393,6 +393,45 @@ def calculate_kundli(data):
             "speed":      spd,
         })
 
+    # ── Divisional Charts (Vargas) ───────────────────────────────────────────
+    # D9 Navamsha — marriage, dharma, spouse, spiritual strength
+    # D10 Dashamsha — career, profession, achievement
+    def _d9_sign_idx(lon):
+        # Parashari Navamsha: simple formula (108 divisions × 3°20' = 360°)
+        return int((lon * 9.0) / 30.0) % 12
+
+    def _d10_sign_idx(lon):
+        # Parashari Dashamsha: odd signs start from self, even signs from 9th
+        sidx = int(lon / 30.0) % 12
+        pada = int((lon % 30.0) / 3.0)               # 0-9 (each 3°)
+        if sidx % 2 == 0:                            # sign_index 0,2,4... = odd signs
+            return (sidx + pada) % 12
+        return (sidx + 8 + pada) % 12
+
+    def _build_varga(sign_fn, asc_deg, positions):
+        asc_idx = sign_fn(asc_deg)
+        planets_varga = []
+        for pname_v in ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"]:
+            plon_v = positions[pname_v]
+            sidx_v = sign_fn(plon_v)
+            planets_varga.append({
+                "name":       pname_v,
+                "sign":       SIGNS[sidx_v],
+                "signIndex":  sidx_v,
+                "house":      ((sidx_v - asc_idx + 12) % 12) + 1,
+            })
+        return {
+            "ascendant":           SIGNS[asc_idx],
+            "ascendantSignIndex":  asc_idx,
+            "planets":             planets_varga,
+        }
+
+    d9_chart  = _build_varga(_d9_sign_idx,  asc_lon, planet_positions)
+    d10_chart = _build_varga(_d10_sign_idx, asc_lon, planet_positions)
+
+    print(f"[VARGA] D9 Lagna : {d9_chart['ascendant']}", flush=True)
+    print(f"[VARGA] D10 Lagna: {d10_chart['ascendant']}", flush=True)
+
 
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -420,6 +459,10 @@ def calculate_kundli(data):
         "dashaBalance":  birth_dasha_balance,
         "calcVersion":   8,
         "planets": planet_list,
+        "divisionalCharts": {
+            "D9":  d9_chart,
+            "D10": d10_chart,
+        },
         "dashas": dashas,
         "currentDasha": {
             "maha": current_maha["planet"],

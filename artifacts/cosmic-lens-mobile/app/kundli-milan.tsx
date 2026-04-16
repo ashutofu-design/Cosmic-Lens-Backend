@@ -1172,7 +1172,7 @@ export default function KundliMilanScreen(){
               <Pressable
                 onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
                 style={[ms.segBtn,{overflow:"hidden"}]}>
-                <LinearGradient colors={plan==="pro"?["#7c3aed","#db2777"]:["rgba(124,58,237,0.4)","rgba(219,39,119,0.4)"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                <LinearGradient colors={plan==="pro"?["#7c3aed","#db2777"]:["#5b21b6","#9d174d"]} start={{x:0,y:0}} end={{x:1,y:0}}
                   style={[StyleSheet.absoluteFillObject,{borderRadius:14}]}/>
                 <View style={{position:"absolute",top:-8,left:"25%",right:"25%",height:16,borderRadius:8,backgroundColor:plan==="pro"?"rgba(219,39,119,0.3)":"rgba(219,39,119,0.15)"}}/>
                 <Text style={[ms.segTxt,{color:"#fff"}]}>✨ Pro</Text>

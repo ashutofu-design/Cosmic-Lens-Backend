@@ -33,6 +33,7 @@ interface MainOption {
   badge?: string;
   desc: string;
   items: string[];
+  depthLine?: string;
 }
 
 const OPTIONS: MainOption[] = [
@@ -52,13 +53,16 @@ const OPTIONS: MainOption[] = [
   {
     key: "marriage",
     title: "Marriage Compatibility",
-    subtitle: "Check long-term marriage potential",
+    subtitle: "See if this match is truly meant for marriage",
     emoji: "💍",
     gradient: ["#6366f1", "#818cf8", "#a78bfa"],
     glowColor: "#6366f1",
     route: "/kundli-milan",
+    highlighted: true,
+    badge: "💍 Deep Analysis",
     desc: "For serious & marriage decisions",
-    items: ["Kundli Milan (Pro)"],
+    items: ["Soul Sync", "Attraction Match", "Destiny Link", "Intimacy Score"],
+    depthLine: "36 Gun Milan + deep compatibility insights",
   },
 ];
 
@@ -399,6 +403,15 @@ function OptionCard({
                 );
               })}
             </View>
+
+            {option.depthLine ? (
+              <View style={{flexDirection:"row",alignItems:"center",gap:5,marginTop:2,paddingHorizontal:2}}>
+                <Feather name="zap" size={10} color={isDark ? `${option.glowColor}AA` : option.glowColor}/>
+                <Text style={{color:isDark?"rgba(203,213,225,0.55)":"#64748B",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                  {option.depthLine}
+                </Text>
+              </View>
+            ) : null}
 
             <LinearGradient
               colors={[c1, c2, c3]}

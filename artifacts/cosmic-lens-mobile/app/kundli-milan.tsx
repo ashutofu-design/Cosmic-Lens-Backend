@@ -1221,13 +1221,12 @@ export default function KundliMilanScreen(){
                   disabled={!p1||!p2||loading}
                   style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
                     borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
-                  <LinearGradient colors={["#0b0b0f","#1a1625","#0b0b0f"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  <LinearGradient colors={["#fde68a","#f59e0b","#b45309"]} start={{x:0,y:0}} end={{x:1,y:0}}
                     style={{paddingVertical:17,alignItems:"center",
-                      shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.35,shadowRadius:14}}>
+                      shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.55,shadowRadius:16}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
-                      <Feather name="zap" size={16} color="#f59e0b"/>
-                      <Text style={{color:"#fbbf24",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.6,
-                        textShadowColor:"rgba(251,191,36,0.5)",textShadowOffset:{width:0,height:0},textShadowRadius:8}}>
+                      <Feather name="zap" size={17} color="#451a03"/>
+                      <Text style={{color:"#451a03",fontSize:17,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.7}}>
                         Check Now
                       </Text>
                     </View>

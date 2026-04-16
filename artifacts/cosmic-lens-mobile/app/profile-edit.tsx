@@ -692,15 +692,15 @@ export default function ProfileEditScreen() {
           </View>
         </View>
         </KeyboardAvoidingView>
-      </Modal>
 
-      {/* FM picker modals */}
-      <PickerModal visible={fmDayOpen}   title="Select Day"        items={DAYS_L}        selected={fmForm.day}    onSelect={v => { fmSet("day")(v);    setFmDayOpen(false);   }} onClose={() => setFmDayOpen(false)}   />
-      <PickerModal visible={fmMonthOpen} title="Select Month"      items={MONTHS_L}      selected={fmForm.month}  onSelect={v => { fmSet("month")(v);  setFmMonthOpen(false); }} onClose={() => setFmMonthOpen(false)} />
-      <PickerModal visible={fmYearOpen}  title="Select Birth Year" items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
-      <PickerModal visible={fmHourOpen}  title="Select Hour"       items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
-      <PickerModal visible={fmMinOpen}   title="Select Minute"     items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
-      <PickerModal visible={fmRelOpen}   title="Select Relation"   items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
+        {/* FM picker modals — MUST be inside the sheet Modal so they present on top on iOS */}
+        <PickerModal visible={fmDayOpen}   title="Select Day"        items={DAYS_L}        selected={fmForm.day}    onSelect={v => { fmSet("day")(v);    setFmDayOpen(false);   }} onClose={() => setFmDayOpen(false)}   />
+        <PickerModal visible={fmMonthOpen} title="Select Month"      items={MONTHS_L}      selected={fmForm.month}  onSelect={v => { fmSet("month")(v);  setFmMonthOpen(false); }} onClose={() => setFmMonthOpen(false)} />
+        <PickerModal visible={fmYearOpen}  title="Select Birth Year" items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
+        <PickerModal visible={fmHourOpen}  title="Select Hour"       items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
+        <PickerModal visible={fmMinOpen}   title="Select Minute"     items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
+        <PickerModal visible={fmRelOpen}   title="Select Relation"   items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
+      </Modal>
 
       {/* Delete Confirm */}
       {confirmDeleteId && deleteTarget && (

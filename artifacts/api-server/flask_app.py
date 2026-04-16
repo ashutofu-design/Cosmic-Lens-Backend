@@ -24,7 +24,7 @@ from kp_engine import calculate_kp
 from ask_engine import process_ask
 from dosh_engine import analyze_doshas
 from database import db, init_db
-from models import User, Kundli
+from models import User, Kundli, Profile
 
 app = Flask(__name__)
 CORS(app)
@@ -257,6 +257,64 @@ def save_user_kundli(user_id):
 
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ── Multi-profile cloud sync ───────────────────────────────────────────────────
+
+@app.route("/api/user/<int:user_id>/profiles", methods=["GET"])
+def list_user_profiles(user_id):
+    """Return every profile saved by this user (self + family)."""
+    user, err = get_authed_user(user_id)
+    if err: return err
+    rows = Profile.query.filter_by(user_id=user_id).order_by(Profile.is_primary.desc(), Profile.created_at.asc()).all()
+    primary_id = next((r.client_id for r in rows if r.is_primary), (rows[0].client_id if rows else None))
+    return jsonify({
+        "profiles":         [r.to_dict() for r in rows],
+        "primaryProfileId": primary_id,
+    })
+
+
+@app.route("/api/user/<int:user_id>/profiles/sync", methods=["POST"])
+def sync_user_profiles(user_id):
+    """Bulk upsert — client sends full profile list + primaryId. Server mirrors it.
+    Body: { profiles: [{id, name, gender, relation, birthData, kundli}], primaryProfileId: str }
+    """
+    user, err = get_authed_user(user_id)
+    if err: return err
+    import json as _json
+    data = request.get_json(force=True, silent=True) or {}
+    incoming = data.get("profiles") or []
+    primary_id = data.get("primaryProfileId")
+
+    incoming_ids = {p.get("id") for p in incoming if p.get("id")}
+    existing = {r.client_id: r for r in Profile.query.filter_by(user_id=user_id).all()}
+
+    # Delete removed
+    for cid, row in existing.items():
+        if cid not in incoming_ids:
+            db.session.delete(row)
+
+    # Upsert
+    for p in incoming:
+        cid = p.get("id")
+        if not cid: continue
+        row = existing.get(cid)
+        if not row:
+            row = Profile(user_id=user_id, client_id=cid)
+            db.session.add(row)
+        row.name       = (p.get("name") or "")[:200]
+        row.gender     = (p.get("gender") or "")[:20]
+        row.relation   = (p.get("relation") or "")[:50]
+        row.is_primary = (cid == primary_id)
+        row.birth_data = _json.dumps(p.get("birthData")) if p.get("birthData") else None
+        row.chart_data = _json.dumps(p.get("kundli"))    if p.get("kundli")    else None
+
+    db.session.commit()
+    rows = Profile.query.filter_by(user_id=user_id).order_by(Profile.is_primary.desc(), Profile.created_at.asc()).all()
+    return jsonify({
+        "profiles":         [r.to_dict() for r in rows],
+        "primaryProfileId": next((r.client_id for r in rows if r.is_primary), (rows[0].client_id if rows else None)),
+    })
 
 
 # ── Admin routes ────────────────────────────────────────────────────────────────

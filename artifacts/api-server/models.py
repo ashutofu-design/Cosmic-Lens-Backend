@@ -90,3 +90,39 @@ class Kundli(db.Model):
             "lon":     self.lon,
             "tz":      self.tz,
         }
+
+
+class Profile(db.Model):
+    """Multi-profile cloud storage — each user can have many saved kundlis (self + family)."""
+    __tablename__ = "profiles"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    user_id       = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id     = db.Column(db.String(64), nullable=False, index=True)   # client-generated id (stable across sync)
+    name          = db.Column(db.String(200), nullable=False, default="")
+    gender        = db.Column(db.String(20), default="")
+    relation      = db.Column(db.String(50), default="")                   # Self / Wife / Father / ...
+    is_primary    = db.Column(db.Boolean, default=False, nullable=False)
+    birth_data    = db.Column(db.Text)                                     # JSON
+    chart_data    = db.Column(db.Text)                                     # JSON (kundli)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint("user_id", "client_id", name="uq_user_client_profile"),)
+
+    def to_dict(self):
+        import json as _json
+        def _load(s):
+            if not s: return None
+            try: return _json.loads(s)
+            except Exception: return None
+        return {
+            "id":          self.client_id,
+            "name":        self.name,
+            "gender":      self.gender or "",
+            "relation":    self.relation or "",
+            "isPrimary":   self.is_primary,
+            "birthData":   _load(self.birth_data),
+            "kundli":      _load(self.chart_data),
+            "updatedAt":   self.updated_at.isoformat() if self.updated_at else None,
+        }

@@ -488,8 +488,12 @@ export default function ProfileEditScreen() {
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-        <Pressable style={bs.overlay} onPress={() => !fmSaving && setFmVisible(false)}>
-          <Pressable style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]} onPress={e => e.stopPropagation()}>
+        <View style={bs.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => { if (!fmSaving) setFmVisible(false); }}
+          />
+          <View style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]}>
             <View style={[bs.handle, { backgroundColor: C.isDark ? C.border2 : "#D4D4D8" }]} />
 
             <Text style={[bs.title, { color: C.text }]}>
@@ -685,8 +689,8 @@ export default function ProfileEditScreen() {
                 </LinearGradient>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
         </KeyboardAvoidingView>
       </Modal>
 

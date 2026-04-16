@@ -180,6 +180,68 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // ── Cloud sync refs & helpers (must appear before handlers that use them) ──
+  const userRef      = useRef<AuthUser | null>(null);
+  const primaryIdRef = useRef<string | null>(null);
+  const profilesRef  = useRef<ProfileEntry[]>([]);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { userRef.current      = user;      }, [user]);
+  useEffect(() => { primaryIdRef.current = primaryId; }, [primaryId]);
+  useEffect(() => { profilesRef.current  = profiles;  }, [profiles]);
+
+  const pushProfilesToCloud = useCallback(async (list: ProfileEntry[], pid: string | null) => {
+    const currentUser = userRef.current;
+    if (!currentUser?.id || !currentUser?.api_key) return;
+    try {
+      await fetch(`${API_BASE}/api/user/${currentUser.id}/profiles/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": currentUser.api_key },
+        body: JSON.stringify({
+          profiles: list.map(p => ({
+            id: p.id, name: p.name, gender: p.gender, relation: p.relation ?? "",
+            birthData: p.birthData, kundli: p.kundli,
+          })),
+          primaryProfileId: pid,
+        }),
+      });
+    } catch { /* silent — local is source of truth */ }
+  }, []);
+
+  const queueCloudSync = useCallback((list: ProfileEntry[], pid: string | null) => {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => { pushProfilesToCloud(list, pid); }, 600);
+  }, [pushProfilesToCloud]);
+
+  const pullProfilesFromCloud = useCallback(async (u: AuthUser) => {
+    if (!u?.id || !u?.api_key) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/user/${u.id}/profiles`, {
+        headers: { "X-API-Key": u.api_key },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      const cloudProfiles: ProfileEntry[] = (data?.profiles ?? []).map((p: any) => ({
+        id: p.id, name: p.name ?? "", gender: p.gender ?? "",
+        relation: p.relation ?? undefined,
+        birthData: p.birthData, kundli: p.kundli ?? null,
+      })).filter((p: ProfileEntry) => !!p.birthData);
+      const cloudPrimary = data?.primaryProfileId ?? null;
+
+      // Merge with local — cloud is authoritative if non-empty, else push local up
+      if (cloudProfiles.length > 0) {
+        _setProfiles(cloudProfiles);
+        AsyncStorage.setItem(KEYS.profiles, JSON.stringify(cloudProfiles)).catch(() => {});
+        const resolvedPid = cloudPrimary && cloudProfiles.find(p => p.id === cloudPrimary)
+          ? cloudPrimary : cloudProfiles[0].id;
+        _setPrimaryId(resolvedPid);
+        AsyncStorage.setItem(KEYS.primaryId, resolvedPid).catch(() => {});
+      } else if (profilesRef.current.length > 0) {
+        // Cloud empty but local has profiles → push local up
+        pushProfilesToCloud(profilesRef.current, primaryIdRef.current);
+      }
+    } catch { /* silent */ }
+  }, [pushProfilesToCloud]);
+
   // ── Derived values ─────────────────────────────────────────────────────────
   const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
   const birthData = primaryProfile?.birthData ?? null;
@@ -229,6 +291,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     _setProfiles(prev => {
       const next = [...prev, newEntry];
       AsyncStorage.setItem(KEYS.profiles, JSON.stringify(next)).catch(() => {});
+      queueCloudSync(next, primaryIdRef.current);
       return next;
     });
     return newEntry;
@@ -238,6 +301,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     _setProfiles(prev => {
       const next = prev.map(p => p.id === id ? { ...p, ...updates } : p);
       AsyncStorage.setItem(KEYS.profiles, JSON.stringify(next)).catch(() => {});
+      queueCloudSync(next, primaryIdRef.current);
       return next;
     });
   }, []);
@@ -246,12 +310,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     _setProfiles(prev => {
       const next = prev.filter(p => p.id !== id);
       AsyncStorage.setItem(KEYS.profiles, JSON.stringify(next)).catch(() => {});
+      let nextPrimary: string | null = primaryIdRef.current;
       _setPrimaryId(prevId => {
-        if (prevId !== id) return prevId;
+        if (prevId !== id) { nextPrimary = prevId; return prevId; }
         const fallback = next[0]?.id ?? null;
         if (fallback) AsyncStorage.setItem(KEYS.primaryId, fallback).catch(() => {});
+        nextPrimary = fallback;
         return fallback;
       });
+      queueCloudSync(next, nextPrimary);
       return next;
     });
   }, []);
@@ -263,9 +330,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const setUser = useCallback((u: AuthUser | null) => {
     _setUser(u);
-    if (u) AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
-    else   AsyncStorage.removeItem(KEYS.user).catch(() => {});
-  }, []);
+    if (u) {
+      AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
+      pullProfilesFromCloud(u);
+    } else {
+      AsyncStorage.removeItem(KEYS.user).catch(() => {});
+    }
+  }, [pullProfilesFromCloud]);
 
   const setLanguage = useCallback((l: LangCode) => {
     _setLanguage(l);
@@ -305,10 +376,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [profiles, primaryId]);
 
-  // ── Cloud sync ─────────────────────────────────────────────────────────────
-  const userRef = useRef<AuthUser | null>(null);
-  useEffect(() => { userRef.current = user; }, [user]);
-
+  // ── Cloud sync (single-kundli legacy push for primary) ─────────────────────
   const syncKundliToCloud = useCallback(async (bd: BirthData, k: KundliData) => {
     const currentUser = userRef.current;
     if (!currentUser?.id || !currentUser?.api_key) return;
@@ -352,8 +420,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         _setUser(updated);
         AsyncStorage.setItem(KEYS.user, JSON.stringify(updated)).catch(() => {});
       }
+      // Always pull multi-profile snapshot too
+      pullProfilesFromCloud(currentUser);
     } catch { /* silent */ }
-  }, []);
+  }, [pullProfilesFromCloud]);
+
+  // On app start — if we hydrated a persisted user from AsyncStorage, pull cloud profiles once.
+  const didInitialCloudPull = useRef(false);
+  useEffect(() => {
+    if (didInitialCloudPull.current) return;
+    if (isLoading) return;
+    if (!user?.id || !user?.api_key) return;
+    didInitialCloudPull.current = true;
+    pullProfilesFromCloud(user);
+  }, [isLoading, user, pullProfilesFromCloud]);
 
   return (
     <UserContext.Provider value={{

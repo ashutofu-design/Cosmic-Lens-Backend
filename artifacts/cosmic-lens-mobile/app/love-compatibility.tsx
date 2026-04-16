@@ -1,43 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
-
-// ── 15 common Indian cities with lat/lon (tz always 5.5) ─────────────────────
-const CITIES: { name: string; lat: number; lon: number; tz: number }[] = [
-  { name: "Delhi",      lat: 28.6139, lon: 77.2090, tz: 5.5 },
-  { name: "Mumbai",     lat: 19.0760, lon: 72.8777, tz: 5.5 },
-  { name: "Bangalore",  lat: 12.9716, lon: 77.5946, tz: 5.5 },
-  { name: "Kolkata",    lat: 22.5726, lon: 88.3639, tz: 5.5 },
-  { name: "Chennai",    lat: 13.0827, lon: 80.2707, tz: 5.5 },
-  { name: "Hyderabad",  lat: 17.3850, lon: 78.4867, tz: 5.5 },
-  { name: "Pune",       lat: 18.5204, lon: 73.8567, tz: 5.5 },
-  { name: "Ahmedabad",  lat: 23.0225, lon: 72.5714, tz: 5.5 },
-  { name: "Jaipur",     lat: 26.9124, lon: 75.7873, tz: 5.5 },
-  { name: "Lucknow",    lat: 26.8467, lon: 80.9462, tz: 5.5 },
-  { name: "Patna",      lat: 25.5941, lon: 85.1376, tz: 5.5 },
-  { name: "Chandigarh", lat: 30.7333, lon: 76.7794, tz: 5.5 },
-  { name: "Varanasi",   lat: 25.3176, lon: 82.9739, tz: 5.5 },
-  { name: "Bhopal",     lat: 23.2599, lon: 77.4126, tz: 5.5 },
-  { name: "Nagpur",     lat: 21.1458, lon: 79.0882, tz: 5.5 },
-];
-
-interface PersonForm {
-  name: string;
-  day: string; month: string; year: string;
-  hour: string; minute: string; ampm: "AM" | "PM";
-  cityIdx: number;
-}
+import type { BirthData } from "@/types";
 
 interface Breakdown {
   emotional: number; attraction: number; communication: number;
@@ -54,10 +29,14 @@ interface Result {
   breakdown: Breakdown;
 }
 
-const emptyPerson = (): PersonForm => ({
-  name: "", day: "", month: "", year: "",
-  hour: "", minute: "", ampm: "AM", cityIdx: 0,
-});
+function packPerson(bd: BirthData) {
+  return {
+    name: bd.name,
+    day: bd.day, month: bd.month, year: bd.year,
+    hour: bd.hour, minute: bd.minute, ampm: bd.ampm,
+    lat: bd.lat, lon: bd.lon, tz: bd.tz, place: bd.place,
+  };
+}
 
 export default function LoveCompatibilityScreen() {
   const C = useC();
@@ -65,8 +44,17 @@ export default function LoveCompatibilityScreen() {
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const isDark = C.isDark;
 
-  const [p1, setP1] = useState<PersonForm>(emptyPerson());
-  const [p2, setP2] = useState<PersonForm>(emptyPerson());
+  const { profiles, primaryProfileId } = useUser();
+  const params = useLocalSearchParams<{ partnerId?: string }>();
+  const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
+
+  const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
+  const partnerProfile = partnerId ? (profiles.find(p => p.id === partnerId) ?? null) : null;
+
+  const hasSelfKundli    = !!primaryProfile?.kundli && !!primaryProfile?.birthData;
+  const hasPartnerKundli = !!partnerProfile?.kundli && !!partnerProfile?.birthData;
+  const canAnalyze = hasSelfKundli && hasPartnerKundli;
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
@@ -78,38 +66,29 @@ export default function LoveCompatibilityScreen() {
   const bgCard2 = isDark ? "#1A2135" : "#EEF0F4";
   const border  = isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.08)";
 
-  function valid(p: PersonForm): boolean {
-    const d = +p.day, mo = +p.month, y = +p.year, h = +p.hour, mi = +p.minute;
-    return !!p.name.trim() && d>=1&&d<=31 && mo>=1&&mo<=12 && y>=1900&&y<=2100
-        && h>=1&&h<=12 && mi>=0&&mi<=59;
-  }
+  // Auto-analyze on mount when both kundlis are ready
+  const didRun = useRef(false);
+  useEffect(() => {
+    if (didRun.current) return;
+    if (!canAnalyze) return;
+    didRun.current = true;
+    runAnalysis();
+  }, [canAnalyze]);
 
-  async function analyze() {
-    if (!valid(p1) || !valid(p2)) {
-      setErr("Please fill both partners' details correctly.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
+  async function runAnalysis() {
+    if (!primaryProfile?.birthData || !partnerProfile?.birthData) return;
     setErr(null); setResult(null); setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const pack = (p: PersonForm) => {
-      const c = CITIES[p.cityIdx];
-      return {
-        name: p.name.trim(),
-        day: +p.day, month: +p.month, year: +p.year,
-        hour: +p.hour, minute: +p.minute, ampm: p.ampm,
-        lat: c.lat, lon: c.lon, tz: c.tz, place: c.name,
-      };
-    };
-
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 30000);
       const resp = await fetch(`${API_BASE}/api/love-compatibility`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ p1: pack(p1), p2: pack(p2) }),
+        body: JSON.stringify({
+          p1: packPerson(primaryProfile.birthData),
+          p2: packPerson(partnerProfile.birthData),
+        }),
         signal: ctrl.signal,
       });
       clearTimeout(timer);
@@ -123,10 +102,6 @@ export default function LoveCompatibilityScreen() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function reset() {
-    setResult(null); setErr(null);
   }
 
   return (
@@ -145,156 +120,134 @@ export default function LoveCompatibilityScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: topPad + 60,
+          paddingBottom: insets.bottom + 40,
+          paddingHorizontal: 18,
+        }}
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={{ paddingTop: topPad + 60, paddingBottom: insets.bottom + 40, paddingHorizontal: 18 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Hero */}
-          <View style={s.hero}>
-            <LinearGradient colors={["#ec4899", "#f472b6"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={s.heroIcon}>
-              <Text style={{ fontSize: 28 }}>💘</Text>
-            </LinearGradient>
-            <Text style={[s.heroTitle, { color: textHi, fontFamily: "Nunito_700Bold" }]}>Love Compatibility</Text>
-            <Text style={[s.heroSub, { color: textLo, fontFamily: "Nunito_400Regular" }]}>
-              Vedic D1 + D9 analysis with real transits
+        {/* Hero */}
+        <View style={s.hero}>
+          <LinearGradient colors={["#ec4899", "#f472b6"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={s.heroIcon}>
+            <Text style={{ fontSize: 28 }}>💘</Text>
+          </LinearGradient>
+          <Text style={[s.heroTitle, { color: textHi, fontFamily: "Nunito_700Bold" }]}>Love Compatibility</Text>
+          <Text style={[s.heroSub, { color: textLo, fontFamily: "Nunito_400Regular" }]}>
+            Vedic D1 + D9 analysis with real transits
+          </Text>
+        </View>
+
+        {/* Pair summary card (always visible when both kundlis present) */}
+        {canAnalyze && (
+          <View style={[s.pairCard, { backgroundColor: bgCard, borderColor: border }]}>
+            <PersonChip label="You" name={primaryProfile!.name} place={primaryProfile!.birthData?.place}
+              color="#ec4899" textHi={textHi} textLo={textLo} bgCard2={bgCard2} border={border} />
+            <View style={s.pairDivider}>
+              <Text style={{ fontSize: 18 }}>💞</Text>
+            </View>
+            <PersonChip label="Partner" name={partnerProfile!.name} place={partnerProfile!.birthData?.place}
+              color="#a855f7" textHi={textHi} textLo={textLo} bgCard2={bgCard2} border={border} />
+          </View>
+        )}
+
+        {/* Gate (fallback) — should rarely be seen since Relationship blocks */}
+        {!canAnalyze && (
+          <View style={[s.gateCard, { backgroundColor: bgCard, borderColor: border }]}>
+            <View style={[s.gateIcon, { backgroundColor: "rgba(239,68,68,0.12)", borderColor: "rgba(239,68,68,0.3)" }]}>
+              <Feather name="lock" size={22} color="#ef4444" />
+            </View>
+            <Text style={[s.gateTitle, { color: textHi }]}>Kundli required</Text>
+            <Text style={[s.gateMsg, { color: textLo }]}>
+              {!hasSelfKundli && !hasPartnerKundli
+                ? "Both your and your partner's kundli must be saved first."
+                : !hasSelfKundli
+                  ? "Your kundli is not ready yet."
+                  : !partnerId
+                    ? "Please select a partner from the Relationship screen."
+                    : `Partner's kundli is not ready yet.`}
+            </Text>
+            <Pressable onPress={() => router.replace("/relationship" as any)} style={{ marginTop: 14, width: "100%" }}>
+              <View style={[s.cta, { backgroundColor: accent }]}>
+                <Feather name="heart" size={16} color="#fff" />
+                <Text style={s.ctaText}>Go to Relationship</Text>
+              </View>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Loading */}
+        {canAnalyze && loading && (
+          <View style={[s.loadingCard, { backgroundColor: bgCard, borderColor: border }]}>
+            <ActivityIndicator color={accent} size="large" />
+            <Text style={[s.loadingText, { color: textHi }]}>Reading both kundlis…</Text>
+            <Text style={[s.loadingSub, { color: textLo }]}>
+              D1 + D9 + Dashas + Live Transits
             </Text>
           </View>
+        )}
 
-          {/* Result view */}
-          {result ? (
-            <ResultView result={result} accent={accent} textHi={textHi} textLo={textLo}
-              bgCard={bgCard} bgCard2={bgCard2} border={border} isDark={isDark} onAgain={reset} />
-          ) : (
-            <>
-              {/* Person 1 */}
-              <PersonForm label="Partner 1" emoji="👤" color="#ec4899" person={p1} setPerson={setP1}
-                textHi={textHi} textLo={textLo} bgCard={bgCard} bgCard2={bgCard2} border={border} />
-              {/* Person 2 */}
-              <PersonForm label="Partner 2" emoji="👤" color="#a855f7" person={p2} setPerson={setP2}
-                textHi={textHi} textLo={textLo} bgCard={bgCard} bgCard2={bgCard2} border={border} />
+        {/* Error */}
+        {canAnalyze && !loading && err && (
+          <View style={[s.errCard, { backgroundColor: bgCard, borderColor: "#ef4444" }]}>
+            <Feather name="alert-circle" size={22} color="#ef4444" />
+            <Text style={[s.errText, { color: textHi }]}>{err}</Text>
+            <Pressable onPress={runAnalysis} style={{ width: "100%" }}>
+              <View style={[s.cta, { backgroundColor: accent }]}>
+                <Feather name="refresh-cw" size={16} color="#fff" />
+                <Text style={s.ctaText}>Retry</Text>
+              </View>
+            </Pressable>
+          </View>
+        )}
 
-              {err && (
-                <View style={[s.errBox, { borderColor: "#ef4444" }]}>
-                  <Feather name="alert-circle" size={16} color="#ef4444" />
-                  <Text style={{ color: "#ef4444", fontSize: 13, flex: 1, fontFamily: "Nunito_500Medium" }}>{err}</Text>
-                </View>
-              )}
-
-              <Pressable onPress={analyze} disabled={loading} style={{ marginTop: 8 }}>
-                <LinearGradient colors={["#ec4899", "#a855f7"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }}
-                  style={[s.cta, { opacity: loading ? 0.7 : 1 }]}>
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <Feather name="heart" size={18} color="#fff" />
-                      <Text style={s.ctaText}>Analyze Compatibility</Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {/* Result */}
+        {canAnalyze && !loading && result && (
+          <ResultView
+            result={result} accent={accent} textHi={textHi} textLo={textLo}
+            bgCard={bgCard} bgCard2={bgCard2} border={border} isDark={isDark}
+            onReAnalyze={runAnalysis}
+          />
+        )}
+      </ScrollView>
     </CosmicBg>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-function PersonForm({
-  label, emoji, color, person, setPerson,
-  textHi, textLo, bgCard, bgCard2, border,
+function PersonChip({
+  label, name, place, color, textHi, textLo, bgCard2, border,
 }: {
-  label: string; emoji: string; color: string;
-  person: PersonForm; setPerson: (p: PersonForm) => void;
-  textHi: string; textLo: string; bgCard: string; bgCard2: string; border: string;
+  label: string; name: string; place?: string; color: string;
+  textHi: string; textLo: string; bgCard2: string; border: string;
 }) {
-  const update = (patch: Partial<PersonForm>) => setPerson({ ...person, ...patch });
-
   return (
-    <View style={[s.personCard, { backgroundColor: bgCard, borderColor: border }]}>
-      <View style={s.personHead}>
-        <LinearGradient colors={[color, color + "aa"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={s.personBadge}>
-          <Text style={{ fontSize: 18 }}>{emoji}</Text>
-        </LinearGradient>
-        <Text style={[s.personLabel, { color: textHi, fontFamily: "Nunito_700Bold" }]}>{label}</Text>
+    <View style={[s.personChip, { backgroundColor: bgCard2, borderColor: border }]}>
+      <LinearGradient colors={[color, color + "aa"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }}
+        style={s.personChipBadge}>
+        <Text style={{ fontSize: 14 }}>👤</Text>
+      </LinearGradient>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[s.personChipLbl, { color: textLo }]}>{label}</Text>
+        <Text style={[s.personChipName, { color: textHi }]} numberOfLines={1}>{name}</Text>
+        {place ? (
+          <Text style={[s.personChipPlace, { color: textLo }]} numberOfLines={1}>
+            <Feather name="map-pin" size={9} color={textLo} /> {place}
+          </Text>
+        ) : null}
       </View>
-
-      <TextInput
-        placeholder="Name"
-        placeholderTextColor={textLo}
-        value={person.name}
-        onChangeText={(v) => update({ name: v })}
-        style={[s.input, { color: textHi, backgroundColor: bgCard2, borderColor: border }]}
-      />
-
-      <Text style={[s.lbl, { color: textLo }]}>Date of Birth</Text>
-      <View style={s.row3}>
-        <TextInput placeholder="DD" placeholderTextColor={textLo} value={person.day}
-          onChangeText={(v) => update({ day: v.replace(/[^\d]/g, "").slice(0,2) })}
-          keyboardType="number-pad"
-          style={[s.input, s.inputSm, { color: textHi, backgroundColor: bgCard2, borderColor: border }]} />
-        <TextInput placeholder="MM" placeholderTextColor={textLo} value={person.month}
-          onChangeText={(v) => update({ month: v.replace(/[^\d]/g, "").slice(0,2) })}
-          keyboardType="number-pad"
-          style={[s.input, s.inputSm, { color: textHi, backgroundColor: bgCard2, borderColor: border }]} />
-        <TextInput placeholder="YYYY" placeholderTextColor={textLo} value={person.year}
-          onChangeText={(v) => update({ year: v.replace(/[^\d]/g, "").slice(0,4) })}
-          keyboardType="number-pad"
-          style={[s.input, s.inputSm, { color: textHi, backgroundColor: bgCard2, borderColor: border }]} />
-      </View>
-
-      <Text style={[s.lbl, { color: textLo }]}>Time of Birth</Text>
-      <View style={s.row3}>
-        <TextInput placeholder="HH" placeholderTextColor={textLo} value={person.hour}
-          onChangeText={(v) => update({ hour: v.replace(/[^\d]/g, "").slice(0,2) })}
-          keyboardType="number-pad"
-          style={[s.input, s.inputSm, { color: textHi, backgroundColor: bgCard2, borderColor: border }]} />
-        <TextInput placeholder="MM" placeholderTextColor={textLo} value={person.minute}
-          onChangeText={(v) => update({ minute: v.replace(/[^\d]/g, "").slice(0,2) })}
-          keyboardType="number-pad"
-          style={[s.input, s.inputSm, { color: textHi, backgroundColor: bgCard2, borderColor: border }]} />
-        <View style={[s.ampmWrap, { backgroundColor: bgCard2, borderColor: border }]}>
-          {(["AM","PM"] as const).map((ap) => (
-            <Pressable key={ap} onPress={() => update({ ampm: ap })}
-              style={[s.ampmBtn, person.ampm === ap && { backgroundColor: color }]}>
-              <Text style={{ color: person.ampm === ap ? "#fff" : textLo, fontSize: 13, fontFamily: "Nunito_600SemiBold" }}>{ap}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <Text style={[s.lbl, { color: textLo }]}>Place of Birth</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
-        {CITIES.map((c, i) => (
-          <Pressable key={c.name} onPress={() => update({ cityIdx: i })}
-            style={[s.cityChip, {
-              backgroundColor: person.cityIdx === i ? color : bgCard2,
-              borderColor: person.cityIdx === i ? color : border,
-            }]}>
-            <Text style={{ color: person.cityIdx === i ? "#fff" : textHi, fontSize: 12.5, fontFamily: "Nunito_600SemiBold" }}>
-              {c.name}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
     </View>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 function ResultView({
-  result, accent, textHi, textLo, bgCard, bgCard2, border, isDark, onAgain,
+  result, accent, textHi, textLo, bgCard, bgCard2, border, isDark, onReAnalyze,
 }: {
   result: Result; accent: string; textHi: string; textLo: string;
-  bgCard: string; bgCard2: string; border: string; isDark: boolean; onAgain: () => void;
+  bgCard: string; bgCard2: string; border: string; isDark: boolean;
+  onReAnalyze: () => void;
 }) {
   const R = 70;
   const circ = 2 * Math.PI * R;
@@ -315,7 +268,6 @@ function ResultView({
 
   return (
     <View style={{ gap: 14 }}>
-      {/* Score circle */}
       <View style={[s.resCard, { backgroundColor: bgCard, borderColor: border }]}>
         <View style={s.scoreWrap}>
           <Svg width={170} height={170}>
@@ -332,7 +284,6 @@ function ResultView({
         <Text style={[s.verdict, { color: textHi, fontFamily: "Nunito_700Bold" }]}>{verdict}</Text>
       </View>
 
-      {/* Factor pills */}
       <View style={[s.resCard, { backgroundColor: bgCard, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: textHi }]}>Core factors</Text>
         <View style={s.factorGrid}>
@@ -352,7 +303,6 @@ function ResultView({
         </View>
       </View>
 
-      {/* Breakdown bars */}
       <View style={[s.resCard, { backgroundColor: bgCard, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: textHi }]}>Section scores</Text>
         {([
@@ -384,7 +334,6 @@ function ResultView({
         )}
       </View>
 
-      {/* Reasons list */}
       <View style={[s.resCard, { backgroundColor: bgCard, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: textHi }]}>
           Astrological reasoning ({result.reasons.length})
@@ -404,10 +353,10 @@ function ResultView({
         </View>
       </View>
 
-      <Pressable onPress={onAgain} style={{ marginTop: 4 }}>
+      <Pressable onPress={onReAnalyze} style={{ marginTop: 4 }}>
         <View style={[s.cta, { backgroundColor: accent }]}>
           <Feather name="refresh-cw" size={16} color="#fff" />
-          <Text style={s.ctaText}>Analyze another pair</Text>
+          <Text style={s.ctaText}>Re-analyze</Text>
         </View>
       </Pressable>
     </View>
@@ -420,33 +369,38 @@ const s = StyleSheet.create({
   backBtn: { alignSelf: "flex-start" },
   backCircle: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1 },
 
-  hero: { alignItems: "center", marginBottom: 22, gap: 8 },
+  hero: { alignItems: "center", marginBottom: 18, gap: 8 },
   heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: "rgba(255,255,255,0.15)" },
   heroTitle: { fontSize: 24, letterSpacing: -0.4 },
   heroSub: { fontSize: 12.5, letterSpacing: 0.2 },
 
-  personCard: { borderRadius: 18, borderWidth: 1, padding: 16, gap: 10, marginBottom: 14 },
-  personHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  personBadge: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  personLabel: { fontSize: 16, letterSpacing: -0.2 },
+  pairCard: { flexDirection: "row", alignItems: "stretch", gap: 8,
+    borderRadius: 18, borderWidth: 1, padding: 10, marginBottom: 14 },
+  pairDivider: { width: 30, alignItems: "center", justifyContent: "center" },
+  personChip: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 10, borderRadius: 12, borderWidth: 1, minWidth: 0 },
+  personChipBadge: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  personChipLbl: { fontSize: 10, fontFamily: "Nunito_600SemiBold", letterSpacing: 0.4, textTransform: "uppercase" },
+  personChipName: { fontSize: 13.5, fontFamily: "Nunito_700Bold", marginTop: 1 },
+  personChipPlace: { fontSize: 10.5, fontFamily: "Nunito_500Medium", marginTop: 1 },
 
-  input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11, fontSize: 14, fontFamily: "Nunito_500Medium" },
-  inputSm: { flex: 1, textAlign: "center" },
-  lbl: { fontSize: 11.5, marginTop: 4, marginBottom: -2, fontFamily: "Nunito_600SemiBold", letterSpacing: 0.3, textTransform: "uppercase" },
-  row3: { flexDirection: "row", gap: 8 },
+  gateCard: { alignItems: "center", padding: 22, borderRadius: 18, borderWidth: 1, gap: 8 },
+  gateIcon: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, marginBottom: 6 },
+  gateTitle: { fontSize: 17, fontFamily: "Nunito_700Bold" },
+  gateMsg: { fontSize: 13, textAlign: "center", lineHeight: 19, fontFamily: "Nunito_500Medium" },
 
-  ampmWrap: { flex: 1, flexDirection: "row", borderRadius: 12, borderWidth: 1, padding: 3 },
-  ampmBtn: { flex: 1, alignItems: "center", justifyContent: "center", borderRadius: 9, paddingVertical: 7 },
+  loadingCard: { alignItems: "center", padding: 30, borderRadius: 18, borderWidth: 1, gap: 12 },
+  loadingText: { fontSize: 15, fontFamily: "Nunito_700Bold", marginTop: 4 },
+  loadingSub: { fontSize: 12, fontFamily: "Nunito_500Medium" },
 
-  cityChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
-
-  errBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12,
-    borderWidth: 1, backgroundColor: "rgba(239,68,68,0.08)", marginTop: 4, marginBottom: 4 },
+  errCard: { alignItems: "center", padding: 20, borderRadius: 18, borderWidth: 1, gap: 10 },
+  errText: { fontSize: 13, textAlign: "center", fontFamily: "Nunito_500Medium" },
 
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingVertical: 16, borderRadius: 14 },
-  ctaText: { color: "#fff", fontSize: 15, fontFamily: "Nunito_700Bold", letterSpacing: 0.3 },
+    paddingVertical: 14, borderRadius: 12 },
+  ctaText: { color: "#fff", fontSize: 14.5, fontFamily: "Nunito_700Bold", letterSpacing: 0.3 },
 
   resCard: { borderRadius: 18, borderWidth: 1, padding: 16 },
   scoreWrap: { alignItems: "center", justifyContent: "center", marginBottom: 10 },

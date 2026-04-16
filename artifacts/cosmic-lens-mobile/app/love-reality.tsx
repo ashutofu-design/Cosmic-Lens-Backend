@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
@@ -76,10 +76,12 @@ function FeatureCard({
   feature,
   index,
   isDark,
+  partnerId,
 }: {
   feature: Feature;
   index: number;
   isDark: boolean;
+  partnerId?: string | null;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -129,7 +131,10 @@ function FeatureCard({
     <Animated.View style={{ transform: [{ scale: scaleAnim }, { translateY: slideAnim }], opacity: fadeAnim }}>
       <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        if (feature.key === "love-compat") router.push("/love-compatibility");
+        if (feature.key === "love-compat") {
+          const url = partnerId ? `/love-compatibility?partnerId=${partnerId}` : "/love-compatibility";
+          router.push(url as any);
+        }
       }}>
         <View style={[s.card, {
           shadowColor: feature.iconColor,
@@ -208,6 +213,8 @@ function FeatureCard({
 export default function LoveRealityScreen() {
   const C = useC();
   const t = useT();
+  const params = useLocalSearchParams<{ partnerId?: string }>();
+  const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -271,7 +278,7 @@ export default function LoveRealityScreen() {
 
         <View style={s.list}>
           {FEATURES.map((f, i) => (
-            <FeatureCard key={f.key} feature={f} index={i} isDark={isDark} />
+            <FeatureCard key={f.key} feature={f} index={i} isDark={isDark} partnerId={partnerId} />
           ))}
         </View>
       </ScrollView>

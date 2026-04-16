@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Easing,
   Modal,
@@ -72,11 +73,15 @@ function OptionCard({
   index,
   isDark,
   partnerId,
+  canEnter,
+  onBlocked,
 }: {
   option: MainOption;
   index: number;
   isDark: boolean;
   partnerId?: string | null;
+  canEnter: boolean;
+  onBlocked: () => void;
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -200,6 +205,11 @@ function OptionCard({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => {
+          if (!canEnter) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            onBlocked();
+            return;
+          }
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           const url = partnerId ? `${option.route}?partnerId=${partnerId}` : option.route;
           router.push(url as any);
@@ -636,9 +646,35 @@ export default function RelationshipScreen() {
         </Modal>
 
         <View style={s.optionsList}>
-          {OPTIONS.map((opt, i) => (
-            <OptionCard key={opt.key} option={opt} index={i} isDark={isDark} partnerId={selectedP2?.id} />
-          ))}
+          {OPTIONS.map((opt, i) => {
+            const canEnter = !!primaryProfile?.kundli && !!selectedP2?.kundli;
+            return (
+              <OptionCard
+                key={opt.key}
+                option={opt}
+                index={i}
+                isDark={isDark}
+                partnerId={selectedP2?.id}
+                canEnter={canEnter}
+                onBlocked={() => {
+                  const missingSelf    = !primaryProfile?.kundli;
+                  const missingPartner = !selectedP2 || !selectedP2.kundli;
+                  const msg =
+                    missingSelf && missingPartner
+                      ? "Both your kundli and partner's kundli are required. Please create both kundlis from the Kundli screen first."
+                    : missingSelf
+                      ? "Your kundli is not ready. Please generate it from the Kundli screen first."
+                    : !selectedP2
+                      ? "Please select your partner above to proceed."
+                      : `Partner '${selectedP2.name}' does not have a kundli yet. Please create their kundli from the Kundli screen first.`;
+                  Alert.alert("Kundli required", msg, [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Open Kundli", onPress: () => router.push("/kundli-milan" as any) },
+                  ]);
+                }}
+              />
+            );
+          })}
         </View>
       </ScrollView>
     </CosmicBg>

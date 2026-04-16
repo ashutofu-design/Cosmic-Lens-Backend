@@ -1225,8 +1225,8 @@ export default function KundliMilanScreen(){
                     style={{paddingVertical:17,alignItems:"center",
                       shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.55,shadowRadius:16}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
-                      <Feather name="zap" size={18} color="#000000"/>
-                      <Text style={{color:"#000000",fontSize:18,fontFamily:"Nunito_900Black",letterSpacing:0.8}}>
+                      <Feather name="zap" size={22} color="#000000"/>
+                      <Text style={{color:"#000000",fontSize:22,fontFamily:"Nunito_900Black",letterSpacing:1,lineHeight:28}}>
                         Check Now
                       </Text>
                     </View>

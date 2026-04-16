@@ -11,39 +11,54 @@ from datetime import datetime
 class User(db.Model):
     __tablename__ = "users"
 
-    id          = db.Column(db.Integer, primary_key=True)
-    name        = db.Column(db.String(200), nullable=False, default="")
-    email       = db.Column(db.String(255), unique=True, nullable=False)
-    password    = db.Column(db.Text, nullable=True)
-    google_id   = db.Column(db.String(200), nullable=True)
-    api_key     = db.Column(db.String(64), unique=True, nullable=True)
-    is_pro      = db.Column(db.Boolean, default=False, nullable=False)
-    is_admin    = db.Column(db.Boolean, default=False, nullable=False)
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    last_active = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id             = db.Column(db.Integer, primary_key=True)
+    name           = db.Column(db.String(200), nullable=False, default="")
+    email          = db.Column(db.String(255), unique=True, nullable=False)
+    password       = db.Column(db.Text, nullable=True)
+    google_id      = db.Column(db.String(200), nullable=True)
+    api_key        = db.Column(db.String(64), unique=True, nullable=True)
+    is_pro         = db.Column(db.Boolean, default=False, nullable=False)
+    is_admin       = db.Column(db.Boolean, default=False, nullable=False)
+
+    # ── Subscription ──────────────────────────────────────────────────────────
+    plan           = db.Column(db.String(20), default="free", nullable=False)   # free / pro / elite
+    plan_expiry    = db.Column(db.DateTime, nullable=True)                       # when plan expires
+    plan_order_id  = db.Column(db.String(200), nullable=True)                   # last Cashfree order ID
+
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     kundli = db.relationship("Kundli", backref="user", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self):
+        plan_active = (
+            self.plan != "free"
+            and self.plan_expiry is not None
+            and self.plan_expiry > datetime.utcnow()
+        )
         return {
-            "id":         self.id,
-            "name":       self.name,
-            "email":      self.email,
-            "api_key":    self.api_key,
-            "is_pro":     self.is_pro,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "id":           self.id,
+            "name":         self.name,
+            "email":        self.email,
+            "api_key":      self.api_key,
+            "is_pro":       self.is_pro and plan_active,
+            "plan":         self.plan if plan_active else "free",
+            "plan_expiry":  self.plan_expiry.isoformat() if self.plan_expiry else None,
+            "created_at":   self.created_at.isoformat() if self.created_at else None,
         }
 
     def to_admin_dict(self):
         return {
-            "id":          self.id,
-            "name":        self.name,
-            "email":       self.email,
-            "is_pro":      self.is_pro,
-            "is_admin":    self.is_admin,
-            "created_at":  self.created_at.isoformat() if self.created_at else None,
-            "last_active": self.last_active.isoformat() if self.last_active else None,
-            "has_kundli":  self.kundli is not None,
+            "id":           self.id,
+            "name":         self.name,
+            "email":        self.email,
+            "is_pro":       self.is_pro,
+            "is_admin":     self.is_admin,
+            "plan":         self.plan,
+            "plan_expiry":  self.plan_expiry.isoformat() if self.plan_expiry else None,
+            "created_at":   self.created_at.isoformat() if self.created_at else None,
+            "last_active":  self.last_active.isoformat() if self.last_active else None,
+            "has_kundli":   self.kundli is not None,
         }
 
 

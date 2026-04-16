@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -158,6 +159,15 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
   );
 }
 
+// ── Plan key → expiry label ─────────────────────────────────────────────────
+function planExpiryLabel(expiry: string | null | undefined): string {
+  if (!expiry) return "";
+  try {
+    const d = new Date(expiry);
+    return `Expires ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+  } catch { return ""; }
+}
+
 // ── Main Screen ────────────────────────────────────────────────────────────────
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
@@ -170,7 +180,25 @@ export default function SubscriptionScreen() {
 
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
 
-  const isPro  = user?.is_pro ?? false;
+  // Derive real plan from user object
+  const activePlan = user?.plan ?? (user?.is_pro ? "pro" : "free");
+  const isPro      = activePlan !== "free";
+  const expiryLabel = planExpiryLabel(user?.plan_expiry);
+
+  const planDotColor: Record<string, string> = {
+    free:  "#64748b",
+    pro:   "#f59e0b",
+    elite: "#a78bfa",
+  };
+
+  function handlePlanPress(planKey: string) {
+    if (!user?.id) {
+      Alert.alert("Login Required", "Please login to purchase a plan.");
+      return;
+    }
+    if (planKey === activePlan) return;
+    router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle } });
+  }
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
@@ -215,9 +243,11 @@ export default function SubscriptionScreen() {
 
           {/* Current plan chip */}
           <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={s.freeDot} />
+            <View style={[s.freeDot, { backgroundColor: planDotColor[activePlan] }]} />
             <Text style={[s.currentChipText, { color: C.textMid }]}>
-              {isPro ? "Pro Plan — Active" : "Free Plan — Active"}
+              {activePlan === "elite" ? "Elite Plan — Active" :
+               activePlan === "pro"   ? "Pro Plan — Active"  : "Free Plan — Active"}
+              {expiryLabel ? `  ·  ${expiryLabel}` : ""}
             </Text>
           </View>
         </LinearGradient>
@@ -249,10 +279,20 @@ export default function SubscriptionScreen() {
               key={plan.key}
               plan={plan}
               cycle={cycle}
-              isCurrent={plan.key === (isPro ? "pro" : "free")}
-              onPress={() => {}}
+              isCurrent={plan.key === activePlan}
+              onPress={() => handlePlanPress(plan.key)}
             />
           ))}
+        </View>
+
+        {/* ── Cashfree badge ── */}
+        <View style={[s.payBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={{ fontSize: 14 }}>🔒</Text>
+          <Text style={[s.payBadgeText, { color: C.textMid }]}>
+            Secured by{" "}
+            <Text style={{ color: isDark ? "#f59e0b" : "#d97706", fontFamily: F.bold }}>Cashfree</Text>
+            {" "}— India's trusted payment gateway
+          </Text>
         </View>
 
         {/* ── Benefits grid ── */}
@@ -279,7 +319,7 @@ export default function SubscriptionScreen() {
         <Text style={[s.footerNote, { color: C.textMuted }]}>
           • Subscription monthly ya yearly renew hoti hai{"\n"}
           • Kabhi bhi cancel kar sakte hain{"\n"}
-          • Secure payment — Razorpay / Google Pay
+          • Powered by Cashfree — PCI DSS compliant
         </Text>
 
       </ScrollView>
@@ -368,6 +408,13 @@ const s = StyleSheet.create({
     lineHeight: 18, textAlign: "center",
     paddingHorizontal: 8, marginBottom: 8,
   },
+
+  payBadge: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 12, borderWidth: 1,
+    paddingVertical: 10, paddingHorizontal: 14,
+  },
+  payBadgeText: { fontSize: 12, fontFamily: F.medium, flex: 1 },
 });
 
 // ── Plan card styles ───────────────────────────────────────────────────────────

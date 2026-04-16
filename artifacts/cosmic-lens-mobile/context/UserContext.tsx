@@ -20,6 +20,8 @@ export interface AuthUser {
   email: string;
   api_key: string;
   is_pro?: boolean;
+  plan?: "free" | "pro" | "elite";
+  plan_expiry?: string | null;
 }
 
 type LangCode = UILang;
@@ -83,6 +85,9 @@ interface UserContextType {
   setTodayEnergy: (e: number | null) => void;
   setMoonData: (m: { longitude: number; rashiIndex: number } | null) => void;
   logout: () => void;
+
+  // Payment / subscription
+  refreshUser: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | null>(null);
@@ -333,6 +338,23 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     Promise.all(Object.values(KEYS).map(k => AsyncStorage.removeItem(k))).catch(() => {});
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const currentUser = userRef.current;
+    if (!currentUser?.id) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/user/${currentUser.id}/kundli`, {
+        headers: { "X-API-Key": currentUser.api_key ?? "" },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data?.user) {
+        const updated: AuthUser = { ...currentUser, ...data.user };
+        _setUser(updated);
+        AsyncStorage.setItem(KEYS.user, JSON.stringify(updated)).catch(() => {});
+      }
+    } catch { /* silent */ }
+  }, []);
+
   return (
     <UserContext.Provider value={{
       user, birthData, kundli, setBirthData, setKundli,
@@ -343,6 +365,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       doshData, doshLoading,
       todayEnergy, moonData, isLoading,
       setUser, setTodayEnergy, setMoonData, logout,
+      refreshUser,
     }}>
       {children}
     </UserContext.Provider>

@@ -215,19 +215,19 @@ def get_authed_user(user_id: int):
 
 @app.route("/api/user/<int:user_id>/kundli", methods=["GET"])
 def get_user_kundli(user_id):
-    """Get saved kundli for a user."""
+    """Get saved kundli + user profile (including subscription plan) for a user."""
     user, err = get_authed_user(user_id)
     if err: return err
-    if not user.kundli:
-        return jsonify({"kundli": None})
-    # Return full chart_data too so the app can restore the chart
-    import json
-    k = user.kundli
-    d = k.to_dict()
-    if k.chart_data:
-        try: d["chart_data"] = json.loads(k.chart_data)
-        except Exception: pass
-    return jsonify({"kundli": d})
+    kundli_data = None
+    if user.kundli:
+        import json
+        k = user.kundli
+        d = k.to_dict()
+        if k.chart_data:
+            try: d["chart_data"] = json.loads(k.chart_data)
+            except Exception: pass
+        kundli_data = d
+    return jsonify({"kundli": kundli_data, "user": user.to_dict()})
 
 
 @app.route("/api/user/<int:user_id>/kundli", methods=["POST"])
@@ -1595,6 +1595,308 @@ def kundli_milan():
             "marriage_outlook": marriage_outlook,
         }
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ── Cashfree Payment Gateway ──────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CASHFREE_APP_ID = os.environ.get("CASHFREE_APP_ID", "")
+CASHFREE_SECRET = os.environ.get("CASHFREE_SECRET_KEY", "")
+CASHFREE_ENV    = os.environ.get("CASHFREE_ENV", "sandbox")  # "sandbox" or "production"
+
+PLAN_PRICES = {
+    "pro_monthly":   149,
+    "pro_yearly":    999,
+    "elite_monthly": 399,
+    "elite_yearly":  2999,
+}
+
+
+def _cf_base():
+    if CASHFREE_ENV == "production":
+        return "https://api.cashfree.com/pg"
+    return "https://sandbox.cashfree.com/pg"
+
+
+def _cf_payment_url(session_id: str) -> str:
+    if CASHFREE_ENV == "production":
+        return f"https://payments.cashfree.com/order/#{session_id}"
+    return f"https://payments-test.cashfree.com/order/#{session_id}"
+
+
+def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
+    """Grant Pro/Elite plan to user and set expiry date."""
+    from datetime import timedelta
+    user = User.query.get(user_id)
+    if not user:
+        return False
+    now = datetime.utcnow()
+    expiry = now + timedelta(days=365 if cycle == "yearly" else 31)
+    user.plan          = plan
+    user.plan_expiry   = expiry
+    user.plan_order_id = order_id
+    user.is_pro        = (plan in ("pro", "elite"))
+    db.session.commit()
+    return True
+
+
+@app.route("/api/payment/create-order", methods=["POST", "OPTIONS"])
+def create_payment_order():
+    """Create a Cashfree payment order and return a payment link."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import urllib.request as _req, json as _json
+
+    if not CASHFREE_APP_ID or not CASHFREE_SECRET:
+        return jsonify({"error": "Cashfree not configured on server"}), 503
+
+    data    = request.get_json() or {}
+    user_id = data.get("user_id")
+    plan    = data.get("plan")   # "pro" or "elite"
+    cycle   = data.get("cycle")  # "monthly" or "yearly"
+
+    if not user_id or plan not in ("pro", "elite") or cycle not in ("monthly", "yearly"):
+        return jsonify({"error": "Invalid request: need user_id, plan, cycle"}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    plan_key = f"{plan}_{cycle}"
+    amount   = PLAN_PRICES.get(plan_key, 0)
+
+    # Unique order ID — encodes user/plan/cycle for webhook parsing
+    ts       = int(datetime.utcnow().timestamp())
+    order_id = f"CL{user_id}_{plan[0].upper()}{cycle[0].upper()}_{ts}"
+
+    # Return URL shown in browser after payment completes (no deep link needed)
+    return_url = f"{os.environ.get('API_BASE', 'http://localhost:8080')}/api/payment/return?order_id={order_id}&plan={plan}&cycle={cycle}"
+
+    payload = {
+        "order_id":       order_id,
+        "order_amount":   amount,
+        "order_currency": "INR",
+        "customer_details": {
+            "customer_id":    str(user.id),
+            "customer_name":  user.name or "User",
+            "customer_email": user.email,
+            "customer_phone": "9999999999",
+        },
+        "order_meta": {
+            "return_url": return_url,
+        },
+        "order_tags": {
+            "plan":    plan,
+            "cycle":   cycle,
+            "user_id": str(user_id),
+        },
+    }
+
+    body   = _json.dumps(payload).encode()
+    cf_req = _req.Request(
+        f"{_cf_base()}/orders",
+        data=body,
+        headers={
+            "Content-Type":    "application/json",
+            "x-client-id":     CASHFREE_APP_ID,
+            "x-client-secret": CASHFREE_SECRET,
+            "x-api-version":   "2023-08-01",
+        },
+        method="POST",
+    )
+    try:
+        with _req.urlopen(cf_req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+    except _req.error.HTTPError as e:
+        detail = e.read().decode()
+        return jsonify({"error": "Cashfree order creation failed", "detail": detail}), 502
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+    session_id   = result.get("payment_session_id", "")
+    payment_link = _cf_payment_url(session_id)
+
+    return jsonify({
+        "order_id":           order_id,
+        "payment_session_id": session_id,
+        "payment_link":       payment_link,
+        "amount":             amount,
+        "plan":               plan,
+        "cycle":              cycle,
+    })
+
+
+@app.route("/api/payment/status/<order_id>", methods=["GET", "OPTIONS"])
+def payment_status(order_id):
+    """Poll Cashfree for payment status — called by frontend after browser returns."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import urllib.request as _req, json as _json
+
+    if not CASHFREE_APP_ID or not CASHFREE_SECRET:
+        return jsonify({"error": "Cashfree not configured"}), 503
+
+    cf_req = _req.Request(
+        f"{_cf_base()}/orders/{order_id}/payments",
+        headers={
+            "x-client-id":     CASHFREE_APP_ID,
+            "x-client-secret": CASHFREE_SECRET,
+            "x-api-version":   "2023-08-01",
+        },
+    )
+    try:
+        with _req.urlopen(cf_req, timeout=15) as resp:
+            payments = _json.loads(resp.read())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+    if not isinstance(payments, list):
+        payments = []
+
+    paid = any(p.get("payment_status") == "SUCCESS" for p in payments)
+
+    if paid:
+        # Parse order_id: CL{user_id}_{P/E}{M/Y}_{ts}
+        try:
+            parts   = order_id.split("_")
+            uid_str = parts[0][2:]          # strip "CL"
+            code    = parts[1]              # e.g. "PM" or "EY"
+            plan    = "pro" if code[0] == "P" else "elite"
+            cycle   = "monthly" if code[1] == "M" else "yearly"
+            _activate_plan(int(uid_str), plan, cycle, order_id)
+            # Return fresh user data
+            user = User.query.get(int(uid_str))
+            return jsonify({
+                "status":  "SUCCESS",
+                "plan":    plan,
+                "cycle":   cycle,
+                "user":    user.to_dict() if user else None,
+            })
+        except Exception:
+            return jsonify({"status": "SUCCESS"})
+
+    statuses = list({p.get("payment_status", "PENDING") for p in payments})
+    return jsonify({"status": statuses[0] if statuses else "PENDING"})
+
+
+@app.route("/api/payment/webhook", methods=["POST"])
+def payment_webhook():
+    """Cashfree webhook — verifies signature and activates subscription."""
+    import hmac as _hmac, hashlib, base64, json as _json
+
+    raw_body     = request.get_data()
+    received_sig = request.headers.get("x-webhook-signature", "")
+    timestamp    = request.headers.get("x-webhook-timestamp", "")
+
+    # Signature verification (skip if secret not configured)
+    if CASHFREE_SECRET and received_sig:
+        message  = (timestamp + raw_body.decode()).encode()
+        expected = base64.b64encode(
+            _hmac.new(CASHFREE_SECRET.encode(), message, hashlib.sha256).digest()
+        ).decode()
+        if not _hmac.compare_digest(received_sig, expected):
+            return jsonify({"error": "Invalid signature"}), 401
+
+    try:
+        payload = _json.loads(raw_body)
+    except Exception:
+        return jsonify({"error": "Bad JSON"}), 400
+
+    event = payload.get("type", "")
+
+    if event in ("PAYMENT_SUCCESS_WEBHOOK", "PAYMENT_SUCCESS"):
+        order    = payload.get("data", {}).get("order", {})
+        order_id = order.get("order_id", "")
+        tags     = order.get("order_tags", {})
+        uid      = tags.get("user_id", "")
+        plan     = tags.get("plan", "")
+        cycle    = tags.get("cycle", "monthly")
+
+        if uid and plan and order_id:
+            _activate_plan(int(uid), plan, cycle, order_id)
+
+    return jsonify({"status": "ok"}), 200
+
+
+@app.route("/api/payment/return", methods=["GET"])
+def payment_return():
+    """Browser return page shown to user after Cashfree payment."""
+    order_id = request.args.get("order_id", "")
+    plan     = request.args.get("plan", "")
+    cycle    = request.args.get("cycle", "")
+    status   = request.args.get("status", "")
+
+    plan_label = f"{plan.title()} ({cycle})" if plan else "plan"
+
+    if status and status.upper() != "CANCELLED":
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Payment Complete — Cosmic Lens</title>
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+          background:#0c0818;color:#fff;min-height:100vh;
+          display:flex;align-items:center;justify-content:center;padding:24px}}
+    .card{{background:rgba(255,255,255,0.06);border:1px solid rgba(245,158,11,0.3);
+           border-radius:20px;padding:32px 24px;max-width:400px;width:100%;text-align:center}}
+    .emoji{{font-size:52px;margin-bottom:16px}}
+    h1{{font-size:22px;font-weight:700;color:#f59e0b;margin-bottom:8px}}
+    p{{color:rgba(255,255,255,0.6);font-size:14px;line-height:1.6;margin-bottom:20px}}
+    .badge{{display:inline-block;background:rgba(245,158,11,0.15);
+            border:1px solid rgba(245,158,11,0.4);border-radius:20px;
+            padding:6px 16px;font-size:12px;color:#f59e0b;font-weight:600;margin-bottom:20px}}
+    .note{{font-size:12px;color:rgba(255,255,255,0.35)}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="emoji">⭐</div>
+    <h1>Payment Successful!</h1>
+    <div class="badge">{plan_label.upper()} ACTIVATED</div>
+    <p>Aapka {plan_label} plan activate ho gaya hai.<br/>
+       Cosmic Lens app mein wapas jao aur features enjoy karo!</p>
+    <p class="note">Order: {order_id}</p>
+  </div>
+</body>
+</html>"""
+    else:
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Payment Cancelled — Cosmic Lens</title>
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+          background:#0c0818;color:#fff;min-height:100vh;
+          display:flex;align-items:center;justify-content:center;padding:24px}}
+    .card{{background:rgba(255,255,255,0.06);border:1px solid rgba(100,116,139,0.3);
+           border-radius:20px;padding:32px 24px;max-width:400px;width:100%;text-align:center}}
+    .emoji{{font-size:52px;margin-bottom:16px}}
+    h1{{font-size:22px;font-weight:700;color:#94a3b8;margin-bottom:8px}}
+    p{{color:rgba(255,255,255,0.6);font-size:14px;line-height:1.6}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="emoji">🌙</div>
+    <h1>Payment Cancelled</h1>
+    <p>Koi baat nahi — jab chahein try karein.<br/>App mein wapas jakar phir se upgrade karein.</p>
+  </div>
+</body>
+</html>"""
+
+    from flask import make_response
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html"
+    return resp
 
 
 if __name__ == "__main__":

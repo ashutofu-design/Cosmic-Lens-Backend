@@ -28,20 +28,14 @@ localPort = 8081
 externalPort = 80
 
 [[ports]]
-localPort = 8082
-externalPort = 4200
-
-[[ports]]
-localPort = 8083
-externalPort = 3002
-
-[[ports]]
 localPort = 18987
 externalPort = 3000
 
-[[ports]]
-localPort = 18988
-externalPort = 6000
-
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+CASHFREE_ENV = "sandbox"
+API_BASE = "https://18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev"

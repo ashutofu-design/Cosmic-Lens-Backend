@@ -1221,7 +1221,7 @@ export default function KundliMilanScreen(){
                   disabled={!p1||!p2||loading}
                   style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
                     borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
-                  <LinearGradient colors={["#b45309","#92400e","#78350f"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  <LinearGradient colors={["#fde68a","#f59e0b","#b45309"]} start={{x:0,y:0}} end={{x:1,y:0}}
                     style={{paddingVertical:17,alignItems:"center",
                       shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.55,shadowRadius:16}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:9}}>

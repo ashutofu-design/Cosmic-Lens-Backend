@@ -1390,31 +1390,6 @@ export default function KundliMilanScreen(){
                 </LinearGradient>
               </View>
 
-              {/* ── 5. Primary CTA Button ── */}
-              <Pressable onPress={()=>{
-                  if(canCalculate){handleCalculate();}
-                  else if(!person1&&!autoP1){setAddingFor("self");}
-                  else if(!p2){setAddingFor("partner");}
-                }}
-                style={({pressed})=>({opacity:pressed?0.85:1})}>
-                <LinearGradient colors={["#4f46e5","#7c3aed","#a855f7"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={{paddingVertical:17,borderRadius:20,alignItems:"center",justifyContent:"center",
-                    shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.4,shadowRadius:16}}>
-                  {calcLoading?<ActivityIndicator color="#fff" size="small"/>:(
-                    <View style={{alignItems:"center",gap:3}}>
-                      <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                        <Feather name={canCalculate?"heart":"plus-circle"} size={18} color="#fff"/>
-                        <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_800ExtraBold"}}>
-                          {canCalculate?"Reveal Your Compatibility":"Add Details & Reveal Compatibility"}
-                        </Text>
-                      </View>
-                      <Text style={{color:"rgba(255,255,255,0.6)",fontSize:10,fontFamily:"Nunito_400Regular"}}>
-                        Free Ashtakoot Gun Milan Report
-                      </Text>
-                    </View>
-                  )}
-                </LinearGradient>
-              </Pressable>
 
             </View>
           )}

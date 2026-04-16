@@ -4170,6 +4170,397 @@ def will_return():
     })
 
 
+@app.route("/api/future-outcome", methods=["POST"])
+def future_outcome():
+    """
+    Future Relationship Outcome — live, real-time personalized engine.
+    Person A primary; Person B used for synastry adjustments.
+    Produces: future_score, outcome, confidence, current_phase, next_shift,
+              timeline_flow (Now→1m, 1-3m, 3-6m), factors{}, reasons[].
+    Every output is deterministic from current Dasha + live transits + D1 + D9.
+    """
+    import swisseph as swe
+    from datetime import datetime as _dt, timedelta as _td
+
+    data = request.get_json(force=True, silent=True) or {}
+    if "p1" not in data or "p2" not in data:
+        return jsonify({"error": "Missing p1 or p2"}), 400
+
+    try:
+        kA = calculate_kundli(data["p1"])
+        kB = calculate_kundli(data["p2"])
+    except Exception as exc:
+        return jsonify({"error": f"Kundli calculation failed: {exc}"}), 500
+
+    SIGNS_F = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+               "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    LORDS_F = ["Mars","Venus","Mercury","Moon","Sun","Mercury",
+               "Venus","Mars","Jupiter","Saturn","Saturn","Jupiter"]
+    EXALT_F = {"Sun":0,"Moon":1,"Mars":9,"Mercury":5,"Jupiter":3,"Venus":11,"Saturn":6}
+    DEBIL_F = {"Sun":6,"Moon":7,"Mars":3,"Mercury":11,"Jupiter":9,"Venus":5,"Saturn":0}
+    OWN_F   = {"Sun":[4],"Moon":[3],"Mars":[0,7],"Mercury":[2,5],
+               "Jupiter":[8,11],"Venus":[1,6],"Saturn":[9,10]}
+    MALEFIC_F = {"Saturn","Mars","Rahu","Ketu"}
+    def sidx(s):
+        try: return SIGNS_F.index(s)
+        except: return 0
+    def getp(k, n):
+        for p in k.get("planets", []):
+            if p["name"] == n: return p
+        return None
+    def dignity(pl, si):
+        if EXALT_F.get(pl) == si: return 2
+        if DEBIL_F.get(pl) == si: return -2
+        if si in OWN_F.get(pl, []): return 1
+        return 0
+    def lord_of(k, h):
+        asc = sidx(k.get("ascendant","Aries"))
+        return LORDS_F[(asc + h - 1) % 12]
+    def occupants(k, h):
+        return [p["name"] for p in k.get("planets", []) if p["house"] == h]
+    def aspects_house(k, h):
+        asc = sidx(k.get("ascendant","Aries"))
+        tgt = (asc + h - 1) % 12
+        hits = []
+        for p in k.get("planets", []):
+            d = (tgt - sidx(p["sign"]) + 12) % 12
+            ok = d == 6
+            if p["name"] == "Mars": ok = ok or d in (3,7)
+            if p["name"] == "Jupiter": ok = ok or d in (4,8)
+            if p["name"] == "Saturn": ok = ok or d in (2,9)
+            if p["name"] in ("Rahu","Ketu"): ok = ok or d in (4,8)
+            if ok: hits.append(p["name"])
+        return hits
+
+    A_name = kA.get("name") or "You"
+    B_name = kB.get("name") or "Partner"
+    reasons = []
+
+    LOVE_H = {5, 7, 11}
+    SEP_H  = {6, 8, 12}
+
+    def planet_touches_house(k, planet, h):
+        p = getp(k, planet)
+        if not p: return False
+        if p["house"] == h: return True
+        asc = sidx(k.get("ascendant","Aries"))
+        tgt_sign = (asc + h - 1) % 12
+        if LORDS_F[tgt_sign] == planet: return True
+        if planet in aspects_house(k, h): return True
+        disp = LORDS_F[sidx(p["sign"])]
+        dp = getp(k, disp)
+        if dp and dp["house"] == h: return True
+        return False
+
+    # ── LIVE TRANSITS ────────────────────────────────────────────────────────
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    now = _dt.utcnow()
+    jd_now = swe.julday(now.year, now.month, now.day, now.hour + now.minute/60.0)
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+
+    def transit_longitudes(jd):
+        t = {}
+        for pname, pid in [("Jupiter",swe.JUPITER),("Saturn",swe.SATURN),
+                           ("Mars",swe.MARS),("Rahu",swe.MEAN_NODE),
+                           ("Venus",swe.VENUS),("Sun",swe.SUN),("Mercury",swe.MERCURY)]:
+            try:
+                r = swe.calc_ut(jd, pid, flags)
+                t[pname] = r[0][0] % 360.0
+            except Exception: pass
+        if "Rahu" in t:
+            t["Ketu"] = (t["Rahu"] + 180) % 360
+        return t
+
+    t_now = transit_longitudes(jd_now)
+    t_30  = transit_longitudes(jd_now + 30)
+    t_90  = transit_longitudes(jd_now + 90)
+    t_180 = transit_longitudes(jd_now + 180)
+
+    def asp_signs(planet, lon):
+        ts = int(lon // 30)
+        out = [(ts + 6) % 12]
+        if planet == "Jupiter": out += [(ts+4)%12, (ts+8)%12]
+        if planet == "Saturn":  out += [(ts+2)%12, (ts+9)%12]
+        if planet == "Mars":    out += [(ts+3)%12, (ts+7)%12]
+        if planet in ("Rahu","Ketu"): out += [(ts+4)%12, (ts+8)%12]
+        return out + [ts]
+
+    asc_A = sidx(kA.get("ascendant","Aries"))
+    h5 = (asc_A + 4) % 12
+    h7 = (asc_A + 6) % 12
+    h11 = (asc_A + 10) % 12
+    venus_A = getp(kA, "Venus"); moon_A = getp(kA, "Moon")
+    vsA = sidx(venus_A["sign"]) if venus_A else None
+    msA = sidx(moon_A["sign"])  if moon_A  else None
+
+    def transit_impact(t_map):
+        """Return (score_delta, hits[list of strings])."""
+        pts = 0; hits = []
+        for tp, lon in t_map.items():
+            asp = asp_signs(tp, lon)
+            for lbl, tgt in [("5th",h5),("7th",h7),("11th",h11),("Venus",vsA),("Moon",msA)]:
+                if tgt is None: continue
+                if tgt in asp:
+                    if tp == "Jupiter":    pts += 3; hits.append(f"Jupiter→{lbl}")
+                    elif tp == "Saturn":   pts -= 2; hits.append(f"Saturn→{lbl}")
+                    elif tp == "Rahu":     pts += 1; hits.append(f"Rahu→{lbl}")
+                    elif tp == "Ketu":     pts -= 2; hits.append(f"Ketu→{lbl}")
+                    elif tp == "Mars":     pts -= 1; hits.append(f"Mars→{lbl}")
+                    elif tp == "Venus":    pts += 2; hits.append(f"Venus→{lbl}")
+                    elif tp == "Sun":      pts += 0
+                    elif tp == "Mercury":  pts += 0
+        return pts, sorted(set(hits))
+
+    tr_now_pts,  tr_now_hits  = transit_impact(t_now)
+    tr_30_pts,   tr_30_hits   = transit_impact(t_30)
+    tr_90_pts,   tr_90_hits   = transit_impact(t_90)
+    tr_180_pts,  tr_180_hits  = transit_impact(t_180)
+
+    for h in tr_now_hits[:6]:
+        if "Jupiter" in h: reasons.append(f"Right now Jupiter is triggering {A_name}'s {h.split('→')[1]} — growth window open")
+        if "Saturn" in h:  reasons.append(f"Saturn is currently pressing {A_name}'s {h.split('→')[1]} — karmic test live")
+        if "Rahu" in h:    reasons.append(f"Rahu live on {A_name}'s {h.split('→')[1]} — unpredictable spike")
+
+    # ── DASHA ANALYSIS ───────────────────────────────────────────────────────
+    cd = kA.get("currentDasha") or {}
+    md, ad, pd = cd.get("maha"), cd.get("antar"), cd.get("pratyantar")
+
+    def dasha_score_for(pl, weight):
+        if not pl: return 0, None
+        love_link = any(planet_touches_house(kA, pl, h) for h in LOVE_H)
+        sep_link  = any(planet_touches_house(kA, pl, h) for h in SEP_H)
+        pP = getp(kA, pl)
+        dgn = dignity(pl, sidx(pP["sign"])) if pP else 0
+
+        p = 0
+        tag = []
+        if love_link and not sep_link:
+            p += weight; tag.append("activates love axis")
+        if sep_link and not love_link:
+            p -= weight; tag.append("activates separation axis")
+        if love_link and sep_link:
+            p += 0; tag.append("mixed love/separation")
+        if pl in ("Venus","Moon","Jupiter") and not sep_link:
+            p += int(weight * 0.4); tag.append(f"{pl} benefic force")
+        if pl in ("Saturn","Ketu") and not love_link:
+            p -= int(weight * 0.4); tag.append(f"{pl} detachment")
+        if dgn >= 1:
+            p += int(weight * 0.3); tag.append("dignified")
+        elif dgn <= -2:
+            p -= int(weight * 0.3); tag.append("debilitated")
+        return p, f"{pl} — " + ", ".join(tag) if tag else f"{pl} — neutral"
+
+    md_p, md_txt = dasha_score_for(md, 12)
+    ad_p, ad_txt = dasha_score_for(ad, 8)
+    pd_p, pd_txt = dasha_score_for(pd, 5)
+    dasha_total = max(-25, min(25, md_p + ad_p + pd_p))
+    if md:
+        reasons.append(f"Currently in {md} MD — {md_txt.split(' — ',1)[1] if ' — ' in md_txt else 'neutral influence'}")
+    if ad:
+        reasons.append(f"Antardasha of {ad} shaping the near-term tone — {ad_txt.split(' — ',1)[1] if ' — ' in ad_txt else 'neutral'}")
+    if pd:
+        reasons.append(f"Active Pratyantar {pd} is the day-to-day driver right now — {pd_txt.split(' — ',1)[1] if ' — ' in pd_txt else 'neutral'}")
+
+    # ── D9 VALIDATION ────────────────────────────────────────────────────────
+    d9 = kA.get("divisionalCharts", {}).get("D9") or {}
+    d9_7_occ = [q["name"] for q in d9.get("planets", []) if q.get("house") == 7]
+    d9_ben = sum(1 for x in d9_7_occ if x in ("Jupiter","Venus","Moon","Mercury"))
+    d9_mal = sum(1 for x in d9_7_occ if x in MALEFIC_F)
+    d9_pts = max(-15, min(15, 5*d9_ben - 4*d9_mal))
+    if d9_ben > 0:
+        reasons.append(f"D9 7th house holds {', '.join(x for x in d9_7_occ if x in ('Jupiter','Venus','Moon','Mercury'))} — marriage layer genuinely supportive")
+    if d9_mal > 0:
+        reasons.append(f"D9 7th carries malefics ({', '.join(x for x in d9_7_occ if x in MALEFIC_F)}) — long-term strain baked in")
+    if not d9_7_occ:
+        # check D9 7th lord strength as fallback
+        d9_asc = sidx((d9.get("ascendant") or kA.get("ascendant","Aries")))
+        d9_7_sign = (d9_asc + 6) % 12
+        d9_7_lord = LORDS_F[d9_7_sign]
+        d9_lp = None
+        for q in d9.get("planets", []):
+            if q["name"] == d9_7_lord: d9_lp = q; break
+        if d9_lp:
+            dg = dignity(d9_7_lord, sidx(d9_lp["sign"]))
+            if dg >= 1: d9_pts += 4; reasons.append(f"D9 7th lord {d9_7_lord} dignified — marriage potential steady")
+            if dg <= -2: d9_pts -= 5; reasons.append(f"D9 7th lord {d9_7_lord} debilitated — marriage layer weak")
+
+    # ── 7th / 5th ANCHOR ─────────────────────────────────────────────────────
+    anchor_pts = 0
+    anchor_state = []
+    for h, w, lbl in [(7, 4, "7th"), (5, 3, "5th"), (11, 2, "11th")]:
+        inside = occupants(kA, h)
+        bens   = [x for x in inside if x in ("Jupiter","Venus","Moon","Mercury")]
+        mals   = [x for x in inside if x in MALEFIC_F]
+        asps   = aspects_house(kA, h)
+        if bens:
+            anchor_pts += w; anchor_state.append(f"{lbl}: {','.join(bens)} inside")
+        if "Jupiter" in asps and "Jupiter" not in bens:
+            anchor_pts += 1; anchor_state.append(f"{lbl}: Jupiter aspect")
+        if mals and "Jupiter" not in asps:
+            anchor_pts -= 1; anchor_state.append(f"{lbl}: {','.join(mals)} malefic")
+    anchor_pts = max(-10, min(15, anchor_pts))
+
+    # ── SYNASTRY SOFT INFLUENCE (±5) ─────────────────────────────────────────
+    syn_pts = 0; syn_state = []
+    for hlbl, sign_idx in [(5,h5),(7,h7),(11,h11)]:
+        for pB in kB.get("planets", []):
+            if sidx(pB["sign"]) == sign_idx:
+                if pB["name"] in ("Venus","Jupiter","Moon"):
+                    syn_pts += 2; syn_state.append(f"{B_name}'s {pB['name']} on A's {hlbl}th")
+                    reasons.append(f"{B_name}'s {pB['name']} overlays {A_name}'s {hlbl}th — steady emotional pull")
+                elif pB["name"] == "Saturn":
+                    syn_pts -= 3; syn_state.append(f"{B_name}'s Saturn on A's {hlbl}th")
+                    reasons.append(f"{B_name}'s Saturn on {A_name}'s {hlbl}th — long shadow, commitment heavy")
+                elif pB["name"] == "Rahu":
+                    syn_pts += 1; syn_state.append(f"{B_name}'s Rahu on A's {hlbl}th")
+                elif pB["name"] == "Ketu":
+                    syn_pts -= 2; syn_state.append(f"{B_name}'s Ketu on A's {hlbl}th")
+    syn_pts = max(-5, min(5, syn_pts))
+
+    # Clamp transit score
+    transit_pts = max(-15, min(15, tr_now_pts))
+
+    # ── FINAL SCORE ──────────────────────────────────────────────────────────
+    raw = 50 + dasha_total + transit_pts + d9_pts + anchor_pts + syn_pts
+    future_score = max(0, min(100, round(raw)))
+
+    if   future_score >= 75: outcome_chance = "thriving — long-term trajectory"
+    elif future_score >= 60: outcome_chance = "growing — steady positive direction"
+    elif future_score >= 45: outcome_chance = "mixed — both sides will be tested"
+    elif future_score >= 30: outcome_chance = "strained — heavy work required"
+    else:                    outcome_chance = "fading — natural separation path"
+
+    # ── CONFIDENCE ───────────────────────────────────────────────────────────
+    # High confidence when dasha is clear, transits strong, signals aligned
+    signal_strength = abs(dasha_total) + abs(transit_pts) + abs(d9_pts) + abs(anchor_pts)
+    # Conflict = contradictory sign between dasha and transit
+    conflict = 0
+    if dasha_total > 0 and transit_pts < 0: conflict = abs(transit_pts)
+    if dasha_total < 0 and transit_pts > 0: conflict = abs(transit_pts)
+    confidence = int(max(40, min(95, 55 + signal_strength * 1.2 - conflict * 1.5)))
+
+    # ── CURRENT PHASE (dynamic text) ─────────────────────────────────────────
+    jup_live = any(h.startswith("Jupiter") for h in tr_now_hits)
+    sat_live = any(h.startswith("Saturn") for h in tr_now_hits)
+    rah_live = any(h.startswith("Rahu") for h in tr_now_hits)
+    ketu_live= any(h.startswith("Ketu") for h in tr_now_hits)
+
+    if pd in ("Venus","Moon","Jupiter") and jup_live:
+        current_phase = "Active reconnection phase"
+    elif pd in ("Saturn","Ketu") and sat_live:
+        current_phase = "Karmic testing phase"
+    elif sat_live and not jup_live:
+        current_phase = "Emotional distance / pressure phase"
+    elif rah_live and not jup_live:
+        current_phase = "Unstable high-intensity phase"
+    elif ketu_live and not jup_live:
+        current_phase = "Detachment / release phase"
+    elif jup_live:
+        current_phase = "Healing & expansion phase"
+    elif pd in ("Venus","Moon"):
+        current_phase = "Tender emotional opening phase"
+    elif dasha_total > 5 and transit_pts >= 0:
+        current_phase = "Quiet stabilisation phase"
+    elif dasha_total < -5:
+        current_phase = "Inner friction phase"
+    else:
+        current_phase = "Neutral waiting phase"
+
+    # ── NEXT SHIFT ───────────────────────────────────────────────────────────
+    delta_30  = tr_30_pts  - tr_now_pts
+    delta_90  = tr_90_pts  - tr_now_pts
+    delta_180 = tr_180_pts - tr_now_pts
+
+    if abs(delta_30) >= 4:
+        horizon_days, horizon_delta = 30, delta_30
+    elif abs(delta_90) >= 5:
+        horizon_days, horizon_delta = 90, delta_90
+    elif abs(delta_180) >= 6:
+        horizon_days, horizon_delta = 180, delta_180
+    else:
+        horizon_days, horizon_delta = 90, delta_90
+
+    horizon_label = "~30 days" if horizon_days == 30 else ("~3 months" if horizon_days == 90 else "~6 months")
+    if horizon_delta > 2:
+        next_shift = f"Positive shift expected in {horizon_label}"
+    elif horizon_delta < -2:
+        next_shift = f"Pressure phase continues for next {horizon_label}"
+    else:
+        next_shift = f"Steady current phase through {horizon_label}"
+
+    # ── TIMELINE FLOW ────────────────────────────────────────────────────────
+    def trend_for(prev_pts, pts):
+        d = pts - prev_pts
+        if pts >= 6 or d >= 4: return "up"
+        if pts <= -4 or d <= -4: return "down"
+        return "mixed"
+    def period_reason(t_map, hits):
+        ben_hits = [h for h in hits if h.startswith(("Jupiter","Venus"))]
+        mal_hits = [h for h in hits if h.startswith(("Saturn","Ketu"))]
+        chaos_hits = [h for h in hits if h.startswith(("Rahu","Mars"))]
+        parts = []
+        if ben_hits:  parts.append(f"{', '.join(ben_hits[:2])} open growth channels")
+        if mal_hits:  parts.append(f"{', '.join(mal_hits[:2])} apply pressure")
+        if chaos_hits:parts.append(f"{', '.join(chaos_hits[:2])} bring volatility")
+        return " · ".join(parts) if parts else "planetary tone neutral"
+
+    now_trend = trend_for(0, tr_now_pts + dasha_total // 2)
+    short_trend = trend_for(tr_now_pts, tr_30_pts)
+    mid_trend = trend_for(tr_30_pts, tr_90_pts)
+
+    timeline_flow = [
+        {
+            "period": "Now → 1 month",
+            "trend":  now_trend,
+            "reason": f"{pd or md or 'Current dasha'} is shaping tone · " + period_reason(t_now, tr_now_hits),
+        },
+        {
+            "period": "1–3 months",
+            "trend":  short_trend,
+            "reason": period_reason(t_30, tr_30_hits) + f" · delta {('+' if delta_30>=0 else '')}{delta_30}",
+        },
+        {
+            "period": "3–6 months",
+            "trend":  mid_trend,
+            "reason": period_reason(t_90, tr_90_hits) + f" · delta {('+' if delta_90>=0 else '')}{delta_90}",
+        },
+    ]
+
+    factors = {
+        "current_dasha":    f"MD {md} / AD {ad} / PD {pd} → {'+' if dasha_total>=0 else ''}{dasha_total}",
+        "live_transit":     (", ".join(tr_now_hits[:6]) if tr_now_hits else "no strong transits") + f" → {'+' if transit_pts>=0 else ''}{transit_pts}",
+        "d9_marriage":      f"D9 7th: {','.join(d9_7_occ) if d9_7_occ else 'empty'} → {'+' if d9_pts>=0 else ''}{d9_pts}",
+        "relationship_anchors": (" · ".join(anchor_state) if anchor_state else "7th/5th/11th quiet") + f" → {'+' if anchor_pts>=0 else ''}{anchor_pts}",
+        "partner_synastry": (" · ".join(syn_state) if syn_state else "no significant overlays") + f" → {'+' if syn_pts>=0 else ''}{syn_pts}",
+    }
+
+    # Dedupe reasons
+    seen = set(); uniq = []
+    for r in reasons:
+        if r not in seen:
+            seen.add(r); uniq.append(r)
+
+    return jsonify({
+        "future_score":  future_score,
+        "outcome":       outcome_chance,
+        "confidence":    confidence,
+        "current_phase": current_phase,
+        "next_shift":    next_shift,
+        "timeline_flow": timeline_flow,
+        "factors":       factors,
+        "reasons":       uniq,
+        "breakdown": {
+            "start":      50,
+            "dasha":      dasha_total,
+            "transit":    transit_pts,
+            "d9":         d9_pts,
+            "anchors":    anchor_pts,
+            "synastry":   syn_pts,
+        },
+        "generated_at":  now.isoformat() + "Z",
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

@@ -143,6 +143,9 @@ function FeatureCard({
         } else if (feature.key === "will-return") {
           const url = partnerId ? `/will-return?partnerId=${partnerId}` : "/will-return";
           router.push(url as any);
+        } else if (feature.key === "future-outcome") {
+          const url = partnerId ? `/future-outcome?partnerId=${partnerId}` : "/future-outcome";
+          router.push(url as any);
         }
       }}>
         <View style={[s.card, {

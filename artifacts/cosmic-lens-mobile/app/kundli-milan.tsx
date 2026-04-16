@@ -12,6 +12,7 @@ import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { MilanResultStore } from "@/lib/milanResultStore";
 
 // ── Ashtakoot tables ──────────────────────────────────────────────────────────
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
@@ -1074,6 +1075,7 @@ export default function KundliMilanScreen(){
   const [addingFor,setAddingFor]=useState<"self"|"partner"|null>(null);
   const [p1,setP1]=useState<PersonData|null>(null);
   const [p2,setP2]=useState<PersonData|null>(null);
+  const [p2Profile,setP2Profile]=useState<any|null>(null);
   const [result,setResult]=useState<Result|null>(null);
   const [calcLoading,setCalcLoading]=useState(false);
 
@@ -1089,6 +1091,7 @@ export default function KundliMilanScreen(){
         moonSign:prof.kundli.moonSign,
         manglik:[1,4,7,8,12].includes(marsH),
       });
+      setP2Profile(prof);
     }
   },[params.partnerId,profiles]);
 
@@ -1129,6 +1132,37 @@ export default function KundliMilanScreen(){
     if(!person1||!p2)return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if(!isPro){
+      // ── Backend Ashtakoot (Swiss Ephemeris) ──
+      const bd1=p1Profile?.birthData;
+      const bd2=p2Profile?.birthData;
+      if(bd1&&bd2){
+        setCalcLoading(true);
+        try{
+          const ctrl=new AbortController();
+          const timer=setTimeout(()=>ctrl.abort(),18000);
+          const resp=await fetch(`${API_BASE}/api/kundli-milan`,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({
+              p1:{...bd1,name:person1.name},
+              p2:{...bd2,name:p2.name},
+            }),
+            signal:ctrl.signal,
+          });
+          clearTimeout(timer);
+          if(resp.ok){
+            const json=await resp.json();
+            MilanResultStore.set(json);
+            router.push("/kundli-milan-result" as any);
+            setCalcLoading(false);
+            return;
+          }
+        }catch(e){
+          // fallback to client-side below
+        }
+        setCalcLoading(false);
+      }
+      // ── Fallback: client-side (no full birth data) ──
       router.push({
         pathname: "/kundli-milan-result" as any,
         params: {

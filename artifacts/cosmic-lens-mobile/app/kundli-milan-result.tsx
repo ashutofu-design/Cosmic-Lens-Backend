@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
+import { MilanResultStore } from "@/lib/milanResultStore";
 
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
 const RASHIS=["Mesh","Vrishabh","Mithun","Kark","Simha","Kanya","Tula","Vrishchik","Dhanu","Makar","Kumbh","Meen"];
@@ -259,10 +260,46 @@ export default function KundliMilanResultScreen() {
     p2Name: string; p2Nak: string; p2Moon: string; p2Mang: string;
   }>();
 
-  const result = compute(
-    params.p1Nak ?? "", params.p1Moon ?? "", params.p1Mang === "true",
-    params.p2Nak ?? "", params.p2Moon ?? "", params.p2Mang === "true",
-  );
+  // ── Try backend result first (Swiss Ephemeris accurate) ──
+  const backendData = MilanResultStore.get();
+
+  let result: Result;
+  let p1DisplayName = params.p1Name || "Person 1";
+  let p2DisplayName = params.p2Name || "Person 2";
+  let backendAnalysis: {
+    compatibility_insight: string;
+    strengths: string[];
+    challenges: string[];
+    marriage_outlook: string;
+  } | null = null;
+
+  if (backendData && backendData.koots) {
+    // Transform backend shape → local Result shape
+    const bk: Record<string, any> = {};
+    for (const k of backendData.koots) bk[k.key] = k;
+    result = {
+      nadi:   bk.nadi   ?? { score:0, max:8,  label:"Nadi",        detail:"-", bad:true },
+      gana:   bk.gana   ?? { score:0, max:6,  label:"Gana",        detail:"-", bad:true },
+      bhakut: bk.bhakut ?? { score:0, max:7,  label:"Bhakut",      detail:"-", bad:true },
+      maitri: bk.maitri ?? { score:0, max:5,  label:"Graha Maitri",detail:"-", bad:true },
+      yoni:   bk.yoni   ?? { score:0, max:4,  label:"Yoni",        detail:"-", bad:true },
+      tara:   bk.tara   ?? { score:0, max:3,  label:"Tara",        detail:"-", bad:true },
+      vasya:  bk.vasya  ?? { score:0, max:2,  label:"Vasya",       detail:"-", bad:false},
+      varna:  bk.varna  ?? { score:0, max:1,  label:"Varna",       detail:"-", bad:true },
+      total:  backendData.total ?? 0,
+      manglik:backendData.manglik_dosh ?? false,
+    };
+    p1DisplayName = backendData.p1?.name || params.p1Name || "Person 1";
+    p2DisplayName = backendData.p2?.name || params.p2Name || "Person 2";
+    backendAnalysis = backendData.analysis ?? null;
+  } else {
+    // Fallback: client-side computation from URL params
+    result = compute(
+      params.p1Nak ?? "", params.p1Moon ?? "", params.p1Mang === "true",
+      params.p2Nak ?? "", params.p2Moon ?? "", params.p2Mang === "true",
+    );
+  }
+
   const g = grade(result.total);
   const pctTotal = Math.round((result.total / 36) * 100);
 
@@ -369,7 +406,7 @@ export default function KundliMilanResultScreen() {
             <View style={st.nameChip}>
               <Text style={{ fontSize: 14 }}>👤</Text>
               <Text style={[st.nameText, { color: isDark ? "#e2d8ff" : "#3B0764" }]} numberOfLines={1}>
-                {params.p1Name || "Person 1"}
+                {p1DisplayName}
               </Text>
             </View>
             <View style={[st.heartIcon, { backgroundColor: isDark ? "rgba(236,72,153,0.15)" : "rgba(236,72,153,0.1)" }]}>
@@ -378,7 +415,7 @@ export default function KundliMilanResultScreen() {
             <View style={st.nameChip}>
               <Text style={{ fontSize: 14 }}>💑</Text>
               <Text style={[st.nameText, { color: isDark ? "#fce7f3" : "#831843" }]} numberOfLines={1}>
-                {params.p2Name || "Person 2"}
+                {p2DisplayName}
               </Text>
             </View>
           </View>
@@ -412,6 +449,51 @@ export default function KundliMilanResultScreen() {
           )}
         </Animated.View>
 
+        {/* ── SOURCE BADGE ── */}
+        {backendData && (
+          <View style={{flexDirection:"row",alignItems:"center",gap:6,alignSelf:"center",
+            backgroundColor:isDark?"rgba(34,197,94,0.1)":"rgba(34,197,94,0.07)",
+            borderWidth:1,borderColor:isDark?"rgba(34,197,94,0.3)":"rgba(34,197,94,0.25)",
+            borderRadius:20,paddingHorizontal:12,paddingVertical:5}}>
+            <View style={{width:6,height:6,borderRadius:3,backgroundColor:"#22c55e"}}/>
+            <Text style={{color:isDark?"#86efac":"#15803d",fontSize:10,fontFamily:"Nunito_700Bold",letterSpacing:0.5}}>
+              Calculated via Swiss Ephemeris (Lahiri Ayanamsa)
+            </Text>
+          </View>
+        )}
+
+        {/* ── Backend nakshatra details ── */}
+        {backendData?.p1 && (
+          <View style={{flexDirection:"row",gap:8}}>
+            <View style={{flex:1,backgroundColor:isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)",
+              borderRadius:12,padding:10,borderWidth:1,borderColor:isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)"}}>
+              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"rgba(0,0,0,0.5)",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:0.8,textTransform:"uppercase",marginBottom:3}}>
+                {backendData.p1.name}
+              </Text>
+              <Text style={{color:isDark?"#c4b5fd":"#4f46e5",fontSize:11,fontFamily:"Nunito_700Bold"}}>
+                {backendData.p1.nakshatra}
+              </Text>
+              <Text style={{color:isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                Pada {backendData.p1.pada} · {backendData.p1.rashi}
+              </Text>
+              {backendData.p1.manglik&&<Text style={{color:"#ef4444",fontSize:9,fontFamily:"Nunito_700Bold",marginTop:2}}>♂ Manglik</Text>}
+            </View>
+            <View style={{flex:1,backgroundColor:isDark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)",
+              borderRadius:12,padding:10,borderWidth:1,borderColor:isDark?"rgba(255,255,255,0.08)":"rgba(0,0,0,0.06)"}}>
+              <Text style={{color:isDark?"rgba(255,255,255,0.5)":"rgba(0,0,0,0.5)",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:0.8,textTransform:"uppercase",marginBottom:3}}>
+                {backendData.p2.name}
+              </Text>
+              <Text style={{color:isDark?"#f9a8d4":"#be185d",fontSize:11,fontFamily:"Nunito_700Bold"}}>
+                {backendData.p2.nakshatra}
+              </Text>
+              <Text style={{color:isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                Pada {backendData.p2.pada} · {backendData.p2.rashi}
+              </Text>
+              {backendData.p2.manglik&&<Text style={{color:"#ef4444",fontSize:9,fontFamily:"Nunito_700Bold",marginTop:2}}>♂ Manglik</Text>}
+            </View>
+          </View>
+        )}
+
         {/* ── Compatibility Insight (rich paragraph) ── */}
         <View style={[st.analysisCard, {
           backgroundColor: isDark ? "rgba(99,102,241,0.08)" : "rgba(99,102,241,0.05)",
@@ -424,7 +506,7 @@ export default function KundliMilanResultScreen() {
             </Text>
           </View>
           <Text style={[st.analysisBody, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
-            {compatibilityInsight}
+            {backendAnalysis?.compatibility_insight ?? compatibilityInsight}
           </Text>
         </View>
 
@@ -439,7 +521,7 @@ export default function KundliMilanResultScreen() {
               Your Strengths Together
             </Text>
           </View>
-          {strengths.map((s, i) => (
+          {(backendAnalysis?.strengths ?? strengths).map((s, i) => (
             <View key={i} style={st.bulletRow}>
               <View style={[st.bulletDot, { backgroundColor: isDark ? "#86efac" : "#16a34a" }]} />
               <Text style={[st.bulletText, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
@@ -460,7 +542,7 @@ export default function KundliMilanResultScreen() {
               Areas to Be Mindful Of
             </Text>
           </View>
-          {challenges.map((c, i) => (
+          {(backendAnalysis?.challenges ?? challenges).map((c, i) => (
             <View key={i} style={st.bulletRow}>
               <View style={[st.bulletDot, { backgroundColor: isDark ? "#fdba74" : "#ea580c" }]} />
               <Text style={[st.bulletText, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
@@ -482,7 +564,7 @@ export default function KundliMilanResultScreen() {
             </Text>
           </View>
           <Text style={[st.analysisBody, { color: isDark ? "rgba(226,232,240,0.78)" : "#334155" }]}>
-            {marriageOutlook}
+            {backendAnalysis?.marriage_outlook ?? marriageOutlook}
           </Text>
         </View>
 

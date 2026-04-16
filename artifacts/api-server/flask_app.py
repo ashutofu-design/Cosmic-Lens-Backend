@@ -1308,6 +1308,295 @@ def expo_qr():
     return html, 200, {"Content-Type": "text/html"}
 
 
+@app.route("/api/kundli-milan", methods=["POST"])
+def kundli_milan():
+    """
+    Accurate Ashtakoot Guna Milan using pyswisseph.
+    Accepts two persons' birth details, computes Moon sidereal longitude
+    for each via Swiss Ephemeris (Lahiri ayanamsa), then derives all
+    8 koot scores and returns detailed written analysis.
+
+    Body (JSON):
+      p1: { name, day, month, year, hour, minute, ampm, lat, lon, tz }
+      p2: { name, day, month, year, hour, minute, ampm, lat, lon, tz }
+    """
+    import swisseph as swe
+    import math
+
+    data = request.get_json(force=True, silent=True)
+    if not data or "p1" not in data or "p2" not in data:
+        return jsonify({"error": "Missing p1 or p2"}), 400
+
+    # ── Nakshatra / Rashi tables ──────────────────────────────────────────────
+    NAKSHATRAS = [
+        "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra",
+        "Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni",
+        "Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha",
+        "Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha",
+        "Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"
+    ]
+    RASHIS = [
+        "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+        "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+    ]
+    NAK_SIZE = 360.0 / 27.0   # 13.333… degrees per nakshatra
+
+    def moon_longitude(p):
+        """Return sidereal Moon longitude (Lahiri) for birth data dict p."""
+        hour24 = p["hour"] % 12
+        if p.get("ampm","AM").upper() == "PM":
+            hour24 += 12
+        hour_frac = hour24 + p.get("minute", 0) / 60.0
+        # tz offset → UTC
+        tz_offset = float(p.get("tz", 0))
+        jd = swe.julday(p["year"], p["month"], p["day"], hour_frac - tz_offset)
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        result, _ = swe.calc_ut(jd, swe.MOON, flags)
+        return result[0] % 360.0, jd
+
+    def mars_house(p, jd):
+        """Return Mars house number (1-12) for birth data."""
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        mars_res, _ = swe.calc_ut(jd, swe.MARS, flags)
+        mars_lon = mars_res[0] % 360.0
+        ayanamsa = swe.get_ayanamsa_ut(jd)
+        cusps, ascmc = swe.houses(jd, float(p["lat"]), float(p["lon"]), b'W')
+        asc_sid = (ascmc[0] - ayanamsa + 360) % 360
+        # Simple equal-house: house index
+        rel = (mars_lon - asc_sid + 360) % 360
+        return int(rel / 30) + 1
+
+    def parse_person(p):
+        """Return dict with nak_idx, rashi_idx, pada, manglik, name."""
+        ml, jd = moon_longitude(p)
+        nak_idx   = int(ml / NAK_SIZE) % 27
+        pada      = int((ml % NAK_SIZE) / (NAK_SIZE / 4)) + 1
+        rashi_idx = int(ml / 30) % 12
+        mh        = mars_house(p, jd)
+        manglik   = mh in [1, 4, 7, 8, 12]
+        return {
+            "name": p.get("name","Person"),
+            "nak_idx": nak_idx,
+            "nak_name": NAKSHATRAS[nak_idx],
+            "pada": pada,
+            "rashi_idx": rashi_idx,
+            "rashi_name": RASHIS[rashi_idx],
+            "moon_lon": ml,
+            "manglik": manglik,
+        }
+
+    # ── 8 Koot calculation tables ────────────────────────────────────────────
+    # Nadi (8 pts) — three types cycling per 9 nakshatras
+    NADI = [0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2, 2,1,0, 0,1,2]
+    NADI_N = ["Vata (Adi)","Pitta (Madhya)","Kapha (Antya)"]
+
+    # Gana (6 pts)
+    GANA = [0,1,2, 1,0,1, 0,0,2, 2,1,1, 0,2,0, 2,0,2, 2,1,1, 0,1,2, 1,1,0]
+    GANA_N = ["Dev","Manushya","Raksha"]
+
+    # Varna (1 pt) — by rashi
+    VARNA = [1,2,3,0,1,2,3,0,1,2,3,0]  # Brahmin=0,Kshatriya=1,Vaishya=2,Shudra=3
+
+    # Vasya (2 pts)
+    def vasya_score(r1, r2):
+        if r1 == r2: return 2
+        groups = [[0,3,4],[1,6,7,9],[2,8],[5,10,11]]
+        g1 = next(i for i,g in enumerate(groups) if r1 in g)
+        g2 = next(i for i,g in enumerate(groups) if r2 in g)
+        return 2 if g1 == g2 else 1
+
+    # Tara (3 pts)
+    def tara_score(n1, n2):
+        fwd = ((n2 - n1 + 27) % 27) + 1
+        rev = ((n1 - n2 + 27) % 27) + 1
+        bad = {3,5,7}
+        fwd_ok = (fwd % 9 or 9) not in bad
+        rev_ok = (rev % 9 or 9) not in bad
+        if fwd_ok and rev_ok: return 3
+        if fwd_ok or rev_ok:  return 1.5
+        return 0
+
+    # Yoni (4 pts)
+    YONI = [0,1,2,3,4,5,6,7,8,9,10,2,11,12,13,14,14,13,5,12,11,10,3,7,4,9,0]
+    YONI_ENEMY = [(0,1),(2,3),(4,5),(6,7),(8,9),(10,11),(12,13),(14,0)]
+    def yoni_score(n1, n2):
+        y1,y2 = YONI[n1],YONI[n2]
+        if y1==y2: return 4
+        if any((y1==a and y2==b)or(y1==b and y2==a) for a,b in YONI_ENEMY): return 0
+        return 2
+
+    # Graha Maitri (5 pts) — rashi lord friendship
+    RASHI_LORD = [2,5,3,1,0,3,5,2,4,6,6,4]   # 0=Sun,1=Moon,2=Mars,3=Merc,4=Jup,5=Ven,6=Sat
+    PLN_FRIEND = [
+        [1,2,2,1,2,0,0],[2,1,0,1,2,2,0],[2,0,1,1,2,0,2],
+        [2,0,2,1,0,2,0],[2,1,2,1,1,0,0],[2,2,0,2,1,1,0],[0,0,2,2,2,0,1],
+    ]
+    def maitri_score(r1, r2):
+        l1,l2 = RASHI_LORD[r1],RASHI_LORD[r2]
+        t = PLN_FRIEND[l1][l2] + PLN_FRIEND[l2][l1]
+        return 5 if t>=4 else 4 if t==3 else 3 if t==2 else 0
+
+    # Bhakut (7 pts) — rashi gap
+    def bhakut_score(r1, r2):
+        d = abs(r1 - r2)
+        bad = [(1,11),(4,8),(5,7)]
+        if any(d==a or d==b for a,b in bad): return 0
+        return 7
+
+    try:
+        pp1 = parse_person(data["p1"])
+        pp2 = parse_person(data["p2"])
+    except Exception as e:
+        return jsonify({"error": f"Calculation failed: {str(e)}"}), 500
+
+    n1,n2 = pp1["nak_idx"], pp2["nak_idx"]
+    r1,r2 = pp1["rashi_idx"], pp2["rashi_idx"]
+
+    nadi_sc   = 8 if NADI[n1]!=NADI[n2] else 0
+    gana_sc_raw= GANA[n1],GANA[n2]
+    g1,g2     = gana_sc_raw
+    if g1==g2:   gana_sc=6
+    elif {g1,g2}=={0,2}: gana_sc=1
+    elif 2 in {g1,g2}:   gana_sc=0
+    else:        gana_sc=6
+    bhakut_sc = bhakut_score(r1,r2)
+    maitri_sc = maitri_score(r1,r2)
+    yoni_sc   = yoni_score(n1,n2)
+    tara_sc   = tara_score(n1,n2)
+    vasya_sc  = vasya_score(r1,r2)
+    varna_sc  = 1 if VARNA[r1]<=VARNA[r2] else 0
+
+    total = nadi_sc + gana_sc + bhakut_sc + maitri_sc + yoni_sc + tara_sc + vasya_sc + varna_sc
+    manglik_dosh = pp1["manglik"] != pp2["manglik"]
+
+    koots = [
+        {"key":"nadi",   "label":"Nadi",         "score":nadi_sc,   "max":8,
+         "detail": f"{NADI_N[NADI[n1]]} × {NADI_N[NADI[n2]]}" if nadi_sc==8 else f"Both {NADI_N[NADI[n1]]}",
+         "bad": nadi_sc==0},
+        {"key":"gana",   "label":"Gana",          "score":gana_sc,   "max":6,
+         "detail": f"{GANA_N[g1]} + {GANA_N[g2]}",  "bad": gana_sc==0},
+        {"key":"bhakut", "label":"Bhakut",        "score":bhakut_sc, "max":7,
+         "detail": "Shubh" if bhakut_sc==7 else "Dosh present",  "bad": bhakut_sc==0},
+        {"key":"maitri", "label":"Graha Maitri",  "score":maitri_sc, "max":5,
+         "detail": "Friendly" if maitri_sc>=4 else "Neutral" if maitri_sc>=3 else "Hostile",
+         "bad": maitri_sc<3},
+        {"key":"yoni",   "label":"Yoni",          "score":yoni_sc,   "max":4,
+         "detail": "Same Yoni" if yoni_sc==4 else "Moderate" if yoni_sc==2 else "Hostile Yoni",
+         "bad": yoni_sc==0},
+        {"key":"tara",   "label":"Tara",          "score":tara_sc,   "max":3,
+         "detail": "Auspicious" if tara_sc==3 else "Moderate" if tara_sc>0 else "Inauspicious",
+         "bad": tara_sc==0},
+        {"key":"vasya",  "label":"Vasya",         "score":vasya_sc,  "max":2,
+         "detail": "Strong" if vasya_sc==2 else "Moderate",  "bad": False},
+        {"key":"varna",  "label":"Varna",         "score":varna_sc,  "max":1,
+         "detail": "Matched" if varna_sc==1 else "Mismatched",  "bad": varna_sc==0},
+    ]
+
+    # ── Grade & written analysis ──────────────────────────────────────────────
+    if   total>=32: grade_label,grade_col,grade_emoji = "Excellent Match","#22c55e","🌟"
+    elif total>=27: grade_label,grade_col,grade_emoji = "Very Good Match","#4ade80","💚"
+    elif total>=21: grade_label,grade_col,grade_emoji = "Average Match",  "#fbbf24","💛"
+    elif total>=18: grade_label,grade_col,grade_emoji = "Below Average",  "#f97316","🧡"
+    else:           grade_label,grade_col,grade_emoji = "Low Compatibility","#ef4444","❤️‍🩹"
+
+    pct = round((total/36)*100)
+    verdict = (
+        "Stars align strongly. An exceptional and harmonious union." if total>=32 else
+        "Very positive match. With love and respect, great potential ahead." if total>=27 else
+        "Moderate match. Awareness and effort will help this bond grow." if total>=21 else
+        "Challenging match. Remedies and guidance strongly recommended."
+    )
+
+    # Strengths
+    strengths = []
+    if nadi_sc==8:
+        strengths.append("Different Nadi types create natural physical and emotional balance — a strong foundation for healthy children and long life together.")
+    if gana_sc>=5:
+        strengths.append(f"Gana harmony ({GANA_N[g1]} + {GANA_N[g2]}) shows your inner natures are well-matched — temperaments flow without friction in daily life.")
+    if bhakut_sc==7:
+        strengths.append(f"Bhakut is fully auspicious ({pp1['rashi_name']} – {pp2['rashi_name']}) — Rashi positions promote prosperity, family growth, and mutual welfare.")
+    if maitri_sc>=4:
+        strengths.append("Strong Graha Maitri — the lords of your Moon signs are friendly, ensuring deep mental compatibility and shared values.")
+    if yoni_sc>=3:
+        strengths.append("Yoni match indicates strong physical attraction and intimate compatibility — chemistry comes naturally.")
+    if tara_sc==3:
+        strengths.append("Tara Koot is fully auspicious — destiny favours this union; major life events tend to unfold positively.")
+    if vasya_sc==2:
+        strengths.append("Strong Vasya — you naturally support each other's decisions and growth without power struggles.")
+    if not strengths:
+        strengths.append("Every relationship has hidden strengths. Focus on shared values, communication, and mutual respect to discover yours.")
+
+    # Challenges
+    challenges = []
+    if nadi_sc==0:
+        challenges.append(f"Nadi Dosha detected — both partners share {NADI_N[NADI[n1]]} constitutional energy. This may affect health and progeny; Maha Mrityunjaya Jaap (1.25 lakh) is recommended.")
+    if gana_sc==0:
+        challenges.append(f"Major Gana mismatch ({GANA_N[g1]}–{GANA_N[g2]}) — fundamentally different temperaments. Conscious patience and spiritual practice together are essential.")
+    if bhakut_sc==0:
+        challenges.append(f"Bhakut Dosha present ({pp1['rashi_name']}–{pp2['rashi_name']}) — may bring tension in finances, family, or progeny. Navagraha Shanti or Vivah Yog puja can help.")
+    if maitri_sc<3:
+        challenges.append("Graha Maitri is weak — the planetary lords of your Rashis are not naturally friendly, requiring effort to build mutual understanding.")
+    if yoni_sc==0:
+        challenges.append("Hostile Yoni — instinctive natures tend to clash. Open communication about needs and boundaries is crucial for harmony.")
+    if manglik_dosh:
+        challenges.append("Manglik Dosha imbalance — only one partner is Manglik. Kumbh Vivah ceremony or Mangal Shanti puja before marriage is strongly advised.")
+    if not challenges:
+        challenges.append("No major doshas detected — this is a smooth match astrologically. Continue nurturing it with care and devotion.")
+
+    # Marriage Outlook
+    marriage_outlook = (
+        "This is one of the highest-rated matches in Vedic astrology. Marriage between you is likely to bring lasting joy, prosperity, healthy progeny, and spiritual growth. Family harmony and emotional security will be natural. Sacred rituals and joint pujas will further elevate this beautiful connection." if total>=32 else
+        "A very promising marriage match. With love, communication, and respect for each other's space, this relationship can blossom into a deeply fulfilling lifelong partnership. Minor differences smooth over through shared rituals like daily prayers and gratitude practice." if total>=27 else
+        "An average match that requires conscious effort. Focus on understanding each other's emotional needs, practice patience, and consider remedies like Vivah Yog rituals. With dedication, this bond grows stronger over time." if total>=21 else
+        "A challenging match in classical Vedic terms. Strongly recommend consulting a qualified Jyotishi before marriage. Remedies like Kumbh Vivah, Maha Mrityunjaya Jaap, and Navagraha Shanti can significantly improve outcomes."
+    )
+
+    compatibility_insight = (
+        f"Out of the maximum 36 Gunas in Ashtakoot Milan, your union scores {total} ({pct}% match). "
+        f"In Vedic tradition, scores above 18 are acceptable for marriage, above 24 are good, and above 28 are excellent. "
+        f"Your match falls in the \"{grade_label.lower()}\" range — "
+        + (
+            "the cosmic forces strongly support your union and the foundation is solid."
+            if total>=24 else
+            "while some astrological challenges exist, sincere effort and remedies can transform this relationship."
+        )
+        + f" Nakshatra of {pp1['name']}: {pp1['nak_name']} (Pada {pp1['pada']}, {pp1['rashi_name']}). "
+        + f"Nakshatra of {pp2['name']}: {pp2['nak_name']} (Pada {pp2['pada']}, {pp2['rashi_name']})."
+    )
+
+    return jsonify({
+        "p1": {
+            "name": pp1["name"],
+            "nakshatra": pp1["nak_name"],
+            "pada": pp1["pada"],
+            "rashi": pp1["rashi_name"],
+            "manglik": pp1["manglik"],
+        },
+        "p2": {
+            "name": pp2["name"],
+            "nakshatra": pp2["nak_name"],
+            "pada": pp2["pada"],
+            "rashi": pp2["rashi_name"],
+            "manglik": pp2["manglik"],
+        },
+        "total": total,
+        "max": 36,
+        "percent": pct,
+        "grade": {"label": grade_label, "color": grade_col, "emoji": grade_emoji},
+        "verdict": verdict,
+        "manglik_dosh": manglik_dosh,
+        "koots": koots,
+        "analysis": {
+            "compatibility_insight": compatibility_insight,
+            "strengths": strengths,
+            "challenges": challenges,
+            "marriage_outlook": marriage_outlook,
+        }
+    })
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)

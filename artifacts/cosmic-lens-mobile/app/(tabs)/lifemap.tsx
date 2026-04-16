@@ -15,7 +15,6 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
@@ -28,57 +27,113 @@ interface Category {
   emoji: string;
   gradient: [string, string];
   glowColor: string;
+  badge: string;
+  subtitle: string;
+  primary?: boolean;
   route?: string;
 }
 
 const CATEGORIES: Category[] = [
-  { key: "relationship", icon: "heart",       emoji: "💕", gradient: ["#ff6b9d", "#c44569"], glowColor: "#ff6b9d" },
-  { key: "career",       icon: "briefcase",   emoji: "🚀", gradient: ["#f59e0b", "#d97706"], glowColor: "#f59e0b" },
-  { key: "health",       icon: "activity",    emoji: "🧘", gradient: ["#10b981", "#059669"], glowColor: "#10b981" },
-  { key: "finance",      icon: "dollar-sign", emoji: "💰", gradient: ["#60a5fa", "#3b82f6"], glowColor: "#60a5fa" },
+  {
+    key: "relationship",
+    icon: "heart",
+    emoji: "💕",
+    gradient: ["#ff4d8d", "#ff1a6c"],
+    glowColor: "#ff4d8d",
+    badge: "❤️ LOVE",
+    subtitle: "Check love & marriage future",
+    primary: true,
+  },
+  {
+    key: "career",
+    icon: "briefcase",
+    emoji: "🚀",
+    gradient: ["#ff8c00", "#f59e0b"],
+    glowColor: "#f59e0b",
+    badge: "🚀 GROWTH",
+    subtitle: "Know your success path",
+  },
+  {
+    key: "health",
+    icon: "activity",
+    emoji: "🧘",
+    gradient: ["#00e676", "#10b981"],
+    glowColor: "#00e676",
+    badge: "🧘 WELLNESS",
+    subtitle: "Your health & energy status",
+  },
+  {
+    key: "finance",
+    icon: "dollar-sign",
+    emoji: "💰",
+    gradient: ["#448aff", "#2979ff"],
+    glowColor: "#448aff",
+    badge: "💰 MONEY",
+    subtitle: "Money flow & wealth future",
+  },
 ];
 
-const STAR_POSITIONS = [
-  { x: 12, y: 8, size: 2, opacity: 0.5, delay: 0 },
-  { x: 85, y: 15, size: 1.5, opacity: 0.4, delay: 400 },
-  { x: 45, y: 5, size: 1.8, opacity: 0.35, delay: 800 },
-  { x: 70, y: 22, size: 2.2, opacity: 0.45, delay: 200 },
-  { x: 25, y: 20, size: 1.2, opacity: 0.3, delay: 600 },
-  { x: 92, y: 6, size: 1.6, opacity: 0.38, delay: 1000 },
-  { x: 55, y: 18, size: 1.4, opacity: 0.32, delay: 300 },
-  { x: 8, y: 25, size: 1.8, opacity: 0.42, delay: 700 },
-];
+const STAR_COUNT = 14;
+const STARS = Array.from({ length: STAR_COUNT }, (_, i) => ({
+  x: (7 + i * 31 + (i % 3) * 17) % 95,
+  y: (5 + i * 19 + (i % 4) * 11) % 90,
+  size: 1.2 + (i % 3) * 0.6,
+  delay: i * 220,
+}));
 
 function StarField() {
-  const anims = useRef(STAR_POSITIONS.map(() => new Animated.Value(0.3))).current;
+  const driftAnims = useRef(STARS.map(() => new Animated.Value(0))).current;
+  const opacityAnims = useRef(STARS.map(() => new Animated.Value(0.2))).current;
 
   useEffect(() => {
-    const animations = anims.map((anim, i) =>
+    const drifts = driftAnims.map((anim, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.timing(anim, {
-            toValue: 1,
-            duration: 1800 + i * 200,
-            delay: STAR_POSITIONS[i].delay,
+            toValue: 8 + (i % 3) * 4,
+            duration: 4000 + i * 400,
+            delay: STARS[i].delay,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
           Animated.timing(anim, {
-            toValue: 0.2,
-            duration: 1800 + i * 200,
+            toValue: 0,
+            duration: 4000 + i * 400,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true,
           }),
         ])
       )
     );
-    Animated.stagger(150, animations).start();
-    return () => animations.forEach(a => a.stop());
+
+    const twinkles = opacityAnims.map((anim, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 0.8 + (i % 3) * 0.15,
+            duration: 1600 + i * 180,
+            delay: STARS[i].delay + 100,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.15,
+            duration: 1600 + i * 180,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      )
+    );
+
+    const all = [...drifts, ...twinkles];
+    Animated.stagger(80, all).start();
+    return () => all.forEach(a => a.stop());
   }, []);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {STAR_POSITIONS.map((star, i) => (
+      {STARS.map((star, i) => (
         <Animated.View
           key={i}
           style={{
@@ -89,7 +144,8 @@ function StarField() {
             height: star.size * 2,
             borderRadius: star.size,
             backgroundColor: "#fff",
-            opacity: anims[i],
+            opacity: opacityAnims[i],
+            transform: [{ translateY: driftAnims[i] }],
           }}
         />
       ))}
@@ -107,27 +163,54 @@ function CategoryCard({
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.25)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.15,
-          duration: 2000,
-          delay: index * 300,
+          toValue: 1.18,
+          duration: 1800,
+          delay: index * 250,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 2000,
+          duration: 1800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
-    loop.start();
-    return () => loop.stop();
+    const glow = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: cat.primary ? 0.55 : 0.35,
+          duration: 2200,
+          delay: index * 200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: cat.primary ? 0.3 : 0.15,
+          duration: 2200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const fade = Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      delay: 150 + index * 120,
+      useNativeDriver: true,
+    });
+    pulse.start();
+    glow.start();
+    fade.start();
+    return () => { pulse.stop(); glow.stop(); };
   }, []);
 
   const titles: Record<string, string> = {
@@ -136,72 +219,95 @@ function CategoryCard({
     health: t.health,
     finance: t.finance,
   };
-  const subtitles: Record<string, string> = {
-    relationship: t.lifeMapRelSub ?? "Love, compatibility & bonds",
-    career: t.lifeMapCarSub ?? "Growth, success & purpose",
-    health: t.lifeMapHealthSub ?? "Body, mind & vitality",
-    finance: t.lifeMapFinSub ?? "Wealth, stability & flow",
-  };
 
   const title = titles[cat.key] || cat.key;
-  const sub = subtitles[cat.key];
+  const sub = cat.subtitle;
   const [c1, c2] = cat.gradient;
   const isDark = C.isDark;
+  const isPrimary = !!cat.primary;
 
-  const cardBg = isDark ? "rgba(15,23,42,0.65)" : "rgba(255,255,255,0.75)";
-  const borderCol = isDark ? `${cat.glowColor}35` : `${cat.glowColor}25`;
+  const cardBg = isDark
+    ? isPrimary ? "rgba(50,10,30,0.7)" : "rgba(15,23,42,0.65)"
+    : isPrimary ? "rgba(255,230,240,0.85)" : "rgba(255,255,255,0.78)";
+  const borderCol = isDark
+    ? `${cat.glowColor}${isPrimary ? "55" : "35"}`
+    : `${cat.glowColor}${isPrimary ? "40" : "25"}`;
 
   function handlePressIn() {
-    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 40, bounciness: 4 }).start();
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 0.955, useNativeDriver: true, speed: 50, bounciness: 4 }),
+      Animated.timing(glowAnim, { toValue: 0.7, duration: 150, useNativeDriver: true }),
+    ]).start();
   }
   function handlePressOut() {
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 6 }),
+      Animated.timing(glowAnim, { toValue: isPrimary ? 0.35 : 0.2, duration: 400, useNativeDriver: true }),
+    ]).start();
   }
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: fadeAnim }}>
       <Pressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           if (cat.route) router.push(cat.route as any);
         }}
       >
         <View style={[
           s.card,
+          isPrimary && s.cardPrimary,
           {
             borderColor: borderCol,
             shadowColor: cat.glowColor,
-            shadowOpacity: isDark ? 0.25 : 0.12,
+            shadowOpacity: isDark ? (isPrimary ? 0.45 : 0.25) : (isPrimary ? 0.2 : 0.1),
           },
         ]}>
           {Platform.OS !== "web" ? (
             <BlurView
-              intensity={isDark ? 30 : 40}
+              intensity={isDark ? 35 : 45}
               tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
             />
           ) : null}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: cardBg, borderRadius: 18 }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: cardBg, borderRadius: isPrimary ? 22 : 18 }]} />
 
-          <View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: 18 }]}>
+          <Animated.View style={[
+            StyleSheet.absoluteFill,
+            { overflow: "hidden", borderRadius: isPrimary ? 22 : 18, opacity: glowAnim },
+          ]}>
             <LinearGradient
               colors={isDark
-                ? [`${cat.glowColor}08`, `${cat.glowColor}03`, "transparent"]
-                : [`${cat.glowColor}06`, "transparent"]}
+                ? [`${cat.glowColor}20`, `${cat.glowColor}08`, "transparent"]
+                : [`${cat.glowColor}15`, `${cat.glowColor}05`, "transparent"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-          </View>
+          </Animated.View>
 
-          <View style={s.cardRow}>
-            <View style={s.iconOuter}>
+          {isPrimary && (
+            <View style={s.mostUsedWrap}>
+              <LinearGradient
+                colors={isDark ? ["#ff4d8d", "#ff1a6c"] : ["#e91e63", "#c2185b"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={s.mostUsedBadge}
+              >
+                <Text style={s.mostUsedText}>🔥 MOST USED</Text>
+              </LinearGradient>
+            </View>
+          )}
+
+          <View style={[s.cardRow, isPrimary && s.cardRowPrimary]}>
+            <View style={[s.iconOuter, isPrimary && s.iconOuterPrimary]}>
               <Animated.View style={[
                 s.iconGlow,
+                isPrimary && s.iconGlowPrimary,
                 {
-                  backgroundColor: `${cat.glowColor}15`,
+                  backgroundColor: `${cat.glowColor}${isPrimary ? "30" : "18"}`,
                   transform: [{ scale: pulseAnim }],
                 },
               ]} />
@@ -209,18 +315,30 @@ function CategoryCard({
                 colors={[c1, c2]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={s.iconWrap}
+                style={[s.iconWrap, isPrimary && s.iconWrapPrimary]}
               >
-                <Text style={s.emoji}>{cat.emoji}</Text>
+                <Text style={[s.emoji, isPrimary && { fontSize: 26 }]}>{cat.emoji}</Text>
               </LinearGradient>
             </View>
 
             <View style={s.cardText}>
-              <Text style={[s.cardTitle, { color: isDark ? "#fff" : "#0F172A", fontFamily: "Nunito_700Bold" }]}>
-                {title}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={[
+                  s.cardTitle,
+                  isPrimary && s.cardTitlePrimary,
+                  { color: isDark ? "#fff" : "#0F172A", fontFamily: "Nunito_700Bold" },
+                ]}>
+                  {title}
+                </Text>
+                <View style={[
+                  s.badge,
+                  { backgroundColor: isDark ? `${cat.glowColor}18` : `${cat.glowColor}12`, borderColor: `${cat.glowColor}30` },
+                ]}>
+                  <Text style={[s.badgeLabel, { color: cat.glowColor }]}>{cat.badge}</Text>
+                </View>
+              </View>
               <Text
-                style={[s.cardSub, { color: isDark ? "rgba(203,213,225,0.7)" : "#64748B", fontFamily: "Nunito_400Regular" }]}
+                style={[s.cardSub, { color: isDark ? "rgba(203,213,225,0.75)" : "#64748B", fontFamily: "Nunito_500Medium" }]}
                 numberOfLines={1}
               >
                 {sub}
@@ -229,12 +347,12 @@ function CategoryCard({
 
             <View style={[s.arrowBtn, { shadowColor: cat.glowColor }]}>
               <LinearGradient
-                colors={isDark ? [`${c1}40`, `${c2}25`] : [`${c1}20`, `${c2}12`]}
+                colors={isDark ? [c1, c2] : [`${c1}50`, `${c2}35`]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={s.arrowGrad}
+                style={[s.arrowGrad, isPrimary && s.arrowGradPrimary]}
               >
-                <Feather name="arrow-right" size={14} color={isDark ? cat.glowColor : c2} />
+                <Feather name="chevron-right" size={isPrimary ? 18 : 15} color={isDark ? "#fff" : c2} />
               </LinearGradient>
             </View>
           </View>
@@ -243,7 +361,7 @@ function CategoryCard({
             colors={[c1, c2]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={s.bottomBar}
+            style={[s.bottomBar, isPrimary && s.bottomBarPrimary]}
           />
         </View>
       </Pressable>
@@ -263,12 +381,12 @@ export default function LifeMapScreen() {
   const ac = isDark ? "#f59e0b" : "#7C3AED";
 
   const headerFade = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(-12)).current;
   useEffect(() => {
-    Animated.timing(headerFade, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.timing(headerFade, { toValue: 1, duration: 700, useNativeDriver: true }),
+      Animated.timing(headerSlide, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
   }, []);
 
   return (
@@ -280,16 +398,16 @@ export default function LifeMapScreen() {
         contentContainerStyle={[s.content, { paddingTop: topPad + 16, paddingBottom: botPad + 110 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[s.headerWrap, { opacity: headerFade }]}>
+        <Animated.View style={[s.headerWrap, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
           <View style={s.headerBadge}>
             <LinearGradient
               colors={isDark ? ["#f59e0b", "#d97706"] : ["#7C3AED", "#6D5DF6"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={s.badgeGrad}
+              style={s.headerBadgeGrad}
             >
               <Feather name="map" size={10} color="#fff" />
-              <Text style={s.badgeText}>LIFE MAP</Text>
+              <Text style={s.headerBadgeText}>LIFE MAP</Text>
             </LinearGradient>
           </View>
 
@@ -349,9 +467,9 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingHorizontal: 18, gap: 14 },
 
-  headerWrap: { gap: 4, marginBottom: 4 },
+  headerWrap: { gap: 4, marginBottom: 6 },
   headerBadge: { alignSelf: "flex-start", marginBottom: 8 },
-  badgeGrad: {
+  headerBadgeGrad: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -359,14 +477,14 @@ const s = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
   },
-  badgeText: {
+  headerBadgeText: {
     color: "#fff",
     fontSize: 9,
     fontFamily: "Nunito_700Bold",
     letterSpacing: 1.5,
   },
 
-  heading: { fontSize: 26, letterSpacing: -0.5 },
+  heading: { fontSize: 28, letterSpacing: -0.5 },
   subtitle: { fontSize: 13.5, letterSpacing: 0.1 },
 
   grid: { gap: 12 },
@@ -379,6 +497,33 @@ const s = StyleSheet.create({
     shadowRadius: 14,
     elevation: 5,
   },
+  cardPrimary: {
+    borderRadius: 22,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 22,
+    elevation: 8,
+  },
+
+  mostUsedWrap: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  mostUsedBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 20,
+  },
+  mostUsedText: {
+    color: "#fff",
+    fontSize: 8.5,
+    fontFamily: "Nunito_800ExtraBold",
+    letterSpacing: 1,
+  },
+
   cardRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -386,15 +531,27 @@ const s = StyleSheet.create({
     paddingVertical: 18,
     gap: 14,
   },
+  cardRowPrimary: {
+    paddingVertical: 22,
+    padding: 18,
+  },
+
   iconOuter: {
     width: 52,
     height: 52,
     alignItems: "center",
     justifyContent: "center",
   },
+  iconOuterPrimary: {
+    width: 60,
+    height: 60,
+  },
   iconGlow: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 26,
+  },
+  iconGlowPrimary: {
+    borderRadius: 30,
   },
   iconWrap: {
     width: 48,
@@ -403,16 +560,34 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  iconWrapPrimary: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+  },
   emoji: { fontSize: 22 },
-  cardText: { flex: 1, gap: 3 },
+  cardText: { flex: 1, gap: 4 },
   cardTitle: { fontSize: 16.5, letterSpacing: -0.2 },
-  cardSub: { fontSize: 12.5 },
+  cardTitlePrimary: { fontSize: 18.5 },
+  cardSub: { fontSize: 12.5, letterSpacing: 0.1 },
+
+  badge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  badgeLabel: {
+    fontSize: 7.5,
+    fontFamily: "Nunito_700Bold",
+    letterSpacing: 0.8,
+  },
 
   arrowBtn: {
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 5,
   },
   arrowGrad: {
     width: 34,
@@ -421,14 +596,23 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  arrowGradPrimary: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   bottomBar: {
     height: 2.5,
     marginHorizontal: 18,
     marginBottom: 3,
     borderRadius: 2,
-    opacity: 0.5,
+    opacity: 0.6,
+  },
+  bottomBarPrimary: {
+    height: 3,
+    opacity: 0.8,
   },
 
   footerCard: {

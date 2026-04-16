@@ -1214,56 +1214,72 @@ export default function KundliMilanScreen(){
           {!isPro&&!result&&(
             <View style={{gap:16}}>
 
-              {/* Hook */}
-              <View style={{alignItems:"center",paddingVertical:10,paddingHorizontal:12,
-                backgroundColor:C.isDark?"rgba(124,58,237,0.1)":"rgba(124,58,237,0.06)",
-                borderRadius:16,borderWidth:1,
-                borderColor:C.isDark?"rgba(139,92,246,0.15)":"rgba(124,58,237,0.1)"}}>
-                <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{fontSize:14}}>✦</Text>
-                  <Text style={{color:C.isDark?"#e9d5ff":"#4c1d95",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
-                    Will This Relationship Work?
-                  </Text>
-                </View>
-                <Text style={{color:C.isDark?"#fff":"#3b0764",fontSize:11,fontFamily:"Nunito_700Bold",marginTop:3}}>
-                  Ancient Vedic wisdom meets modern insights
+              {/* ── Top CTA: Check Now ── */}
+              <Pressable
+                onPress={()=>{p1&&p2&&handleMatch();Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+                disabled={!p1||!p2||loading}
+                style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.85:1,overflow:"hidden",borderRadius:16})}>
+                <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={{paddingVertical:16,alignItems:"center",
+                    shadowColor:"#7c3aed",shadowOffset:{width:0,height:6},shadowOpacity:0.4,shadowRadius:12}}>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                    <Feather name="zap" size={16} color="#fff"/>
+                    <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.4}}>
+                      Check Now
+                    </Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+
+              {/* ── Section Title ── */}
+              <View style={{alignItems:"center",gap:4,marginTop:4}}>
+                <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:12,fontFamily:"Nunito_800ExtraBold",
+                  textTransform:"uppercase",letterSpacing:2}}>
+                  What You'll Discover
+                </Text>
+                <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",
+                  fontSize:11,fontFamily:"Nunito_500Medium"}}>
+                  Based on 36 Gun Milan (Ashtakoot matching)
                 </Text>
               </View>
 
-              {/* What You'll Discover */}
-              <View style={{gap:10}}>
-                <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
-                  <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
-                  <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:10,fontFamily:"Nunito_700Bold",
-                    textTransform:"uppercase",letterSpacing:1.5}}>
-                    What You'll Discover
-                  </Text>
-                  <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
-                </View>
-
-                <View style={{flexDirection:"row",flexWrap:"wrap",gap:7,justifyContent:"center"}}>
-                  {([
-                    {icon:"🔮",label:"Soul Sync",color:"#f59e0b"},
-                    {icon:"🧲",label:"Attraction",color:"#ef4444"},
-                    {icon:"⭐",label:"Destiny",color:"#8b5cf6"},
-                    {icon:"🔥",label:"Intimacy",color:"#ec4899"},
-                    {icon:"🤝",label:"Emotional",color:"#3b82f6"},
-                    {icon:"⚡",label:"Personality",color:"#6366f1"},
-                    {icon:"🌙",label:"Alignment",color:"#14b8a6"},
-                    {icon:"💫",label:"Energy",color:"#a855f7"},
-                  ] as const).map((item,i)=>(
-                    <View key={i} style={{width:"22%",
-                      backgroundColor:C.isDark?"#111827":"#1A2135",
-                      borderRadius:12,paddingVertical:10,paddingHorizontal:4,alignItems:"center",gap:4,
-                      borderWidth:1,borderColor:"rgba(255,255,255,0.08)"}}>
-                      <View style={{width:26,height:26,borderRadius:13,alignItems:"center",justifyContent:"center",
-                        backgroundColor:`${item.color}20`}}>
-                        <Text style={{fontSize:12}}>{item.icon}</Text>
+              {/* ── 2-Column Detailed Grid ── */}
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
+                {([
+                  {icon:"🔮",title:"Soul Sync",koot:"Varna",desc:"Spiritual & intellectual match",color:"#f59e0b"},
+                  {icon:"🧲",title:"Attraction Power",koot:"Vashya",desc:"Mutual attraction & influence",color:"#ef4444"},
+                  {icon:"⭐",title:"Destiny Link",koot:"Tara",desc:"Luck & timing alignment",color:"#8b5cf6"},
+                  {icon:"🔥",title:"Intimacy Match",koot:"Yoni",desc:"Physical & emotional chemistry",color:"#ec4899"},
+                  {icon:"🤝",title:"Emotional Bond",koot:"Graha Maitri",desc:"Heart-to-heart connection",color:"#3b82f6"},
+                  {icon:"⚡",title:"Personality Energy",koot:"Gana",desc:"Nature & temperament match",color:"#6366f1"},
+                  {icon:"🌙",title:"Life Alignment",koot:"Bhakoot",desc:"Family & life harmony",color:"#14b8a6"},
+                  {icon:"💫",title:"Energy Flow",koot:"Nadi",desc:"Deep soul compatibility",color:"#a855f7"},
+                ] as const).map((item,i)=>(
+                  <View key={i} style={{width:"48%",
+                    backgroundColor:C.isDark?"#111827":"#1A2135",
+                    borderRadius:14,padding:12,gap:6,
+                    borderWidth:1,borderColor:"rgba(255,255,255,0.07)",
+                    shadowColor:"#000",shadowOffset:{width:0,height:3},shadowOpacity:0.25,shadowRadius:6,elevation:3}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <View style={{width:32,height:32,borderRadius:10,alignItems:"center",justifyContent:"center",
+                        backgroundColor:`${item.color}22`}}>
+                        <Text style={{fontSize:16}}>{item.icon}</Text>
                       </View>
-                      <Text style={{color:"#E5E7EB",fontSize:8,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{item.label}</Text>
+                      <View style={{flex:1}}>
+                        <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={{color:item.color,fontSize:8,fontFamily:"Nunito_700Bold",
+                          textTransform:"uppercase",letterSpacing:0.6}}>
+                          {item.koot}
+                        </Text>
+                      </View>
                     </View>
-                  ))}
-                </View>
+                    <Text style={{color:"#9CA3AF",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
+                      {item.desc}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
               {/* ── Unlock Section (only on button tap) ── */}

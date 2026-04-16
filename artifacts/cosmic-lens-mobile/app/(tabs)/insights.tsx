@@ -15,9 +15,8 @@ import {
 import { CosmicBg } from "@/components/CosmicBg";
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useC, useTheme } from "@/context/ThemeContext";
+import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { ZODIAC_ACCENTS, ZODIAC_EMOJI } from "@/lib/zodiac";
 import { getT } from "@/lib/i18n";
 import {
   computeProInsight,
@@ -27,51 +26,6 @@ import {
   type PDForecast,
   type ProInsight,
 } from "@/lib/proInsightEngine";
-
-// ── Cosmic Theme Card ─────────────────────────────────────────────────────────
-function CosmicThemeCard() {
-  const C = useC();
-  const { zodiacSign, zodiacAccent } = useTheme();
-  const sign   = zodiacSign;
-  const emoji  = sign ? ZODIAC_EMOJI[sign] : "✨";
-  const accent = sign ? ZODIAC_ACCENTS[sign].accent : C.accent;
-
-  return (
-    <View style={[
-      ct.card,
-      {
-        backgroundColor: C.bgCard,
-        borderColor: `${accent}35`,
-        shadowColor: accent,
-      },
-    ]}>
-
-      {/* Subtle glow behind the emoji orb */}
-      <View style={[ct.glowOrb, { backgroundColor: `${accent}18`, borderColor: `${accent}30` }]}>
-        <Text style={ct.emoji}>{emoji}</Text>
-        {/* Inner pulse ring */}
-        <View style={[ct.ring, { borderColor: `${accent}25` }]} />
-      </View>
-
-      {/* Text content */}
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 3 }}>
-          <Text style={[ct.title, { color: C.text }]}>
-            {sign ? `${sign} Theme Active` : "Cosmic Theme"}
-          </Text>
-          <View style={[ct.liveDot, { backgroundColor: accent }]} />
-        </View>
-        <Text style={[ct.desc, { color: C.textMuted }]}>
-          Your app theme adapts to your zodiac energy
-        </Text>
-      </View>
-
-      {/* Color swatch */}
-      <View style={[ct.swatch, { backgroundColor: accent, shadowColor: accent }]} />
-
-    </View>
-  );
-}
 
 type Category = "career" | "relationship" | "finance" | "health";
 
@@ -530,49 +484,8 @@ const s = StyleSheet.create({
   avgScore: { fontSize: 28, fontWeight: "800" },
   avgLabel: { color: "#3d5a7a", fontSize: 11 },
 
-  themeSection: { gap: 8 },
   sectionCap: {
     fontSize: 10, fontWeight: "700", letterSpacing: 2,
     textTransform: "uppercase", paddingLeft: 2,
-  },
-});
-
-// ── Cosmic Theme Card styles ───────────────────────────────────────────────────
-const ct = StyleSheet.create({
-  card: {
-    flexDirection: "row", alignItems: "center", gap: 14,
-    borderRadius: 18, borderWidth: 1,
-    paddingHorizontal: 16, paddingVertical: 14,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.30,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  glowOrb: {
-    width: 52, height: 52, borderRadius: 26,
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 1,
-  },
-  ring: {
-    position: "absolute",
-    top: 2, left: 2,
-    width: 46, height: 46, borderRadius: 23,
-    borderWidth: 1.5,
-  },
-  emoji: { fontSize: 24, lineHeight: 30 },
-
-  title: { fontSize: 14, fontWeight: "700", letterSpacing: -0.2 },
-  desc:  { fontSize: 11, lineHeight: 16 },
-
-  liveDot: {
-    width: 7, height: 7, borderRadius: 3.5,
-    marginBottom: 1,
-  },
-  swatch: {
-    width: 22, height: 22, borderRadius: 11,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.60,
-    shadowRadius: 6,
-    elevation: 4,
   },
 });

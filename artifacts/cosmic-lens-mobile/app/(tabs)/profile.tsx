@@ -444,8 +444,6 @@ export default function ProfileScreen() {
           <View style={[s.planBadge,{ backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Feather name="circle" size={9} color={C.textMuted} />
             <Text style={{ color: C.textMuted, fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1 }}>FREE PLAN</Text>
-            <View style={[s.planDivider,{ backgroundColor: C.border }]} />
-            <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 10, fontFamily: F.semibold }}>Upgrade Now →</Text>
           </View>
         </LinearGradient>
 
@@ -463,19 +461,6 @@ export default function ProfileScreen() {
                   <Text style={{ color:C.textMuted, fontSize:11, fontFamily:F.medium }}>
                     {profiles.length} profile{profiles.length !== 1 ? "s" : ""}
                   </Text>
-                  <Feather name="chevron-right" size={14} color={C.textDim} />
-                </View>
-              }
-            />
-
-            <SettingRow
-              icon="star"
-              label={t.subscription}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
-              right={
-                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <View style={{ width:7, height:7, borderRadius:3.5, backgroundColor:C.textDim }} />
-                  <Text style={{ color:C.textMuted, fontSize:12, fontFamily:F.medium }}>Free Plan</Text>
                   <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
               }

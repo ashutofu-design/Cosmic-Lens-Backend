@@ -1210,11 +1210,64 @@ export default function KundliMilanScreen(){
             </Animated.View>
           )}
 
-          {/* ── BASIC MODE: Premium conversion screen ── */}
-          {!isPro&&!result&&showUnlock&&(
+          {/* ── BASIC MODE: Hook + Discovery (always visible) ── */}
+          {!isPro&&!result&&(
             <View style={{gap:16}}>
 
-              {/* ── Unified Unlock Section ── */}
+              {/* Hook */}
+              <View style={{alignItems:"center",paddingVertical:10,paddingHorizontal:12,
+                backgroundColor:C.isDark?"rgba(124,58,237,0.1)":"rgba(124,58,237,0.06)",
+                borderRadius:16,borderWidth:1,
+                borderColor:C.isDark?"rgba(139,92,246,0.15)":"rgba(124,58,237,0.1)"}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                  <Text style={{fontSize:14}}>✦</Text>
+                  <Text style={{color:C.isDark?"#e9d5ff":"#4c1d95",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
+                    Will This Relationship Work?
+                  </Text>
+                </View>
+                <Text style={{color:C.isDark?"#fff":"#3b0764",fontSize:11,fontFamily:"Nunito_700Bold",marginTop:3}}>
+                  Ancient Vedic wisdom meets modern insights
+                </Text>
+              </View>
+
+              {/* What You'll Discover */}
+              <View style={{gap:10}}>
+                <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+                  <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
+                  <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:10,fontFamily:"Nunito_700Bold",
+                    textTransform:"uppercase",letterSpacing:1.5}}>
+                    What You'll Discover
+                  </Text>
+                  <View style={{height:1,flex:1,backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
+                </View>
+
+                <View style={{flexDirection:"row",flexWrap:"wrap",gap:7,justifyContent:"center"}}>
+                  {([
+                    {icon:"🔮",label:"Soul Sync",color:"#f59e0b"},
+                    {icon:"🧲",label:"Attraction",color:"#ef4444"},
+                    {icon:"⭐",label:"Destiny",color:"#8b5cf6"},
+                    {icon:"🔥",label:"Intimacy",color:"#ec4899"},
+                    {icon:"🤝",label:"Emotional",color:"#3b82f6"},
+                    {icon:"⚡",label:"Personality",color:"#6366f1"},
+                    {icon:"🌙",label:"Alignment",color:"#14b8a6"},
+                    {icon:"💫",label:"Energy",color:"#a855f7"},
+                  ] as const).map((item,i)=>(
+                    <View key={i} style={{width:"22%",
+                      backgroundColor:C.isDark?"#111827":"#1A2135",
+                      borderRadius:12,paddingVertical:10,paddingHorizontal:4,alignItems:"center",gap:4,
+                      borderWidth:1,borderColor:"rgba(255,255,255,0.08)"}}>
+                      <View style={{width:26,height:26,borderRadius:13,alignItems:"center",justifyContent:"center",
+                        backgroundColor:`${item.color}20`}}>
+                        <Text style={{fontSize:12}}>{item.icon}</Text>
+                      </View>
+                      <Text style={{color:"#E5E7EB",fontSize:8,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{item.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* ── Unlock Section (only on button tap) ── */}
+              {showUnlock&&(
               <View style={{borderRadius:20,overflow:"hidden",
                 borderWidth:1,borderColor:"rgba(245,158,11,0.35)"}}>
                 <LinearGradient colors={["#1a0d04","#111827"]}
@@ -1233,57 +1286,6 @@ export default function KundliMilanScreen(){
                     <Text style={{color:"rgba(251,191,36,0.7)",fontSize:10,fontFamily:"Nunito_500Medium"}}>
                       See what you're missing about your relationship
                     </Text>
-                  </View>
-
-                  {/* Hook */}
-                  <View style={{alignItems:"center",paddingVertical:8,
-                    backgroundColor:"rgba(124,58,237,0.1)",borderRadius:14,
-                    borderWidth:1,borderColor:"rgba(139,92,246,0.15)"}}>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                      <Text style={{fontSize:13}}>✦</Text>
-                      <Text style={{color:"#e9d5ff",fontSize:15,fontFamily:"Nunito_800ExtraBold"}}>
-                        Will This Relationship Work?
-                      </Text>
-                    </View>
-                    <Text style={{color:"#fff",fontSize:10,fontFamily:"Nunito_700Bold",marginTop:2}}>
-                      Ancient Vedic wisdom meets modern insights
-                    </Text>
-                  </View>
-
-                  {/* What You'll Discover */}
-                  <View style={{gap:8}}>
-                    <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
-                      <View style={{height:1,flex:1,backgroundColor:"rgba(245,158,11,0.15)"}}/>
-                      <Text style={{color:"#fbbf24",fontSize:9,fontFamily:"Nunito_700Bold",
-                        textTransform:"uppercase",letterSpacing:1.5}}>
-                        What You'll Discover
-                      </Text>
-                      <View style={{height:1,flex:1,backgroundColor:"rgba(245,158,11,0.15)"}}/>
-                    </View>
-
-                    <View style={{flexDirection:"row",flexWrap:"wrap",gap:6,justifyContent:"center"}}>
-                      {([
-                        {icon:"🔮",label:"Soul Sync",color:"#f59e0b"},
-                        {icon:"🧲",label:"Attraction",color:"#ef4444"},
-                        {icon:"⭐",label:"Destiny",color:"#8b5cf6"},
-                        {icon:"🔥",label:"Intimacy",color:"#ec4899"},
-                        {icon:"🤝",label:"Emotional",color:"#3b82f6"},
-                        {icon:"⚡",label:"Personality",color:"#6366f1"},
-                        {icon:"🌙",label:"Alignment",color:"#14b8a6"},
-                        {icon:"💫",label:"Energy",color:"#a855f7"},
-                      ] as const).map((item,i)=>(
-                        <View key={i} style={{width:"22%",
-                          backgroundColor:"rgba(255,255,255,0.04)",
-                          borderRadius:10,paddingVertical:8,paddingHorizontal:3,alignItems:"center",gap:3,
-                          borderWidth:1,borderColor:"rgba(255,255,255,0.06)"}}>
-                          <View style={{width:24,height:24,borderRadius:12,alignItems:"center",justifyContent:"center",
-                            backgroundColor:`${item.color}20`}}>
-                            <Text style={{fontSize:11}}>{item.icon}</Text>
-                          </View>
-                          <Text style={{color:"#E5E7EB",fontSize:7,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{item.label}</Text>
-                        </View>
-                      ))}
-                    </View>
                   </View>
 
                   {/* Feature List */}

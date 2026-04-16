@@ -214,7 +214,7 @@ function OptionCard({
 
         <View style={[
           s.card,
-          { borderRadius: bRadius },
+          { borderRadius: bRadius, backgroundColor: isDark ? "#111827" : "#f8f8ff" },
           {
             shadowColor: option.glowColor,
             shadowOpacity: isDark ? 0.5 : (isHL ? 0.25 : 0.1),
@@ -223,7 +223,7 @@ function OptionCard({
             elevation: 14,
           },
         ]}>
-          {isDark ? null : Platform.OS !== "web" ? (
+          {!isDark && Platform.OS !== "web" ? (
             <BlurView
               intensity={60}
               tint="light"

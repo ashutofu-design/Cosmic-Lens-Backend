@@ -1221,13 +1221,13 @@ export default function KundliMilanScreen(){
                   disabled={!p1||!p2||loading}
                   style={({pressed})=>({opacity:(!p1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
                     borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
-                  <LinearGradient colors={["#fde68a","#f59e0b","#b45309"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                    style={{paddingVertical:17,alignItems:"center",
+                  <LinearGradient colors={["#FFD89B","#FFB347"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                    style={{paddingVertical:18,alignItems:"center",
                       shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.55,shadowRadius:16}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
-                      <Feather name="zap" size={22} color="#000000"/>
-                      <Text style={{color:"#000000",fontSize:22,fontFamily:"Nunito_900Black",letterSpacing:1,lineHeight:28,
-                        textShadowColor:"#000000",textShadowOffset:{width:0,height:0},textShadowRadius:6}}>
+                      <Feather name="zap" size={18} color="#000000"/>
+                      <Text style={{color:"#000000",fontSize:18,fontWeight:"800",letterSpacing:0.5,
+                        textShadowColor:"rgba(0,0,0,0.15)",textShadowOffset:{width:0,height:1},textShadowRadius:1}}>
                         Check Now
                       </Text>
                     </View>

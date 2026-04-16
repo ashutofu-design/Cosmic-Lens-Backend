@@ -140,6 +140,9 @@ function FeatureCard({
         } else if (feature.key === "loyalty") {
           const url = partnerId ? `/loyalty-check?partnerId=${partnerId}` : "/loyalty-check";
           router.push(url as any);
+        } else if (feature.key === "will-return") {
+          const url = partnerId ? `/will-return?partnerId=${partnerId}` : "/will-return";
+          router.push(url as any);
         }
       }}>
         <View style={[s.card, {

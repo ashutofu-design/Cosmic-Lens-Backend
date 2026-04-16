@@ -484,6 +484,62 @@ export default function RelationshipScreen() {
           </Text>
         </Animated.View>
 
+        {/* ── Hook: Will This Relationship Work? ── */}
+        <View style={{alignItems:"center",paddingVertical:4,marginBottom:6}}>
+          <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+            <Text style={{fontSize:14}}>✦</Text>
+            <Text style={{color:isDark?"#f3e8ff":"#5b21b6",fontSize:17,fontFamily:"Nunito_800ExtraBold"}}>
+              Will This Relationship Work?
+            </Text>
+          </View>
+          <Text style={{color:isDark?"rgba(203,213,225,0.55)":"#64748B",fontSize:11,fontFamily:"Nunito_400Regular",marginTop:3}}>
+            Ancient Vedic wisdom meets modern insights
+          </Text>
+        </View>
+
+        {/* ── What You'll Discover ── */}
+        <View style={{gap:12,marginBottom:16}}>
+          <View style={{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+            <View style={{height:1,flex:1,backgroundColor:isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
+            <Text style={{color:isDark?"#a78bfa":"#7c3aed",fontSize:11,fontFamily:"Nunito_700Bold",
+              textTransform:"uppercase",letterSpacing:1.5}}>
+              What You'll Discover
+            </Text>
+            <View style={{height:1,flex:1,backgroundColor:isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}}/>
+          </View>
+
+          <View style={{flexDirection:"row",flexWrap:"wrap",gap:10,justifyContent:"center"}}>
+            {([
+              {icon:"🔮",label:"Soul Sync",sub:"Varna",color:"#f59e0b",desc:"Spiritual & intellectual match"},
+              {icon:"🧲",label:"Attraction Power",sub:"Vashya",color:"#ef4444",desc:"Mutual influence & magnetism"},
+              {icon:"⭐",label:"Destiny Link",sub:"Tara",color:"#8b5cf6",desc:"Cosmic luck & fortune alignment"},
+              {icon:"🔥",label:"Intimacy Match",sub:"Yoni",color:"#ec4899",desc:"Physical & energetic chemistry"},
+              {icon:"🤝",label:"Emotional Bond",sub:"Graha Maitri",color:"#3b82f6",desc:"Heart-to-heart connection"},
+              {icon:"⚡",label:"Personality Energy",sub:"Gana",color:"#6366f1",desc:"Temperament compatibility"},
+              {icon:"🌙",label:"Life Alignment",sub:"Bhakoot",color:"#14b8a6",desc:"Prosperity & family harmony"},
+              {icon:"💫",label:"Energy Flow",sub:"Nadi",color:"#a855f7",desc:"Deepest soul-level resonance"},
+            ] as const).map((item,i)=>(
+              <View key={i} style={{width:"47%",
+                backgroundColor:isDark?"#111827":"#1A2135",
+                borderRadius:16,padding:13,gap:4,
+                borderWidth:1,borderColor:"rgba(255,255,255,0.08)",
+                shadowColor:item.color,shadowOffset:{width:0,height:2},shadowOpacity:isDark?0.2:0.08,shadowRadius:10}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
+                  <View style={{width:30,height:30,borderRadius:15,alignItems:"center",justifyContent:"center",
+                    backgroundColor:`${item.color}20`}}>
+                    <Text style={{fontSize:14}}>{item.icon}</Text>
+                  </View>
+                  <View style={{flex:1}}>
+                    <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_700Bold"}}>{item.label}</Text>
+                    <Text style={{color:"rgba(167,139,250,0.7)",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>{item.sub}</Text>
+                  </View>
+                </View>
+                <Text style={{color:"#9CA3AF",fontSize:9,fontFamily:"Nunito_400Regular",lineHeight:13}}>{item.desc}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
         {/* ── Smart Person Slots ── */}
         <View style={{flexDirection:"row",gap:8,marginBottom:14}}>
 

@@ -1158,10 +1158,36 @@ export default function KundliMilanScreen(){
               <Text style={{color:"#7c3aed",fontSize:10,fontFamily:"Nunito_400Regular"}}>अष्टकूट गुण मिलान</Text>
             </View>
           </View>
+
+          {/* ── Segmented Basic / Pro Toggle ── */}
+          <View style={{alignItems:"center",paddingTop:12,paddingBottom:4}}>
+            <View style={[ms.segWrap,{backgroundColor:C.isDark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.05)"}]}>
+              <Pressable
+                onPress={()=>{setPlan("basic");Haptics.selectionAsync();}}
+                style={[ms.segBtn,
+                  plan==="basic"&&{backgroundColor:C.isDark?"#1e2744":"#4f46e5"}
+                ]}>
+                <Text style={[ms.segTxt,{color:plan==="basic"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>Basic</Text>
+              </Pressable>
+              <Pressable
+                onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+                style={[ms.segBtn,{overflow:"hidden"},plan==="pro"&&{backgroundColor:"#6d28d9"}]}>
+                {plan==="pro"?(
+                  <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                    style={[StyleSheet.absoluteFillObject,{borderRadius:14}]}/>
+                ):null}
+                {plan==="pro"&&(
+                  <View style={{position:"absolute",top:-8,left:"25%",right:"25%",height:16,borderRadius:8,backgroundColor:"rgba(219,39,119,0.3)"}}/>
+                )}
+                <Text style={[ms.segTxt,{color:plan==="pro"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>✨ Pro</Text>
+              </Pressable>
+            </View>
+          </View>
+
         </LinearGradient>
 
         <ScrollView
-          contentContainerStyle={[ms.scroll,{paddingBottom:botPad+80}]}
+          contentContainerStyle={[ms.scroll,{paddingBottom:botPad+30}]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
 
@@ -1377,31 +1403,6 @@ export default function KundliMilanScreen(){
 
         </ScrollView>
 
-        {/* ── Sticky Bottom Basic / Pro Switch ── */}
-        <View style={[ms.stickyBar,{paddingBottom:Math.max(botPad,16),backgroundColor:C.isDark?"#0B0F19":"#F8F9FC",borderTopColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.06)"}]}>
-          <View style={[ms.stickyInner,{backgroundColor:C.isDark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.05)"}]}>
-            <Pressable
-              onPress={()=>{setPlan("basic");Haptics.selectionAsync();}}
-              style={[ms.stickyBtn,
-                plan==="basic"&&{backgroundColor:C.isDark?"#1e2744":"#4f46e5"}
-              ]}>
-              <Text style={[ms.stickyBtnTxt,{color:plan==="basic"?"#fff":C.isDark?"rgba(255,255,255,0.45)":"rgba(0,0,0,0.4)"}]}>Basic</Text>
-            </Pressable>
-            <Pressable
-              onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-              style={[ms.stickyBtn,{overflow:"hidden"},plan==="pro"&&{backgroundColor:"#6d28d9"}]}>
-              {plan==="pro"?(
-                <LinearGradient colors={["#7c3aed","#db2777"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={[StyleSheet.absoluteFillObject,{borderRadius:16}]}/>
-              ):null}
-              {plan==="pro"&&(
-                <View style={ms.proGlow}/>
-              )}
-              <Text style={[ms.stickyBtnTxt,{color:plan==="pro"?"#fff":C.isDark?"rgba(255,255,255,0.45)":"rgba(0,0,0,0.4)"}]}>✨ Pro</Text>
-            </Pressable>
-          </View>
-        </View>
-
       </View>
     </KeyboardAvoidingView>
   );
@@ -1441,11 +1442,9 @@ const ms=StyleSheet.create({
   upgradeNudge:{borderRadius:16,borderWidth:1,padding:16},
   switchProBtn:{borderRadius:12,height:42,alignItems:"center",justifyContent:"center"},
   howCard:   {borderRadius:16,borderWidth:1,padding:16},
-  stickyBar: {position:"absolute",bottom:0,left:0,right:0,paddingTop:10,paddingHorizontal:16,borderTopWidth:1,zIndex:10},
-  stickyInner:{flexDirection:"row",borderRadius:20,padding:3,gap:3},
-  stickyBtn: {flex:1,height:44,borderRadius:16,alignItems:"center",justifyContent:"center"},
-  stickyBtnTxt:{fontSize:14,fontFamily:"Nunito_800ExtraBold"},
-  proGlow:   {position:"absolute",top:-10,left:"20%",right:"20%",height:20,borderRadius:10,backgroundColor:"rgba(219,39,119,0.35)"},
+  segWrap:   {flexDirection:"row",borderRadius:18,padding:3,gap:3,width:200},
+  segBtn:    {flex:1,height:36,borderRadius:14,alignItems:"center",justifyContent:"center"},
+  segTxt:    {fontSize:12,fontFamily:"Nunito_800ExtraBold"},
 });
 
 const sl=StyleSheet.create({

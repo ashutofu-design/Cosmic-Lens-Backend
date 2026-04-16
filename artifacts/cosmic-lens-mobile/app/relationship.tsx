@@ -469,7 +469,7 @@ export default function RelationshipScreen() {
 
       <ScrollView
         style={s.root}
-        contentContainerStyle={[s.content, { paddingTop: topPad + 60, paddingBottom: botPad + 50 }]}
+        contentContainerStyle={[s.content, { paddingTop: topPad + 50, paddingBottom: botPad + 30 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={[s.heroWrap, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
@@ -494,7 +494,7 @@ export default function RelationshipScreen() {
         </Animated.View>
 
         {/* ── Compact Kundli Slots ── */}
-        <View style={{flexDirection:"row",gap:8,marginBottom:24}}>
+        <View style={{flexDirection:"row",gap:8,marginBottom:14}}>
           <Pressable onPress={()=>router.push("/kundli-milan" as any)}
             style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
               borderRadius:14,paddingHorizontal:10,gap:7,
@@ -546,30 +546,30 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
 
-  heroWrap: { alignItems: "center", marginBottom: 32, gap: 10 },
-  heroEmojiWrap: { alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  heroWrap: { alignItems: "center", marginBottom: 14, gap: 6 },
+  heroEmojiWrap: { alignItems: "center", justifyContent: "center", marginBottom: 4 },
   heroEmojiCircle: {
-    width: 80, height: 80, borderRadius: 40,
+    width: 56, height: 56, borderRadius: 28,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.18)",
   },
-  heroEmoji: { fontSize: 38 },
+  heroEmoji: { fontSize: 26 },
   heroEmojiGlow: {
     position: "absolute",
-    width: 110, height: 110, borderRadius: 55,
+    width: 76, height: 76, borderRadius: 38,
     backgroundColor: "rgba(255,77,141,0.15)",
     zIndex: -1,
   },
   heroEmojiGlow2: {
     position: "absolute",
-    width: 140, height: 140, borderRadius: 70,
+    width: 96, height: 96, borderRadius: 48,
     backgroundColor: "rgba(192,38,211,0.08)",
     zIndex: -2,
   },
-  heroTitle: { fontSize: 30, letterSpacing: -0.5, textAlign: "center" },
-  heroSub: { fontSize: 14, textAlign: "center", letterSpacing: 0.2, maxWidth: 270 },
+  heroTitle: { fontSize: 24, letterSpacing: -0.5, textAlign: "center" },
+  heroSub: { fontSize: 12, textAlign: "center", letterSpacing: 0.2, maxWidth: 270 },
 
-  optionsList: { gap: 24 },
+  optionsList: { gap: 14 },
 
   radialGlow: {
     position: "absolute",
@@ -598,35 +598,35 @@ const s = StyleSheet.create({
     letterSpacing: 1.3,
   },
 
-  cardContent: { padding: 22, paddingTop: 24, gap: 16 },
-  cardContentHL: { padding: 24, paddingTop: 26 },
+  cardContent: { padding: 16, paddingTop: 18, gap: 12 },
+  cardContentHL: { padding: 18, paddingTop: 20 },
 
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 14 },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
 
   emojiCircle: {
-    width: 56, height: 56, borderRadius: 19,
+    width: 46, height: 46, borderRadius: 16,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.14)",
   },
   emojiCircleHL: {
-    width: 66, height: 66, borderRadius: 22,
+    width: 54, height: 54, borderRadius: 18,
   },
-  emoji: { fontSize: 25 },
-  emojiHL: { fontSize: 30 },
+  emoji: { fontSize: 22 },
+  emojiHL: { fontSize: 26 },
 
-  titleArea: { flex: 1, gap: 5 },
-  cardTitle: { fontSize: 18, letterSpacing: -0.2 },
-  cardTitleHL: { fontSize: 21 },
-  cardSub: { fontSize: 12, letterSpacing: 0.1 },
-  cardSubHL: { fontSize: 12.5, lineHeight: 17 },
+  titleArea: { flex: 1, gap: 3 },
+  cardTitle: { fontSize: 16, letterSpacing: -0.2 },
+  cardTitleHL: { fontSize: 18 },
+  cardSub: { fontSize: 11, letterSpacing: 0.1 },
+  cardSubHL: { fontSize: 11.5, lineHeight: 16 },
 
   arrowCircle: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.2)",
   },
   arrowCircleHL: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 44, height: 44, borderRadius: 22,
   },
 
   descRow: { marginTop: -2 },

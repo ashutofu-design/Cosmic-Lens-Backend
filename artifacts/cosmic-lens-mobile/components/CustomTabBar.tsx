@@ -78,10 +78,10 @@ function TabItem({
           style={[
             styles.pillGlow,
             {
-              backgroundColor: C.isDark ? `${accent}12` : `${accent}08`,
+              backgroundColor: C.isDark ? `${accent}12` : `${accent}14`,
               shadowColor: accent,
-              shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.6] }),
-              shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 14] }),
+              shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, C.isDark ? 0.6 : 0.4] }),
+              shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, C.isDark ? 14 : 18] }),
             },
           ]}
         >
@@ -89,7 +89,7 @@ function TabItem({
             colors={
               C.isDark
                 ? [`${accent}30`, `${accent}12`]
-                : [`${accent}20`, `${accent}08`]
+                : [`${accent}22`, `${accent}10`]
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -159,7 +159,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
     }
   }
 
-  const barBg = C.isDark ? "rgba(8,16,32,0.82)" : "rgba(255,255,255,0.78)";
+  const barBg = C.isDark ? "rgba(8,16,32,0.82)" : "rgba(255,255,255,0.60)";
   const blurTint = C.isDark ? "dark" : "light";
 
   return (
@@ -183,7 +183,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 
         {Platform.OS !== "web" ? (
           <BlurView
-            intensity={C.isDark ? 45 : 55}
+            intensity={C.isDark ? 45 : 70}
             tint={blurTint}
             style={StyleSheet.absoluteFill}
           />

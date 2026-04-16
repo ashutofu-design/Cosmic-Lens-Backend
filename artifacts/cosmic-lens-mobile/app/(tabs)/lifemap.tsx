@@ -82,6 +82,7 @@ const STARS = Array.from({ length: STAR_COUNT }, (_, i) => ({
 }));
 
 function StarField() {
+  const C = useC();
   const driftAnims = useRef(STARS.map(() => new Animated.Value(0))).current;
   const opacityAnims = useRef(STARS.map(() => new Animated.Value(0.2))).current;
 
@@ -143,7 +144,7 @@ function StarField() {
             width: star.size * 2,
             height: star.size * 2,
             borderRadius: star.size,
-            backgroundColor: "#fff",
+            backgroundColor: C.isDark ? "#fff" : "rgba(124,58,237,0.3)",
             opacity: opacityAnims[i],
             transform: [{ translateY: driftAnims[i] }],
           }}
@@ -228,10 +229,10 @@ function CategoryCard({
 
   const cardBg = isDark
     ? isPrimary ? "rgba(50,10,30,0.7)" : "rgba(15,23,42,0.65)"
-    : isPrimary ? "rgba(255,230,240,0.85)" : "rgba(255,255,255,0.78)";
+    : isPrimary ? "rgba(255,235,245,0.92)" : "rgba(255,255,255,0.88)";
   const borderCol = isDark
     ? `${cat.glowColor}${isPrimary ? "55" : "35"}`
-    : `${cat.glowColor}${isPrimary ? "40" : "25"}`;
+    : `${cat.glowColor}${isPrimary ? "18" : "10"}`;
 
   function handlePressIn() {
     Animated.parallel([
@@ -261,8 +262,11 @@ function CategoryCard({
           isPrimary && s.cardPrimary,
           {
             borderColor: borderCol,
-            shadowColor: cat.glowColor,
-            shadowOpacity: isDark ? (isPrimary ? 0.45 : 0.25) : (isPrimary ? 0.2 : 0.1),
+            borderWidth: isDark ? (isPrimary ? 1.5 : 1) : (isPrimary ? 0.5 : 0),
+            shadowColor: isDark ? cat.glowColor : "rgba(0,0,0,0.15)",
+            shadowOpacity: isDark ? (isPrimary ? 0.45 : 0.25) : (isPrimary ? 0.35 : 0.2),
+            shadowRadius: isDark ? (isPrimary ? 22 : 14) : (isPrimary ? 20 : 12),
+            shadowOffset: { width: 0, height: isDark ? 4 : 6 },
           },
         ]}>
           {Platform.OS !== "web" ? (
@@ -281,7 +285,7 @@ function CategoryCard({
             <LinearGradient
               colors={isDark
                 ? [`${cat.glowColor}20`, `${cat.glowColor}08`, "transparent"]
-                : [`${cat.glowColor}15`, `${cat.glowColor}05`, "transparent"]}
+                : [`${cat.glowColor}12`, `${cat.glowColor}06`, "transparent"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}

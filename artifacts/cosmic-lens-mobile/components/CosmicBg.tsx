@@ -12,10 +12,7 @@ interface Props {
   contentStyle?: ViewStyle;
 }
 
-// Pre-calculated star positions [x%, y%, size, opacity]
-// spread across full screen to look like a real galaxy
 const STARS: [number, number, number, number][] = [
-  // tiny faint stars
   [0.04, 0.06, 1, 0.25], [0.92, 0.03, 1, 0.20], [0.17, 0.10, 1, 0.30],
   [0.43, 0.07, 1, 0.22], [0.68, 0.04, 1, 0.28], [0.81, 0.09, 1, 0.18],
   [0.29, 0.14, 1, 0.25], [0.55, 0.11, 1, 0.32], [0.73, 0.15, 1, 0.20],
@@ -35,7 +32,6 @@ const STARS: [number, number, number, number][] = [
   [0.60, 0.75, 1, 0.17], [0.08, 0.80, 1, 0.22], [0.38, 0.81, 1, 0.19],
   [0.75, 0.79, 1, 0.25], [0.53, 0.84, 1, 0.18], [0.20, 0.87, 1, 0.22],
   [0.84, 0.85, 1, 0.17], [0.45, 0.89, 1, 0.20], [0.93, 0.88, 1, 0.15],
-  // medium stars
   [0.09, 0.08, 2, 0.40], [0.31, 0.05, 2, 0.35], [0.57, 0.09, 2, 0.42],
   [0.79, 0.06, 2, 0.38], [0.21, 0.20, 2, 0.36], [0.66, 0.17, 2, 0.40],
   [0.47, 0.29, 2, 0.35], [0.84, 0.26, 2, 0.38], [0.13, 0.35, 2, 0.42],
@@ -45,17 +41,14 @@ const STARS: [number, number, number, number][] = [
   [0.35, 0.71, 2, 0.40], [0.80, 0.68, 2, 0.34], [0.10, 0.75, 2, 0.38],
   [0.51, 0.78, 2, 0.35], [0.77, 0.82, 2, 0.40], [0.25, 0.86, 2, 0.36],
   [0.62, 0.91, 2, 0.32], [0.90, 0.93, 2, 0.35],
-  // bright stars
   [0.15, 0.12, 3, 0.60], [0.53, 0.16, 3, 0.55], [0.88, 0.20, 3, 0.58],
   [0.33, 0.36, 3, 0.62], [0.70, 0.33, 3, 0.56], [0.07, 0.46, 3, 0.60],
   [0.48, 0.50, 3, 0.54], [0.92, 0.44, 3, 0.58], [0.22, 0.66, 3, 0.62],
   [0.65, 0.70, 3, 0.55], [0.43, 0.83, 3, 0.58], [0.85, 0.78, 3, 0.52],
-  // very bright (sparkle) stars
   [0.26, 0.08, 4, 0.80], [0.74, 0.13, 4, 0.75], [0.42, 0.60, 4, 0.78],
   [0.87, 0.58, 4, 0.72], [0.11, 0.88, 4, 0.76],
 ];
 
-// Milky Way: very faint diagonal dust lanes — tiny wisps only
 const MILKY: [number, number, number][] = [
   [0.20, 0.15, 0.03], [0.28, 0.22, 0.04], [0.35, 0.29, 0.03],
   [0.42, 0.36, 0.04], [0.50, 0.44, 0.03], [0.57, 0.51, 0.03],
@@ -66,41 +59,36 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
   const C = useC();
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }, style]}>
+    <View style={[s.root, { backgroundColor: C.isDark ? C.bg : "#E8E6F0" }, style]}>
 
-      {/* ── Milky Way diagonal dust lane (dark mode) ── */}
-      {C.isDark && MILKY.map(([x, y, o], i) => (
-        <View
-          key={`mw${i}`}
-          style={{
-            position: "absolute",
-            width: W * 0.12,
-            height: W * 0.12,
-            borderRadius: W * 0.06,
-            backgroundColor: `rgba(190,200,255,${o})`,
-            left: W * x - W * 0.06,
-            top: H * y - W * 0.06,
-            opacity: 0.6,
-          }}
-        />
-      ))}
-
-      {/* ── Galaxy nebula color washes ── */}
       {C.isDark ? (
         <>
-          {/* Deep purple wash — top */}
+          {MILKY.map(([x, y, o], i) => (
+            <View
+              key={`mw${i}`}
+              style={{
+                position: "absolute",
+                width: W * 0.12,
+                height: W * 0.12,
+                borderRadius: W * 0.06,
+                backgroundColor: `rgba(190,200,255,${o})`,
+                left: W * x - W * 0.06,
+                top: H * y - W * 0.06,
+                opacity: 0.6,
+              }}
+            />
+          ))}
+
           <LinearGradient
             colors={["rgba(60,20,120,0.30)", "rgba(40,10,90,0.15)", "transparent"]}
             style={[s.wash, { top: 0, height: H * 0.45 }]}
             start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
           />
-          {/* Blue-indigo wash — bottom */}
           <LinearGradient
             colors={["transparent", "rgba(20,10,80,0.20)", "rgba(30,5,70,0.30)"]}
             style={[s.wash, { bottom: 0, height: H * 0.40 }]}
             start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
           />
-          {/* Very faint warm tint — far corner, barely visible */}
           <View style={{
             position: "absolute",
             width: W * 0.30,
@@ -112,14 +100,46 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
           }} />
         </>
       ) : (
-        <LinearGradient
-          colors={["rgba(99,102,241,0.05)", "rgba(99,102,241,0.02)", "transparent"]}
-          style={[s.wash, { top: 0, height: H * 0.35 }]}
-          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
-        />
+        <>
+          <LinearGradient
+            colors={["#DDD6F3", "#C8C2E8", "#B8C6F0", "#CEDAF5"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          <LinearGradient
+            colors={["rgba(124,58,237,0.08)", "transparent"]}
+            style={[s.wash, { top: 0, height: H * 0.35 }]}
+            start={{ x: 0.3, y: 0 }} end={{ x: 0.7, y: 1 }}
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(99,102,241,0.06)"]}
+            style={[s.wash, { bottom: 0, height: H * 0.3 }]}
+            start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
+          />
+
+          <View style={{
+            position: "absolute",
+            width: W * 0.50,
+            height: W * 0.50,
+            borderRadius: W * 0.25,
+            backgroundColor: "rgba(124,58,237,0.04)",
+            top: H * 0.08,
+            right: -W * 0.1,
+          }} />
+          <View style={{
+            position: "absolute",
+            width: W * 0.40,
+            height: W * 0.40,
+            borderRadius: W * 0.20,
+            backgroundColor: "rgba(99,102,241,0.04)",
+            bottom: H * 0.15,
+            left: -W * 0.05,
+          }} />
+        </>
       )}
 
-      {/* ── Stars ── */}
       {STARS.map(([x, y, size, opacity], i) => (
         <View
           key={`st${i}`}
@@ -128,18 +148,23 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: i % 7 === 0
-              ? `rgba(180,200,255,${C.isDark ? opacity : opacity * 0.5})`   // blue-tint
-              : i % 11 === 0
-              ? `rgba(255,240,180,${C.isDark ? opacity : opacity * 0.4})`   // warm-tint
-              : `rgba(255,255,255,${C.isDark ? opacity : opacity * 0.4})`,  // white
+            backgroundColor: C.isDark
+              ? (i % 7 === 0
+                ? `rgba(180,200,255,${opacity})`
+                : i % 11 === 0
+                ? `rgba(255,240,180,${opacity})`
+                : `rgba(255,255,255,${opacity})`)
+              : (i % 7 === 0
+                ? `rgba(124,58,237,${opacity * 0.25})`
+                : i % 11 === 0
+                ? `rgba(99,102,241,${opacity * 0.2})`
+                : `rgba(100,116,139,${opacity * 0.15})`),
             left: W * x,
             top: H * y,
           }}
         />
       ))}
 
-      {/* ── Sparkle cross on very bright stars ── */}
       {C.isDark && (
         <>
           {[[0.26, 0.08], [0.74, 0.13], [0.42, 0.60], [0.87, 0.58], [0.11, 0.88]].map(([x, y], i) => (

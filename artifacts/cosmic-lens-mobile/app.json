@@ -44,14 +44,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "1d64e5c6-e079-4d42-909c-de8484fe015d"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": ""
-    }
+    "runtimeVersion": "1.0.0",
+    "owner": "satyayatra"
   }
 }

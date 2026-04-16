@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Modal, Platform,
+  ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Platform,
   Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1073,7 +1073,6 @@ export default function KundliMilanScreen(){
   const params=useLocalSearchParams<{partnerId?:string}>();
 
   const [plan,setPlan]=useState<"basic"|"pro">("basic");
-  const [showUnlock,setShowUnlock]=useState(false);
   const [addingFor,setAddingFor]=useState<"self"|"partner"|null>(null);
   const [p1,setP1]=useState<PersonData|null>(null);
   const [p2,setP2]=useState<PersonData|null>(null);
@@ -1231,14 +1230,6 @@ export default function KundliMilanScreen(){
               <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>{t.kundliMilanTitle}</Text>
               <Text style={{color:"#7c3aed",fontSize:10,fontFamily:"Nunito_400Regular"}}>अष्टकूट गुण मिलान</Text>
             </View>
-            <Pressable
-              onPress={()=>{setShowUnlock(v=>!v);Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-              style={({pressed})=>({opacity:pressed?0.8:1,overflow:"hidden",borderRadius:10})}>
-              <LinearGradient colors={["#f59e0b","#ea580c"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                style={{paddingHorizontal:10,paddingVertical:6,borderRadius:10}}>
-                <Text style={{color:"#fff",fontSize:9,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.5}}>{showUnlock?"✕ Hide":"🔓 Unlock"}</Text>
-              </LinearGradient>
-            </Pressable>
           </View>
 
           {/* ── Segmented Basic / Pro Toggle ── */}
@@ -1498,70 +1489,6 @@ export default function KundliMilanScreen(){
         </ScrollView>
 
       </View>
-
-      {/* ── Unlock Full Report — Slide-up Half-Screen Modal ── */}
-      <Modal visible={showUnlock} transparent animationType="slide" onRequestClose={()=>setShowUnlock(false)}>
-        <Pressable onPress={()=>setShowUnlock(false)} style={{flex:1,backgroundColor:"rgba(0,0,0,0.6)"}}/>
-        <View style={{position:"absolute",left:0,right:0,bottom:0,maxHeight:"75%",
-          borderTopLeftRadius:28,borderTopRightRadius:28,overflow:"hidden",
-          borderTopWidth:1,borderLeftWidth:1,borderRightWidth:1,borderColor:"rgba(245,158,11,0.35)"}}>
-          <LinearGradient colors={["#1a0d04","#111827"]} style={{paddingTop:10,paddingHorizontal:18,paddingBottom:Math.max(insets.bottom,18)}}>
-            {/* Drag handle */}
-            <View style={{alignSelf:"center",width:42,height:4,borderRadius:2,backgroundColor:"rgba(255,255,255,0.25)",marginBottom:10}}/>
-
-            {/* Header */}
-            <View style={{flexDirection:"row",alignItems:"center",gap:7,marginBottom:4}}>
-              <Text style={{color:"#fbbf24",fontSize:16,fontFamily:"Nunito_800ExtraBold",flex:1}}>
-                Unlock Your Full Relationship Report 🔒
-              </Text>
-              <View style={{backgroundColor:"#b45309",paddingHorizontal:8,paddingVertical:3,borderRadius:8}}>
-                <Text style={{color:"#fff",fontSize:8,fontFamily:"Nunito_700Bold"}}>PRO</Text>
-              </View>
-            </View>
-            <Text style={{color:"rgba(251,191,36,0.7)",fontSize:11,fontFamily:"Nunito_500Medium",marginBottom:12}}>
-              See what you're missing about your relationship
-            </Text>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{maxHeight:380}}>
-              <View style={{gap:6}}>
-                {([
-                  "Your true emotional & physical compatibility score",
-                  "Where this relationship is truly heading",
-                  "Strengths that will keep your relationship strong",
-                  "Marriage stability & separation risk analysis",
-                  "Hidden patterns affecting your bond",
-                  "Karmic & past life connection between you",
-                  "Final relationship decision (Yes / Wait / Rethink)",
-                  "Energy blocks impacting your connection",
-                  "Personalized remedies to improve your relationship",
-                ]).map((txt,i)=>(
-                  <View key={i} style={{flexDirection:"row",alignItems:"center",gap:8,
-                    backgroundColor:"rgba(245,158,11,0.08)",
-                    borderRadius:10,paddingHorizontal:10,paddingVertical:9,
-                    borderWidth:0.5,borderColor:"rgba(245,158,11,0.18)"}}>
-                    <Feather name="lock" size={11} color="#f59e0b"/>
-                    <Text style={{color:"#E5E7EB",fontSize:12,fontFamily:"Nunito_500Medium",flex:1}}>{txt}</Text>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-
-            {/* Unlock CTA */}
-            <Pressable onPress={()=>{setShowUnlock(false);setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-              style={({pressed})=>({opacity:pressed?0.85:1,marginTop:14})}>
-              <LinearGradient colors={["#ea580c","#f59e0b","#eab308"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                style={{paddingVertical:15,borderRadius:16,alignItems:"center",
-                  shadowColor:"#f59e0b",shadowOffset:{width:0,height:5},shadowOpacity:0.5,shadowRadius:14}}>
-                <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                  <Feather name="unlock" size={16} color="#451a03"/>
-                  <Text style={{color:"#451a03",fontSize:15,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.3}}>Unlock Full Report</Text>
-                  <Text style={{fontSize:15}}>✨</Text>
-                </View>
-              </LinearGradient>
-            </Pressable>
-          </LinearGradient>
-        </View>
-      </Modal>
 
     </KeyboardAvoidingView>
   );

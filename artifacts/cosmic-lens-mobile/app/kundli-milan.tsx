@@ -1207,7 +1207,74 @@ export default function KundliMilanScreen(){
             </Animated.View>
           )}
 
-          {/* ── Compact Kundli Slots ── always one row, max ~50px ── */}
+          {/* ── BASIC MODE: Show both forms inline ── */}
+          {!isPro&&!result&&(
+            <View style={{gap:14}}>
+              {!person1&&!autoP1?(
+                <AddKundliForm title="PERSON 1 — YOUR BIRTH DETAILS"
+                  onDone={d=>handleDone("self",d)} onCancel={()=>{}}/>
+              ):(
+                <View style={{flexDirection:"row",alignItems:"center",gap:10,
+                  backgroundColor:"rgba(99,102,241,0.08)",borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                  borderWidth:1,borderColor:"rgba(99,102,241,0.2)"}}>
+                  <View style={{width:38,height:38,borderRadius:19,backgroundColor:"rgba(99,102,241,0.12)",
+                    alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"rgba(99,102,241,0.3)"}}>
+                    <Text style={{fontSize:16}}>👤</Text>
+                  </View>
+                  <View style={{flex:1,gap:2}}>
+                    <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold"}}>{person1?.name}</Text>
+                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>
+                      {EN2R[person1?.moonSign??""]??person1?.moonSign} · {person1?.nakshatra}
+                    </Text>
+                  </View>
+                  <Feather name="check-circle" size={16} color="#6366f1"/>
+                  {!autoP1&&(
+                    <Pressable onPress={()=>{setP1(null);}} style={{padding:4}}>
+                      <Feather name="x" size={14} color={C.textDim}/>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
+              {!p2?(
+                <AddKundliForm title="PERSON 2 — PARTNER'S BIRTH DETAILS"
+                  onDone={d=>handleDone("partner",d)} onCancel={()=>{}}/>
+              ):(
+                <View style={{flexDirection:"row",alignItems:"center",gap:10,
+                  backgroundColor:"rgba(236,72,153,0.07)",borderRadius:16,paddingHorizontal:14,paddingVertical:12,
+                  borderWidth:1,borderColor:"rgba(236,72,153,0.2)"}}>
+                  <View style={{width:38,height:38,borderRadius:19,backgroundColor:"rgba(236,72,153,0.1)",
+                    alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"rgba(236,72,153,0.25)"}}>
+                    <Text style={{fontSize:16}}>💑</Text>
+                  </View>
+                  <View style={{flex:1,gap:2}}>
+                    <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_700Bold"}}>{p2.name}</Text>
+                    <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>
+                      {EN2R[p2.moonSign]??p2.moonSign} · {p2.nakshatra}
+                    </Text>
+                  </View>
+                  <Feather name="check-circle" size={16} color="#ec4899"/>
+                  <Pressable onPress={()=>{setP2(null);}} style={{padding:4}}>
+                    <Feather name="x" size={14} color={C.textDim}/>
+                  </Pressable>
+                </View>
+              )}
+
+              <Pressable onPress={handleCalculate} disabled={!canCalculate||calcLoading}
+                style={({pressed})=>({opacity:pressed||!canCalculate||calcLoading?0.4:1,marginTop:4})}>
+                <LinearGradient colors={["#4f46e5","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.basicBtn}>
+                  {calcLoading?<ActivityIndicator color="#fff" size="small"/>:(
+                    <Text style={ms.basicBtnTxt}>
+                      {canCalculate?"Start Matching ✨":!person1&&!p2?"Enter details above":!person1?"Add your details first":"Add partner details"}
+                    </Text>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── PRO MODE: Compact Kundli Slots ── */}
+          {isPro&&(
           <Animated.View style={{transform:[{scale:scaleAnim}],gap:8}}>
 
             <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
@@ -1215,14 +1282,14 @@ export default function KundliMilanScreen(){
               {/* SLOT 1 — You */}
               {person1?(
                 <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:6,
-                  backgroundColor:isPro?"rgba(167,139,250,0.12)":"rgba(99,102,241,0.08)",
+                  backgroundColor:"rgba(167,139,250,0.12)",
                   borderRadius:22,paddingHorizontal:11,paddingVertical:8,
-                  borderWidth:1,borderColor:isPro?"rgba(139,92,246,0.35)":C.border}}>
+                  borderWidth:1,borderColor:"rgba(139,92,246,0.35)"}}>
                   <Text style={{fontSize:13}}>{autoP1?"🔒":"👤"}</Text>
                   <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
                     {person1.name}
                   </Text>
-                  <Feather name="check-circle" size={12} color={isPro?"#a78bfa":"#6366f1"}/>
+                  <Feather name="check-circle" size={12} color="#a78bfa"/>
                 </View>
               ):(
                 <Pressable onPress={()=>{setAddingFor("self");setResult(null);}}
@@ -1231,7 +1298,7 @@ export default function KundliMilanScreen(){
                     backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(99,102,241,0.05)",
                     borderRadius:22,paddingVertical:9,borderWidth:1,
                     borderStyle:"dashed" as any,
-                    borderColor:isPro?"rgba(139,92,246,0.4)":C.border})}>
+                    borderColor:"rgba(139,92,246,0.4)"})}>
                   <Text style={{fontSize:11}}>👤</Text>
                   <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium"}}>Not Added</Text>
                 </Pressable>
@@ -1239,21 +1306,21 @@ export default function KundliMilanScreen(){
 
               {/* Heart divider */}
               <View style={{width:22,height:22,borderRadius:11,alignItems:"center",justifyContent:"center",
-                backgroundColor:isPro?"rgba(139,92,246,0.15)":"rgba(236,72,153,0.1)"}}>
+                backgroundColor:"rgba(139,92,246,0.15)"}}>
                 <Text style={{fontSize:10}}>♥</Text>
               </View>
 
               {/* SLOT 2 — Partner */}
               {p2?(
                 <View style={{flex:1,flexDirection:"row",alignItems:"center",gap:6,
-                  backgroundColor:isPro?"rgba(249,168,212,0.1)":"rgba(236,72,153,0.07)",
+                  backgroundColor:"rgba(249,168,212,0.1)",
                   borderRadius:22,paddingHorizontal:11,paddingVertical:8,
-                  borderWidth:1,borderColor:isPro?"rgba(249,168,212,0.3)":"rgba(236,72,153,0.2)"}}>
+                  borderWidth:1,borderColor:"rgba(249,168,212,0.3)"}}>
                   <Text style={{fontSize:13}}>💑</Text>
                   <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
                     {p2.name}
                   </Text>
-                  <Feather name="check-circle" size={12} color={isPro?"#f9a8d4":"#ec4899"}/>
+                  <Feather name="check-circle" size={12} color="#f9a8d4"/>
                 </View>
               ):(
                 <Pressable onPress={()=>{setAddingFor("partner");setResult(null);}}
@@ -1262,7 +1329,7 @@ export default function KundliMilanScreen(){
                     backgroundColor:C.isDark?"rgba(255,255,255,0.04)":"rgba(236,72,153,0.04)",
                     borderRadius:22,paddingVertical:9,borderWidth:1,
                     borderStyle:"dashed" as any,
-                    borderColor:isPro?"rgba(249,168,212,0.35)":"rgba(236,72,153,0.2)"})} >
+                    borderColor:"rgba(249,168,212,0.35)"})} >
                   <Text style={{fontSize:11}}>❤️</Text>
                   <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium"}}>Not Added</Text>
                 </Pressable>
@@ -1297,30 +1364,20 @@ export default function KundliMilanScreen(){
             )}
 
           </Animated.View>
+          )}
 
           {/* ── PRO Preview Insights ── */}
           {isPro&&!result&&<ProInsightsPanel/>}
 
 
-          {/* ── CTA Buttons ── */}
-          {!result&&(isPro?(
+          {/* ── PRO CTA Buttons ── */}
+          {isPro&&!result&&(
             <ShineButton
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate} loading={calcLoading}
               text={canCalculate?"Unlock Deep Match Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
               onPress={handleCalculate}/>
-          ):(
-            <Pressable onPress={handleCalculate} disabled={!canCalculate||calcLoading}
-              style={({pressed})=>({opacity:pressed||!canCalculate||calcLoading?0.45:1})}>
-              <LinearGradient colors={["#4f46e5","#7c3aed"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.basicBtn}>
-                {calcLoading?<ActivityIndicator color="#fff" size="small"/>:(
-                  <Text style={ms.basicBtnTxt}>
-                    {canCalculate?"Start Matching ✨":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
-                  </Text>
-                )}
-              </LinearGradient>
-            </Pressable>
-          ))}
+          )}
 
           {/* ── Results ── */}
           {result&&g&&(

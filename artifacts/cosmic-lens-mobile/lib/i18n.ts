@@ -1,16 +1,16 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // COSMIC LENS — App-wide UI Translation System
-// India  : en hi bn mr ta te gu kn ml pa or as
+// India  : en hn hi bn mr ta te gu kn ml pa or as   (hn = Hinglish / Roman Hindi)
 // Global : en zh es ar fr pt de ru ja id ko tr
 // ══════════════════════════════════════════════════════════════════════════════
 
 export type UILang =
-  | "en" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn"
+  | "en" | "hn" | "hi" | "mr" | "bn" | "te" | "ta" | "gu" | "kn"
   | "ml" | "pa" | "or" | "as"
   | "zh" | "es" | "ar" | "fr" | "pt" | "de" | "ru" | "ja" | "id" | "ko" | "tr";
 
 // ── Region buckets (English is in both) ───────────────────────────────────────
-export const INDIA_LANG_CODES  = ["en","hi","bn","mr","ta","te","gu","kn","ml","or","pa","as"] as const;
+export const INDIA_LANG_CODES  = ["en","hn","hi","bn","mr","ta","te","gu","kn","ml","or","pa","as"] as const;
 export const GLOBAL_LANG_CODES = ["en","zh","es","ar","fr","pt","de","ru","ja","id","ko","tr"] as const;
 
 export interface Translations {
@@ -212,6 +212,71 @@ const T: Record<UILang, Translations> = {
 
     errorGeneral: "Something went wrong. Please try again.",
     noInternet: "No internet connection.", tryAgain: "Try Again",
+  },
+
+  // ── HINGLISH (Hindi in Roman script) ────────────────────────────────────────
+  hn: {
+    tabHome: "Home", tabKundli: "Kundli", tabAsk: "Poochein",
+    tabLifeMap: "Life Map", tabFuture: "Future", tabNotice: "Notice", tabProfile: "Profile",
+
+    save: "Save karein", cancel: "Cancel", skip: "Skip", back: "Wapas",
+    next: "Aage", done: "Ho gaya", retry: "Dobara try karein", search: "Search",
+    loading: "Load ho raha hai...", close: "Band karein", confirm: "Confirm",
+    delete: "Delete", edit: "Edit",
+
+    logIn: "Log In", createAccount: "Account banaayein",
+    continueGuest: "Bina account ke continue karein",
+    guestNote: "Aapke charts sirf is device par save honge",
+    emailAddr: "Email Address", password: "Password",
+    yourName: "Aapka naam", loginSubtitle: "Aapka personal Vedic astrology guide",
+
+    birthDetails: "Birth Details",
+    birthSubtitle: "Sahi Kundli ke liye accurate birth details zaroori hain.",
+    dateOfBirth: "Janam ki Date", timeOfBirth: "Janam ka Time",
+    birthPlace: "Janam Sthan", gender: "Gender",
+    genderMale: "Male", genderFemale: "Female", genderOther: "Other",
+    searchCity: "Sheher ya gaon search karein...",
+    generateKundli: "Kundli banayein", generatingKundli: "Kundli ban rahi hai...",
+    day: "Din", month: "Mahina", year: "Saal",
+    hour: "Ghanta", minute: "Minute",
+    timeTip: "Janam ka time Mahadasha ko directly affect karta hai. AM ya PM dhyan se check karein.",
+
+    todayEnergy: "Aaj ki Cosmic Energy", moonTransit: "Chandra Gochar",
+    currentDasha: "Current Dasha", setupKundli: "Apni Kundli Setup karein",
+    setupKundliSub: "Vedic chart banane ke liye birth details daalein",
+    viewAll: "Sab dekhein", viewDetails: "Details dekhein",
+    forecast: "Bhavishyafal", today: "Aaj",
+
+    natalChart: "Janam Kundli", planets: "Grah",
+    dashaTimeline: "Dasha Timeline", nakshatra: "Nakshatra",
+    ascendant: "Lagna", house: "Bhav",
+    noKundli: "Abhi Kundli nahi hai", noKundliSub: "Saare features unlock karne ke liye Kundli banayein",
+    createKundli: "Kundli banayein", chartType: "Chart Type",
+
+    settings: "Settings", language: "Bhasha", darkMode: "Dark Mode",
+    myProfiles: "Meri Profiles", subscription: "Subscription",
+    addFamilyMember: "Family Member add karein",
+    addFamilySub: "Beta, Beti, Jeevansathi, Maa-Baap, Dost aur bahut kuch",
+    logOut: "Log Out", deleteAccount: "Account delete karein",
+    freePlan: "Free Plan", upgradeNow: "Abhi Upgrade karein",
+    selectLanguage: "Bhasha chunein", langSubtitle: "App ki bhasha turant badal jaayegi",
+    langSearch: "Bhasha search karein...", supported: "Supported", comingSoon: "Jald aa raha hai",
+
+    askTitle: "Jyotish AI se poochein", askPlaceholder: "Apni kundli ke baare mein kuch bhi poochein...",
+    askSend: "Bhejein", askSuggestions: "Yeh poochein...",
+
+    lifeMapTitle: "Life Map", lifeMapSubtitle: "Sitaaron dwara mapped aapki zindagi",
+    lifeMapRelSub: "Pyaar, compatibility aur rishte", lifeMapCarSub: "Growth, success aur purpose",
+    lifeMapHealthSub: "Sharir, mann aur energy", lifeMapFinSub: "Dhan, stability aur flow",
+    lifeMapComing: "Aur dimensions aa rahe hain", lifeMapComingSub: "Education, Travel, Spirituality aur bahut kuch",
+
+    futureTitle: "Future Timeline", futureSubtitle: "Agle 6 mahine decoded",
+    career: "Career", finance: "Paisa", relationship: "Rishta", health: "Swasthya",
+
+    noticeTitle: "Notices", noNotices: "Abhi koi notice nahi",
+
+    errorGeneral: "Kuch galat ho gaya. Dobara try karein.",
+    noInternet: "Internet connection nahi hai.", tryAgain: "Dobara try karein",
   },
 
   // ── HINDI ───────────────────────────────────────────────────────────────────

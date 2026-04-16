@@ -27,6 +27,7 @@ type LangItem = { code: string; native: string; name: string };
 
 const ALL_LANG_META: LangItem[] = [
   { code:"en",  native:"English",     name:"English"    },
+  { code:"hn",  native:"Hinglish",    name:"Hinglish"   },
   { code:"hi",  native:"हिंदी",       name:"Hindi"      },
   { code:"bn",  native:"বাংলা",       name:"Bengali"    },
   { code:"mr",  native:"मराठी",       name:"Marathi"    },

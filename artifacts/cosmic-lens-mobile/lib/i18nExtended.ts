@@ -269,6 +269,94 @@ const TE: Record<UILang, ExtTranslations> = {
     upcomingEvents: "Upcoming Events", nextSixMonths: "Next 6 Months",
   },
 
+  // ── HINGLISH (Hindi in Roman script) ───────────────────────────────────────
+  hn: {
+    calculating: "Calculate ho raha hai...", noData: "Koi data nahi hai",
+    selectProfile: "Profile chunein", birthDataNeeded: "Birth data chahiye",
+    goBack: "Wapas jaayein", viewReport: "Report dekhein", matchReport: "Match Report",
+    present: "Maujood", notPresent: "Maujood nahi",
+    auspicious: "Shubh", inauspicious: "Ashubh",
+    daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly",
+    selectSign: "Apni Rashi chunein",
+
+    rashifalTitle: "Rashifal", todaysRashifal: "Aaj ka Rashifal",
+    loveSection: "Pyaar", careerSection: "Career",
+    healthSection: "Swasthya", moneySection: "Paisa",
+
+    panchangTitle: "Panchang", tithi: "Tithi", vara: "Vaar (Din)",
+    yogaPanchang: "Yog", karana: "Karan",
+    sunriseLabel: "Sooryodaya", sunsetLabel: "Sooryaast",
+    auspiciousTimes: "Shubh Muhurat", rahukaal: "Rahu Kaal",
+    moonSignLabel: "Chandra Rashi", paksha: "Paksha", festivals: "Tyohaar",
+
+    kundliMilanTitle: "Kundli Milan", kundliMilanSub: "Ashtakoot Compatibility",
+    groomLabel: "Dulha", brideLabel: "Dulhan",
+    checkCompatibility: "Compatibility check karein",
+    gunaScore: "Guna Score", outOf36: "36 me se",
+    manglikLabel: "Manglik", selfProfile: "Aapki Profile",
+    partnerProfile: "Partner ki Profile", addPartner: "Partner add karein",
+    birthDataMissing: "Ek ya dono logon ka birth data missing hai",
+
+    milanResult: "Compatibility Result", strengthsLabel: "Strengths",
+    challengesLabel: "Challenges", marriageOutlook: "Shaadi ka Outlook",
+    cosmicInsight: "Cosmic Insight", overallScore: "Overall Score",
+
+    doshTitle: "Dosh", manglikDosh: "Manglik Dosh",
+    kaalSarpDosh: "Kaal Sarp Dosh", pitruDosh: "Pitru Dosh",
+    sadhesatiLabel: "Sadhe Sati", remedyLabel: "Upay",
+    doshPresent: "Maujood", doshAbsent: "Maujood nahi",
+
+    numerologyTitle: "Numerology", lifePathLabel: "Life Path Number",
+    destinyNumber: "Destiny Number", soulNumber: "Soul Number",
+    personalityNumber: "Personality Number",
+    luckyNumbers: "Lucky Numbers", luckyColors: "Lucky Colors",
+
+    luckyTitle: "Lucky Cheezein", luckyNumber: "Lucky Number",
+    luckyColor: "Lucky Rang", luckyGem: "Lucky Ratna",
+    luckyDay: "Lucky Din", luckyDirection: "Lucky Disha",
+    luckyMetal: "Lucky Dhatu",
+
+    muhuratTitle: "Muhurat", marriageMuhurat: "Shaadi Muhurat",
+    businessMuhurat: "Business Muhurat", travelMuhurat: "Yatra Muhurat",
+    propertyMuhurat: "Griha Pravesh", noMuhurat: "Aaj koi muhurat nahi",
+
+    planetTitle: "Grahon ki Position", retrograde: "Vakri",
+    directMotion: "Margi", transitLabel: "Gochar",
+    planetDignity: "Sthiti", exalted: "Uchch", debilitated: "Neech",
+
+    vastuTitle: "Vastu Shastra", northDir: "Uttar", southDir: "Dakshin",
+    eastDir: "Poorv", westDir: "Paschim", northEast: "Ishaan",
+    northWest: "Vayavya", southEast: "Agni", southWest: "Nairutya",
+    vastuTip: "Vastu Tip",
+
+    remediesTitle: "Upay", gemstones: "Ratna",
+    mantrasLabel: "Mantra", donationLabel: "Daan",
+    fastingLabel: "Vrat", yagyaLabel: "Yagya / Havan",
+
+    subscriptionTitle: "Subscription", paymentTitle: "Safe Payment",
+    plansTitle: "Plans aur Pricing", perMonth: "/ mahina", perYear: "/ saal",
+    currentPlanLabel: "Current Plan", upgradePlanLabel: "Plan Upgrade karein",
+    mostPopular: "Sabse Popular", bestValue: "Best Value",
+    planFeatures: "Kya-kya milega",
+
+    editProfileTitle: "Profile Edit karein", saveChanges: "Changes save karein",
+    nameLabel: "Naam", relationLabel: "Rishta", profileUpdated: "Profile update ho gayi",
+
+    relationshipTitle: "Rishta Analysis", loveTitle: "Pyaar aur Sachai",
+    marriageCompatTitle: "Shaadi Compatibility",
+    synastrySub: "Do charts ke beech cosmic connection",
+
+    myKundliTitle: "Meri Kundli", chartDetails: "Chart Details",
+    planetaryStrength: "Grahon ki Takat", houseAnalysis: "Bhav Analysis",
+
+    alertsTitle: "Daily Alerts", enableAlerts: "Daily Alerts chalu karein",
+    alertTime: "Alert Time", alertsEnabled: "Alerts chalu hain",
+    alertsDisabled: "Alerts band hain",
+
+    forecastTitle: "Forecast", forecastSub: "Aapke agle 6 mahine decoded",
+    upcomingEvents: "Aane Waale Events", nextSixMonths: "Agle 6 Mahine",
+  },
+
   // ── HINDI ──────────────────────────────────────────────────────────────────
   hi: {
     calculating: "गणना हो रही है...", noData: "कोई डेटा उपलब्ध नहीं",

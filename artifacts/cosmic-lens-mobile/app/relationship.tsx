@@ -188,10 +188,7 @@ function OptionCard({
     ]).start();
   }
 
-  const cardBg = isDark
-    ? "#121826"
-    : isHL ? "rgba(255,242,248,0.96)" : "rgba(248,248,255,0.95)";
-
+  const loveWarm = option.key === "love";
   const bRadius = isHL ? 28 : 22;
 
   return (
@@ -204,7 +201,7 @@ function OptionCard({
           router.push(option.route as any);
         }}
       >
-        {isHL && isDark && (
+        {isDark && (
           <Animated.View style={[s.radialGlow, { opacity: glowAnim }]}>
             <LinearGradient
               colors={[`${c1}30`, `${c2}18`, "transparent"]}
@@ -220,69 +217,83 @@ function OptionCard({
           { borderRadius: bRadius },
           {
             shadowColor: option.glowColor,
-            shadowOpacity: isDark ? (isHL ? 0.6 : 0.25) : (isHL ? 0.25 : 0.1),
-            shadowRadius: isHL ? 40 : 20,
-            shadowOffset: { width: 0, height: isHL ? 14 : 6 },
-            elevation: isHL ? 16 : 8,
+            shadowOpacity: isDark ? 0.5 : (isHL ? 0.25 : 0.1),
+            shadowRadius: 30,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 14,
           },
         ]}>
-          {Platform.OS !== "web" ? (
+          {isDark ? null : Platform.OS !== "web" ? (
             <BlurView
-              intensity={isDark ? 45 : 60}
-              tint={isDark ? "dark" : "light"}
+              intensity={60}
+              tint="light"
               style={StyleSheet.absoluteFill}
             />
           ) : null}
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: cardBg, borderRadius: bRadius }]} />
 
-          <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
+          {isDark ? (
             <LinearGradient
-              colors={isDark
-                ? [`${c1}30`, `${c2}15`, `${c3}08`, "transparent"]
-                : [`${c1}18`, `${c2}0A`, "transparent"]}
+              colors={loveWarm
+                ? ["#1a0a10", "#111827", "#110d14"]
+                : ["#0d0f1e", "#111827", "#0f0d1a"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
+              style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
             />
-          </Animated.View>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, {
+              backgroundColor: isHL ? "rgba(255,242,248,0.96)" : "rgba(248,248,255,0.95)",
+              borderRadius: bRadius,
+            }]} />
+          )}
+
+          {isDark && (
+            <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
+              <LinearGradient
+                colors={[`${c1}20`, `${c2}10`, "transparent"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          )}
+
+          {!isDark && (
+            <Animated.View style={[StyleSheet.absoluteFill, { overflow: "hidden", borderRadius: bRadius, opacity: glowAnim }]}>
+              <LinearGradient
+                colors={[`${c1}18`, `${c2}0A`, "transparent"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          )}
 
           {isDark && (
             <LinearGradient
-              colors={[`${option.glowColor}0C`, "transparent"]}
+              colors={[`${option.glowColor}10`, "transparent"]}
               start={{ x: 0.5, y: 1 }}
               end={{ x: 0.5, y: 0.2 }}
               style={[StyleSheet.absoluteFill, { borderRadius: bRadius }]}
             />
           )}
 
-          {isHL && isDark && (
-            <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: bRadius, opacity: glowAnim }]}>
-              <LinearGradient
-                colors={[`${c1}12`, `${c2}08`, "transparent", `${c3}06`]}
-                start={{ x: 0, y: 1 }}
-                end={{ x: 1, y: 0 }}
-                locations={[0, 0.3, 0.6, 1]}
-                style={StyleSheet.absoluteFill}
-              />
-            </Animated.View>
-          )}
-
           <View style={[StyleSheet.absoluteFill, {
             borderRadius: bRadius,
             borderWidth: isDark ? 1 : 0.5,
             borderColor: isDark
-              ? "rgba(255,255,255,0.12)"
+              ? "rgba(255,255,255,0.1)"
               : `${option.glowColor}${isHL ? "20" : "0C"}`,
           }]} />
 
-          <LinearGradient
-            colors={isDark
-              ? ["rgba(255,255,255,0.06)", "transparent"]
-              : ["rgba(255,255,255,0.5)", "transparent"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={[StyleSheet.absoluteFill, { borderRadius: bRadius, height: "35%" }]}
-          />
+          {!isDark && (
+            <LinearGradient
+              colors={["rgba(255,255,255,0.5)", "transparent"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: bRadius, height: "35%" }]}
+            />
+          )}
 
           {isHL && option.badge && (
             <View style={s.badgeWrap}>

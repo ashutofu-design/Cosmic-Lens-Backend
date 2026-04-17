@@ -155,61 +155,99 @@ function CompassBezel() {
     const isHalf  = i % 9 === 4 || i % 9 === 5; // mid-way marks
     const ang     = toRad(bearing);
     const rOuter  = BEZEL_RING_R;
-    const rInner  = isMajor ? BEZEL_INNER_R - SIZE * 0.038
-                  : isHalf  ? BEZEL_INNER_R - SIZE * 0.018
-                             : BEZEL_INNER_R - SIZE * 0.012;
+    const rInner  = isMajor ? BEZEL_INNER_R - SIZE * 0.042
+                  : isHalf  ? BEZEL_INNER_R - SIZE * 0.022
+                             : BEZEL_INNER_R - SIZE * 0.014;
     ticks.push(
       <Line
         key={i}
         x1={CX + rOuter * Math.cos(ang)} y1={CY + rOuter * Math.sin(ang)}
         x2={CX + rInner * Math.cos(ang)} y2={CY + rInner * Math.sin(ang)}
-        stroke={isMajor ? "#f9d76b" : isHalf ? "#d4a017" : "#8a6020"}
-        strokeWidth={isMajor ? 2.2 : isHalf ? 1.4 : 0.8}
+        stroke={isMajor ? "#fff2b8" : isHalf ? "#e8c84b" : "#96690f"}
+        strokeWidth={isMajor ? 2.6 : isHalf ? 1.6 : 0.9}
+        strokeLinecap="round"
       />
     );
   }
 
+  // 8 decorative rivets at cardinal/ordinal positions (between gold rings)
+  const rivetR = SIZE * 0.462;
+  const rivets = DIRS.map(d => {
+    const ang = toRad(d.deg + 22.5); // between sectors
+    const rx  = CX + rivetR * Math.cos(ang);
+    const ry  = CY + rivetR * Math.sin(ang);
+    return (
+      <G key={`rv-${d.deg}`}>
+        <Circle cx={rx} cy={ry} r={SIZE * 0.011} fill="#3a2404" />
+        <Circle cx={rx} cy={ry} r={SIZE * 0.0085} fill="url(#rivetGold)" />
+        <Circle cx={rx - SIZE * 0.002} cy={ry - SIZE * 0.002} r={SIZE * 0.003} fill="#fff8dc" opacity="0.85" />
+      </G>
+    );
+  });
+
   return (
     <Svg width={SIZE} height={SIZE}>
       <Defs>
-        {/* Background deep radial */}
-        <RadialGradient id="bg" cx="50%" cy="38%" r="65%">
-          <Stop offset="0"   stopColor="#18243d" />
-          <Stop offset="1"   stopColor="#060e1c" />
+        {/* Background deep radial (obsidian-like) */}
+        <RadialGradient id="bg" cx="50%" cy="35%" r="72%">
+          <Stop offset="0"   stopColor="#1b2a4a" />
+          <Stop offset="0.55" stopColor="#0a1428" />
+          <Stop offset="1"   stopColor="#02060f" />
         </RadialGradient>
-        {/* Gold ring gradient */}
-        <SvgLinearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0"   stopColor="#f9e17b" />
-          <Stop offset="0.35" stopColor="#e8c84b" />
-          <Stop offset="0.65" stopColor="#c07b27" />
+        {/* Primary gold ring — rich 24k look */}
+        <SvgLinearGradient id="gold" x1="0.15" y1="0" x2="0.85" y2="1">
+          <Stop offset="0"    stopColor="#fff2b8" />
+          <Stop offset="0.20" stopColor="#ffd966" />
+          <Stop offset="0.50" stopColor="#c89020" />
+          <Stop offset="0.80" stopColor="#7a4800" />
+          <Stop offset="1"    stopColor="#3a2404" />
+        </SvgLinearGradient>
+        {/* Inner gold ring — brushed metal */}
+        <SvgLinearGradient id="goldInner" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0"    stopColor="#e8c84b" />
+          <Stop offset="0.5"  stopColor="#f9d76b" />
+          <Stop offset="1"    stopColor="#8a6020" />
+        </SvgLinearGradient>
+        {/* Highlight arc (sheen) */}
+        <SvgLinearGradient id="goldShine" x1="0.2" y1="0" x2="0.8" y2="1">
+          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.75" />
+          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
+        </SvgLinearGradient>
+        {/* Rivet gold (small) */}
+        <RadialGradient id="rivetGold" cx="35%" cy="30%" r="70%">
+          <Stop offset="0"   stopColor="#fff2b8" />
           <Stop offset="1"   stopColor="#7a4800" />
-        </SvgLinearGradient>
-        {/* Highlight arc */}
-        <SvgLinearGradient id="goldShine" x1="0" y1="0" x2="0.5" y2="1">
-          <Stop offset="0"   stopColor="#fff8dc" stopOpacity="0.5" />
-          <Stop offset="1"   stopColor="#fff8dc" stopOpacity="0" />
-        </SvgLinearGradient>
+        </RadialGradient>
       </Defs>
 
       {/* Background circle */}
       <Circle cx={CX} cy={CY} r={BEZEL_INNER_R} fill="url(#bg)" />
 
-      {/* Outer gold ring */}
+      {/* Outer deep gold ring */}
       <Circle
         cx={CX} cy={CY} r={BEZEL_OUTER_R}
         fill="none" stroke="url(#gold)"
-        strokeWidth={SIZE * 0.024}
+        strokeWidth={SIZE * 0.034}
       />
-      {/* Shine arc on top of ring */}
+      {/* Outer ring thin dark edge */}
+      <Circle cx={CX} cy={CY} r={BEZEL_OUTER_R + SIZE * 0.017} fill="none" stroke="#2a1804" strokeWidth="0.8" opacity="0.9" />
+      <Circle cx={CX} cy={CY} r={BEZEL_OUTER_R - SIZE * 0.017} fill="none" stroke="#2a1804" strokeWidth="0.8" opacity="0.9" />
+
+      {/* Top sheen on gold ring (shine) */}
       <Circle
         cx={CX} cy={CY} r={BEZEL_OUTER_R}
         fill="none" stroke="url(#goldShine)"
-        strokeWidth={SIZE * 0.014}
-        strokeDasharray={`${BEZEL_OUTER_R * Math.PI * 0.55} ${BEZEL_OUTER_R * Math.PI * 1.45}`}
-        strokeDashoffset={BEZEL_OUTER_R * Math.PI * 0.85}
+        strokeWidth={SIZE * 0.016}
+        strokeDasharray={`${BEZEL_OUTER_R * Math.PI * 0.42} ${BEZEL_OUTER_R * Math.PI * 1.58}`}
+        strokeDashoffset={BEZEL_OUTER_R * Math.PI * 0.88}
       />
-      {/* Inner bezel accent ring */}
-      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R} fill="none" stroke="#c49a2a" strokeWidth="1" opacity="0.55" />
+
+      {/* Rivets */}
+      {rivets}
+
+      {/* Inner gold accent ring */}
+      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R + SIZE * 0.005} fill="none" stroke="url(#goldInner)" strokeWidth={SIZE * 0.009} />
+      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R - SIZE * 0.002} fill="none" stroke="#3a2404" strokeWidth="0.7" opacity="0.85" />
 
       {/* Tick marks */}
       {ticks}
@@ -217,7 +255,7 @@ function CompassBezel() {
       {/* Degree labels at every 45° */}
       {DIRS.map(d => {
         const ang  = toRad(d.deg);
-        const r    = BEZEL_INNER_R - SIZE * 0.054;
+        const r    = BEZEL_INNER_R - SIZE * 0.062;
         const lx   = CX + r * Math.cos(ang);
         const ly   = CY + r * Math.sin(ang);
         return (
@@ -226,9 +264,9 @@ function CompassBezel() {
             x={lx} y={ly}
             textAnchor="middle" alignmentBaseline="middle"
             fill="#f9d76b"
-            fontSize={SIZE * 0.032}
+            fontSize={SIZE * 0.03}
             fontWeight="700"
-            opacity="0.85"
+            opacity="0.9"
           >
             {d.deg === 0 ? "000" : d.deg.toString().padStart(3, "0")}°
           </SvgText>
@@ -243,71 +281,121 @@ function CompassCenter() {
   return (
     <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
       <Defs>
-        <RadialGradient id="jewel" cx="38%" cy="32%" r="70%">
-          <Stop offset="0"   stopColor="#fff0a0" />
-          <Stop offset="0.45" stopColor="#d4a017" />
-          <Stop offset="1"   stopColor="#5a3200" />
+        <RadialGradient id="jewel" cx="35%" cy="28%" r="75%">
+          <Stop offset="0"    stopColor="#fff8dc" />
+          <Stop offset="0.18" stopColor="#ffeea8" />
+          <Stop offset="0.50" stopColor="#e8b93a" />
+          <Stop offset="0.85" stopColor="#8a5a10" />
+          <Stop offset="1"    stopColor="#3a2404" />
         </RadialGradient>
         <SvgLinearGradient id="jewelRing" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0"   stopColor="#f9e17b" />
-          <Stop offset="1"   stopColor="#7a4800" />
+          <Stop offset="0"    stopColor="#fff2b8" />
+          <Stop offset="0.5"  stopColor="#e8c84b" />
+          <Stop offset="1"    stopColor="#5a3200" />
         </SvgLinearGradient>
+        <RadialGradient id="jewelHighlight" cx="35%" cy="28%" r="40%">
+          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.9" />
+          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
+        </RadialGradient>
       </Defs>
 
-      {/* Outer glow */}
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.022} fill="#f59e0b" opacity="0.09" />
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.012} fill="#f59e0b" opacity="0.12" />
+      {/* Ambient glow */}
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.035} fill="#f59e0b" opacity="0.07" />
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.022} fill="#f59e0b" opacity="0.10" />
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.012} fill="#f59e0b" opacity="0.14" />
+
+      {/* Dark ring (depth) */}
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.009} fill="#1a0e02" />
+
+      {/* Gold outer ring */}
+      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.006} fill="none" stroke="url(#jewelRing)" strokeWidth={SIZE * 0.011} />
 
       {/* Jewel base */}
-      <Circle cx={CX} cy={CY} r={CENTER_R}           fill="url(#jewel)"   />
-      <Circle cx={CX} cy={CY} r={CENTER_R}           fill="none" stroke="url(#jewelRing)" strokeWidth="2.5" />
-      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.012} fill="none" stroke="#f9d76b66" strokeWidth="1" />
+      <Circle cx={CX} cy={CY} r={CENTER_R} fill="url(#jewel)" />
 
-      {/* Om symbol */}
+      {/* Inner engraved ring */}
+      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.008} fill="none" stroke="#3a2404" strokeWidth="0.7" opacity="0.9" />
+      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.015} fill="none" stroke="#fff2b8" strokeWidth="0.5" opacity="0.35" />
+
+      {/* Top highlight */}
+      <Circle cx={CX - SIZE * 0.018} cy={CY - SIZE * 0.028} r={SIZE * 0.042} fill="url(#jewelHighlight)" />
+
+      {/* Om symbol — carved effect with shadow + highlight */}
+      <SvgText
+        x={CX + 0.8} y={CY + SIZE * 0.008}
+        textAnchor="middle" alignmentBaseline="middle"
+        fill="#fff2b8" fillOpacity="0.45"
+        fontSize={SIZE * 0.098}
+        fontWeight="900"
+      >
+        ॐ
+      </SvgText>
       <SvgText
         x={CX} y={CY + SIZE * 0.006}
         textAnchor="middle" alignmentBaseline="middle"
-        fill="#060e1c"
-        fontSize={SIZE * 0.092}
+        fill="#1a0e02"
+        fontSize={SIZE * 0.098}
         fontWeight="900"
       >
         ॐ
       </SvgText>
 
       {/* Center pivot dot */}
-      <Circle cx={CX} cy={CY} r={3.5} fill="#f9d76b" />
+      <Circle cx={CX} cy={CY} r={SIZE * 0.011} fill="#1a0e02" />
+      <Circle cx={CX - 1} cy={CY - 1} r={SIZE * 0.006} fill="#fff8dc" opacity="0.9" />
     </Svg>
   );
 }
 
-// ── North pointer (fixed red triangle at top) ──────────────────────────────────
+// ── North pointer (fixed ruby+gold indicator at top) ───────────────────────────
 function NorthPointer() {
-  const tipY   = SIZE * 0.028;
-  const baseY  = SIZE * 0.068;
-  const halfW  = SIZE * 0.032;
+  const tipY   = SIZE * 0.022;
+  const baseY  = SIZE * 0.078;
+  const halfW  = SIZE * 0.036;
+  const midY   = (tipY + baseY) / 2;
   return (
     <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
       <Defs>
         <SvgLinearGradient id="redArrow" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"  stopColor="#ff6464" />
-          <Stop offset="1"  stopColor="#b91c1c" />
+          <Stop offset="0"    stopColor="#ff8a8a" />
+          <Stop offset="0.45" stopColor="#dc2626" />
+          <Stop offset="1"    stopColor="#7f1d1d" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id="redShine" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0"    stopColor="#ffffff" stopOpacity="0.65" />
+          <Stop offset="0.6"  stopColor="#ffffff" stopOpacity="0" />
         </SvgLinearGradient>
       </Defs>
       {/* Shadow */}
       <Polygon
-        points={`${CX},${tipY + 2} ${CX - halfW + 2},${baseY + 2} ${CX + halfW + 2},${baseY + 2}`}
-        fill="#00000044"
+        points={`${CX + 1.5},${tipY + 2} ${CX - halfW + 1.5},${baseY + 2} ${CX + halfW + 1.5},${baseY + 2}`}
+        fill="#00000066"
       />
       {/* Red arrow body */}
       <Polygon
         points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
         fill="url(#redArrow)"
       />
+      {/* Shine on left side */}
+      <Polygon
+        points={`${CX},${tipY} ${CX - halfW * 0.7},${baseY - 2} ${CX - 1},${midY}`}
+        fill="url(#redShine)"
+      />
       {/* Gold outline */}
       <Polygon
         points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
-        fill="none" stroke="#f9d76b" strokeWidth="1.2"
+        fill="none" stroke="#f9d76b" strokeWidth="1.4"
       />
+      {/* Tip gold dot */}
+      <Circle cx={CX} cy={tipY + 0.5} r="1.6" fill="#fff2b8" />
+      {/* "N" label above arrow */}
+      <SvgText
+        x={CX} y={tipY - SIZE * 0.010}
+        textAnchor="middle" alignmentBaseline="middle"
+        fill="#f9d76b" fontSize={SIZE * 0.032} fontWeight="900"
+      >
+        N
+      </SvgText>
     </Svg>
   );
 }
@@ -335,10 +423,15 @@ function useMagnetometerHeading() {
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    Magnetometer.setUpdateInterval(120);
+    Magnetometer.setUpdateInterval(100);
     const sub = Magnetometer.addListener(({ x, y }) => {
-      let angle = Math.atan2(y, x) * (180 / Math.PI);
-      angle = (360 - angle) % 360;
+      // Correct compass heading for portrait mode:
+      // - device top pointing North  → Mx=0,  My>0  → heading = 0
+      // - device top pointing East   → Mx<0,  My=0  → heading = 90
+      // - device top pointing South  → Mx=0,  My<0  → heading = 180
+      // - device top pointing West   → Mx>0,  My=0  → heading = 270
+      let angle = Math.atan2(-x, y) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
       setIsLive(true);
       update(angle);
     });
@@ -400,25 +493,29 @@ function VastuCompass() {
         </View>
       </View>
 
-      {/* ── Compass graphic ── */}
-      <View style={[cp.compassWrap, { width: SIZE, height: SIZE }]}>
-        {/* Layer 1: Fixed outer bezel */}
-        <View style={StyleSheet.absoluteFill}>
-          <CompassBezel />
+      {/* ── Compass graphic with 3D premium frame ── */}
+      <View style={cp.compassFrame}>
+        <View style={cp.compassOuterRing}>
+          <View style={[cp.compassWrap, { width: SIZE, height: SIZE }]}>
+            {/* Layer 1: Fixed outer bezel */}
+            <View style={StyleSheet.absoluteFill}>
+              <CompassBezel />
+            </View>
+
+            {/* Layer 2: Rotating rose */}
+            <Animated.View style={[StyleSheet.absoluteFill, rotateStyle]}>
+              <CompassRose />
+            </Animated.View>
+
+            {/* Layer 3: Fixed center jewel */}
+            <View style={StyleSheet.absoluteFill}>
+              <CompassCenter />
+            </View>
+
+            {/* Layer 4: Fixed north pointer */}
+            <NorthPointer />
+          </View>
         </View>
-
-        {/* Layer 2: Rotating rose */}
-        <Animated.View style={[StyleSheet.absoluteFill, rotateStyle]}>
-          <CompassRose />
-        </Animated.View>
-
-        {/* Layer 3: Fixed center jewel */}
-        <View style={StyleSheet.absoluteFill}>
-          <CompassCenter />
-        </View>
-
-        {/* Layer 4: Fixed north pointer */}
-        <NorthPointer />
       </View>
 
       {/* ── Legend ── */}
@@ -450,6 +547,26 @@ const cp = StyleSheet.create({
   hdgDir:     { fontSize: 15, fontWeight: "700" },
   hdgHindi:   { fontSize: 12, marginTop: 2 },
   compassWrap:{ alignSelf: "center", position: "relative" },
+  compassFrame: {
+    alignSelf: "center",
+    padding: 10,
+    borderRadius: (SIZE + 40) / 2,
+    backgroundColor: "#0a0a0a",
+    shadowColor: "#f9d76b",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 14,
+    borderWidth: 1.5,
+    borderColor: "#3a2404",
+  },
+  compassOuterRing: {
+    padding: 5,
+    borderRadius: (SIZE + 20) / 2,
+    backgroundColor: "#1a0e02",
+    borderWidth: 1,
+    borderColor: "#7a4800",
+  },
   legend:     { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot:  { width: 8, height: 8, borderRadius: 4 },

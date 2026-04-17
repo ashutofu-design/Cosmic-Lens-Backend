@@ -16,7 +16,9 @@ const DIRS = [
 const SIZE = 340;
 const CX = SIZE / 2, CY = SIZE / 2;
 const R_OUT = SIZE * 0.48;
-const R_INNER = SIZE * 0.20;
+const R_INNER = SIZE * 0.17;
+const R_LABEL = SIZE * 0.40;  // short code near outer edge
+const R_DEITY = SIZE * 0.30;  // deity name in middle of sector ring, clear of center
 
 // 8 vertices of an octagon (rotated so flat edges face N/S/E/W would be weird; use vertex-at-top)
 function octagonPoints(r: number) {
@@ -109,19 +111,17 @@ export function Octagon() {
         {/* Direction labels */}
         {DIRS.map(d => {
           const a = (-Math.PI / 2) + (d.idx * Math.PI * 2) / 8;
-          const rLabel = R_OUT * 0.68;
-          const rDeity = R_OUT * 0.50;
-          const lx = CX + rLabel * Math.cos(a), ly = CY + rLabel * Math.sin(a);
-          const dx = CX + rDeity * Math.cos(a), dy = CY + rDeity * Math.sin(a);
+          const lx = CX + R_LABEL * Math.cos(a), ly = CY + R_LABEL * Math.sin(a);
+          const dx = CX + R_DEITY * Math.cos(a), dy = CY + R_DEITY * Math.sin(a);
           const isCard = d.idx % 2 === 0;
           return (
             <g key={`l-${d.short}`}>
               <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-                fill={isCard ? "#fff8dc" : GOLD} fontSize={isCard ? 22 : 15} fontWeight="900">
+                fill={isCard ? "#fff8dc" : GOLD} fontSize={isCard ? 20 : 14} fontWeight="900">
                 {d.short}
               </text>
-              <text x={dx} y={dy} textAnchor="middle" dominantBaseline="middle"
-                fill={d.bright ? GOLD : GOLD_DIM} fontSize={9} fontWeight="700" letterSpacing="1.5">
+              <text x={dx} y={dy + (isCard ? 12 : 10)} textAnchor="middle" dominantBaseline="middle"
+                fill={d.bright ? GOLD : GOLD_DIM} fontSize={8} fontWeight="700" letterSpacing="1.3">
                 {d.deity}
               </text>
             </g>

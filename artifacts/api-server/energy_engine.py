@@ -19,6 +19,8 @@ extended easily for premium variants.
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from shadbala import compute_shadbala, apply_shodhana, REQUIRED_MIN
+
 # ──────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
 # ──────────────────────────────────────────────────────────────────────────────
@@ -315,27 +317,65 @@ def compute_moon_transit_score(moon_today_sign: int,
 # 3. ASHTAKAVARGA SCORE (20%)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def compute_ashtakavarga_score(planets: List[Dict[str, Any]],
-                               lagna_sign: int,
-                               moon_today_sign: int) -> Tuple[float, Dict[str, Any]]:
-    """Sum of bindus for moon's current sign across 7 grahas + Lagna,
-    normalised to 0-100.  Mean total bindus per sign ≈ 28 (max 56)."""
+def _build_bhinnashtakavarga(planets: List[Dict[str, Any]],
+                             lagna_sign: int) -> Dict[str, List[int]]:
+    """
+    Build the Bhinnashtakavarga (BAV) matrix: for each graha, a 12-cell row
+    giving bindus in each sign 0..11.  Sources: Sun..Saturn + Lagna.
+    """
     sign_of = _planet_sign_lookup(planets, lagna_sign)
-    # The 8th source is Lagna itself.
     src_signs = [sign_of.get(n, lagna_sign) for n in AV_PLANETS] + [lagna_sign]
 
-    total = 0
+    bav: Dict[str, List[int]] = {}
     for planet in AV_PLANETS:
         rules = AV_TABLE[planet]
-        for c in range(8):
-            rel = ((moon_today_sign - src_signs[c]) % 12) + 1
-            if rel in rules[c]:
-                total += 1
+        row = [0] * 12
+        for sign in range(12):
+            bindus = 0
+            for c in range(8):
+                rel = ((sign - src_signs[c]) % 12) + 1
+                if rel in rules[c]:
+                    bindus += 1
+            row[sign] = bindus
+        bav[planet] = row
+    return bav
 
-    # Realistic curve: 20 bindus → 0, 30 → 50, 40+ → 100. Matches real-world
-    # distribution where moon-sign totals typically range 22-38.
-    score = max(0.0, min(100.0, (total - 20) * 5.0))
-    return score, {"bindus": total, "max": 56}
+
+def compute_ashtakavarga_score(planets: List[Dict[str, Any]],
+                               lagna_sign: int,
+                               moon_today_sign: int
+                               ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Classical Sarvashtakavarga with Trikona + Ekadhipatya Shodhana applied
+    (Parashara's prescribed bindu-reduction) before summing the moon-sign
+    column.  The post-Shodhana totals are smaller but astrologically more
+    meaningful — they reflect *net* transit support after cancelling out
+    redundant bindus.
+    """
+    # 1. Build raw BAV matrix
+    raw_bav = _build_bhinnashtakavarga(planets, lagna_sign)
+
+    # 2. Determine which signs are occupied (for Ekadhipatya)
+    sign_of = _planet_sign_lookup(planets, lagna_sign)
+    occupied = {s for s in sign_of.values() if isinstance(s, int)}
+
+    # 3. Apply Shodhana
+    reduced = apply_shodhana(raw_bav, occupied)
+
+    # 4. Sum moon-sign column across all 7 grahas → Sarva (post-Shodhana)
+    raw_total     = sum(raw_bav[p][moon_today_sign]     for p in AV_PLANETS)
+    reduced_total = sum(reduced[p][moon_today_sign]     for p in AV_PLANETS)
+
+    # Post-Shodhana totals are typically 0..25.  Calibrated curve:
+    #   0 → 10, 8 → 50, 16+ → 100
+    score = max(0.0, min(100.0, 10.0 + reduced_total * 5.625))
+
+    return score, {
+        "bindus_raw":     raw_total,
+        "bindus_reduced": reduced_total,
+        "max":            56,
+        "shodhana":       True,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -356,33 +396,61 @@ def compute_tara_score(today_nak_idx: int,
 # ──────────────────────────────────────────────────────────────────────────────
 
 def compute_aspect_strength_score(planets: List[Dict[str, Any]],
-                                  lagna_sign: int) -> Tuple[float, Dict[str, Any]]:
-    """Simple birth-chart strength: benefics in good houses + exaltation - debilitation."""
-    base = 50.0
-    detail: Dict[str, Any] = {"benefic_kendra": 0, "malefic_dushthana": 0,
-                              "exalted": [], "debilitated": []}
+                                  lagna_sign: int,
+                                  moon_sun_angle: Optional[float] = None
+                                  ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Full classical Shadbala-based chart strength.
 
-    sign_of = _planet_sign_lookup(planets, lagna_sign)
-    house_of = _planet_house_lookup(planets)
+    Each of the 7 grahas has a computed Shadbala expressed as % of its
+    required minimum (Parashara's rupas-required table).  We average the
+    percentages (capped at 150%) and map to 0-100.
 
-    for name, house in house_of.items():
-        nat = _classify(name)
-        if nat == "benefic" and house in KENDRA_TRIKONA:
-            base += 4
-            detail["benefic_kendra"] += 1
-        elif nat == "malefic" and house in DUSHTHANA:
-            base -= 4
-            detail["malefic_dushthana"] += 1
+    Weighted slightly toward the luminaries (Sun + Moon count 1.3×) because
+    their strength affects overall day-level vitality most.
+    """
+    if not planets:
+        return 50.0, {"reason": "no_planet_data"}
 
-    for name, sign in sign_of.items():
-        if EXALTATION.get(name) == sign:
-            base += 6
-            detail["exalted"].append(name)
-        elif DEBILITATION.get(name) == sign:
-            base -= 6
-            detail["debilitated"].append(name)
+    shad = compute_shadbala(planets, lagna_sign, moon_sun_angle)
+    if not shad:
+        return 50.0, {"reason": "shadbala_unavailable"}
 
-    return max(0.0, min(100.0, base)), detail
+    weights = {"Sun": 1.3, "Moon": 1.3,
+               "Mars": 1.0, "Mercury": 1.0, "Jupiter": 1.0,
+               "Venus": 1.0, "Saturn": 1.0}
+
+    weighted_sum = 0.0
+    weight_total = 0.0
+    by_planet: Dict[str, Any] = {}
+    strong_planets: List[str] = []
+    weak_planets:   List[str] = []
+
+    for planet, info in shad.items():
+        pct = min(150.0, info["strength_pct"])
+        w   = weights.get(planet, 1.0)
+        weighted_sum += pct * w
+        weight_total += w
+        by_planet[planet] = {
+            "pct":   info["strength_pct"],
+            "total": info["total"],
+            "req":   info["required"],
+        }
+        if info["strength_pct"] >= 100:
+            strong_planets.append(planet)
+        elif info["strength_pct"] < 70:
+            weak_planets.append(planet)
+
+    avg_pct = weighted_sum / weight_total if weight_total else 0.0
+    # Map 0..150% → 0..100 score (linear, capped).
+    score = max(0.0, min(100.0, avg_pct * 100.0 / 150.0))
+
+    return score, {
+        "shadbala_avg_pct": round(avg_pct, 1),
+        "strong_planets":   strong_planets,
+        "weak_planets":     weak_planets,
+        "per_planet":       by_planet,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -489,12 +557,19 @@ def calculate_energy(user_data: Dict[str, Any],
     if "Moon" in _sign_map:
         birth_moon_sign = _sign_map["Moon"]
 
+    # ── Moon-Sun angle at birth (for Paksha Bala inside Shadbala) ────────
+    moon_sun_angle: Optional[float] = None
+    _lon_map = {p.get("name"): p.get("lon") for p in planets
+                if isinstance(p.get("lon"), (int, float))}
+    if "Moon" in _lon_map and "Sun" in _lon_map:
+        moon_sun_angle = (_lon_map["Moon"] - _lon_map["Sun"]) % 360.0
+
     # ── Components ───────────────────────────────────────────────────────
     dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
     moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign, birth_moon_sign)
     av_sc,     av_d     = compute_ashtakavarga_score(planets, lagna_sign, moon_sign)
     tara_sc,   tara_d   = compute_tara_score(moon_nak, birth_nak_idx)
-    asp_sc,    asp_d    = compute_aspect_strength_score(planets, lagna_sign)
+    asp_sc,    asp_d    = compute_aspect_strength_score(planets, lagna_sign, moon_sun_angle)
 
     # ── Weighted aggregate ───────────────────────────────────────────────
     energy = (dasha_sc * 0.30 + moon_sc * 0.25 + av_sc * 0.20

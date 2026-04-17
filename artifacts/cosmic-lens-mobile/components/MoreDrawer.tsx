@@ -29,8 +29,17 @@ type FeatureItem = {
 export default function MoreDrawer({
   visible, onClose,
 }: { visible: boolean; onClose: () => void }) {
-  const C = useC();
+  useC();
   const t = useT();
+  const C = {
+    bg: "#0b1020",
+    bgCard: "#141a2e",
+    bgCard2: "#1c2340",
+    text: "#f5f6ff",
+    textMuted: "#9aa3c7",
+    border: "#2a3158",
+    border3: "#232a4a",
+  } as const;
 
   const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
     {

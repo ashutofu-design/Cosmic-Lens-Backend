@@ -23,6 +23,7 @@ from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
 from dosh_engine import analyze_doshas
+from energy_engine import calculate_energy
 from database import db, init_db
 from models import User, Kundli, Profile
 
@@ -993,6 +994,81 @@ def kundli():
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/energy/today", methods=["GET", "POST"])
+def energy_today():
+    """
+    Daily Energy Score (0-100) using weighted Vedic formula:
+        Dasha 30% + Moon Transit 25% + Ashtakavarga 20%
+        + Tara Bal 15% + Aspect/Strength 10%
+
+    Auth modes:
+      • Pass `user_id` (query or JSON body) + X-API-Key header → loads
+        the user's saved kundli from DB.
+      • Or POST JSON body with `kundli` (full chart_data) → stateless,
+        no auth needed.
+
+    Optional `date=YYYY-MM-DD` query/body for back-dated runs.
+    """
+    import json as _json
+    import swisseph as swe
+    from datetime import datetime as _dt
+
+    body = request.get_json(force=True, silent=True) or {}
+    date_str = (request.args.get("date") or body.get("date") or "").strip()
+
+    # ── Resolve target date ──────────────────────────────────────────────
+    try:
+        if date_str:
+            day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
+        else:
+            day = _dt.utcnow()
+    except ValueError:
+        return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+
+    date_iso = day.strftime("%Y-%m-%d")
+
+    # ── Resolve user kundli ──────────────────────────────────────────────
+    kundli_dict = body.get("kundli") or body.get("chart_data")
+    if not kundli_dict:
+        uid_raw = request.args.get("user_id") or body.get("user_id")
+        if not uid_raw:
+            return jsonify({"error": "Provide user_id (with X-API-Key) or kundli body"}), 400
+        try:
+            user_id = int(uid_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "user_id must be an integer"}), 400
+
+        user, err = get_authed_user(user_id)
+        if err:
+            return err
+        if not user.kundli or not user.kundli.chart_data:
+            return jsonify({"error": "No kundli saved for this user"}), 404
+        try:
+            kundli_dict = _json.loads(user.kundli.chart_data)
+        except Exception:
+            return jsonify({"error": "Saved kundli is corrupted"}), 500
+
+    # ── Compute today's moon (sidereal) ──────────────────────────────────
+    jd = swe.julday(day.year, day.month, day.day,
+                    day.hour + day.minute / 60.0)
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    moon_lon = swe.calc_ut(jd, swe.MOON, flags)[0][0] % 360.0
+
+    today_moon = {
+        "longitude":      round(moon_lon, 4),
+        "rashiIndex":     int(moon_lon / 30) % 12,
+        "nakshatraIndex": int(moon_lon / (360 / 27)) % 27,
+    }
+
+    # ── Run engine ───────────────────────────────────────────────────────
+    result = calculate_energy(kundli_dict, today_moon, date_iso=date_iso)
+    if "error" in result:
+        return jsonify(result), 400
+
+    result["today_moon"] = today_moon
+    return jsonify(result)
 
 
 @app.route("/api/moon_transit", methods=["GET"])

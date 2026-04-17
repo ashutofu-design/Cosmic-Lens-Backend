@@ -22,7 +22,6 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
-import { useFeatureGate } from "@/components/FeatureGate";
 
 interface MainOption {
   key: string;
@@ -407,7 +406,6 @@ function OptionCard({
 
 export default function RelationshipScreen() {
   const C = useC();
-  const { LockOverlay } = useFeatureGate("love_reality_full");
   const t = useT();
   const { profiles, primaryProfileId } = useUser();
   const insets = useSafeAreaInsets();
@@ -680,7 +678,6 @@ export default function RelationshipScreen() {
           })}
         </View>
       </ScrollView>
-      {LockOverlay}
     </CosmicBg>
   );
 }

@@ -194,10 +194,10 @@ export default function MoreDrawer({
                     style={[
                       s.catCard,
                       {
-                        backgroundColor: "#0f1428",
-                        borderColor: `${accent}33`,
+                        backgroundColor: "#2a3358",
+                        borderColor: `${accent}44`,
                         shadowColor: accent,
-                        shadowOpacity: 0.18,
+                        shadowOpacity: 0.22,
                         shadowRadius: 12,
                         shadowOffset: { width: 0, height: 4 },
                       },

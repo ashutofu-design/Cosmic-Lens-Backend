@@ -107,7 +107,10 @@ export default function PaymentWebviewScreen() {
       const timer = setTimeout(() => ctrl.abort(), 15000);
       const resp  = await fetch(`${API_BASE}/api/payment/create-order`, {
         method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(user.api_key ? { "X-API-Key": user.api_key } : {}),
+        },
         body:    JSON.stringify({ user_id: user.id, plan, cycle }),
         signal:  ctrl.signal,
       });

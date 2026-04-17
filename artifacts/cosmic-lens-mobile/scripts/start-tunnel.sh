@@ -8,9 +8,12 @@ LOG_FILE="/tmp/expo-raw.log"
 pkill -f "ngrok" 2>/dev/null || true
 sleep 1
 
-REPLIT_API_DOMAIN="${REPLIT_DEV_DOMAIN}"
-export EXPO_PUBLIC_DOMAIN="$REPLIT_API_DOMAIN"
-echo "[startup] API accessible at: https://$REPLIT_API_DOMAIN"
+# API is exposed via localtunnel (cosmiclens-api.loca.lt) — that domain is
+# configured as the default in lib/apiConfig.ts, so we DO NOT export
+# EXPO_PUBLIC_DOMAIN here (which would override it with the kirk.replit.dev
+# URL that Indian cellular carriers block).
+PUBLIC_API_URL="https://cosmiclens-api.loca.lt"
+echo "[startup] API accessible at: $PUBLIC_API_URL"
 
 METRO_PORT="${PORT:-18987}"
 
@@ -106,7 +109,7 @@ echo "$EXPO_URL" > "$TUNNEL_URL_FILE"
 echo ""
 echo "================================================="
 echo " EXPO GO:  $EXPO_URL"
-echo " API:      https://$REPLIT_API_DOMAIN"
+echo " API:      $PUBLIC_API_URL"
 echo "================================================="
 
 cleanup() {

@@ -10,7 +10,7 @@ name = "API Server"
 paths = ["/api"]
 
 [services.development]
-run = "python3 flask_app.py"
+run = "bash start.sh"
 
 [services.development.env]
 PORT = "8080"

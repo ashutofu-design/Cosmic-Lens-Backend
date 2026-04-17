@@ -49,6 +49,193 @@ def require_admin():
         return jsonify({"error": "Unauthorized"}), 401
     return None
 
+# ── Public legal page (no auth required) ──────────────────────────────────────
+
+LEGAL_HTML = """<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<title>Legal - Cosmic Lens</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; color: #1a1a2e; line-height: 1.65; background: #fafafa; }
+  h1 { font-size: 32px; margin: 0 0 8px; color: #6d28d9; }
+  h2 { font-size: 22px; margin-top: 40px; padding-top: 18px; border-top: 2px solid #e5e7eb; color: #4c1d95; }
+  h3 { font-size: 17px; margin-top: 22px; color: #374151; }
+  .lead { color: #6b7280; margin-bottom: 24px; }
+  .toc { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 22px; margin-bottom: 28px; }
+  .toc a { display: block; padding: 4px 0; color: #6d28d9; text-decoration: none; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+  .highlight { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 14px 18px; margin: 18px 0; border-radius: 6px; }
+  .contact { background: #ede9fe; border-radius: 8px; padding: 14px 18px; margin-top: 12px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 13px; text-align: center; }
+  footer a { color: #6d28d9; margin: 0 8px; }
+  a { color: #6d28d9; }
+</style>
+</head>
+<body>
+
+<h1>Legal &amp; Policies</h1>
+<p class=\"lead\">Cosmic Lens — Vedic Astrology Platform. Last updated: April 2026.</p>
+
+<div class=\"toc\">
+  <strong>Contents</strong>
+  <a href=\"#privacy\">1. Privacy Policy</a>
+  <a href=\"#terms\">2. Terms of Service</a>
+  <a href=\"#refund\">3. Refund &amp; Cancellation Policy</a>
+  <a href=\"#disclaimer\">4. Disclaimer</a>
+  <a href=\"#contact\">5. Contact Us</a>
+</div>
+
+<!-- ────────────────────────── PRIVACY ────────────────────────── -->
+<h2 id=\"privacy\">1. Privacy Policy</h2>
+<p>Cosmic Lens (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) respects your privacy. This policy explains what data we collect, how we use it, and your rights.</p>
+
+<h3>Information We Collect</h3>
+<ul>
+  <li><strong>Account data:</strong> mobile number (verified via OTP), name, language preference.</li>
+  <li><strong>Birth details:</strong> date, time, and place of birth — used solely to compute your kundli.</li>
+  <li><strong>Payment data:</strong> processed by Cashfree Payments. We never see or store your card or UPI credentials.</li>
+  <li><strong>Usage data:</strong> app interactions, feature usage, and crash logs to improve the service.</li>
+</ul>
+
+<h3>How We Use Your Information</h3>
+<ul>
+  <li>Generate your personalized Vedic kundli, dasha, and predictions.</li>
+  <li>Process subscription payments and manage your plan.</li>
+  <li>Send OTP for authentication (via MSG91).</li>
+  <li>Improve the app and detect fraud or abuse.</li>
+</ul>
+
+<h3>Data Sharing</h3>
+<p>We do <strong>not</strong> sell your personal data. We share only with:</p>
+<ul>
+  <li><strong>Cashfree Payments</strong> — for processing transactions.</li>
+  <li><strong>MSG91</strong> — for sending one-time passwords.</li>
+  <li><strong>Government authorities</strong> — only when legally required.</li>
+</ul>
+
+<h3>Data Retention &amp; Deletion</h3>
+<p>You may delete your account at any time from <em>Settings → Delete Account</em>. Upon deletion, your personal data is removed within 30 days. Anonymized analytics may be retained.</p>
+
+<h3>Security</h3>
+<p>All data is transmitted over HTTPS. Passwords (where applicable) are hashed. Payment processing uses PCI-DSS compliant gateways.</p>
+
+<!-- ────────────────────────── TERMS ────────────────────────── -->
+<h2 id=\"terms\">2. Terms of Service</h2>
+<p>By using Cosmic Lens, you agree to these terms.</p>
+
+<h3>Eligibility</h3>
+<ul>
+  <li>You must be at least 18 years old.</li>
+  <li>The service is currently available only to users in India.</li>
+  <li>You must provide accurate birth details for kundli generation.</li>
+</ul>
+
+<h3>Subscription Plans</h3>
+<ul>
+  <li><strong>Free:</strong> basic kundli &amp; daily horoscope.</li>
+  <li><strong>7-Day Trial:</strong> ₹1 one-time, full Pro access for 7 days.</li>
+  <li><strong>Basic:</strong> ₹199 per month, recurring monthly.</li>
+  <li><strong>Pro:</strong> ₹499 per month, recurring monthly.</li>
+</ul>
+<p>All prices are in Indian Rupees (INR) and inclusive of applicable taxes.</p>
+
+<h3>Acceptable Use</h3>
+<ul>
+  <li>Do not abuse, reverse engineer, or scrape the service.</li>
+  <li>Do not impersonate others or share your account.</li>
+  <li>We may suspend accounts that violate these terms.</li>
+</ul>
+
+<h3>Intellectual Property</h3>
+<p>All content, algorithms, and designs in Cosmic Lens are owned by us. Your kundli output is for personal use only.</p>
+
+<!-- ────────────────────────── REFUND ────────────────────────── -->
+<h2 id=\"refund\">3. Refund &amp; Cancellation Policy</h2>
+
+<div class=\"highlight\">
+  <strong>Quick summary:</strong> Cancel anytime. Refunds available within 7 days of payment if the service was not used. ₹1 trial is non-refundable.
+</div>
+
+<h3>Cancellation</h3>
+<ul>
+  <li>You may cancel your subscription at any time from <em>Settings → Subscription → Cancel</em>.</li>
+  <li>Cancellation stops future renewals immediately. You retain access until the end of your current billing cycle.</li>
+  <li>No cancellation fee is charged.</li>
+</ul>
+
+<h3>Refund Eligibility</h3>
+<ul>
+  <li><strong>Full refund:</strong> If you cancel within <strong>7 days</strong> of your first paid subscription (Basic or Pro) <em>and</em> have not consumed any premium feature beyond the free tier, you are eligible for a 100% refund.</li>
+  <li><strong>Partial refund:</strong> Not provided. Refunds are either full (within 7 days, unused) or none.</li>
+  <li><strong>Trial (₹1 / 7-day):</strong> Non-refundable due to its promotional nature.</li>
+  <li><strong>Renewal charges:</strong> Once a renewal is processed, that billing cycle is non-refundable. Cancel before the next billing date to avoid charges.</li>
+</ul>
+
+<h3>How to Request a Refund</h3>
+<p>Email <a href=\"mailto:support@cosmiclens.app\">support@cosmiclens.app</a> with:</p>
+<ul>
+  <li>Your registered mobile number</li>
+  <li>Order ID (visible on your subscription page)</li>
+  <li>Reason for refund</li>
+</ul>
+<p>We respond within <strong>2 business days</strong> and process approved refunds within <strong>5–7 business days</strong> to the original payment method via Cashfree.</p>
+
+<h3>Failed / Duplicate Payments</h3>
+<p>If you were charged but the subscription did not activate, or you were charged twice for the same order, we will refund automatically within 7 business days. Contact support if not received.</p>
+
+<!-- ────────────────────────── DISCLAIMER ────────────────────────── -->
+<h2 id=\"disclaimer\">4. Disclaimer</h2>
+
+<div class=\"highlight\">
+  <strong>Important:</strong> Cosmic Lens is for entertainment and self-reflection purposes only. Astrological predictions are not a substitute for professional medical, legal, financial, or psychological advice.
+</div>
+
+<ul>
+  <li>Predictions are generated using traditional Vedic astrology algorithms based on the birth details you provide. Accuracy depends entirely on the correctness of those inputs.</li>
+  <li>We make no guarantee regarding the outcomes of any prediction, remedy, or muhurat shown in the app.</li>
+  <li>Any decisions you take based on the content (career, marriage, finance, health) are your sole responsibility.</li>
+  <li>Always consult qualified professionals — doctors, lawyers, financial advisors — for matters in their respective fields.</li>
+  <li>The app does not promote superstition or discrimination on the basis of caste, religion, or gender.</li>
+</ul>
+
+<!-- ────────────────────────── CONTACT ────────────────────────── -->
+<h2 id=\"contact\">5. Contact Us</h2>
+<div class=\"contact\">
+  <p style=\"margin:4px 0\"><strong>Cosmic Lens Support</strong></p>
+  <p style=\"margin:4px 0\">Email: <a href=\"mailto:support@cosmiclens.app\">support@cosmiclens.app</a></p>
+  <p style=\"margin:4px 0\">For refund requests, mention &quot;Refund&quot; in the subject line.</p>
+  <p style=\"margin:4px 0\">Response time: within 2 business days.</p>
+</div>
+
+<footer>
+  <div>
+    <a href=\"#privacy\">Privacy</a> ·
+    <a href=\"#terms\">Terms</a> ·
+    <a href=\"#refund\"><strong>Refund Policy</strong></a> ·
+    <a href=\"#disclaimer\">Disclaimer</a>
+  </div>
+  <div style=\"margin-top:10px\">© 2026 Cosmic Lens. All rights reserved.</div>
+</footer>
+
+</body>
+</html>"""
+
+@app.route("/legal", methods=["GET"])
+@app.route("/legal/", methods=["GET"])
+@app.route("/privacy", methods=["GET"])
+@app.route("/terms", methods=["GET"])
+@app.route("/refund", methods=["GET"])
+@app.route("/refund-policy", methods=["GET"])
+@app.route("/disclaimer", methods=["GET"])
+def legal_page():
+    from flask import Response
+    return Response(LEGAL_HTML, mimetype="text/html; charset=utf-8")
+
 # ── Auth routes ────────────────────────────────────────────────────────────────
 
 @app.route("/api/auth/config", methods=["GET"])

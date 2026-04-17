@@ -17,7 +17,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
+import { API_BASE } from "@/lib/apiConfig";
 import { usePlan, startTrial, PRICES, TRIAL_DAYS } from "@/lib/subscription";
+import { Linking } from "react-native";
 
 // ── Font aliases ─────────────────────────────────────────────────────────────
 const F = {
@@ -349,11 +351,32 @@ export default function SubscriptionScreen() {
 
         {/* ── Footer ── */}
         <Text style={[s.footerNote, { color: C.textMuted }]}>
-          • ₹1 — {TRIAL_DAYS}-day trial (one-time, naye users ke liye){"\n"}
-          • Subscription har mahine renew hoti hai{"\n"}
-          • Kabhi bhi cancel kar sakte hain{"\n"}
+          • ₹1 — {TRIAL_DAYS}-day trial (one-time, for new users){"\n"}
+          • Subscription renews every month{"\n"}
+          • Cancel anytime{"\n"}
           • Powered by Cashfree — PCI DSS compliant
         </Text>
+
+        {/* ── Legal links ── */}
+        <View style={{ flexDirection: "row", justifyContent: "center", flexWrap: "wrap", marginTop: 18, gap: 14 }}>
+          <Pressable onPress={() => Linking.openURL(`${API_BASE}/legal#refund`)}>
+            <Text style={{ color: "#8b5cf6", fontFamily: F.semibold, fontSize: 13, textDecorationLine: "underline" }}>
+              Refund Policy
+            </Text>
+          </Pressable>
+          <Text style={{ color: C.textMuted, fontSize: 13 }}>·</Text>
+          <Pressable onPress={() => Linking.openURL(`${API_BASE}/legal#terms`)}>
+            <Text style={{ color: "#8b5cf6", fontFamily: F.semibold, fontSize: 13, textDecorationLine: "underline" }}>
+              Terms
+            </Text>
+          </Pressable>
+          <Text style={{ color: C.textMuted, fontSize: 13 }}>·</Text>
+          <Pressable onPress={() => Linking.openURL(`${API_BASE}/legal#privacy`)}>
+            <Text style={{ color: "#8b5cf6", fontFamily: F.semibold, fontSize: 13, textDecorationLine: "underline" }}>
+              Privacy
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );

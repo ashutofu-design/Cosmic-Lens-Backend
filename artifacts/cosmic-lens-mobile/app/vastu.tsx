@@ -60,87 +60,161 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
 function CompassRose() {
   const innerR = ROSE_INNER_R;
   const outerR = ROSE_OUTER_R;
+  const midR   = (innerR + outerR) / 2;
+  const petalR = outerR + SIZE * 0.018;
 
   return (
     <Svg width={SIZE} height={SIZE}>
       <Defs>
+        {/* Jewel-tone sector gradients — color at low alpha over dark */}
         {DIRS.map(d => (
-          <SvgLinearGradient key={`g-${d.short}`} id={`g-${d.short}`} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0"   stopColor={d.color} stopOpacity="1"    />
-            <Stop offset="1"   stopColor={d.color} stopOpacity="0.45" />
-          </SvgLinearGradient>
+          <RadialGradient key={`jw-${d.short}`} id={`jw-${d.short}`} cx="50%" cy="50%" r="75%">
+            <Stop offset="0"    stopColor={d.color} stopOpacity="0.32" />
+            <Stop offset="0.55" stopColor={d.color} stopOpacity="0.12" />
+            <Stop offset="1"    stopColor="#050914" stopOpacity="1"    />
+          </RadialGradient>
         ))}
-        <RadialGradient id="ring-shine" cx="38%" cy="32%" r="70%">
-          <Stop offset="0"   stopColor="#f9d76b" stopOpacity="0.25" />
+        {/* Sheen overlay on sectors */}
+        <SvgLinearGradient id="sectorSheen" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0"   stopColor="#fff2b8" stopOpacity="0.18" />
+          <Stop offset="0.5" stopColor="#fff2b8" stopOpacity="0.04" />
+          <Stop offset="1"   stopColor="#000000" stopOpacity="0.25" />
+        </SvgLinearGradient>
+        {/* Gold ambient shine */}
+        <RadialGradient id="ring-shine" cx="38%" cy="28%" r="80%">
+          <Stop offset="0"   stopColor="#f9d76b" stopOpacity="0.22" />
+          <Stop offset="0.6" stopColor="#f9d76b" stopOpacity="0.04" />
           <Stop offset="1"   stopColor="#f9d76b" stopOpacity="0"    />
         </RadialGradient>
+        {/* Petal gradient */}
+        <SvgLinearGradient id="petal" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0"   stopColor="#fff2b8" stopOpacity="0.8" />
+          <Stop offset="1"   stopColor="#7a4800" stopOpacity="0.9" />
+        </SvgLinearGradient>
       </Defs>
 
-      <Defs>
-        <RadialGradient id="sectorDark" cx="50%" cy="50%" r="70%">
-          <Stop offset="0"   stopColor="#1a2344" />
-          <Stop offset="1"   stopColor="#050914" />
-        </RadialGradient>
-        <RadialGradient id="sectorDarkAlt" cx="50%" cy="50%" r="70%">
-          <Stop offset="0"   stopColor="#202a4e" />
-          <Stop offset="1"   stopColor="#07112a" />
-        </RadialGradient>
-      </Defs>
-
-      {/* Direction sectors — minimal dark panels with gold accents */}
-      {DIRS.map((d, i) => {
-        const isCardinal = d.deg % 90 === 0;
-        const mid        = toRad(d.deg);
-        const lx         = CX + LABEL_R * Math.cos(mid);
-        const ly         = CY + LABEL_R * Math.sin(mid);
-        const path       = wedgePath(CX, CY, innerR, outerR, d.deg - 22.4, d.deg + 22.4);
-
+      {/* ── Layer 1: Jewel-tone sectors ── */}
+      {DIRS.map(d => {
+        const mid  = toRad(d.deg);
+        const path = wedgePath(CX, CY, innerR, outerR, d.deg - 22.4, d.deg + 22.4);
         return (
-          <G key={d.short}>
-            {/* Muted dark sector */}
-            <Path d={path} fill={i % 2 === 0 ? "url(#sectorDark)" : "url(#sectorDarkAlt)"} />
-            {/* Gold hairline divider */}
-            <Path d={path} fill="none" stroke="#f9d76b" strokeWidth="0.5" opacity="0.25" />
+          <G key={`s-${d.short}`}>
+            <Path d={path} fill={`url(#jw-${d.short})`} />
+            <Path d={path} fill="url(#sectorSheen)" opacity="0.7" />
+            {/* gold radial divider line */}
+            <Line
+              x1={CX + innerR * Math.cos(toRad(d.deg - 22.4))}
+              y1={CY + innerR * Math.sin(toRad(d.deg - 22.4))}
+              x2={CX + outerR * Math.cos(toRad(d.deg - 22.4))}
+              y2={CY + outerR * Math.sin(toRad(d.deg - 22.4))}
+              stroke="#f9d76b" strokeWidth="0.7" opacity="0.45"
+            />
+          </G>
+        );
+      })}
 
-            {/* Cardinal arrow tip (metallic gold) */}
+      {/* Ambient gold shine overlay */}
+      <Circle cx={CX} cy={CY} r={outerR} fill="url(#ring-shine)" />
+
+      {/* ── Layer 2: 8-petal lotus ring (outer decoration) ── */}
+      {DIRS.map(d => {
+        const mid   = toRad(d.deg + 22.5); // between sectors
+        const px    = CX + petalR * Math.cos(mid);
+        const py    = CY + petalR * Math.sin(mid);
+        const pLen  = SIZE * 0.052;
+        const pWid  = SIZE * 0.022;
+        // petal tangent vectors
+        const tx    = -Math.sin(mid), ty = Math.cos(mid);
+        const nx    = Math.cos(mid),  ny = Math.sin(mid);
+        const tip1  = `${px + nx * pLen * 0.5},${py + ny * pLen * 0.5}`;
+        const tip2  = `${px - nx * pLen * 0.5},${py - ny * pLen * 0.5}`;
+        const side1 = `${px + tx * pWid},${py + ty * pWid}`;
+        const side2 = `${px - tx * pWid},${py - ty * pWid}`;
+        return (
+          <G key={`pt-${d.deg}`} opacity="0.55">
+            <Path
+              d={`M ${tip1} Q ${side1} ${tip2} Q ${side2} ${tip1} Z`}
+              fill="url(#petal)" stroke="#f9d76b" strokeWidth="0.6"
+            />
+          </G>
+        );
+      })}
+
+      {/* ── Layer 3: Direction labels ── */}
+      {DIRS.map(d => {
+        const isCardinal = d.deg % 90 === 0;
+        const mid = toRad(d.deg);
+        const lx  = CX + LABEL_R * Math.cos(mid);
+        const ly  = CY + LABEL_R * Math.sin(mid);
+        const hx  = CX + HINDI_R * Math.cos(mid);
+        const hy  = CY + HINDI_R * Math.sin(mid);
+        const ex  = CX + elemR   * Math.cos(mid);
+        const ey  = CY + elemR   * Math.sin(mid);
+        return (
+          <G key={`l-${d.short}`}>
+            {/* Cardinal arrow tip — metallic gold */}
             {isCardinal && (() => {
-              const tip   = CX + (outerR + SIZE * 0.028) * Math.cos(mid);
-              const tipY  = CY + (outerR + SIZE * 0.028) * Math.sin(mid);
-              const bx1   = CX + outerR * Math.cos(mid - 0.14);
-              const by1   = CY + outerR * Math.sin(mid - 0.14);
-              const bx2   = CX + outerR * Math.cos(mid + 0.14);
-              const by2   = CY + outerR * Math.sin(mid + 0.14);
+              const tip  = CX + (outerR + SIZE * 0.030) * Math.cos(mid);
+              const tipY = CY + (outerR + SIZE * 0.030) * Math.sin(mid);
+              const bx1  = CX + outerR * Math.cos(mid - 0.14);
+              const by1  = CY + outerR * Math.sin(mid - 0.14);
+              const bx2  = CX + outerR * Math.cos(mid + 0.14);
+              const by2  = CY + outerR * Math.sin(mid + 0.14);
               return (
                 <Polygon
                   points={`${tip},${tipY} ${bx1},${by1} ${bx2},${by2}`}
-                  fill="#f9d76b"
-                  stroke="#3a2404"
-                  strokeWidth="0.6"
+                  fill="#f9d76b" stroke="#3a2404" strokeWidth="0.6"
                 />
               );
             })()}
 
-            {/* Short code (N / NE / etc.) — soft gold */}
+            {/* Short code */}
             <SvgText
               x={lx} y={ly}
               textAnchor="middle" alignmentBaseline="middle"
-              fill={isCardinal ? "#fff8dc" : "#f9d76bcc"}
-              fontSize={isCardinal ? SIZE * 0.062 : SIZE * 0.044}
-              fontWeight={isCardinal ? "900" : "600"}
+              fill={isCardinal ? "#fff8dc" : "#f9d76b"}
+              fontSize={isCardinal ? SIZE * 0.064 : SIZE * 0.046}
+              fontWeight="900"
               letterSpacing={1}
             >
               {d.short}
+            </SvgText>
+
+            {/* Hindi name — glowing color */}
+            <SvgText
+              x={hx} y={hy}
+              textAnchor="middle" alignmentBaseline="middle"
+              fill={d.color}
+              fontSize={SIZE * 0.032}
+              fontWeight="700"
+              opacity={0.95}
+            >
+              {d.hindi}
             </SvgText>
           </G>
         );
       })}
 
-      {/* Shine overlay */}
-      <Circle cx={CX} cy={CY} r={outerR} fill="url(#ring-shine)" />
+      {/* ── Layer 4: Gold filigree separator rings ── */}
+      <Circle cx={CX} cy={CY} r={outerR}  fill="none" stroke="#f9d76b" strokeWidth="1.2" opacity="0.55" />
+      <Circle cx={CX} cy={CY} r={outerR - SIZE * 0.008} fill="none" stroke="#3a2404" strokeWidth="0.5" opacity="0.8" />
+      <Circle cx={CX} cy={CY} r={midR}   fill="none" stroke="#f9d76b" strokeWidth="0.5" opacity="0.25" strokeDasharray="2 3" />
+      <Circle cx={CX} cy={CY} r={innerR + SIZE * 0.010} fill="none" stroke="#3a2404" strokeWidth="0.5" opacity="0.7" />
+      <Circle cx={CX} cy={CY} r={innerR} fill="none" stroke="#f9d76b" strokeWidth="1.4" opacity="0.7" />
 
-      {/* Inner separator ring */}
-      <Circle cx={CX} cy={CY} r={innerR}  fill="none" stroke="#f9d76b" strokeWidth="1.5" opacity="0.6" />
-      <Circle cx={CX} cy={CY} r={outerR}  fill="none" stroke="#f9d76b" strokeWidth="1"   opacity="0.3" />
+      {/* 8 tiny rivet dots on inner gold ring */}
+      {DIRS.map(d => {
+        const ang = toRad(d.deg + 22.5);
+        const rx  = CX + (innerR + SIZE * 0.005) * Math.cos(ang);
+        const ry  = CY + (innerR + SIZE * 0.005) * Math.sin(ang);
+        return (
+          <G key={`rd-${d.deg}`}>
+            <Circle cx={rx} cy={ry} r={SIZE * 0.007} fill="#3a2404" />
+            <Circle cx={rx} cy={ry} r={SIZE * 0.005} fill="#f9d76b" />
+            <Circle cx={rx - 0.4} cy={ry - 0.4} r={SIZE * 0.0018} fill="#fff8dc" opacity="0.9" />
+          </G>
+        );
+      })}
     </Svg>
   );
 }
@@ -251,23 +325,23 @@ function CompassBezel() {
       {/* Tick marks */}
       {ticks}
 
-      {/* Degree labels at every 45° */}
-      {DIRS.map(d => {
-        const ang  = toRad(d.deg);
-        const r    = BEZEL_INNER_R - SIZE * 0.062;
-        const lx   = CX + r * Math.cos(ang);
-        const ly   = CY + r * Math.sin(ang);
+      {/* Degree labels only at cardinal positions (just inside bezel) */}
+      {DIRS.filter(d => d.deg % 90 === 0).map(d => {
+        const ang = toRad(d.deg);
+        const r   = BEZEL_INNER_R - SIZE * 0.028;
+        const lx  = CX + r * Math.cos(ang);
+        const ly  = CY + r * Math.sin(ang);
         return (
           <SvgText
-            key={d.short}
+            key={`deg-${d.short}`}
             x={lx} y={ly}
             textAnchor="middle" alignmentBaseline="middle"
             fill="#f9d76b"
-            fontSize={SIZE * 0.03}
-            fontWeight="700"
-            opacity="0.9"
+            fontSize={SIZE * 0.024}
+            fontWeight="600"
+            opacity="0.55"
           >
-            {d.deg === 0 ? "000" : d.deg.toString().padStart(3, "0")}°
+            {d.deg.toString().padStart(3, "0")}°
           </SvgText>
         );
       })}
@@ -354,11 +428,63 @@ function EnergyCore() {
         borderWidth: 0.8, borderColor: "#f9d76b66",
       }} />
 
+      {/* Yantra (8-pointed star) sacred geometry overlay */}
+      {(() => {
+        const yR  = coreSize * 1.35;
+        const yCX = yR, yCY = yR;
+        const starPts: string[] = [];
+        for (let k = 0; k < 16; k++) {
+          const ang = (k * Math.PI) / 8 - Math.PI / 2;
+          const r   = k % 2 === 0 ? yR * 0.95 : yR * 0.48;
+          starPts.push(`${yCX + r * Math.cos(ang)},${yCY + r * Math.sin(ang)}`);
+        }
+        const tri1: string[] = [];
+        const tri2: string[] = [];
+        for (let k = 0; k < 3; k++) {
+          const a1 = (k * 2 * Math.PI) / 3 - Math.PI / 2;
+          const a2 = a1 + Math.PI / 3;
+          tri1.push(`${yCX + yR * 0.85 * Math.cos(a1)},${yCY + yR * 0.85 * Math.sin(a1)}`);
+          tri2.push(`${yCX + yR * 0.85 * Math.cos(a2)},${yCY + yR * 0.85 * Math.sin(a2)}`);
+        }
+        return (
+          <Svg
+            width={yR * 2}
+            height={yR * 2}
+            style={{ position: "absolute" }}
+            pointerEvents="none"
+          >
+            <Defs>
+              <RadialGradient id="yantraFill" cx="50%" cy="50%" r="50%">
+                <Stop offset="0"   stopColor="#f9d76b" stopOpacity="0.22" />
+                <Stop offset="1"   stopColor="#f9d76b" stopOpacity="0.04" />
+              </RadialGradient>
+            </Defs>
+            {/* Fill star (octagram base) */}
+            <Polygon points={starPts.join(" ")} fill="url(#yantraFill)" />
+            {/* Two interlocking triangles (shatkona / star of David feel) */}
+            <Polygon points={tri1.join(" ")} fill="none" stroke="#f9d76b" strokeWidth="0.7" opacity="0.55" />
+            <Polygon points={tri2.join(" ")} fill="none" stroke="#fff2b8" strokeWidth="0.7" opacity="0.55" />
+            {/* Octagram outline */}
+            <Polygon points={starPts.join(" ")} fill="none" stroke="#f9d76b" strokeWidth="0.9" opacity="0.85" />
+            {/* 8 gold dots at star tips */}
+            {Array.from({ length: 8 }).map((_, k) => {
+              const ang = (k * Math.PI) / 4 - Math.PI / 2;
+              const dx  = yCX + yR * 0.95 * Math.cos(ang);
+              const dy  = yCY + yR * 0.95 * Math.sin(ang);
+              return <Circle key={k} cx={dx} cy={dy} r={1.8} fill="#fff8dc" opacity={0.95} />;
+            })}
+            {/* Inner bindu circle */}
+            <Circle cx={yCX} cy={yCY} r={yR * 0.22} fill="none" stroke="#f9d76b" strokeWidth="0.8" opacity="0.7" />
+          </Svg>
+        );
+      })()}
+
       {/* Bright core dot with halo */}
       <View style={{
-        width: coreSize * 0.78, height: coreSize * 0.78, borderRadius: coreSize * 0.39,
-        backgroundColor: "#2a1804",
+        width: coreSize * 0.72, height: coreSize * 0.72, borderRadius: coreSize * 0.36,
+        backgroundColor: "#1a0e02",
         alignItems: "center", justifyContent: "center",
+        borderWidth: 1, borderColor: "#f9d76b",
         shadowColor: "#f9d76b", shadowOpacity: 0.9, shadowRadius: 14,
         shadowOffset: { width: 0, height: 0 },
       }}>

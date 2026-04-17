@@ -524,23 +524,8 @@ export default function ProfileScreen() {
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="shield"
-              label="Privacy Policy"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/privacy"); }}
-            />
-            <SettingRow
-              icon="file-text"
-              label="Terms of Service"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/terms"); }}
-            />
-            <SettingRow
-              icon="rotate-ccw"
-              label="Refund & Cancellation"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/refund"); }}
-            />
-            <SettingRow
-              icon="alert-triangle"
-              label="Astrology Disclaimer"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/disclaimer"); }}
+              label="Legal & Policies"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/legal"); }}
               last
             />
           </View>

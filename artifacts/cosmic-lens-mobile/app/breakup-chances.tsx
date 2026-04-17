@@ -13,6 +13,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import type { BirthData } from "@/types";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 type Severity = "low" | "moderate" | "severe";
 type RiskLevel = "low" | "medium" | "high" | "very high";
@@ -49,6 +50,7 @@ function packPerson(bd: BirthData) {
 
 export default function BreakupChancesScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("love_reality_full");
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const isDark = C.isDark;
@@ -219,6 +221,7 @@ export default function BreakupChancesScreen() {
           />
         )}
       </ScrollView>
+      {LockOverlay}
     </CosmicBg>
   );
 }

@@ -13,6 +13,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import type { BirthData } from "@/types";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 interface Breakdown {
   emotional: number; attraction: number; communication: number;
@@ -40,6 +41,7 @@ function packPerson(bd: BirthData) {
 
 export default function LoveCompatibilityScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("love_reality_full");
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const isDark = C.isDark;
@@ -211,6 +213,7 @@ export default function LoveCompatibilityScreen() {
           />
         )}
       </ScrollView>
+      {LockOverlay}
     </CosmicBg>
   );
 }

@@ -13,6 +13,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import type { BirthData } from "@/types";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 type Chance      = "unlikely" | "possible" | "strong" | "very strong";
 type ReunionType = "temporary" | "long-term" | "unstable";
@@ -48,6 +49,7 @@ function packPerson(bd: BirthData) {
 
 export default function WillReturnScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("love_reality_full");
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const isDark = C.isDark;
@@ -214,6 +216,7 @@ export default function WillReturnScreen() {
           />
         )}
       </ScrollView>
+      {LockOverlay}
     </CosmicBg>
   );
 }

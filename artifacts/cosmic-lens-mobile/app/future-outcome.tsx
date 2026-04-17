@@ -13,6 +13,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import type { BirthData } from "@/types";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 type Trend = "up" | "down" | "mixed";
 
@@ -49,6 +50,7 @@ function packPerson(bd: BirthData) {
 
 export default function FutureOutcomeScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("future_timeline_6m");
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const isDark = C.isDark;
@@ -213,6 +215,7 @@ export default function FutureOutcomeScreen() {
           />
         )}
       </ScrollView>
+      {LockOverlay}
     </CosmicBg>
   );
 }

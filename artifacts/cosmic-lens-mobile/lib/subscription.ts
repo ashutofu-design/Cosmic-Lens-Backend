@@ -55,7 +55,7 @@ export type FeatureKey =
   | "kundli_milan"
   | "unlimited_profiles";
 
-const FEATURE_REQUIREMENT: Record<FeatureKey, "basic" | "pro"> = {
+export const FEATURE_REQUIREMENT: Record<FeatureKey, "basic" | "pro"> = {
   ask_unlimited:        "pro",
   marriage_compat_full: "pro",
   love_reality_full:    "pro",

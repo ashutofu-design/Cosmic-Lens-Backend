@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 function KundliMilanCard({ isDark }: { isDark: boolean }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -156,6 +157,7 @@ function KundliMilanCard({ isDark }: { isDark: boolean }) {
 
 export default function MarriageCompatScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("marriage_compat_full");
   const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
@@ -247,6 +249,7 @@ export default function MarriageCompatScreen() {
           </View>
         </View>
       </ScrollView>
+      {LockOverlay}
     </CosmicBg>
   );
 }

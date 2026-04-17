@@ -18,6 +18,7 @@ import { useT } from "@/hooks/useT";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 const DAY_NAMES = ["Aaditya (Sun)", "Soma (Mon)", "Mangal (Tue)", "Budh (Wed)", "Guru (Thu)", "Shukra (Fri)", "Shani (Sat)"];
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -120,6 +121,7 @@ function WeekChart({
 export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
   const C = useC();
+  const { LockOverlay } = useFeatureGate("future_timeline_6m");
   const t = useT();
   const { kundli, moonData } = useUser();
   const topPad   = Platform.OS === "web" ? 67 : insets.top;
@@ -343,6 +345,7 @@ export default function ForecastScreen() {
           </Pressable>
         )}
       </ScrollView>
+      {LockOverlay}
     </View>
   );
 }

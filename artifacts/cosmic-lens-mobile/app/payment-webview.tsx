@@ -122,6 +122,12 @@ export default function PaymentWebviewScreen() {
       setOrderId(order_id);
       setPaymentLink(payment_link);
       setPhase("paying");
+
+      // On web, react-native-webview doesn't render. Open Cashfree checkout
+      // in a new tab; user returns to app and taps "I've Paid" to verify.
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        try { window.open(payment_link, "_blank", "noopener,noreferrer"); } catch {}
+      }
     } catch (e: any) {
       setErrMsg(e?.message ?? "Network error. Check connection.");
       setPhase("failed");
@@ -271,6 +277,36 @@ export default function PaymentWebviewScreen() {
             <ActivityIndicator size="large" color={ac} style={{ marginTop: 20 }} />
           )}
 
+          {/* Web: Cashfree opens in new tab; user comes back & taps Verify */}
+          {phase === "paying" && Platform.OS === "web" && !!paymentLink && (
+            <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
+              <Pressable
+                onPress={() => {
+                  try { (window as any).open(paymentLink, "_blank", "noopener,noreferrer"); } catch {}
+                }}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: ac, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: ac }]}>↗ Reopen Cashfree Checkout</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setPhase("verifying");
+                  _verifyPayment(orderId);
+                }}
+                style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Text style={s.primaryBtnText}>✓ I've Paid — Verify Now</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: C.textMid }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          )}
+
           {phase === "success" && (
             <Pressable
               onPress={() => { Haptics.selectionAsync(); router.replace("/"); }}
@@ -312,9 +348,9 @@ export default function PaymentWebviewScreen() {
         </Text>
       </Animated.View>
 
-      {/* In-app payment WebView */}
+      {/* In-app payment WebView (mobile only — web uses new tab) */}
       <Modal
-        visible={phase === "paying" && !!paymentLink}
+        visible={Platform.OS !== "web" && phase === "paying" && !!paymentLink}
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={handleClosePayment}

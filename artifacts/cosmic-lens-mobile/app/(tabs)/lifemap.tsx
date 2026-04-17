@@ -83,6 +83,7 @@ const CATEGORIES: Category[] = [
     badge: "Important",
     badgeIcon: "💰",
     subtitle: "Money flow & financial future",
+    route: "/finance",
   },
 ];
 

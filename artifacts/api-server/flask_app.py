@@ -1791,6 +1791,380 @@ def health_analysis():
     return jsonify(response)
 
 
+@app.route("/api/finance-analysis", methods=["POST", "OPTIONS"])
+def finance_analysis():
+    """
+    Vedic finance analysis with Basic / Pro tiering.
+    Body: { "user_id": int, "kundli": {...} }   Headers: X-API-Key
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import swisseph as swe
+    from subscription_helper import effective_plan
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    kundli  = data.get("kundli") or {}
+
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+
+    planets = kundli.get("planets") or []
+    if not planets:
+        return jsonify({"error": "Kundli not provided. Please complete your birth chart first."}), 400
+
+    SIGNS = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+             "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    SIGN_LORD = {
+        "Aries":"Mars","Taurus":"Venus","Gemini":"Mercury","Cancer":"Moon",
+        "Leo":"Sun","Virgo":"Mercury","Libra":"Venus","Scorpio":"Mars",
+        "Sagittarius":"Jupiter","Capricorn":"Saturn","Aquarius":"Saturn","Pisces":"Jupiter",
+    }
+    EXALT = {"Sun":"Aries","Moon":"Taurus","Mars":"Capricorn","Mercury":"Virgo",
+             "Jupiter":"Cancer","Venus":"Pisces","Saturn":"Libra"}
+    DEBIL = {"Sun":"Libra","Moon":"Scorpio","Mars":"Cancer","Mercury":"Pisces",
+             "Jupiter":"Capricorn","Venus":"Virgo","Saturn":"Aries"}
+    OWN   = {"Sun":["Leo"],"Moon":["Cancer"],"Mars":["Aries","Scorpio"],
+             "Mercury":["Gemini","Virgo"],"Jupiter":["Sagittarius","Pisces"],
+             "Venus":["Taurus","Libra"],"Saturn":["Capricorn","Aquarius"]}
+
+    def find_planet(name):
+        for p in planets:
+            if p.get("name") == name:
+                return p
+        return None
+
+    asc_sign = kundli.get("ascendant") or "Aries"
+    asc_idx  = SIGNS.index(asc_sign) if asc_sign in SIGNS else 0
+    sign_of_2nd  = SIGNS[(asc_idx + 1)  % 12]
+    sign_of_5th  = SIGNS[(asc_idx + 4)  % 12]
+    sign_of_8th  = SIGNS[(asc_idx + 7)  % 12]
+    sign_of_9th  = SIGNS[(asc_idx + 8)  % 12]
+    sign_of_11th = SIGNS[(asc_idx + 10) % 12]
+    sign_of_12th = SIGNS[(asc_idx + 11) % 12]
+    lord_2nd     = SIGN_LORD[sign_of_2nd]
+    lord_11th    = SIGN_LORD[sign_of_11th]
+
+    score   = 55
+    notes   = []
+    benefics = {"Jupiter","Venus","Mercury"}
+
+    # 2nd house — wealth/savings
+    p2 = [p for p in planets if p.get("house") == 2]
+    for p in p2:
+        nm = p.get("name")
+        if nm == "Jupiter":
+            score += 8; notes.append("Jupiter in 2nd — strong savings & family wealth")
+        elif nm == "Venus":
+            score += 6; notes.append("Venus in 2nd — luxury & comfort money")
+        elif nm == "Mercury":
+            score += 4; notes.append("Mercury in 2nd — sharp money sense, business mind")
+        elif nm == "Saturn":
+            score -= 4; notes.append("Saturn in 2nd — savings build slowly, late but steady")
+        elif nm == "Rahu":
+            score += 2; notes.append("Rahu in 2nd — unconventional income paths")
+        elif nm == "Ketu":
+            score -= 3; notes.append("Ketu in 2nd — money can slip away, avoid leaks")
+
+    # 2nd lord placement
+    l2 = find_planet(lord_2nd)
+    if l2:
+        h = l2.get("house", 0); sg = l2.get("sign","")
+        if h in (1,2,5,9,10,11):
+            score += 6; notes.append(f"2nd lord {lord_2nd} in {h}th — wealth flow supported")
+        elif h in (6,8,12):
+            score -= 7; notes.append(f"2nd lord {lord_2nd} in {h}th (dusthana) — wealth leakage risk")
+        if lord_2nd in EXALT and sg == EXALT[lord_2nd]:
+            score += 5; notes.append(f"{lord_2nd} exalted — wealth karma strong")
+        elif lord_2nd in DEBIL and sg == DEBIL[lord_2nd]:
+            score -= 5; notes.append(f"{lord_2nd} debilitated — money matters need extra effort")
+
+    # 11th house — gains/income
+    p11 = [p for p in planets if p.get("house") == 11]
+    for p in p11:
+        nm = p.get("name")
+        if nm in benefics:
+            score += 6; notes.append(f"{nm} in 11th — multiple income streams indicated")
+        elif nm == "Sun":
+            score += 4; notes.append("Sun in 11th — gains through authority/position")
+        elif nm == "Saturn":
+            score += 5; notes.append("Saturn in 11th — slow but huge long-term gains")
+        elif nm == "Mars":
+            score += 3; notes.append("Mars in 11th — gains through enterprise & courage")
+        elif nm == "Rahu":
+            score += 6; notes.append("Rahu in 11th — sudden, large gains from foreign/unconventional sources")
+
+    # 11th lord
+    l11 = find_planet(lord_11th)
+    if l11:
+        h = l11.get("house", 0)
+        if h in (2,5,9,10,11):
+            score += 5; notes.append(f"11th lord {lord_11th} in {h}th — gains channel strong")
+        elif h in (6,8,12):
+            score -= 5; notes.append(f"11th lord {lord_11th} in {h}th — income blocked or delayed")
+
+    # 5th house — investments/speculation
+    p5 = [p for p in planets if p.get("house") == 5]
+    for p in p5:
+        nm = p.get("name")
+        if nm in benefics:
+            score += 4; notes.append(f"{nm} in 5th — favorable for investments")
+        elif nm in ("Mars","Rahu"):
+            score += 1; notes.append(f"{nm} in 5th — speculation possible, but high risk")
+        elif nm == "Ketu":
+            score -= 3; notes.append("Ketu in 5th — avoid speculation, pure luck weak")
+
+    # 9th house — luck/fortune
+    p9 = [p for p in planets if p.get("house") == 9]
+    for p in p9:
+        nm = p.get("name")
+        if nm in benefics or nm == "Sun":
+            score += 4; notes.append(f"{nm} in 9th — fortune & elder/mentor support")
+        elif nm in ("Saturn","Rahu","Ketu"):
+            score -= 2
+
+    # 8th house — sudden gains/losses
+    p8 = [p for p in planets if p.get("house") == 8]
+    for p in p8:
+        nm = p.get("name")
+        if nm == "Jupiter":
+            score += 3; notes.append("Jupiter in 8th — possible inheritance/sudden wealth")
+        elif nm == "Venus":
+            score += 2
+        elif nm in ("Mars","Saturn","Ketu"):
+            score -= 3; notes.append(f"{nm} in 8th — sudden expenses possible, keep emergency fund")
+
+    # 12th house — expenses
+    p12 = [p for p in planets if p.get("house") == 12]
+    for p in p12:
+        nm = p.get("name")
+        if nm in ("Saturn","Rahu","Ketu"):
+            score -= 4; notes.append(f"{nm} in 12th — high expense or hidden outflow")
+        elif nm == "Mars":
+            score -= 2
+
+    # Jupiter karaka strength
+    jup = find_planet("Jupiter")
+    if jup:
+        jsg = jup.get("sign","")
+        if jsg == EXALT["Jupiter"]:
+            score += 5; notes.append("Jupiter exalted — natural wealth protector strong")
+        elif jsg == DEBIL["Jupiter"]:
+            score -= 5; notes.append("Jupiter debilitated — wealth wisdom needs nurture")
+        if jup.get("house") in (1,2,5,9,11):
+            score += 3
+        elif jup.get("house") in (6,8,12):
+            score -= 3
+
+    # Venus karaka strength
+    ven = find_planet("Venus")
+    if ven:
+        vsg = ven.get("sign","")
+        if vsg == EXALT["Venus"]:
+            score += 4
+        elif vsg == DEBIL["Venus"]:
+            score -= 4
+
+    # Saturn delay/loss factor
+    sat = find_planet("Saturn")
+    if sat and sat.get("house") in (2,5,8,11,12):
+        # Saturn in 11th is actually positive (handled above)
+        if sat.get("house") in (8,12):
+            score -= 3; notes.append(f"Saturn in {sat.get('house')}th — delays in money matters")
+
+    # ── Live transits: Jupiter, Saturn, Rahu on wealth houses ────────────
+    transit_notes = []
+    try:
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        for p_name, p_id in (("Jupiter", swe.JUPITER), ("Saturn", swe.SATURN),
+                             ("Rahu", swe.MEAN_NODE), ("Venus", swe.VENUS)):
+            res = swe.calc_ut(jd_now, p_id, flags)
+            t_lon = res[0][0] % 360
+            t_sign = SIGNS[int(t_lon // 30)]
+            t_house = ((SIGNS.index(t_sign) - asc_idx + 12) % 12) + 1
+            if p_name == "Jupiter" and t_house in (2, 5, 9, 11):
+                score += 5
+                transit_notes.append(f"Jupiter currently in your {t_house}th — wealth-building & opportunity phase active")
+            if p_name == "Saturn" and t_house in (2, 11):
+                score += 3
+                transit_notes.append(f"Saturn in {t_house}th — slow but solid long-term wealth structure forming")
+            if p_name == "Saturn" and t_house in (8, 12):
+                score -= 3
+                transit_notes.append(f"Saturn in {t_house}th — extra discipline on expenses needed")
+            if p_name == "Rahu" and t_house in (2, 5, 11):
+                score += 4
+                transit_notes.append(f"Rahu in {t_house}th — sudden income or unconventional gain possible")
+            if p_name == "Venus" and t_house in (2, 11):
+                score += 2
+                transit_notes.append(f"Venus in {t_house}th — comfort spending & luxury inflow phase")
+    except Exception:
+        pass
+
+    # ── Current dasha favorability for finance ──────────────────────────
+    cd = kundli.get("currentDasha") or {}
+    md_lord = cd.get("maha","")
+    ad_lord = cd.get("antar","")
+    DASHA_WEALTH = {
+        "Jupiter": +8, "Venus": +6, "Mercury": +5, "Sun": +3,
+        "Moon": +2, "Saturn": +2, "Mars": 0, "Rahu": +4, "Ketu": -3,
+    }
+    if md_lord in DASHA_WEALTH:
+        score += DASHA_WEALTH[md_lord]
+    if ad_lord in DASHA_WEALTH:
+        score += DASHA_WEALTH[ad_lord] // 2
+
+    score = max(25, min(95, score))
+    if score >= 70:
+        trend = "Gain"
+        summary = "Finance mein achhi energy hai. Income grow karne ke yog hain. Sahi opportunity ka faayda uthayein."
+    elif score >= 50:
+        trend = "Stable"
+        summary = "Money flow steady hai. Bade risks abhi avoid karein, slow & disciplined approach se wealth build hogi."
+    else:
+        trend = "Loss"
+        summary = "Abhi expenses ya delay phase chal sakta hai. Naya investment soch-samajh ke karein, savings ko priority dein."
+
+    hook = "A strong financial gain period is indicated — full timing and source are revealed in Pro."
+
+    plan = effective_plan(user)
+    is_pro_user = plan in ("pro", "trial")
+
+    response = {
+        "level":      "pro" if is_pro_user else "basic",
+        "pro_locked": not is_pro_user,
+        "basic": {
+            "score":   score,
+            "trend":   trend,
+            "summary": summary,
+            "hook":    hook,
+        },
+    }
+
+    if is_pro_user:
+        def planet_strength(name):
+            p = find_planet(name)
+            if not p: return None
+            sg = p.get("sign","")
+            status = "neutral"
+            if name in EXALT and sg == EXALT[name]:    status = "exalted"
+            elif name in DEBIL and sg == DEBIL[name]:  status = "debilitated"
+            elif sg in OWN.get(name, []):              status = "own sign"
+            return {"name": name, "sign": sg, "house": p.get("house"),
+                    "status": status, "retrograde": bool(p.get("retrograde"))}
+
+        houses_block = {
+            "h2":  {"sign": sign_of_2nd,  "lord": lord_2nd,
+                    "occupants": ", ".join(p["name"] for p in p2) or "Khaali",
+                    "meaning": "Wealth & savings"},
+            "h11": {"sign": sign_of_11th, "lord": lord_11th,
+                    "occupants": ", ".join(p["name"] for p in p11) or "Khaali",
+                    "meaning": "Income & gains"},
+            "h5":  {"sign": sign_of_5th,  "lord": SIGN_LORD[sign_of_5th],
+                    "occupants": ", ".join(p["name"] for p in p5) or "Khaali",
+                    "meaning": "Investment & speculation"},
+            "h9":  {"sign": sign_of_9th,  "lord": SIGN_LORD[sign_of_9th],
+                    "occupants": ", ".join(p["name"] for p in p9) or "Khaali",
+                    "meaning": "Luck & fortune"},
+        }
+
+        planets_block = [planet_strength(n) for n in ("Jupiter","Venus","Mercury","Saturn","Rahu")]
+        planets_block = [p for p in planets_block if p]
+
+        # Inflow periods
+        inflow = []
+        if md_lord in ("Jupiter","Venus","Mercury") and DASHA_WEALTH.get(md_lord, 0) >= 5:
+            inflow.append(f"Current {md_lord} mahadasha — wealth-favorable phase, naye income channels khulne ke chances strong hain.")
+        if ad_lord in ("Jupiter","Venus","Mercury","Rahu"):
+            inflow.append(f"{md_lord}-{ad_lord} antardasha (ends {cd.get('endDate','')}) — short-term gain window active hai.")
+        if any("opportunity phase" in t or "sudden income" in t for t in transit_notes):
+            inflow.append("Jupiter/Rahu transit bhi support de raha hai — apportunities pe quickly act karein.")
+        if not inflow:
+            inflow.append("Major inflow yog abhi nahi hai. Existing income consolidate karein, naye sources slowly explore karein.")
+
+        # Expense / loss phases
+        expenses = []
+        if md_lord in ("Saturn","Ketu","Rahu") and md_lord != "Jupiter":
+            if md_lord == "Ketu":
+                expenses.append(f"Ketu mahadasha — money detachment phase, unexpected expense possible. Budget tight rakhein.")
+            elif md_lord == "Saturn":
+                expenses.append(f"Saturn mahadasha — slow income aur disciplined spending zaroori. Loans soch-samajh ke.")
+        if any("expense" in t.lower() or "discipline on expenses" in t for t in transit_notes):
+            expenses.append("Saturn transit kuch hidden outflow la raha hai — monthly expenses track karein.")
+        if not expenses:
+            expenses.append("Major loss phase abhi nahi hai. Routine expenses hi expected hain.")
+
+        # Investment opportunities
+        invest = []
+        if jup and jup.get("house") in (5,9,11):
+            invest.append("Jupiter strong placement — long-term investments (mutual funds, gold, education) favorable.")
+        if any(p.get("name") in benefics and p.get("house") == 5 for p in planets):
+            invest.append("5th house mein benefic — equity/SIP route try kar sakte ho, but research zaroor karein.")
+        if any(p.get("name") == "Rahu" and p.get("house") in (5,11) for p in planets):
+            invest.append("Rahu in 5th/11th — speculation/crypto attract karega, but max 5-10% portfolio rakhein.")
+        if not invest:
+            invest.append("Conservative tools (FD, RD, PPF) abhi behtar — speculation se door rahein.")
+
+        # Sudden gain/loss
+        sudden = []
+        if any(p.get("name") == "Rahu" and p.get("house") in (2,5,8,11) for p in planets):
+            sudden.append("Rahu wealth-house mein — sudden bonus, lottery ya unexpected money ka chance, but equally sudden loss bhi possible.")
+        if any(p.get("name") == "Jupiter" and p.get("house") == 8 for p in planets):
+            sudden.append("Jupiter in 8th — inheritance ya gift se wealth aane ka subtle yog.")
+        if any(p.get("name") in ("Mars","Ketu") and p.get("house") == 8 for p in planets):
+            sudden.append("Mars/Ketu in 8th — emergency fund maintain rakhein, sudden expense possible.")
+        if not sudden:
+            sudden.append("Sudden gain/loss ka strong indicator nahi hai. Steady flow expected.")
+
+        # Wealth stability
+        stability_score = 0
+        if l2 and l2.get("house") in (1,2,5,9,10,11): stability_score += 2
+        if jup and jup.get("house") in (1,2,5,9,11): stability_score += 2
+        if any(p.get("name") == "Saturn" and p.get("house") == 11 for p in planets): stability_score += 1
+        if any(p.get("name") in ("Saturn","Rahu","Ketu") and p.get("house") == 12 for p in planets): stability_score -= 2
+
+        if stability_score >= 3:
+            stability = "Strong — long-term wealth structure solid hai. Routine bachat hi compound hokar bada corpus banega."
+        elif stability_score >= 0:
+            stability = "Moderate — wealth slowly build hoti hai. Patience aur disciplined SIP zaroori."
+        else:
+            stability = "Volatile — money aata-jaata rehta hai. Spending discipline aur emergency fund priority hai."
+
+        # Remedies
+        remedies = []
+        if jup and (jup.get("sign") == DEBIL["Jupiter"] or jup.get("house") in (6,8,12)):
+            remedies.append("Brihaspativaar (Thursday) ko 'Om Brim Brihaspataye Namah' 108 baar — Jupiter ki blessings activate hoti hain.")
+        if md_lord == "Saturn" or (sat and sat.get("house") in (2,8,12)):
+            remedies.append("Shanivaar ko till tel ka deepak Peepal ke neeche — Saturn ki delay halki hoti hai.")
+        if ven and (ven.get("sign") == DEBIL["Venus"] or ven.get("house") in (6,8,12)):
+            remedies.append("Shukravaar ko white sweet kanya ko daan — Venus ki kripa wealth flow lati hai.")
+        if md_lord == "Rahu" or any(p.get("name") == "Rahu" and p.get("house") == 12 for p in planets):
+            remedies.append("Roz subah 7 daane gud + chana cow ko — Rahu ki chaos energy stable hoti hai.")
+        # Always include practical
+        remedies.append("Practical: 50-30-20 rule (50% needs, 30% wants, 20% savings) — Lakshmi sthir wahin tikti hai jahan discipline hai.")
+        remedies.append("Practical: Har month 10% income emergency fund mein — sudden expense ke time grace milega.")
+
+        response["pro"] = {
+            "houses":     houses_block,
+            "planets":    planets_block,
+            "transit":    transit_notes or ["No major Jupiter/Saturn transit on wealth houses currently."],
+            "inflow":     inflow,
+            "expenses":   expenses,
+            "invest":     invest,
+            "sudden":     sudden,
+            "stability":  stability,
+            "remedies":   remedies,
+            "reasons":    notes[:8],
+        }
+
+    return jsonify(response)
+
+
 @app.route("/api/current_transits", methods=["GET"])
 def current_transits():
     """Real-time sidereal planetary positions (Lahiri ayanamsha) for all 9 grahas."""

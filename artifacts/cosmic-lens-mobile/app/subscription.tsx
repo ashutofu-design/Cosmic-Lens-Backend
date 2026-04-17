@@ -26,8 +26,6 @@ const F = {
   bold:     "Nunito_700Bold",
 } as const;
 
-type BillingCycle = "monthly" | "yearly";
-
 // ── Plans definition (mirrors backend subscription_helper.py) ────────────────
 const PLANS = [
   {
@@ -36,8 +34,6 @@ const PLANS = [
     accent: "#a78bfa",
     badge: null as string | null,
     monthlyPrice: PRICES.basic_monthly,
-    yearlyPrice:  PRICES.basic_yearly,
-    yearlySave:   25,
     icon: "star" as const,
     tagline: "Roz ke liye basics",
     features: [
@@ -61,9 +57,6 @@ const PLANS = [
     accent: "#f59e0b",
     badge: "🔥 MOST POPULAR",
     monthlyPrice: PRICES.pro_monthly,
-    yearlyPrice:  PRICES.pro_monthly,   // Pro is monthly-only — show monthly price even on yearly toggle
-    yearlySave:   0,
-    monthlyOnly:  true as const,
     icon: "zap" as const,
     tagline: "Full power Vedic insights",
     features: [
@@ -177,19 +170,15 @@ function TrialBanner({
 // ── Plan Card ────────────────────────────────────────────────────────────────
 function PlanCard({
   plan,
-  cycle,
   isCurrent,
   onPress,
 }: {
   plan: typeof PLANS[number];
-  cycle: BillingCycle;
   isCurrent: boolean;
   onPress: () => void;
 }) {
   const C = useC();
-  const monthlyOnly = (plan as any).monthlyOnly === true;
-  const effectiveCycle: BillingCycle = monthlyOnly ? "monthly" : cycle;
-  const price = effectiveCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+  const price = plan.monthlyPrice;
   const isPopular = plan.key === "pro";
 
   return (
@@ -228,30 +217,11 @@ function PlanCard({
       </View>
 
       {/* Price */}
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 12, marginBottom: 4 }}>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 12, marginBottom: 10 }}>
         <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
         <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-        <Text style={[pl.pricePer, { color: C.textMuted }]}>/{effectiveCycle === "yearly" ? "year" : "month"}</Text>
+        <Text style={[pl.pricePer, { color: C.textMuted }]}>/month</Text>
       </View>
-
-      {/* Monthly-only note for Pro */}
-      {monthlyOnly && cycle === "yearly" && (
-        <Text style={[pl.perMonthEq, { color: C.textMid, marginBottom: 6 }]}>
-          Monthly billing only
-        </Text>
-      )}
-
-      {/* Per-month equivalent for yearly */}
-      {!monthlyOnly && effectiveCycle === "yearly" && (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
-          <Text style={[pl.perMonthEq, { color: C.textMid }]}>
-            ≈ ₹{Math.round(plan.yearlyPrice / 12).toLocaleString("en-IN")}/month
-          </Text>
-          <View style={pl.savePill}>
-            <Text style={pl.saveText}>Save {plan.yearlySave}%</Text>
-          </View>
-        </View>
-      )}
 
       <View style={[pl.sep, { backgroundColor: `${plan.accent}18` }]} />
 
@@ -318,7 +288,6 @@ export default function SubscriptionScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [trialLoading, setTrialLoading] = useState(false);
 
   const expiryISO   = isTrial ? sub.trial_expires_at : sub.plan_expires_at;
@@ -330,9 +299,7 @@ export default function SubscriptionScreen() {
       return;
     }
     if (planKey === plan) return;
-    // Pro plan is monthly-only — force monthly cycle regardless of toggle.
-    const effectiveCycle = planKey === "pro" ? "monthly" : cycle;
-    router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle: effectiveCycle } });
+    router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle: "monthly" } });
   }
 
   function handleStartTrial() {
@@ -402,33 +369,12 @@ export default function SubscriptionScreen() {
           loading={trialLoading}
         />
 
-        {/* ── Billing toggle ── */}
-        <View style={[s.cycleRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          {(["monthly", "yearly"] as BillingCycle[]).map(c => (
-            <Pressable
-              key={c}
-              onPress={() => { setCycle(c); try { Haptics.selectionAsync(); } catch {} }}
-              style={[s.cycleBtn, cycle === c && s.cycleBtnActive]}
-            >
-              <Text style={[s.cycleTxt, { color: cycle === c ? "#f59e0b" : C.textMuted }]}>
-                {c === "monthly" ? "Monthly" : "Yearly"}
-              </Text>
-              {c === "yearly" && (
-                <View style={s.savePillTop}>
-                  <Text style={s.savePillTopTxt}>SAVE UPTO 38%</Text>
-                </View>
-              )}
-            </Pressable>
-          ))}
-        </View>
-
         {/* ── Plan cards ── */}
         <View style={s.plansWrap}>
           {PLANS.map(p => (
             <PlanCard
               key={p.key}
               plan={p}
-              cycle={cycle}
               isCurrent={p.key === plan}
               onPress={() => handlePlanPress(p.key)}
             />
@@ -470,7 +416,7 @@ export default function SubscriptionScreen() {
         {/* ── Footer ── */}
         <Text style={[s.footerNote, { color: C.textMuted }]}>
           • ₹1 — {TRIAL_DAYS}-day trial (one-time, naye users ke liye){"\n"}
-          • Subscription monthly ya yearly renew hoti hai{"\n"}
+          • Subscription har mahine renew hoti hai{"\n"}
           • Kabhi bhi cancel kar sakte hain{"\n"}
           • Powered by Cashfree — PCI DSS compliant
         </Text>

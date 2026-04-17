@@ -27,8 +27,8 @@ TRIAL_DAYS = 7
 
 # Daily AI question limits
 QUESTION_LIMITS = {
-    "free":  1,    # taste only
-    "trial": 3,    # trial = basic features but tighter quota
+    "free":  3,    # new users get a real taste — 3 questions/day
+    "trial": 5,    # trial = basic features with slightly higher quota
     "basic": 10,
     "pro":  -1,    # unlimited
     "elite": -1,

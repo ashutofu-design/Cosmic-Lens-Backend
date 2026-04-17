@@ -43,15 +43,6 @@ export default function MoreDrawer({
       title: t.catPanchang,
       items: [
         { id: "panchang",  icon: "clock",       emoji: "🗓️", title: t.mdPanchangTitle, subtitle: t.mdPanchangSub,  route: "/panchang",     accent: "#a78bfa" },
-        { id: "rahukaal",  icon: "alert-circle",emoji: "⛔", title: t.mdRahukaalTitle, subtitle: t.mdRahukaalSub,  route: "/panchang?tab=rahu", accent: "#f87171" },
-        { id: "festivals", icon: "gift",        emoji: "🎉", title: t.mdFestivalsTitle,subtitle: t.mdFestivalsSub, route: "/panchang?tab=festivals", accent: "#fb923c" },
-      ],
-    },
-    {
-      title: t.catKundliMilan,
-      items: [
-        { id: "milan",     icon: "heart",       emoji: "❤️", title: t.mdMilanTitle,     subtitle: t.mdMilanSub,    route: "/kundli-milan", accent: "#f43f5e" },
-        { id: "compat",    icon: "users",       emoji: "🤝", title: t.mdCompatTitle,    subtitle: t.mdCompatSub,   route: "/kundli-milan?tab=rashi", accent: "#ec4899" },
       ],
     },
     {

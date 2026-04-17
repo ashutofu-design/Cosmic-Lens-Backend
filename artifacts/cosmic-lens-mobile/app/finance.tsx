@@ -19,6 +19,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
 
@@ -134,6 +135,7 @@ function Bullet({ children, color }: { children: React.ReactNode; color: string 
 export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
   const { user, kundli } = useUser();
+  const t = useT();
   const { isPro, isTrial } = usePlan();
   const isProUser = isPro || isTrial;
 
@@ -148,7 +150,7 @@ export default function FinanceScreen() {
       setErr("Please log in to view your finance analysis."); setLoading(false); return;
     }
     if (!kundli) {
-      setErr("Apni kundli pehle complete karein — birth details add karke aaiye.");
+      setErr(t.errKundliRequired);
       setLoading(false); return;
     }
     setLoading(true);

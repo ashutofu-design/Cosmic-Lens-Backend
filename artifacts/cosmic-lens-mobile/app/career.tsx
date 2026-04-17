@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
 
@@ -146,6 +147,7 @@ export default function CareerScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
   const { user, kundli } = useUser();
+  const t = useT();
   const { isPro, isTrial } = usePlan();
   const isProUser = isPro || isTrial;
 
@@ -162,7 +164,7 @@ export default function CareerScreen() {
       return;
     }
     if (!kundli) {
-      setErr("Apni kundli pehle complete karein — birth details add karke aaiye.");
+      setErr(t.errKundliRequired);
       setLoading(false);
       return;
     }

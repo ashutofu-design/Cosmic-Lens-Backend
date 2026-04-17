@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { getT } from "@/lib/i18n";
 import { router } from "expo-router";
 
@@ -60,7 +61,7 @@ export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
   const { kundli, birthData, language, user } = useUser();
-  const t = getT(language);
+  const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -134,7 +135,7 @@ export default function AskScreen() {
             used:    json?.quota?.used  ?? 0,
             limit:   json?.quota?.limit ?? 0,
             plan:    json?.plan         ?? "free",
-            message: json?.message      ?? "Aaj ka daily limit poora ho gaya.",
+            message: json?.message      ?? t.askDailyLimitOver,
           });
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
           return;

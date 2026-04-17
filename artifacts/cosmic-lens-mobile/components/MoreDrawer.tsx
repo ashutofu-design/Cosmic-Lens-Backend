@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const DRAWER_W = 320;
 
@@ -23,60 +24,61 @@ type FeatureItem = {
   badge?: string;
 };
 
-const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
-  {
-    title: "🔮 Rashifal & Lucky",
-    items: [
-      { id: "rashifal",  icon: "sun",       emoji: "☀️", title: "Daily Rashifal",      subtitle: "Aaj ka rashi phal",          route: "/rashifal",     accent: "#f59e0b" },
-      { id: "lucky",     icon: "star",       emoji: "🍀", title: "Lucky Color & More",  subtitle: "Rang, number, din, ratan",   route: "/lucky",        accent: "#22c55e" },
-      { id: "rashifal2", icon: "calendar",   emoji: "📅", title: "Weekly Rashifal",     subtitle: "7 din ka bhavishya",         route: "/rashifal?tab=weekly", accent: "#60a5fa", badge: "New" },
-    ],
-  },
-  {
-    title: "🌙 Panchang",
-    items: [
-      { id: "panchang",  icon: "clock",      emoji: "🗓️", title: "Aaj ka Panchang",     subtitle: "Tithi, Nakshatra, Yoga",     route: "/panchang",     accent: "#a78bfa" },
-      { id: "rahukaal",  icon: "alert-circle",emoji: "⛔", title: "Rahu Kaal",           subtitle: "Aaj ka ashubh samay",        route: "/panchang?tab=rahu", accent: "#f87171" },
-      { id: "festivals", icon: "gift",        emoji: "🎉", title: "Tyohar & Vrat",       subtitle: "Festival & vrat calendar",   route: "/panchang?tab=festivals", accent: "#fb923c" },
-    ],
-  },
-  {
-    title: "💑 Kundli Milan",
-    items: [
-      { id: "milan",     icon: "heart",      emoji: "❤️", title: "Kundli Milan",        subtitle: "36 guna matching",           route: "/kundli-milan", accent: "#f43f5e" },
-      { id: "compat",    icon: "users",       emoji: "🤝", title: "Rashi Compatibility", subtitle: "Love aur business match",    route: "/kundli-milan?tab=rashi", accent: "#ec4899" },
-    ],
-  },
-  {
-    title: "⏰ Muhurat",
-    items: [
-      { id: "muhurat",   icon: "check-circle",emoji: "✅", title: "Shubh Muhurat",       subtitle: "Shadi, Griha, Business",     route: "/muhurat",      accent: "#10b981" },
-    ],
-  },
-  {
-    title: "🔢 Numerology",
-    items: [
-      { id: "numerology",icon: "hash",        emoji: "🔢", title: "Numerology",          subtitle: "Life path, lucky number",    route: "/numerology",   accent: "#8b5cf6" },
-    ],
-  },
-  {
-    title: "💎 Upay & Remedies",
-    items: [
-      { id: "remedies",  icon: "zap",         emoji: "⚡", title: "Graha Upay",          subtitle: "Mantra, daan, ratan",        route: "/remedies",     accent: "#f59e0b" },
-    ],
-  },
-  {
-    title: "🏠 Vastu",
-    items: [
-      { id: "vastu",     icon: "home",        emoji: "🏠", title: "Vastu Tips",          subtitle: "Ghar aur disha guide",      route: "/vastu",        accent: "#06b6d4" },
-    ],
-  },
-];
-
 export default function MoreDrawer({
   visible, onClose,
 }: { visible: boolean; onClose: () => void }) {
   const C = useC();
+  const t = useT();
+
+  const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
+    {
+      title: t.catRashifal,
+      items: [
+        { id: "rashifal",  icon: "sun",        emoji: "☀️", title: t.mdRashifalTitle,  subtitle: t.mdRashifalSub,  route: "/rashifal",     accent: "#f59e0b" },
+        { id: "lucky",     icon: "star",       emoji: "🍀", title: t.mdLuckyTitle,     subtitle: t.mdLuckySub,     route: "/lucky",        accent: "#22c55e" },
+        { id: "rashifal2", icon: "calendar",   emoji: "📅", title: t.mdWeeklyTitle,    subtitle: t.mdWeeklySub,    route: "/rashifal?tab=weekly", accent: "#60a5fa", badge: t.badgeNew },
+      ],
+    },
+    {
+      title: t.catPanchang,
+      items: [
+        { id: "panchang",  icon: "clock",       emoji: "🗓️", title: t.mdPanchangTitle, subtitle: t.mdPanchangSub,  route: "/panchang",     accent: "#a78bfa" },
+        { id: "rahukaal",  icon: "alert-circle",emoji: "⛔", title: t.mdRahukaalTitle, subtitle: t.mdRahukaalSub,  route: "/panchang?tab=rahu", accent: "#f87171" },
+        { id: "festivals", icon: "gift",        emoji: "🎉", title: t.mdFestivalsTitle,subtitle: t.mdFestivalsSub, route: "/panchang?tab=festivals", accent: "#fb923c" },
+      ],
+    },
+    {
+      title: t.catKundliMilan,
+      items: [
+        { id: "milan",     icon: "heart",       emoji: "❤️", title: t.mdMilanTitle,     subtitle: t.mdMilanSub,    route: "/kundli-milan", accent: "#f43f5e" },
+        { id: "compat",    icon: "users",       emoji: "🤝", title: t.mdCompatTitle,    subtitle: t.mdCompatSub,   route: "/kundli-milan?tab=rashi", accent: "#ec4899" },
+      ],
+    },
+    {
+      title: t.catMuhurat,
+      items: [
+        { id: "muhurat",   icon: "check-circle",emoji: "✅", title: t.mdMuhuratTitle,   subtitle: t.mdMuhuratSub,  route: "/muhurat",      accent: "#10b981" },
+      ],
+    },
+    {
+      title: t.catNumerology,
+      items: [
+        { id: "numerology",icon: "hash",        emoji: "🔢", title: t.mdNumerologyTitle,subtitle: t.mdNumerologySub,route: "/numerology",  accent: "#8b5cf6" },
+      ],
+    },
+    {
+      title: t.catRemedies,
+      items: [
+        { id: "remedies",  icon: "zap",         emoji: "⚡", title: t.mdRemediesTitle,  subtitle: t.mdRemediesSub, route: "/remedies",     accent: "#f59e0b" },
+      ],
+    },
+    {
+      title: t.catVastu,
+      items: [
+        { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/vastu",        accent: "#06b6d4" },
+      ],
+    },
+  ];
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(DRAWER_W)).current;
   const overlayOp = useRef(new Animated.Value(0)).current;
@@ -125,8 +127,8 @@ export default function MoreDrawer({
           {/* Header */}
           <View style={s.header}>
             <View>
-              <Text style={[s.headerTitle, { color: C.text }]}>Explore</Text>
-              <Text style={[s.headerSub, { color: C.textMuted }]}>Sab kuch ek jagah</Text>
+              <Text style={[s.headerTitle, { color: C.text }]}>{t.moreExplore}</Text>
+              <Text style={[s.headerSub, { color: C.textMuted }]}>{t.moreSubtitle}</Text>
             </View>
             <Pressable
               onPress={onClose}

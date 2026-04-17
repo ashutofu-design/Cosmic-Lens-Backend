@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { usePlan, startTrial, PRICES, TRIAL_DAYS } from "@/lib/subscription";
 
 // ── Font aliases ─────────────────────────────────────────────────────────────
@@ -35,7 +36,7 @@ const PLANS = [
     badge: null as string | null,
     monthlyPrice: PRICES.basic_monthly,
     icon: "star" as const,
-    tagline: "Roz ke liye basics",
+    tagline: "__BASIC_TAG__",
     features: [
       "10 AI Questions / day",
       "Marriage Compatibility (Basic)",
@@ -114,6 +115,7 @@ function PlanCard({
   onPress: () => void;
 }) {
   const C = useC();
+  const t = useT();
   const price = plan.monthlyPrice;
   const isPopular = plan.key === "pro";
 
@@ -142,7 +144,11 @@ function PlanCard({
           </View>
           <View>
             <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
-            <Text style={[pl.planTagline, { color: C.textMuted }]}>{plan.tagline}</Text>
+            <Text style={[pl.planTagline, { color: C.textMuted }]}>
+              {plan.tagline === "__BASIC_TAG__" ? t.planBasicTagline
+                : plan.tagline === "Full power Vedic insights" ? t.planProTagline
+                : plan.tagline}
+            </Text>
           </View>
         </View>
         {isCurrent && (

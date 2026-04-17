@@ -11,6 +11,7 @@ import Svg, { Circle } from "react-native-svg";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import type { BirthData } from "@/types";
 import { useFeatureGate } from "@/components/FeatureGate";
@@ -56,6 +57,7 @@ export default function FutureOutcomeScreen() {
   const isDark = C.isDark;
 
   const { profiles, primaryProfileId } = useUser();
+  const t = useT();
   const params = useLocalSearchParams<{ partnerId?: string }>();
   const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
 
@@ -165,15 +167,13 @@ export default function FutureOutcomeScreen() {
             <View style={[s.gateIcon, { backgroundColor: "rgba(139,92,246,0.12)", borderColor: "rgba(139,92,246,0.3)" }]}>
               <Feather name="lock" size={22} color="#8b5cf6" />
             </View>
-            <Text style={[s.gateTitle, { color: textHi }]}>Kundli required</Text>
+            <Text style={[s.gateTitle, { color: textHi }]}>{t.needKundli}</Text>
             <Text style={[s.gateMsg, { color: textLo }]}>
               {!hasSelfKundli && !hasPartnerKundli
-                ? "Both your and your partner's kundli must be saved first."
+                ? t.needBothKundli
                 : !hasSelfKundli
-                  ? "Your kundli is not ready yet."
-                  : !partnerId
-                    ? "Please select a partner from the Relationship screen."
-                    : `Partner's kundli is not ready yet.`}
+                  ? t.needKundliSub
+                  : t.needPartnerKundli}
             </Text>
             <Pressable onPress={() => router.replace("/relationship" as any)} style={{ marginTop: 14, width: "100%" }}>
               <View style={[s.cta, { backgroundColor: accent }]}>

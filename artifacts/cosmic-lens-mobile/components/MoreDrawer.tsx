@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
-  Animated, Linking, Modal, Pressable, ScrollView,
+  Animated, Linking, Modal, Platform, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -95,16 +95,26 @@ export default function MoreDrawer({
   }
 
   async function openFounderWhatsApp() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
     const msg = encodeURIComponent(FOUNDER_MSG);
-    const appUrl = `whatsapp://send?phone=${FOUNDER_WHATSAPP}&text=${msg}`;
     const webUrl = `https://wa.me/${FOUNDER_WHATSAPP}?text=${msg}`;
+    const appUrl = `whatsapp://send?phone=${FOUNDER_WHATSAPP}&text=${msg}`;
+
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") {
+        window.open(webUrl, "_blank");
+      }
+      return;
+    }
+
     try {
       const canOpen = await Linking.canOpenURL(appUrl);
-      await Linking.openURL(canOpen ? appUrl : webUrl);
-    } catch {
-      Linking.openURL(webUrl).catch(() => {});
-    }
+      if (canOpen) {
+        await Linking.openURL(appUrl);
+        return;
+      }
+    } catch {}
+    try { await Linking.openURL(webUrl); } catch {}
   }
 
   return (

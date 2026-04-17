@@ -123,15 +123,26 @@ export interface PlaceSuggestion {
 }
 
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
-  const r = await apiFetch(`${BASE_URL}/api/geocode?q=${encodeURIComponent(query)}`);
-  const rows = await r.json();
-  return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
-    label: x.label,
-    lat: x.lat,
-    lon: x.lon,
-    tz: x.tz,
-    countryCode: "",
-  }));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await apiFetch(
+      `${BASE_URL}/api/geocode?q=${encodeURIComponent(query)}`,
+      { signal: ctrl.signal },
+    );
+    if (!r.ok) throw new Error(`Search failed (HTTP ${r.status})`);
+    const rows = await r.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
+      label: x.label,
+      lat: x.lat,
+      lon: x.lon,
+      tz: x.tz,
+      countryCode: "",
+    }));
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function fetchTimezone(lat: number, lon: number): Promise<number> {

@@ -71,13 +71,22 @@ export default function OnboardingScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   async function doSearchPlace() {
-    if (placeQuery.length < 2) return;
-    setSearching(true); setSuggestions([]);
+    if (placeQuery.trim().length < 2) return;
+    setSearching(true); setSuggestions([]); setError("");
     try {
-      const results = await searchPlaces(placeQuery);
+      const results = await searchPlaces(placeQuery.trim());
       setSuggestions(results);
-    } catch { /* ignore */ }
-    finally { setSearching(false); }
+      if (results.length === 0) {
+        setError("No matching place found. Try a different spelling or a nearby city.");
+      }
+    } catch (e: any) {
+      const msg = e?.name === "AbortError"
+        ? "Search timed out. Check your internet and try again."
+        : "Search failed. Please try again.";
+      setError(msg);
+    } finally {
+      setSearching(false);
+    }
   }
 
   async function selectPlace(item: PlaceSuggestion) {

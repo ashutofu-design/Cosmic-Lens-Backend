@@ -74,6 +74,7 @@ export default function PaymentWebviewScreen() {
   const [phase,       setPhase]       = useState<Phase>("creating");
   const [errMsg,      setErrMsg]      = useState("");
   const [orderId,     setOrderId]     = useState(params.orderId ?? "");
+  const [sessionId,   setSessionId]   = useState<string>(params.sessionId ?? "");
   const [paymentLink, setPaymentLink] = useState<string>(params.paymentLink ?? "");
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -94,6 +95,60 @@ export default function PaymentWebviewScreen() {
       _createOrder();
     }
   }, []);
+
+  // ── Official Cashfree JS SDK loader (web only) ─────────────────────────────
+  // Loads the SDK from CDN once, then calls cashfree.checkout({ paymentSessionId }).
+  // We pass ONLY paymentSessionId — never the constructed payment_link.
+  async function _openCashfreeCheckout(paymentSessionId: string) {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+
+    // Strict re-check: never call SDK without a valid session id
+    if (!paymentSessionId || paymentSessionId.trim() === "") {
+      console.warn("[Pay] ❌ refusing to invoke SDK with empty paymentSessionId");
+      return;
+    }
+
+    const w: any = window;
+    const env: "sandbox" | "production" =
+      String(process.env.EXPO_PUBLIC_CASHFREE_ENV || "sandbox") === "production"
+        ? "production"
+        : "sandbox";
+
+    async function _ensureSdkLoaded(): Promise<any> {
+      if (w.Cashfree) return w.Cashfree;
+      await new Promise<void>((resolve, reject) => {
+        const existing = document.getElementById("cashfree-sdk-script");
+        if (existing) {
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", () => reject(new Error("SDK load failed")));
+          return;
+        }
+        const s = document.createElement("script");
+        s.id    = "cashfree-sdk-script";
+        s.src   = "https://sdk.cashfree.com/js/v3/cashfree.js";
+        s.async = true;
+        s.onload  = () => resolve();
+        s.onerror = () => reject(new Error("SDK load failed"));
+        document.head.appendChild(s);
+      });
+      return w.Cashfree;
+    }
+
+    try {
+      const Cashfree = await _ensureSdkLoaded();
+      const cashfree = Cashfree({ mode: env });
+      console.log("[Pay] 🚀 cashfree.checkout({ paymentSessionId: ...", paymentSessionId.slice(-12), "})  mode=", env);
+      const result = await cashfree.checkout({
+        paymentSessionId,                 // ONLY this — no link, no order_id
+        redirectTarget: "_blank",         // open hosted checkout in a new tab
+      });
+      console.log("[Pay] checkout result", result);
+    } catch (e: any) {
+      console.warn("[Pay] ❌ SDK checkout failed, falling back to link:", e?.message);
+      // Hard fallback only if SDK can't load (offline / CSP / etc)
+      try { window.open(paymentLink, "_blank", "noopener,noreferrer"); } catch {}
+    }
+  }
 
   async function _createOrder() {
     if (!user?.id) {
@@ -121,7 +176,10 @@ export default function PaymentWebviewScreen() {
       });
       clearTimeout(timer);
       const data = await resp.json();
-      console.log("[Pay] order response", { ok: resp.ok, status: resp.status, data });
+      // STRICT spec: log full response for debugging.
+      console.log("ORDER RESPONSE:", data);
+      console.log("[Pay] order response meta", { ok: resp.ok, status: resp.status });
+
       if (!resp.ok || data.error) {
         const msg = data.error ?? `Order creation failed (${resp.status}).`;
         console.warn("[Pay] ❌ create-order failed:", msg);
@@ -132,9 +190,14 @@ export default function PaymentWebviewScreen() {
       const { order_id, payment_link, payment_session_id } =
         data as { order_id: string; payment_link: string; payment_session_id: string };
 
-      if (!payment_link || !payment_session_id) {
-        console.warn("[Pay] ❌ missing payment_link/session_id in response");
-        setErrMsg("Server returned an incomplete order. Try again.");
+      // STRICT spec: log session id explicitly.
+      console.log("SESSION ID:", payment_session_id);
+
+      // STRICT validation: only payment_session_id is required to open checkout.
+      // Without a valid session, do NOT open the Cashfree UI under any circumstances.
+      if (!payment_session_id || payment_session_id.trim() === "") {
+        console.warn("[Pay] ❌ missing payment_session_id — refusing to open checkout");
+        setErrMsg("Server returned an invalid session. Please try again.");
         setPhase("failed");
         return;
       }
@@ -142,18 +205,18 @@ export default function PaymentWebviewScreen() {
       console.log("[Pay] ✅ fresh session", {
         order_id,
         session_tail: "..." + payment_session_id.slice(-20),
-        link_len: payment_link.length,
       });
 
       setOrderId(order_id);
-      setPaymentLink(payment_link);
+      setSessionId(payment_session_id);
+      setPaymentLink(payment_link || "");
       setPhase("paying");
 
-      // On web, react-native-webview doesn't render. Open Cashfree checkout
-      // in a new tab; user returns to app and taps "I've Paid" to verify.
+      // On web, use the OFFICIAL Cashfree JS SDK with paymentSessionId only.
+      // The SDK handles checkout UI; we never construct or reuse links.
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        console.log("[Pay] 🚀 opening Cashfree checkout in new tab");
-        try { window.open(payment_link, "_blank", "noopener,noreferrer"); } catch {}
+        console.log("[Pay] 🚀 opening Cashfree checkout via SDK with paymentSessionId");
+        await _openCashfreeCheckout(payment_session_id);
       }
     } catch (e: any) {
       console.warn("[Pay] ❌ network error:", e?.message);

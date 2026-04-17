@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
-import { useFeatureGate } from "@/components/FeatureGate";
 
 interface Feature {
   key: string;
@@ -225,7 +224,6 @@ function FeatureCard({
 
 export default function LoveRealityScreen() {
   const C = useC();
-  const { LockOverlay } = useFeatureGate("love_reality_full");
   const t = useT();
   const params = useLocalSearchParams<{ partnerId?: string }>();
   const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
@@ -296,7 +294,6 @@ export default function LoveRealityScreen() {
           ))}
         </View>
       </ScrollView>
-      {LockOverlay}
     </CosmicBg>
   );
 }

@@ -15,6 +15,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { MilanResultStore } from "@/lib/milanResultStore";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 // ── Ashtakoot tables ──────────────────────────────────────────────────────────
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
@@ -1386,6 +1387,7 @@ function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData
 export default function KundliMilanScreen(){
   const insets=useSafeAreaInsets();
   const C=useC();
+  const { LockOverlay } = useFeatureGate("kundli_milan");
   const t=useT();
   const topPad=Platform.OS==="web"?67:insets.top;
   const botPad=Platform.OS==="web"?34:insets.bottom;
@@ -1816,6 +1818,7 @@ export default function KundliMilanScreen(){
 
       </View>
 
+      {LockOverlay}
     </KeyboardAvoidingView>
   );
 }

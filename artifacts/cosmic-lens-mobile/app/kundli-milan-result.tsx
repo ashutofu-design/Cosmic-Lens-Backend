@@ -13,6 +13,7 @@ import Svg, { Circle } from "react-native-svg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { MilanResultStore } from "@/lib/milanResultStore";
+import { useFeatureGate } from "@/components/FeatureGate";
 
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
 const RASHIS=["Mesh","Vrishabh","Mithun","Kark","Simha","Kanya","Tula","Vrishchik","Dhanu","Makar","Kumbh","Meen"];
@@ -485,6 +486,7 @@ const hs = StyleSheet.create({
 
 export default function KundliMilanResultScreen() {
   const C = useC();
+  const { LockOverlay } = useFeatureGate("kundli_milan");
   const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
@@ -897,6 +899,7 @@ export default function KundliMilanResultScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      {LockOverlay}
     </View>
   );
 }

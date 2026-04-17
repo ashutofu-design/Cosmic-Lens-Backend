@@ -73,7 +73,7 @@ export const FEATURE_REQUIREMENT: Record<FeatureKey, "basic" | "pro"> = {
 function planRank(plan: Plan | "elite"): number {
   switch (plan) {
     case "free":  return 0;
-    case "trial": return 1;
+    case "trial": return 2;   // trial unlocks Basic-tier features (matches backend)
     case "basic": return 2;
     case "pro":   return 3;
     case "elite": return 3;

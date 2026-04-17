@@ -592,7 +592,7 @@ const cp = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 11,
     borderRadius: 999,
-    backgroundColor: "rgba(249,215,107,0.08)",
+    backgroundColor: "#0c1426",
     borderWidth: 1,
     borderColor: "rgba(249,215,107,0.45)",
     overflow: "hidden",

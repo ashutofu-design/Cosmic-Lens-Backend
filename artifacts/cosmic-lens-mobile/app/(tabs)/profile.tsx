@@ -576,11 +576,19 @@ export default function ProfileScreen() {
 
           <Pressable
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Alert.alert("Logout", "Are you sure you want to log out?", [
-                { text:"Cancel", style:"cancel" },
-                { text:"Logout", style:"destructive", onPress: handleLogout },
-              ]);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              if (Platform.OS === "web") {
+                // RN Web's Alert with 3 buttons does not fire the destructive onPress reliably.
+                // Use the browser's native confirm() instead.
+                // eslint-disable-next-line no-alert
+                const ok = typeof window !== "undefined" && window.confirm("Are you sure you want to log out?");
+                if (ok) handleLogout();
+              } else {
+                Alert.alert("Logout", "Are you sure you want to log out?", [
+                  { text:"Cancel", style:"cancel" },
+                  { text:"Logout", style:"destructive", onPress: handleLogout },
+                ]);
+              }
             }}
             style={({ pressed }) => [s.logoutBtn, pressed && { opacity:0.75 }]}
           >

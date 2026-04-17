@@ -3266,7 +3266,7 @@ def kundli_milan():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 CASHFREE_APP_ID = os.environ.get("CASHFREE_APP_ID", "")
-CASHFREE_SECRET = os.environ.get("CASHFREE_SECRET_KEY", "")
+CASHFREE_SECRET = os.environ.get("CASHFREE_SECRET_KEY", "") or os.environ.get("CASHFREE_SECRET", "")
 CASHFREE_ENV    = os.environ.get("CASHFREE_ENV", "sandbox")  # "sandbox" or "production"
 
 PLAN_PRICES = {

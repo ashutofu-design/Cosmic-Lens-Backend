@@ -186,7 +186,9 @@ export default function PaymentWebviewScreen() {
     try {
       const ctrl  = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 12000);
-      const resp  = await fetch(`${API_BASE}/api/payment/status/${oid}`, { signal: ctrl.signal });
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      const resp  = await fetch(`${API_BASE}/api/payment/status/${oid}`, { signal: ctrl.signal, headers });
       clearTimeout(timer);
       const data = await resp.json();
 

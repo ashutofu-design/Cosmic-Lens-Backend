@@ -76,61 +76,60 @@ function CompassRose() {
         </RadialGradient>
       </Defs>
 
-      {/* Direction sectors */}
-      {DIRS.map(d => {
+      <Defs>
+        <RadialGradient id="sectorDark" cx="50%" cy="50%" r="70%">
+          <Stop offset="0"   stopColor="#1a2344" />
+          <Stop offset="1"   stopColor="#050914" />
+        </RadialGradient>
+        <RadialGradient id="sectorDarkAlt" cx="50%" cy="50%" r="70%">
+          <Stop offset="0"   stopColor="#202a4e" />
+          <Stop offset="1"   stopColor="#07112a" />
+        </RadialGradient>
+      </Defs>
+
+      {/* Direction sectors — minimal dark panels with gold accents */}
+      {DIRS.map((d, i) => {
         const isCardinal = d.deg % 90 === 0;
         const mid        = toRad(d.deg);
         const lx         = CX + LABEL_R * Math.cos(mid);
         const ly         = CY + LABEL_R * Math.sin(mid);
-        const hx         = CX + HINDI_R  * Math.cos(mid);
-        const hy         = CY + HINDI_R  * Math.sin(mid);
         const path       = wedgePath(CX, CY, innerR, outerR, d.deg - 22.4, d.deg + 22.4);
 
         return (
           <G key={d.short}>
-            {/* Sector fill */}
-            <Path d={path} fill={`url(#g-${d.short})`} opacity={isCardinal ? 1 : 0.8} />
-            {/* Sector border */}
-            <Path d={path} fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="0.8" />
+            {/* Muted dark sector */}
+            <Path d={path} fill={i % 2 === 0 ? "url(#sectorDark)" : "url(#sectorDarkAlt)"} />
+            {/* Gold hairline divider */}
+            <Path d={path} fill="none" stroke="#f9d76b" strokeWidth="0.5" opacity="0.25" />
 
-            {/* Cardinal arrow tip */}
+            {/* Cardinal arrow tip (metallic gold) */}
             {isCardinal && (() => {
               const tip   = CX + (outerR + SIZE * 0.028) * Math.cos(mid);
               const tipY  = CY + (outerR + SIZE * 0.028) * Math.sin(mid);
-              const bx1   = CX + outerR * Math.cos(mid - 0.16);
-              const by1   = CY + outerR * Math.sin(mid - 0.16);
-              const bx2   = CX + outerR * Math.cos(mid + 0.16);
-              const by2   = CY + outerR * Math.sin(mid + 0.16);
+              const bx1   = CX + outerR * Math.cos(mid - 0.14);
+              const by1   = CY + outerR * Math.sin(mid - 0.14);
+              const bx2   = CX + outerR * Math.cos(mid + 0.14);
+              const by2   = CY + outerR * Math.sin(mid + 0.14);
               return (
                 <Polygon
                   points={`${tip},${tipY} ${bx1},${by1} ${bx2},${by2}`}
-                  fill={d.color}
-                  stroke="#000"
-                  strokeWidth="0.5"
+                  fill="#f9d76b"
+                  stroke="#3a2404"
+                  strokeWidth="0.6"
                 />
               );
             })()}
 
-            {/* Short code (N / NE / etc.) */}
+            {/* Short code (N / NE / etc.) — soft gold */}
             <SvgText
               x={lx} y={ly}
               textAnchor="middle" alignmentBaseline="middle"
-              fill={isCardinal ? "#fff" : "#ffffffdd"}
-              fontSize={isCardinal ? SIZE * 0.062 : SIZE * 0.046}
-              fontWeight="900"
+              fill={isCardinal ? "#fff8dc" : "#f9d76bcc"}
+              fontSize={isCardinal ? SIZE * 0.062 : SIZE * 0.044}
+              fontWeight={isCardinal ? "900" : "600"}
+              letterSpacing={1}
             >
               {d.short}
-            </SvgText>
-
-            {/* Hindi name */}
-            <SvgText
-              x={hx} y={hy}
-              textAnchor="middle" alignmentBaseline="middle"
-              fill={d.color}
-              fontSize={SIZE * 0.034}
-              fontWeight="600"
-            >
-              {d.hindi}
             </SvgText>
           </G>
         );
@@ -276,74 +275,101 @@ function CompassBezel() {
   );
 }
 
-// ── Center Jewel (fixed) ───────────────────────────────────────────────────────
-function CompassCenter() {
+// ── Energy Core (glowing pulsing core — no religious symbol) ──────────────────
+function EnergyCore() {
+  const pulse1 = useRef(new Animated.Value(0)).current;
+  const pulse2 = useRef(new Animated.Value(0)).current;
+  const pulse3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const make = (v: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, { toValue: 1, duration: 2400, useNativeDriver: true }),
+        ]),
+      );
+    const a = make(pulse1, 0);
+    const b = make(pulse2, 800);
+    const c = make(pulse3, 1600);
+    a.start(); b.start(); c.start();
+    return () => { a.stop(); b.stop(); c.stop(); };
+  }, [pulse1, pulse2, pulse3]);
+
+  const ring = (v: Animated.Value, baseSize: number, color: string) => {
+    const scale   = v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.9] });
+    const opacity = v.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.55, 0] });
+    return (
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          width: baseSize, height: baseSize, borderRadius: baseSize / 2,
+          borderWidth: 1.2, borderColor: color,
+          transform: [{ scale }], opacity,
+        }}
+      />
+    );
+  };
+
+  const coreSize = SIZE * 0.14;
+  const dotSize  = SIZE * 0.048;
+
   return (
-    <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
-      <Defs>
-        <RadialGradient id="jewel" cx="35%" cy="28%" r="75%">
-          <Stop offset="0"    stopColor="#fff8dc" />
-          <Stop offset="0.18" stopColor="#ffeea8" />
-          <Stop offset="0.50" stopColor="#e8b93a" />
-          <Stop offset="0.85" stopColor="#8a5a10" />
-          <Stop offset="1"    stopColor="#3a2404" />
-        </RadialGradient>
-        <SvgLinearGradient id="jewelRing" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0"    stopColor="#fff2b8" />
-          <Stop offset="0.5"  stopColor="#e8c84b" />
-          <Stop offset="1"    stopColor="#5a3200" />
-        </SvgLinearGradient>
-        <RadialGradient id="jewelHighlight" cx="35%" cy="28%" r="40%">
-          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.9" />
-          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
-        </RadialGradient>
-      </Defs>
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        { alignItems: "center", justifyContent: "center" },
+      ]}
+    >
+      {/* Ambient radial glow (static layers, soft) */}
+      <View style={{
+        position: "absolute", width: coreSize * 3.2, height: coreSize * 3.2,
+        borderRadius: coreSize * 1.6, backgroundColor: "#f9d76b", opacity: 0.05,
+      }} />
+      <View style={{
+        position: "absolute", width: coreSize * 2.3, height: coreSize * 2.3,
+        borderRadius: coreSize * 1.15, backgroundColor: "#f9d76b", opacity: 0.10,
+      }} />
+      <View style={{
+        position: "absolute", width: coreSize * 1.6, height: coreSize * 1.6,
+        borderRadius: coreSize * 0.8, backgroundColor: "#ffd966", opacity: 0.16,
+      }} />
 
-      {/* Ambient glow */}
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.035} fill="#f59e0b" opacity="0.07" />
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.022} fill="#f59e0b" opacity="0.10" />
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.012} fill="#f59e0b" opacity="0.14" />
+      {/* Pulsing expanding rings */}
+      {ring(pulse1, coreSize, "#f9d76b")}
+      {ring(pulse2, coreSize, "#ffd966")}
+      {ring(pulse3, coreSize, "#fff2b8")}
 
-      {/* Dark ring (depth) */}
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.009} fill="#1a0e02" />
+      {/* Static thin gold rings */}
+      <View style={{
+        position: "absolute", width: coreSize * 1.55, height: coreSize * 1.55,
+        borderRadius: coreSize * 0.775,
+        borderWidth: 0.6, borderColor: "#f9d76b44",
+      }} />
+      <View style={{
+        position: "absolute", width: coreSize * 1.15, height: coreSize * 1.15,
+        borderRadius: coreSize * 0.575,
+        borderWidth: 0.8, borderColor: "#f9d76b66",
+      }} />
 
-      {/* Gold outer ring */}
-      <Circle cx={CX} cy={CY} r={CENTER_R + SIZE * 0.006} fill="none" stroke="url(#jewelRing)" strokeWidth={SIZE * 0.011} />
-
-      {/* Jewel base */}
-      <Circle cx={CX} cy={CY} r={CENTER_R} fill="url(#jewel)" />
-
-      {/* Inner engraved ring */}
-      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.008} fill="none" stroke="#3a2404" strokeWidth="0.7" opacity="0.9" />
-      <Circle cx={CX} cy={CY} r={CENTER_R - SIZE * 0.015} fill="none" stroke="#fff2b8" strokeWidth="0.5" opacity="0.35" />
-
-      {/* Top highlight */}
-      <Circle cx={CX - SIZE * 0.018} cy={CY - SIZE * 0.028} r={SIZE * 0.042} fill="url(#jewelHighlight)" />
-
-      {/* Om symbol — carved effect with shadow + highlight */}
-      <SvgText
-        x={CX + 0.8} y={CY + SIZE * 0.008}
-        textAnchor="middle" alignmentBaseline="middle"
-        fill="#fff2b8" fillOpacity="0.45"
-        fontSize={SIZE * 0.098}
-        fontWeight="900"
-      >
-        ॐ
-      </SvgText>
-      <SvgText
-        x={CX} y={CY + SIZE * 0.006}
-        textAnchor="middle" alignmentBaseline="middle"
-        fill="#1a0e02"
-        fontSize={SIZE * 0.098}
-        fontWeight="900"
-      >
-        ॐ
-      </SvgText>
-
-      {/* Center pivot dot */}
-      <Circle cx={CX} cy={CY} r={SIZE * 0.011} fill="#1a0e02" />
-      <Circle cx={CX - 1} cy={CY - 1} r={SIZE * 0.006} fill="#fff8dc" opacity="0.9" />
-    </Svg>
+      {/* Bright core dot with halo */}
+      <View style={{
+        width: coreSize * 0.78, height: coreSize * 0.78, borderRadius: coreSize * 0.39,
+        backgroundColor: "#2a1804",
+        alignItems: "center", justifyContent: "center",
+        shadowColor: "#f9d76b", shadowOpacity: 0.9, shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+      }}>
+        <View style={{
+          width: dotSize, height: dotSize, borderRadius: dotSize / 2,
+          backgroundColor: "#fff8dc",
+          shadowColor: "#fff2b8", shadowOpacity: 1, shadowRadius: 10,
+          shadowOffset: { width: 0, height: 0 },
+        }} />
+      </View>
+    </View>
   );
 }
 
@@ -507,10 +533,8 @@ function VastuCompass() {
               <CompassRose />
             </Animated.View>
 
-            {/* Layer 3: Fixed center jewel */}
-            <View style={StyleSheet.absoluteFill}>
-              <CompassCenter />
-            </View>
+            {/* Layer 3: Energy Core (replaces Om) */}
+            <EnergyCore />
 
             {/* Layer 4: Fixed north pointer */}
             <NorthPointer />
@@ -518,18 +542,15 @@ function VastuCompass() {
         </View>
       </View>
 
-      {/* ── Legend ── */}
-      <View style={cp.legend}>
-        {DIRS.filter(d => d.deg % 90 === 0).map(d => (
-          <View key={d.short} style={cp.legendItem}>
-            <View style={[cp.legendDot, { backgroundColor: d.color }]} />
-            <Text style={[cp.legendTxt, { color: C.textMuted }]}>{d.short} · {d.sub}</Text>
-          </View>
-        ))}
+      {/* ── Glassmorphism pill: Ideal Direction ── */}
+      <View style={cp.pillWrap}>
+        <View style={cp.pill}>
+          <View style={cp.pillGlow} />
+          <Text style={cp.pillText}>
+            ✨  Ideal Direction: <Text style={cp.pillAccent}>North-East</Text>
+          </Text>
+        </View>
       </View>
-      <Text style={[cp.note, { color: C.textMuted }]}>
-        🔴 Red arrow = North · Compass rose rotates with device · NE = Ishaan (most auspicious)
-      </Text>
     </View>
   );
 }
@@ -567,11 +588,26 @@ const cp = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#7a4800",
   },
-  legend:     { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  legendDot:  { width: 8, height: 8, borderRadius: 4 },
-  legendTxt:  { fontSize: 11 },
-  note:       { fontSize: 11, lineHeight: 17, textAlign: "center" },
+  pillWrap:   { alignItems: "center", marginTop: 4 },
+  pill: {
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: "rgba(249,215,107,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(249,215,107,0.45)",
+    overflow: "hidden",
+    shadowColor: "#f9d76b",
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  pillGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(249,215,107,0.04)",
+  },
+  pillText:   { color: "#f5e4a3", fontSize: 13, fontWeight: "600", letterSpacing: 0.4 },
+  pillAccent: { color: "#fff8dc", fontWeight: "800" },
 });
 
 // ── Vastu Data ────────────────────────────────────────────────────────────────

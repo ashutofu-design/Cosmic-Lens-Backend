@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StatusBar,
@@ -58,7 +59,7 @@ const STARTERS = [
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData, language } = useUser();
+  const { kundli, birthData, language, user } = useUser();
   const t = getT(language);
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -78,6 +79,12 @@ export default function AskScreen() {
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [quotaModal, setQuotaModal] = useState<null | {
+    used: number;
+    limit: number;
+    plan: string;
+    message: string;
+  }>(null);
   const listRef = useRef<FlatList>(null);
 
   const scrollToEnd = useCallback(() => {
@@ -101,13 +108,53 @@ export default function AskScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (user?.api_key) headers["X-API-Key"] = user.api_key;
+
         const res = await apiFetch(`${API_BASE}/api/ask`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: text.trim(), kundli, birthData }),
+          headers,
+          body: JSON.stringify({
+            question: text.trim(),
+            kundli,
+            birthData,
+            lang: language,
+            user_id: user?.id,
+          }),
         });
-        const json = await res.json();
-        const answer = json.answer ?? json.response ?? "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
+        const json = await res.json().catch(() => ({} as any));
+
+        // ── Quota exhausted (HTTP 402) ─────────────────────────────────────
+        if (res.status === 402) {
+          // Remove the thinking bubble and the user's just-sent message
+          // (they didn't actually consume an answer).
+          setMessages(prev => prev.filter(m => m.id !== "thinking" && m.id !== userMsg.id));
+          setInput(text); // restore input so they can retry after upgrade
+          setQuotaModal({
+            used:    json?.quota?.used  ?? 0,
+            limit:   json?.quota?.limit ?? 0,
+            plan:    json?.plan         ?? "free",
+            message: json?.message      ?? "Aaj ka daily limit poora ho gaya.",
+          });
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
+          return;
+        }
+
+        // ── Auth error (401) ──────────────────────────────────────────────
+        if (res.status === 401) {
+          setMessages(prev =>
+            prev.filter(m => m.id !== "thinking").concat({
+              id: Date.now().toString(),
+              role: "assistant",
+              text: "Session expired — kripya logout karke phir login karein.",
+            })
+          );
+          return;
+        }
+
+        const answer =
+          json.text ?? json.answer ?? json.response ??
+          "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
         setMessages(prev =>
           prev.filter(m => m.id !== "thinking").concat({ id: Date.now().toString(), role: "assistant", text: answer })
         );
@@ -123,7 +170,7 @@ export default function AskScreen() {
         setLoading(false);
       }
     },
-    [loading, showDemo, kundli, birthData]
+    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, language]
   );
 
   const renderMsg = ({ item }: { item: Message }) => {
@@ -224,10 +271,108 @@ export default function AskScreen() {
           </LinearGradient>
         </Pressable>
       </View>
+
+      {/* ── Daily quota exhausted modal ──────────────────────────────────── */}
+      <Modal
+        visible={!!quotaModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQuotaModal(null)}
+      >
+        <Pressable style={qm.backdrop} onPress={() => setQuotaModal(null)}>
+          <Pressable style={[qm.card, { backgroundColor: C.bgCard, borderColor: `${C.accent}40` }]} onPress={(e) => e.stopPropagation?.()}>
+            <View style={[qm.iconWrap, { backgroundColor: C.accentBg, borderColor: `${C.accent}40` }]}>
+              <Feather name="zap" size={28} color={C.accent} />
+            </View>
+
+            <Text style={[qm.title, { color: C.text }]}>Daily limit poora</Text>
+
+            <Text style={[qm.usage, { color: C.textMid }]}>
+              <Text style={{ fontWeight: "700", color: C.text }}>{quotaModal?.used ?? 0}</Text>
+              <Text> / </Text>
+              <Text style={{ fontWeight: "700", color: C.text }}>{quotaModal?.limit ?? 0}</Text>
+              <Text> questions used today</Text>
+            </Text>
+
+            <Text style={[qm.msg, { color: C.textMuted }]}>
+              {quotaModal?.plan === "pro"
+                ? quotaModal?.message
+                : quotaModal?.plan === "basic"
+                  ? "Basic plan mein 10 questions/day milte hain. Pro upgrade karke unlimited paayein."
+                  : quotaModal?.plan === "trial"
+                    ? "Trial mein 3 questions/day milte hain. Pro lekar unlimited karein."
+                    : "Free mein 1 question/day. Trial start karein ya Basic/Pro lein."}
+            </Text>
+
+            {quotaModal?.plan !== "pro" && (
+              <Pressable
+                onPress={() => {
+                  setQuotaModal(null);
+                  router.push("/subscription");
+                }}
+                style={({ pressed }) => [{ width: "100%", marginTop: 4, opacity: pressed ? 0.9 : 1 }]}
+              >
+                <LinearGradient
+                  colors={["#d97706", "#f59e0b"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                  style={qm.cta}
+                >
+                  <Feather name="zap" size={15} color="#fff" />
+                  <Text style={qm.ctaText}>Upgrade Now</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
+
+            <Pressable onPress={() => setQuotaModal(null)} style={qm.dismiss}>
+              <Text style={[qm.dismissText, { color: C.textMuted }]}>
+                {quotaModal?.plan === "pro" ? "Theek hai" : "Baad mein"}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
     </CosmicBg>
   );
 }
+
+const qm = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 24,
+    alignItems: "center",
+    gap: 10,
+  },
+  iconWrap: {
+    width: 60, height: 60, borderRadius: 16, borderWidth: 1.5,
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 19, fontWeight: "700", letterSpacing: -0.3, textAlign: "center",
+  },
+  usage: { fontSize: 13, textAlign: "center" },
+  msg: {
+    fontSize: 12.5, textAlign: "center", lineHeight: 18, marginBottom: 6,
+  },
+  cta: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 13, borderRadius: 13,
+  },
+  ctaText: { color: "#fff", fontSize: 14.5, fontWeight: "700" },
+  dismiss: { paddingVertical: 8, paddingHorizontal: 16, marginTop: 4 },
+  dismissText: { fontSize: 12.5, fontWeight: "600" },
+});
 
 const s = StyleSheet.create({
   root: { flex: 1 },

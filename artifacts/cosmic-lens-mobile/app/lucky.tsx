@@ -62,14 +62,79 @@ const card = StyleSheet.create({
   title: { fontSize: 10, fontFamily: "Nunito_700Bold", letterSpacing: 1.5 },
 });
 
+// Map English/Hindi sign names → RashiKey
+const SIGN_TO_RASHI: Record<string, RashiKey> = {
+  aries: "mesh", mesh: "mesh", "मेष": "mesh",
+  taurus: "vrishabh", vrishabh: "vrishabh", "वृषभ": "vrishabh",
+  gemini: "mithun", mithun: "mithun", "मिथुन": "mithun",
+  cancer: "kark", kark: "kark", "कर्क": "kark",
+  leo: "simha", simha: "simha", "सिंह": "simha",
+  virgo: "kanya", kanya: "kanya", "कन्या": "kanya",
+  libra: "tula", tula: "tula", "तुला": "tula",
+  scorpio: "vrishchik", vrishchik: "vrishchik", "वृश्चिक": "vrishchik",
+  sagittarius: "dhanu", dhanu: "dhanu", "धनु": "dhanu",
+  capricorn: "makar", makar: "makar", "मकर": "makar",
+  aquarius: "kumbh", kumbh: "kumbh", "कुम्भ": "kumbh", "कुंभ": "kumbh",
+  pisces: "meen", meen: "meen", "मीन": "meen",
+};
+
+function deriveRashi(moonSign?: string | null, planets?: Array<{ name: string; rashi?: string }>): RashiKey {
+  if (moonSign) {
+    const k = SIGN_TO_RASHI[moonSign.trim().toLowerCase()];
+    if (k) return k;
+  }
+  const moon = planets?.find(p => p?.name === "Moon");
+  if (moon?.rashi) {
+    const k = SIGN_TO_RASHI[moon.rashi.trim().toLowerCase()];
+    if (k) return k;
+  }
+  return "mesh";
+}
+
+// Day-of-year (0..365) — used as deterministic seed for daily rotation
+function dayOfYear(d: Date): number {
+  const start = new Date(d.getFullYear(), 0, 0);
+  return Math.floor((d.getTime() - start.getTime()) / 86400000);
+}
+
+const RASHI_INDEX: Record<RashiKey, number> = {
+  mesh: 0, vrishabh: 1, mithun: 2, kark: 3, simha: 4, kanya: 5,
+  tula: 6, vrishchik: 7, dhanu: 8, makar: 9, kumbh: 10, meen: 11,
+};
+
+// Daily energy hint — rotates by weekday (deterministic, no API needed)
+const DAILY_HINTS = [
+  "Aaj ka graha-yog steady hai — shanti ke saath kaam karein.",     // Sun
+  "Chandrama prabhav prabal — bhaavnaaen samajhdari se sambhalein.", // Mon
+  "Mangal urja active — saahas aur action ka din.",                  // Tue
+  "Budh ki kripa — sanchaar aur planning sukhad hogi.",              // Wed
+  "Guru ka ashirvaad — gyaan aur uchch shiksha ke avsar.",           // Thu
+  "Shukra ka prabhav — kala, prem aur soundarya ka din.",            // Fri
+  "Shani ka asar — sthirta aur mehnat ka din, dheeraj rakhein.",     // Sat
+];
+
 export default function LuckyScreen() {
   const C = useC();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { profiles } = useUser();
-  const rashi = (profiles[0]?.rashi ?? "mesh") as RashiKey;
+  const { profiles, kundli } = useUser();
+  const rashi = deriveRashi(kundli?.moonSign, kundli?.planets);
   const rashiMeta = RASHIS_META[rashi] ?? RASHIS_META.mesh;
-  const lucky = LUCKY[rashi] ?? LUCKY.mesh;
+  const baseLucky = LUCKY[rashi] ?? LUCKY.mesh;
+  const now = new Date();
+
+  // Daily-varying lucky number derived from rashi seed + day-of-year
+  const dailyLucky = useMemo(() => {
+    const dy = dayOfYear(now);
+    const seed = (RASHI_INDEX[rashi] ?? 0) * 13 + dy;
+    const todaysNumber = ((seed % 9) + 1);   // 1..9
+    const todaysHint   = DAILY_HINTS[now.getDay()];
+    // Merge daily number with the rashi's base 2 numbers (deduped)
+    const numbers = Array.from(new Set([todaysNumber, ...baseLucky.numbers])).slice(0, 3);
+    return { ...baseLucky, numbers, hint: todaysHint };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rashi]);
+  const lucky = dailyLucky;
 
   const today = useMemo(() => {
     const d = new Date();
@@ -94,6 +159,13 @@ export default function LuckyScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 14 }}
       >
+        {/* Today's Cosmic Pulse — daily-rotating hint */}
+        <Card title="✨ AAJ KA YOG (TODAY'S PULSE)">
+          <Text style={{ color: C.text, fontSize: 13, fontFamily: F.medium, lineHeight: 19 }}>
+            {lucky.hint}
+          </Text>
+        </Card>
+
         {/* Lucky Colors */}
         <Card title="🎨 LUCKY RANG (COLORS)">
           <View style={{ flexDirection: "row", gap: 10 }}>

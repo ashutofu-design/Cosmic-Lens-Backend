@@ -49,6 +49,46 @@ const PHAL: Record<string, { aaj: string; hafta: string; lucky: string; savdhan:
   meen:      { aaj: "Bhakti aur spirituality ka din. Sapne sach ho sakte hain. Kala aur sangeet mein man lagega. Kisi roohaani anubhav ka yog.", hafta: "Aatmik unnati hogi. Dharmarth kaaryon mein bhaagidaari. Kalpana ko haaqikat mein badlne ka waqt. Swasthya ka dhyan rakhein.", lucky: "Peela/Sea Green rang, Guruvaar, Ank 3", savdhan: "Dhokhebaaz logon se sachait rahein." },
 };
 
+// Map any sign name (English / Hindi / Hinglish) → rashi key
+const SIGN_TO_RASHI: Record<string, string> = {
+  aries: "mesh", mesh: "mesh", "मेष": "mesh",
+  taurus: "vrishabh", vrishabh: "vrishabh", "वृषभ": "vrishabh",
+  gemini: "mithun", mithun: "mithun", "मिथुन": "mithun",
+  cancer: "kark", kark: "kark", "कर्क": "kark",
+  leo: "simha", simha: "simha", "सिंह": "simha",
+  virgo: "kanya", kanya: "kanya", "कन्या": "kanya",
+  libra: "tula", tula: "tula", "तुला": "tula",
+  scorpio: "vrishchik", vrishchik: "vrishchik", "वृश्चिक": "vrishchik",
+  sagittarius: "dhanu", dhanu: "dhanu", "धनु": "dhanu",
+  capricorn: "makar", makar: "makar", "मकर": "makar",
+  aquarius: "kumbh", kumbh: "kumbh", "कुम्भ": "kumbh", "कुंभ": "kumbh",
+  pisces: "meen", meen: "meen", "मीन": "meen",
+};
+
+function deriveRashiKey(moonSign?: string | null, planets?: Array<{ name: string; rashi?: string }>): string | null {
+  if (moonSign) {
+    const k = SIGN_TO_RASHI[moonSign.trim().toLowerCase()];
+    if (k) return k;
+  }
+  const moon = planets?.find(p => p?.name === "Moon");
+  if (moon?.rashi) {
+    const k = SIGN_TO_RASHI[moon.rashi.trim().toLowerCase()];
+    if (k) return k;
+  }
+  return null;
+}
+
+// Daily-rotating prefix — varies by weekday so content reads fresh each day
+const DAILY_PREFIX = [
+  "Aaj Surya prabhav prabal hai. ",       // Sun
+  "Chandrama ki sthiti madhur hai. ",     // Mon
+  "Mangal ki urja ke saath, ",            // Tue
+  "Budh ki kripa se, ",                   // Wed
+  "Guru ke ashirvaad mein, ",             // Thu
+  "Shukra ka prabhav suhana hai. ",       // Fri
+  "Shani ki drishti gehri hai. ",         // Sat
+];
+
 export default function RashifalScreen() {
   const C = useC();
   const t = useT();
@@ -56,9 +96,10 @@ export default function RashifalScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const [tabIdx, setTabIdx] = useState(params.tab === "weekly" ? 1 : 0);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const { profiles } = useUser();
-  const userRashi = profiles[0]?.rashi ?? null;
+  const { profiles, kundli } = useUser();
+  const userRashi = deriveRashiKey(kundli?.moonSign, kundli?.planets);
   const TABS = [t.daily, t.weekly, t.monthly];
+  const todayPrefix = DAILY_PREFIX[new Date().getDay()];
 
   return (
     <View style={{ flex: 1 }}>
@@ -99,7 +140,8 @@ export default function RashifalScreen() {
           const phal = PHAL[rashi.id];
           const isMe = userRashi === rashi.id;
           const isOpen = expanded === rashi.id;
-          const text = tabIdx === 0 ? phal.aaj : phal.hafta;
+          // Daily tab gets the rotating prefix so the same rashi reads fresh each day.
+          const text = tabIdx === 0 ? `${todayPrefix}${phal.aaj}` : phal.hafta;
 
           return (
             <Pressable

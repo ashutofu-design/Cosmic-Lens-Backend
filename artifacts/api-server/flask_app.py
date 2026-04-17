@@ -2227,11 +2227,10 @@ PLAN_PRICES = {
     "trial_weekly":  1,      # ₹1 → 7-day trial (one-time, Basic-tier access)
     "basic_monthly": 199,
     "basic_yearly":  1799,
-    "pro_monthly":   399,
-    "pro_yearly":    2999,
+    "pro_monthly":   499,
+    # Pro yearly removed — Pro is monthly-only.
     # legacy fallback (do not advertise)
-    "elite_monthly": 399,
-    "elite_yearly":  2999,
+    "elite_monthly": 499,
 }
 
 
@@ -2248,11 +2247,20 @@ def _cf_payment_url(session_id: str) -> str:
 
 
 def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
-    """Grant Trial / Basic / Pro / Elite plan to user and set expiry date."""
+    """Grant Trial / Basic / Pro / Elite plan to user and set expiry date.
+
+    IDEMPOTENT: if this exact order_id has already been processed for this user,
+    no-op. Prevents repeated polling / webhook retries from extending the plan.
+    """
     from datetime import timedelta
     user = User.query.get(user_id)
     if not user:
         return False
+
+    # Idempotency guard — same order_id already activated → no-op
+    if user.plan_order_id and user.plan_order_id == order_id:
+        return True
+
     now = datetime.utcnow()
 
     # ── Trial: 7-day Basic-tier access, gated by trial_started_at ─────────
@@ -2266,11 +2274,16 @@ def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
         db.session.commit()
         return True
 
-    expiry = now + timedelta(days=365 if cycle == "yearly" else 31)
-
-    # Treat 'elite' as legacy 'pro'
+    # Treat 'elite' as legacy 'pro' — and force monthly cycle (Pro is monthly-only)
     if plan == "elite":
         plan = "pro"
+    if plan == "pro":
+        cycle = "monthly"
+
+    days   = 365 if cycle == "yearly" else 31
+    # Extend from existing expiry if still active, else from now
+    base   = user.plan_expiry if (user.plan_expiry and user.plan_expiry > now) else now
+    expiry = base + timedelta(days=days)
 
     user.plan          = plan
     user.plan_expiry   = expiry
@@ -2296,11 +2309,20 @@ def create_payment_order():
     plan    = data.get("plan")   # "trial" / "basic" / "pro" / "elite"
     cycle   = data.get("cycle")  # "weekly" / "monthly" / "yearly"
 
+    # Auth: require X-API-Key tied to this user_id
+    if user_id:
+        try:
+            _user, _err = get_authed_user(int(user_id))
+            if _err:
+                return _err
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid user_id"}), 400
+
     valid_combos = {
         ("trial", "weekly"),
         ("basic", "monthly"), ("basic", "yearly"),
         ("pro",   "monthly"),
-        ("elite", "monthly"), ("elite", "yearly"),
+        ("elite", "monthly"),
     }
     if not user_id or (plan, cycle) not in valid_combos:
         return jsonify({"error": "Invalid request: need user_id, plan, cycle"}), 400
@@ -2388,6 +2410,15 @@ def payment_status(order_id):
 
     if not CASHFREE_APP_ID or not CASHFREE_SECRET:
         return jsonify({"error": "Cashfree not configured"}), 503
+
+    # Auth: order_id encodes user_id ("CL{uid}_..."). Verify caller owns this user.
+    try:
+        _uid = int(order_id.split("_")[0][2:])
+        _user, _err = get_authed_user(_uid)
+        if _err:
+            return _err
+    except (IndexError, ValueError):
+        return jsonify({"error": "Invalid order_id"}), 400
 
     cf_req = _req.Request(
         f"{_cf_base()}/orders/{order_id}/payments",

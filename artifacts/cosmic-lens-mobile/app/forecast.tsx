@@ -189,18 +189,9 @@ export default function ForecastScreen() {
         setDays(built);
       })
       .catch(() => {
-        // fallback
-        const fallback = [72, 58, 81, 45, 70, 65, 77];
-        setDays(dates.map((ds, i) => {
-          const dt = new Date(ds + "T00:00:00");
-          return {
-            date: dt, score: fallback[i],
-            moonLon: 120 + i * 13,
-            moonSign: moonSign(120 + i * 13),
-            phase: moonPhase(dt),
-            summary: SCORE_SUMMARIES[scoreToTrend(fallback[i])],
-          };
-        }));
+        // API failed — clear days so UI shows the empty/error state
+        // (avoid fake scores that would mislead user into thinking it's real data)
+        setDays([]);
       })
       .finally(() => setLoading(false));
   }, [kundli, moonData, showDemo]);
@@ -241,7 +232,9 @@ export default function ForecastScreen() {
             />
           ) : (
             <View style={s.chartPlaceholder}>
-              <Text style={[s.placeholderText, { color: C.textMuted }]}>Loading...</Text>
+              <Text style={[s.placeholderText, { color: C.textMuted }]}>
+                {loading ? "Loading..." : "Forecast load nahi ho saka. Internet check karke wapas try karein."}
+              </Text>
             </View>
           )}
         </View>

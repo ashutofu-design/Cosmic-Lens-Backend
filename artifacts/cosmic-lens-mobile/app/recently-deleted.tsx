@@ -56,7 +56,7 @@ function hoursLeft(iso?: string | null): number {
 export default function RecentlyDeletedScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
-  const { user } = useUser();
+  const { user, refreshUser } = useUser();
 
   const [items, setItems] = useState<DeletedProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,6 +117,9 @@ export default function RecentlyDeletedScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setItems(prev => prev.filter(x => x.id !== p.id));
       setRestoringId(null);
+      // Sync UserContext so restored profile reappears in Profile Edit
+      // and isn't re-soft-deleted by the next local-vs-cloud reconcile.
+      try { await refreshUser(); } catch {}
     } catch {
       Alert.alert("Restore failed", "Check your internet and try again.");
       setRestoringId(null);

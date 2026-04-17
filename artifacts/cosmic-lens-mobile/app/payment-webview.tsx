@@ -47,10 +47,9 @@ const PLAN_PRICES: Record<string, number> = {
   basic_monthly: PRICES.basic_monthly,
   basic_yearly:  PRICES.basic_yearly,
   pro_monthly:   PRICES.pro_monthly,
-  pro_yearly:    PRICES.pro_yearly,
+  // Pro yearly removed — Pro is monthly-only.
   // legacy fallback (older builds may still send 'elite')
   elite_monthly: PRICES.pro_monthly,
-  elite_yearly:  PRICES.pro_yearly,
 };
 
 export default function PaymentWebviewScreen() {

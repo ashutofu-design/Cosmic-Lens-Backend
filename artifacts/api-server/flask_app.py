@@ -1160,6 +1160,310 @@ def planet_transits():
     return jsonify(results)
 
 
+@app.route("/api/career-analysis", methods=["POST", "OPTIONS"])
+def career_analysis():
+    """
+    Vedic career analysis with Basic / Pro tiering.
+
+    Body: { "user_id": int, "kundli": {...saved kundli object...} }
+    Headers: X-API-Key (required)
+
+    Returns:
+      basic block (always): { score 0-100, trend, summary, hook }
+      pro   block (only Pro/Trial users): houses, planets, dasha, transit,
+                                          growth, struggles, promotion, job_change, risks
+      meta:  { level: 'basic'|'pro', pro_locked: bool }
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import swisseph as swe
+    from subscription_helper import effective_plan
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    kundli  = data.get("kundli") or {}
+
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+
+    planets = kundli.get("planets") or []
+    if not planets:
+        return jsonify({"error": "Kundli not provided. Please complete your birth chart first."}), 400
+
+    SIGNS = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+             "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    SIGN_LORD = {
+        "Aries":"Mars","Taurus":"Venus","Gemini":"Mercury","Cancer":"Moon",
+        "Leo":"Sun","Virgo":"Mercury","Libra":"Venus","Scorpio":"Mars",
+        "Sagittarius":"Jupiter","Capricorn":"Saturn","Aquarius":"Saturn","Pisces":"Jupiter",
+    }
+    EXALT = {"Sun":"Aries","Moon":"Taurus","Mars":"Capricorn","Mercury":"Virgo",
+             "Jupiter":"Cancer","Venus":"Pisces","Saturn":"Libra"}
+    DEBIL = {"Sun":"Libra","Moon":"Scorpio","Mars":"Cancer","Mercury":"Pisces",
+             "Jupiter":"Capricorn","Venus":"Virgo","Saturn":"Aries"}
+    OWN   = {"Sun":["Leo"],"Moon":["Cancer"],"Mars":["Aries","Scorpio"],
+             "Mercury":["Gemini","Virgo"],"Jupiter":["Sagittarius","Pisces"],
+             "Venus":["Taurus","Libra"],"Saturn":["Capricorn","Aquarius"]}
+
+    def find_planet(name, source=planets):
+        for p in source:
+            if p.get("name") == name:
+                return p
+        return None
+
+    asc_sign = kundli.get("ascendant") or "Aries"
+    asc_idx  = SIGNS.index(asc_sign) if asc_sign in SIGNS else 0
+    sign_of_10th = SIGNS[(asc_idx + 9) % 12]
+    sign_of_6th  = SIGNS[(asc_idx + 5) % 12]
+    sign_of_11th = SIGNS[(asc_idx + 10) % 12]
+    lord_10th    = SIGN_LORD[sign_of_10th]
+
+    # ── Score calculation ────────────────────────────────────────────────
+    score   = 50
+    reasons = []
+
+    # 10th house occupants (D1)
+    p10 = [p for p in planets if p.get("house") == 10]
+    benefics = {"Jupiter","Venus","Mercury"}
+    malefics_hard = {"Saturn","Mars","Rahu","Ketu"}
+    for p in p10:
+        nm = p.get("name")
+        if nm in benefics:
+            score += 6; reasons.append(f"{nm} in 10th — benefic support for career")
+        elif nm == "Sun":
+            score += 8; reasons.append("Sun in 10th — strong status & authority")
+        elif nm == "Saturn":
+            score += 5; reasons.append("Saturn in 10th — disciplined long-term career builder")
+        elif nm == "Mars":
+            score += 4; reasons.append("Mars in 10th — drive & competitive edge")
+        elif nm == "Rahu":
+            score += 3; reasons.append("Rahu in 10th — unconventional rise, sudden growth")
+        elif nm == "Ketu":
+            score -= 4; reasons.append("Ketu in 10th — detachment, frequent career shifts")
+
+    # 10th lord placement
+    lord_p = find_planet(lord_10th)
+    if lord_p:
+        lh = lord_p.get("house", 0)
+        lsign = lord_p.get("sign", "")
+        if lh in (1,4,5,7,9,10,11):
+            score += 7; reasons.append(f"10th lord {lord_10th} in {lh}th — favorable house placement")
+        elif lh in (6,8,12):
+            score -= 6; reasons.append(f"10th lord {lord_10th} in {lh}th (dusthana) — career obstacles")
+        if lord_10th in EXALT and lsign == EXALT[lord_10th]:
+            score += 6; reasons.append(f"{lord_10th} exalted in {lsign} — exceptional career strength")
+        elif lord_10th in DEBIL and lsign == DEBIL[lord_10th]:
+            score -= 6; reasons.append(f"{lord_10th} debilitated in {lsign} — career struggles indicated")
+        elif lsign in OWN.get(lord_10th, []):
+            score += 4; reasons.append(f"{lord_10th} in own sign {lsign} — stable career foundation")
+
+    # 11th house — gains
+    p11 = [p for p in planets if p.get("house") == 11]
+    for p in p11:
+        if p.get("name") in benefics or p.get("name") == "Jupiter":
+            score += 4; reasons.append(f"{p['name']} in 11th — strong income & gains")
+        elif p.get("name") in ("Sun","Saturn","Mars"):
+            score += 2
+
+    # 6th house — service & competition
+    p6 = [p for p in planets if p.get("house") == 6]
+    for p in p6:
+        if p.get("name") in ("Mars","Saturn","Sun"):
+            score += 3; reasons.append(f"{p['name']} in 6th — wins over rivals & job stability")
+
+    # Saturn dignity (work karaka)
+    sat = find_planet("Saturn")
+    if sat:
+        ssg = sat.get("sign","")
+        if ssg == EXALT["Saturn"]:
+            score += 5; reasons.append("Saturn exalted — natural karma karaka strong")
+        elif ssg == DEBIL["Saturn"]:
+            score -= 5; reasons.append("Saturn debilitated — extra effort needed in career")
+
+    # Sun dignity (status karaka)
+    sun = find_planet("Sun")
+    if sun:
+        ssg = sun.get("sign","")
+        if ssg == EXALT["Sun"]:
+            score += 4; reasons.append("Sun exalted — leadership & recognition")
+        elif ssg == DEBIL["Sun"]:
+            score -= 4; reasons.append("Sun debilitated — confidence & authority challenges")
+
+    # D10 Dashamsha — career-specific divisional chart
+    d10 = (kundli.get("divisionalCharts") or {}).get("D10") or {}
+    d10_planets = d10.get("planets") or []
+    d10_p10 = [p for p in d10_planets if p.get("house") == 10]
+    for p in d10_p10:
+        if p.get("name") in benefics:
+            score += 4; reasons.append(f"{p['name']} in D10 10th — refined career karma")
+        elif p.get("name") == "Sun":
+            score += 5; reasons.append("Sun in D10 10th — destined for visible authority")
+
+    # ── Current Mahadasha lord favorability for career ──────────────────
+    cd = kundli.get("currentDasha") or {}
+    md_lord = cd.get("maha","")
+    ad_lord = cd.get("antar","")
+    DASHA_CAREER = {
+        "Jupiter": +8, "Sun": +7, "Mercury": +6, "Saturn": +5,
+        "Mars": +3, "Venus": +2, "Moon": 0, "Rahu": -3, "Ketu": -5,
+    }
+    if md_lord in DASHA_CAREER:
+        score += DASHA_CAREER[md_lord]
+        reasons.append(f"Mahadasha {md_lord} — {'favorable' if DASHA_CAREER[md_lord] >= 0 else 'challenging'} for career")
+    if ad_lord in DASHA_CAREER:
+        score += DASHA_CAREER[ad_lord] // 2
+
+    # ── Live transit: Saturn & Jupiter on 10th house ──────────────────────
+    transit_notes = []
+    try:
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        for p_name, p_id in (("Jupiter", swe.JUPITER), ("Saturn", swe.SATURN)):
+            res = swe.calc_ut(jd_now, p_id, flags)
+            t_lon = res[0][0] % 360
+            t_sign = SIGNS[int(t_lon // 30)]
+            t_house = ((SIGNS.index(t_sign) - asc_idx + 12) % 12) + 1
+            if p_name == "Jupiter" and t_house in (10, 2, 6):
+                score += 4
+                transit_notes.append(f"Jupiter currently transiting your {t_house}th house — career growth phase active")
+            if p_name == "Saturn" and t_house == 10:
+                score += 2
+                transit_notes.append(f"Saturn transiting your 10th house — major career restructuring period")
+            elif p_name == "Saturn" and t_house in (4, 8, 12):
+                score -= 4
+                transit_notes.append(f"Saturn transiting your {t_house}th house — slow progress phase")
+    except Exception:
+        pass
+
+    # Clamp & summarize
+    score = max(20, min(95, score))
+    if score >= 70:
+        trend = "Good"
+        summary = "Career mein strong support hai. Mehnat ka achha phal milne wala hai. Aage badhne ka time hai."
+    elif score >= 50:
+        trend = "Average"
+        summary = "Mixed energy hai career mein. Patience aur sahi planning se progress hogi. Bade decisions sambhal ke lein."
+    else:
+        trend = "Risk"
+        summary = "Abhi career mein challenges hain. Jaldi switch mat karein. Skill build karein, time better hoga."
+
+    hook = "A major career shift is indicated in your chart — full timing and reason inside Pro."
+
+    plan = effective_plan(user)
+    is_pro_user = plan in ("pro", "trial")
+
+    response = {
+        "level":      "pro" if is_pro_user else "basic",
+        "pro_locked": not is_pro_user,
+        "basic": {
+            "score":   score,
+            "trend":   trend,
+            "summary": summary,
+            "hook":    hook,
+        },
+    }
+
+    if is_pro_user:
+        # ── Build Pro deep-dive sections ──────────────────────────────
+        # Houses
+        def fmt_house(num, sign, occ):
+            occ_names = ", ".join(p["name"] for p in occ) if occ else "Khaali"
+            return {
+                "house":     num,
+                "sign":      sign,
+                "lord":      SIGN_LORD[sign],
+                "occupants": occ_names,
+            }
+        houses_block = {
+            "h10": fmt_house(10, sign_of_10th, p10),
+            "h6":  fmt_house(6,  sign_of_6th,  p6),
+            "h11": fmt_house(11, sign_of_11th, p11),
+        }
+
+        # Planet strengths
+        def planet_strength(name):
+            p = find_planet(name)
+            if not p:
+                return None
+            sg = p.get("sign","")
+            status = "neutral"
+            if name in EXALT and sg == EXALT[name]:
+                status = "exalted"
+            elif name in DEBIL and sg == DEBIL[name]:
+                status = "debilitated"
+            elif sg in OWN.get(name, []):
+                status = "own sign"
+            return {"name": name, "sign": sg, "house": p.get("house"), "status": status,
+                    "retrograde": bool(p.get("retrograde"))}
+
+        planets_block = [planet_strength(n) for n in ("Saturn","Sun","Mercury","Jupiter","Mars")]
+        planets_block = [p for p in planets_block if p]
+
+        # Dasha block
+        dasha_block = {
+            "mahadasha": md_lord,
+            "antardasha": ad_lord,
+            "verdict": (
+                "Career-supportive period — promotions & visibility likely."
+                if DASHA_CAREER.get(md_lord, 0) >= 5 else
+                "Mixed dasha — focus on consolidation, avoid risky switches."
+                if DASHA_CAREER.get(md_lord, 0) >= 0 else
+                "Challenging dasha — patience & skill building over jumps."
+            ),
+            "ends": cd.get("endDate", ""),
+        }
+
+        # Timing predictions (qualitative, derived from dasha + current trend)
+        growth = []
+        struggles = []
+        promotion = []
+        job_change = []
+        risks = []
+
+        if DASHA_CAREER.get(md_lord, 0) >= 5:
+            growth.append(f"Current {md_lord} mahadasha aapke career ke favorable phase mein hai — recognition aur growth ke chances strong hain.")
+            promotion.append(f"{md_lord} dasha mein promotion ya bigger role lene ka achha samay hai. Visible work pe focus karein.")
+        if md_lord in ("Saturn","Rahu","Ketu"):
+            struggles.append(f"{md_lord} dasha slow but transformative hai — quick rewards ki ummeed na rakhein.")
+        if ad_lord in ("Mars","Rahu") and md_lord in ("Saturn","Sun"):
+            job_change.append(f"{md_lord}-{ad_lord} antardasha — job change ya career direction shift ka strong indicator.")
+        if not job_change:
+            job_change.append("Next 6-12 months mein major job change ka indicator weak hai. Stability favor karein.")
+
+        if score < 50:
+            risks.append("Career score abhi low hai — financial commitment ya loan se bachein.")
+            risks.append("Workplace politics aur authority figures (boss/seniors) se sambhalkar communicate karein.")
+        if any(r for r in transit_notes if "slow progress" in r.lower()):
+            risks.append("Saturn transit slow progress de raha hai — long-term planning, short-term patience.")
+
+        if not growth:
+            growth.append("Steady but unremarkable growth phase. Skill-building pe focus karein, results 2-3 saal mein dikhenge.")
+        if not struggles:
+            struggles.append("Major struggle indicators absent. Routine challenges hi expected hain.")
+        if not promotion:
+            promotion.append("Promotion ka clear yog abhi nahi hai — current role mein excel karke setup tayyar karein.")
+
+        response["pro"] = {
+            "houses":     houses_block,
+            "planets":    planets_block,
+            "dasha":      dasha_block,
+            "transit":    transit_notes or ["No major Saturn/Jupiter transit on career houses currently."],
+            "growth":     growth,
+            "struggles":  struggles,
+            "promotion":  promotion,
+            "job_change": job_change,
+            "risks":      risks,
+            "reasons":    reasons[:8],
+        }
+
+    return jsonify(response)
+
+
 @app.route("/api/current_transits", methods=["GET"])
 def current_transits():
     """Real-time sidereal planetary positions (Lahiri ayanamsha) for all 9 grahas."""

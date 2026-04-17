@@ -59,6 +59,7 @@ const CATEGORIES: Category[] = [
     badge: "Trending",
     badgeIcon: "🚀",
     subtitle: "Career growth & breakthrough insights",
+    route: "/career",
   },
   {
     key: "health",

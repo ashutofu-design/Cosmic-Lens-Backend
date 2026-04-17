@@ -27,6 +27,13 @@ from database import db, init_db
 from models import User, Kundli, Profile
 
 app = Flask(__name__)
+import logging as _logging
+app.logger.setLevel(_logging.INFO)
+if not app.logger.handlers:
+    _h = _logging.StreamHandler()
+    _h.setLevel(_logging.INFO)
+    _h.setFormatter(_logging.Formatter("[%(levelname)s] %(message)s"))
+    app.logger.addHandler(_h)
 CORS(app)
 
 # ── Database init ──────────────────────────────────────────────────────────────
@@ -3417,6 +3424,7 @@ def create_payment_order():
         },
         method="POST",
     )
+    app.logger.info(f"[CF] POST {_cf_base()}/orders  env={CASHFREE_ENV}  order={order_id}  amt=₹{amount}  user={user_id}")
     try:
         with _req.urlopen(cf_req, timeout=15) as resp:
             result = _json.loads(resp.read())
@@ -3425,18 +3433,23 @@ def create_payment_order():
             detail = e.read().decode()
         except Exception:
             detail = ""
-        app.logger.error(f"Cashfree {e.code} on /orders: {detail}")
+        app.logger.error(f"[CF] ❌ HTTP {e.code} on /orders: {detail}")
         return jsonify({
             "error":  "Cashfree order creation failed",
             "code":   e.code,
             "detail": detail,
         }), 502
     except Exception as e:
-        app.logger.error(f"Cashfree network error: {e}")
+        app.logger.error(f"[CF] ❌ network error: {e}")
         return jsonify({"error": str(e)}), 502
 
     session_id   = result.get("payment_session_id", "")
+    cf_order_id  = result.get("cf_order_id", "")
+    if not session_id:
+        app.logger.error(f"[CF] ❌ no payment_session_id in response: {result}")
+        return jsonify({"error": "Cashfree returned no session_id", "raw": result}), 502
     payment_link = _cf_payment_url(session_id)
+    app.logger.info(f"[CF] ✅ order created  cf_order_id={cf_order_id}  session=...{session_id[-20:]}  link_len={len(payment_link)}")
 
     return jsonify({
         "order_id":           order_id,

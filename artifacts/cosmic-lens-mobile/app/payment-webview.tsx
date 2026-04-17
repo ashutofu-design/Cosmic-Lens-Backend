@@ -101,7 +101,12 @@ export default function PaymentWebviewScreen() {
       setPhase("failed");
       return;
     }
+    // Always start FRESH — clear any stale link/order before creating.
+    setPaymentLink("");
+    setOrderId("");
+    handledRef.current = false;
     setPhase("creating");
+    console.log("[Pay] 🔄 creating fresh order", { plan, cycle, userId: user.id });
     try {
       const ctrl  = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -116,12 +121,30 @@ export default function PaymentWebviewScreen() {
       });
       clearTimeout(timer);
       const data = await resp.json();
+      console.log("[Pay] order response", { ok: resp.ok, status: resp.status, data });
       if (!resp.ok || data.error) {
-        setErrMsg(data.error ?? "Could not create order. Try again.");
+        const msg = data.error ?? `Order creation failed (${resp.status}).`;
+        console.warn("[Pay] ❌ create-order failed:", msg);
+        setErrMsg(msg);
+        setPhase("failed");
+        return;  // do NOT open checkout on failure
+      }
+      const { order_id, payment_link, payment_session_id } =
+        data as { order_id: string; payment_link: string; payment_session_id: string };
+
+      if (!payment_link || !payment_session_id) {
+        console.warn("[Pay] ❌ missing payment_link/session_id in response");
+        setErrMsg("Server returned an incomplete order. Try again.");
         setPhase("failed");
         return;
       }
-      const { order_id, payment_link } = data as { order_id: string; payment_link: string };
+
+      console.log("[Pay] ✅ fresh session", {
+        order_id,
+        session_tail: "..." + payment_session_id.slice(-20),
+        link_len: payment_link.length,
+      });
+
       setOrderId(order_id);
       setPaymentLink(payment_link);
       setPhase("paying");
@@ -129,9 +152,11 @@ export default function PaymentWebviewScreen() {
       // On web, react-native-webview doesn't render. Open Cashfree checkout
       // in a new tab; user returns to app and taps "I've Paid" to verify.
       if (Platform.OS === "web" && typeof window !== "undefined") {
+        console.log("[Pay] 🚀 opening Cashfree checkout in new tab");
         try { window.open(payment_link, "_blank", "noopener,noreferrer"); } catch {}
       }
     } catch (e: any) {
+      console.warn("[Pay] ❌ network error:", e?.message);
       setErrMsg(e?.message ?? "Network error. Check connection.");
       setPhase("failed");
     }

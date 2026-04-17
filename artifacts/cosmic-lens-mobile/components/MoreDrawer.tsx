@@ -185,40 +185,65 @@ export default function MoreDrawer({
               </View>
             </Pressable>
 
-            {CATEGORIES.map(cat => (
-              <View key={cat.title}>
-                <Text style={[s.catLabel, { color: C.textMuted }]}>{cat.title}</Text>
-                <View style={[s.catCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                  {cat.items.map((item, idx) => (
-                    <Pressable
-                      key={item.id}
-                      onPress={() => navigate(item.route)}
-                      style={({ pressed }) => [
-                        s.item,
-                        idx < cat.items.length - 1 && [s.itemBorder, { borderBottomColor: C.border3 }],
-                        pressed && { opacity: 0.7 },
+            {CATEGORIES.map(cat => {
+              const accent = cat.items[0]?.accent ?? "#a78bfa";
+              return (
+                <View key={cat.title}>
+                  <Text style={[s.catLabel, { color: accent }]}>{cat.title}</Text>
+                  <View
+                    style={[
+                      s.catCard,
+                      {
+                        backgroundColor: "#0f1428",
+                        borderColor: `${accent}33`,
+                        shadowColor: accent,
+                        shadowOpacity: 0.18,
+                        shadowRadius: 12,
+                        shadowOffset: { width: 0, height: 4 },
+                      },
+                    ]}
+                  >
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        StyleSheet.absoluteFillObject,
+                        { backgroundColor: `${accent}10`, borderRadius: 14 },
                       ]}
-                    >
-                      <View style={[s.iconCircle, { backgroundColor: `${item.accent}18` }]}>
-                        <Text style={{ fontSize: 18 }}>{item.emoji}</Text>
-                      </View>
-                      <View style={s.itemText}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={[s.itemTitle, { color: C.text }]}>{item.title}</Text>
-                          {item.badge && (
-                            <View style={[s.badge, { backgroundColor: `${item.accent}20`, borderColor: `${item.accent}40` }]}>
-                              <Text style={[s.badgeText, { color: item.accent }]}>{item.badge}</Text>
-                            </View>
-                          )}
+                    />
+                    {cat.items.map((item, idx) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => navigate(item.route)}
+                        style={({ pressed }) => [
+                          s.item,
+                          idx < cat.items.length - 1 && [
+                            s.itemBorder,
+                            { borderBottomColor: `${accent}22` },
+                          ],
+                          pressed && { opacity: 0.7 },
+                        ]}
+                      >
+                        <View style={[s.iconCircle, { backgroundColor: `${item.accent}28`, borderWidth: 1, borderColor: `${item.accent}55` }]}>
+                          <Text style={{ fontSize: 18 }}>{item.emoji}</Text>
                         </View>
-                        <Text style={[s.itemSub, { color: C.textMuted }]}>{item.subtitle}</Text>
-                      </View>
-                      <Feather name="chevron-right" size={14} color={C.textDim} />
-                    </Pressable>
-                  ))}
+                        <View style={s.itemText}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={[s.itemTitle, { color: "#f5f6ff" }]}>{item.title}</Text>
+                            {item.badge && (
+                              <View style={[s.badge, { backgroundColor: `${item.accent}25`, borderColor: `${item.accent}55` }]}>
+                                <Text style={[s.badgeText, { color: item.accent }]}>{item.badge}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={[s.itemSub, { color: "#9aa3c7" }]}>{item.subtitle}</Text>
+                        </View>
+                        <Feather name="chevron-right" size={14} color={`${accent}99`} />
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
         </Animated.View>
       </View>

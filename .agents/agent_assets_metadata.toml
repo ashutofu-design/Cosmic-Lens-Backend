@@ -24,3 +24,9 @@ id = "9bmUn4cLmMWLlU2VJXuj2"
 uri = "file://expo-qr.png"
 type = "image"
 title = "Expo Go QR Code"
+
+[[outputs]]
+id = "FW2Wwkv4ZbYoQ1e3MG0Pj"
+uri = "file://exports/expo-qr.png"
+type = "image"
+title = "Cosmic Lens — Expo Go QR Code"

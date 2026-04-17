@@ -112,7 +112,10 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - **Fallback**: `getT(lang)` falls back to English for any unknown/unsupported code.
 - Usage pattern: `import { getT } from "@/lib/i18n"; const t = getT(language);`
 - `UserContext` exposes `language` (LangCode), `setLanguage`, `isIndia`
-- **Wired screens**: CustomTabBar, profile.tsx, login.tsx, onboarding.tsx, index.tsx (home), kundli.tsx, ask.tsx, insights.tsx, notice.tsx
+- **Wired screens**: CustomTabBar, profile.tsx (settings rows + section labels + logout dialog), login.tsx (full), verify-otp.tsx (full), onboarding.tsx, index.tsx (home), kundli.tsx, ask.tsx, insights.tsx, notice.tsx
+- **Auth flow keys** (`i18nMore.ts`): `enterPhone`, `phonePromptSub`, `mobileNumberLabel`, `mobileNumberPh`, `otpAutoCreateNote`, `sendOtp`, `orDivider`, `demoLogin`, `demoLoginSub`, `termsAccept`, `termsLink`, `privacyLink`, `otpVerifyTitle`, `otpSentToHeading`, `verifyOtp`, `didntGetOtp`, `resendIn`, `resendOtp`, `changeNumber`, `invalidPhone`, `authNotConfigured`, `otpInvalid`, `otpExpired`, `otpQuotaExceeded`, `otpTooManyAttempts`, `errNetwork`, `loginGenericError`, `otpResent`, `otpFailed` — all defined in EN/HN/HI; other 21 languages auto-fall back to EN.
+- **Profile settings keys**: `settingEditProfile`, `settingSubscription`, `settingAbout`, `settingHelp`, `settingRateUs`, `settingShareApp`, `settingLegal`, `settingDeleteAcc`, `sectionSupport`, `sectionLegal`, `sectionDanger`, `logoutTitle`, `logoutConfirm`, `logoutCta`, `cancel`, `profilesCount`.
+- **Still hardcoded** (next pass): `(tabs)/index.tsx` "Namaste"/energy phrases, `subscription.tsx` plan features array, `profile-edit.tsx` form labels, `EnergyChart.tsx` time labels, `UpgradeLock.tsx` "Upgrade to Pro" panel.
 
 ## API Endpoints
 

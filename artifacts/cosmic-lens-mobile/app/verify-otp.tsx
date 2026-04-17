@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { confirmPhoneOtp, sendPhoneOtp, resetPendingVerification } from "@/lib/firebaseAuth";
@@ -27,6 +28,7 @@ const OTP_LEN = 6;
 export default function VerifyOtpScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
+  const t      = useT();
   const isDark = C.isDark;
   const { setUser } = useUser();
 
@@ -125,7 +127,7 @@ export default function VerifyOtpScreen() {
       const data = await res.json();
       if (!res.ok || data.ok === false) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-        setError(data.error || "Login complete nahi ho saka. Try again.");
+        setError(data.error || t.loginGenericError);
         return;
       }
 
@@ -137,16 +139,16 @@ export default function VerifyOtpScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       const msg = String(e?.message || e || "");
       if (msg.includes("auth/invalid-verification-code") || msg.includes("Invalid OTP")) {
-        setError("Galat OTP. Dobara check karein.");
+        setError(t.otpInvalid);
         setDigits(Array(OTP_LEN).fill(""));
         inputs.current[0]?.focus();
       } else if (msg.includes("auth/code-expired") || msg.includes("No pending")) {
-        setError("OTP expire ho gaya. Resend karein.");
+        setError(t.otpExpired);
         setDigits(Array(OTP_LEN).fill(""));
       } else if (msg.toLowerCase().includes("network")) {
-        setError("Network error. Try again.");
+        setError(t.errNetwork);
       } else {
-        setError(msg || "Verify nahi ho saka.");
+        setError(msg || t.loginGenericError);
       }
     } finally {
       setLoading(false);
@@ -162,18 +164,18 @@ export default function VerifyOtpScreen() {
       const e164 = `+${cc}${phone}`;
       await sendPhoneOtp(e164);
 
-      setInfo("Naya OTP bhej diya gaya hai.");
+      setInfo(t.otpResent);
       setCooldown(30);
       setDigits(Array(OTP_LEN).fill(""));
       inputs.current[0]?.focus();
     } catch (e: any) {
       const msg = String(e?.message || e || "");
       if (msg.includes("auth/too-many-requests")) {
-        setError("Bahut zyada attempts. Thodi der baad try karein.");
+        setError(t.otpTooManyAttempts);
       } else if (msg.toLowerCase().includes("network")) {
-        setError("Network error. Try again.");
+        setError(t.errNetwork);
       } else {
-        setError(msg || "OTP resend nahi ho saka.");
+        setError(msg || t.otpFailed);
       }
     } finally {
       setResending(false);
@@ -195,7 +197,7 @@ export default function VerifyOtpScreen() {
           {/* Back */}
           <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={10}>
             <Feather name="arrow-left" size={20} color={C.text} />
-            <Text style={[s.backText, { color: C.text }]}>Number badlein</Text>
+            <Text style={[s.backText, { color: C.text }]}>{t.changeNumber}</Text>
           </Pressable>
 
           {/* Header */}
@@ -206,10 +208,10 @@ export default function VerifyOtpScreen() {
             }]}>
               <Feather name="message-circle" size={26} color={isDark ? "#f59e0b" : "#92400E"} />
             </View>
-            <Text style={[s.title, { color: C.text }]}>OTP Verify Karein</Text>
+            <Text style={[s.title, { color: C.text }]}>{t.otpVerifyTitle}</Text>
             <Text style={[s.subtitle, { color: C.textMuted }]}>
-              Hum ne <Text style={{ color: C.text, fontFamily: "Nunito_700Bold" }}>+{cc} {phone}</Text>
-              {" "}par 6-digit code bheja hai.
+              {t.otpSentToHeading}{" "}
+              <Text style={{ color: C.text, fontFamily: "Nunito_700Bold" }}>+{cc} {phone}</Text>
             </Text>
           </View>
 
@@ -285,7 +287,7 @@ export default function VerifyOtpScreen() {
                   : (
                     <>
                       <Feather name="check" size={16} color="#fff" />
-                      <Text style={s.ctaText}>Verify Karein</Text>
+                      <Text style={s.ctaText}>{t.verifyOtp}</Text>
                     </>
                   )
                 }
@@ -294,7 +296,7 @@ export default function VerifyOtpScreen() {
 
             {/* Resend */}
             <View style={s.resendRow}>
-              <Text style={[s.resendLabel, { color: C.textMuted }]}>OTP nahi mila?</Text>
+              <Text style={[s.resendLabel, { color: C.textMuted }]}>{t.didntGetOtp}</Text>
               <Pressable
                 onPress={resend}
                 disabled={cooldown > 0 || resending}
@@ -309,7 +311,7 @@ export default function VerifyOtpScreen() {
                         ? { color: C.textMuted }
                         : { color: isDark ? "#f59e0b" : "#92400E" }
                     ]}>
-                      {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend OTP"}
+                      {cooldown > 0 ? `${t.resendIn} ${cooldown}s` : t.resendOtp}
                     </Text>
                   )
                 }

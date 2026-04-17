@@ -82,6 +82,38 @@ export interface MoreT {
   termsAccept:         string;
   termsLink:           string;
   privacyLink:         string;
+  mobileNumberLabel:   string;
+  mobileNumberPh:      string;
+  otpAutoCreateNote:   string;
+  orDivider:           string;
+  demoLogin:           string;
+  demoLoginSub:        string;
+  authNotConfigured:   string;
+  otpQuotaExceeded:    string;
+  otpTooManyAttempts:  string;
+  otpExpired:          string;
+  otpVerifyTitle:      string;
+  otpSentToHeading:    string;
+  didntGetOtp:         string;
+  loginGenericError:   string;
+
+  // ── Profile / Settings rows ───────────────────────────────
+  settingEditProfile:  string;
+  settingSubscription: string;
+  settingAbout:        string;
+  settingHelp:         string;
+  settingRateUs:       string;
+  settingShareApp:     string;
+  settingLegal:        string;
+  settingDeleteAcc:    string;
+  sectionSupport:      string;
+  sectionLegal:        string;
+  sectionDanger:       string;
+  logoutTitle:         string;
+  logoutConfirm:       string;
+  logoutCta:           string;
+  cancel:              string;
+  profilesCount:       string;
 
   // ── Common analysis errors ───────────────────────────────
   needKundli:          string;
@@ -222,6 +254,38 @@ const EN: MoreT = {
   termsAccept:        "By continuing, you agree to our",
   termsLink:          "Terms",
   privacyLink:        "Privacy Policy",
+  mobileNumberLabel:  "MOBILE NUMBER",
+  mobileNumberPh:     "10-digit number",
+  otpAutoCreateNote:  "You'll receive a 6-digit OTP via SMS. First-time numbers get an account automatically.",
+  orDivider:          "or",
+  demoLogin:          "Demo Login",
+  demoLoginSub:       "For testing — go straight in",
+  authNotConfigured:  "Authentication setup pending. Please contact support.",
+  otpQuotaExceeded:   "Today's SMS quota is full. Try again tomorrow.",
+  otpTooManyAttempts: "Too many attempts. Please try again later.",
+  otpExpired:         "OTP expired. Please resend.",
+  otpVerifyTitle:     "Verify OTP",
+  otpSentToHeading:   "We sent a 6-digit code to",
+  didntGetOtp:        "Didn't get the OTP?",
+  loginGenericError:  "Couldn't complete login. Please try again.",
+
+  // Profile / Settings
+  settingEditProfile: "Edit Profile",
+  settingSubscription:"Subscription",
+  settingAbout:       "About Cosmic Lens",
+  settingHelp:        "Help & Support",
+  settingRateUs:      "Rate Us ⭐",
+  settingShareApp:    "Share App",
+  settingLegal:       "Legal & Policies",
+  settingDeleteAcc:   "Delete My Account",
+  sectionSupport:     "SUPPORT & ABOUT",
+  sectionLegal:       "LEGAL & POLICIES",
+  sectionDanger:      "DANGER ZONE",
+  logoutTitle:        "Logout",
+  logoutConfirm:      "Are you sure you want to log out?",
+  logoutCta:          "Logout",
+  cancel:             "Cancel",
+  profilesCount:      "profiles",
 
   // Common analysis
   needKundli:         "Kundli Required",
@@ -359,6 +423,38 @@ const HN: Partial<MoreT> = {
   termsAccept:        "Continue karke aap maante hain hamare",
   termsLink:          "Terms",
   privacyLink:        "Privacy Policy",
+  mobileNumberLabel:  "MOBILE NUMBER",
+  mobileNumberPh:     "10-digit number",
+  otpAutoCreateNote:  "SMS se 6-digit OTP aayega. Pehli baar number daalne par account automatic ban jayega.",
+  orDivider:          "ya phir",
+  demoLogin:          "Demo Login",
+  demoLoginSub:       "Testing ke liye — seedha andar jayein",
+  authNotConfigured:  "Authentication setup pending. Admin se contact karein.",
+  otpQuotaExceeded:   "Aaj ka SMS quota khatam. Kal try karein.",
+  otpTooManyAttempts: "Bahut zyada attempts. Thodi der baad try karein.",
+  otpExpired:         "OTP expire ho gaya. Resend karein.",
+  otpVerifyTitle:     "OTP Verify Karein",
+  otpSentToHeading:   "Hum ne 6-digit code bheja hai",
+  didntGetOtp:        "OTP nahi mila?",
+  loginGenericError:  "Login complete nahi ho saka. Dobara try karein.",
+
+  // Profile / Settings
+  settingEditProfile: "Profile Edit karein",
+  settingSubscription:"Subscription",
+  settingAbout:       "Cosmic Lens ke baare mein",
+  settingHelp:        "Help & Support",
+  settingRateUs:      "Rate karein ⭐",
+  settingShareApp:    "App Share karein",
+  settingLegal:       "Legal & Policies",
+  settingDeleteAcc:   "Account Delete karein",
+  sectionSupport:     "SUPPORT & ABOUT",
+  sectionLegal:       "LEGAL & POLICIES",
+  sectionDanger:      "DANGER ZONE",
+  logoutTitle:        "Logout",
+  logoutConfirm:      "Kya aap logout karna chahte hain?",
+  logoutCta:          "Logout",
+  cancel:             "Cancel",
+  profilesCount:      "profiles",
 
   needKundli:         "Kundli zaroori",
   needKundliSub:      "Aapki kundli abhi ready nahi hai. Pehle Kundli screen se banayein.",
@@ -489,6 +585,38 @@ const HI: Partial<MoreT> = {
   termsAccept:        "जारी रखकर आप हमारी",
   termsLink:          "शर्तें",
   privacyLink:        "गोपनीयता नीति",
+  mobileNumberLabel:  "मोबाइल नंबर",
+  mobileNumberPh:     "10-अंकीय नंबर",
+  otpAutoCreateNote:  "SMS पर 6-अंकीय OTP आएगा। पहली बार नंबर डालने पर खाता अपने आप बन जाएगा।",
+  orDivider:          "या",
+  demoLogin:          "डेमो लॉगिन",
+  demoLoginSub:       "टेस्टिंग के लिए — सीधे अंदर जाएं",
+  authNotConfigured:  "ऑथेंटिकेशन सेटअप अभी पेंडिंग है। कृपया सपोर्ट से संपर्क करें।",
+  otpQuotaExceeded:   "आज का SMS कोटा पूरा हो गया है। कल कोशिश करें।",
+  otpTooManyAttempts: "बहुत ज़्यादा कोशिशें। थोड़ी देर बाद कोशिश करें।",
+  otpExpired:         "OTP की अवधि समाप्त हो गई है। फिर से भेजें।",
+  otpVerifyTitle:     "OTP वेरिफाई करें",
+  otpSentToHeading:   "हमने 6-अंकीय कोड भेजा है",
+  didntGetOtp:        "OTP नहीं मिला?",
+  loginGenericError:  "लॉगिन पूरा नहीं हो सका। फिर से कोशिश करें।",
+
+  // Profile / Settings
+  settingEditProfile: "प्रोफ़ाइल एडिट करें",
+  settingSubscription:"सब्सक्रिप्शन",
+  settingAbout:       "Cosmic Lens के बारे में",
+  settingHelp:        "मदद और सहायता",
+  settingRateUs:      "रेट करें ⭐",
+  settingShareApp:    "ऐप शेयर करें",
+  settingLegal:       "कानूनी और नीतियाँ",
+  settingDeleteAcc:   "मेरा अकाउंट डिलीट करें",
+  sectionSupport:     "सहायता और जानकारी",
+  sectionLegal:       "कानूनी और नीतियाँ",
+  sectionDanger:      "ख़तरनाक ज़ोन",
+  logoutTitle:        "लॉगआउट",
+  logoutConfirm:      "क्या आप लॉगआउट करना चाहते हैं?",
+  logoutCta:          "लॉगआउट",
+  cancel:             "रद्द करें",
+  profilesCount:      "प्रोफ़ाइल",
 
   needKundli:         "कुंडली आवश्यक",
   needKundliSub:      "आपकी कुंडली अभी तैयार नहीं है। कृपया पहले कुंडली स्क्रीन से बनाएं।",

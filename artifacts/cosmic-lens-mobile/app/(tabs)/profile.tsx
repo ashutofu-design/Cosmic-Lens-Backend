@@ -455,12 +455,12 @@ export default function ProfileScreen() {
 
             <SettingRow
               icon="edit-3"
-              label="Edit Profile"
+              label={t.settingEditProfile}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/profile-edit"); }}
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
                   <Text style={{ color:C.textMuted, fontSize:11, fontFamily:F.medium }}>
-                    {profiles.length} profile{profiles.length !== 1 ? "s" : ""}
+                    {profiles.length} {t.profilesCount}
                   </Text>
                   <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
@@ -469,7 +469,7 @@ export default function ProfileScreen() {
 
             <SettingRow
               icon="award"
-              label="Subscription"
+              label={t.settingSubscription}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
               right={<Feather name="chevron-right" size={14} color={C.textDim} />}
             />
@@ -499,26 +499,26 @@ export default function ProfileScreen() {
 
         {/* ── SUPPORT ──────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>SUPPORT & ABOUT</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.sectionSupport}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="info"
-              label="About Cosmic Lens"
+              label={t.settingAbout}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/about"); }}
             />
             <SettingRow
               icon="message-circle"
-              label="Help & Support"
+              label={t.settingHelp}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL("mailto:support@cosmiclens.app"); }}
             />
             <SettingRow
               icon="star"
-              label="Rate Us ⭐"
+              label={t.settingRateUs}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
             />
             <SettingRow
               icon="share-2"
-              label="Share App"
+              label={t.settingShareApp}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
               last
             />
@@ -527,11 +527,11 @@ export default function ProfileScreen() {
 
         {/* ── LEGAL ────────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>LEGAL & POLICIES</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.sectionLegal}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="shield"
-              label="Legal & Policies"
+              label={t.settingLegal}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/legal"); }}
               last
             />
@@ -540,11 +540,11 @@ export default function ProfileScreen() {
 
         {/* ── DANGER ZONE ──────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: "#ef4444" }]}>DANGER ZONE</Text>
+          <Text style={[s.sectionLabel,{ color: "#ef4444" }]}>{t.sectionDanger}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: "rgba(239,68,68,0.25)" }]}>
             <SettingRow
               icon="trash-2"
-              label="Delete My Account"
+              label={t.settingDeleteAcc}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/delete-account"); }}
               last
             />
@@ -581,12 +581,12 @@ export default function ProfileScreen() {
                 // RN Web's Alert with 3 buttons does not fire the destructive onPress reliably.
                 // Use the browser's native confirm() instead.
                 // eslint-disable-next-line no-alert
-                const ok = typeof window !== "undefined" && window.confirm("Are you sure you want to log out?");
+                const ok = typeof window !== "undefined" && window.confirm(t.logoutConfirm);
                 if (ok) handleLogout();
               } else {
-                Alert.alert("Logout", "Are you sure you want to log out?", [
-                  { text:"Cancel", style:"cancel" },
-                  { text:"Logout", style:"destructive", onPress: handleLogout },
+                Alert.alert(t.logoutTitle, t.logoutConfirm, [
+                  { text: t.cancel, style:"cancel" },
+                  { text: t.logoutCta, style:"destructive", onPress: handleLogout },
                 ]);
               }
             }}

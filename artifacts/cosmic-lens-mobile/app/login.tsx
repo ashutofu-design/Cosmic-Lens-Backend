@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { sendPhoneOtp, resetPendingVerification } from "@/lib/firebaseAuth";
@@ -27,6 +28,7 @@ import { isFirebaseConfigured } from "@/lib/firebaseConfig";
 export default function LoginScreen() {
   const insets  = useSafeAreaInsets();
   const C       = useC();
+  const t       = useT();
   const { setUser } = useUser();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -51,11 +53,11 @@ export default function LoginScreen() {
   async function sendOtp() {
     const digits = mobile.replace(/\D/g, "");
     if (digits.length !== 10 || !"6789".includes(digits[0])) {
-      setError("Sahi 10-digit mobile number daalein (6/7/8/9 se shuru)");
+      setError(t.invalidPhone);
       return;
     }
     if (!isFirebaseConfigured()) {
-      setError("Firebase setup pending. Admin se contact karein.");
+      setError(t.authNotConfigured);
       return;
     }
 
@@ -76,18 +78,18 @@ export default function LoginScreen() {
         },
       });
     } catch (e: any) {
-      const msg = String(e?.message || e || "OTP bhejne mein dikkat aayi.");
+      const msg = String(e?.message || e || "");
       // Normalise common Firebase error codes for non-technical users.
       if (msg.includes("auth/invalid-phone-number")) {
-        setError("Mobile number invalid hai. Dobara check karein.");
+        setError(t.invalidPhone);
       } else if (msg.includes("auth/too-many-requests")) {
-        setError("Bahut zyada attempts. Thodi der baad try karein.");
+        setError(t.otpTooManyAttempts);
       } else if (msg.includes("auth/quota-exceeded")) {
-        setError("Aaj ka SMS quota khatam. Kal try karein.");
+        setError(t.otpQuotaExceeded);
       } else if (msg.toLowerCase().includes("network")) {
-        setError("Network error. Connection check karein.");
+        setError(t.errNetwork);
       } else {
-        setError(msg);
+        setError(msg || t.otpFailed);
       }
     } finally {
       setLoading(false);
@@ -105,7 +107,7 @@ export default function LoginScreen() {
       });
       const data = await res.json();
       if (!res.ok || !data?.id) {
-        setError(data?.error || "Demo login failed. Try again.");
+        setError(data?.error || t.loginGenericError);
         return;
       }
       finishLogin({
@@ -116,7 +118,7 @@ export default function LoginScreen() {
         is_pro:  !!data.is_pro,
       });
     } catch {
-      setError("Network error. Connection check karein.");
+      setError(t.errNetwork);
     } finally {
       setLoading(false);
     }
@@ -161,7 +163,7 @@ export default function LoginScreen() {
             </View>
             <Text style={[s.title, { color: C.text }]}>Cosmic Lens</Text>
             <Text style={[s.subtitle, { color: C.textMuted }]}>
-              Apna mobile number daalein, OTP se login karein
+              {t.enterPhone} — {t.phonePromptSub}
             </Text>
           </View>
 
@@ -172,7 +174,7 @@ export default function LoginScreen() {
             shadowColor: isDark ? "#7c3aed" : "#0F172A",
             shadowOpacity: isDark ? 0.18 : 0.12,
           }]}>
-            <Text style={[s.fieldLabel, { color: C.warningText }]}>MOBILE NUMBER</Text>
+            <Text style={[s.fieldLabel, { color: C.warningText }]}>{t.mobileNumberLabel}</Text>
             <View style={[
               s.phoneRow,
               { backgroundColor: C.inputBg, borderColor: error ? "rgba(239,68,68,0.5)" : C.inputBorder }
@@ -185,7 +187,7 @@ export default function LoginScreen() {
                 style={[s.phoneInput, { color: C.text }]}
                 value={mobile}
                 onChangeText={v => { setMobile(v.replace(/\D/g, "").slice(0, 10)); setError(""); }}
-                placeholder="10-digit number"
+                placeholder={t.mobileNumberPh}
                 placeholderTextColor={isDark ? "#3d2b6b" : "#94A3B8"}
                 keyboardType="number-pad"
                 maxLength={10}
@@ -208,7 +210,7 @@ export default function LoginScreen() {
             )}
 
             <Text style={[s.note, { color: C.textMuted }]}>
-              SMS se 6-digit OTP aayega. Pehli baar number daalne par account automatic ban jaayega.
+              {t.otpAutoCreateNote}
             </Text>
 
             <Pressable
@@ -226,7 +228,7 @@ export default function LoginScreen() {
                   : (
                     <>
                       <Feather name="send" size={16} color="#fff" />
-                      <Text style={s.ctaText}>OTP Bhejen</Text>
+                      <Text style={s.ctaText}>{t.sendOtp}</Text>
                     </>
                   )
                 }
@@ -238,7 +240,7 @@ export default function LoginScreen() {
           <View style={s.demoWrap}>
             <View style={s.divider}>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
-              <Text style={[s.divText, { color: C.textMuted }]}>ya phir</Text>
+              <Text style={[s.divText, { color: C.textMuted }]}>{t.orDivider}</Text>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
             </View>
 
@@ -254,8 +256,8 @@ export default function LoginScreen() {
                   <Text style={{ fontSize: 14 }}>⚡</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.demoBtnTitle, { color: isDark ? "#f59e0b" : "#92400E" }]}>Demo Login</Text>
-                  <Text style={[s.demoBtnSub, { color: C.textMuted }]}>Testing ke liye — seedha andar jayein</Text>
+                  <Text style={[s.demoBtnTitle, { color: isDark ? "#f59e0b" : "#92400E" }]}>{t.demoLogin}</Text>
+                  <Text style={[s.demoBtnSub, { color: C.textMuted }]}>{t.demoLoginSub}</Text>
                 </View>
                 <Feather name="chevron-right" size={16} color={isDark ? "#f59e0b" : "#92400E"} />
               </View>
@@ -263,10 +265,10 @@ export default function LoginScreen() {
           </View>
 
           <Text style={[s.footer, { color: C.textMuted }]}>
-            By continuing, you agree to our{" "}
-            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>Terms of Service</Text>
-            {" "}and{" "}
-            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>Privacy Policy</Text>
+            {t.termsAccept}{" "}
+            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>{t.termsLink}</Text>
+            {" & "}
+            <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>{t.privacyLink}</Text>
           </Text>
 
           {/*

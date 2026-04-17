@@ -176,6 +176,76 @@ export interface MoreT {
   errSomething:        string;
   errNetwork:          string;
   errKundliRequired:   string;
+
+  // ── Lucky screen ──────────────────────────────────────────
+  luckyHeaderTodaysPulse: string;
+  luckyHeaderColors:      string;
+  luckyHeaderNumbers:     string;
+  luckyHeaderDays:        string;
+  luckyHeaderGemstone:    string;
+  luckyHeaderDeity:       string;
+  luckyHeaderMantra:      string;
+  luckyLabelDirection:    string;
+  luckyLabelMetal:        string;
+  luckyLabelElement:      string;
+  luckyGemstoneTip:       string;
+  luckyDeityTip:          string;
+  luckyMantraTip:         string;
+
+  // ── Panchang screen ───────────────────────────────────────
+  panSunrise:        string;
+  panSunset:         string;
+  panVaar:           string;
+  panTithi:          string;
+  panNakshatra:      string;
+  panYoga:           string;
+  panKarana:         string;
+  panBrahmaMuhurta:  string;
+  panBrahmaTip:      string;
+  panRahuKaalLbl:    string;
+  panRahuTip:        string;
+  panYamaghanta:     string;
+  panYamaTip:        string;
+  panGulika:         string;
+  panGulikaTip:      string;
+  panAbhijitLbl:     string;
+  panAbhijitTip:     string;
+  panFestivalsYear:  string;
+  panBadgeNational:  string;
+
+  // ── Muhurat screen ────────────────────────────────────────
+  muhSubtitle:    string;
+  muhEmpty:       string;
+  muhAvoid:       string;
+  muhNakshatra:   string;
+  muhNote:        string;
+  muhCatShadi:    string;
+  muhCatShadiSub: string;
+  muhCatGriha:    string;
+  muhCatGrihaSub: string;
+  muhCatBiz:      string;
+  muhCatBizSub:   string;
+  muhCatVehicle:  string;
+  muhCatVehSub:   string;
+  muhCatNamkaran: string;
+  muhCatNamSub:   string;
+  muhCatMundan:   string;
+  muhCatMundanSub:string;
+  muhCatThread:   string;
+  muhCatThreadSub:string;
+  muhCatTravel:   string;
+  muhCatTravelSub:string;
+
+  // ── Remedies screen ───────────────────────────────────────
+  remSubtitle:      string;
+  remPujaDay:       string;
+  remGemstoneLbl:   string;
+  remGemstoneTip:   string;
+  remMantraLbl:     string;
+  remDaanLbl:       string;
+  remDaanTip:       string;
+  remUpayLbl:       string;
+  remWeakSignsLbl:  string; // "Signs of weak {planet}"
 }
 
 // English — primary, complete
@@ -348,6 +418,76 @@ const EN: MoreT = {
   errSomething:       "Something went wrong.",
   errNetwork:         "Network error. Check your connection.",
   errKundliRequired:  "Please complete your Kundli first — add your birth details and come back.",
+
+  // Lucky screen
+  luckyHeaderTodaysPulse: "✨ TODAY'S PULSE",
+  luckyHeaderColors:      "🎨 LUCKY COLORS",
+  luckyHeaderNumbers:     "🔢 LUCKY NUMBERS",
+  luckyHeaderDays:        "📅 LUCKY DAYS",
+  luckyHeaderGemstone:    "💎 LUCKY GEMSTONE",
+  luckyHeaderDeity:       "🛕 GUARDIAN DEITY",
+  luckyHeaderMantra:      "🔔 PLANETARY MANTRA",
+  luckyLabelDirection:    "⬆️ DIRECTION",
+  luckyLabelMetal:        "⚗️ METAL",
+  luckyLabelElement:      "ELEMENT",
+  luckyGemstoneTip:       "Wear in gold or silver",
+  luckyDeityTip:          "Worship and meditation bring special blessings",
+  luckyMantraTip:         "Chant 108 times during an auspicious time",
+
+  // Panchang
+  panSunrise:        "Sunrise",
+  panSunset:         "Sunset",
+  panVaar:           "Weekday",
+  panTithi:          "Tithi",
+  panNakshatra:      "Nakshatra",
+  panYoga:           "Yoga",
+  panKarana:         "Karana",
+  panBrahmaMuhurta:  "🌟 BRAHMA MUHURTA",
+  panBrahmaTip:      "Most auspicious time for worship, meditation and new beginnings",
+  panRahuKaalLbl:    "Rahu Kaal",
+  panRahuTip:        "Avoid any auspicious activity during this time",
+  panYamaghanta:     "Yamaghanta",
+  panYamaTip:        "Avoid auspicious work",
+  panGulika:         "Gulika Kaal",
+  panGulikaTip:      "Do not perform auspicious rituals",
+  panAbhijitLbl:     "ℹ️ ABHIJIT MUHURTA (AUSPICIOUS)",
+  panAbhijitTip:     "Best time for any auspicious work — the most auspicious muhurat of the day.",
+  panFestivalsYear:  "📅 MAJOR FESTIVALS & NATIONAL HOLIDAYS",
+  panBadgeNational:  "National",
+
+  // Muhurat
+  muhSubtitle:    "Auspicious time for every event",
+  muhEmpty:       "No muhurats listed for this category yet. Coming soon.",
+  muhAvoid:       "Avoid",
+  muhNakshatra:   "Nakshatra",
+  muhNote:        "Dates are approximate. Please confirm exact time and local timing with a pandit.",
+  muhCatShadi:    "Wedding Muhurat",
+  muhCatShadiSub: "Auspicious days for marriage",
+  muhCatGriha:    "Griha Pravesh",
+  muhCatGrihaSub: "Entering a new home",
+  muhCatBiz:      "Business Start",
+  muhCatBizSub:   "Day to start a business",
+  muhCatVehicle:  "Vehicle Purchase",
+  muhCatVehSub:   "Buying a new vehicle",
+  muhCatNamkaran: "Naming Ceremony",
+  muhCatNamSub:   "Naming the baby",
+  muhCatMundan:   "Mundan Ceremony",
+  muhCatMundanSub:"Baby's first haircut",
+  muhCatThread:   "Yagyopavit",
+  muhCatThreadSub:"Janeu / Upanayana",
+  muhCatTravel:   "Travel Muhurat",
+  muhCatTravelSub:"Auspicious time to travel",
+
+  // Remedies
+  remSubtitle:      "Mantra, charity and remedies",
+  remPujaDay:       "Worship day",
+  remGemstoneLbl:   "💎 GEMSTONE",
+  remGemstoneTip:   "Wear in gold or silver during an auspicious muhurat",
+  remMantraLbl:     "🔔 PLANETARY MANTRA",
+  remDaanLbl:       "🤲 CHARITY (DAAN)",
+  remDaanTip:       "Donating on this day or during an eclipse gives special benefit",
+  remUpayLbl:       "⚡ REMEDIES",
+  remWeakSignsLbl:  "⚠️ SIGNS OF WEAK {planet}",
 };
 
 // Hinglish overrides (only differing keys)
@@ -510,6 +650,76 @@ const HN: Partial<MoreT> = {
   errSomething:       "Kuch galat ho gaya.",
   errNetwork:         "Network error. Connection check karein.",
   errKundliRequired:  "Apni Kundli pehle complete karein — birth details add karke aaiye.",
+
+  // Lucky
+  luckyHeaderTodaysPulse: "✨ AAJ KA YOG",
+  luckyHeaderColors:      "🎨 LUCKY RANG",
+  luckyHeaderNumbers:     "🔢 LUCKY ANK",
+  luckyHeaderDays:        "📅 LUCKY DIN",
+  luckyHeaderGemstone:    "💎 LUCKY RATAN",
+  luckyHeaderDeity:       "🛕 ARADHYA DEVTA",
+  luckyHeaderMantra:      "🔔 GRAHA MANTRA",
+  luckyLabelDirection:    "⬆️ DISHA",
+  luckyLabelMetal:        "⚗️ DHATU",
+  luckyLabelElement:      "TATVA",
+  luckyGemstoneTip:       "Sone ya Chandi mein dharan karein",
+  luckyDeityTip:          "Puja aur dhyan se vishesh laabh milega",
+  luckyMantraTip:         "Shubh muhurat mein 108 baar jaap karein",
+
+  // Panchang
+  panSunrise:       "Sunrise",
+  panSunset:        "Sunset",
+  panVaar:          "Vaar (Din)",
+  panTithi:         "Tithi",
+  panNakshatra:     "Nakshatra",
+  panYoga:          "Yoga",
+  panKarana:        "Karana",
+  panBrahmaMuhurta: "🌟 BRAHMA MUHURTA",
+  panBrahmaTip:     "Puja, dhyan aur naye kaaryon ke liye param shubh samay",
+  panRahuKaalLbl:   "Rahu Kaal",
+  panRahuTip:       "Is samay mein koi shubh kaarya na karein",
+  panYamaghanta:    "Yamaghanta",
+  panYamaTip:       "Shubh kaarya avoid karein",
+  panGulika:        "Gulika Kaal",
+  panGulikaTip:     "Maanglik kaarya na karein",
+  panAbhijitLbl:    "ℹ️ ABHIJIT MUHURTA (SHUBH)",
+  panAbhijitTip:    "Har shubh kaarya ke liye uchit samay. Din ka sabse shubh muhurta.",
+  panFestivalsYear: "📅 PRAMUKH TYOHAR & RASHTRIYA PARV",
+  panBadgeNational: "Rashtriya",
+
+  // Muhurat
+  muhSubtitle:    "Har kaarya ke liye shubh samay",
+  muhEmpty:       "Is category ke liye abhi muhurat nahi hai. Jald aayenge.",
+  muhAvoid:       "Avoid",
+  muhNakshatra:   "Nakshatra",
+  muhNote:        "Muhurat dates approximate hain. Pandit ji se exact time aur local timing confirm zaroor karein.",
+  muhCatShadi:    "Vivah Muhurat",
+  muhCatShadiSub: "Shadi ke shubh din",
+  muhCatGriha:    "Griha Pravesh",
+  muhCatGrihaSub: "Naye ghar mein pravesh",
+  muhCatBiz:      "Vyapar Aarambh",
+  muhCatBizSub:   "Business shuru karne ka din",
+  muhCatVehicle:  "Vahan Kharidi",
+  muhCatVehSub:   "Naya vahan kharidna",
+  muhCatNamkaran: "Namkaran Muhurat",
+  muhCatNamSub:   "Bacche ka naam rakhna",
+  muhCatMundan:   "Mundan Muhurat",
+  muhCatMundanSub:"Bacche ka pehla mudan",
+  muhCatThread:   "Yagyopavit Muhurat",
+  muhCatThreadSub:"Janeu / Upanayana",
+  muhCatTravel:   "Yatra Muhurat",
+  muhCatTravelSub:"Safar ke liye shubh samay",
+
+  // Remedies
+  remSubtitle:     "Mantra, Daan aur Remedies",
+  remPujaDay:      "Puja ka din",
+  remGemstoneLbl:  "💎 RATAN (GEMSTONE)",
+  remGemstoneTip:  "Sone ya Chandi mein, shubh muhurat mein dharan karein",
+  remMantraLbl:    "🔔 GRAHA MANTRA",
+  remDaanLbl:      "🤲 DAAN (CHARITY)",
+  remDaanTip:      "Is din ya grahan ke samay daan karna vishesh phal deta hai",
+  remUpayLbl:      "⚡ UPAY (REMEDIES)",
+  remWeakSignsLbl: "⚠️ WEAK {planet} KE LAKSHAN",
 };
 
 // Hindi overrides (Devanagari)
@@ -672,6 +882,76 @@ const HI: Partial<MoreT> = {
   errSomething:       "कुछ गलत हो गया।",
   errNetwork:         "नेटवर्क त्रुटि। अपना कनेक्शन जाँचें।",
   errKundliRequired:  "कृपया पहले अपनी कुंडली पूरी करें — जन्म विवरण जोड़कर वापस आएं।",
+
+  // Lucky
+  luckyHeaderTodaysPulse: "✨ आज का योग",
+  luckyHeaderColors:      "🎨 शुभ रंग",
+  luckyHeaderNumbers:     "🔢 शुभ अंक",
+  luckyHeaderDays:        "📅 शुभ दिन",
+  luckyHeaderGemstone:    "💎 शुभ रत्न",
+  luckyHeaderDeity:       "🛕 आराध्य देव",
+  luckyHeaderMantra:      "🔔 ग्रह मंत्र",
+  luckyLabelDirection:    "⬆️ दिशा",
+  luckyLabelMetal:        "⚗️ धातु",
+  luckyLabelElement:      "तत्व",
+  luckyGemstoneTip:       "सोने या चाँदी में धारण करें",
+  luckyDeityTip:          "पूजा और ध्यान से विशेष लाभ मिलेगा",
+  luckyMantraTip:         "शुभ मुहूर्त में 108 बार जाप करें",
+
+  // Panchang
+  panSunrise:       "सूर्योदय",
+  panSunset:        "सूर्यास्त",
+  panVaar:          "वार (दिन)",
+  panTithi:         "तिथि",
+  panNakshatra:     "नक्षत्र",
+  panYoga:          "योग",
+  panKarana:        "करण",
+  panBrahmaMuhurta: "🌟 ब्रह्म मुहूर्त",
+  panBrahmaTip:     "पूजा, ध्यान और नए कार्यों के लिए परम शुभ समय",
+  panRahuKaalLbl:   "राहु काल",
+  panRahuTip:       "इस समय में कोई शुभ कार्य न करें",
+  panYamaghanta:    "यमघण्ट",
+  panYamaTip:       "शुभ कार्य न करें",
+  panGulika:        "गुलिक काल",
+  panGulikaTip:     "मांगलिक कार्य न करें",
+  panAbhijitLbl:    "ℹ️ अभिजित मुहूर्त (शुभ)",
+  panAbhijitTip:    "हर शुभ कार्य के लिए उचित समय। दिन का सबसे शुभ मुहूर्त।",
+  panFestivalsYear: "📅 प्रमुख त्यौहार और राष्ट्रीय पर्व",
+  panBadgeNational: "राष्ट्रीय",
+
+  // Muhurat
+  muhSubtitle:    "हर कार्य के लिए शुभ समय",
+  muhEmpty:       "इस श्रेणी के लिए अभी मुहूर्त उपलब्ध नहीं हैं। जल्द आ रहे हैं।",
+  muhAvoid:       "बचें",
+  muhNakshatra:   "नक्षत्र",
+  muhNote:        "मुहूर्त की तारीखें अनुमानित हैं। पंडित जी से सटीक समय और लोकल टाइमिंग अवश्य पुष्टि करें।",
+  muhCatShadi:    "विवाह मुहूर्त",
+  muhCatShadiSub: "शादी के शुभ दिन",
+  muhCatGriha:    "गृह प्रवेश",
+  muhCatGrihaSub: "नए घर में प्रवेश",
+  muhCatBiz:      "व्यापार आरंभ",
+  muhCatBizSub:   "व्यापार शुरू करने का दिन",
+  muhCatVehicle:  "वाहन खरीद",
+  muhCatVehSub:   "नया वाहन खरीदना",
+  muhCatNamkaran: "नामकरण मुहूर्त",
+  muhCatNamSub:   "बच्चे का नाम रखना",
+  muhCatMundan:   "मुंडन मुहूर्त",
+  muhCatMundanSub:"बच्चे का पहला मुंडन",
+  muhCatThread:   "यज्ञोपवीत मुहूर्त",
+  muhCatThreadSub:"जनेऊ / उपनयन",
+  muhCatTravel:   "यात्रा मुहूर्त",
+  muhCatTravelSub:"सफ़र के लिए शुभ समय",
+
+  // Remedies
+  remSubtitle:     "मंत्र, दान और उपाय",
+  remPujaDay:      "पूजा का दिन",
+  remGemstoneLbl:  "💎 रत्न",
+  remGemstoneTip:  "सोने या चाँदी में, शुभ मुहूर्त में धारण करें",
+  remMantraLbl:    "🔔 ग्रह मंत्र",
+  remDaanLbl:      "🤲 दान",
+  remDaanTip:      "इस दिन या ग्रहण के समय दान करना विशेष फल देता है",
+  remUpayLbl:      "⚡ उपाय",
+  remWeakSignsLbl: "⚠️ कमज़ोर {planet} के लक्षण",
 };
 
 /**

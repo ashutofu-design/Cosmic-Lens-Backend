@@ -160,14 +160,14 @@ export default function LuckyScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 14 }}
       >
         {/* Today's Cosmic Pulse — daily-rotating hint */}
-        <Card title="✨ AAJ KA YOG (TODAY'S PULSE)">
+        <Card title={t.luckyHeaderTodaysPulse}>
           <Text style={{ color: C.text, fontSize: 13, fontFamily: F.medium, lineHeight: 19 }}>
             {lucky.hint}
           </Text>
         </Card>
 
         {/* Lucky Colors */}
-        <Card title="🎨 LUCKY RANG (COLORS)">
+        <Card title={t.luckyHeaderColors}>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {lucky.colors.map(c => (
               <View key={c.hex} style={{ alignItems: "center", gap: 6 }}>
@@ -179,7 +179,7 @@ export default function LuckyScreen() {
         </Card>
 
         {/* Lucky Numbers */}
-        <Card title="🔢 LUCKY ANKA (NUMBERS)">
+        <Card title={t.luckyHeaderNumbers}>
           <View style={{ flexDirection: "row", gap: 10 }}>
             {lucky.numbers.map(n => (
               <View key={n} style={[s.numCircle, { backgroundColor: C.isDark ? "#f59e0b22" : C.warningBg, borderColor: C.isDark ? "#f59e0b44" : C.warningBorder }]}>
@@ -190,7 +190,7 @@ export default function LuckyScreen() {
         </Card>
 
         {/* Lucky Days */}
-        <Card title="📅 LUCKY DIN (DAYS)">
+        <Card title={t.luckyHeaderDays}>
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {lucky.days.map(d => (
               <View key={d} style={[s.chip, { backgroundColor: C.isDark ? "#22c55e14" : "#DCFCE7", borderColor: C.isDark ? "#22c55e40" : "#86EFAC" }]}>
@@ -201,13 +201,13 @@ export default function LuckyScreen() {
         </Card>
 
         {/* Gemstone */}
-        <Card title="💎 LUCKY RATAN (GEMSTONE)">
+        <Card title={t.luckyHeaderGemstone}>
           <View style={[s.gemRow, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Text style={{ fontSize: 32 }}>💎</Text>
             <View>
               <Text style={[s.gemName, { color: C.text }]}>{lucky.gemstoneHi}</Text>
               <Text style={[s.gemEn, { color: C.textMuted }]}>{lucky.gemstone}</Text>
-              <Text style={[s.gemTip, { color: C.textDim }]}>Sone ya Chandi mein dharan karein</Text>
+              <Text style={[s.gemTip, { color: C.textDim }]}>{t.luckyGemstoneTip}</Text>
             </View>
           </View>
         </Card>
@@ -215,38 +215,38 @@ export default function LuckyScreen() {
         {/* Direction + Metal + Element */}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <View style={[s.smallCard, { backgroundColor: C.bgCard, borderColor: C.border, flex: 1 }]}>
-            <Text style={[s.smallLabel, { color: C.textMuted }]}>⬆️ DISHA</Text>
+            <Text style={[s.smallLabel, { color: C.textMuted }]}>{t.luckyLabelDirection}</Text>
             <Text style={{ fontSize: 22 }}>{lucky.directionEmoji}</Text>
             <Text style={[s.smallVal, { color: C.text }]}>{lucky.direction}</Text>
           </View>
           <View style={[s.smallCard, { backgroundColor: C.bgCard, borderColor: C.border, flex: 1 }]}>
-            <Text style={[s.smallLabel, { color: C.textMuted }]}>⚗️ DHATU</Text>
+            <Text style={[s.smallLabel, { color: C.textMuted }]}>{t.luckyLabelMetal}</Text>
             <Text style={{ fontSize: 22 }}>🔩</Text>
             <Text style={[s.smallVal, { color: C.text }]}>{lucky.metal}</Text>
           </View>
           <View style={[s.smallCard, { backgroundColor: C.bgCard, borderColor: C.border, flex: 1 }]}>
-            <Text style={[s.smallLabel, { color: C.textMuted }]}>TATVA</Text>
+            <Text style={[s.smallLabel, { color: C.textMuted }]}>{t.luckyLabelElement}</Text>
             <Text style={{ fontSize: 22 }}>{lucky.elementEmoji}</Text>
             <Text style={[s.smallVal, { color: C.text }]}>{lucky.element}</Text>
           </View>
         </View>
 
         {/* Deity */}
-        <Card title="🛕 ARADHYA DEVTA">
+        <Card title={t.luckyHeaderDeity}>
           <View style={[s.deityRow, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Text style={{ fontSize: 26 }}>🕉️</Text>
             <View style={{ flex: 1 }}>
               <Text style={[s.deityName, { color: C.text }]}>{lucky.deity}</Text>
-              <Text style={[s.deityTip, { color: C.textMuted }]}>Puja aur dhyan se vishesh laabh milega</Text>
+              <Text style={[s.deityTip, { color: C.textMuted }]}>{t.luckyDeityTip}</Text>
             </View>
           </View>
         </Card>
 
         {/* Mantra */}
-        <Card title="🔔 GRAHA MANTRA">
+        <Card title={t.luckyHeaderMantra}>
           <View style={[s.mantraBox, { backgroundColor: C.isDark ? "#f59e0b08" : C.warningBg, borderColor: C.isDark ? "#f59e0b30" : C.warningBorder }]}>
             <Text style={[s.mantraText, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{lucky.mantra}</Text>
-            <Text style={[s.mantraTip, { color: C.textMuted }]}>Roshandar ya Shubh muhurat mein 108 baar jaap karein</Text>
+            <Text style={[s.mantraTip, { color: C.textMuted }]}>{t.luckyMantraTip}</Text>
           </View>
         </Card>
       </ScrollView>

@@ -148,7 +148,7 @@ export default function PanchangScreen() {
               <View style={s.sunItem}>
                 <Text style={{ fontSize: 24 }}>🌅</Text>
                 <View>
-                  <Text style={[s.sunLabel, { color: C.textMuted }]}>Sunrise</Text>
+                  <Text style={[s.sunLabel, { color: C.textMuted }]}>{t.panSunrise}</Text>
                   <Text style={[s.sunVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{SUNRISE}</Text>
                 </View>
               </View>
@@ -156,7 +156,7 @@ export default function PanchangScreen() {
               <View style={s.sunItem}>
                 <Text style={{ fontSize: 24 }}>🌇</Text>
                 <View>
-                  <Text style={[s.sunLabel, { color: C.textMuted }]}>Sunset</Text>
+                  <Text style={[s.sunLabel, { color: C.textMuted }]}>{t.panSunset}</Text>
                   <Text style={[s.sunVal, { color: "#fb923c" }]}>{SUNSET}</Text>
                 </View>
               </View>
@@ -164,18 +164,18 @@ export default function PanchangScreen() {
 
             {/* Panchang details */}
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <InfoRow label="Vaar (Weekday)" value={panchang.var}      emoji="📆" />
-              <InfoRow label="Tithi"          value={panchang.tithi}    emoji="🌙" />
-              <InfoRow label="Nakshatra"      value={panchang.nakshatra}emoji="⭐" />
-              <InfoRow label="Yoga"           value={panchang.yoga}     emoji="🔮" />
-              <InfoRow label="Karana"         value={panchang.karana}   emoji="✨" />
+              <InfoRow label={t.panVaar}      value={panchang.var}      emoji="📆" />
+              <InfoRow label={t.panTithi}     value={panchang.tithi}    emoji="🌙" />
+              <InfoRow label={t.panNakshatra} value={panchang.nakshatra}emoji="⭐" />
+              <InfoRow label={t.panYoga}      value={panchang.yoga}     emoji="🔮" />
+              <InfoRow label={t.panKarana}    value={panchang.karana}   emoji="✨" />
             </View>
 
             {/* Subah muhurt note */}
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.cardTitle, { color: C.textMuted }]}>🌟 BRAHMA MUHURTA</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.panBrahmaMuhurta}</Text>
               <Text style={[s.cardVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>04:38 AM – 05:26 AM</Text>
-              <Text style={[s.cardTip, { color: C.textMuted }]}>Puja, dhyan aur naye kaaryon ke liye param shubh samay</Text>
+              <Text style={[s.cardTip, { color: C.textMuted }]}>{t.panBrahmaTip}</Text>
             </View>
           </>
         )}
@@ -186,9 +186,9 @@ export default function PanchangScreen() {
             <View style={[s.rahuHero, { backgroundColor: C.isDark ? "rgba(239,68,68,0.07)" : "#FEE2E2", borderColor: "rgba(239,68,68,0.2)" }]}>
               <Text style={{ fontSize: 36 }}>⛔</Text>
               <View>
-                <Text style={[s.rahuTitle, { color: "#ef4444" }]}>Rahu Kaal</Text>
+                <Text style={[s.rahuTitle, { color: "#ef4444" }]}>{t.panRahuKaalLbl}</Text>
                 <Text style={[s.rahuTime, { color: C.text }]}>{kaal.rahu}</Text>
-                <Text style={[s.rahuTip, { color: C.textMuted }]}>Is samay mein koi shubh kaarya na karein</Text>
+                <Text style={[s.rahuTip, { color: C.textMuted }]}>{t.panRahuTip}</Text>
               </View>
             </View>
 
@@ -196,25 +196,25 @@ export default function PanchangScreen() {
               <View style={pr.row}>
                 <Text style={{ fontSize: 20 }}>⚡</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[pr.rowLabel, { color: C.textMuted }]}>Yamaghanta</Text>
+                  <Text style={[pr.rowLabel, { color: C.textMuted }]}>{t.panYamaghanta}</Text>
                   <Text style={[pr.rowVal, { color: C.text }]}>{kaal.yama}</Text>
-                  <Text style={[s.rahuTip, { color: C.textDim }]}>Shubh kaarya avoid karein</Text>
+                  <Text style={[s.rahuTip, { color: C.textDim }]}>{t.panYamaTip}</Text>
                 </View>
               </View>
               <View style={[pr.row, { borderBottomWidth: 0 }]}>
                 <Text style={{ fontSize: 20 }}>🌑</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[pr.rowLabel, { color: C.textMuted }]}>Gulika Kaal</Text>
+                  <Text style={[pr.rowLabel, { color: C.textMuted }]}>{t.panGulika}</Text>
                   <Text style={[pr.rowVal, { color: C.text }]}>{kaal.gulika}</Text>
-                  <Text style={[s.rahuTip, { color: C.textDim }]}>Maanglik kaarya na karein</Text>
+                  <Text style={[s.rahuTip, { color: C.textDim }]}>{t.panGulikaTip}</Text>
                 </View>
               </View>
             </View>
 
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, gap: 8 }]}>
-              <Text style={[s.cardTitle, { color: C.textMuted }]}>ℹ️ ABHIJIT MUHURTA (SHUBH)</Text>
+              <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.panAbhijitLbl}</Text>
               <Text style={[s.cardVal, { color: "#22c55e" }]}>11:54 AM – 12:46 PM</Text>
-              <Text style={[s.cardTip, { color: C.textMuted }]}>Har shubh kaarya ke liye uchit samay. Din ka sabse shubh muhurta.</Text>
+              <Text style={[s.cardTip, { color: C.textMuted }]}>{t.panAbhijitTip}</Text>
             </View>
           </>
         )}
@@ -222,7 +222,7 @@ export default function PanchangScreen() {
         {/* ── FESTIVALS TAB ── */}
         {tabIdx === 2 && (
           <>
-            <Text style={[s.yearLabel, { color: C.textMuted }]}>📅 2026 KE PRAMUKH TYOHAR & RASHTRIYA PARV</Text>
+            <Text style={[s.yearLabel, { color: C.textMuted }]}>{t.panFestivalsYear}</Text>
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               {FESTIVALS_2026.map((f, i) => (
                 <View
@@ -240,7 +240,7 @@ export default function PanchangScreen() {
                   </View>
                   {f.type === "rashtriya" && (
                     <View style={[s.badge, { backgroundColor: C.isDark ? "#3b82f620" : "#DBEAFE", borderColor: C.isDark ? "#3b82f640" : "#93C5FD" }]}>
-                      <Text style={[s.badgeText, { color: "#60a5fa" }]}>Rashtriya</Text>
+                      <Text style={[s.badgeText, { color: "#60a5fa" }]}>{t.panBadgeNational}</Text>
                     </View>
                   )}
                 </View>

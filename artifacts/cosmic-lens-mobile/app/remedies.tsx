@@ -168,7 +168,7 @@ export default function RemediesScreen() {
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.remediesTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>Mantra, Daan aur Remedies</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>{t.remSubtitle}</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
@@ -204,27 +204,27 @@ export default function RemediesScreen() {
           <View>
             <Text style={[s.heroTitle, { color: planet.color }]}>{planet.name}</Text>
             <Text style={[s.heroDev, { color: C.text }]}>{planet.deity_emoji} {planet.deity}</Text>
-            <Text style={[s.heroDay, { color: C.textMuted }]}>Puja ka din: {planet.day}</Text>
+            <Text style={[s.heroDay, { color: C.textMuted }]}>{t.remPujaDay}: {planet.day}</Text>
           </View>
         </View>
 
         {/* Gemstone */}
         <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>💎 RATAN (GEMSTONE)</Text>
+          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remGemstoneLbl}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View style={[s.gemCircle, { backgroundColor: `${planet.gemstoneColor}20`, borderColor: `${planet.gemstoneColor}50` }]}>
               <Text style={{ fontSize: 24 }}>💎</Text>
             </View>
             <View>
               <Text style={[s.gemName, { color: C.text }]}>{planet.gemstone}</Text>
-              <Text style={[s.gemTip, { color: C.textMuted }]}>Sone ya Chandi mein, shubh muhurat mein dharan karein</Text>
+              <Text style={[s.gemTip, { color: C.textMuted }]}>{t.remGemstoneTip}</Text>
             </View>
           </View>
         </View>
 
         {/* Mantra */}
         <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>🔔 GRAHA MANTRA</Text>
+          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remMantraLbl}</Text>
           <View style={[s.mantraBox, { backgroundColor: `${planet.color}08`, borderColor: `${planet.color}25` }]}>
             <Text style={[s.mantraText, { color: planet.color }]}>{planet.mantra}</Text>
           </View>
@@ -236,17 +236,17 @@ export default function RemediesScreen() {
 
         {/* Daan */}
         <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>🤲 DAAN (CHARITY)</Text>
+          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remDaanLbl}</Text>
           <Text style={[s.daanText, { color: C.textMid }]}>{planet.daan}</Text>
           <View style={[s.tipBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Feather name="info" size={12} color={C.textDim} />
-            <Text style={[s.tipText, { color: C.textMuted }]}>{planet.day} ko ya grahan ke samay daan karna vishesh phal deta hai</Text>
+            <Text style={[s.tipText, { color: C.textMuted }]}>{t.remDaanTip}</Text>
           </View>
         </View>
 
         {/* Upay */}
         <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>⚡ UPAY (REMEDIES)</Text>
+          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remUpayLbl}</Text>
           {planet.upay.map((u, i) => (
             <View key={i} style={s.upayRow}>
               <View style={[s.upayDot, { backgroundColor: planet.color }]} />
@@ -257,7 +257,7 @@ export default function RemediesScreen() {
 
         {/* Weak sign symptoms */}
         <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.cardTitle, { color: C.textMuted }]}>⚠️ WEAK {planet.name.toUpperCase()} KE LAKSHAN</Text>
+          <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.remWeakSignsLbl.replace("{planet}", planet.name.toUpperCase())}</Text>
           {planet.weak_signs.map((w, i) => (
             <View key={i} style={[s.signRow, { borderBottomColor: C.border3 }, i === planet.weak_signs.length - 1 && { borderBottomWidth: 0 }]}>
               <Text style={{ fontSize: 16 }}>🔴</Text>

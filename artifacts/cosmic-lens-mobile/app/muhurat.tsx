@@ -14,16 +14,16 @@ const F = {
   medium: "Nunito_500Medium", regular: "Nunito_400Regular",
 };
 
-const CATEGORIES = [
-  { id: "shadi",     emoji: "💒", title: "Vivah Muhurat",       subtitle: "Shadi ke shubh din", color: "#f43f5e" },
-  { id: "griha",     emoji: "🏠", title: "Griha Pravesh",        subtitle: "Naye ghar mein pravesh", color: "#f59e0b" },
-  { id: "business",  emoji: "💼", title: "Vyapar Aarambh",       subtitle: "Business shuru karne ka din", color: "#22c55e" },
-  { id: "vehicle",   emoji: "🚗", title: "Vahan Kharidi",        subtitle: "Naya vahan kharidna", color: "#60a5fa" },
-  { id: "namkaran",  emoji: "👶", title: "Namkaran Muhurat",     subtitle: "Bacche ka naam rakhna", color: "#a78bfa" },
-  { id: "mundane",   emoji: "✂️", title: "Mundan Muhurat",       subtitle: "Bacche ka pehla mudan", color: "#fb923c" },
-  { id: "thread",    emoji: "🧵", title: "Yagyopavit Muhurat",   subtitle: "Janeu / Upanayana", color: "#10b981" },
-  { id: "travel",    emoji: "✈️", title: "Yatra Muhurat",        subtitle: "Safar ke liye shubh samay", color: "#06b6d4" },
-];
+const CATEGORY_META = [
+  { id: "shadi",     emoji: "💒", color: "#f43f5e" },
+  { id: "griha",     emoji: "🏠", color: "#f59e0b" },
+  { id: "business",  emoji: "💼", color: "#22c55e" },
+  { id: "vehicle",   emoji: "🚗", color: "#60a5fa" },
+  { id: "namkaran",  emoji: "👶", color: "#a78bfa" },
+  { id: "mundane",   emoji: "✂️", color: "#fb923c" },
+  { id: "thread",    emoji: "🧵", color: "#10b981" },
+  { id: "travel",    emoji: "✈️", color: "#06b6d4" },
+] as const;
 
 type MuhuratData = {
   month: string; dates: { date: string; day: string; time: string; nakshatra: string; good: boolean }[];
@@ -108,6 +108,22 @@ export default function MuhuratScreen() {
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<string>("shadi");
 
+  const CAT_LABELS: Record<string, { title: string; subtitle: string }> = {
+    shadi:    { title: t.muhCatShadi,    subtitle: t.muhCatShadiSub },
+    griha:    { title: t.muhCatGriha,    subtitle: t.muhCatGrihaSub },
+    business: { title: t.muhCatBiz,      subtitle: t.muhCatBizSub },
+    vehicle:  { title: t.muhCatVehicle,  subtitle: t.muhCatVehSub },
+    namkaran: { title: t.muhCatNamkaran, subtitle: t.muhCatNamSub },
+    mundane:  { title: t.muhCatMundan,   subtitle: t.muhCatMundanSub },
+    thread:   { title: t.muhCatThread,   subtitle: t.muhCatThreadSub },
+    travel:   { title: t.muhCatTravel,   subtitle: t.muhCatTravelSub },
+  };
+  const CATEGORIES = CATEGORY_META.map(m => ({
+    ...m,
+    title: CAT_LABELS[m.id]?.title ?? m.id,
+    subtitle: CAT_LABELS[m.id]?.subtitle ?? "",
+  }));
+
   const data = MUHURAT_DATA[selected] ?? [];
   const cat = CATEGORIES.find(c => c.id === selected)!;
 
@@ -120,7 +136,7 @@ export default function MuhuratScreen() {
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.muhuratTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>Har kaarya ke liye shubh samay</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>{t.muhSubtitle}</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
@@ -162,7 +178,7 @@ export default function MuhuratScreen() {
         {data.length === 0 ? (
           <View style={[s.emptyBox, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={{ fontSize: 32 }}>🔭</Text>
-            <Text style={[s.emptyText, { color: C.textMuted }]}>Is category ke liye abhi muhurat nahi hai. Jald aayenge.</Text>
+            <Text style={[s.emptyText, { color: C.textMuted }]}>{t.muhEmpty}</Text>
           </View>
         ) : (
           data.map(monthData => (
@@ -187,12 +203,12 @@ export default function MuhuratScreen() {
                         <Text style={[s.dayName, { color: C.text }]}>{d.day}</Text>
                         {!d.good && (
                           <View style={s.avoidBadge}>
-                            <Text style={s.avoidText}>Avoid</Text>
+                            <Text style={s.avoidText}>{t.muhAvoid}</Text>
                           </View>
                         )}
                       </View>
                       <Text style={[s.timeText, { color: d.good ? cat.color : C.textDim }]}>⏰ {d.time}</Text>
-                      <Text style={[s.nakshatraText, { color: C.textMuted }]}>⭐ {d.nakshatra} Nakshatra</Text>
+                      <Text style={[s.nakshatraText, { color: C.textMuted }]}>⭐ {d.nakshatra} {t.muhNakshatra}</Text>
                     </View>
                     {d.good && <Feather name="check-circle" size={18} color={cat.color} />}
                   </View>
@@ -206,7 +222,7 @@ export default function MuhuratScreen() {
         <View style={[s.noteBox, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
           <Feather name="info" size={14} color={C.textDim} />
           <Text style={[s.noteText, { color: C.textMuted }]}>
-            Muhurat dates approximate hain. Pandit ji se exact time aur local timing confirm zaroor karein.
+            {t.muhNote}
           </Text>
         </View>
       </ScrollView>

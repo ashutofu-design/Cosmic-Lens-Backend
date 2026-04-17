@@ -522,27 +522,23 @@ function VastuCompass() {
         </View>
       </View>
 
-      {/* ── Compass graphic with 3D premium frame ── */}
-      <View style={cp.compassFrame}>
-        <View style={cp.compassOuterRing}>
-          <View style={[cp.compassWrap, { width: SIZE, height: SIZE }]}>
-            {/* Layer 1: Fixed outer bezel */}
-            <View style={StyleSheet.absoluteFill}>
-              <CompassBezel />
-            </View>
-
-            {/* Layer 2: Rotating rose */}
-            <Animated.View style={[StyleSheet.absoluteFill, rotateStyle]}>
-              <CompassRose />
-            </Animated.View>
-
-            {/* Layer 3: Energy Core (replaces Om) */}
-            <EnergyCore />
-
-            {/* Layer 4: Fixed north pointer */}
-            <NorthPointer />
-          </View>
+      {/* ── Compass graphic (no frame — octagon stands alone) ── */}
+      <View style={[cp.compassWrap, { width: SIZE, height: SIZE }]}>
+        {/* Layer 1: Fixed outer bezel */}
+        <View style={StyleSheet.absoluteFill}>
+          <CompassBezel />
         </View>
+
+        {/* Layer 2: Rotating rose */}
+        <Animated.View style={[StyleSheet.absoluteFill, rotateStyle]}>
+          <CompassRose />
+        </Animated.View>
+
+        {/* Layer 3: Energy Core (replaces Om) */}
+        <EnergyCore />
+
+        {/* Layer 4: Fixed north pointer */}
+        <NorthPointer />
       </View>
 
       {/* ── Glassmorphism pill: Ideal Direction ── */}

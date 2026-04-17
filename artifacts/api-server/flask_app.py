@@ -2112,6 +2112,7 @@ CASHFREE_SECRET = os.environ.get("CASHFREE_SECRET_KEY", "")
 CASHFREE_ENV    = os.environ.get("CASHFREE_ENV", "sandbox")  # "sandbox" or "production"
 
 PLAN_PRICES = {
+    "trial_weekly":  1,      # ₹1 → 7-day trial (one-time, Basic-tier access)
     "basic_monthly": 199,
     "basic_yearly":  1799,
     "pro_monthly":   399,
@@ -2135,12 +2136,24 @@ def _cf_payment_url(session_id: str) -> str:
 
 
 def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
-    """Grant Basic / Pro / Elite plan to user and set expiry date."""
+    """Grant Trial / Basic / Pro / Elite plan to user and set expiry date."""
     from datetime import timedelta
     user = User.query.get(user_id)
     if not user:
         return False
     now = datetime.utcnow()
+
+    # ── Trial: 7-day Basic-tier access, gated by trial_started_at ─────────
+    if plan == "trial":
+        if user.trial_used:
+            # Already consumed — refund/idempotency case. No-op (still 200).
+            return True
+        user.trial_started_at = now
+        user.trial_used       = True
+        user.plan_order_id    = order_id
+        db.session.commit()
+        return True
+
     expiry = now + timedelta(days=365 if cycle == "yearly" else 31)
 
     # Treat 'elite' as legacy 'pro'
@@ -2168,15 +2181,25 @@ def create_payment_order():
 
     data    = request.get_json() or {}
     user_id = data.get("user_id")
-    plan    = data.get("plan")   # "basic" / "pro" / "elite"
-    cycle   = data.get("cycle")  # "monthly" or "yearly"
+    plan    = data.get("plan")   # "trial" / "basic" / "pro" / "elite"
+    cycle   = data.get("cycle")  # "weekly" / "monthly" / "yearly"
 
-    if not user_id or plan not in ("basic", "pro", "elite") or cycle not in ("monthly", "yearly"):
+    valid_combos = {
+        ("trial", "weekly"),
+        ("basic", "monthly"), ("basic", "yearly"),
+        ("pro",   "monthly"), ("pro",   "yearly"),
+        ("elite", "monthly"), ("elite", "yearly"),
+    }
+    if not user_id or (plan, cycle) not in valid_combos:
         return jsonify({"error": "Invalid request: need user_id, plan, cycle"}), 400
 
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
+
+    # One-time trial guard: don't let user pay ₹1 again if already used
+    if plan == "trial" and user.trial_used:
+        return jsonify({"error": "Trial already used. Please choose Basic or Pro."}), 400
 
     plan_key = f"{plan}_{cycle}"
     amount   = PLAN_PRICES.get(plan_key, 0)
@@ -2274,14 +2297,20 @@ def payment_status(order_id):
     paid = any(p.get("payment_status") == "SUCCESS" for p in payments)
 
     if paid:
-        # Parse order_id: CL{user_id}_{B/P/E}{M/Y}_{ts}
+        # Parse order_id: CL{user_id}_{T/B/P/E}{W/M/Y}_{ts}
+        # T=trial, B=basic, P=pro, E=elite (legacy)
+        # W=weekly (trial only), M=monthly, Y=yearly
         try:
             parts   = order_id.split("_")
             uid_str = parts[0][2:]          # strip "CL"
-            code    = parts[1]              # e.g. "BM", "PY", "EY"
-            plan_map = {"B": "basic", "P": "pro", "E": "elite"}
-            plan    = plan_map.get(code[0], "pro")
-            cycle   = "monthly" if code[1] == "M" else "yearly"
+            code    = parts[1]              # e.g. "TW", "BM", "PY"
+            plan_map  = {"T": "trial", "B": "basic", "P": "pro", "E": "elite"}
+            cycle_map = {"W": "weekly",  "M": "monthly", "Y": "yearly"}
+            plan  = plan_map.get(code[0])
+            cycle = cycle_map.get(code[1])
+            if not plan or not cycle:
+                # Unknown order shape — refuse rather than activating wrong plan
+                return jsonify({"status": "SUCCESS", "warning": "unknown_order_shape"})
             _activate_plan(int(uid_str), plan, cycle, order_id)
             # Return fresh user data
             user = User.query.get(int(uid_str))

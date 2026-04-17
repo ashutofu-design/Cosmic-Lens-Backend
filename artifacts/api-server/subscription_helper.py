@@ -17,6 +17,7 @@ from database import db
 
 # ── Tunables (single place to change pricing/limits) ─────────────────────────
 PLAN_PRICES = {
+    "trial_weekly":  1,
     "basic_monthly": 199,
     "basic_yearly":  1799,
     "pro_monthly":   399,
@@ -134,11 +135,13 @@ def start_trial(user) -> dict:
 
 
 def auto_start_trial_on_signup(user) -> None:
-    """Called from signup endpoints — gives every new user a free trial."""
-    if user and not user.trial_used:
-        user.trial_started_at = datetime.utcnow()
-        user.trial_used = True
-        # commit handled by caller
+    """
+    Deprecated: previously gave every new user a free 7-day trial.
+    Trial is now a paid (₹1) plan activated via /api/payment/create-order
+    with plan='trial', cycle='weekly'. Kept as a no-op so existing
+    callers keep working without code-edit.
+    """
+    return
 
 
 def reset_daily_quota_if_needed(user) -> None:

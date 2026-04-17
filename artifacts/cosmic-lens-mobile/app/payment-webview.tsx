@@ -29,18 +29,21 @@ const F = {
 type Phase = "creating" | "opening" | "verifying" | "success" | "failed" | "cancelled";
 
 const PLAN_LABELS: Record<string, string> = {
+  trial: "7-Day Trial",
   basic: "Basic",
   pro:   "Pro",
   elite: "Pro", // legacy alias
 };
 const PLAN_ICONS: Record<string, string> = {
+  trial: "🎁",
   basic: "✨",
   pro:   "⚡",
   elite: "⚡",
 };
-const CYCLE_LABELS: Record<string, string> = { monthly: "Monthly", yearly: "Yearly" };
+const CYCLE_LABELS: Record<string, string> = { weekly: "7 Days", monthly: "Monthly", yearly: "Yearly" };
 // Single source of truth — mirrors backend PLAN_PRICES.
 const PLAN_PRICES: Record<string, number> = {
+  trial_weekly:  PRICES.trial_weekly,
   basic_monthly: PRICES.basic_monthly,
   basic_yearly:  PRICES.basic_yearly,
   pro_monthly:   PRICES.pro_monthly,

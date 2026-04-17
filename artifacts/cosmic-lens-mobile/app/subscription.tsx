@@ -91,7 +91,7 @@ function planExpiryLabel(expiry: string | null | undefined): string {
 
 function planLabel(plan: string): string {
   switch (plan) {
-    case "trial": return "Free Trial — Active";
+    case "trial": return "7-Day Trial — Active";
     case "basic": return "Basic Plan — Active";
     case "pro":   return "Pro Plan — Active";
     case "elite": return "Pro Plan — Active";
@@ -132,10 +132,10 @@ function TrialBanner({
           <Feather name="gift" size={16} color="#22c55e" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[tb.title, { color: C.text }]}>Free Trial Active 🎉</Text>
+          <Text style={[tb.title, { color: C.text }]}>Trial Active 🎉</Text>
           <Text style={[tb.sub, { color: C.textMid }]}>
             {daysLeft != null && daysLeft > 0
-              ? `${daysLeft} ${daysLeft === 1 ? "din" : "din"} bache hain — Basic features unlocked`
+              ? `${daysLeft} din bache hain — Basic features unlocked`
               : "Aaj trial khatam ho raha hai"}
           </Text>
         </View>
@@ -161,8 +161,8 @@ function TrialBanner({
               : <Feather name="gift" size={16} color="#fff" />}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={tb.startTitle}>Start 7-Day Free Trial</Text>
-            <Text style={tb.startSub}>Basic features bilkul free, no payment required</Text>
+            <Text style={tb.startTitle}>₹1 — 7-Day Trial Start</Text>
+            <Text style={tb.startSub}>Sirf ₹1 mein 7 din Basic features unlock — one-time</Text>
           </View>
           <Feather name="arrow-right" size={16} color="#fff" />
         </LinearGradient>
@@ -323,20 +323,13 @@ export default function SubscriptionScreen() {
     router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle } });
   }
 
-  async function handleStartTrial() {
+  function handleStartTrial() {
     if (!user?.id || !user?.api_key) {
-      Alert.alert("Login Required", "Please login to start your free trial.");
+      Alert.alert("Login Required", "Please login to start your trial.");
       return;
     }
-    setTrialLoading(true);
-    const res = await startTrial(user.id, user.api_key);
-    setTrialLoading(false);
-    if (!res.ok) {
-      Alert.alert("Trial unavailable", res.error || "Please try again later.");
-      return;
-    }
-    await refresh();
-    Alert.alert("Trial Started 🎉", `7-day free trial activated. Enjoy Basic features till ${planExpiryLabel(res.subscription?.trial_expires_at)}.`);
+    // ₹1 paid trial — same payment flow as Basic/Pro, just plan='trial' cycle='weekly'.
+    router.push({ pathname: "/payment-webview", params: { plan: "trial", cycle: "weekly" } });
   }
 
   return (
@@ -464,7 +457,7 @@ export default function SubscriptionScreen() {
 
         {/* ── Footer ── */}
         <Text style={[s.footerNote, { color: C.textMuted }]}>
-          • {TRIAL_DAYS}-day free trial — sirf naye users ke liye, ek baar{"\n"}
+          • ₹1 — {TRIAL_DAYS}-day trial (one-time, naye users ke liye){"\n"}
           • Subscription monthly ya yearly renew hoti hai{"\n"}
           • Kabhi bhi cancel kar sakte hain{"\n"}
           • Powered by Cashfree — PCI DSS compliant

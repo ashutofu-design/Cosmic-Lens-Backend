@@ -11,6 +11,7 @@ import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 // ── Pricing constants (backend authoritative; these are fallbacks) ───────────
 export const PRICES = {
+  trial_weekly:  1,        // ₹1 → 7-day trial (one-time, Basic-tier access)
   basic_monthly: 199,
   basic_yearly:  1799,
   pro_monthly:   399,

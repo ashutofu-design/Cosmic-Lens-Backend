@@ -210,6 +210,40 @@ def verify_otp_route():
     return jsonify(payload), (201 if is_new else 200)
 
 
+@app.route("/api/auth/demo", methods=["POST"])
+def demo_login_route():
+    """Idempotent demo user — for testing only.
+    Returns a real backend user with valid id + api_key so payment & quota flows work.
+    """
+    from subscription_helper import subscription_status, auto_start_trial_on_signup
+    DEMO_PHONE = "+919999000001"
+    user = User.query.filter_by(phone=DEMO_PHONE).first()
+    is_new = False
+    if not user:
+        is_new = True
+        user = User(
+            name         = "Demo User",
+            phone        = DEMO_PHONE,
+            country_code = "91",
+            api_key      = secrets.token_hex(32),
+        )
+        db.session.add(user)
+        db.session.flush()
+        try:
+            auto_start_trial_on_signup(user)
+        except Exception:
+            pass
+    else:
+        if not user.api_key:
+            user.api_key = secrets.token_hex(32)
+        user.last_active = datetime.utcnow()
+    db.session.commit()
+    payload = user.to_dict()
+    payload["subscription"] = subscription_status(user)
+    payload["is_new_user"]  = is_new
+    return jsonify(payload), 200
+
+
 @app.route("/api/auth/signup", methods=["POST"])
 @app.route("/api/auth/login",  methods=["POST"])
 @app.route("/api/auth/mobile", methods=["POST"])

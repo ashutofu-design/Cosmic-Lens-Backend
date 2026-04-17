@@ -78,15 +78,32 @@ export default function LoginScreen() {
     }
   }
 
-  function handleDemoLogin() {
+  async function handleDemoLogin() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    finishLogin({
-      id:      0,
-      name:    "Demo User",
-      email:   "demo@cosmic.local",
-      api_key: "",
-      is_pro:  false,
-    });
+    setError(""); setLoading(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/auth/demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.id) {
+        setError(data?.error || "Demo login failed. Try again.");
+        return;
+      }
+      finishLogin({
+        id:      data.id,
+        name:    data.name || "Demo User",
+        email:   data.email || "demo@cosmic.local",
+        api_key: data.api_key || "",
+        is_pro:  !!data.is_pro,
+      });
+    } catch {
+      setError("Network error. Connection check karein.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const canContinue = mobile.replace(/\D/g, "").length === 10;

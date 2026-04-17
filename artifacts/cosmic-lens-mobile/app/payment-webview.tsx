@@ -97,9 +97,11 @@ export default function PaymentWebviewScreen() {
   }, []);
 
   // ── Official Cashfree JS SDK loader (web only) ─────────────────────────────
-  // Loads the SDK from CDN once, then calls cashfree.checkout({ paymentSessionId }).
-  // We pass ONLY paymentSessionId — never the constructed payment_link.
-  async function _openCashfreeCheckout(paymentSessionId: string) {
+  // Loads the SDK from CDN once, then calls cashfree.checkout({ paymentSessionId, paymentMethod? }).
+  // We pass ONLY paymentSessionId (+ optional paymentMethod) — never the constructed payment_link.
+  type PayMethod = "upi" | "card" | "netbanking" | undefined;
+
+  async function _openCashfreeCheckout(paymentSessionId: string, method: PayMethod = undefined) {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
 
     // Strict re-check: never call SDK without a valid session id
@@ -134,14 +136,33 @@ export default function PaymentWebviewScreen() {
       return w.Cashfree;
     }
 
+    // Map our friendly method names to Cashfree's componentName so the drop-in
+    // pre-selects (and on mobile UPI auto-launches GPay/PhonePe via intent).
+    function _componentFor(m: PayMethod): string[] | undefined {
+      switch (m) {
+        case "upi":         return ["order-details", "upi"];
+        case "card":        return ["order-details", "card"];
+        case "netbanking":  return ["order-details", "netbanking"];
+        default:            return undefined;   // full default checkout
+      }
+    }
+
     try {
       const Cashfree = await _ensureSdkLoaded();
       const cashfree = Cashfree({ mode: env });
-      console.log("[Pay] 🚀 cashfree.checkout({ paymentSessionId: ...", paymentSessionId.slice(-12), "})  mode=", env);
-      const result = await cashfree.checkout({
+      const components = _componentFor(method);
+      console.log(
+        "[Pay] 🚀 cashfree.checkout({ paymentSessionId: ...",
+        paymentSessionId.slice(-12),
+        "})  method=", method ?? "default",
+        " mode=", env,
+      );
+      const opts: any = {
         paymentSessionId,                 // ONLY this — no link, no order_id
         redirectTarget: "_blank",         // open hosted checkout in a new tab
-      });
+      };
+      if (components) opts.components = components;
+      const result = await cashfree.checkout(opts);
       console.log("[Pay] checkout result", result);
     } catch (e: any) {
       console.warn("[Pay] ❌ SDK checkout failed, falling back to link:", e?.message);
@@ -212,12 +233,10 @@ export default function PaymentWebviewScreen() {
       setPaymentLink(payment_link || "");
       setPhase("paying");
 
-      // On web, use the OFFICIAL Cashfree JS SDK with paymentSessionId only.
-      // The SDK handles checkout UI; we never construct or reuse links.
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        console.log("[Pay] 🚀 opening Cashfree checkout via SDK with paymentSessionId");
-        await _openCashfreeCheckout(payment_session_id);
-      }
+      // Note: We DO NOT auto-open Cashfree here. On web, the user picks a
+      // method (UPI / Card / NetBanking) from the buttons in the "paying"
+      // phase, and each button launches the SDK with that method preselected.
+      // On native, the WebView modal will open automatically (uses paymentLink).
     } catch (e: any) {
       console.warn("[Pay] ❌ network error:", e?.message);
       setErrMsg(e?.message ?? "Network error. Check connection.");
@@ -370,27 +389,47 @@ export default function PaymentWebviewScreen() {
             <ActivityIndicator size="large" color={ac} style={{ marginTop: 20 }} />
           )}
 
-          {/* Web: Cashfree opens in new tab; user comes back & taps Verify */}
-          {phase === "paying" && Platform.OS === "web" && !!paymentLink && (
+          {/* Web: choose a payment method — each opens Cashfree pre-selected */}
+          {phase === "paying" && Platform.OS === "web" && !!sessionId && (
             <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
+              <Text style={[s.statusSub, { color: C.textMid, marginBottom: 4, fontFamily: F.bold }]}>
+                Choose Payment Method
+              </Text>
+
+              {/* UPI — opens GPay/PhonePe app on mobile, QR on desktop */}
               <Pressable
-                onPress={() => {
-                  try { (window as any).open(paymentLink, "_blank", "noopener,noreferrer"); } catch {}
-                }}
-                style={({ pressed }) => [s.secondaryBtn, { borderColor: ac, opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Text style={[s.secondaryBtnText, { color: ac }]}>↗ Reopen Cashfree Checkout</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setPhase("verifying");
-                  _verifyPayment(orderId);
-                }}
+                onPress={() => { Haptics.selectionAsync(); _openCashfreeCheckout(sessionId, "upi"); }}
                 style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
               >
-                <Text style={s.primaryBtnText}>✓ I've Paid — Verify Now</Text>
+                <Text style={s.primaryBtnText}>📱 Pay with UPI  (GPay / PhonePe / Paytm)</Text>
               </Pressable>
+
+              {/* Card */}
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); _openCashfreeCheckout(sessionId, "card"); }}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: ac, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: ac }]}>💳 Pay with Card</Text>
+              </Pressable>
+
+              {/* Net Banking */}
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); _openCashfreeCheckout(sessionId, "netbanking"); }}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: ac, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: ac }]}>🏦 Pay with Net Banking</Text>
+              </Pressable>
+
+              <View style={{ height: 6 }} />
+
+              {/* After paying in the new tab, come back & verify */}
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); setPhase("verifying"); _verifyPayment(orderId); }}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: C.textMid }]}>✓ I've Paid — Verify Now</Text>
+              </Pressable>
+
               <Pressable
                 onPress={() => router.back()}
                 style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}

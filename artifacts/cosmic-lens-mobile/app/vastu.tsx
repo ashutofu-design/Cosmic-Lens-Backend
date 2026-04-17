@@ -492,7 +492,7 @@ function VastuCompass() {
   });
 
   return (
-    <View style={[cp.outer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+    <View style={[cp.outer, { backgroundColor: C.isDark ? "#131c2e" : C.bgCard, borderColor: C.isDark ? "#1e2a44" : C.border }]}>
       {/* ── Header row ── */}
       <View style={cp.headerRow}>
         <View>

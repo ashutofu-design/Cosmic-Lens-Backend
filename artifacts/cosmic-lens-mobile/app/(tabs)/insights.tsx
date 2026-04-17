@@ -220,7 +220,7 @@ export default function InsightsScreen() {
         >
           <Feather name="lock" size={12} color={C.warningText} />
           <Text style={[s.demoText, { color: C.warningText }]}>
-            Apni kundli banao — personalized dasha predictions ke liye
+            {t.futureDemoBanner}
           </Text>
           <Feather name="chevron-right" size={12} color={C.warningText} />
         </Pressable>
@@ -230,15 +230,15 @@ export default function InsightsScreen() {
       {showDemo && (
         <View style={[s.emptyState, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <Text style={s.emptyEmoji}>🪐</Text>
-          <Text style={[s.emptyTitle, { color: C.text }]}>Kundli required</Text>
+          <Text style={[s.emptyTitle, { color: C.text }]}>{t.kundliRequired}</Text>
           <Text style={[s.emptyBody, { color: C.textDim }]}>
-            Enter your birth details to see your real Mahadasha, Antardasha and Pratyantar Dasha predictions with live planetary transits.
+            {t.kundliRequiredSub}
           </Text>
           <Pressable
             style={[s.emptyBtn, { backgroundColor: C.accent }]}
             onPress={() => router.push("/onboarding")}
           >
-            <Text style={s.emptyBtnText}>Create Kundli</Text>
+            <Text style={s.emptyBtnText}>{t.createKundli}</Text>
           </Pressable>
         </View>
       )}
@@ -249,7 +249,7 @@ export default function InsightsScreen() {
           {/* Dasha Phase card */}
           {insight && (
             <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.dashaLabel, { color: C.textMuted }]}>Active Dasha Phase</Text>
+              <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.activeDashaPhase}</Text>
               <View style={s.dashaRow}>
                 {[
                   { lbl: "MD", planet: insight.mdPlanet, clr: "#4b6a86" },
@@ -300,11 +300,11 @@ export default function InsightsScreen() {
                 <View style={s.trendRow}>
                   <Feather name={trendIcon} size={14} color={trendColor} />
                   <Text style={[s.trendText, { color: trendColor }]}>
-                    {catData.trend === "UP" ? "Accha" : catData.trend === "DOWN" ? "Chunautiyan" : "Average"} phase
+                    {catData.trend === "UP" ? t.phaseGood : catData.trend === "DOWN" ? t.phaseChallenging : t.phaseAverage} {t.phaseSuffix}
                   </Text>
                 </View>
                 <Text style={[s.activePlanetText, { color: C.textMuted }]}>
-                  Active: <Text style={{ color: PLANET_CLR[catData.activePlanet] ?? catColor }}>
+                  {t.activeLabel}: <Text style={{ color: PLANET_CLR[catData.activePlanet] ?? catColor }}>
                     {pName(catData.activePlanet)}
                   </Text>
                 </Text>
@@ -317,7 +317,7 @@ export default function InsightsScreen() {
             <View style={[s.sadeSatiAlert, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.3)" }]}>
               <Feather name="alert-octagon" size={14} color="#ef4444" />
               <Text style={[s.sadeSatiText, { color: "#ef4444" }]}>
-                Sade Sati active — Saturn's 7.5-year transit over your natal Moon. Health and finances need extra attention.
+                {t.sadeSatiAlert}
               </Text>
             </View>
           )}
@@ -327,7 +327,7 @@ export default function InsightsScreen() {
             <View style={[s.errorBanner, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Feather name="wifi-off" size={13} color={C.textDim} />
               <Text style={[s.errorText, { color: C.textDim }]}>
-                Transit data unavailable — chart shows natal dasha strength only, not live planetary transits.
+                {t.transitUnavailBanner}
               </Text>
             </View>
           )}
@@ -335,7 +335,7 @@ export default function InsightsScreen() {
           {/* 6-month forecast graph */}
           <View style={[s.graphCard, { backgroundColor: C.bgCard, borderColor: C.border, boxShadow: C.cardShadow } as any]}>
             <View style={s.graphHeader}>
-              <Text style={[s.graphTitle, { color: C.textMuted }]}>6-Month Trend</Text>
+              <Text style={[s.graphTitle, { color: C.textMuted }]}>{t.sixMonthTrend}</Text>
               {forecastLoading && <ActivityIndicator size="small" color={catColor} />}
             </View>
             {forecast && !forecast.transitError ? (
@@ -345,7 +345,7 @@ export default function InsightsScreen() {
             ) : forecast?.transitError ? (
               <View style={s.graphPlaceholder}>
                 <Feather name="bar-chart-2" size={24} color={C.border} />
-                <Text style={[s.unavailText, { color: C.textDim }]}>Transit data unavailable</Text>
+                <Text style={[s.unavailText, { color: C.textDim }]}>{t.transitUnavailShort}</Text>
               </View>
             ) : (
               <View style={s.graphPlaceholder}>
@@ -357,7 +357,7 @@ export default function InsightsScreen() {
           {/* Upcoming PD chips */}
           {insight && insight.upcomingPDs.length > 0 && (
             <View style={s.pdSection}>
-              <Text style={[s.sectionTitle, { color: C.textMuted }]}>Upcoming Pratyantardasha</Text>
+              <Text style={[s.sectionTitle, { color: C.textMuted }]}>{t.upcomingPD}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.pdRow}>
                 {insight.upcomingPDs.map((pd, i) => {
                   const clr = PLANET_CLR[pd.planet] ?? "#f59e0b";
@@ -381,7 +381,7 @@ export default function InsightsScreen() {
             <View style={[s.reasonsCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <View style={s.reasonsHeader}>
                 <Feather name="zap" size={13} color={catColor} />
-                <Text style={[s.reasonsTitle, { color: catColor }]}>Why this score?</Text>
+                <Text style={[s.reasonsTitle, { color: catColor }]}>{t.whyThisScore}</Text>
               </View>
               {forecast.reasons.map((r, i) => (
                 <ReasonItem key={i} text={r} color={catColor} />
@@ -393,9 +393,9 @@ export default function InsightsScreen() {
           {forecast && (
             <View style={[s.avgBadge, { borderColor: `${catColor}40`, backgroundColor: `${catColor}08` }]}>
               <Text style={[s.avgScore, { color: catColor }]}>{forecast.avgScore}</Text>
-              <Text style={[s.avgLabel, { color: C.textMuted }]}>6-month average score</Text>
+              <Text style={[s.avgLabel, { color: C.textMuted }]}>{t.sixMonthAvg}</Text>
               {forecast.transitError && (
-                <Text style={[s.avgSub, { color: C.textDim }]}>Based on natal dasha only</Text>
+                <Text style={[s.avgSub, { color: C.textDim }]}>{t.basedOnNatal}</Text>
               )}
             </View>
           )}

@@ -276,12 +276,12 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
   return (
-    <View style={[hero.card, { flex: 1, backgroundColor: Ctheme.bgCard, borderColor: `${insight.color}30`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.18, shadowRadius: 20, shadowOffset: { width: 0, height: 0 } } as any]}>
+    <View style={[hero.card, { flex: 1, backgroundColor: "#0f0a24", borderColor: `${insight.color}40`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 0 } } as any]}>
 
       {/* ── Centered score — single hero value ── */}
       <View style={hero.topRow}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={[hero.label, { color: Ctheme.isDark ? "rgba(255,255,255,0.35)" : "#9f7aea" }]}>TODAY'S ENERGY</Text>
+          <Text style={[hero.label, { color: "rgba(255,255,255,0.45)" }]}>TODAY'S ENERGY</Text>
           {showDemo && (
             <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
               <Feather name="lock" size={8} color={Ctheme.textDim} />

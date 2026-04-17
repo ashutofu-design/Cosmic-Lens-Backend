@@ -31,15 +31,18 @@ const LABEL_R        = SIZE * 0.370;
 const HINDI_R        = SIZE * 0.285;
 
 // ── Vastu direction data ───────────────────────────────────────────────────────
+// Gold & Black premium palette — alternating bright gold (cardinals) and antique gold (inter-cardinals)
+const GOLD_BRIGHT  = "#f9d76b"; // 24k bright
+const GOLD_ANTIQUE = "#b8893a"; // aged bronze-gold
 const DIRS = [
-  { deg:   0, short: "N",  hindi: "उत्तर", sub: "North",     deity: "Kubera", meaning: "WEALTH",   elem: "Vaayu",  color: "#fbbf24" },
-  { deg:  45, short: "NE", hindi: "ईशान",  sub: "Ishaan",    deity: "Ishaan", meaning: "DIVINITY", elem: "Divya",  color: "#c4b5fd" },
-  { deg:  90, short: "E",  hindi: "पूर्व",  sub: "East",      deity: "Surya",  meaning: "ENERGY",   elem: "Surya",  color: "#fde047" },
-  { deg: 135, short: "SE", hindi: "अग्नि",  sub: "Agni",      deity: "Agni",   meaning: "FIRE",     elem: "Agni",   color: "#fb923c" },
-  { deg: 180, short: "S",  hindi: "दक्षिण", sub: "South",     deity: "Yama",   meaning: "HONOR",    elem: "Yama",   color: "#f87171" },
-  { deg: 225, short: "SW", hindi: "नैऋत्य", sub: "Niriti",    deity: "Niriti", meaning: "EARTH",    elem: "Prithvi",color: "#a3e635" },
-  { deg: 270, short: "W",  hindi: "पश्चिम", sub: "West",      deity: "Varuna", meaning: "WATER",    elem: "Jal",    color: "#7dd3fc" },
-  { deg: 315, short: "NW", hindi: "वायव्य", sub: "Vayu",      deity: "Vayu",   meaning: "AIR",      elem: "Vayu",   color: "#6ee7b7" },
+  { deg:   0, short: "N",  hindi: "उत्तर", sub: "North",     deity: "Kubera", meaning: "WEALTH",   elem: "Vaayu",  color: GOLD_BRIGHT  },
+  { deg:  45, short: "NE", hindi: "ईशान",  sub: "Ishaan",    deity: "Ishaan", meaning: "DIVINITY", elem: "Divya",  color: GOLD_ANTIQUE },
+  { deg:  90, short: "E",  hindi: "पूर्व",  sub: "East",      deity: "Surya",  meaning: "ENERGY",   elem: "Surya",  color: GOLD_BRIGHT  },
+  { deg: 135, short: "SE", hindi: "अग्नि",  sub: "Agni",      deity: "Agni",   meaning: "FIRE",     elem: "Agni",   color: GOLD_ANTIQUE },
+  { deg: 180, short: "S",  hindi: "दक्षिण", sub: "South",     deity: "Yama",   meaning: "HONOR",    elem: "Yama",   color: GOLD_BRIGHT  },
+  { deg: 225, short: "SW", hindi: "नैऋत्य", sub: "Niriti",    deity: "Niriti", meaning: "EARTH",    elem: "Prithvi",color: GOLD_ANTIQUE },
+  { deg: 270, short: "W",  hindi: "पश्चिम", sub: "West",      deity: "Varuna", meaning: "WATER",    elem: "Jal",    color: GOLD_BRIGHT  },
+  { deg: 315, short: "NW", hindi: "वायव्य", sub: "Vayu",      deity: "Vayu",   meaning: "AIR",      elem: "Vayu",   color: GOLD_ANTIQUE },
 ];
 
 // Compass bearing → SVG angle in radians (0° bearing = top)
@@ -69,9 +72,9 @@ function CompassRose() {
         {/* Jewel-tone sector gradients — color at low alpha over dark */}
         {DIRS.map(d => (
           <RadialGradient key={`jw-${d.short}`} id={`jw-${d.short}`} cx="50%" cy="50%" r="75%">
-            <Stop offset="0"    stopColor={d.color} stopOpacity="0.32" />
-            <Stop offset="0.55" stopColor={d.color} stopOpacity="0.12" />
-            <Stop offset="1"    stopColor="#050914" stopOpacity="1"    />
+            <Stop offset="0"    stopColor={d.color} stopOpacity={d.color === GOLD_BRIGHT ? "0.22" : "0.10"} />
+            <Stop offset="0.55" stopColor={d.color} stopOpacity={d.color === GOLD_BRIGHT ? "0.08" : "0.04"} />
+            <Stop offset="1"    stopColor="#05070d" stopOpacity="1"    />
           </RadialGradient>
         ))}
         {/* Sheen overlay on sectors */}
@@ -500,7 +503,7 @@ function EnergyCore() {
   );
 }
 
-// ── North pointer (fixed ruby+gold indicator at top) ───────────────────────────
+// ── North pointer (fixed gold indicator at top) ───────────────────────────
 function NorthPointer() {
   const tipY   = SIZE * 0.022;
   const baseY  = SIZE * 0.078;
@@ -509,12 +512,12 @@ function NorthPointer() {
   return (
     <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
       <Defs>
-        <SvgLinearGradient id="redArrow" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"    stopColor="#ff8a8a" />
-          <Stop offset="0.45" stopColor="#dc2626" />
-          <Stop offset="1"    stopColor="#7f1d1d" />
+        <SvgLinearGradient id="goldArrow" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0"    stopColor="#fff2b8" />
+          <Stop offset="0.45" stopColor="#f9d76b" />
+          <Stop offset="1"    stopColor="#7a4800" />
         </SvgLinearGradient>
-        <SvgLinearGradient id="redShine" x1="0" y1="0" x2="1" y2="1">
+        <SvgLinearGradient id="goldShine" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0"    stopColor="#ffffff" stopOpacity="0.65" />
           <Stop offset="0.6"  stopColor="#ffffff" stopOpacity="0" />
         </SvgLinearGradient>
@@ -524,22 +527,22 @@ function NorthPointer() {
         points={`${CX + 1.5},${tipY + 2} ${CX - halfW + 1.5},${baseY + 2} ${CX + halfW + 1.5},${baseY + 2}`}
         fill="#00000066"
       />
-      {/* Red arrow body */}
+      {/* Gold arrow body */}
       <Polygon
         points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
-        fill="url(#redArrow)"
+        fill="url(#goldArrow)"
       />
       {/* Shine on left side */}
       <Polygon
         points={`${CX},${tipY} ${CX - halfW * 0.7},${baseY - 2} ${CX - 1},${midY}`}
-        fill="url(#redShine)"
+        fill="url(#goldShine)"
       />
-      {/* Gold outline */}
+      {/* Dark gold outline */}
       <Polygon
         points={`${CX},${tipY} ${CX - halfW},${baseY} ${CX + halfW},${baseY}`}
-        fill="none" stroke="#f9d76b" strokeWidth="1.4"
+        fill="none" stroke="#3a2404" strokeWidth="1.2"
       />
-      {/* Tip gold dot */}
+      {/* Tip cream dot */}
       <Circle cx={CX} cy={tipY + 0.5} r="1.6" fill="#fff2b8" />
       {/* "N" label above arrow */}
       <SvgText

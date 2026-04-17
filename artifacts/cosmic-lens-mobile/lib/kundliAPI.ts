@@ -2,27 +2,64 @@ import type { BirthData, KundliData } from "@/types";
 
 import { API_BASE as BASE_URL, apiFetch } from "./apiConfig";
 
-async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<KundliData> {
+export interface KundliAuth {
+  user_id: number;
+  api_key: string;
+}
+
+export class KundliQuotaError extends Error {
+  used: number;
+  limit: number;
+  plan: string;
+  constructor(message: string, used: number, limit: number, plan: string) {
+    super(message);
+    this.name = "KundliQuotaError";
+    this.used = used;
+    this.limit = limit;
+    this.plan = plan;
+  }
+}
+
+async function attemptKundliFetch(bd: BirthData, timeoutMs: number, auth?: KundliAuth | null): Promise<KundliData> {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (auth?.api_key) headers["X-API-Key"] = auth.api_key;
+
+    const body: Record<string, unknown> = {
+      name:   bd.name,
+      day:    bd.day,
+      month:  bd.month,
+      year:   bd.year,
+      hour:   bd.hour,
+      minute: bd.minute,
+      ampm:   bd.ampm,
+      lat:    bd.lat,
+      lon:    bd.lon,
+      tz:     bd.tz,
+      place:  bd.place,
+    };
+    if (auth?.user_id) body.user_id = auth.user_id;
+
     const res = await apiFetch(`${BASE_URL}/api/kundli`, {
       method: "POST",
-      body: JSON.stringify({
-        name:   bd.name,
-        day:    bd.day,
-        month:  bd.month,
-        year:   bd.year,
-        hour:   bd.hour,
-        minute: bd.minute,
-        ampm:   bd.ampm,
-        lat:    bd.lat,
-        lon:    bd.lon,
-        tz:     bd.tz,
-        place:  bd.place,
-      }),
+      headers,
+      body: JSON.stringify(body),
       signal: ctrl.signal,
     });
+
+    if (res.status === 402) {
+      const err = (await res.json().catch(() => ({}))) as {
+        message?: string; quota?: { used: number; limit: number }; plan?: string;
+      };
+      throw new KundliQuotaError(
+        err.message ?? "Daily kundli limit reached",
+        err.quota?.used ?? 0,
+        err.quota?.limit ?? 0,
+        err.plan ?? "free",
+      );
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -41,15 +78,17 @@ async function attemptKundliFetch(bd: BirthData, timeoutMs: number): Promise<Kun
   }
 }
 
-export async function fetchKundliFromAPI(bd: BirthData): Promise<KundliData> {
+export async function fetchKundliFromAPI(bd: BirthData, auth?: KundliAuth | null): Promise<KundliData> {
   const TIMEOUTS  = [20_000, 28_000, 35_000];
   const MAX_TRIES = 3;
   let lastErr: Error = new Error("Kundli calculation failed.");
 
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     try {
-      return await attemptKundliFetch(bd, TIMEOUTS[attempt]);
+      return await attemptKundliFetch(bd, TIMEOUTS[attempt], auth);
     } catch (e: unknown) {
+      // Quota errors are terminal — never retry, surface immediately.
+      if (e instanceof KundliQuotaError) throw e;
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "TIMEOUT") {
         lastErr = new Error(

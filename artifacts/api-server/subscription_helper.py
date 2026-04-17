@@ -35,6 +35,15 @@ QUESTION_LIMITS = {
     "elite": -1,
 }
 
+# Daily Kundli generation limits (compute-heavy — keep tight)
+KUNDLI_LIMITS = {
+    "free":  1,
+    "trial": 3,
+    "basic": 5,
+    "pro":  -1,    # unlimited
+    "elite": -1,
+}
+
 # Future Timeline months unlocked
 TIMELINE_MONTHS = {
     "free":  0,
@@ -94,6 +103,11 @@ def question_limit(user) -> int:
     return QUESTION_LIMITS.get(effective_plan(user), 1)
 
 
+def kundli_limit(user) -> int:
+    """Daily kundli-generation limit. -1 = unlimited."""
+    return KUNDLI_LIMITS.get(effective_plan(user), 1)
+
+
 def timeline_months(user) -> int:
     return TIMELINE_MONTHS.get(effective_plan(user), 0)
 
@@ -149,6 +163,9 @@ def reset_daily_quota_if_needed(user) -> None:
     if user.daily_questions_date != today:
         user.daily_questions_date = today
         user.daily_questions_used = 0
+    if user.daily_kundlis_date != today:
+        user.daily_kundlis_date = today
+        user.daily_kundlis_used = 0
 
 
 def can_ask_question(user) -> dict:
@@ -198,6 +215,47 @@ def consume_question(user) -> dict:
     }
 
 
+def can_generate_kundli(user) -> dict:
+    """Check (without consuming) if user can generate another kundli today."""
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+
+    reset_daily_quota_if_needed(user)
+    limit = kundli_limit(user)
+
+    if limit == -1:
+        return {"allowed": True, "used": user.daily_kundlis_used, "limit": -1}
+
+    if user.daily_kundlis_used >= limit:
+        return {
+            "allowed": False,
+            "used":    user.daily_kundlis_used,
+            "limit":   limit,
+            "reason":  "Daily kundli limit reached",
+        }
+    return {
+        "allowed": True,
+        "used":    user.daily_kundlis_used,
+        "limit":   limit,
+    }
+
+
+def consume_kundli(user) -> dict:
+    """Atomically check + increment daily kundli counter."""
+    check = can_generate_kundli(user)
+    if not check["allowed"]:
+        return check
+
+    user.daily_kundlis_used += 1
+    db.session.commit()
+
+    return {
+        "allowed": True,
+        "used":    user.daily_kundlis_used,
+        "limit":   check["limit"],
+    }
+
+
 def subscription_status(user) -> dict:
     """
     Full subscription snapshot for the mobile app.
@@ -225,6 +283,8 @@ def subscription_status(user) -> dict:
         "limits": {
             "questions_per_day":  question_limit(user) if user else QUESTION_LIMITS["free"],
             "questions_used":     user.daily_questions_used if user else 0,
+            "kundlis_per_day":    kundli_limit(user) if user else KUNDLI_LIMITS["free"],
+            "kundlis_used":       user.daily_kundlis_used if user else 0,
             "timeline_months":    timeline_months(user) if user else 0,
             "profile_limit":      profile_limit(user) if user else 1,
         },

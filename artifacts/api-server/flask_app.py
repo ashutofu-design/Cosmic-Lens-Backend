@@ -634,6 +634,8 @@ def timezone_lookup():
 
 @app.route("/api/kundli", methods=["POST"])
 def kundli():
+    from subscription_helper import consume_kundli, effective_plan
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid or missing JSON body"}), 400
@@ -643,8 +645,38 @@ def kundli():
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
 
+    # ── Daily kundli quota check (auth mandatory when user_id supplied) ──────
+    # We CHECK quota up-front (so failed requests don't waste compute), but
+    # only CONSUME after a successful calculation — so transient failures
+    # don't lock out free-tier users (1/day).
+    from subscription_helper import can_generate_kundli
+
+    user_id = data.get("user_id")
+    user    = None
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        check = can_generate_kundli(user)
+        if not check["allowed"]:
+            return jsonify({
+                "error":            "daily_kundli_limit_reached",
+                "message":          f"Aaj ka {check['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                "quota":            {"used": check["used"], "limit": check["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+
     try:
         result = calculate_kundli(data)
+        # Only consume quota AFTER a successful calculation
+        if user:
+            quota = consume_kundli(user)
+            result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

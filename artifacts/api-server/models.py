@@ -33,6 +33,10 @@ class User(db.Model):
     daily_questions_used = db.Column(db.Integer, default=0, nullable=False)
     daily_questions_date = db.Column(db.String(10), default="", nullable=False) # YYYY-MM-DD
 
+    # ── Daily Kundli generation quota ─────────────────────────────────────────
+    daily_kundlis_used = db.Column(db.Integer, default=0, nullable=False)
+    daily_kundlis_date = db.Column(db.String(10), default="", nullable=False)   # YYYY-MM-DD
+
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

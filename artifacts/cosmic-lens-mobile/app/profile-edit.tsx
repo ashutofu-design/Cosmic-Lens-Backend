@@ -379,7 +379,8 @@ export default function ProfileEditScreen() {
         hour: Number(fmForm.hour), minute: Number(fmForm.minute), ampm: fmForm.ampm,
         place: fmForm.place, lat: fmForm.lat, lon: fmForm.lon, tz: fmForm.tz,
       };
-      const kundli = await fetchKundliFromAPI(birthData);
+      const auth = user?.id && user?.api_key ? { user_id: user.id, api_key: user.api_key } : null;
+      const kundli = await fetchKundliFromAPI(birthData, auth);
       if (fmEditId && fmIsPrimary) {
         updateProfile(fmEditId, { name: fmForm.name.trim(), gender: fmForm.gender, birthData, kundli });
         setBirthData(birthData);

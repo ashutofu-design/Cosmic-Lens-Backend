@@ -38,7 +38,7 @@ const MINS   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { setBirthData, setKundli, syncKundliToCloud, language } = useUser();
+  const { setBirthData, setKundli, syncKundliToCloud, language, user } = useUser();
   const t = getT(language);
 
   const [name,    setName]    = useState("");
@@ -114,14 +114,21 @@ export default function OnboardingScreen() {
         lon:    selectedLon!,
         tz:     selectedTz!,
       };
-      const kundli = await fetchKundliFromAPI(bd);
+      const auth = user?.id && user?.api_key ? { user_id: user.id, api_key: user.api_key } : null;
+      const kundli = await fetchKundliFromAPI(bd, auth);
       setBirthData(bd);
       setKundli(kundli);
       syncKundliToCloud(bd, kundli).catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
+      const { KundliQuotaError } = await import("@/lib/kundliAPI");
+      if (e instanceof KundliQuotaError) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setError(`${e.message} (${e.used}/${e.limit} used today)`);
+      } else {
+        setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

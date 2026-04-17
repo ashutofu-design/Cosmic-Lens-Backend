@@ -180,7 +180,8 @@ export default function LoginScreen() {
               { backgroundColor: C.inputBg, borderColor: error ? "rgba(239,68,68,0.5)" : C.inputBorder }
             ]}>
               <View style={[s.phonePrefix, { borderRightColor: C.border }]}>
-                <Text style={[s.phonePrefixCountry, { color: C.textMuted }]}>IN</Text>
+                <Text style={s.phonePrefixFlag}>🇮🇳</Text>
+                <Text style={[s.phonePrefixCountry, { color: C.textMuted }]}>India</Text>
                 <Text style={[s.phonePrefixCode, { color: C.text }]}>+91</Text>
               </View>
               <TextInput

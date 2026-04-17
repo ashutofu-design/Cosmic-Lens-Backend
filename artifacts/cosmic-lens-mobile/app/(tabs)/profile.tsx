@@ -468,6 +468,13 @@ export default function ProfileScreen() {
             />
 
             <SettingRow
+              icon="award"
+              label="Subscription"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
+              right={<Feather name="chevron-right" size={14} color={C.textDim} />}
+            />
+
+            <SettingRow
               icon="globe"
               label={t.language}
               onPress={() => setShowLang(true)}

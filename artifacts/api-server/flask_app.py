@@ -1464,6 +1464,333 @@ def career_analysis():
     return jsonify(response)
 
 
+@app.route("/api/health-analysis", methods=["POST", "OPTIONS"])
+def health_analysis():
+    """
+    Vedic health analysis with Basic / Pro tiering.
+    Body: { "user_id": int, "kundli": {...} }   Headers: X-API-Key
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import swisseph as swe
+    from subscription_helper import effective_plan
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    kundli  = data.get("kundli") or {}
+
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+
+    planets = kundli.get("planets") or []
+    if not planets:
+        return jsonify({"error": "Kundli not provided. Please complete your birth chart first."}), 400
+
+    SIGNS = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+             "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+    SIGN_LORD = {
+        "Aries":"Mars","Taurus":"Venus","Gemini":"Mercury","Cancer":"Moon",
+        "Leo":"Sun","Virgo":"Mercury","Libra":"Venus","Scorpio":"Mars",
+        "Sagittarius":"Jupiter","Capricorn":"Saturn","Aquarius":"Saturn","Pisces":"Jupiter",
+    }
+    EXALT = {"Sun":"Aries","Moon":"Taurus","Mars":"Capricorn","Mercury":"Virgo",
+             "Jupiter":"Cancer","Venus":"Pisces","Saturn":"Libra"}
+    DEBIL = {"Sun":"Libra","Moon":"Scorpio","Mars":"Cancer","Mercury":"Pisces",
+             "Jupiter":"Capricorn","Venus":"Virgo","Saturn":"Aries"}
+    OWN   = {"Sun":["Leo"],"Moon":["Cancer"],"Mars":["Aries","Scorpio"],
+             "Mercury":["Gemini","Virgo"],"Jupiter":["Sagittarius","Pisces"],
+             "Venus":["Taurus","Libra"],"Saturn":["Capricorn","Aquarius"]}
+
+    def find_planet(name):
+        for p in planets:
+            if p.get("name") == name:
+                return p
+        return None
+
+    asc_sign = kundli.get("ascendant") or "Aries"
+    asc_idx  = SIGNS.index(asc_sign) if asc_sign in SIGNS else 0
+    sign_of_1st  = asc_sign
+    sign_of_6th  = SIGNS[(asc_idx + 5) % 12]
+    sign_of_8th  = SIGNS[(asc_idx + 7) % 12]
+    sign_of_12th = SIGNS[(asc_idx + 11) % 12]
+    lord_1st     = SIGN_LORD[sign_of_1st]
+    lord_6th     = SIGN_LORD[sign_of_6th]
+    lord_8th     = SIGN_LORD[sign_of_8th]
+
+    # ── Health score (start strong, deduct for vulnerabilities) ──────────
+    score   = 65
+    notes   = []
+    benefics = {"Jupiter","Venus","Mercury","Moon"}
+
+    # Lagna lord placement & dignity → vitality
+    l1 = find_planet(lord_1st)
+    if l1:
+        h = l1.get("house", 0)
+        sg = l1.get("sign","")
+        if h in (1, 4, 5, 7, 9, 10, 11):
+            score += 6; notes.append(f"Lagna lord {lord_1st} well-placed in {h}th — strong vitality")
+        elif h in (6, 8, 12):
+            score -= 8; notes.append(f"Lagna lord {lord_1st} in {h}th (dusthana) — vitality challenges")
+        if lord_1st in EXALT and sg == EXALT[lord_1st]:
+            score += 5; notes.append(f"{lord_1st} exalted — robust constitution")
+        elif lord_1st in DEBIL and sg == DEBIL[lord_1st]:
+            score -= 6; notes.append(f"{lord_1st} debilitated — extra self-care needed")
+
+    # Planets in 1st house
+    p1 = [p for p in planets if p.get("house") == 1]
+    for p in p1:
+        nm = p.get("name")
+        if nm in benefics:
+            score += 4
+        elif nm in ("Saturn","Mars","Rahu","Ketu"):
+            score -= 5
+            notes.append(f"{nm} in Lagna — affects natural body strength")
+
+    # 6th house — disease (more planets here = more health activity, often issues)
+    p6 = [p for p in planets if p.get("house") == 6]
+    for p in p6:
+        nm = p.get("name")
+        if nm == "Saturn":
+            score -= 5; notes.append("Saturn in 6th — chronic, slow-recovery tendency")
+        elif nm == "Mars":
+            score -= 3; notes.append("Mars in 6th — inflammation & accident-prone phases")
+        elif nm == "Rahu":
+            score -= 4; notes.append("Rahu in 6th — sudden, hard-to-diagnose issues")
+        elif nm == "Sun":
+            score -= 2
+        elif nm in benefics:
+            score += 2  # benefics in 6th can give recovery strength
+
+    # 8th house — chronic / longevity
+    p8 = [p for p in planets if p.get("house") == 8]
+    for p in p8:
+        nm = p.get("name")
+        if nm in ("Saturn","Mars","Rahu","Ketu"):
+            score -= 4; notes.append(f"{nm} in 8th — chronic patterns possible")
+        elif nm == "Sun":
+            score -= 2
+
+    # 12th house — hidden/sleep/hospital
+    p12 = [p for p in planets if p.get("house") == 12]
+    for p in p12:
+        nm = p.get("name")
+        if nm in ("Saturn","Rahu","Ketu"):
+            score -= 3; notes.append(f"{nm} in 12th — sleep or hidden issues to monitor")
+
+    # Moon — mental health
+    moon = find_planet("Moon")
+    moon_house = moon.get("house") if moon else 0
+    if moon:
+        msg = moon.get("sign","")
+        if msg == EXALT["Moon"]:
+            score += 4; notes.append("Moon exalted — strong emotional balance")
+        elif msg == DEBIL["Moon"]:
+            score -= 5; notes.append("Moon debilitated — mood swings & stress sensitivity")
+        if moon_house in (6,8,12):
+            score -= 4; notes.append(f"Moon in {moon_house}th — mental fatigue prone")
+        # Moon-Saturn close house = depression risk
+        sat = find_planet("Saturn")
+        if sat and abs((sat.get("house",0) or 0) - (moon_house or 0)) <= 1:
+            score -= 3; notes.append("Moon-Saturn proximity — emotional heaviness, needs grounding")
+
+    # Sun — vitality
+    sun = find_planet("Sun")
+    if sun:
+        ssg = sun.get("sign","")
+        if ssg == EXALT["Sun"]:
+            score += 3
+        elif ssg == DEBIL["Sun"]:
+            score -= 3; notes.append("Sun debilitated — low immunity periods possible")
+
+    # ── Live transit: Saturn / Mars / Rahu on health houses ──────────────
+    transit_notes = []
+    transit_planets_raw = []
+    try:
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        for p_name, p_id in (("Saturn", swe.SATURN), ("Mars", swe.MARS),
+                             ("Jupiter", swe.JUPITER), ("Rahu", swe.MEAN_NODE)):
+            res = swe.calc_ut(jd_now, p_id, flags)
+            t_lon = res[0][0] % 360
+            t_sign = SIGNS[int(t_lon // 30)]
+            t_house = ((SIGNS.index(t_sign) - asc_idx + 12) % 12) + 1
+            transit_planets_raw.append((p_name, t_sign, t_house))
+            if p_name == "Saturn" and t_house in (1, 6, 8, 12):
+                score -= 4
+                transit_notes.append(f"Saturn transiting {t_house}th — slow energy, needs extra rest")
+            if p_name == "Mars" and t_house in (1, 6, 8):
+                score -= 3
+                transit_notes.append(f"Mars transiting {t_house}th — be cautious with injuries & inflammation")
+            if p_name == "Jupiter" and t_house in (1, 5, 9):
+                score += 4
+                transit_notes.append(f"Jupiter transiting {t_house}th — protective & healing influence")
+            if p_name == "Rahu" and t_house in (1, 6, 8):
+                score -= 2
+                transit_notes.append(f"Rahu transiting {t_house}th — unusual symptoms may surface, check early")
+    except Exception:
+        pass
+
+    # ── Current dasha lord influence ─────────────────────────────────────
+    cd = kundli.get("currentDasha") or {}
+    md_lord = cd.get("maha","")
+    ad_lord = cd.get("antar","")
+    DASHA_HEALTH = {
+        "Jupiter": +5, "Venus": +3, "Mercury": +2, "Moon": +1,
+        "Sun": 0, "Mars": -3, "Saturn": -4, "Rahu": -5, "Ketu": -4,
+    }
+    if md_lord in DASHA_HEALTH:
+        score += DASHA_HEALTH[md_lord]
+    if ad_lord in DASHA_HEALTH:
+        score += DASHA_HEALTH[ad_lord] // 2
+
+    # Clamp
+    score = max(25, min(95, score))
+    if score >= 70:
+        risk = "Low"
+        summary = "Aapki health energy strong dikh rahi hai. Routine maintain karein, sab achha rahega."
+    elif score >= 50:
+        risk = "Moderate"
+        summary = "Health mixed phase mein hai. Sleep, food aur stress management pe dhyan dein — chhoti aadat badi rakshak hoti hai."
+    else:
+        risk = "High"
+        summary = "Body abhi extra care maang rahi hai. Kuch areas mein dhyan dene se bade issue tale ja sakte hain. Doctor consult zaroori lagey to lein."
+
+    hook = "A hidden health risk period is indicated — full timing and causes are revealed in Pro."
+
+    plan = effective_plan(user)
+    is_pro_user = plan in ("pro", "trial")
+
+    response = {
+        "level":      "pro" if is_pro_user else "basic",
+        "pro_locked": not is_pro_user,
+        "basic": {
+            "score":   score,
+            "risk":    risk,
+            "summary": summary,
+            "hook":    hook,
+        },
+    }
+
+    if is_pro_user:
+        # ── Pro deep-dive ────────────────────────────────────────────────
+        def planet_strength(name):
+            p = find_planet(name)
+            if not p: return None
+            sg = p.get("sign","")
+            status = "neutral"
+            if name in EXALT and sg == EXALT[name]:    status = "exalted"
+            elif name in DEBIL and sg == DEBIL[name]:  status = "debilitated"
+            elif sg in OWN.get(name, []):              status = "own sign"
+            return {"name": name, "sign": sg, "house": p.get("house"),
+                    "status": status, "retrograde": bool(p.get("retrograde"))}
+
+        houses_block = {
+            "h1":  {"sign": sign_of_1st,  "lord": lord_1st,
+                    "occupants": ", ".join(p["name"] for p in p1) or "Khaali",
+                    "meaning": "Body & vitality"},
+            "h6":  {"sign": sign_of_6th,  "lord": lord_6th,
+                    "occupants": ", ".join(p["name"] for p in p6) or "Khaali",
+                    "meaning": "Disease & immunity"},
+            "h8":  {"sign": sign_of_8th,  "lord": lord_8th,
+                    "occupants": ", ".join(p["name"] for p in p8) or "Khaali",
+                    "meaning": "Chronic & longevity"},
+            "h12": {"sign": sign_of_12th, "lord": SIGN_LORD[sign_of_12th],
+                    "occupants": ", ".join(p["name"] for p in p12) or "Khaali",
+                    "meaning": "Sleep & hidden issues"},
+        }
+
+        planets_block = [planet_strength(n) for n in ("Moon","Sun","Saturn","Mars","Jupiter")]
+        planets_block = [p for p in planets_block if p]
+
+        # Risk periods (qualitative based on dasha)
+        risk_periods = []
+        if md_lord in ("Saturn","Rahu","Ketu","Mars"):
+            risk_periods.append(f"Current {md_lord} mahadasha — extra rest, regular checkups recommended.")
+        if ad_lord in ("Saturn","Mars","Rahu","Ketu") and ad_lord != md_lord:
+            risk_periods.append(f"{md_lord}-{ad_lord} antardasha (ends {cd.get('endDate','')}) — peak window for stress or minor health flare-ups.")
+        if any(("Saturn" in t or "Mars" in t) and ("transiting" in t) for t in transit_notes):
+            risk_periods.append("Live transit also indicates a sensitivity window — slow down for next few weeks.")
+        if not risk_periods:
+            risk_periods.append("Koi major risk period abhi nahi hai. Routine care kaafi hai.")
+
+        # Nature of issues — derived from afflicted planets/houses
+        nature = []
+        sat = find_planet("Saturn")
+        mars = find_planet("Mars")
+        merc = find_planet("Mercury")
+        if sat and sat.get("house") in (1,6,8,12):
+            nature.append("Joint, bone ya knee-related stiffness — daily stretching aur warmth helpful.")
+        if mars and mars.get("house") in (1,6,8):
+            nature.append("Inflammation, acidity, blood-pressure ya minor injuries ka chance — spicy food kam karein.")
+        if merc and merc.get("house") in (6,8,12):
+            nature.append("Nervous system aur digestion sensitive — calm routine + light meals.")
+        if moon and (moon_house in (6,8,12) or moon.get("sign") == DEBIL["Moon"]):
+            nature.append("Stress, mood swings, neend mein disturbance — pranayam aur 7-8 hour sleep zaroori.")
+        if not nature:
+            nature.append("Constitution overall steady hai — minor seasonal issues hi expected hain.")
+
+        # Recovery strength
+        jup = find_planet("Jupiter")
+        ven = find_planet("Venus")
+        recovery_score = 0
+        if jup:
+            if jup.get("house") in (1,5,9): recovery_score += 2
+            if jup.get("sign") == EXALT["Jupiter"]: recovery_score += 2
+        if ven and ven.get("house") in (1,4,7,10): recovery_score += 1
+        if l1 and l1.get("house") in (1,4,5,7,9,10): recovery_score += 1
+        if recovery_score >= 4:
+            recovery = "Strong — body bounces back fast. Healing energies actively support you."
+        elif recovery_score >= 2:
+            recovery = "Moderate — recovery aaram se hoti hai with proper rest aur diet."
+        else:
+            recovery = "Slow — patience zaroori hai. Recovery time genuinely lagta hai, jaldbazi mat karein."
+
+        # Preventive guidance
+        prevent = [
+            "Daily 30 min walk ya light yoga — circulation aur immunity dono ke liye base hai.",
+            "Subah Surya ko jal arpan + 10 min sunlight — Sun energy strengthen karta hai.",
+            "Sleep 10:30 PM se pehle, screen 1 hour pehle band — Moon ki energy balance karega.",
+            "Hydration + warm cooked food — Vata aur acidity dono ke liye supportive.",
+        ]
+        if sat and sat.get("house") in (1,6,8,12):
+            prevent.append("Saturn affliction — black sesame oil massage, knees aur lower back ka extra dhyan.")
+        if mars and mars.get("house") in (1,6,8):
+            prevent.append("Mars affliction — alcohol/spice cut down, anger pe Pranayam helpful.")
+
+        # Remedies — gentle, mantra + lifestyle (no fear)
+        remedies = []
+        if md_lord == "Saturn" or (sat and sat.get("house") in (1,6,8,12)):
+            remedies.append("Shanivaar ko 'Om Sham Shanaischaraya Namah' 108 baar — Saturn ki heaviness halki hoti hai.")
+        if md_lord == "Mars" or (mars and mars.get("house") in (1,6,8)):
+            remedies.append("Mangalvaar ko Hanuman Chalisa — Mars ki agni constructive direction milti hai.")
+        if moon and (moon_house in (6,8,12) or moon.get("sign") == DEBIL["Moon"]):
+            remedies.append("Somvaar ko white food (rice/milk) + 'Om Som Somaya Namah' 108 baar — mind shanti milti hai.")
+        if md_lord == "Rahu" or md_lord == "Ketu":
+            remedies.append("Roz 5 min meditation + clean room — Rahu/Ketu ki chaos energy settle hoti hai.")
+        if not remedies:
+            remedies.append("Daily 'Maha Mrityunjaya Mantra' 11 baar — universal health protector.")
+            remedies.append("Tulsi ke 2-3 patte subah — natural immunity booster.")
+
+        response["pro"] = {
+            "houses":        houses_block,
+            "planets":       planets_block,
+            "transit":       transit_notes or ["No major adverse transit on health houses currently — protective phase."],
+            "risk_periods":  risk_periods,
+            "nature":        nature,
+            "recovery":      recovery,
+            "prevent":       prevent,
+            "remedies":      remedies,
+            "reasons":       notes[:8],
+        }
+
+    return jsonify(response)
+
+
 @app.route("/api/current_transits", methods=["GET"])
 def current_transits():
     """Real-time sidereal planetary positions (Lahiri ayanamsha) for all 9 grahas."""

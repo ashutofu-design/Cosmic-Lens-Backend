@@ -71,6 +71,7 @@ const CATEGORIES: Category[] = [
     badge: "Check Now",
     badgeIcon: "⚠️",
     subtitle: "Energy, health & risk prediction",
+    route: "/health",
   },
   {
     key: "finance",

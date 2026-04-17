@@ -1,9 +1,8 @@
-// Public API URL — exposed via localtunnel so it works on Indian cellular
-// carriers (Jio/Airtel) which block *.kirk.replit.dev. Server-side wrapper
-// (artifacts/api-server/start.sh) keeps this subdomain stable.
-const PUBLIC_API_DOMAIN = "cosmiclens-api.loca.lt";
+// API domain — points to the Replit dev server. Override at run time
+// with EXPO_PUBLIC_DOMAIN if you need a different host.
+const REPLIT_DOMAIN = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
 
-const domain = process.env.EXPO_PUBLIC_DOMAIN || PUBLIC_API_DOMAIN;
+const domain = process.env.EXPO_PUBLIC_DOMAIN || REPLIT_DOMAIN;
 
 export const API_BASE = `https://${domain}`;
 

@@ -329,16 +329,19 @@ const s = StyleSheet.create({
   },
   fieldLabel: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 2.4 },
 
-  phoneRow: { flexDirection: "row", alignItems: "center", borderRadius: 16, borderWidth: 1.2, overflow: "hidden", paddingRight: 10 },
+  phoneRow: { flexDirection: "row", alignItems: "stretch", borderRadius: 16, borderWidth: 1.2, overflow: "hidden", minHeight: 52 },
   phonePrefix: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 15,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14,
     borderRightWidth: 1,
   },
-  phonePrefixFlag: { fontSize: 18 },
+  phonePrefixFlag: { fontSize: 16, marginRight: 2 },
   phonePrefixCountry: { fontSize: 13, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
   phonePrefixCode: { fontSize: 15, fontFamily: "Nunito_700Bold" },
-  phoneInput: { flex: 1, fontSize: 15, paddingHorizontal: 12, fontFamily: "Nunito_500Medium" },
+  phoneInput: {
+    flex: 1, fontSize: 15, paddingHorizontal: 14, fontFamily: "Nunito_500Medium",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
+  },
 
   errorBox:  { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 },
   errorText: { fontSize: 12, color: "#f87171", fontFamily: "Nunito_500Medium", flex: 1 },

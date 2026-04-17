@@ -17,11 +17,13 @@ import {
 import Svg, { Circle, Defs, Ellipse, RadialGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { CountryPicker } from "@/components/CountryPicker";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { DEFAULT_COUNTRY, type Country } from "@/lib/countries";
 import { sendPhoneOtp, resetPendingVerification } from "@/lib/firebaseAuth";
 import { isFirebaseConfigured } from "@/lib/firebaseConfig";
 
@@ -38,6 +40,8 @@ export default function LoginScreen() {
   const [mobile,  setMobile]  = useState("");
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Reset any stale verification handle whenever the user lands on the login
   // screen (e.g. they hit "Number badlein" on the verify screen).
@@ -52,7 +56,11 @@ export default function LoginScreen() {
 
   async function sendOtp() {
     const digits = mobile.replace(/\D/g, "");
-    if (digits.length !== 10 || !"6789".includes(digits[0])) {
+    if (digits.length < country.minLen || digits.length > country.maxLen) {
+      setError(t.invalidPhone);
+      return;
+    }
+    if (country.code === "IN" && !"6789".includes(digits[0] || "")) {
       setError(t.invalidPhone);
       return;
     }
@@ -65,7 +73,7 @@ export default function LoginScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
     try {
-      const e164 = `+91${digits}`;
+      const e164 = `+${country.dial}${digits}`;
       await sendPhoneOtp(e164);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -73,7 +81,7 @@ export default function LoginScreen() {
         pathname: "/verify-otp",
         params: {
           phone:    digits,
-          cc:       "91",
+          cc:       country.dial,
           cooldown: "30",
         },
       });
@@ -179,19 +187,26 @@ export default function LoginScreen() {
               s.phoneRow,
               { backgroundColor: C.inputBg, borderColor: error ? "rgba(239,68,68,0.5)" : C.inputBorder }
             ]}>
-              <View style={[s.phonePrefix, { borderRightColor: C.border }]}>
-                <Text style={s.phonePrefixFlag}>🇮🇳</Text>
-                <Text style={[s.phonePrefixCountry, { color: C.textMuted }]}>India</Text>
-                <Text style={[s.phonePrefixCode, { color: C.text }]}>+91</Text>
-              </View>
+              <Pressable
+                onPress={() => { setPickerOpen(true); }}
+                style={({ pressed }) => [
+                  s.phonePrefix,
+                  { borderRightColor: C.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+                hitSlop={6}
+              >
+                <Text style={s.phonePrefixFlag}>{country.flag}</Text>
+                <Text style={[s.phonePrefixCode, { color: C.text }]}>+{country.dial}</Text>
+                <Feather name="chevron-down" size={14} color={C.textMuted} />
+              </Pressable>
               <TextInput
                 style={[s.phoneInput, { color: C.text }]}
                 value={mobile}
-                onChangeText={v => { setMobile(v.replace(/\D/g, "").slice(0, 10)); setError(""); }}
-                placeholder={t.mobileNumberPh}
+                onChangeText={v => { setMobile(v.replace(/\D/g, "").slice(0, country.maxLen)); setError(""); }}
+                placeholder={`${country.maxLen}-digit number`}
                 placeholderTextColor={isDark ? "#3d2b6b" : "#94A3B8"}
                 keyboardType="number-pad"
-                maxLength={10}
+                maxLength={country.maxLen}
                 returnKeyType="done"
                 onSubmitEditing={sendOtp}
                 autoFocus
@@ -283,6 +298,13 @@ export default function LoginScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <CountryPicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(c) => { setCountry(c); setMobile(""); setError(""); }}
+        selectedCode={country.code}
+      />
     </CosmicBg>
   );
 }
@@ -313,6 +335,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 15,
     borderRightWidth: 1,
   },
+  phonePrefixFlag: { fontSize: 18 },
   phonePrefixCountry: { fontSize: 13, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
   phonePrefixCode: { fontSize: 15, fontFamily: "Nunito_700Bold" },
   phoneInput: { flex: 1, fontSize: 15, paddingHorizontal: 12, fontFamily: "Nunito_500Medium" },

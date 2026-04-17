@@ -39,8 +39,12 @@ COOLDOWN_SECONDS    = 60          # min interval between two send-OTP for same p
 MAX_VERIFY_ATTEMPTS = 5           # incorrect OTP entries before request is invalidated
 MAX_SENDS_PER_HOUR  = 5           # anti-spam: max OTP sends per phone per rolling hour
 
-# MSG91 endpoints (Flow API — sends DLT-compliant template SMS)
-MSG91_SEND_URL = "https://control.msg91.com/api/v5/flow"
+# MSG91 endpoints
+# SendOTP API — works with templates created in OTP Widget/SDK section.
+# Flow API — works with templates created in SMS Flow section.
+# We default to SendOTP (matches the template type most users create first).
+MSG91_OTP_URL  = "https://control.msg91.com/api/v5/otp"
+MSG91_FLOW_URL = "https://control.msg91.com/api/v5/flow"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,16 +93,19 @@ def _msg91_configured() -> bool:
 
 def send_sms_via_msg91(phone_e164: str, otp_code: str) -> tuple[bool, str]:
     """
-    Send OTP via MSG91 Flow API. Requires DLT-registered template.
-    Template variable convention: ##OTP## placeholder in template body
-    (configurable via MSG91_OTP_VAR env var, default "OTP").
+    Send OTP via MSG91. Two API modes are supported, controlled by MSG91_API_MODE:
+      - "otp"  (default) — SendOTP API (templates from OTP Widget/SDK section)
+      - "flow"           — Flow API   (templates from SMS Flow section, custom variables)
+
+    Both require an MSG91-approved template ID.
 
     Returns (success, message_or_error).
     """
     auth_key    = os.environ.get("MSG91_AUTH_KEY", "").strip()
     template_id = os.environ.get("MSG91_TEMPLATE_ID", "").strip()
-    sender_id   = os.environ.get("MSG91_SENDER_ID", "").strip()  # optional, template default used
+    sender_id   = os.environ.get("MSG91_SENDER_ID", "").strip()  # optional
     otp_var     = os.environ.get("MSG91_OTP_VAR", "OTP").strip() or "OTP"
+    api_mode    = (os.environ.get("MSG91_API_MODE", "otp").strip() or "otp").lower()
 
     if not auth_key or not template_id:
         return False, "MSG91 not configured (missing MSG91_AUTH_KEY/MSG91_TEMPLATE_ID)"
@@ -106,22 +113,32 @@ def send_sms_via_msg91(phone_e164: str, otp_code: str) -> tuple[bool, str]:
     # MSG91 expects mobile WITHOUT '+' prefix
     mobile = phone_e164.lstrip("+")
 
-    # Flow API body — template variables are arbitrary keys
-    payload = {
-        "template_id": template_id,
-        "recipients": [
-            {
-                "mobiles": mobile,
-                otp_var:   otp_code,
-            }
-        ],
-    }
-    if sender_id:
-        payload["sender"] = sender_id
+    if api_mode == "flow":
+        url = MSG91_FLOW_URL
+        payload = {
+            "template_id": template_id,
+            "recipients": [{"mobiles": mobile, otp_var: otp_code}],
+        }
+        if sender_id:
+            payload["sender"] = sender_id
+    else:
+        # SendOTP API — pass our generated OTP so backend hashing/verify logic stays
+        # in our hands. MSG91 will substitute ##OTP## (or the configured var) in the
+        # approved template content.
+        url = MSG91_OTP_URL
+        payload = {
+            "template_id": template_id,
+            "mobile":      mobile,
+            "otp":         otp_code,
+            "otp_length":  OTP_LENGTH,
+            "otp_expiry":  OTP_TTL_MINUTES,
+        }
+        if sender_id:
+            payload["sender"] = sender_id
 
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        MSG91_SEND_URL,
+        url,
         data=body,
         method="POST",
         headers={
@@ -139,7 +156,6 @@ def send_sms_via_msg91(phone_e164: str, otp_code: str) -> tuple[bool, str]:
                 data = json.loads(raw)
             except Exception:
                 pass
-            # MSG91 success shape: {"type":"success", ...} or {"message":"..."}
             if (data.get("type") == "success") or (resp.status in (200, 201)):
                 return True, data.get("message", "sent")
             return False, f"MSG91 rejected: {raw[:200]}"

@@ -46,6 +46,34 @@ DEBILITATION = {
     "Jupiter": 9, "Venus": 5, "Saturn": 0,
 }
 
+# Own / Mool-trikona signs — planet feels "at home" → strong dignity.
+OWN_SIGNS: Dict[str, set] = {
+    "Sun":     {4},        # Leo
+    "Moon":    {3},        # Cancer
+    "Mars":    {0, 7},     # Aries + Scorpio
+    "Mercury": {2, 5},     # Gemini + Virgo
+    "Jupiter": {8, 11},    # Sagittarius + Pisces
+    "Venus":   {1, 6},     # Taurus + Libra
+    "Saturn":  {9, 10},    # Capricorn + Aquarius
+}
+
+# Yogakaraka planet per ascendant sign (rules both a kendra AND a trikona).
+# These planets become exceptionally auspicious during their dasha.
+YOGAKARAKA = {
+    1: "Saturn",   # Taurus lagna
+    3: "Mars",     # Cancer lagna
+    4: "Mars",     # Leo lagna
+    6: "Saturn",   # Libra lagna
+    9: "Venus",    # Capricorn lagna
+    10: "Venus",   # Aquarius lagna
+}
+
+# Combustion orbs (degrees from Sun) — planet within this becomes weak.
+COMBUST_ORB = {
+    "Moon": 12.0, "Mars": 17.0, "Mercury": 14.0,
+    "Jupiter": 11.0, "Venus": 10.0, "Saturn": 15.0,
+}
+
 # Tara Bal mapping (0-8 → score)
 TARA_SCORES = [60, 85, 35, 80, 45, 88, 30, 75, 95]
 TARA_NAMES  = ["Janma", "Sampat", "Vipat", "Kshema", "Pratyak",
@@ -143,50 +171,109 @@ def _resolve_current_dasha(dashas: List[Dict[str, Any]],
             pd.get("planet") if pd else None)
 
 
-def _score_dasha_planet(planet: str, house: Optional[int]) -> int:
-    """Score a single dasha lord 0-100 based on placement + nature."""
-    nat = _classify(planet)
-    if house is None:
-        # Unknown placement — fall back to nature-only.
-        return {"benefic": 70, "malefic": 45, "neutral": 60}[nat]
+def _is_combust(planet: str, planets: List[Dict[str, Any]]) -> bool:
+    """True if planet is within combustion orb of the Sun."""
+    if planet not in COMBUST_ORB:
+        return False
+    lon_of = {p.get("name"): p.get("lon") for p in planets or []
+              if isinstance(p.get("lon"), (int, float))}
+    sun = lon_of.get("Sun")
+    pl  = lon_of.get(planet)
+    if sun is None or pl is None:
+        return False
+    diff = abs(((pl - sun + 180) % 360) - 180)
+    return diff < COMBUST_ORB[planet]
 
-    if nat == "benefic":
-        if house in KENDRA_TRIKONA: return 90       # benefic in best houses
-        if house in DUSHTHANA:      return 55       # benefic in dushthana
-        return 75                                   # benefic in 2/3/11
-    if nat == "malefic":
-        if house in DUSHTHANA:      return 38       # malefic in 6/8/12
-        if house in KENDRA_TRIKONA: return 60       # malefic in kendra
-        return 50                                   # malefic in 2/3/11
-    # neutral
-    if house in KENDRA_TRIKONA: return 75
-    if house in DUSHTHANA:      return 45
-    return 60
+
+def _score_dasha_planet(planet: str,
+                        house: Optional[int],
+                        sign: Optional[int],
+                        lagna_sign: int,
+                        planets: List[Dict[str, Any]]) -> Tuple[int, Dict[str, Any]]:
+    """Score a single dasha lord 0-100 with full dignity + yogakaraka + combust."""
+    nat = _classify(planet)
+    reasons: List[str] = []
+
+    # ── Base score from placement + nature ──────────────────────────
+    if house is None:
+        base = {"benefic": 70, "malefic": 45, "neutral": 60}[nat]
+        reasons.append(f"{nat} (house unknown)")
+    elif nat == "benefic":
+        if   house in KENDRA_TRIKONA: base = 88; reasons.append("benefic in kendra/trikona")
+        elif house in DUSHTHANA:      base = 55; reasons.append("benefic in 6/8/12")
+        else:                         base = 72; reasons.append("benefic in 2/3/11")
+    elif nat == "malefic":
+        if   house in DUSHTHANA:      base = 38; reasons.append("malefic in 6/8/12")
+        elif house in KENDRA_TRIKONA: base = 58; reasons.append("malefic in kendra/trikona")
+        else:                         base = 48; reasons.append("malefic in 2/3/11")
+    else:
+        if   house in KENDRA_TRIKONA: base = 72
+        elif house in DUSHTHANA:      base = 45
+        else:                         base = 60
+
+    # ── Yogakaraka boost (huge factor classically) ──────────────────
+    if YOGAKARAKA.get(lagna_sign) == planet:
+        base += 12
+        reasons.append("YOGAKARAKA for lagna")
+
+    # ── Dignity (sign-based) ────────────────────────────────────────
+    if sign is not None:
+        if EXALTATION.get(planet) == sign:
+            base += 10; reasons.append("exalted")
+        elif sign in OWN_SIGNS.get(planet, set()):
+            base += 7;  reasons.append("own sign")
+        elif DEBILITATION.get(planet) == sign:
+            base -= 12; reasons.append("debilitated")
+
+    # ── Combustion penalty ──────────────────────────────────────────
+    if _is_combust(planet, planets):
+        base -= 8
+        reasons.append("combust")
+
+    final = max(5, min(100, base))
+    return final, {"reasons": reasons, "base": base}
 
 
 def compute_dasha_score(kundli: Dict[str, Any],
-                        today: str) -> Tuple[float, Dict[str, Any]]:
-    """Return (score 0-100, detail dict) for current MD/AD/PD."""
+                        today: str,
+                        lagna_sign: int) -> Tuple[float, Dict[str, Any]]:
+    """
+    Weighted MD/AD/PD score (MD 50%, AD 30%, PD 20%) with dignity, yogakaraka,
+    and combustion factored into each lord's individual score.
+    """
     dashas = kundli.get("dashas") or kundli.get("chart_data", {}).get("dashas")
     if not dashas:
-        return 60.0, {"reason": "no_dasha_data", "md": None, "ad": None, "pd": None}
+        return 60.0, {"reason": "no_dasha_data"}
 
     md, ad, pd = _resolve_current_dasha(dashas, today)
-    houses = _planet_house_lookup(kundli.get("planets") or
-                                  kundli.get("chart_data", {}).get("planets") or [])
+    planets = (kundli.get("planets")
+               or kundli.get("chart_data", {}).get("planets") or [])
+    houses  = _planet_house_lookup(planets)
+    signs   = _planet_sign_lookup(planets, lagna_sign)
 
-    parts: List[int] = []
+    weights = {"md": 0.50, "ad": 0.30, "pd": 0.20}
     detail: Dict[str, Any] = {}
+    weighted_sum = 0.0
+    weight_total = 0.0
+
     for label, planet in (("md", md), ("ad", ad), ("pd", pd)):
         if not planet:
             continue
-        sc = _score_dasha_planet(planet, houses.get(planet))
-        detail[label] = {"planet": planet, "house": houses.get(planet), "score": sc}
-        parts.append(sc)
+        sc, meta = _score_dasha_planet(planet, houses.get(planet),
+                                       signs.get(planet), lagna_sign, planets)
+        detail[label] = {
+            "planet": planet,
+            "house":  houses.get(planet),
+            "sign":   signs.get(planet),
+            "score":  sc,
+            "reasons": meta["reasons"],
+        }
+        weighted_sum += sc * weights[label]
+        weight_total += weights[label]
 
-    if not parts:
+    if weight_total == 0:
         return 60.0, {"reason": "no_active_period", **detail}
-    return float(sum(parts) / len(parts)), detail
+    return weighted_sum / weight_total, detail
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -194,12 +281,34 @@ def compute_dasha_score(kundli: Dict[str, Any],
 # ──────────────────────────────────────────────────────────────────────────────
 
 def compute_moon_transit_score(moon_today_sign: int,
-                               lagna_sign: int) -> Tuple[float, Dict[str, Any]]:
+                               lagna_sign: int,
+                               birth_moon_sign: Optional[int] = None
+                               ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Lagna-relative house placement + Chandrashtama check.
+    Chandrashtama = Moon transits 8th sign from natal Moon → classically
+    very inauspicious; overrides the placement score.
+    """
     house = ((moon_today_sign - lagna_sign) % 12) + 1
-    if house in {1, 5, 9, 10}: score = 85
-    elif house in {2, 3, 7, 11}: score = 70
-    else: score = 42  # 4,6,8,12
-    return float(score), {"house": house, "moon_sign": moon_today_sign}
+    if house in {1, 5, 9, 10}:    score = 85
+    elif house in {4}:            score = 70   # kendra but less
+    elif house in {2, 3, 7, 11}:  score = 68
+    elif house in {6}:            score = 50
+    else:                         score = 40   # 8, 12
+
+    detail: Dict[str, Any] = {"house": house, "moon_sign": moon_today_sign,
+                              "chandrashtama": False}
+
+    if birth_moon_sign is not None:
+        from_natal = ((moon_today_sign - birth_moon_sign) % 12) + 1
+        detail["from_natal_moon"] = from_natal
+        if from_natal == 8:
+            score = min(score, 25)
+            detail["chandrashtama"] = True
+        elif from_natal in {1, 3, 6, 7, 10, 11}:
+            score += 5   # auspicious placements from janma rashi
+
+    return float(max(0, min(100, score))), detail
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -223,8 +332,9 @@ def compute_ashtakavarga_score(planets: List[Dict[str, Any]],
             if rel in rules[c]:
                 total += 1
 
-    # Normalise: 28 average → 50, 56 max → 100, 0 → 0
-    score = max(0.0, min(100.0, (total / 56.0) * 100.0 * 1.6))  # 1.6× boost
+    # Realistic curve: 20 bindus → 0, 30 → 50, 40+ → 100. Matches real-world
+    # distribution where moon-sign totals typically range 22-38.
+    score = max(0.0, min(100.0, (total - 20) * 5.0))
     return score, {"bindus": total, "max": 56}
 
 
@@ -373,9 +483,15 @@ def calculate_energy(user_data: Dict[str, Any],
                       or (user_data.get("chart_data") or {}).get("nakshatra"))
     birth_nak_idx  = NAKSHATRAS.index(birth_nak_name) if birth_nak_name in NAKSHATRAS else -1
 
+    # ── Birth Moon sign (for chandrashtama) ──────────────────────────────
+    birth_moon_sign: Optional[int] = None
+    _sign_map = _planet_sign_lookup(planets, lagna_sign)
+    if "Moon" in _sign_map:
+        birth_moon_sign = _sign_map["Moon"]
+
     # ── Components ───────────────────────────────────────────────────────
-    dasha_sc,  dasha_d  = compute_dasha_score(user_data, today)
-    moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign)
+    dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
+    moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign, birth_moon_sign)
     av_sc,     av_d     = compute_ashtakavarga_score(planets, lagna_sign, moon_sign)
     tara_sc,   tara_d   = compute_tara_score(moon_nak, birth_nak_idx)
     asp_sc,    asp_d    = compute_aspect_strength_score(planets, lagna_sign)

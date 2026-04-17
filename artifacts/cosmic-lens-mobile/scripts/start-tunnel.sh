@@ -92,7 +92,14 @@ if [ "$TUNNEL_OK" = false ]; then
   sleep 2
   pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
   METRO_PID=$!
-  EXPO_URL="exp://${REPLIT_DEV_DOMAIN}"
+  # Prefer Replit's dedicated Expo proxy domain — it bypasses workspace auth so
+  # Expo Go on a physical phone can reach Metro. Falls back to the regular dev
+  # domain only if the Expo-specific one isn't injected (older Repls).
+  if [ -n "$REPLIT_EXPO_DEV_DOMAIN" ]; then
+    EXPO_URL="exp://${REPLIT_EXPO_DEV_DOMAIN}"
+  else
+    EXPO_URL="exp://${REPLIT_DEV_DOMAIN}"
+  fi
 fi
 
 echo "$EXPO_URL" > "$TUNNEL_URL_FILE"

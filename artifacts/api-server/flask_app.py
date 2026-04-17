@@ -80,6 +80,9 @@ LEGAL_HTML = """<!DOCTYPE html>
 
 <h1>Legal &amp; Policies</h1>
 <p class=\"lead\">Cosmic Lens — Vedic Astrology Platform. Last updated: April 2026.</p>
+<p style=\"background:#ede9fe;border-left:4px solid #6d28d9;padding:12px 16px;border-radius:6px;margin:0 0 24px;color:#4c1d95;font-weight:500\">
+  This page is publicly accessible and applies to all users of Cosmic Lens services.
+</p>
 
 <div class=\"toc\">
   <strong>Contents</strong>
@@ -138,7 +141,6 @@ LEGAL_HTML = """<!DOCTYPE html>
 <h3>Subscription Plans</h3>
 <ul>
   <li><strong>Free:</strong> basic kundli &amp; daily horoscope.</li>
-  <li><strong>7-Day Trial:</strong> ₹1 one-time, full Pro access for 7 days.</li>
   <li><strong>Basic:</strong> ₹199 per month, recurring monthly.</li>
   <li><strong>Pro:</strong> ₹499 per month, recurring monthly.</li>
 </ul>
@@ -158,7 +160,7 @@ LEGAL_HTML = """<!DOCTYPE html>
 <h2 id=\"refund\">3. Refund &amp; Cancellation Policy</h2>
 
 <div class=\"highlight\">
-  <strong>Quick summary:</strong> Cancel anytime. Refunds available within 7 days of payment if the service was not used. ₹1 trial is non-refundable.
+  <strong>Quick summary:</strong> Cancel anytime. Refunds may be granted within 7 days of purchase if the service has not been meaningfully used, subject to review.
 </div>
 
 <h3>Cancellation</h3>
@@ -170,9 +172,8 @@ LEGAL_HTML = """<!DOCTYPE html>
 
 <h3>Refund Eligibility</h3>
 <ul>
-  <li><strong>Full refund:</strong> If you cancel within <strong>7 days</strong> of your first paid subscription (Basic or Pro) <em>and</em> have not consumed any premium feature beyond the free tier, you are eligible for a 100% refund.</li>
-  <li><strong>Partial refund:</strong> Not provided. Refunds are either full (within 7 days, unused) or none.</li>
-  <li><strong>Trial (₹1 / 7-day):</strong> Non-refundable due to its promotional nature.</li>
+  <li><strong>Refunds may be granted within 7 days of purchase if the service has not been meaningfully used, subject to review.</strong></li>
+  <li><strong>Partial refund:</strong> Not provided. Refunds are either full or none, based on review.</li>
   <li><strong>Renewal charges:</strong> Once a renewal is processed, that billing cycle is non-refundable. Cancel before the next billing date to avoid charges.</li>
 </ul>
 
@@ -192,12 +193,12 @@ LEGAL_HTML = """<!DOCTYPE html>
 <h2 id=\"disclaimer\">4. Disclaimer</h2>
 
 <div class=\"highlight\">
-  <strong>Important:</strong> Cosmic Lens is for entertainment and self-reflection purposes only. Astrological predictions are not a substitute for professional medical, legal, financial, or psychological advice.
+  <strong>Important:</strong> Cosmic Lens is for guidance and informational purposes only. Astrological predictions are not a substitute for professional medical, legal, financial, or psychological advice.
 </div>
 
 <ul>
+  <li>We do not guarantee the accuracy, completeness, or outcomes of any prediction.</li>
   <li>Predictions are generated using traditional Vedic astrology algorithms based on the birth details you provide. Accuracy depends entirely on the correctness of those inputs.</li>
-  <li>We make no guarantee regarding the outcomes of any prediction, remedy, or muhurat shown in the app.</li>
   <li>Any decisions you take based on the content (career, marriage, finance, health) are your sole responsibility.</li>
   <li>Always consult qualified professionals — doctors, lawyers, financial advisors — for matters in their respective fields.</li>
   <li>The app does not promote superstition or discrimination on the basis of caste, religion, or gender.</li>

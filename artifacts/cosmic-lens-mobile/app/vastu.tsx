@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { Magnetometer } from "expo-sensors";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -499,10 +500,10 @@ function VastuCompass() {
           <Text style={[cp.heading, { color: C.text }]}>Vastu Compass</Text>
           <Text style={[cp.subhead, { color: C.textMuted }]}>Sacred Direction Finder</Text>
         </View>
-        <View style={[cp.badge, { backgroundColor: isLive ? (C.isDark ? "#16a34a18" : "#DCFCE7") : (C.isDark ? "#64748b18" : "#F1F5F9") }]}>
-          <View style={[cp.dot, { backgroundColor: isLive ? "#22c55e" : "#64748b" }]} />
-          <Text style={[cp.badgeTxt, { color: isLive ? "#22c55e" : "#94a3b8" }]}>
-            {isLive ? "LIVE" : "STATIC"}
+        <View style={[cp.badge, { backgroundColor: isLive ? "rgba(249,215,107,0.10)" : "rgba(148,163,184,0.10)", borderWidth: 1, borderColor: isLive ? "rgba(249,215,107,0.4)" : "rgba(148,163,184,0.3)" }]}>
+          <View style={[cp.dot, { backgroundColor: isLive ? "#f9d76b" : "#94a3b8" }]} />
+          <Text style={[cp.badgeTxt, { color: isLive ? "#f9d76b" : "#94a3b8" }]}>
+            {isLive ? "SENSOR ACTIVE" : "ALIGNING…"}
           </Text>
         </View>
       </View>
@@ -981,7 +982,16 @@ export default function VastuScreen() {
   const [section, setSection] = useState<"basic" | "pro">("basic");
 
   return (
-    <View style={[s.root, { backgroundColor: C.bg }]}>
+    <View style={[s.root, { backgroundColor: C.isDark ? "#050709" : C.bg }]}>
+      {/* Premium dark gradient backdrop (black → deep brown) — dark mode only */}
+      {C.isDark && (
+        <LinearGradient
+          colors={["#050709", "#0a0604", "#1a0e02"]}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      )}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />

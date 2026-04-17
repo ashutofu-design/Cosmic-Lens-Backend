@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  Alert, Animated, Modal, Platform, Pressable,
+  Alert, Animated, Linking, Modal, Platform, Pressable,
   ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -495,9 +495,14 @@ export default function ProfileScreen() {
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>SUPPORT & ABOUT</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
+              icon="info"
+              label="About Cosmic Lens"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/about"); }}
+            />
+            <SettingRow
               icon="message-circle"
               label="Help & Support"
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL("mailto:support@cosmiclens.app"); }}
             />
             <SettingRow
               icon="star"
@@ -508,16 +513,47 @@ export default function ProfileScreen() {
               icon="share-2"
               label="Share App"
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              last
             />
+          </View>
+        </View>
+
+        {/* ── LEGAL ────────────────────────────────────────────────────── */}
+        <View>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>LEGAL & POLICIES</Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="shield"
               label="Privacy Policy"
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/privacy"); }}
             />
             <SettingRow
               icon="file-text"
               label="Terms of Service"
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/terms"); }}
+            />
+            <SettingRow
+              icon="rotate-ccw"
+              label="Refund & Cancellation"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/refund"); }}
+            />
+            <SettingRow
+              icon="alert-triangle"
+              label="Astrology Disclaimer"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/disclaimer"); }}
+              last
+            />
+          </View>
+        </View>
+
+        {/* ── DANGER ZONE ──────────────────────────────────────────────── */}
+        <View>
+          <Text style={[s.sectionLabel,{ color: "#ef4444" }]}>DANGER ZONE</Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: "rgba(239,68,68,0.25)" }]}>
+            <SettingRow
+              icon="trash-2"
+              label="Delete My Account"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/delete-account"); }}
               last
             />
           </View>

@@ -376,6 +376,60 @@ def save_user_kundli(user_id):
 
 # ── Multi-profile cloud sync ───────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ACCOUNT DELETION  (Play Store / App Store mandatory)
+# Permanently removes the user and all related personal data.
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/user/<int:user_id>/delete", methods=["POST", "DELETE"])
+def delete_user_account(user_id):
+    """Permanently delete a user and all related data (kundlis, profiles).
+    Requires X-API-Key matching the user. Idempotent: returns 200 even if
+    already deleted."""
+    # Idempotent: if the user no longer exists, treat any request bearing
+    # an X-API-Key header as already-deleted (200) so retries after network
+    # ambiguity succeed. Wrong/missing key on a NON-existent user is also
+    # treated as success — no data is leaked either way.
+    api_key = request.headers.get("X-API-Key", "").strip()
+    user    = User.query.get(user_id)
+    if not user:
+        return jsonify({
+            "ok":      True,
+            "message": "Account already deleted",
+            "note":    "No further action required.",
+        }), 200
+    if not api_key or user.api_key != api_key:
+        return jsonify({"error": "Unauthorized — invalid API key"}), 401
+
+    # Confirmation phrase required (mobile sends "DELETE")
+    body         = request.get_json(silent=True) or {}
+    confirmation = (body.get("confirm") or "").strip().upper()
+    if confirmation != "DELETE":
+        return jsonify({
+            "error": "Confirmation required. Send {\"confirm\":\"DELETE\"} to proceed.",
+        }), 400
+
+    deleted_email = user.email
+    try:
+        # 1) Delete kundlis (no CASCADE on this FK)
+        Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        # 2) Profiles cascade automatically via ondelete="CASCADE"
+        Profile.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        # 3) Delete the user row itself
+        db.session.delete(user)
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"Deletion failed: {exc}"}), 500
+
+    return jsonify({
+        "ok":      True,
+        "message": "Account permanently deleted",
+        "email":   deleted_email,
+        "note":    "Personal data has been erased. Tax invoices may be retained for 7 years per Indian law.",
+    })
+
+
 @app.route("/api/user/<int:user_id>/profiles", methods=["GET"])
 def list_user_profiles(user_id):
     """Return every profile saved by this user (self + family)."""

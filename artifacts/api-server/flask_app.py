@@ -3304,7 +3304,7 @@ def create_payment_order():
     if request.method == "OPTIONS":
         return jsonify({}), 200
 
-    import urllib.request as _req, json as _json
+    import urllib.request as _req, urllib.error as _err_mod, json as _json
 
     if not CASHFREE_APP_ID or not CASHFREE_SECRET:
         return jsonify({"error": "Cashfree not configured on server"}), 503
@@ -3386,10 +3386,19 @@ def create_payment_order():
     try:
         with _req.urlopen(cf_req, timeout=15) as resp:
             result = _json.loads(resp.read())
-    except _req.error.HTTPError as e:
-        detail = e.read().decode()
-        return jsonify({"error": "Cashfree order creation failed", "detail": detail}), 502
+    except _err_mod.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = ""
+        app.logger.error(f"Cashfree {e.code} on /orders: {detail}")
+        return jsonify({
+            "error":  "Cashfree order creation failed",
+            "code":   e.code,
+            "detail": detail,
+        }), 502
     except Exception as e:
+        app.logger.error(f"Cashfree network error: {e}")
         return jsonify({"error": str(e)}), 502
 
     session_id   = result.get("payment_session_id", "")

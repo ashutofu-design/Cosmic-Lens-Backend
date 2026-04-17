@@ -35,6 +35,10 @@ export interface SubscriptionInfo {
 export interface AuthUser {
   id: number;
   name: string;
+  /** Phone is the canonical identity since OTP migration. E.164 format e.g. "+919876543210". */
+  phone?: string;
+  country_code?: string;
+  /** Legacy field — empty string for OTP-created accounts; kept for backward compat. */
   email: string;
   api_key: string;
   is_pro?: boolean;

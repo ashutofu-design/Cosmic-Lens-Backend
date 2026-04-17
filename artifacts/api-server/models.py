@@ -13,9 +13,12 @@ class User(db.Model):
 
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(200), nullable=False, default="")
-    email          = db.Column(db.String(255), unique=True, nullable=False)
-    password       = db.Column(db.Text, nullable=True)
-    google_id      = db.Column(db.String(200), nullable=True)
+    # Phone-OTP is the canonical identity. Email kept nullable for legacy/demo only.
+    phone          = db.Column(db.String(20), unique=True, nullable=True, index=True)   # E.164 e.g. +919876543210
+    country_code   = db.Column(db.String(4),  nullable=True, default="91")
+    email          = db.Column(db.String(255), unique=True, nullable=True)             # legacy/demo only
+    password       = db.Column(db.Text, nullable=True)                                  # legacy
+    google_id      = db.Column(db.String(200), nullable=True)                          # legacy
     api_key        = db.Column(db.String(64), unique=True, nullable=True)
     is_pro         = db.Column(db.Boolean, default=False, nullable=False)
     is_admin       = db.Column(db.Boolean, default=False, nullable=False)
@@ -51,7 +54,9 @@ class User(db.Model):
         return {
             "id":           self.id,
             "name":         self.name,
-            "email":        self.email,
+            "phone":        self.phone or "",
+            "country_code": self.country_code or "",
+            "email":        self.email or "",   # kept for backward compat; empty for new OTP users
             "api_key":      self.api_key,
             "is_pro":       self.is_pro and plan_active,
             "plan":         self.plan if plan_active else "free",
@@ -146,6 +151,24 @@ class Profile(db.Model):
             "updatedAt":   self.updated_at.isoformat() if self.updated_at else None,
             "deletedAt":   self.deleted_at.isoformat() if self.deleted_at else None,
         }
+
+
+class OtpRequest(db.Model):
+    """
+    One row per OTP send. Used to enforce cooldowns, retry limits, and verification.
+    Verified rows are kept for audit. A nightly purge can drop rows > 30 days old
+    (not implemented yet — table stays small at expected volumes).
+    """
+    __tablename__ = "otp_requests"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    phone       = db.Column(db.String(20), nullable=False, index=True)        # canonical +ccNNNNN
+    otp_hash    = db.Column(db.Text, nullable=False)
+    expires_at  = db.Column(db.DateTime, nullable=False, index=True)
+    attempts    = db.Column(db.Integer, default=0, nullable=False)
+    verified    = db.Column(db.Boolean, default=False, nullable=False)
+    ip          = db.Column(db.String(64), default="", nullable=False)        # for audit only
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 def compute_birth_key(birth_data) -> str:

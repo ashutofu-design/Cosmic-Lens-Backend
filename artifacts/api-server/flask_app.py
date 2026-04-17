@@ -115,150 +115,116 @@ def geocode():
     return jsonify(results)
 
 
-@app.route("/api/auth/signup", methods=["POST"])
-def signup():
-    from subscription_helper import auto_start_trial_on_signup, subscription_status
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH — Phone OTP only (production: MSG91, dev: console log fallback).
+# Email/password and Google sign-in are removed; legacy endpoints return 410.
+# ─────────────────────────────────────────────────────────────────────────────
 
-    data  = request.get_json(force=True, silent=True) or {}
-    name  = (data.get("name") or "").strip()
-    email = (data.get("email") or "").strip().lower()
-    pwd   = data.get("password") or ""
-
-    if not name or not email or not pwd:
-        return jsonify({"error": "Name, email, and password are required"}), 400
-    if "@" not in email or "." not in email:
-        return jsonify({"error": "Enter a valid email address"}), 400
-    if len(pwd) < 6:
-        return jsonify({"error": "Password must be at least 6 characters"}), 400
-
-    if User.query.filter_by(email=email).first():
-        return jsonify({"error": "An account with this email already exists"}), 409
-
-    user = User(
-        name=name, email=email,
-        password=generate_password_hash(pwd),
-        api_key=secrets.token_hex(32),
-    )
-    db.session.add(user)
-    db.session.flush()
-    auto_start_trial_on_signup(user)   # 7-day trial begins immediately
-    db.session.commit()
-
-    payload = user.to_dict()
-    payload["subscription"] = subscription_status(user)
-    return jsonify(payload), 201
+from models import OtpRequest
+import otp_helper
 
 
-@app.route("/api/auth/login", methods=["POST"])
-def login():
-    data  = request.get_json(force=True, silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
-    pwd   = data.get("password") or ""
-
-    if not email or not pwd:
-        return jsonify({"error": "Email and password are required"}), 400
-
-    user = User.query.filter_by(email=email).first()
-    if not user or not user.password or not check_password_hash(user.password, pwd):
-        return jsonify({"error": "Invalid email or password"}), 401
-
-    # Generate api_key if user doesn't have one (backfill)
-    if not user.api_key:
-        user.api_key = secrets.token_hex(32)
-
-    user.last_active = datetime.utcnow()
-    db.session.commit()
-
-    from subscription_helper import subscription_status
-    payload = user.to_dict()
-    payload["subscription"] = subscription_status(user)
-    return jsonify(payload)
+def _client_ip() -> str:
+    # X-Forwarded-For first (proxied behind Replit) then remote_addr
+    fwd = request.headers.get("X-Forwarded-For", "")
+    return (fwd.split(",")[0].strip() if fwd else (request.remote_addr or ""))[:64]
 
 
-@app.route("/api/auth/mobile", methods=["POST"])
-def mobile_login():
-    data   = request.get_json(force=True, silent=True) or {}
-    mobile = (data.get("mobile") or "").strip().replace(" ", "").replace("-", "")
-
-    # Keep only digits
-    digits = "".join(c for c in mobile if c.isdigit())
-    if len(digits) < 7 or len(digits) > 15:
-        return jsonify({"error": "Valid mobile number enter karein (7–15 digits)"}), 400
-
-    pseudo_email = f"mobile:{digits}@cosmic.local"
-    user = User.query.filter_by(email=pseudo_email).first()
-
-    from subscription_helper import auto_start_trial_on_signup, subscription_status
-
-    if user:
-        user.last_active = datetime.utcnow()
-        if not user.api_key:
-            user.api_key = secrets.token_hex(32)
-        db.session.commit()
-        payload = user.to_dict()
-        payload["subscription"] = subscription_status(user)
-        return jsonify(payload)
-    else:
-        # Auto-create account
-        last4 = digits[-4:]
-        user = User(
-            name=f"User {last4}",
-            email=pseudo_email,
-            password=None,
-            api_key=secrets.token_hex(32),
-        )
-        db.session.add(user)
-        db.session.flush()
-        auto_start_trial_on_signup(user)
-        db.session.commit()
-        payload = user.to_dict()
-        payload["subscription"] = subscription_status(user)
-        return jsonify(payload), 201
-
-
-@app.route("/api/auth/google", methods=["POST"])
-def google_login():
-    data       = request.get_json(force=True, silent=True) or {}
-    credential = data.get("credential") or ""
-    client_id  = os.environ.get("GOOGLE_CLIENT_ID", "")
-
-    if not credential:
-        return jsonify({"error": "Google credential required"}), 400
-    if not client_id:
-        return jsonify({"error": "Google Sign-In is not configured on this server"}), 503
+@app.route("/api/auth/send-otp", methods=["POST"])
+def send_otp_route():
+    """
+    Body: { phone: "9876543210", country_code?: "91" }
+    Sends a 6-digit OTP via MSG91. Enforces 60-sec cooldown + 5/hour anti-spam.
+    Response: { ok, request_id, expires_in, cooldown }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    cc   = (data.get("country_code") or "91").strip()
+    ph   = (data.get("phone") or "").strip()
 
     try:
-        from google.oauth2 import id_token
-        from google.auth.transport import requests as g_requests
-        info      = id_token.verify_oauth2_token(credential, g_requests.Request(), client_id)
-        google_id = info["sub"]
-        email     = info.get("email", "").lower()
-        name      = info.get("name", "")
-    except Exception as exc:
-        return jsonify({"error": f"Google verification failed: {exc}"}), 401
+        _, _, e164 = otp_helper.normalize_phone(cc, ph)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
-    user = User.query.filter(
-        (User.email == email) | (User.google_id == google_id)
-    ).first()
+    res = otp_helper.send_otp(e164, OtpRequest, db, ip=_client_ip())
+    if not res.get("ok"):
+        return jsonify(res), 429
+    return jsonify(res)
 
+
+@app.route("/api/auth/verify-otp", methods=["POST"])
+def verify_otp_route():
+    """
+    Body: { phone, country_code?, otp, name? }
+    On verify success, finds-or-creates the User by phone and returns user payload
+    (with api_key) + subscription status. New users auto-get the 7-day trial.
+    """
     from subscription_helper import auto_start_trial_on_signup, subscription_status
 
-    if user:
-        user.google_id   = google_id
-        user.last_active = datetime.utcnow()
-        db.session.commit()
-        payload = user.to_dict()
-        payload["subscription"] = subscription_status(user)
-        return jsonify(payload)
-    else:
-        user = User(name=name, email=email, google_id=google_id)
+    data = request.get_json(force=True, silent=True) or {}
+    cc   = (data.get("country_code") or "91").strip()
+    ph   = (data.get("phone") or "").strip()
+    otp  = (data.get("otp") or "").strip()
+    name = (data.get("name") or "").strip()[:200]
+
+    try:
+        cc_norm, ph_norm, e164 = otp_helper.normalize_phone(cc, ph)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    res = otp_helper.verify_otp(e164, otp, OtpRequest, db)
+    if not res.get("ok"):
+        return jsonify(res), 401
+
+    # Find or create user by phone (canonical identity).
+    # Race-safe: catch IntegrityError from a parallel verify creating same phone.
+    from sqlalchemy.exc import IntegrityError
+    user = User.query.filter_by(phone=e164).first()
+    is_new = False
+    if not user:
+        is_new = True
+        last4 = ph_norm[-4:] if len(ph_norm) >= 4 else ph_norm
+        user = User(
+            name         = name or f"User {last4}",
+            phone        = e164,
+            country_code = cc_norm,
+            api_key      = secrets.token_hex(32),
+        )
         db.session.add(user)
-        db.session.flush()
-        auto_start_trial_on_signup(user)
-        db.session.commit()
-        payload = user.to_dict()
-        payload["subscription"] = subscription_status(user)
-        return jsonify(payload), 201
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            user = User.query.filter_by(phone=e164).first()
+            is_new = False
+            if not user:
+                return jsonify({"ok": False, "error": "User creation race; please retry"}), 500
+        if is_new:
+            auto_start_trial_on_signup(user)
+    else:
+        if not user.api_key:
+            user.api_key = secrets.token_hex(32)
+        user.last_active = datetime.utcnow()
+        # Update name if user provided one and account had a placeholder
+        if name and (not user.name or user.name.startswith("User ")):
+            user.name = name
+    db.session.commit()
+
+    payload = user.to_dict()
+    payload["subscription"] = subscription_status(user)
+    payload["is_new_user"]  = is_new
+    return jsonify(payload), (201 if is_new else 200)
+
+
+@app.route("/api/auth/signup", methods=["POST"])
+@app.route("/api/auth/login",  methods=["POST"])
+@app.route("/api/auth/mobile", methods=["POST"])
+@app.route("/api/auth/google", methods=["POST"])
+def _legacy_auth_gone():
+    return jsonify({
+        "error":   "endpoint_removed",
+        "message": "Login ab sirf mobile OTP se hota hai. App update karein.",
+    }), 410
 
 
 # ─────────────────────────────────────────────────────────────────────────────

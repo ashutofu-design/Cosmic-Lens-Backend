@@ -37,11 +37,28 @@ def init_db(app):
         db.create_all()
         # Safe migration: add api_key column if it doesn't exist
         try:
+            import os
             from sqlalchemy import text
             with db.engine.connect() as conn:
                 if "postgresql" in url:
                     conn.execute(text(
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key VARCHAR(64) UNIQUE"
+                    ))
+                    # Phone-OTP auth columns
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) UNIQUE"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS country_code VARCHAR(4) DEFAULT '91'"
+                    ))
+                    # Drop NOT NULL on email (phone is the new canonical identity).
+                    # IF EXISTS guard handles re-runs.
+                    try:
+                        conn.execute(text("ALTER TABLE users ALTER COLUMN email DROP NOT NULL"))
+                    except Exception:
+                        pass
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_users_phone ON users(phone)"
                     ))
                     conn.execute(text(
                         "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS birth_key VARCHAR(120)"
@@ -55,10 +72,22 @@ def init_db(app):
                     conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS ix_profiles_deleted_at ON profiles(deleted_at)"
                     ))
+                    # One-time pre-launch wipe of legacy email/google users.
+                    # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
+                    if os.environ.get("COSMIC_WIPE_USERS") == "1":
+                        try:
+                            conn.execute(text("TRUNCATE TABLE profiles, kundlis, otp_requests, users RESTART IDENTITY CASCADE"))
+                            print("[DB] WIPED users/profiles/kundlis/otp_requests (COSMIC_WIPE_USERS=1)")
+                        except Exception as e:
+                            print(f"[DB] Wipe skipped (table may not exist yet): {e}")
                 else:
-                    # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
+                    # SQLite doesn't support IF NOT EXISTS on ALTER TABLE.
+                    # Note: SQLite cannot drop NOT NULL via ALTER, but the dev DB will
+                    # be recreated on first run for a clean local schema if missing.
                     for stmt in (
                         "ALTER TABLE users ADD COLUMN api_key VARCHAR(64)",
+                        "ALTER TABLE users ADD COLUMN phone VARCHAR(20)",
+                        "ALTER TABLE users ADD COLUMN country_code VARCHAR(4) DEFAULT '91'",
                         "ALTER TABLE profiles ADD COLUMN birth_key VARCHAR(120)",
                         "ALTER TABLE profiles ADD COLUMN deleted_at TIMESTAMP",
                     ):

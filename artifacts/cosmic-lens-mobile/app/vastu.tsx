@@ -32,14 +32,14 @@ const HINDI_R        = SIZE * 0.285;
 
 // ── Vastu direction data ───────────────────────────────────────────────────────
 const DIRS = [
-  { deg:   0, short: "N",  hindi: "उत्तर", sub: "Uttar",    elem: "Vaayu",  color: "#f59e0b" },
-  { deg:  45, short: "NE", hindi: "ईशान",  sub: "Ishaan",   elem: "Divya",  color: "#a78bfa" },
-  { deg:  90, short: "E",  hindi: "पूर्व",  sub: "Poorv",    elem: "Surya",  color: "#fbbf24" },
-  { deg: 135, short: "SE", hindi: "अग्नि",  sub: "Agni",     elem: "Agni",   color: "#f97316" },
-  { deg: 180, short: "S",  hindi: "दक्षिण", sub: "Dakshin",  elem: "Yama",   color: "#ef4444" },
-  { deg: 225, short: "SW", hindi: "नैऋत्य", sub: "Nairitya", elem: "Prithvi",color: "#84cc16" },
-  { deg: 270, short: "W",  hindi: "पश्चिम", sub: "Paschim",  elem: "Jal",    color: "#38bdf8" },
-  { deg: 315, short: "NW", hindi: "वायव्य", sub: "Vaayu",    elem: "Vayu",   color: "#34d399" },
+  { deg:   0, short: "N",  hindi: "उत्तर", sub: "North",     deity: "Kubera", meaning: "WEALTH",   elem: "Vaayu",  color: "#fbbf24" },
+  { deg:  45, short: "NE", hindi: "ईशान",  sub: "Ishaan",    deity: "Ishaan", meaning: "DIVINITY", elem: "Divya",  color: "#c4b5fd" },
+  { deg:  90, short: "E",  hindi: "पूर्व",  sub: "East",      deity: "Surya",  meaning: "ENERGY",   elem: "Surya",  color: "#fde047" },
+  { deg: 135, short: "SE", hindi: "अग्नि",  sub: "Agni",      deity: "Agni",   meaning: "FIRE",     elem: "Agni",   color: "#fb923c" },
+  { deg: 180, short: "S",  hindi: "दक्षिण", sub: "South",     deity: "Yama",   meaning: "HONOR",    elem: "Yama",   color: "#f87171" },
+  { deg: 225, short: "SW", hindi: "नैऋत्य", sub: "Niriti",    deity: "Niriti", meaning: "EARTH",    elem: "Prithvi",color: "#a3e635" },
+  { deg: 270, short: "W",  hindi: "पश्चिम", sub: "West",      deity: "Varuna", meaning: "WATER",    elem: "Jal",    color: "#7dd3fc" },
+  { deg: 315, short: "NW", hindi: "वायव्य", sub: "Vayu",      deity: "Vayu",   meaning: "AIR",      elem: "Vayu",   color: "#6ee7b7" },
 ];
 
 // Compass bearing → SVG angle in radians (0° bearing = top)
@@ -180,16 +180,17 @@ function CompassRose() {
               {d.short}
             </SvgText>
 
-            {/* Hindi name — glowing color */}
+            {/* Deity / Element name in English — glowing jewel color */}
             <SvgText
               x={hx} y={hy}
               textAnchor="middle" alignmentBaseline="middle"
               fill={d.color}
-              fontSize={SIZE * 0.032}
+              fontSize={SIZE * 0.030}
               fontWeight="700"
               opacity={0.95}
+              letterSpacing={1.5}
             >
-              {d.hindi}
+              {d.deity.toUpperCase()}
             </SvgText>
           </G>
         );
@@ -620,7 +621,7 @@ function VastuCompass() {
       <View style={cp.headerRow}>
         <View>
           <Text style={[cp.heading, { color: C.text }]}>Vastu Compass</Text>
-          <Text style={[cp.subhead, { color: C.textMuted }]}>वास्तु कम्पास</Text>
+          <Text style={[cp.subhead, { color: C.textMuted }]}>Sacred Direction Finder</Text>
         </View>
         <View style={[cp.badge, { backgroundColor: isLive ? (C.isDark ? "#16a34a18" : "#DCFCE7") : (C.isDark ? "#64748b18" : "#F1F5F9") }]}>
           <View style={[cp.dot, { backgroundColor: isLive ? "#22c55e" : "#64748b" }]} />
@@ -1121,7 +1122,7 @@ export default function VastuScreen() {
               <Text style={s.premiumBadgeText}>PREMIUM</Text>
             </View>
           </View>
-          <Text style={[s.titleHindi, { color: C.textMuted }]}>वास्तु शास्त्र · Compass + Room-wise Guidance</Text>
+          <Text style={[s.titleHindi, { color: C.textMuted }]}>Sacred Compass · Room-wise Guidance</Text>
         </View>
       </View>
 

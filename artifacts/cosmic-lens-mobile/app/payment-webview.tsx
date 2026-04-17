@@ -17,6 +17,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
+import { PRICES } from "@/lib/subscription";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -28,14 +29,25 @@ const F = {
 type Phase = "creating" | "opening" | "verifying" | "success" | "failed" | "cancelled";
 
 const PLAN_LABELS: Record<string, string> = {
+  basic: "Basic",
   pro:   "Pro",
-  elite: "Elite",
+  elite: "Pro", // legacy alias
 };
-const PLAN_ICONS: Record<string, string> = { pro: "⚡", elite: "⭐" };
+const PLAN_ICONS: Record<string, string> = {
+  basic: "✨",
+  pro:   "⚡",
+  elite: "⚡",
+};
 const CYCLE_LABELS: Record<string, string> = { monthly: "Monthly", yearly: "Yearly" };
+// Single source of truth — mirrors backend PLAN_PRICES.
 const PLAN_PRICES: Record<string, number> = {
-  pro_monthly: 149, pro_yearly: 999,
-  elite_monthly: 399, elite_yearly: 2999,
+  basic_monthly: PRICES.basic_monthly,
+  basic_yearly:  PRICES.basic_yearly,
+  pro_monthly:   PRICES.pro_monthly,
+  pro_yearly:    PRICES.pro_yearly,
+  // legacy fallback (older builds may still send 'elite')
+  elite_monthly: PRICES.pro_monthly,
+  elite_yearly:  PRICES.pro_yearly,
 };
 
 export default function PaymentWebviewScreen() {

@@ -34,9 +34,7 @@ export default function MoreDrawer({
     {
       title: t.catRashifal,
       items: [
-        { id: "rashifal",  icon: "sun",        emoji: "☀️", title: t.mdRashifalTitle,  subtitle: t.mdRashifalSub,  route: "/rashifal",     accent: "#f59e0b" },
         { id: "lucky",     icon: "star",       emoji: "🍀", title: t.mdLuckyTitle,     subtitle: t.mdLuckySub,     route: "/lucky",        accent: "#22c55e" },
-        { id: "rashifal2", icon: "calendar",   emoji: "📅", title: t.mdWeeklyTitle,    subtitle: t.mdWeeklySub,    route: "/rashifal?tab=weekly", accent: "#60a5fa", badge: t.badgeNew },
       ],
     },
     {

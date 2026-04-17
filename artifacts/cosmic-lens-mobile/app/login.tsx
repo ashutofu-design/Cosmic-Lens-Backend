@@ -180,8 +180,8 @@ export default function LoginScreen() {
               { backgroundColor: C.inputBg, borderColor: error ? "rgba(239,68,68,0.5)" : C.inputBorder }
             ]}>
               <View style={[s.phonePrefix, { borderRightColor: C.border }]}>
-                <Text style={s.phonePrefixFlag}>🇮🇳</Text>
-                <Text style={[s.phonePrefixCode, { color: C.textMid }]}>+91</Text>
+                <Text style={[s.phonePrefixCountry, { color: C.textMuted }]}>IN</Text>
+                <Text style={[s.phonePrefixCode, { color: C.text }]}>+91</Text>
               </View>
               <TextInput
                 style={[s.phoneInput, { color: C.text }]}
@@ -298,22 +298,22 @@ const s = StyleSheet.create({
   subtitle: { fontSize: 12, fontFamily: "Nunito_400Regular", textAlign: "center", paddingHorizontal: 24 },
 
   card: {
-    width: "100%", maxWidth: 380, borderRadius: 20, padding: 20,
+    width: "100%", maxWidth: 380, borderRadius: 24, padding: 22,
     borderWidth: 1, gap: 14,
     shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18, shadowRadius: 24, elevation: 10,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22, shadowRadius: 28, elevation: 12,
   },
-  fieldLabel: { fontSize: 10, fontFamily: "Nunito_700Bold", letterSpacing: 2 },
+  fieldLabel: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 2.4 },
 
-  phoneRow: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  phoneRow: { flexDirection: "row", alignItems: "center", borderRadius: 16, borderWidth: 1.2, overflow: "hidden", paddingRight: 10 },
   phonePrefix: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, paddingVertical: 13,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 14, paddingVertical: 15,
     borderRightWidth: 1,
   },
-  phonePrefixFlag: { fontSize: 16 },
-  phonePrefixCode: { fontSize: 14, fontFamily: "Nunito_600SemiBold" },
+  phonePrefixCountry: { fontSize: 13, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
+  phonePrefixCode: { fontSize: 15, fontFamily: "Nunito_700Bold" },
   phoneInput: { flex: 1, fontSize: 15, paddingHorizontal: 12, fontFamily: "Nunito_500Medium" },
 
   errorBox:  { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 },
@@ -323,9 +323,9 @@ const s = StyleSheet.create({
 
   ctaBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, paddingVertical: 14, borderRadius: 14,
+    gap: 10, paddingVertical: 16, borderRadius: 999,
   },
-  ctaText: { fontSize: 14, color: "#fff", fontFamily: "Nunito_700Bold" },
+  ctaText: { fontSize: 15, color: "#fff", fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.3 },
 
   demoWrap: { width: "100%", maxWidth: 380, gap: 14, alignItems: "center", marginTop: 4 },
   divider:  { flexDirection: "row", alignItems: "center", gap: 10, width: "100%" },

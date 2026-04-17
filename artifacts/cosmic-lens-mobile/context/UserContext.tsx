@@ -14,14 +14,33 @@ export interface ProfileEntry {
   kundli: KundliData | null;
 }
 
+export interface SubscriptionInfo {
+  plan:                "free" | "trial" | "basic" | "pro" | "elite";
+  analysis_mode:       "basic" | "pro";
+  is_pro:              boolean;
+  is_basic_or_above:   boolean;
+  trial_eligible:      boolean;
+  trial_expires_at:    string | null;
+  plan_expires_at:     string | null;
+  limits: {
+    questions_per_day: number;   // -1 = unlimited
+    questions_used:    number;
+    timeline_months:   number;
+    profile_limit:     number;   // -1 = unlimited
+  };
+  prices: Record<string, number>;
+  trial_days: number;
+}
+
 export interface AuthUser {
   id: number;
   name: string;
   email: string;
   api_key: string;
   is_pro?: boolean;
-  plan?: "free" | "pro" | "elite";
+  plan?: "free" | "trial" | "basic" | "pro" | "elite";
   plan_expiry?: string | null;
+  subscription?: SubscriptionInfo;
 }
 
 type LangCode = UILang;

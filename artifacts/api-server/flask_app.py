@@ -117,6 +117,8 @@ def geocode():
 
 @app.route("/api/auth/signup", methods=["POST"])
 def signup():
+    from subscription_helper import auto_start_trial_on_signup, subscription_status
+
     data  = request.get_json(force=True, silent=True) or {}
     name  = (data.get("name") or "").strip()
     email = (data.get("email") or "").strip().lower()
@@ -138,8 +140,13 @@ def signup():
         api_key=secrets.token_hex(32),
     )
     db.session.add(user)
+    db.session.flush()
+    auto_start_trial_on_signup(user)   # 7-day trial begins immediately
     db.session.commit()
-    return jsonify(user.to_dict()), 201
+
+    payload = user.to_dict()
+    payload["subscription"] = subscription_status(user)
+    return jsonify(payload), 201
 
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -161,7 +168,11 @@ def login():
 
     user.last_active = datetime.utcnow()
     db.session.commit()
-    return jsonify(user.to_dict())
+
+    from subscription_helper import subscription_status
+    payload = user.to_dict()
+    payload["subscription"] = subscription_status(user)
+    return jsonify(payload)
 
 
 @app.route("/api/auth/mobile", methods=["POST"])
@@ -177,12 +188,16 @@ def mobile_login():
     pseudo_email = f"mobile:{digits}@cosmic.local"
     user = User.query.filter_by(email=pseudo_email).first()
 
+    from subscription_helper import auto_start_trial_on_signup, subscription_status
+
     if user:
         user.last_active = datetime.utcnow()
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
         db.session.commit()
-        return jsonify(user.to_dict())
+        payload = user.to_dict()
+        payload["subscription"] = subscription_status(user)
+        return jsonify(payload)
     else:
         # Auto-create account
         last4 = digits[-4:]
@@ -193,8 +208,12 @@ def mobile_login():
             api_key=secrets.token_hex(32),
         )
         db.session.add(user)
+        db.session.flush()
+        auto_start_trial_on_signup(user)
         db.session.commit()
-        return jsonify(user.to_dict()), 201
+        payload = user.to_dict()
+        payload["subscription"] = subscription_status(user)
+        return jsonify(payload), 201
 
 
 @app.route("/api/auth/google", methods=["POST"])
@@ -222,16 +241,76 @@ def google_login():
         (User.email == email) | (User.google_id == google_id)
     ).first()
 
+    from subscription_helper import auto_start_trial_on_signup, subscription_status
+
     if user:
         user.google_id   = google_id
         user.last_active = datetime.utcnow()
         db.session.commit()
-        return jsonify(user.to_dict())
+        payload = user.to_dict()
+        payload["subscription"] = subscription_status(user)
+        return jsonify(payload)
     else:
         user = User(name=name, email=email, google_id=google_id)
         db.session.add(user)
+        db.session.flush()
+        auto_start_trial_on_signup(user)
         db.session.commit()
-        return jsonify(user.to_dict()), 201
+        payload = user.to_dict()
+        payload["subscription"] = subscription_status(user)
+        return jsonify(payload), 201
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUBSCRIPTION endpoints (single source of truth: subscription_helper.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route("/api/subscription/status", methods=["GET"])
+def subscription_status_route():
+    """Returns the user's effective plan, trial state, daily quota, prices.
+    Anonymous (no user_id) → returns DEFAULT free-plan shape.
+    Authenticated → requires matching X-API-Key for that user_id (prevents IDOR)."""
+    from subscription_helper import subscription_status
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return jsonify(subscription_status(None))
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key or user.api_key != api_key:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    return jsonify(subscription_status(user))
+
+
+@app.route("/api/subscription/start-trial", methods=["POST"])
+def start_trial_route():
+    """Begin the 7-day free trial for a user (one-time)."""
+    from subscription_helper import start_trial, subscription_status
+    data    = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id")
+
+    user = User.query.get(user_id) if user_id else None
+    if not user:
+        return jsonify({"ok": False, "error": "User not found"}), 404
+
+    # Mandatory api-key check (prevents trial fraud / IDOR)
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key or user.api_key != api_key:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    res = start_trial(user)
+    if not res.get("ok"):
+        return jsonify(res), 400
+
+    return jsonify({
+        "ok":           True,
+        "expires_at":   res["expires_at"],
+        "subscription": subscription_status(user),
+    })
 
 
 # ── API key auth helper ────────────────────────────────────────────────────────
@@ -1037,20 +1116,53 @@ def dosh_analysis():
 def ask_route():
     """
     AI Ask engine — rule-based astrology question analysis.
-    Body: { question, kundli, lang, replyIdx }
-    Returns: { text, topic, confidence }
+    Body: { question, kundli, lang, replyIdx, user_id }
+    Returns: { text, topic, confidence, quota:{used,limit} }
+    On limit hit returns 402 with {error, quota, upgrade_required:true}.
     """
+    from subscription_helper import consume_question, effective_plan
+
     data = request.get_json(force=True, silent=True) or {}
     question  = data.get("question", "")
     kundli    = data.get("kundli")
     lang      = data.get("lang", "en")
     reply_idx = int(data.get("replyIdx", 0))
+    user_id   = data.get("user_id")
 
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
+    user = None
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+    else:
+        # Anonymous fallback — kept for legacy callers (e.g. preview/demo).
+        # No persistence; loose 1/req behaviour. Mobile clients should always
+        # send user_id+X-API-Key so quota truly enforces.
+        quota = {"used": 0, "limit": 1}
+
+    # ── Run engine ───────────────────────────────────────────────────────────
     try:
         result = process_ask(question, kundli, lang, reply_idx)
+        if isinstance(result, dict):
+            result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+            result["plan"]  = effective_plan(user) if user else "free"
         return jsonify(result)
     except Exception as exc:
         import traceback
@@ -1946,8 +2058,11 @@ CASHFREE_SECRET = os.environ.get("CASHFREE_SECRET_KEY", "")
 CASHFREE_ENV    = os.environ.get("CASHFREE_ENV", "sandbox")  # "sandbox" or "production"
 
 PLAN_PRICES = {
-    "pro_monthly":   149,
-    "pro_yearly":    999,
+    "basic_monthly": 199,
+    "basic_yearly":  1799,
+    "pro_monthly":   399,
+    "pro_yearly":    2999,
+    # legacy fallback (do not advertise)
     "elite_monthly": 399,
     "elite_yearly":  2999,
 }
@@ -1966,17 +2081,22 @@ def _cf_payment_url(session_id: str) -> str:
 
 
 def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
-    """Grant Pro/Elite plan to user and set expiry date."""
+    """Grant Basic / Pro / Elite plan to user and set expiry date."""
     from datetime import timedelta
     user = User.query.get(user_id)
     if not user:
         return False
     now = datetime.utcnow()
     expiry = now + timedelta(days=365 if cycle == "yearly" else 31)
+
+    # Treat 'elite' as legacy 'pro'
+    if plan == "elite":
+        plan = "pro"
+
     user.plan          = plan
     user.plan_expiry   = expiry
     user.plan_order_id = order_id
-    user.is_pro        = (plan in ("pro", "elite"))
+    user.is_pro        = (plan == "pro")
     db.session.commit()
     return True
 
@@ -1994,10 +2114,10 @@ def create_payment_order():
 
     data    = request.get_json() or {}
     user_id = data.get("user_id")
-    plan    = data.get("plan")   # "pro" or "elite"
+    plan    = data.get("plan")   # "basic" / "pro" / "elite"
     cycle   = data.get("cycle")  # "monthly" or "yearly"
 
-    if not user_id or plan not in ("pro", "elite") or cycle not in ("monthly", "yearly"):
+    if not user_id or plan not in ("basic", "pro", "elite") or cycle not in ("monthly", "yearly"):
         return jsonify({"error": "Invalid request: need user_id, plan, cycle"}), 400
 
     user = User.query.get(user_id)
@@ -2008,6 +2128,7 @@ def create_payment_order():
     amount   = PLAN_PRICES.get(plan_key, 0)
 
     # Unique order ID — encodes user/plan/cycle for webhook parsing
+    # plan codes: B=basic, P=pro, E=elite (legacy)
     ts       = int(datetime.utcnow().timestamp())
     order_id = f"CL{user_id}_{plan[0].upper()}{cycle[0].upper()}_{ts}"
 
@@ -2099,12 +2220,13 @@ def payment_status(order_id):
     paid = any(p.get("payment_status") == "SUCCESS" for p in payments)
 
     if paid:
-        # Parse order_id: CL{user_id}_{P/E}{M/Y}_{ts}
+        # Parse order_id: CL{user_id}_{B/P/E}{M/Y}_{ts}
         try:
             parts   = order_id.split("_")
             uid_str = parts[0][2:]          # strip "CL"
-            code    = parts[1]              # e.g. "PM" or "EY"
-            plan    = "pro" if code[0] == "P" else "elite"
+            code    = parts[1]              # e.g. "BM", "PY", "EY"
+            plan_map = {"B": "basic", "P": "pro", "E": "elite"}
+            plan    = plan_map.get(code[0], "pro")
             cycle   = "monthly" if code[1] == "M" else "yearly"
             _activate_plan(int(uid_str), plan, cycle, order_id)
             # Return fresh user data

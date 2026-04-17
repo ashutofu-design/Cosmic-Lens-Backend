@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -15,9 +16,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { useT } from "@/hooks/useT";
+import { usePlan, startTrial, PRICES, TRIAL_DAYS } from "@/lib/subscription";
 
-// ── Font aliases ───────────────────────────────────────────────────────────────
+// ── Font aliases ─────────────────────────────────────────────────────────────
 const F = {
   regular:  "Nunito_400Regular",
   medium:   "Nunito_500Medium",
@@ -25,181 +26,317 @@ const F = {
   bold:     "Nunito_700Bold",
 } as const;
 
-// ── Plans data ─────────────────────────────────────────────────────────────────
 type BillingCycle = "monthly" | "yearly";
 
+// ── Plans definition (mirrors backend subscription_helper.py) ────────────────
 const PLANS = [
   {
-    key: "free", name: "Free",
-    accent: "#64748b", accentBg: "rgba(71,85,105,0.08)",
-    border: "rgba(71,85,105,0.22)", badge: null,
-    monthlyPrice: 0, yearlyPrice: 0,
-    cta: "Current Plan", ctaActive: false,
-    icon: "circle" as const,
-    features: ["1 Profile", "Basic Kundli Chart", "3 AI Questions / day", "Demo Insights", "Basic Planet View"],
-    featureOff: ["Full Dasha Timeline", "7-Day Forecast", "PDF Report", "Kundli Milan"],
-  },
-  {
-    key: "pro", name: "Pro",
-    accent: "#f59e0b", accentBg: "rgba(245,158,11,0.05)",
-    border: "rgba(245,158,11,0.30)", badge: "POPULAR",
-    monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
-    cta: "Get Pro", ctaActive: true,
-    icon: "zap" as const,
-    features: ["5 Profiles", "Full Kundli + Dasha Timeline", "Unlimited AI Chat", "7-Day Forecast", "Planet Positions + Nakshatra", "Monthly Category Insights"],
-    featureOff: ["PDF Report", "Kundli Milan"],
-  },
-  {
-    key: "elite", name: "Elite",
-    accent: "#a78bfa", accentBg: "rgba(167,139,250,0.05)",
-    border: "rgba(167,139,250,0.30)", badge: "PREMIUM",
-    monthlyPrice: 399, yearlyPrice: 2999, yearlySave: 37,
-    cta: "Get Elite", ctaActive: true,
+    key: "basic" as const,
+    name: "Basic",
+    accent: "#a78bfa",
+    badge: null as string | null,
+    monthlyPrice: PRICES.basic_monthly,
+    yearlyPrice:  PRICES.basic_yearly,
+    yearlySave:   25,
     icon: "star" as const,
-    features: ["Unlimited Profiles", "All Pro Features", "Monthly PDF Report", "Kundli Milan (Vivah Yog)", "Career & Finance Deep Analysis", "Priority Astrologer Chat", "Yearly Forecast"],
-    featureOff: [],
+    tagline: "Roz ke liye basics",
+    features: [
+      "10 AI Questions / day",
+      "Marriage Compatibility (Basic)",
+      "Love Compatibility (Basic)",
+      "Career, Health, Finance — short summary",
+      "Future Timeline — 1 month",
+      "5 saved profiles",
+    ],
+    locked: [
+      "Unlimited Questions",
+      "Deep analysis with reasoning",
+      "Full 6-month timeline",
+      "Karmic insights & PDF report",
+    ],
+  },
+  {
+    key: "pro" as const,
+    name: "Pro",
+    accent: "#f59e0b",
+    badge: "🔥 MOST POPULAR",
+    monthlyPrice: PRICES.pro_monthly,
+    yearlyPrice:  PRICES.pro_yearly,
+    yearlySave:   38,
+    icon: "zap" as const,
+    tagline: "Full power Vedic insights",
+    features: [
+      "Unlimited AI Questions",
+      "Marriage & Love — Full deep analysis",
+      "Career, Health, Finance — Detailed",
+      "Future Timeline — 6 months full",
+      "D1 + D9 chart analysis",
+      "Dasha (MD + AD + PD) full breakdown",
+      "Karmic patterns & hidden insights",
+      "PDF report download",
+      "Unlimited saved profiles",
+    ],
+    locked: [],
   },
 ];
 
-// ── Plan Card ──────────────────────────────────────────────────────────────────
-function PlanCard({ plan, cycle, isCurrent, onPress }: {
-  plan: typeof PLANS[0]; cycle: BillingCycle;
-  isCurrent: boolean; onPress: () => void;
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function planExpiryLabel(expiry: string | null | undefined): string {
+  if (!expiry) return "";
+  try {
+    const d = new Date(expiry);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch { return ""; }
+}
+
+function planLabel(plan: string): string {
+  switch (plan) {
+    case "trial": return "Free Trial — Active";
+    case "basic": return "Basic Plan — Active";
+    case "pro":   return "Pro Plan — Active";
+    case "elite": return "Pro Plan — Active";
+    default:      return "Free Plan";
+  }
+}
+
+function planDot(plan: string): string {
+  switch (plan) {
+    case "trial": return "#22c55e";
+    case "basic": return "#a78bfa";
+    case "pro":   return "#f59e0b";
+    case "elite": return "#f59e0b";
+    default:      return "#64748b";
+  }
+}
+
+// ── Trial banner ─────────────────────────────────────────────────────────────
+function TrialBanner({
+  eligible,
+  isTrial,
+  daysLeft,
+  onStart,
+  loading,
+}: {
+  eligible: boolean;
+  isTrial:  boolean;
+  daysLeft: number | null;
+  onStart:  () => void;
+  loading:  boolean;
 }) {
   const C = useC();
-  const price  = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
-  const isFree = plan.key === "free";
+
+  if (isTrial) {
+    return (
+      <View style={[tb.activeCard, { borderColor: "#22c55e60", backgroundColor: C.isDark ? "#16a34a10" : "#dcfce7" }]}>
+        <View style={[tb.iconWrap, { backgroundColor: "#22c55e20" }]}>
+          <Feather name="gift" size={16} color="#22c55e" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[tb.title, { color: C.text }]}>Free Trial Active 🎉</Text>
+          <Text style={[tb.sub, { color: C.textMid }]}>
+            {daysLeft != null && daysLeft > 0
+              ? `${daysLeft} ${daysLeft === 1 ? "din" : "din"} bache hain — Basic features unlocked`
+              : "Aaj trial khatam ho raha hai"}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (eligible) {
+    return (
+      <Pressable
+        onPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} ; onStart(); }}
+        disabled={loading}
+        style={({ pressed }) => [{ opacity: pressed || loading ? 0.85 : 1 }]}
+      >
+        <LinearGradient
+          colors={["#16a34a", "#22c55e"]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={tb.startCard}
+        >
+          <View style={[tb.iconWrap, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
+            {loading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Feather name="gift" size={16} color="#fff" />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={tb.startTitle}>Start 7-Day Free Trial</Text>
+            <Text style={tb.startSub}>Basic features bilkul free, no payment required</Text>
+          </View>
+          <Feather name="arrow-right" size={16} color="#fff" />
+        </LinearGradient>
+      </Pressable>
+    );
+  }
+
+  return null;
+}
+
+// ── Plan Card ────────────────────────────────────────────────────────────────
+function PlanCard({
+  plan,
+  cycle,
+  isCurrent,
+  onPress,
+}: {
+  plan: typeof PLANS[number];
+  cycle: BillingCycle;
+  isCurrent: boolean;
+  onPress: () => void;
+}) {
+  const C = useC();
+  const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+  const isPopular = plan.key === "pro";
 
   return (
-    <View style={[pl.card, { borderColor: C.isDark ? plan.border : `${plan.accent}30`, backgroundColor: C.isDark ? plan.accentBg : C.bgCard }, isCurrent && pl.cardCurrent]}>
-      {/* Top row */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={[pl.iconWrap, { backgroundColor: `${plan.accent}18`, borderColor: `${plan.accent}30` }]}>
-            <Feather name={plan.icon} size={14} color={plan.accent} />
-          </View>
-          <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
-          {isCurrent && (
-            <View style={[pl.badge, { backgroundColor: `${plan.accent}20`, borderColor: `${plan.accent}40` }]}>
-              <Text style={[pl.badgeText, { color: plan.accent }]}>ACTIVE</Text>
-            </View>
-          )}
+    <View
+      style={[
+        pl.card,
+        {
+          borderColor: isPopular ? `${plan.accent}55` : `${plan.accent}30`,
+          backgroundColor: C.bgCard,
+          borderWidth: isPopular ? 2 : 1.5,
+        },
+      ]}
+    >
+      {plan.badge && (
+        <View style={[pl.popularBadge, { backgroundColor: plan.accent }]}>
+          <Text style={pl.popularBadgeText}>{plan.badge}</Text>
         </View>
-        {plan.badge && !isCurrent && (
-          <View style={[pl.badge, { backgroundColor: `${plan.accent}15`, borderColor: `${plan.accent}35` }]}>
-            <Text style={[pl.badgeText, { color: plan.accent }]}>{plan.badge}</Text>
+      )}
+
+      {/* Header row */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <View style={[pl.iconWrap, { backgroundColor: `${plan.accent}18`, borderColor: `${plan.accent}30` }]}>
+            <Feather name={plan.icon} size={16} color={plan.accent} />
+          </View>
+          <View>
+            <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
+            <Text style={[pl.planTagline, { color: C.textMuted }]}>{plan.tagline}</Text>
+          </View>
+        </View>
+        {isCurrent && (
+          <View style={[pl.activeBadge, { backgroundColor: `${plan.accent}20`, borderColor: `${plan.accent}40` }]}>
+            <Text style={[pl.activeBadgeText, { color: plan.accent }]}>ACTIVE</Text>
           </View>
         )}
       </View>
 
       {/* Price */}
-      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginBottom: 6 }}>
-        {isFree ? (
-          <Text style={[pl.price, { color: plan.accent }]}>FREE</Text>
-        ) : (
-          <>
-            <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
-            <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-            <Text style={pl.pricePer}>/{cycle === "yearly" ? "year" : "month"}</Text>
-          </>
-        )}
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 12, marginBottom: 4 }}>
+        <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
+        <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
+        <Text style={[pl.pricePer, { color: C.textMuted }]}>/{cycle === "yearly" ? "year" : "month"}</Text>
       </View>
 
-      {/* Save pill */}
-      {cycle === "yearly" && !isFree && (plan as any).yearlySave && (
-        <View style={pl.savePill}>
-          <Feather name="tag" size={9} color="#4ade80" />
-          <Text style={pl.saveText}>Save {(plan as any).yearlySave}% vs monthly</Text>
+      {/* Per-month equivalent for yearly */}
+      {cycle === "yearly" && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <Text style={[pl.perMonthEq, { color: C.textMid }]}>
+            ≈ ₹{Math.round(plan.yearlyPrice / 12).toLocaleString("en-IN")}/month
+          </Text>
+          <View style={pl.savePill}>
+            <Text style={pl.saveText}>Save {plan.yearlySave}%</Text>
+          </View>
         </View>
       )}
 
       <View style={[pl.sep, { backgroundColor: `${plan.accent}18` }]} />
 
       {/* Features */}
-      <View style={{ gap: 7, marginBottom: 14 }}>
+      <View style={{ gap: 9, marginBottom: 14 }}>
         {plan.features.map(f => (
           <View key={f} style={pl.featureRow}>
             <View style={[pl.featureDot, { backgroundColor: `${plan.accent}22` }]}>
-              <Feather name="check" size={9} color={plan.accent} />
+              <Feather name="check" size={10} color={plan.accent} />
             </View>
-            <Text style={pl.featureText}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.text }]}>{f}</Text>
           </View>
         ))}
-        {plan.featureOff.map(f => (
+        {plan.locked.map(f => (
           <View key={f} style={pl.featureRow}>
             <View style={[pl.featureDot, { backgroundColor: C.bgCard2 }]}>
-              <Feather name="minus" size={9} color={C.textMuted} />
+              <Feather name="x" size={10} color={C.textMuted} />
             </View>
-            <Text style={[pl.featureText, { color: C.textMuted }]}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.textMuted, textDecorationLine: "line-through" }]}>{f}</Text>
           </View>
         ))}
       </View>
 
       {/* CTA */}
-      {plan.ctaActive ? (
+      {isCurrent ? (
+        <View style={[pl.ctaActive, { borderColor: `${plan.accent}40`, backgroundColor: `${plan.accent}10` }]}>
+          <Feather name="check-circle" size={14} color={plan.accent} />
+          <Text style={[pl.ctaActiveText, { color: plan.accent }]}>Current Plan</Text>
+        </View>
+      ) : (
         <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onPress(); }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1 }]}
+          onPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} ; onPress(); }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
         >
           <LinearGradient
-            colors={plan.key === "pro" ? ["#d97706", "#f59e0b"] : ["#7c3aed", "#a78bfa"]}
+            colors={isPopular ? ["#d97706", "#f59e0b"] : ["#7c3aed", "#a78bfa"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={pl.ctaBtn}
           >
-            <Feather name={plan.icon} size={14} color="#fff" />
-            <Text style={pl.ctaBtnText}>{plan.cta}</Text>
+            <Feather name={isPopular ? "zap" : "star"} size={14} color="#fff" />
+            <Text style={pl.ctaBtnText}>{isPopular ? "Upgrade to Pro 🔓" : "Get Basic"}</Text>
           </LinearGradient>
         </Pressable>
-      ) : (
-        <View style={[pl.ctaBtnOutline, { borderColor: `${plan.accent}30` }]}>
-          <Feather name="check-circle" size={14} color={plan.accent} />
-          <Text style={[pl.ctaBtnText, { color: plan.accent }]}>{plan.cta}</Text>
-        </View>
       )}
     </View>
   );
 }
 
-// ── Plan key → expiry label ─────────────────────────────────────────────────
-function planExpiryLabel(expiry: string | null | undefined): string {
-  if (!expiry) return "";
-  try {
-    const d = new Date(expiry);
-    return `Expires ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
-  } catch { return ""; }
-}
-
-// ── Main Screen ────────────────────────────────────────────────────────────────
+// ── Main Screen ──────────────────────────────────────────────────────────────
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
-  const t      = useT();
   const { user } = useUser();
   const isDark = C.isDark;
+  const {
+    plan,
+    isTrial,
+    trialEligible,
+    daysRemaining,
+    sub,
+    refresh,
+  } = usePlan();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const [trialLoading, setTrialLoading] = useState(false);
 
-  // Derive real plan from user object
-  const activePlan = user?.plan ?? (user?.is_pro ? "pro" : "free");
-  const isPro      = activePlan !== "free";
-  const expiryLabel = planExpiryLabel(user?.plan_expiry);
-
-  const planDotColor: Record<string, string> = {
-    free:  "#64748b",
-    pro:   "#f59e0b",
-    elite: "#a78bfa",
-  };
+  const expiryISO   = isTrial ? sub.trial_expires_at : sub.plan_expires_at;
+  const expiryLabel = planExpiryLabel(expiryISO);
 
   function handlePlanPress(planKey: string) {
     if (!user?.id) {
       Alert.alert("Login Required", "Please login to purchase a plan.");
       return;
     }
-    if (planKey === activePlan) return;
+    if (planKey === plan) return;
     router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle } });
+  }
+
+  async function handleStartTrial() {
+    if (!user?.id || !user?.api_key) {
+      Alert.alert("Login Required", "Please login to start your free trial.");
+      return;
+    }
+    setTrialLoading(true);
+    const res = await startTrial(user.id, user.api_key);
+    setTrialLoading(false);
+    if (!res.ok) {
+      Alert.alert("Trial unavailable", res.error || "Please try again later.");
+      return;
+    }
+    await refresh();
+    Alert.alert("Trial Started 🎉", `7-day free trial activated. Enjoy Basic features till ${planExpiryLabel(res.subscription?.trial_expires_at)}.`);
   }
 
   return (
@@ -210,7 +347,7 @@ export default function SubscriptionScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>{t.subscriptionTitle}</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>Subscription</Text>
           <Text style={[s.headerSub, { color: C.textMuted }]}>Apna plan choose karein</Text>
         </View>
       </View>
@@ -219,8 +356,7 @@ export default function SubscriptionScreen() {
         contentContainerStyle={[s.scroll, { paddingBottom: botPad + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-
-        {/* ── Hero banner ── */}
+        {/* ── Hero ── */}
         <LinearGradient
           colors={isDark ? ["#1a1330", "#0c0818"] : ["#EEF2FF", "#F5F7FB"]}
           style={s.heroBanner}
@@ -243,31 +379,38 @@ export default function SubscriptionScreen() {
             Kundli, Dasha, AI Chat, Forecast — sab ek jagah
           </Text>
 
-          {/* Current plan chip */}
           <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={[s.freeDot, { backgroundColor: planDotColor[activePlan] }]} />
+            <View style={[s.chipDot, { backgroundColor: planDot(plan) }]} />
             <Text style={[s.currentChipText, { color: C.textMid }]}>
-              {activePlan === "elite" ? "Elite Plan — Active" :
-               activePlan === "pro"   ? "Pro Plan — Active"  : "Free Plan — Active"}
-              {expiryLabel ? `  ·  ${expiryLabel}` : ""}
+              {planLabel(plan)}
+              {expiryLabel ? `  ·  till ${expiryLabel}` : ""}
             </Text>
           </View>
         </LinearGradient>
+
+        {/* ── Trial banner ── */}
+        <TrialBanner
+          eligible={trialEligible}
+          isTrial={isTrial}
+          daysLeft={daysRemaining}
+          onStart={handleStartTrial}
+          loading={trialLoading}
+        />
 
         {/* ── Billing toggle ── */}
         <View style={[s.cycleRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           {(["monthly", "yearly"] as BillingCycle[]).map(c => (
             <Pressable
               key={c}
-              onPress={() => { setCycle(c); Haptics.selectionAsync(); }}
+              onPress={() => { setCycle(c); try { Haptics.selectionAsync(); } catch {} }}
               style={[s.cycleBtn, cycle === c && s.cycleBtnActive]}
             >
               <Text style={[s.cycleTxt, { color: cycle === c ? "#f59e0b" : C.textMuted }]}>
                 {c === "monthly" ? "Monthly" : "Yearly"}
               </Text>
               {c === "yearly" && (
-                <View style={s.savePill}>
-                  <Text style={s.savePillTxt}>44% OFF</Text>
+                <View style={s.savePillTop}>
+                  <Text style={s.savePillTopTxt}>SAVE UPTO 38%</Text>
                 </View>
               )}
             </Pressable>
@@ -276,14 +419,36 @@ export default function SubscriptionScreen() {
 
         {/* ── Plan cards ── */}
         <View style={s.plansWrap}>
-          {PLANS.map(plan => (
+          {PLANS.map(p => (
             <PlanCard
-              key={plan.key}
-              plan={plan}
+              key={p.key}
+              plan={p}
               cycle={cycle}
-              isCurrent={plan.key === activePlan}
-              onPress={() => handlePlanPress(plan.key)}
+              isCurrent={p.key === plan}
+              onPress={() => handlePlanPress(p.key)}
             />
+          ))}
+        </View>
+
+        {/* ── Comparison Table ── */}
+        <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
+          {[
+            { label: "AI Questions", basic: "10/day",         pro: "Unlimited" },
+            { label: "Marriage Compat", basic: "Score + summary", pro: "Full breakdown" },
+            { label: "Future Timeline", basic: "1 month",     pro: "6 months" },
+            { label: "Dasha Analysis",  basic: "Overview",    pro: "MD + AD + PD" },
+            { label: "Karmic Insights", basic: "—",            pro: "✓ Included" },
+            { label: "PDF Report",      basic: "—",            pro: "✓ Download" },
+            { label: "Saved Profiles",  basic: "5",            pro: "Unlimited" },
+          ].map((row, i) => (
+            <View key={row.label} style={[s.compareRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
+              <Text style={[s.compareLabel, { color: C.textMid }]}>{row.label}</Text>
+              <View style={s.compareCells}>
+                <Text style={[s.compareCell, { color: C.textMid }]}>{row.basic}</Text>
+                <Text style={[s.compareCell, { color: "#f59e0b", fontFamily: F.bold }]}>{row.pro}</Text>
+              </View>
+            </View>
           ))}
         </View>
 
@@ -297,39 +462,19 @@ export default function SubscriptionScreen() {
           </Text>
         </View>
 
-        {/* ── Benefits grid ── */}
-        <View style={[s.benefitsCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.benefitsTitle, { color: C.text }]}>Pro aur Elite ke fayde</Text>
-          <View style={s.benefitsGrid}>
-            {[
-              { icon: "🔮", text: "Full Dasha Timeline" },
-              { icon: "🤖", text: "Unlimited AI Chat" },
-              { icon: "📊", text: "7-Day Forecast" },
-              { icon: "💍", text: "Kundli Milan" },
-              { icon: "📄", text: "PDF Report" },
-              { icon: "🌟", text: "Nakshatra Analysis" },
-            ].map(b => (
-              <View key={b.text} style={[s.benefitItem, { backgroundColor: isDark ? "rgba(245,158,11,0.05)" : C.warningBg, borderColor: isDark ? "rgba(245,158,11,0.20)" : C.warningBorder }]}>
-                <Text style={{ fontSize: 18 }}>{b.icon}</Text>
-                <Text style={[s.benefitText, { color: C.textMid }]}>{b.text}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* ── Footer note ── */}
+        {/* ── Footer ── */}
         <Text style={[s.footerNote, { color: C.textMuted }]}>
+          • {TRIAL_DAYS}-day free trial — sirf naye users ke liye, ek baar{"\n"}
           • Subscription monthly ya yearly renew hoti hai{"\n"}
           • Kabhi bhi cancel kar sakte hain{"\n"}
           • Powered by Cashfree — PCI DSS compliant
         </Text>
-
       </ScrollView>
     </View>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
+// ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1 },
 
@@ -346,11 +491,9 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 18, fontFamily: F.bold, letterSpacing: -0.3 },
   headerSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
 
-  scroll: { paddingHorizontal: 16, gap: 16, paddingTop: 16 },
+  scroll: { paddingHorizontal: 16, gap: 14, paddingTop: 16 },
 
-  heroBanner: {
-    borderRadius: 20, padding: 20, alignItems: "center", gap: 10,
-  },
+  heroBanner: { borderRadius: 20, padding: 20, alignItems: "center", gap: 10 },
   heroIconRow: { flexDirection: "row", gap: 10, marginBottom: 4 },
   heroIcon: {
     width: 48, height: 48, borderRadius: 14,
@@ -360,15 +503,13 @@ const s = StyleSheet.create({
     fontSize: 22, fontFamily: F.bold, textAlign: "center",
     letterSpacing: -0.5, lineHeight: 30,
   },
-  heroSub: {
-    fontSize: 13, fontFamily: F.regular, textAlign: "center",
-  },
+  heroSub: { fontSize: 13, fontFamily: F.regular, textAlign: "center" },
   currentChip: {
     flexDirection: "row", alignItems: "center", gap: 7,
     paddingVertical: 7, paddingHorizontal: 14,
     borderRadius: 20, borderWidth: 1, marginTop: 4,
   },
-  freeDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#64748b" },
+  chipDot: { width: 7, height: 7, borderRadius: 3.5 },
   currentChipText: { fontSize: 12, fontFamily: F.semibold },
 
   cycleRow: {
@@ -384,31 +525,30 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(245,158,11,0.28)",
   },
   cycleTxt: { fontSize: 13, fontFamily: F.semibold },
-  savePill: {
-    backgroundColor: "rgba(74,222,128,0.15)", borderRadius: 6,
+  savePillTop: {
+    backgroundColor: "rgba(74,222,128,0.18)", borderRadius: 6,
     paddingVertical: 2, paddingHorizontal: 6,
   },
-  savePillTxt: { color: "#4ade80", fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 },
+  savePillTopTxt: { color: "#16a34a", fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 },
 
   plansWrap: { gap: 12 },
 
-  benefitsCard: {
-    borderRadius: 16, borderWidth: 1, padding: 16, gap: 12,
+  compareCard: {
+    borderRadius: 16, borderWidth: 1, padding: 16, gap: 4,
   },
-  benefitsTitle: { fontSize: 14, fontFamily: F.bold },
-  benefitsGrid: {
-    flexDirection: "row", flexWrap: "wrap", gap: 8,
+  compareTitle: { fontSize: 14, fontFamily: F.bold, marginBottom: 8 },
+  compareRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 10, gap: 12,
   },
-  benefitItem: {
-    width: "47%", borderRadius: 12, borderWidth: 1,
-    padding: 12, alignItems: "center", gap: 6,
-  },
-  benefitText: { fontSize: 11, fontFamily: F.medium, textAlign: "center" },
+  compareLabel: { flex: 1.2, fontSize: 12, fontFamily: F.semibold },
+  compareCells: { flex: 1.5, flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  compareCell:  { flex: 1, fontSize: 11.5, fontFamily: F.medium, textAlign: "center" },
 
   footerNote: {
     fontSize: 11, fontFamily: F.regular,
     lineHeight: 18, textAlign: "center",
-    paddingHorizontal: 8, marginBottom: 8,
+    paddingHorizontal: 8, marginBottom: 8, marginTop: 4,
   },
 
   payBadge: {
@@ -419,44 +559,80 @@ const s = StyleSheet.create({
   payBadgeText: { fontSize: 12, fontFamily: F.medium, flex: 1 },
 });
 
-// ── Plan card styles ───────────────────────────────────────────────────────────
-const pl = StyleSheet.create({
-  card: { borderRadius: 16, borderWidth: 1.5, padding: 16 },
-  cardCurrent: { borderWidth: 1 },
+// ── Trial banner styles ──────────────────────────────────────────────────────
+const tb = StyleSheet.create({
+  startCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderRadius: 14, padding: 14,
+  },
+  activeCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderRadius: 14, borderWidth: 1, padding: 14,
+  },
   iconWrap: {
-    width: 28, height: 28, borderRadius: 8,
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  startTitle: { color: "#fff", fontSize: 14, fontFamily: F.bold, letterSpacing: -0.2 },
+  startSub:   { color: "rgba(255,255,255,0.85)", fontSize: 11.5, fontFamily: F.regular, marginTop: 2 },
+  title:      { fontSize: 14, fontFamily: F.bold, letterSpacing: -0.2 },
+  sub:        { fontSize: 11.5, fontFamily: F.regular, marginTop: 2 },
+});
+
+// ── Plan card styles ─────────────────────────────────────────────────────────
+const pl = StyleSheet.create({
+  card: { borderRadius: 16, padding: 16, position: "relative" },
+  popularBadge: {
+    position: "absolute", top: -10, right: 16,
+    paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8,
+    zIndex: 2,
+  },
+  popularBadgeText: {
+    color: "#fff", fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5,
+  },
+  iconWrap: {
+    width: 34, height: 34, borderRadius: 10,
     borderWidth: 1, alignItems: "center", justifyContent: "center",
   },
-  planName:    { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.2 },
-  badge: {
+  planName:    { fontSize: 18, fontFamily: F.bold, letterSpacing: -0.2 },
+  planTagline: { fontSize: 11, fontFamily: F.regular, marginTop: 1 },
+
+  activeBadge: {
     borderWidth: 1, borderRadius: 20,
-    paddingVertical: 2, paddingHorizontal: 8,
+    paddingVertical: 3, paddingHorizontal: 9,
   },
-  badgeText: { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.8 },
-  price:         { fontSize: 26, fontFamily: F.bold, lineHeight: 30 },
-  priceCurrency: { fontSize: 15, fontFamily: F.bold, paddingBottom: 3 },
-  pricePer:      { color: "#475569", fontSize: 12, fontFamily: F.medium, paddingBottom: 4 },
+  activeBadgeText: { fontSize: 9, fontFamily: F.bold, letterSpacing: 0.8 },
+
+  price:         { fontSize: 30, fontFamily: F.bold, lineHeight: 34 },
+  priceCurrency: { fontSize: 17, fontFamily: F.bold, paddingBottom: 4 },
+  pricePer:      { fontSize: 12, fontFamily: F.medium, paddingBottom: 5 },
+
+  perMonthEq: { fontSize: 11, fontFamily: F.medium },
   savePill: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "rgba(74,222,128,0.1)", borderRadius: 6,
-    paddingVertical: 3, paddingHorizontal: 8, alignSelf: "flex-start",
+    backgroundColor: "rgba(74,222,128,0.15)", borderRadius: 6,
+    paddingVertical: 2, paddingHorizontal: 6,
   },
-  saveText: { color: "#4ade80", fontSize: 10, fontFamily: F.semibold },
+  saveText: { color: "#16a34a", fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
+
   sep: { height: 1, marginVertical: 14 },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+  featureRow: { flexDirection: "row", alignItems: "center", gap: 9 },
   featureDot: {
     width: 18, height: 18, borderRadius: 5,
     alignItems: "center", justifyContent: "center",
   },
-  featureText: { color: "#94a3b8", fontSize: 12, fontFamily: F.medium, flex: 1 },
+  featureText: { fontSize: 12.5, fontFamily: F.medium, flex: 1 },
+
   ctaBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 7, paddingVertical: 13, borderRadius: 12,
   },
-  ctaBtnOutline: {
+  ctaBtnText: { color: "#fff", fontSize: 14, fontFamily: F.bold },
+
+  ctaActive: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 7, paddingVertical: 13, borderRadius: 12,
-    borderWidth: 1, backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
   },
-  ctaBtnText: { color: "#fff", fontSize: 14, fontFamily: F.bold },
+  ctaActiveText: { fontSize: 14, fontFamily: F.bold },
 });

@@ -21,9 +21,17 @@ class User(db.Model):
     is_admin       = db.Column(db.Boolean, default=False, nullable=False)
 
     # ── Subscription ──────────────────────────────────────────────────────────
-    plan           = db.Column(db.String(20), default="free", nullable=False)   # free / pro / elite
-    plan_expiry    = db.Column(db.DateTime, nullable=True)                       # when plan expires
+    plan           = db.Column(db.String(20), default="free", nullable=False)   # free / trial / basic / pro / elite
+    plan_expiry    = db.Column(db.DateTime, nullable=True)                       # when paid plan expires
     plan_order_id  = db.Column(db.String(200), nullable=True)                   # last Cashfree order ID
+
+    # ── Free Trial ────────────────────────────────────────────────────────────
+    trial_started_at = db.Column(db.DateTime, nullable=True)                    # when 7-day trial began
+    trial_used       = db.Column(db.Boolean, default=False, nullable=False)     # one-time eligibility flag
+
+    # ── Daily AI question quota ───────────────────────────────────────────────
+    daily_questions_used = db.Column(db.Integer, default=0, nullable=False)
+    daily_questions_date = db.Column(db.String(10), default="", nullable=False) # YYYY-MM-DD
 
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

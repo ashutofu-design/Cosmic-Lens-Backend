@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
-  Animated, Modal, Pressable, ScrollView,
+  Animated, Linking, Modal, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,8 @@ import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 
 const DRAWER_W = 320;
+const FOUNDER_WHATSAPP = "919040524394";
+const FOUNDER_MSG = "Namaste 🙏 Main Cosmic Lens app se aa raha hu. Mujhe apni kundli / rashifal ke baare mein aapse personally baat karni hai.";
 
 type FeatureItem = {
   id: string;
@@ -92,6 +94,19 @@ export default function MoreDrawer({
     setTimeout(() => router.push(route as any), 200);
   }
 
+  async function openFounderWhatsApp() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const msg = encodeURIComponent(FOUNDER_MSG);
+    const appUrl = `whatsapp://send?phone=${FOUNDER_WHATSAPP}&text=${msg}`;
+    const webUrl = `https://wa.me/${FOUNDER_WHATSAPP}?text=${msg}`;
+    try {
+      const canOpen = await Linking.canOpenURL(appUrl);
+      await Linking.openURL(canOpen ? appUrl : webUrl);
+    } catch {
+      Linking.openURL(webUrl).catch(() => {});
+    }
+  }
+
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.root}>
@@ -131,6 +146,35 @@ export default function MoreDrawer({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
           >
+            {/* ── Talk to Founder (WhatsApp) ───────────────────────────── */}
+            <Pressable
+              onPress={openFounderWhatsApp}
+              style={({ pressed }) => [
+                s.founderCard,
+                { borderColor: "#25D36640", backgroundColor: C.bgCard },
+                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <View style={[s.founderGlow, { backgroundColor: "#25D36612" }]} />
+              <View style={[s.founderIconWrap, { backgroundColor: "#25D36620", borderColor: "#25D36655" }]}>
+                <Text style={{ fontSize: 24 }}>💬</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={[s.founderTitle, { color: C.text }]}>Talk to Founder</Text>
+                  <View style={s.founderBadge}>
+                    <Text style={s.founderBadgeText}>FREE</Text>
+                  </View>
+                </View>
+                <Text style={[s.founderSub, { color: C.textMuted }]}>
+                  Personally apni kundli dikhani hai? WhatsApp par chat karein
+                </Text>
+              </View>
+              <View style={[s.founderArrow, { backgroundColor: "#25D366" }]}>
+                <Feather name="message-circle" size={14} color="#fff" />
+              </View>
+            </Pressable>
+
             {CATEGORIES.map(cat => (
               <View key={cat.title}>
                 <Text style={[s.catLabel, { color: C.textMuted }]}>{cat.title}</Text>
@@ -219,4 +263,42 @@ const s = StyleSheet.create({
     borderRadius: 8, borderWidth: 1,
   },
   badgeText: { fontSize: 8, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
+
+  founderCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  founderGlow: {
+    position: "absolute",
+    top: -20, right: -20,
+    width: 120, height: 120,
+    borderRadius: 60,
+  },
+  founderIconWrap: {
+    width: 48, height: 48, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  founderTitle: { fontSize: 15, fontFamily: "Nunito_700Bold", letterSpacing: -0.2 },
+  founderSub: { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 2, lineHeight: 15 },
+  founderBadge: {
+    backgroundColor: "#25D36625",
+    borderWidth: 1, borderColor: "#25D36660",
+    paddingHorizontal: 6, paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  founderBadgeText: {
+    fontSize: 8, fontFamily: "Nunito_700Bold",
+    color: "#25D366", letterSpacing: 0.8,
+  },
+  founderArrow: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: "center", justifyContent: "center",
+  },
 });

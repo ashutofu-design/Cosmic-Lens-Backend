@@ -254,7 +254,7 @@ export default function ProfileEditScreen() {
   const t = useT();
   const {
     profiles, primaryProfileId, addProfile, updateProfile, deleteProfile,
-    setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile,
+    setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile, user,
   } = useUser();
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;

@@ -218,6 +218,7 @@ function PlanCard({
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
+  const t      = useT();
   const { user } = useUser();
   const isDark = C.isDark;
   const {
@@ -262,8 +263,8 @@ export default function SubscriptionScreen() {
           <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Subscription</Text>
-          <Text style={[s.headerSub, { color: C.textMuted }]}>Apna plan choose karein</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.subscription}</Text>
+          <Text style={[s.headerSub, { color: C.textMuted }]}>{t.chooseYourPlan}</Text>
         </View>
       </View>
 
@@ -288,10 +289,10 @@ export default function SubscriptionScreen() {
             </View>
           </View>
           <Text style={[s.heroTitle, { color: C.text }]}>
-            Poori Vedic Astrology{"\n"}Unlock Karein
+            {t.unlockVedicTitle}
           </Text>
           <Text style={[s.heroSub, { color: C.textMuted }]}>
-            Kundli, Dasha, AI Chat, Forecast — sab ek jagah
+            Kundli · Dasha · AI Chat · Forecast
           </Text>
 
           <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>

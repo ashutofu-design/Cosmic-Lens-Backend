@@ -233,7 +233,7 @@ export default function ForecastScreen() {
           ) : (
             <View style={s.chartPlaceholder}>
               <Text style={[s.placeholderText, { color: C.textMuted }]}>
-                {loading ? "Loading..." : "Forecast load nahi ho saka. Internet check karke wapas try karein."}
+                {loading ? t.loading : t.forecastError}
               </Text>
             </View>
           )}
@@ -306,7 +306,7 @@ export default function ForecastScreen() {
                 onPress={() => { if (selected > 0) { setSelected(selected - 1); Haptics.selectionAsync(); } }}
               >
                 <Feather name="chevron-left" size={16} color={selected === 0 ? C.textDim : C.text} />
-                <Text style={[s.navLabel, { color: C.text }, selected === 0 && { color: C.textDim }]}>Pehle Din</Text>
+                <Text style={[s.navLabel, { color: C.text }, selected === 0 && { color: C.textDim }]}>{t.prevDay}</Text>
               </Pressable>
               <View style={s.navDots}>
                 {days.map((_, i) => (
@@ -319,7 +319,7 @@ export default function ForecastScreen() {
                 style={[s.navBtn, selected === 6 && s.navBtnDisabled]}
                 onPress={() => { if (selected < days.length-1) { setSelected(selected + 1); Haptics.selectionAsync(); } }}
               >
-                <Text style={[s.navLabel, { color: C.text }, selected === 6 && { color: C.textDim }]}>Agle Din</Text>
+                <Text style={[s.navLabel, { color: C.text }, selected === 6 && { color: C.textDim }]}>{t.nextDay}</Text>
                 <Feather name="chevron-right" size={16} color={selected === 6 ? C.textDim : C.text} />
               </Pressable>
             </View>
@@ -331,8 +331,8 @@ export default function ForecastScreen() {
           <Pressable style={s.unlockBanner} onPress={() => router.push("/onboarding")}>
             <Feather name="lock" size={14} color="#fbbf24" />
             <View style={{ flex: 1 }}>
-              <Text style={s.unlockTitle}>Personalized Forecast Unlock Karein</Text>
-              <Text style={s.unlockSub}>Apni Kundli ke hisaab se daily energy score milega</Text>
+              <Text style={s.unlockTitle}>{t.unlockForecastTitle}</Text>
+              <Text style={s.unlockSub}>{t.unlockForecastSub}</Text>
             </View>
             <Feather name="chevron-right" size={14} color="#fbbf24" />
           </Pressable>

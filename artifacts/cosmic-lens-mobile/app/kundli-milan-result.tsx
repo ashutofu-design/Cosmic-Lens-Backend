@@ -552,13 +552,13 @@ export default function KundliMilanResultScreen() {
           Result Not Found
         </Text>
         <Text style={{ color:C.textMuted, fontSize:14, fontFamily:"Nunito_400Regular", textAlign:"center", marginBottom:32 }}>
-          Koi result nahi mila. Wapas jao aur dobara calculate karein.
+          {t.noResultFound}
         </Text>
         <Pressable
           onPress={() => router.back()}
           style={{ backgroundColor:C.isDark?"#f59e0b":"#7C3AED", paddingHorizontal:32, paddingVertical:14, borderRadius:14 }}
         >
-          <Text style={{ color:"#fff", fontFamily:"Nunito_700Bold", fontSize:16 }}>Go Back</Text>
+          <Text style={{ color:"#fff", fontFamily:"Nunito_700Bold", fontSize:16 }}>{t.goBack}</Text>
         </Pressable>
       </View>
     );

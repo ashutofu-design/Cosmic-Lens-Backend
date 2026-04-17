@@ -11,13 +11,25 @@ export const API_HEADERS: Record<string, string> = {
 };
 
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
-  return fetch(url, {
+  const merged: RequestInit = {
     ...init,
     headers: {
       ...API_HEADERS,
       ...(init?.headers as Record<string, string> | undefined),
     },
-  });
+  };
+  // Retry once on transient "Network request failed" — common on cellular networks
+  // when the first TLS handshake to a fresh host hiccups. We don't retry on AbortError
+  // (timeout/cancel), HTTP errors, or other failure modes.
+  try {
+    return await fetch(url, merged);
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw e;
+    const msg = String(e?.message || "");
+    if (!/Network request failed|TypeError|fetch/i.test(msg)) throw e;
+    await new Promise(r => setTimeout(r, 600));
+    return fetch(url, merged);
+  }
 }
 
 if (__DEV__) {

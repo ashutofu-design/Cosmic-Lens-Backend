@@ -19,7 +19,16 @@ PORT = "8080"
 build = "pip install -r artifacts/api-server/requirements.txt"
 
 [services.production.run]
-args = ["python3", "artifacts/api-server/flask_app.py"]
+args = [
+  "gunicorn",
+  "--chdir", "artifacts/api-server",
+  "--bind", "0.0.0.0:8080",
+  "--workers", "2",
+  "--threads", "4",
+  "--timeout", "60",
+  "--access-logfile", "-",
+  "flask_app:app",
+]
 
 [services.production.run.env]
 PORT = "8080"

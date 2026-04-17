@@ -1,15 +1,41 @@
-// API domain — points to the Replit dev server. Override at run time
-// with EXPO_PUBLIC_DOMAIN if you need a different host.
-const REPLIT_DOMAIN = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
+// ─────────────────────────────────────────────────────────────────────────────
+// API endpoint resolution.
+//
+// Priority (highest first):
+//   1. EXPO_PUBLIC_API_URL    → full URL override (e.g. https://my-api.replit.app)
+//   2. EXPO_PUBLIC_DOMAIN     → just the hostname (legacy, https:// auto-prepended)
+//   3. PRODUCTION_API_URL     → baked-in production fallback (set after publishing)
+//   4. DEV fallback           → Replit dev server domain (only for local testing)
+//
+// For Play Store builds, set EXPO_PUBLIC_API_URL in your `.env` to the deployed
+// production URL (e.g. `https://cosmic-lens.replit.app`). EAS build will pick it
+// up automatically and bake it into the app bundle.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const domain = process.env.EXPO_PUBLIC_DOMAIN || REPLIT_DOMAIN;
+// Replace this with your deployed `.replit.app` URL after publishing the backend.
+// Until you publish, this will simply be unused as long as EXPO_PUBLIC_API_URL is set.
+const PRODUCTION_API_URL = "https://cosmic-lens-api.replit.app";
 
-export const API_BASE = `https://${domain}`;
+// Replit dev server (used only when running `expo start` locally, never in
+// production builds). This is intentionally kept as a fallback so local dev
+// keeps working.
+const DEV_REPLIT_DOMAIN = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
+
+function resolveApiBase(): string {
+  const fullUrl   = process.env.EXPO_PUBLIC_API_URL;
+  const hostOnly  = process.env.EXPO_PUBLIC_DOMAIN;
+
+  if (fullUrl && /^https?:\/\//.test(fullUrl)) return fullUrl.replace(/\/$/, "");
+  if (hostOnly)                                return `https://${hostOnly}`;
+  if (!__DEV__)                                return PRODUCTION_API_URL;
+  return `https://${DEV_REPLIT_DOMAIN}`;
+}
+
+export const API_BASE = resolveApiBase();
 
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
-  "Accept": "application/json",
-  "bypass-tunnel-reminder": "true",
+  "Accept":       "application/json",
 };
 
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
@@ -35,15 +61,11 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
 }
 
 if (__DEV__) {
-  console.log("[CosmicLens] EXPO_PUBLIC_DOMAIN:", process.env.EXPO_PUBLIC_DOMAIN);
   console.log("[CosmicLens] API_BASE resolved to:", API_BASE);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
-  fetch(`${API_BASE}/api/healthz`, {
-    signal: ctrl.signal,
-    headers: { "bypass-tunnel-reminder": "true" },
-  })
+  fetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
     .then(r => r.json())
     .then(d => console.log("[CosmicLens] healthz OK ✓", JSON.stringify(d)))
     .catch(e => console.error("[CosmicLens] healthz FAILED:", e.message, "→", `${API_BASE}/api/healthz`))

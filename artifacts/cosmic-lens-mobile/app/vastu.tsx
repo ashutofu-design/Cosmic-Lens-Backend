@@ -27,8 +27,31 @@ const BEZEL_INNER_R  = SIZE * 0.458;
 const ROSE_OUTER_R   = SIZE * 0.435;
 const ROSE_INNER_R   = SIZE * 0.178;
 const CENTER_R       = SIZE * 0.148;
-const LABEL_R        = SIZE * 0.370;
-const HINDI_R        = SIZE * 0.285;
+const LABEL_R        = SIZE * 0.400; // octagon outer-edge zone (short code)
+const HINDI_R        = SIZE * 0.300; // octagon mid-sector zone (deity name)
+
+// Octagon helpers — 8 vertices with vertex-at-top
+function octagonPoints(r: number): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (-Math.PI / 2) + (i * Math.PI * 2) / 8;
+    pts.push([CX + r * Math.cos(a), CY + r * Math.sin(a)]);
+  }
+  return pts;
+}
+function octagonPointsStr(r: number): string {
+  return octagonPoints(r).map(p => `${p[0]},${p[1]}`).join(" ");
+}
+// Triangular wedge slice for one of 8 sectors
+function octSlice(idx: number, rOut: number, rIn: number): string {
+  const a0 = (-Math.PI / 2) + ((idx - 0.5) * Math.PI * 2) / 8;
+  const a1 = (-Math.PI / 2) + ((idx + 0.5) * Math.PI * 2) / 8;
+  const x1 = CX + rIn  * Math.cos(a0), y1 = CY + rIn  * Math.sin(a0);
+  const x2 = CX + rOut * Math.cos(a0), y2 = CY + rOut * Math.sin(a0);
+  const x3 = CX + rOut * Math.cos(a1), y3 = CY + rOut * Math.sin(a1);
+  const x4 = CX + rIn  * Math.cos(a1), y4 = CY + rIn  * Math.sin(a1);
+  return `M${x1},${y1} L${x2},${y2} L${x3},${y3} L${x4},${y4} Z`;
+}
 
 // ── Vastu direction data ───────────────────────────────────────────────────────
 // Gold & Black premium palette — alternating bright gold (cardinals) and antique gold (inter-cardinals)
@@ -59,139 +82,62 @@ function wedgePath(cx: number, cy: number, r1: number, r2: number, a0: number, a
   return `M${x1},${y1} L${x2},${y2} A${r2},${r2},0,${laf},1,${x3},${y3} L${x4},${y4} A${r1},${r1},0,${laf},0,${x1},${y1}Z`;
 }
 
-// ── Compass Rose (rotates) ─────────────────────────────────────────────────────
+// ── Compass Rose (rotates) — Octagon Dial ─────────────────────────────────────
 function CompassRose() {
-  const innerR = ROSE_INNER_R;
-  const outerR = ROSE_OUTER_R;
-  const midR   = (innerR + outerR) / 2;
-  const petalR = outerR + SIZE * 0.018;
+  const R_OUT_OCT  = SIZE * 0.48;
+  const R_INNER_OCT = SIZE * 0.17;
 
   return (
     <Svg width={SIZE} height={SIZE}>
       <Defs>
-        {/* Jewel-tone sector gradients — color at low alpha over dark */}
-        {DIRS.map(d => (
-          <RadialGradient key={`jw-${d.short}`} id={`jw-${d.short}`} cx="50%" cy="50%" r="75%">
-            <Stop offset="0"    stopColor={d.color} stopOpacity={d.color === GOLD_BRIGHT ? "0.22" : "0.10"} />
-            <Stop offset="0.55" stopColor={d.color} stopOpacity={d.color === GOLD_BRIGHT ? "0.08" : "0.04"} />
-            <Stop offset="1"    stopColor="#05070d" stopOpacity="1"    />
-          </RadialGradient>
+        {/* Per-sector vertical gradient — color fades to BG */}
+        {DIRS.map((d, i) => (
+          <SvgLinearGradient key={`og-${i}`} id={`og-${i}`} x1="0.5" y1="0" x2="0.5" y2="1">
+            <Stop offset="0" stopColor={d.color} stopOpacity={d.color === GOLD_BRIGHT ? "0.22" : "0.10"} />
+            <Stop offset="1" stopColor="#05070d" stopOpacity="1" />
+          </SvgLinearGradient>
         ))}
-        {/* Sheen overlay on sectors */}
-        <SvgLinearGradient id="sectorSheen" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"   stopColor="#fff2b8" stopOpacity="0.18" />
-          <Stop offset="0.5" stopColor="#fff2b8" stopOpacity="0.04" />
-          <Stop offset="1"   stopColor="#000000" stopOpacity="0.25" />
-        </SvgLinearGradient>
-        {/* Gold ambient shine */}
-        <RadialGradient id="ring-shine" cx="38%" cy="28%" r="80%">
-          <Stop offset="0"   stopColor="#f9d76b" stopOpacity="0.22" />
-          <Stop offset="0.6" stopColor="#f9d76b" stopOpacity="0.04" />
-          <Stop offset="1"   stopColor="#f9d76b" stopOpacity="0"    />
-        </RadialGradient>
-        {/* Petal gradient */}
-        <SvgLinearGradient id="petal" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0"   stopColor="#fff2b8" stopOpacity="0.8" />
-          <Stop offset="1"   stopColor="#7a4800" stopOpacity="0.9" />
-        </SvgLinearGradient>
       </Defs>
 
-      {/* ── Layer 1: Jewel-tone sectors ── */}
-      {DIRS.map(d => {
-        const mid  = toRad(d.deg);
-        const path = wedgePath(CX, CY, innerR, outerR, d.deg - 22.4, d.deg + 22.4);
+      {/* 8 triangular sector slices */}
+      {DIRS.map((d, i) => {
+        const a0 = (-Math.PI / 2) + ((i - 0.5) * Math.PI * 2) / 8;
+        const x1 = CX + R_INNER_OCT * Math.cos(a0), y1 = CY + R_INNER_OCT * Math.sin(a0);
+        const x2 = CX + R_OUT_OCT * 0.94 * Math.cos(a0), y2 = CY + R_OUT_OCT * 0.94 * Math.sin(a0);
         return (
-          <G key={`s-${d.short}`}>
-            <Path d={path} fill={`url(#jw-${d.short})`} />
-            <Path d={path} fill="url(#sectorSheen)" opacity="0.7" />
-            {/* gold radial divider line */}
-            <Line
-              x1={CX + innerR * Math.cos(toRad(d.deg - 22.4))}
-              y1={CY + innerR * Math.sin(toRad(d.deg - 22.4))}
-              x2={CX + outerR * Math.cos(toRad(d.deg - 22.4))}
-              y2={CY + outerR * Math.sin(toRad(d.deg - 22.4))}
-              stroke="#f9d76b" strokeWidth="0.7" opacity="0.45"
-            />
+          <G key={`s-${i}`}>
+            <Path d={octSlice(i, R_OUT_OCT * 0.94, R_INNER_OCT)} fill={`url(#og-${i})`} />
+            {/* radial divider line */}
+            <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#f9d76b" strokeWidth="0.7" opacity="0.5" />
           </G>
         );
       })}
 
-      {/* Ambient gold shine overlay */}
-      <Circle cx={CX} cy={CY} r={outerR} fill="url(#ring-shine)" />
-
-      {/* ── Layer 2: 8-petal lotus ring (outer decoration) ── */}
-      {DIRS.map(d => {
-        const mid   = toRad(d.deg + 22.5); // between sectors
-        const px    = CX + petalR * Math.cos(mid);
-        const py    = CY + petalR * Math.sin(mid);
-        const pLen  = SIZE * 0.052;
-        const pWid  = SIZE * 0.022;
-        // petal tangent vectors
-        const tx    = -Math.sin(mid), ty = Math.cos(mid);
-        const nx    = Math.cos(mid),  ny = Math.sin(mid);
-        const tip1  = `${px + nx * pLen * 0.5},${py + ny * pLen * 0.5}`;
-        const tip2  = `${px - nx * pLen * 0.5},${py - ny * pLen * 0.5}`;
-        const side1 = `${px + tx * pWid},${py + ty * pWid}`;
-        const side2 = `${px - tx * pWid},${py - ty * pWid}`;
+      {/* Direction labels — short code + deity name */}
+      {DIRS.map((d, i) => {
+        const a = (-Math.PI / 2) + (i * Math.PI * 2) / 8;
+        const lx = CX + LABEL_R * Math.cos(a), ly = CY + LABEL_R * Math.sin(a);
+        const dx = CX + HINDI_R * Math.cos(a), dy = CY + HINDI_R * Math.sin(a);
+        const isCard = d.deg % 90 === 0;
         return (
-          <G key={`pt-${d.deg}`} opacity="0.55">
-            <Path
-              d={`M ${tip1} Q ${side1} ${tip2} Q ${side2} ${tip1} Z`}
-              fill="url(#petal)" stroke="#f9d76b" strokeWidth="0.6"
-            />
-          </G>
-        );
-      })}
-
-      {/* ── Layer 3: Direction labels ── */}
-      {DIRS.map(d => {
-        const isCardinal = d.deg % 90 === 0;
-        const mid = toRad(d.deg);
-        const lx  = CX + LABEL_R * Math.cos(mid);
-        const ly  = CY + LABEL_R * Math.sin(mid);
-        const hx  = CX + HINDI_R * Math.cos(mid);
-        const hy  = CY + HINDI_R * Math.sin(mid);
-        const ex  = CX + elemR   * Math.cos(mid);
-        const ey  = CY + elemR   * Math.sin(mid);
-        return (
-          <G key={`l-${d.short}`}>
-            {/* Cardinal arrow tip — metallic gold */}
-            {isCardinal && (() => {
-              const tip  = CX + (outerR + SIZE * 0.030) * Math.cos(mid);
-              const tipY = CY + (outerR + SIZE * 0.030) * Math.sin(mid);
-              const bx1  = CX + outerR * Math.cos(mid - 0.14);
-              const by1  = CY + outerR * Math.sin(mid - 0.14);
-              const bx2  = CX + outerR * Math.cos(mid + 0.14);
-              const by2  = CY + outerR * Math.sin(mid + 0.14);
-              return (
-                <Polygon
-                  points={`${tip},${tipY} ${bx1},${by1} ${bx2},${by2}`}
-                  fill="#f9d76b" stroke="#3a2404" strokeWidth="0.6"
-                />
-              );
-            })()}
-
-            {/* Short code */}
+          <G key={`l-${i}`}>
             <SvgText
               x={lx} y={ly}
               textAnchor="middle" alignmentBaseline="middle"
-              fill={isCardinal ? "#fff8dc" : "#f9d76b"}
-              fontSize={isCardinal ? SIZE * 0.064 : SIZE * 0.046}
+              fill={isCard ? "#fff8dc" : "#f9d76b"}
+              fontSize={isCard ? SIZE * 0.062 : SIZE * 0.044}
               fontWeight="900"
               letterSpacing={1}
             >
               {d.short}
             </SvgText>
-
-            {/* Deity / Element name in English — glowing jewel color */}
             <SvgText
-              x={hx} y={hy}
+              x={dx} y={dy + (isCard ? SIZE * 0.036 : SIZE * 0.030)}
               textAnchor="middle" alignmentBaseline="middle"
               fill={d.color}
-              fontSize={SIZE * 0.030}
+              fontSize={SIZE * 0.026}
               fontWeight="700"
-              opacity={0.95}
-              letterSpacing={1.5}
+              letterSpacing={1.3}
             >
               {d.deity.toUpperCase()}
             </SvgText>
@@ -199,156 +145,83 @@ function CompassRose() {
         );
       })}
 
-      {/* ── Layer 4: Gold filigree separator rings ── */}
-      <Circle cx={CX} cy={CY} r={outerR}  fill="none" stroke="#f9d76b" strokeWidth="1.2" opacity="0.55" />
-      <Circle cx={CX} cy={CY} r={outerR - SIZE * 0.008} fill="none" stroke="#3a2404" strokeWidth="0.5" opacity="0.8" />
-      <Circle cx={CX} cy={CY} r={midR}   fill="none" stroke="#f9d76b" strokeWidth="0.5" opacity="0.25" strokeDasharray="2 3" />
-      <Circle cx={CX} cy={CY} r={innerR + SIZE * 0.010} fill="none" stroke="#3a2404" strokeWidth="0.5" opacity="0.7" />
-      <Circle cx={CX} cy={CY} r={innerR} fill="none" stroke="#f9d76b" strokeWidth="1.4" opacity="0.7" />
-
-      {/* 8 tiny rivet dots on inner gold ring */}
-      {DIRS.map(d => {
-        const ang = toRad(d.deg + 22.5);
-        const rx  = CX + (innerR + SIZE * 0.005) * Math.cos(ang);
-        const ry  = CY + (innerR + SIZE * 0.005) * Math.sin(ang);
-        return (
-          <G key={`rd-${d.deg}`}>
-            <Circle cx={rx} cy={ry} r={SIZE * 0.007} fill="#3a2404" />
-            <Circle cx={rx} cy={ry} r={SIZE * 0.005} fill="#f9d76b" />
-            <Circle cx={rx - 0.4} cy={ry - 0.4} r={SIZE * 0.0018} fill="#fff8dc" opacity="0.9" />
-          </G>
-        );
-      })}
+      {/* Inner octagon outline (separator) */}
+      <Polygon
+        points={octagonPointsStr(R_INNER_OCT)}
+        fill="none"
+        stroke="#f9d76b"
+        strokeWidth="1.4"
+        opacity="0.85"
+      />
+      {/* 8 rivets on inner octagon vertices */}
+      {octagonPoints(R_INNER_OCT).map((p, i) => (
+        <G key={`rv-${i}`}>
+          <Circle cx={p[0]} cy={p[1]} r={SIZE * 0.010} fill="#3a2404" />
+          <Circle cx={p[0]} cy={p[1]} r={SIZE * 0.007} fill="#f9d76b" />
+          <Circle cx={p[0] - 0.6} cy={p[1] - 0.6} r={SIZE * 0.0025} fill="#fff8dc" opacity="0.9" />
+        </G>
+      ))}
     </Svg>
   );
 }
 
-// ── Compass Bezel (fixed outer ring) ──────────────────────────────────────────
+// ── Compass Bezel (fixed octagon frame) ───────────────────────────────────────
 function CompassBezel() {
-  const ticks: React.ReactElement[] = [];
-  for (let i = 0; i < 72; i++) {
-    const bearing = i * 5;
-    const isMajor = i % 9 === 0;      // every 45°
-    const isHalf  = i % 9 === 4 || i % 9 === 5; // mid-way marks
-    const ang     = toRad(bearing);
-    const rOuter  = BEZEL_RING_R;
-    const rInner  = isMajor ? BEZEL_INNER_R - SIZE * 0.042
-                  : isHalf  ? BEZEL_INNER_R - SIZE * 0.022
-                             : BEZEL_INNER_R - SIZE * 0.014;
-    ticks.push(
-      <Line
-        key={i}
-        x1={CX + rOuter * Math.cos(ang)} y1={CY + rOuter * Math.sin(ang)}
-        x2={CX + rInner * Math.cos(ang)} y2={CY + rInner * Math.sin(ang)}
-        stroke={isMajor ? "#fff2b8" : isHalf ? "#e8c84b" : "#96690f"}
-        strokeWidth={isMajor ? 2.6 : isHalf ? 1.6 : 0.9}
-        strokeLinecap="round"
-      />
-    );
-  }
-
-  // 8 decorative rivets at cardinal/ordinal positions (between gold rings)
-  const rivetR = SIZE * 0.462;
-  const rivets = DIRS.map(d => {
-    const ang = toRad(d.deg + 22.5); // between sectors
-    const rx  = CX + rivetR * Math.cos(ang);
-    const ry  = CY + rivetR * Math.sin(ang);
-    return (
-      <G key={`rv-${d.deg}`}>
-        <Circle cx={rx} cy={ry} r={SIZE * 0.011} fill="#3a2404" />
-        <Circle cx={rx} cy={ry} r={SIZE * 0.0085} fill="url(#rivetGold)" />
-        <Circle cx={rx - SIZE * 0.002} cy={ry - SIZE * 0.002} r={SIZE * 0.003} fill="#fff8dc" opacity="0.85" />
-      </G>
-    );
-  });
+  const R_OUT_OCT = SIZE * 0.48;
+  const outerPts  = octagonPointsStr(R_OUT_OCT);
+  const innerPts  = octagonPoints(R_OUT_OCT * 0.96);
 
   return (
     <Svg width={SIZE} height={SIZE}>
       <Defs>
-        {/* Background deep radial (obsidian-like) */}
-        <RadialGradient id="bg" cx="50%" cy="35%" r="72%">
-          <Stop offset="0"   stopColor="#1b2a4a" />
-          <Stop offset="0.55" stopColor="#0a1428" />
-          <Stop offset="1"   stopColor="#02060f" />
+        {/* Deep obsidian radial background */}
+        <RadialGradient id="bg-oct" cx="50%" cy="35%" r="75%">
+          <Stop offset="0"    stopColor="#1a1208" />
+          <Stop offset="0.55" stopColor="#0a0604" />
+          <Stop offset="1"    stopColor="#020100" />
         </RadialGradient>
-        {/* Primary gold ring — rich 24k look */}
-        <SvgLinearGradient id="gold" x1="0.15" y1="0" x2="0.85" y2="1">
+        {/* Rich 24k gold diagonal gradient for outer octagon */}
+        <SvgLinearGradient id="oct-gold" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0"    stopColor="#fff2b8" />
-          <Stop offset="0.20" stopColor="#ffd966" />
-          <Stop offset="0.50" stopColor="#c89020" />
+          <Stop offset="0.30" stopColor="#ffd966" />
+          <Stop offset="0.55" stopColor="#c89020" />
           <Stop offset="0.80" stopColor="#7a4800" />
           <Stop offset="1"    stopColor="#3a2404" />
         </SvgLinearGradient>
-        {/* Inner gold ring — brushed metal */}
-        <SvgLinearGradient id="goldInner" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0"    stopColor="#e8c84b" />
-          <Stop offset="0.5"  stopColor="#f9d76b" />
-          <Stop offset="1"    stopColor="#8a6020" />
-        </SvgLinearGradient>
-        {/* Highlight arc (sheen) */}
-        <SvgLinearGradient id="goldShine" x1="0.2" y1="0" x2="0.8" y2="1">
-          <Stop offset="0"   stopColor="#ffffff" stopOpacity="0.75" />
-          <Stop offset="1"   stopColor="#ffffff" stopOpacity="0" />
-        </SvgLinearGradient>
-        {/* Rivet gold (small) */}
+        {/* Rivet gold */}
         <RadialGradient id="rivetGold" cx="35%" cy="30%" r="70%">
-          <Stop offset="0"   stopColor="#fff2b8" />
-          <Stop offset="1"   stopColor="#7a4800" />
+          <Stop offset="0" stopColor="#fff2b8" />
+          <Stop offset="1" stopColor="#7a4800" />
         </RadialGradient>
       </Defs>
 
-      {/* Background circle */}
-      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R} fill="url(#bg)" />
-
-      {/* Outer deep gold ring */}
-      <Circle
-        cx={CX} cy={CY} r={BEZEL_OUTER_R}
-        fill="none" stroke="url(#gold)"
-        strokeWidth={SIZE * 0.034}
+      {/* Outer octagon gold frame */}
+      <Polygon points={outerPts} fill="url(#oct-gold)" />
+      {/* Inner octagon — background fill + thin gold stroke */}
+      <Polygon
+        points={octagonPointsStr(R_OUT_OCT * 0.94)}
+        fill="url(#bg-oct)"
+        stroke="#f9d76b"
+        strokeWidth="0.8"
+        opacity="0.95"
       />
-      {/* Outer ring thin dark edge */}
-      <Circle cx={CX} cy={CY} r={BEZEL_OUTER_R + SIZE * 0.017} fill="none" stroke="#2a1804" strokeWidth="0.8" opacity="0.9" />
-      <Circle cx={CX} cy={CY} r={BEZEL_OUTER_R - SIZE * 0.017} fill="none" stroke="#2a1804" strokeWidth="0.8" opacity="0.9" />
-
-      {/* Top sheen on gold ring (shine) */}
-      <Circle
-        cx={CX} cy={CY} r={BEZEL_OUTER_R}
-        fill="none" stroke="url(#goldShine)"
-        strokeWidth={SIZE * 0.016}
-        strokeDasharray={`${BEZEL_OUTER_R * Math.PI * 0.42} ${BEZEL_OUTER_R * Math.PI * 1.58}`}
-        strokeDashoffset={BEZEL_OUTER_R * Math.PI * 0.88}
+      {/* Subtle inner gold highlight line */}
+      <Polygon
+        points={octagonPointsStr(R_OUT_OCT * 0.92)}
+        fill="none"
+        stroke="#3a2404"
+        strokeWidth="0.6"
+        opacity="0.8"
       />
 
-      {/* Rivets */}
-      {rivets}
-
-      {/* Inner gold accent ring */}
-      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R + SIZE * 0.005} fill="none" stroke="url(#goldInner)" strokeWidth={SIZE * 0.009} />
-      <Circle cx={CX} cy={CY} r={BEZEL_INNER_R - SIZE * 0.002} fill="none" stroke="#3a2404" strokeWidth="0.7" opacity="0.85" />
-
-      {/* Tick marks */}
-      {ticks}
-
-      {/* Degree labels only at cardinal positions (just inside bezel) */}
-      {DIRS.filter(d => d.deg % 90 === 0).map(d => {
-        const ang = toRad(d.deg);
-        const r   = BEZEL_INNER_R - SIZE * 0.028;
-        const lx  = CX + r * Math.cos(ang);
-        const ly  = CY + r * Math.sin(ang);
-        return (
-          <SvgText
-            key={`deg-${d.short}`}
-            x={lx} y={ly}
-            textAnchor="middle" alignmentBaseline="middle"
-            fill="#f9d76b"
-            fontSize={SIZE * 0.024}
-            fontWeight="600"
-            opacity="0.55"
-          >
-            {d.deg.toString().padStart(3, "0")}°
-          </SvgText>
-        );
-      })}
+      {/* 8 decorative rivets at octagon vertices (on inner edge) */}
+      {innerPts.map((p, i) => (
+        <G key={`bz-rv-${i}`}>
+          <Circle cx={p[0]} cy={p[1]} r={SIZE * 0.012} fill="#3a2404" />
+          <Circle cx={p[0]} cy={p[1]} r={SIZE * 0.009} fill="url(#rivetGold)" />
+          <Circle cx={p[0] - 0.8} cy={p[1] - 0.8} r={SIZE * 0.003} fill="#fff8dc" opacity="0.9" />
+        </G>
+      ))}
     </Svg>
   );
 }

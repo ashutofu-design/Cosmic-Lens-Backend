@@ -3392,6 +3392,16 @@ def create_payment_order():
     # Return URL shown in browser after payment completes (no deep link needed)
     return_url = f"{os.environ.get('API_BASE', 'http://localhost:8080')}/api/payment/return?order_id={order_id}&plan={plan}&cycle={cycle}"
 
+    # Cashfree's hosted checkout requires a non-empty email + valid phone (10 digits, no +91).
+    # Fall back to safe defaults for demo / phone-only signups.
+    cust_email = (user.email or "").strip() or f"user{user.id}@cosmiclens.app"
+    raw_phone  = (user.phone or "").strip()
+    digits     = "".join(c for c in raw_phone if c.isdigit())
+    if len(digits) >= 10:
+        cust_phone = digits[-10:]   # Cashfree wants 10-digit Indian number
+    else:
+        cust_phone = "9999999999"
+
     payload = {
         "order_id":       order_id,
         "order_amount":   amount,
@@ -3399,8 +3409,8 @@ def create_payment_order():
         "customer_details": {
             "customer_id":    str(user.id),
             "customer_name":  user.name or "User",
-            "customer_email": user.email,
-            "customer_phone": "9999999999",
+            "customer_email": cust_email,
+            "customer_phone": cust_phone,
         },
         "order_meta": {
             "return_url": return_url,

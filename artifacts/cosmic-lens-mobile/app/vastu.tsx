@@ -4,7 +4,7 @@ import { Magnetometer } from "expo-sensors";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Animated, Dimensions, Platform, Pressable, ScrollView,
+  Animated, Dimensions, Linking, Platform, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from "react-native";
 import Svg, {
@@ -940,9 +940,10 @@ function RoomCard({ room }: { room: VastuRoom }) {
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
-  const t      = useT();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const [section, setSection] = useState<"basic" | "pro">("basic");
 
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
@@ -951,65 +952,244 @@ export default function VastuScreen() {
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex:1 }}>
-          <Text style={[s.title, { color: C.text }]}>{t.vastuTitle}</Text>
-          <Text style={[s.titleHindi, { color: C.textMuted }]}>वास्तु शास्त्र — Room-wise Guidance</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={[s.title, { color: C.text }]}>AstroVastu</Text>
+            <View style={s.premiumBadge}>
+              <Feather name="star" size={9} color="#3a2404" />
+              <Text style={s.premiumBadgeText}>PREMIUM</Text>
+            </View>
+          </View>
+          <Text style={[s.titleHindi, { color: C.textMuted }]}>वास्तु शास्त्र · Compass + Room-wise Guidance</Text>
         </View>
+      </View>
+
+      {/* ── Basic / Pro Tab Selector ── */}
+      <View style={[s.tabBar, { borderBottomColor: C.border, backgroundColor: C.bg }]}>
+        <Pressable
+          onPress={() => { Haptics.selectionAsync?.(); setSection("basic"); }}
+          style={[s.tabPill, section === "basic" && { backgroundColor: C.bgCard2, borderColor: C.accent }]}
+        >
+          <Feather name="home" size={13} color={section === "basic" ? C.accent : C.textMuted} />
+          <Text style={[s.tabPillText, { color: section === "basic" ? C.accent : C.textMuted, fontWeight: section === "basic" ? "800" : "600" }]}>
+            Basic
+          </Text>
+          <Text style={[s.tabPillSub, { color: section === "basic" ? C.accent : C.textDim }]}>FREE</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { Haptics.selectionAsync?.(); setSection("pro"); }}
+          style={[s.tabPill, section === "pro" && { backgroundColor: "#f9d76b18", borderColor: "#f9d76b" }]}
+        >
+          <Feather name="award" size={13} color={section === "pro" ? "#f9d76b" : C.textMuted} />
+          <Text style={[s.tabPillText, { color: section === "pro" ? "#f9d76b" : C.textMuted, fontWeight: section === "pro" ? "800" : "600" }]}>
+            Pro
+          </Text>
+          <Text style={[s.tabPillSub, { color: section === "pro" ? "#f9d76b" : C.textDim }]}>🔒</Text>
+        </Pressable>
       </View>
 
       <ScrollView
         contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Intro */}
-        <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={{ fontSize:24 }}>🏠</Text>
-          <View style={{ flex:1 }}>
-            <Text style={[s.introTitle, { color: C.text }]}>What is Vastu Shastra?</Text>
-            <Text style={[s.introBody, { color: C.textMuted }]}>
-              Vastu Shastra is an ancient Indian science of architecture. Correct directions bring
-              positive energy, happiness, health, and prosperity to your home.
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Premium Compass ── */}
-        <VastuCompass />
-
-        {/* Section label */}
-        <Text style={[s.sectionLabel, { color: C.accent }]}>ROOM-WISE VASTU GUIDE</Text>
-        <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
-
-        {/* Room cards */}
-        {ROOMS.map(room => <RoomCard key={room.key} room={room} />)}
-
-        {/* General tips */}
-        <View style={[s.genCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.genTitle, { color: C.text }]}>⚡ General Vastu Tips</Text>
-          {[
-            "Keep the home free of clutter — blocked spaces block energy flow",
-            "Ensure your home is well-lit — darkness invites negativity",
-            "Fix squeaky or broken doors promptly",
-            "Keep indoor plants — they bring life energy into the home",
-            "Remove broken or damaged items immediately",
-            "A running water feature (fountain or aquarium) in the North is auspicious",
-          ].map((tip,i) => (
-            <View key={i} style={s.genRow}>
-              <View style={[s.genDot, { backgroundColor: C.textDim }]} />
-              <Text style={[s.genText, { color: C.textMuted }]}>{tip}</Text>
+        {section === "basic" ? (
+          <>
+            {/* Intro */}
+            <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={{ fontSize:24 }}>🏠</Text>
+              <View style={{ flex:1 }}>
+                <Text style={[s.introTitle, { color: C.text }]}>What is Vastu Shastra?</Text>
+                <Text style={[s.introBody, { color: C.textMuted }]}>
+                  Vastu Shastra is an ancient Indian science of architecture. Correct directions bring
+                  positive energy, happiness, health, and prosperity to your home.
+                </Text>
+              </View>
             </View>
-          ))}
-        </View>
 
-        {/* Disclaimer */}
-        <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Feather name="info" size={12} color={C.textMuted} />
-          <Text style={[s.disclaimerText, { color: C.textMuted }]}>
-            This is a general Vastu guide. For your home specifically, always consult a qualified
-            Vastu expert for personalized advice.
-          </Text>
-        </View>
+            {/* ── Premium Compass ── */}
+            <VastuCompass />
+
+            {/* Section label */}
+            <Text style={[s.sectionLabel, { color: C.accent }]}>ROOM-WISE VASTU GUIDE</Text>
+            <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
+
+            {/* Room cards */}
+            {ROOMS.map(room => <RoomCard key={room.key} room={room} />)}
+
+            {/* General tips */}
+            <View style={[s.genCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.genTitle, { color: C.text }]}>⚡ General Vastu Tips</Text>
+              {[
+                "Keep the home free of clutter — blocked spaces block energy flow",
+                "Ensure your home is well-lit — darkness invites negativity",
+                "Fix squeaky or broken doors promptly",
+                "Keep indoor plants — they bring life energy into the home",
+                "Remove broken or damaged items immediately",
+                "A running water feature (fountain or aquarium) in the North is auspicious",
+              ].map((tip,i) => (
+                <View key={i} style={s.genRow}>
+                  <View style={[s.genDot, { backgroundColor: C.textDim }]} />
+                  <Text style={[s.genText, { color: C.textMuted }]}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Upsell teaser → Pro */}
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSection("pro"); }}
+              style={s.upsellCard}
+            >
+              <View style={s.upsellGlow} />
+              <Feather name="award" size={18} color="#f9d76b" />
+              <View style={{ flex: 1 }}>
+                <Text style={s.upsellTitle}>Unlock AstroVastu Pro</Text>
+                <Text style={s.upsellSub}>Personal home analysis, kundli-matched directions, yantra remedies & expert consultation</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color="#f9d76b" />
+            </Pressable>
+
+            {/* Disclaimer */}
+            <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Feather name="info" size={12} color={C.textMuted} />
+              <Text style={[s.disclaimerText, { color: C.textMuted }]}>
+                This is a general Vastu guide. For your home specifically, always consult a qualified
+                Vastu expert for personalized advice.
+              </Text>
+            </View>
+          </>
+        ) : (
+          <ProSection C={C} />
+        )}
       </ScrollView>
     </View>
+  );
+}
+
+// ── Pro Section ──────────────────────────────────────────────────────────────
+function ProSection({ C }: { C: any }) {
+  const PRO_FEATURES = [
+    {
+      icon: "📐",
+      title: "Home Blueprint Vastu Scan",
+      desc: "Apne ghar ka photo ya map upload karein — AI direction-wise dosh & remedy report banayega",
+      color: "#a78bfa",
+    },
+    {
+      icon: "🎯",
+      title: "Kundli + Vastu Match",
+      desc: "Aap ki kundli ke hisaab se personal lucky directions, colors, aur yantra placement",
+      color: "#f59e0b",
+    },
+    {
+      icon: "💎",
+      title: "Direction-wise Gem & Yantra Guide",
+      desc: "Har dish ke liye sahi crystal, ratna, aur yantra — with placement instructions",
+      color: "#22c55e",
+    },
+    {
+      icon: "🔮",
+      title: "Vastu Dosh Detection",
+      desc: "11+ common Vastu defects identify karein with step-by-step remedies (no demolition)",
+      color: "#ef4444",
+    },
+    {
+      icon: "🪔",
+      title: "Pooja Room Deep Analysis",
+      desc: "Mandir placement, deity direction, colors, ingredient list — complete guide",
+      color: "#fbbf24",
+    },
+    {
+      icon: "🏢",
+      title: "Office & Business Vastu",
+      desc: "Career & wealth-focused direction analysis for desk, cash locker, main door",
+      color: "#06b6d4",
+    },
+    {
+      icon: "👨‍🏫",
+      title: "1-on-1 Expert Consultation",
+      desc: "Certified Vastu expert se 30-min video call (monthly included in Pro plan)",
+      color: "#ec4899",
+    },
+    {
+      icon: "📅",
+      title: "Griha Pravesh Muhurat",
+      desc: "Shubh date & time for home entry, kitchen opening, foundation laying",
+      color: "#8b5cf6",
+    },
+  ];
+
+  async function openWhatsApp() {
+    const msg = encodeURIComponent("Namaste 🙏 Mujhe AstroVastu Pro ke baare mein jaankari chahiye — personal Vastu consultation kaise book karun?");
+    const url = `https://wa.me/919040524394?text=${msg}`;
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") window.open(url, "_blank");
+    } else {
+      try { await Linking.openURL(url); } catch {}
+    }
+  }
+
+  return (
+    <>
+      {/* Pro Hero Banner */}
+      <View style={s.proHero}>
+        <View style={s.proHeroGlow} />
+        <View style={s.proCrown}>
+          <Text style={{ fontSize: 34 }}>👑</Text>
+        </View>
+        <Text style={s.proHeroTitle}>AstroVastu Pro</Text>
+        <Text style={s.proHeroSub}>Personalized premium Vastu analysis</Text>
+        <View style={s.proHeroBadgeRow}>
+          <View style={s.proHeroBadge}>
+            <Text style={s.proHeroBadgeText}>₹499/mo</Text>
+          </View>
+          <View style={[s.proHeroBadge, { backgroundColor: "#fff2b820", borderColor: "#fff2b855" }]}>
+            <Text style={[s.proHeroBadgeText, { color: "#fff2b8" }]}>Cancel anytime</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={[s.sectionLabel, { color: "#f9d76b" }]}>✨ PREMIUM FEATURES</Text>
+      <Text style={[s.sectionSub, { color: C.textMuted }]}>Everything in Basic + advanced personal analysis</Text>
+
+      {/* Feature list */}
+      {PRO_FEATURES.map((f, i) => (
+        <View key={i} style={[s.proFeature, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <View style={[s.proFeatureIcon, { backgroundColor: `${f.color}18`, borderColor: `${f.color}40` }]}>
+            <Text style={{ fontSize: 22 }}>{f.icon}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <Text style={[s.proFeatureTitle, { color: C.text }]}>{f.title}</Text>
+              <View style={s.proPill}>
+                <Feather name="lock" size={7} color="#f9d76b" />
+                <Text style={s.proPillText}>PRO</Text>
+              </View>
+            </View>
+            <Text style={[s.proFeatureDesc, { color: C.textMuted }]}>{f.desc}</Text>
+          </View>
+        </View>
+      ))}
+
+      {/* CTA buttons */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/subscription" as any); }}
+        style={s.ctaPrimary}
+      >
+        <Feather name="zap" size={16} color="#3a2404" />
+        <Text style={s.ctaPrimaryText}>Upgrade to Pro — ₹499/mo</Text>
+      </Pressable>
+
+      <Pressable onPress={openWhatsApp} style={[s.ctaSecondary, { borderColor: C.border, backgroundColor: C.bgCard }]}>
+        <Feather name="message-circle" size={15} color="#25D366" />
+        <Text style={[s.ctaSecondaryText, { color: C.text }]}>Talk to Vastu Expert on WhatsApp</Text>
+      </Pressable>
+
+      <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Feather name="info" size={12} color={C.textMuted} />
+        <Text style={[s.disclaimerText, { color: C.textMuted }]}>
+          Pro features require an active AstroVastu Pro subscription. Cancel anytime from your profile.
+        </Text>
+      </View>
+    </>
   );
 }
 
@@ -1033,6 +1213,181 @@ const s = StyleSheet.create({
   genText:    { fontSize:12, lineHeight:19, flex:1 },
   disclaimer: { flexDirection:"row", alignItems:"flex-start", gap:8, borderRadius:10, padding:12, borderWidth:1 },
   disclaimerText: { fontSize:11, lineHeight:17, flex:1 },
+
+  // Premium badge in header
+  premiumBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: "#f9d76b",
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1, borderColor: "#c89020",
+  },
+  premiumBadgeText: {
+    fontSize: 8, fontWeight: "900", color: "#3a2404",
+    letterSpacing: 1,
+  },
+
+  // Tab bar (Basic / Pro)
+  tabBar: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  tabPill: {
+    flex: 1,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  tabPillText: { fontSize: 13, letterSpacing: 0.2 },
+  tabPillSub: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
+
+  // Upsell banner on Basic tab
+  upsellCard: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#f9d76b55",
+    backgroundColor: "#1a1408",
+    overflow: "hidden",
+    position: "relative",
+  },
+  upsellGlow: {
+    position: "absolute",
+    top: -30, right: -30,
+    width: 120, height: 120,
+    borderRadius: 60,
+    backgroundColor: "#f9d76b12",
+  },
+  upsellTitle: {
+    fontSize: 14, fontWeight: "800",
+    color: "#f9d76b",
+    marginBottom: 2,
+  },
+  upsellSub: {
+    fontSize: 11, lineHeight: 16,
+    color: "#e0c080",
+  },
+
+  // Pro hero banner
+  proHero: {
+    alignItems: "center",
+    padding: 24,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#f9d76b66",
+    backgroundColor: "#0f0a02",
+    overflow: "hidden",
+    position: "relative",
+    gap: 6,
+  },
+  proHeroGlow: {
+    position: "absolute",
+    top: -60, left: "50%",
+    width: 260, height: 260,
+    borderRadius: 130,
+    backgroundColor: "#f9d76b1a",
+    marginLeft: -130,
+  },
+  proCrown: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: "#f9d76b20",
+    borderWidth: 1, borderColor: "#f9d76b66",
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 4,
+  },
+  proHeroTitle: {
+    fontSize: 22, fontWeight: "900",
+    color: "#f9d76b",
+    letterSpacing: -0.4,
+  },
+  proHeroSub: {
+    fontSize: 12,
+    color: "#c4a050",
+    marginBottom: 8,
+  },
+  proHeroBadgeRow: {
+    flexDirection: "row", gap: 8,
+  },
+  proHeroBadge: {
+    backgroundColor: "#f9d76b25",
+    borderWidth: 1, borderColor: "#f9d76b80",
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 20,
+  },
+  proHeroBadgeText: {
+    fontSize: 11, fontWeight: "800",
+    color: "#f9d76b",
+    letterSpacing: 0.3,
+  },
+
+  // Pro feature card
+  proFeature: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  proFeatureIcon: {
+    width: 46, height: 46, borderRadius: 12,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  proFeatureTitle: {
+    fontSize: 13, fontWeight: "700",
+  },
+  proFeatureDesc: {
+    fontSize: 11, lineHeight: 16,
+    marginTop: 3,
+  },
+  proPill: {
+    flexDirection: "row", alignItems: "center", gap: 2,
+    backgroundColor: "#f9d76b15",
+    borderWidth: 1, borderColor: "#f9d76b55",
+    paddingHorizontal: 5, paddingVertical: 1,
+    borderRadius: 5,
+  },
+  proPillText: {
+    fontSize: 8, fontWeight: "800",
+    color: "#f9d76b",
+    letterSpacing: 0.5,
+  },
+
+  // CTA buttons
+  ctaPrimary: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#f9d76b",
+    shadowColor: "#f9d76b",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+    marginTop: 6,
+  },
+  ctaPrimaryText: {
+    fontSize: 14, fontWeight: "900",
+    color: "#3a2404",
+    letterSpacing: 0.3,
+  },
+  ctaSecondary: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  ctaSecondaryText: {
+    fontSize: 13, fontWeight: "700",
+  },
 });
 
 const c = StyleSheet.create({

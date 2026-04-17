@@ -109,7 +109,7 @@ LEGAL_HTML = """<!DOCTYPE html>
 <ul>
   <li>Generate your personalized Vedic kundli, dasha, and predictions.</li>
   <li>Process subscription payments and manage your plan.</li>
-  <li>Send OTP for authentication (via MSG91).</li>
+  <li>Send OTP for authentication (via Firebase Phone Authentication).</li>
   <li>Improve the app and detect fraud or abuse.</li>
 </ul>
 
@@ -117,7 +117,7 @@ LEGAL_HTML = """<!DOCTYPE html>
 <p>We do <strong>not</strong> sell your personal data. We share only with:</p>
 <ul>
   <li><strong>Cashfree Payments</strong> — for processing transactions.</li>
-  <li><strong>MSG91</strong> — for sending one-time passwords.</li>
+  <li><strong>Google Firebase</strong> — for sending one-time passwords (Phone Auth).</li>
   <li><strong>Government authorities</strong> — only when legally required.</li>
 </ul>
 
@@ -305,104 +305,11 @@ def geocode():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AUTH — Phone OTP only (production: MSG91, dev: console log fallback).
-# Email/password and Google sign-in are removed; legacy endpoints return 410.
+# AUTH — Phone OTP via Firebase Phone Authentication.
+# OTP send + confirm happens entirely on the client (Firebase SDK).
+# Backend only verifies the resulting Firebase ID token below.
+# Legacy email/password and MSG91 OTP endpoints have been removed.
 # ─────────────────────────────────────────────────────────────────────────────
-
-from models import OtpRequest
-import otp_helper
-
-
-def _client_ip() -> str:
-    # X-Forwarded-For first (proxied behind Replit) then remote_addr
-    fwd = request.headers.get("X-Forwarded-For", "")
-    return (fwd.split(",")[0].strip() if fwd else (request.remote_addr or ""))[:64]
-
-
-@app.route("/api/auth/send-otp", methods=["POST"])
-def send_otp_route():
-    """
-    Body: { phone: "9876543210", country_code?: "91" }
-    Sends a 6-digit OTP via MSG91. Enforces 60-sec cooldown + 5/hour anti-spam.
-    Response: { ok, request_id, expires_in, cooldown }
-    """
-    data = request.get_json(force=True, silent=True) or {}
-    cc   = (data.get("country_code") or "91").strip()
-    ph   = (data.get("phone") or "").strip()
-
-    try:
-        _, _, e164 = otp_helper.normalize_phone(cc, ph)
-    except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-
-    res = otp_helper.send_otp(e164, OtpRequest, db, ip=_client_ip())
-    if not res.get("ok"):
-        return jsonify(res), 429
-    return jsonify(res)
-
-
-@app.route("/api/auth/verify-otp", methods=["POST"])
-def verify_otp_route():
-    """
-    Body: { phone, country_code?, otp, name? }
-    On verify success, finds-or-creates the User by phone and returns user payload
-    (with api_key) + subscription status. New users auto-get the 7-day trial.
-    """
-    from subscription_helper import auto_start_trial_on_signup, subscription_status
-
-    data = request.get_json(force=True, silent=True) or {}
-    cc   = (data.get("country_code") or "91").strip()
-    ph   = (data.get("phone") or "").strip()
-    otp  = (data.get("otp") or "").strip()
-    name = (data.get("name") or "").strip()[:200]
-
-    try:
-        cc_norm, ph_norm, e164 = otp_helper.normalize_phone(cc, ph)
-    except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
-
-    res = otp_helper.verify_otp(e164, otp, OtpRequest, db)
-    if not res.get("ok"):
-        return jsonify(res), 401
-
-    # Find or create user by phone (canonical identity).
-    # Race-safe: catch IntegrityError from a parallel verify creating same phone.
-    from sqlalchemy.exc import IntegrityError
-    user = User.query.filter_by(phone=e164).first()
-    is_new = False
-    if not user:
-        is_new = True
-        last4 = ph_norm[-4:] if len(ph_norm) >= 4 else ph_norm
-        user = User(
-            name         = name or f"User {last4}",
-            phone        = e164,
-            country_code = cc_norm,
-            api_key      = secrets.token_hex(32),
-        )
-        db.session.add(user)
-        try:
-            db.session.flush()
-        except IntegrityError:
-            db.session.rollback()
-            user = User.query.filter_by(phone=e164).first()
-            is_new = False
-            if not user:
-                return jsonify({"ok": False, "error": "User creation race; please retry"}), 500
-        if is_new:
-            auto_start_trial_on_signup(user)
-    else:
-        if not user.api_key:
-            user.api_key = secrets.token_hex(32)
-        user.last_active = datetime.utcnow()
-        # Update name if user provided one and account had a placeholder
-        if name and (not user.name or user.name.startswith("User ")):
-            user.name = name
-    db.session.commit()
-
-    payload = user.to_dict()
-    payload["subscription"] = subscription_status(user)
-    payload["is_new_user"]  = is_new
-    return jsonify(payload), (201 if is_new else 200)
 
 
 @app.route("/api/auth/firebase-verify", methods=["POST"])

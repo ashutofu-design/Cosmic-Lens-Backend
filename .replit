@@ -55,3 +55,18 @@ channel = "stable-25_05"
 [userenv.shared]
 CASHFREE_ENV = "sandbox"
 API_BASE = "https://18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev"
+FIREBASE_SERVICE_ACCOUNT_JSON = '''
+{
+  "type": "service_account",
+  "project_id": "cosmic-lens-62cc2",
+  "private_key_id": "4a942900f481ea860c7f8d92e28acec700f6113a",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCeMSG4+r8bVOb+\nTMrJC4p+yqSN1JDSQvPnnKom0b2LPUfligl3k2YdbyzKK7hCjOUIHeL4NoAbNKX1\n0p7xc/sm8cN7/x6oyEX7hCRwV1ReQLA+hWVPpfJ31h9PiRtsOobT8twqe8Fv7NHh\nRT+HoD/AOjV1uK44GQe3ph6DTDzUJIybullLUGm20Ryf4ZxA4IWv8UjajXLqmBC7\nQSppWeuxvJR6fwIAuRMH204+6yQmIDKw/Q1Kq9zUKKlqwTOD2DFUq1KV0Xf9OtNT\nn5A9wKN5fU+1f0ndao7RBz3PXzg7VNggo4co0YYY2os7TYU68LYaqQh1nb2jIcJM\niugvQ5zHAgMBAAECggEAAfyN9tu3QKmdSP4/4axybcsvq9RKiUlr9LGj9V7W6YO4\nfmpwWf8Q3jfCMTvBUZyhV6vAaOuOSkkr+F1Pv6p8Me4BTXJTuTzinBj5uCtwlMpt\nLCvSrOBhnh2jQQVwwbgub0TyfNoXAMfRjummtZZOlqRkfXj3Px8ZWLYOVgnEDcnu\np3kdG4TnEyiT7pK3sH71HcisNFEIzb5dTabXn8SpwpSQ1wtxH54dZq+No9djclxk\nhTWt9jmk6OGSzB0Wpyrn5lWeyJfP2ihcyaKDsWfn4ao1R4Sb5Ms6B+3rwffx/BOe\nPjVEVxVjzji49tutaPIzXm3RNUzVd9oNARQMV6oAyQKBgQDQFlyxF6Aw3ocDimAb\njZ9CeRBs274tiqfq3ttd3EhhzQbhfHuOFlMvd48GQoeO7aUPrsVYG3vyyN8NYOPr\nKQHpeQcfVjcaTBrX9MVc27rBzK+J78UUMNiiVs5W4XYaCqY3hu+bIZ9ujkfHEvSY\nGXqxmmPKK4zF9V8ZES1hxV5zMwKBgQDCnbNUBQbSfPJaDEh/Y7vwjbqaXZuZHkCy\ndCXyT2PN8G222JlUevclkd4Qzlf78osJoCwlMcxVgaZnkTWyCNrs9F0+EbE+6B2C\nrmOWA0Z99ZAzWYOlh4RKrd9qOtWJL99dJ7KB2T5B90duv1JPirgsvhzrM1iVK+Nd\n6nljqi0wHQKBgQDCgER/27+GLlow+wS+fHAiqBqsRfHLi9FM/qY5Y4/cqtIFrl+m\n/kMfGTf89+7RsFwa/pfDtVz0IMItNSWVR61b2B7KMcIruHtW5JoeI9y7DWH/Irkq\nGEZF57HTD8derBmVyXDpplHp+uAouhUanqZKoC8qZ+6bkrEjMyUiQGP6dQKBgQC5\nhS+P5oLMYIN+x7rMhTyBYfoCcT2Ex0wRUZti079mb82Gwg/YcqfqzpSMHMfOyzUz\nZdbvVftdf4wrqkcvgjWAMKo6Iw990jNfgfI47MJkDJT7/lb6kqbPsdQKJi+s6U/a\nM599HKS2qY0Uy5khbjGHpWtX4siM2xuRSZWSJoWRGQKBgAcBOjtrycnGgpwkRS8m\nyIbdzgWAuetNJ6ba5JtJEVBIFIDMgHmKipElGegMv+C101iWM8qGOaEHFzdvst22\n8HCbLYRSkjt91TtdUVHqU0GqzsyPiJtBggX8WIzn0ScP1786bzWGX72eRYVQuVvZ\nLV6GSb9uEmUU1Cv0KNWUWo6T\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@cosmic-lens-62cc2.iam.gserviceaccount.com",
+  "client_id": "117780308456342692273",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40cosmic-lens-62cc2.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+'''

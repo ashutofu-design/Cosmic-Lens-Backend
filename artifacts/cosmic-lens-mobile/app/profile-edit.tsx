@@ -472,6 +472,38 @@ export default function ProfileEditScreen() {
             </View>
           )}
 
+          {/* Recently Deleted entry */}
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); router.push("/recently-deleted"); }}
+            style={({ pressed }) => [{
+              marginTop: 14,
+              padding: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: C.isDark ? C.border2 : "#E5E7EB",
+              backgroundColor: C.isDark ? C.bgCard : "#FFFFFF",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              opacity: pressed ? 0.85 : 1,
+            }]}
+          >
+            <View style={{
+              width: 36, height: 36, borderRadius: 18,
+              backgroundColor: `${ac}15`,
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Feather name="trash-2" size={16} color={ac} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>Recently Deleted</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }}>
+                Restore profiles within 24 hours
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={C.textMuted} />
+          </Pressable>
+
           {!primaryProfile && familyMembers.length === 0 && (
             <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>

@@ -23,6 +23,7 @@ import { getT } from "@/lib/i18n";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
+import { fetchTodayEnergy } from "@/lib/energyAPI";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
 
@@ -155,20 +156,40 @@ export default function HomeScreen() {
     cancelRef.current = false;
     setLoading(true); setTargetPts([]); setLabels([]); setSettled(false);
 
-    apiFetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
+    // Parallel fetch: moon history (for chart line) + accurate backend energy.
+    // Chart line uses the lightweight local calc (visual only), but the hero
+    // number comes from the backend Shadbala/Shodhana engine for ~92% accuracy.
+    const moonHistPromise = apiFetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
       .then(r => r.json())
-      .then((data: { points: MoonHistoryPoint[] }) => {
+      .catch(() => null) as Promise<{ points: MoonHistoryPoint[] } | null>;
+
+    const backendEnergyPromise = fetchTodayEnergy(kundli);
+
+    Promise.all([moonHistPromise, backendEnergyPromise])
+      .then(([moonHist, backend]) => {
         if (cancelRef.current) return;
-        const values = data.points.map((pt, idx) => {
-          if (idx === data.points.length - 1) {
-            const e = computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli);
-            if (e !== null) { setTodayEnergy(e); setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex }); }
-            return e ?? 0;
+
+        if (!moonHist?.points?.length) {
+          setLoading(false);
+          return;
+        }
+
+        // Build chart points from local calc (used for visual line only).
+        const lastIdx = moonHist.points.length - 1;
+        const values = moonHist.points.map((pt, idx) => {
+          const localScore = computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli) ?? 0;
+          if (idx === lastIdx) {
+            // Current point: prefer accurate backend score; fall back to local.
+            const hero = backend?.energy_score ?? localScore;
+            setTodayEnergy(hero);
+            setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex });
+            return hero;
           }
-          return computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli) ?? 0;
+          return localScore;
         });
-        const lbls = data.points.map((pt, idx) =>
-          idx === data.points.length - 1 ? "Now" : pt.label
+
+        const lbls = moonHist.points.map((pt, idx) =>
+          idx === lastIdx ? "Now" : pt.label
         );
         setTargetPts(values); setLabels(lbls); setLoading(false);
         setTimeout(() => { if (!cancelRef.current) setSettled(true); }, 1400);
@@ -194,7 +215,7 @@ export default function HomeScreen() {
   const showDemo    = !kundli;
   const chartPts    = showDemo ? DEMO_PTS    : targetPts;
   const chartLbls   = showDemo ? DEMO_LABELS : labels;
-  const chartEnergy = showDemo ? 38          : todayEnergy;
+  const chartEnergy = showDemo ? 38          : (todayEnergy ?? 0);
   const insight     = energyInsight(chartEnergy);
 
   const activeDasha: ActiveDashaResult | null =

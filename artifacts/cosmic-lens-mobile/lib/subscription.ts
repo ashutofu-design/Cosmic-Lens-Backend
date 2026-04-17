@@ -14,8 +14,8 @@ export const PRICES = {
   trial_weekly:  1,        // ₹1 → 7-day trial (one-time, Basic-tier access)
   basic_monthly: 199,
   basic_yearly:  1799,
-  pro_monthly:   399,
-  pro_yearly:    2999,
+  pro_monthly:   499,
+  // Pro yearly removed — Pro is monthly-only.
 } as const;
 
 export const TRIAL_DAYS = 7;

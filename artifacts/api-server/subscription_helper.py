@@ -3,15 +3,18 @@ Cosmic Lens — Subscription Logic (single source of truth)
 
 Plan keys:
   free   — default, very limited
-  trial  — 7-day free trial (one-time per user) → BASIC features unlocked
-  basic  — ₹199/mo or ₹1,799/yr — short summaries, 10 Q/day
-  pro    — ₹399/mo or ₹2,999/yr — full depth, unlimited Q
+  trial  — 7-day paid trial (₹1, one-time per user) → BASIC features unlocked
+  basic  — ₹199/mo or ₹1,799/yr — short summaries, 10 Q/day, 5 K/day
+  pro    — ₹499/mo (NO yearly) — full depth, unlimited Q & K
   elite  — legacy alias treated as 'pro'
 
 Everything plan-related (effective plan, feature gates, daily quota) goes here.
+Daily reset uses IST (Asia/Kolkata) so India users get a clean midnight reset.
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from sqlalchemy import update
 from database import db
 
 
@@ -20,27 +23,27 @@ PLAN_PRICES = {
     "trial_weekly":  1,
     "basic_monthly": 199,
     "basic_yearly":  1799,
-    "pro_monthly":   399,
-    "pro_yearly":    2999,
+    "pro_monthly":   499,
+    # Pro yearly removed — Pro is monthly-only.
 }
 
 TRIAL_DAYS = 7
 
-# Daily AI question limits
+# Daily AI question limits (-1 = unlimited)
 QUESTION_LIMITS = {
-    "free":  3,    # new users get a real taste — 3 questions/day
-    "trial": 5,    # trial = basic features with slightly higher quota
+    "free":  3,
+    "trial": 10,   # trial = same as Basic
     "basic": 10,
-    "pro":  -1,    # unlimited
+    "pro":  -1,
     "elite": -1,
 }
 
-# Daily Kundli generation limits (compute-heavy — keep tight)
+# Daily Kundli generation limits — counts only NEW kundlis (dedup handled at API layer)
 KUNDLI_LIMITS = {
     "free":  1,
-    "trial": 3,
+    "trial": 5,    # trial = same as Basic
     "basic": 5,
-    "pro":  -1,    # unlimited
+    "pro":  -1,
     "elite": -1,
 }
 
@@ -53,18 +56,23 @@ TIMELINE_MONTHS = {
     "elite": 6,
 }
 
-# Saved profiles
+# Saved profiles (active, excluding soft-deleted)
 PROFILE_LIMIT = {
     "free":  1,
-    "trial": 3,
+    "trial": 5,    # trial = same as Basic
     "basic": 5,
     "pro":  -1,
     "elite": -1,
 }
 
 
+# ── IST timezone helpers ─────────────────────────────────────────────────────
+IST = ZoneInfo("Asia/Kolkata")
+
+
 def _today_str() -> str:
-    return date.today().isoformat()
+    """Today's date in IST (so daily reset happens at IST midnight)."""
+    return datetime.now(IST).date().isoformat()
 
 
 def effective_plan(user) -> str:
@@ -91,20 +99,15 @@ def effective_plan(user) -> str:
 
 
 def analysis_mode(user) -> str:
-    """
-    Returns 'pro' for full-depth analysis, else 'basic' (short summary).
-    Use this in API responses to trim deep fields for non-pro users.
-    """
+    """Returns 'pro' for full-depth analysis, else 'basic' (short summary)."""
     return "pro" if effective_plan(user) == "pro" else "basic"
 
 
 def question_limit(user) -> int:
-    """Daily AI question limit. -1 = unlimited."""
     return QUESTION_LIMITS.get(effective_plan(user), 1)
 
 
 def kundli_limit(user) -> int:
-    """Daily kundli-generation limit. -1 = unlimited."""
     return KUNDLI_LIMITS.get(effective_plan(user), 1)
 
 
@@ -128,10 +131,6 @@ def trial_eligible(user) -> bool:
 
 
 def start_trial(user) -> dict:
-    """
-    Begins a 7-day trial. Returns {ok, error?, expires_at?}.
-    Idempotent guard against double-starting.
-    """
     if not user:
         return {"ok": False, "error": "User not found"}
     if not trial_eligible(user):
@@ -149,30 +148,28 @@ def start_trial(user) -> dict:
 
 
 def auto_start_trial_on_signup(user) -> None:
-    """
-    Deprecated: previously gave every new user a free 7-day trial.
-    Trial is now a paid (₹1) plan activated via /api/payment/create-order
-    with plan='trial', cycle='weekly'. Kept as a no-op so existing
-    callers keep working without code-edit.
-    """
+    """No-op (legacy). Trial is now a paid (₹1) plan."""
     return
 
 
 def reset_daily_quota_if_needed(user) -> None:
+    """Resets daily counters if the IST date has rolled over."""
     today = _today_str()
+    changed = False
     if user.daily_questions_date != today:
         user.daily_questions_date = today
         user.daily_questions_used = 0
+        changed = True
     if user.daily_kundlis_date != today:
         user.daily_kundlis_date = today
         user.daily_kundlis_used = 0
+        changed = True
+    if changed:
+        db.session.commit()
 
 
 def can_ask_question(user) -> dict:
-    """
-    Check (without consuming) if user can ask another question today.
-    Returns {allowed, used, limit, reason?}.
-    """
+    """Check (without consuming) if user can ask another question today."""
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
@@ -189,34 +186,59 @@ def can_ask_question(user) -> dict:
             "limit":   limit,
             "reason":  "Daily limit reached",
         }
-    return {
-        "allowed": True,
-        "used":    user.daily_questions_used,
-        "limit":   limit,
-    }
+    return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
 
 
 def consume_question(user) -> dict:
     """
-    Atomically check + increment daily question counter.
-    Returns {allowed, used, limit, reason?}.
+    ATOMIC check + increment. Uses a conditional UPDATE so two parallel
+    requests can never both succeed past the daily limit.
     """
-    check = can_ask_question(user)
-    if not check["allowed"]:
-        return check
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
-    user.daily_questions_used += 1
+    reset_daily_quota_if_needed(user)
+    limit = question_limit(user)
+    today = _today_str()
+
+    # Import locally to avoid circular import
+    from models import User
+
+    if limit == -1:
+        # Unlimited — still track count for analytics
+        db.session.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(daily_questions_used=User.daily_questions_used + 1)
+        )
+        db.session.commit()
+        db.session.refresh(user)
+        return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
+
+    # Atomic: increment only if (still today AND used < limit)
+    result = db.session.execute(
+        update(User)
+        .where(User.id == user.id)
+        .where(User.daily_questions_date == today)
+        .where(User.daily_questions_used < limit)
+        .values(daily_questions_used=User.daily_questions_used + 1)
+    )
     db.session.commit()
 
-    return {
-        "allowed": True,
-        "used":    user.daily_questions_used,
-        "limit":   check["limit"],
-    }
+    if result.rowcount == 0:
+        db.session.refresh(user)
+        return {
+            "allowed": False,
+            "used":    user.daily_questions_used,
+            "limit":   limit,
+            "reason":  "Daily limit reached",
+        }
+
+    db.session.refresh(user)
+    return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
 
 
 def can_generate_kundli(user) -> dict:
-    """Check (without consuming) if user can generate another kundli today."""
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
@@ -233,36 +255,57 @@ def can_generate_kundli(user) -> dict:
             "limit":   limit,
             "reason":  "Daily kundli limit reached",
         }
-    return {
-        "allowed": True,
-        "used":    user.daily_kundlis_used,
-        "limit":   limit,
-    }
+    return {"allowed": True, "used": user.daily_kundlis_used, "limit": limit}
 
 
 def consume_kundli(user) -> dict:
-    """Atomically check + increment daily kundli counter."""
-    check = can_generate_kundli(user)
-    if not check["allowed"]:
-        return check
+    """ATOMIC check + increment for kundli generation."""
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
-    user.daily_kundlis_used += 1
+    reset_daily_quota_if_needed(user)
+    limit = kundli_limit(user)
+    today = _today_str()
+
+    from models import User
+
+    if limit == -1:
+        db.session.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(daily_kundlis_used=User.daily_kundlis_used + 1)
+        )
+        db.session.commit()
+        db.session.refresh(user)
+        return {"allowed": True, "used": user.daily_kundlis_used, "limit": -1}
+
+    result = db.session.execute(
+        update(User)
+        .where(User.id == user.id)
+        .where(User.daily_kundlis_date == today)
+        .where(User.daily_kundlis_used < limit)
+        .values(daily_kundlis_used=User.daily_kundlis_used + 1)
+    )
     db.session.commit()
 
-    return {
-        "allowed": True,
-        "used":    user.daily_kundlis_used,
-        "limit":   check["limit"],
-    }
+    if result.rowcount == 0:
+        db.session.refresh(user)
+        return {
+            "allowed": False,
+            "used":    user.daily_kundlis_used,
+            "limit":   limit,
+            "reason":  "Daily kundli limit reached",
+        }
+
+    db.session.refresh(user)
+    return {"allowed": True, "used": user.daily_kundlis_used, "limit": limit}
 
 
 def subscription_status(user) -> dict:
-    """
-    Full subscription snapshot for the mobile app.
-    Returned by /api/subscription/status.
-    """
+    """Full subscription snapshot for the mobile app."""
     plan = effective_plan(user) if user else "free"
-    reset_daily_quota_if_needed(user) if user else None
+    if user:
+        reset_daily_quota_if_needed(user)
 
     trial_expires_at = None
     if user and user.trial_started_at:

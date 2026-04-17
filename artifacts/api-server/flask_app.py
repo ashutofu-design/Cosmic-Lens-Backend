@@ -430,12 +430,36 @@ def delete_user_account(user_id):
     })
 
 
+RECENTLY_DELETED_HOURS = 24
+
+
+def _purge_expired_deleted(user_id: int) -> None:
+    """Hard-delete soft-deleted profiles older than the 24-hr restore window."""
+    from datetime import timedelta as _td
+    cutoff = datetime.utcnow() - _td(hours=RECENTLY_DELETED_HOURS)
+    expired = Profile.query.filter(
+        Profile.user_id == user_id,
+        Profile.deleted_at.isnot(None),
+        Profile.deleted_at < cutoff,
+    ).all()
+    for row in expired:
+        db.session.delete(row)
+    if expired:
+        db.session.commit()
+
+
 @app.route("/api/user/<int:user_id>/profiles", methods=["GET"])
 def list_user_profiles(user_id):
-    """Return every profile saved by this user (self + family)."""
+    """Return every ACTIVE profile saved by this user (excludes Recently Deleted)."""
     user, err = get_authed_user(user_id)
     if err: return err
-    rows = Profile.query.filter_by(user_id=user_id).order_by(Profile.is_primary.desc(), Profile.created_at.asc()).all()
+
+    _purge_expired_deleted(user_id)
+
+    rows = (Profile.query
+            .filter_by(user_id=user_id, deleted_at=None)
+            .order_by(Profile.is_primary.desc(), Profile.created_at.asc())
+            .all())
     primary_id = next((r.client_id for r in rows if r.is_primary), (rows[0].client_id if rows else None))
     return jsonify({
         "profiles":         [r.to_dict() for r in rows],
@@ -443,14 +467,56 @@ def list_user_profiles(user_id):
     })
 
 
+@app.route("/api/user/<int:user_id>/profiles/deleted", methods=["GET"])
+def list_deleted_profiles(user_id):
+    """Recently Deleted (last 24 hrs) — restorable without quota cost."""
+    user, err = get_authed_user(user_id)
+    if err: return err
+
+    _purge_expired_deleted(user_id)
+
+    rows = (Profile.query
+            .filter(Profile.user_id == user_id, Profile.deleted_at.isnot(None))
+            .order_by(Profile.deleted_at.desc())
+            .all())
+    return jsonify({"profiles": [r.to_dict() for r in rows]})
+
+
+@app.route("/api/user/<int:user_id>/profiles/<client_id>/restore", methods=["POST"])
+def restore_user_profile(user_id, client_id):
+    """Restore a soft-deleted profile (within 24 hrs)."""
+    from datetime import timedelta as _td
+    user, err = get_authed_user(user_id)
+    if err: return err
+
+    row = Profile.query.filter_by(user_id=user_id, client_id=client_id).first()
+    if not row or row.deleted_at is None:
+        return jsonify({"ok": False, "error": "Profile not found in Recently Deleted"}), 404
+
+    if row.deleted_at < datetime.utcnow() - _td(hours=RECENTLY_DELETED_HOURS):
+        # Window has elapsed — purge and reject
+        db.session.delete(row)
+        db.session.commit()
+        return jsonify({"ok": False, "error": "Restore window expired"}), 410
+
+    row.deleted_at = None
+    db.session.commit()
+    return jsonify({"ok": True, "profile": row.to_dict()})
+
+
 @app.route("/api/user/<int:user_id>/profiles/sync", methods=["POST"])
 def sync_user_profiles(user_id):
-    """Bulk upsert — client sends full profile list + primaryId. Server mirrors it.
+    """Bulk upsert — client sends full ACTIVE profile list + primaryId.
+    Removed-from-list profiles are SOFT-deleted (24-hr Recently Deleted window).
     Body: { profiles: [{id, name, gender, relation, birthData, kundli}], primaryProfileId: str }
     """
     user, err = get_authed_user(user_id)
     if err: return err
     import json as _json
+    from models import compute_birth_key
+
+    _purge_expired_deleted(user_id)
+
     data = request.get_json(force=True, silent=True) or {}
     incoming = data.get("profiles") or []
     primary_id = data.get("primaryProfileId")
@@ -458,12 +524,15 @@ def sync_user_profiles(user_id):
     incoming_ids = {p.get("id") for p in incoming if p.get("id")}
     existing = {r.client_id: r for r in Profile.query.filter_by(user_id=user_id).all()}
 
-    # Delete removed
-    for cid, row in existing.items():
-        if cid not in incoming_ids:
-            db.session.delete(row)
+    now = datetime.utcnow()
 
-    # Upsert
+    # SOFT-delete profiles that disappeared from the active list (skip rows
+    # already soft-deleted so we don't extend their restore window).
+    for cid, row in existing.items():
+        if cid not in incoming_ids and row.deleted_at is None:
+            row.deleted_at = now
+
+    # Upsert (also auto-restores any matching soft-deleted row by clearing deleted_at)
     for p in incoming:
         cid = p.get("id")
         if not cid: continue
@@ -475,11 +544,17 @@ def sync_user_profiles(user_id):
         row.gender     = (p.get("gender") or "")[:20]
         row.relation   = (p.get("relation") or "")[:50]
         row.is_primary = (cid == primary_id)
-        row.birth_data = _json.dumps(p.get("birthData")) if p.get("birthData") else None
-        row.chart_data = _json.dumps(p.get("kundli"))    if p.get("kundli")    else None
+        bd             = p.get("birthData")
+        row.birth_data = _json.dumps(bd) if bd else None
+        row.chart_data = _json.dumps(p.get("kundli")) if p.get("kundli") else None
+        row.birth_key  = compute_birth_key(bd) if bd else None
+        row.deleted_at = None  # incoming = active
 
     db.session.commit()
-    rows = Profile.query.filter_by(user_id=user_id).order_by(Profile.is_primary.desc(), Profile.created_at.asc()).all()
+    rows = (Profile.query
+            .filter_by(user_id=user_id, deleted_at=None)
+            .order_by(Profile.is_primary.desc(), Profile.created_at.asc())
+            .all())
     return jsonify({
         "profiles":         [r.to_dict() for r in rows],
         "primaryProfileId": next((r.client_id for r in rows if r.is_primary), (rows[0].client_id if rows else None)),
@@ -634,7 +709,9 @@ def timezone_lookup():
 
 @app.route("/api/kundli", methods=["POST"])
 def kundli():
-    from subscription_helper import consume_kundli, effective_plan
+    from subscription_helper import consume_kundli, effective_plan, can_generate_kundli
+    from models import compute_birth_key
+    import json as _json
 
     data = request.get_json(force=True, silent=True)
     if not data:
@@ -644,12 +721,6 @@ def kundli():
     missing  = [f for f in required if f not in data]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
-
-    # ── Daily kundli quota check (auth mandatory when user_id supplied) ──────
-    # We CHECK quota up-front (so failed requests don't waste compute), but
-    # only CONSUME after a successful calculation — so transient failures
-    # don't lock out free-tier users (1/day).
-    from subscription_helper import can_generate_kundli
 
     user_id = data.get("user_id")
     user    = None
@@ -661,6 +732,43 @@ def kundli():
         if not api_key or user.api_key != api_key:
             return jsonify({"error": "Unauthorized"}), 401
 
+        # ── Per-user dedup: same DOB/time/place → return cached chart, NO quota cost ──
+        birth_key = compute_birth_key(data)
+        if birth_key:
+            cached = (Profile.query
+                      .filter_by(user_id=user.id, birth_key=birth_key, deleted_at=None)
+                      .filter(Profile.chart_data.isnot(None))
+                      .first())
+            if not cached:
+                # Backfill legacy profiles (rows that have chart_data but null birth_key
+                # because they predate the dedup feature). Cheap one-time scan per user.
+                legacy = (Profile.query
+                          .filter_by(user_id=user.id, birth_key=None, deleted_at=None)
+                          .filter(Profile.birth_data.isnot(None))
+                          .all())
+                if legacy:
+                    for r in legacy:
+                        try:
+                            bd = _json.loads(r.birth_data)
+                            r.birth_key = compute_birth_key(bd)
+                        except Exception:
+                            r.birth_key = ""
+                    db.session.commit()
+                    cached = (Profile.query
+                              .filter_by(user_id=user.id, birth_key=birth_key, deleted_at=None)
+                              .filter(Profile.chart_data.isnot(None))
+                              .first())
+            if cached:
+                try:
+                    chart = _json.loads(cached.chart_data)
+                    if isinstance(chart, dict):
+                        chart["cached"]    = True
+                        chart["cached_id"] = cached.client_id
+                        return jsonify(chart)
+                except Exception:
+                    pass  # corrupt cache → fall through to fresh compute
+
+        # ── Quota check (only when no cache hit) ──
         check = can_generate_kundli(user)
         if not check["allowed"]:
             return jsonify({
@@ -673,10 +781,22 @@ def kundli():
 
     try:
         result = calculate_kundli(data)
-        # Only consume quota AFTER a successful calculation
+        # Consume quota ONLY after a successful fresh calculation. The atomic
+        # consume can still fail under heavy concurrency (another request used
+        # the last slot between our pre-check and now) — in that case we must
+        # honor the hard limit and reject this response.
         if user:
             quota = consume_kundli(user)
-            result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+            if not quota.get("allowed"):
+                return jsonify({
+                    "error":            "daily_kundli_limit_reached",
+                    "message":          f"Aaj ka {quota['limit']} kundli ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                    "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                    "plan":             effective_plan(user),
+                    "upgrade_required": True,
+                }), 402
+            result["quota"]  = {"used": quota["used"], "limit": quota["limit"]}
+            result["cached"] = False
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -2219,7 +2339,7 @@ def create_payment_order():
     valid_combos = {
         ("trial", "weekly"),
         ("basic", "monthly"), ("basic", "yearly"),
-        ("pro",   "monthly"), ("pro",   "yearly"),
+        ("pro",   "monthly"),
         ("elite", "monthly"), ("elite", "yearly"),
     }
     if not user_id or (plan, cycle) not in valid_combos:
@@ -2368,8 +2488,11 @@ def payment_webhook():
     received_sig = request.headers.get("x-webhook-signature", "")
     timestamp    = request.headers.get("x-webhook-timestamp", "")
 
-    # Signature verification (skip if secret not configured)
-    if CASHFREE_SECRET and received_sig:
+    # Mandatory signature verification when CASHFREE_SECRET is configured.
+    # This prevents spoofed webhook calls from activating subscriptions.
+    if CASHFREE_SECRET:
+        if not received_sig or not timestamp:
+            return jsonify({"error": "Signature required"}), 401
         message  = (timestamp + raw_body.decode()).encode()
         expected = base64.b64encode(
             _hmac.new(CASHFREE_SECRET.encode(), message, hashlib.sha256).digest()

@@ -117,6 +117,13 @@ class Profile(db.Model):
     is_primary    = db.Column(db.Boolean, default=False, nullable=False)
     birth_data    = db.Column(db.Text)                                     # JSON
     chart_data    = db.Column(db.Text)                                     # JSON (kundli)
+    # Dedup key: sha-ish key from (dob, tob, lat≈, lon≈) — used by /api/kundli
+    # to return a cached chart when the same user re-requests identical birth data
+    # WITHOUT consuming a daily generation slot.
+    birth_key     = db.Column(db.String(120), nullable=True, index=True)
+    # Soft-delete: when set, profile is in "Recently Deleted" (24-hr restore window).
+    # NULL = active. Set to a timestamp to soft-delete.
+    deleted_at    = db.Column(db.DateTime, nullable=True, index=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -137,4 +144,28 @@ class Profile(db.Model):
             "birthData":   _load(self.birth_data),
             "kundli":      _load(self.chart_data),
             "updatedAt":   self.updated_at.isoformat() if self.updated_at else None,
+            "deletedAt":   self.deleted_at.isoformat() if self.deleted_at else None,
         }
+
+
+def compute_birth_key(birth_data) -> str:
+    """
+    Deterministic dedup key for a kundli computation. Two birth-data inputs
+    producing the same key are considered identical for caching purposes.
+    Uses date + time + ~11m geographic precision. Name excluded (math doesn't
+    depend on name).
+    """
+    if not birth_data or not isinstance(birth_data, dict):
+        return ""
+    try:
+        d   = int(birth_data.get("day", 0))
+        m   = int(birth_data.get("month", 0))
+        y   = int(birth_data.get("year", 0))
+        h   = int(birth_data.get("hour", 0))
+        mn  = int(birth_data.get("minute", 0))
+        ampm = str(birth_data.get("ampm", "")).upper().strip()
+        lat = float(birth_data.get("lat", 0))
+        lon = float(birth_data.get("lon", 0))
+        return f"{y:04d}-{m:02d}-{d:02d}|{h:02d}:{mn:02d}{ampm}|{lat:.4f},{lon:.4f}"
+    except (TypeError, ValueError):
+        return ""

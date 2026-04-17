@@ -43,12 +43,29 @@ def init_db(app):
                     conn.execute(text(
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key VARCHAR(64) UNIQUE"
                     ))
+                    conn.execute(text(
+                        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS birth_key VARCHAR(120)"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_profiles_birth_key ON profiles(birth_key)"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_profiles_deleted_at ON profiles(deleted_at)"
+                    ))
                 else:
                     # SQLite doesn't support IF NOT EXISTS on ALTER TABLE
-                    try:
-                        conn.execute(text("ALTER TABLE users ADD COLUMN api_key VARCHAR(64)"))
-                    except Exception:
-                        pass
+                    for stmt in (
+                        "ALTER TABLE users ADD COLUMN api_key VARCHAR(64)",
+                        "ALTER TABLE profiles ADD COLUMN birth_key VARCHAR(120)",
+                        "ALTER TABLE profiles ADD COLUMN deleted_at TIMESTAMP",
+                    ):
+                        try:
+                            conn.execute(text(stmt))
+                        except Exception:
+                            pass
                 conn.commit()
         except Exception as e:
             print(f"[DB] Migration note: {e}")

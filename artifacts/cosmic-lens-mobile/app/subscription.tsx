@@ -61,8 +61,9 @@ const PLANS = [
     accent: "#f59e0b",
     badge: "🔥 MOST POPULAR",
     monthlyPrice: PRICES.pro_monthly,
-    yearlyPrice:  PRICES.pro_yearly,
-    yearlySave:   38,
+    yearlyPrice:  PRICES.pro_monthly,   // Pro is monthly-only — show monthly price even on yearly toggle
+    yearlySave:   0,
+    monthlyOnly:  true as const,
     icon: "zap" as const,
     tagline: "Full power Vedic insights",
     features: [
@@ -186,7 +187,9 @@ function PlanCard({
   onPress: () => void;
 }) {
   const C = useC();
-  const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
+  const monthlyOnly = (plan as any).monthlyOnly === true;
+  const effectiveCycle: BillingCycle = monthlyOnly ? "monthly" : cycle;
+  const price = effectiveCycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isPopular = plan.key === "pro";
 
   return (
@@ -228,11 +231,18 @@ function PlanCard({
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 3, marginTop: 12, marginBottom: 4 }}>
         <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
         <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-        <Text style={[pl.pricePer, { color: C.textMuted }]}>/{cycle === "yearly" ? "year" : "month"}</Text>
+        <Text style={[pl.pricePer, { color: C.textMuted }]}>/{effectiveCycle === "yearly" ? "year" : "month"}</Text>
       </View>
 
+      {/* Monthly-only note for Pro */}
+      {monthlyOnly && cycle === "yearly" && (
+        <Text style={[pl.perMonthEq, { color: C.textMid, marginBottom: 6 }]}>
+          Monthly billing only
+        </Text>
+      )}
+
       {/* Per-month equivalent for yearly */}
-      {cycle === "yearly" && (
+      {!monthlyOnly && effectiveCycle === "yearly" && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
           <Text style={[pl.perMonthEq, { color: C.textMid }]}>
             ≈ ₹{Math.round(plan.yearlyPrice / 12).toLocaleString("en-IN")}/month
@@ -320,7 +330,9 @@ export default function SubscriptionScreen() {
       return;
     }
     if (planKey === plan) return;
-    router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle } });
+    // Pro plan is monthly-only — force monthly cycle regardless of toggle.
+    const effectiveCycle = planKey === "pro" ? "monthly" : cycle;
+    router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle: effectiveCycle } });
   }
 
   function handleStartTrial() {

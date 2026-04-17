@@ -87,21 +87,56 @@ except: pass
   sleep 2
 done
 
-# If tunnel failed, fall back to plain LAN/proxy mode so the iframe preview works
+# If Expo's built-in (ngrok) tunnel failed, expose Metro via localtunnel
+# instead. The kirk.replit.dev fallback is unusable on Indian cellular
+# carriers (Jio/Airtel) which block that domain.
 if [ "$TUNNEL_OK" = false ]; then
-  echo "[startup] Tunnel unavailable — starting Metro in plain mode (iframe preview will work)..."
+  echo "[startup] Expo tunnel unavailable — starting Metro in plain mode + localtunnel…"
   kill "$METRO_PID" 2>/dev/null || true
   pkill -f "ngrok" 2>/dev/null || true
   sleep 2
   pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
   METRO_PID=$!
-  # Prefer Replit's dedicated Expo proxy domain — it bypasses workspace auth so
-  # Expo Go on a physical phone can reach Metro. Falls back to the regular dev
-  # domain only if the Expo-specific one isn't injected (older Repls).
-  if [ -n "$REPLIT_EXPO_DEV_DOMAIN" ]; then
-    EXPO_URL="exp://${REPLIT_EXPO_DEV_DOMAIN}"
-  else
-    EXPO_URL="exp://${REPLIT_DEV_DOMAIN}"
+
+  # Wait for Metro to bind locally.
+  for i in $(seq 1 30); do
+    if curl -sf -m 1 "http://localhost:$METRO_PORT/status" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+
+  # Start localtunnel on Metro's port, with auto-reconnect.
+  METRO_SUB="cosmiclens-metro"
+  (
+    while true; do
+      echo "[lt-metro] starting tunnel → $METRO_SUB.loca.lt"
+      lt --port "$METRO_PORT" --subdomain "$METRO_SUB" 2>&1 | sed 's/^/[lt-metro] /'
+      echo "[lt-metro] exited; retrying in 3s"
+      sleep 3
+    done
+  ) &
+  LT_METRO_PID=$!
+
+  # Verify localtunnel actually came up (sometimes the subdomain is taken).
+  for i in $(seq 1 15); do
+    if curl -sf -m 3 "https://$METRO_SUB.loca.lt/status" \
+        -H "bypass-tunnel-reminder: true" 2>/dev/null | grep -q "packager-status:running"; then
+      EXPO_URL="exp://$METRO_SUB.loca.lt"
+      echo "[startup] Metro localtunnel ready: $EXPO_URL"
+      break
+    fi
+    sleep 2
+  done
+
+  if [ -z "$EXPO_URL" ]; then
+    # Last-resort fallback (won't work on cellular but keeps iframe preview alive).
+    if [ -n "$REPLIT_EXPO_DEV_DOMAIN" ]; then
+      EXPO_URL="exp://${REPLIT_EXPO_DEV_DOMAIN}"
+    else
+      EXPO_URL="exp://${REPLIT_DEV_DOMAIN}"
+    fi
+    echo "[startup] WARNING: localtunnel for Metro failed; falling back to: $EXPO_URL"
   fi
 fi
 
@@ -114,6 +149,7 @@ echo "================================================="
 
 cleanup() {
   kill "$METRO_PID" 2>/dev/null || true
+  [ -n "$LT_METRO_PID" ] && kill "$LT_METRO_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 

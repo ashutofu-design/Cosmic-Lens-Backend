@@ -103,70 +103,6 @@ function planDot(plan: string): string {
   }
 }
 
-// ── Trial banner ─────────────────────────────────────────────────────────────
-function TrialBanner({
-  eligible,
-  isTrial,
-  daysLeft,
-  onStart,
-  loading,
-}: {
-  eligible: boolean;
-  isTrial:  boolean;
-  daysLeft: number | null;
-  onStart:  () => void;
-  loading:  boolean;
-}) {
-  const C = useC();
-
-  if (isTrial) {
-    return (
-      <View style={[tb.activeCard, { borderColor: "#22c55e60", backgroundColor: C.isDark ? "#16a34a10" : "#dcfce7" }]}>
-        <View style={[tb.iconWrap, { backgroundColor: "#22c55e20" }]}>
-          <Feather name="gift" size={16} color="#22c55e" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[tb.title, { color: C.text }]}>Trial Active 🎉</Text>
-          <Text style={[tb.sub, { color: C.textMid }]}>
-            {daysLeft != null && daysLeft > 0
-              ? `${daysLeft} din bache hain — Basic features unlocked`
-              : "Aaj trial khatam ho raha hai"}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (eligible) {
-    return (
-      <Pressable
-        onPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} ; onStart(); }}
-        disabled={loading}
-        style={({ pressed }) => [{ opacity: pressed || loading ? 0.85 : 1 }]}
-      >
-        <LinearGradient
-          colors={["#16a34a", "#22c55e"]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={tb.startCard}
-        >
-          <View style={[tb.iconWrap, { backgroundColor: "rgba(255,255,255,0.18)" }]}>
-            {loading
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Feather name="gift" size={16} color="#fff" />}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={tb.startTitle}>₹1 — 7-Day Trial Start</Text>
-            <Text style={tb.startSub}>Sirf ₹1 mein 7 din Basic features unlock — one-time</Text>
-          </View>
-          <Feather name="arrow-right" size={16} color="#fff" />
-        </LinearGradient>
-      </Pressable>
-    );
-  }
-
-  return null;
-}
-
 // ── Plan Card ────────────────────────────────────────────────────────────────
 function PlanCard({
   plan,
@@ -279,16 +215,11 @@ export default function SubscriptionScreen() {
   const {
     plan,
     isTrial,
-    trialEligible,
-    daysRemaining,
     sub,
-    refresh,
   } = usePlan();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-
-  const [trialLoading, setTrialLoading] = useState(false);
 
   const expiryISO   = isTrial ? sub.trial_expires_at : sub.plan_expires_at;
   const expiryLabel = planExpiryLabel(expiryISO);
@@ -313,17 +244,6 @@ export default function SubscriptionScreen() {
       return;
     }
     router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle: "monthly" } });
-  }
-
-  function handleStartTrial() {
-    console.log("[Subscription] handleStartTrial: user.id=", user?.id);
-    if (!user?.id || !user?.api_key) {
-      _notify("Login Required", "Please login to start your trial.");
-      router.push("/login");
-      return;
-    }
-    // ₹1 paid trial — same payment flow as Basic/Pro, just plan='trial' cycle='weekly'.
-    router.push({ pathname: "/payment-webview", params: { plan: "trial", cycle: "weekly" } });
   }
 
   return (
@@ -375,14 +295,7 @@ export default function SubscriptionScreen() {
           </View>
         </LinearGradient>
 
-        {/* ── Trial banner ── */}
-        <TrialBanner
-          eligible={trialEligible}
-          isTrial={isTrial}
-          daysLeft={daysRemaining}
-          onStart={handleStartTrial}
-          loading={trialLoading}
-        />
+        {/* Trial banner removed per user request — trial is now offered as a regular plan card */}
 
         {/* ── Plan cards ── */}
         <View style={s.plansWrap}>

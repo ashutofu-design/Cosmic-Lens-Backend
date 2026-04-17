@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "com.cosmiclens.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0B1220"
@@ -36,7 +37,15 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-dev-client"
+      "expo-dev-client",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "useFrameworks": "static" }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

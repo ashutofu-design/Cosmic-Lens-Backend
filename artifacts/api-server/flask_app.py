@@ -405,6 +405,103 @@ def verify_otp_route():
     return jsonify(payload), (201 if is_new else 200)
 
 
+@app.route("/api/auth/firebase-verify", methods=["POST"])
+def firebase_verify_route():
+    """
+    Production-grade phone-OTP login powered by Firebase Phone Authentication.
+
+    Body: { "id_token": "<Firebase ID token from client SDK>", "name?": "..." }
+
+    Flow:
+      1. Client (Expo) calls Firebase signInWithPhoneNumber → user enters OTP →
+         confirmation.confirm(code) → client receives a short-lived ID token.
+      2. Client POSTs that ID token here.
+      3. Backend verifies signature + expiry with Firebase Admin SDK.
+      4. Extracts the verified phone number, finds-or-creates the local User row,
+         and returns the standard auth payload (id, api_key, subscription, ...).
+
+    On success: 200 (existing user) or 201 (new user).
+    On failure: 401 with { ok: false, error: "..." }.
+    """
+    from subscription_helper import auto_start_trial_on_signup, subscription_status
+    from firebase_admin_helper import verify_id_token, FirebaseAuthError
+    from sqlalchemy.exc import IntegrityError
+
+    data     = request.get_json(force=True, silent=True) or {}
+    id_token = (data.get("id_token") or "").strip()
+    name     = (data.get("name") or "").strip()[:200]
+
+    if not id_token:
+        return jsonify({"ok": False, "error": "Missing id_token"}), 400
+
+    try:
+        decoded = verify_id_token(id_token)
+    except FirebaseAuthError as e:
+        app.logger.warning("[firebase-verify] %s", e)
+        return jsonify({"ok": False, "error": str(e)}), 401
+
+    phone_e164 = (decoded.get("phone_number") or "").strip()
+    if not phone_e164 or not phone_e164.startswith("+"):
+        return jsonify({
+            "ok":    False,
+            "error": "Token has no verified phone number",
+        }), 401
+
+    # India-only policy: keep parity with the previous OTP flow.
+    if not phone_e164.startswith("+91"):
+        return jsonify({
+            "ok":    False,
+            "error": "Only Indian mobile numbers are supported (+91).",
+        }), 403
+
+    cc_norm = "91"
+    ph_norm = phone_e164[3:]  # 10-digit local part after +91
+
+    # Find or create user by phone (canonical identity).
+    user   = User.query.filter_by(phone=phone_e164).first()
+    is_new = False
+    if not user:
+        is_new = True
+        last4 = ph_norm[-4:] if len(ph_norm) >= 4 else ph_norm
+        user = User(
+            name         = name or f"User {last4}",
+            phone        = phone_e164,
+            country_code = cc_norm,
+            api_key      = secrets.token_hex(32),
+        )
+        db.session.add(user)
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            user = User.query.filter_by(phone=phone_e164).first()
+            is_new = False
+            if not user:
+                return jsonify({
+                    "ok":    False,
+                    "error": "User creation race; please retry",
+                }), 500
+        if is_new:
+            try:
+                auto_start_trial_on_signup(user)
+            except Exception:
+                app.logger.exception("[firebase-verify] auto_start_trial failed")
+    else:
+        if not user.api_key:
+            user.api_key = secrets.token_hex(32)
+        user.last_active = datetime.utcnow()
+        if name and (not user.name or user.name.startswith("User ")):
+            user.name = name
+
+    db.session.commit()
+
+    payload = user.to_dict()
+    payload["subscription"] = subscription_status(user)
+    payload["is_new_user"]  = is_new
+    payload["ok"]           = True
+    return jsonify(payload), (201 if is_new else 200)
+
+
 @app.route("/api/auth/demo", methods=["POST"])
 def demo_login_route():
     """Idempotent demo user — for testing only.

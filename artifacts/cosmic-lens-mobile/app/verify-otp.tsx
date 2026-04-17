@@ -20,6 +20,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { confirmPhoneOtp, sendPhoneOtp, resetPendingVerification } from "@/lib/firebaseAuth";
 
 const OTP_LEN = 6;
 
@@ -108,28 +109,45 @@ export default function VerifyOtpScreen() {
       return;
     }
     setLoading(true); setError("");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
     try {
-      const res = await apiFetch(`${API_BASE}/api/auth/verify-otp`, {
+      // Step 1: confirm OTP with Firebase → get short-lived ID token.
+      const idToken = await confirmPhoneOtp(otp);
+
+      // Step 2: hand the token to our backend, which verifies it and returns
+      //         the application user payload (id, api_key, subscription, ...).
+      const res = await apiFetch(`${API_BASE}/api/auth/firebase-verify`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ phone, country_code: cc, otp }),
+        body:    JSON.stringify({ id_token: idToken }),
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setError(data.error || "OTP verify nahi ho saka.");
-        // Clear digits on hard fail (so user retypes)
-        if ((data.error || "").toLowerCase().includes("naya otp")) {
-          setDigits(Array(OTP_LEN).fill(""));
-        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        setError(data.error || "Login complete nahi ho saka. Try again.");
         return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      resetPendingVerification();
       setUser(data as AuthUser);
       router.replace("/(tabs)");
-    } catch {
-      setError("Network error. Try again.");
+    } catch (e: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      const msg = String(e?.message || e || "");
+      if (msg.includes("auth/invalid-verification-code") || msg.includes("Invalid OTP")) {
+        setError("Galat OTP. Dobara check karein.");
+        setDigits(Array(OTP_LEN).fill(""));
+        inputs.current[0]?.focus();
+      } else if (msg.includes("auth/code-expired") || msg.includes("No pending")) {
+        setError("OTP expire ho gaya. Resend karein.");
+        setDigits(Array(OTP_LEN).fill(""));
+      } else if (msg.toLowerCase().includes("network")) {
+        setError("Network error. Try again.");
+      } else {
+        setError(msg || "Verify nahi ho saka.");
+      }
     } finally {
       setLoading(false);
     }
@@ -138,25 +156,25 @@ export default function VerifyOtpScreen() {
   async function resend() {
     if (cooldown > 0 || resending) return;
     setResending(true); setError(""); setInfo("");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
     try {
-      const res = await apiFetch(`${API_BASE}/api/auth/send-otp`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ phone, country_code: cc }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(data.error || "OTP resend nahi ho saka.");
-        if (data.retry_after) setCooldown(data.retry_after);
-        return;
-      }
+      const e164 = `+${cc}${phone}`;
+      await sendPhoneOtp(e164);
+
       setInfo("Naya OTP bhej diya gaya hai.");
-      setCooldown(data.cooldown || 60);
+      setCooldown(30);
       setDigits(Array(OTP_LEN).fill(""));
       inputs.current[0]?.focus();
-    } catch {
-      setError("Network error. Try again.");
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (msg.includes("auth/too-many-requests")) {
+        setError("Bahut zyada attempts. Thodi der baad try karein.");
+      } else if (msg.toLowerCase().includes("network")) {
+        setError("Network error. Try again.");
+      } else {
+        setError(msg || "OTP resend nahi ho saka.");
+      }
     } finally {
       setResending(false);
     }

@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +21,8 @@ import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { sendPhoneOtp, resetPendingVerification } from "@/lib/firebaseAuth";
+import { isFirebaseConfigured } from "@/lib/firebaseConfig";
 
 export default function LoginScreen() {
   const insets  = useSafeAreaInsets();
@@ -35,6 +37,12 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
 
+  // Reset any stale verification handle whenever the user lands on the login
+  // screen (e.g. they hit "Number badlein" on the verify screen).
+  useEffect(() => {
+    resetPendingVerification();
+  }, []);
+
   function finishLogin(u: AuthUser) {
     setUser(u);
     router.replace("/(tabs)");
@@ -46,40 +54,48 @@ export default function LoginScreen() {
       setError("Sahi 10-digit mobile number daalein (6/7/8/9 se shuru)");
       return;
     }
+    if (!isFirebaseConfigured()) {
+      setError("Firebase setup pending. Admin se contact karein.");
+      return;
+    }
+
     setError(""); setLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
     try {
-      const res = await apiFetch(`${API_BASE}/api/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: digits, country_code: "91" }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(data.error || "OTP bhejne mein dikkat aayi.");
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const e164 = `+91${digits}`;
+      await sendPhoneOtp(e164);
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.push({
         pathname: "/verify-otp",
         params: {
           phone:    digits,
           cc:       "91",
-          cooldown: String(data.cooldown ?? 60),
-          // dev_otp is only included by the API when COSMIC_OTP_DEV_RETURN=1
-          // is explicitly set on the server (local-only). Never present in prod.
-          devOtp:   data.dev_otp || "",
+          cooldown: "30",
         },
       });
-    } catch {
-      setError("Network error. Connection check karein.");
+    } catch (e: any) {
+      const msg = String(e?.message || e || "OTP bhejne mein dikkat aayi.");
+      // Normalise common Firebase error codes for non-technical users.
+      if (msg.includes("auth/invalid-phone-number")) {
+        setError("Mobile number invalid hai. Dobara check karein.");
+      } else if (msg.includes("auth/too-many-requests")) {
+        setError("Bahut zyada attempts. Thodi der baad try karein.");
+      } else if (msg.includes("auth/quota-exceeded")) {
+        setError("Aaj ka SMS quota khatam. Kal try karein.");
+      } else if (msg.toLowerCase().includes("network")) {
+        setError("Network error. Connection check karein.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   }
 
   async function handleDemoLogin() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setError(""); setLoading(true);
     try {
       const res = await apiFetch(`${API_BASE}/api/auth/demo`, {
@@ -252,6 +268,16 @@ export default function LoginScreen() {
             {" "}and{" "}
             <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>Privacy Policy</Text>
           </Text>
+
+          {/*
+            Invisible reCAPTCHA mount point. Required by Firebase JS SDK on web
+            for phone authentication. On native this div simply doesn't render.
+            Using a hidden View with a raw HTML id via dangerouslySetInnerHTML
+            keeps it cross-platform — react-native-web honours the `nativeID`.
+          */}
+          {Platform.OS === "web" && (
+            <View nativeID="cosmic-recaptcha" style={{ height: 0, width: 0, opacity: 0 }} />
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </CosmicBg>

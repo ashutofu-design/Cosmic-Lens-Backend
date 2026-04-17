@@ -65,7 +65,11 @@
   },
   "dependencies": {
     "@expo-google-fonts/nunito": "^0.4.2",
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/auth": "^24.0.0",
+    "expo-build-properties": "^55.0.13",
     "expo-sensors": "~15.0.8",
+    "firebase": "^12.12.0",
     "react-native-webview": "13.15.0"
   }
 }

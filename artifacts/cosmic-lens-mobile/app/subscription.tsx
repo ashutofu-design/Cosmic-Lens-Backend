@@ -293,18 +293,33 @@ export default function SubscriptionScreen() {
   const expiryISO   = isTrial ? sub.trial_expires_at : sub.plan_expires_at;
   const expiryLabel = planExpiryLabel(expiryISO);
 
+  function _notify(title: string, msg: string) {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try { (window as any).alert(`${title}\n\n${msg}`); } catch {}
+    } else {
+      Alert.alert(title, msg);
+    }
+  }
+
   function handlePlanPress(planKey: string) {
+    console.log("[Subscription] handlePlanPress:", planKey, "user.id=", user?.id, "current plan=", plan);
     if (!user?.id) {
-      Alert.alert("Login Required", "Please login to purchase a plan.");
+      _notify("Login Required", "Please login to purchase a plan.");
+      router.push("/login");
       return;
     }
-    if (planKey === plan) return;
+    if (planKey === plan) {
+      _notify("Already Active", `You are already on the ${planKey} plan.`);
+      return;
+    }
     router.push({ pathname: "/payment-webview", params: { plan: planKey, cycle: "monthly" } });
   }
 
   function handleStartTrial() {
+    console.log("[Subscription] handleStartTrial: user.id=", user?.id);
     if (!user?.id || !user?.api_key) {
-      Alert.alert("Login Required", "Please login to start your trial.");
+      _notify("Login Required", "Please login to start your trial.");
+      router.push("/login");
       return;
     }
     // ₹1 paid trial — same payment flow as Basic/Pro, just plan='trial' cycle='weekly'.

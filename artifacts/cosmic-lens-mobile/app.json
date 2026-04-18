@@ -38,6 +38,13 @@
       "expo-font",
       "expo-web-browser",
       "expo-dev-client",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cosmic Lens needs access to your photos so Acharya ji can analyze your room for Vastu guidance.",
+          "cameraPermission": "Cosmic Lens needs camera access so you can capture room photos for instant Vastu analysis."
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [

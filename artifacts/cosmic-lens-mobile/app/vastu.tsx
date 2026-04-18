@@ -1,11 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { Magnetometer } from "expo-sensors";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Animated, Dimensions, Linking, Platform, Pressable, ScrollView,
+  ActivityIndicator,
+  Alert,
+  Animated, Dimensions, Linking, Modal, Platform, Pressable, ScrollView,
   StyleSheet, Text, View,
 } from "react-native";
 import Svg, {
@@ -15,6 +19,8 @@ import Svg, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { useUser } from "@/context/UserContext";
+import { API_BASE } from "@/lib/apiConfig";
 
 // ── Compass constants ──────────────────────────────────────────────────────────
 const WW   = Dimensions.get("window").width;
@@ -973,6 +979,362 @@ function RoomCard({ room }: { room: VastuRoom }) {
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
+// ── Vastu Drishti Scan Card ──────────────────────────────────────────────────
+const ROOM_TYPES: { key: string; emoji: string; label: string }[] = [
+  { key: "bedroom",     emoji: "🛏️", label: "Bedroom"      },
+  { key: "kitchen",     emoji: "🍳", label: "Kitchen"      },
+  { key: "pooja room",  emoji: "🪔", label: "Pooja Room"   },
+  { key: "living room", emoji: "🛋️", label: "Living Room" },
+  { key: "main door",   emoji: "🚪", label: "Main Door"    },
+  { key: "bathroom",    emoji: "🚿", label: "Bathroom"     },
+  { key: "study room",  emoji: "📚", label: "Study Room"   },
+  { key: "office",      emoji: "💼", label: "Office"       },
+];
+
+function VastuScanCard({ C }: { C: any }) {
+  const { user, language } = useUser();
+  const [imageUri, setImageUri]   = useState<string | null>(null);
+  const [imageB64, setImageB64]   = useState<string | null>(null);
+  const [room, setRoom]           = useState<string>("bedroom");
+  const [picking, setPicking]     = useState(false);
+  const [scanning, setScanning]   = useState(false);
+  const [result, setResult]       = useState<string | null>(null);
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
+
+  const pickFromLibrary = async () => {
+    try {
+      setPicking(true);
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission needed", "Photo gallery access dijiye taaki Vastu Drishti aapka room dekh sake.");
+        return;
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+        base64: true,
+        allowsEditing: false,
+      });
+      if (!r.canceled && r.assets?.[0]) {
+        const a = r.assets[0];
+        setImageUri(a.uri);
+        setImageB64(a.base64 ?? null);
+        setResult(null);
+        Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Photo nahi le payi.");
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const pickFromCamera = async () => {
+    try {
+      setPicking(true);
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission needed", "Camera access dijiye taaki turant photo le sakein.");
+        return;
+      }
+      const r = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+        base64: true,
+        allowsEditing: false,
+      });
+      if (!r.canceled && r.assets?.[0]) {
+        const a = r.assets[0];
+        setImageUri(a.uri);
+        setImageB64(a.base64 ?? null);
+        setResult(null);
+        Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Camera khol nahi payi.");
+    } finally {
+      setPicking(false);
+    }
+  };
+
+  const runScan = async () => {
+    if (!imageB64) {
+      Alert.alert("Photo missing", "Pehle ek room ka photo lijiye ya gallery se chuniye.");
+      return;
+    }
+    setScanning(true);
+    setResult(null);
+    Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+
+      const dataUrl = `data:image/jpeg;base64,${imageB64}`;
+      const resp = await fetch(`${API_BASE}/api/vastu-scan`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          image:   dataUrl,
+          room,
+          lang:    language,
+          user_id: user?.id,
+        }),
+      });
+      const d = await resp.json();
+      if (!resp.ok) {
+        if (resp.status === 402) {
+          Alert.alert(
+            "Daily limit poora",
+            d?.message ?? "Aaj ka free limit poora ho gaya — kal phir try karein ya Pro le lijiye."
+          );
+        } else {
+          Alert.alert("Scan failed", d?.message ?? "Photo analyze nahi ho payi. Acchi roshni mein dobara try karein.");
+        }
+        return;
+      }
+      setResult(d?.text ?? "");
+      Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Network error", e?.message ?? "Internet connection check kijiye.");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const reset = () => {
+    setImageUri(null);
+    setImageB64(null);
+    setResult(null);
+  };
+
+  const selectedRoom = ROOM_TYPES.find(r => r.key === room) ?? ROOM_TYPES[0];
+
+  return (
+    <View style={[vs.card, { backgroundColor: C.bgCard, borderColor: "#a78bfa55" }]}>
+      <LinearGradient
+        colors={["#a78bfa15", "transparent"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+
+      <View style={vs.headerRow}>
+        <View style={vs.iconBox}>
+          <Text style={{ fontSize: 22 }}>📸</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[vs.title, { color: C.text }]}>Vastu Drishti Scan</Text>
+            <View style={vs.newBadge}>
+              <Text style={vs.newBadgeText}>NEW</Text>
+            </View>
+          </View>
+          <Text style={[vs.sub, { color: C.textMuted }]}>
+            Apne ghar ka photo bhejiye — Acharya ji Vastu dekh ke margdarshan denge
+          </Text>
+        </View>
+      </View>
+
+      {/* Room type selector */}
+      <Pressable
+        onPress={() => setShowRoomPicker(true)}
+        style={[vs.roomBtn, { backgroundColor: C.bgCard2, borderColor: C.border }]}
+      >
+        <Text style={{ fontSize: 16 }}>{selectedRoom.emoji}</Text>
+        <Text style={[vs.roomBtnText, { color: C.text }]}>{selectedRoom.label}</Text>
+        <Feather name="chevron-down" size={14} color={C.textMuted} />
+      </Pressable>
+
+      {/* Photo preview / pickers */}
+      {imageUri ? (
+        <View style={vs.previewWrap}>
+          <Image source={{ uri: imageUri }} style={vs.preview} contentFit="cover" />
+          {!result && !scanning && (
+            <Pressable onPress={reset} style={vs.previewClear}>
+              <Feather name="x" size={14} color="#fff" />
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        <View style={vs.pickerRow}>
+          <Pressable
+            onPress={pickFromCamera}
+            disabled={picking}
+            style={[vs.pickBtn, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55", opacity: picking ? 0.5 : 1 }]}
+          >
+            <Feather name="camera" size={20} color="#a78bfa" />
+            <Text style={[vs.pickBtnText, { color: C.text }]}>Camera</Text>
+            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Turant photo lein</Text>
+          </Pressable>
+          <Pressable
+            onPress={pickFromLibrary}
+            disabled={picking}
+            style={[vs.pickBtn, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55", opacity: picking ? 0.5 : 1 }]}
+          >
+            <Feather name="image" size={20} color="#a78bfa" />
+            <Text style={[vs.pickBtnText, { color: C.text }]}>Gallery</Text>
+            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Saved photo chuniye</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Scan button */}
+      {imageUri && !result && (
+        <Pressable onPress={runScan} disabled={scanning} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+          <LinearGradient
+            colors={["#a78bfa", "#7c3aed"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={vs.scanBtn}
+          >
+            {scanning ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={vs.scanBtnText}>Acharya ji photo dekh rahe hain...</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="zap" size={16} color="#fff" />
+                <Text style={vs.scanBtnText}>Vastu Drishti Activate Karein</Text>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      )}
+
+      {/* Result */}
+      {result && (
+        <View style={[vs.resultCard, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55" }]}>
+          <View style={vs.resultHeader}>
+            <View style={vs.resultAvatar}>
+              <Text style={{ fontSize: 16 }}>🧙</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[vs.resultName, { color: C.text }]}>Acharya Vidyasagar</Text>
+              <Text style={[vs.resultSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
+            </View>
+          </View>
+          <Text style={[vs.resultText, { color: C.textMid }]}>{result}</Text>
+          <Pressable onPress={reset} style={[vs.againBtn, { borderColor: "#a78bfa55" }]}>
+            <Feather name="refresh-ccw" size={13} color="#a78bfa" />
+            <Text style={[vs.againText, { color: "#a78bfa" }]}>Doosri photo scan karein</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {!user?.id && !result && (
+        <Text style={[vs.note, { color: C.textMuted }]}>
+          ✨ Free mein 3 scans har din. Pro mein unlimited.
+        </Text>
+      )}
+
+      {/* Room picker modal */}
+      <Modal visible={showRoomPicker} transparent animationType="fade" onRequestClose={() => setShowRoomPicker(false)}>
+        <Pressable style={vs.modalBackdrop} onPress={() => setShowRoomPicker(false)}>
+          <Pressable style={[vs.modalCard, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={[vs.modalTitle, { color: C.text }]}>Room type chuniye</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {ROOM_TYPES.map(rt => (
+                <Pressable
+                  key={rt.key}
+                  onPress={() => { setRoom(rt.key); setShowRoomPicker(false); Haptics.selectionAsync?.(); }}
+                  style={[vs.modalRow, room === rt.key && { backgroundColor: "#a78bfa20" }]}
+                >
+                  <Text style={{ fontSize: 18 }}>{rt.emoji}</Text>
+                  <Text style={[vs.modalRowText, { color: C.text }]}>{rt.label}</Text>
+                  {room === rt.key && <Feather name="check" size={16} color="#a78bfa" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+const vs = StyleSheet.create({
+  card: {
+    borderRadius: 16, borderWidth: 1.5, padding: 14, gap: 12,
+    overflow: "hidden", position: "relative",
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconBox: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "#a78bfa20", borderWidth: 1, borderColor: "#a78bfa55",
+    alignItems: "center", justifyContent: "center",
+  },
+  title:    { fontSize: 15, fontWeight: "800" },
+  sub:      { fontSize: 11, lineHeight: 15, marginTop: 2 },
+  newBadge: {
+    backgroundColor: "#a78bfa", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+  },
+  newBadgeText: { fontSize: 8, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+
+  roomBtn: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 10, borderWidth: 1, alignSelf: "flex-start",
+  },
+  roomBtnText: { fontSize: 13, fontWeight: "700" },
+
+  pickerRow: { flexDirection: "row", gap: 10 },
+  pickBtn: {
+    flex: 1, alignItems: "center", gap: 4,
+    paddingVertical: 16, borderRadius: 12, borderWidth: 1, borderStyle: "dashed",
+  },
+  pickBtnText: { fontSize: 13, fontWeight: "700", marginTop: 4 },
+  pickBtnSub:  { fontSize: 10 },
+
+  previewWrap: { borderRadius: 12, overflow: "hidden", position: "relative" },
+  preview:     { width: "100%", height: 200, backgroundColor: "#0a0a0a" },
+  previewClear: {
+    position: "absolute", top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center", justifyContent: "center",
+  },
+
+  scanBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 13, borderRadius: 12,
+    shadowColor: "#a78bfa", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
+  },
+  scanBtnText: { fontSize: 13, fontWeight: "800", color: "#fff", letterSpacing: 0.3 },
+
+  resultCard: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 10 },
+  resultHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  resultAvatar: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: "#a78bfa20", borderWidth: 1, borderColor: "#a78bfa55",
+    alignItems: "center", justifyContent: "center",
+  },
+  resultName: { fontSize: 13, fontWeight: "800" },
+  resultSub:  { fontSize: 9, marginTop: 1 },
+  resultText: { fontSize: 13, lineHeight: 21 },
+  againBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 9, borderRadius: 10, borderWidth: 1, marginTop: 4,
+  },
+  againText: { fontSize: 11, fontWeight: "700" },
+
+  note: { fontSize: 10, textAlign: "center", marginTop: 2 },
+
+  modalBackdrop: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center", justifyContent: "center", padding: 20,
+  },
+  modalCard: {
+    width: "100%", maxWidth: 360, borderRadius: 16, borderWidth: 1, padding: 14, gap: 8,
+  },
+  modalTitle: { fontSize: 14, fontWeight: "800", marginBottom: 4 },
+  modalRow: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 10, paddingVertical: 11, borderRadius: 8,
+  },
+  modalRowText: { fontSize: 13, fontWeight: "600", flex: 1 },
+});
+
+
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
@@ -1049,6 +1411,9 @@ export default function VastuScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* ── Vastu Drishti Scan (NEW — photo upload + Acharya analysis) ── */}
+            <VastuScanCard C={C} />
 
             {/* ── Premium Compass ── */}
             <VastuCompass />

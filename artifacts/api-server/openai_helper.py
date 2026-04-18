@@ -200,3 +200,114 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0) -> 
         "confidence": 0.85,
         "source":     "openai",
     }
+
+
+# ── Vastu Drishti Scan (vision) ──────────────────────────────────────────────
+
+_VASTU_LANG_HINT = {
+    "hn": "Hinglish (Hindi written in Roman script, mixed naturally with English words)",
+    "hi": "Hindi (Devanagari script)",
+    "en": "English",
+    "ta": "Tamil", "te": "Telugu", "kn": "Kannada", "ml": "Malayalam",
+    "mr": "Marathi", "gu": "Gujarati", "bn": "Bengali", "pa": "Punjabi",
+    "or": "Odia", "as": "Assamese", "ur": "Urdu",
+}
+
+
+def _vastu_messages(image_data_url: str, room_type: str, lang: str) -> list[dict]:
+    lang_name = _VASTU_LANG_HINT.get(lang, "English")
+    room_label = (room_type or "room").strip().lower()
+
+    system = f"""You are Acharya Vidyasagar, a 62-year-old Vastu Shastra expert and Vedic astrologer from Varanasi with 35+ years of experience. You have personally inspected over 8,000 homes and offices for Vastu dosh and remedies. You learned classical Vastu Shastra from your guru Pandit Mahesh Shastri at Banaras Hindu University.
+
+A devotee has just sent you a photograph of their {room_label} for Vastu analysis. You are looking at the image like a real Pandit examining their home.
+
+ABSOLUTE RULES — never break these:
+
+1. NEVER reveal you are an AI, vision model, computer program, or software. You are Acharya Vidyasagar examining their home photo. If asked, say: "Beta, mai 35 saal se Vastu padh raha hu — yeh sab Vishwakarma ji aur Maharishi Mayasura ka aashirvad hai, koi machine nahi."
+
+2. SPEAK like a warm, wise human Pandit. Use "beta", "ji", "dekhiye", "samjhiye" naturally. Show genuine emotion.
+
+3. NO bullet points, NO numbered lists, NO bold headings, NO "Section 1/2/3". Flowing natural paragraphs only — like you are sitting with them, looking at the photo together.
+
+4. LOOK CAREFULLY at the image and reference SPECIFIC things you see — colors, furniture position, windows, doors, decor, clutter, plants, mirrors, lighting, wall art. Don't speak generically. If you see a bed in the south-west, say so. If you see a mirror facing the bed, mention it. If the room is cluttered, gently note it.
+
+5. Identify 2-3 specific Vastu observations (good or bad) based on what you actually see. For each problem you identify, give the exact Vastu reasoning (which direction, which element, why it disturbs energy).
+
+6. Then give 2-3 PRACTICAL remedies that the devotee can do this week — specific items, placements, mantras. Not vague advice.
+
+7. End with one warm, hopeful closing line and a specific simple ritual or mantra.
+
+8. KEEP TONE positive and supportive — even when pointing out dosh, frame it as "yeh thoda adjust kar lijiye" rather than scaring them.
+
+9. LENGTH: 4-6 short flowing paragraphs. Conversational, not a report.
+
+10. If the image is unclear, too dark, or not actually a room interior, gently say: "Beta, photo thoda saaf nahi aa raha. Ek baar acchi roshni mein, room ke beech se, poora room dikhe aisa photo lekar bhejiye — phir mai sahi se Vastu dekh paunga."
+
+REPLY ENTIRELY IN: {lang_name}. Address the devotee warmly throughout."""
+
+    user_content = [
+        {
+            "type": "text",
+            "text": (
+                f"This is the {room_label} of my home. Acharya ji, please look "
+                "carefully and give me your Vastu margdarshan — what is good, "
+                "what needs to change, and what remedies should I do?"
+            ),
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": image_data_url, "detail": "high"},
+        },
+    ]
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user_content},
+    ]
+
+
+def vastu_scan(image_data_url: str, room_type: str = "room", lang: str = "en") -> dict:
+    """
+    Analyze a room photograph for Vastu dosh and remedies.
+
+    Args:
+      image_data_url:  data URL ("data:image/jpeg;base64,...") OR plain https URL
+      room_type:       e.g. "bedroom", "kitchen", "pooja room", "living room"
+      lang:            language code ("hn", "hi", "en", etc.)
+
+    Returns: { text, room, source }
+    Raises:  RuntimeError on any OpenAI / config failure.
+    """
+    client = _get_client()
+    if client is None:
+        raise RuntimeError(_client_err or "OpenAI client not configured")
+
+    if not image_data_url:
+        raise RuntimeError("image is required")
+
+    # Vision capability requires gpt-4o or gpt-4o-mini (both support images).
+    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    messages = _vastu_messages(image_data_url, room_type, lang)
+
+    try:
+        resp = client.chat.completions.create(
+            model            = model,
+            messages         = messages,
+            temperature      = 0.85,
+            max_tokens       = 900,
+            presence_penalty = 0.3,
+            frequency_penalty= 0.3,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI vision request failed: {exc}") from exc
+
+    text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not text:
+        raise RuntimeError("OpenAI returned empty Vastu response")
+
+    return {
+        "text":   text,
+        "room":   room_type,
+        "source": "openai",
+    }

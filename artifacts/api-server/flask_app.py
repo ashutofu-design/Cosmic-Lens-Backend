@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
-from openai_helper import ai_ask, is_available as openai_available
+from openai_helper import ai_ask, vastu_scan, is_available as openai_available
 from dosh_engine import analyze_doshas
 from energy_engine import calculate_energy
 from database import db, init_db
@@ -2664,6 +2664,83 @@ def ask_route():
         result["quota"]  = {"used": quota["used"], "limit": quota["limit"]}
         result["plan"]   = effective_plan(user) if user else "free"
         result["source"] = result.get("source", "ai" if used_ai else "rules")
+    return jsonify(result)
+
+
+# ── Vastu Drishti Scan (vision) ───────────────────────────────────────────────
+
+@app.route("/api/vastu-scan", methods=["POST"])
+def vastu_scan_route():
+    """
+    Vastu Drishti — analyze a room photo via Acharya Vidyasagar persona.
+    Body JSON:
+      {
+        "image":     "data:image/jpeg;base64,..."  (required),
+        "room":      "bedroom" | "kitchen" | "pooja" | ...  (optional),
+        "lang":      "hn" | "hi" | "en" | ...               (optional),
+        "user_id":   <int>                                  (optional, for quota)
+      }
+    Returns: { text, room, source, quota:{used,limit}, plan }
+
+    Quota: Vastu Scan counts against the daily question quota (one scan = one
+    question) so free-tier abuse is bounded. Free plan = 3/day.
+    """
+    from subscription_helper import consume_question, effective_plan
+
+    data = request.get_json(force=True, silent=True) or {}
+    image   = (data.get("image") or "").strip()
+    room    = (data.get("room") or "room").strip() or "room"
+    lang    = data.get("lang", "en")
+    user_id = data.get("user_id")
+
+    if not image:
+        return jsonify({"error": "image is required"}), 400
+
+    # Cap payload at ~10MB raw to keep OpenAI costs in check.
+    if len(image) > 10 * 1024 * 1024:
+        return jsonify({"error": "image too large (max 10 MB)"}), 413
+
+    if not openai_available():
+        return jsonify({
+            "error":   "vastu_scan_unavailable",
+            "message": "Vastu Drishti seva abhi temporarily band hai — kuch der baad try karein.",
+        }), 503
+
+    # ── Quota gate (same as /api/ask) ────────────────────────────────────────
+    user = None
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited Vastu scans.",
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+    else:
+        quota = {"used": 0, "limit": 1}
+
+    try:
+        result = vastu_scan(image, room, lang)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error":   "vastu_scan_failed",
+            "message": "Photo analyze nahi ho payi. Ek baar phir se acchi roshni mein photo lekar try karein.",
+            "detail":  str(exc),
+        }), 500
+
+    result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+    result["plan"]  = effective_plan(user) if user else "free"
     return jsonify(result)
 
 

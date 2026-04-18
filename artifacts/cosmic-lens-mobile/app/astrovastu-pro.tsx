@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
 
@@ -89,31 +90,20 @@ export default function AstroVastuProScreen() {
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
 
-  // ── Capture handler — auto submits to backend ────────────────────────
-  const onCapture = useCallback(async (capture: SmartScanResult) => {
+  // ── Shared submit helper ──────────────────────────────────────────────
+  const runScan = useCallback(async (payload: Record<string, unknown>) => {
     if (loading) return;
     if (!user?.id || !user?.api_key) {
       setError({ error: "auth_required", message: "Please log in to run a Smart Scan." });
       return;
     }
-
     setError(null); setResult(null); setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     try {
       const resp = await fetch(`${API_BASE}/api/astrovastu-pro`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
-        body:    JSON.stringify({
-          user_id: user.id,
-          floor_plan_upload: {
-            type:     "image",
-            data_url: capture.data_url,
-            ...(typeof capture.heading_deg === "number"
-              ? { heading_deg: capture.heading_deg }
-              : {}),
-          },
-        }),
+        body:    JSON.stringify({ user_id: user.id, ...payload }),
       });
       const body = await resp.json();
       if (!resp.ok) {
@@ -129,6 +119,27 @@ export default function AstroVastuProScreen() {
       setLoading(false);
     }
   }, [loading, user]);
+
+  // ── Camera capture: send only the image (vision will detect rooms) ──
+  const onCapture = useCallback((capture: SmartScanResult) => {
+    runScan({
+      floor_plan_upload: {
+        type:     "image",
+        data_url: capture.data_url,
+        ...(typeof capture.heading_deg === "number"
+          ? { heading_deg: capture.heading_deg }
+          : {}),
+      },
+    });
+  }, [runScan]);
+
+  // ── Gallery upload: image + user-tagged room/direction (ground truth) ─
+  const onGallerySubmit = useCallback((g: GalleryScanResult) => {
+    runScan({
+      floor_plan: [{ room_type: g.room_type, direction: g.direction }],
+      floor_plan_upload: { type: "image", data_url: g.data_url },
+    });
+  }, [runScan]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -166,6 +177,19 @@ export default function AstroVastuProScreen() {
           onCapture={onCapture}
           loading={loading}
           hint="Camera + compass · One tap to scan"
+        />
+
+        {/* OR divider */}
+        <View style={styles.orRow}>
+          <View style={[styles.orLine, { backgroundColor: C.border }]} />
+          <Text style={[styles.orText, { color: C.textMid }]}>OR</Text>
+          <View style={[styles.orLine, { backgroundColor: C.border }]} />
+        </View>
+
+        {/* Gallery upload — for users not at home */}
+        <GalleryScanUpload
+          onSubmit={onGallerySubmit}
+          loading={loading}
         />
 
         {/* ── Error / paywall card ─────────────────────────────────── */}
@@ -462,4 +486,8 @@ const styles = StyleSheet.create({
 
   brandingFooter:      { fontSize: 12, textAlign: "center", marginTop: 28, fontWeight: "600" },
   brandingFooterSmall: { fontSize: 10, textAlign: "center", marginTop: 4, opacity: 0.7 },
+
+  orRow:    { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 16 },
+  orLine:   { flex: 1, height: 1 },
+  orText:   { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
 });

@@ -13,6 +13,7 @@
 import { Feather } from "@expo/vector-icons";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { Magnetometer } from "expo-sensors";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -77,29 +78,67 @@ export function SmartScanCamera({
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    let sub: { remove: () => void } | null = null;
+    let locSub: Location.LocationSubscription | null = null;
+    let magSub: { remove: () => void } | null = null;
+    let cancelled = false;
+
+    // Smoothing across the 0°/360° wrap-around. iOS already delivers a
+    // de-jittered heading via Core Location, so use a soft alpha there.
     let smoothed: number | null = null;
-    // Circular low-pass filter so the compass doesn't jitter while the
-    // user moves the phone around. Uses shortest-arc averaging so the
-    // value stays stable across the 0°/360° wrap-around.
-    const ALPHA = 0.18;
-    try {
-      Magnetometer.setUpdateInterval(180);
-      sub = Magnetometer.addListener(({ x, y }) => {
-        let raw = Math.atan2(-x, y) * (180 / Math.PI);
-        if (raw < 0) raw += 360;
-        if (smoothed == null) {
-          smoothed = raw;
-        } else {
-          let diff = raw - smoothed;
-          if (diff > 180)  diff -= 360;
-          if (diff < -180) diff += 360;
-          smoothed = (smoothed + ALPHA * diff + 360) % 360;
+    const ALPHA = Platform.OS === "ios" ? 0.5 : 0.25;
+    const apply = (raw: number) => {
+      let r = ((raw % 360) + 360) % 360;
+      if (smoothed == null) {
+        smoothed = r;
+      } else {
+        let diff = r - smoothed;
+        if (diff > 180)  diff -= 360;
+        if (diff < -180) diff += 360;
+        smoothed = (smoothed + ALPHA * diff + 360) % 360;
+      }
+      setHeading(smoothed);
+    };
+
+    (async () => {
+      // Preferred: Core Location / Android FusedLocation heading. This is
+      // what the iOS Compass app uses — properly calibrated, with magnetic
+      // declination corrected via GPS, so the value matches the system
+      // compass instead of raw magnetometer math.
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!cancelled && perm.granted) {
+          locSub = await Location.watchHeadingAsync((h) => {
+            // trueHeading uses GPS-corrected declination (matches iOS
+            // Compass). Falls back to magHeading if GPS lock not yet
+            // acquired (trueHeading reports -1 in that case).
+            const t = typeof h.trueHeading === "number" ? h.trueHeading : -1;
+            const m = typeof h.magHeading  === "number" ? h.magHeading  : -1;
+            const pick = t >= 0 ? t : m;
+            if (pick >= 0) apply(pick);
+          });
+          return; // success — don't fall back to raw magnetometer
         }
-        setHeading(smoothed);
-      });
-    } catch { /* sensor unavailable */ }
-    return () => { try { sub?.remove(); } catch { /* noop */ } };
+      } catch {
+        // Permission denied or sensor unavailable — fall through.
+      }
+
+      // Fallback: raw magnetometer (no declination correction; will drift
+      // from the system compass by up to ~10° depending on location).
+      try {
+        Magnetometer.setUpdateInterval(180);
+        magSub = Magnetometer.addListener(({ x, y }) => {
+          let raw = Math.atan2(-x, y) * (180 / Math.PI);
+          if (raw < 0) raw += 360;
+          apply(raw);
+        });
+      } catch { /* sensor unavailable */ }
+    })();
+
+    return () => {
+      cancelled = true;
+      try { locSub?.remove(); } catch { /* noop */ }
+      try { magSub?.remove(); } catch { /* noop */ }
+    };
   }, []);
 
   const dir = useMemo(

@@ -52,6 +52,13 @@
           "recordAudioAndroid": false
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Cosmic Lens needs location to provide a calibrated compass heading (matching the iOS Compass app) so room directions are accurate.",
+          "locationWhenInUsePermission": "Cosmic Lens needs location to provide a calibrated compass heading (matching the iOS Compass app) so room directions are accurate."
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [

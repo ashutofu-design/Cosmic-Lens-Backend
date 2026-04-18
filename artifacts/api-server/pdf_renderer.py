@@ -452,6 +452,155 @@ def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Universal Vastu Remedies Appendix
+# Strong classical remedies for when structural shift is not possible.
+# Categorised so user finds the right remedy fast.
+# ─────────────────────────────────────────────────────────────────────
+_UNIVERSAL_REMEDIES: List[Dict[str, Any]] = [
+    {
+        "title": "Kitchen in wrong direction (N / NE / SW)",
+        "ref":   "Vastu Saar Ch.7, Brihat Samhita 53.62",
+        "items": [
+            "Paste a 4-inch wide YELLOW electrical tape strip on the wall behind the gas stove, floor-to-ceiling — neutralises the wrong-direction Agni dosh.",
+            "Place a small COPPER pyramid (3-inch base) on top of the chimney hood; copper amplifies Agni in the right axis.",
+            "Always cook FACING EAST — even if the platform is on the wrong wall, the cook's body posture matters most.",
+            "Keep a small bowl of ROCK SALT in the SE corner of the kitchen; replace every Saturday.",
+            "Hang a SUNRISE painting on the east kitchen wall; do NOT hang any water-element art (waterfall, river) inside kitchen.",
+        ],
+    },
+    {
+        "title": "Bathroom / WC in wrong direction (NE / centre / pooja-adjacent)",
+        "ref":   "Mansara Shilpa Shastra Ch.9, Vastu Saar",
+        "items": [
+            "Paste a thick YELLOW tape line on the bathroom door frame (outer side, all 4 sides) — blocks negative energy leak into the home.",
+            "Keep a sea-salt bowl inside the bathroom on the floor; replace every 3 days.",
+            "Always keep the bathroom door CLOSED when not in use; install a slow self-closer if family forgets.",
+            "Place a small mirror on the OUTER side of the bathroom door (facing away from pooja / bedroom) — deflects the dosh outward.",
+            "Plant a money-plant in a copper pot inside the bathroom — absorbs the negative water energy.",
+            "If WC faces N or E: paint the WC seat lid a deep brown / maroon and always keep it closed.",
+        ],
+    },
+    {
+        "title": "Pooja room in wrong direction (S / SW / above bathroom)",
+        "ref":   "Brihat Samhita 53.86, Vastu Saar Ch.10",
+        "items": [
+            "Place a small PYRAMID (clear quartz or copper) under the idol platform — uplifts the energy axis to NE virtually.",
+            "Light a desi-ghee diya facing EAST every morning — re-establishes the Brahmasthan link.",
+            "Hang a Shree Yantra on the east wall of the pooja space, framed in copper.",
+            "Never store anything BELOW the idol platform; keep that area clean & open.",
+            "Place a small flowing-water fountain in the actual NE corner of the home (even outside the pooja room) — relays the energy.",
+        ],
+    },
+    {
+        "title": "Master bedroom in wrong direction (NE / SE)",
+        "ref":   "Vastu Saar Ch.6, Mayamatam Ch.27",
+        "items": [
+            "Sleep with HEAD pointing SOUTH or EAST only — the body alignment overrides room dosh significantly.",
+            "Place a heavy wooden / metal almirah in the SW corner of the bedroom — anchors the heavy zone.",
+            "Avoid mirrors facing the bed; if unavoidable, cover with cloth at night.",
+            "Hang a pair of love-birds / family photo on the SW wall.",
+            "Use earthy tones (beige, light brown, soft pink) for bedroom walls — never bright red or pure white.",
+        ],
+    },
+    {
+        "title": "Entrance / main door in wrong direction (S / SW / Vidisha axis)",
+        "ref":   "Vastu Saar Ch.4, Brihat Samhita 53.71",
+        "items": [
+            "Hang a copper Shubh-Labh + Swastik plate on top of the door frame, INSIDE the house.",
+            "Place a pair of brass / copper Kuber yantras on either side of the door frame (inside).",
+            "Paste a Hanuman-ji tile or sticker on the OUTSIDE of the main door — blocks negative entry.",
+            "Never place a shoe rack directly opposite the main door; shift it sideways.",
+            "Keep the threshold (dehleez) raised by 1-2 inches with a small wooden / marble strip — classical 'energy speed-breaker'.",
+            "Hang a wind-chime (5 or 6 metal rods) just inside the entrance — activates positive vibration.",
+        ],
+    },
+    {
+        "title": "Beam over bed / sofa / desk (Tula dosh)",
+        "ref":   "Mansara Ch.18",
+        "items": [
+            "Hang a pair of bamboo flutes (mouth-down) at 45° on the beam — classical Tula-dosh nivaran.",
+            "Paint the beam the SAME colour as the ceiling so it visually disappears.",
+            "Suspend a false ceiling panel directly under the beam if budget allows.",
+            "Avoid sleeping / sitting / working DIRECTLY under the beam — shift the bed / chair by 1-2 feet.",
+        ],
+    },
+    {
+        "title": "Mirror facing bed / main door / dining",
+        "ref":   "Vastu Saar Ch.11",
+        "items": [
+            "Cover the mirror with a thin cloth at night, OR shift it to a wall that does NOT reflect bed / door / dining.",
+            "If mirror faces main door: it bounces incoming Lakshmi out — relocate or hang a Bagua mirror just outside the door instead.",
+            "Always use single-piece mirrors; broken / multi-panel mirrors create Maya dosh.",
+        ],
+    },
+    {
+        "title": "Toilet above kitchen / pooja / bedroom (multi-floor)",
+        "ref":   "Vastu Saar Ch.9",
+        "items": [
+            "Paint the toilet floor (the one above) a light yellow shade.",
+            "Place a copper sheet (6-inch square) under the WC base.",
+            "Hang a Shree Yantra in the room directly below — neutralises the descending negative axis.",
+            "Always use the lower-floor room for limited duration (kitchen — short cooking, pooja — short worship).",
+        ],
+    },
+    {
+        "title": "Plot / topography dosh (slope wrong, water-tank wrong)",
+        "ref":   "Brihat Samhita 53.86–88",
+        "items": [
+            "Underground water tank MUST be in NE; if it's elsewhere, install a small symbolic copper bowl with water in the actual NE corner daily.",
+            "Overhead tank MUST be in SW; if it's in NE/SE, paint it dark blue and add weight (extra concrete cap) to the SW corner of the terrace.",
+            "Plot slope should fall toward NE. If it falls SW (Vipreet Vastu): raise the SW boundary by 6-12 inches with extra soil / planters.",
+            "Plant TALL heavy trees (neem, mango) in S / SW; light flowering plants only in N / NE.",
+        ],
+    },
+    {
+        "title": "Universal everyday remedies (works for almost any dosh)",
+        "ref":   "Atharvaveda + classical texts",
+        "items": [
+            "Burn camphor (kapoor) + loban once a week in every room — purifies stagnant energy.",
+            "Sprinkle sea-salt water in all room corners on Saturday evening; mop with rock-salt water on Sundays.",
+            "Keep fresh flowers in the NE corner of the living room, replaced every 2 days.",
+            "Play Vedic mantras (Gayatri, Mahamrityunjaya) softly for 10 minutes at sunrise.",
+            "Avoid clutter under beds, on top of cupboards, behind doors — clutter is the #1 Vastu blocker.",
+            "Fix leaking taps and broken items within 7 days — water leaks = wealth leaks (classical).",
+        ],
+    },
+]
+
+
+def _universal_remedies_block(s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Appendix: classical strong remedies for when structural shift isn't possible."""
+    flow: List[Any] = []
+    flow.append(PageBreak())
+    flow.append(Paragraph("Universal Vastu Remedies (Appendix)", s["h2"]))
+    flow.append(Paragraph(
+        "<i>When a kitchen, bathroom, pooja, or entrance cannot be physically shifted, "
+        "these classical remedies — drawn from Vastu Saar, Brihat Samhita, Mansara Shilpa "
+        "Shastra and Mayamatam — neutralise a large portion of the dosh. Apply only those "
+        "that match a finding flagged in your report above.</i>",
+        s["body"]))
+    flow.append(Spacer(1, 8))
+
+    for cat in _UNIVERSAL_REMEDIES:
+        flow.append(Paragraph(_safe(cat["title"]), s["h3"]))
+        flow.append(Paragraph(
+            f"<font color='#7C3AED'>Reference:</font> <i>{_safe(cat['ref'])}</i>",
+            s["small"]))
+        for item in cat["items"]:
+            flow.append(Paragraph(f"• {_safe(item)}", s["body"]))
+        flow.append(Spacer(1, 6))
+
+    flow.append(Spacer(1, 4))
+    flow.append(Paragraph(
+        "<i>Note: Remedies are most effective when combined with daily worship, "
+        "cleanliness, and positive intent. Re-scan your premise after applying remedies "
+        "for an updated score.</i>",
+        s["bodyHi"]))
+    flow.append(Spacer(1, 8))
+    return flow
+
+
+# ─────────────────────────────────────────────────────────────────────
 # PUBLIC: Business Vastu PDF
 # ─────────────────────────────────────────────────────────────────────
 def render_business_pdf(report: Dict[str, Any], *,
@@ -554,6 +703,10 @@ def render_business_pdf(report: Dict[str, Any], *,
             flow.append(Paragraph(f"• {_safe(r)}", s["body"]))
         flow.append(Spacer(1, 6))
 
+    # ── Universal Vastu Remedies appendix (always shown — strong remedies
+    #    when structural shift isn't possible)
+    flow.extend(_universal_remedies_block(s))
+
     # ── Scope disclosure (what this report is NOT)
     flow.extend(_disclosure_block(s, is_business=True))
 
@@ -648,6 +801,10 @@ def render_pro_pdf(report: Dict[str, Any], *,
         flow.append(Paragraph("Classical References", s["h2"]))
         for r in refs:
             flow.append(Paragraph(f"• {_safe(r)}", s["body"]))
+
+    # ── Universal Vastu Remedies appendix (always shown — strong remedies
+    #    when structural shift isn't possible)
+    flow.extend(_universal_remedies_block(s))
 
     # ── Scope disclosure (what this report is NOT)
     flow.extend(_disclosure_block(s, is_business=False))

@@ -41,6 +41,40 @@ def _brand_safe_error(_internal_reason: str) -> str:
     return _BRAND_ERR_DEFAULT
 
 
+# Per-room retake guidance — what features the user should make sure to capture.
+_ROOM_FEATURE_HINTS = {
+    "kitchen":    "stove, sink, and counter",
+    "bathroom":   "WC/commode, tap, and wall tiles",
+    "pooja":      "mandir/idols and the altar area",
+    "bedroom":    "bed and the wall behind it",
+    "hall":       "sofa/seating area and the main wall",
+    "livingroom": "sofa/seating area and the main wall",
+    "office":     "desk and chair area",
+    "cabin":      "desk and chair area",
+    "factory":    "main machinery and floor area",
+    "shop":       "counter and display shelves",
+    "entrance":   "main door and threshold",
+}
+
+def _room_feature_hint(rt: str) -> str:
+    return _ROOM_FEATURE_HINTS.get((rt or "").lower(), "key room features")
+
+def _retake_guidance(rt: str, reason: str) -> str:
+    """Craft a short retake tip combining what's wrong + what to capture."""
+    feat = _room_feature_hint(rt)
+    r = (reason or "").lower()
+    if "paas" in r or "close" in r or "zoom" in r:
+        return f"Step back 2-3 feet so {feat} all fit in one frame."
+    if "door" in r or "far" in r or "duur" in r or "context" in r:
+        return f"Move closer so the {feat} are clearly visible."
+    if "dark" in r or "roshni" in r or "light" in r or "dim" in r:
+        return f"Turn on the room lights and take the photo facing the {feat}."
+    if "blur" in r or "shake" in r:
+        return "Hold the phone steady and tap to focus before clicking."
+    # Default — generic guidance
+    return f"Stand at one corner and capture the {feat} in one clear frame with good lighting."
+
+
 def _photo_size_bytes(data_url: str) -> int:
     """Approximate decoded byte size of a base64 data URL."""
     if "," in data_url:
@@ -203,21 +237,36 @@ def annotate_report_with_room_photos(
             summary["scan_inconclusive_count"] += 1
 
         # ── Room identity verification gate ──────────────────────────────
-        identity_match  = vf.get("room_identity_match")
-        detected_rt     = (vf.get("detected_room_type") or "").strip().lower()
-        features_seen   = vf.get("identity_features_seen") or []
+        identity_match    = vf.get("room_identity_match")
+        detected_rt       = (vf.get("detected_room_type") or "").strip().lower()
+        features_seen     = vf.get("identity_features_seen") or []
+        inconclusive_why  = (vf.get("inconclusive_reason") or "").strip()
         # If model didn't include the new field (defensive), default True so
         # we don't break existing scans — but if explicitly False, reject.
         if identity_match is False:
+            # Pretty room label used in the user-facing reject message.
+            room_label = rt.replace("_", " ")
+            # 1) Mismatch: detected a different specific room
             if detected_rt and detected_rt not in ("unclear", "", rt):
+                detected_label = detected_rt.replace("_", " ")
                 err_msg = (
-                    f"Photo #{i+1}: aap ne '{rt}' bola, par photo me '{detected_rt}' "
-                    f"dikh raha hai. Sahi room ka photo upload kariye."
+                    f"This is not the exact {room_label} photo — looks like a "
+                    f"{detected_label}. Please retake the photo from inside your "
+                    f"{room_label} so the {_room_feature_hint(rt)} are clearly visible."
                 )
+            # 2) Too close / too far / dark / blurry — model gave a reason
+            elif inconclusive_why:
+                # Use model's specific reason + add retake guidance
+                guidance = _retake_guidance(rt, inconclusive_why)
+                err_msg = (
+                    f"This is not the exact {room_label} photo. {inconclusive_why} "
+                    f"Tip: {guidance}"
+                )
+            # 3) Generic unclear
             else:
                 err_msg = (
-                    f"Photo #{i+1}: photo me '{rt}' ke features clear nahi dikhe. "
-                    "Behtar roshni / saaf photo lijiye."
+                    f"This is not the exact {room_label} photo. "
+                    f"Tip: {_retake_guidance(rt, '')}"
                 )
             summary["errors"].append(err_msg)
             summary["per_room"].append({

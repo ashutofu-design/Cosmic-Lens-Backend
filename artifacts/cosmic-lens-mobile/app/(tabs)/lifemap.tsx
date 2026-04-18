@@ -85,6 +85,18 @@ const CATEGORIES: Category[] = [
     subtitle: "Money flow & financial future",
     route: "/finance",
   },
+  {
+    key: "divya-prashna",
+    icon: "help-circle",
+    emoji: "🔮",
+    gradient: ["#8b5cf6", "#f59e0b"],
+    glowOuter: ["rgba(139,92,246,0.22)", "rgba(245,158,11,0.10)"],
+    glowColor: "#8b5cf6",
+    badge: "KP Horary",
+    badgeIcon: "✨",
+    subtitle: "Ek hi sawaal — instant verdict (KP 1-249 sub-lord)",
+    route: "/divya-prashna",
+  },
 ];
 
 const STAR_COUNT = 16;
@@ -273,6 +285,7 @@ function CategoryCard({
     career: t.career,
     health: t.health,
     finance: t.finance,
+    "divya-prashna": "Divya Prashna",
   };
 
   const title = titles[cat.key] || cat.key;

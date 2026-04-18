@@ -30,3 +30,9 @@ id = "FW2Wwkv4ZbYoQ1e3MG0Pj"
 uri = "file://exports/expo-qr.png"
 type = "image"
 title = "Cosmic Lens Dev Client - Phone QR"
+
+[[outputs]]
+id = "Yi8690DjfZhYge6wocx1k"
+uri = "file://.local/qr/expo-go.png"
+type = "image"
+title = "Expo Go QR — scan from inside Expo Go app"

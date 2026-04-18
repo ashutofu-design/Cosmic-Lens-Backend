@@ -35,6 +35,7 @@ function RootLayoutNav() {
       <Stack.Screen name="kundli-milan"     options={{ headerShown: false }} />
       <Stack.Screen name="vastu"            options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-basic" options={{ headerShown: false }} />
+      <Stack.Screen name="astrovastu-pro"   options={{ headerShown: false }} />
     </Stack>
   );
 }

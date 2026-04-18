@@ -2801,6 +2801,154 @@ def astrovastu_basic_route():
     return jsonify(response)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AstroVastu PRO  —  multi-room deep-scan endpoint  (Sprint 3)
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/astrovastu-pro", methods=["POST"])
+def astrovastu_pro_route():
+    """
+    PRO AstroVastu — full-house deep scan with mahadasha-mandatory layer.
+
+    Body: {
+      user_id:    <int>                                        (required, authed),
+      floor_plan: [ {room_type:str, direction:str}, ...max 12 ] (required)
+    }
+    Headers: X-API-Key (required)
+
+    Returns 200 with full PRO report (see astrovastu_pro_response.py)
+        or 400/401/402/422/500 on validation/auth/quota/profile/engine errors.
+
+    Quota: monthly counter (basic=1/mo, pro=unlimited). Consumed AFTER engine
+    success — failed scans never charge the user (Sprint-2 architect fix).
+    """
+    from subscription_helper import (
+        can_use_astrovastu_pro, consume_astrovastu_pro, effective_plan,
+    )
+    from astrovastu_pro_engine import analyze_floor_plan
+    from astrovastu_pro_response import build_pro_response
+    from kundli_engine import calculate_kundli
+    from models import AstroVastuProLog
+    import json
+
+    data = request.get_json(force=True, silent=True) or {}
+
+    # ── Validation ────────────────────────────────────────────────────────
+    floor_plan = data.get("floor_plan")
+    if not isinstance(floor_plan, list) or not floor_plan:
+        return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
+    if len(floor_plan) > 12:
+        return jsonify({"error": "floor_plan supports at most 12 rooms per scan"}), 400
+    for i, room in enumerate(floor_plan):
+        if not isinstance(room, dict):
+            return jsonify({"error": f"floor_plan[{i}] must be an object"}), 400
+        if not room.get("room_type") or not room.get("direction"):
+            return jsonify({"error": f"floor_plan[{i}] missing room_type or direction"}), 400
+
+    # ── Auth (X-API-Key + user_id) ────────────────────────────────────────
+    user_id = data.get("user_id")
+    api_key = request.headers.get("X-API-Key", "")
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required",
+                        "message": "Login zaroori hai PRO deep-scan ke liye."}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    plan = effective_plan(user)
+
+    # ── Profile completeness (Sprint-2 fix pattern) ──────────────────────
+    k = user.kundli
+    if not k:
+        return jsonify({"error": "profile_incomplete",
+                        "message": "Pehle apni Kundli profile complete karein.",
+                        "missing_fields": ["dob", "tob", "pob", "lat", "lon", "tz"]}), 422
+    chart = None
+    if k.chart_data:
+        try:    chart = json.loads(k.chart_data)
+        except: chart = None
+    if not chart:
+        missing = [f for f, v in [("dob", k.dob), ("tob", k.tob),
+                                  ("lat", k.lat), ("lon", k.lon), ("tz", k.tz)]
+                   if v in (None, "")]
+        if missing:
+            return jsonify({"error": "profile_incomplete",
+                            "missing_fields": missing,
+                            "message": "Pehle apni Kundli profile complete karein."}), 422
+        try:
+            chart = calculate_kundli({
+                "name": k.name or user.name or "User",
+                "day":  int(k.dob.split("-")[2]),
+                "month":int(k.dob.split("-")[1]),
+                "year": int(k.dob.split("-")[0]),
+                "hour": int((k.tob or "06:00").split(":")[0]),
+                "minute": int((k.tob or "06:00").split(":")[1]),
+                "ampm": "AM",
+                "lat": float(k.lat or 0), "lon": float(k.lon or 0),
+                "tz":  float(k.tz or 5.5), "place": k.pob or "",
+            })
+        except Exception as exc:
+            return jsonify({"error": "kundli_unreadable", "message": str(exc)}), 422
+
+    # ── Quota gate (no consumption yet) ──────────────────────────────────
+    quota_check = can_use_astrovastu_pro(user)
+    if not quota_check["allowed"]:
+        return jsonify({
+            "error":   "monthly_limit_reached" if quota_check.get("limit", 0) > 0
+                       else "upgrade_required",
+            "message": (f"Aapka maasik PRO scan limit ({quota_check['limit']}) poora ho gaya. "
+                        "Pro plan upgrade karein for unlimited."
+                        if quota_check.get("limit", 0) > 0
+                        else "PRO AstroVastu requires Basic or Pro plan."),
+            "quota":   {"used": quota_check["used"], "limit": quota_check["limit"]},
+            "plan":    plan,
+            "upgrade_required": True,
+        }), 402
+
+    # ── Engine pipeline (run BEFORE charging quota — Sprint-2 fix) ──────
+    try:
+        scan = analyze_floor_plan(floor_plan, chart)
+        report = build_pro_response(scan, plan=plan)
+    except Exception as exc:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+
+    # ── Atomic monthly consume AFTER engine success ──────────────────────
+    quota = consume_astrovastu_pro(user)
+    if not quota["allowed"]:
+        return jsonify({
+            "error":   "monthly_limit_reached",
+            "quota":   {"used": quota["used"], "limit": quota["limit"]},
+            "plan":    plan,
+            "upgrade_required": True,
+        }), 402
+
+    # Attach quota info to response
+    report["quota"] = {"used": quota["used"], "limit": quota["limit"], "plan": plan}
+
+    # ── Log row (analytics; never blocks user response) ──────────────────
+    try:
+        log = AstroVastuProLog(
+            user_id       = user.id,
+            rooms_count   = scan.get("rooms_count", 0),
+            overall_score = report["overall"]["score"],
+            avoid_count   = report["overall"]["counts"]["avoid"],
+            adjust_count  = report["overall"]["counts"]["adjustment_needed"],
+            ideal_count   = report["overall"]["counts"]["ideal"],
+            lagna         = report["kundli_summary"].get("lagna"),
+            mahadasha     = report["kundli_summary"].get("mahadasha"),
+            sade_sati     = bool(report["kundli_summary"].get("sade_sati")),
+            floor_plan    = json.dumps(floor_plan, ensure_ascii=False),
+            plan          = plan,
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as exc:
+        print(f"[astrovastu-pro] log failed: {exc}")
+        db.session.rollback()
+
+    return jsonify(report)
+
+
 @app.route("/api/ask", methods=["POST"])
 def ask_route():
     """

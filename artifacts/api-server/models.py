@@ -40,6 +40,10 @@ class User(db.Model):
     daily_kundlis_used = db.Column(db.Integer, default=0, nullable=False)
     daily_kundlis_date = db.Column(db.String(10), default="", nullable=False)   # YYYY-MM-DD
 
+    # ── Monthly AstroVastu PRO quota ──────────────────────────────────────────
+    monthly_astrovastu_pro_used  = db.Column(db.Integer, default=0, nullable=False)
+    monthly_astrovastu_pro_month = db.Column(db.String(7),  default="", nullable=False)  # YYYY-MM
+
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -194,6 +198,33 @@ class AstroVastuBasicLog(db.Model):
 
     __table_args__ = (
         db.Index("ix_avbl_user_created", "user_id", "created_at"),
+    )
+
+
+class AstroVastuProLog(db.Model):
+    """
+    One row per PRO AstroVastu deep-scan. Stores the input floor plan + summary
+    metrics (full per-room JSON kept lean). Used for analytics & ML.
+    """
+    __tablename__ = "astrovastu_pro_logs"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    rooms_count  = db.Column(db.Integer, nullable=False, default=0)
+    overall_score= db.Column(db.Integer, nullable=False, default=0)   # 0-100
+    avoid_count  = db.Column(db.Integer, nullable=False, default=0)
+    adjust_count = db.Column(db.Integer, nullable=False, default=0)
+    ideal_count  = db.Column(db.Integer, nullable=False, default=0)
+    lagna        = db.Column(db.String(20), nullable=True)
+    mahadasha    = db.Column(db.String(20), nullable=True)
+    sade_sati    = db.Column(db.Boolean, default=False, nullable=False)
+    floor_plan   = db.Column(db.Text, nullable=False, default="[]")    # JSON of input rooms
+    plan         = db.Column(db.String(20), default="free", nullable=False)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_avpl_user_created", "user_id", "created_at"),
     )
 
 

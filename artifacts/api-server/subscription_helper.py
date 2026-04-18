@@ -158,22 +158,74 @@ def can_use_astrovastu_basic(user) -> dict:
     return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
 
 
+def _current_month_str() -> str:
+    """Returns IST month as 'YYYY-MM'."""
+    return _today_str()[:7]
+
+
+def reset_monthly_pro_quota_if_needed(user) -> None:
+    """Resets the PRO monthly counter if the IST month rolled over."""
+    this_month = _current_month_str()
+    if user.monthly_astrovastu_pro_month != this_month:
+        user.monthly_astrovastu_pro_month = this_month
+        user.monthly_astrovastu_pro_used  = 0
+        db.session.commit()
+
+
 def can_use_astrovastu_pro(user) -> dict:
-    """
-    Gate check for PRO AstroVastu deep-scan.
-    Note: monthly counter (`monthly_astrovastu_pro_used`) will be added in
-    Sprint 3 when the endpoint is wired. For now we only enforce the plan gate.
-    """
+    """Gate check (no consumption) for PRO AstroVastu deep-scan."""
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
     limit = astrovastu_pro_monthly_limit(user)
     if limit == 0:
         return {"allowed": False, "used": 0, "limit": 0,
                 "reason": "PRO AstroVastu requires Basic or Pro plan"}
+    reset_monthly_pro_quota_if_needed(user)
     if limit == -1:
-        return {"allowed": True, "used": 0, "limit": -1}
-    # Sprint 1: plan-gate only. Sprint 3 will add monthly counter check.
-    return {"allowed": True, "used": 0, "limit": limit}
+        return {"allowed": True, "used": user.monthly_astrovastu_pro_used, "limit": -1}
+    if user.monthly_astrovastu_pro_used >= limit:
+        return {"allowed": False, "used": user.monthly_astrovastu_pro_used,
+                "limit": limit, "reason": "Monthly PRO scan limit reached"}
+    return {"allowed": True, "used": user.monthly_astrovastu_pro_used, "limit": limit}
+
+
+def consume_astrovastu_pro(user) -> dict:
+    """
+    ATOMIC monthly counter increment for PRO AstroVastu. Same pattern as
+    consume_question — conditional UPDATE prevents over-consumption under
+    concurrent requests.
+    """
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+    reset_monthly_pro_quota_if_needed(user)
+    limit = astrovastu_pro_monthly_limit(user)
+    this_month = _current_month_str()
+    if limit == 0:
+        return {"allowed": False, "used": 0, "limit": 0,
+                "reason": "PRO AstroVastu requires Basic or Pro plan"}
+
+    from models import User as _U
+    if limit == -1:
+        db.session.execute(
+            update(_U).where(_U.id == user.id)
+            .values(monthly_astrovastu_pro_used=_U.monthly_astrovastu_pro_used + 1)
+        )
+        db.session.commit(); db.session.refresh(user)
+        return {"allowed": True, "used": user.monthly_astrovastu_pro_used, "limit": -1}
+
+    result = db.session.execute(
+        update(_U).where(_U.id == user.id)
+        .where(_U.monthly_astrovastu_pro_month == this_month)
+        .where(_U.monthly_astrovastu_pro_used  < limit)
+        .values(monthly_astrovastu_pro_used=_U.monthly_astrovastu_pro_used + 1)
+    )
+    db.session.commit()
+    if result.rowcount == 0:
+        db.session.refresh(user)
+        return {"allowed": False, "used": user.monthly_astrovastu_pro_used,
+                "limit": limit, "reason": "Monthly PRO scan limit reached"}
+    db.session.refresh(user)
+    return {"allowed": True, "used": user.monthly_astrovastu_pro_used, "limit": limit}
 
 
 def timeline_months(user) -> int:

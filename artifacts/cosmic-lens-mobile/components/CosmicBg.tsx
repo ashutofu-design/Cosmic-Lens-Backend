@@ -7,7 +7,7 @@ import { useC } from "@/context/ThemeContext";
 const { width: W, height: H } = Dimensions.get("window");
 
 interface Props {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   style?: ViewStyle;
   contentStyle?: ViewStyle;
 }

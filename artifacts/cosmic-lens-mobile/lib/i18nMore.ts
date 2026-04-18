@@ -246,6 +246,45 @@ export interface MoreT {
   remDaanTip:       string;
   remUpayLbl:       string;
   remWeakSignsLbl:  string; // "Signs of weak {planet}"
+
+  // ── Numerology screen ────────────────────────────────────
+  numSubtitle:        string;
+  numFreeBadge:       string;
+  numSelectProfile:   string;
+  numNoProfileTitle:  string;
+  numNoProfileBody:   string;
+  numSetupProfile:    string;
+  numAutoSynced:      string;
+  numFreeSection:     string;
+  numTapHint:         string;
+  numLifePathLbl:     string;
+  numLifePathHi:      string;
+  numDestinyLbl:      string;
+  numDestinyHi:       string;
+  numSoulUrgeLbl:     string;
+  numSoulUrgeHi:      string;
+  numPersonalYM:      string;
+  numYearPrefix:      string; // "Year"
+  numCareer:          string;
+  numLove:            string;
+  numStrength:        string;
+  numWeakness:        string;
+  numRemedy:          string;
+  numLuckyNumbers:    string;
+  numLuckyColor:      string;
+  numPremiumDivider:  string;
+  numUnlockTitle:     string;
+  numUnlockBody:      string;
+  numAdvancedSection: string;
+  numLockPersonality: string;
+  numLockMaturity:    string;
+  numLockCareerFin:   string;
+  numLockLoveCompat:  string;
+  numLockNameCorr:    string;
+  numLockChallenges:  string;
+  numCtaTitle:        string;
+  numCtaSub:          string;
+  numFooterNote:      string;
 }
 
 // English — primary, complete
@@ -488,6 +527,45 @@ const EN: MoreT = {
   remDaanTip:       "Donating on this day or during an eclipse gives special benefit",
   remUpayLbl:       "⚡ REMEDIES",
   remWeakSignsLbl:  "⚠️ SIGNS OF WEAK {planet}",
+
+  // Numerology
+  numSubtitle:        "Vedic Number Science",
+  numFreeBadge:       "FREE",
+  numSelectProfile:   "SELECT PROFILE",
+  numNoProfileTitle:  "No Kundli Profile Found",
+  numNoProfileBody:   "Please create a Kundli profile first. Numerology reads directly from your birth details.",
+  numSetupProfile:    "Set Up Profile →",
+  numAutoSynced:      "Auto-synced",
+  numFreeSection:     "🆓 FREE NUMEROLOGY",
+  numTapHint:         "Tap any card to expand full details",
+  numLifePathLbl:     "LIFE PATH NUMBER",
+  numLifePathHi:      "Life Path",
+  numDestinyLbl:      "DESTINY / EXPRESSION NUMBER",
+  numDestinyHi:       "Destiny",
+  numSoulUrgeLbl:     "SOUL URGE NUMBER",
+  numSoulUrgeHi:      "Soul Urge",
+  numPersonalYM:      "⏰ PERSONAL YEAR · MONTH",
+  numYearPrefix:      "Year",
+  numCareer:          "💼 Career",
+  numLove:            "❤️ Love",
+  numStrength:        "⚡ Strength",
+  numWeakness:        "⚠️ Weakness",
+  numRemedy:          "🙏 Remedy",
+  numLuckyNumbers:    "Lucky Numbers",
+  numLuckyColor:      "Lucky Color",
+  numPremiumDivider:  "PREMIUM REPORT",
+  numUnlockTitle:     "Unlock Your Full Report",
+  numUnlockBody:      "Personality Number · Maturity Number · Name Correction · Career Insights · Love Compatibility · Challenges & Remedies",
+  numAdvancedSection: "🔒 ADVANCED NUMEROLOGY",
+  numLockPersonality: "Personality Number",
+  numLockMaturity:    "Maturity Number",
+  numLockCareerFin:   "Career & Finance Insights",
+  numLockLoveCompat:  "Love Compatibility Report",
+  numLockNameCorr:    "Name Correction Suggestions",
+  numLockChallenges:  "Challenges, Weak Points & Remedies",
+  numCtaTitle:        "Unlock Full Numerology Report",
+  numCtaSub:          "Get Personality, Maturity, Love, Career & Remedies",
+  numFooterNote:      "Calculations use the Pythagorean Numerology system. Life Path, Destiny, and Soul Urge numbers are derived from your Kundli profile data — no re-entry needed.",
 };
 
 // Hinglish overrides (only differing keys)
@@ -720,6 +798,45 @@ const HN: Partial<MoreT> = {
   remDaanTip:      "Is din ya grahan ke samay daan karna vishesh phal deta hai",
   remUpayLbl:      "⚡ UPAY (REMEDIES)",
   remWeakSignsLbl: "⚠️ WEAK {planet} KE LAKSHAN",
+
+  // Numerology
+  numSubtitle:        "Vedic Anka Vigyaan",
+  numFreeBadge:       "FREE",
+  numSelectProfile:   "PROFILE CHUNEIN",
+  numNoProfileTitle:  "Koi Kundli Profile Nahi Mili",
+  numNoProfileBody:   "Pehle Kundli profile banayein. Numerology aapki birth details se direct calculate hoti hai.",
+  numSetupProfile:    "Profile Banayein →",
+  numAutoSynced:      "Auto-synced",
+  numFreeSection:     "🆓 FREE NUMEROLOGY",
+  numTapHint:         "Poori details ke liye kisi bhi card par tap karein",
+  numLifePathLbl:     "LIFE PATH NUMBER",
+  numLifePathHi:      "Jeevan Path Sankhya",
+  numDestinyLbl:      "DESTINY / EXPRESSION NUMBER",
+  numDestinyHi:       "Bhagya Sankhya",
+  numSoulUrgeLbl:     "SOUL URGE NUMBER",
+  numSoulUrgeHi:      "Aatma ki Iccha",
+  numPersonalYM:      "⏰ PERSONAL YEAR · MONTH",
+  numYearPrefix:      "Saal",
+  numCareer:          "💼 Career",
+  numLove:            "❤️ Pyaar",
+  numStrength:        "⚡ Shakti",
+  numWeakness:        "⚠️ Kamzori",
+  numRemedy:          "🙏 Upay",
+  numLuckyNumbers:    "Lucky Numbers",
+  numLuckyColor:      "Lucky Rang",
+  numPremiumDivider:  "PREMIUM REPORT",
+  numUnlockTitle:     "Apni Poori Report Unlock Karein",
+  numUnlockBody:      "Personality Number · Maturity Number · Naam Sudhaar · Career Insights · Love Compatibility · Challenges & Upay",
+  numAdvancedSection: "🔒 ADVANCED NUMEROLOGY",
+  numLockPersonality: "Personality Number",
+  numLockMaturity:    "Maturity Number",
+  numLockCareerFin:   "Career & Finance Insights",
+  numLockLoveCompat:  "Love Compatibility Report",
+  numLockNameCorr:    "Naam Sudhaar Suggestions",
+  numLockChallenges:  "Challenges, Weak Points & Upay",
+  numCtaTitle:        "Poori Numerology Report Unlock Karein",
+  numCtaSub:          "Personality, Maturity, Love, Career aur Upay paayein",
+  numFooterNote:      "Calculations Pythagorean Numerology system pe based hain. Life Path, Destiny aur Soul Urge numbers aapki Kundli profile se aate hain — re-entry ki zaroorat nahi.",
 };
 
 // Hindi overrides (Devanagari)
@@ -952,6 +1069,45 @@ const HI: Partial<MoreT> = {
   remDaanTip:      "इस दिन या ग्रहण के समय दान करना विशेष फल देता है",
   remUpayLbl:      "⚡ उपाय",
   remWeakSignsLbl: "⚠️ कमज़ोर {planet} के लक्षण",
+
+  // Numerology
+  numSubtitle:        "वैदिक अंक विज्ञान",
+  numFreeBadge:       "निःशुल्क",
+  numSelectProfile:   "प्रोफ़ाइल चुनें",
+  numNoProfileTitle:  "कोई कुंडली प्रोफ़ाइल नहीं मिली",
+  numNoProfileBody:   "कृपया पहले कुंडली प्रोफ़ाइल बनाएं। अंकज्योतिष आपकी जन्म जानकारी से सीधे गणना करता है।",
+  numSetupProfile:    "प्रोफ़ाइल बनाएं →",
+  numAutoSynced:      "ऑटो-सिंक",
+  numFreeSection:     "🆓 निःशुल्क अंकज्योतिष",
+  numTapHint:         "पूरी जानकारी के लिए किसी भी कार्ड पर टैप करें",
+  numLifePathLbl:     "जीवन पथ संख्या",
+  numLifePathHi:      "जीवन पथ",
+  numDestinyLbl:      "भाग्य संख्या",
+  numDestinyHi:       "भाग्य",
+  numSoulUrgeLbl:     "आत्मा की इच्छा",
+  numSoulUrgeHi:      "अंतर्मन",
+  numPersonalYM:      "⏰ व्यक्तिगत वर्ष · माह",
+  numYearPrefix:      "वर्ष",
+  numCareer:          "💼 करियर",
+  numLove:            "❤️ प्रेम",
+  numStrength:        "⚡ शक्ति",
+  numWeakness:        "⚠️ कमज़ोरी",
+  numRemedy:          "🙏 उपाय",
+  numLuckyNumbers:    "शुभ अंक",
+  numLuckyColor:      "शुभ रंग",
+  numPremiumDivider:  "प्रीमियम रिपोर्ट",
+  numUnlockTitle:     "अपनी पूरी रिपोर्ट अनलॉक करें",
+  numUnlockBody:      "व्यक्तित्व संख्या · परिपक्वता संख्या · नाम सुधार · करियर अंतर्दृष्टि · प्रेम संगति · चुनौतियां और उपाय",
+  numAdvancedSection: "🔒 उन्नत अंकज्योतिष",
+  numLockPersonality: "व्यक्तित्व संख्या",
+  numLockMaturity:    "परिपक्वता संख्या",
+  numLockCareerFin:   "करियर और वित्त अंतर्दृष्टि",
+  numLockLoveCompat:  "प्रेम संगति रिपोर्ट",
+  numLockNameCorr:    "नाम सुधार सुझाव",
+  numLockChallenges:  "चुनौतियां, कमज़ोरियां और उपाय",
+  numCtaTitle:        "पूरी अंकज्योतिष रिपोर्ट अनलॉक करें",
+  numCtaSub:          "व्यक्तित्व, परिपक्वता, प्रेम, करियर और उपाय पाएं",
+  numFooterNote:      "गणनाएं पाइथागोरस अंकज्योतिष प्रणाली पर आधारित हैं। जीवन पथ, भाग्य और आत्मा की इच्छा संख्याएं आपकी कुंडली प्रोफ़ाइल से ली जाती हैं — दोबारा दर्ज करने की आवश्यकता नहीं।",
 };
 
 /**

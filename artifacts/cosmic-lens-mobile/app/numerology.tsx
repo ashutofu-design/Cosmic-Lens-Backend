@@ -218,6 +218,7 @@ function NumCard({
   label, labelHindi, num, expanded, onToggle,
 }: { label: string; labelHindi: string; num: number; expanded: boolean; onToggle: () => void }) {
   const C    = useC();
+  const t    = useT();
   const info = getInfo(num);
 
   return (
@@ -257,34 +258,34 @@ function NumCard({
       {expanded && (
         <View style={{ gap:10, marginTop:4 }}>
           <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>💼 Career</Text>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numCareer}</Text>
             <Text style={[nc.detailVal, { color: C.textMid }]}>{info.career}</Text>
           </View>
           <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>❤️ Love</Text>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numLove}</Text>
             <Text style={[nc.detailVal, { color: C.textMid }]}>{info.love}</Text>
           </View>
           <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>⚡ Strength</Text>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numStrength}</Text>
             <Text style={[nc.detailVal, { color: "#22c55e" }]}>{info.strength}</Text>
           </View>
           <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>⚠️ Weakness</Text>
+            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
             <Text style={[nc.detailVal, { color: "#f87171" }]}>{info.weakness}</Text>
           </View>
           <View style={[nc.detailBlock, { borderColor: C.border, backgroundColor:`${info.color}06` }]}>
-            <Text style={[nc.detailLabel, { color: info.color }]}>🙏 Remedy</Text>
+            <Text style={[nc.detailLabel, { color: info.color }]}>{t.numRemedy}</Text>
             <Text style={[nc.detailVal, { color: C.textMid }]}>{info.remedy}</Text>
           </View>
           <View style={nc.luckyRow}>
             <View style={[nc.luckyPill, { backgroundColor:`${info.color}12` }]}>
-              <Text style={[nc.luckyLabel, { color: C.textDim }]}>Lucky Numbers</Text>
+              <Text style={[nc.luckyLabel, { color: C.textDim }]}>{t.numLuckyNumbers}</Text>
               <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyNums}</Text>
             </View>
             <View style={[nc.luckyPill, { backgroundColor:`${info.luckyColorHex}12` }]}>
               <View style={[nc.colorDot, { backgroundColor: info.luckyColorHex }]} />
               <View>
-                <Text style={[nc.luckyLabel, { color: C.textDim }]}>Lucky Color</Text>
+                <Text style={[nc.luckyLabel, { color: C.textDim }]}>{t.numLuckyColor}</Text>
                 <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyColor}</Text>
               </View>
             </View>
@@ -320,6 +321,7 @@ const nc = StyleSheet.create({
 // ── Personal year mini card ───────────────────────────────────────────────────
 function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
   const C    = useC();
+  const t    = useT();
   const info = getInfo(py);
   const pmInfo = getInfo(pm);
   const year = new Date().getFullYear();
@@ -327,11 +329,11 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
 
   return (
     <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}30` }]}>
-      <Text style={[pyc.title, { color: C.textDim }]}>⏰ PERSONAL YEAR · MONTH</Text>
+      <Text style={[pyc.title, { color: C.textDim }]}>{t.numPersonalYM}</Text>
       <View style={pyc.row}>
         <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
           <Text style={[pyc.bigNum, { color: info.color }]}>{py}</Text>
-          <Text style={[pyc.label, { color: C.textMuted }]}>Year {year}</Text>
+          <Text style={[pyc.label, { color: C.textMuted }]}>{t.numYearPrefix} {year}</Text>
           <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[py] ?? ""}</Text>
         </View>
         <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
@@ -473,10 +475,10 @@ export default function NumerologyScreen() {
         </Pressable>
         <View style={{ flex:1 }}>
           <Text style={[s.title, { color: C.text }]}>{t.numerologyTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]}>अंकज्योतिष — Vedic Number Science</Text>
+          <Text style={[s.sub, { color: C.textMuted }]}>{t.numSubtitle}</Text>
         </View>
         <View style={[s.badge, { backgroundColor: `${C.accent}15` }]}>
-          <Text style={[s.badgeTxt, { color: C.accent }]}>FREE</Text>
+          <Text style={[s.badgeTxt, { color: C.accent }]}>{t.numFreeBadge}</Text>
         </View>
       </View>
 
@@ -487,7 +489,7 @@ export default function NumerologyScreen() {
         {/* Profile selector */}
         {profiles.length > 1 && (
           <View style={{ gap:6 }}>
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>SELECT PROFILE</Text>
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numSelectProfile}</Text>
             <ProfileSelector
               profiles={profiles} activeId={selectedId}
               onSelect={(id) => setSelectedId(id)}
@@ -499,15 +501,15 @@ export default function NumerologyScreen() {
         {!bd && (
           <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={{ fontSize:40 }}>🔢</Text>
-            <Text style={[s.emptyTitle, { color: C.text }]}>No Kundli Profile Found</Text>
+            <Text style={[s.emptyTitle, { color: C.text }]}>{t.numNoProfileTitle}</Text>
             <Text style={[s.emptyBody, { color: C.textMuted }]}>
-              Please create a Kundli profile first. Numerology reads directly from your birth details.
+              {t.numNoProfileBody}
             </Text>
             <Pressable
               onPress={() => router.push("/profile-edit" as any)}
               style={[s.emptyBtn, { backgroundColor: C.accent }]}
             >
-              <Text style={s.emptyBtnTxt}>Set Up Profile →</Text>
+              <Text style={s.emptyBtnTxt}>{t.numSetupProfile}</Text>
             </Pressable>
           </View>
         )}
@@ -526,7 +528,7 @@ export default function NumerologyScreen() {
               </View>
               <View style={[s.syncBadge, { backgroundColor:`${C.accent}10` }]}>
                 <Feather name="check-circle" size={11} color={C.accent} />
-                <Text style={[s.syncTxt, { color: C.accent }]}>Auto-synced</Text>
+                <Text style={[s.syncTxt, { color: C.accent }]}>{t.numAutoSynced}</Text>
               </View>
             </View>
           </View>
@@ -535,21 +537,21 @@ export default function NumerologyScreen() {
         {/* Free section */}
         {nums && (
           <>
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>🆓 FREE NUMEROLOGY</Text>
-            <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to expand full details</Text>
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numFreeSection}</Text>
+            <Text style={[s.sectionSub, { color: C.textMuted }]}>{t.numTapHint}</Text>
 
             <NumCard
-              label="LIFE PATH NUMBER" labelHindi="जीवन पथ संख्या"
+              label={t.numLifePathLbl} labelHindi={t.numLifePathHi}
               num={nums.lp} expanded={expLP}
               onToggle={() => { setExpLP(v => !v); Haptics.selectionAsync(); }}
             />
             <NumCard
-              label="DESTINY / EXPRESSION NUMBER" labelHindi="भाग्य संख्या"
+              label={t.numDestinyLbl} labelHindi={t.numDestinyHi}
               num={nums.dest} expanded={expDest}
               onToggle={() => { setExpDest(v => !v); Haptics.selectionAsync(); }}
             />
             <NumCard
-              label="SOUL URGE NUMBER" labelHindi="आत्मा की इच्छा"
+              label={t.numSoulUrgeLbl} labelHindi={t.numSoulUrgeHi}
               num={nums.soul} expanded={expSoul}
               onToggle={() => { setExpSoul(v => !v); Haptics.selectionAsync(); }}
             />
@@ -562,7 +564,7 @@ export default function NumerologyScreen() {
               <View style={[s.divLine, { backgroundColor: C.border }]} />
               <View style={[s.divBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Feather name="lock" size={10} color={C.isDark ? "#f59e0b" : "#92400E"} />
-                <Text style={[s.divTxt, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>PREMIUM REPORT</Text>
+                <Text style={[s.divTxt, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{t.numPremiumDivider}</Text>
               </View>
               <View style={[s.divLine, { backgroundColor: C.border }]} />
             </View>
@@ -571,23 +573,22 @@ export default function NumerologyScreen() {
             <View style={[s.teaserCard, { backgroundColor: C.bgCard, borderColor:"rgba(245,158,11,0.25)" }]}>
               <Text style={{ fontSize:32 }}>🔐</Text>
               <View style={{ flex:1, gap:4 }}>
-                <Text style={[s.teaserTitle, { color: C.text }]}>Unlock Your Full Report</Text>
+                <Text style={[s.teaserTitle, { color: C.text }]}>{t.numUnlockTitle}</Text>
                 <Text style={[s.teaserBody, { color: C.textMuted }]}>
-                  Personality Number · Maturity Number · Name Correction ·
-                  Career Insights · Love Compatibility · Challenges & Remedies
+                  {t.numUnlockBody}
                 </Text>
               </View>
             </View>
 
             {/* Locked cards preview */}
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>🔒 ADVANCED NUMEROLOGY</Text>
+            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numAdvancedSection}</Text>
 
-            <LockedCard title="Personality Number" emoji="🎭" color="#8b5cf6" />
-            <LockedCard title="Maturity Number" emoji="🌱" color="#10b981" />
-            <LockedCard title="Career & Finance Insights" emoji="💼" color="#f59e0b" />
-            <LockedCard title="Love Compatibility Report" emoji="❤️" color="#f43f5e" />
-            <LockedCard title="Name Correction Suggestions" emoji="✍️" color="#06b6d4" />
-            <LockedCard title="Challenges, Weak Points & Remedies" emoji="🙏" color="#f97316" />
+            <LockedCard title={t.numLockPersonality} emoji="🎭" color="#8b5cf6" />
+            <LockedCard title={t.numLockMaturity} emoji="🌱" color="#10b981" />
+            <LockedCard title={t.numLockCareerFin} emoji="💼" color="#f59e0b" />
+            <LockedCard title={t.numLockLoveCompat} emoji="❤️" color="#f43f5e" />
+            <LockedCard title={t.numLockNameCorr} emoji="✍️" color="#06b6d4" />
+            <LockedCard title={t.numLockChallenges} emoji="🙏" color="#f97316" />
 
             {/* CTA */}
             <Pressable
@@ -597,8 +598,8 @@ export default function NumerologyScreen() {
               <View style={s.ctaInner}>
                 <Text style={{ fontSize:22 }}>⭐</Text>
                 <View style={{ flex:1 }}>
-                  <Text style={s.ctaTitle}>Unlock Full Numerology Report</Text>
-                  <Text style={s.ctaSub}>Get Personality, Maturity, Love, Career & Remedies</Text>
+                  <Text style={s.ctaTitle}>{t.numCtaTitle}</Text>
+                  <Text style={s.ctaSub}>{t.numCtaSub}</Text>
                 </View>
                 <Feather name="arrow-right" size={18} color="#fff" />
               </View>
@@ -608,8 +609,7 @@ export default function NumerologyScreen() {
             <View style={[s.footer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Feather name="info" size={12} color={C.textMuted} />
               <Text style={[s.footerTxt, { color: C.textMuted }]}>
-                Calculations use the Pythagorean Numerology system. Life Path, Destiny, and Soul Urge
-                numbers are derived from your Kundli profile data — no re-entry needed.
+                {t.numFooterNote}
               </Text>
             </View>
           </>

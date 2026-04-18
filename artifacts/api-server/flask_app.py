@@ -3060,6 +3060,226 @@ def astrovastu_purchase_intent_route():
     })
 
 
+@app.route("/api/astrovastu/create-order", methods=["POST", "OPTIONS"])
+def astrovastu_create_order_route():
+    """
+    Phase 3 — Cashfree one-time order for an AstroVastu SKU.
+
+    Flow:
+      1. Validate user + SKU (and property_name for unlock SKUs).
+      2. Create or reuse an AstroVastuPurchase row (status=created).
+      3. POST to Cashfree /pg/orders with order_tags={kind:astrovastu, purchase_id}.
+      4. Persist returned cf order_id back on the purchase row.
+      5. Return { payment_session_id, payment_link, order_id, purchase_id }.
+
+    Body: { user_id, sku, property_name?, purchase_id? }
+    Headers: X-API-Key
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import urllib.request as _req, urllib.error as _err_mod, json as _json
+    from subscription_helper import SKU_CATALOG
+    from models import AstroVastuPurchase
+
+    if not CASHFREE_APP_ID or not CASHFREE_SECRET:
+        return jsonify({"error": "cashfree_not_configured"}), 503
+
+    data    = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = request.headers.get("X-API-Key", "").strip()
+    sku     = (data.get("sku") or "").strip()
+    pname   = (data.get("property_name") or "").strip()
+    pid_in  = data.get("purchase_id")
+
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    spec = SKU_CATALOG.get(sku)
+    if not spec:
+        return jsonify({"error": "invalid_sku",
+                        "valid_skus": list(SKU_CATALOG.keys())}), 400
+    if spec["grants"] == "unlock" and not pname:
+        return jsonify({"error": "property_name_required"}), 400
+
+    # Reuse existing intent if caller provided a still-pending purchase_id.
+    purchase = None
+    if pid_in:
+        purchase = AstroVastuPurchase.query.get(pid_in)
+        if purchase and (purchase.user_id != user.id or
+                         purchase.status != "created" or
+                         purchase.sku != sku):
+            purchase = None
+    if not purchase:
+        purchase = AstroVastuPurchase(
+            user_id       = user.id,
+            sku           = sku,
+            amount        = spec["price"],
+            property_name = pname or None,
+            status        = "created",
+        )
+        db.session.add(purchase)
+        db.session.commit()
+
+    # Order id encodes user + purchase so webhook + status route can route fast.
+    ts       = int(datetime.utcnow().timestamp())
+    order_id = f"AV{user.id}_{purchase.id}_{ts}"
+
+    return_url = (
+        f"{os.environ.get('API_BASE', 'http://localhost:8080')}/api/payment/return"
+        f"?order_id={order_id}&plan=astrovastu&cycle=onetime"
+    )
+
+    cust_email = (user.email or "").strip() or f"user{user.id}@cosmiclens.app"
+    raw_phone  = (user.phone or "").strip()
+    digits     = "".join(c for c in raw_phone if c.isdigit())
+    cust_phone = digits[-10:] if len(digits) >= 10 else "9999999999"
+
+    payload = {
+        "order_id":       order_id,
+        "order_amount":   spec["price"],
+        "order_currency": "INR",
+        "customer_details": {
+            "customer_id":    str(user.id),
+            "customer_name":  user.name or "User",
+            "customer_email": cust_email,
+            "customer_phone": cust_phone,
+        },
+        "order_meta": {"return_url": return_url},
+        # PII-minimised tags — purchase_id is the canonical link back to our
+        # DB row (which holds property_name + user_id). We deliberately
+        # exclude user_id and property_name from Cashfree metadata.
+        "order_tags": {
+            "kind":        "astrovastu",
+            "purchase_id": str(purchase.id),
+            "sku":         sku,
+        },
+    }
+
+    body   = _json.dumps(payload).encode()
+    cf_req = _req.Request(
+        f"{_cf_base()}/orders", data=body,
+        headers={
+            "Content-Type":    "application/json",
+            "x-client-id":     CASHFREE_APP_ID,
+            "x-client-secret": CASHFREE_SECRET,
+            "x-api-version":   "2023-08-01",
+        },
+        method="POST",
+    )
+    app.logger.info(f"[CF-AV] POST /orders  order={order_id}  amt=₹{spec['price']}  user={user.id}  sku={sku}")
+    try:
+        with _req.urlopen(cf_req, timeout=15) as resp:
+            result = _json.loads(resp.read())
+    except _err_mod.HTTPError as e:
+        try:    detail = e.read().decode()
+        except: detail = ""
+        app.logger.error(f"[CF-AV] HTTP {e.code} on /orders: {detail}")
+        return jsonify({"error": "cashfree_order_failed",
+                        "code": e.code, "detail": detail}), 502
+    except Exception as e:
+        app.logger.error(f"[CF-AV] network error: {e}")
+        return jsonify({"error": str(e)}), 502
+
+    session_id = result.get("payment_session_id", "")
+    if not session_id:
+        app.logger.error(f"[CF-AV] no session id in response: {result}")
+        return jsonify({"error": "cashfree_no_session", "raw": result}), 502
+
+    purchase.order_id = order_id
+    db.session.commit()
+
+    payment_link = _cf_payment_url(session_id)
+    app.logger.info(f"[CF-AV] OK  cf_order={result.get('cf_order_id')}  session=...{session_id[-12:]}")
+
+    return jsonify({
+        "purchase_id":        purchase.id,
+        "order_id":           order_id,
+        "payment_session_id": session_id,
+        "payment_link":       payment_link,
+        "amount":             spec["price"],
+        "sku":                sku,
+        "label":              spec["label"],
+        "grants":             spec["grants"],
+        "property_name":      pname or None,
+    })
+
+
+@app.route("/api/astrovastu/purchase-status/<int:purchase_id>", methods=["GET", "OPTIONS"])
+def astrovastu_purchase_status_route(purchase_id):
+    """
+    Mobile polling endpoint after the Cashfree WebView returns. Idempotent.
+
+    Behaviour:
+      1. Returns the current AstroVastuPurchase row for the authed user.
+      2. If status is still 'created' AND we have a Cashfree order_id, polls
+         Cashfree once, and on SUCCESS marks paid + grants idempotently.
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    import urllib.request as _req, json as _json
+    from subscription_helper import grant_purchase_idempotent
+    from models import AstroVastuPurchase
+
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key:
+        return jsonify({"error": "auth_required"}), 401
+
+    purchase = AstroVastuPurchase.query.get(purchase_id)
+    if not purchase:
+        return jsonify({"error": "purchase_not_found"}), 404
+
+    user = User.query.filter_by(id=purchase.user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    # Live-poll Cashfree if we still think the order is open.
+    if purchase.status == "created" and purchase.order_id and CASHFREE_APP_ID and CASHFREE_SECRET:
+        try:
+            cf_req = _req.Request(
+                f"{_cf_base()}/orders/{purchase.order_id}/payments",
+                headers={
+                    "x-client-id":     CASHFREE_APP_ID,
+                    "x-client-secret": CASHFREE_SECRET,
+                    "x-api-version":   "2023-08-01",
+                },
+            )
+            with _req.urlopen(cf_req, timeout=10) as resp:
+                payments = _json.loads(resp.read())
+            if not isinstance(payments, list):
+                payments = []
+            if any(p.get("payment_status") == "SUCCESS" for p in payments):
+                purchase.status  = "paid"
+                purchase.paid_at = datetime.utcnow()
+                db.session.commit()
+                grant_purchase_idempotent(purchase)
+                db.session.refresh(purchase)
+                db.session.refresh(user)
+            elif any(p.get("payment_status") in ("FAILED", "USER_DROPPED", "CANCELLED")
+                     for p in payments):
+                # Don't flip to failed — user can retry the same intent.
+                pass
+        except Exception as e:
+            app.logger.warning(f"[CF-AV] poll error for order {purchase.order_id}: {e}")
+
+    return jsonify({
+        "purchase_id":   purchase.id,
+        "sku":           purchase.sku,
+        "amount":        purchase.amount,
+        "property_name": purchase.property_name,
+        "order_id":      purchase.order_id,
+        "status":        purchase.status,        # created / paid / failed / expired
+        "granted":       bool(purchase.granted),
+        "paid_at":       purchase.paid_at.isoformat() if purchase.paid_at else None,
+        "room_credits":  user.astrovastu_room_credits or 0,
+        "is_pro":        bool(getattr(user, "is_pro", False)),
+    })
+
+
 @app.route("/api/astrovastu/dev-grant", methods=["POST"])
 def astrovastu_dev_grant_route():
     """
@@ -4572,11 +4792,43 @@ def payment_webhook():
     if event in ("PAYMENT_SUCCESS_WEBHOOK", "PAYMENT_SUCCESS"):
         order    = payload.get("data", {}).get("order", {})
         order_id = order.get("order_id", "")
-        tags     = order.get("order_tags", {})
+        tags     = order.get("order_tags", {}) or {}
         uid      = tags.get("user_id", "")
-        plan     = tags.get("plan", "")
-        cycle    = tags.get("cycle", "monthly")
 
+        # ── AstroVastu one-time purchases (Phase 3) ────────────────────────
+        if tags.get("kind") == "astrovastu" or (order_id and order_id.startswith("AV")):
+            from subscription_helper import grant_purchase_idempotent
+            from models import AstroVastuPurchase
+            pid = tags.get("purchase_id") or ""
+            purchase = None
+            if pid:
+                try:
+                    purchase = AstroVastuPurchase.query.get(int(pid))
+                except (TypeError, ValueError):
+                    purchase = None
+            if not purchase and order_id:
+                purchase = AstroVastuPurchase.query.filter_by(order_id=order_id).first()
+            # Fallback parse from order_id format AV{user}_{purchase}_{ts}
+            if not purchase and order_id and order_id.startswith("AV"):
+                try:
+                    parsed_pid = int(order_id.split("_")[1])
+                    purchase = AstroVastuPurchase.query.get(parsed_pid)
+                except (IndexError, ValueError):
+                    pass
+            if purchase:
+                if purchase.status != "paid":
+                    purchase.status  = "paid"
+                    purchase.paid_at = datetime.utcnow()
+                    db.session.commit()
+                grant_purchase_idempotent(purchase)
+                app.logger.info(f"[CF-AV] webhook granted purchase id={purchase.id} sku={purchase.sku}")
+            else:
+                app.logger.warning(f"[CF-AV] webhook: no AstroVastuPurchase for order={order_id} pid={pid}")
+            return jsonify({"status": "ok"}), 200
+
+        # ── Subscription plans (existing flow) ─────────────────────────────
+        plan  = tags.get("plan", "")
+        cycle = tags.get("cycle", "monthly")
         if uid and plan and order_id:
             _activate_plan(int(uid), plan, cycle, order_id)
 

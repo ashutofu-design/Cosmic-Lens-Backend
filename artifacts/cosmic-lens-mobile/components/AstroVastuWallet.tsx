@@ -14,6 +14,7 @@
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -114,7 +115,7 @@ export function AstroVastuWallet({
 
   useEffect(() => { loadStatus(); }, [loadStatus, refreshKey]);
 
-  // ── Buy flow (Phase 3 will swap dev-grant for real Cashfree session) ──
+  // ── Buy flow (Phase 3 — Cashfree one-time WebView) ─────────────────
   const handleBuy = useCallback(async (sku: string) => {
     if (!user?.id || !user?.api_key) return;
     const spec = status?.catalog?.[sku];
@@ -134,69 +135,44 @@ export function AstroVastuWallet({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      // 1) create intent
-      const intentRes = await fetch(`${API_BASE}/api/astrovastu/intent`, {
+      const orderRes = await fetch(`${API_BASE}/api/astrovastu/create-order`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
         body:    JSON.stringify({
           user_id: user.id, sku, property_name: propName,
         }),
       });
-      const intent = await intentRes.json();
-      if (!intentRes.ok) {
-        Alert.alert("Couldn't create order", intent?.message || intent?.error || "Try again.");
+      const order = await orderRes.json();
+      if (!orderRes.ok || !order?.payment_session_id) {
+        Alert.alert(
+          "Couldn't start payment",
+          order?.detail || order?.message || order?.error || "Try again.",
+        );
         return;
       }
 
-      // 2) Phase-3 placeholder: confirm + run dev-grant so the user can
-      //    test the unlock UX end-to-end in dev. Production will route to
-      //    Cashfree checkout via WebView here.
-      Alert.alert(
-        `${spec.label} — ₹${spec.price}`,
-        spec.grants === "unlock"
-          ? `Property "${propName}" will be unlocked for life on confirm.\n\n` +
-            "Live payment integration is arriving in Phase 3 — test the unlock now?"
-          : `${spec.credits} room credit${(spec.credits ?? 1) > 1 ? "s" : ""} will be added on confirm.\n\n` +
-            "Live payment integration is arriving in Phase 3 — test the unlock now?",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Confirm (test)",
-            onPress: async () => {
-              try {
-                const grantRes = await fetch(`${API_BASE}/api/astrovastu/dev-grant`, {
-                  method:  "POST",
-                  headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
-                  body:    JSON.stringify({
-                    user_id: user.id, purchase_id: intent.purchase_id,
-                  }),
-                });
-                if (grantRes.status === 403) {
-                  Alert.alert("Coming soon", "Live payment will go live with Phase 3.");
-                  return;
-                }
-                const grant = await grantRes.json();
-                if (grant.granted) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  Alert.alert("Unlocked!", spec.grants === "unlock"
-                    ? `"${propName}" is now unlocked for life.`
-                    : `+${spec.credits} room credit${(spec.credits ?? 1) > 1 ? "s" : ""} added.`);
-                  setBuyOpen(false);
-                  loadStatus();
-                } else {
-                  Alert.alert("Could not grant", grant.reason || "Unknown error.");
-                }
-              } catch (e: any) {
-                Alert.alert("Network error", e?.message || "Try again.");
-              }
-            },
-          },
-        ],
-      );
+      setBuyOpen(false);
+      // Hand off to the shared payment WebView (kind=astrovastu branch).
+      router.push({
+        pathname: "/payment-webview",
+        params: {
+          plan:        "astrovastu",
+          cycle:       "onetime",
+          kind:        "astrovastu",
+          sku,
+          purchaseId:  String(order.purchase_id),
+          orderId:     order.order_id,
+          sessionId:   order.payment_session_id,
+          paymentLink: order.payment_link || "",
+          amount:      String(order.amount || spec.price),
+          label:       spec.label,
+          propertyName: propName,
+        },
+      });
     } catch (e: any) {
       Alert.alert("Network error", e?.message || "Try again.");
     }
-  }, [user, status?.catalog, propertyName, loadStatus]);
+  }, [user, status?.catalog, propertyName]);
 
   // ── Skeleton ───────────────────────────────────────────────────────
   if (loading) {

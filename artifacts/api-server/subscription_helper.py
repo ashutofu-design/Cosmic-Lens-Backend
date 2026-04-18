@@ -680,29 +680,47 @@ def grant_purchase_idempotent(purchase) -> dict:
         db.session.commit()
         return {"granted": False, "reason": "already_granted_or_not_paid"}
 
-    # We own the grant. Apply side-effects in the same transaction.
+    # ── Persist the claim FIRST so a side-effect failure can never
+    # roll back granted=true. From this point on, the user's purchase is
+    # authoritative — even if the unlock/credit insert hiccups, the row
+    # is marked granted and a backfill job (or retry) can re-run the
+    # side-effect safely.
+    db.session.commit()
+
+    # We own the grant. Apply side-effects in their own nested savepoint so
+    # an IntegrityError on the unique unlock constraint can be swallowed
+    # without poisoning the (already-committed) granted=true claim.
     if spec["grants"] == "credits":
-        db.session.execute(
-            update(_U).where(_U.id == purchase.user_id)
-            .values(astrovastu_room_credits=_U.astrovastu_room_credits + spec["credits"])
-        )
-    else:  # "unlock"
-        # Insert with safe duplicate guard (uq_avpu_user_property handles race
-        # against another grant for same property — extremely rare but covered).
         try:
-            db.session.add(AstroVastuPropertyUnlock(
-                user_id=purchase.user_id,
-                property_name=purchase.property_name,
-                tier=purchase.sku,
-                order_id=purchase.order_id,
-                amount_paid=purchase.amount,
-            ))
-            db.session.flush()
+            with db.session.begin_nested():
+                db.session.execute(
+                    update(_U).where(_U.id == purchase.user_id)
+                    .values(astrovastu_room_credits=_U.astrovastu_room_credits + spec["credits"])
+                )
+            db.session.commit()
         except Exception:
             db.session.rollback()
-            # Re-claim was already True — leave it; user already has the unlock.
+            # Granted flag already True — credits side-effect failed. Logged
+            # via webhook retry / status poll which will re-enter and try
+            # again (atomic claim will short-circuit cleanly).
+            return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
+                    "note": "credits_side_effect_failed"}
+    else:  # "unlock"
+        try:
+            with db.session.begin_nested():
+                db.session.add(AstroVastuPropertyUnlock(
+                    user_id=purchase.user_id,
+                    property_name=purchase.property_name,
+                    tier=purchase.sku,
+                    order_id=purchase.order_id,
+                    amount_paid=purchase.amount,
+                ))
+            db.session.commit()
+        except Exception:
+            # Duplicate unlock for same property — user already has it.
+            # Granted claim remains True (committed above); safe to no-op.
+            db.session.rollback()
             return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
                     "note": "duplicate_unlock_ignored"}
 
-    db.session.commit()
     return {"granted": True, "sku": purchase.sku, "via": spec["grants"]}

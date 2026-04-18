@@ -27,21 +27,28 @@ const F = {
   bold:     "Nunito_700Bold",
 } as const;
 
-type Phase = "creating" | "paying" | "verifying" | "success" | "failed" | "cancelled";
+type Phase = "creating" | "paying" | "verifying" | "success" | "failed" | "cancelled" | "pending_verify";
 
 const PLAN_LABELS: Record<string, string> = {
-  trial: "7-Day Trial",
-  basic: "Basic",
-  pro:   "Pro",
-  elite: "Pro",
+  trial:      "7-Day Trial",
+  basic:      "Basic",
+  pro:        "Pro",
+  elite:      "Pro",
+  astrovastu: "AstroVastu",
 };
 const PLAN_ICONS: Record<string, string> = {
-  trial: "🎁",
-  basic: "✨",
-  pro:   "⚡",
-  elite: "⚡",
+  trial:      "🎁",
+  basic:      "✨",
+  pro:        "⚡",
+  elite:      "⚡",
+  astrovastu: "🏠",
 };
-const CYCLE_LABELS: Record<string, string> = { weekly: "7 Days", monthly: "Monthly", yearly: "Yearly" };
+const CYCLE_LABELS: Record<string, string> = {
+  weekly:  "7 Days",
+  monthly: "Monthly",
+  yearly:  "Yearly",
+  onetime: "Lifetime",
+};
 const PLAN_PRICES: Record<string, number> = {
   trial_weekly:  PRICES.trial_weekly,
   basic_monthly: PRICES.basic_monthly,
@@ -65,11 +72,19 @@ export default function PaymentWebviewScreen() {
 
   const params = useLocalSearchParams<{
     plan: string; cycle: string; orderId?: string; sessionId?: string; paymentLink?: string;
+    // ── AstroVastu one-time purchase params ──
+    kind?: string; sku?: string; purchaseId?: string;
+    amount?: string; label?: string; propertyName?: string;
   }>();
 
   const plan  = params.plan  ?? "pro";
   const cycle = params.cycle ?? "monthly";
-  const price = PLAN_PRICES[`${plan}_${cycle}`] ?? 0;
+  const isAstroVastu  = (params.kind === "astrovastu") || plan === "astrovastu";
+  const avPurchaseId  = params.purchaseId ? Number(params.purchaseId) : 0;
+  const avLabel       = params.label || "AstroVastu Unlock";
+  const avPropName    = params.propertyName || "";
+  const avAmount      = params.amount ? Number(params.amount) : 0;
+  const price = isAstroVastu ? avAmount : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
 
   const [phase,       setPhase]       = useState<Phase>("creating");
   const [errMsg,      setErrMsg]      = useState("");
@@ -262,9 +277,45 @@ export default function PaymentWebviewScreen() {
   }
 
   async function _verifyPayment(oid: string) {
-    if (!oid) { setPhase("cancelled"); return; }
+    if (!oid && !isAstroVastu) { setPhase("cancelled"); return; }
     // Small grace so backend webhook can settle
     await new Promise(r => setTimeout(r, 1200));
+
+    // ── AstroVastu one-time: poll our purchase-status endpoint ───────────
+    if (isAstroVastu) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      // Poll up to 6 times w/ 2s gap (~12s headroom for webhook delivery).
+      // On miss → "pending_verify" (NOT "cancelled") so user can re-check
+      // the SAME purchase without creating a new order — no double charge.
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(
+            `${API_BASE}/api/astrovastu/purchase-status/${avPurchaseId}`,
+            { signal: ctrl.signal, headers },
+          );
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && data?.granted) {
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      // Webhook hasn't landed yet OR user cancelled — don't assume either.
+      // Show "Pending verification" with a "Check again" button (re-runs
+      // _verifyPayment on the same purchase, no new Cashfree order).
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── Subscription plans (existing flow) ───────────────────────────────
     try {
       const ctrl  = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -308,30 +359,37 @@ export default function PaymentWebviewScreen() {
   }
 
   const phaseIcon: Record<Phase, string> = {
-    creating:  "⏳",
-    paying:    "💳",
-    verifying: "🔍",
-    success:   "🎉",
-    failed:    "❌",
-    cancelled: "🌙",
+    creating:       "⏳",
+    paying:         "💳",
+    verifying:      "🔍",
+    success:        "🎉",
+    failed:         "❌",
+    cancelled:      "🌙",
+    pending_verify: "⌛",
   };
 
+  const successCopy = isAstroVastu
+    ? `${PLAN_ICONS.astrovastu} ${avLabel}${avPropName ? ` for "${avPropName}"` : ""} unlocked!`
+    : `${PLAN_ICONS[plan]} ${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]} plan is now active!`;
+
   const phaseTitle: Record<Phase, string> = {
-    creating:  "Creating Your Order…",
-    paying:    "Complete Your Payment",
-    verifying: "Verifying Payment…",
-    success:   "Plan Activated!",
-    failed:    "Payment Failed",
-    cancelled: "Payment Cancelled",
+    creating:       "Creating Your Order…",
+    paying:         "Complete Your Payment",
+    verifying:      "Verifying Payment…",
+    success:        isAstroVastu ? "Unlocked!" : "Plan Activated!",
+    failed:         "Payment Failed",
+    cancelled:      "Payment Cancelled",
+    pending_verify: "Verification Pending",
   };
 
   const phaseSubtitle: Record<Phase, string> = {
-    creating:  "Securely connecting to Cashfree…",
-    paying:    "Pay securely below — page is hosted by Cashfree.",
-    verifying: "Checking your payment status…",
-    success:   `${PLAN_ICONS[plan]} ${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]} plan is now active!`,
-    failed:    errMsg || "Something went wrong. Please try again.",
-    cancelled: "No payment was made. You can try again anytime.",
+    creating:       "Securely connecting to Cashfree…",
+    paying:         "Pay securely below — page is hosted by Cashfree.",
+    verifying:      "Checking your payment status…",
+    success:        successCopy,
+    failed:         errMsg || "Something went wrong. Please try again.",
+    cancelled:      "No payment was made. You can try again anytime.",
+    pending_verify: "If you completed the payment, it can take a few seconds to confirm. Tap below to re-check — you will NOT be charged again.",
   };
 
   const isLoading = ["creating", "verifying"].includes(phase);
@@ -446,6 +504,27 @@ export default function PaymentWebviewScreen() {
             >
               <Text style={s.primaryBtnText}>Go to Home ✨</Text>
             </Pressable>
+          )}
+
+          {phase === "pending_verify" && (
+            <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setPhase("verifying");
+                  _verifyPayment(orderId);
+                }}
+                style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Text style={s.primaryBtnText}>🔄 Check Payment Status</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: C.textMid }]}>Close</Text>
+              </Pressable>
+            </View>
           )}
 
           {(phase === "failed" || phase === "cancelled") && (

@@ -2814,6 +2814,95 @@ def astrovastu_basic_route():
 # ─────────────────────────────────────────────────────────────────────────────
 # AstroVastu PRO  —  multi-room deep-scan endpoint  (Sprint 3)
 # ─────────────────────────────────────────────────────────────────────────────
+def _resolve_user_chart(user):
+    """
+    Load the user's birth chart, preferring the multi-profile primary Profile,
+    then falling back to the legacy `user.kundli` table.
+
+    Returns (chart_dict_or_None, missing_fields_list, name_str).
+    A non-None chart means we're good to proceed; otherwise `missing_fields`
+    tells the client what to ask for.
+    """
+    import json as _json
+    from kundli_engine import calculate_kundli as _calc
+
+    # 1) Multi-profile primary (canonical source in current app)
+    try:
+        prim = (Profile.query
+                .filter_by(user_id=user.id, deleted_at=None, is_primary=True)
+                .first())
+        if not prim:
+            prim = (Profile.query
+                    .filter_by(user_id=user.id, deleted_at=None)
+                    .order_by(Profile.created_at.asc())
+                    .first())
+        if prim:
+            name = prim.name or user.name or "User"
+            if prim.chart_data:
+                try:
+                    return _json.loads(prim.chart_data), [], name
+                except Exception:
+                    pass
+            bd = None
+            if prim.birth_data:
+                try: bd = _json.loads(prim.birth_data)
+                except Exception: bd = None
+            if isinstance(bd, dict):
+                try:
+                    chart = _calc({
+                        "name":   name,
+                        "day":    int(bd.get("day", 0)),
+                        "month":  int(bd.get("month", 0)),
+                        "year":   int(bd.get("year", 0)),
+                        "hour":   int(bd.get("hour", 0)),
+                        "minute": int(bd.get("minute", 0)),
+                        "ampm":   str(bd.get("ampm") or "AM").upper(),
+                        "lat":    float(bd.get("lat") or 0),
+                        "lon":    float(bd.get("lon") or 0),
+                        "tz":     float(bd.get("tz")  or 5.5),
+                        "place":  bd.get("place") or "",
+                    })
+                    return chart, [], name
+                except Exception as exc:
+                    print(f"[chart-resolve] primary profile calc failed: {exc}")
+    except Exception as exc:
+        print(f"[chart-resolve] primary profile lookup failed: {exc}")
+
+    # 2) Legacy single-kundli fallback
+    k = user.kundli
+    if k:
+        name = k.name or user.name or "User"
+        if k.chart_data:
+            try:
+                return _json.loads(k.chart_data), [], name
+            except Exception:
+                pass
+        missing = [f for f, v in [("dob", k.dob), ("tob", k.tob),
+                                  ("lat", k.lat), ("lon", k.lon), ("tz", k.tz)]
+                   if v in (None, "")]
+        if not missing:
+            try:
+                chart = _calc({
+                    "name":   name,
+                    "day":    int(k.dob.split("-")[2]),
+                    "month":  int(k.dob.split("-")[1]),
+                    "year":   int(k.dob.split("-")[0]),
+                    "hour":   int((k.tob or "06:00").split(":")[0]),
+                    "minute": int((k.tob or "06:00").split(":")[1]),
+                    "ampm":   "AM",
+                    "lat":    float(k.lat or 0),
+                    "lon":    float(k.lon or 0),
+                    "tz":     float(k.tz  or 5.5),
+                    "place":  k.pob or "",
+                })
+                return chart, [], name
+            except Exception as exc:
+                print(f"[chart-resolve] legacy kundli calc failed: {exc}")
+        return None, (missing or ["dob", "tob", "pob", "lat", "lon", "tz"]), name
+
+    return None, ["dob", "tob", "pob", "lat", "lon", "tz"], (user.name or "User")
+
+
 @app.route("/api/astrovastu-pro", methods=["POST"])
 def astrovastu_pro_route():
     """
@@ -2893,38 +2982,12 @@ def astrovastu_pro_route():
 
     plan = effective_plan(user)
 
-    # ── Profile completeness (Sprint-2 fix pattern) ──────────────────────
-    k = user.kundli
-    if not k:
-        return jsonify({"error": "profile_incomplete",
-                        "message": "Pehle apni Kundli profile complete karein.",
-                        "missing_fields": ["dob", "tob", "pob", "lat", "lon", "tz"]}), 422
-    chart = None
-    if k.chart_data:
-        try:    chart = json.loads(k.chart_data)
-        except: chart = None
+    # ── Profile completeness (multi-profile primary OR legacy kundli) ────
+    chart, missing, _name = _resolve_user_chart(user)
     if not chart:
-        missing = [f for f, v in [("dob", k.dob), ("tob", k.tob),
-                                  ("lat", k.lat), ("lon", k.lon), ("tz", k.tz)]
-                   if v in (None, "")]
-        if missing:
-            return jsonify({"error": "profile_incomplete",
-                            "missing_fields": missing,
-                            "message": "Pehle apni Kundli profile complete karein."}), 422
-        try:
-            chart = calculate_kundli({
-                "name": k.name or user.name or "User",
-                "day":  int(k.dob.split("-")[2]),
-                "month":int(k.dob.split("-")[1]),
-                "year": int(k.dob.split("-")[0]),
-                "hour": int((k.tob or "06:00").split(":")[0]),
-                "minute": int((k.tob or "06:00").split(":")[1]),
-                "ampm": "AM",
-                "lat": float(k.lat or 0), "lon": float(k.lon or 0),
-                "tz":  float(k.tz or 5.5), "place": k.pob or "",
-            })
-        except Exception as exc:
-            return jsonify({"error": "kundli_unreadable", "message": str(exc)}), 422
+        return jsonify({"error": "profile_incomplete",
+                        "missing_fields": missing,
+                        "message": "Pehle apni Kundli profile complete karein."}), 422
 
     # ── Phase-2 unlock gate (Pro / property unlock / monthly basic quota) ─
     property_name = (data.get("property_name") or "").strip()
@@ -3110,39 +3173,12 @@ def business_vastu_route():
 
     plan = effective_plan(user)
 
-    # ── Owner kundli (same Sprint-2 fix pattern) ─────────────────────────
-    k = user.kundli
-    if not k:
-        return jsonify({"error": "profile_incomplete",
-                        "message": "Pehle apni Kundli profile complete karein.",
-                        "missing_fields": ["dob", "tob", "pob", "lat", "lon", "tz"]}), 422
-    owner_chart = None
-    if k.chart_data:
-        try:    owner_chart = json.loads(k.chart_data)
-        except: owner_chart = None
+    # ── Owner kundli (multi-profile primary OR legacy kundli) ────────────
+    owner_chart, missing, _name = _resolve_user_chart(user)
     if not owner_chart:
-        missing = [f for f, v in [("dob", k.dob), ("tob", k.tob),
-                                  ("lat", k.lat), ("lon", k.lon), ("tz", k.tz)]
-                   if v in (None, "")]
-        if missing:
-            return jsonify({"error": "profile_incomplete",
-                            "missing_fields": missing,
-                            "message": "Pehle apni Kundli profile complete karein."}), 422
-        try:
-            owner_chart = calculate_kundli({
-                "name":  k.name or user.name or "Owner",
-                "day":   int(k.dob.split("-")[2]),
-                "month": int(k.dob.split("-")[1]),
-                "year":  int(k.dob.split("-")[0]),
-                "hour":  int((k.tob or "06:00").split(":")[0]),
-                "minute":int((k.tob or "06:00").split(":")[1]),
-                "ampm":  "AM",
-                "lat":   float(k.lat or 0), "lon": float(k.lon or 0),
-                "tz":    float(k.tz or 5.5), "place": k.pob or "",
-            })
-        except Exception as exc:
-            return jsonify({"error": "kundli_unreadable", "message": str(exc)}), 422
-
+        return jsonify({"error": "profile_incomplete",
+                        "missing_fields": missing,
+                        "message": "Pehle apni Kundli profile complete karein."}), 422
     # ── Optional partner kundlis (max 3, must belong to this user) ──────
     partner_charts = []
     partner_ids = data.get("partners") or []

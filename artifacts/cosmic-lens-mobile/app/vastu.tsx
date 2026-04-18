@@ -2575,7 +2575,7 @@ export default function VastuScreen() {
           <Text style={[s.tabPillText, { color: section === "basic" ? C.accent : C.textMuted, fontWeight: section === "basic" ? "800" : "600" }]}>
             Basic
           </Text>
-          <Text style={[s.tabPillSub, { color: section === "basic" ? C.accent : C.textDim }]}>FREE</Text>
+          <Text style={[s.tabPillSub, { color: section === "basic" ? C.accent : C.textDim }]}>BASIC</Text>
         </Pressable>
         <Pressable
           onPress={() => { Haptics.selectionAsync?.(); setSection("pro"); }}
@@ -2595,6 +2595,26 @@ export default function VastuScreen() {
       >
         {section === "basic" ? (
           <>
+            {/* ── AstroVastu Quick Check (kundli-personalized single-room) ── */}
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/astrovastu-basic" as any); }}
+              style={[s.heroCard, { borderColor: C.accent, backgroundColor: C.isDark ? "#0c1722" : C.bgCard }]}
+            >
+              <View style={[s.heroBadge, { backgroundColor: `${C.accent}22`, borderColor: C.accent }]}>
+                <Text style={{ fontSize: 9, fontWeight: "900", color: C.accent, letterSpacing: 1.4 }}>NEW · BASIC</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Text style={{ fontSize: 30 }}>🔮</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.heroTitle, { color: C.text }]}>AstroVastu Quick Check</Text>
+                  <Text style={[s.heroSub, { color: C.textMuted }]}>
+                    Apni kundli ke hisaab se ek room ka Vastu — instant verdict & remedies
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={C.accent} />
+              </View>
+            </Pressable>
+
             {/* Intro */}
             <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={{ fontSize:24 }}>🏠</Text>
@@ -2777,13 +2797,22 @@ function ProSection({ C }: { C: any }) {
         </View>
       ))}
 
-      {/* CTA buttons */}
+      {/* ── Open AstroVastu Deep Scan (server-side gated for Pro plan) ── */}
       <Pressable
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/subscription" as any); }}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/astrovastu-pro" as any); }}
         style={s.ctaPrimary}
       >
-        <Feather name="zap" size={16} color="#3a2404" />
-        <Text style={s.ctaPrimaryText}>Upgrade to Pro — ₹499/mo</Text>
+        <Feather name="award" size={16} color="#3a2404" />
+        <Text style={s.ctaPrimaryText}>🌟 Open AstroVastu Deep Scan</Text>
+      </Pressable>
+
+      {/* Upgrade fallback (for users without Pro plan) */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/subscription" as any); }}
+        style={[s.ctaSecondary, { borderColor: "#f9d76b66", backgroundColor: "#f9d76b12" }]}
+      >
+        <Feather name="zap" size={15} color="#f9d76b" />
+        <Text style={[s.ctaSecondaryText, { color: "#f9d76b" }]}>Upgrade to Pro — ₹499/mo</Text>
       </Pressable>
 
       <Pressable onPress={openWhatsApp} style={[s.ctaSecondary, { borderColor: C.border, backgroundColor: C.bgCard }]}>
@@ -2812,6 +2841,10 @@ const s = StyleSheet.create({
   sectionLabel:{ fontSize:10, fontWeight:"800", letterSpacing:2.5, marginBottom:2 },
   sectionSub: { fontSize:11, marginBottom:4, marginTop:-6 },
   introCard:  { flexDirection:"row", alignItems:"flex-start", gap:12, borderRadius:14, borderWidth:1, padding:14 },
+  heroCard:   { borderRadius:16, borderWidth:2, padding:14, gap:10, position:"relative" },
+  heroBadge:  { alignSelf:"flex-start", paddingHorizontal:8, paddingVertical:3, borderRadius:6, borderWidth:1 },
+  heroTitle:  { fontSize:15, fontWeight:"800", marginBottom:3 },
+  heroSub:    { fontSize:11, lineHeight:16 },
   introTitle: { fontSize:13, fontWeight:"700", marginBottom:5 },
   introBody:  { fontSize:12, lineHeight:19 },
   genCard:    { borderRadius:14, borderWidth:1, padding:14, gap:10 },

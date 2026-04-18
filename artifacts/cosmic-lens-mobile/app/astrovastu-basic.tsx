@@ -279,7 +279,7 @@ export default function AstroVastuBasicScreen() {
               )}
               {errInfo.upgrade_required && (
                 <Pressable
-                  onPress={() => router.push("/(tabs)/account" as any)}
+                  onPress={() => router.push("/subscription" as any)}
                   style={[styles.upgradeBtn, { backgroundColor: "#F59E0B", marginTop: 10 }]}
                 >
                   <Text style={styles.upgradeText}>

@@ -2628,14 +2628,64 @@ export default function VastuScreen() {
               </View>
             </View>
 
-            {/* ── Vastu Drishti Scan (single-photo Acharya analysis) ── */}
-            <VastuScanCard C={C} />
-
-            {/* ── Deep Scan (Phase 2 — 4-wall guided multi-photo + spatial map) ── */}
-            <VastuDeepScanCard C={C} />
-
-            {/* ── Premium Compass ── */}
+            {/* ── Premium Compass (FREE forever — zero API cost) ── */}
             <VastuCompass />
+
+            {/* ── AstroVastu PRO upgrade CTA (replaces free Vastu Drishti scan) ── */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Unlock AstroVastu PRO for ₹199"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push("/astrovastu-pro");
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.9 : 1, marginTop: 14 }]}
+            >
+              <LinearGradient
+                colors={["#7c3aed", "#a855f7", "#ec4899"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  borderRadius: 16, padding: 16, borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.18)",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <View style={{
+                    width: 36, height: 36, borderRadius: 18,
+                    backgroundColor: "rgba(255,255,255,0.2)",
+                    alignItems: "center", justifyContent: "center",
+                  }}>
+                    <Feather name="zap" size={18} color="#fff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>
+                      AstroVastu PRO — Pura Ghar Scan
+                    </Text>
+                    <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2 }}>
+                      Cosmic Vision + your Kundli + Mahadasha layer
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ color: "rgba(255,255,255,0.95)", fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
+                  Floor-plan upload, room photos with compass, deterministic Vastu Shastra rules
+                  cited from Brihat Samhita / Mayamatam, personalised priority actions for your chart.
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                    <Text style={{ color: "#fff", fontSize: 22, fontWeight: "900" }}>₹199</Text>
+                    <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>one-time</Text>
+                  </View>
+                  <View style={{
+                    backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                    flexDirection: "row", alignItems: "center", gap: 6,
+                  }}>
+                    <Text style={{ color: "#7c3aed", fontWeight: "800", fontSize: 13 }}>Unlock PRO</Text>
+                    <Feather name="arrow-right" size={14} color="#7c3aed" />
+                  </View>
+                </View>
+              </LinearGradient>
+            </Pressable>
 
             {/* Section label */}
             <Text style={[s.sectionLabel, { color: C.accent }]}>ROOM-WISE VASTU GUIDE</Text>

@@ -4017,27 +4017,39 @@ def vastu_scan_route():
             "message": "Vastu Drishti seva abhi temporarily band hai — kuch der baad try karein.",
         }), 503
 
-    # ── Quota gate (same as /api/ask) ────────────────────────────────────────
-    user = None
-    if user_id:
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
-            return jsonify({"error": "Unauthorized"}), 401
+    # ── PRO-tier gate (Cosmic Vision API costs ~₹2-3/scan; PRO+ only) ────────
+    if not user_id:
+        return jsonify({
+            "error":            "login_required",
+            "message":          "AstroVastu PRO unlock karne ke liye login zaroori hai.",
+            "upgrade_required": True,
+        }), 401
 
-        quota = consume_question(user)
-        if not quota["allowed"]:
-            return jsonify({
-                "error":            "daily_limit_reached",
-                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited Vastu scans.",
-                "quota":            {"used": quota["used"], "limit": quota["limit"]},
-                "plan":             effective_plan(user),
-                "upgrade_required": True,
-            }), 402
-    else:
-        quota = {"used": 0, "limit": 1}
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key or user.api_key != api_key:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    plan = effective_plan(user)
+    if plan not in ("pro", "trial"):
+        return jsonify({
+            "error":            "upgrade_required",
+            "message":          "Vastu Drishti scanner sirf AstroVastu PRO members ke liye hai. ₹199 ek baar mein unlock karein.",
+            "plan":             plan,
+            "upgrade_required": True,
+        }), 402
+
+    quota = consume_question(user)
+    if not quota["allowed"]:
+        return jsonify({
+            "error":            "daily_limit_reached",
+            "message":          f"Aaj ka {quota['limit']} scans ka limit poora ho gaya.",
+            "quota":            {"used": quota["used"], "limit": quota["limit"]},
+            "plan":             plan,
+            "upgrade_required": True,
+        }), 402
 
     try:
         result = vastu_scan(image, room, lang, heading_deg=heading_deg)
@@ -4127,11 +4139,12 @@ def vastu_deep_scan_route():
             "message": "Deep Scan seva abhi temporarily band hai — kuch der baad try karein.",
         }), 503
 
-    # ── Quota gate (login required for deep scan) ────────────────────────────
+    # ── PRO-tier gate (Cosmic Vision multi-photo deep scan; PRO+ only) ───────
     if not user_id:
         return jsonify({
-            "error":   "login_required",
-            "message": "Deep Scan ke liye login zaroori hai — yeh advanced multi-photo analysis hai.",
+            "error":            "login_required",
+            "message":          "Deep Scan ke liye login zaroori hai — yeh AstroVastu PRO ka advanced feature hai.",
+            "upgrade_required": True,
         }), 401
 
     user = User.query.get(user_id)
@@ -4141,13 +4154,22 @@ def vastu_deep_scan_route():
     if not api_key or user.api_key != api_key:
         return jsonify({"error": "Unauthorized"}), 401
 
+    plan = effective_plan(user)
+    if plan not in ("pro", "trial"):
+        return jsonify({
+            "error":            "upgrade_required",
+            "message":          "Deep Scan sirf AstroVastu PRO members ke liye hai. ₹199 ek baar mein unlock karein.",
+            "plan":             plan,
+            "upgrade_required": True,
+        }), 402
+
     quota = consume_question(user)
     if not quota["allowed"]:
         return jsonify({
             "error":            "daily_limit_reached",
-            "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited Deep Scans.",
+            "message":          f"Aaj ka {quota['limit']} scans ka limit poora ho gaya.",
             "quota":            {"used": quota["used"], "limit": quota["limit"]},
-            "plan":             effective_plan(user),
+            "plan":             plan,
             "upgrade_required": True,
         }), 402
 

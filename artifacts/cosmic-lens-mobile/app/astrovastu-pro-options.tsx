@@ -11,10 +11,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 export default function AstroVastuProOptions() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -51,13 +53,13 @@ export default function AstroVastuProOptions() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={[s.title, { color: C.text }]}>AstroVastu Pro Premium</Text>
+            <Text style={[s.title, { color: C.text }]}>{t.vt_titleAstroVastuProPremium}</Text>
             <View style={s.premBadge}>
               <Feather name="award" size={9} color="#3a2404" />
-              <Text style={s.premBadgeText}>PREMIUM</Text>
+              <Text style={s.premBadgeText}>{t.vt_tagPremium}</Text>
             </View>
           </View>
-          <Text style={[s.titleSub, { color: C.textMuted }]}>Home ya Business — kya scan karna hai?</Text>
+          <Text style={[s.titleSub, { color: C.textMuted }]}>{t.vt_subHomeOrBusiness}</Text>
         </View>
       </View>
 
@@ -74,30 +76,30 @@ export default function AstroVastuProOptions() {
             style={StyleSheet.absoluteFill}
           />
           <View style={[s.tag, { backgroundColor: "#a78bfa22", borderColor: "#a78bfa" }]}>
-            <Text style={[s.tagText, { color: "#a78bfa" }]}>FOR HOME / RESIDENCE</Text>
+            <Text style={[s.tagText, { color: "#a78bfa" }]}>{t.vt_tagForHome}</Text>
           </View>
 
           <View style={s.cardHeader}>
             <Text style={s.emoji}>🏠</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: C.text }]}>Home Vastu Advanced</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>{t.vt_titleHomeVastu}</Text>
               <Text style={[s.cardTagline, { color: C.textMuted }]}>
-                Kundli + multi-floor + family member match
+                {t.vt_subAdvancedAnalysis}
               </Text>
             </View>
           </View>
 
           <View style={s.bullets}>
-            <Bullet color="#a78bfa" C={C} text="Single room (Quick Check) — ₹199" />
-            <Bullet color="#a78bfa" C={C} text="3-room bundle (Spot Check) — ₹499" />
-            <Bullet color="#a78bfa" C={C} text="Full Home Advanced — ₹2,999 lifetime per property" />
-            <Bullet color="#a78bfa" C={C} text="Mahadasha + Antardasha conflict alerts" />
-            <Bullet color="#a78bfa" C={C} text="Family kundlis (up to 5) cross-match" />
-            <Bullet color="#a78bfa" C={C} text="PDF download + history + WhatsApp share" />
+            <Bullet color="#a78bfa" C={C} text={t.vt_priceSingleRoom} />
+            <Bullet color="#a78bfa" C={C} text={t.vt_priceThreeBundle} />
+            <Bullet color="#a78bfa" C={C} text={t.vt_priceFullHome} />
+            <Bullet color="#a78bfa" C={C} text={t.vt_priceMahadashaConflict} />
+            <Bullet color="#a78bfa" C={C} text={t.vt_priceFamilyMatch} />
+            <Bullet color="#a78bfa" C={C} text={t.vt_pricePdfShare} />
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: "#a78bfa22" }]}>
-            <Text style={[s.ctaText, { color: "#a78bfa" }]}>Open Home Vastu</Text>
+            <Text style={[s.ctaText, { color: "#a78bfa" }]}>{t.vt_ctaOpenHomeVastu}</Text>
             <Feather name="arrow-right" size={16} color="#a78bfa" />
           </View>
         </Pressable>
@@ -111,29 +113,29 @@ export default function AstroVastuProOptions() {
             style={StyleSheet.absoluteFill}
           />
           <View style={[s.tag, { backgroundColor: "#06b6d422", borderColor: "#06b6d4" }]}>
-            <Text style={[s.tagText, { color: "#06b6d4" }]}>FOR BUSINESS / COMMERCIAL</Text>
+            <Text style={[s.tagText, { color: "#06b6d4" }]}>{t.vt_tagForBusiness}</Text>
           </View>
 
           <View style={s.cardHeader}>
             <Text style={s.emoji}>🏢</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: C.text }]}>Business Vastu</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>{t.vt_titleBusinessVastu}</Text>
               <Text style={[s.cardTagline, { color: C.textMuted }]}>
-                Shop, Office, Factory — owner kundli driven
+                {t.vt_subKundliPersonalized}
               </Text>
             </View>
           </View>
 
           <View style={s.bullets}>
-            <Bullet color="#06b6d4" C={C} text="🏪 Shop Vastu — ₹999 (cash counter, entrance, owner seat)" />
-            <Bullet color="#06b6d4" C={C} text="🏢 Office Vastu — ₹1,499 (CEO cabin, conference, locker)" />
-            <Bullet color="#06b6d4" C={C} text="🏭 Factory Vastu — ₹2,999 (machinery, raw material, boiler)" />
-            <Bullet color="#06b6d4" C={C} text="Owner kundli + up to 3 partners ka analysis" />
-            <Bullet color="#06b6d4" C={C} text="Business start muhurat chart consideration" />
+            <Bullet color="#06b6d4" C={C} text={t.vt_priceBusinessShop} />
+            <Bullet color="#06b6d4" C={C} text={t.vt_priceBusinessOffice} />
+            <Bullet color="#06b6d4" C={C} text={t.vt_priceBusinessFactory} />
+            <Bullet color="#06b6d4" C={C} text={t.vt_priceOwnerKundli} />
+            <Bullet color="#06b6d4" C={C} text={t.vt_priceMuhurat} />
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: "#06b6d422" }]}>
-            <Text style={[s.ctaText, { color: "#06b6d4" }]}>Open Business Vastu</Text>
+            <Text style={[s.ctaText, { color: "#06b6d4" }]}>{t.vt_ctaOpenBusinessVastu}</Text>
             <Feather name="arrow-right" size={16} color="#06b6d4" />
           </View>
         </Pressable>
@@ -154,9 +156,9 @@ export default function AstroVastuProOptions() {
             <Feather name="folder" size={18} color="#f6c453" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[s.reportsTitle, { color: C.text }]}>My Reports</Text>
+            <Text style={[s.reportsTitle, { color: C.text }]}>{t.vt_titleMyReports}</Text>
             <Text style={[s.reportsSub, { color: C.textMuted }]}>
-              View &amp; share all your past PDF scans
+              {t.vt_reportsSub}
             </Text>
           </View>
           <Feather name="chevron-right" size={18} color={C.textMuted} />
@@ -166,13 +168,13 @@ export default function AstroVastuProOptions() {
         <View style={[s.noteCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="zap" size={14} color="#f59e0b" />
           <Text style={[s.noteText, { color: C.textMuted }]}>
-            <Text style={{ fontWeight: "800", color: "#f59e0b" }}>General Pro subscribers</Text> get{" "}
-            <Text style={{ fontWeight: "800", color: C.text }}>20% off</Text> on all AstroVastu purchases above.
+            <Text style={{ fontWeight: "800", color: "#f59e0b" }}>{t.vt_discountProSubs}</Text>{" "}
+            <Text style={{ fontWeight: "800", color: C.text }}>{t.vt_discountAmount}</Text> {t.vt_discountSuffix}
           </Text>
         </View>
 
         <Text style={[s.branding, { color: C.textDim }]}>
-          Powered by Advanced Cosmic Intelligence
+          {t.vt_appBranding}
         </Text>
       </ScrollView>
     </View>

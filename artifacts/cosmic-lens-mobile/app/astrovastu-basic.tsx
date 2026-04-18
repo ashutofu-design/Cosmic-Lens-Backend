@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
 
@@ -100,7 +101,8 @@ type ErrorResponse = {
 export default function AstroVastuBasicScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
-  const { user } = useUser();
+  const { user, language } = useUser();
+  const t = useT();
 
   const [room, setRoom]               = useState<string>("bedroom");
   const [direction, setDirection]     = useState<string>("North-East");
@@ -111,7 +113,7 @@ export default function AstroVastuBasicScreen() {
 
   const onSubmit = useCallback(async () => {
     if (!user?.id || !user?.api_key) {
-      setErrInfo({ error: "auth_required", message: "Login zaroori hai." });
+      setErrInfo({ error: "auth_required", message: t.vt_alertLoginRequiredBody });
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -125,7 +127,7 @@ export default function AstroVastuBasicScreen() {
           "Content-Type": "application/json",
           "X-API-Key":    user.api_key,
         },
-        body: JSON.stringify({ user_id: user.id, room_type: room, direction }),
+        body: JSON.stringify({ user_id: user.id, room_type: room, direction, lang: language || "en" }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -139,7 +141,7 @@ export default function AstroVastuBasicScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e: any) {
-      setErrInfo({ error: "network_error", message: e?.message || "Network error" });
+      setErrInfo({ error: "network_error", message: e?.message || t.vt_alertNetworkErrorTitle });
     } finally {
       setLoading(false);
     }
@@ -161,7 +163,7 @@ export default function AstroVastuBasicScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Feather name="chevron-left" size={26} color={C.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>Personalized Quick Check</Text>
+        <Text style={[styles.headerTitle, { color: C.text }]}>{t.vt_titleQuickCheck}</Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -175,16 +177,15 @@ export default function AstroVastuBasicScreen() {
         {/* ── Intro card ─────────────────────────────────────────────── */}
         <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[styles.cardTitle, { color: C.text }]}>
-            🪐  Kundli + Vastu = Personalized
+            {t.vt_introKundliPersonalized}
           </Text>
           <Text style={[styles.bodyText, { color: C.textMid }]}>
-            Aapki Lagna, Mahadasha, aur special yogas ke aadhaar par room placement
-            ka deterministic verdict — classical sources ke saath.
+            {t.vt_introQuickCheckBody}
           </Text>
         </View>
 
         {/* ── Room picker ──────────────────────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: C.text }]}>1.  Kamra chunein</Text>
+        <Text style={[styles.sectionTitle, { color: C.text }]}>{t.vt_sectionPickKamra}</Text>
         <View style={styles.grid}>
           {ROOMS.map(r => {
             const sel = r.key === room;
@@ -214,7 +215,7 @@ export default function AstroVastuBasicScreen() {
 
         {/* ── Direction wheel ──────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 18 }]}>
-          2.  Disha chunein
+          {t.vt_sectionPickDisha}
         </Text>
         <View style={styles.dirGrid}>
           {DIRECTIONS.map(d => {
@@ -252,7 +253,7 @@ export default function AstroVastuBasicScreen() {
         >
           {loading
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.submitText}>Check Karein  ✨</Text>}
+            : <Text style={styles.submitText}>{t.vt_ctaCheckKarein}</Text>}
         </Pressable>
 
         {/* ── Error / upsell banner ─────────────────────────────── */}
@@ -270,7 +271,7 @@ export default function AstroVastuBasicScreen() {
             />
             <View style={{ flex: 1 }}>
               <Text style={[styles.errTitle, { color: C.text }]}>
-                {errInfo.upgrade_required ? "Daily limit poora" : "Issue"}
+                {errInfo.upgrade_required ? t.vt_alertDailyLimitFull : t.vt_alertIssue}
               </Text>
               <Text style={[styles.errBody, { color: C.textMid }]}>
                 {errInfo.message || errInfo.error}
@@ -280,7 +281,7 @@ export default function AstroVastuBasicScreen() {
                   onPress={() => router.push("/profile-edit" as any)}
                   style={[styles.upgradeBtn, { backgroundColor: C.accent, marginTop: 10 }]}
                 >
-                  <Text style={styles.upgradeText}>Profile Complete Karein</Text>
+                  <Text style={styles.upgradeText}>{t.vt_ctaProfileComplete}</Text>
                 </Pressable>
               )}
               {errInfo.upgrade_required && (
@@ -289,7 +290,7 @@ export default function AstroVastuBasicScreen() {
                   style={[styles.upgradeBtn, { backgroundColor: "#F59E0B", marginTop: 10 }]}
                 >
                   <Text style={styles.upgradeText}>
-                    Upgrade — Basic ₹199 / Pro ₹499
+                    {t.vt_ctaUpgrade}
                   </Text>
                 </Pressable>
               )}
@@ -312,7 +313,7 @@ export default function AstroVastuBasicScreen() {
 
             {/* Severity meter */}
             <View style={styles.sevRow}>
-              <Text style={[styles.metaLabel, { color: C.textMid }]}>Severity:</Text>
+              <Text style={[styles.metaLabel, { color: C.textMid }]}>{t.vt_severity}</Text>
               <Text style={[styles.metaValue, { color: C.text }]}>
                 {result.severity.label.en} ({result.severity.label.hi}) ·  ×{result.severity.multiplier.toFixed(1)}
               </Text>
@@ -320,7 +321,7 @@ export default function AstroVastuBasicScreen() {
 
             {/* Personalization reason */}
             <View style={[styles.section, { borderTopColor: C.border }]}>
-              <Text style={[styles.sectionLabel, { color: tone.fg }]}>Why this verdict?</Text>
+              <Text style={[styles.sectionLabel, { color: tone.fg }]}>{t.vt_sectionWhyVerdict}</Text>
               <Text style={[styles.bodyText, { color: C.text, marginTop: 4 }]}>
                 {result.personalization_reason.hi}
               </Text>
@@ -333,7 +334,7 @@ export default function AstroVastuBasicScreen() {
             {result.remedies.length > 0 && (
               <View style={[styles.section, { borderTopColor: C.border }]}>
                 <Text style={[styles.sectionLabel, { color: tone.fg }]}>
-                  Upaay ({result.remedies.length})
+                  {t.vt_sectionRemedies} ({result.remedies.length})
                 </Text>
                 {result.remedies.map((r, idx) => (
                   <View key={`${r.action}-${idx}`} style={[styles.remedyItem, { borderColor: C.border }]}>
@@ -356,7 +357,7 @@ export default function AstroVastuBasicScreen() {
             {result.classical_refs.length > 0 && (
               <View style={[styles.section, { borderTopColor: C.border }]}>
                 <Text style={[styles.sectionLabel, { color: tone.fg }]}>
-                  Shastra Pramaan
+                  {t.vt_sectionShastraPramaan}
                 </Text>
                 {result.classical_refs.map((ref, i) => (
                   <Text key={i} style={[styles.refText, { color: C.textMid, marginTop: 4 }]}>
@@ -369,8 +370,8 @@ export default function AstroVastuBasicScreen() {
             {/* Quota footer */}
             <View style={[styles.section, { borderTopColor: C.border }]}>
               <Text style={[styles.bodyTextSmall, { color: C.textMid }]}>
-                Aaj: {result.quota.used} / {result.quota.limit === -1 ? "Unlimited" : result.quota.limit}
-                {"  ·  "}Plan: {result.plan.toUpperCase()}
+                {t.vt_quotaTodayPrefix} {result.quota.used} / {result.quota.limit === -1 ? t.vt_quotaUnlimited : result.quota.limit}
+                {"  ·  "}{t.vt_planLabel} {result.plan.toUpperCase()}
               </Text>
             </View>
           </View>
@@ -378,7 +379,7 @@ export default function AstroVastuBasicScreen() {
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
-          ✨  Powered by Advanced Cosmic Intelligence
+          ✨  {t.vt_appBranding}
         </Text>
         <Text style={[styles.brandingFooterSmall, { color: C.textMid }]}>
           Cosmic AstroVastu Drishti Engine v1.0

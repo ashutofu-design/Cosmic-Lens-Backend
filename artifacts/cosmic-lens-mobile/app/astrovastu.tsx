@@ -11,10 +11,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 export default function AstroVastuChooser() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -45,8 +47,8 @@ export default function AstroVastuChooser() {
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.title, { color: C.text }]}>AstroVastu</Text>
-          <Text style={[s.titleSub, { color: C.textMuted }]}>Choose your Vastu journey</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.vt_titleAstroVastu}</Text>
+          <Text style={[s.titleSub, { color: C.textMuted }]}>{t.vt_subChooseJourney}</Text>
         </View>
       </View>
 
@@ -55,9 +57,9 @@ export default function AstroVastuChooser() {
         showsVerticalScrollIndicator={false}
       >
         {/* Intro */}
-        <Text style={[s.heading, { color: C.text }]}>Aap kaunsa Vastu chahte hain?</Text>
+        <Text style={[s.heading, { color: C.text }]}>{t.vt_subAskWhich}</Text>
         <Text style={[s.subHeading, { color: C.textMuted }]}>
-          Free se shuruaat karein ya kundli-personalized Premium analysis lein
+          {t.vt_subKundliPersonalized}
         </Text>
 
         {/* ── LEFT: AstroVastu (FREE) ── */}
@@ -66,26 +68,26 @@ export default function AstroVastuChooser() {
           style={[s.card, { borderColor: C.accent, backgroundColor: C.isDark ? "#0c1722" : C.bgCard }]}
         >
           <View style={[s.tag, { backgroundColor: `${C.accent}22`, borderColor: C.accent }]}>
-            <Text style={[s.tagText, { color: C.accent }]}>FREE · ALWAYS</Text>
+            <Text style={[s.tagText, { color: C.accent }]}>{t.vt_tagFreeAlways}</Text>
           </View>
 
           <View style={s.cardHeader}>
             <Text style={s.emoji}>🧭</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: C.text }]}>AstroVastu</Text>
-              <Text style={[s.cardTagline, { color: C.textMuted }]}>Compass + basic Vastu guide</Text>
+              <Text style={[s.cardTitle, { color: C.text }]}>{t.vt_titleAstroVastu}</Text>
+              <Text style={[s.cardTagline, { color: C.textMuted }]}>{t.vt_subBasicGuide}</Text>
             </View>
           </View>
 
           <View style={s.bullets}>
-            <Bullet C={C} text="Real magnetometer compass — direction find karein" />
-            <Bullet C={C} text="Room-wise guide: kitchen, bedroom, pooja kahan hona chahiye" />
-            <Bullet C={C} text="General do's & don'ts per direction" />
-            <Bullet C={C} text="8 directions ka deity, element & meaning" />
+            <Bullet C={C} text={t.vt_bulFreeMagnetometer} />
+            <Bullet C={C} text={t.vt_bulFreeRoomGuide} />
+            <Bullet C={C} text={t.vt_bulFreeDosDonts} />
+            <Bullet C={C} text={t.vt_bulFree8Directions} />
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: `${C.accent}15` }]}>
-            <Text style={[s.ctaText, { color: C.accent }]}>Open Free Vastu</Text>
+            <Text style={[s.ctaText, { color: C.accent }]}>{t.vt_ctaOpenFreeVastu}</Text>
             <Feather name="arrow-right" size={16} color={C.accent} />
           </View>
         </Pressable>
@@ -102,36 +104,36 @@ export default function AstroVastuChooser() {
 
           <View style={[s.tag, { backgroundColor: "#f9d76b", borderColor: "#f9d76b" }]}>
             <Feather name="award" size={9} color="#3a2404" />
-            <Text style={[s.tagText, { color: "#3a2404", marginLeft: 4 }]}>PRO PREMIUM</Text>
+            <Text style={[s.tagText, { color: "#3a2404", marginLeft: 4 }]}>{t.vt_tagProPremium}</Text>
           </View>
 
           <View style={s.cardHeader}>
             <Text style={s.emoji}>🌟</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: "#fef3c7" }]}>AstroVastu Pro Premium</Text>
+              <Text style={[s.cardTitle, { color: "#fef3c7" }]}>{t.vt_titleAstroVastuProPremium}</Text>
               <Text style={[s.cardTagline, { color: "#f9d76bcc" }]}>
-                Kundli-personalized Vastu — Home & Business
+                {t.vt_subKundliPersonalized}
               </Text>
             </View>
           </View>
 
           <View style={s.bullets}>
-            <BulletGold text="Single room quick check — ₹199" />
-            <BulletGold text="3-room bundle — ₹499" />
-            <BulletGold text="Full Home Advanced (lifetime) — ₹2,999" />
-            <BulletGold text="Business: Shop / Office / Factory — ₹999 onwards" />
-            <BulletGold text="Mahadasha-mandatory analysis + classical refs + PDF" />
+            <BulletGold text={t.vt_priceSingleRoom} />
+            <BulletGold text={t.vt_priceThreeBundle} />
+            <BulletGold text={t.vt_priceFullHome} />
+            <BulletGold text={t.vt_priceBusinessShop} />
+            <BulletGold text={t.vt_priceMahadashaConflict} />
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: "#f9d76b22" }]}>
-            <Text style={[s.ctaText, { color: "#f9d76b" }]}>View Premium Options</Text>
+            <Text style={[s.ctaText, { color: "#f9d76b" }]}>{t.vt_ctaViewPremiumOptions}</Text>
             <Feather name="arrow-right" size={16} color="#f9d76b" />
           </View>
         </Pressable>
 
         {/* Branding */}
         <Text style={[s.branding, { color: C.textDim }]}>
-          Powered by Advanced Cosmic Intelligence
+          {t.vt_appBranding}
         </Text>
       </ScrollView>
     </View>

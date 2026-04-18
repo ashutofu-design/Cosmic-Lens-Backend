@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
 Wrapper around `expo start --go` that auto-answers the
-"Log in / Proceed anonymously" prompt by sending DOWN+ENTER
-the first time it appears. Required because the prompt has no
-non-interactive bypass flag.
+"Log in / Proceed anonymously" prompt EVERY TIME it appears.
+Expo CLI re-prompts on every device connect, so we cannot
+just answer once.
 """
 import os
 import pty
 import sys
 import select
 import errno
+import time
 
 PORT = os.environ.get("PORT", "18987")
 CMD = [
@@ -17,43 +18,46 @@ CMD = [
     f"pnpm exec expo start --go --lan --port {PORT} --clear",
 ]
 
-answered = False
+PROMPT_MARKER = b"Use arrow-keys"
 
 
 def main() -> int:
-    global answered
     pid, fd = pty.fork()
     if pid == 0:
         os.execvp(CMD[0], CMD)
         os._exit(127)
 
     buf = b""
+    last_answer_at = 0.0
     try:
         while True:
             try:
                 r, _, _ = select.select([fd], [], [], 1.0)
             except (InterruptedError, OSError):
                 continue
-            if fd in r:
-                try:
-                    chunk = os.read(fd, 4096)
-                except OSError as e:
-                    if e.errno == errno.EIO:
-                        break
-                    raise
-                if not chunk:
+            if fd not in r:
+                continue
+            try:
+                chunk = os.read(fd, 4096)
+            except OSError as e:
+                if e.errno == errno.EIO:
                     break
-                sys.stdout.buffer.write(chunk)
-                sys.stdout.buffer.flush()
-                buf += chunk
-                if not answered and b"Proceed anonymously" in buf:
-                    # DOWN arrow then ENTER → selects "Proceed anonymously"
-                    os.write(fd, b"\x1b[B\r")
-                    answered = True
-                    buf = b""
-                # keep buffer bounded
-                if len(buf) > 16384:
-                    buf = buf[-4096:]
+                raise
+            if not chunk:
+                break
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+            buf += chunk
+            now = time.time()
+            # Re-answer every time the prompt re-appears, but rate-limit
+            # to once per 1.5s to avoid spamming during prompt re-renders.
+            if PROMPT_MARKER in buf and (now - last_answer_at) > 1.5:
+                # DOWN arrow then ENTER → "Proceed anonymously"
+                os.write(fd, b"\x1b[B\r")
+                last_answer_at = now
+                buf = b""
+            if len(buf) > 16384:
+                buf = buf[-4096:]
     finally:
         try:
             _, status = os.waitpid(pid, 0)

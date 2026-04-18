@@ -63,7 +63,7 @@
         "projectId": "1d64e5c6-e079-4d42-909c-de8484fe015d"
       }
     },
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": { "policy": "sdkVersion" },
     "owner": "satyayatra"
   }
 }

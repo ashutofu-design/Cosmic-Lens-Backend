@@ -1119,17 +1119,17 @@ function VastuScanCard({ C }: { C: any }) {
 
       <View style={vs.headerRow}>
         <View style={vs.iconBox}>
-          <Text style={{ fontSize: 22 }}>📸</Text>
+          <Text style={{ fontSize: 22 }}>📡</Text>
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={[vs.title, { color: C.text }]}>Vastu Drishti Scan</Text>
+            <Text style={[vs.title, { color: C.text }]}>Vastu Drishti Scanner</Text>
             <View style={vs.newBadge}>
               <Text style={vs.newBadgeText}>NEW</Text>
             </View>
           </View>
           <Text style={[vs.sub, { color: C.textMuted }]}>
-            Apne ghar ka photo bhejiye — Acharya ji Vastu dekh ke margdarshan denge
+            Room ka photo upload karein — advanced spatial-energy scan + dosh detection + remedies
           </Text>
         </View>
       </View>
@@ -1188,34 +1188,39 @@ function VastuScanCard({ C }: { C: any }) {
             {scanning ? (
               <>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={vs.scanBtnText}>Acharya ji photo dekh rahe hain...</Text>
+                <Text style={vs.scanBtnText}>Scanning spatial energy field...</Text>
               </>
             ) : (
               <>
                 <Feather name="zap" size={16} color="#fff" />
-                <Text style={vs.scanBtnText}>Vastu Drishti Activate Karein</Text>
+                <Text style={vs.scanBtnText}>Initiate Vastu Drishti Scan</Text>
               </>
             )}
           </LinearGradient>
         </Pressable>
       )}
 
-      {/* Result */}
+      {/* Result — scanner readout style */}
       {result && (
         <View style={[vs.resultCard, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55" }]}>
           <View style={vs.resultHeader}>
             <View style={vs.resultAvatar}>
-              <Text style={{ fontSize: 16 }}>🧙</Text>
+              <Feather name="zap" size={14} color="#a78bfa" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[vs.resultName, { color: C.text }]}>Acharya Vidyasagar</Text>
-              <Text style={[vs.resultSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
+              <Text style={[vs.resultName, { color: C.text }]}>COSMIC VASTU DRISHTI</Text>
+              <Text style={[vs.resultSub, { color: C.textMuted }]}>Spatial-Energy Scan Report · v2.4</Text>
+            </View>
+            <View style={vs.statusDot}>
+              <View style={vs.statusDotInner} />
+              <Text style={vs.statusText}>LIVE</Text>
             </View>
           </View>
+          <View style={vs.divider} />
           <Text style={[vs.resultText, { color: C.textMid }]}>{result}</Text>
           <Pressable onPress={reset} style={[vs.againBtn, { borderColor: "#a78bfa55" }]}>
             <Feather name="refresh-ccw" size={13} color="#a78bfa" />
-            <Text style={[vs.againText, { color: "#a78bfa" }]}>Doosri photo scan karein</Text>
+            <Text style={[vs.againText, { color: "#a78bfa" }]}>Run new scan</Text>
           </Pressable>
         </View>
       )}
@@ -1308,9 +1313,19 @@ const vs = StyleSheet.create({
     backgroundColor: "#a78bfa20", borderWidth: 1, borderColor: "#a78bfa55",
     alignItems: "center", justifyContent: "center",
   },
-  resultName: { fontSize: 13, fontWeight: "800" },
-  resultSub:  { fontSize: 9, marginTop: 1 },
-  resultText: { fontSize: 13, lineHeight: 21 },
+  resultName: { fontSize: 12, fontWeight: "900", letterSpacing: 1.2 },
+  resultSub:  { fontSize: 9, marginTop: 1, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  resultText: { fontSize: 13, lineHeight: 21, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  statusDot: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "#10b98120",
+    borderWidth: 1, borderColor: "#10b98166",
+  },
+  statusDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#10b981" },
+  statusText: { fontSize: 9, fontWeight: "900", color: "#10b981", letterSpacing: 1 },
+  divider: { height: 1, backgroundColor: "#a78bfa30", marginVertical: 2 },
   againBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
     paddingVertical: 9, borderRadius: 10, borderWidth: 1, marginTop: 4,

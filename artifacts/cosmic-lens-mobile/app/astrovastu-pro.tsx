@@ -14,6 +14,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -237,11 +238,14 @@ export default function AstroVastuProScreen() {
           const openPdf = async () => {
             try {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              const ok = await Linking.canOpenURL(pdfFullUrl);
-              if (!ok) throw new Error("Cannot open URL");
-              await Linking.openURL(pdfFullUrl);
+              await WebBrowser.openBrowserAsync(pdfFullUrl, {
+                presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                showTitle: true,
+                enableBarCollapsing: true,
+              });
             } catch (e: any) {
-              Alert.alert("Open PDF", "Could not open the PDF viewer.\n\n" + String(e?.message || e));
+              try { await Linking.openURL(pdfFullUrl); }
+              catch { Alert.alert("Open PDF", "Could not open the PDF.\n\n" + String(e?.message || e)); }
             }
           };
           return (

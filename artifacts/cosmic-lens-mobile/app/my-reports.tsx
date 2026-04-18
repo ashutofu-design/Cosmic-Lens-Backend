@@ -9,6 +9,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -106,11 +107,14 @@ export default function MyReportsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const url = `${API_BASE}${it.pdf_url}?t=${encodeURIComponent(it.pdf_token)}`;
     try {
-      const ok = await Linking.canOpenURL(url);
-      if (!ok) throw new Error("cannot open");
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert("Cannot open PDF", "Please install a PDF viewer or browser to open the report.");
+      await WebBrowser.openBrowserAsync(url, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        showTitle: true,
+        enableBarCollapsing: true,
+      });
+    } catch (e: any) {
+      try { await Linking.openURL(url); }
+      catch { Alert.alert("Cannot open PDF", "Could not open the report.\n\n" + String(e?.message || e)); }
     }
   };
 

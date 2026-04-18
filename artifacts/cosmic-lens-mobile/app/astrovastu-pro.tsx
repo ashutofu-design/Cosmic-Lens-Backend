@@ -32,8 +32,21 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
+import { RoomPhoto, RoomPhotoCapture, RoomChoice } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
+import type { NorthAt } from "@/components/SmartScanUpload";
+
+// Default room list for PRO (full-house residential) — used by RoomPhotoCapture
+// since the PRO flow doesn't ask the user to list rooms upfront (vision detects).
+const PRO_DEFAULT_ROOMS: RoomChoice[] = [
+  { key: "bedroom",   label: "Bedroom"      },
+  { key: "kitchen",   label: "Kitchen"      },
+  { key: "pooja",     label: "Pooja Room"   },
+  { key: "living",    label: "Living Room"  },
+  { key: "bathroom",  label: "Bathroom"     },
+  { key: "entrance",  label: "Entrance"     },
+];
 
 // ─────────────────────────────────────────────────────────────────────────
 const VERDICT_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
@@ -87,9 +100,11 @@ export default function AstroVastuProScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useUser();
 
-  const [loading, setLoading] = useState(false);
-  const [result,  setResult]  = useState<ProResponse | null>(null);
-  const [error,   setError]   = useState<ErrorPayload | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [result,     setResult]     = useState<ProResponse | null>(null);
+  const [error,      setError]      = useState<ErrorPayload | null>(null);
+  const [northAt,    setNorthAt]    = useState<NorthAt>("top");
+  const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
 
   // ── Shared submit helper ──────────────────────────────────────────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
@@ -127,20 +142,27 @@ export default function AstroVastuProScreen() {
       floor_plan_upload: {
         type:     "image",
         data_url: capture.data_url,
+        north_at: northAt,
         ...(typeof capture.heading_deg === "number"
           ? { heading_deg: capture.heading_deg }
           : {}),
       },
+      ...(roomPhotos.length > 0 ? { room_photos: roomPhotos } : {}),
     });
-  }, [runScan]);
+  }, [runScan, northAt, roomPhotos]);
 
   // ── Gallery / PDF upload: file + user-tagged room/direction (ground truth) ─
   const onGallerySubmit = useCallback((g: GalleryScanResult) => {
     runScan({
       floor_plan: [{ room_type: g.room_type, direction: g.direction }],
-      floor_plan_upload: { type: g.kind, data_url: g.data_url },
+      floor_plan_upload: {
+        type:     g.kind,
+        data_url: g.data_url,
+        north_at: northAt,
+      },
+      ...(roomPhotos.length > 0 ? { room_photos: roomPhotos } : {}),
     });
-  }, [runScan]);
+  }, [runScan, northAt, roomPhotos]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -191,6 +213,51 @@ export default function AstroVastuProScreen() {
         <GalleryScanUpload
           onSubmit={onGallerySubmit}
           loading={loading}
+        />
+
+        {/* ── North-at calibration (applies to camera + gallery upload) ── */}
+        <View style={[styles.northCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <Feather name="compass" size={14} color={C.accent} />
+            <Text style={[styles.northTitle, { color: C.text }]}>
+              Where is North on your floor plan?
+            </Text>
+          </View>
+          <Text style={[styles.northSub, { color: C.textMid }]}>
+            Look for a North arrow (N↑) on your plan. If unsure, leave it on Top.
+          </Text>
+          <View style={styles.northRow}>
+            {(["top","right","bottom","left"] as const).map((opt) => {
+              const sel = northAt === opt;
+              return (
+                <Pressable
+                  key={opt}
+                  onPress={() => setNorthAt(opt)}
+                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.northBtn,
+                    {
+                      borderColor: sel ? C.accent : C.border,
+                      backgroundColor: sel ? C.accentBg : "transparent",
+                      opacity: loading ? 0.5 : pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: sel ? C.accent : C.text, fontWeight: "700", fontSize: 12 }}>
+                    {opt[0].toUpperCase() + opt.slice(1)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── Optional: per-room photos with live magnetometer compass ── */}
+        <RoomPhotoCapture
+          rooms={PRO_DEFAULT_ROOMS}
+          photos={roomPhotos}
+          onChange={setRoomPhotos}
+          disabled={loading}
         />
 
         {/* ── Error / paywall card ─────────────────────────────────── */}
@@ -494,4 +561,10 @@ const styles = StyleSheet.create({
   orRow:    { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 16 },
   orLine:   { flex: 1, height: 1 },
   orText:   { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
+
+  northCard:  { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 14, marginBottom: 14 },
+  northTitle: { fontSize: 13, fontWeight: "700" },
+  northSub:   { fontSize: 11, lineHeight: 15, marginTop: 2, marginBottom: 8 },
+  northRow:   { flexDirection: "row", gap: 6 },
+  northBtn:   { flex: 1, paddingVertical: 9, borderRadius: 8, borderWidth: 1, alignItems: "center" },
 });

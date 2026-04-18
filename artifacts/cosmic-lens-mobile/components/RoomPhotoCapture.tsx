@@ -1,26 +1,25 @@
 /**
- * RoomPhotoCapture — Phase 7 magnetometer-aware room photo upload.
+ * RoomPhotoCapture — Phase 7 magnetometer-aware room photo capture.
  *
  * Flow per photo:
- *   1. User picks a room (from rooms they already listed).
- *   2. Live compass heading is shown (real magnetometer).
- *   3. User points phone at the wall they want to photograph and taps
- *      "Capture with Compass". We snapshot the current heading_deg and
- *      immediately launch the camera. The heading recorded is the
- *      pre-capture aim (most accurate ground truth available without a
- *      custom camera UI overlay).
- *   4. Photo is converted to data URL + heading is attached. Stored in
- *      parent's state as { room_type, image_data_url, heading_deg }.
+ *   1. User taps a room (from rooms they already listed).
+ *   2. A live in-app camera modal opens with a compass overlay below the preview.
+ *   3. User aims the phone at the wall to scan and taps the big shutter button.
+ *      The current magnetometer heading is snapshotted at the same instant.
+ *   4. Photo is converted to a data URL and stored in the parent's state as
+ *      { room_type, image_data_url, heading_deg }.
  *
- * Branding: surfaces "Cosmic Vision Engine" — never mentions AI/LLM/GPT.
+ * Branding: surfaces "Cosmic Vision" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
+import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
 import { Magnetometer } from "expo-sensors";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Dimensions,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -76,9 +75,12 @@ export function RoomPhotoCapture({
   rooms, photos, onChange, disabled, maxPhotos = 6,
 }: Props) {
   const C = useC();
+  const cameraRef = useRef<CameraView | null>(null);
+  const [perm, requestPerm] = useCameraPermissions();
   const [heading, setHeading] = useState<number | null>(null);
   const [busy,    setBusy]    = useState(false);
-  const [picked,  setPicked]  = useState<string | null>(null);
+  const [picked,  setPicked]  = useState<string | null>(null);   // room being captured
+  const [facing,  setFacing]  = useState<CameraType>("back");
 
   // ── Magnetometer subscription (native only) ────────────────────────────
   useEffect(() => {
@@ -104,35 +106,47 @@ export function RoomPhotoCapture({
 
   const canAdd = photos.length < maxPhotos;
 
-  // ── Pick room then capture ─────────────────────────────────────────────
-  const onCapture = useCallback(async (roomKey: string) => {
+  // ── Open camera modal for a given room ─────────────────────────────────
+  const openCameraFor = useCallback(async (roomKey: string) => {
     if (disabled || busy || !canAdd) return;
     Haptics.selectionAsync();
-    setBusy(true);
-    // Snapshot heading at this exact instant — last live magnetometer reading.
-    const headingAtCapture = heading;
-
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (perm.status !== "granted") {
+    if (Platform.OS === "web") {
+      Alert.alert("Camera not available", "Please open this on your phone to capture room photos.");
+      return;
+    }
+    if (!perm?.granted) {
+      const r = await requestPerm();
+      if (!r.granted) {
         Alert.alert(
           "Camera permission needed",
-          "Please allow camera access to capture a room photo for Cosmic Vision.",
+          "Please allow camera access in settings to capture room photos with the compass.",
         );
         return;
       }
-      const r = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality:    0.7,
-        base64:     true,
-        exif:       false,
+    }
+    setPicked(roomKey);
+  }, [busy, canAdd, disabled, perm, requestPerm]);
+
+  // ── Capture photo (called from inside the modal) ───────────────────────
+  const onShutter = useCallback(async () => {
+    if (busy || !cameraRef.current || !picked) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBusy(true);
+    const headingAtCapture = heading;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.7,
+        skipProcessing: true,
+        exif: false,
       });
-      if (r.canceled || !r.assets?.[0]?.base64) return;
-      const a    = r.assets[0];
-      const mime = a.mimeType || "image/jpeg";
+      if (!photo?.base64) {
+        Alert.alert("Capture failed", "Photo could not be saved. Please try again.");
+        return;
+      }
       const next: RoomPhoto = {
-        room_type:      roomKey,
-        image_data_url: `data:${mime};base64,${a.base64}`,
+        room_type:      picked,
+        image_data_url: `data:image/jpeg;base64,${photo.base64}`,
         ...(typeof headingAtCapture === "number"
           ? { heading_deg: Math.round(headingAtCapture * 10) / 10 }
           : {}),
@@ -145,14 +159,31 @@ export function RoomPhotoCapture({
     } finally {
       setBusy(false);
     }
-  }, [busy, canAdd, disabled, heading, onChange, photos]);
+  }, [busy, heading, onChange, photos, picked]);
+
+  const closeCamera = useCallback(() => {
+    Haptics.selectionAsync();
+    setPicked(null);
+  }, []);
 
   const removePhoto = useCallback((idx: number) => {
     Haptics.selectionAsync();
     onChange(photos.filter((_, i) => i !== idx));
   }, [onChange, photos]);
 
+  const flipCamera = useCallback(() => {
+    Haptics.selectionAsync();
+    setFacing((f) => (f === "back" ? "front" : "back"));
+  }, []);
+
   // ── UI ─────────────────────────────────────────────────────────────────
+  const pickedLabel = useMemo(
+    () => rooms.find((r) => r.key === picked)?.label || picked || "",
+    [picked, rooms],
+  );
+  const screen = Dimensions.get("window");
+  const camHeight = Math.round(screen.height * 0.6);
+
   return (
     <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
       <View style={s.headerRow}>
@@ -160,12 +191,11 @@ export function RoomPhotoCapture({
         <Text style={[s.title, { color: C.text }]}>Room Photos with Compass</Text>
       </View>
       <Text style={[s.sub, { color: C.textMuted }]}>
-        Optional. Point your phone at the wall you want to scan, then tap a room
-        below. Cosmic Vision will use the live compass heading for accurate
-        direction analysis.
+        Optional. Tap a room below — a live camera with compass will open. Aim
+        at the wall you want Cosmic Vision to analyse, then tap the shutter.
       </Text>
 
-      {/* Live compass strip */}
+      {/* Live compass strip (also visible outside camera) */}
       <View style={[s.compass, { borderColor: C.border, backgroundColor: C.bg }]}>
         <Feather name="compass" size={18} color={dir ? C.accent : C.textMuted} />
         {dir ? (
@@ -175,7 +205,7 @@ export function RoomPhotoCapture({
         ) : (
           <Text style={[s.compassText, { color: C.textMuted }]}>
             {Platform.OS === "web"
-              ? "Compass not available on web preview — heading will be inferred from photo."
+              ? "Compass not available on web preview — open on your phone."
               : "Reading compass…"}
           </Text>
         )}
@@ -184,7 +214,7 @@ export function RoomPhotoCapture({
       {/* Per-room capture buttons */}
       {rooms.length === 0 ? (
         <Text style={[s.empty, { color: C.textMuted }]}>
-          Add at least one room above to capture a photo for it.
+          Add at least one room below to capture a photo for it.
         </Text>
       ) : (
         <ScrollView
@@ -192,29 +222,27 @@ export function RoomPhotoCapture({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8, paddingVertical: 6 }}
         >
-          {rooms.map((r) => {
-            const isPicked = picked === r.key;
-            return (
-              <Pressable
-                key={r.key}
-                disabled={disabled || busy || !canAdd}
-                onPress={() => { setPicked(r.key); onCapture(r.key); }}
-                style={({ pressed }) => [
-                  s.roomBtn,
-                  {
-                    borderColor: isPicked ? C.accent : C.border,
-                    backgroundColor: isPicked ? C.accent + "15" : C.bg,
-                    opacity: (disabled || busy || !canAdd) ? 0.5 : pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
-                <Feather name="camera" size={13} color={C.accent} />
-                <Text style={[s.roomBtnText, { color: C.text }]} numberOfLines={1}>
-                  {r.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {rooms.map((r) => (
+            <Pressable
+              key={r.key}
+              disabled={disabled || busy || !canAdd}
+              onPress={() => openCameraFor(r.key)}
+              accessibilityLabel={`Capture photo for ${r.label}`}
+              style={({ pressed }) => [
+                s.roomBtn,
+                {
+                  borderColor: C.border,
+                  backgroundColor: C.bg,
+                  opacity: (disabled || busy || !canAdd) ? 0.5 : pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Feather name="camera" size={13} color={C.accent} />
+              <Text style={[s.roomBtnText, { color: C.text }]} numberOfLines={1}>
+                {r.label}
+              </Text>
+            </Pressable>
+          ))}
         </ScrollView>
       )}
 
@@ -255,6 +283,81 @@ export function RoomPhotoCapture({
           })}
         </View>
       ) : null}
+
+      {/* ── Live camera modal ────────────────────────────────────────── */}
+      <Modal
+        visible={picked !== null}
+        animationType="slide"
+        onRequestClose={closeCamera}
+        statusBarTranslucent
+      >
+        <View style={s.camWrap}>
+          {picked !== null ? (
+            <CameraView
+              ref={cameraRef}
+              style={[s.camView, { height: camHeight }]}
+              facing={facing}
+            />
+          ) : null}
+
+          {/* Top bar: room name + close */}
+          <View style={s.topBar} pointerEvents="box-none">
+            <View style={s.topBadge}>
+              <Feather name="home" size={13} color="#fff" />
+              <Text style={s.topBadgeText} numberOfLines={1}>{pickedLabel}</Text>
+            </View>
+            <Pressable onPress={closeCamera} hitSlop={12} style={s.closeBtn}>
+              <Feather name="x" size={22} color="#fff" />
+            </Pressable>
+          </View>
+
+          {/* Bottom controls: compass + shutter + flip */}
+          <View style={s.bottomPanel}>
+            <View style={s.camCompass}>
+              <Feather name="compass" size={18} color={dir ? "#fbbf24" : "#9ca3af"} />
+              {dir ? (
+                <Text style={s.camCompassText}>
+                  {heading?.toFixed(0)}°  ·  Facing <Text style={{ color: "#fbbf24", fontWeight: "900" }}>{dir.label}</Text> ({dir.code})
+                </Text>
+              ) : (
+                <Text style={[s.camCompassText, { color: "#9ca3af" }]}>
+                  Reading compass…
+                </Text>
+              )}
+            </View>
+
+            <Text style={s.camHint}>
+              Aim at the wall you want to analyse, then tap the shutter.
+            </Text>
+
+            <View style={s.shutterRow}>
+              <View style={{ width: 56 }} />
+              <Pressable
+                onPress={onShutter}
+                disabled={busy}
+                accessibilityLabel="Capture photo"
+                style={({ pressed }) => [
+                  s.shutterOuter,
+                  { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={s.shutterInner} />
+              </Pressable>
+              <Pressable
+                onPress={flipCamera}
+                disabled={busy}
+                hitSlop={10}
+                style={({ pressed }) => [
+                  s.flipBtn,
+                  { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Feather name="refresh-cw" size={20} color="#fff" />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -271,11 +374,48 @@ const s = StyleSheet.create({
   empty:       { fontSize: 11, fontStyle: "italic", paddingVertical: 6 },
   roomBtn:     { flexDirection: "row", alignItems: "center", gap: 6,
                  paddingHorizontal: 12, paddingVertical: 9,
-                 borderRadius: 9, borderWidth: 1, maxWidth: 160 },
+                 borderRadius: 9, borderWidth: 1, maxWidth: 200 },
   roomBtnText: { fontSize: 12, fontWeight: "600" },
   photoRow:    { flexDirection: "row", alignItems: "center", gap: 10,
                  paddingHorizontal: 11, paddingVertical: 9,
                  borderWidth: 1, borderRadius: 9 },
   photoTitle:  { fontSize: 12, fontWeight: "700" },
   photoMeta:   { fontSize: 11, marginTop: 2 },
+
+  // ── Camera modal ──
+  camWrap:        { flex: 1, backgroundColor: "#000" },
+  camView:        { width: "100%", backgroundColor: "#000" },
+  topBar:         { position: "absolute", top: 0, left: 0, right: 0,
+                    paddingTop: 50, paddingHorizontal: 16, paddingBottom: 10,
+                    flexDirection: "row", justifyContent: "space-between",
+                    alignItems: "center", zIndex: 10 },
+  topBadge:       { flexDirection: "row", alignItems: "center", gap: 6,
+                    paddingHorizontal: 12, paddingVertical: 7,
+                    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 18,
+                    maxWidth: "70%" },
+  topBadgeText:   { color: "#fff", fontSize: 13, fontWeight: "700" },
+  closeBtn:       { width: 38, height: 38, borderRadius: 19,
+                    backgroundColor: "rgba(0,0,0,0.55)",
+                    alignItems: "center", justifyContent: "center" },
+  bottomPanel:    { flex: 1, backgroundColor: "#0b1220",
+                    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28,
+                    justifyContent: "space-between" },
+  camCompass:     { flexDirection: "row", alignItems: "center", gap: 12,
+                    paddingHorizontal: 16, paddingVertical: 14,
+                    backgroundColor: "#111827", borderRadius: 12,
+                    borderWidth: 1, borderColor: "#374151" },
+  camCompassText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  camHint:        { color: "#9ca3af", fontSize: 12, textAlign: "center",
+                    marginTop: 12, marginBottom: 4 },
+  shutterRow:     { flexDirection: "row", alignItems: "center",
+                    justifyContent: "space-between", paddingTop: 6 },
+  shutterOuter:   { width: 78, height: 78, borderRadius: 39,
+                    borderWidth: 4, borderColor: "#fff",
+                    alignItems: "center", justifyContent: "center",
+                    backgroundColor: "rgba(255,255,255,0.12)" },
+  shutterInner:   { width: 60, height: 60, borderRadius: 30,
+                    backgroundColor: "#fff" },
+  flipBtn:        { width: 46, height: 46, borderRadius: 23,
+                    backgroundColor: "rgba(255,255,255,0.18)",
+                    alignItems: "center", justifyContent: "center" },
 });

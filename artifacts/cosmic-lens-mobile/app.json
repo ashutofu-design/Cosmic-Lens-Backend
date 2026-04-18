@@ -45,6 +45,13 @@
           "cameraPermission": "Cosmic Lens needs camera access so you can capture room photos for instant Vastu analysis."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cosmic Lens needs camera access so you can capture live room photos with the compass for accurate Vastu direction analysis.",
+          "recordAudioAndroid": false
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [

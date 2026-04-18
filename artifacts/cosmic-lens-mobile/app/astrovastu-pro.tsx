@@ -14,11 +14,13 @@
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Linking from "expo-linking";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -105,6 +107,9 @@ type ProResponse = {
   classical_summary: ClassicalRef[];
   footer: string;
   quota: { used: number; limit: number; plan: string };
+  pdf_url?: string;
+  pdf_token?: string;
+  report_id?: number;
 };
 
 type ErrorPayload = {
@@ -354,8 +359,82 @@ export default function AstroVastuProScreen() {
           </View>
         )}
 
-        {/* ── Result card (null-safe across partial payloads) ────────── */}
-        {result && (() => {
+        {/* ── PDF-only result for paid PRO scans ─────────────────────── */}
+        {result && result.pdf_url && result.pdf_token && (() => {
+          const overall = result.overall || ({} as ProResponse["overall"]);
+          const grade   = overall.grade || "C";
+          const score   = typeof overall.score === "number" ? overall.score : 0;
+          const summary = overall.summary || { en: "", hi: "" };
+          const pdfFullUrl =
+            `${API_BASE}${result.pdf_url}?t=${encodeURIComponent(result.pdf_token)}`;
+          const openPdf = async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              const ok = await Linking.canOpenURL(pdfFullUrl);
+              if (!ok) throw new Error("Cannot open URL");
+              await Linking.openURL(pdfFullUrl);
+            } catch (e: any) {
+              Alert.alert(
+                "Open PDF",
+                "Could not open the PDF viewer.\n\n" + String(e?.message || e),
+              );
+            }
+          };
+          return (
+            <View style={{ marginTop: 18 }}>
+              <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionLabel, { color: C.textMid }]}>OVERALL HOUSE SCORE</Text>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
+                    <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
+                    <Text style={{ color: C.textMid, fontWeight: "600" }}>/100</Text>
+                    <View style={{
+                      marginLeft: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
+                      backgroundColor: GRADE_COLOR[grade] || C.accent,
+                    }}>
+                      <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
+                    </View>
+                  </View>
+                  {summary.en ? (
+                    <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>{summary.en}</Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={[styles.card, {
+                backgroundColor: C.bgCard, borderColor: C.border, marginTop: 12,
+              }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Feather name="file-text" size={18} color={C.accent} />
+                  <Text style={[styles.cardTitle, { color: C.text }]}>Detailed PDF Report Ready</Text>
+                </View>
+                <Text style={{ color: C.text, fontSize: 13, marginBottom: 4 }}>
+                  Aapka full AstroVastu PRO report PDF me ready hai — har room ka deep verdict,
+                  Mahadasha layer, priority actions aur classical references.
+                </Text>
+                <Text style={{ color: C.textMid, fontSize: 12, marginBottom: 12 }}>
+                  Your full AstroVastu PRO report is available as a PDF — open, save, or share it.
+                </Text>
+                <Pressable
+                  onPress={openPdf}
+                  style={[styles.submitBtn, { backgroundColor: C.accent }]}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Feather name="download" size={16} color="#fff" />
+                    <Text style={styles.submitText}>Open PDF Report</Text>
+                  </View>
+                </Pressable>
+              </View>
+
+              <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
+                {result.footer || "Powered by Advanced Cosmic Intelligence"}
+              </Text>
+            </View>
+          );
+        })()}
+
+        {/* ── Legacy on-screen result (only when no pdf_url) ──────────── */}
+        {result && !result.pdf_url && (() => {
           const overall  = result.overall  || ({} as ProResponse["overall"]);
           const counts   = overall.counts  || { ideal: 0, acceptable: 0, adjustment_needed: 0, avoid: 0 };
           const summary  = overall.summary || { en: "", hi: "" };

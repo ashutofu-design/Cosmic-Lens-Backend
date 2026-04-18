@@ -7,3 +7,4 @@ gunicorn
 werkzeug
 firebase-admin
 openai>=1.40.0
+reportlab>=4.0

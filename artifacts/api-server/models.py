@@ -272,6 +272,7 @@ class BusinessVastuLog(db.Model):
     floor_plan     = db.Column(db.Text, nullable=False, default="[]")  # JSON
     via            = db.Column(db.String(20), nullable=False, default="property_unlock")
     plan           = db.Column(db.String(20), default="free", nullable=False)
+    report_json    = db.Column(db.Text, nullable=True)                    # full bilingual report JSON for PDF render
     created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (
@@ -299,6 +300,7 @@ class AstroVastuProLog(db.Model):
     sade_sati    = db.Column(db.Boolean, default=False, nullable=False)
     floor_plan   = db.Column(db.Text, nullable=False, default="[]")    # JSON of input rooms
     plan         = db.Column(db.String(20), default="free", nullable=False)
+    report_json  = db.Column(db.Text, nullable=True)                     # full bilingual report JSON for PDF render
     created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (

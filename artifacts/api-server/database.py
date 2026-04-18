@@ -79,6 +79,13 @@ def init_db(app):
                     ))
                     # Phase-4 Business Vastu — log table is created via
                     # db.create_all() at first request; nothing to ALTER.
+                    # Phase-4.5 PDF export — store full report JSON for re-render.
+                    conn.execute(text(
+                        "ALTER TABLE business_vastu_logs ADD COLUMN IF NOT EXISTS report_json TEXT"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE astrovastu_pro_logs ADD COLUMN IF NOT EXISTS report_json TEXT"
+                    ))
                     # One-time pre-launch wipe of legacy email/google users.
                     # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
                     if os.environ.get("COSMIC_WIPE_USERS") == "1":
@@ -97,6 +104,8 @@ def init_db(app):
                         "ALTER TABLE users ADD COLUMN country_code VARCHAR(4) DEFAULT '91'",
                         "ALTER TABLE profiles ADD COLUMN birth_key VARCHAR(120)",
                         "ALTER TABLE profiles ADD COLUMN deleted_at TIMESTAMP",
+                        "ALTER TABLE business_vastu_logs ADD COLUMN report_json TEXT",
+                        "ALTER TABLE astrovastu_pro_logs ADD COLUMN report_json TEXT",
                     ):
                         try:
                             conn.execute(text(stmt))

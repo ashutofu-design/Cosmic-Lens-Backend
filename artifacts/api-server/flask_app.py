@@ -14,7 +14,7 @@ import sys
 import secrets
 import urllib.parse
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -2753,7 +2753,7 @@ def astrovastu_basic_route():
         rule    = get_generic_room_rule(room_type)
     except Exception as exc:
         import traceback; traceback.print_exc()
-        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+        return jsonify({"error": "engine_failure"}), 500
 
     # ── Item 20b: Phase-2 atomic consume AFTER engine success ─────────────
     quota = consume_astrovastu_basic_v2(user, property_name)
@@ -2919,7 +2919,7 @@ def astrovastu_pro_route():
         report = build_pro_response(scan, plan=plan)
     except Exception as exc:
         import traceback; traceback.print_exc()
-        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+        return jsonify({"error": "engine_failure"}), 500
 
     # ── Phase-2 atomic consume AFTER engine success ──────────────────────
     quota = consume_astrovastu_pro_v2(user, property_name)
@@ -2957,9 +2957,13 @@ def astrovastu_pro_route():
             sade_sati     = bool(report["kundli_summary"].get("sade_sati")),
             floor_plan    = json.dumps(floor_plan, ensure_ascii=False),
             plan          = plan,
+            report_json   = json.dumps(report, ensure_ascii=False),
         )
         db.session.add(log)
         db.session.commit()
+        report["report_id"] = log.id
+        report["pdf_url"]   = f"/api/astrovastu-pro/pdf/{log.id}"
+        report["pdf_token"] = make_pdf_token("pro", log.id, user.id)
     except Exception as exc:
         print(f"[astrovastu-pro] log failed: {exc}")
         db.session.rollback()
@@ -3124,7 +3128,7 @@ def business_vastu_route():
         report = build_business_response(scan, plan=plan)
     except Exception as exc:
         import traceback; traceback.print_exc()
-        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+        return jsonify({"error": "engine_failure"}), 500
 
     # ── Phase-4 consume (no-op for lifetime model — just re-confirm gate) ─
     consumed = consume_business_vastu_v2(user, btype, property_name)
@@ -3161,14 +3165,202 @@ def business_vastu_route():
             floor_plan    = json.dumps(floor_plan, ensure_ascii=False),
             via           = consumed.get("via", "property_unlock"),
             plan          = plan,
+            report_json   = json.dumps(report, ensure_ascii=False),
         )
         db.session.add(log)
         db.session.commit()
+        report["report_id"] = log.id
+        report["pdf_url"]   = f"/api/business-vastu/pdf/{log.id}"
+        report["pdf_token"] = make_pdf_token("biz", log.id, user.id)
     except Exception as exc:
         print(f"[business-vastu] log failed: {exc}")
         db.session.rollback()
 
     return jsonify(report)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 4.5 — PDF report endpoints (PRO + Business)
+# Auth: X-API-Key header (preferred for API clients) OR a short-lived signed
+# `?t=` token (mobile uses Linking.openURL which cannot set headers).
+# The token is HMAC-SHA256 over (kind, log_id, user_id, exp) using SESSION_SECRET
+# and is valid for ~10 minutes. Long-lived account api_key is NEVER accepted in
+# the URL. Ownership: log.user_id must match resolved user.id.
+# Canonical brand footer is always enforced at render time.
+# ─────────────────────────────────────────────────────────────────────────────
+PDF_BRAND_FOOTER = "Powered by Advanced Cosmic Intelligence"
+_PDF_TOKEN_TTL_SEC = 600  # 10 minutes
+
+
+def _pdf_token_secret() -> bytes:
+    sec = os.environ.get("SESSION_SECRET")
+    if not sec:
+        raise RuntimeError(
+            "SESSION_SECRET is required for signing PDF access tokens; "
+            "refusing to use a predictable fallback."
+        )
+    return sec.encode()
+
+
+def make_pdf_token(kind: str, log_id: int, user_id: int,
+                   ttl: int = _PDF_TOKEN_TTL_SEC) -> str:
+    import hmac as _hmac, hashlib, base64, time as _t
+    exp = int(_t.time()) + max(60, int(ttl))
+    msg = f"{kind}|{log_id}|{user_id}|{exp}".encode()
+    sig = _hmac.new(_pdf_token_secret(), msg, hashlib.sha256).digest()
+    sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode()
+    return f"{exp}.{sig_b64}"
+
+
+def _verify_pdf_token(token: str, kind: str, log_id: int) -> int | None:
+    """Returns user_id on success, else None."""
+    import hmac as _hmac, hashlib, base64, time as _t
+    if not token or "." not in token:
+        return None
+    try:
+        exp_str, sig_b64 = token.split(".", 1)
+        exp = int(exp_str)
+        if exp < int(_t.time()):
+            return None
+        # Token is signed for *some* user_id; we must brute-force only the
+        # log's owner. Caller supplies log_id; we try the log's user_id.
+        log = None
+        if kind == "biz":
+            from models import BusinessVastuLog as _M
+            log = db.session.get(_M, log_id)
+        elif kind == "pro":
+            from models import AstroVastuProLog as _M
+            log = db.session.get(_M, log_id)
+        if log is None:
+            return None
+        msg = f"{kind}|{log_id}|{log.user_id}|{exp}".encode()
+        expected = _hmac.new(_pdf_token_secret(), msg, hashlib.sha256).digest()
+        expected_b64 = base64.urlsafe_b64encode(expected).rstrip(b"=").decode()
+        if _hmac.compare_digest(expected_b64, sig_b64):
+            return int(log.user_id)
+        return None
+    except Exception:
+        return None
+
+
+def _resolve_user_for_pdf(kind: str, log_id: int):
+    """Header api_key (preferred) OR signed short-lived ?t= token."""
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if api_key:
+        return User.query.filter_by(api_key=api_key).first()
+    token = (request.args.get("t") or "").strip()
+    if token:
+        uid = _verify_pdf_token(token, kind, log_id)
+        if uid:
+            return db.session.get(User, uid)
+    return None
+
+
+@app.route("/api/business-vastu/pdf/<int:log_id>", methods=["GET"])
+def business_vastu_pdf(log_id: int):
+    import json
+    from models import BusinessVastuLog
+    user = _resolve_user_for_pdf("biz", log_id)
+    if not user:
+        return jsonify({"error": "auth_required"}), 401
+    log = db.session.get(BusinessVastuLog, log_id)
+    if not log or log.user_id != user.id:
+        return jsonify({"error": "not_found"}), 404
+    if not log.report_json:
+        return jsonify({"error": "report_unavailable",
+                        "message": "Re-run the scan to generate a fresh PDF."}), 410
+
+    try:
+        report = json.loads(log.report_json) if isinstance(log.report_json, str) else log.report_json
+    except Exception as e:
+        app.logger.exception("[PDF/biz] json parse failed: %s", e)
+        return jsonify({"error": "report_corrupt"}), 500
+
+    # Force canonical brand footer (no leakage of LLM/AI mentions)
+    if isinstance(report, dict):
+        report["footer"] = {"en": PDF_BRAND_FOOTER, "hi": PDF_BRAND_FOOTER}
+
+    user_name = ""
+    try:
+        if user.kundli and user.kundli.name:
+            user_name = user.kundli.name
+    except Exception:
+        pass
+
+    try:
+        from pdf_renderer import render_business_pdf
+        pdf_bytes = render_business_pdf(
+            report,
+            property_name=log.property_name or "",
+            user_name=user_name,
+        )
+    except Exception as e:
+        app.logger.exception("[PDF/biz] render failed: %s", e)
+        return jsonify({"error": "render_failed"}), 500
+    safe_name = (log.property_name or "premise").replace(" ", "_")
+    fname = f"BusinessVastu_{log.business_type}_{safe_name}_{log.id}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+@app.route("/api/astrovastu-pro/pdf/<int:log_id>", methods=["GET"])
+def astrovastu_pro_pdf(log_id: int):
+    import json
+    from models import AstroVastuProLog
+    user = _resolve_user_for_pdf("pro", log_id)
+    if not user:
+        return jsonify({"error": "auth_required"}), 401
+    log = db.session.get(AstroVastuProLog, log_id)
+    if not log or log.user_id != user.id:
+        return jsonify({"error": "not_found"}), 404
+    if not log.report_json:
+        return jsonify({"error": "report_unavailable",
+                        "message": "Re-run the scan to generate a fresh PDF."}), 410
+
+    try:
+        report = json.loads(log.report_json) if isinstance(log.report_json, str) else log.report_json
+    except Exception as e:
+        app.logger.exception("[PDF/pro] json parse failed: %s", e)
+        return jsonify({"error": "report_corrupt"}), 500
+
+    # Force canonical brand footer
+    if isinstance(report, dict):
+        report["footer"] = PDF_BRAND_FOOTER
+
+    user_name = ""
+    try:
+        if user.kundli and user.kundli.name:
+            user_name = user.kundli.name
+    except Exception:
+        pass
+
+    property_name = ""
+    try:
+        property_name = (report.get("meta") or {}).get("property_name") or ""
+    except Exception:
+        pass
+
+    try:
+        from pdf_renderer import render_pro_pdf
+        pdf_bytes = render_pro_pdf(report, property_name=property_name, user_name=user_name)
+    except Exception as e:
+        app.logger.exception("[PDF/pro] render failed: %s", e)
+        return jsonify({"error": "render_failed"}), 500
+    fname = f"AstroVastuPRO_{log.id}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

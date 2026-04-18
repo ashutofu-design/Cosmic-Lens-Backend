@@ -2693,6 +2693,19 @@ def vastu_scan_route():
     lang    = data.get("lang", "en")
     user_id = data.get("user_id")
 
+    # Optional REAL device sensor reading (compass heading at scan time).
+    # Single biggest accuracy lever — when present, the LLM uses this as
+    # ground truth for directional analysis instead of guessing.
+    heading_raw = data.get("heading_deg")
+    heading_deg: float | None = None
+    if heading_raw is not None:
+        try:
+            heading_deg = float(heading_raw)
+            if not (0.0 <= heading_deg < 360.0):
+                heading_deg = heading_deg % 360.0
+        except (TypeError, ValueError):
+            heading_deg = None
+
     if not image:
         return jsonify({"error": "image is required"}), 400
 
@@ -2729,7 +2742,7 @@ def vastu_scan_route():
         quota = {"used": 0, "limit": 1}
 
     try:
-        result = vastu_scan(image, room, lang)
+        result = vastu_scan(image, room, lang, heading_deg=heading_deg)
     except Exception as exc:
         import traceback
         traceback.print_exc()

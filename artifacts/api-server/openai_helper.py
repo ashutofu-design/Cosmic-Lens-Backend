@@ -214,70 +214,159 @@ _VASTU_LANG_HINT = {
 }
 
 
-def _vastu_messages(image_data_url: str, room_type: str, lang: str) -> list[dict]:
+from vastu_rules import format_rules_for_prompt, heading_to_direction, DIRECTIONS
+
+
+# JSON schema for strict structured output. OpenAI strict mode requires every
+# property listed in `required` and `additionalProperties: false`.
+_VASTU_JSON_SCHEMA: dict = {
+    "name": "vastu_scan_result",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "scan_inconclusive", "inconclusive_reason",
+            "room_detected", "compliance_score", "energy_status",
+            "direction_basis", "camera_facing_direction",
+            "observations", "dosh", "remedies",
+            "energy_forecast", "confidence",
+        ],
+        "properties": {
+            "scan_inconclusive":      {"type": "boolean"},
+            "inconclusive_reason":    {"type": "string"},
+            "room_detected":          {"type": "string"},
+            "compliance_score":       {"type": "integer", "minimum": 0, "maximum": 100},
+            "energy_status":          {"type": "string", "enum": ["Excellent", "Optimal", "Mild Disturbance", "Moderate Dosh", "Significant Dosh"]},
+            "direction_basis":        {"type": "string", "enum": ["magnetometer", "visual_inference", "assumed"]},
+            "camera_facing_direction":{"type": "string"},
+            "observations": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["text", "direction", "severity", "classical_rule_ref"],
+                    "properties": {
+                        "text":               {"type": "string"},
+                        "direction":          {"type": "string"},
+                        "severity":           {"type": "string", "enum": ["positive", "neutral", "warning", "critical"]},
+                        "classical_rule_ref": {"type": "string"},
+                    },
+                },
+            },
+            "dosh": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name", "description", "classical_source", "severity"],
+                    "properties": {
+                        "name":             {"type": "string"},
+                        "description":      {"type": "string"},
+                        "classical_source": {"type": "string"},
+                        "severity":         {"type": "string", "enum": ["minor", "moderate", "major"]},
+                    },
+                },
+            },
+            "remedies": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["action", "priority", "classical_source"],
+                    "properties": {
+                        "action":           {"type": "string"},
+                        "priority":         {"type": "string", "enum": ["high", "medium", "low"]},
+                        "classical_source": {"type": "string"},
+                    },
+                },
+            },
+            "energy_forecast": {"type": "string"},
+            "confidence":      {"type": "integer", "minimum": 0, "maximum": 100},
+        },
+    },
+}
+
+
+def _vastu_messages(
+    image_data_url: str,
+    room_type: str,
+    lang: str,
+    heading_deg: float | None,
+) -> list[dict]:
     lang_name = _VASTU_LANG_HINT.get(lang, "English")
     room_label = (room_type or "room").strip().lower()
 
-    system = f"""You are the COSMIC VASTU DRISHTI ENGINE — an advanced energy-scanning system that fuses classical Vastu Shastra with modern spatial-energy analysis. You scan photographs of rooms and detect elemental imbalances, directional dosh, energy blockages, and prescribe precise remedies.
+    rules_block = format_rules_for_prompt(room_label)
 
-Your output style is that of a highly advanced, precise, almost futuristic scanning system — but with deep Vastu Shastra knowledge embedded into every reading. You sound powerful, confident, and technically accurate, yet rooted in classical Vedic wisdom.
+    # Direction context — single biggest accuracy lever.
+    if heading_deg is not None:
+        cam_dir_code = heading_to_direction(heading_deg)
+        cam_dir_full = DIRECTIONS.get(cam_dir_code, {}).get("name", cam_dir_code)
+        direction_block = (
+            f"=== REAL DEVICE DIRECTION (from device magnetometer) ===\n"
+            f"  Camera was facing: {heading_deg:.1f}° (compass) → {cam_dir_code} ({cam_dir_full})\n"
+            f"  This means: the wall in front of the camera is on the {cam_dir_full} side of the room.\n"
+            f"  Use this as ABSOLUTE GROUND TRUTH for all directional inferences in this scan.\n"
+            f"  direction_basis MUST be set to \"magnetometer\".\n"
+        )
+        basis_hint = '"magnetometer"'
+    else:
+        direction_block = (
+            f"=== DEVICE DIRECTION ===\n"
+            f"  Magnetometer reading was NOT provided.\n"
+            f"  You may infer direction from visible cues (window light, shadow angle, sun position).\n"
+            f"  Set direction_basis to EXACTLY one of:\n"
+            f"    - \"visual_inference\"  if you have at least one reliable visible cue.\n"
+            f"    - \"assumed\"           if no reliable cue exists (then state assumption clearly).\n"
+        )
+        basis_hint = '"visual_inference" OR "assumed" (pick exactly one)'
 
-ABSOLUTE RULES — never break these:
+    system = f"""You are the COSMIC VASTU DRISHTI ENGINE v3.0 — an advanced spatial-energy analysis system that combines classical Vastu Shastra (Brihat Samhita, Mayamatam, Manasara, Samarangana Sutradhara) with real device sensor data and computer vision to produce highly accurate Vastu compliance reports.
 
-1. NEVER mention "AI", "ChatGPT", "GPT", "OpenAI", "language model", "machine learning", or any modern tech company name. You are the "Cosmic Vastu Drishti Engine" / "Cosmic Intelligence Scanner" — a proprietary advanced spatial-energy analysis system.
+You are NOT a generic chatbot or assistant. You are a precision scanning system that:
+  • Reads photographs of rooms with expert-level visual analysis
+  • Cross-references everything observed against an injected classical Vastu rule database
+  • Cites the exact classical text or rule for every observation, dosh, and remedy
+  • Reports its own confidence level honestly
+  • Never invents observations not visible in the photo
+  • Never invents classical citations — only uses sources from the injected rule database
 
-2. NEVER use the persona of a Pandit / Acharya / Guru / human astrologer for THIS scan. You are a SCANNER — precise, advanced, system-like. Do NOT use words like "beta", "ji", "dekhiye", "mere paas", "meri experience". Drop all human-Pandit warmth.
+ABSOLUTE OUTPUT RULES:
 
-3. USE scanner / engine / system language naturally:
-   - "Scan complete." / "Analysis complete." / "Energy scan finalized."
-   - "Detected: <observation>"
-   - "Element imbalance identified in the <direction> quadrant"
-   - "Energy flow: optimal / disrupted / blocked"
-   - "Vastu compliance score" (give a number 0–100)
-   - "Recommended calibrations" / "Prescribed remedies"
+1. You MUST return a single JSON object matching the strict schema. No prose outside JSON.
+2. NEVER mention "AI", "ChatGPT", "GPT", "OpenAI", "language model" anywhere in the JSON values. You are the "Cosmic Vastu Drishti Engine".
+3. All free-text fields ("text", "description", "action", "energy_forecast", "inconclusive_reason") must be written in: {lang_name}. Field NAMES stay English. Enum values stay English. Classical source citations stay in their original form (e.g. "Brihat Samhita 53.42").
+4. EVERY observation, dosh, and remedy MUST cite a classical_rule_ref or classical_source from the injected rule database below. Do NOT invent sources. If you cannot map an observation to a rule, omit it.
+5. compliance_score (0-100): Calculate by starting at 100, deducting 12 for each major dosh, 6 for each moderate, 3 for each minor. Floor at 30 unless the room is uninhabitable. (Backend will recompute deterministically using this same formula — keep your math consistent so narrative and number stay aligned.)
+6. confidence (0-100): Honestly report your confidence. Lower it sharply if image is dim, blurry, partial, or if direction_basis is "assumed".
+7. If image is unclear, too dark, or not a room interior: set scan_inconclusive=true, fill inconclusive_reason in {lang_name}, and return empty arrays for observations/dosh/remedies. Do NOT fabricate analysis.
+8. direction_basis MUST be: "{basis_hint}" (based on whether magnetometer data was provided). camera_facing_direction is the human-readable name (e.g. "North-East").
+9. observations: 3-6 items. SPECIFIC things visible in the photo (bed position, mirror placement, window direction, clutter, color, etc.) tagged with direction and severity. classical_rule_ref must reference rule IDs like "G3" or "R2" from the injected rule database, OR a direct citation like "Brihat Samhita 53.42".
+10. dosh: 0-4 items. Real Vastu doshas detected, each with severity grading.
+11. remedies: 2-5 items. Practical actions the user can do this week. Cite the classical source for the remedy.
+12. energy_forecast: 1-2 sentences in {lang_name} predicting the energy shift after applying remedies. Frame as energy alignment, not medical/legal/financial guarantee.
 
-4. STRUCTURE the response in clean labeled SECTIONS — this scan IS allowed to use bold-style headings and short structured blocks (different from the Acharya conversational flow). Recommended structure:
+{direction_block}
 
-   ⚡ SCAN COMPLETE
-   📍 Detected Room Type: <type>
-   🧭 Energy Flow Status: <Optimal / Mild Disturbance / Significant Dosh>
-   📊 Vastu Compliance Score: <0–100>
+=== INJECTED CLASSICAL VASTU RULE DATABASE ===
+You MUST reason ONLY from these rules. Do not invent additional rules or citations.
 
-   🔍 KEY OBSERVATIONS
-   (2–4 short observations of SPECIFIC things visible in the photo, each with the direction/element it affects.)
+{rules_block}
 
-   ⚠️ DETECTED IMBALANCES
-   (1–3 dosh, each with one-line classical Vastu reasoning.)
+=== END OF RULES ===
 
-   🛠️ PRESCRIBED CALIBRATIONS
-   (2–4 precise actionable remedies — exact items, placement, direction, color, or mantra.)
-
-   🌟 ENERGY FORECAST
-   (1–2 sentences on what positive shift the user can expect after applying the calibrations.)
-
-5. LOOK CAREFULLY at the image and reference SPECIFIC things you actually see — bed position, mirror placement, window direction, color of walls, clutter, plants, lighting, decor, electronics. Be precise. If you cannot determine direction from the photo, state "Direction inference: limited — assuming standard orientation."
-
-6. Tone is CONFIDENT, PRECISE, advanced — like a high-end scanning device giving a readout. No emotional warmth, no personal stories, no "I think". Use declarative statements: "The bed is positioned along the south wall — this aligns with Vastu best practice." Not "I think your bed looks nice."
-
-7. NEVER claim medical, legal, or financial guarantees. Frame remedies as energy calibration — "expected to improve sleep quality and mental calm" rather than "will cure insomnia".
-
-8. If the image is unclear, too dark, or not a room interior, output:
-   ⚠️ SCAN INCONCLUSIVE
-   Image clarity insufficient for accurate spatial-energy analysis.
-   Recommended: Recapture the photo in well-lit conditions, from the room's center, capturing the full space including floor, ceiling, and at least two walls. Re-run scan.
-
-9. LENGTH: Concise but complete — total ~200–350 words. Each section short and punchy.
-
-10. REPLY ENTIRELY IN: {lang_name}. Keep section headers in English (with emojis) for the system-feel; translate only the body content into {lang_name}."""
+Now perform the scan and return the strict JSON object."""
 
     user_content = [
         {
             "type": "text",
             "text": (
-                f"Room type input: {room_label}. "
-                "Initiate Cosmic Vastu Drishti scan on the attached image. "
-                "Return full structured analysis with detected imbalances, "
-                "compliance score, and prescribed calibrations."
+                f"Room type input (user-declared): {room_label}\n"
+                f"Heading data: "
+                + (f"{heading_deg:.1f}° (real magnetometer reading)" if heading_deg is not None else "not provided")
+                + "\n\nInitiate full Cosmic Vastu Drishti scan on the attached image. "
+                "Return the strict JSON object per schema."
             ),
         },
         {
@@ -292,47 +381,87 @@ ABSOLUTE RULES — never break these:
     ]
 
 
-def vastu_scan(image_data_url: str, room_type: str = "room", lang: str = "en") -> dict:
+def _post_process_score(parsed: dict) -> dict:
     """
-    Analyze a room photograph for Vastu dosh and remedies.
+    ALWAYS recompute compliance_score deterministically from dosh severities so
+    the score is fully auditable and reproducible across identical scans.
+    No dosh => clean room => 100.
+    Original LLM-suggested score is preserved in `compliance_score_llm` for
+    transparency and tuning.
+    """
+    dosh = parsed.get("dosh") or []
+    deductions = 0
+    for d in dosh:
+        sev = (d.get("severity") or "").lower()
+        if   sev == "major":    deductions += 12
+        elif sev == "moderate": deductions += 6
+        elif sev == "minor":    deductions += 3
+
+    computed = max(30, 100 - deductions) if dosh else 100
+    parsed["compliance_score_llm"]    = parsed.get("compliance_score")
+    parsed["compliance_score"]        = computed
+    parsed["compliance_score_method"] = (
+        "rule-based: 100 - 12*major - 6*moderate - 3*minor (floor 30); 100 if zero dosh"
+    )
+    return parsed
+
+
+def vastu_scan(
+    image_data_url: str,
+    room_type: str = "room",
+    lang: str = "en",
+    heading_deg: float | None = None,
+) -> dict:
+    """
+    Analyze a room photograph for Vastu compliance with injected classical rules.
 
     Args:
-      image_data_url:  data URL ("data:image/jpeg;base64,...") OR plain https URL
+      image_data_url:  data URL ("data:image/jpeg;base64,...") OR https URL
       room_type:       e.g. "bedroom", "kitchen", "pooja room", "living room"
       lang:            language code ("hn", "hi", "en", etc.)
+      heading_deg:     compass heading in degrees (0-360) the camera was facing
+                       at scan time — REAL device sensor data. Optional but
+                       dramatically improves accuracy when provided.
 
-    Returns: { text, room, source }
-    Raises:  RuntimeError on any OpenAI / config failure.
+    Returns parsed dict with strict JSON schema fields. See _VASTU_JSON_SCHEMA.
+    Raises RuntimeError on OpenAI / config failure.
     """
     client = _get_client()
     if client is None:
         raise RuntimeError(_client_err or "OpenAI client not configured")
-
     if not image_data_url:
         raise RuntimeError("image is required")
 
-    # Vision capability requires gpt-4o or gpt-4o-mini (both support images).
-    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
-    messages = _vastu_messages(image_data_url, room_type, lang)
+    # Phase 1 upgrade: full GPT-4o (much better vision than mini).
+    # Override via env var if needed.
+    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
+    messages = _vastu_messages(image_data_url, room_type, lang, heading_deg)
 
     try:
         resp = client.chat.completions.create(
-            model            = model,
-            messages         = messages,
-            temperature      = 0.85,
-            max_tokens       = 900,
-            presence_penalty = 0.3,
-            frequency_penalty= 0.3,
+            model           = model,
+            messages        = messages,
+            temperature     = 0.4,    # lower = more deterministic, less hallucination
+            max_tokens      = 1800,
+            response_format = {"type": "json_schema", "json_schema": _VASTU_JSON_SCHEMA},
         )
     except Exception as exc:
         raise RuntimeError(f"OpenAI vision request failed: {exc}") from exc
 
-    text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
-    if not text:
+    raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not raw:
         raise RuntimeError("OpenAI returned empty Vastu response")
 
-    return {
-        "text":   text,
-        "room":   room_type,
-        "source": "openai",
-    }
+    try:
+        parsed = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI returned non-JSON Vastu response: {exc}") from exc
+
+    parsed = _post_process_score(parsed)
+    parsed["room"]   = room_type
+    parsed["source"] = "openai"
+    parsed["model"]  = model
+    if heading_deg is not None:
+        parsed["heading_deg_input"] = heading_deg
+
+    return parsed

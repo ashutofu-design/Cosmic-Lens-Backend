@@ -991,6 +991,62 @@ const ROOM_TYPES: { key: string; emoji: string; label: string }[] = [
   { key: "office",      emoji: "💼", label: "Office"       },
 ];
 
+// ── Strict structured response from /api/vastu-scan (Phase 1) ──────────────
+type VastuScanResponse = {
+  scan_inconclusive:        boolean;
+  inconclusive_reason:      string;
+  room_detected:            string;
+  compliance_score:         number;
+  compliance_score_llm?:    number;
+  compliance_score_method?: string;
+  energy_status:            "Excellent" | "Optimal" | "Mild Disturbance" | "Moderate Dosh" | "Significant Dosh";
+  direction_basis:          "magnetometer" | "visual_inference" | "assumed";
+  camera_facing_direction:  string;
+  observations: Array<{
+    text: string; direction: string;
+    severity: "positive" | "neutral" | "warning" | "critical";
+    classical_rule_ref: string;
+  }>;
+  dosh: Array<{
+    name: string; description: string;
+    classical_source: string;
+    severity: "minor" | "moderate" | "major";
+  }>;
+  remedies: Array<{
+    action: string;
+    priority: "high" | "medium" | "low";
+    classical_source: string;
+  }>;
+  energy_forecast: string;
+  confidence:      number;
+  room?:           string;
+  source?:         string;
+  model?:          string;
+  heading_deg_input?: number;
+  quota?:          { used: number; limit: number };
+  plan?:           string;
+};
+
+// Lightweight magnetometer heading reader (no animation) — captured at scan time
+function useScanHeading() {
+  const headingRef = useRef<number | null>(null);
+  const [hasFix, setHasFix] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    Magnetometer.setUpdateInterval(200);
+    const sub = Magnetometer.addListener(({ x, y }) => {
+      let angle = Math.atan2(-x, y) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
+      headingRef.current = angle;
+      if (!hasFix) setHasFix(true);
+    });
+    return () => sub.remove();
+  }, [hasFix]);
+
+  return { getHeading: () => headingRef.current, hasFix };
+}
+
 function VastuScanCard({ C }: { C: any }) {
   const { user, language } = useUser();
   const [imageUri, setImageUri]   = useState<string | null>(null);
@@ -998,8 +1054,9 @@ function VastuScanCard({ C }: { C: any }) {
   const [room, setRoom]           = useState<string>("bedroom");
   const [picking, setPicking]     = useState(false);
   const [scanning, setScanning]   = useState(false);
-  const [result, setResult]       = useState<string | null>(null);
+  const [result, setResult]       = useState<VastuScanResponse | null>(null);
   const [showRoomPicker, setShowRoomPicker] = useState(false);
+  const { getHeading, hasFix }    = useScanHeading();
 
   const pickFromLibrary = async () => {
     try {
@@ -1068,6 +1125,10 @@ function VastuScanCard({ C }: { C: any }) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (user?.api_key) headers["X-API-Key"] = user.api_key;
 
+      // Capture REAL device compass heading at scan moment — single biggest
+      // accuracy lever for backend Vastu analysis.
+      const heading_deg = getHeading();
+
       const dataUrl = `data:image/jpeg;base64,${imageB64}`;
       const resp = await fetch(`${API_BASE}/api/vastu-scan`, {
         method: "POST",
@@ -1077,6 +1138,7 @@ function VastuScanCard({ C }: { C: any }) {
           room,
           lang:    language,
           user_id: user?.id,
+          heading_deg,
         }),
       });
       const d = await resp.json();
@@ -1091,7 +1153,7 @@ function VastuScanCard({ C }: { C: any }) {
         }
         return;
       }
-      setResult(d?.text ?? "");
+      setResult(d as VastuScanResponse);
       Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Network error", e?.message ?? "Internet connection check kijiye.");
@@ -1200,30 +1262,20 @@ function VastuScanCard({ C }: { C: any }) {
         </Pressable>
       )}
 
-      {/* Result — scanner readout style */}
-      {result && (
-        <View style={[vs.resultCard, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55" }]}>
-          <View style={vs.resultHeader}>
-            <View style={vs.resultAvatar}>
-              <Feather name="zap" size={14} color="#a78bfa" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[vs.resultName, { color: C.text }]}>COSMIC VASTU DRISHTI</Text>
-              <Text style={[vs.resultSub, { color: C.textMuted }]}>Spatial-Energy Scan Report · v2.4</Text>
-            </View>
-            <View style={vs.statusDot}>
-              <View style={vs.statusDotInner} />
-              <Text style={vs.statusText}>LIVE</Text>
-            </View>
-          </View>
-          <View style={vs.divider} />
-          <Text style={[vs.resultText, { color: C.textMid }]}>{result}</Text>
-          <Pressable onPress={reset} style={[vs.againBtn, { borderColor: "#a78bfa55" }]}>
-            <Feather name="refresh-ccw" size={13} color="#a78bfa" />
-            <Text style={[vs.againText, { color: "#a78bfa" }]}>Run new scan</Text>
-          </Pressable>
+      {/* Heading-fix indicator (shown only before scan) */}
+      {imageUri && !result && !scanning && (
+        <View style={[vs.headingChip, { borderColor: hasFix ? "#10b98155" : "#94a3b855", backgroundColor: hasFix ? "#10b98115" : "#94a3b815" }]}>
+          <Feather name="compass" size={12} color={hasFix ? "#10b981" : "#94a3b8"} />
+          <Text style={[vs.headingChipText, { color: hasFix ? "#10b981" : "#94a3b8" }]}>
+            {hasFix
+              ? "Compass active · scan will use REAL device direction"
+              : "Compass calibrating… move phone in figure-8 motion"}
+          </Text>
         </View>
       )}
+
+      {/* Result — structured Vastu Drishti report (Phase 1 v3.0) */}
+      {result && <VastuScanReport C={C} data={result} onReset={reset} />}
 
       {!user?.id && !result && (
         <Text style={[vs.note, { color: C.textMuted }]}>
@@ -1256,11 +1308,286 @@ function VastuScanCard({ C }: { C: any }) {
   );
 }
 
+// ── Score gauge (SVG arc) ──────────────────────────────────────────────────
+function ScoreGauge({ score }: { score: number }) {
+  const size = 120;
+  const stroke = 10;
+  const radius = (size - stroke) / 2;
+  const circ = 2 * Math.PI * radius;
+  const pct = Math.max(0, Math.min(100, score)) / 100;
+  const offset = circ * (1 - pct);
+  const color =
+    score >= 85 ? "#10b981" :
+    score >= 70 ? "#84cc16" :
+    score >= 55 ? "#f59e0b" :
+    score >= 40 ? "#f97316" : "#ef4444";
+
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: "-90deg" }] }}>
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#ffffff15" strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke={color} strokeWidth={stroke} fill="none"
+          strokeDasharray={`${circ} ${circ}`}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+        />
+      </Svg>
+      <View style={{ position: "absolute", alignItems: "center" }}>
+        <Text style={{ fontSize: 28, fontWeight: "900", color }}>{score}</Text>
+        <Text style={{ fontSize: 9, fontWeight: "700", color: "#94a3b8", letterSpacing: 1 }}>/ 100</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Severity color helpers ─────────────────────────────────────────────────
+const SEV_OBS = {
+  positive: { bg: "#10b98115", border: "#10b98155", color: "#10b981", icon: "check-circle" as const },
+  neutral:  { bg: "#94a3b815", border: "#94a3b855", color: "#94a3b8", icon: "info"         as const },
+  warning:  { bg: "#f59e0b15", border: "#f59e0b55", color: "#f59e0b", icon: "alert-circle" as const },
+  critical: { bg: "#ef444415", border: "#ef444455", color: "#ef4444", icon: "alert-octagon"as const },
+};
+const SEV_DOSH = {
+  minor:    { bg: "#f59e0b15", border: "#f59e0b66", color: "#f59e0b", label: "MINOR"    },
+  moderate: { bg: "#f9731615", border: "#f9731666", color: "#f97316", label: "MODERATE" },
+  major:    { bg: "#ef444415", border: "#ef444466", color: "#ef4444", label: "MAJOR"    },
+};
+const PRIORITY_COLOR = {
+  high:   "#ef4444",
+  medium: "#f59e0b",
+  low:    "#10b981",
+};
+
+function VastuScanReport({ C, data: raw, onReset }: { C: any; data: VastuScanResponse; onReset: () => void }) {
+  // Defensive normalization — protect render against malformed/partial JSON.
+  const data: VastuScanResponse = {
+    scan_inconclusive:       Boolean(raw?.scan_inconclusive),
+    inconclusive_reason:     typeof raw?.inconclusive_reason === "string" ? raw.inconclusive_reason : "",
+    room_detected:           typeof raw?.room_detected       === "string" ? raw.room_detected       : "room",
+    compliance_score:        Number.isFinite(raw?.compliance_score) ? Math.max(0, Math.min(100, Math.round(Number(raw.compliance_score)))) : 0,
+    compliance_score_llm:    Number.isFinite(raw?.compliance_score_llm) ? Number(raw.compliance_score_llm) : undefined,
+    compliance_score_method: typeof raw?.compliance_score_method === "string" ? raw.compliance_score_method : undefined,
+    energy_status:           (["Excellent","Optimal","Mild Disturbance","Moderate Dosh","Significant Dosh"] as const).includes(raw?.energy_status as any) ? raw.energy_status : "Optimal",
+    direction_basis:         (["magnetometer","visual_inference","assumed"] as const).includes(raw?.direction_basis as any) ? raw.direction_basis : "assumed",
+    camera_facing_direction: typeof raw?.camera_facing_direction === "string" ? raw.camera_facing_direction : "Unknown",
+    observations:            Array.isArray(raw?.observations) ? raw.observations.filter(Boolean) : [],
+    dosh:                    Array.isArray(raw?.dosh)         ? raw.dosh.filter(Boolean)         : [],
+    remedies:                Array.isArray(raw?.remedies)     ? raw.remedies.filter(Boolean)     : [],
+    energy_forecast:         typeof raw?.energy_forecast === "string" ? raw.energy_forecast : "",
+    confidence:              Number.isFinite(raw?.confidence) ? Math.max(0, Math.min(100, Math.round(Number(raw.confidence)))) : 0,
+    heading_deg_input:       Number.isFinite(raw?.heading_deg_input) ? Number(raw.heading_deg_input) : undefined,
+  };
+
+  // Inconclusive scan — friendly empty state
+  if (data.scan_inconclusive) {
+    return (
+      <View style={[vs.resultCard, { backgroundColor: C.bgCard2, borderColor: "#f59e0b55" }]}>
+        <View style={vs.resultHeader}>
+          <View style={[vs.resultAvatar, { backgroundColor: "#f59e0b20", borderColor: "#f59e0b55" }]}>
+            <Feather name="alert-triangle" size={14} color="#f59e0b" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[vs.resultName, { color: C.text }]}>SCAN INCONCLUSIVE</Text>
+            <Text style={[vs.resultSub, { color: C.textMuted }]}>Image clarity insufficient</Text>
+          </View>
+        </View>
+        <View style={vs.divider} />
+        <Text style={[vs.resultText, { color: C.textMid, fontFamily: undefined }]}>
+          {data.inconclusive_reason}
+        </Text>
+        <Pressable onPress={onReset} style={[vs.againBtn, { borderColor: "#f59e0b55" }]}>
+          <Feather name="refresh-ccw" size={13} color="#f59e0b" />
+          <Text style={[vs.againText, { color: "#f59e0b" }]}>Recapture and scan again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const isReal = data.direction_basis === "magnetometer";
+
+  return (
+    <View style={[vs.resultCard, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55" }]}>
+      {/* Header */}
+      <View style={vs.resultHeader}>
+        <View style={vs.resultAvatar}>
+          <Feather name="zap" size={14} color="#a78bfa" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[vs.resultName, { color: C.text }]}>COSMIC VASTU DRISHTI</Text>
+          <Text style={[vs.resultSub, { color: C.textMuted }]}>
+            v3.0 · {data.room_detected || "room"} · confidence {data.confidence}%
+          </Text>
+        </View>
+        <View style={vs.statusDot}>
+          <View style={vs.statusDotInner} />
+          <Text style={vs.statusText}>SCAN OK</Text>
+        </View>
+      </View>
+
+      <View style={vs.divider} />
+
+      {/* Score + Status block */}
+      <View style={vs.scoreRow}>
+        <ScoreGauge score={data.compliance_score} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={[vs.scoreLabel, { color: C.textMuted }]}>VASTU COMPLIANCE</Text>
+          <Text style={[vs.scoreStatus, { color: C.text }]}>{data.energy_status}</Text>
+          <View style={[vs.dirChip, { borderColor: isReal ? "#10b98166" : "#94a3b866", backgroundColor: isReal ? "#10b98115" : "#94a3b815" }]}>
+            <Feather name="compass" size={11} color={isReal ? "#10b981" : "#94a3b8"} />
+            <Text style={[vs.dirChipText, { color: isReal ? "#10b981" : "#94a3b8" }]}>
+              {isReal
+                ? `${data.camera_facing_direction} · ${data.heading_deg_input?.toFixed(0)}° (real sensor)`
+                : `${data.camera_facing_direction} · ${data.direction_basis}`}
+            </Text>
+          </View>
+          {data.compliance_score_method && (
+            <Text style={[vs.scoreMethod, { color: C.textDim }]} numberOfLines={2}>
+              {data.compliance_score_method}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* Observations */}
+      {data.observations.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[vs.sectionLabel, { color: C.textMuted }]}>🔍 KEY OBSERVATIONS</Text>
+          {data.observations.map((o, i) => {
+            const sev = SEV_OBS[o.severity] ?? SEV_OBS.neutral;
+            return (
+              <View key={i} style={[vs.obsCard, { backgroundColor: sev.bg, borderColor: sev.border }]}>
+                <Feather name={sev.icon} size={14} color={sev.color} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={[vs.obsText, { color: C.text }]}>{o.text}</Text>
+                  <View style={vs.obsMeta}>
+                    <Text style={[vs.obsTag, { color: sev.color, borderColor: sev.border }]}>{o.direction.toUpperCase()}</Text>
+                    <Text style={[vs.obsCite, { color: C.textDim }]}>📜 {o.classical_rule_ref}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Dosh detected */}
+      {data.dosh.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[vs.sectionLabel, { color: "#ef4444" }]}>⚠️ DETECTED IMBALANCES ({data.dosh.length})</Text>
+          {data.dosh.map((d, i) => {
+            const sev = SEV_DOSH[d.severity] ?? SEV_DOSH.moderate;
+            return (
+              <View key={i} style={[vs.doshCard, { backgroundColor: sev.bg, borderColor: sev.border }]}>
+                <View style={vs.doshHead}>
+                  <Text style={[vs.doshName, { color: C.text }]}>{d.name}</Text>
+                  <View style={[vs.doshBadge, { backgroundColor: sev.color }]}>
+                    <Text style={vs.doshBadgeText}>{sev.label}</Text>
+                  </View>
+                </View>
+                <Text style={[vs.doshDesc, { color: C.textMid }]}>{d.description}</Text>
+                <Text style={[vs.doshCite, { color: C.textDim }]}>📜 {d.classical_source}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Remedies */}
+      {data.remedies.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[vs.sectionLabel, { color: "#10b981" }]}>🛠️ PRESCRIBED CALIBRATIONS</Text>
+          {data.remedies.map((r, i) => (
+            <View key={i} style={[vs.remCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <View style={[vs.remDot, { backgroundColor: PRIORITY_COLOR[r.priority] }]} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={[vs.remText, { color: C.text }]}>{r.action}</Text>
+                <View style={vs.remMeta}>
+                  <Text style={[vs.remPriority, { color: PRIORITY_COLOR[r.priority] }]}>
+                    {r.priority.toUpperCase()} PRIORITY
+                  </Text>
+                  <Text style={[vs.remCite, { color: C.textDim }]}>📜 {r.classical_source}</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Forecast */}
+      {data.energy_forecast && (
+        <View style={[vs.forecastCard, { borderColor: "#a78bfa55", backgroundColor: "#a78bfa10" }]}>
+          <Text style={vs.forecastLabel}>🌟 ENERGY FORECAST</Text>
+          <Text style={[vs.forecastText, { color: C.text }]}>{data.energy_forecast}</Text>
+        </View>
+      )}
+
+      <Pressable onPress={onReset} style={[vs.againBtn, { borderColor: "#a78bfa55" }]}>
+        <Feather name="refresh-ccw" size={13} color="#a78bfa" />
+        <Text style={[vs.againText, { color: "#a78bfa" }]}>Run new scan</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const vs = StyleSheet.create({
   card: {
     borderRadius: 16, borderWidth: 1.5, padding: 14, gap: 12,
     overflow: "hidden", position: "relative",
   },
+  // Phase 1 structured-report styles
+  headingChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: 8, borderWidth: 1, alignSelf: "flex-start",
+  },
+  headingChipText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
+
+  scoreRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  scoreLabel:  { fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
+  scoreStatus: { fontSize: 16, fontWeight: "900" },
+  scoreMethod: { fontSize: 9, fontStyle: "italic", marginTop: 2 },
+  dirChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6, borderWidth: 1, alignSelf: "flex-start",
+  },
+  dirChipText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
+
+  sectionLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginTop: 4 },
+
+  obsCard: {
+    flexDirection: "row", gap: 10,
+    padding: 10, borderRadius: 10, borderWidth: 1,
+  },
+  obsText: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  obsMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  obsTag: {
+    fontSize: 9, fontWeight: "900", letterSpacing: 0.8,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 4, borderWidth: 1,
+  },
+  obsCite: { fontSize: 9, fontWeight: "600", fontStyle: "italic" },
+
+  doshCard: { padding: 11, borderRadius: 10, borderWidth: 1, gap: 5 },
+  doshHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  doshName: { fontSize: 13, fontWeight: "800", flex: 1 },
+  doshBadge: { paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 4 },
+  doshBadgeText: { fontSize: 8, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+  doshDesc: { fontSize: 12, lineHeight: 17 },
+  doshCite: { fontSize: 9, fontWeight: "600", fontStyle: "italic", marginTop: 2 },
+
+  remCard: { flexDirection: "row", gap: 10, padding: 11, borderRadius: 10, borderWidth: 1 },
+  remDot:  { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  remText: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  remMeta: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  remPriority: { fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  remCite:  { fontSize: 9, fontWeight: "600", fontStyle: "italic" },
+
+  forecastCard: { padding: 12, borderRadius: 10, borderWidth: 1, gap: 5 },
+  forecastLabel: { fontSize: 9, fontWeight: "900", letterSpacing: 1.5, color: "#a78bfa" },
+  forecastText:  { fontSize: 13, lineHeight: 19, fontWeight: "600" },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconBox: {
     width: 44, height: 44, borderRadius: 12,

@@ -4013,6 +4013,75 @@ def ask_route():
     return jsonify(result)
 
 
+# ── Divya Prashna — Horary (Time Prashna) ────────────────────────────────────
+
+@app.route("/api/prashna/categories", methods=["GET"])
+def prashna_categories_route():
+    """Return the list of supported Divya Prashna categories for the UI."""
+    from prashna_engine import list_categories
+    return jsonify({"categories": list_categories()})
+
+
+@app.route("/api/prashna/ask", methods=["POST"])
+def prashna_ask_route():
+    """
+    Divya Prashna — answer a horary question using the live KP cusp chart
+    cast for the current server time at Bhubaneswar (astrologer's seat).
+
+    Body JSON:
+      {
+        "question": "Mera sona milega?"   (required, free text),
+        "category": "stolen_item" | ...   (optional, auto-inferred if omitted),
+        "user_id":  <int>                 (optional, for daily-quota gate)
+      }
+
+    Returns the prashna_engine result. Daily quota: same as /api/ask.
+    """
+    from prashna_engine import ask_prashna
+    from subscription_helper import consume_question, effective_plan
+
+    data     = request.get_json(force=True, silent=True) or {}
+    question = (data.get("question") or "").strip()
+    category = data.get("category")
+    user_id  = data.get("user_id")
+
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+
+    # ── Optional auth + daily quota (mirrors /api/ask) ───────────────────────
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          (
+                    f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                    "Pro upgrade karein for unlimited."
+                ),
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+
+    try:
+        result = ask_prashna(question=question, category=category)
+    except Exception:
+        app.logger.exception("[Divya Prashna] failed")
+        return jsonify({
+            "error":   "internal_error",
+            "message": "Prashna chart banane mein samasya hui. Punah prayaas karein.",
+        }), 500
+
+    return jsonify(result)
+
+
 # ── Vastu Drishti Scan (vision) ───────────────────────────────────────────────
 
 @app.route("/api/vastu-scan", methods=["POST"])

@@ -225,6 +225,28 @@ export default function AskScreen() {
         </Pressable>
       )}
 
+      {/* Divya Prashna entry */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/divya-prashna"); }}
+        style={{ marginHorizontal: 12, marginBottom: 8, borderRadius: 14, overflow: "hidden" }}
+      >
+        <LinearGradient
+          colors={["#7c3aed", "#a855f7", "#ec4899"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 }}
+        >
+          <Text style={{ fontSize: 22 }}>🔮</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Divya Prashna</Text>
+            <Text style={{ color: "#ffffffcc", fontSize: 11, marginTop: 2 }}>
+              Apna sawaal pucho — turant Vedic horary jawab
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color="#fff" />
+        </LinearGradient>
+      </Pressable>
+
       {/* Messages */}
       <FlatList
         ref={listRef}

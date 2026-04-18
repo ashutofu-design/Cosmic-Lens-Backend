@@ -111,6 +111,71 @@ def kundli_limit(user) -> int:
     return KUNDLI_LIMITS.get(effective_plan(user), 1)
 
 
+# ── AstroVastu tier gates ────────────────────────────────────────────────
+# BASIC AstroVastu (text-only kundli check) — shares the daily_questions_used
+# counter with the Q&A endpoint. Limits MUST stay aligned with QUESTION_LIMITS
+# above (free=3, trial=10, basic=10, pro=unlimited) since both flows consume
+# from the same atomic counter; otherwise the check could approve while the
+# consume step rejects.
+ASTROVASTU_BASIC_DAILY: dict = {
+    "free":  3,
+    "trial": 10,
+    "basic": 10,
+    "pro":  -1,
+    "elite": -1,
+}
+
+ASTROVASTU_PRO_MONTHLY: dict = {
+    "free":  0,    # Locked — preview only
+    "trial": 1,
+    "basic": 1,    # 1 deep-scan per month for Basic plan
+    "pro":  -1,    # Unlimited
+    "elite": -1,
+}
+
+
+def astrovastu_basic_limit(user) -> int:
+    return ASTROVASTU_BASIC_DAILY.get(effective_plan(user), 0)
+
+
+def astrovastu_pro_monthly_limit(user) -> int:
+    return ASTROVASTU_PRO_MONTHLY.get(effective_plan(user), 0)
+
+
+def can_use_astrovastu_basic(user) -> dict:
+    """Quick gate check for BASIC AstroVastu — reuses daily-questions counter."""
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+    reset_daily_quota_if_needed(user)
+    limit = astrovastu_basic_limit(user)
+    if limit == 0:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Plan upgrade required"}
+    if limit == -1:
+        return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
+    if user.daily_questions_used >= limit:
+        return {"allowed": False, "used": user.daily_questions_used, "limit": limit,
+                "reason": "Daily AstroVastu limit reached"}
+    return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
+
+
+def can_use_astrovastu_pro(user) -> dict:
+    """
+    Gate check for PRO AstroVastu deep-scan.
+    Note: monthly counter (`monthly_astrovastu_pro_used`) will be added in
+    Sprint 3 when the endpoint is wired. For now we only enforce the plan gate.
+    """
+    if not user:
+        return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+    limit = astrovastu_pro_monthly_limit(user)
+    if limit == 0:
+        return {"allowed": False, "used": 0, "limit": 0,
+                "reason": "PRO AstroVastu requires Basic or Pro plan"}
+    if limit == -1:
+        return {"allowed": True, "used": 0, "limit": -1}
+    # Sprint 1: plan-gate only. Sprint 3 will add monthly counter check.
+    return {"allowed": True, "used": 0, "limit": limit}
+
+
 def timeline_months(user) -> int:
     return TIMELINE_MONTHS.get(effective_plan(user), 0)
 

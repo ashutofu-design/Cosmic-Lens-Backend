@@ -1,0 +1,237 @@
+I need a COMPLETE, DEEP, and BRUTALLY HONEST audit of the AstroVastu system.
+
+This is NOT a summary request.  
+This is a FULL SYSTEM BREAKDOWN — product + backend + AI + accuracy + limitations.
+
+DO NOT skip anything. DO NOT generalize.
+
+-------------------------------------
+COPY FORMAT (MANDATORY)
+-------------------------------------
+
+Wrap the ENTIRE response in ONE SINGLE COPYABLE BLOCK.
+
+At the top:
+=== START COPY ===
+
+At the bottom:
+=== END COPY ===
+
+No emojis inside the block.
+
+-------------------------------------
+1. COMPLETE USER JOURNEY (PIXEL TO RESULT)
+-------------------------------------
+
+Explain EXACTLY what happens from the moment user taps AstroVastu:
+
+- Screen 1 (what user sees)
+- Buttons, options (Basic / Pro)
+- User actions
+- Every next screen
+
+Write like:
+Step 1 → Step 2 → Step 3 → ... → Final Output
+
+Include:
+- Loading states
+- Errors
+- Empty states
+
+-------------------------------------
+2. BASIC MODE — REAL IMPLEMENTATION
+-------------------------------------
+
+Explain:
+
+- Where kundli data comes from
+- What exact fields are used
+- How Lagna logic is applied
+- How Rashi modifies result
+- Whether rules are fixed or AI-generated
+
+Include:
+- Sample real output
+- Time taken
+- Cost
+- Backend endpoint
+
+-------------------------------------
+3. PRO MODE — FULL SYSTEM (NO SKIPPING)
+-------------------------------------
+
+FRONTEND FLOW:
+
+- Entry screen
+- Room selection
+- Image upload flow
+- Multi-photo logic
+- Compass capture (real or not?)
+
+BACKEND FLOW:
+
+- Endpoint called
+- Full request payload (example JSON)
+- Image handling (base64, compression, limits)
+- Model used
+- FULL prompt used (exact text)
+
+PROCESSING:
+
+- Object detection method (real vs guess)
+- Direction mapping logic
+- Rule application (real DB vs prompt)
+- Kundli merge logic
+- Score calculation logic
+
+OUTPUT:
+
+- Full sample response
+- Response JSON structure
+
+-------------------------------------
+4. DIRECTION SYSTEM — REALITY CHECK
+-------------------------------------
+
+- Is real magnetometer used?
+- How heading is captured?
+- Accuracy level?
+
+OR
+
+- Is it guessed from image?
+
+Explain clearly:
+REAL vs ASSUMPTION
+
+-------------------------------------
+5. IMAGE ANALYSIS — TRUTH
+-------------------------------------
+
+- Is this true computer vision?
+- Or LLM interpretation?
+
+Accuracy level for:
+- bed
+- stove
+- mirror
+- door
+- clutter
+
+Give realistic % estimate.
+
+-------------------------------------
+6. ASTRO ENGINE — DEPTH CHECK
+-------------------------------------
+
+- Which kundli fields are used:
+  Lagna, Rashi, Mahadasha, planets?
+
+- Are “80 rules” actually coded?
+  OR just simulated via prompt?
+
+- Is there deterministic logic?
+  OR fully AI reasoning?
+
+-------------------------------------
+7. BACKEND ARCHITECTURE
+-------------------------------------
+
+- All endpoints
+- Request/response formats
+- Where logic runs:
+  frontend / backend / AI
+
+- Error handling
+- Fallback logic
+
+-------------------------------------
+8. PERFORMANCE + COST
+-------------------------------------
+
+- Cost per scan (₹)
+- Time per scan
+- Limits:
+  images, size, quota
+
+-------------------------------------
+9. FAILURE & EDGE CASES
+-------------------------------------
+
+What happens if:
+
+- Image unclear
+- No image
+- Compass missing
+- Kundli missing
+- OpenAI fails
+
+-------------------------------------
+10. SECURITY + DATA
+-------------------------------------
+
+- Is user data safe?
+- API key exposure risk?
+- Image storage method?
+- Logging?
+
+-------------------------------------
+11. CHECKLIST (VERY IMPORTANT)
+-------------------------------------
+
+Give:
+
+✅ Fully implemented  
+⚠️ Partially implemented  
+❌ Not implemented  
+
+-------------------------------------
+12. UX + TRUST FACTOR
+-------------------------------------
+
+- Will user trust this system?
+- Does it feel real or AI-generated?
+
+-------------------------------------
+13. FINAL HONEST VERDICT (MOST IMPORTANT)
+-------------------------------------
+
+If a REAL user:
+
+- uploads room image
+- uses compass
+- has kundli
+
+Then:
+
+Will they get:
+- Accurate vastu analysis?
+- Correct direction-based insight?
+- Personalized Astro-Vastu output?
+
+OR:
+
+Is it still:
+- Approximation?
+- AI guessing?
+- Not fully reliable?
+
+-------------------------------------
+14. IMPROVEMENT ROADMAP
+-------------------------------------
+
+- Top 5 things needed to make it truly accurate
+- What to fix first
+
+-------------------------------------
+IMPORTANT:
+-------------------------------------
+
+Be brutally honest.
+
+Separate clearly:
+REAL ENGINE vs AI ASSUMPTION
+
+Do not hide weaknesses.
+
+Return EVERYTHING inside ONE COPYABLE BLOCK.

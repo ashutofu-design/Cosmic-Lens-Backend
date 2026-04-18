@@ -4082,6 +4082,64 @@ def prashna_ask_route():
     return jsonify(result)
 
 
+# ── Future Partner Portrait — async task with progress ───────────────────────
+
+@app.route("/api/partner-portrait/start", methods=["POST"])
+def partner_portrait_start_route():
+    """
+    Kick off async portrait generation. Body:
+      {
+        "kundli":      <kundli dict from /api/kundli>  (required),
+        "birth_data":  <birth dict>                    (optional, enables KP layer),
+        "user_gender": "male" | "female"               (optional, default male),
+        "user_id":     <int>                           (optional, for future quota gating)
+      }
+    Returns: { task_id, status: "queued" }
+    """
+    from partner_portrait_engine import start_portrait_task
+
+    data        = request.get_json(force=True, silent=True) or {}
+    kundli      = data.get("kundli")
+    birth_data  = data.get("birth_data")
+    user_gender = (data.get("user_gender") or "male").lower()
+    if user_gender not in ("male", "female"):
+        user_gender = "male"
+
+    if not isinstance(kundli, dict) or not kundli.get("planets"):
+        return jsonify({"error": "kundli is required"}), 400
+
+    # Optional auth (mirrors /api/ask)
+    user_id = data.get("user_id")
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        task_id = start_portrait_task(kundli, birth_data, user_gender)
+    except Exception:
+        app.logger.exception("[partner-portrait] start failed")
+        return jsonify({
+            "error":   "internal_error",
+            "message": "Portrait shuru nahi ho saka. Punah prayaas karein.",
+        }), 500
+
+    return jsonify({"task_id": task_id, "status": "queued"})
+
+
+@app.route("/api/partner-portrait/status/<task_id>", methods=["GET"])
+def partner_portrait_status_route(task_id):
+    """Poll the status of a running portrait task. Returns progress 0-100 + image_url when done."""
+    from partner_portrait_engine import get_task_status
+    status = get_task_status(task_id)
+    if not status:
+        return jsonify({"error": "task_not_found"}), 404
+    return jsonify(status)
+
+
 # ── Vastu Drishti Scan (vision) ───────────────────────────────────────────────
 
 @app.route("/api/vastu-scan", methods=["POST"])

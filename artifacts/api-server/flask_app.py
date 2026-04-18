@@ -416,7 +416,8 @@ def demo_login_route():
     """Idempotent demo user — for testing only.
     Returns a real backend user with valid id + api_key so payment & quota flows work.
     """
-    from subscription_helper import subscription_status, auto_start_trial_on_signup
+    from subscription_helper import subscription_status
+    from datetime import timedelta as _td
     DEMO_PHONE = "+919999000001"
     user = User.query.filter_by(phone=DEMO_PHONE).first()
     is_new = False
@@ -430,14 +431,15 @@ def demo_login_route():
         )
         db.session.add(user)
         db.session.flush()
-        try:
-            auto_start_trial_on_signup(user)
-        except Exception:
-            pass
     else:
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
         user.last_active = datetime.utcnow()
+
+    # Demo user always gets full Pro — for testing every paid feature end-to-end.
+    user.is_pro      = True
+    user.plan        = "pro"
+    user.plan_expiry = datetime.utcnow() + _td(days=365 * 10)
     db.session.commit()
     payload = user.to_dict()
     payload["subscription"] = subscription_status(user)

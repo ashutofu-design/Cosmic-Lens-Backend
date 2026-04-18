@@ -1,15 +1,18 @@
 /**
  * GalleryScanUpload — for users who aren't at home and can't open the live
- * camera. Lets them pick a photo from the gallery, then manually tag the
- * room type + direction (since there's no live magnetometer reading).
+ * camera. Lets them pick EITHER a photo from the gallery OR a PDF floor
+ * plan from files, then manually tag the room type + direction (since
+ * there's no live magnetometer reading).
  *
  * Submits via the parent's `onSubmit` callback as:
- *   { data_url, base64, room_type, direction }
+ *   { kind: "image"|"pdf", data_url, base64, room_type, direction }
  * The parent wires this into the existing /api/astrovastu-pro POST.
  *
  * Branding: "Cosmic Vision" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useState } from "react";
@@ -28,6 +31,7 @@ import {
 import { useC } from "@/context/ThemeContext";
 
 export type GalleryScanResult = {
+  kind:      "image" | "pdf";
   data_url:  string;
   base64:    string;
   room_type: string;
@@ -65,25 +69,29 @@ const DIRECTION_OPTIONS: { key: string; short: string; en: string; hi: string }[
   { key: "NW", short: "NW", en: "North-West", hi: "Vayavya"  },
 ];
 
+type PickedFile =
+  | { kind: "image"; data_url: string; base64: string; name?: string }
+  | { kind: "pdf";   data_url: string; base64: string; name?: string };
+
 export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
   const C = useC();
   const [open, setOpen] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [photo, setPhoto] = useState<{ data_url: string; base64: string } | null>(null);
+  const [picking, setPicking] = useState<"image" | "pdf" | null>(null);
+  const [file, setFile] = useState<PickedFile | null>(null);
   const [roomType, setRoomType] = useState<string>("");
   const [direction, setDirection] = useState<string>("");
 
-  // ── Open gallery & pick image ───────────────────────────────────────
+  // ── Pick image from gallery ─────────────────────────────────────────
   const pickImage = useCallback(async () => {
     if (disabled || loading || picking) return;
     Haptics.selectionAsync();
-    setPicking(true);
+    setPicking("image");
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
           "Gallery permission needed",
-          "Please allow photo access so you can pick a room photo from your gallery.",
+          "Please allow photo access so you can pick a floor plan from your gallery.",
         );
         return;
       }
@@ -95,9 +103,11 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
       });
       if (res.canceled || !res.assets?.[0]?.base64) return;
       const a = res.assets[0];
-      setPhoto({
+      setFile({
+        kind:     "image",
         base64:   a.base64!,
         data_url: `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`,
+        name:     a.fileName || undefined,
       });
       setRoomType("");
       setDirection("");
@@ -105,7 +115,51 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
     } catch (e: any) {
       Alert.alert("Couldn't open gallery", String(e?.message || e));
     } finally {
-      setPicking(false);
+      setPicking(null);
+    }
+  }, [disabled, loading, picking]);
+
+  // ── Pick PDF from device ────────────────────────────────────────────
+  const pickPdf = useCallback(async () => {
+    if (disabled || loading || picking) return;
+    Haptics.selectionAsync();
+    setPicking("pdf");
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled || !res.assets?.[0]) return;
+      const a = res.assets[0];
+
+      // Read the file as base64
+      const base64 = await FileSystem.readAsStringAsync(a.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Soft size limit (~10 MB raw → ~13 MB base64)
+      if (base64.length > 13 * 1024 * 1024) {
+        Alert.alert(
+          "PDF too large",
+          "Please pick a PDF smaller than 10 MB.",
+        );
+        return;
+      }
+
+      setFile({
+        kind:     "pdf",
+        base64,
+        data_url: `data:application/pdf;base64,${base64}`,
+        name:     a.name || "floor-plan.pdf",
+      });
+      setRoomType("");
+      setDirection("");
+      setOpen(true);
+    } catch (e: any) {
+      Alert.alert("Couldn't open file picker", String(e?.message || e));
+    } finally {
+      setPicking(null);
     }
   }, [disabled, loading, picking]);
 
@@ -113,59 +167,94 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
     if (loading) return;
     Haptics.selectionAsync();
     setOpen(false);
-    setPhoto(null);
+    setFile(null);
     setRoomType("");
     setDirection("");
   }, [loading]);
 
   const submit = useCallback(() => {
-    if (!photo || !roomType || !direction || loading) return;
+    if (!file || !roomType || !direction || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onSubmit({
-      data_url:  photo.data_url,
-      base64:    photo.base64,
+      kind:      file.kind,
+      data_url:  file.data_url,
+      base64:    file.base64,
       room_type: roomType,
       direction,
     });
     setOpen(false);
-    setPhoto(null);
+    setFile(null);
     setRoomType("");
     setDirection("");
-  }, [direction, loading, onSubmit, photo, roomType]);
+  }, [direction, file, loading, onSubmit, roomType]);
 
-  const canSubmit = !!photo && !!roomType && !!direction && !loading;
+  const canSubmit = !!file && !!roomType && !!direction && !loading;
+  const busy      = !!picking || !!loading;
 
   return (
     <>
-      <Pressable
-        onPress={pickImage}
-        disabled={disabled || loading || picking}
-        style={({ pressed }) => [
-          s.uploadBtn,
-          {
-            borderColor: C.border,
-            backgroundColor: C.bgCard,
-            opacity: (disabled || loading) ? 0.5 : pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        {picking ? (
-          <ActivityIndicator color={C.accent} />
-        ) : (
-          <>
-            <Feather name="image" size={20} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[s.uploadTitle, { color: C.text }]}>
-                Upload from Gallery
+      {/* Two side-by-side buttons: Image | PDF */}
+      <View style={s.btnRow}>
+        <Pressable
+          onPress={pickImage}
+          disabled={disabled || busy}
+          style={({ pressed }) => [
+            s.uploadBtn,
+            {
+              borderColor: C.border,
+              backgroundColor: C.bgCard,
+              opacity: (disabled || loading) ? 0.5 : pressed ? 0.85 : 1,
+              flex: 1,
+            },
+          ]}
+        >
+          {picking === "image" ? (
+            <ActivityIndicator color={C.accent} />
+          ) : (
+            <>
+              <Feather name="image" size={22} color={C.accent} />
+              <Text style={[s.uploadTitle, { color: C.text, marginTop: 8 }]}>
+                Upload Photo
               </Text>
               <Text style={[s.uploadSub, { color: C.textMid }]}>
-                Not at home? Pick a photo and tag the room + direction manually.
+                JPG / PNG from gallery
               </Text>
-            </View>
-            <Feather name="chevron-right" size={18} color={C.textMid} />
-          </>
-        )}
-      </Pressable>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          onPress={pickPdf}
+          disabled={disabled || busy}
+          style={({ pressed }) => [
+            s.uploadBtn,
+            {
+              borderColor: C.border,
+              backgroundColor: C.bgCard,
+              opacity: (disabled || loading) ? 0.5 : pressed ? 0.85 : 1,
+              flex: 1,
+            },
+          ]}
+        >
+          {picking === "pdf" ? (
+            <ActivityIndicator color={C.accent} />
+          ) : (
+            <>
+              <Feather name="file-text" size={22} color={C.accent} />
+              <Text style={[s.uploadTitle, { color: C.text, marginTop: 8 }]}>
+                Upload PDF
+              </Text>
+              <Text style={[s.uploadSub, { color: C.textMid }]}>
+                Floor plan PDF (page 1)
+              </Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+
+      <Text style={[s.hintLine, { color: C.textMid }]}>
+        Not at home? Pick a photo or PDF and tag the room + direction manually.
+      </Text>
 
       <Modal
         visible={open}
@@ -178,17 +267,27 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
             <Pressable onPress={close} hitSlop={10} style={{ padding: 6 }}>
               <Feather name="x" size={22} color={C.text} />
             </Pressable>
-            <Text style={[s.modalTitle, { color: C.text }]}>Tag this photo</Text>
+            <Text style={[s.modalTitle, { color: C.text }]}>Tag this {file?.kind === "pdf" ? "PDF" : "photo"}</Text>
             <View style={{ width: 28 }} />
           </View>
 
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-            {photo ? (
+            {file?.kind === "image" ? (
               <Image
-                source={{ uri: photo.data_url }}
+                source={{ uri: file.data_url }}
                 style={s.preview}
                 resizeMode="cover"
               />
+            ) : file?.kind === "pdf" ? (
+              <View style={[s.pdfBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Feather name="file-text" size={36} color={C.accent} />
+                <Text style={{ color: C.text, fontWeight: "700", marginTop: 8, textAlign: "center" }}>
+                  {file.name || "floor-plan.pdf"}
+                </Text>
+                <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4, textAlign: "center" }}>
+                  We will read page 1 of this PDF as your floor plan.
+                </Text>
+              </View>
             ) : null}
 
             <Text style={[s.sectionLabel, { color: C.textMid, marginTop: 18 }]}>
@@ -263,7 +362,7 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
 
             <Text style={[s.fineprint, { color: C.textMid }]}>
               You picked the direction yourself, so Cosmic Vision will use it as
-              ground truth instead of inferring from the photo.
+              ground truth instead of inferring from the {file?.kind === "pdf" ? "PDF" : "photo"}.
             </Text>
           </ScrollView>
         </View>
@@ -273,13 +372,18 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
 }
 
 const s = StyleSheet.create({
-  uploadBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingVertical: 16, paddingHorizontal: 16,
-    borderRadius: 14, borderWidth: 1, marginTop: 12,
+  btnRow: {
+    flexDirection: "row", gap: 10, marginTop: 12,
   },
-  uploadTitle: { fontSize: 14, fontWeight: "700" },
-  uploadSub:   { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  uploadBtn: {
+    alignItems: "center", justifyContent: "center",
+    paddingVertical: 18, paddingHorizontal: 12,
+    borderRadius: 14, borderWidth: 1,
+    minHeight: 110,
+  },
+  uploadTitle: { fontSize: 13, fontWeight: "700" },
+  uploadSub:   { fontSize: 10, marginTop: 3, textAlign: "center" },
+  hintLine:    { fontSize: 11, marginTop: 8, textAlign: "center", lineHeight: 15 },
 
   modalWrap:    { flex: 1 },
   modalHeader:  {
@@ -289,6 +393,11 @@ const s = StyleSheet.create({
   modalTitle:   { fontSize: 16, fontWeight: "700" },
 
   preview:      { width: "100%", height: 220, borderRadius: 12 },
+  pdfBadge:     {
+    width: "100%", paddingVertical: 28, paddingHorizontal: 18,
+    borderRadius: 12, borderWidth: 1, alignItems: "center",
+  },
+
   sectionLabel: { fontSize: 11, fontWeight: "800", textTransform: "uppercase",
                   letterSpacing: 0.5, marginBottom: 8 },
 

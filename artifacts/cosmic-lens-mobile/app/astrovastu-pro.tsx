@@ -134,11 +134,11 @@ export default function AstroVastuProScreen() {
     });
   }, [runScan]);
 
-  // ── Gallery upload: image + user-tagged room/direction (ground truth) ─
+  // ── Gallery / PDF upload: file + user-tagged room/direction (ground truth) ─
   const onGallerySubmit = useCallback((g: GalleryScanResult) => {
     runScan({
       floor_plan: [{ room_type: g.room_type, direction: g.direction }],
-      floor_plan_upload: { type: "image", data_url: g.data_url },
+      floor_plan_upload: { type: g.kind, data_url: g.data_url },
     });
   }, [runScan]);
 

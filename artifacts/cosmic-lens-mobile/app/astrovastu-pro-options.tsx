@@ -32,6 +32,11 @@ export default function AstroVastuProOptions() {
     );
   };
 
+  const goReports = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/my-reports" as any);
+  };
+
   return (
     <View style={[s.root, { backgroundColor: C.isDark ? "#050709" : C.bg }]}>
       {C.isDark && (
@@ -140,6 +145,30 @@ export default function AstroVastuProOptions() {
           </View>
         </Pressable>
 
+        {/* My Reports — history of paid scans */}
+        <Pressable
+          onPress={goReports}
+          style={({ pressed }) => [
+            s.reportsCard,
+            {
+              backgroundColor: C.isDark ? "#0e1318" : C.bgCard,
+              borderColor: C.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <View style={[s.reportsIcon, { backgroundColor: "#f6c45322", borderColor: "#f6c453" }]}>
+            <Feather name="folder" size={18} color="#f6c453" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.reportsTitle, { color: C.text }]}>My Reports</Text>
+            <Text style={[s.reportsSub, { color: C.textMuted }]}>
+              View &amp; share all your past PDF scans
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={C.textMuted} />
+        </Pressable>
+
         {/* Pro discount note */}
         <View style={[s.noteCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="zap" size={14} color="#f59e0b" />
@@ -189,6 +218,10 @@ const s = StyleSheet.create({
   bulletText:     { fontSize: 12, lineHeight: 17, flex: 1 },
   ctaRow:         { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 11, borderRadius: 10, marginTop: 6 },
   ctaText:        { fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
+  reportsCard:    { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 12, borderWidth: 1, marginTop: 4 },
+  reportsIcon:    { width: 38, height: 38, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  reportsTitle:   { fontSize: 14, fontWeight: "800" },
+  reportsSub:     { fontSize: 11, marginTop: 2 },
   noteCard:       { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 4 },
   noteText:       { fontSize: 11, lineHeight: 16, flex: 1 },
   branding:       { fontSize: 10, textAlign: "center", marginTop: 8, letterSpacing: 1.2, fontWeight: "600" },

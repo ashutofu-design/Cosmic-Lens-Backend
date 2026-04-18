@@ -3364,6 +3364,81 @@ def astrovastu_pro_pdf(log_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Phase 5 — Reports history (combined BIZ + PRO)
+# ─────────────────────────────────────────────────────────────────────────────
+def _grade_for(score: int) -> str:
+    if score >= 85: return "A"
+    if score >= 70: return "B"
+    if score >= 55: return "C"
+    if score >= 40: return "D"
+    return "E"
+
+
+@app.route("/api/user/<int:user_id>/reports/history", methods=["GET"])
+def reports_history_route(user_id):
+    """
+    Returns the user's combined paid-scan history (newest first).
+    Each item carries a freshly-issued short-lived `pdf_token` so the mobile
+    client can open the PDF without a second auth round-trip.
+
+    Auth: user_id + X-API-Key header.
+    """
+    from models import BusinessVastuLog, AstroVastuProLog
+
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+
+    try:
+        limit = max(1, min(int(request.args.get("limit", 50)), 200))
+    except (TypeError, ValueError):
+        limit = 50
+
+    items = []
+
+    biz_rows = (BusinessVastuLog.query
+                .filter_by(user_id=user.id)
+                .order_by(BusinessVastuLog.created_at.desc())
+                .limit(limit).all())
+    for r in biz_rows:
+        items.append({
+            "kind":          "business",
+            "id":            r.id,
+            "property_name": r.property_name or f"{(r.business_type or '').title()} scan",
+            "business_type": r.business_type,
+            "rooms_count":   r.rooms_count,
+            "score":         r.overall_score,
+            "grade":         _grade_for(r.overall_score or 0),
+            "created_at":    r.created_at.isoformat() if r.created_at else None,
+            "pdf_url":       f"/api/business-vastu/pdf/{r.id}",
+            "pdf_token":     make_pdf_token("biz", r.id, user.id),
+        })
+
+    pro_rows = (AstroVastuProLog.query
+                .filter_by(user_id=user.id)
+                .order_by(AstroVastuProLog.created_at.desc())
+                .limit(limit).all())
+    for r in pro_rows:
+        items.append({
+            "kind":          "pro",
+            "id":            r.id,
+            "property_name": getattr(r, "property_name", None) or "Home deep-scan",
+            "business_type": None,
+            "rooms_count":   r.rooms_count,
+            "score":         r.overall_score,
+            "grade":         _grade_for(r.overall_score or 0),
+            "created_at":    r.created_at.isoformat() if r.created_at else None,
+            "pdf_url":       f"/api/astrovastu-pro/pdf/{r.id}",
+            "pdf_token":     make_pdf_token("pro", r.id, user.id),
+        })
+
+    items.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    items = items[:limit]
+
+    return jsonify({"count": len(items), "items": items})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # AstroVastu  —  Phase-2 Status & Purchase Intent endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/astrovastu/status", methods=["GET", "POST"])

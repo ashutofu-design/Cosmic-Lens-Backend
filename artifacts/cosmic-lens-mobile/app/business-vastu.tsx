@@ -36,6 +36,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
@@ -171,6 +172,7 @@ export default function BusinessVastuScreen() {
   const [error,     setError]     = useState<ErrorPayload | null>(null);
   const [walletKey, setWalletKey] = useState(0);
   const [scanUpload, setScanUpload] = useState<SmartScanUploadValue | null>(null);
+  const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
 
@@ -180,6 +182,8 @@ export default function BusinessVastuScreen() {
     // Reset rooms with the first two critical rooms of the new business type
     const crits = ROOM_BY_BIZ[b].filter(r => r.critical).slice(0, 2);
     setRooms(crits.map(r => ({ room_type: r.key, direction: "" })));
+    // Clear any room photos — they were tied to the previous business type's room set
+    setRoomPhotos([]);
     setResult(null); setError(null);
   }, []);
 
@@ -233,6 +237,13 @@ export default function BusinessVastuScreen() {
               ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
               ...(scanUpload.north_at ? { north_at: scanUpload.north_at } : {}),
             } } : {}),
+          ...(roomPhotos.length > 0
+            ? { room_photos: roomPhotos.map(p => ({
+                  room_type:      p.room_type,
+                  image_data_url: p.image_data_url,
+                  ...(typeof p.heading_deg === "number" ? { heading_deg: p.heading_deg } : {}),
+                })) }
+            : {}),
         }),
       });
       const body = await resp.json();
@@ -249,7 +260,7 @@ export default function BusinessVastuScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, bizType, propertyName, scanUpload]);
+  }, [loading, rooms, user, bizType, propertyName, scanUpload, roomPhotos]);
 
   const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
 
@@ -343,6 +354,28 @@ export default function BusinessVastuScreen() {
         <View style={{ marginTop: 14 }}>
           <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
         </View>
+
+        {/* ── Optional: room photos with magnetometer (sensor-confirmed accuracy) ── */}
+        <RoomPhotoCapture
+          rooms={
+            // Use the user's listed rooms (whichever have a room_type filled in) —
+            // de-duped so each room appears once with its business-type label.
+            Array.from(
+              new Map(
+                rooms
+                  .filter(r => r.room_type)
+                  .map(r => {
+                    const meta = roomOpts.find(o => o.key === r.room_type);
+                    return [r.room_type, { key: r.room_type, label: meta?.en || r.room_type }];
+                  })
+              ).values()
+            )
+          }
+          photos={roomPhotos}
+          onChange={setRoomPhotos}
+          disabled={loading}
+          maxPhotos={6}
+        />
 
         {/* ── Floor-plan editor ──────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>

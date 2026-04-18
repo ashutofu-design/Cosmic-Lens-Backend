@@ -32,6 +32,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
+import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
@@ -118,6 +119,7 @@ export default function AstroVastuProScreen() {
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
   const [wholePlan, setWholePlan] = useState<SmartScanUploadValue | null>(null);
+  const [wholeRoomPhotos, setWholeRoomPhotos] = useState<RoomPhoto[]>([]);
   const [mode, setMode] = useState<"camera" | "single" | "whole">("camera");
   const [cameraRoom, setCameraRoom] = useState<string | null>(null);
 
@@ -187,8 +189,15 @@ export default function AstroVastuProScreen() {
         ...(wholePlan.base64   ? { base64:   wholePlan.base64   } : {}),
         north_at: wholePlan.north_at || "top",
       },
+      ...(wholeRoomPhotos.length > 0
+        ? { room_photos: wholeRoomPhotos.map(p => ({
+              room_type:      p.room_type,
+              image_data_url: p.image_data_url,
+              ...(typeof p.heading_deg === "number" ? { heading_deg: p.heading_deg } : {}),
+            })) }
+        : {}),
     });
-  }, [runScan, wholePlan]);
+  }, [runScan, wholePlan, wholeRoomPhotos]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -355,6 +364,16 @@ export default function AstroVastuProScreen() {
               onChange={setWholePlan}
               disabled={loading}
             />
+
+            {/* Optional: room photos with magnetometer for sensor-confirmed accuracy */}
+            <RoomPhotoCapture
+              rooms={CAMERA_ROOMS.map(r => ({ key: r.key, label: r.label }))}
+              photos={wholeRoomPhotos}
+              onChange={setWholeRoomPhotos}
+              disabled={loading}
+              maxPhotos={6}
+            />
+
             <Pressable
               onPress={onWholePlanSubmit}
               disabled={loading || !wholePlan}

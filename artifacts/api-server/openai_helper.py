@@ -381,6 +381,285 @@ Now perform the scan and return the strict JSON object."""
     ]
 
 
+# ── Deep Scan (Phase 2) — multi-photo 4-wall guided capture ───────────────────
+# Schema extends single-photo schema with per-wall analyses + spatial map.
+_VASTU_DEEP_JSON_SCHEMA: dict = {
+    "name": "vastu_deep_scan_result",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "scan_inconclusive", "inconclusive_reason",
+            "room_detected", "compliance_score", "energy_status",
+            "wall_analyses", "spatial_map",
+            "observations", "dosh", "remedies",
+            "energy_forecast", "confidence",
+            "photo_count_used",
+        ],
+        "properties": {
+            "scan_inconclusive":   {"type": "boolean"},
+            "inconclusive_reason": {"type": "string"},
+            "room_detected":       {"type": "string"},
+            "compliance_score":    {"type": "integer", "minimum": 0, "maximum": 100},
+            "energy_status":       {"type": "string", "enum": ["Excellent", "Optimal", "Mild Disturbance", "Moderate Dosh", "Significant Dosh"]},
+            "photo_count_used":    {"type": "integer", "minimum": 0, "maximum": 8},
+            "wall_analyses": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["wall_direction", "wall_heading_deg", "elements_detected", "wall_status", "wall_compliance", "notes"],
+                    "properties": {
+                        "wall_direction":   {"type": "string"},
+                        "wall_heading_deg": {"type": "number"},
+                        "elements_detected":{"type": "array", "items": {"type": "string"}},
+                        "wall_status":      {"type": "string", "enum": ["auspicious", "neutral", "concern", "dosh"]},
+                        "wall_compliance":  {"type": "integer", "minimum": 0, "maximum": 100},
+                        "notes":            {"type": "string"},
+                    },
+                },
+            },
+            "spatial_map": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["bed_or_seating", "main_door", "brahmasthan", "ne_corner", "sw_corner", "se_corner", "nw_corner"],
+                "properties": {
+                    "bed_or_seating": {"type": "string"},
+                    "main_door":      {"type": "string"},
+                    "brahmasthan":    {"type": "string"},
+                    "ne_corner":      {"type": "string"},
+                    "sw_corner":      {"type": "string"},
+                    "se_corner":      {"type": "string"},
+                    "nw_corner":      {"type": "string"},
+                },
+            },
+            "observations": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["text", "direction", "severity", "classical_rule_ref"],
+                    "properties": {
+                        "text":               {"type": "string"},
+                        "direction":          {"type": "string"},
+                        "severity":           {"type": "string", "enum": ["positive", "neutral", "warning", "critical"]},
+                        "classical_rule_ref": {"type": "string"},
+                    },
+                },
+            },
+            "dosh": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["name", "description", "classical_source", "severity"],
+                    "properties": {
+                        "name":             {"type": "string"},
+                        "description":      {"type": "string"},
+                        "classical_source": {"type": "string"},
+                        "severity":         {"type": "string", "enum": ["minor", "moderate", "major"]},
+                    },
+                },
+            },
+            "remedies": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["action", "priority", "classical_source"],
+                    "properties": {
+                        "action":           {"type": "string"},
+                        "priority":         {"type": "string", "enum": ["high", "medium", "low"]},
+                        "classical_source": {"type": "string"},
+                    },
+                },
+            },
+            "energy_forecast": {"type": "string"},
+            "confidence":      {"type": "integer", "minimum": 0, "maximum": 100},
+        },
+    },
+}
+
+
+def _vastu_deep_messages(
+    photos: list[dict],
+    room_type: str,
+    lang: str,
+    floor_plan_url: str | None,
+) -> list[dict]:
+    """
+    photos: list of {"image_data_url": str, "heading_deg": float, "label": str}
+            each pre-validated.
+    floor_plan_url: optional top-down floor plan image data URL.
+    """
+    lang_name = _VASTU_LANG_HINT.get(lang, "English")
+    room_label = (room_type or "room").strip().lower()
+    rules_block = format_rules_for_prompt(room_label)
+
+    photo_descriptors: list[str] = []
+    for i, p in enumerate(photos, 1):
+        h    = p["heading_deg"]
+        code = heading_to_direction(h)
+        full = DIRECTIONS.get(code, {}).get("name", code)
+        photo_descriptors.append(
+            f"  PHOTO {i}: facing {full} ({code}) at {h:.1f}° compass — captures the {full} wall of the room."
+        )
+
+    has_floor = floor_plan_url is not None
+    n = len(photos)
+
+    system = f"""You are the COSMIC VASTU DRISHTI ENGINE v3.0 — DEEP SCAN MODE.
+
+This is a MULTI-PHOTO spatial-energy analysis. You will receive {n} interior photographs of the same room, each captured at a specific compass heading (the camera was facing that direction at capture time). {('Plus ONE top-down floor plan image.' if has_floor else 'No floor plan provided.')}
+
+Your job: build a complete spatial map of the room by combining all photos, then apply classical Vastu Shastra to every wall, every corner, and every detected element.
+
+ABSOLUTE OUTPUT RULES:
+
+1. Return a single JSON object matching the strict schema. No prose outside JSON.
+2. NEVER mention "AI", "ChatGPT", "GPT", "OpenAI", "language model" anywhere.
+3. All free-text fields written in: {lang_name}. Field names, enum values, and classical citations stay in their original form.
+4. EVERY observation, dosh, and remedy MUST cite a rule from the injected database. Do not invent sources.
+5. compliance_score: backend will recompute deterministically from dosh severities (12/6/3 deduction). Keep your score consistent with this formula.
+6. confidence (0-100): self-report honestly. Boost if all 4 walls captured with magnetometer headings; lower if photos are dim/partial.
+7. wall_analyses: produce EXACTLY {n} entries — one per photo, in the same order. wall_heading_deg must match the heading provided for that photo. wall_compliance is per-wall 0-100. wall_status enum must be one of: auspicious / neutral / concern / dosh.
+   IMPORTANT — heading interpretation: provided headings are RAW DEVICE MAGNETIC compass readings (no declination correction, no building-axis offset). Real buildings often sit a few degrees off true magnetic north. Treat each heading as the dominant cardinal direction (snap to nearest of N/E/S/W when within ~25°), and use visible architectural cues (window placement, sun-light direction, door positions) to corroborate. If the user's heading clearly contradicts the visible scene, mention this in the wall's notes but proceed with the dominant cardinal guess.
+8. spatial_map: synthesize across ALL photos. For each field, give a one-line factual statement (e.g. bed_or_seating: "Bed positioned along South wall, head pointing South — auspicious per Brihat Samhita 53.45"). If you cannot determine a field with confidence, say "not clearly visible in provided photos".
+9. observations (3-8 items): the most important global observations across the whole room.
+10. dosh (0-5): real Vastu doshas with severity grading.
+11. remedies (3-7): practical actions — be specific to what was actually observed.
+12. energy_forecast: 1-2 sentences in {lang_name}, framed as energy alignment (no medical/legal/financial guarantees).
+13. photo_count_used: must equal {n}.
+14. If photos are too unclear to analyze: scan_inconclusive=true, fill inconclusive_reason in {lang_name}, return empty arrays for wall_analyses/observations/dosh/remedies and an empty-string spatial_map fields.
+
+=== PHOTO INVENTORY (in order they will appear) ===
+{chr(10).join(photo_descriptors)}
+{('  PHOTO ' + str(n+1) + ': top-down FLOOR PLAN of the room.' if has_floor else '')}
+
+=== INJECTED CLASSICAL VASTU RULE DATABASE ===
+{rules_block}
+
+=== END OF RULES ===
+
+Now perform the deep scan and return the strict JSON object."""
+
+    # User message: text + interleaved photos
+    user_content: list[dict] = [
+        {
+            "type": "text",
+            "text": (
+                f"Room type (user-declared): {room_label}\n"
+                f"Photos: {n} directional + {'1 floor plan' if has_floor else 'no floor plan'}\n"
+                f"All headings are REAL device magnetometer readings.\n\n"
+                f"Photos follow in order:"
+            ),
+        },
+    ]
+    for i, p in enumerate(photos, 1):
+        h    = p["heading_deg"]
+        code = heading_to_direction(h)
+        full = DIRECTIONS.get(code, {}).get("name", code)
+        user_content.append({
+            "type": "text",
+            "text": f"--- PHOTO {i}/{n} — facing {full} wall ({code}, heading {h:.1f}°) ---",
+        })
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": p["image_data_url"], "detail": "high"},
+        })
+    if floor_plan_url:
+        user_content.append({"type": "text", "text": f"--- PHOTO {n+1}/{n+1} — TOP-DOWN FLOOR PLAN (no heading) ---"})
+        user_content.append({"type": "image_url", "image_url": {"url": floor_plan_url, "detail": "high"}})
+
+    user_content.append({
+        "type": "text",
+        "text": "Now perform the full DEEP SCAN. Build the spatial map by cross-referencing all photos. Return the strict JSON object.",
+    })
+
+    return [
+        {"role": "system", "content": system},
+        {"role": "user",   "content": user_content},
+    ]
+
+
+def vastu_deep_scan(
+    photos: list[dict],
+    room_type: str = "room",
+    lang: str = "en",
+    floor_plan_url: str | None = None,
+) -> dict:
+    """
+    Multi-photo Vastu deep scan.
+
+    Args:
+      photos: list of dicts, each with keys:
+        - image_data_url: str (data URL or https URL, required)
+        - heading_deg:    float 0-360 (required, real magnetometer reading)
+        - label:          str (optional human-readable label, e.g. "north_wall")
+      room_type:      e.g. "bedroom"
+      lang:           language code
+      floor_plan_url: optional top-down floor plan image
+
+    Returns parsed dict matching _VASTU_DEEP_JSON_SCHEMA.
+    Raises RuntimeError on config / OpenAI failure.
+    """
+    client = _get_client()
+    if client is None:
+        raise RuntimeError(_client_err or "OpenAI client not configured")
+    if not photos:
+        raise RuntimeError("at least one photo is required")
+    if len(photos) > 6:
+        raise RuntimeError("maximum 6 directional photos supported")
+
+    # Validate each photo entry
+    norm: list[dict] = []
+    for i, p in enumerate(photos):
+        url = (p.get("image_data_url") or p.get("image") or "").strip()
+        if not url:
+            raise RuntimeError(f"photo {i+1}: image is required")
+        h = p.get("heading_deg")
+        if h is None:
+            raise RuntimeError(f"photo {i+1}: heading_deg is required (real magnetometer reading)")
+        try:
+            h = float(h) % 360.0
+        except (TypeError, ValueError):
+            raise RuntimeError(f"photo {i+1}: heading_deg must be a number")
+        norm.append({"image_data_url": url, "heading_deg": h, "label": p.get("label", f"photo_{i+1}")})
+
+    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
+    messages = _vastu_deep_messages(norm, room_type, lang, floor_plan_url)
+
+    try:
+        resp = client.chat.completions.create(
+            model           = model,
+            messages        = messages,
+            temperature     = 0.4,
+            max_tokens      = 3000,
+            response_format = {"type": "json_schema", "json_schema": _VASTU_DEEP_JSON_SCHEMA},
+        )
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI deep-scan request failed: {exc}") from exc
+
+    raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not raw:
+        raise RuntimeError("OpenAI returned empty deep-scan response")
+
+    try:
+        parsed = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI returned non-JSON deep-scan response: {exc}") from exc
+
+    parsed = _post_process_score(parsed)
+    parsed["room"]   = room_type
+    parsed["source"] = "openai-deep"
+    parsed["model"]  = model
+    parsed["photos_input_count"] = len(norm)
+    parsed["floor_plan_provided"] = floor_plan_url is not None
+
+    return parsed
+
+
 def _post_process_score(parsed: dict) -> dict:
     """
     ALWAYS recompute compliance_score deterministically from dosh severities so

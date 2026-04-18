@@ -2757,6 +2757,118 @@ def vastu_scan_route():
     return jsonify(result)
 
 
+# ── Vastu Drishti DEEP Scan (Phase 2 — multi-photo guided 4-wall capture) ─────
+
+@app.route("/api/vastu-deep-scan", methods=["POST"])
+def vastu_deep_scan_route():
+    """
+    Deep multi-photo Vastu analysis. Builds a complete spatial map by
+    cross-referencing 2-6 directional photos (each tagged with REAL device
+    magnetometer heading) plus an optional top-down floor plan.
+
+    Body JSON:
+      {
+        "photos": [
+          {"image": "data:image/jpeg;base64,...", "heading_deg": 0,   "label": "north_wall"},
+          {"image": "data:image/jpeg;base64,...", "heading_deg": 90,  "label": "east_wall"},
+          {"image": "data:image/jpeg;base64,...", "heading_deg": 180, "label": "south_wall"},
+          {"image": "data:image/jpeg;base64,...", "heading_deg": 270, "label": "west_wall"}
+        ],
+        "floor_plan":  "data:image/jpeg;base64,..."  (optional, top-down view),
+        "room":        "bedroom",
+        "lang":        "hn",
+        "user_id":     <int>  (REQUIRED — login required for deep scan)
+      }
+
+    Quota: deep scan consumes 1 question unit (cost ~₹3-5/scan).
+    """
+    from subscription_helper import consume_question, effective_plan
+    from openai_helper       import vastu_deep_scan
+
+    data       = request.get_json(force=True, silent=True) or {}
+    photos_raw = data.get("photos") or []
+    floor_plan = (data.get("floor_plan") or "").strip() or None
+    room       = (data.get("room") or "room").strip() or "room"
+    lang       = data.get("lang", "en")
+    user_id    = data.get("user_id")
+
+    if not isinstance(photos_raw, list) or len(photos_raw) < 2:
+        return jsonify({"error": "at least 2 directional photos are required"}), 400
+    if len(photos_raw) > 6:
+        return jsonify({"error": "maximum 6 directional photos supported"}), 400
+
+    # Normalize + validate each photo entry
+    photos: list[dict] = []
+    total_size = 0
+    for i, p in enumerate(photos_raw):
+        if not isinstance(p, dict):
+            return jsonify({"error": f"photo {i+1} must be an object"}), 400
+        img = (p.get("image") or "").strip()
+        if not img:
+            return jsonify({"error": f"photo {i+1}: image is required"}), 400
+        h = p.get("heading_deg")
+        if h is None:
+            return jsonify({"error": f"photo {i+1}: heading_deg required (real magnetometer reading)"}), 400
+        try:
+            h = float(h) % 360.0
+        except (TypeError, ValueError):
+            return jsonify({"error": f"photo {i+1}: heading_deg must be a number"}), 400
+        total_size += len(img)
+        photos.append({"image_data_url": img, "heading_deg": h, "label": p.get("label") or f"photo_{i+1}"})
+
+    if floor_plan:
+        total_size += len(floor_plan)
+
+    # Cap aggregate payload at 30 MB raw — protects backend + OpenAI bill.
+    if total_size > 30 * 1024 * 1024:
+        return jsonify({"error": "total image payload too large (max 30 MB)"}), 413
+
+    if not openai_available():
+        return jsonify({
+            "error":   "vastu_deep_scan_unavailable",
+            "message": "Deep Scan seva abhi temporarily band hai — kuch der baad try karein.",
+        }), 503
+
+    # ── Quota gate (login required for deep scan) ────────────────────────────
+    if not user_id:
+        return jsonify({
+            "error":   "login_required",
+            "message": "Deep Scan ke liye login zaroori hai — yeh advanced multi-photo analysis hai.",
+        }), 401
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not api_key or user.api_key != api_key:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    quota = consume_question(user)
+    if not quota["allowed"]:
+        return jsonify({
+            "error":            "daily_limit_reached",
+            "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited Deep Scans.",
+            "quota":            {"used": quota["used"], "limit": quota["limit"]},
+            "plan":             effective_plan(user),
+            "upgrade_required": True,
+        }), 402
+
+    try:
+        result = vastu_deep_scan(photos, room_type=room, lang=lang, floor_plan_url=floor_plan)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error":   "vastu_deep_scan_failed",
+            "message": "Deep scan complete nahi ho payi. Photos ko acchi roshni mein dobara capture karein.",
+            "detail":  str(exc),
+        }), 500
+
+    result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+    result["plan"]  = effective_plan(user)
+    return jsonify(result)
+
+
 # ── Numerology API ────────────────────────────────────────────────────────────
 
 PYTHAGOREAN = {

@@ -1308,6 +1308,671 @@ function VastuScanCard({ C }: { C: any }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 2 — DEEP SCAN: 4-wall guided multi-photo capture
+// ─────────────────────────────────────────────────────────────────────────────
+
+type WallStep = {
+  key:        "N" | "E" | "S" | "W";
+  label:      string;
+  hindi:      string;
+  target_deg: number;
+};
+
+const WALL_STEPS: WallStep[] = [
+  { key: "N", label: "North Wall", hindi: "Uttar (उत्तर)", target_deg: 0   },
+  { key: "E", label: "East Wall",  hindi: "Poorv (पूर्व)",  target_deg: 90  },
+  { key: "S", label: "South Wall", hindi: "Dakshin (दक्षिण)",target_deg: 180 },
+  { key: "W", label: "West Wall",  hindi: "Paschim (पश्चिम)",target_deg: 270 },
+];
+
+const ALIGN_TOLERANCE_DEG = 15;
+
+// Live continuously-updating compass heading (state, not ref) — used by wizard.
+// Gated by `enabled` so the sensor isn't draining battery while the wizard
+// modal is mounted-but-hidden.
+function useLiveHeading(enabled: boolean) {
+  const [heading, setHeading] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) { setHeading(null); return; }
+    if (Platform.OS === "web") return;
+    Magnetometer.setUpdateInterval(120);
+    const sub = Magnetometer.addListener(({ x, y }) => {
+      let angle = Math.atan2(-x, y) * (180 / Math.PI);
+      if (angle < 0) angle += 360;
+      setHeading(angle);
+    });
+    return () => sub.remove();
+  }, [enabled]);
+  return heading;
+}
+
+// Smallest signed angular delta (current → target) in degrees, range [-180, 180]
+function angularDelta(current: number, target: number): number {
+  let d = ((target - current + 540) % 360) - 180;
+  return d;
+}
+
+type CapturedPhoto = {
+  uri:         string;
+  base64:      string;
+  heading_deg: number;
+};
+
+// ── Compact alignment indicator (north-up arc with target marker) ─────────
+function AlignmentDial({ current, target }: { current: number | null; target: number }) {
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r  = size / 2 - 14;
+  const delta = current == null ? null : angularDelta(current, target);
+  const aligned = delta != null && Math.abs(delta) <= ALIGN_TOLERANCE_DEG;
+  const ringColor = current == null ? "#64748b" : aligned ? "#10b981" : Math.abs(delta!) < 35 ? "#f59e0b" : "#ef4444";
+
+  // Target marker at top (12 o'clock = target direction). Arrow indicates how far phone heading is from target.
+  // Phone-relative arrow rotation: -delta (positive delta = need to rotate phone clockwise toward target,
+  // so the arrow points right; equivalently, the arrow direction = -delta from up).
+  const arrowAngle = delta == null ? 0 : -delta;
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size}>
+        {/* Outer ring */}
+        <Circle cx={cx} cy={cy} r={r} stroke="#ffffff15" strokeWidth={2} fill="none" />
+        {/* Tolerance arc at top */}
+        <Path
+          d={`M ${cx + r * Math.cos((-90 - ALIGN_TOLERANCE_DEG) * Math.PI / 180)} ${cy + r * Math.sin((-90 - ALIGN_TOLERANCE_DEG) * Math.PI / 180)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos((-90 + ALIGN_TOLERANCE_DEG) * Math.PI / 180)} ${cy + r * Math.sin((-90 + ALIGN_TOLERANCE_DEG) * Math.PI / 180)}`}
+          stroke="#10b98166"
+          strokeWidth={6}
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Target tick at top */}
+        <Line x1={cx} y1={cy - r - 4} x2={cx} y2={cy - r + 8} stroke="#10b981" strokeWidth={3} />
+        {/* Arrow showing where phone is currently pointing relative to target */}
+        {delta != null && (
+          <G transform={`rotate(${arrowAngle} ${cx} ${cy})`}>
+            <Polygon
+              points={`${cx},${cy - r + 12} ${cx - 12},${cy - r + 38} ${cx + 12},${cy - r + 38}`}
+              fill={ringColor}
+            />
+            <Line x1={cx} y1={cy - r + 38} x2={cx} y2={cy + r * 0.35} stroke={ringColor} strokeWidth={3} strokeLinecap="round" />
+          </G>
+        )}
+        {/* Center dot */}
+        <Circle cx={cx} cy={cy} r={6} fill={ringColor} />
+      </Svg>
+      <View style={{ position: "absolute", bottom: 6, alignItems: "center" }}>
+        <Text style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 1 }}>TARGET</Text>
+        <Text style={{ fontSize: 14, fontWeight: "900", color: ringColor }}>{Math.round(target)}°</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Deep-scan capture wizard (modal) ──────────────────────────────────────
+function DeepScanWizard({
+  C,
+  visible,
+  onClose,
+  onComplete,
+}: {
+  C:          any;
+  visible:    boolean;
+  onClose:    () => void;
+  onComplete: (photos: CapturedPhoto[], floorPlan: { uri: string; base64: string } | null) => void;
+}) {
+  const heading = useLiveHeading(visible);
+  const [stepIndex, setStepIndex] = useState(0); // 0..3 = walls, 4 = floor plan, 5 = review
+  const [captured, setCaptured]   = useState<(CapturedPhoto | null)[]>([null, null, null, null]);
+  const [floorPlan, setFloorPlan] = useState<{ uri: string; base64: string } | null>(null);
+  const [busy, setBusy]           = useState(false);
+
+  const reset = useCallback(() => {
+    setStepIndex(0);
+    setCaptured([null, null, null, null]);
+    setFloorPlan(null);
+    setBusy(false);
+  }, []);
+
+  useEffect(() => { if (!visible) reset(); }, [visible, reset]);
+
+  const isWallStep = stepIndex >= 0 && stepIndex < 4;
+  const wallStep   = isWallStep ? WALL_STEPS[stepIndex] : null;
+  const delta      = wallStep && heading != null ? angularDelta(heading, wallStep.target_deg) : null;
+  const aligned    = delta != null && Math.abs(delta) <= ALIGN_TOLERANCE_DEG;
+
+  const captureCurrentWall = async (useCamera: boolean) => {
+    if (!wallStep) return;
+    if (heading == null) {
+      Alert.alert("Compass calibrating", "Phone ko hawa mein ek '∞' shape mein ghoomayein, fir compass ready ho jayega.");
+      return;
+    }
+    if (useCamera && !aligned) {
+      Alert.alert("Phone ko sahi direction mein karein", `${wallStep.label} (${Math.round(wallStep.target_deg)}°) ki taraf face karein. Tolerance ±${ALIGN_TOLERANCE_DEG}° hai.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      let r;
+      if (useCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Camera permission needed"); return; }
+        r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
+      } else {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { Alert.alert("Gallery permission needed"); return; }
+        r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
+      }
+      if (r.canceled || !r.assets?.[0]) return;
+      const a = r.assets[0];
+      if (!a.base64) { Alert.alert("Photo nahi padh sake"); return; }
+      // Capture heading at the moment of taking photo (camera) or current heading (library override).
+      const headingAtCapture = heading; // already validated above
+      const next = [...captured];
+      next[stepIndex] = { uri: a.uri, base64: a.base64, heading_deg: headingAtCapture! };
+      setCaptured(next);
+      Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Photo capture nahi ho payi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickFloorPlan = async () => {
+    setBusy(true);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert("Gallery permission needed"); return; }
+      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
+      if (r.canceled || !r.assets?.[0]) return;
+      const a = r.assets[0];
+      if (!a.base64) return;
+      setFloorPlan({ uri: a.uri, base64: a.base64 });
+      Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Floor plan upload nahi ho paya.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const goNext = () => {
+    if (isWallStep && !captured[stepIndex]) {
+      Alert.alert("Pehle is wall ki photo lijiye");
+      return;
+    }
+    Haptics.selectionAsync?.();
+    setStepIndex(stepIndex + 1);
+  };
+  const goBack = () => {
+    if (stepIndex === 0) { onClose(); return; }
+    setStepIndex(stepIndex - 1);
+  };
+  const submitAll = () => {
+    const photos = captured.filter(Boolean) as CapturedPhoto[];
+    if (photos.length < 2) { Alert.alert("Kam se kam 2 walls capture karein"); return; }
+    onComplete(photos, floorPlan);
+  };
+
+  const totalSteps = 5;
+  const stepHuman  = stepIndex < 4 ? `${stepIndex + 1}/4` : stepIndex === 4 ? "Optional" : "Review";
+
+  // Status banner color/text
+  let statusColor = "#94a3b8";
+  let statusText  = "Compass calibrating…";
+  if (heading != null && wallStep) {
+    if (aligned)            { statusColor = "#10b981"; statusText = "PERFECT — Capture now ✓"; }
+    else if (Math.abs(delta!) < 35) { statusColor = "#f59e0b"; statusText = `Almost there — ${Math.round(Math.abs(delta!))}° ${delta! > 0 ? "right" : "left"}`; }
+    else                    { statusColor = "#ef4444"; statusText = `Turn ${Math.round(Math.abs(delta!))}° ${delta! > 0 ? "right ➡" : "⬅ left"}`; }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: C.bgScreen ?? "#0a0a0f" }}>
+        <SafeAreaTopSpacer />
+        {/* Header */}
+        <View style={ds.header}>
+          <Pressable onPress={goBack} hitSlop={10} style={ds.headerBtn}>
+            <Feather name="chevron-left" size={22} color={C.text} />
+          </Pressable>
+          <View style={{ flex: 1, alignItems: "center" }}>
+            <Text style={[ds.headerTitle, { color: C.text }]}>Cosmic Vastu Deep Scan</Text>
+            <Text style={[ds.headerSub,   { color: C.textMuted }]}>Step {stepHuman} of {totalSteps}</Text>
+          </View>
+          <Pressable onPress={onClose} hitSlop={10} style={ds.headerBtn}>
+            <Feather name="x" size={20} color={C.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Step indicator dots */}
+        <View style={ds.dotsRow}>
+          {[0, 1, 2, 3, 4].map(i => {
+            const done   = i < 4 ? !!captured[i] : !!floorPlan;
+            const active = i === stepIndex;
+            return (
+              <View
+                key={i}
+                style={[
+                  ds.dot,
+                  { backgroundColor: done ? "#10b981" : active ? "#a78bfa" : "#ffffff15" },
+                ]}
+              />
+            );
+          })}
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+          {isWallStep && wallStep && (
+            <>
+              <Text style={[ds.stepTitle, { color: C.text }]}>{wallStep.label}</Text>
+              <Text style={[ds.stepSub,   { color: C.textMuted }]}>{wallStep.hindi} • Target {Math.round(wallStep.target_deg)}°</Text>
+
+              <View style={ds.dialWrap}>
+                <AlignmentDial current={heading} target={wallStep.target_deg} />
+              </View>
+
+              <View style={[ds.statusPill, { backgroundColor: statusColor + "20", borderColor: statusColor + "66" }]}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
+                <Text style={{ color: statusColor, fontWeight: "800", fontSize: 12, letterSpacing: 0.4 }}>{statusText}</Text>
+              </View>
+
+              <Text style={[ds.helper, { color: C.textMuted }]}>
+                Stand in the centre of the room and rotate your body so the camera faces the {wallStep.label.toLowerCase()}. Tap the capture button when the dial is green.
+              </Text>
+
+              {captured[stepIndex] && (
+                <View style={ds.thumbWrap}>
+                  <Image source={{ uri: captured[stepIndex]!.uri }} style={ds.thumbImg} contentFit="cover" />
+                  <View style={ds.thumbBadge}>
+                    <Feather name="check-circle" size={14} color="#10b981" />
+                    <Text style={ds.thumbBadgeText}>Captured at {Math.round(captured[stepIndex]!.heading_deg)}°</Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={ds.btnRow}>
+                <Pressable
+                  onPress={() => captureCurrentWall(true)}
+                  disabled={busy || !aligned}
+                  style={[ds.bigBtn, { backgroundColor: aligned ? "#10b981" : "#374151", opacity: busy ? 0.6 : 1 }]}
+                >
+                  <Feather name="camera" size={18} color="#fff" />
+                  <Text style={ds.bigBtnText}>{aligned ? "Capture Now" : "Align First"}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => captureCurrentWall(false)}
+                  disabled={busy}
+                  style={[ds.smallBtn, { borderColor: C.border }]}
+                >
+                  <Feather name="image" size={14} color={C.textMuted} />
+                  <Text style={[ds.smallBtnText, { color: C.textMuted }]}>From Gallery</Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={goNext}
+                disabled={!captured[stepIndex]}
+                style={[ds.nextBtn, { backgroundColor: captured[stepIndex] ? "#a78bfa" : "#37415180" }]}
+              >
+                <Text style={ds.nextBtnText}>Next: {stepIndex < 3 ? WALL_STEPS[stepIndex + 1].label : "Floor Plan (optional)"}</Text>
+                <Feather name="chevron-right" size={16} color="#fff" />
+              </Pressable>
+            </>
+          )}
+
+          {stepIndex === 4 && (
+            <>
+              <Text style={[ds.stepTitle, { color: C.text }]}>Floor Plan (Optional)</Text>
+              <Text style={[ds.stepSub, { color: C.textMuted }]}>
+                Top-down view of your room — adds spatial context. Skip if you don't have one.
+              </Text>
+
+              <View style={[ds.uploadCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                {floorPlan ? (
+                  <Image source={{ uri: floorPlan.uri }} style={ds.fpImg} contentFit="contain" />
+                ) : (
+                  <>
+                    <Feather name="map" size={36} color={C.textDim} />
+                    <Text style={[ds.uploadHint, { color: C.textMuted }]}>No floor plan added</Text>
+                  </>
+                )}
+              </View>
+
+              <View style={ds.btnRow}>
+                <Pressable onPress={pickFloorPlan} disabled={busy} style={[ds.bigBtn, { backgroundColor: "#a78bfa" }]}>
+                  <Feather name={floorPlan ? "refresh-cw" : "upload"} size={16} color="#fff" />
+                  <Text style={ds.bigBtnText}>{floorPlan ? "Replace" : "Upload Floor Plan"}</Text>
+                </Pressable>
+                {floorPlan && (
+                  <Pressable onPress={() => setFloorPlan(null)} style={[ds.smallBtn, { borderColor: C.border }]}>
+                    <Feather name="x" size={14} color={C.textMuted} />
+                    <Text style={[ds.smallBtnText, { color: C.textMuted }]}>Remove</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <Pressable onPress={goNext} style={[ds.nextBtn, { backgroundColor: "#a78bfa" }]}>
+                <Text style={ds.nextBtnText}>Next: Review & Scan</Text>
+                <Feather name="chevron-right" size={16} color="#fff" />
+              </Pressable>
+            </>
+          )}
+
+          {stepIndex === 5 && (
+            <>
+              <Text style={[ds.stepTitle, { color: C.text }]}>Review & Submit</Text>
+              <Text style={[ds.stepSub, { color: C.textMuted }]}>Confirm your captures, then run Deep Scan.</Text>
+
+              <View style={ds.reviewGrid}>
+                {WALL_STEPS.map((w, i) => {
+                  const ph = captured[i];
+                  return (
+                    <View key={w.key} style={[ds.reviewCell, { borderColor: C.border, backgroundColor: C.bgCard }]}>
+                      {ph ? (
+                        <Image source={{ uri: ph.uri }} style={ds.reviewImg} contentFit="cover" />
+                      ) : (
+                        <View style={[ds.reviewImg, { alignItems: "center", justifyContent: "center" }]}>
+                          <Feather name="alert-triangle" size={20} color="#94a3b8" />
+                        </View>
+                      )}
+                      <Text style={[ds.reviewLabel, { color: C.text }]}>{w.key} • {w.label}</Text>
+                      <Text style={[ds.reviewMeta,  { color: C.textMuted }]}>
+                        {ph ? `${Math.round(ph.heading_deg)}° captured` : "Skipped"}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {floorPlan && (
+                  <View style={[ds.reviewCell, { borderColor: "#a78bfa55", backgroundColor: C.bgCard, width: "100%" }]}>
+                    <Image source={{ uri: floorPlan.uri }} style={[ds.reviewImg, { height: 120 }]} contentFit="contain" />
+                    <Text style={[ds.reviewLabel, { color: C.text }]}>📐 Floor Plan</Text>
+                  </View>
+                )}
+              </View>
+
+              <Pressable onPress={submitAll} style={[ds.nextBtn, { backgroundColor: "#10b981", marginTop: 18 }]}>
+                <Feather name="zap" size={16} color="#fff" />
+                <Text style={ds.nextBtnText}>Run Cosmic Deep Scan</Text>
+              </Pressable>
+              <Text style={[ds.fineprint, { color: C.textMuted }]}>
+                Uses 1 daily quota unit • Powered by Advanced Cosmic Intelligence
+              </Text>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+function SafeAreaTopSpacer() {
+  const ins = useSafeAreaInsets();
+  return <View style={{ height: ins.top }} />;
+}
+
+// ── Deep Scan entry card (replaces hidden until expanded) ─────────────────
+type VastuDeepScanResponse = VastuScanResponse & {
+  wall_analyses?: Array<{
+    wall_direction:    string;
+    wall_heading_deg:  number;
+    elements_detected: string[];
+    wall_status:       "auspicious" | "neutral" | "concern" | "dosh";
+    wall_compliance:   number;
+    notes:             string;
+  }>;
+  spatial_map?: {
+    bed_or_seating: string;
+    main_door:      string;
+    brahmasthan:    string;
+    ne_corner:      string;
+    sw_corner:      string;
+    se_corner:      string;
+    nw_corner:      string;
+  };
+  photos_input_count?:  number;
+  floor_plan_provided?: boolean;
+};
+
+function VastuDeepScanCard({ C }: { C: any }) {
+  const { user, language } = useUser();
+  const [room, setRoom]               = useState<string>("bedroom");
+  const [showRoomPicker, setShowPick] = useState(false);
+  const [wizardOpen, setWizardOpen]   = useState(false);
+  const [scanning, setScanning]       = useState(false);
+  const [result, setResult]           = useState<VastuDeepScanResponse | null>(null);
+
+  const startWizard = () => {
+    if (!user?.id) {
+      Alert.alert("Login required", "Deep Scan ke liye login zaroori hai — yeh advanced multi-photo analysis hai.");
+      return;
+    }
+    setResult(null);
+    setWizardOpen(true);
+  };
+
+  const handleComplete = async (photos: CapturedPhoto[], floorPlan: { uri: string; base64: string } | null) => {
+    setWizardOpen(false);
+    setScanning(true);
+    try {
+      const body: any = {
+        room,
+        lang:    language || "en",
+        user_id: user?.id,
+        photos:  photos.map(p => ({
+          image:       `data:image/jpeg;base64,${p.base64}`,
+          heading_deg: p.heading_deg,
+          label:       `wall_${Math.round(p.heading_deg)}deg`,
+        })),
+      };
+      if (floorPlan) body.floor_plan = `data:image/jpeg;base64,${floorPlan.base64}`;
+
+      const r = await fetch(`${API_BASE}/api/vastu-deep-scan`, {
+        method:  "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(user?.api_key ? { "X-API-Key": user.api_key } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        Alert.alert(j.error === "daily_limit_reached" ? "Daily limit poora" : "Deep scan failed", j.message ?? "Try again.");
+        return;
+      }
+      setResult(j as VastuDeepScanResponse);
+      Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert("Network error", e?.message ?? "Server se baat nahi ho payi.");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const reset = () => setResult(null);
+
+  return (
+    <View style={[vds.card, { backgroundColor: C.bgCard, borderColor: "#a78bfa55" }]}>
+      <View style={vds.glow} />
+      <View style={vds.header}>
+        <View style={vds.badge}>
+          <Feather name="zap" size={10} color="#fff" />
+          <Text style={vds.badgeText}>DEEP SCAN</Text>
+        </View>
+        <Text style={[vds.title, { color: C.text }]}>4-Wall Cosmic Drishti</Text>
+        <Text style={[vds.sub,   { color: C.textMuted }]}>
+          Photograph each wall with the compass guide — get a complete spatial energy map of the room.
+        </Text>
+      </View>
+
+      {!result && !scanning && (
+        <>
+          <Pressable
+            onPress={() => setShowPick(true)}
+            style={[vds.roomChip, { borderColor: C.border, backgroundColor: C.bgCardElev ?? "#ffffff08" }]}
+          >
+            <Text style={{ fontSize: 16 }}>{ROOM_TYPES.find(r => r.key === room)?.emoji ?? "🏠"}</Text>
+            <Text style={[vds.roomChipText, { color: C.text }]}>{ROOM_TYPES.find(r => r.key === room)?.label ?? "Room"}</Text>
+            <Feather name="chevron-down" size={14} color={C.textMuted} />
+          </Pressable>
+
+          <View style={vds.featureRow}>
+            <DeepFeature icon="compass"    text="Live compass alignment ±15°" />
+            <DeepFeature icon="grid"       text="Per-wall analysis" />
+            <DeepFeature icon="map"        text="Spatial Brahmasthan map" />
+            <DeepFeature icon="book-open"  text="80+ classical rules" />
+          </View>
+
+          <Pressable onPress={startWizard} style={vds.startBtn}>
+            <LinearGradient
+              colors={["#a78bfa", "#7c3aed"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={vds.startBtnInner}
+            >
+              <Feather name="zap" size={16} color="#fff" />
+              <Text style={vds.startBtnText}>Start Deep Scan</Text>
+            </LinearGradient>
+          </Pressable>
+
+          {!user?.id && (
+            <Text style={[vds.note, { color: C.textMuted }]}>🔒 Login required • Uses 1 daily quota unit</Text>
+          )}
+        </>
+      )}
+
+      {scanning && (
+        <View style={{ alignItems: "center", paddingVertical: 24 }}>
+          <ActivityIndicator size="large" color="#a78bfa" />
+          <Text style={{ color: C.textMuted, marginTop: 12, fontSize: 12, textAlign: "center" }}>
+            Cosmic Drishti Engine analyzing all walls and synthesizing spatial map…{"\n"}
+            (10–30 seconds)
+          </Text>
+        </View>
+      )}
+
+      {result && (
+        <VastuScanReport C={C} data={result} onReset={reset} extras={{
+          wall_analyses: result.wall_analyses,
+          spatial_map:   result.spatial_map,
+          photos_count:  result.photos_input_count,
+          floor_plan:    result.floor_plan_provided,
+        }} />
+      )}
+
+      {/* Wizard */}
+      <DeepScanWizard
+        C={C}
+        visible={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onComplete={handleComplete}
+      />
+
+      {/* Room picker (reuses same modal styles as basic) */}
+      <Modal visible={showRoomPicker} transparent animationType="fade" onRequestClose={() => setShowPick(false)}>
+        <Pressable style={vs.modalBackdrop} onPress={() => setShowPick(false)}>
+          <Pressable style={[vs.modalCard, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={(e) => e.stopPropagation?.()}>
+            <Text style={[vs.modalTitle, { color: C.text }]}>Room type chuniye</Text>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {ROOM_TYPES.map(rt => (
+                <Pressable
+                  key={rt.key}
+                  onPress={() => { setRoom(rt.key); setShowPick(false); Haptics.selectionAsync?.(); }}
+                  style={[vs.modalRow, room === rt.key && { backgroundColor: "#a78bfa20" }]}
+                >
+                  <Text style={{ fontSize: 18 }}>{rt.emoji}</Text>
+                  <Text style={[vs.modalRowText, { color: C.text }]}>{rt.label}</Text>
+                  {room === rt.key && <Feather name="check" size={16} color="#a78bfa" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+function DeepFeature({ icon, text }: { icon: any; text: string }) {
+  return (
+    <View style={vds.feat}>
+      <Feather name={icon} size={11} color="#a78bfa" />
+      <Text style={vds.featText}>{text}</Text>
+    </View>
+  );
+}
+
+// ── Wall analyses + spatial map blocks (rendered inside VastuScanReport) ──
+function WallAnalysisBlock({ C, walls }: { C: any; walls: NonNullable<VastuDeepScanResponse["wall_analyses"]> }) {
+  if (!walls?.length) return null;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>WALL-BY-WALL ANALYSIS</Text>
+      {walls.map((w, i) => {
+        const sev = w.wall_status === "auspicious" ? SEV_OBS.positive
+                  : w.wall_status === "neutral"    ? SEV_OBS.neutral
+                  : w.wall_status === "concern"    ? SEV_OBS.warning
+                                                   : SEV_OBS.critical;
+        const compClr = w.wall_compliance >= 75 ? "#10b981" : w.wall_compliance >= 50 ? "#f59e0b" : "#ef4444";
+        return (
+          <View key={i} style={{ borderRadius: 10, borderWidth: 1, padding: 11, backgroundColor: sev.bg, borderColor: sev.border, gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name={sev.icon} size={14} color={sev.color} />
+              <Text style={{ color: C.text, fontWeight: "800", fontSize: 13, flex: 1 }}>
+                {w.wall_direction} <Text style={{ color: C.textMuted, fontWeight: "600", fontSize: 11 }}>· {Math.round(w.wall_heading_deg)}°</Text>
+              </Text>
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: compClr + "30", borderWidth: 1, borderColor: compClr + "66" }}>
+                <Text style={{ color: compClr, fontWeight: "900", fontSize: 10 }}>{w.wall_compliance}/100</Text>
+              </View>
+            </View>
+            {w.elements_detected?.length > 0 && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                {w.elements_detected.map((el, k) => (
+                  <View key={k} style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: "#ffffff10" }}>
+                    <Text style={{ color: C.textMuted, fontSize: 10, fontWeight: "600" }}>{el}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {!!w.notes && <Text style={{ color: C.text, fontSize: 12, lineHeight: 17 }}>{w.notes}</Text>}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function SpatialMapBlock({ C, map }: { C: any; map: NonNullable<VastuDeepScanResponse["spatial_map"]> }) {
+  const rows: { k: string; label: string; emoji: string }[] = [
+    { k: "bed_or_seating", label: "Bed / Seating",     emoji: "🛏️" },
+    { k: "main_door",      label: "Main Door",         emoji: "🚪" },
+    { k: "brahmasthan",    label: "Brahmasthan (centre)", emoji: "🕉️" },
+    { k: "ne_corner",      label: "NE Corner (Ishanya)",   emoji: "🌅" },
+    { k: "se_corner",      label: "SE Corner (Agni)",      emoji: "🔥" },
+    { k: "sw_corner",      label: "SW Corner (Nairutya)",  emoji: "🪨" },
+    { k: "nw_corner",      label: "NW Corner (Vayavya)",   emoji: "💨" },
+  ];
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>SPATIAL ENERGY MAP</Text>
+      <View style={{ borderRadius: 10, borderWidth: 1, borderColor: C.border, backgroundColor: "#ffffff05", padding: 10, gap: 8 }}>
+        {rows.map(r => {
+          const v = (map as any)[r.k] || "";
+          if (!v || /not\s*clearly\s*visible/i.test(v)) return null;
+          return (
+            <View key={r.k} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+              <Text style={{ fontSize: 14, marginTop: 1 }}>{r.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.text, fontWeight: "800", fontSize: 11 }}>{r.label}</Text>
+                <Text style={{ color: C.textMuted, fontSize: 12, lineHeight: 17, marginTop: 1 }}>{v}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 // ── Score gauge (SVG arc) ──────────────────────────────────────────────────
 function ScoreGauge({ score }: { score: number }) {
   const size = 120;
@@ -1360,7 +2025,17 @@ const PRIORITY_COLOR = {
   low:    "#10b981",
 };
 
-function VastuScanReport({ C, data: raw, onReset }: { C: any; data: VastuScanResponse; onReset: () => void }) {
+function VastuScanReport({ C, data: raw, onReset, extras }: {
+  C:       any;
+  data:    VastuScanResponse;
+  onReset: () => void;
+  extras?: {
+    wall_analyses?: VastuDeepScanResponse["wall_analyses"];
+    spatial_map?:   VastuDeepScanResponse["spatial_map"];
+    photos_count?:  number;
+    floor_plan?:    boolean;
+  };
+}) {
   // Defensive normalization — protect render against malformed/partial JSON.
   const data: VastuScanResponse = {
     scan_inconclusive:       Boolean(raw?.scan_inconclusive),
@@ -1449,6 +2124,20 @@ function VastuScanReport({ C, data: raw, onReset }: { C: any; data: VastuScanRes
           )}
         </View>
       </View>
+
+      {/* Deep-scan extras: per-wall analysis + spatial map (rendered above observations when present) */}
+      {extras?.wall_analyses && extras.wall_analyses.length > 0 && (
+        <WallAnalysisBlock C={C} walls={extras.wall_analyses} />
+      )}
+      {extras?.spatial_map && (
+        <SpatialMapBlock C={C} map={extras.spatial_map} />
+      )}
+      {(extras?.photos_count || extras?.floor_plan) && (
+        <Text style={{ color: C.textDim, fontSize: 10, fontStyle: "italic" }}>
+          Synthesized from {extras.photos_count ?? 0} directional photo{extras.photos_count === 1 ? "" : "s"}
+          {extras.floor_plan ? " + floor plan" : ""}
+        </Text>
+      )}
 
       {/* Observations */}
       {data.observations.length > 0 && (
@@ -1676,6 +2365,132 @@ const vs = StyleSheet.create({
   modalRowText: { fontSize: 13, fontWeight: "600", flex: 1 },
 });
 
+// ── Deep Scan card styles ─────────────────────────────────────────────────
+const vds = StyleSheet.create({
+  card: {
+    borderRadius: 16, borderWidth: 1.5, padding: 14, gap: 12,
+    overflow: "hidden", position: "relative",
+    shadowColor: "#a78bfa", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25, shadowRadius: 14, elevation: 4,
+    marginTop: 12,
+  },
+  glow: {
+    position: "absolute", top: -40, right: -40,
+    width: 140, height: 140, borderRadius: 70,
+    backgroundColor: "#a78bfa20",
+  },
+  header: { gap: 4 },
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: "#7c3aed",
+  },
+  badgeText: { color: "#fff", fontSize: 9, fontWeight: "900", letterSpacing: 1.2 },
+  title: { fontSize: 17, fontWeight: "900", marginTop: 4 },
+  sub:   { fontSize: 12, lineHeight: 17 },
+  roomChip: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 11, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1, alignSelf: "flex-start",
+  },
+  roomChipText: { fontSize: 13, fontWeight: "700" },
+  featureRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  feat: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: "#a78bfa15",
+    borderWidth: 1, borderColor: "#a78bfa33",
+  },
+  featText: { color: "#cbb8ff", fontSize: 10, fontWeight: "700" },
+  startBtn: { borderRadius: 12, overflow: "hidden" },
+  startBtnInner: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 14,
+  },
+  startBtnText: { color: "#fff", fontSize: 14, fontWeight: "900", letterSpacing: 0.5 },
+  note: { fontSize: 10, textAlign: "center", marginTop: 2 },
+});
+
+// ── Wizard styles ─────────────────────────────────────────────────────────
+const ds = StyleSheet.create({
+  header: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#ffffff15",
+  },
+  headerBtn: { padding: 6 },
+  headerTitle: { fontSize: 14, fontWeight: "800" },
+  headerSub:   { fontSize: 10, marginTop: 1, letterSpacing: 0.5 },
+  dotsRow: {
+    flexDirection: "row", justifyContent: "center", gap: 8, paddingVertical: 10,
+  },
+  dot: { width: 28, height: 4, borderRadius: 2 },
+  stepTitle: { fontSize: 22, fontWeight: "900", marginTop: 4 },
+  stepSub:   { fontSize: 12, marginTop: 4 },
+  dialWrap:  { alignItems: "center", marginVertical: 18 },
+  statusPill: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    alignSelf: "center",
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 999, borderWidth: 1,
+    marginBottom: 12,
+  },
+  helper: {
+    fontSize: 12, lineHeight: 17, textAlign: "center", marginBottom: 14,
+  },
+  thumbWrap: {
+    borderRadius: 12, overflow: "hidden", marginBottom: 14,
+    borderWidth: 1, borderColor: "#10b98166",
+  },
+  thumbImg: { width: "100%", height: 160 },
+  thumbBadge: {
+    position: "absolute", top: 8, left: 8,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  thumbBadgeText: { color: "#10b981", fontSize: 10, fontWeight: "800" },
+  btnRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  bigBtn: {
+    flex: 1,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 14, borderRadius: 12,
+  },
+  bigBtnText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  smallBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderRadius: 12, borderWidth: 1,
+  },
+  smallBtnText: { fontSize: 12, fontWeight: "700" },
+  nextBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 14, borderRadius: 12,
+  },
+  nextBtnText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  uploadCard: {
+    height: 180, borderRadius: 12, borderWidth: 1, borderStyle: "dashed",
+    alignItems: "center", justifyContent: "center", gap: 8,
+    marginVertical: 14, overflow: "hidden",
+  },
+  fpImg: { width: "100%", height: "100%" },
+  uploadHint: { fontSize: 12 },
+  reviewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  reviewCell: {
+    width: "48%",
+    borderRadius: 10, borderWidth: 1, padding: 8, gap: 4,
+    overflow: "hidden",
+  },
+  reviewImg: { width: "100%", height: 90, borderRadius: 6, backgroundColor: "#0a0a0f" },
+  reviewLabel: { fontSize: 11, fontWeight: "800" },
+  reviewMeta:  { fontSize: 9 },
+  fineprint: { fontSize: 10, textAlign: "center", marginTop: 10 },
+});
+
 
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
@@ -1754,8 +2569,11 @@ export default function VastuScreen() {
               </View>
             </View>
 
-            {/* ── Vastu Drishti Scan (NEW — photo upload + Acharya analysis) ── */}
+            {/* ── Vastu Drishti Scan (single-photo Acharya analysis) ── */}
             <VastuScanCard C={C} />
+
+            {/* ── Deep Scan (Phase 2 — 4-wall guided multi-photo + spatial map) ── */}
+            <VastuDeepScanCard C={C} />
 
             {/* ── Premium Compass ── */}
             <VastuCompass />

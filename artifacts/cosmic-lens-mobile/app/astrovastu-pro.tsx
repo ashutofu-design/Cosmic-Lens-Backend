@@ -33,6 +33,8 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
+import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -111,6 +113,7 @@ type ProResponse = {
   pdf_url?: string;
   pdf_token?: string;
   report_id?: number;
+  vision_room_findings?: VisionRoomFindings;
 };
 
 type ErrorPayload = {
@@ -142,6 +145,7 @@ export default function AstroVastuProScreen() {
   const [propertyName, setPropertyName] = useState<string>("");  // Phase 2: per-property unlock match
   const [walletKey,    setWalletKey]    = useState(0);
   const [scanUpload,   setScanUpload]   = useState<SmartScanUploadValue | null>(null);
+  const [roomPhotos,   setRoomPhotos]   = useState<RoomPhoto[]>([]);
 
   // ── Floor-plan editor handlers ────────────────────────────────────────
   const addRoom = useCallback(() => {
@@ -187,7 +191,9 @@ export default function AstroVastuProScreen() {
               type:     scanUpload.type,
               ...(scanUpload.data_url ? { data_url: scanUpload.data_url } : {}),
               ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
+              ...(scanUpload.north_at ? { north_at: scanUpload.north_at } : {}),
             } } : {}),
+          ...(roomPhotos.length > 0 ? { room_photos: roomPhotos } : {}),
         }),
       });
       const body = await resp.json();
@@ -204,7 +210,7 @@ export default function AstroVastuProScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, propertyName, scanUpload]);
+  }, [loading, rooms, user, propertyName, scanUpload, roomPhotos]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -253,6 +259,25 @@ export default function AstroVastuProScreen() {
         <View style={{ marginTop: 14 }}>
           <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
         </View>
+
+        {/* ── Room photo capture with live compass (Phase 7) ──────────── */}
+        <RoomPhotoCapture
+          rooms={rooms
+            .filter((r) => r.room_type && r.direction)
+            .map((r, i) => {
+              const ro = ROOM_OPTIONS.find((x) => x.key === r.room_type);
+              const di = DIRECTION_OPTIONS.find((x) => x.key === r.direction);
+              return {
+                key:   `${r.room_type}-${i}`,
+                label: `${ro?.en || r.room_type} (${di?.short || r.direction})`,
+              };
+            })
+            .filter((c, i, arr) => arr.findIndex((x) => x.key === c.key) === i)
+            .map((c) => ({ key: c.key.split("-")[0], label: c.label }))}
+          photos={roomPhotos}
+          onChange={setRoomPhotos}
+          disabled={loading}
+        />
 
         {/* ── Floor-plan editor ───────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
@@ -415,6 +440,12 @@ export default function AstroVastuProScreen() {
                   {summary.en ? (
                     <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>{summary.en}</Text>
                   ) : null}
+                  <ScanBasisBadge
+                    visionRoomFindings={result.vision_room_findings}
+                    perRoomBasis={(result.rooms || []).map((rr: any) => ({
+                      room_type: rr.room_type, direction_basis: rr.direction_basis,
+                    }))}
+                  />
                 </View>
               </View>
 
@@ -480,6 +511,12 @@ export default function AstroVastuProScreen() {
                     <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
                   </View>
                 </View>
+                <ScanBasisBadge
+                  visionRoomFindings={result.vision_room_findings}
+                  perRoomBasis={(result.rooms || []).map((rr: any) => ({
+                    room_type: rr.room_type, direction_basis: rr.direction_basis,
+                  }))}
+                />
                 <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>
                   {summary.en}
                 </Text>

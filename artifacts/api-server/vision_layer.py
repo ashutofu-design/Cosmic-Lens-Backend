@@ -214,10 +214,19 @@ def annotate_report_with_room_photos(
                 matched_idx = idx
                 used_room_indices.add(idx)
                 break
+        # direction_basis is the trust signal we expose to UI:
+        # "magnetometer" | "visual_inference" | "assumed"
+        # If client sent heading_deg, force magnetometer regardless of model output.
+        if h is not None:
+            direction_basis = "magnetometer"
+        else:
+            direction_basis = (vf.get("direction_basis") or "").strip().lower() or "visual_inference"
+
         if matched_idx >= 0:
             existing = rooms_in_report[matched_idx].get("visual_findings") or []
             rooms_in_report[matched_idx]["visual_findings"] = existing + findings
             rooms_in_report[matched_idx]["visual_score_delta"] = delta
+            rooms_in_report[matched_idx]["direction_basis"]    = direction_basis
         # If no room match, findings still surface in summary
 
         summary["rooms_analyzed"] += 1
@@ -228,6 +237,7 @@ def annotate_report_with_room_photos(
             "confidence":         int(vf.get("confidence") or 0),
             "scan_inconclusive":  bool(vf.get("scan_inconclusive")),
             "matched_in_report":  matched_idx >= 0,
+            "direction_basis":    direction_basis,
         })
         net_delta += delta
 

@@ -35,6 +35,8 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
+import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -143,6 +145,7 @@ type BizResponse = {
   pdf_url?: string;
   pdf_token?: string;
   report_id?: number;
+  vision_room_findings?: VisionRoomFindings;
 };
 
 type ErrorPayload = {
@@ -168,6 +171,7 @@ export default function BusinessVastuScreen() {
   const [error,     setError]     = useState<ErrorPayload | null>(null);
   const [walletKey, setWalletKey] = useState(0);
   const [scanUpload, setScanUpload] = useState<SmartScanUploadValue | null>(null);
+  const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
 
@@ -228,7 +232,9 @@ export default function BusinessVastuScreen() {
               type:     scanUpload.type,
               ...(scanUpload.data_url ? { data_url: scanUpload.data_url } : {}),
               ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
+              ...(scanUpload.north_at ? { north_at: scanUpload.north_at } : {}),
             } } : {}),
+          ...(roomPhotos.length > 0 ? { room_photos: roomPhotos } : {}),
         }),
       });
       const body = await resp.json();
@@ -245,7 +251,7 @@ export default function BusinessVastuScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, bizType, propertyName, scanUpload]);
+  }, [loading, rooms, user, bizType, propertyName, scanUpload, roomPhotos]);
 
   const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
 
@@ -339,6 +345,24 @@ export default function BusinessVastuScreen() {
         <View style={{ marginTop: 14 }}>
           <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
         </View>
+
+        {/* ── Room photo capture with live compass (Phase 7) ──────────── */}
+        <RoomPhotoCapture
+          rooms={rooms
+            .filter((r) => r.room_type && r.direction)
+            .map((r) => {
+              const ro = roomOpts.find((x) => x.key === r.room_type);
+              const di = DIRECTION_OPTIONS.find((x) => x.key === r.direction);
+              return {
+                key:   r.room_type,
+                label: `${ro?.en || r.room_type} (${di?.short || r.direction})`,
+              };
+            })
+            .filter((c, i, arr) => arr.findIndex((x) => x.key === c.key) === i)}
+          photos={roomPhotos}
+          onChange={setRoomPhotos}
+          disabled={loading}
+        />
 
         {/* ── Floor-plan editor ──────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
@@ -499,6 +523,12 @@ export default function BusinessVastuScreen() {
                   {sm.en ? (
                     <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>{sm.en}</Text>
                   ) : null}
+                  <ScanBasisBadge
+                    visionRoomFindings={result.vision_room_findings}
+                    perRoomBasis={(result.rooms || []).map((rr: any) => ({
+                      room_type: rr.room_type, direction_basis: rr.direction_basis,
+                    }))}
+                  />
                 </View>
               </View>
 
@@ -566,6 +596,12 @@ export default function BusinessVastuScreen() {
                 </View>
                 <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>{sm.en}</Text>
                 <Text style={{ color: C.textMid, fontSize: 12, marginTop: 2 }}>{sm.hi}</Text>
+                <ScanBasisBadge
+                  visionRoomFindings={result.vision_room_findings}
+                  perRoomBasis={(result.rooms || []).map((rr: any) => ({
+                    room_type: rr.room_type, direction_basis: rr.direction_basis,
+                  }))}
+                />
               </View>
             </View>
 

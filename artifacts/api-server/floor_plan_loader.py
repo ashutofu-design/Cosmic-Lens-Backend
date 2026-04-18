@@ -30,6 +30,16 @@ _MAX_RAW_BYTES = 12 * 1024 * 1024
 _MAX_LONG_EDGE = 1600
 _PDF_RENDER_SCALE = 2.0  # 144 DPI-ish for clarity
 
+# Mapping: where the user said North is on the plan → CCW degrees to rotate so
+# that North ends up at the TOP of the image (which is the convention vision
+# prompts assume).
+_NORTH_AT_ROTATE_CCW = {
+    "top":    0,    # already correct
+    "right":  90,   # rotate so right edge becomes top
+    "bottom": 180,
+    "left":   270,
+}
+
 
 def _strip_data_url(s: str) -> bytes:
     s = s.strip()
@@ -45,7 +55,7 @@ def _strip_data_url(s: str) -> bytes:
         raise ValueError(f"base64 decode failed: {exc}") from exc
 
 
-def _bytes_to_png_data_url(raw: bytes) -> str:
+def _bytes_to_png_data_url(raw: bytes, rotate_ccw_deg: int = 0) -> str:
     if not raw:
         raise ValueError("empty image bytes")
     try:
@@ -60,6 +70,11 @@ def _bytes_to_png_data_url(raw: bytes) -> str:
 
     if img.mode not in ("RGB", "RGBA"):
         img = img.convert("RGB")
+
+    # Rotate first (so resize cap applies post-rotation). PIL.rotate is CCW.
+    rot = int(rotate_ccw_deg) % 360
+    if rot in (90, 180, 270):
+        img = img.rotate(rot, expand=True)
 
     w, h = img.size
     long_edge = max(w, h)
@@ -122,9 +137,12 @@ def to_image_data_url(payload: dict) -> str:
             f"floor_plan_upload too large ({len(raw)} bytes; max {_MAX_RAW_BYTES})"
         )
 
+    north_at = (payload.get("north_at") or "top").strip().lower()
+    rotate_ccw = _NORTH_AT_ROTATE_CCW.get(north_at, 0)
+
     if kind == "pdf":
         png_bytes = _pdf_first_page_to_png_bytes(raw)
-        return _bytes_to_png_data_url(png_bytes)
+        return _bytes_to_png_data_url(png_bytes, rotate_ccw_deg=rotate_ccw)
 
-    # image path: re-encode through Pillow to normalize + resize
-    return _bytes_to_png_data_url(raw)
+    # image path: re-encode through Pillow to normalize + resize (+ rotate)
+    return _bytes_to_png_data_url(raw, rotate_ccw_deg=rotate_ccw)

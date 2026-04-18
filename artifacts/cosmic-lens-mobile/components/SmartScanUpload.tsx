@@ -16,12 +16,15 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useC } from "@/context/ThemeContext";
 
+export type NorthAt = "top" | "right" | "bottom" | "left";
+
 export type SmartScanUploadValue = {
   type: "image" | "pdf";
   base64?: string;            // raw base64 (PDF or fallback)
   data_url?: string;          // data URL (preferred for images)
   filename?: string;
   size_bytes?: number;
+  north_at?: NorthAt;         // where North points on the uploaded plan (default "top")
 };
 
 type Props = {
@@ -134,22 +137,61 @@ export function SmartScanUpload({ value, onChange, disabled }: Props) {
       </Text>
 
       {value ? (
-        <View style={[s.uploadedBox, { borderColor: C.accent + "55", backgroundColor: C.accent + "10" }]}>
-          <Feather name="check-circle" size={18} color={C.accent} />
-          <View style={{ flex: 1, marginLeft: 8 }}>
-            <Text style={[s.uploadedName, { color: C.text }]} numberOfLines={1}>
-              {value.filename || (value.type === "pdf" ? "floor_plan.pdf" : "floor_plan.jpg")}
-            </Text>
-            <Text style={[s.uploadedMeta, { color: C.textMuted }]}>
-              {value.type.toUpperCase()}
-              {value.size_bytes ? `  ·  ${(value.size_bytes / 1024).toFixed(0)} KB` : ""}
-              {"  ·  Rooms will auto-detect on submit"}
-            </Text>
+        <>
+          <View style={[s.uploadedBox, { borderColor: C.accent + "55", backgroundColor: C.accent + "10" }]}>
+            <Feather name="check-circle" size={18} color={C.accent} />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[s.uploadedName, { color: C.text }]} numberOfLines={1}>
+                {value.filename || (value.type === "pdf" ? "floor_plan.pdf" : "floor_plan.jpg")}
+              </Text>
+              <Text style={[s.uploadedMeta, { color: C.textMuted }]}>
+                {value.type.toUpperCase()}
+                {value.size_bytes ? `  ·  ${(value.size_bytes / 1024).toFixed(0)} KB` : ""}
+                {"  ·  Rooms will auto-detect on submit"}
+              </Text>
+            </View>
+            <Pressable onPress={onClear} hitSlop={8} style={{ padding: 6 }}>
+              <Feather name="x" size={18} color={C.textMuted} />
+            </Pressable>
           </View>
-          <Pressable onPress={onClear} hitSlop={8} style={{ padding: 6 }}>
-            <Feather name="x" size={18} color={C.textMuted} />
-          </Pressable>
-        </View>
+
+          {/* North-at calibration — critical for direction accuracy */}
+          <View style={{ marginTop: 10 }}>
+            <Text style={[s.northTitle, { color: C.text }]}>
+              <Feather name="compass" size={12} color={C.accent} />  Where is North on this plan?
+            </Text>
+            <Text style={[s.northSub, { color: C.textMuted }]}>
+              Look for a North arrow (N↑) on your plan. If unsure, choose Top.
+            </Text>
+            <View style={s.northRow}>
+              {(["top","right","bottom","left"] as const).map((opt) => {
+                const sel = (value.north_at || "top") === opt;
+                return (
+                  <Pressable
+                    key={opt}
+                    disabled={disabled}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      onChange({ ...value, north_at: opt });
+                    }}
+                    style={({ pressed }) => [
+                      s.northBtn,
+                      {
+                        borderColor: sel ? C.accent : C.border,
+                        backgroundColor: sel ? C.accent + "15" : "transparent",
+                        opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: sel ? C.accent : C.text, fontWeight: "700", fontSize: 12 }}>
+                      {opt[0].toUpperCase() + opt.slice(1)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </>
       ) : (
         <View style={s.btnRow}>
           <Pressable
@@ -193,4 +235,9 @@ const s = StyleSheet.create({
                  borderWidth: 1, borderRadius: 9 },
   uploadedName:{ fontSize: 13, fontWeight: "600" },
   uploadedMeta:{ fontSize: 11, marginTop: 2 },
+  northTitle:  { fontSize: 12, fontWeight: "700", marginBottom: 2 },
+  northSub:    { fontSize: 10, lineHeight: 14, marginBottom: 8 },
+  northRow:    { flexDirection: "row", gap: 6 },
+  northBtn:    { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1,
+                 alignItems: "center" },
 });

@@ -15,6 +15,16 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - **Astrology engine**: pyswisseph (Swiss Ephemeris)
 - **Database**: SQLite (`users.db`) for user auth
 
+## Recent: Phase 7 — Cosmic Vision Accuracy Upgrade (2026-04-18)
+
+Three fixes to close the marketing-vs-reality gap surfaced in the deep audit:
+
+- **A1 Magnetometer-aware room photo capture** — new `components/RoomPhotoCapture.tsx` shows a live compass strip and snapshots `heading_deg` at the moment of capture; wired into both `astrovastu-pro.tsx` and `business-vastu.tsx`. Payload now carries `room_photos:[{room_type,image_data_url,heading_deg}]` (max 6). Backend `vision_layer.annotate_report_with_room_photos` forces `direction_basis="magnetometer"` whenever client supplied a heading, regardless of vision output.
+- **A2 Floor plan orientation calibration** — `SmartScanUpload` adds a 4-button "Where is North on this plan?" picker (top/right/bottom/left). `floor_plan_loader.to_image_data_url` reads `north_at` and pre-rotates the PNG via Pillow (CCW: top=0°, right=90°, bottom=180°, left=270°) so North is always at the top before vision sees it.
+- **A3 Scan basis badge** — new `components/ScanBasisBadge.tsx` shows "Compass-confirmed" (green), "Visual inference" (amber), or "Cosmic Vision" near the score card on both PRO + Business result screens (paid PDF and legacy on-screen paths). Sources `vision_room_findings.per_room[].direction_basis` + per-room `direction_basis` written by `vision_layer`.
+
+Brand-safety: every new user-facing string uses "Cosmic Vision" — no AI/OpenAI/GPT mention.
+
 ## Artifacts
 
 | Artifact | Path | Purpose |

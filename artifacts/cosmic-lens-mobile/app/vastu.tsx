@@ -1027,24 +1027,35 @@ type VastuScanResponse = {
   plan?:           string;
 };
 
-// Lightweight magnetometer heading reader (no animation) — captured at scan time
+// Lightweight magnetometer heading reader — captured at scan time.
+// `getHeading()` returns instantaneous raw value (precise capture); `displayHeading`
+// is EMA-smoothed state for jitter-free pinpoint UI display.
 function useScanHeading() {
   const headingRef = useRef<number | null>(null);
   const [hasFix, setHasFix] = useState(false);
+  const [displayHeading, setDisplayHeading] = useState<number | null>(null);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    Magnetometer.setUpdateInterval(200);
+    Magnetometer.setUpdateInterval(120);
     const sub = Magnetometer.addListener(({ x, y }) => {
-      let angle = Math.atan2(-x, y) * (180 / Math.PI);
-      if (angle < 0) angle += 360;
-      headingRef.current = angle;
+      let raw = Math.atan2(-x, y) * (180 / Math.PI);
+      if (raw < 0) raw += 360;
+      headingRef.current = raw;             // raw for capture precision
       if (!hasFix) setHasFix(true);
+      setDisplayHeading(prev => {           // smoothed for display
+        if (prev == null) return raw;
+        const d = ((raw - prev + 540) % 360) - 180;
+        let next = prev + 0.28 * d;
+        if (next < 0)     next += 360;
+        if (next >= 360)  next -= 360;
+        return next;
+      });
     });
     return () => sub.remove();
   }, [hasFix]);
 
-  return { getHeading: () => headingRef.current, hasFix };
+  return { getHeading: () => headingRef.current, hasFix, displayHeading };
 }
 
 function VastuScanCard({ C }: { C: any }) {
@@ -1056,7 +1067,7 @@ function VastuScanCard({ C }: { C: any }) {
   const [scanning, setScanning]   = useState(false);
   const [result, setResult]       = useState<VastuScanResponse | null>(null);
   const [showRoomPicker, setShowRoomPicker] = useState(false);
-  const { getHeading, hasFix }    = useScanHeading();
+  const { getHeading, hasFix, displayHeading } = useScanHeading();
 
   const pickFromLibrary = async () => {
     try {
@@ -1268,7 +1279,7 @@ function VastuScanCard({ C }: { C: any }) {
           <Feather name="compass" size={12} color={hasFix ? "#10b981" : "#94a3b8"} />
           <Text style={[vs.headingChipText, { color: hasFix ? "#10b981" : "#94a3b8" }]}>
             {hasFix
-              ? "Compass active · scan will use REAL device direction"
+              ? `Compass live · ${displayHeading != null ? displayHeading.toFixed(1) : "--"}° · pinpoint`
               : "Compass calibrating… move phone in figure-8 motion"}
           </Text>
         </View>
@@ -1328,29 +1339,41 @@ const WALL_STEPS: WallStep[] = [
 
 const ALIGN_TOLERANCE_DEG = 15;
 
+// Smallest signed angular delta (current → target) in degrees, range [-180, 180]
+function angularDelta(current: number, target: number): number {
+  let d = ((target - current + 540) % 360) - 180;
+  return d;
+}
+
+// Smoothing factor for EMA (low-pass filter). Higher = more responsive, more jitter.
+// 0.25 = comfy "settles in 4-5 frames", removes raw sensor noise (~±2°).
+const HEADING_EMA_ALPHA = 0.28;
+
 // Live continuously-updating compass heading (state, not ref) — used by wizard.
 // Gated by `enabled` so the sensor isn't draining battery while the wizard
-// modal is mounted-but-hidden.
+// modal is mounted-but-hidden. Smoothed with EMA for pinpoint, jitter-free
+// readout — handles 0/360° wrap-around correctly via shortest-arc interpolation.
 function useLiveHeading(enabled: boolean) {
   const [heading, setHeading] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) { setHeading(null); return; }
     if (Platform.OS === "web") return;
-    Magnetometer.setUpdateInterval(120);
+    Magnetometer.setUpdateInterval(80);
     const sub = Magnetometer.addListener(({ x, y }) => {
-      let angle = Math.atan2(-x, y) * (180 / Math.PI);
-      if (angle < 0) angle += 360;
-      setHeading(angle);
+      let raw = Math.atan2(-x, y) * (180 / Math.PI);
+      if (raw < 0) raw += 360;
+      setHeading(prev => {
+        if (prev == null) return raw;
+        const d = angularDelta(prev, raw);   // shortest-arc delta
+        let next = prev + HEADING_EMA_ALPHA * d;
+        if (next < 0)     next += 360;
+        if (next >= 360)  next -= 360;
+        return next;
+      });
     });
     return () => sub.remove();
   }, [enabled]);
   return heading;
-}
-
-// Smallest signed angular delta (current → target) in degrees, range [-180, 180]
-function angularDelta(current: number, target: number): number {
-  let d = ((target - current + 540) % 360) - 180;
-  return d;
 }
 
 type CapturedPhoto = {
@@ -1361,7 +1384,7 @@ type CapturedPhoto = {
 
 // ── Compact alignment indicator (north-up arc with target marker) ─────────
 function AlignmentDial({ current, target }: { current: number | null; target: number }) {
-  const size = 180;
+  const size = 220;
   const cx = size / 2;
   const cy = size / 2;
   const r  = size / 2 - 14;
@@ -1401,9 +1424,24 @@ function AlignmentDial({ current, target }: { current: number | null; target: nu
         {/* Center dot */}
         <Circle cx={cx} cy={cy} r={6} fill={ringColor} />
       </Svg>
-      <View style={{ position: "absolute", bottom: 6, alignItems: "center" }}>
-        <Text style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 1 }}>TARGET</Text>
-        <Text style={{ fontSize: 14, fontWeight: "900", color: ringColor }}>{Math.round(target)}°</Text>
+      {/* Big live degree readout — pinpoint single-decimal precision */}
+      <View style={{ position: "absolute", alignItems: "center" }}>
+        <Text style={{ fontSize: 9, color: "#94a3b8", letterSpacing: 1.5, fontWeight: "800" }}>LIVE COMPASS</Text>
+        <Text style={{
+          fontSize: 32, fontWeight: "900", color: ringColor,
+          fontVariant: ["tabular-nums"],
+          fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+        }}>
+          {current == null ? "--" : current.toFixed(1)}°
+        </Text>
+        <Text style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 0.8, marginTop: 2 }}>
+          target {target.toFixed(1)}°
+          {delta != null && (
+            <Text style={{ color: ringColor, fontWeight: "800" }}>
+              {"  ·  "}Δ {delta > 0 ? "+" : ""}{delta.toFixed(1)}°
+            </Text>
+          )}
+        </Text>
       </View>
     </View>
   );
@@ -1586,7 +1624,7 @@ function DeepScanWizard({
                   <Image source={{ uri: captured[stepIndex]!.uri }} style={ds.thumbImg} contentFit="cover" />
                   <View style={ds.thumbBadge}>
                     <Feather name="check-circle" size={14} color="#10b981" />
-                    <Text style={ds.thumbBadgeText}>Captured at {Math.round(captured[stepIndex]!.heading_deg)}°</Text>
+                    <Text style={ds.thumbBadgeText}>Captured at {captured[stepIndex]!.heading_deg.toFixed(1)}°</Text>
                   </View>
                 </View>
               )}
@@ -1678,7 +1716,7 @@ function DeepScanWizard({
                       )}
                       <Text style={[ds.reviewLabel, { color: C.text }]}>{w.key} • {w.label}</Text>
                       <Text style={[ds.reviewMeta,  { color: C.textMuted }]}>
-                        {ph ? `${Math.round(ph.heading_deg)}° captured` : "Skipped"}
+                        {ph ? `${ph.heading_deg.toFixed(1)}° captured` : "Skipped"}
                       </Text>
                     </View>
                   );
@@ -1918,7 +1956,7 @@ function WallAnalysisBlock({ C, walls }: { C: any; walls: NonNullable<VastuDeepS
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Feather name={sev.icon} size={14} color={sev.color} />
               <Text style={{ color: C.text, fontWeight: "800", fontSize: 13, flex: 1 }}>
-                {w.wall_direction} <Text style={{ color: C.textMuted, fontWeight: "600", fontSize: 11 }}>· {Math.round(w.wall_heading_deg)}°</Text>
+                {w.wall_direction} <Text style={{ color: C.textMuted, fontWeight: "600", fontSize: 11 }}>· {w.wall_heading_deg.toFixed(1)}°</Text>
               </Text>
               <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: compClr + "30", borderWidth: 1, borderColor: compClr + "66" }}>
                 <Text style={{ color: compClr, fontWeight: "900", fontSize: 10 }}>{w.wall_compliance}/100</Text>
@@ -2113,7 +2151,7 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
             <Feather name="compass" size={11} color={isReal ? "#10b981" : "#94a3b8"} />
             <Text style={[vs.dirChipText, { color: isReal ? "#10b981" : "#94a3b8" }]}>
               {isReal
-                ? `${data.camera_facing_direction} · ${data.heading_deg_input?.toFixed(0)}° (real sensor)`
+                ? `${data.camera_facing_direction} · ${data.heading_deg_input?.toFixed(1)}° (real sensor)`
                 : `${data.camera_facing_direction} · ${data.direction_basis}`}
             </Text>
           </View>

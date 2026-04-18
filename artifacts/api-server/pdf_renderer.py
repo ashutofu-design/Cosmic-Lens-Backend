@@ -93,6 +93,16 @@ def _safe(s: Any) -> str:
     """Escape & truncate for ReportLab Paragraph."""
     if s is None:
         return ""
+    if isinstance(s, dict):
+        # Classical-reference shape: {"type":"vastu","source":"Vastu Saar Ch.9"}
+        src  = s.get("source") or s.get("text") or s.get("title") or ""
+        kind = s.get("type")   or s.get("category") or ""
+        if src and kind:
+            s = f"{src} ({kind})"
+        else:
+            s = src or kind or ""
+    elif isinstance(s, (list, tuple)):
+        s = ", ".join(_safe(x) for x in s)
     t = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return t
 
@@ -220,7 +230,9 @@ def _priority_table(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
         crit = " ★" if p.get("is_critical") else ""
         room_dir = (p.get("room_type", "") or "").replace("_", " ").title() + crit + \
                    "\n" + (p.get("direction", "") or "")
-        why = (p.get("why_en") or "") + "\n" + (p.get("why_hi") or "")
+        why_en = p.get("why_en") or p.get("why") or ""
+        why_hi = p.get("why_hi") or ""
+        why = (why_en + ("\n" + why_hi if why_hi else "")).strip()
         data.append([
             str(i),
             Paragraph(_safe(room_dir).replace("\n", "<br/>"), s["body"]),
@@ -294,6 +306,45 @@ def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[
             f"<i>Note:</i> {_safe(vfp['inconclusive_reason'])}", s["body"]
         ))
     out.append(Spacer(1, 8))
+    return out
+
+
+def _signature_block(s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Authorized signature: script-style 'sign' + typed name + brand line."""
+    out: List[Any] = [Spacer(1, 18)]
+    rule = Table([[""]], colWidths=[55 * mm], rowHeights=[0.6])
+    rule.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), 0.6, BORDER)]))
+
+    label_st = ParagraphStyle("sig_label", parent=s["body"], fontSize=8,
+                              textColor=TEXT_SOFT, leading=10, spaceAfter=2)
+    sign_st  = ParagraphStyle("sig_script", parent=s["body"],
+                              fontName="Helvetica-BoldOblique",
+                              fontSize=22, leading=24,
+                              textColor=BRAND_PURPLE, spaceAfter=2)
+    name_st  = ParagraphStyle("sig_name", parent=s["body"], fontSize=10,
+                              fontName="Helvetica-Bold", textColor=TEXT_DARK,
+                              leading=12, spaceAfter=1)
+    brand_st = ParagraphStyle("sig_brand", parent=s["body"], fontSize=9,
+                              textColor=TEXT_SOFT, leading=11)
+
+    cell = [
+        Paragraph("Authorized by", label_st),
+        Paragraph("<i>Ashutosh Bharadwaj</i>", sign_st),
+        rule,
+        Paragraph("Ashutosh Bharadwaj", name_st),
+        Paragraph("Cosmic Lens · Founder", brand_st),
+        Paragraph(f"Digitally signed · {datetime.utcnow().strftime('%d %b %Y')}",
+                  ParagraphStyle("sig_date", parent=s["body"], fontSize=7,
+                                 textColor=TEXT_SOFT, leading=9)),
+    ]
+    holder = Table([[cell]], colWidths=[170 * mm], hAlign="RIGHT")
+    holder.setStyle(TableStyle([
+        ("ALIGN",  (0, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    out.append(holder)
     return out
 
 
@@ -600,6 +651,9 @@ def render_pro_pdf(report: Dict[str, Any], *,
 
     # ── Scope disclosure (what this report is NOT)
     flow.extend(_disclosure_block(s, is_business=False))
+
+    # ── Authorized signature block ──────────────────────────────────────
+    flow.extend(_signature_block(s))
 
     _ft = report.get("footer")
     if isinstance(_ft, dict):

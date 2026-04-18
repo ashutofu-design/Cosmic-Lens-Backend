@@ -37,6 +37,32 @@ import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
+// Rooms a user can pick before opening the live camera (PRO residential).
+const CAMERA_ROOMS: { key: string; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { key: "bedroom",  label: "Bedroom",   icon: "moon"        },
+  { key: "kitchen",  label: "Kitchen",   icon: "coffee"      },
+  { key: "pooja",    label: "Pooja",     icon: "sun"         },
+  { key: "living",   label: "Living",    icon: "tv"          },
+  { key: "bathroom", label: "Bathroom",  icon: "droplet"     },
+  { key: "entrance", label: "Entrance",  icon: "log-in"      },
+  { key: "study",    label: "Study",     icon: "book-open"   },
+  { key: "store",    label: "Store",     icon: "package"     },
+];
+
+// Compass heading (deg) → 8-dir code
+function headingToDirCode(h: number): string {
+  const a = ((h % 360) + 360) % 360;
+  if (a >= 337.5 || a <  22.5) return "N";
+  if (a >=  22.5 && a <  67.5) return "NE";
+  if (a >=  67.5 && a < 112.5) return "E";
+  if (a >= 112.5 && a < 157.5) return "SE";
+  if (a >= 157.5 && a < 202.5) return "S";
+  if (a >= 202.5 && a < 247.5) return "SW";
+  if (a >= 247.5 && a < 292.5) return "W";
+  return "NW";
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 const VERDICT_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
   Ideal:                { bg: "rgba(16,185,129,0.18)", fg: "#10B981", border: "rgba(16,185,129,0.45)" },
   Acceptable:           { bg: "rgba(59,130,246,0.18)", fg: "#3B82F6", border: "rgba(59,130,246,0.45)" },
@@ -93,6 +119,7 @@ export default function AstroVastuProScreen() {
   const [error,   setError]   = useState<ErrorPayload | null>(null);
   const [wholePlan, setWholePlan] = useState<SmartScanUploadValue | null>(null);
   const [mode, setMode] = useState<"camera" | "single" | "whole">("camera");
+  const [cameraRoom, setCameraRoom] = useState<string | null>(null);
 
   // ── Shared submit helper ──────────────────────────────────────────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
@@ -124,9 +151,14 @@ export default function AstroVastuProScreen() {
     }
   }, [loading, user]);
 
-  // ── Camera capture: send only the image (vision will detect rooms) ──
+  // ── Camera capture: user-picked room + compass-derived direction ──
   const onCapture = useCallback((capture: SmartScanResult) => {
+    if (!cameraRoom) return;
+    const direction = typeof capture.heading_deg === "number"
+      ? headingToDirCode(capture.heading_deg)
+      : undefined;
     runScan({
+      floor_plan: [{ room_type: cameraRoom, ...(direction ? { direction } : {}) }],
       floor_plan_upload: {
         type:     "image",
         data_url: capture.data_url,
@@ -135,7 +167,7 @@ export default function AstroVastuProScreen() {
           : {}),
       },
     });
-  }, [runScan]);
+  }, [runScan, cameraRoom]);
 
   // ── Gallery / PDF upload: file + user-tagged room/direction (ground truth) ─
   const onGallerySubmit = useCallback((g: GalleryScanResult) => {
@@ -230,15 +262,60 @@ export default function AstroVastuProScreen() {
                 Smart Scan — Live Camera
               </Text>
               <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                Open the live camera with a built-in compass. Aim at your floor plan
-                or any single room — one tap will detect the layout and run the analysis.
+                Step 1 — Tell us which room you're going to photograph.
+                Step 2 — Tap the camera and stand inside that room. The built-in
+                compass will lock the direction at shutter time.
               </Text>
             </View>
-            <SmartScanCamera
-              onCapture={onCapture}
-              loading={loading}
-              hint="Camera + compass · One tap to scan"
-            />
+
+            {/* Room picker — required before camera opens */}
+            <Text style={[styles.pickerLabel, { color: C.text }]}>
+              Which room is this photo of?
+            </Text>
+            <View style={styles.roomGrid}>
+              {CAMERA_ROOMS.map((r) => {
+                const sel = cameraRoom === r.key;
+                return (
+                  <Pressable
+                    key={r.key}
+                    onPress={() => setCameraRoom(r.key)}
+                    disabled={loading}
+                    style={({ pressed }) => [
+                      styles.roomChip,
+                      {
+                        borderColor:     sel ? C.accent  : C.border,
+                        backgroundColor: sel ? C.accentBg : C.bgCard,
+                        opacity:         loading ? 0.5 : pressed ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    <Feather name={r.icon} size={14} color={sel ? C.accent : C.textMid} />
+                    <Text style={{
+                      color: sel ? C.accent : C.text,
+                      fontSize: 12, fontWeight: "600",
+                    }}>
+                      {r.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {!cameraRoom && (
+              <Text style={[styles.pickerHint, { color: C.textMid }]}>
+                Pick a room above to enable the camera.
+              </Text>
+            )}
+
+            <View style={{ opacity: cameraRoom ? 1 : 0.45, marginTop: 10 }} pointerEvents={cameraRoom ? "auto" : "none"}>
+              <SmartScanCamera
+                onCapture={onCapture}
+                loading={loading}
+                disabled={!cameraRoom}
+                hint={cameraRoom
+                  ? `Camera + compass · Photographing ${CAMERA_ROOMS.find(x => x.key === cameraRoom)?.label}`
+                  : "Pick a room first"}
+              />
+            </View>
           </>
         )}
 
@@ -604,6 +681,13 @@ const styles = StyleSheet.create({
   modeIntro:      { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
   modeIntroTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4 },
   modeIntroBody:  { fontSize: 12, lineHeight: 17 },
+
+  pickerLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
+  pickerHint:  { fontSize: 11, marginTop: 6, fontStyle: "italic" },
+  roomGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  roomChip:    { flexDirection: "row", alignItems: "center", gap: 6,
+                 paddingVertical: 9, paddingHorizontal: 12,
+                 borderRadius: 9, borderWidth: 1 },
 
   runScanBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center",
                  gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 10 },

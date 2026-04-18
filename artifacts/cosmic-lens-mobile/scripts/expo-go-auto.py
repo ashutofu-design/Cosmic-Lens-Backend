@@ -13,9 +13,26 @@ import errno
 import time
 
 PORT = os.environ.get("PORT", "18987")
+# CRITICAL: Run expo from the mobile app dir, not workspace root.
+PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+# CRITICAL: Replit proxies the dev server on standard 443 via REPLIT_EXPO_DEV_DOMAIN.
+# Without this override, expo CLI announces bundle URLs like
+# `https://<domain>:18987/...` which the phone cannot reach (port 18987 is
+# only exposed inside the container). EXPO_PACKAGER_PROXY_URL forces the
+# manifest to use the public proxy URL instead.
+EXPO_DOMAIN = os.environ.get("REPLIT_EXPO_DEV_DOMAIN", "")
+extra_env = ""
+if EXPO_DOMAIN:
+    proxy_url = f"https://{EXPO_DOMAIN}"
+    extra_env = (
+        f"export EXPO_PACKAGER_PROXY_URL={proxy_url} && "
+        f"export REACT_NATIVE_PACKAGER_HOSTNAME={EXPO_DOMAIN} && "
+    )
+
 CMD = [
     "/bin/bash", "-lc",
-    f"pnpm exec expo start --go --lan --port {PORT} --clear",
+    f"cd {PROJECT_DIR} && {extra_env}exec npx expo start --go --port {PORT} --clear",
 ]
 
 PROMPT_MARKER = b"Use arrow-keys"

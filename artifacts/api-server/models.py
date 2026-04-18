@@ -45,7 +45,9 @@ class User(db.Model):
     monthly_astrovastu_pro_month = db.Column(db.String(7),  default="", nullable=False)  # YYYY-MM
 
     # ── AstroVastu one-time room credits (Phase 2 unlock model) ──────────────
-    # 1-room (₹199) grants +1, 3-room bundle (₹499) grants +3. Decrements on each
+    # PRO Home scan credits. ₹199 grants +1, ₹499 bundle grants +3. Decrements on each
+    # AstroVastu PRO scan. (Basic AstroVastu is free — does not consume credits.)
+    # Column name kept for backward-compat; semantic is now "PRO Home scan credits".
     # BASIC scan only when user has neither Pro plan nor unlocked property.
     astrovastu_room_credits = db.Column(db.Integer, default=0, nullable=False)
 

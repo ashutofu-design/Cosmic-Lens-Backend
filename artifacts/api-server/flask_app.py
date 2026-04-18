@@ -2739,7 +2739,7 @@ def astrovastu_basic_route():
         return jsonify({
             "error":   "upgrade_required",
             "message": quota_check.get("reason",
-                       "Buy a Room Check (₹199), Bundle (₹499), or Full Home Unlock (₹2,999)."),
+                       "Login + Kundli profile required for personalized Basic check."),
             "credits": quota_check.get("credits", 0),
             "unlocks": quota_check.get("unlocks", []),
             "plan":    plan,
@@ -2998,7 +2998,7 @@ def astrovastu_pro_route():
         return jsonify({
             "error":   "upgrade_required",
             "message": quota_check.get("reason",
-                       "Unlock this property for ₹2,999 (lifetime) or upgrade to Pro plan."),
+                       "Buy a PRO Home Scan (₹199), 3-Scan Bundle (₹499), or Full Home Lifetime (₹2,999)."),
             "unlocks": quota_check.get("unlocks", []),
             "plan":    plan,
             "upgrade_required": True,

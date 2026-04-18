@@ -300,6 +300,7 @@ class AstroVastuProLog(db.Model):
     sade_sati    = db.Column(db.Boolean, default=False, nullable=False)
     floor_plan   = db.Column(db.Text, nullable=False, default="[]")    # JSON of input rooms
     plan         = db.Column(db.String(20), default="free", nullable=False)
+    property_name= db.Column(db.String(120), nullable=True, index=True)   # owner-supplied label, e.g. "Mumbai Flat"
     report_json  = db.Column(db.Text, nullable=True)                     # full bilingual report JSON for PDF render
     created_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 

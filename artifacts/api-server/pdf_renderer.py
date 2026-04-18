@@ -297,6 +297,53 @@ def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[
     return out
 
 
+def _disclosure_block(s: Dict[str, ParagraphStyle], *,
+                      is_business: bool = False) -> List[Any]:
+    """
+    Brand-safe 'What this report does NOT include' section.
+    Sets clear expectations so users don't interpret a Vastu/Astro report
+    as legal, medical, financial, structural-engineering or guaranteed advice.
+    """
+    out: List[Any] = []
+    out.append(Spacer(1, 10))
+    out.append(Paragraph("What this report does NOT include", s["h2"]))
+    items_en = [
+        "Structural / civil engineering certification — consult a licensed engineer for any construction decision.",
+        "Legal, medical, financial or tax advice of any kind.",
+        "A guarantee of business profit, marriage outcome, health, or specific life events — Vastu and astrology offer guidance, not certainty.",
+        "Approval or compliance with local building codes, RERA norms or municipal regulations.",
+        "Replacement for a personal consultation with a qualified Vastu acharya or jyotishi for major life decisions.",
+        "Demolition, structural alteration or expensive renovation recommendations — prefer the low-cost remedies listed above first.",
+    ]
+    if is_business:
+        items_en.append(
+            "Business strategy, accounting or workforce decisions — these remain the owner's responsibility."
+        )
+    items_hi = [
+        "Structural / civil engineering certification — kisi bhi nirman kary se pehle licensed engineer se salaah lein.",
+        "Kisi bhi prakar ki kanooni, medical, financial ya tax salaah.",
+        "Vyapar laabh, vivah, swasthya ya jeevan ki ghatnaon ki guarantee nahin — Vastu aur Jyotish margdarshan dete hain, nishchay nahin.",
+        "Sthaniya building code, RERA niyam ya municipal niyamon ki anumati nahin.",
+        "Bade jeevan nirnayon ke liye yogya Vastu acharya ya jyotishi ki vyaktigat salaah ka vikalp nahin.",
+        "Tod-phod ya mahanga renovation suggest nahin karte — pehle upar diye gaye saral upayon ko apnayein.",
+    ]
+    if is_business:
+        items_hi.append(
+            "Vyaparik strategy, accounting ya karmchari nirnay vyapari ke apne hain."
+        )
+    for en, hi in zip(items_en, items_hi):
+        out.append(Paragraph(f"• {_safe(en)}", s["body"]))
+        out.append(Paragraph(f"<i>{_safe(hi)}</i>", s["body"]))
+    out.append(Spacer(1, 4))
+    out.append(Paragraph(
+        "<i>This report is generated for guidance and self-improvement only. "
+        "Cosmic Lens and its team accept no liability for decisions taken on the "
+        "basis of this report. By using this report you acknowledge these limits.</i>",
+        s["body"]
+    ))
+    return out
+
+
 def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
                  with_business: bool) -> Table:
     head = ["Room", "Dir", "Verdict", "Score", "Notes"]
@@ -456,6 +503,9 @@ def render_business_pdf(report: Dict[str, Any], *,
             flow.append(Paragraph(f"• {_safe(r)}", s["body"]))
         flow.append(Spacer(1, 6))
 
+    # ── Scope disclosure (what this report is NOT)
+    flow.extend(_disclosure_block(s, is_business=True))
+
     # ── Footer
     _ft = report.get("footer")
     if isinstance(_ft, dict):
@@ -547,6 +597,9 @@ def render_pro_pdf(report: Dict[str, Any], *,
         flow.append(Paragraph("Classical References", s["h2"]))
         for r in refs:
             flow.append(Paragraph(f"• {_safe(r)}", s["body"]))
+
+    # ── Scope disclosure (what this report is NOT)
+    flow.extend(_disclosure_block(s, is_business=False))
 
     _ft = report.get("footer")
     if isinstance(_ft, dict):

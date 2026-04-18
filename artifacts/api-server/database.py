@@ -86,6 +86,13 @@ def init_db(app):
                     conn.execute(text(
                         "ALTER TABLE astrovastu_pro_logs ADD COLUMN IF NOT EXISTS report_json TEXT"
                     ))
+                    # Phase-7 pre-launch: persist the owner-supplied property label.
+                    conn.execute(text(
+                        "ALTER TABLE astrovastu_pro_logs ADD COLUMN IF NOT EXISTS property_name VARCHAR(120)"
+                    ))
+                    conn.execute(text(
+                        "CREATE INDEX IF NOT EXISTS ix_avpl_property_name ON astrovastu_pro_logs (property_name)"
+                    ))
                     # One-time pre-launch wipe of legacy email/google users.
                     # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
                     if os.environ.get("COSMIC_WIPE_USERS") == "1":
@@ -106,6 +113,7 @@ def init_db(app):
                         "ALTER TABLE profiles ADD COLUMN deleted_at TIMESTAMP",
                         "ALTER TABLE business_vastu_logs ADD COLUMN report_json TEXT",
                         "ALTER TABLE astrovastu_pro_logs ADD COLUMN report_json TEXT",
+                        "ALTER TABLE astrovastu_pro_logs ADD COLUMN property_name VARCHAR(120)",
                     ):
                         try:
                             conn.execute(text(stmt))

@@ -3005,6 +3005,7 @@ def astrovastu_pro_route():
             sade_sati     = bool(report["kundli_summary"].get("sade_sati")),
             floor_plan    = json.dumps(floor_plan, ensure_ascii=False),
             plan          = plan,
+            property_name = (property_name or None),
             report_json   = json.dumps(report, ensure_ascii=False),
         )
         db.session.add(log)

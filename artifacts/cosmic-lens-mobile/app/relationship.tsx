@@ -36,6 +36,7 @@ interface MainOption {
   desc: string;
   items: string[];
   depthLine?: string;
+  soloMode?: boolean;     // true = needs only primary kundli (no partner select required)
 }
 
 const OPTIONS: MainOption[] = [
@@ -84,6 +85,7 @@ const OPTIONS: MainOption[] = [
       "Cosmic Portrait — divya jhalak",
     ],
     depthLine: "BPHS + Phaladeepika + KP Reader + Jaimini Sutras",
+    soloMode: true,
   },
 ];
 
@@ -224,13 +226,17 @@ function OptionCard({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => {
-          if (!canEnter) {
+          // Solo-mode features (e.g. Future Partner Portrait) only need the user's own
+          // primary kundli — skip the partner-required gate.
+          if (!option.soloMode && !canEnter) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             onBlocked();
             return;
           }
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          const url = partnerId ? `${option.route}?partnerId=${partnerId}` : option.route;
+          const url = (!option.soloMode && partnerId)
+            ? `${option.route}?partnerId=${partnerId}`
+            : option.route;
           router.push(url as any);
         }}
       >

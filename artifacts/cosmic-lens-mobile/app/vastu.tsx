@@ -2595,27 +2595,6 @@ export default function VastuScreen() {
       >
         {section === "basic" ? (
           <>
-            {/* ── Upgrade to Premium AstroVastu (chooser) ── */}
-            <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/astrovastu-pro-options" as any); }}
-              style={[s.heroCard, { borderColor: "#f9d76b", backgroundColor: C.isDark ? "#0a0604" : C.bgCard }]}
-            >
-              <View style={[s.heroBadge, { backgroundColor: "#f9d76b22", borderColor: "#f9d76b" }]}>
-                <Feather name="award" size={9} color="#f9d76b" />
-                <Text style={{ fontSize: 9, fontWeight: "900", color: "#f9d76b", letterSpacing: 1.4, marginLeft: 4 }}>PRO PREMIUM</Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Text style={{ fontSize: 30 }}>🌟</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.heroTitle, { color: C.text }]}>Unlock AstroVastu Premium</Text>
-                  <Text style={[s.heroSub, { color: C.textMuted }]}>
-                    Kundli-personalized — Home & Business · ₹199 se shuruaat
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color="#f9d76b" />
-              </View>
-            </Pressable>
-
             {/* Intro */}
             <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={{ fontSize:24 }}>🏠</Text>
@@ -2711,20 +2690,6 @@ export default function VastuScreen() {
                 </View>
               ))}
             </View>
-
-            {/* Upsell teaser → Pro */}
-            <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setSection("pro"); }}
-              style={s.upsellCard}
-            >
-              <View style={s.upsellGlow} />
-              <Feather name="award" size={18} color="#f9d76b" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.upsellTitle}>Unlock AstroVastu Pro</Text>
-                <Text style={s.upsellSub}>Personal home analysis, kundli-matched directions, yantra remedies & expert consultation</Text>
-              </View>
-              <Feather name="chevron-right" size={16} color="#f9d76b" />
-            </Pressable>
 
             {/* Disclaimer */}
             <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>

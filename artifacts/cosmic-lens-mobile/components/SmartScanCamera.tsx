@@ -78,12 +78,25 @@ export function SmartScanCamera({
   useEffect(() => {
     if (Platform.OS === "web") return;
     let sub: { remove: () => void } | null = null;
+    let smoothed: number | null = null;
+    // Circular low-pass filter so the compass doesn't jitter while the
+    // user moves the phone around. Uses shortest-arc averaging so the
+    // value stays stable across the 0°/360° wrap-around.
+    const ALPHA = 0.18;
     try {
-      Magnetometer.setUpdateInterval(120);
+      Magnetometer.setUpdateInterval(180);
       sub = Magnetometer.addListener(({ x, y }) => {
-        let angle = Math.atan2(-x, y) * (180 / Math.PI);
-        if (angle < 0) angle += 360;
-        setHeading(angle);
+        let raw = Math.atan2(-x, y) * (180 / Math.PI);
+        if (raw < 0) raw += 360;
+        if (smoothed == null) {
+          smoothed = raw;
+        } else {
+          let diff = raw - smoothed;
+          if (diff > 180)  diff -= 360;
+          if (diff < -180) diff += 360;
+          smoothed = (smoothed + ALPHA * diff + 360) % 360;
+        }
+        setHeading(smoothed);
       });
     } catch { /* sensor unavailable */ }
     return () => { try { sub?.remove(); } catch { /* noop */ } };
@@ -188,28 +201,37 @@ export function SmartScanCamera({
         statusBarTranslucent
       >
         <View style={s.camWrap}>
-          {open ? (
-            <CameraView
-              ref={cameraRef}
-              style={s.camView}
-              facing={facing}
-            />
-          ) : null}
+          {/* Top: live camera preview */}
+          <View style={s.camTop}>
+            {open ? (
+              <CameraView
+                ref={cameraRef}
+                style={s.camView}
+                facing={facing}
+              />
+            ) : null}
 
-          <View style={s.topBar} pointerEvents="box-none">
-            <View style={s.topBadge}>
-              <Feather name="zap" size={13} color="#fff" />
-              <Text style={s.topBadgeText}>Smart Scan</Text>
+            <View style={s.topBar} pointerEvents="box-none">
+              <View style={s.topBadge}>
+                <Feather name="zap" size={13} color="#fff" />
+                <Text style={s.topBadgeText}>Smart Scan</Text>
+              </View>
+              <Pressable
+                onPress={() => !busy && setOpen(false)}
+                hitSlop={12}
+                style={s.closeBtn}
+              >
+                <Feather name="x" size={22} color="#fff" />
+              </Pressable>
             </View>
-            <Pressable
-              onPress={() => !busy && setOpen(false)}
-              hitSlop={12}
-              style={s.closeBtn}
-            >
-              <Feather name="x" size={22} color="#fff" />
-            </Pressable>
+
+            {/* Center crosshair to help user aim */}
+            <View pointerEvents="none" style={s.crosshair}>
+              <View style={s.crosshairBox} />
+            </View>
           </View>
 
+          {/* Bottom: compass + shutter (separate section, no overlap) */}
           <View style={s.bottomPanel}>
             <View style={s.camCompass}>
               <Feather name="compass" size={18} color={dir ? "#fbbf24" : "#9ca3af"} />
@@ -275,7 +297,9 @@ const s = StyleSheet.create({
   bigBtnText: { color: "#fff", fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
   hint:       { fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: 10 },
 
-  camWrap:        { flex: 1, backgroundColor: "#000" },
+  camWrap:        { flex: 1, backgroundColor: "#000", flexDirection: "column" },
+  camTop:         { flex: 1, position: "relative", backgroundColor: "#000",
+                    overflow: "hidden" },
   camView:        { flex: 1, width: "100%", backgroundColor: "#000" },
   topBar:         { position: "absolute", top: 0, left: 0, right: 0,
                     paddingTop: 50, paddingHorizontal: 16, paddingBottom: 10,
@@ -288,8 +312,11 @@ const s = StyleSheet.create({
   closeBtn:       { width: 38, height: 38, borderRadius: 19,
                     backgroundColor: "rgba(0,0,0,0.55)",
                     alignItems: "center", justifyContent: "center" },
-  bottomPanel:    { position: "absolute", left: 0, right: 0, bottom: 0,
-                    backgroundColor: "rgba(11,18,32,0.92)",
+  crosshair:      { position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                    alignItems: "center", justifyContent: "center" },
+  crosshairBox:   { width: 110, height: 110, borderWidth: 1.5,
+                    borderColor: "rgba(255,255,255,0.7)", borderRadius: 8 },
+  bottomPanel:    { backgroundColor: "#0b1220",
                     paddingHorizontal: 20, paddingTop: 18, paddingBottom: 32 },
   camCompass:     { flexDirection: "row", alignItems: "center", gap: 12,
                     paddingHorizontal: 16, paddingVertical: 14,

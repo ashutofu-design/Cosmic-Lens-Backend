@@ -36,7 +36,7 @@ const DEMO_MESSAGES: Message[] = [
   {
     id: "d1",
     role: "assistant",
-    text: "Hello! I'm your Vedic Astrology assistant. Ask me anything about your Kundli — dasha, planets, houses, or any other question.",
+    text: "Pranam beta 🙏 Mai Acharya Vidyasagar — 35 saal se kundli padh raha hu Kashi mein. Aap apni kundli, dasha, vivah, karya, swasthya — kuch bhi pooch sakte hain, mai margdarshan dunga.",
   },
   {
     id: "d2",
@@ -46,15 +46,15 @@ const DEMO_MESSAGES: Message[] = [
   {
     id: "d3",
     role: "assistant",
-    text: "Without a Kundli I can only give general information. Create your birth chart — then I'll give you a personalized career analysis based on your active dasha!",
+    text: "Beta, bina kundli dekhe mai sirf saamanya baat keh sakta hu. Aap pehle apni janm-kundli banaiye — phir mai aapke graha, dasha aur yog dekh ke ekdum personalized margdarshan dunga.",
   },
 ];
 
 const STARTERS = [
-  "How will my career be this year?",
-  "What is the right time for marriage?",
-  "Tell me about my health",
-  "When will I see financial gains?",
+  "Mera vivah kab hoga?",
+  "Career mein safalta kab milegi?",
+  "Mere swasthya ke baare mein bataiye",
+  "Dhan-laabh kab hoga mujhe?",
 ];
 
 export default function AskScreen() {
@@ -74,7 +74,7 @@ export default function AskScreen() {
           {
             id: "init",
             role: "assistant",
-            text: `Hello! I can read your kundli. Ask me about your planets, dasha, or any area of life.`,
+            text: `Pranam beta 🙏 Mai Acharya Vidyasagar — Kashi se. Aapki kundli mere saamne hai. Vivah, karya, swasthya, dhan — jo bhi prashna ho, nishankoch poochiye.`,
           },
         ]
   );
@@ -210,8 +210,8 @@ export default function AskScreen() {
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
         <View style={s.headerDot} />
-        <Text style={[s.headerTitle, { color: C.text }]}>Jyotish AI</Text>
-        <Text style={[s.headerSub, { color: C.textMuted }]}>Vedic Astrology Assistant</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>Acharya Vidyasagar</Text>
+        <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
       {/* Demo banner */}

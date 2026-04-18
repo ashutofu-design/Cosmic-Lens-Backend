@@ -36,7 +36,6 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
-import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
@@ -172,7 +171,6 @@ export default function BusinessVastuScreen() {
   const [error,     setError]     = useState<ErrorPayload | null>(null);
   const [walletKey, setWalletKey] = useState(0);
   const [scanUpload, setScanUpload] = useState<SmartScanUploadValue | null>(null);
-  const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
 
@@ -235,7 +233,6 @@ export default function BusinessVastuScreen() {
               ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
               ...(scanUpload.north_at ? { north_at: scanUpload.north_at } : {}),
             } } : {}),
-          ...(roomPhotos.length > 0 ? { room_photos: roomPhotos } : {}),
         }),
       });
       const body = await resp.json();
@@ -252,7 +249,7 @@ export default function BusinessVastuScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, bizType, propertyName, scanUpload, roomPhotos]);
+  }, [loading, rooms, user, bizType, propertyName, scanUpload]);
 
   const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
 
@@ -342,28 +339,10 @@ export default function BusinessVastuScreen() {
           refreshKey={walletKey}
         />
 
-        {/* ── Smart Scan upload (Phase 6) ────────────────────────────── */}
+        {/* ── Smart Scan upload — full premise PDF/image (vision auto-detects) ── */}
         <View style={{ marginTop: 14 }}>
           <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
         </View>
-
-        {/* ── Room photo capture with live compass (Phase 7) ──────────── */}
-        <RoomPhotoCapture
-          rooms={rooms
-            .filter((r) => r.room_type && r.direction)
-            .map((r) => {
-              const ro = roomOpts.find((x) => x.key === r.room_type);
-              const di = DIRECTION_OPTIONS.find((x) => x.key === r.direction);
-              return {
-                key:   r.room_type,
-                label: `${ro?.en || r.room_type} (${di?.short || r.direction})`,
-              };
-            })
-            .filter((c, i, arr) => arr.findIndex((x) => x.key === c.key) === i)}
-          photos={roomPhotos}
-          onChange={setRoomPhotos}
-          disabled={loading}
-        />
 
         {/* ── Floor-plan editor ──────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>

@@ -34,6 +34,7 @@ import { API_BASE } from "@/lib/apiConfig";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
+import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
 const VERDICT_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
@@ -90,6 +91,7 @@ export default function AstroVastuProScreen() {
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
+  const [wholePlan, setWholePlan] = useState<SmartScanUploadValue | null>(null);
 
   // ── Shared submit helper ──────────────────────────────────────────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
@@ -142,6 +144,19 @@ export default function AstroVastuProScreen() {
     });
   }, [runScan]);
 
+  // ── Whole floor plan: PDF/JPG of the entire floor — vision auto-detects all rooms ─
+  const onWholePlanSubmit = useCallback(() => {
+    if (!wholePlan) return;
+    runScan({
+      floor_plan_upload: {
+        type:     wholePlan.type,
+        ...(wholePlan.data_url ? { data_url: wholePlan.data_url } : {}),
+        ...(wholePlan.base64   ? { base64:   wholePlan.base64   } : {}),
+        north_at: wholePlan.north_at || "top",
+      },
+    });
+  }, [runScan, wholePlan]);
+
   // ─────────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
@@ -187,11 +202,56 @@ export default function AstroVastuProScreen() {
           <View style={[styles.orLine, { backgroundColor: C.border }]} />
         </View>
 
-        {/* Gallery upload — for users not at home */}
+        {/* Gallery upload — single room with user-tagged direction */}
         <GalleryScanUpload
           onSubmit={onGallerySubmit}
           loading={loading}
         />
+
+        {/* OR divider */}
+        <View style={styles.orRow}>
+          <View style={[styles.orLine, { backgroundColor: C.border }]} />
+          <Text style={[styles.orText, { color: C.textMid }]}>OR</Text>
+          <View style={[styles.orLine, { backgroundColor: C.border }]} />
+        </View>
+
+        {/* Whole floor plan upload — architect's PDF/JPG, vision auto-detects all rooms */}
+        <View style={[styles.wholeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <Feather name="layout" size={16} color={C.accent} />
+            <Text style={[styles.wholeTitle, { color: C.text }]}>
+              Got the full floor plan from your architect?
+            </Text>
+          </View>
+          <Text style={[styles.wholeBody, { color: C.textMid }]}>
+            Upload the entire layout (PDF or image — bedroom, kitchen, bathroom, all of it).
+            Cosmic Vision will detect every room and give you one consolidated direction-wise
+            report, personalised to your kundli.
+          </Text>
+        </View>
+
+        <SmartScanUpload
+          value={wholePlan}
+          onChange={setWholePlan}
+          disabled={loading}
+        />
+
+        <Pressable
+          onPress={onWholePlanSubmit}
+          disabled={loading || !wholePlan}
+          style={({ pressed }) => [
+            styles.runScanBtn,
+            {
+              backgroundColor: (loading || !wholePlan) ? C.border : C.accent,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Feather name="zap" size={16} color={(loading || !wholePlan) ? C.textMid : "#0B0F19"} />
+          <Text style={[styles.runScanText, { color: (loading || !wholePlan) ? C.textMid : "#0B0F19" }]}>
+            {loading ? "Analysing…" : "Run Whole-Floor Vastu Scan"}
+          </Text>
+        </Pressable>
 
         {/* ── Error / paywall card ─────────────────────────────────── */}
         {error && (
@@ -494,4 +554,12 @@ const styles = StyleSheet.create({
   orRow:    { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 16 },
   orLine:   { flex: 1, height: 1 },
   orText:   { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
+
+  wholeIntro: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
+  wholeTitle: { fontSize: 14, fontWeight: "700", flexShrink: 1 },
+  wholeBody:  { fontSize: 12, lineHeight: 17 },
+
+  runScanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center",
+                gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 4 },
+  runScanText:{ fontSize: 14, fontWeight: "800" },
 });

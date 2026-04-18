@@ -1,0 +1,131 @@
+We are building a dual-tier AstroVastu system: BASIC and PRO.
+
+This is not a UI description — this is ENGINE + LOGIC + FLOW definition.
+Follow strictly.
+
+-------------------------------------
+🟢 BASIC TIER — SYSTEM DESIGN
+-------------------------------------
+
+Goal:
+Fast, simple, low-cost, addictive entry experience.
+No image processing. No heavy logic.
+
+INPUT:
+- User kundli data (minimum):
+  - Lagna (required)
+  - Rashi (required)
+- Optional:
+  - Planet strengths (if available)
+
+PROCESS LOGIC:
+
+Step 1: Identify Lagna element and ruling planet
+- Map Lagna → element (fire/earth/air/water)
+- Map Lagna → favorable directions
+
+Step 2: Apply simple Rashi support
+- Check if Moon sign supports or weakens Lagna direction
+- Adjust recommendation slightly (no deep logic)
+
+Step 3: Match with generic vastu rules
+- Example:
+  Kitchen → SE ideal
+  Bedroom → SW ideal
+  Pooja → NE ideal
+
+Step 4: Combine result
+- Output:
+  - “Ideal (aligned)”
+  - “Acceptable (minor adjustment needed)”
+  - “Not recommended”
+
+Step 5: Suggest 1–2 simple remedies
+- Color
+- Direction facing
+- Small object placement
+
+OUTPUT FORMAT:
+- Plain text only
+- Max 80–120 words
+- No sections
+- No “scan” language
+
+Example Output:
+Your Lagna is Gemini. Air element supports West and North directions.
+Kitchen in West is acceptable. Slight imbalance in fire element.
+Suggestion: Add green element or plant near North wall.
+
+STRICT RULES:
+- Do NOT use advanced astrology (no Mahadasha)
+- Do NOT simulate scan
+- Keep logic deterministic and simple
+- Keep cost minimal
+
+-------------------------------------
+🔴 PRO TIER — FULL ENGINE DESIGN
+-------------------------------------
+
+Goal:
+Create the most advanced AstroVastu system combining:
+Vision + Spatial + Direction + Kundli + Rule Engine
+
+-------------------------------------
+PHASE 1 — INPUT CAPTURE
+-------------------------------------
+
+Step 1: User selects room type
+- bedroom / kitchen / living / pooja / etc
+
+Step 2: Image input
+- Single or multiple images allowed
+
+Step 3: Guided capture (if multi-photo enabled)
+- Prompt user:
+  “Capture North wall”
+  “Capture East wall”
+  “Capture entrance”
+  “Capture full room”
+
+Step 4: Direction capture (critical)
+- Capture device compass heading (0–360°)
+- Attach to each image:
+  e.g. “Image 1 facing 87° (East)”
+
+Step 5: Kundli input
+- Lagna
+- Rashi
+- (Optional advanced)
+  - Mahadasha
+  - Weak planets
+  - Yogas (Manglik, Sade-Sati, etc)
+
+-------------------------------------
+PHASE 2 — VISION ANALYSIS
+-------------------------------------
+
+Step 1: Detect objects
+- Bed
+- Stove
+- Sink
+- Mirror
+- Door
+- Window
+- Electronics
+- Clutter
+- Colors
+
+Step 2: Map object → direction
+- Using compass data
+- Build directional grid:
+  N / NE / E / SE / S / SW / W / NW
+
+Step 3: Detect layout issues
+- Example:
+  Bed in NE
+  Stove in NW
+  Mirror facing bed
+  Toilet in NE
+
+-------------------------------------
+PHASE 3 — GENER

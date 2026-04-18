@@ -35,6 +35,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists per business type (mirrors backend BUSINESS_CRITICAL)
@@ -166,6 +167,7 @@ export default function BusinessVastuScreen() {
   const [result,    setResult]    = useState<BizResponse | null>(null);
   const [error,     setError]     = useState<ErrorPayload | null>(null);
   const [walletKey, setWalletKey] = useState(0);
+  const [scanUpload, setScanUpload] = useState<SmartScanUploadValue | null>(null);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
 
@@ -200,8 +202,8 @@ export default function BusinessVastuScreen() {
       return;
     }
     const valid = rooms.filter(r => r.room_type && r.direction);
-    if (valid.length === 0) {
-      setError({ error: "validation", message: "Add at least one room with a direction." });
+    if (valid.length === 0 && !scanUpload) {
+      setError({ error: "validation", message: "Add at least one room with a direction, or upload a floor plan." });
       return;
     }
     if (!propertyName.trim()) {
@@ -222,6 +224,11 @@ export default function BusinessVastuScreen() {
           business_type: bizType,
           floor_plan:    valid,
           property_name: propertyName.trim(),
+          ...(scanUpload ? { floor_plan_upload: {
+              type:     scanUpload.type,
+              ...(scanUpload.data_url ? { data_url: scanUpload.data_url } : {}),
+              ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
+            } } : {}),
         }),
       });
       const body = await resp.json();
@@ -238,7 +245,7 @@ export default function BusinessVastuScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, bizType, propertyName]);
+  }, [loading, rooms, user, bizType, propertyName, scanUpload]);
 
   const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
 
@@ -328,10 +335,20 @@ export default function BusinessVastuScreen() {
           refreshKey={walletKey}
         />
 
+        {/* ── Smart Scan upload (Phase 6) ────────────────────────────── */}
+        <View style={{ marginTop: 14 }}>
+          <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
+        </View>
+
         {/* ── Floor-plan editor ──────────────────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: C.text, marginTop: 14 }]}>
-          Premise Layout ({rooms.length}/15)
+        <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
+          {scanUpload ? "Optional: Refine Rooms" : `Premise Layout (${rooms.length}/15)`}
         </Text>
+        {scanUpload ? (
+          <Text style={{ color: C.textMid, fontSize: 11, marginBottom: 6 }}>
+            Cosmic Vision will detect rooms from your upload. You can also list rooms here to override.
+          </Text>
+        ) : null}
 
         {rooms.map((r, idx) => {
           const ro = roomOpts.find(x => x.key === r.room_type) ?? roomOpts[0];

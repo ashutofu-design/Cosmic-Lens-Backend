@@ -2841,10 +2841,37 @@ def astrovastu_pro_route():
     import json
 
     data = request.get_json(force=True, silent=True) or {}
+    lang = (data.get("lang") or "en").strip().lower()
+
+    # ── Phase 6: Cosmic Vision floor-plan extraction (optional, NEVER blocks) ─
+    vision_data    = None
+    vision_warning = None
+    fp_upload = data.get("floor_plan_upload")
+    if isinstance(fp_upload, dict) and (fp_upload.get("data_url") or fp_upload.get("base64")):
+        try:
+            from vision_layer import extract_floor_plan_from_upload
+            vd, verr = extract_floor_plan_from_upload(fp_upload, business_type=None, lang=lang)
+        except Exception as exc:
+            print(f"[astrovastu-pro] floor-plan vision crashed (non-fatal): {exc}")
+            vd, verr = {}, "Cosmic Vision is temporarily unavailable. Continuing with your manual layout."
+        if verr:
+            vision_warning = verr
+        if vd and vd.get("rooms"):
+            vision_data = vd
+            if not data.get("floor_plan"):
+                data["floor_plan"] = vd["rooms"]
 
     # ── Validation ────────────────────────────────────────────────────────
     floor_plan = data.get("floor_plan")
     if not isinstance(floor_plan, list) or not floor_plan:
+        # If user uploaded a floor plan but Cosmic Vision couldn't read it,
+        # surface a brand-safe, actionable message instead of a generic 400.
+        if fp_upload:
+            return jsonify({
+                "error":          "vision_inconclusive",
+                "message":        vision_warning or "Cosmic Vision could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
+                "vision_warning": vision_warning or "Cosmic Vision could not detect rooms.",
+            }), 422
         return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
     if len(floor_plan) > 12:
         return jsonify({"error": "floor_plan supports at most 12 rooms per scan"}), 400
@@ -2920,6 +2947,27 @@ def astrovastu_pro_route():
     except Exception as exc:
         import traceback; traceback.print_exc()
         return jsonify({"error": "engine_failure"}), 500
+
+    # ── Phase 6: room photo visual findings (optional, non-fatal) ────────
+    room_photos = data.get("room_photos")
+    if isinstance(room_photos, list) and room_photos:
+        try:
+            from vision_layer import annotate_report_with_room_photos
+            annotate_report_with_room_photos(report, room_photos, lang=lang)
+        except Exception as exc:
+            print(f"[astrovastu-pro] room photo vision failed (non-fatal): {exc}")
+    if vision_data:
+        report["vision_floor_plan"] = vision_data
+    if vision_warning:
+        report["vision_warning"] = vision_warning
+    report["vision_used"] = bool(vision_data) or bool(
+        (report.get("vision_room_findings") or {}).get("rooms_analyzed", 0)
+    )
+    # vision_findings_count = total visual findings across all rooms
+    _vfc = 0
+    for _r in (report.get("rooms") or []):
+        _vfc += len(_r.get("visual_findings") or [])
+    report["vision_findings_count"] = _vfc
 
     # ── Phase-2 atomic consume AFTER engine success ──────────────────────
     quota = consume_astrovastu_pro_v2(user, property_name)
@@ -3006,6 +3054,7 @@ def business_vastu_route():
     import json
 
     data = request.get_json(force=True, silent=True) or {}
+    lang = (data.get("lang") or "en").strip().lower()
 
     # ── Validation ────────────────────────────────────────────────────────
     btype = (data.get("business_type") or "").strip().lower()
@@ -3013,8 +3062,32 @@ def business_vastu_route():
         return jsonify({"error": "invalid_business_type",
                         "message": "business_type must be shop / office / factory."}), 400
 
+    # ── Phase 6: Cosmic Vision floor-plan extraction (optional, NEVER blocks) ─
+    vision_data    = None
+    vision_warning = None
+    fp_upload = data.get("floor_plan_upload")
+    if isinstance(fp_upload, dict) and (fp_upload.get("data_url") or fp_upload.get("base64")):
+        try:
+            from vision_layer import extract_floor_plan_from_upload
+            vd, verr = extract_floor_plan_from_upload(fp_upload, business_type=btype, lang=lang)
+        except Exception as exc:
+            print(f"[business-vastu] floor-plan vision crashed (non-fatal): {exc}")
+            vd, verr = {}, "Cosmic Vision is temporarily unavailable. Continuing with your manual layout."
+        if verr:
+            vision_warning = verr
+        if vd and vd.get("rooms"):
+            vision_data = vd
+            if not data.get("floor_plan"):
+                data["floor_plan"] = vd["rooms"]
+
     floor_plan = data.get("floor_plan")
     if not isinstance(floor_plan, list) or not floor_plan:
+        if fp_upload:
+            return jsonify({
+                "error":          "vision_inconclusive",
+                "message":        vision_warning or "Cosmic Vision could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
+                "vision_warning": vision_warning or "Cosmic Vision could not detect rooms.",
+            }), 422
         return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
     if len(floor_plan) > 15:
         return jsonify({"error": "floor_plan supports at most 15 rooms per scan"}), 400
@@ -3129,6 +3202,26 @@ def business_vastu_route():
     except Exception as exc:
         import traceback; traceback.print_exc()
         return jsonify({"error": "engine_failure"}), 500
+
+    # ── Phase 6: room photo visual findings (optional, non-fatal) ────────
+    room_photos = data.get("room_photos")
+    if isinstance(room_photos, list) and room_photos:
+        try:
+            from vision_layer import annotate_report_with_room_photos
+            annotate_report_with_room_photos(report, room_photos, lang=lang)
+        except Exception as exc:
+            print(f"[business-vastu] room photo vision failed (non-fatal): {exc}")
+    if vision_data:
+        report["vision_floor_plan"] = vision_data
+    if vision_warning:
+        report["vision_warning"] = vision_warning
+    report["vision_used"] = bool(vision_data) or bool(
+        (report.get("vision_room_findings") or {}).get("rooms_analyzed", 0)
+    )
+    _vfc = 0
+    for _r in (report.get("rooms") or []):
+        _vfc += len(_r.get("visual_findings") or [])
+    report["vision_findings_count"] = _vfc
 
     # ── Phase-4 consume (no-op for lifetime model — just re-confirm gate) ─
     consumed = consume_business_vastu_v2(user, btype, property_name)

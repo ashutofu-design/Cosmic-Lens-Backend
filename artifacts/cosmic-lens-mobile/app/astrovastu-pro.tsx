@@ -33,6 +33,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
+import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists (ready for 24-language i18n migration)
@@ -140,6 +141,7 @@ export default function AstroVastuProScreen() {
   const [error,   setError]   = useState<ErrorPayload | null>(null);
   const [propertyName, setPropertyName] = useState<string>("");  // Phase 2: per-property unlock match
   const [walletKey,    setWalletKey]    = useState(0);
+  const [scanUpload,   setScanUpload]   = useState<SmartScanUploadValue | null>(null);
 
   // ── Floor-plan editor handlers ────────────────────────────────────────
   const addRoom = useCallback(() => {
@@ -165,8 +167,8 @@ export default function AstroVastuProScreen() {
       return;
     }
     const valid = rooms.filter((r) => r.room_type && r.direction);
-    if (valid.length === 0) {
-      setError({ error: "validation", message: "Add at least one room with a direction." });
+    if (valid.length === 0 && !scanUpload) {
+      setError({ error: "validation", message: "Add at least one room with a direction, or upload a floor plan." });
       return;
     }
 
@@ -181,6 +183,11 @@ export default function AstroVastuProScreen() {
           user_id: user.id,
           floor_plan: valid,
           property_name: propertyName.trim(),
+          ...(scanUpload ? { floor_plan_upload: {
+              type:     scanUpload.type,
+              ...(scanUpload.data_url ? { data_url: scanUpload.data_url } : {}),
+              ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
+            } } : {}),
         }),
       });
       const body = await resp.json();
@@ -197,7 +204,7 @@ export default function AstroVastuProScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, propertyName]);
+  }, [loading, rooms, user, propertyName, scanUpload]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -242,10 +249,20 @@ export default function AstroVastuProScreen() {
           refreshKey={walletKey}
         />
 
+        {/* ── Smart Scan upload (Phase 6) ────────────────────────────── */}
+        <View style={{ marginTop: 14 }}>
+          <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
+        </View>
+
         {/* ── Floor-plan editor ───────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
-          Your Floor Plan ({rooms.length}/12)
+          {scanUpload ? "Optional: Refine Rooms" : `Your Floor Plan (${rooms.length}/12)`}
         </Text>
+        {scanUpload ? (
+          <Text style={{ color: C.textMid, fontSize: 11, marginBottom: 6 }}>
+            Cosmic Vision will detect rooms from your upload. You can also list rooms here to override.
+          </Text>
+        ) : null}
 
         {rooms.map((r, idx) => {
           const ro = ROOM_OPTIONS.find((x) => x.key === r.room_type) ?? ROOM_OPTIONS[0];

@@ -744,3 +744,286 @@ def vastu_scan(
         parsed["heading_deg_input"] = heading_deg
 
     return parsed
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COSMIC VISION ENGINE — floor-plan extraction + room visual analysis
+# (Phase 6: powers AstroVastu PRO + Business Vastu paid tiers)
+# All user-facing text is branded as "Cosmic Vision Engine".
+# Engine remains source of truth for verdicts; vision provides INPUT extraction
+# and environmental observations only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FLOOR_PLAN_LAYOUT_SCHEMA = {
+    "name": "FloorPlanLayout",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "rooms", "structural_notes", "plot_shape",
+            "main_entrance_direction", "confidence", "scan_inconclusive",
+            "inconclusive_reason",
+        ],
+        "properties": {
+            "rooms": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 30,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["room_type", "direction", "position_grid", "notes"],
+                    "properties": {
+                        "room_type": {
+                            "type": "string",
+                            "description": "canonical lowercase: master_bedroom, bedroom, kitchen, pooja_room, living_room, dining, bathroom, toilet, study, store, balcony, staircase, entrance, office, cabin, reception, conference, workstation, store_room, billing, cash_counter, factory_floor, warehouse, godown, machine_room, raw_material, finished_goods, etc."
+                        },
+                        "direction": {
+                            "type": "string",
+                            "enum": ["N","NE","E","SE","S","SW","W","NW","center"]
+                        },
+                        "position_grid": {
+                            "type": "string",
+                            "description": "approx grid cell, e.g. 'top-left', 'center', 'bottom-right'"
+                        },
+                        "notes": {"type": "string"}
+                    }
+                }
+            },
+            "structural_notes": {
+                "type": "array",
+                "maxItems": 10,
+                "items": {"type": "string"}
+            },
+            "plot_shape": {
+                "type": "string",
+                "description": "rectangular / square / irregular / L-shaped / other"
+            },
+            "main_entrance_direction": {
+                "type": "string",
+                "enum": ["N","NE","E","SE","S","SW","W","NW","unknown"]
+            },
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+            "scan_inconclusive": {"type": "boolean"},
+            "inconclusive_reason": {"type": "string"}
+        }
+    }
+}
+
+
+_ROOM_VISUAL_SCHEMA = {
+    "name": "RoomVisualFindings",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["visual_findings", "score_delta", "confidence",
+                     "scan_inconclusive", "inconclusive_reason"],
+        "properties": {
+            "visual_findings": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 8,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["text", "severity", "category"],
+                    "properties": {
+                        "text": {"type": "string"},
+                        "severity": {
+                            "type": "string",
+                            "enum": ["positive", "neutral", "minor", "moderate", "major"]
+                        },
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "clutter", "mirror", "beam", "color",
+                                "electronics", "idol", "furniture", "lighting",
+                                "plant", "water", "fire", "storage", "general"
+                            ]
+                        }
+                    }
+                }
+            },
+            "score_delta": {
+                "type": "integer", "minimum": -15, "maximum": 10,
+                "description": "net adjustment to room compliance score from visual environment"
+            },
+            "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+            "scan_inconclusive": {"type": "boolean"},
+            "inconclusive_reason": {"type": "string"}
+        }
+    }
+}
+
+
+def extract_floor_plan_layout(
+    image_data_url: str,
+    business_type: str | None = None,
+    lang: str = "en",
+) -> dict:
+    """
+    Extract structured room layout from a top-down floor plan image (PNG data URL).
+
+    Returns dict per _FLOOR_PLAN_LAYOUT_SCHEMA. Raises RuntimeError on config /
+    OpenAI failure. Branded as Cosmic Vision Engine — never mentions AI/GPT.
+    """
+    client = _get_client()
+    if client is None:
+        raise RuntimeError(_client_err or "Cosmic Vision Engine not configured")
+    if not image_data_url or not isinstance(image_data_url, str):
+        raise RuntimeError("floor plan image is required")
+
+    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
+    lang_name = _LANG_NAME.get(lang, "English")
+    btype = (business_type or "").strip().lower() or "residential"
+
+    system = (
+        "You are the COSMIC VISION ENGINE — Floor Plan Spatial Analyzer.\n\n"
+        "Your job: examine ONE top-down floor plan image and extract every "
+        "identifiable room, its cardinal direction, and structural notes "
+        "relevant to Vastu Shastra.\n\n"
+        "ABSOLUTE RULES:\n"
+        "1. Output ONLY the strict JSON object — no prose.\n"
+        "2. NEVER mention 'AI', 'GPT', 'OpenAI', 'language model'. You are "
+        "the Cosmic Vision Engine.\n"
+        f"3. The property type is: {btype}. Identify rooms appropriate to it.\n"
+        "4. Direction = the cardinal/intercardinal zone where the room SITS "
+        "within the plot, assuming North is at the TOP of the floor plan "
+        "unless an explicit compass arrow shows otherwise. Use 9-cell logic: "
+        "NW | N | NE / W | center | E / SW | S | SE.\n"
+        "5. Use canonical lowercase room_type tokens (see schema description).\n"
+        "6. structural_notes (0-10 lines): things like 'kitchen and toilet "
+        "share a wall', 'staircase passes through center', 'plot is L-shaped'.\n"
+        "7. confidence (0-100): be honest. If the plan is blurry, hand-drawn "
+        "without labels, or you cannot determine room functions reliably, "
+        "set scan_inconclusive=true with a reason.\n"
+        f"8. structural_notes / inconclusive_reason text in: {lang_name}. "
+        "Field names, enums, room_type tokens stay original.\n"
+    )
+    user_content = [
+        {"type": "text", "text": (
+            f"Property type: {btype}. Identify all rooms with their direction "
+            "(9-cell zone) within the plot. Return strict JSON."
+        )},
+        {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
+    ]
+
+    try:
+        resp = client.chat.completions.create(
+            model           = model,
+            messages        = [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user_content},
+            ],
+            temperature     = 0.2,
+            max_tokens      = 2000,
+            response_format = {"type": "json_schema", "json_schema": _FLOOR_PLAN_LAYOUT_SCHEMA},
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Cosmic Vision Engine request failed: {exc}") from exc
+
+    raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not raw:
+        raise RuntimeError("Cosmic Vision Engine returned empty response")
+    try:
+        parsed = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"Cosmic Vision Engine returned non-JSON: {exc}") from exc
+
+    parsed["source"] = "cosmic-vision-floor-plan"
+    parsed["model"]  = model
+    return parsed
+
+
+def analyze_room_visuals(
+    image_data_url: str,
+    room_type: str,
+    heading_deg: float | None = None,
+    lang: str = "en",
+) -> dict:
+    """
+    Analyze ONE room photograph for visual environmental Vastu observations
+    (clutter, mirror placement, beam, electronics, idol orientation, color, etc.).
+
+    Returns dict per _ROOM_VISUAL_SCHEMA. score_delta is BOUNDED to [-15, +10].
+    Branded — never mentions AI.
+    """
+    client = _get_client()
+    if client is None:
+        raise RuntimeError(_client_err or "Cosmic Vision Engine not configured")
+    if not image_data_url:
+        raise RuntimeError("room photo is required")
+
+    model = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o")
+    lang_name = _LANG_NAME.get(lang, "English")
+    rt = (room_type or "room").strip().lower()
+    heading_str = f"{heading_deg:.1f}°" if isinstance(heading_deg, (int, float)) else "unknown"
+
+    system = (
+        "You are the COSMIC VISION ENGINE — Room Environment Analyzer.\n\n"
+        "Your job: examine ONE photograph of a real interior room and surface "
+        "VISUAL ENVIRONMENTAL observations relevant to Vastu Shastra (clutter, "
+        "mirror placement, exposed beams, sharp colors, large electronics, "
+        "idol orientation, water/fire elements, broken items, etc.).\n\n"
+        "ABSOLUTE RULES:\n"
+        "1. Output ONLY the strict JSON object — no prose.\n"
+        "2. NEVER mention 'AI', 'GPT', 'OpenAI', 'language model'. You are "
+        "the Cosmic Vision Engine.\n"
+        "3. Do NOT make verdicts on the room layout/direction — that is handled "
+        "by the classical engine. Focus on what is VISIBLE in the photo.\n"
+        "4. visual_findings: 0-8 specific items. severity = "
+        "positive | neutral | minor | moderate | major.\n"
+        "5. score_delta: small integer in [-15, +10] reflecting net "
+        "environmental impact. Be conservative — classical rules dominate.\n"
+        "6. confidence (0-100): be honest. If photo is blurry / dark / not a "
+        "room, set scan_inconclusive=true with a reason and empty findings.\n"
+        f"7. text / inconclusive_reason in: {lang_name}. Enums stay original.\n"
+        "8. Be specific — say 'mirror on south wall facing bed' not 'mirror present'.\n"
+    )
+    user_content = [
+        {"type": "text", "text": (
+            f"Room type (user-declared): {rt}\n"
+            f"Camera heading at capture: {heading_str}\n"
+            "Return strict JSON with visual environmental findings only."
+        )},
+        {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
+    ]
+
+    try:
+        resp = client.chat.completions.create(
+            model           = model,
+            messages        = [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user_content},
+            ],
+            temperature     = 0.3,
+            max_tokens      = 1500,
+            response_format = {"type": "json_schema", "json_schema": _ROOM_VISUAL_SCHEMA},
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Cosmic Vision Engine request failed: {exc}") from exc
+
+    raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    if not raw:
+        raise RuntimeError("Cosmic Vision Engine returned empty response")
+    try:
+        parsed = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError(f"Cosmic Vision Engine returned non-JSON: {exc}") from exc
+
+    # Hard-clamp score_delta defensively
+    sd = parsed.get("score_delta", 0)
+    try:
+        sd = int(sd)
+    except Exception:
+        sd = 0
+    parsed["score_delta"] = max(-15, min(10, sd))
+
+    parsed["source"]    = "cosmic-vision-room"
+    parsed["model"]     = model
+    parsed["room_type"] = rt
+    if heading_deg is not None:
+        parsed["heading_deg_input"] = float(heading_deg)
+    return parsed

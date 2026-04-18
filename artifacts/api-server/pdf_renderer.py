@@ -250,6 +250,53 @@ def _priority_table(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
     return t
 
 
+def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Render the optional 'Cosmic Vision Findings' section."""
+    out: List[Any] = []
+    vfp = report.get("vision_floor_plan") or {}
+    vrf = report.get("vision_room_findings") or {}
+    used = bool(vfp) or bool(vrf.get("rooms_analyzed", 0))
+    if not used:
+        return out
+
+    out.append(Paragraph("Cosmic Vision Findings", s["h2"]))
+    bits: List[str] = []
+    if vfp:
+        if vfp.get("plot_shape"):
+            bits.append(f"Plot shape: <b>{_safe(vfp['plot_shape'])}</b>")
+        if vfp.get("main_entrance"):
+            bits.append(f"Main entrance: <b>{_safe(vfp['main_entrance'])}</b>")
+        rooms_full = vfp.get("rooms_full") or vfp.get("rooms") or []
+        if rooms_full:
+            bits.append(f"Rooms auto-detected: <b>{len(rooms_full)}</b>")
+        conf = vfp.get("confidence")
+        if isinstance(conf, int):
+            bits.append(f"Detection confidence: <b>{conf}/100</b>")
+    if vrf.get("rooms_analyzed"):
+        bits.append(f"Room photos analyzed: <b>{vrf['rooms_analyzed']}</b>")
+        if vrf.get("applied_score_delta"):
+            sd = vrf["applied_score_delta"]
+            sign = "+" if sd > 0 else ""
+            bits.append(f"Visual score adjustment: <b>{sign}{sd}</b>")
+    if bits:
+        out.append(Paragraph("  ·  ".join(bits), s["body"]))
+        out.append(Spacer(1, 4))
+
+    notes = list(vfp.get("structural_notes") or [])
+    if notes:
+        out.append(Paragraph("<b>Structural notes from your floor plan:</b>", s["body"]))
+        for n in notes[:8]:
+            out.append(Paragraph(f"• {_safe(n)}", s["body"]))
+        out.append(Spacer(1, 4))
+
+    if vfp.get("scan_inconclusive") and vfp.get("inconclusive_reason"):
+        out.append(Paragraph(
+            f"<i>Note:</i> {_safe(vfp['inconclusive_reason'])}", s["body"]
+        ))
+    out.append(Spacer(1, 8))
+    return out
+
+
 def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
                  with_business: bool) -> Table:
     head = ["Room", "Dir", "Verdict", "Score", "Notes"]
@@ -267,6 +314,13 @@ def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
             md = r["mahadasha"]
             if md.get("reason_en"):
                 notes.append("Mahadasha: " + md["reason_en"])
+        vfs = r.get("visual_findings") or []
+        if vfs:
+            for vf in vfs[:3]:
+                txt = (vf.get("text") or "").strip()
+                sev = (vf.get("severity") or "").strip()
+                if txt:
+                    notes.append(f"Vision ({sev}): {txt}")
         notes_str = "<br/>".join(_safe(n) for n in notes) or "—"
         verdict = r.get("verdict", "Acceptable")
         crit = " ★" if r.get("is_critical") else ""
@@ -383,6 +437,9 @@ def render_business_pdf(report: Dict[str, Any], *,
     flow.append(_priority_table(report.get("priority_actions") or [], s))
     flow.append(Spacer(1, 10))
 
+    # ── Cosmic Vision Findings (Phase 6, optional)
+    flow.extend(_vision_block(report, s))
+
     # ── Room-by-room
     rooms = report.get("rooms") or []
     if rooms:
@@ -474,6 +531,9 @@ def render_pro_pdf(report: Dict[str, Any], *,
     flow.append(Paragraph("Priority Actions", s["h2"]))
     flow.append(_priority_table(report.get("priority_actions") or [], s))
     flow.append(Spacer(1, 10))
+
+    # ── Cosmic Vision Findings (Phase 6, optional)
+    flow.extend(_vision_block(report, s))
 
     rooms = report.get("rooms") or []
     if rooms:

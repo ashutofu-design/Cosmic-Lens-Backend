@@ -35,6 +35,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 
 type Phase = "idle" | "loading" | "done" | "error";
 
@@ -155,10 +156,10 @@ export default function FuturePartnerPortraitScreen() {
   }, []);
 
   const onReveal = useCallback(async () => {
-    if (!kundli) {
+    if (!birth) {
       Alert.alert(
-        "Kundli zaroori hai",
-        "Apni primary kundli pehle bana lein, fir Cosmic Portrait reveal karein.",
+        "Birth details zaroori hain",
+        "Apni primary profile me birth date/time/place pehle add karein, fir Cosmic Portrait reveal karein.",
       );
       return;
     }
@@ -171,9 +172,29 @@ export default function FuturePartnerPortraitScreen() {
     setImageUrl(null);
     setTraits(null);
 
+    // If kundli not yet computed (user hasn't opened kundli screen), compute it now.
+    let kundliToUse = kundli;
+    if (!kundliToUse) {
+      try {
+        setMessage("Pehle aapki kundli compute kar raha hu...");
+        const auth = (user?.id && user?.api_key)
+          ? { user_id: user.id, api_key: user.api_key }
+          : null;
+        kundliToUse = await fetchKundliFromAPI(birth, auth);
+      } catch (e: any) {
+        setPhase("error");
+        setErrMsg(
+          e?.message?.includes("quota")
+            ? "Aapka kundli quota khatam ho gaya. Subscription upgrade karein."
+            : "Kundli compute nahi ho saki. Network check karke punah prayaas karein."
+        );
+        return;
+      }
+    }
+
     try {
       const body: any = {
-        kundli,
+        kundli:      kundliToUse,
         birth_data:  birth,
         user_gender: userGender,
       };

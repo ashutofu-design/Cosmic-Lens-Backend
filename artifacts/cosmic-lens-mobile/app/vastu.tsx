@@ -2595,23 +2595,24 @@ export default function VastuScreen() {
       >
         {section === "basic" ? (
           <>
-            {/* ── AstroVastu Quick Check (kundli-personalized single-room) ── */}
+            {/* ── Upgrade to Premium AstroVastu (chooser) ── */}
             <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/astrovastu-basic" as any); }}
-              style={[s.heroCard, { borderColor: C.accent, backgroundColor: C.isDark ? "#0c1722" : C.bgCard }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/astrovastu-pro-options" as any); }}
+              style={[s.heroCard, { borderColor: "#f9d76b", backgroundColor: C.isDark ? "#0a0604" : C.bgCard }]}
             >
-              <View style={[s.heroBadge, { backgroundColor: `${C.accent}22`, borderColor: C.accent }]}>
-                <Text style={{ fontSize: 9, fontWeight: "900", color: C.accent, letterSpacing: 1.4 }}>NEW · BASIC</Text>
+              <View style={[s.heroBadge, { backgroundColor: "#f9d76b22", borderColor: "#f9d76b" }]}>
+                <Feather name="award" size={9} color="#f9d76b" />
+                <Text style={{ fontSize: 9, fontWeight: "900", color: "#f9d76b", letterSpacing: 1.4, marginLeft: 4 }}>PRO PREMIUM</Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Text style={{ fontSize: 30 }}>🔮</Text>
+                <Text style={{ fontSize: 30 }}>🌟</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[s.heroTitle, { color: C.text }]}>AstroVastu Quick Check</Text>
+                  <Text style={[s.heroTitle, { color: C.text }]}>Unlock AstroVastu Premium</Text>
                   <Text style={[s.heroSub, { color: C.textMuted }]}>
-                    Apni kundli ke hisaab se ek room ka Vastu — instant verdict & remedies
+                    Kundli-personalized — Home & Business · ₹199 se shuruaat
                   </Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={C.accent} />
+                <Feather name="chevron-right" size={18} color="#f9d76b" />
               </View>
             </Pressable>
 

@@ -66,7 +66,7 @@ export default function MoreDrawer({
     {
       title: t.catVastu,
       items: [
-        { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/vastu",        accent: "#06b6d4" },
+        { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/astrovastu",   accent: "#06b6d4" },
       ],
     },
   ];

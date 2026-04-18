@@ -318,6 +318,10 @@ export default function SubscriptionScreen() {
           ))}
         </View>
 
+        {/* ── AstroVastu Pricing Card (one-time purchases — separate from subscription) ── */}
+        <AstroVastuPricingCard C={C} />
+
+
         {/* ── Comparison Table ── */}
         <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
@@ -382,6 +386,113 @@ export default function SubscriptionScreen() {
     </View>
   );
 }
+
+// ── AstroVastu Pricing Card ──────────────────────────────────────────────────
+// Separate from subscription tiers — these are ONE-TIME purchases per scan/property.
+// All prices are listed transparently so user knows the full Vastu pricing ladder.
+function AstroVastuPricingCard({ C }: { C: any }) {
+  const goAstroVastu = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push("/astrovastu" as any);
+  };
+
+  const tiers = [
+    { emoji: "🧭", name: "AstroVastu Compass + Guide", price: "FREE",      sub: "Always free",                color: "#10b981" },
+    { emoji: "🔮", name: "1 Room — Quick Check",        price: "₹199",     sub: "One-time",                   color: "#a78bfa" },
+    { emoji: "🏠", name: "3 Rooms — Spot Check Bundle", price: "₹499",     sub: "One-time · Save ₹98",        color: "#a78bfa" },
+    { emoji: "🌟", name: "Full Home Advanced",          price: "₹2,999",   sub: "Lifetime per property",      color: "#f9d76b", best: true },
+    { emoji: "🏪", name: "Shop Vastu",                  price: "₹999",     sub: "One-time scan",              color: "#06b6d4" },
+    { emoji: "🏢", name: "Office Vastu",                price: "₹1,499",   sub: "One-time scan",              color: "#06b6d4" },
+    { emoji: "🏭", name: "Factory Vastu",               price: "₹2,999",   sub: "One-time scan",              color: "#06b6d4" },
+  ];
+
+  return (
+    <View style={[av.wrap, { backgroundColor: C.bgCard, borderColor: "#f9d76b" }]}>
+      {/* Premium gold header */}
+      <LinearGradient
+        colors={["#f9d76b22", "#f59e0b15", "transparent"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={av.headerGrad}
+      >
+        <View style={av.titleRow}>
+          <Feather name="award" size={16} color="#f9d76b" />
+          <Text style={[av.title, { color: C.text }]}>AstroVastu Pricing</Text>
+          <View style={av.premBadge}>
+            <Text style={av.premBadgeText}>PREMIUM</Text>
+          </View>
+        </View>
+        <Text style={[av.subtitle, { color: C.textMuted }]}>
+          Vastu products — sab one-time, koi monthly nahi (kyunki Vastu ek baar set hota hai)
+        </Text>
+      </LinearGradient>
+
+      {/* Tier rows */}
+      <View style={av.tiers}>
+        {tiers.map((t, i) => (
+          <View
+            key={t.name}
+            style={[
+              av.tierRow,
+              i > 0 && { borderTopWidth: 1, borderTopColor: C.border },
+              t.best && { backgroundColor: "#f9d76b0d" },
+            ]}
+          >
+            <Text style={av.tierEmoji}>{t.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={[av.tierName, { color: C.text }]}>{t.name}</Text>
+                {t.best && (
+                  <View style={av.bestBadge}>
+                    <Text style={av.bestBadgeText}>BEST VALUE</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[av.tierSub, { color: C.textMuted }]}>{t.sub}</Text>
+            </View>
+            <Text style={[av.tierPrice, { color: t.color }]}>{t.price}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Pro discount note */}
+      <View style={[av.noteRow, { borderTopColor: C.border, backgroundColor: C.isDark ? "#0a0604" : "#fff8e1" }]}>
+        <Feather name="zap" size={13} color="#f59e0b" />
+        <Text style={[av.noteText, { color: C.textMuted }]}>
+          <Text style={{ fontWeight: "800", color: "#f59e0b" }}>Pro subscribers</Text> get{" "}
+          <Text style={{ fontWeight: "800", color: C.text }}>20% off</Text> on all AstroVastu purchases above.
+        </Text>
+      </View>
+
+      {/* CTA */}
+      <Pressable onPress={goAstroVastu} style={av.cta}>
+        <Feather name="external-link" size={14} color="#3a2404" />
+        <Text style={av.ctaText}>Open AstroVastu</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const av = StyleSheet.create({
+  wrap:           { borderRadius: 16, borderWidth: 2, marginTop: 16, overflow: "hidden" },
+  headerGrad:     { paddingHorizontal: 14, paddingVertical: 12, gap: 6 },
+  titleRow:       { flexDirection: "row", alignItems: "center", gap: 8 },
+  title:          { fontSize: 14, fontWeight: "800", flex: 1 },
+  premBadge:      { backgroundColor: "#f9d76b", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 },
+  premBadgeText:  { fontSize: 8, fontWeight: "900", color: "#3a2404", letterSpacing: 0.8 },
+  subtitle:       { fontSize: 10.5, lineHeight: 15 },
+  tiers:          { paddingHorizontal: 0 },
+  tierRow:        { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 14, paddingVertical: 11 },
+  tierEmoji:      { fontSize: 20 },
+  tierName:       { fontSize: 12.5, fontWeight: "700" },
+  tierSub:        { fontSize: 10, marginTop: 2 },
+  tierPrice:      { fontSize: 14, fontWeight: "900", letterSpacing: 0.3 },
+  bestBadge:      { backgroundColor: "#f9d76b", paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 },
+  bestBadgeText:  { fontSize: 7.5, fontWeight: "900", color: "#3a2404", letterSpacing: 0.6 },
+  noteRow:        { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1 },
+  noteText:       { fontSize: 10.5, lineHeight: 15, flex: 1 },
+  cta:            { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#f9d76b", paddingVertical: 12, marginHorizontal: 14, marginVertical: 12, borderRadius: 10 },
+  ctaText:        { fontSize: 13, fontWeight: "800", color: "#3a2404", letterSpacing: 0.3 },
+});
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({

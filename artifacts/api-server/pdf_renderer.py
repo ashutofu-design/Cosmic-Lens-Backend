@@ -56,6 +56,31 @@ GRADE_COLOR = {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# Language mode (set per-render by render_*_pdf entry-points)
+#   "en"        → English-only PDF
+#   "hinglish"  → Hinglish-only PDF (Roman-script Hindi, e.g. "Gas chulha SE…")
+#   "bilingual" → Both English + Hinglish (default; backward-compatible)
+# True Devanagari Hindi requires a Devanagari font + translation pass; for now
+# requests for "hi" alias to "bilingual" so users still get readable output.
+# ─────────────────────────────────────────────────────────────────────
+_LANG_ALIASES = {
+    "en": "en", "english": "en",
+    "hinglish": "hinglish", "hi-latin": "hinglish",
+    "bilingual": "bilingual", "both": "bilingual",
+    "hi": "bilingual", "hindi": "bilingual", "devanagari": "bilingual",
+}
+_CURRENT_LANG = "bilingual"
+
+def _normalise_lang(lang: str | None) -> str:
+    return _LANG_ALIASES.get((lang or "").strip().lower(), "bilingual")
+
+def _show_en() -> bool:
+    return _CURRENT_LANG in ("en", "bilingual")
+
+def _show_hi() -> bool:
+    return _CURRENT_LANG in ("hinglish", "bilingual")
+
+# ─────────────────────────────────────────────────────────────────────
 def _styles() -> Dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
     return {
@@ -140,11 +165,12 @@ def _score_block(s: ParagraphStyle, score: int, grade: str,
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
-    right = Table([
-        [Paragraph(f"<b>{_safe(label)}</b>", s["h3"])],
-        [Paragraph(_safe(summary_en), s["body"])],
-        [Paragraph(_safe(summary_hi), s["bodyHi"])],
-    ], colWidths=[110 * mm])
+    rows = [[Paragraph(f"<b>{_safe(label)}</b>", s["h3"])]]
+    if _show_en() and summary_en:
+        rows.append([Paragraph(_safe(summary_en), s["body"])])
+    if _show_hi() and summary_hi:
+        rows.append([Paragraph(_safe(summary_hi), s["bodyHi"])])
+    right = Table(rows, colWidths=[110 * mm])
     right.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -203,9 +229,9 @@ def _section_card(title: str, body_en: str, body_hi: str,
                   s: ParagraphStyle, accent: colors.Color = BRAND_PURPLE) -> Table:
     rows = [[Paragraph(f"<b>{_safe(title)}</b>",
                        ParagraphStyle("ct", parent=s["h3"], textColor=accent))]]
-    if body_en:
+    if body_en and _show_en():
         rows.append([Paragraph(_safe(body_en), s["body"])])
-    if body_hi:
+    if body_hi and _show_hi():
         rows.append([Paragraph(_safe(body_hi), s["bodyHi"])])
     t = Table(rows, colWidths=[170 * mm])
     t.setStyle(TableStyle([
@@ -230,8 +256,8 @@ def _priority_table(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
         crit = " ★" if p.get("is_critical") else ""
         room_dir = (p.get("room_type", "") or "").replace("_", " ").title() + crit + \
                    "\n" + (p.get("direction", "") or "")
-        why_en = p.get("why_en") or p.get("why") or ""
-        why_hi = p.get("why_hi") or ""
+        why_en = (p.get("why_en") or p.get("why") or "") if _show_en() else ""
+        why_hi = (p.get("why_hi") or "") if _show_hi() else ""
         why = (why_en + ("\n" + why_hi if why_hi else "")).strip()
         data.append([
             str(i),
@@ -383,8 +409,10 @@ def _disclosure_block(s: Dict[str, ParagraphStyle], *,
             "Vyaparik strategy, accounting ya karmchari nirnay vyapari ke apne hain."
         )
     for en, hi in zip(items_en, items_hi):
-        out.append(Paragraph(f"• {_safe(en)}", s["body"]))
-        out.append(Paragraph(f"<i>{_safe(hi)}</i>", s["body"]))
+        if _show_en():
+            out.append(Paragraph(f"• {_safe(en)}", s["body"]))
+        if _show_hi():
+            out.append(Paragraph(f"{'• ' if not _show_en() else ''}<i>{_safe(hi)}</i>", s["body"]))
     out.append(Spacer(1, 4))
     out.append(Paragraph(
         "<i>This report is generated for guidance and self-improvement only. "
@@ -419,14 +447,27 @@ def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
                 sev = (vf.get("severity") or "").strip()
                 if txt:
                     notes.append(f"Vision ({sev}): {txt}")
-        # Classical remedies (top 3) — wired in from remedies_db merge
+        # Classical remedies (top 3) — wired in from remedies_db merge.
+        # Picks the language version per the user's chosen PDF language.
         rems = r.get("remedies") or []
         for rem in rems[:3]:
-            en = (rem.get("english") or "").strip()
             ref = (rem.get("classical_ref") or "").strip()
-            if en:
-                tag = f" <i>[{ref}]</i>" if ref else ""
-                notes.append(f"Remedy: {en}{tag}")
+            tag = f" <i>[{ref}]</i>" if ref else ""
+            if _CURRENT_LANG == "en":
+                txt = (rem.get("english") or "").strip()
+                if txt:
+                    notes.append(f"Remedy: {txt}{tag}")
+            elif _CURRENT_LANG == "hinglish":
+                txt = (rem.get("hindi") or rem.get("english") or "").strip()
+                if txt:
+                    notes.append(f"Upaay: {txt}{tag}")
+            else:  # bilingual
+                en = (rem.get("english") or "").strip()
+                hi = (rem.get("hindi") or "").strip()
+                if en:
+                    notes.append(f"Remedy: {en}{tag}")
+                if hi:
+                    notes.append(f"Upaay: {hi}")
         notes_str = "<br/>".join(_safe(n) if not n.startswith("Remedy:") else n
                                   for n in notes) or "—"
         verdict = r.get("verdict", "Acceptable")
@@ -614,8 +655,14 @@ def _universal_remedies_block(s: Dict[str, ParagraphStyle]) -> List[Any]:
 # ─────────────────────────────────────────────────────────────────────
 def render_business_pdf(report: Dict[str, Any], *,
                         property_name: str = "",
-                        user_name: str = "") -> bytes:
-    """Render a Business Vastu deep-scan report into a PDF byte string."""
+                        user_name: str = "",
+                        lang: str = "bilingual") -> bytes:
+    """Render a Business Vastu deep-scan report into a PDF byte string.
+
+    `lang`: "en" | "hinglish" | "bilingual" (or aliases handled by _normalise_lang).
+    """
+    global _CURRENT_LANG
+    _CURRENT_LANG = _normalise_lang(lang)
     s = _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -739,8 +786,14 @@ def render_business_pdf(report: Dict[str, Any], *,
 # ─────────────────────────────────────────────────────────────────────
 def render_pro_pdf(report: Dict[str, Any], *,
                    property_name: str = "",
-                   user_name: str = "") -> bytes:
-    """Render an AstroVastu PRO (residential) report into a PDF byte string."""
+                   user_name: str = "",
+                   lang: str = "bilingual") -> bytes:
+    """Render an AstroVastu PRO (residential) report into a PDF byte string.
+
+    `lang`: "en" | "hinglish" | "bilingual" (or aliases handled by _normalise_lang).
+    """
+    global _CURRENT_LANG
+    _CURRENT_LANG = _normalise_lang(lang)
     s = _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,

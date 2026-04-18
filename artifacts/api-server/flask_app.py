@@ -3426,12 +3426,14 @@ def business_vastu_pdf(log_id: int):
     except Exception:
         pass
 
+    lang = (request.args.get("lang") or "bilingual").strip().lower()
     try:
         from pdf_renderer import render_business_pdf
         pdf_bytes = render_business_pdf(
             report,
             property_name=log.property_name or "",
             user_name=user_name,
+            lang=lang,
         )
     except Exception as e:
         app.logger.exception("[PDF/biz] render failed: %s", e)
@@ -3485,9 +3487,10 @@ def astrovastu_pro_pdf(log_id: int):
     except Exception:
         pass
 
+    lang = (request.args.get("lang") or "bilingual").strip().lower()
     try:
         from pdf_renderer import render_pro_pdf
-        pdf_bytes = render_pro_pdf(report, property_name=property_name, user_name=user_name)
+        pdf_bytes = render_pro_pdf(report, property_name=property_name, user_name=user_name, lang=lang)
     except Exception as e:
         app.logger.exception("[PDF/pro] render failed: %s", e)
         return jsonify({"error": "render_failed"}), 500

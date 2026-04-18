@@ -28,6 +28,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import {
+  openReportPdfWithLanguageChoice,
+  pickReportPdfLanguage,
+} from "@/lib/pdfLanguagePicker";
 
 type HistoryItem = {
   kind: "business" | "pro";
@@ -103,24 +107,16 @@ export default function MyReportsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const onOpenPdf = async (it: HistoryItem) => {
+  const onOpenPdf = (it: HistoryItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const url = `${API_BASE}${it.pdf_url}?t=${encodeURIComponent(it.pdf_token)}`;
-    try {
-      await WebBrowser.openBrowserAsync(url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-        showTitle: true,
-        enableBarCollapsing: true,
-      });
-    } catch (e: any) {
-      try { await Linking.openURL(url); }
-      catch { Alert.alert("Cannot open PDF", "Could not open the report.\n\n" + String(e?.message || e)); }
-    }
+    openReportPdfWithLanguageChoice(url);
   };
 
-  const onShareWhatsApp = async (it: HistoryItem) => {
+  const onShareWhatsApp = (it: HistoryItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const url = `${API_BASE}${it.pdf_url}?t=${encodeURIComponent(it.pdf_token)}`;
+    const baseUrl = `${API_BASE}${it.pdf_url}?t=${encodeURIComponent(it.pdf_token)}`;
+    pickReportPdfLanguage(baseUrl, async (url) => {
     const msg =
       `🪔 *${kindLabel(it)}*\n` +
       `🏠 ${it.property_name}\n` +
@@ -143,6 +139,7 @@ export default function MyReportsScreen() {
         "Please install WhatsApp to share, or copy the report link manually."
       );
     }
+    });
   };
 
   const renderItem = ({ item: it }: { item: HistoryItem }) => {

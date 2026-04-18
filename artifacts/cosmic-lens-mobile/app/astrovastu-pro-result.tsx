@@ -30,6 +30,7 @@ import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-na
 
 import { useC } from "@/context/ThemeContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { proResultCache } from "@/lib/proResultCache";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 
@@ -137,19 +138,10 @@ export default function AstroVastuProResultScreen() {
     ? `${API_BASE}${result.pdf_url}?t=${encodeURIComponent(result.pdf_token)}`
     : null;
 
-  const openPdf = async () => {
+  const openPdf = () => {
     if (!pdfFull) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await WebBrowser.openBrowserAsync(pdfFull, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-        showTitle: true,
-        enableBarCollapsing: true,
-      });
-    } catch (e: any) {
-      try { await Linking.openURL(pdfFull); }
-      catch { Alert.alert("Open PDF", "Could not open the PDF.\n\n" + String(e?.message || e)); }
-    }
+    openReportPdfWithLanguageChoice(pdfFull);
   };
 
   const shareWhatsApp = async () => {

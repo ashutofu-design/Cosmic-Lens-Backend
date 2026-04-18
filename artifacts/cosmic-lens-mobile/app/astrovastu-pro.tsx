@@ -31,6 +31,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
 import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
@@ -435,18 +436,9 @@ export default function AstroVastuProScreen() {
           const summary = overall.summary || { en: "", hi: "" };
           const pdfFullUrl =
             `${API_BASE}${result.pdf_url}?t=${encodeURIComponent(result.pdf_token)}`;
-          const openPdf = async () => {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await WebBrowser.openBrowserAsync(pdfFullUrl, {
-                presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-                showTitle: true,
-                enableBarCollapsing: true,
-              });
-            } catch (e: any) {
-              try { await Linking.openURL(pdfFullUrl); }
-              catch { Alert.alert("Open PDF", "Could not open the PDF.\n\n" + String(e?.message || e)); }
-            }
+          const openPdf = () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            openReportPdfWithLanguageChoice(pdfFullUrl);
           };
           return (
             <View style={{ marginTop: 18 }}>

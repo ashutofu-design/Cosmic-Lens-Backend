@@ -25,11 +25,7 @@ export default function AstroVastuProOptions() {
 
   const goBusiness = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Coming Soon",
-      "Business Vastu (Shop / Office / Factory) abhi build ho raha hai. Bahut jaldi available hoga!",
-      [{ text: "OK" }]
-    );
+    router.push("/business-vastu" as any);
   };
 
   const goReports = () => {
@@ -117,9 +113,6 @@ export default function AstroVastuProOptions() {
           <View style={[s.tag, { backgroundColor: "#06b6d422", borderColor: "#06b6d4" }]}>
             <Text style={[s.tagText, { color: "#06b6d4" }]}>FOR BUSINESS / COMMERCIAL</Text>
           </View>
-          <View style={[s.soonBadge, { backgroundColor: "#f59e0b" }]}>
-            <Text style={s.soonBadgeText}>COMING SOON</Text>
-          </View>
 
           <View style={s.cardHeader}>
             <Text style={s.emoji}>🏢</Text>
@@ -140,8 +133,8 @@ export default function AstroVastuProOptions() {
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: "#06b6d422" }]}>
-            <Text style={[s.ctaText, { color: "#06b6d4" }]}>Notify When Ready</Text>
-            <Feather name="bell" size={15} color="#06b6d4" />
+            <Text style={[s.ctaText, { color: "#06b6d4" }]}>Open Business Vastu</Text>
+            <Feather name="arrow-right" size={16} color="#06b6d4" />
           </View>
         </Pressable>
 

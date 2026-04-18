@@ -2593,6 +2593,214 @@ def dosh_analysis():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── AstroVastu BASIC (Sprint 2 — text-only personalized check) ───────────────
+
+@app.route("/api/astrovastu-basic", methods=["POST"])
+def astrovastu_basic_route():
+    """
+    BASIC AstroVastu — deterministic personalized Vastu check using the user's
+    saved kundli + classical rules. No vision, no LLM call (cost ~₹0.50/check).
+
+    Body: {
+      user_id:      <int>           (required for authed quota; optional preview),
+      room_type:    str             (e.g. "bedroom", "kitchen", "pooja"),
+      direction:    str             (one of 8 directions; case-insensitive),
+      floor:        int             (optional),
+      current_color: str            (optional),
+      notes:        str             (optional)
+    }
+    Headers: X-API-Key  (required when user_id sent)
+
+    Returns 200 with full deterministic response (see astrovastu_response.py),
+    or 401/402/404/422 on auth/quota/profile/validation errors.
+    """
+    from subscription_helper import (
+        can_use_astrovastu_basic,
+        consume_question,
+        effective_plan,
+    )
+    from astrovastu_engine import (
+        build_kundli_context,
+        apply_tie_breakers,
+        personalized_severity_multiplier,
+        is_profile_complete,
+    )
+    from astrovastu_rules import (
+        DIRECTIONS,
+        get_generic_room_rule,
+    )
+    from astrovastu_response import build_basic_response
+    from kundli_engine import calculate_kundli
+    from models import AstroVastuBasicLog
+    import json
+
+    data = request.get_json(force=True, silent=True) or {}
+
+    # ── Item 17: request validation ─────────────────────────────────────────
+    room_type = (data.get("room_type") or "").strip().lower()
+    direction = (data.get("direction") or "").strip()
+    if not room_type:
+        return jsonify({"error": "room_type is required"}), 400
+
+    # Normalize direction (accept "north-east", "Northeast", "NE", etc. → "North-East")
+    DIR_ALIASES = {
+        "n":  "North", "north":      "North",
+        "ne": "North-East", "northeast": "North-East", "north-east": "North-East",
+        "e":  "East",  "east":       "East",
+        "se": "South-East", "southeast": "South-East", "south-east": "South-East",
+        "s":  "South", "south":      "South",
+        "sw": "South-West", "southwest": "South-West", "south-west": "South-West",
+        "w":  "West",  "west":       "West",
+        "nw": "North-West", "northwest": "North-West", "north-west": "North-West",
+    }
+    direction_norm = DIR_ALIASES.get(direction.lower(), direction)
+    if direction_norm not in DIRECTIONS:
+        return jsonify({
+            "error": "invalid direction",
+            "allowed": DIRECTIONS,
+        }), 400
+
+    # ── Item 18: auth (mandatory when user_id provided) ────────────────────
+    user_id = data.get("user_id")
+    user = None
+    plan = "free"
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized — invalid API key"}), 401
+        plan = effective_plan(user)
+    else:
+        return jsonify({
+            "error": "auth_required",
+            "message": "Login zaroori hai personalized check ke liye.",
+        }), 401
+
+    # ── Item 19: profile completeness gate ─────────────────────────────────
+    # Accept either: cached chart_data, OR raw birth fields (we recompute).
+    # Hard-block only when neither is usable.
+    k = user.kundli
+    if not k:
+        return jsonify({
+            "error":   "profile_incomplete",
+            "message": "Pehle apni Kundli profile complete karein (DOB, time, place).",
+            "missing_fields": ["dob", "tob", "pob", "lat", "lon", "tz"],
+        }), 422
+
+    chart = None
+    if k.chart_data:
+        try:
+            chart = json.loads(k.chart_data)
+        except Exception:
+            chart = None
+
+    if not chart:
+        # Validate raw birth fields before attempting recompute.
+        missing = []
+        if not k.dob:       missing.append("dob")
+        if not k.tob:       missing.append("tob")
+        if k.lat is None:   missing.append("lat")
+        if k.lon is None:   missing.append("lon")
+        if k.tz  is None:   missing.append("tz")
+        if missing:
+            return jsonify({
+                "error":   "profile_incomplete",
+                "message": "Pehle apni Kundli profile complete karein (DOB, time, place).",
+                "missing_fields": missing,
+            }), 422
+        try:
+            chart = calculate_kundli({
+                "name":     k.name or user.name or "User",
+                "day":      int(k.dob.split("-")[2]),
+                "month":    int(k.dob.split("-")[1]),
+                "year":     int(k.dob.split("-")[0]),
+                "hour":     int((k.tob or "06:00").split(":")[0]),
+                "minute":   int((k.tob or "06:00").split(":")[1]),
+                "ampm":     "AM",
+                "lat":      float(k.lat or 0),
+                "lon":      float(k.lon or 0),
+                "tz":       float(k.tz or 5.5),
+                "place":    k.pob or "",
+            })
+        except Exception as exc:
+            return jsonify({
+                "error":   "kundli_unreadable",
+                "message": f"Kundli data parse nahin ho saka: {exc}",
+            }), 422
+
+    # ── Item 20a: pre-flight quota gate (no consumption yet) ───────────────
+    quota_check = can_use_astrovastu_basic(user)
+    if not quota_check["allowed"]:
+        return jsonify({
+            "error":   "daily_limit_reached",
+            "message": f"Aaj ka {quota_check['limit']} check ka limit poora ho gaya. "
+                       f"Pro upgrade karein for unlimited.",
+            "quota":   {"used": quota_check["used"], "limit": quota_check["limit"]},
+            "plan":    plan,
+            "upgrade_required": True,
+        }), 402
+
+    # ── Item 21: engine pipeline (run BEFORE charging quota) ──────────────
+    # If the engine fails, the user must NOT lose a daily check.
+    try:
+        ctx     = build_kundli_context(chart)
+        tb_res  = apply_tie_breakers(room_type, direction_norm, ctx)
+        sev_res = personalized_severity_multiplier(direction_norm, ctx)
+        rule    = get_generic_room_rule(room_type)
+    except Exception as exc:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+
+    # ── Item 20b: atomic consume AFTER engine success ─────────────────────
+    quota = consume_question(user)
+    if not quota["allowed"]:
+        # Edge: another concurrent request consumed the last unit between
+        # gate and consume. Return 402 without leaking the result.
+        return jsonify({
+            "error":   "daily_limit_reached",
+            "quota":   {"used": quota["used"], "limit": quota["limit"]},
+            "plan":    plan,
+            "upgrade_required": True,
+        }), 402
+
+    # ── Item 22: build response (deterministic, bilingual) ────────────────
+    response = build_basic_response(
+        room_type=room_type,
+        direction=direction_norm,
+        kundli_context=ctx,
+        tie_breaker_result=tb_res,
+        severity_result=sev_res,
+        generic_room_rule=rule,
+    )
+    response["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+    response["plan"]  = plan
+
+    # ── Item 24: log to DB ────────────────────────────────────────────────
+    try:
+        log = AstroVastuBasicLog(
+            user_id    = user.id,
+            room_type  = room_type,
+            direction  = direction_norm,
+            verdict    = response["verdict"],
+            severity   = response["severity"]["bucket"],
+            multiplier = response["severity"]["multiplier"],
+            lagna      = ctx.get("lagna"),
+            mahadasha  = ctx.get("current_mahadasha"),
+            sade_sati  = bool(ctx.get("sade_sati", {}).get("active")),
+            plan       = plan,
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as exc:
+        # Logging never blocks the user's result
+        print(f"[astrovastu-basic] log failed: {exc}")
+        db.session.rollback()
+
+    return jsonify(response)
+
+
 @app.route("/api/ask", methods=["POST"])
 def ask_route():
     """

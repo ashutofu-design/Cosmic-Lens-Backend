@@ -171,6 +171,32 @@ class OtpRequest(db.Model):
     created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class AstroVastuBasicLog(db.Model):
+    """
+    One row per BASIC AstroVastu check. Used for analytics + future ML training.
+    Kept lean — full kundli is not duplicated (already in users.kundli).
+    """
+    __tablename__ = "astrovastu_basic_logs"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                            nullable=True, index=True)        # nullable for anon preview
+    room_type   = db.Column(db.String(40), nullable=False)
+    direction   = db.Column(db.String(20), nullable=False)
+    verdict     = db.Column(db.String(40), nullable=False)
+    severity    = db.Column(db.String(20), nullable=False, default="minor")
+    multiplier  = db.Column(db.Float, nullable=False, default=1.0)
+    lagna       = db.Column(db.String(20), nullable=True)
+    mahadasha   = db.Column(db.String(20), nullable=True)
+    sade_sati   = db.Column(db.Boolean, default=False, nullable=False)
+    plan        = db.Column(db.String(20), default="free", nullable=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_avbl_user_created", "user_id", "created_at"),
+    )
+
+
 def compute_birth_key(birth_data) -> str:
     """
     Deterministic dedup key for a kundli computation. Two birth-data inputs

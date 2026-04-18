@@ -2968,6 +2968,210 @@ def astrovastu_pro_route():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Business Vastu (Phase 4) — Shop / Office / Factory deep-scan
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/business-vastu", methods=["POST"])
+def business_vastu_route():
+    """
+    Business Vastu deep-scan for commercial premises.
+
+    Body:
+      user_id        : int    (required, authed via X-API-Key)
+      business_type  : str    (required, one of "shop"|"office"|"factory")
+      floor_plan     : list   (required, 1-15 rooms of {room_type, direction})
+      property_name  : str    (required for non-Pro users — drives unlock match)
+      partners       : list   (optional, up to 3 user-profile-ids whose
+                               kundlis layer in stakeholder synergy)
+      muhurat        : dict   (optional, business-start chart input —
+                               { dob:"YYYY-MM-DD", tob:"HH:MM", lat, lon, tz, place })
+
+    Returns 200 with full Business Vastu report
+            or 400 / 401 / 402 / 422 / 500.
+
+    Gating: Phase-4 — Pro plan OR property_unlock for the matching business
+    SKU (shop_999 / office_1499 / factory_2999). NO monthly fallback —
+    this is a one-time professional purchase per premise.
+    """
+    from subscription_helper import (
+        can_use_business_vastu_v2, consume_business_vastu_v2, effective_plan,
+    )
+    from business_vastu_engine import analyze_business
+    from business_vastu_response import build_business_response
+    from kundli_engine import calculate_kundli
+    from models import BusinessVastuLog, Profile
+    import json
+
+    data = request.get_json(force=True, silent=True) or {}
+
+    # ── Validation ────────────────────────────────────────────────────────
+    btype = (data.get("business_type") or "").strip().lower()
+    if btype not in ("shop", "office", "factory"):
+        return jsonify({"error": "invalid_business_type",
+                        "message": "business_type must be shop / office / factory."}), 400
+
+    floor_plan = data.get("floor_plan")
+    if not isinstance(floor_plan, list) or not floor_plan:
+        return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
+    if len(floor_plan) > 15:
+        return jsonify({"error": "floor_plan supports at most 15 rooms per scan"}), 400
+    for i, room in enumerate(floor_plan):
+        if not isinstance(room, dict):
+            return jsonify({"error": f"floor_plan[{i}] must be an object"}), 400
+        if not room.get("room_type") or not room.get("direction"):
+            return jsonify({"error": f"floor_plan[{i}] missing room_type or direction"}), 400
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+    user_id = data.get("user_id")
+    api_key = request.headers.get("X-API-Key", "")
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required",
+                        "message": "Login zaroori hai Business Vastu ke liye."}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    plan = effective_plan(user)
+
+    # ── Owner kundli (same Sprint-2 fix pattern) ─────────────────────────
+    k = user.kundli
+    if not k:
+        return jsonify({"error": "profile_incomplete",
+                        "message": "Pehle apni Kundli profile complete karein.",
+                        "missing_fields": ["dob", "tob", "pob", "lat", "lon", "tz"]}), 422
+    owner_chart = None
+    if k.chart_data:
+        try:    owner_chart = json.loads(k.chart_data)
+        except: owner_chart = None
+    if not owner_chart:
+        missing = [f for f, v in [("dob", k.dob), ("tob", k.tob),
+                                  ("lat", k.lat), ("lon", k.lon), ("tz", k.tz)]
+                   if v in (None, "")]
+        if missing:
+            return jsonify({"error": "profile_incomplete",
+                            "missing_fields": missing,
+                            "message": "Pehle apni Kundli profile complete karein."}), 422
+        try:
+            owner_chart = calculate_kundli({
+                "name":  k.name or user.name or "Owner",
+                "day":   int(k.dob.split("-")[2]),
+                "month": int(k.dob.split("-")[1]),
+                "year":  int(k.dob.split("-")[0]),
+                "hour":  int((k.tob or "06:00").split(":")[0]),
+                "minute":int((k.tob or "06:00").split(":")[1]),
+                "ampm":  "AM",
+                "lat":   float(k.lat or 0), "lon": float(k.lon or 0),
+                "tz":    float(k.tz or 5.5), "place": k.pob or "",
+            })
+        except Exception as exc:
+            return jsonify({"error": "kundli_unreadable", "message": str(exc)}), 422
+
+    # ── Optional partner kundlis (max 3, must belong to this user) ──────
+    partner_charts = []
+    partner_ids = data.get("partners") or []
+    if isinstance(partner_ids, list) and partner_ids:
+        for pid in partner_ids[:3]:
+            try:    pid_int = int(pid)
+            except: continue
+            prof = Profile.query.filter_by(id=pid_int, user_id=user.id,
+                                            deleted_at=None).first()
+            if not prof or not prof.chart_data:
+                continue
+            try:    partner_charts.append(json.loads(prof.chart_data))
+            except: pass
+
+    # ── Optional muhurat chart ──────────────────────────────────────────
+    muhurat_chart = None
+    muhurat_in    = data.get("muhurat")
+    if isinstance(muhurat_in, dict) and muhurat_in.get("dob"):
+        try:
+            muhurat_chart = calculate_kundli({
+                "name":   "Muhurat",
+                "day":    int(muhurat_in["dob"].split("-")[2]),
+                "month":  int(muhurat_in["dob"].split("-")[1]),
+                "year":   int(muhurat_in["dob"].split("-")[0]),
+                "hour":   int((muhurat_in.get("tob") or "12:00").split(":")[0]),
+                "minute": int((muhurat_in.get("tob") or "12:00").split(":")[1]),
+                "ampm":   "AM",
+                "lat":    float(muhurat_in.get("lat") or k.lat or 0),
+                "lon":    float(muhurat_in.get("lon") or k.lon or 0),
+                "tz":     float(muhurat_in.get("tz")  or k.tz  or 5.5),
+                "place":  muhurat_in.get("place") or k.pob or "",
+            })
+        except Exception as exc:
+            print(f"[business-vastu] muhurat chart failed (non-fatal): {exc}")
+            muhurat_chart = None
+
+    # ── Phase-4 unlock gate ──────────────────────────────────────────────
+    property_name = (data.get("property_name") or "").strip()
+    gate = can_use_business_vastu_v2(user, btype, property_name)
+    if not gate["allowed"]:
+        return jsonify({
+            "error":            "upgrade_required",
+            "message":          gate.get("reason"),
+            "required_sku":     gate.get("required_sku"),
+            "unlocks":          gate.get("unlocks", []),
+            "plan":             plan,
+            "upgrade_required": True,
+        }), 402
+
+    # ── Engine pipeline (run BEFORE charging — Sprint-2 pattern) ─────────
+    try:
+        scan   = analyze_business(floor_plan, btype, owner_chart,
+                                   partner_kundlis=partner_charts or None,
+                                   muhurat_kundli=muhurat_chart)
+        if scan.get("error"):
+            return jsonify({"error": scan["error"]}), 400
+        report = build_business_response(scan, plan=plan)
+    except Exception as exc:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
+
+    # ── Phase-4 consume (no-op for lifetime model — just re-confirm gate) ─
+    consumed = consume_business_vastu_v2(user, btype, property_name)
+    if not consumed["allowed"]:
+        return jsonify({
+            "error":            "upgrade_required",
+            "message":          consumed.get("reason"),
+            "plan":             plan,
+            "upgrade_required": True,
+        }), 402
+
+    report["unlock"] = {
+        "via":           consumed.get("via"),
+        "property_name": property_name or None,
+        "plan":          plan,
+    }
+
+    # ── Log row (analytics; never blocks user response) ──────────────────
+    try:
+        counts = report["overall"]["counts"]
+        log = BusinessVastuLog(
+            user_id       = user.id,
+            business_type = btype,
+            property_name = property_name or None,
+            rooms_count   = scan.get("rooms_count", 0),
+            overall_score = report["overall"]["score"],
+            avoid_count   = counts.get("avoid", 0),
+            adjust_count  = counts.get("adjustment_needed", 0),
+            ideal_count   = counts.get("ideal", 0),
+            partner_count = len(partner_charts),
+            has_muhurat   = muhurat_chart is not None,
+            lagna         = (scan.get("owner_context") or {}).get("lagna"),
+            mahadasha     = (scan.get("owner_context") or {}).get("mahadasha"),
+            floor_plan    = json.dumps(floor_plan, ensure_ascii=False),
+            via           = consumed.get("via", "property_unlock"),
+            plan          = plan,
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as exc:
+        print(f"[business-vastu] log failed: {exc}")
+        db.session.rollback()
+
+    return jsonify(report)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # AstroVastu  —  Phase-2 Status & Purchase Intent endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 @app.route("/api/astrovastu/status", methods=["GET", "POST"])

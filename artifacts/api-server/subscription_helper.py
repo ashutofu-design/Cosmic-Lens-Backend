@@ -648,6 +648,70 @@ def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
             "upgrade_required": True}
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Phase 4 — Business Vastu gating
+# ─────────────────────────────────────────────────────────────────────────
+# Each business type maps to its lifetime-unlock SKU. Property-unlock check
+# is the same as residential — a single named "property" (e.g. "Andheri
+# Shop", "Powai HQ") gets unlimited Business Vastu scans for life.
+BUSINESS_TYPE_TO_SKU = {
+    "shop":    "shop_999",
+    "office":  "office_1499",
+    "factory": "factory_2999",
+}
+
+
+def can_use_business_vastu_v2(user, business_type: str, property_name: str = "") -> dict:
+    """
+    Phase-4 gate for Business Vastu deep-scan. Allows if:
+      - Pro plan (unlimited)
+      - Property unlocked (lifetime, REQUIRES property_name)
+
+    Unlike residential AstroVastu, Business Vastu does NOT have a free
+    monthly fallback — it is a one-time professional purchase per premise.
+    """
+    if not user:
+        return {"allowed": False, "reason": "Login required", "via": "none"}
+
+    btype = (business_type or "").strip().lower()
+    if btype not in BUSINESS_TYPE_TO_SKU:
+        return {"allowed": False, "reason": "Invalid business type", "via": "none"}
+
+    plan    = effective_plan(user)
+    unlocks = list_unlocked_properties(user)
+
+    if plan == "pro":
+        return {"allowed": True, "via": "pro_plan", "unlocks": unlocks}
+
+    # Business unlock requires a tier match — a "shop_999" unlock for
+    # "Andheri Shop" must NOT grant Office Vastu on the same name.
+    sku = BUSINESS_TYPE_TO_SKU[btype]
+    if property_name:
+        from models import AstroVastuPropertyUnlock
+        row = AstroVastuPropertyUnlock.query.filter_by(
+            user_id=user.id, property_name=property_name.strip()
+        ).first()
+        if row and row.tier == sku:
+            return {"allowed": True, "via": "property_unlock", "unlocks": unlocks}
+
+    spec  = SKU_CATALOG.get(sku, {})
+    label = spec.get("label", "Business Vastu")
+    price = spec.get("price", 0)
+    return {
+        "allowed":          False,
+        "reason":           f"Unlock this {btype} for ₹{price} ({label}) or upgrade to Pro plan.",
+        "required_sku":     sku,
+        "unlocks":          unlocks,
+        "via":              "none",
+        "upgrade_required": True,
+    }
+
+
+def consume_business_vastu_v2(user, business_type: str, property_name: str = "") -> dict:
+    """Phase-4 consume — same gate as can_use, no quota decrement (lifetime model)."""
+    return can_use_business_vastu_v2(user, business_type, property_name)
+
+
 def grant_purchase_idempotent(purchase) -> dict:
     """
     Apply a paid purchase to the user. Race-safe via a single atomic UPDATE

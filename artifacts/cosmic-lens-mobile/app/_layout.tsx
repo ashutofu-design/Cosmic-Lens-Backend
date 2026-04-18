@@ -38,6 +38,7 @@ function RootLayoutNav() {
       <Stack.Screen name="astrovastu-pro-options"   options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-basic"         options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-pro"           options={{ headerShown: false }} />
+      <Stack.Screen name="business-vastu"           options={{ headerShown: false }} />
     </Stack>
   );
 }

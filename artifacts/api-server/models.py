@@ -251,6 +251,34 @@ class AstroVastuPurchase(db.Model):
     paid_at       = db.Column(db.DateTime, nullable=True)
 
 
+class BusinessVastuLog(db.Model):
+    """Phase-4 — one row per Business Vastu deep-scan (analytics + audit)."""
+    __tablename__ = "business_vastu_logs"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    user_id        = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                               nullable=False, index=True)
+    business_type  = db.Column(db.String(20),  nullable=False)        # shop / office / factory
+    property_name  = db.Column(db.String(120), nullable=True)
+    rooms_count    = db.Column(db.Integer, nullable=False, default=0)
+    overall_score  = db.Column(db.Integer, nullable=False, default=0)  # 0-100
+    avoid_count    = db.Column(db.Integer, nullable=False, default=0)
+    adjust_count   = db.Column(db.Integer, nullable=False, default=0)
+    ideal_count    = db.Column(db.Integer, nullable=False, default=0)
+    partner_count  = db.Column(db.Integer, nullable=False, default=0)
+    has_muhurat    = db.Column(db.Boolean, nullable=False, default=False)
+    lagna          = db.Column(db.String(20), nullable=True)
+    mahadasha      = db.Column(db.String(20), nullable=True)
+    floor_plan     = db.Column(db.Text, nullable=False, default="[]")  # JSON
+    via            = db.Column(db.String(20), nullable=False, default="property_unlock")
+    plan           = db.Column(db.String(20), default="free", nullable=False)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_bvl_user_created", "user_id", "created_at"),
+    )
+
+
 class AstroVastuProLog(db.Model):
     """
     One row per PRO AstroVastu deep-scan. Stores the input floor plan + summary

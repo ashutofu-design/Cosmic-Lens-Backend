@@ -77,6 +77,8 @@ def init_db(app):
                         "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
                         "astrovastu_room_credits INTEGER NOT NULL DEFAULT 0"
                     ))
+                    # Phase-4 Business Vastu — log table is created via
+                    # db.create_all() at first request; nothing to ALTER.
                     # One-time pre-launch wipe of legacy email/google users.
                     # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
                     if os.environ.get("COSMIC_WIPE_USERS") == "1":

@@ -6,3 +6,4 @@ pyswisseph
 gunicorn
 werkzeug
 firebase-admin
+openai>=1.40.0

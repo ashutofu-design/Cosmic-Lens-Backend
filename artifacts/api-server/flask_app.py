@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
+from openai_helper import ai_ask, is_available as openai_available
 from dosh_engine import analyze_doshas
 from energy_engine import calculate_energy
 from database import db, init_db
@@ -2638,16 +2639,32 @@ def ask_route():
         quota = {"used": 0, "limit": 1}
 
     # ── Run engine ───────────────────────────────────────────────────────────
-    try:
-        result = process_ask(question, kundli, lang, reply_idx)
-        if isinstance(result, dict):
-            result["quota"] = {"used": quota["used"], "limit": quota["limit"]}
-            result["plan"]  = effective_plan(user) if user else "free"
-        return jsonify(result)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(exc)}), 500
+    # Strategy: try OpenAI (richer, conversational answers). On any failure
+    # — missing key, rate limit, network error — silently fall back to the
+    # deterministic rule-based engine so the user never sees an outage.
+    result = None
+    used_ai = False
+    if openai_available():
+        try:
+            result = ai_ask(question, kundli, lang, reply_idx)
+            used_ai = True
+        except Exception as exc:
+            print(f"[ask] OpenAI failed, falling back to rule engine: {exc}")
+            result = None
+
+    if result is None:
+        try:
+            result = process_ask(question, kundli, lang, reply_idx)
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            return jsonify({"error": str(exc)}), 500
+
+    if isinstance(result, dict):
+        result["quota"]  = {"used": quota["used"], "limit": quota["limit"]}
+        result["plan"]   = effective_plan(user) if user else "free"
+        result["source"] = result.get("source", "ai" if used_ai else "rules")
+    return jsonify(result)
 
 
 # ── Numerology API ────────────────────────────────────────────────────────────

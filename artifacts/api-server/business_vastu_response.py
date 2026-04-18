@@ -19,6 +19,8 @@ Sections returned:
 
 from typing import Any, Dict, List
 
+from remedies_db import merge_remedies
+
 
 def _grade(score: int) -> str:
     if score >= 85: return "A"
@@ -63,11 +65,22 @@ def _business_intro(business_type: str) -> Dict[str, str]:
                                        "hi": "Vyapar Vastu vishleshan."})
 
 
-def _room_card(r: Dict[str, Any]) -> Dict[str, Any]:
+def _room_card(r: Dict[str, Any], business_type: str = "shop") -> Dict[str, Any]:
     """One room rendered for the mobile UI list."""
     md = r.get("mahadasha_layer", {}) or {}
     biz = r.get("business_layer", {}) or {}
     zone = r.get("zone", {}) or {}
+
+    # Pull any pre-existing remedies (engine/vision) and merge with classical DB
+    existing_remedies = r.get("remedies", []) or []
+    merged_remedies = merge_remedies(
+        existing      = existing_remedies,
+        room_type     = r.get("room_type", ""),
+        verdict       = r.get("verdict", "Acceptable"),
+        business_type = business_type,
+        max_total     = 6,
+    )
+
     return {
         "room_type":      r["room_type"],
         "direction":      r["direction"],
@@ -90,9 +103,10 @@ def _room_card(r: Dict[str, Any]) -> Dict[str, Any]:
             "reason_en": biz.get("reason_en"),
             "reason_hi": biz.get("reason_hi"),
         },
-        "generic_rule": r.get("generic_rule", {}),
-        "tie_breaker":  r.get("tie_breaker", {}),
+        "generic_rule":   r.get("generic_rule", {}),
+        "tie_breaker":    r.get("tie_breaker", {}),
         "classical_refs": r.get("classical_refs", []),
+        "remedies":       merged_remedies,
     }
 
 
@@ -162,7 +176,7 @@ def build_business_response(scan: Dict[str, Any], plan: str = "free") -> Dict[st
         "mahadasha_alert":  scan.get("mahadasha_alert"),
         "stakeholder":      scan.get("stakeholder", {}),
         "muhurat":          scan.get("muhurat"),
-        "rooms":            [_room_card(r) for r in rooms],
+        "rooms":            [_room_card(r, business_type=btype) for r in rooms],
         "priority_actions": [_priority_action(r) for r in scan.get("priority_rooms", [])],
         "classical_summary": _dedupe_refs(rooms),
         "owner_context":    scan.get("owner_context", {}),

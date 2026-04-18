@@ -23,6 +23,7 @@ from astrovastu_response import build_basic_response
 from adjacency_rules    import evaluate_adjacencies
 from topography_rules   import evaluate_topography
 from dimension_rules    import evaluate_room_dimensions
+from remedies_db        import merge_remedies
 
 
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -136,6 +137,17 @@ def build_pro_response(
                      "verdict_label": {"en": r["verdict"], "hi": r["verdict"]},
                      "personalization_reason": {"en": "", "hi": ""}}
 
+        # Merge classical remedies DB with engine-derived remedies.
+        # Layer 1 (DB) acts as the trusted spine; Layer 2 (basic engine output)
+        # contributes kundli-personalised + vision-suggested remedies on top.
+        merged_remedies = merge_remedies(
+            existing      = basic.get("remedies", []),
+            room_type     = r["room_type"],
+            verdict       = r["verdict"],
+            business_type = None,
+            max_total     = 6,
+        )
+
         room_reports.append({
             "room_type":      r["room_type"],
             "direction":      r["direction"],
@@ -147,7 +159,7 @@ def build_pro_response(
             "score":          r["score"],
             "zone":           r["zone"],
             "mahadasha_layer": r["mahadasha_layer"],
-            "remedies":       basic.get("remedies", []),
+            "remedies":       merged_remedies,
             "classical_refs": basic.get("classical_refs", []),
             "reasons":        basic.get("reasons", []),
         })

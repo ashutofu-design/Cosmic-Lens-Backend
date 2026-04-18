@@ -419,7 +419,16 @@ def _rooms_table(rooms: List[Dict[str, Any]], s: ParagraphStyle,
                 sev = (vf.get("severity") or "").strip()
                 if txt:
                     notes.append(f"Vision ({sev}): {txt}")
-        notes_str = "<br/>".join(_safe(n) for n in notes) or "—"
+        # Classical remedies (top 3) — wired in from remedies_db merge
+        rems = r.get("remedies") or []
+        for rem in rems[:3]:
+            en = (rem.get("english") or "").strip()
+            ref = (rem.get("classical_ref") or "").strip()
+            if en:
+                tag = f" <i>[{ref}]</i>" if ref else ""
+                notes.append(f"Remedy: {en}{tag}")
+        notes_str = "<br/>".join(_safe(n) if not n.startswith("Remedy:") else n
+                                  for n in notes) or "—"
         verdict = r.get("verdict", "Acceptable")
         crit = " ★" if r.get("is_critical") else ""
         data.append([

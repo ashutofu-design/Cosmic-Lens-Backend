@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_PUBLIC_REPL_ID=$REPL_ID pnpm exec expo start --lan --port ${PORT:-18987} --clear",
+    "dev": "EXPO_PUBLIC_REPL_ID=$REPL_ID python3 scripts/expo-go-auto.py",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

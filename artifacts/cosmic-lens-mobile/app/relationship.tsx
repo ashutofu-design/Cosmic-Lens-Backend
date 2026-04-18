@@ -66,6 +66,25 @@ const OPTIONS: MainOption[] = [
     items: ["Soul Sync", "Attraction Match", "Destiny Link", "Intimacy Score"],
     depthLine: "36 Gun Milan + deep compatibility insights",
   },
+  {
+    key: "future-partner",
+    title: "Future Partner Portrait",
+    subtitle: "Check your future partner — roop, swabhav aur disha",
+    emoji: "🔮",
+    gradient: ["#9333ea", "#c084fc", "#e879f9"],
+    glowColor: "#9333ea",
+    route: "/future-partner-portrait",
+    highlighted: true,
+    badge: "✨ NEW · Cosmic Portrait",
+    desc: "Aapki kundli se jeevansaathi ki divya jhalak",
+    items: [
+      "30+ shastriya rules (D1+D9+D3+D30+KP+UL+DK+A7)",
+      "Roop, complexion, aankhein, vibe",
+      "Disha + umar + vyavsay hint",
+      "Cosmic Portrait — divya jhalak",
+    ],
+    depthLine: "BPHS + Phaladeepika + KP Reader + Jaimini Sutras",
+  },
 ];
 
 function OptionCard({

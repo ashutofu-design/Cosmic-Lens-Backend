@@ -92,6 +92,7 @@ export default function AstroVastuProScreen() {
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
   const [wholePlan, setWholePlan] = useState<SmartScanUploadValue | null>(null);
+  const [mode, setMode] = useState<"camera" | "single" | "whole">("camera");
 
   // ── Shared submit helper ──────────────────────────────────────────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
@@ -176,82 +177,125 @@ export default function AstroVastuProScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Hero + Smart Scan button ─────────────────────────────── */}
+        {/* ── Hero ─────────────────────────────────────────────────── */}
         <View style={[styles.hero, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <View style={[styles.heroIcon, { backgroundColor: C.accentBg }]}>
             <Feather name="zap" size={26} color={C.accent} />
           </View>
           <Text style={[styles.heroTitle, { color: C.text }]}>Smart Scan</Text>
           <Text style={[styles.heroBody, { color: C.textMid }]}>
-            Tap the button below to open the live camera with a built-in compass.
-            Aim at your floor plan or any room — we'll detect the layout and run
-            a personalised Vastu × Kundli analysis.
+            Choose how you want to scan. Each method runs a personalised
+            Vastu × Kundli analysis.
           </Text>
         </View>
 
-        <SmartScanCamera
-          onCapture={onCapture}
-          loading={loading}
-          hint="Camera + compass · One tap to scan"
-        />
-
-        {/* OR divider */}
-        <View style={styles.orRow}>
-          <View style={[styles.orLine, { backgroundColor: C.border }]} />
-          <Text style={[styles.orText, { color: C.textMid }]}>OR</Text>
-          <View style={[styles.orLine, { backgroundColor: C.border }]} />
+        {/* ── 3-tile sub-menu picker ───────────────────────────────── */}
+        <View style={styles.modeRow}>
+          {([
+            { key: "camera", icon: "camera",    title: "Smart Scan",     sub: "Open camera"      },
+            { key: "single", icon: "image",     title: "Individual Room", sub: "Photo / PDF"     },
+            { key: "whole",  icon: "layout",    title: "Full Plan",       sub: "Architect PDF"   },
+          ] as const).map((m) => {
+            const sel = mode === m.key;
+            return (
+              <Pressable
+                key={m.key}
+                onPress={() => setMode(m.key)}
+                style={({ pressed }) => [
+                  styles.modeTile,
+                  {
+                    borderColor:     sel ? C.accent  : C.border,
+                    backgroundColor: sel ? C.accentBg : C.bgCard,
+                    opacity:         pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Feather name={m.icon} size={20} color={sel ? C.accent : C.textMid} />
+                <Text style={[styles.modeTitle, { color: sel ? C.accent : C.text }]}>
+                  {m.title}
+                </Text>
+                <Text style={[styles.modeSub, { color: sel ? C.accent : C.textMid }]}>
+                  {m.sub}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {/* Gallery upload — single room with user-tagged direction */}
-        <GalleryScanUpload
-          onSubmit={onGallerySubmit}
-          loading={loading}
-        />
+        {/* ── Selected mode body ───────────────────────────────────── */}
+        {mode === "camera" && (
+          <>
+            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
+                Smart Scan — Live Camera
+              </Text>
+              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
+                Open the live camera with a built-in compass. Aim at your floor plan
+                or any single room — one tap will detect the layout and run the analysis.
+              </Text>
+            </View>
+            <SmartScanCamera
+              onCapture={onCapture}
+              loading={loading}
+              hint="Camera + compass · One tap to scan"
+            />
+          </>
+        )}
 
-        {/* OR divider */}
-        <View style={styles.orRow}>
-          <View style={[styles.orLine, { backgroundColor: C.border }]} />
-          <Text style={[styles.orText, { color: C.textMid }]}>OR</Text>
-          <View style={[styles.orLine, { backgroundColor: C.border }]} />
-        </View>
+        {mode === "single" && (
+          <>
+            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
+                Individual Room — Photo or PDF
+              </Text>
+              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
+                Not at home? Pick a photo or PDF from your gallery and tag the room
+                + direction manually. Best when you want to check one specific room.
+              </Text>
+            </View>
+            <GalleryScanUpload
+              onSubmit={onGallerySubmit}
+              loading={loading}
+            />
+          </>
+        )}
 
-        {/* Whole floor plan upload — architect's PDF/JPG, vision auto-detects all rooms */}
-        <View style={[styles.wholeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <Feather name="layout" size={16} color={C.accent} />
-            <Text style={[styles.wholeTitle, { color: C.text }]}>
-              Got the full floor plan from your architect?
-            </Text>
-          </View>
-          <Text style={[styles.wholeBody, { color: C.textMid }]}>
-            Upload the entire layout (PDF or image — bedroom, kitchen, bathroom, all of it).
-            Cosmic Vision will detect every room and give you one consolidated direction-wise
-            report, personalised to your kundli.
-          </Text>
-        </View>
-
-        <SmartScanUpload
-          value={wholePlan}
-          onChange={setWholePlan}
-          disabled={loading}
-        />
-
-        <Pressable
-          onPress={onWholePlanSubmit}
-          disabled={loading || !wholePlan}
-          style={({ pressed }) => [
-            styles.runScanBtn,
-            {
-              backgroundColor: (loading || !wholePlan) ? C.border : C.accent,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Feather name="zap" size={16} color={(loading || !wholePlan) ? C.textMid : "#0B0F19"} />
-          <Text style={[styles.runScanText, { color: (loading || !wholePlan) ? C.textMid : "#0B0F19" }]}>
-            {loading ? "Analysing…" : "Run Whole-Floor Vastu Scan"}
-          </Text>
-        </Pressable>
+        {mode === "whole" && (
+          <>
+            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
+                Full Plan — Smart Scan Cosmic Vision
+              </Text>
+              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
+                Got the entire floor plan from your architect (PDF or image — bedroom,
+                kitchen, bathroom, all of it)? Upload here. Cosmic Vision will detect
+                every room and give you one consolidated direction-wise report,
+                personalised to your kundli.
+              </Text>
+            </View>
+            <SmartScanUpload
+              value={wholePlan}
+              onChange={setWholePlan}
+              disabled={loading}
+            />
+            <Pressable
+              onPress={onWholePlanSubmit}
+              disabled={loading || !wholePlan}
+              style={({ pressed }) => [
+                styles.runScanBtn,
+                {
+                  backgroundColor: (loading || !wholePlan) ? C.border : C.accent,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Feather name="zap" size={16} color={(loading || !wholePlan) ? C.textMid : "#0B0F19"} />
+              <Text style={[styles.runScanText, { color: (loading || !wholePlan) ? C.textMid : "#0B0F19" }]}>
+                {loading ? "Analysing…" : "Run Whole-Floor Vastu Scan"}
+              </Text>
+            </Pressable>
+          </>
+        )}
 
         {/* ── Error / paywall card ─────────────────────────────────── */}
         {error && (
@@ -551,15 +595,17 @@ const styles = StyleSheet.create({
   brandingFooter:      { fontSize: 12, textAlign: "center", marginTop: 28, fontWeight: "600" },
   brandingFooterSmall: { fontSize: 10, textAlign: "center", marginTop: 4, opacity: 0.7 },
 
-  orRow:    { flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 16 },
-  orLine:   { flex: 1, height: 1 },
-  orText:   { fontSize: 11, fontWeight: "700", letterSpacing: 1 },
+  modeRow:   { flexDirection: "row", gap: 8, marginBottom: 14 },
+  modeTile:  { flex: 1, alignItems: "center", paddingVertical: 14, paddingHorizontal: 6,
+               borderRadius: 12, borderWidth: 1, gap: 6 },
+  modeTitle: { fontSize: 12, fontWeight: "700", textAlign: "center" },
+  modeSub:   { fontSize: 10, fontWeight: "500", textAlign: "center", opacity: 0.85 },
 
-  wholeIntro: { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
-  wholeTitle: { fontSize: 14, fontWeight: "700", flexShrink: 1 },
-  wholeBody:  { fontSize: 12, lineHeight: 17 },
+  modeIntro:      { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
+  modeIntroTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4 },
+  modeIntroBody:  { fontSize: 12, lineHeight: 17 },
 
-  runScanBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center",
-                gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 4 },
-  runScanText:{ fontSize: 14, fontWeight: "800" },
+  runScanBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center",
+                 gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 10 },
+  runScanText: { fontSize: 14, fontWeight: "800" },
 });

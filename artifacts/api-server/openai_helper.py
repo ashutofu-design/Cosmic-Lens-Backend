@@ -818,9 +818,31 @@ _ROOM_VISUAL_SCHEMA = {
     "schema": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["visual_findings", "score_delta", "confidence",
+        "required": ["room_identity_match", "detected_room_type",
+                     "identity_features_seen",
+                     "visual_findings", "score_delta", "confidence",
                      "scan_inconclusive", "inconclusive_reason"],
         "properties": {
+            "room_identity_match": {
+                "type": "boolean",
+                "description": "True ONLY if the photo clearly shows the user-declared room_type. "
+                               "Look for the room's defining features (kitchen=stove/sink/counter, "
+                               "bathroom=WC/shower/tiles, pooja=idols/diya, bedroom=bed, "
+                               "office=desk/chairs, factory=machinery, shop=counter/shelves)."
+            },
+            "detected_room_type": {
+                "type": "string",
+                "description": "Your honest classification of what room this photo actually shows "
+                               "(kitchen/bathroom/pooja/bedroom/livingroom/office/factory/shop/"
+                               "outdoor/unclear). Use 'unclear' if you cannot tell."
+            },
+            "identity_features_seen": {
+                "type": "array",
+                "minItems": 0, "maxItems": 6,
+                "items": {"type": "string"},
+                "description": "Concrete features you can see (e.g. 'gas stove', 'sink with tap', "
+                               "'toilet seat'). Empty array if photo too unclear."
+            },
             "visual_findings": {
                 "type": "array",
                 "minItems": 0,
@@ -963,8 +985,28 @@ def analyze_room_visuals(
 
     system = (
         "You are the COSMIC VISION ENGINE — Room Environment Analyzer.\n\n"
-        "Your job: examine ONE photograph of a real interior room and surface "
-        "VISUAL ENVIRONMENTAL observations relevant to Vastu Shastra (clutter, "
+        "STEP 1 — ROOM IDENTITY VERIFICATION (CRITICAL):\n"
+        f"The user declared this photo is of a '{rt}'. BEFORE any analysis, "
+        "verify the photo actually shows that type of room by looking for its "
+        "defining features:\n"
+        "  • kitchen → gas stove / chulha / chimney / sink / counter / utensils\n"
+        "  • bathroom → WC / commode / shower / bathtub / wall tiles / tap\n"
+        "  • pooja → idols / diya / agarbatti stand / mandir cabinet / bell\n"
+        "  • bedroom → bed / mattress / pillows / wardrobe / dressing table\n"
+        "  • livingroom → sofa / coffee table / TV unit / large seating\n"
+        "  • office → desk / office chair / computer / files / cabin partition\n"
+        "  • factory → machinery / conveyors / raw material storage / industrial floor\n"
+        "  • shop → display shelves / counter / cash register / merchandise\n\n"
+        "If the photo CLEARLY shows the declared room: room_identity_match=true.\n"
+        "If the photo shows a DIFFERENT room (e.g. user said 'kitchen' but it's a bedroom): "
+        "room_identity_match=false, detected_room_type=<actual>, and STILL list any features "
+        "you DID see in identity_features_seen. Return EMPTY visual_findings, score_delta=0, "
+        "scan_inconclusive=true, and an inconclusive_reason explaining the mismatch.\n"
+        "If photo is too unclear / blurry / not a room interior at all: "
+        "room_identity_match=false, detected_room_type='unclear', "
+        "scan_inconclusive=true with reason.\n\n"
+        "STEP 2 — VASTU ANALYSIS (only if room_identity_match=true):\n"
+        "Surface VISUAL ENVIRONMENTAL observations relevant to Vastu Shastra (clutter, "
         "mirror placement, exposed beams, sharp colors, large electronics, "
         "idol orientation, water/fire elements, broken items, etc.).\n\n"
         "ABSOLUTE RULES:\n"
@@ -973,10 +1015,11 @@ def analyze_room_visuals(
         "the Cosmic Vision Engine.\n"
         "3. Do NOT make verdicts on the room layout/direction — that is handled "
         "by the classical engine. Focus on what is VISIBLE in the photo.\n"
-        "4. visual_findings: 0-8 specific items. severity = "
+        "4. visual_findings: 0-8 specific items (EMPTY if room_identity_match=false). severity = "
         "positive | neutral | minor | moderate | major.\n"
         "5. score_delta: small integer in [-15, +10] reflecting net "
-        "environmental impact. Be conservative — classical rules dominate.\n"
+        "environmental impact. Be conservative — classical rules dominate. "
+        "MUST be 0 if room_identity_match=false.\n"
         "6. confidence (0-100): be honest. If photo is blurry / dark / not a "
         "room, set scan_inconclusive=true with a reason and empty findings.\n"
         f"7. text / inconclusive_reason in: {lang_name}. Enums stay original.\n"

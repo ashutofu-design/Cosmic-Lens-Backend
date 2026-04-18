@@ -202,6 +202,36 @@ def annotate_report_with_room_photos(
         if vf.get("scan_inconclusive"):
             summary["scan_inconclusive_count"] += 1
 
+        # ── Room identity verification gate ──────────────────────────────
+        identity_match  = vf.get("room_identity_match")
+        detected_rt     = (vf.get("detected_room_type") or "").strip().lower()
+        features_seen   = vf.get("identity_features_seen") or []
+        # If model didn't include the new field (defensive), default True so
+        # we don't break existing scans — but if explicitly False, reject.
+        if identity_match is False:
+            if detected_rt and detected_rt not in ("unclear", "", rt):
+                err_msg = (
+                    f"Photo #{i+1}: aap ne '{rt}' bola, par photo me '{detected_rt}' "
+                    f"dikh raha hai. Sahi room ka photo upload kariye."
+                )
+            else:
+                err_msg = (
+                    f"Photo #{i+1}: photo me '{rt}' ke features clear nahi dikhe. "
+                    "Behtar roshni / saaf photo lijiye."
+                )
+            summary["errors"].append(err_msg)
+            summary["per_room"].append({
+                "room_type":          rt,
+                "rejected":           True,
+                "rejection_reason":   "room_identity_mismatch",
+                "detected_room_type": detected_rt or "unclear",
+                "features_seen":      list(features_seen)[:6],
+                "findings_count":     0,
+                "score_delta":        0,
+                "matched_in_report":  False,
+            })
+            continue  # do NOT merge findings, do NOT apply score_delta
+
         findings = vf.get("visual_findings") or []
         delta    = int(vf.get("score_delta") or 0)
 

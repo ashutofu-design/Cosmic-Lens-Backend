@@ -3008,7 +3008,14 @@ def astrovastu_pro_route():
     # ── Engine pipeline (run BEFORE charging quota — Sprint-2 fix) ──────
     try:
         scan = analyze_floor_plan(floor_plan, chart)
-        report = build_pro_response(scan, plan=plan)
+        # Pass classical-rule inputs (adjacency, topography, dimensions) through
+        # so the response builder can run those modules and surface findings.
+        pro_extras = {
+            "room_adjacencies": data.get("room_adjacencies") or [],
+            "plot_topography":  data.get("plot_topography")  or {},
+            "floor_plan":       floor_plan,  # for per-room dimension_rules
+        }
+        report = build_pro_response(scan, plan=plan, extras=pro_extras)
     except Exception as exc:
         import traceback; traceback.print_exc()
         return jsonify({"error": "engine_failure"}), 500

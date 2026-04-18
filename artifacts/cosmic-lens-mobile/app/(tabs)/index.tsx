@@ -546,6 +546,7 @@ function DoshCard({ onPress, kundli }: { onPress: () => void; kundli: any }) {
 function BadTimeCard({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
   const { width: screenW } = useWindowDimensions();
   const cardW              = screenW - 28;
+  const { C }              = useColors();
   const dashaTxt           = activeDasha
     ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} Dasha`
     : "Saturn Transit";

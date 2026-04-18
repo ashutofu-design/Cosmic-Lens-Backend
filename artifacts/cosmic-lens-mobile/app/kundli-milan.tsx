@@ -631,7 +631,7 @@ function ProInsightsPanel(){
 }
 
 // ── Pro Result Report — 12 sections ──────────────────────────────────────────
-function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;grad:[string,string]};C:any}){
+function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;grad:readonly [string,string]};C:any}){
   // Derived metrics (0-100)
   const pct=(n:number,d:number)=>Math.round(Math.min((n/d)*100,100));
   const emotional  = Math.round((pct(result.nadi.score,8)*0.45+pct(result.tara.score,3)*0.3+pct(result.maitri.score,5)*0.25));
@@ -1411,8 +1411,8 @@ export default function KundliMilanScreen(){
       const marsH=prof.kundli.planets.find((p:any)=>p.name==="Mars")?.house??0;
       setP2({
         name:prof.name,
-        nakshatra:prof.kundli.nakshatra,
-        moonSign:prof.kundli.moonSign,
+        nakshatra:prof.kundli.nakshatra ?? "",
+        moonSign:prof.kundli.moonSign ?? "",
         manglik:[1,4,7,8,12].includes(marsH),
       });
       setP2Profile(prof);
@@ -1439,8 +1439,8 @@ export default function KundliMilanScreen(){
 
   const autoP1:PersonData|null=primaryKundli?{
     name:p1Profile?.name??"Aap",
-    nakshatra:primaryKundli.nakshatra,
-    moonSign:primaryKundli.moonSign,
+    nakshatra:primaryKundli.nakshatra ?? "",
+    moonSign:primaryKundli.moonSign ?? "",
     manglik:[1,4,7,8,12].includes(primaryKundli.planets.find(p=>p.name==="Mars")?.house??0),
   }:null;
   const person1=autoP1??p1;

@@ -15,6 +15,7 @@ export const SIGNS: Record<LangCode, string[]> = {
   bn: ["মেষ","বৃষ","মিথুন","কর্কট","সিংহ","কন্যা","তুলা","বৃশ্চিক","ধনু","মকর","কুম্ভ","মীন"],
   mr: ["मेष","वृषभ","मिथुन","कर्क","सिंह","कन्या","तुला","वृश्चिक","धनु","मकर","कुंभ","मीन"],
   gu: ["મેષ","વૃષભ","મિથુન","કર્ક","સિંહ","કન્યા","તુલા","વૃશ્ચિક","ધનુ","મકર","કુંભ","મીન"],
+  kn: ["ಮೇಷ","ವೃಷಭ","ಮಿಥುನ","ಕರ್ಕ","ಸಿಂಹ","ಕನ್ಯಾ","ತುಲಾ","ವೃಶ್ಚಿಕ","ಧನು","ಮಕರ","ಕುಂಭ","ಮೀನ"],
   en: ["Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"],
 };
 
@@ -26,6 +27,7 @@ export const ORDINALS: Record<LangCode, string[]> = {
   bn: ["","১ম","২য়","৩য়","৪র্থ","৫ম","৬ষ্ঠ","৭ম","৮ম","৯ম","১০ম","১১তম","১২তম"],
   mr: ["","पहिल्या","दुसऱ्या","तिसऱ्या","चौथ्या","पाचव्या","सहाव्या","सातव्या","आठव्या","नवव्या","दहाव्या","अकराव्या","बाराव्या"],
   gu: ["","1લા","2જા","3જા","4થા","5મા","6ઠ્ઠા","7મા","8મા","9મા","10મા","11મા","12મા"],
+  kn: ["","1ನೇ","2ನೇ","3ನೇ","4ನೇ","5ನೇ","6ನೇ","7ನೇ","8ನೇ","9ನೇ","10ನೇ","11ನೇ","12ನೇ"],
   en: ["","1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th","11th","12th"],
 };
 
@@ -37,6 +39,7 @@ export const PLANET_NAMES: Record<LangCode, Record<string, string>> = {
   bn: { Sun:"সূর্য", Moon:"চন্দ্র", Mars:"মঙ্গল", Mercury:"বুধ", Jupiter:"বৃহস্পতি", Venus:"শুক্র", Saturn:"শনি", Rahu:"রাহু", Ketu:"কেতু" },
   mr: { Sun:"सूर्य", Moon:"चंद्र", Mars:"मंगळ", Mercury:"बुध", Jupiter:"गुरू", Venus:"शुक्र", Saturn:"शनी", Rahu:"राहू", Ketu:"केतू" },
   gu: { Sun:"સૂર્ય", Moon:"ચંદ્ર", Mars:"મંગળ", Mercury:"બુધ", Jupiter:"ગુરુ", Venus:"શુક્ર", Saturn:"શનિ", Rahu:"રાહુ", Ketu:"કેતુ" },
+  kn: { Sun:"ಸೂರ್ಯ", Moon:"ಚಂದ್ರ", Mars:"ಮಂಗಳ", Mercury:"ಬುಧ", Jupiter:"ಗುರು", Venus:"ಶುಕ್ರ", Saturn:"ಶನಿ", Rahu:"ರಾಹು", Ketu:"ಕೇತು" },
   en: { Sun:"Sun", Moon:"Moon", Mars:"Mars", Mercury:"Mercury", Jupiter:"Jupiter", Venus:"Venus", Saturn:"Saturn", Rahu:"Rahu", Ketu:"Ketu" },
 };
 
@@ -52,6 +55,7 @@ export const DOMAIN_KW: Record<LangCode, Record<string, string>> = {
   bn: { career:"ক্যারিয়ার", finance:"আর্থিক অবস্থা", relationship:"সম্পর্ক", health:"স্বাস্থ্য" },
   mr: { career:"करिअर", finance:"आर्थिक स्थिती", relationship:"नाते", health:"आरोग्य" },
   gu: { career:"કારકિર્દી", finance:"આર્થિક સ્થિતિ", relationship:"સંબંધ", health:"આરોગ્ય" },
+  kn: { career:"ವೃತ್ತಿ", finance:"ಆರ್ಥಿಕ ಸ್ಥಿತಿ", relationship:"ಸಂಬಂಧ", health:"ಆರೋಗ್ಯ" },
   en: { career:"career", finance:"finances", relationship:"relationships", health:"health" },
 };
 
@@ -63,6 +67,7 @@ const DIGNITY: Record<LangCode, Record<string, string>> = {
   bn: { exalted:"উচ্চ", debil:"নীচ", own:"স্বরাশিতে", friendly:"মিত্ররাশিতে", enemy:"শত্রুরাশিতে", neutral:"সমরাশিতে" },
   mr: { exalted:"उच्च", debil:"नीच", own:"स्वराशीत", friendly:"मित्र राशीत", enemy:"शत्रू राशीत", neutral:"सम राशीत" },
   gu: { exalted:"ઉચ્ચ", debil:"નીચ", own:"સ્વ-રાશિ", friendly:"મિત્ર-રાશિ", enemy:"શત્રુ-રાશિ", neutral:"સમ-રાશિ" },
+  kn: { exalted:"ಉಚ್ಚ", debil:"ನೀಚ", own:"ಸ್ವ-ರಾಶಿಯಲ್ಲಿ", friendly:"ಮಿತ್ರ ರಾಶಿಯಲ್ಲಿ", enemy:"ಶತ್ರು ರಾಶಿಯಲ್ಲಿ", neutral:"ಸಮ ರಾಶಿಯಲ್ಲಿ" },
   en: { exalted:"exalted", debil:"debilitated", own:"in own sign", friendly:"in a friendly sign", enemy:"in an enemy sign", neutral:"in a neutral sign" },
 };
 
@@ -90,6 +95,7 @@ const HOUSE_TYPES: Record<LangCode, Record<string,string>> = {
   bn: { angular:"কেন্দ্র ভাব", trikona:"ত্রিকোণ ভাব", dusthana:"দুস্থান ভাব", neutral:"সাধারণ ভাব" },
   mr: { angular:"केंद्र भाव", trikona:"त्रिकोण भाव", dusthana:"दुस्थान भाव", neutral:"सामान्य भाव" },
   gu: { angular:"કેન્દ્ર ભાવ", trikona:"ત્રિકોણ ભાવ", dusthana:"દૂષ્ઠ ભાવ", neutral:"સામાન્ય ભાવ" },
+  kn: { angular:"ಕೇಂದ್ರ ಭಾವ", trikona:"ತ್ರಿಕೋಣ ಭಾವ", dusthana:"ದುಸ್ಥಾನ ಭಾವ", neutral:"ಸಾಮಾನ್ಯ ಭಾವ" },
   en: { angular:"angular/kendra", trikona:"auspicious/trikona", dusthana:"challenging/dusthana", neutral:"neutral" },
 };
 
@@ -408,6 +414,52 @@ const TEMPLATES: Record<LangCode, LangTemplates> = {
       finance:      "અત્યારે રૂઢિચુસ્ત આર્થિક આયોજન શ્રેષ્ઠ છે. માસિક બજેટ જાળવો અને કટોકટી ભંડોળ રાખો.",
       relationship: "સક્રિય રીતે સાંભળવું અને ખુલ્લો, સીધો સંવાદ સંબંધ મજબૂત કરે છે. ધારણાઓ ટાળો.",
       health:       "નિયમિત દૈનિક ક્રમ — ગુણવત્તાયુક્ત ઊંઘ, સંતુલિત આહાર અને દૈનિક વ્યાયામ — ને પ્રાધાન્ય આપો.",
+    },
+  },
+
+  kn: {
+    placement:       "{planet} is placed in your {ordinal} house in {sign} — {dignity} ({houseType}).",
+    retrograde:      " {planet} is currently in retrograde motion, turning energy inward.",
+    noAspects:       "No major planetary aspects fall on {planet} right now — outcomes depend primarily on its own strength.",
+    beneficOnly:     "{benefics} cast a favorable aspect on {planet}, providing support.",
+    maleficOnly:     "{malefics} aspect {planet} with challenging energy, bringing some friction.",
+    bothAspects:     "{benefics} provide favorable aspects on {planet}, while {malefics} also aspect it. These planetary influences shape the outcomes of this period.",
+    adStrong:        "{adPlanet} Antardasha is in a strong position — providing additional support.",
+    adModerate:      "{adPlanet} Antardasha is in moderate standing.",
+    adWeak:          "{adPlanet} Antardasha is in a somewhat challenging position — its influence adds complexity.",
+    adVeryWeak:      "{adPlanet} Antardasha is under considerable pressure, reducing the overall strength of this period.",
+    conclusionGood:  "Overall, this is a relatively favorable phase for your {domain}. Consistent effort is likely to yield positive results.",
+    conclusionMixed: "This is a mixed phase — expect both gains and challenges in your {domain}. Take one step at a time.",
+    conclusionBad:   "This period brings notable challenges for your {domain}. Patience and realistic expectations will help you navigate {planet}'s dasha well.",
+    cautionDusthana: "{planet} is in your {ordinal} house (a challenging house) in {sign} — extra patience and effort will be needed for results in your {domain}.",
+    cautionDebil:    "{planet} is currently debilitated in {sign} — its natural potential is somewhat limited during this period.",
+    cautionMalAspect:"{malefics} casts a challenging aspect on {planet} — unexpected obstacles or pressure may arise in your {domain}.",
+    cautionNone:     "{planet} shows no major structural weakness in its current position, but avoid impulsive decisions.",
+    adCautionDusthana:" {adPlanet} Antardasha is also in the {ordinal} house — this double pressure calls for calculated, deliberate steps.",
+    adCautionWeak:   " {adPlanet} Antardasha is also in a weak position — reconsider every major decision carefully before acting.",
+    behaviourCareer: " Avoid workplace conflicts and office politics. Stay focused on your own work.",
+    behaviourFinance:" Always seek a second opinion for major financial decisions. Avoid FOMO-driven investments.",
+    behaviourRel:    " Don't assume — express what's on your mind directly. Unchecked emotions damage relationships.",
+    behaviourHealth: " Don't ignore your body's early warning signals. Strictly avoid overexertion and irregular routines.",
+    categoryGood:    "{pdPlanet}–{adPlanet} phase is favorable for your {domain}. Consistent effort will bring good results.",
+    categoryMixed:   "{pdPlanet}–{adPlanet} phase gives mixed results for your {domain}. Staying focused will help improve outcomes.",
+    categoryBad:     "{pdPlanet}–{adPlanet} phase brings challenges to your {domain}. Patience and a realistic approach are key.",
+    remedies: {
+      Sun:     "Offer water to the rising sun at dawn. Chant 'Om Suryaya Namah' daily. Wear copper or orange on Sundays.",
+      Moon:    "Meditate near water or moonlight. Chant 'Om Som Somaya Namah'. Wear white on Mondays.",
+      Mars:    "Channel energy into disciplined physical practice. Recite the Hanuman Chalisa regularly. Wear red on Tuesdays.",
+      Mercury: "Journal your thoughts. Chant 'Om Budhaya Namah'. Wear green on Wednesdays.",
+      Jupiter: "Study sacred texts daily. Chant 'Om Gurave Namah'. Wear yellow on Thursdays. Practice gratitude.",
+      Venus:   "Invest in creative expression and self-care. Chant 'Om Shukraya Namah'. Wear white or pink on Fridays.",
+      Saturn:  "Commit to daily discipline. Chant 'Om Shanaischaraya Namah'. Serve those in need. Wear blue on Saturdays.",
+      Rahu:    "Practice daily grounding — barefoot walks, deep breathing. Chant 'Om Rahave Namah'. Accept uncertainty.",
+      Ketu:    "Deepen your meditation practice. Chant 'Om Ketave Namah'. Ketu favors inner spiritual work.",
+    },
+    practicals: {
+      career:       "Set one clear career goal for this period and pursue it with consistent daily effort. Minimize distractions.",
+      finance:      "Conservative financial planning serves you best now. Maintain a monthly budget and keep an emergency fund.",
+      relationship: "Active listening and open, direct communication strengthen relationships. Avoid assumptions.",
+      health:       "Prioritize a consistent routine — quality sleep, balanced diet, and daily movement. Listen to your body early.",
     },
   },
 

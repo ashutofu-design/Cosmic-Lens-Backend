@@ -1552,7 +1552,7 @@ const T: Record<UILang, Translations> = {
   // ── ASSAMESE ────────────────────────────────────────────────────────────────
   as: {
     tabHome: "হোম", tabKundli: "কুণ্ডলী", tabAsk: "সুধক",
-    tabLifeMap: "লাইফ ম্যাপ", tabLifeMap: "লাইফ মেপ", tabFuture: "ভবিষ্যৎ", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
+    tabLifeMap: "লাইফ ম্যাপ", tabFuture: "ভবিষ্যৎ", tabNotice: "জাননী", tabProfile: "প্ৰফাইল",
 
     save: "সংৰক্ষণ কৰক", cancel: "বাতিল কৰক", skip: "এৰক", back: "পিছলৈ",
     next: "পৰৱৰ্তী", done: "সম্পূৰ্ণ", retry: "পুনৰ চেষ্টা কৰক", search: "বিচাৰক",
@@ -1664,7 +1664,7 @@ const T: Record<UILang, Translations> = {
   // ── CHINESE SIMPLIFIED ───────────────────────────────────────────────────────
   zh: {
     tabHome: "首页", tabKundli: "星盘", tabAsk: "咨询",
-    tabLifeMap: "生命地图", tabLifeMap: "ライフマップ", tabFuture: "未来", tabNotice: "通知", tabProfile: "我的",
+    tabLifeMap: "生命地图", tabFuture: "未来", tabNotice: "通知", tabProfile: "我的",
 
     save: "保存", cancel: "取消", skip: "跳过", back: "返回",
     next: "下一步", done: "完成", retry: "重试", search: "搜索",
@@ -2447,7 +2447,7 @@ const T: Record<UILang, Translations> = {
   // ── JAPANESE ────────────────────────────────────────────────────────────────
   ja: {
     tabHome: "ホーム", tabKundli: "クンドリ", tabAsk: "質問",
-    tabLifeMap: "生命地图", tabLifeMap: "ライフマップ", tabFuture: "未来", tabNotice: "お知らせ", tabProfile: "プロフィール",
+    tabLifeMap: "ライフマップ", tabFuture: "未来", tabNotice: "お知らせ", tabProfile: "プロフィール",
 
     save: "保存", cancel: "キャンセル", skip: "スキップ", back: "戻る",
     next: "次へ", done: "完了", retry: "再試行", search: "検索",

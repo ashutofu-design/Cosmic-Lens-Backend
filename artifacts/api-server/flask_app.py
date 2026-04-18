@@ -2615,8 +2615,8 @@ def astrovastu_basic_route():
     or 401/402/404/422 on auth/quota/profile/validation errors.
     """
     from subscription_helper import (
-        can_use_astrovastu_basic,
-        consume_question,
+        can_use_astrovastu_basic_v2,
+        consume_astrovastu_basic_v2,
         effective_plan,
     )
     from astrovastu_engine import (
@@ -2730,14 +2730,16 @@ def astrovastu_basic_route():
                 "message": f"Kundli data parse nahin ho saka: {exc}",
             }), 422
 
-    # ── Item 20a: pre-flight quota gate (no consumption yet) ───────────────
-    quota_check = can_use_astrovastu_basic(user)
+    # ── Item 20a: Phase-2 unlock gate (Pro / property unlock / room credit / daily quota)
+    property_name = (data.get("property_name") or "").strip()
+    quota_check = can_use_astrovastu_basic_v2(user, property_name)
     if not quota_check["allowed"]:
         return jsonify({
-            "error":   "daily_limit_reached",
-            "message": f"Aaj ka {quota_check['limit']} check ka limit poora ho gaya. "
-                       f"Pro upgrade karein for unlimited.",
-            "quota":   {"used": quota_check["used"], "limit": quota_check["limit"]},
+            "error":   "upgrade_required",
+            "message": quota_check.get("reason",
+                       "Buy a Room Check (₹199), Bundle (₹499), or Full Home Unlock (₹2,999)."),
+            "credits": quota_check.get("credits", 0),
+            "unlocks": quota_check.get("unlocks", []),
             "plan":    plan,
             "upgrade_required": True,
         }), 402
@@ -2753,14 +2755,13 @@ def astrovastu_basic_route():
         import traceback; traceback.print_exc()
         return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
 
-    # ── Item 20b: atomic consume AFTER engine success ─────────────────────
-    quota = consume_question(user)
+    # ── Item 20b: Phase-2 atomic consume AFTER engine success ─────────────
+    quota = consume_astrovastu_basic_v2(user, property_name)
     if not quota["allowed"]:
-        # Edge: another concurrent request consumed the last unit between
-        # gate and consume. Return 402 without leaking the result.
         return jsonify({
-            "error":   "daily_limit_reached",
-            "quota":   {"used": quota["used"], "limit": quota["limit"]},
+            "error":   "upgrade_required",
+            "message": quota.get("reason", "Out of credits."),
+            "credits": quota.get("credits", 0),
             "plan":    plan,
             "upgrade_required": True,
         }), 402
@@ -2774,7 +2775,16 @@ def astrovastu_basic_route():
         severity_result=sev_res,
         generic_room_rule=rule,
     )
-    response["quota"] = {"used": quota["used"], "limit": quota["limit"]}
+    response["unlock"] = {
+        "via":            quota.get("via"),
+        "credits_left":   quota.get("credits", 0),
+        "property_name":  property_name or None,
+    }
+    # Backward-compat shim — older clients still read response.quota.{used,limit}
+    response["quota"] = {
+        "used":  quota.get("used", 0) or 0,
+        "limit": quota.get("limit", -1) if quota.get("via") == "daily_free_quota" else -1,
+    }
     response["plan"]  = plan
 
     # ── Item 24: log to DB ────────────────────────────────────────────────
@@ -2822,7 +2832,7 @@ def astrovastu_pro_route():
     success — failed scans never charge the user (Sprint-2 architect fix).
     """
     from subscription_helper import (
-        can_use_astrovastu_pro, consume_astrovastu_pro, effective_plan,
+        can_use_astrovastu_pro_v2, consume_astrovastu_pro_v2, effective_plan,
     )
     from astrovastu_pro_engine import analyze_floor_plan
     from astrovastu_pro_response import build_pro_response
@@ -2889,19 +2899,18 @@ def astrovastu_pro_route():
         except Exception as exc:
             return jsonify({"error": "kundli_unreadable", "message": str(exc)}), 422
 
-    # ── Quota gate (no consumption yet) ──────────────────────────────────
-    quota_check = can_use_astrovastu_pro(user)
+    # ── Phase-2 unlock gate (Pro / property unlock / monthly basic quota) ─
+    property_name = (data.get("property_name") or "").strip()
+    quota_check = can_use_astrovastu_pro_v2(user, property_name)
     if not quota_check["allowed"]:
         return jsonify({
-            "error":   "monthly_limit_reached" if quota_check.get("limit", 0) > 0
-                       else "upgrade_required",
-            "message": (f"Aapka maasik PRO scan limit ({quota_check['limit']}) poora ho gaya. "
-                        "Pro plan upgrade karein for unlimited."
-                        if quota_check.get("limit", 0) > 0
-                        else "PRO AstroVastu requires Basic or Pro plan."),
-            "quota":   {"used": quota_check["used"], "limit": quota_check["limit"]},
+            "error":   "upgrade_required",
+            "message": quota_check.get("reason",
+                       "Unlock this property for ₹2,999 (lifetime) or upgrade to Pro plan."),
+            "unlocks": quota_check.get("unlocks", []),
             "plan":    plan,
             "upgrade_required": True,
+            "suggested_skus": ["full_home_2999", "shop_999", "office_1499", "factory_2999"],
         }), 402
 
     # ── Engine pipeline (run BEFORE charging quota — Sprint-2 fix) ──────
@@ -2912,18 +2921,27 @@ def astrovastu_pro_route():
         import traceback; traceback.print_exc()
         return jsonify({"error": "engine_failure", "detail": str(exc)}), 500
 
-    # ── Atomic monthly consume AFTER engine success ──────────────────────
-    quota = consume_astrovastu_pro(user)
+    # ── Phase-2 atomic consume AFTER engine success ──────────────────────
+    quota = consume_astrovastu_pro_v2(user, property_name)
     if not quota["allowed"]:
         return jsonify({
-            "error":   "monthly_limit_reached",
-            "quota":   {"used": quota["used"], "limit": quota["limit"]},
+            "error":   "upgrade_required",
+            "message": quota.get("reason"),
             "plan":    plan,
             "upgrade_required": True,
         }), 402
 
-    # Attach quota info to response
-    report["quota"] = {"used": quota["used"], "limit": quota["limit"], "plan": plan}
+    report["unlock"] = {
+        "via":           quota.get("via"),
+        "property_name": property_name or None,
+        "plan":          plan,
+    }
+    # Backward-compat shim for older clients
+    report["quota"] = {
+        "used":  quota.get("used", 0) or 0,
+        "limit": quota.get("limit", -1) if quota.get("via") == "monthly_quota" else -1,
+        "plan":  plan,
+    }
 
     # ── Log row (analytics; never blocks user response) ──────────────────
     try:
@@ -2947,6 +2965,145 @@ def astrovastu_pro_route():
         db.session.rollback()
 
     return jsonify(report)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AstroVastu  —  Phase-2 Status & Purchase Intent endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/astrovastu/status", methods=["GET", "POST"])
+def astrovastu_status_route():
+    """
+    Returns the user's AstroVastu unlock state:
+      { plan, room_credits, unlocked_properties:[{name,tier,unlocked_at}],
+        catalog:{sku:{price,label,grants}}, monthly_pro_used, monthly_pro_limit }
+    Auth: user_id + X-API-Key (mandatory).
+    """
+    from subscription_helper import (
+        SKU_CATALOG, list_unlocked_properties, effective_plan,
+        astrovastu_pro_monthly_limit,
+    )
+    data = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id") or request.args.get("user_id")
+    api_key = request.headers.get("X-API-Key", "").strip()
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    plan = effective_plan(user)
+    return jsonify({
+        "plan":                 plan,
+        "is_pro":               plan == "pro",
+        "room_credits":         user.astrovastu_room_credits or 0,
+        "unlocked_properties":  list_unlocked_properties(user),
+        "monthly_pro_used":     user.monthly_astrovastu_pro_used or 0,
+        "monthly_pro_limit":    astrovastu_pro_monthly_limit(user),
+        "catalog":              SKU_CATALOG,
+    })
+
+
+@app.route("/api/astrovastu/intent", methods=["POST"])
+def astrovastu_purchase_intent_route():
+    """
+    Creates a one-time payment intent for an AstroVastu SKU. Returns the
+    purchase row id + the SKU spec. Phase 3 will hook this to Cashfree
+    (creates a Cashfree order, returns payment_session_id).
+
+    Body: { user_id, sku, property_name? }
+    Headers: X-API-Key
+    """
+    from subscription_helper import SKU_CATALOG, effective_plan
+    from models import AstroVastuPurchase
+
+    data = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = request.headers.get("X-API-Key", "").strip()
+    sku     = (data.get("sku") or "").strip()
+    pname   = (data.get("property_name") or "").strip()
+
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    spec = SKU_CATALOG.get(sku)
+    if not spec:
+        return jsonify({"error": "invalid_sku", "valid_skus": list(SKU_CATALOG.keys())}), 400
+    if spec["grants"] == "unlock" and not pname:
+        return jsonify({"error": "property_name_required",
+                        "message": "Please name this property (e.g. 'Mumbai Flat')."}), 400
+
+    purchase = AstroVastuPurchase(
+        user_id       = user.id,
+        sku           = sku,
+        amount        = spec["price"],
+        property_name = pname or None,
+        status        = "created",
+    )
+    db.session.add(purchase)
+    db.session.commit()
+
+    return jsonify({
+        "purchase_id":        purchase.id,
+        "sku":                sku,
+        "amount":             spec["price"],
+        "label":              spec["label"],
+        "grants":             spec["grants"],
+        "property_name":      pname or None,
+        "plan":               effective_plan(user),
+        "payment_session_id": None,
+        "payment_url":        None,
+        "status":             "created",
+        "message":            "Payment integration arrives in Phase 3 — purchase logged.",
+    })
+
+
+@app.route("/api/astrovastu/dev-grant", methods=["POST"])
+def astrovastu_dev_grant_route():
+    """
+    DEV-ONLY: marks a created purchase as paid and grants the credits/unlock.
+    Disabled in production. Used to test Phase-2 unlock flow before Phase-3
+    Cashfree integration is live.
+
+    Body: { user_id, purchase_id }
+    Headers: X-API-Key
+    """
+    import os as _os
+    from subscription_helper import grant_purchase_idempotent
+    from models import AstroVastuPurchase
+
+    # SECURE-BY-DEFAULT — must explicitly opt in via env flag AND not be prod.
+    if (_os.environ.get("ASTROVASTU_DEV_GRANT_ENABLED") or "").strip() != "1":
+        return jsonify({"error": "dev_grant_disabled",
+                        "message": "Set ASTROVASTU_DEV_GRANT_ENABLED=1 to enable in dev."}), 403
+    if (_os.environ.get("FLASK_ENV") or "").lower() == "production":
+        return jsonify({"error": "disabled_in_production"}), 403
+
+    data = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id")
+    api_key = request.headers.get("X-API-Key", "").strip()
+    pid     = data.get("purchase_id")
+    if not user_id or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    user = User.query.filter_by(id=user_id, api_key=api_key).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    purchase = AstroVastuPurchase.query.get(pid)
+    if not purchase or purchase.user_id != user.id:
+        return jsonify({"error": "purchase_not_found"}), 404
+
+    from datetime import datetime as _dt
+    purchase.status  = "paid"
+    purchase.paid_at = _dt.utcnow()
+    db.session.commit()
+
+    result = grant_purchase_idempotent(purchase)
+    db.session.refresh(user)
+    return jsonify({"purchase_id": pid, **result,
+                    "room_credits": user.astrovastu_room_credits})
 
 
 @app.route("/api/ask", methods=["POST"])

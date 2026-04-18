@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { AstroVastuWallet } from "@/components/AstroVastuWallet";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists (ready for 24-language i18n migration)
@@ -132,6 +133,8 @@ export default function AstroVastuProScreen() {
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
+  const [propertyName, setPropertyName] = useState<string>("");  // Phase 2: per-property unlock match
+  const [walletKey,    setWalletKey]    = useState(0);
 
   // ── Floor-plan editor handlers ────────────────────────────────────────
   const addRoom = useCallback(() => {
@@ -169,7 +172,11 @@ export default function AstroVastuProScreen() {
       const resp = await fetch(`${API_BASE}/api/astrovastu-pro`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
-        body:    JSON.stringify({ user_id: user.id, floor_plan: valid }),
+        body:    JSON.stringify({
+          user_id: user.id,
+          floor_plan: valid,
+          property_name: propertyName.trim(),
+        }),
       });
       const body = await resp.json();
       if (!resp.ok) {
@@ -177,6 +184,7 @@ export default function AstroVastuProScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } else {
         setResult(body as ProResponse);
+        setWalletKey((k) => k + 1);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e: any) {
@@ -184,7 +192,7 @@ export default function AstroVastuProScreen() {
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user]);
+  }, [loading, rooms, user, propertyName]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -220,6 +228,14 @@ export default function AstroVastuProScreen() {
             chal rahi Mahadasha ka deep analysis karenge.
           </Text>
         </View>
+
+        {/* ── AstroVastu Wallet (Phase 2: unlocks + buy CTAs) ─────── */}
+        <AstroVastuWallet
+          variant="pro"
+          propertyName={propertyName}
+          onPropertyNameChange={setPropertyName}
+          refreshKey={walletKey}
+        />
 
         {/* ── Floor-plan editor ───────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>

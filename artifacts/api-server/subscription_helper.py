@@ -451,3 +451,258 @@ def subscription_status(user) -> dict:
         "prices":            PLAN_PRICES,
         "trial_days":        TRIAL_DAYS,
     }
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  Phase-2 — AstroVastu One-Time Unlock Model                              ║
+# ║                                                                          ║
+# ║  Replaces strict monthly quota with three independent paths:             ║
+# ║   1) Pro plan (₹499/mo)  → unlimited everything                          ║
+# ║   2) Property unlock     → unlimited PRO scans for a single named home   ║
+# ║      (₹2,999 Full Home / ₹999 Shop / ₹1,499 Office / ₹2,999 Factory)     ║
+# ║   3) Room credits        → 1-room (₹199) or 3-room bundle (₹499) for     ║
+# ║      one-off BASIC checks                                                ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+SKU_CATALOG = {
+    "1room_199":       {"price": 199,  "grants": "credits", "credits": 1, "label": "1 Room Quick Check"},
+    "bundle_499":      {"price": 499,  "grants": "credits", "credits": 3, "label": "3-Room Bundle"},
+    "full_home_2999":  {"price": 2999, "grants": "unlock",  "label": "Full Home Lifetime"},
+    "shop_999":        {"price": 999,  "grants": "unlock",  "label": "Shop Vastu Lifetime"},
+    "office_1499":     {"price": 1499, "grants": "unlock",  "label": "Office Vastu Lifetime"},
+    "factory_2999":    {"price": 2999, "grants": "unlock",  "label": "Factory Vastu Lifetime"},
+}
+
+
+def is_property_unlocked(user, property_name: str) -> bool:
+    """True if user has a lifetime unlock for the given property name."""
+    if not user or not property_name:
+        return False
+    from models import AstroVastuPropertyUnlock
+    pname = property_name.strip()
+    if not pname:
+        return False
+    row = AstroVastuPropertyUnlock.query.filter_by(
+        user_id=user.id, property_name=pname
+    ).first()
+    return row is not None
+
+
+def list_unlocked_properties(user) -> list:
+    """Returns list of {property_name, tier, unlocked_at} for user."""
+    if not user:
+        return []
+    from models import AstroVastuPropertyUnlock
+    rows = (AstroVastuPropertyUnlock.query
+            .filter_by(user_id=user.id)
+            .order_by(AstroVastuPropertyUnlock.unlocked_at.desc())
+            .all())
+    return [{
+        "property_name": r.property_name,
+        "tier":          r.tier,
+        "unlocked_at":   r.unlocked_at.isoformat() if r.unlocked_at else None,
+    } for r in rows]
+
+
+def can_use_astrovastu_basic_v2(user, property_name: str = "") -> dict:
+    """
+    Phase-2 gate for BASIC AstroVastu. Allows if ANY of:
+      - Pro plan (unlimited)
+      - Property unlocked (unlimited for that property)
+      - Room credits available
+      - Daily free quota available (legacy fallback for free/trial/basic plans)
+    """
+    if not user:
+        return {"allowed": False, "reason": "Login required",
+                "credits": 0, "unlocks": [], "via": "none"}
+
+    plan = effective_plan(user)
+    unlocks = list_unlocked_properties(user)
+
+    if plan == "pro":
+        return {"allowed": True, "via": "pro_plan",
+                "credits": user.astrovastu_room_credits, "unlocks": unlocks}
+
+    if property_name and is_property_unlocked(user, property_name):
+        return {"allowed": True, "via": "property_unlock",
+                "credits": user.astrovastu_room_credits, "unlocks": unlocks}
+
+    if (user.astrovastu_room_credits or 0) > 0:
+        return {"allowed": True, "via": "room_credit",
+                "credits": user.astrovastu_room_credits, "unlocks": unlocks}
+
+    # Fallback to legacy daily free/basic quota
+    legacy = can_use_astrovastu_basic(user)
+    if legacy.get("allowed"):
+        return {"allowed": True, "via": "daily_free_quota",
+                "credits": user.astrovastu_room_credits, "unlocks": unlocks,
+                "used": legacy.get("used"), "limit": legacy.get("limit")}
+
+    return {"allowed": False,
+            "reason": "Buy a Room Check (₹199), 3-Room Bundle (₹499), or Full Home Unlock (₹2,999).",
+            "credits": user.astrovastu_room_credits, "unlocks": unlocks,
+            "via": "none", "upgrade_required": True}
+
+
+def consume_astrovastu_basic_v2(user, property_name: str = "") -> dict:
+    """
+    Phase-2 atomic consume for BASIC. Resolution order matches gate:
+      pro_plan → no charge
+      property_unlock → no charge
+      room_credit → atomic decrement of astrovastu_room_credits
+      daily_free_quota → reuse legacy consume_question
+    """
+    if not user:
+        return {"allowed": False, "reason": "Login required", "via": "none"}
+
+    plan = effective_plan(user)
+    if plan == "pro":
+        return {"allowed": True, "via": "pro_plan",
+                "credits": user.astrovastu_room_credits}
+
+    if property_name and is_property_unlocked(user, property_name):
+        return {"allowed": True, "via": "property_unlock",
+                "credits": user.astrovastu_room_credits}
+
+    # Try room credit (atomic conditional UPDATE)
+    if (user.astrovastu_room_credits or 0) > 0:
+        from models import User as _U
+        result = db.session.execute(
+            update(_U).where(_U.id == user.id)
+            .where(_U.astrovastu_room_credits > 0)
+            .values(astrovastu_room_credits=_U.astrovastu_room_credits - 1)
+        )
+        db.session.commit()
+        if result.rowcount > 0:
+            db.session.refresh(user)
+            return {"allowed": True, "via": "room_credit",
+                    "credits": user.astrovastu_room_credits}
+
+    # Fall back to legacy daily quota (uses consume_question counter)
+    legacy_check = can_use_astrovastu_basic(user)
+    if legacy_check.get("allowed"):
+        consumed = consume_question(user)
+        if consumed.get("allowed"):
+            return {"allowed": True, "via": "daily_free_quota",
+                    "credits": user.astrovastu_room_credits,
+                    "used": consumed.get("used"), "limit": consumed.get("limit")}
+
+    return {"allowed": False,
+            "reason": "Out of credits. Buy a Room Check (₹199), Bundle (₹499), or Full Home Unlock (₹2,999).",
+            "credits": user.astrovastu_room_credits,
+            "upgrade_required": True}
+
+
+def can_use_astrovastu_pro_v2(user, property_name: str = "") -> dict:
+    """
+    Phase-2 gate for PRO multi-room deep-scan. Allows if:
+      - Pro plan (unlimited)
+      - Property unlocked (unlimited for that property — REQUIRES property_name)
+      - Legacy basic plan monthly quota (1/mo)
+    Per-room credits do NOT cover PRO scans (PRO is whole-house).
+    """
+    if not user:
+        return {"allowed": False, "reason": "Login required", "via": "none"}
+
+    plan = effective_plan(user)
+    unlocks = list_unlocked_properties(user)
+
+    if plan == "pro":
+        return {"allowed": True, "via": "pro_plan", "unlocks": unlocks}
+
+    if property_name and is_property_unlocked(user, property_name):
+        return {"allowed": True, "via": "property_unlock", "unlocks": unlocks}
+
+    # Fallback to legacy monthly quota (basic plan gets 1/mo)
+    legacy = can_use_astrovastu_pro(user)
+    if legacy.get("allowed"):
+        return {"allowed": True, "via": "monthly_quota",
+                "used": legacy.get("used"), "limit": legacy.get("limit"),
+                "unlocks": unlocks}
+
+    return {"allowed": False,
+            "reason": "Unlock this property for ₹2,999 (lifetime) or upgrade to Pro plan.",
+            "unlocks": unlocks, "via": "none", "upgrade_required": True}
+
+
+def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
+    """Phase-2 atomic consume for PRO. Mirrors gate resolution order."""
+    if not user:
+        return {"allowed": False, "reason": "Login required", "via": "none"}
+
+    plan = effective_plan(user)
+    if plan == "pro":
+        return {"allowed": True, "via": "pro_plan"}
+
+    if property_name and is_property_unlocked(user, property_name):
+        return {"allowed": True, "via": "property_unlock"}
+
+    # Fallback: legacy monthly quota (atomic via existing consume_astrovastu_pro)
+    consumed = consume_astrovastu_pro(user)
+    if consumed.get("allowed"):
+        return {"allowed": True, "via": "monthly_quota",
+                "used": consumed.get("used"), "limit": consumed.get("limit")}
+
+    return {"allowed": False,
+            "reason": "Unlock this property for ₹2,999 (lifetime) or upgrade to Pro plan.",
+            "upgrade_required": True}
+
+
+def grant_purchase_idempotent(purchase) -> dict:
+    """
+    Apply a paid purchase to the user. Race-safe via a single atomic UPDATE
+    on (id, status='paid', granted=False). Only the row whose UPDATE
+    succeeds (rowcount==1) proceeds to grant credits/unlock. Subsequent
+    callers (concurrent webhook + manual retry) see rowcount==0 and exit
+    cleanly without double-granting.
+    """
+    from models import User as _U, AstroVastuPropertyUnlock, AstroVastuPurchase
+    if not purchase:
+        return {"granted": False, "reason": "missing_purchase"}
+
+    spec = SKU_CATALOG.get(purchase.sku)
+    if not spec:
+        return {"granted": False, "reason": "unknown_sku"}
+
+    if spec["grants"] == "unlock" and not purchase.property_name:
+        return {"granted": False, "reason": "missing_property_name"}
+
+    # ── Atomic claim — only one caller wins ──────────────────────────────
+    claim = db.session.execute(
+        update(AstroVastuPurchase)
+        .where(AstroVastuPurchase.id == purchase.id)
+        .where(AstroVastuPurchase.status == "paid")
+        .where(AstroVastuPurchase.granted.is_(False))
+        .values(granted=True)
+    )
+    if claim.rowcount != 1:
+        # Either another worker already claimed it, or status != 'paid'.
+        db.session.commit()
+        return {"granted": False, "reason": "already_granted_or_not_paid"}
+
+    # We own the grant. Apply side-effects in the same transaction.
+    if spec["grants"] == "credits":
+        db.session.execute(
+            update(_U).where(_U.id == purchase.user_id)
+            .values(astrovastu_room_credits=_U.astrovastu_room_credits + spec["credits"])
+        )
+    else:  # "unlock"
+        # Insert with safe duplicate guard (uq_avpu_user_property handles race
+        # against another grant for same property — extremely rare but covered).
+        try:
+            db.session.add(AstroVastuPropertyUnlock(
+                user_id=purchase.user_id,
+                property_name=purchase.property_name,
+                tier=purchase.sku,
+                order_id=purchase.order_id,
+                amount_paid=purchase.amount,
+            ))
+            db.session.flush()
+        except Exception:
+            db.session.rollback()
+            # Re-claim was already True — leave it; user already has the unlock.
+            return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
+                    "note": "duplicate_unlock_ignored"}
+
+    db.session.commit()
+    return {"granted": True, "sku": purchase.sku, "via": spec["grants"]}

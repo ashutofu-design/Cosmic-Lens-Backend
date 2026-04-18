@@ -44,6 +44,11 @@ class User(db.Model):
     monthly_astrovastu_pro_used  = db.Column(db.Integer, default=0, nullable=False)
     monthly_astrovastu_pro_month = db.Column(db.String(7),  default="", nullable=False)  # YYYY-MM
 
+    # ── AstroVastu one-time room credits (Phase 2 unlock model) ──────────────
+    # 1-room (₹199) grants +1, 3-room bundle (₹499) grants +3. Decrements on each
+    # BASIC scan only when user has neither Pro plan nor unlocked property.
+    astrovastu_room_credits = db.Column(db.Integer, default=0, nullable=False)
+
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -199,6 +204,51 @@ class AstroVastuBasicLog(db.Model):
     __table_args__ = (
         db.Index("ix_avbl_user_created", "user_id", "created_at"),
     )
+
+
+class AstroVastuPropertyUnlock(db.Model):
+    """
+    Phase-2 lifetime per-property unlock for ₹2,999 Full-Home tier (and future
+    Business tiers ₹999/₹1,499/₹2,999). One row per (user, property_name).
+    Once unlocked, that property name has UNLIMITED PRO scans forever — no
+    monthly quota, no room credits consumed.
+    """
+    __tablename__ = "astrovastu_property_unlocks"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    user_id       = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    property_name = db.Column(db.String(120), nullable=False)        # user-chosen label e.g. "Mumbai Flat"
+    tier          = db.Column(db.String(40),  nullable=False, default="full_home_2999")
+    order_id      = db.Column(db.String(200), nullable=True)         # Cashfree order id (Phase 3)
+    amount_paid   = db.Column(db.Integer,     nullable=False, default=0)   # in INR rupees
+    unlocked_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "property_name", name="uq_avpu_user_property"),
+        db.Index("ix_avpu_user_unlocked", "user_id", "unlocked_at"),
+    )
+
+
+class AstroVastuPurchase(db.Model):
+    """
+    Phase-2 transaction log for every AstroVastu one-time payment intent.
+    Status lifecycle: created → paid / failed / expired. The Cashfree webhook
+    (Phase 3) flips status & triggers credit/unlock grant idempotently.
+    """
+    __tablename__ = "astrovastu_purchases"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    user_id       = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                              nullable=False, index=True)
+    sku           = db.Column(db.String(40),  nullable=False)        # 1room_199 / bundle_499 / full_home_2999 / shop_999 / office_1499 / factory_2999
+    amount        = db.Column(db.Integer,     nullable=False)        # INR rupees
+    property_name = db.Column(db.String(120), nullable=True)         # required for unlock-tier SKUs
+    order_id      = db.Column(db.String(200), nullable=True, unique=True)
+    status        = db.Column(db.String(20),  nullable=False, default="created")  # created/paid/failed/expired
+    granted       = db.Column(db.Boolean,     nullable=False, default=False)      # idempotent grant flag
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    paid_at       = db.Column(db.DateTime, nullable=True)
 
 
 class AstroVastuProLog(db.Model):

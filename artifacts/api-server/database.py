@@ -72,6 +72,11 @@ def init_db(app):
                     conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS ix_profiles_deleted_at ON profiles(deleted_at)"
                     ))
+                    # Phase-2 AstroVastu unlock model — one-time room credits column.
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                        "astrovastu_room_credits INTEGER NOT NULL DEFAULT 0"
+                    ))
                     # One-time pre-launch wipe of legacy email/google users.
                     # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
                     if os.environ.get("COSMIC_WIPE_USERS") == "1":

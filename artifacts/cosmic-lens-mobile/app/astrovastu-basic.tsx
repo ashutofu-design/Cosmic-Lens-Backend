@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { API_BASE } from "@/lib/apiConfig";
+import { AstroVastuWallet } from "@/components/AstroVastuWallet";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists — bilingual labels (24-language migration: drop in i18n keys)
@@ -106,6 +107,7 @@ export default function AstroVastuBasicScreen() {
   const [loading, setLoading]         = useState(false);
   const [result, setResult]           = useState<CheckResponse | null>(null);
   const [errInfo, setErrInfo]         = useState<ErrorResponse | null>(null);
+  const [walletKey, setWalletKey]     = useState(0);   // bump to refresh wallet after a scan
 
   const onSubmit = useCallback(async () => {
     if (!user?.id || !user?.api_key) {
@@ -133,6 +135,7 @@ export default function AstroVastuBasicScreen() {
         }
       } else {
         setResult(body as CheckResponse);
+        setWalletKey((k) => k + 1);   // refresh wallet so credit decrement shows
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e: any) {
@@ -166,6 +169,9 @@ export default function AstroVastuBasicScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 80 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── AstroVastu Wallet (Phase 2: credits + buy CTAs) ─────── */}
+        <AstroVastuWallet variant="basic" refreshKey={walletKey} />
+
         {/* ── Intro card ─────────────────────────────────────────────── */}
         <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[styles.cardTitle, { color: C.text }]}>

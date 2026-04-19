@@ -839,7 +839,14 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Test chart: 45 ghatis ishtakaal → Bhava Libra, Hora Cancer (wealth), Ghati Libra (power), Vighati Cancer, Pranapada Capricorn (health), Varnada Pisces
 - **Total special lagnas in LF: 10** (Sree, Indu, Bhrigu Bindu, Karakamsa + 6 new)
 
-### Sprint 37+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 38 — Phase M Sahams Extended ✅ COMPLETE
+- New module: `vedic/tajik/sahams_extended.py` (~110 lines)
+- Phase J (Sprint 35) contributed 30 Sahams covering M1+M2+M3 entirely + 21 of M4
+- **+25 NEW Sahams** added in Phase M: Bhagya, Bhagya-Lord, Asha, Jaya, Soka, Gnyana, Pravasa, Aishwarya, Saubhagya, Tata, Ari, Apamrityu, Vyapara, Manasa, Daiva, Brahma, Vairagya, Vahana, Pasu, Sammoha, Indrayudha, Putrajeeva, Bhratru-vyapara, Kuhu, Jala-patana
+- Computed using same day/night formula switch as Phase J on Varshaphala chart (falls back to natal)
+- **Total Sahams in LF: 55** (30 + 25)
+
+### Sprint 38+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

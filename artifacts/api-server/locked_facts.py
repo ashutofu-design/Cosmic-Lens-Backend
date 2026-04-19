@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-38 / Phase M — Sahams Extended (+25 → 55 total)
+    sahams_m_str = ""
+    try:
+        from vedic.tajik.sahams_extended import (compute_phase_m_extra,  # type: ignore
+                                                   format_phase_m_summary)
+        _sm = compute_phase_m_extra(kundli, birth)
+        sahams_m_str = format_phase_m_summary(_sm)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-M sahams (Sprint-38) failed: {exc}")
+
     # Sprint-37 / Phase L — Special Lagnas (Bhava/Hora/Ghati/Vighati/Pranapada/Varnada)
     lagnas_l_str = ""
     try:
@@ -951,6 +961,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_j_str,
         avashtas_str,
         lagnas_l_str,
+        sahams_m_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

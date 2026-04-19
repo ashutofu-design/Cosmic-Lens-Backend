@@ -1497,6 +1497,23 @@ def _classify_general_submode(question: str) -> str:
     return "explain"
 
 
+def _classify_mode_with_reason(question: str) -> tuple[str, str]:
+    """Returns (mode, human-readable-reason). mode is 'astro' or 'general'."""
+    if not question:
+        return ("astro", "empty question → default astro")
+    q_raw = question
+    q = question.lower()
+    matched_concept  = [s for s in _GENERAL_CONCEPT_SIGNALS if s in q or s in q_raw]
+    matched_personal = [s for s in _PERSONAL_PREDICT_SIGNALS if s in q or s in q_raw]
+    if matched_concept and not matched_personal:
+        return ("general", f"concept signal(s) matched={matched_concept[:3]} "
+                           f"AND no personal signals")
+    if matched_personal:
+        return ("astro", f"personal signal(s) matched={matched_personal[:3]} "
+                         f"(concept matched={matched_concept[:3]})")
+    return ("astro", "no general signals → default astro")
+
+
 def _classify_mode(question: str) -> str:
     """Returns 'astro' or 'general'."""
     if not question:
@@ -1718,6 +1735,31 @@ def _derive_follow_ups(topic: str, lang: str) -> list[str]:
     return list(by_lang.get(eff) or by_lang["hn"])[:3]
 
 
+_ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
+
+
+def _short_id() -> str:
+    import uuid
+    return uuid.uuid4().hex[:8]
+
+
+def _trace(req_id: str, step: str, info: Any) -> None:
+    """Unified per-request debug trace. Set env ASK_DEBUG=0 to silence."""
+    if not _ASK_DEBUG:
+        return
+    try:
+        if isinstance(info, str):
+            body = info
+        else:
+            import json as _json
+            body = _json.dumps(info, ensure_ascii=False, default=str)
+    except Exception:
+        body = repr(info)
+    if len(body) > 1200:
+        body = body[:1200] + f"...(+{len(body)-1200} chars)"
+    print(f"[ask:{req_id}] {step}: {body}", flush=True)
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
            birth: Any = None, history: list | None = None,
            preferred_language: Optional[str] = None) -> dict:
@@ -1725,6 +1767,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     Returns: { text, topic, confidence, source, follow_ups }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
     """
+    req_id = _short_id()
+    has_planets_in = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    has_dasha_in   = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
+    _trace(req_id, "1.RAW_INPUT", {
+        "question": question,
+        "lang_param": lang,
+        "preferred_language": preferred_language,
+        "reply_idx": reply_idx,
+        "history_len": len(history or []),
+        "history_last_roles": [h.get("role") for h in (history or [])[-4:]],
+        "kundli.has_planets": has_planets_in,
+        "kundli.has_dasha":   has_dasha_in,
+        "kundli.planet_count": len((kundli or {}).get("planets") or []) if has_planets_in else 0,
+        "birth.has_coords":   isinstance(birth, dict) and birth.get("lat") is not None,
+    })
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
     # calling the LLM at all. Cheap, deterministic, never leaks chart data.
     if _is_brand_unsafe(question):
@@ -1744,7 +1801,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # failure mode for an astrology app's credibility. General-mode concept
     # questions ("kp vs vedic kya hai") don't need a chart and skip this.
     has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
-    if not has_planets and _classify_mode(question) == "astro":
+    _early_mode, _early_reason = _classify_mode_with_reason(question)
+    if not has_planets and _early_mode == "astro":
+        _trace(req_id, "2.MODE_DETECT",
+               {"mode": _early_mode, "reason": _early_reason,
+                "next": "no_chart_failsafe (no planets + astro mode)"})
         eff_lang = _resolve_response_lang(question, lang, preferred_language)
         no_chart_msg = {
             "en": ("Beta, your full birth-chart isn't with me yet — without it I cannot honestly predict timing or specifics. "
@@ -1770,8 +1831,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     topic = _classify_topic(question)
-    mode  = _classify_mode(question)
-    print(f"[ai_ask] mode={mode} topic={topic} q='{question[:60]}'")
+    mode, mode_reason = _classify_mode_with_reason(question)
+    _trace(req_id, "2.MODE_DETECT", {
+        "mode": mode, "topic": topic, "reason": mode_reason,
+        "follow_up_inherits_mode": False,
+        "note": "mode is RECLASSIFIED every turn from current question only — "
+                "history influences ONLY marriage topic-stickiness below",
+    })
 
     # ── TOPIC STICKINESS for marriage follow-ups ─────────────────────────────
     # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" don't
@@ -1820,6 +1886,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         presence_penalty  = 0.2
         frequency_penalty = 0.2
 
+    # ── Step 3: PROMPT trace — what we actually send to the model ────────────
+    _trace(req_id, "3.PROMPT", {
+        "model": model, "temperature": temperature,
+        "presence_penalty": presence_penalty,
+        "frequency_penalty": frequency_penalty,
+        "message_count": len(messages),
+        "roles": [m["role"] for m in messages],
+        "system_preview": (messages[0]["content"][:600] if messages else ""),
+        "user_preview":   (messages[-1]["content"][:400] if messages else ""),
+        "kundli_injected_in_prompt": (
+            mode == "astro"
+            and any("BIRTH CHART" in (m.get("content") or "")
+                    or "kundli" in (m.get("content") or "").lower()
+                    for m in messages)
+        ),
+    })
+
     def _call_once() -> str:
         try:
             r = client.chat.completions.create(
@@ -1839,6 +1922,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         return t
 
     text = _call_once()
+    _trace(req_id, "4.RAW_AI_RESPONSE", text)
 
     # ── General-mode validators (chart-leak + strict structure) ──────────────
     # Two independent checks for general (non-astro) replies:
@@ -1850,12 +1934,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if mode == "general":
         leaks  = _general_reply_leaks_chart(text)
         broken = _general_reply_violates_structure(text)
+        _trace(req_id, "4b.VALIDATORS",
+               {"chart_leak": leaks, "structure_violation": broken,
+                "regenerate": bool(leaks or broken)})
         if leaks or broken:
             why = []
             if leaks:  why.append("chart-leak")
             if broken: why.append("structure-violation")
-            print(f"[ai_ask] general-mode regen ({'+'.join(why)}) — "
-                  f"snippet: {text[:80]!r}")
             override_lines = ["\n\n=== HARD OVERRIDE — REGENERATE ==="]
             if leaks:
                 override_lines.append(
@@ -1882,12 +1967,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 "content": messages[0]["content"] + "\n".join(override_lines),
             }
             text = _call_once()
+            _trace(req_id, "4c.RAW_AI_REGEN", text)
 
     # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
     # The single-call marriage path uses a pre-baked, fact-locked answer from
     # marriage_engine.format_final_answer(), so no validator retry is needed:
     # the model is only polishing wording, not deciding facts.
+    pre_scrub = text
     text = _scrub_brand_tone(text)
+    if pre_scrub != text:
+        _trace(req_id, "4d.SCRUBBER_CHANGED", {
+            "before_preview": pre_scrub[:200],
+            "after_preview":  text[:200],
+        })
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")
 
@@ -1907,12 +1999,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         confidence = 0.55
 
     eff_lang = _resolve_response_lang(question, lang, preferred_language)
+    follow_ups = _derive_follow_ups(topic, eff_lang)
+    _trace(req_id, "5.FINAL_OUTPUT", text)
+    _trace(req_id, "6.FOLLOW_UPS", {
+        "topic": topic, "lang": eff_lang, "items": follow_ups,
+        "behavior": "follow-up chips are deterministic per (topic, lang); "
+                    "the NEXT user turn is reclassified independently — "
+                    "mode does NOT inherit from this turn",
+    })
     return {
         "text":       text,
         "topic":      topic,
         "confidence": confidence,
         "source":     "openai",
-        "follow_ups": _derive_follow_ups(topic, eff_lang),
+        "follow_ups": follow_ups,
     }
 
 
@@ -1928,8 +2028,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                   birth: Any = None, history: list | None = None,
                   preferred_language: Optional[str] = None):
+    req_id = _short_id()
+    _trace(req_id, "1.RAW_INPUT(stream)", {
+        "question": question, "lang_param": lang,
+        "preferred_language": preferred_language, "reply_idx": reply_idx,
+        "history_len": len(history or []),
+        "kundli.has_planets": isinstance(kundli, dict) and bool(kundli.get("planets")),
+        "kundli.has_dasha":   isinstance(kundli, dict) and bool(kundli.get("currentDasha")),
+    })
     # Brand-safety gate — non-streamable.
     if _is_brand_unsafe(question):
+        _trace(req_id, "2.MODE_DETECT", {"path": "brand_guard → oneshot"})
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}
@@ -1938,6 +2047,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # No chart — non-streamable fail-safe.
     has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
     if not has_planets:
+        _trace(req_id, "2.MODE_DETECT", {"path": "no_chart_failsafe → oneshot"})
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}
@@ -1945,8 +2055,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
 
     # Mode + topic classification — same logic as ai_ask.
     topic = _classify_topic(question)
-    mode  = _classify_mode(question)
-    print(f"[ai_ask_stream] mode={mode} topic={topic} q='{question[:60]}'")
+    mode, mode_reason = _classify_mode_with_reason(question)
+    _trace(req_id, "2.MODE_DETECT", {
+        "mode": mode, "topic": topic, "reason": mode_reason,
+        "follow_up_inherits_mode": False,
+    })
 
     try:
         if mode == "astro" and topic != "marriage" and _detect_marriage_constraint(question, history or []):
@@ -1968,6 +2081,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # concept question (which is exactly what we must prevent).
     if mode == "general":
         topic = "general"
+        _trace(req_id, "2b.ROUTE", "general → ai_ask oneshot (validators run)")
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}
@@ -1976,6 +2090,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Marriage astro path — deterministic engine; one-shot to preserve
     # fact-locked window echoing. Streaming a baked answer adds no value.
     if mode == "astro" and topic == "marriage":
+        _trace(req_id, "2b.ROUTE", "astro+marriage → ai_ask oneshot "
+                                    "(deterministic engine)")
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}
@@ -1992,6 +2108,16 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         preferred_language=preferred_language,
         mode=mode,
     )
+    _trace(req_id, "3.PROMPT(stream)", {
+        "model": model, "message_count": len(messages),
+        "roles": [m["role"] for m in messages],
+        "system_preview": (messages[0]["content"][:600] if messages else ""),
+        "user_preview":   (messages[-1]["content"][:400] if messages else ""),
+        "kundli_injected_in_prompt": any(
+            "BIRTH CHART" in (m.get("content") or "")
+            or "kundli" in (m.get("content") or "").lower()
+            for m in messages),
+    })
 
     raw_chunks: list[str] = []
     try:
@@ -2019,8 +2145,14 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     raw_text = ("".join(raw_chunks)).strip()
     if not raw_text:
         raise RuntimeError("OpenAI returned empty stream")
+    _trace(req_id, "4.RAW_AI_RESPONSE(stream)", raw_text)
 
     final_text = _scrub_brand_tone(raw_text)
+    if raw_text != final_text:
+        _trace(req_id, "4d.SCRUBBER_CHANGED(stream)", {
+            "before_preview": raw_text[:200],
+            "after_preview":  final_text[:200],
+        })
     if not final_text:
         raise RuntimeError("OpenAI returned empty after scrub")
 
@@ -2036,13 +2168,21 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         confidence = 0.55
 
     eff_lang = _resolve_response_lang(question, lang, preferred_language)
+    follow_ups = _derive_follow_ups(topic, eff_lang)
+    _trace(req_id, "5.FINAL_OUTPUT(stream)", final_text)
+    _trace(req_id, "6.FOLLOW_UPS(stream)", {
+        "topic": topic, "lang": eff_lang, "items": follow_ups,
+        "behavior": "follow-up chips are deterministic per (topic, lang); "
+                    "the NEXT user turn is reclassified independently — "
+                    "mode does NOT inherit from this turn",
+    })
     yield {
         "kind":       "final",
         "text":       final_text,
         "topic":      topic,
         "confidence": confidence,
         "source":     "openai_stream",
-        "follow_ups": _derive_follow_ups(topic, eff_lang),
+        "follow_ups": follow_ups,
     }
 
 

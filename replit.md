@@ -730,6 +730,19 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - **Shoola yoga** (Nabhasa Aakriti — Trident) — all 7 grahas in 3 consecutive houses
 - Test on chart: 4 classical + 6 extra yogas detected (Vimala, Dhana 9L+11L, Pasha-Nabhasa-Sankhya, Papakartari, Mridanga-Aakriti, BPHS lord-yogas, Hamsa-Pancha-Mahapurusha for Jupiter exalted in 4H, plus Hari + Hara + Adhi multi-hits) — chart-specific, no Indra/Shoola/Neech-Bhanga (configurations not present)
 
+### Sprint 30.5 — Phase D Tier 4 Doshas (15+) ✅ AUDIT-COMPLETE
+- Verified all 8 requested D1-D8 items + 7 bonus already implemented (Sprints 14, 20)
+- **D1 Kaal Sarp 12 types** ✅ (`classical_yogas.py` 12-named + `dosh_engine._kaal_sarp` Full/Partial)
+- **D2 Pitra Dosh 3 BPHS rules** ✅ (`dosh_deep.pitra_dosh_full` rules a/b/c)
+- **D3 Guru Chandal Yog** ✅ (full Jup-Rahu + Jup-Ketu mild + Rahu-aspects partial)
+- **D4 Nadi Dosh** ✅ (`dosh_deep.nadi_dosh_marker` Aadi/Madhya/Antya nakshatra)
+- **D5 Kantaka Shani** ✅ (`dosh_deep.kantaka_shani` Saturn 1/4/7/10 from natal Moon) + Ashtama Shani bonus
+- **D6 Shrapit Dosh** ✅ (Sat-Rahu conj + aspect partial + close-degrees mild)
+- **D7 Vish Yog** ✅ (`dosh_deep.vish_yog_deep` Sat+Moon close conj/aspect)
+- **D8 Angarak Yog** ✅ (Mars-Rahu conj + 30° mild)
+- **Bonuses**: Mangal Dosh (Lagna+Moon+Venus refs, with cancellation rules), Sade-Sati 3-phase (Rising/Peak/Setting), Grahan deep (4 sub-types), Kemadruma graded, Daridra (3 grades), Karaka doshas (Bhratri/Pitra/Shukra/Putra)
+- Test on chart: 8 doshas surfaced including Ashtama Shani HIGH, Shukra Dosh HIGH, Mangal cancelled (Mars in own Scorpio)
+
 ### Sprint 31 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas

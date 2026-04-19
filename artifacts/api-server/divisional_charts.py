@@ -928,3 +928,241 @@ def format_subtle_vargas_summary(d30, d40, d45, d60, intel, planets):
             if s.get("atma_karaka_d60_sign"):
                 lines.append(f"   ▸ Atma Karaka ({s['atma_karaka']}) lands in {s['atma_karaka_d60_sign']} in D60 — {s['atma_karaka_d60_strength']} (soul-signature)")
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPRINT-12 — Per-varga deep analysis
+#   1) Vargottama Matrix    — full table of where each planet is vargottama
+#                             across all 15 vargas (D1..D60). Vargottama gives
+#                             exceptional strength (Parashara: "as if exalted").
+#   2) Shadvarga Bala       — classical 20-point composite strength score per
+#                             planet using 6 vargas (D1=6, D2=2, D3=4, D9=5,
+#                             D12=2, D30=1) with own/exalt/friend tier weights.
+#   3) Varga-Lagna-Lord     — for D9/D10/D24/D60, identifies varga's own
+#                             lagna sign + its lord + where the lord sits IN
+#                             that varga (overall varga "trustworthiness").
+#
+# Reference: BPHS Ch. 7 (Vargas) + Ch. 27 (Shadbala / Vimshopaka).
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Naisargika (natural) friendship table — Friend / Neutral / Enemy ───────
+_FRIEND = {
+    "Sun":     {"Moon","Mars","Jupiter"},
+    "Moon":    {"Sun","Mercury"},
+    "Mars":    {"Sun","Moon","Jupiter"},
+    "Mercury": {"Sun","Venus"},
+    "Jupiter": {"Sun","Moon","Mars"},
+    "Venus":   {"Mercury","Saturn"},
+    "Saturn":  {"Mercury","Venus"},
+}
+_NEUTRAL = {
+    "Sun":     {"Mercury"},
+    "Moon":    {"Mars","Jupiter","Venus","Saturn"},
+    "Mars":    {"Venus","Saturn"},
+    "Mercury": {"Mars","Jupiter","Saturn"},
+    "Jupiter": {"Saturn"},
+    "Venus":   {"Mars","Jupiter"},
+    "Saturn":  {"Jupiter"},
+}
+_ENEMY = {
+    "Sun":     {"Venus","Saturn"},
+    "Moon":    set(),
+    "Mars":    {"Mercury"},
+    "Mercury": {"Moon"},
+    "Jupiter": {"Mercury","Venus"},
+    "Venus":   {"Sun","Moon"},
+    "Saturn":  {"Sun","Moon","Mars"},
+}
+
+# Shadvarga weights (totals to 20)
+_SHADVARGA_WEIGHTS = {"D1": 6, "D2": 2, "D3": 4, "D9": 5, "D12": 2, "D30": 1}
+
+
+def _planet_in_sign_tier(planet_name: str, sign_idx: int) -> str:
+    """Returns one of: OWN, EXALTED, FRIEND, NEUTRAL, ENEMY, DEBILITATED."""
+    EXALT = {"Sun":0,"Moon":1,"Mars":9,"Mercury":5,"Jupiter":3,"Venus":11,"Saturn":6}
+    DEBIL = {"Sun":6,"Moon":7,"Mars":3,"Mercury":11,"Jupiter":9,"Venus":5,"Saturn":0}
+    OWN   = {"Sun":[4],"Moon":[3],"Mars":[0,7],"Mercury":[2,5],
+             "Jupiter":[8,11],"Venus":[1,6],"Saturn":[9,10]}
+    if EXALT.get(planet_name) == sign_idx: return "EXALTED"
+    if DEBIL.get(planet_name) == sign_idx: return "DEBILITATED"
+    if sign_idx in OWN.get(planet_name, []): return "OWN"
+    sign_lord = _LORD_OF.get(sign_idx)
+    if sign_lord and planet_name in _FRIEND:
+        if sign_lord in _FRIEND[planet_name]:  return "FRIEND"
+        if sign_lord in _NEUTRAL[planet_name]: return "NEUTRAL"
+        if sign_lord in _ENEMY[planet_name]:   return "ENEMY"
+    return "NEUTRAL"
+
+
+_TIER_WEIGHT_FACTOR = {
+    "EXALTED":     1.00,
+    "OWN":         1.00,
+    "FRIEND":      0.50,
+    "NEUTRAL":     0.25,
+    "ENEMY":       0.0625,
+    "DEBILITATED": 0.00,
+}
+
+
+def compute_vargottama_matrix(planets, lagna_lon=None):
+    """Computes a full vargottama matrix across all 15 vargas.
+    Returns: { planet: { 'count': int, 'vargas': [varga_label,...] } }
+    A planet is 'truly powerful' if vargottama in 5+ vargas.
+    """
+    if not planets:
+        return {}
+    # All varga mappers
+    mappers = [
+        ("D1",  _sign_idx_from_lon),
+        ("D2",  _hora_sign),
+        ("D3",  _drekkana_sign),
+        ("D7",  _saptamsa_sign),
+        ("D9",  _navamsa_sign),
+        ("D10", _dasamsa_sign),
+        ("D12", _dwadasamsa_sign),
+        ("D16", _shodasamsa_sign),
+        ("D20", _vimsamsa_sign),
+        ("D24", _chaturvimsamsa_sign),
+        ("D27", _bhamsa_sign),
+        ("D30", _trimsamsa_sign),
+        ("D40", _khavedamsa_sign),
+        ("D45", _akshavedamsa_sign),
+        ("D60", _shashtyamsa_sign),
+    ]
+    out = {}
+    for p in planets:
+        n   = (p.get("name") or "").strip()
+        lon = p.get("longitude") or p.get("lon")
+        if not n or lon is None or n in ("Rahu","Ketu",""):
+            continue
+        d1_idx = _sign_idx_from_lon(float(lon))
+        hits = []
+        for label, mapper in mappers:
+            try:
+                if mapper(float(lon)) == d1_idx:
+                    hits.append(label)
+            except Exception:
+                pass
+        if len(hits) >= 2:   # at least D1 + one more is meaningful
+            out[n] = {"count": len(hits), "vargas": hits}
+    return out
+
+
+def compute_shadvarga_bala(planets):
+    """Shadvarga Bala — classical 20-point composite strength (Parashara).
+    Returns: { planet: {'score': float (0-20), 'verdict': str, 'breakdown': {varga: tier} } }
+    """
+    if not planets:
+        return {}
+    mappers = {
+        "D1":  _sign_idx_from_lon, "D2":  _hora_sign,
+        "D3":  _drekkana_sign,    "D9":  _navamsa_sign,
+        "D12": _dwadasamsa_sign,  "D30": _trimsamsa_sign,
+    }
+    out = {}
+    for p in planets:
+        n   = (p.get("name") or "").strip()
+        lon = p.get("longitude") or p.get("lon")
+        if not n or lon is None or n in ("Rahu","Ketu",""):
+            continue
+        score = 0.0
+        breakdown = {}
+        for vname, mapper in mappers.items():
+            try:
+                d_idx = mapper(float(lon))
+                tier  = _planet_in_sign_tier(n, d_idx)
+                w     = _SHADVARGA_WEIGHTS[vname]
+                pts   = w * _TIER_WEIGHT_FACTOR[tier]
+                score += pts
+                breakdown[vname] = tier
+            except Exception:
+                pass
+        score = round(score, 2)
+        if   score >= 16: verdict = "VERY-STRONG"
+        elif score >= 11: verdict = "STRONG"
+        elif score >= 6:  verdict = "MEDIUM"
+        elif score >= 3:  verdict = "WEAK"
+        else:             verdict = "VERY-WEAK"
+        out[n] = {"score": score, "verdict": verdict, "breakdown": breakdown}
+    return out
+
+
+def compute_varga_lagna_lords(planets, lagna_lon, intel):
+    """For top-4 vargas (D9/D10/D24/D60): the varga's own lagna-lord placement.
+    Returns: { 'D9': {lagna_sign, lord, lord_in_sign, lord_strength}, ... }
+    """
+    out = {}
+    if lagna_lon is None:
+        return out
+    spec = {
+        "D9":  (_navamsa_sign,        "marriage/dharma"),
+        "D10": (_dasamsa_sign,        "career"),
+        "D24": (_chaturvimsamsa_sign, "education"),
+        "D60": (_shashtyamsa_sign,    "past-life karma"),
+    }
+    # Look up _dasamsa_sign — defined inline if not present
+    for vname, (mapper, theme) in spec.items():
+        try:
+            v_lagna_idx = mapper(float(lagna_lon))
+        except Exception:
+            continue
+        v_lagna_sign = _SIGN_NAMES[v_lagna_idx]
+        v_lagna_lord = _LORD_OF.get(v_lagna_idx)
+        if not v_lagna_lord:
+            continue
+        # Find lord's longitude
+        lord_lon = None
+        for p in (planets or []):
+            if (p.get("name") or "").strip() == v_lagna_lord:
+                lord_lon = p.get("longitude") or p.get("lon")
+                break
+        if lord_lon is None:
+            continue
+        try:
+            lord_v_idx = mapper(float(lord_lon))
+        except Exception:
+            continue
+        out[vname] = {
+            "theme": theme,
+            "lagna_sign": v_lagna_sign,
+            "lord": v_lagna_lord,
+            "lord_in_sign": _SIGN_NAMES[lord_v_idx],
+            "lord_strength": _planet_d_strength(v_lagna_lord, lord_v_idx),
+        }
+    return out
+
+
+def format_varga_deep_summary(planets, lagna_lon, intel):
+    """Compact LOCKED FACTS block for Sprint-12 deep analysis."""
+    lines = []
+
+    # 1) Vargottama matrix — top planets
+    vm = compute_vargottama_matrix(planets, lagna_lon)
+    if vm:
+        lines.append("▸ VARGOTTAMA MATRIX (planets vargottama in multiple vargas — exceptional strength):")
+        # Sort by count desc
+        ranked = sorted(vm.items(), key=lambda kv: -kv[1]["count"])
+        for n, info in ranked[:6]:
+            vlist = ", ".join(info["vargas"])
+            tag = "EXCEPTIONAL" if info["count"] >= 5 else ("STRONG" if info["count"] >= 3 else "NOTABLE")
+            lines.append(f"   ▸ {n}: vargottama in {info['count']} vargas ({vlist}) — {tag}")
+
+    # 2) Shadvarga Bala — composite 20-point score
+    sb = compute_shadvarga_bala(planets)
+    if sb:
+        lines.append("▸ SHADVARGA BALA (composite strength 0-20 across D1+D2+D3+D9+D12+D30):")
+        ranked = sorted(sb.items(), key=lambda kv: -kv[1]["score"])
+        for n, info in ranked:
+            lines.append(f"   ▸ {n}: {info['score']}/20 — {info['verdict']}")
+
+    # 3) Varga-lagna-lord deep dive
+    vll = compute_varga_lagna_lords(planets, lagna_lon, intel)
+    if vll:
+        lines.append("▸ VARGA-LAGNA-LORDS (lord of each varga's own lagna placed IN that varga):")
+        for vname, info in vll.items():
+            lines.append(
+                f"   ▸ {vname} lagna {info['lagna_sign']} → lord {info['lord']} "
+                f"in {info['lord_in_sign']} ({info['lord_strength']}) — {info['theme']}"
+            )
+    return "\n".join(lines)

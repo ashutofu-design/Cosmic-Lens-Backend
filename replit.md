@@ -343,3 +343,29 @@ All within token budget.
 
 **🎉 STANDARD SHODASHVARGA (16-VARGA SET) NOW COMPLETE:**
 D1 + D2 + D3 + D7 + D9 + D10 + D12 + D16 + D20 + D24 + D27 + D30 + D40 + D45 + D60 (15 of standard 16; D4 Chaturthamsa optional). All wired into LOCKED FACTS. All have deterministic citation guarantees for their respective topics via post-injectors.
+
+## Sprint 12 — Per-varga Deep Analysis: Vargottama Matrix + Shadvarga Bala + Varga-Lagna-Lord (DONE)
+
+**Three new engines** in `divisional_charts.py`:
+
+1. **`compute_vargottama_matrix()`** — for each planet, scans all 15 vargas (D1..D60) and lists every varga where D1_sign == DN_sign. Tags planets: NOTABLE (≥2), STRONG (≥3), EXCEPTIONAL (≥5). Vargottama = "as if exalted" per Parashara.
+2. **`compute_shadvarga_bala()`** — classical 20-point composite strength using 6 vargas (D1=6, D2=2, D3=4, D9=5, D12=2, D30=1) with tier-weight factors (Own/Exalt=1.0, Friend=0.5, Neutral=0.25, Enemy=0.0625, Debilitated=0). Returns score + verdict (VERY-STRONG ≥16 / STRONG ≥11 / MEDIUM ≥6 / WEAK ≥3 / VERY-WEAK <3).
+3. **`compute_varga_lagna_lords()`** — for D9/D10/D24/D60: identifies each varga's own lagna sign + that lagna's lord + where the lord sits IN that varga (overall varga-trustworthiness signal).
+
+Naisargika (natural) friendship table added (Friend/Neutral/Enemy per planet pair).
+
+**LOCKED FACTS:** `deep_div_str` block now exposes Vargottama matrix (top 6 planets), full Shadvarga Bala leaderboard, and varga-lagna-lord placements.
+
+**Rule T** added to FINAL REMINDERS.
+
+**Smart deterministic post-injector:** scans answer text for planet names; if a mentioned planet is vargottama in 5+ vargas OR has Shadvarga Bala VERY-STRONG/VERY-WEAK, appends one-line "Deep-strength signal" clause. Skips if already cited (via `vargottam` / `shadvarga|shad-bala` regex).
+
+**Smoke test:** Sun-question on test chart (Sun=2.12/20 VERY-WEAK) correctly auto-cited "Sun Shadvarga Bala 2.12/20 (VERY-WEAK)". Venus (STRONG-only) and Saturn (WEAK-only) questions correctly skipped citation — no spam, only genuine exceptional signals enriched.
+
+**Coverage status:**
+- ✅ All 15 vargas (Shodashvarga set) wired
+- ✅ Topic-specific deterministic citation for 8 vargas (D2/D3/D7/D12/D16/D20/D24/D27/D30/D40/D45/D60)
+- ✅ Per-planet composite strength + vargottama signals
+- ⏳ Sprint 13: Argala + Virodhargala (Jaimini intervention/obstruction)
+- ⏳ Sprint 14: Sthira + Niryana Shoola dashas
+- ⏳ Sprint 15: Per-varga yoga/dosha detection

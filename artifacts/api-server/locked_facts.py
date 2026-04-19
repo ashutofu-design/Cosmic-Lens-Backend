@@ -378,6 +378,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] subtle vargas (D30/D40/D45/D60) failed: {exc}")
 
+    # Sprint-12 — Per-varga deep: Vargottama matrix + Shadvarga Bala + Varga-lagna-lord
+    deep_div_str = ""
+    try:
+        from divisional_charts import format_varga_deep_summary  # type: ignore
+        deep_div_str = format_varga_deep_summary(
+            kundli.get("planets") or [], lagna_lon, intel
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] varga deep (Sprint-12) failed: {exc}")
+
     # Sprint-7 — Jaimini Arudha Padas (A1-A12) + Upapada Lagna (UL)
     jm_str = ""
     try:
@@ -501,6 +511,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         extra_div_str,
         adv_div_str,
         subtle_div_str,
+        deep_div_str,
         tr_str,
         _format_dasha_block(kundli),
         pd_str,

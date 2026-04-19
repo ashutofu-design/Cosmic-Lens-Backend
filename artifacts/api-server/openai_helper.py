@@ -1608,6 +1608,19 @@ def _build_messages(
             "(Parashara's most-prized varga). Skip otherwise."
         )
 
+    # Sprint-12 Rule T — Per-varga deep signals (Vargottama matrix + Shadvarga Bala)
+    has_vargottama = "VARGOTTAMA MATRIX" in lf
+    has_shadvarga  = "SHADVARGA BALA"    in lf
+    if has_vargottama or has_shadvarga:
+        reminder_lines.append(
+            "• 🔱 VARGOTTAMA / SHADVARGA BALA reinforcement (Rule T): when you mention "
+            "a SPECIFIC planet by name in your answer, if that planet appears in the "
+            "'VARGOTTAMA MATRIX' block with 5+ vargas OR has Shadvarga Bala ≥16 (VERY-STRONG) "
+            "OR ≤5 (VERY-WEAK), weave ONE short clause about that signal — e.g., "
+            "'Mars vargottama in 6 vargas (exceptional strength)' or 'Saturn Shadvarga "
+            "Bala 4/20 (very weak — limits houses it owns)'. Use sparingly — max 2 such clauses."
+        )
+
     # Sprint-8 Rule P — Chara Dasha cross-check for TIMING questions
     has_chara = "JAIMINI CHARA DASHA" in lf
     timing_topics = {"marriage", "career", "finance", "child", "general"}
@@ -3389,6 +3402,53 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
         except Exception as _exc:
             print(f"[ai_ask] subtle vargas (D30/D40/D45/D60) post-inject failed: {_exc}")
+
+    # Sprint-12 Rule T — DETERMINISTIC Vargottama / Shadvarga Bala reinforcement.
+    # If model mentioned a specific planet by name AND that planet is exceptional
+    # (vargottama in 5+ vargas) OR very-strong/very-weak in Shadvarga Bala,
+    # append one short clause naming that signal. Skip if already cited.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re4
+            from divisional_charts import (compute_vargottama_matrix,  # type: ignore
+                                           compute_shadvarga_bala)
+            _planets_q4 = kundli.get("planets") or []
+            _lg_q4 = kundli.get("lagna") or kundli.get("ascendant")
+            _lagna_lon4 = _lg_q4.get("longitude") or _lg_q4.get("lon") if isinstance(_lg_q4, dict) else None
+            _vm = compute_vargottama_matrix(_planets_q4, _lagna_lon4) or {}
+            _sb = compute_shadvarga_bala(_planets_q4) or {}
+
+            # Already cited?
+            already_vm = bool(_re4.search(r"(?i)vargottam", text or ""))
+            already_sb = bool(_re4.search(r"(?i)shadvarga|shad[\s\-]?bala", text or ""))
+
+            clauses = []
+            # Vargottama clause — pick top planet that is mentioned in answer with 5+ vargas
+            if not already_vm:
+                for n, info in sorted(_vm.items(), key=lambda kv: -kv[1]["count"]):
+                    if info["count"] >= 5 and _re4.search(rf"\b{n}\b", text or ""):
+                        clauses.append(
+                            f"{n} vargottama in {info['count']} vargas "
+                            f"(exceptional natural strength)"
+                        )
+                        break
+            # Shadvarga clause — pick a mentioned planet that is VERY-STRONG or VERY-WEAK
+            if not already_sb:
+                for n, info in _sb.items():
+                    if info["verdict"] in ("VERY-STRONG", "VERY-WEAK") \
+                       and _re4.search(rf"\b{n}\b", text or ""):
+                        clauses.append(
+                            f"{n} Shadvarga Bala {info['score']}/20 ({info['verdict']})"
+                        )
+                        break
+
+            if clauses:
+                text = (text or "").rstrip() + (
+                    f"\n\nDeep-strength signal: "
+                    + "; ".join(clauses) + "."
+                )
+        except Exception as _exc:
+            print(f"[ai_ask] varga deep (Sprint-12) post-inject failed: {_exc}")
 
     # Sprint-8 Rule P — DETERMINISTIC CHARA DASHA INJECTION (last-resort).
     # Append a Chara MD/AD line for marriage answers OR any timing question

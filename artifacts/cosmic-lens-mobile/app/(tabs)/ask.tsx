@@ -67,8 +67,8 @@ export default function AskScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 
-  // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
-  const [mode, setMode] = useState<"chat" | null>(null);
+  // Mode picker: null = show landing, "chat" = Acharya chat, "prashna" = KP 1-249 horary
+  const [mode, setMode] = useState<"chat" | "prashna" | null>(null);
 
   const [messages, setMessages] = useState<Message[]>(() =>
     showDemo
@@ -82,6 +82,7 @@ export default function AskScreen() {
         ]
   );
   const [input, setInput] = useState("");
+  const [prashnaNumber, setPrashnaNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [quotaModal, setQuotaModal] = useState<null | {
     used: number;
@@ -96,6 +97,99 @@ export default function AskScreen() {
   }, []);
 
   useEffect(() => { scrollToEnd(); }, [messages]);
+
+  const sendPrashna = useCallback(
+    async (numStr: string, qText: string) => {
+      if (loading) return;
+      const n = parseInt(numStr, 10);
+      if (!Number.isFinite(n) || n < 1 || n > 249) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: "assistant",
+          text: "⚠️ Number 1 se 249 ke beech hona chahiye. Mann shant karke ek sankhya sochiye.",
+        }]);
+        return;
+      }
+      if (showDemo) { router.push("/onboarding"); return; }
+
+      const userMsg: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        text: `🔢 Sankhya: ${n}${qText.trim() ? ` — ${qText.trim()}` : ""}`,
+      };
+      const thinkMsg: Message = { id: "thinking", role: "assistant", text: "", loading: true };
+      setMessages(prev => [...prev, userMsg, thinkMsg]);
+      setPrashnaNumber("");
+      setInput("");
+      setLoading(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (user?.api_key) headers["X-API-Key"] = user.api_key;
+
+        const res = await apiFetch(`${API_BASE}/api/prashna/number-ask`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            number: n,
+            question: qText.trim(),
+            user_id: user?.id,
+          }),
+        });
+        const json = await res.json().catch(() => ({} as any));
+
+        if (res.status === 402) {
+          setMessages(prev => prev.filter(m => m.id !== "thinking" && m.id !== userMsg.id));
+          setPrashnaNumber(numStr);
+          setInput(qText);
+          setQuotaModal({
+            used:    json?.quota?.used  ?? 0,
+            limit:   json?.quota?.limit ?? 0,
+            plan:    json?.plan         ?? "free",
+            message: json?.message      ?? t.askDailyLimitOver,
+          });
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
+          return;
+        }
+
+        const v = json?.verdict;
+        const c = json?.caution;
+        let answer = "";
+        if (v) {
+          answer += `${v.label_hi || v.label || ""}\n${v.meaning || ""}\n`;
+        }
+        if (json?.timing) answer += `\n⏰ ${json.timing}`;
+        if (Array.isArray(json?.cusp_analysis) && json.cusp_analysis.length) {
+          const cuspLines = json.cusp_analysis.slice(0, 3).map((cu: any) =>
+            `• Bhav ${cu.house}: ${cu.sub_lord || ""}${cu.verdict_note ? ` — ${cu.verdict_note}` : ""}`
+          ).join("\n");
+          if (cuspLines) answer += `\n\n📊 Cusp Analysis:\n${cuspLines}`;
+        }
+        if (c?.reason) answer += `\n\n⚠️ Saavdhani: ${c.reason}`;
+        if (!answer.trim()) answer = json?.error || "Kshama karein, abhi prashna ka jawab nahi mil paaya.";
+
+        setMessages(prev =>
+          prev.filter(m => m.id !== "thinking").concat({
+            id: Date.now().toString(),
+            role: "assistant",
+            text: answer.trim(),
+          })
+        );
+      } catch {
+        setMessages(prev =>
+          prev.filter(m => m.id !== "thinking").concat({
+            id: Date.now().toString(),
+            role: "assistant",
+            text: "Network error — thodi der baad try karein.",
+          })
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loading, showDemo, user?.id, user?.api_key, t.askDailyLimitOver]
+  );
 
   const send = useCallback(
     async (text: string) => {
@@ -226,23 +320,51 @@ export default function AskScreen() {
         <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
-      {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
-      {mode === "chat" && (
-        <View style={[s.modeSwitch, { backgroundColor: C.bgCard2 ?? C.bgCard, borderColor: C.border }]}>
-          <View style={[s.modeSwitchSeg, s.modeSwitchActive, { backgroundColor: C.accentBg, borderColor: `${C.accent}80` }]}>
-            <Feather name="message-circle" size={13} color={C.accent} />
-            <Text style={[s.modeSwitchText, { color: C.accent }]}>Advance Ask Engine</Text>
-          </View>
+      {/* ── Mode switcher pill (chat ⇄ prashna) ───────────────────────────── */}
+      {(mode === "chat" || mode === "prashna") && (
+        <View style={[s.modeSwitch, { backgroundColor: (C as any).bgCard2 ?? C.bgCard, borderColor: C.border }]}>
           <Pressable
             onPress={() => {
+              if (mode === "chat") return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setMode("chat");
+            }}
+            style={({ pressed }) => [
+              s.modeSwitchSeg,
+              mode === "chat" && { backgroundColor: C.accentBg, borderColor: `${C.accent}80` },
+              pressed && mode !== "chat" && { opacity: 0.7 },
+            ]}
+          >
+            <Feather name="message-circle" size={13} color={mode === "chat" ? C.accent : C.textMuted} />
+            <Text style={[s.modeSwitchText, { color: mode === "chat" ? C.accent : C.textMuted }]}>
+              Advance Ask Engine
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (mode === "prashna") return;
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               if (showDemo) { router.push("/onboarding"); return; }
-              router.push("/prashna-kundli");
+              setMode("prashna");
+              setMessages(prev => {
+                if (prev.some(m => m.id === "prashna-init")) return prev;
+                return [...prev, {
+                  id: "prashna-init",
+                  role: "assistant",
+                  text: "🔢 Prashna Kundli (KP 1-249) — mann ko shant karke ek number 1 se 249 ke beech sochiye, neeche likhiye. Aap apna prashna bhi saath mein likh sakte hain. Wahi sankhya aapki prashna-kundli ka lagna banegi.",
+                }];
+              });
             }}
-            style={({ pressed }) => [s.modeSwitchSeg, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              s.modeSwitchSeg,
+              mode === "prashna" && { backgroundColor: C.accentBg, borderColor: `${C.accent}80` },
+              pressed && mode !== "prashna" && { opacity: 0.7 },
+            ]}
           >
-            <Feather name="hash" size={13} color={C.textMuted} />
-            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>Switch to Prashna Kundli</Text>
+            <Feather name="hash" size={13} color={mode === "prashna" ? C.accent : C.textMuted} />
+            <Text style={[s.modeSwitchText, { color: mode === "prashna" ? C.accent : C.textMuted }]}>
+              Prashna Kundli
+            </Text>
           </Pressable>
         </View>
       )}
@@ -300,7 +422,12 @@ export default function AskScreen() {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
-              router.push("/prashna-kundli");
+              setMode("prashna");
+              setMessages(prev => prev.some(m => m.id === "prashna-init") ? prev : [...prev, {
+                id: "prashna-init",
+                role: "assistant",
+                text: "🔢 Prashna Kundli (KP 1-249) — mann ko shant karke ek number 1 se 249 ke beech sochiye, neeche likhiye. Aap apna prashna bhi saath mein likh sakte hain. Wahi sankhya aapki prashna-kundli ka lagna banegi.",
+              }]);
             }}
             style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
           >
@@ -346,8 +473,8 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* ───── Chat Mode ────────────────────────────────────────────────── */}
-      {mode === "chat" && (<>
+      {/* ───── Chat / Prashna Mode ──────────────────────────────────────── */}
+      {(mode === "chat" || mode === "prashna") && (<>
       {/* Messages */}
       <FlatList
         ref={listRef}
@@ -358,8 +485,8 @@ export default function AskScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Starter chips (only if single init message) */}
-      {messages.length <= 1 && !showDemo && (
+      {/* Starter chips (only chat mode, single init) */}
+      {mode === "chat" && messages.length <= 1 && !showDemo && (
         <View style={s.starters}>
           {STARTERS.map(q => (
             <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: `${C.accent}30` }]} onPress={() => send(q)}>
@@ -369,21 +496,47 @@ export default function AskScreen() {
         </View>
       )}
 
+      {/* ── Prashna number-entry row (above question) ─────────────────── */}
+      {mode === "prashna" && (
+        <View style={[s.prashnaNumRow, { backgroundColor: C.bg, borderTopColor: C.border }]}>
+          <View style={[s.prashnaNumWrap, { backgroundColor: C.bgCard, borderColor: `${C.accent}50` }]}>
+            <Feather name="hash" size={14} color={C.accent} />
+            <TextInput
+              style={[s.prashnaNumInput, { color: C.text }]}
+              value={prashnaNumber}
+              onChangeText={(v) => setPrashnaNumber(v.replace(/[^0-9]/g, "").slice(0, 3))}
+              placeholder="1 — 249"
+              placeholderTextColor={C.textMuted}
+              keyboardType="number-pad"
+              maxLength={3}
+              editable={!showDemo && !loading}
+            />
+          </View>
+          <Text style={[s.prashnaNumHint, { color: C.textMuted }]}>
+            Sankhya sochiye (lagna nirdharit)
+          </Text>
+        </View>
+      )}
+
       {/* Input row */}
       <View style={[s.inputRow, { paddingBottom: botPad + 90, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
           style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}
           onChangeText={setInput}
-          placeholder={t.askPlaceholder}
+          placeholder={mode === "prashna" ? "Apna prashna likhiye (vaikalpik)…" : t.askPlaceholder}
           placeholderTextColor={C.textMuted}
           multiline
           editable={!showDemo}
-          onSubmitEditing={() => send(input)}
+          onSubmitEditing={() => mode === "prashna" ? sendPrashna(prashnaNumber, input) : send(input)}
           returnKeyType="send"
         />
         <Pressable
-          onPress={() => (showDemo ? router.push("/onboarding") : send(input))}
+          onPress={() => {
+            if (showDemo) { router.push("/onboarding"); return; }
+            if (mode === "prashna") sendPrashna(prashnaNumber, input);
+            else send(input);
+          }}
           style={({ pressed }) => [s.sendBtn, pressed && { opacity: 0.7 }]}
         >
           <LinearGradient
@@ -540,6 +693,37 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.2,
+  },
+
+  prashnaNumRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  prashnaNumWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    minWidth: 110,
+  },
+  prashnaNumInput: {
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 1,
+    minWidth: 60,
+    paddingVertical: 0,
+  },
+  prashnaNumHint: {
+    flex: 1,
+    fontSize: 11,
+    fontStyle: "italic",
   },
   backBtn: {
     position: "absolute", left: 12, top: 0, bottom: 0,

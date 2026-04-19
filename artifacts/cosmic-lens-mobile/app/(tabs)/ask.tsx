@@ -226,6 +226,27 @@ export default function AskScreen() {
         <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
+      {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
+      {mode === "chat" && (
+        <View style={[s.modeSwitch, { backgroundColor: C.bgCard2 ?? C.bgCard, borderColor: C.border }]}>
+          <View style={[s.modeSwitchSeg, s.modeSwitchActive, { backgroundColor: C.accentBg, borderColor: `${C.accent}80` }]}>
+            <Feather name="message-circle" size={13} color={C.accent} />
+            <Text style={[s.modeSwitchText, { color: C.accent }]}>Advance Ask Engine</Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (showDemo) { router.push("/onboarding"); return; }
+              router.push("/prashna-kundli");
+            }}
+            style={({ pressed }) => [s.modeSwitchSeg, pressed && { opacity: 0.7 }]}
+          >
+            <Feather name="hash" size={13} color={C.textMuted} />
+            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>Switch to Prashna Kundli</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Demo banner */}
       {showDemo && (
         <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
@@ -492,6 +513,34 @@ const s = StyleSheet.create({
   },
   headerTitle: { color: "#dde8f4", fontSize: 16, fontWeight: "700" },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
+
+  modeSwitch: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  modeSwitchSeg: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  modeSwitchActive: {},
+  modeSwitchText: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
   backBtn: {
     position: "absolute", left: 12, top: 0, bottom: 0,
     justifyContent: "center", paddingHorizontal: 4,

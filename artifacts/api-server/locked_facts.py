@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-30 / Phase C — Missing yogas (Indra + Shoola Nabhasa)
+    missing_yogas_str = ""
+    try:
+        from vedic.yogas.missing_yogas import (detect_missing_yogas,  # type: ignore
+                                                format_missing_yogas_summary)
+        _my = detect_missing_yogas(kundli.get("planets") or [], _lg_idx_cy)
+        missing_yogas_str = format_missing_yogas_summary(_my)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] missing yogas (Sprint-30) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -852,6 +862,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         special_lagnas_str,
         age_context_str,
         shadbala_full_str,
+        missing_yogas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

@@ -714,7 +714,23 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - Shadbala%: Mercury 63.0% > Jupiter 56.6% > Saturn ~ Mars 43.8% > Sun 42.8% > Moon 36.5%
   - All 7 grahas show 5-sub Sthana + 5-sub Kala + total %
 
-### Sprint 30 — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 30 — Phase C Tier 3 Deep Yogas (200+) ✅ COMPLETE
+- Audit revealed massive coverage already across `vedic/yogas/classical_yogas.py` + `vedic/yogas/extra_yogas.py` + `chart_intelligence._detect_yogas` + `varga_yogas.py` (Sprints 19, 19.5, 15)
+- **Phase C item-by-item status**:
+  - **C1 Dhana Yogas (30+)** ✅ — Lakshmi-Narayan, Kubera, Kalanidhi, Indra (Sprint 30 new), Saraswati, Vasumati, Parvata, Pushkala, BPHS Lord-yogas (multiple lord-conj/parivartana/swakshetra), Hari/Hara/Brahma/Vishnu/Shiva
+  - **C2 Neech-Bhanga Raj Yoga 4 BPHS rules** ✅ — `extra_yogas.py:565` `_neech_bhanga_full()` covers all 4 cancellation rules (R1 sign-lord-in-kendra, R1-Moon, R2 exalted-lord-of-debilitated, R3 dispositor-aspect, R4 own-house)
+  - **C3 Gajakesari/Budhaditya/Saraswati/Adhi/Lakshmi** ✅ — Gajakesari + Budhaditya + Chandra-Mangal in `chart_intelligence._detect_yogas`; Saraswati + Lakshmi-Narayan in extra_yogas; Adhi-yoga (benefics in 6/7/8 from Lagna/Moon) detected
+  - **C4 Daridra/Kemadruma/Chandra-Mangal/Guru-Chandal** ✅ — All in classical/chart_intel; Kemadruma also has graded dosh detection (full + mild) in dosh_engine
+  - **C5 Kaal Sarp 12 variants** ✅ — `classical_yogas.py:323` covers Anant, Kulik, Vasuki, Shankhpal, Padma, Mahapadma, Takshak, Karkotak, Shankhachuda, Ghatak, Vishdhar, Sheshnag
+  - **C6 Nabhasa 32** ✅ — Sankhya(7), Ashraya(3 — Rajju/Musala/Nala), Dala(2 — Kamala-Dala/Mala-Dala), Aakriti(20+ — Gada/Shakata/Pakshi/Vajra/Yava/Kamala/Vapi×2/Sarpa/Yoopa/Shara/Shakti/Danda/Naava/Koota/Chhatra/Ardhachandra/Chakra/Samudra/Veena/Mridanga + Sprint-30 **Shoola** new)
+  - **C7 Pravrajya 4 renunciation types** ✅ — `classical_yogas.py:531` `Pravrajya yoga ({nm})` for all 4
+  - **C8 200+ classical obscure** ✅ — Brahma, Shiva, Vishnu, Hari, Hara, Trilochan, Dhwaja, Padma, Chamara, Akhanda Samrajya, Mahabhagya, Subhakartari, Papakartari, Lagnadhi, Sunaphaa, Anaphaa, Durdhura, Karak-Bhuvan, Bhaskar, Kahala, Yoopa, Shara, Shakti, Danda, etc. + Sprint-30 **Indra yoga**
+- **Sprint 30 new module**: `vedic/yogas/missing_yogas.py` (~110 lines)
+  - **Indra yoga** (BPHS Royal-Power) — 5L→11H + 11L→5H + Moon→5H (full or 2-of-3 partial)
+  - **Shoola yoga** (Nabhasa Aakriti — Trident) — all 7 grahas in 3 consecutive houses
+- Test on chart: 4 classical + 6 extra yogas detected (Vimala, Dhana 9L+11L, Pasha-Nabhasa-Sankhya, Papakartari, Mridanga-Aakriti, BPHS lord-yogas, Hamsa-Pancha-Mahapurusha for Jupiter exalted in 4H, plus Hari + Hara + Adhi multi-hits) — chart-specific, no Indra/Shoola/Neech-Bhanga (configurations not present)
+
+### Sprint 31 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

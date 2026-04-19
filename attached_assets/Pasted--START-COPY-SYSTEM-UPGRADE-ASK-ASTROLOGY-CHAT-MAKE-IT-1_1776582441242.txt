@@ -1,0 +1,150 @@
+=== START COPY ===
+
+SYSTEM UPGRADE: ASK (ASTROLOGY CHAT) — MAKE IT 100% DETERMINISTIC + HIGH ACCURACY
+
+Current problem:
+- System has strong kundli + KP + transit data
+- BUT final decision (marriage, timing, etc.) is 100% AI-based
+- This causes inconsistency, wrong timelines, and non-deterministic answers
+
+GOAL:
+Make system astrologer-level accurate by shifting decision-making from AI → backend logic
+
+---------------------------------------------------
+PHASE 1 — CREATE FINAL DECISION ENGINE (MANDATORY)
+---------------------------------------------------
+
+Create a Python module: marriage_engine.py
+
+It MUST output structured deterministic result BEFORE AI runs:
+
+{
+  "marriage_promised": true/false,
+  "delay": true/false,
+  "denial": true/false,
+  "confidence": 0-100,
+  "reasons_strong": [],
+  "reasons_weak": [],
+  "kp_verdict": "",
+  "dasha_window": {
+    "start": "YYYY-MM",
+    "end": "YYYY-MM"
+  },
+  "exact_timing_logic": "text explanation"
+}
+
+LOGIC RULES:
+
+STEP 1 — KP DENIAL CHECK (HIGHEST PRIORITY)
+- If 7th cusp sub-lord signifies ONLY 1,6,10 → marriage_denied = true
+
+STEP 2 — PROMISE CHECK
+- If 7th lord strong AND Venus/Jupiter not severely afflicted → marriage_promised = true
+
+STEP 3 — DELAY CHECK
+- Saturn aspect on 7th OR Mangal dosh OR Sade Sati → delay = true (+1.5–2 years)
+
+STEP 4 — DASHAS
+- Find next Mahadasha/Antardasha where significator ∈ (2,7,11)
+- Extract exact start/end dates
+
+STEP 5 — TRANSIT TRIGGER
+- Check Jupiter transit on 1/5/7 from Lagna or Moon
+- Intersect with dasha window
+
+STEP 6 — FINAL TIMELINE
+- Calculate deterministic range (NOT AI guess)
+
+---------------------------------------------------
+PHASE 2 — ADD MISSING ASTRO MODULES
+---------------------------------------------------
+
+Integrate into INTEL:
+
+1. D9 (Navamsa)
+   - Extract 7th lord in D9
+   - Add strength modifier
+
+2. Dara Karaka (Jaimini)
+   - Lowest degree planet
+   - Use for spouse traits
+
+3. Upapada Lagna
+   - Calculate and use for marriage strength
+
+4. Pratyantardasha
+   - Add for precise timing (month-level)
+
+5. Shadbala
+   - Use to weight Venus/Jupiter strength
+
+---------------------------------------------------
+PHASE 3 — SCORING SYSTEM (VERY IMPORTANT)
+---------------------------------------------------
+
+Create score (0–100):
+
++20 → strong 7th lord
++15 → Venus/Jupiter strong
++15 → KP positive
++10 → good yogas
+-20 → KP denial
+-15 → Saturn delay
+-10 → Mangal dosh
+-10 → weak Venus/Jupiter
+
+Final:
+>70 → Strong marriage
+50–70 → Delayed
+<50 → Weak / problematic
+
+---------------------------------------------------
+PHASE 4 — AI ROLE CHANGE (CRITICAL)
+---------------------------------------------------
+
+AI should NOT decide anything.
+
+Change prompt:
+
+- AI receives structured JSON from engine
+- AI ONLY converts into human-friendly answer
+
+STRICT RULE:
+AI must NOT:
+- Change verdict
+- Change timing
+- Add new astrology logic
+
+---------------------------------------------------
+PHASE 5 — OUTPUT FORMAT
+---------------------------------------------------
+
+Backend returns:
+
+{
+  "verdict": "Marriage promised with delay",
+  "confidence": 82,
+  "timeline": "Nov 2026 – Aug 2027",
+  "logic_summary": "...",
+  "remedies": [...]
+}
+
+AI converts into Hinglish/Hindi response
+
+---------------------------------------------------
+PHASE 6 — FIX RANDOMNESS
+---------------------------------------------------
+
+- Set temperature = 0.2
+- Add consistency layer
+- Same input → same output ALWAYS
+
+---------------------------------------------------
+FINAL RESULT EXPECTATION:
+
+- Same kundli → same answer always
+- Timeline accuracy increases drastically
+- AI becomes narrator, not decision maker
+- System becomes astrologer-level engine
+
+=== END COPY ===

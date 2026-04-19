@@ -708,45 +708,39 @@ def _build_messages(
     # with bullets allowed when helpful. No guru tone, no Beta/Pranam, no
     # kundli reference, no forced remedy.
     if mode == "general":
-        sub_mode = _classify_general_submode(question)
-        if sub_mode == "simple":
-            format_block = (
-                "QUESTION TYPE: SIMPLE (short definition / lookup).\n"
-                "FORMAT FOR THIS REPLY:\n"
-                "  • 2–3 lines TOTAL. No more.\n"
-                "  • NO bullet points, NO headers, NO sections.\n"
-                "  • One direct sentence answering the question, then 1 line of\n"
-                "    micro-context if useful. Stop.\n"
-            )
-        else:  # explain
-            format_block = (
-                "QUESTION TYPE: EXPLAIN (concept / comparison / how-it-works /\n"
-                "  history / origin).\n"
-                "FORMAT FOR THIS REPLY:\n"
-                "  • 1 short intro line (NOT a header).\n"
-                "  • 3–5 light bullet points — each bullet 1 line, bold the key\n"
-                "    term at the start (`**Term**: short explanation`).\n"
-                "  • 1 short closing line that ties it together.\n"
-                "  • Total length 80–160 words. NO ### markdown headers.\n"
-            )
         sys_general = (
-            "SYSTEM PROMPT — HUMAN STYLE MODE (ADAPTIVE)\n\n"
-            "You are a highly intelligent conversational assistant. Sound\n"
-            "natural like ChatGPT — smart, adaptive, NOT robotic, NOT a guru.\n\n"
-            "ADAPTIVE FORMAT: choose the layout based on the question type\n"
-            "given below. NEVER force the same structure on every reply.\n\n"
-            f"{format_block}\n"
-            "GLOBAL RULES (always):\n"
-            "  1. No fake empathy (\"I sense your concern\", \"I understand\").\n"
-            "  2. No spiritual / guru tone.\n"
-            "  3. No reference to the user's kundli, chart, planets, dasha,\n"
-            "     rashi, or nakshatra (this is a general question).\n"
-            "  4. No remedy / upay unless the user explicitly asked.\n"
-            "  5. Friendly-but-normal voice. State things confidently.\n\n"
+            "SYSTEM PROMPT — STRICT RESPONSE CONTROL (MANDATORY)\n\n"
+            "You are NOT allowed to answer freely. You MUST follow this exact\n"
+            "structure. Any deviation = WRONG answer.\n\n"
+            "REQUIRED STRUCTURE (in this exact order):\n\n"
+            "  1. FIRST LINE: must begin with the literal text\n"
+            "     `Simple samjho — ` followed by the core idea in ONE sentence.\n\n"
+            "  2. EXPLANATION: 1 to 2 short lines max. No long paragraphs.\n\n"
+            "  3. BULLETS: ONLY if genuinely needed (comparison / 2+ items /\n"
+            "     listy concept). 2 to 4 bullets max, 1 line each, bold the\n"
+            "     key term: `- **Term**: short note`. Otherwise SKIP bullets\n"
+            "     entirely — do NOT pad.\n\n"
+            "  4. LAST LINE: must begin with the literal text `Final: ` and\n"
+            "     give the one-line takeaway / verdict.\n\n"
+            "STRICT RULES:\n"
+            "  • Total length 50–120 words. NEVER more.\n"
+            "  • NO long paragraphs. NO textbook tone. NO ### headers.\n"
+            "  • NO kundli / chart / planet / dasha / rashi / remedy reference.\n"
+            "  • NO guru tone. NO \"Beta\", \"Pranam\", \"I understand\".\n"
+            "  • Stay human, simple, confident.\n\n"
+            "EXAMPLE (correct shape):\n"
+            "  Simple samjho — Saturn discipline aur delay ka planet hai.\n"
+            "  Yeh hard work aur patience sikhata hai, lekin shortcut nahi deta.\n"
+            "\n"
+            "  - **Discipline**: rules aur structure ka karak.\n"
+            "  - **Delay**: result milne mein time leta hai.\n"
+            "\n"
+            "  Final: Saturn slow but solid growth ka planet hai.\n\n"
             "BANNED PHRASES: Pranam, Beta, Beta Q, Dekhiye beta, I sense your,\n"
             "  I understand your, As an AI, based on your chart.\n"
             "BANNED HEDGING: maybe, possible, likely, chances, ho sakta hai,\n"
             "  shayad, sambhavna, I think, perhaps, around (for dates).\n\n"
+            "THIS STRUCTURE IS MANDATORY — NOT OPTIONAL.\n"
             f"REPLY ENTIRELY IN: {lang_name}."
         )
         msgs: list[dict] = [{"role": "system", "content": sys_general}]
@@ -1237,7 +1231,8 @@ _GENERAL_CONCEPT_SIGNALS = (
     "kisne diya", "kisne khoja", "kisne discover", "kisne invent",
     "kaise bani", "kaise bana", "kaise shuru hua",
     "kab shuru", "kab bana", "kab likha", "kab aaya", "kahan se aaya",
-    "kahan se shuru", "history kya", "history of ", "itihas kya",
+    "kahan se shuru", "history kya", "history of ", "history",
+    "itihas kya", "itihas", "ka itihas", "ki history",
     "origin of", "founder of", "who wrote", "who made", "who created",
     "who founded", "who discovered", "who invented", "when did",
     "when was", "where did", "where does", "where is the origin",
@@ -1437,6 +1432,22 @@ _GENERAL_LEAK_PATTERNS = [
     re.compile(r"\bremedy\s*[:\-—]\s*", re.I),
     re.compile(r"\bupay\s*[:\-—]\s*", re.I),
 ]
+
+
+_SIMPLE_SAMJHO_RE = re.compile(r"^\s*simple\s+samjho\s*[—\-:]", re.I)
+_FINAL_LINE_RE    = re.compile(r"(^|\n)\s*final\s*[:\-—]", re.I)
+
+
+def _general_reply_violates_structure(text: str) -> bool:
+    """True if the general-mode reply does NOT start with 'Simple samjho — '
+    OR does NOT contain a 'Final: ...' closing line. Triggers a regenerate."""
+    if not text:
+        return True
+    if not _SIMPLE_SAMJHO_RE.search(text):
+        return True
+    if not _FINAL_LINE_RE.search(text):
+        return True
+    return False
 
 
 def _general_reply_leaks_chart(text: str) -> bool:
@@ -1829,27 +1840,48 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     text = _call_once()
 
-    # ── General-mode chart-leak validator ────────────────────────────────────
-    # If the question is GENERAL (concept / comparison / knowledge) the reply
-    # MUST NOT cite the user's personal kundli, chart placements, mahadasha,
-    # rashi, nakshatra, or remedies. If a leak is detected, regenerate ONCE
-    # with a stricter system message.
-    if mode == "general" and _general_reply_leaks_chart(text):
-        print(f"[ai_ask] general-mode chart leak detected — regenerating "
-              f"(snippet: {text[:80]!r})")
-        messages = list(messages)
-        messages[0] = {
-            "role": "system",
-            "content": messages[0]["content"]
-            + "\n\n=== HARD OVERRIDE ===\n"
-              "Previous attempt referenced the user's kundli / chart / planets /\n"
-              "remedy. THIS IS BANNED for a general question. Answer ONLY the\n"
-              "concept itself — like ChatGPT, no astrology personalisation.\n"
-              "DO NOT use: 'aapki kundli', 'your chart', 'your Sun/Moon',\n"
-              "'aapke 7th house', 'mahadasha', 'aapki rashi', mantra+count+day,\n"
-              "donation upay, or any planet from the user's chart.\n",
-        }
-        text = _call_once()
+    # ── General-mode validators (chart-leak + strict structure) ──────────────
+    # Two independent checks for general (non-astro) replies:
+    #   (a) chart leak — references to user's kundli/planets/dasha/remedy
+    #   (b) structure violation — missing "Simple samjho — " opener OR
+    #       missing "Final: ..." closing line
+    # Either failure triggers ONE regenerate with a hard-override prompt that
+    # restates whichever rule was broken.
+    if mode == "general":
+        leaks  = _general_reply_leaks_chart(text)
+        broken = _general_reply_violates_structure(text)
+        if leaks or broken:
+            why = []
+            if leaks:  why.append("chart-leak")
+            if broken: why.append("structure-violation")
+            print(f"[ai_ask] general-mode regen ({'+'.join(why)}) — "
+                  f"snippet: {text[:80]!r}")
+            override_lines = ["\n\n=== HARD OVERRIDE — REGENERATE ==="]
+            if leaks:
+                override_lines.append(
+                    "Previous attempt referenced the user's kundli / chart /\n"
+                    "planets / dasha / remedy. THIS IS BANNED for a general\n"
+                    "question. Answer ONLY the concept itself — no astrology\n"
+                    "personalisation. DO NOT use: 'aapki kundli', 'your chart',\n"
+                    "'your Sun/Moon', 'aapke 7th house', 'mahadasha',\n"
+                    "'aapki rashi', mantra+count+day, donation upay, or any\n"
+                    "planet from the user's chart."
+                )
+            if broken:
+                override_lines.append(
+                    "Previous attempt VIOLATED the mandatory structure.\n"
+                    "MANDATORY: line 1 MUST start with the literal text\n"
+                    "  `Simple samjho — `\n"
+                    "and the last line MUST start with the literal text\n"
+                    "  `Final: `\n"
+                    "Total length 50–120 words. Bullets only if needed."
+                )
+            messages = list(messages)
+            messages[0] = {
+                "role": "system",
+                "content": messages[0]["content"] + "\n".join(override_lines),
+            }
+            text = _call_once()
 
     # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
     # The single-call marriage path uses a pre-baked, fact-locked answer from

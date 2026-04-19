@@ -670,6 +670,19 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-46 — MEDICAL ASTROLOGY ENGINE (full 20-check deep chart-driven medical audit)
+    medical_str = ""
+    try:
+        from vedic.medical.medical_engine import run_medical_engine, format_medical_engine  # type: ignore
+        _med_sb = locals().get("shadbala") if "shadbala" in locals() else None
+        _med_dasha = (kundli.get("current_dasha")
+                      or kundli.get("vimshottari_current")
+                      or {})
+        medical_str = format_medical_engine(
+            run_medical_engine(kundli, birth or {}, _med_sb, _med_dasha))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] medical engine (Sprint-46) failed: {exc}")
+
     # Sprint-45 — ASTRO-VASTU ENGINE (full 13-check chart-driven Vastu audit)
     astro_vastu_str = ""
     try:
@@ -1026,6 +1039,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_r_str,
         phase_s_str,
         astro_vastu_str,
+        medical_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

@@ -921,7 +921,32 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - V13: Direction-wise final report card (state + colors + axis-block flag)
 - LF: 55,046 → **60,484 chars** (+5,438 — biggest single sprint to date)
 
-### Sprint 45+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 46 — MEDICAL ASTROLOGY ENGINE (Full Deep Engine) ✅ COMPLETE
+- New module: `vedic/medical/medical_engine.py` (~520 lines) — proper deep engine respecting that medical = vastest astrology chapter
+- **20 checks** wired into LF every request:
+  - M1: Kalapurusha 12-sign body map with planet placements
+  - M2: Drekkana 36 organs (head→feet) with planet-organ mapping
+  - M3: Planet→body-system rulership (heart/blood/bones/nerves/skin) + affliction flag
+  - M4: Roga Bhavas (6/8/12) + 6th/8th/12th lord placement
+  - M5: Roga-bala disease-vulnerability score (LOW/MOD/HIGH/VERY-HIGH)
+  - M6: **53 classical disease yogas** with chart-trigger predicates (diabetes/BP/heart/cancer/mental/skin/eye/liver/kidney/joint/asthma/allergies/anaemia/migraine/stomach/reproductive/sexual/bone/teeth/hearing/speech/thyroid/cholesterol/stroke/paralysis/insomnia/anxiety/obesity/acne/baldness/auto-immune/ulcer/piles/TB/epilepsy/vertigo/spinal/sciatica/gout/tumour/poisoning/cirrhosis/etc.)
+  - M7: Constitutional type (Vata/Pitta/Kapha) from element distribution
+  - M8: Janma Nadi from Moon-nakshatra (Aadi/Madhya/Antya)
+  - M9: Maraka planets (2nd & 7th lords)
+  - M10: Disease activation window from current MD/AD
+  - M11: Mental health markers with score & rating
+  - M12: Hereditary disease (5th=maternal, 9th=paternal line)
+  - M13: 15-organ deep status (heart/brain/liver/kidney/stomach/lungs/eyes/reproductive/skin/bones/nervous/digestive/respiratory/endocrine/blood)
+  - M14: Ayurvedic dosha balance advice
+  - M15: Hospitalization windows (8/12 lord activation rule)
+  - M16: Surgical timing (Moon-sign avoid, tithi/nakshatra/hora rules)
+  - M17: Longevity/recovery indicator from Lagna-lord
+  - M18: Acute vs Chronic disease classification
+  - M19: Per-organ strength scorecard with visual bars (0-10)
+  - M20: 36 body-part drekkana report card with affliction state
+- LF: 60,484 → **67,411 chars** (+6,927 — new biggest single sprint)
+
+### Sprint 46+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

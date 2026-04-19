@@ -59,37 +59,148 @@ _LANG_NAME = {
 }
 
 
-def _kundli_summary(kundli: Any) -> str:
-    """Compress the kundli dict into a short string the model can use."""
-    if not isinstance(kundli, dict):
-        return "(no birth chart provided)"
+def _kundli_summary(kundli: Any, birth: Any = None) -> str:
+    """Compress the kundli dict into a rich string the model can reason over."""
     parts: list[str] = []
+
+    # Birth context (from birthData fallback even if kundli is missing fields)
+    if isinstance(birth, dict):
+        dob = birth.get("dob") or birth.get("date")
+        tm  = birth.get("time")
+        pl  = birth.get("place") or birth.get("placeName") or birth.get("city")
+        gen = birth.get("gender")
+        nm  = birth.get("name")
+        bits = []
+        if nm:  bits.append(f"Name: {nm}")
+        if dob: bits.append(f"DOB: {dob}")
+        if tm:  bits.append(f"Time: {tm}")
+        if pl:  bits.append(f"Place: {pl}")
+        if gen: bits.append(f"Gender: {gen}")
+        if bits:
+            parts.append("Birth: " + ", ".join(bits))
+
+    if not isinstance(kundli, dict):
+        return " | ".join(parts) if parts else "(no birth chart provided)"
+
     asc = kundli.get("ascendant") or kundli.get("lagna")
     if asc:
-        parts.append(f"Lagna: {asc}")
+        deg = kundli.get("ascendantDeg")
+        parts.append(f"Lagna: {asc}" + (f" {deg:.2f}°" if isinstance(deg, (int, float)) else ""))
     moon_sign = kundli.get("moonSign") or kundli.get("moon_sign")
     if moon_sign:
-        parts.append(f"Moon sign: {moon_sign}")
+        parts.append(f"Moon sign (Rashi): {moon_sign}")
+    sun_sign = kundli.get("sunSign")
+    if sun_sign:
+        parts.append(f"Sun sign: {sun_sign}")
     nak = kundli.get("nakshatra")
     if nak:
-        parts.append(f"Nakshatra: {nak}")
+        pada = kundli.get("nakshatraPada")
+        ruler = kundli.get("nakshatraRuler")
+        nbits = nak + (f" pada-{pada}" if pada else "")
+        if ruler:
+            nbits += f" (lord: {ruler})"
+        parts.append(f"Nakshatra: {nbits}")
+
+    # Vimshottari Dasha — single most important field for timing predictions
+    cd = kundli.get("currentDasha")
+    if isinstance(cd, dict):
+        maha   = cd.get("maha")
+        antar  = cd.get("antar")
+        ends   = cd.get("endDate")
+        starts = cd.get("startDate")
+        if maha or antar:
+            line = "Current Dasha: "
+            line += f"{maha or '?'} Mahadasha"
+            if antar:
+                line += f" / {antar} Antardasha"
+            if starts and ends:
+                line += f" ({starts} → {ends})"
+            parts.append(line)
+    db = kundli.get("dashaBalance")
+    if isinstance(db, (int, float)) and db > 0:
+        parts.append(f"Dasha balance at birth: {db:.2f} years")
+
+    # Planets in houses + rashi + nakshatra + retrograde
     planets = kundli.get("planets")
-    if isinstance(planets, list):
+    if isinstance(planets, list) and planets:
         plist = []
         for p in planets[:9]:
-            name  = p.get("name", "")
-            sign  = p.get("sign", "")
+            if not isinstance(p, dict):
+                continue
+            name = p.get("name", "")
+            sign = p.get("sign") or p.get("rashi") or ""
             house = p.get("house", "")
+            nakp  = p.get("nakshatra")
             retro = " (R)" if p.get("retrograde") else ""
-            plist.append(f"{name} in {sign} (H{house}){retro}")
+            chunk = f"{name} in {sign} H{house}{retro}"
+            if nakp:
+                chunk += f" [nak {nakp}]"
+            plist.append(chunk)
         if plist:
             parts.append("Planets: " + "; ".join(plist))
+
     return " | ".join(parts) if parts else "(birth chart provided but empty)"
 
 
-def _build_messages(question: str, kundli: Any, lang: str, reply_idx: int) -> list[dict]:
+# ── Topic-specific KP/Parashari focus block ──────────────────────────────────
+
+_TOPIC_FOCUS = {
+    "marriage": (
+        "FOCUS for marriage/spouse questions: examine the 7th house and its lord, "
+        "Venus (kalatra-karaka, look at sign/house/aspects), Jupiter (for women — pati-karaka), "
+        "Mangal-dosh (Mars in 1/4/7/8/12 from Lagna or Moon), Navamsa 7th lord conceptually, "
+        "and the CURRENT Mahadasha+Antardasha lord — does it rule/aspect 2/7/11 (marriage trikona)? "
+        "If yes the timing window is open; if it rules 6/8/12 from 7th, expect delay or friction. "
+        "Cite Phaladeepika Ch.10 (vivah-yog) and BPHS Ch.80 (kalatra-bhava) when relevant. "
+        "Give a reasoned timing window (a year-range tied to the dasha), not a fixed date."
+    ),
+    "career": (
+        "FOCUS for career/job questions: 10th house & its lord, Sun (raj-karaka), Saturn (karma-karaka), "
+        "Mercury (vyapaar-karaka), 6th house (service/competition), 11th (gains). "
+        "Read the current Mahadasha-Antardasha lord — if it rules 2/6/10/11, growth window is open."
+    ),
+    "finance": (
+        "FOCUS: 2nd house (sanchita-dhana), 11th (labha), 5th (purva-punya wealth), "
+        "Jupiter (dhana-karaka), Venus (bhog), Lagna lord strength, current dasha lord's house ownership. "
+        "Look for dhana-yogas: 2L+5L+9L+11L mutual relations."
+    ),
+    "health": (
+        "FOCUS: Lagna & Lagna-lord strength, 6th house (roga), 8th (chronic), 12th (hospitalisation), "
+        "Sun (vitality), Moon (mind/fluids), Mars (blood/inflammation), Saturn (chronic/joints), "
+        "current dasha lord's affliction to Lagna or 6/8/12. Always remind devotee to consult a qualified doctor."
+    ),
+    "child": (
+        "FOCUS: 5th house & its lord, Jupiter (putra-karaka), 9th house (santati), Saptamsha (D-7) conceptually, "
+        "current dasha-antar of 5L or Jupiter."
+    ),
+    "education": (
+        "FOCUS: 4th (basic schooling), 5th (intellect/buddhi), 9th (higher learning), Mercury (buddhi-karaka), "
+        "Jupiter (vidya-karaka), 2nd (memory/speech), current dasha activating these houses."
+    ),
+    "travel": (
+        "FOCUS: 3rd (short journeys), 9th (long/dharmic travel), 12th (foreign settlement), "
+        "Rahu (foreign lands), Moon-Mercury connection, dasha lord in 3/9/12."
+    ),
+    "relationship": (
+        "FOCUS: 5th (romance), 7th (committed bond), Venus (love-karaka for men), Mars (love-karaka for women), "
+        "Moon's emotional condition, current dasha mood."
+    ),
+    "remedy": (
+        "FOCUS: identify the most afflicted/weak planet causing the problem, then prescribe the classical remedy — "
+        "specific mantra (Vedic or Beej), day, count (108 / 1008 / 11000), donation, fast, gemstone (only if dasha favours), "
+        "yantra. Always cite source (Lal Kitab / BPHS / regional tradition)."
+    ),
+}
+
+
+def _focus_block(topic: str) -> str:
+    return _TOPIC_FOCUS.get(topic, "")
+
+
+def _build_messages(question: str, kundli: Any, lang: str, reply_idx: int, birth: Any = None, topic: str = "general") -> list[dict]:
     lang_name = _LANG_NAME.get(lang, "English")
-    chart_str = _kundli_summary(kundli)
+    chart_str = _kundli_summary(kundli, birth)
+    focus     = _focus_block(topic)
     variation = ""
     if reply_idx > 0:
         variation = (
@@ -127,12 +238,20 @@ ABSOLUTE RULES — never break these:
 
 REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casually, you reply warmly; if formally, you reply respectfully but still as a human Pandit."""
 
+    focus_block = f"\n\nSHASTRIYA FOCUS for this question:\n{focus}\n" if focus else ""
+
     user = (
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n\n"
         f"DEVOTEE IS ASKING:\n\"{question}\"\n"
+        f"{focus_block}"
         f"{variation}\n\n"
-        "Now respond as Acharya Vidyasagar would — directly, warmly, in flowing "
-        "natural speech. Reference their actual chart. End with one specific remedy."
+        "INSTRUCTIONS — answer the SPECIFIC question above (do not give a generic reading): "
+        "1) Acknowledge the question in your first line. "
+        "2) Cite specific planets/houses from THIS chart that answer it (use the focus block above). "
+        "3) Reference the CURRENT Mahadasha-Antardasha to give a timing window if asked about 'kab' (when). "
+        "4) Give a clear answer (haan / nahi / sambhavna) — never dodge. "
+        "5) End with ONE specific actionable remedy.\n"
+        "Now respond as Acharya Vidyasagar — warm, flowing, directly addressing this exact question."
     )
 
     return [
@@ -166,7 +285,7 @@ def _classify_topic(question: str) -> str:
 
 # ── Public entry point ───────────────────────────────────────────────────────
 
-def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0) -> dict:
+def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, birth: Any = None) -> dict:
     """
     Returns: { text, topic, confidence, source }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
@@ -176,7 +295,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0) -> 
         raise RuntimeError(_client_err or "OpenAI client not configured")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-    messages = _build_messages(question, kundli, lang, reply_idx)
+    topic = _classify_topic(question)
+    messages = _build_messages(question, kundli, lang, reply_idx, birth=birth, topic=topic)
 
     try:
         resp = client.chat.completions.create(

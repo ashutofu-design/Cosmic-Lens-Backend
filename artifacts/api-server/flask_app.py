@@ -3952,6 +3952,7 @@ def ask_route():
     data = request.get_json(force=True, silent=True) or {}
     question  = data.get("question", "")
     kundli    = data.get("kundli")
+    birth     = data.get("birthData") or data.get("birth")
     lang      = data.get("lang", "en")
     reply_idx = int(data.get("replyIdx", 0))
     user_id   = data.get("user_id")
@@ -3992,7 +3993,7 @@ def ask_route():
     used_ai = False
     if openai_available():
         try:
-            result = ai_ask(question, kundli, lang, reply_idx)
+            result = ai_ask(question, kundli, lang, reply_idx, birth=birth)
             used_ai = True
         except Exception as exc:
             print(f"[ask] OpenAI failed, falling back to rule engine: {exc}")

@@ -1223,9 +1223,12 @@ _GENERAL_CONCEPT_SIGNALS = (
     "kitne prakar", "kitne type", "ke prakar", "ke type",
     "kaise kaam", "kaise work",
     # Knowledge / origin / authorship / history questions (general, not personal)
-    "kisne likha", "kisne banaya", "kisne banaai", "kisne shuru",
-    "kis ne likha", "kis ne banaya", "kaun ne likha", "kaun ne banaya",
-    "kisne diya", "kisne khoja", "kisne discover",
+    "kisne likha", "kisne banaya", "kisne banayi", "kisne banaai",
+    "kisne banai", "kisne bani", "kisne shuru",
+    "kis ne likha", "kis ne banaya", "kis ne banayi", "kis ne banai",
+    "kaun ne likha", "kaun ne banaya", "kaun ne banayi",
+    "kisne diya", "kisne khoja", "kisne discover", "kisne invent",
+    "kaise bani", "kaise bana", "kaise shuru hua",
     "kab shuru", "kab bana", "kab likha", "kab aaya", "kahan se aaya",
     "kahan se shuru", "history kya", "history of ", "itihas kya",
     "origin of", "founder of", "who wrote", "who made", "who created",
@@ -1884,8 +1887,16 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         print(f"[ai_ask_stream] topic-stickiness check failed: {exc}")
 
     # General mode forces topic=general (concept question, no chart).
+    # Route through ai_ask (oneshot) so the chart-leak validator runs —
+    # streaming a general reply token-by-token bypasses post-response
+    # validation and lets the model leak the user's kundli into a
+    # concept question (which is exactly what we must prevent).
     if mode == "general":
         topic = "general"
+        yield {"kind": "oneshot",
+               "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)}
+        return
 
     # Marriage astro path — deterministic engine; one-shot to preserve
     # fact-locked window echoing. Streaming a baked answer adds no value.

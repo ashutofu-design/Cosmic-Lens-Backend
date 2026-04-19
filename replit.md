@@ -431,3 +431,293 @@ Higher vargas (D9-D60) require longitude data; D1 detection works on sign-only f
 **Open follow-ups (deferred per user)**:
 - Age-context layer (current_age + life-stage aware reasoning) — would prevent generic "2024-2026 active period" answers without age contextualization
 - Marriage partner gender inference — bug noted on canvas
+
+---
+
+# 🗺️ MASTER ROADMAP — Cosmic Lens Path to Production (Sprint 16-48)
+
+**Decided sequence (user-approved, locked):**
+1. **Calculations pehle** — saare 1100+ engines complete karenge
+2. **AI training baad mein** — engine data taiyaar ho jaane ke baad AI brain build hoga
+3. **RAG (classical texts) uske baad** — scripture-backed answers
+4. **Production last** — live deploy after everything is solid
+
+This roadmap is the SOURCE OF TRUTH for all future sprints. Do NOT deviate without user confirmation.
+
+---
+
+## 📊 Current Completion: ~62 of ~1172 calculations (5.3%)
+
+The hardest 70% (architecture + determinism layer) is DONE. Now it's mostly engine plug-in work using the established pattern:
+**engine.py → unit test → locked_facts.py wire → Rule entry → post-injector → 3x smoke test → architect review → replit.md update**
+
+---
+
+## PHASE 1 — INFRASTRUCTURE FOUNDATION
+
+### Sprint 16 — Folder Refactor (3-4 hrs)
+Restructure `artifacts/api-server/` from flat 40+ files into organized hierarchy:
+```
+api-server/
+├── vedic/
+│   ├── core/         (kundli_engine, chart_intelligence, planet_strength, aspects, karakas)
+│   ├── divisional/   (D1-D60 vargas + vargottama + shadvarga)
+│   ├── yogas/        (Mahapurusha, Raj, Vipreet, Dhana, Nabhasa, etc.)
+│   ├── doshas/       (Mangal, Kaal Sarp, Pitra, Guru Chandal, etc.)
+│   ├── jaimini/      (Karakas, Arudha, Argala, Chara/Sthira/Niryana dashas)
+│   ├── dashas/       (Vimshottari + Yogini + Ashtottari + Kalachakra + ...)
+│   ├── strength/     (Shadbala, Bhava Bala, Ashtakavarga, Ishta-Kashta)
+│   ├── transits/     (Saturn/Jupiter/Rahu, Sade-Sati, eclipses, fixed stars)
+│   ├── kp/           (KP engine, sub-lords, CIL, horary)
+│   ├── prashna/      (Question-time charts)
+│   ├── matching/     (Ashtakoot, Dashakoot, marriage compatibility)
+│   ├── timing/       (Muhurta, Panchang, Tithi/Nakshatra)
+│   └── tajik/        (Varshaphala, Sahams, annual chart)
+├── orchestration/    (locked_facts, ask_engine, intent_router)
+├── ai/               (openai_helper — slim orchestrator)
+├── remedies/
+├── vastu/            (untouched)
+└── infra/            (flask_app, database, firebase, models)
+```
+
+### Sprint 17 — Critical Bug Fixes
+- Age-context layer (current_age aware reasoning across all answers)
+- Marriage partner gender inference fix
+- Topic classifier upgrade (reduce keyword-only reliance)
+
+---
+
+## PHASE 2 — ALL CALCULATIONS COMPLETE (Sprints 18-31) ⭐ PRIORITY
+
+**Goal: Reach 1100+ calculations professional-grade depth.**
+
+### Sprint 18 — Phase B: Bala Deep (60 calc)
+- Sthana Bala 5 sub: Uchchabala, Saptavargaja, Ojayugmarasiamsa, Kendradi, Drekkana
+- Kala Bala 9 sub: Nathonnatha, Paksha, Tribhaga, Abda, Masa, Vara, Hora, Ayana, Yuddha
+- Dig Bala detailed compass-based
+- Bhava Bala 4-fold per house (48 calc)
+- Ishta Phala + Kashta Phala
+- Vimshopaka Bala in 6/7/10/16 varga groupings
+
+### Sprint 19 — Phase C: Yogas 200+
+- Dhana Yogas (30+) — Lakshmi, Kubera, Kalanidhi, Indra
+- Neech-Bhanga Raj Yoga (4 cancellation rules)
+- Gajakesari, Budhaditya, Saraswati, Adhi, Lakshmi
+- Daridra Yogas, Kemadruma, Chandra-Mangal, Guru-Chandal
+- Kaal Sarp 12 variants (Anant, Kulik, Vasuki, Shankhpal, Padma, Mahapadma, Takshak, Karkotak, Shankhachuda, Ghatak, Vishdhar, Sheshnag)
+- Nabhasa Yogas (32) — Aakriti(20) + Sankhya(7) + Ashraya(3) + Dala(2)
+- Pravrajya Yogas (4 renunciation types)
+- 200+ obscure classical yogas (Brahma, Shiva, Vishnu, Indra, Hari, Hara, Trilochan, Dhwaja, Shoola, Padma, Chamara, Akhanda Samrajya)
+
+### Sprint 20 — Phase D: Doshas 15+
+- Kaal Sarp 12 types with effects
+- Pitra Dosh (3 detection rules)
+- Guru Chandal Yog
+- Nadi Dosh (compatibility-related)
+- Kantaka Shani, Shrapit Dosh, Vish Yog, Angarak Yog
+
+### Sprint 21 — Phase E: 7+ New Dasha Systems
+- Yogini Dasha (8-period system)
+- Ashtottari Dasha (108-yr)
+- Kalachakra Dasha (complex sign-based)
+- Narayana Dasha (Jaimini)
+- Karaka Dasha (Jaimini)
+- Yogardha, Tara, Brahma dashas
+- Pinda, Naisargika, Amshayur (longevity calc)
+- Mandooka, Drig, Trikona, Chaturasheeti Sama
+- Shashtihayani, Shatabdika, Shoola
+
+### Sprint 22 — Phase F: Per-Varga Deep (~144 calc)
+- Varga aspects (16 vargas × planet-to-planet)
+- Varga ashtakavarga (BAV/SAV per varga)
+- Varga dasha (separate Vimshottari per varga)
+- Per-varga yoga detection beyond D1/D9/D10/D24/D60
+- Per-varga dosh detection
+
+### Sprint 23 — Phase G + H: Ashtakavarga Adv + Transits/Eclipses
+- Trikona Shodhana, Ekadhipatya Shodhana, Sodhya Pinda
+- Transit-through-Ashtakavarga predictions
+- Saturn through 12 houses detailed
+- Jupiter 12-yr cycle, Rahu-Ketu 18-month
+- Solar/Lunar eclipse path on natal chart, Saros cycles, pre-natal eclipse points
+- Fixed stars (50+) — 27 nakshatras + Abhijit + Western overlap
+
+### Sprint 24 — Phase I: KP Advanced (40+)
+- Significators 4-level deep
+- Cuspal Interlinks (CIL)
+- Sub-sub-sub lord (3 deep)
+- 249 horary numbers (each with chart)
+- KP marriage matching
+- Eclipse pin-point predictions
+
+### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
+- Varshaphala (Sun-return chart)
+- Muntha (progressed point)
+- Sahams (~50 sensitive points)
+- Tajik aspects (Ittesal, Musaripha, Mukabala, Iqbal, Idbar)
+- Tajik 16 yogas, Munis (3-yr period)
+- Special Lagnas: Bhava, Hora, Ghati, Vighati, Sree, Pranapada, Indu, Varnada
+- Arudha lagna for all 12 houses verification
+
+### Sprint 26 — Phase K: Avashtas (180 planetary states)
+- Baladi (5 by degree): Bala/Kumara/Yuva/Vridha/Mrita
+- Jagradadi (3): Jagrat/Swapna/Sushupti
+- Lajjitadi (6): Lajjit/Garvit/Kshudita/Trishit/Mudit/Kshobhit
+- Deeptadi (9): Deepta/Swastha/Mudita/Shanta/Shakta/Peedita/Deena/Vikala/Khala
+
+### Sprint 27 — Phase M: Sahams + Phase N: Nadi
+- 50 sensitive points: Punya, Yasha, Vidya, Mrityu, Vivaha, Putra, Karma, Bhratri, Matri, Pitri + 40 more
+- Nadi Amsha (1500 amshas — 1/150th of a sign)
+- Bhrigu Saral Paddhati
+- Deva-Manushya-Rakshasa per planet classification
+
+### Sprint 28 — Phase O: Lal Kitab Full
+- 35 Lal Kitab chart variations
+- Pakka ghar per planet
+- Karak grahas per house
+- Rin (debts) of planets
+- Lal Kitab specific dasha
+- 1000+ Lal Kitab remedies database
+
+### Sprint 29 — Phase P + Q + R: Compatibility + Muhurta + Panchang
+- Ashtakoot Milan (full 36 guna detailed)
+- Dashakoot Milan (10-fold matching)
+- Dasha Sandhi, Mahendra, Stree Deergha, Vedha
+- Yoni 14 categories, Linga, Gana detailed, Rajju 5 types, Vashya 5 types
+- Manglik match, Nadi dosh exceptions
+- Muhurta: Choghadiya, Hora, Rahu/Yamaganda/Gulika kaal
+- Abhijit + Brahma muhurta
+- 30+ event-specific muhurtas (marriage, business, travel, surgery, naamkaran, griha pravesh)
+- Panchang full: Tithi+lord+deity, Nakshatra+lord+pada+deity, Yoga(27)+lord, Karana(11)+lord, Vaar+Hora, Ritu, Ayana, Maasa, Samvatsara (60-yr cycle), Shaka, Vikram years
+
+### Sprint 30 — Phase S + T: Numerology/Vastu + Ayanamsha/House Systems
+- Driver/Conductor/Naam/Kua numbers
+- Lucky days/colors per number
+- Vastu defects + remedies per direction
+- 14 extra ayanamsha (Raman, KP, Yukteshwar, Fagan, Aryabhata, True Chitra, Devdutt, Suryasiddhanta, Pushya Paksha, Galactic Centre, Usha-Shashi, Manjula, etc.)
+- 8 extra house systems (Placidus, Koch, Campanus, Regiomontanus, Porphyry, Topocentric, Bhava Chalit, Sripati)
+- User preference setting (which ayanamsha + house system)
+- Side-by-side comparison view
+
+### Sprint 31 — Phase U: Prashna Full + Eclipse + Fixed Stars
+- Prashna full — 249 KP horary numbers each with chart
+- Numerology full integration into responses
+- Detailed nakshatra deity & yogatara analysis (27 nakshatras × deity + symbolism + yogatara fixed star)
+- Eclipse impact engine
+- Fixed stars overlay (50+ stars)
+
+### ✅ CHECKPOINT: All 1100+ calculations complete
+
+---
+
+## PHASE 3 — AI BRAIN BUILD (Sprints 32-38) 🧠
+
+**Goal: Build `ai_brain/` folder so AI uses all engines systematically.**
+
+```
+api-server/ai_brain/
+├── system_prompts/        (master_persona, brand_voice, response_format, language_rules)
+├── few_shot_examples/     (gold-standard answers per topic — marriage/career/wealth/health/etc.)
+├── classical_texts/       (BPHS, Phaladeepika, Saravali, Jaimini Sutras, Lal Kitab, Prashna Marga, Nadi)
+├── decision_trees/        (classical rules codified — marriage_logic, career_logic, etc.)
+├── question_router/       (intent_classifier, engine_map, keyword_patterns, multi_intent_handler)
+├── answer_schemas/        (JSON output structure per topic)
+├── verification/          (fact_checker, completeness_checker, brand_voice_checker, hallucination_detector)
+├── post_injectors/        (deterministic safety net — migrate from openai_helper.py)
+├── memory/                (user_session, chart_cache, feedback_store)
+├── training_data/         (gold_standard, flagged_bad, corrections — continuous learning)
+├── prompts/               (modular templates: pass1_facts, pass2_polish, self_verify, ensemble_voter, CoT)
+├── config/                (model_settings, ensemble_config, confidence_thresholds, feature_flags)
+├── evaluation/            (test_questions, accuracy_metrics, consistency_check, monthly_reports)
+└── orchestrator.py        (master file)
+```
+
+### Sprint 32 — ai_brain skeleton + system_prompts + answer_schemas
+### Sprint 33 — Few-shot examples folder (50 gold-standard answers across top 10 topics)
+### Sprint 34 — Decision trees codified (classical if-else logic for top 10 topics)
+### Sprint 35 — Question router + intent classifier upgrade + engine_map
+### Sprint 36 — Verification layer (fact_checker, brand_voice, hallucination detector)
+### Sprint 37 — Two-pass generation (Pass 1 facts only → Pass 2 polish) + self-verify loop
+### Sprint 38 — Ensemble voting (3 calls, majority wins) + confidence scoring
+
+---
+
+## PHASE 4 — RAG: Classical Texts (Sprints 39-42) 📚
+
+### Sprint 39 — BPHS digitization (chapters 1-50)
+### Sprint 40 — BPHS (51-97) + Phaladeepika full
+### Sprint 41 — Saravali + Jaimini Sutras + Lal Kitab + Prashna Marga
+### Sprint 42 — Embedding search + retrieval pipeline + integration
+
+---
+
+## PHASE 5 — PRODUCTION READY (Sprints 43-48) 🚀
+
+### Sprint 43 — Performance + caching + monitoring
+### Sprint 44 — Subscription (Cashfree) + payments + OTP (MSG91)
+### Sprint 45 — Push notifications (Firebase) + analytics + error monitoring
+### Sprint 46 — Final QA + accuracy testing (100 standard test Qs across all topics)
+### Sprint 47 — Production deploy
+### Sprint 48 — App Store + Play Store submission
+
+---
+
+## PHASE 6 — CONTINUOUS LEARNING (Forever, post-launch)
+
+- Weekly: User feedback review (thumbs up/down)
+- Negative feedback → `flagged_bad/` folder → manual fix → `gold_standard/`
+- Monthly: Auto-generated accuracy reports
+- Pattern detection → prompt + decision tree improvements
+- Goal: 90% → 97% accuracy over 6 months of real usage
+
+---
+
+## 📊 Time Estimate Summary
+
+| Phase | Sprints | Hours | Outcome |
+|---|---|---|---|
+| Phase 1 (Foundation) | 16-17 | 6-8 | Clean structure |
+| **Phase 2 (Calculations)** | **18-31** | **40-60** | **All 1100+ calc done** |
+| Phase 3 (AI Brain) | 32-38 | 20-30 | Smart structured AI |
+| Phase 4 (RAG) | 39-42 | 15-25 | Scripture-backed |
+| Phase 5 (Production) | 43-48 | 15-20 | Live app |
+| **TOTAL** | **33 sprints** | **~100-150 hrs** | **Industry-leading product live** |
+
+---
+
+## 🎯 Expected Final Accuracy
+
+- Calculations done only: 70% → 85%
+- + AI brain framework: 85% → 92%
+- + RAG (classical texts): 92% → 95%
+- + Continuous learning (6 months): 95% → 97-98%
+
+**Industry comparison:** Free apps ~60%, Paid apps ~75%, Pro software (₹15K-50K) ~85-90%, **Cosmic Lens target: 97%+**
+
+---
+
+## ⚠️ Known Pending Bugs (will be fixed in Sprint 17)
+- **Age-context**: AI ignores user's current age when framing timing answers (e.g., "active period 2024-2026" without considering user is currently 22 vs 60)
+- **Marriage partner gender inference**: Bug noted on canvas
+- **Topic classifier**: Currently keyword-based; should use embedding similarity for robustness
+
+---
+
+## 🚦 Discipline Per Sprint (MANDATORY for every new engine)
+
+```
+1. engine.py file (sahi folder mein)
+2. Unit test (test_engine.py)
+3. locked_facts.py wiring
+4. Rule entry in system prompt
+5. Deterministic post-injector
+6. 3x smoke test on real chart (/tmp/k.json, /tmp/req.json, /tmp/qm.json)
+7. Architect review (code_review skill)
+8. replit.md entry
+```
+
+**Skipping this discipline = silent breakage in production.** Non-negotiable.
+
+---
+
+# 🔚 ROADMAP END — This is the source of truth for all future work

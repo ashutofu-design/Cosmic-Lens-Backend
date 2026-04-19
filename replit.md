@@ -778,6 +778,14 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - F5: 7 doshas across vargas (D2 Mangal+Daridra, D3 Mangal, D7 Mangal+Chandra-Grahan, D9 Kemadruma, D12 Kemadruma)
 - **Total varga depth now**: 14 vargas × 3 layers (aspects/ashtaka/yoga-dosha) + per-varga dasha overlay = ~144 sub-calculations
 
+### Sprint 32.5 — Phase G Ashtakavarga Advanced ✅ AUDIT-COMPLETE
+- All 4 items pre-existing in `vedic/varga/ashtaka_deep.py` (Sprint 23):
+  - **G1 Trikona Shodhana** ✅ — column-wise minimum reduction across each trikona group (1-5-9, 2-6-10, 3-7-11, 4-8-12)
+  - **G2 Ekadhipatya Shodhana** ✅ — house-lord conflict resolution (when one planet rules 2 signs)
+  - **G3 Sodhya Pinda** ✅ — Rashi-Pinda + Graha-Pinda + total ranking (BPHS Ch.66) — strongest/weakest planet identified
+  - **G4 Transit-through-Ashtakavarga predictions** ✅ — `transit_overlay()` returns per-planet verdict (EXCELLENT ≥5, FAVOURABLE 4, AVERAGE 3, WEAK ≤2 bindus in current transit sign of own-BAV)
+- Test on chart: Sun reduced [3,3,5,2,3,4,4,4,4,5,6,5] → [0,0,0,0,0,1,0,0,0,0,2,3]; Sodhya Pinda ranking Venus 138 > Mars 66 > Sun/Moon 64 > Saturn 60 > Mercury 40 > Jupiter 29; Transit Sun-Cap 5 EXCELLENT, Mars-Sco 1 WEAK, Jup-Gem 5 EXCELLENT
+
 ### Sprint 33 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas

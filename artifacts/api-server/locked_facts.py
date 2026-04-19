@@ -1007,6 +1007,42 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] transits failed: {exc}")
 
+    # Sprint-51 — Pre-computed timing windows (engine-only, no AI guess)
+    # These are the AUTHORITATIVE timing answers for any "kab hoga" question.
+    # AI is NEVER allowed to invent dates — it must mirror these verbatim.
+    timing_str = ""
+    try:
+        from vedic.timing.timing_engine import (  # type: ignore
+            marriage_timing, child_timing, career_timing, promotion_timing,
+            wealth_timing, foreign_timing, property_timing,
+        )
+        _ks = {
+            "Marriage":  marriage_timing(kundli),
+            "Child":     child_timing(kundli),
+            "Career":    career_timing(kundli),
+            "Promotion": promotion_timing(kundli),
+            "Wealth":    wealth_timing(kundli),
+            "Foreign":   foreign_timing(kundli),
+            "Property":  property_timing(kundli),
+        }
+        _t_lines = ["▸ TIMING ENGINE (Sprint-51 — engine-only, AI MUST mirror verbatim, NEVER invent dates):"]
+        for topic, r in _ks.items():
+            if r and r.get("available"):
+                _t_lines.append(
+                    f"   • {topic:10s} window: {r['window']}  "
+                    f"[confidence: {r['confidence']}, lords: {','.join(r['house_lords'])}]"
+                )
+            else:
+                _t_lines.append(f"   • {topic:10s} window: — (insufficient dasha lookahead)")
+        _t_lines.append(
+            "   ⚐ HARD RULE: For ANY 'kab/when' question on these topics, "
+            "use ONLY the window above. NO date may appear in the answer "
+            "that is not in this block."
+        )
+        timing_str = "\n".join(_t_lines)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] timing_engine failed: {exc}")
+
     # Sprint-8 — Jaimini Chara Dasha (sign-based mahadasha)
     cd_str = ""
     try:
@@ -1081,6 +1117,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         sthira_str,
         niryana_str,
         tr_str,
+        timing_str,
         _format_dasha_block(kundli),
         pd_str,
         jm_str,

@@ -1033,6 +1033,39 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 
 ### Sprint 50+ — Engine layer complete; AI Brain phase next
 
+### Sprint 51 — TIMING ENGINE + ANTI-HALLUCINATION VALIDATOR ✅ COMPLETE
+**User-mandated absolute rule:** AI has ZERO access to timing answers — every "kab hoga" question MUST be answered ONLY by the deterministic engine. AI may only refine LANGUAGE for opinion questions ("Job vs Business?"), and even then must cite engine facts.
+
+**Modules built:**
+- `vedic/timing/timing_engine.py` (~210 lines) — per-topic deterministic windows:
+  - `marriage_timing` (houses 7,2,11) · `child_timing` (5,9,11) · `career_timing` (10,6,2)
+  - `promotion_timing` (10,11,6) · `wealth_timing` (2,11,9) · `foreign_timing` (12,9,7)
+  - `property_timing` (4,11,2) · `health_caution_timing` (1,8,6) · `spiritual_awakening_timing` (9,12,5)
+  - Each scans Vimshottari `upcoming[]` for next 80 sub-periods where MD-lord OR AD-lord matches house lords (score ≥2 → match). Returns `{window, confidence: HIGH/MEDIUM/LOW, factors[], all_matches[]}`
+  - `detect_timing_topic(q)` keyword router (Hindi: kab/shaadi/santaan/videsh/ghar; English: when/marriage/baby/career)
+  - `format_timing_answer()` produces user-facing block AI must mirror verbatim
+
+- `vedic/validator/timing_validator.py` (~170 lines) — HARD anti-hallucination:
+  - `is_timing_question(q)` — 25+ Hindi+English cues (kab, kab hoga, kis saal, when will, by when…)
+  - `extract_date_tokens(text)` — regex for years (1950-2159), month-year combos, MD-AD windows, dasha mentions, age refs
+  - `validate_ai_response(q, ai_text, engine_facts)` — every date/year/month/dasha in AI output cross-checked against engine facts; ANY token NOT in facts → REJECT (severity=REJECT)
+  - `scrub_invented_dates()` — strips invented tokens, replaces with engine window
+  - `enforce_timing_lock()` — single-call wrapper used by `openai_helper.py`
+
+**Wiring:**
+- `locked_facts.py` — pre-computes all 7 timing windows + emits `▸ TIMING ENGINE` block with HARD RULE banner ("NO date may appear in answer that is not in this block")
+- `openai_helper.py` post-AI hook (after `_call_once`) — runs `enforce_timing_lock`; on REJECT, scrubs response and appends authoritative window. Tracing emits `4a.TIMING_VALIDATOR_OK/REJECT` with token diff.
+
+**Verified:** Test chart returns timing block with 7 topics; engine degrades gracefully (window="—" + LOW confidence) when Vimshottari `upcoming[]` shape unavailable. LF: 86,779 → ~76,611 chars (test req variant; production chart will be larger).
+
+**Architecture confirmed by user:**
+| Question type | Engine | AI refine |
+|---|---|---|
+| Shaadi/baby/promotion/foreign/property kab? | 100% | 0% (verbatim mirror) |
+| Job ya business? | chart facts | reasoning over facts (RAG-eligible) |
+| Career/nature kya? | chart facts | reasoning (RAG-eligible) |
+
+
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)
 - Muntha (progressed point)

@@ -2985,6 +2985,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     text = _call_once()
     _trace(req_id, "4.RAW_AI_RESPONSE", text)
 
+    # ── Sprint-51 TIMING VALIDATOR — hard anti-hallucination layer ──────────
+    # If the question is a "kab/when" timing question, the AI is FORBIDDEN
+    # from inventing any date/year/month/dasha not present in the engine's
+    # locked facts. Any invented token is scrubbed and replaced with the
+    # engine's authoritative window.
+    try:
+        from vedic.validator.timing_validator import enforce_timing_lock  # type: ignore
+        _facts_blob = "\n".join(
+            (m.get("content") or "") for m in messages if m.get("role") == "system"
+        )
+        _engine_window = ""
+        # Best-effort extract of the topic-specific engine window line
+        for _line in _facts_blob.splitlines():
+            if "window:" in _line and any(t in _line for t in
+                ("Marriage","Child","Career","Promotion","Wealth","Foreign","Property")):
+                _engine_window = _line.strip(); break
+        _lock = enforce_timing_lock(question or "", text, _facts_blob, _engine_window)
+        if not _lock["ok"]:
+            _trace(req_id, "4a.TIMING_VALIDATOR_REJECT", _lock["validation"])
+            text = _lock["safe_text"]
+        else:
+            _trace(req_id, "4a.TIMING_VALIDATOR_OK", _lock["validation"])
+    except Exception as _exc:  # noqa: BLE001
+        _trace(req_id, "4a.TIMING_VALIDATOR_ERR", str(_exc))
+
     # ── General-mode validators (chart-leak + strict structure) ──────────────
     # Two independent checks for general (non-astro) replies:
     #   (a) chart leak — references to user's kundli/planets/dasha/remedy

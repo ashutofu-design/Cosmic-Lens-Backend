@@ -10,7 +10,7 @@ need to branch.
 
 Configuration:
 - OPENAI_API_KEY  (required)  user-provided secret
-- OPENAI_MODEL    (optional)  defaults to "gpt-4o-mini" for cost
+- OPENAI_MODEL    (optional)  defaults to "gpt-4.1-mini" (smarter than 4o-mini, slightly higher cost)
 - OPENAI_TIMEOUT  (optional)  seconds, defaults to 30
 """
 
@@ -2635,7 +2635,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if client is None:
         raise RuntimeError(_client_err or "OpenAI client not configured")
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
     topic = _classify_topic(question)
     mode, mode_reason = _classify_mode_with_reason(question)
@@ -2735,7 +2735,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 messages         = messages,
                 temperature      = temperature,
                 top_p            = 1,
-                max_tokens       = 280,
+                max_tokens       = 380,
                 presence_penalty = presence_penalty,
                 frequency_penalty= frequency_penalty,
             )
@@ -3052,7 +3052,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     if client is None:
         raise RuntimeError(_client_err or "OpenAI client not configured")
 
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
     # Streaming path is only used for non-marriage astro turns (marriage and
     # general both branch to ai_ask oneshot above), so we don't need the
     # marriage facts meta here — but we still pass an empty out_meta for
@@ -3090,7 +3090,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             messages         = messages,
             temperature      = 0.3,
             top_p            = 1,
-            max_tokens       = 280,
+            max_tokens       = 380,
             presence_penalty = 0.2,
             frequency_penalty= 0.2,
             stream           = True,

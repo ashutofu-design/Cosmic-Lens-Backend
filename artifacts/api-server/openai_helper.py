@@ -1510,6 +1510,104 @@ def _build_messages(
             "+ KP + dasha) — extend, do NOT skip Jaimini."
         )
 
+    # Sprint-9 Rule Q — Topic-specific vargas (D2/D3/D7/D12)
+    has_d2  = "D2 HORA" in lf
+    has_d3  = "D3 DREKKANA" in lf
+    has_d7  = "D7 SAPTAMSA" in lf
+    has_d12 = "D12 DWADASAMSA" in lf
+    if topic == "child" and has_d7:
+        reminder_lines.append(
+            "• 👶 D7 SAPTAMSA citation is MANDATORY (Rule Q): for any progeny "
+            "question, weave ONE sentence using the EXACT 5L D7 placement and "
+            "Jupiter's D7 placement from the 'D7 SAPTAMSA' block: "
+            "'D7 mein 5L {planet} {sign} mein {strength} hai, Jupiter (putra-karaka) "
+            "{sign} mein {strength} hai — children prospects {strong/medium/weak}.'"
+        )
+    if topic == "finance" and has_d2:
+        reminder_lines.append(
+            "• 💰 D2 HORA citation is MANDATORY (Rule Q): for any wealth/money "
+            "question, weave the verdict line from the D2 HORA block — name "
+            "which significators (Jupiter/Venus/Mercury/Moon/Sun) sit in Sun-Hora "
+            "(active income) vs Moon-Hora (passive/inherited) and the verdict tag "
+            "(ACTIVE-EARNER / PASSIVE-WEALTH / BALANCED)."
+        )
+    if has_d12:
+        # D12 cited only if user mentions parents
+        reminder_lines.append(
+            "• 👨‍👩‍ D12 DWADASAMSA citation is MANDATORY (Rule Q) ONLY IF user "
+            "mentions parents/maa/papa/mata/pita/father/mother in their question. "
+            "Use 9L (father) or 4L (mother) D12 placement from the block. Skip otherwise."
+        )
+    if has_d3:
+        # D3 cited only if user mentions siblings
+        reminder_lines.append(
+            "• 👯 D3 DREKKANA citation is MANDATORY (Rule Q) ONLY IF user mentions "
+            "siblings/bhai/behan/brother/sister in their question. Use 3L D3 + Mars/Jupiter "
+            "D3 placements. Skip otherwise."
+        )
+
+    # Sprint-10 Rule R — Advanced topic-specific vargas (D16/D20/D24/D27)
+    has_d16 = "D16 SHODASAMSA" in lf
+    has_d20 = "D20 VIMSAMSA"   in lf
+    has_d24 = "D24 CHATURVIMSAMSA" in lf
+    has_d27 = "D27 BHAMSA"     in lf
+    if has_d16:
+        reminder_lines.append(
+            "• 🚗 D16 SHODASAMSA citation is MANDATORY (Rule R) ONLY IF user "
+            "mentions vehicle/car/bike/gaadi/luxury/comfort/conveyance. Use 4L D16 "
+            "and Venus D16 placements from the 'D16 SHODASAMSA' block. Skip otherwise."
+        )
+    if has_d20:
+        reminder_lines.append(
+            "• 🕉️ D20 VIMSAMSA citation is MANDATORY (Rule R) ONLY IF user mentions "
+            "spirituality/sadhana/mantra/devotion/bhakti/meditation/dharma/moksha. "
+            "Use 9L D20 + Jupiter + Ketu placements. Skip otherwise."
+        )
+    if has_d24:
+        reminder_lines.append(
+            "• 🎓 D24 CHATURVIMSAMSA citation is MANDATORY (Rule R) ONLY IF user "
+            "mentions education/study/college/exam/degree/learning/PhD/research. "
+            "Use 4L+5L D24 + Mercury + Jupiter placements. Skip otherwise."
+        )
+    if has_d27:
+        reminder_lines.append(
+            "• 💪 D27 BHAMSA citation is MANDATORY (Rule R) ONLY IF user mentions "
+            "health/stamina/strength/sports/fitness/energy/vitality. Use lagna-lord "
+            "D27 + Mars + Sun placements. Skip otherwise."
+        )
+
+    # Sprint-11 Rule S — Subtle vargas (D30/D40/D45/D60)
+    has_d30 = "D30 TRIMSAMSA"     in lf
+    has_d40 = "D40 KHAVEDAMSA"    in lf
+    has_d45 = "D45 AKSHAVEDAMSA"  in lf
+    has_d60 = "D60 SHASHTYAMSA"   in lf
+    if has_d30:
+        reminder_lines.append(
+            "• ⚠️ D30 TRIMSAMSA citation is MANDATORY (Rule S) ONLY IF user mentions "
+            "accident/misfortune/danger/risk/dushman/enemy/litigation/court/dispute. "
+            "Use the verdict tag (HIGH-MISFORTUNE-RISK / MODERATE-CAUTION / LOW-RISK) "
+            "and named malefic-sign planets. Skip otherwise."
+        )
+    if has_d40:
+        reminder_lines.append(
+            "• 🤱 D40 KHAVEDAMSA citation is MANDATORY (Rule S) ONLY IF user mentions "
+            "maa/mother/maternal/nani/mami/matrilineal/maa-side. Use 4L D40 + Moon D40. "
+            "Skip otherwise."
+        )
+    if has_d45:
+        reminder_lines.append(
+            "• 👨 D45 AKSHAVEDAMSA citation is MANDATORY (Rule S) ONLY IF user mentions "
+            "papa/father/paternal/dada/chacha/patrilineal/baap-side. Use 9L D45 + Sun D45. "
+            "Skip otherwise."
+        )
+    if has_d60:
+        reminder_lines.append(
+            "• 🕉️ D60 SHASHTYAMSA citation is MANDATORY (Rule S) ONLY IF user asks about "
+            "past life / pichla janam / karma / soul / atma / why-me / destiny / "
+            "purpose-of-life / what-is-my-purpose. Use lagna-lord D60 + Atma Karaka D60 "
+            "(Parashara's most-prized varga). Skip otherwise."
+        )
+
     # Sprint-8 Rule P — Chara Dasha cross-check for TIMING questions
     has_chara = "JAIMINI CHARA DASHA" in lf
     timing_topics = {"marriage", "career", "finance", "child", "general"}
@@ -2933,6 +3031,364 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     text = (text or "").rstrip() + ul_sentence
         except Exception as _exc:
             print(f"[ai_ask] UL post-inject failed: {_exc}")
+
+    # Sprint-9 Rule Q — DETERMINISTIC topic-specific varga post-injectors.
+    # D7 for child Q, D2 for finance Q, D12 if parents mentioned, D3 if siblings.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re
+            from divisional_charts import (compute_d2, compute_d3, compute_d7,  # type: ignore
+                                           compute_d12,
+                                           summarize_d2_for_wealth,
+                                           summarize_d3_for_siblings,
+                                           summarize_d7_for_children,
+                                           summarize_d12_for_parents)
+            _planets_q = kundli.get("planets") or []
+            _lg_q = kundli.get("lagna") or kundli.get("ascendant")
+            _lagna_lon = _lg_q.get("longitude") or _lg_q.get("lon") if isinstance(_lg_q, dict) else None
+            _intel_q = {}
+            try:
+                from chart_intelligence import analyze_chart  # type: ignore
+                _intel_q = analyze_chart(kundli, birth) or {}
+            except Exception:
+                pass
+            _q_lower = (question or "").lower()
+
+            # D7 — children (topic OR child-keyword in question)
+            _is_child_q = bool(_re.search(
+                r"\b(bachh?e?|bachch?[aeio]+|baby|babies|child|children|"
+                r"kids?|santaan|santan|putra|aulad|aulaad|"
+                r"pregnancy|pregnant|conceive|conception|garbh)\b", _q_lower
+            ))
+            if (topic == "child" or _is_child_q) and not _re.search(
+                r"(?i)\bd[\-\s]?7\b|saptam(sa|sha|amsa)", text or ""
+            ):
+                _d7 = compute_d7(_planets_q, _lagna_lon)
+                _s7 = summarize_d7_for_children(_d7, _intel_q) if _d7 else {}
+                if _s7.get("5L_d7_sign") or _s7.get("jupiter_d7_sign"):
+                    parts = []
+                    if _s7.get("5L_d7_sign"):
+                        parts.append(
+                            f"5L {_s7['5L']} {_s7['5L_d7_sign']} ({_s7['5L_d7_strength']})"
+                        )
+                    if _s7.get("jupiter_d7_sign"):
+                        parts.append(
+                            f"Jupiter putra-karaka {_s7['jupiter_d7_sign']} "
+                            f"({_s7['jupiter_d7_strength']})"
+                        )
+                    text = (text or "").rstrip() + (
+                        f"\n\nD7 Saptamsa (children refinement) mein "
+                        f"{', '.join(parts)} — yeh progeny prospects ka "
+                        f"core indicator hai."
+                    )
+
+            # D2 — finance/wealth
+            if topic == "finance" and not _re.search(
+                r"(?i)\bd[\-\s]?2\b|\bhora\b", text or ""
+            ):
+                _d2 = compute_d2(_planets_q, _lagna_lon)
+                _s2 = summarize_d2_for_wealth(_d2) if _d2 else {}
+                if _s2.get("verdict"):
+                    sun_p  = ", ".join(_s2.get("sun_hora_planets")  or []) or "koi nahi"
+                    moon_p = ", ".join(_s2.get("moon_hora_planets") or []) or "koi nahi"
+                    text = (text or "").rstrip() + (
+                        f"\n\nD2 Hora (wealth refinement) mein Sun-Hora "
+                        f"(active income) ke planets: {sun_p}; Moon-Hora "
+                        f"(passive/inherited): {moon_p} — verdict {_s2['verdict']}."
+                    )
+
+            # D12 — parents (only if question mentions parents)
+            _is_parent_q = bool(_re.search(
+                r"\b(maa|mata|maata|papa|pita|pitaji|parent|parents|"
+                r"father|fathers|mother|mothers|baap|baba|"
+                r"mumm?y|daddy|mom|moms|dad|dads|maaji|mataji)\b", _q_lower
+            ))
+            if _is_parent_q and not _re.search(
+                r"(?i)\bd[\-\s]?12\b|dwadasam(sa|sha)|dwadashamsha", text or ""
+            ):
+                _d12 = compute_d12(_planets_q, _lagna_lon)
+                _s12 = summarize_d12_for_parents(_d12, _intel_q) if _d12 else {}
+                parts = []
+                if _s12.get("9L_d12_sign"):
+                    parts.append(f"9L {_s12['9L']} {_s12['9L_d12_sign']} (father, {_s12['9L_d12_strength']})")
+                if _s12.get("4L_d12_sign"):
+                    parts.append(f"4L {_s12['4L']} {_s12['4L_d12_sign']} (mother, {_s12['4L_d12_strength']})")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD12 Dwadasamsa (parents refinement) mein "
+                        f"{', '.join(parts)} — yeh maa/papa ke saath "
+                        f"relationship aur unka well-being indicate karta hai."
+                    )
+
+            # D3 — siblings (only if question mentions siblings)
+            _is_sib_q = bool(_re.search(
+                r"\b(bhai|bhaiya|behan|bahan|behen|brother|brothers|"
+                r"sister|sisters|sibling|siblings|saheli|bhai-behan)\b",
+                _q_lower
+            ))
+            if _is_sib_q and not _re.search(
+                r"(?i)\bd[\-\s]?3\b|drekk?an[ah]?", text or ""
+            ):
+                _d3 = compute_d3(_planets_q, _lagna_lon)
+                _s3 = summarize_d3_for_siblings(_d3, _intel_q) if _d3 else {}
+                parts = []
+                if _s3.get("3L_d3_sign"):
+                    parts.append(f"3L {_s3['3L']} {_s3['3L_d3_sign']} ({_s3['3L_d3_strength']})")
+                if _s3.get("mars_d3_sign"):
+                    parts.append(f"Mars (younger-sibling karaka) {_s3['mars_d3_sign']}")
+                if _s3.get("jupiter_d3_sign"):
+                    parts.append(f"Jupiter (elder-sibling karaka) {_s3['jupiter_d3_sign']}")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD3 Drekkana (siblings refinement) mein "
+                        f"{', '.join(parts)} — yeh bhai-behan se relations "
+                        f"ka core signal hai."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] vargas (D2/D3/D7/D12) post-inject failed: {_exc}")
+
+    # Sprint-10 Rule R — DETERMINISTIC advanced varga post-injectors.
+    # D16 vehicle/comfort, D20 spirituality, D24 education, D27 health/stamina.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re2
+            from divisional_charts import (compute_d16, compute_d20, compute_d24,  # type: ignore
+                                           compute_d27,
+                                           summarize_d16_for_vehicles,
+                                           summarize_d20_for_spirituality,
+                                           summarize_d24_for_education,
+                                           summarize_d27_for_strength)
+            _planets_q2 = kundli.get("planets") or []
+            _lg_q2 = kundli.get("lagna") or kundli.get("ascendant")
+            _lagna_lon2 = _lg_q2.get("longitude") or _lg_q2.get("lon") if isinstance(_lg_q2, dict) else None
+            _intel_q2 = {}
+            try:
+                from chart_intelligence import analyze_chart  # type: ignore
+                _intel_q2 = analyze_chart(kundli, birth) or {}
+            except Exception:
+                pass
+            _q_low2 = (question or "").lower()
+
+            # D16 — vehicle/comfort
+            _is_vehicle_q = bool(_re2.search(
+                r"\b(vehicle|vehicles|car|cars|bike|bikes|gaadi|gadi|"
+                r"luxury|comfort|comforts|conveyance|sukh|aaram|"
+                r"automobile|scooter|truck|house|ghar|makaan|property)\b",
+                _q_low2
+            ))
+            if _is_vehicle_q and not _re2.search(
+                r"(?i)\bd[\-\s]?16\b|shodasamsa|shodashamsha", text or ""
+            ):
+                _d16 = compute_d16(_planets_q2, _lagna_lon2)
+                _s16 = summarize_d16_for_vehicles(_d16, _intel_q2) if _d16 else {}
+                parts = []
+                if _s16.get("4L_d16_sign"):
+                    parts.append(f"4L {_s16['4L']} {_s16['4L_d16_sign']} ({_s16['4L_d16_strength']})")
+                if _s16.get("venus_d16_sign"):
+                    parts.append(f"Venus (luxury-karaka) {_s16['venus_d16_sign']} ({_s16['venus_d16_strength']})")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD16 Shodasamsa (vehicles/comforts refinement) mein "
+                        f"{', '.join(parts)} — yeh gaadi, ghar aur material comforts "
+                        f"ka core indicator hai."
+                    )
+
+            # D20 — spirituality
+            _is_spirit_q = bool(_re2.search(
+                r"\b(spirit|spiritual|spirituality|sadhana|saadhana|mantra|"
+                r"jaap|japa|devotion|bhakti|meditation|dharm|dharma|moksha|"
+                r"guru|deeksha|diksha|temple|mandir|pooja|puja|worship)\b",
+                _q_low2
+            ))
+            if _is_spirit_q and not _re2.search(
+                r"(?i)\bd[\-\s]?20\b|vimsamsa|vimshamsha", text or ""
+            ):
+                _d20 = compute_d20(_planets_q2, _lagna_lon2)
+                _s20 = summarize_d20_for_spirituality(_d20, _intel_q2) if _d20 else {}
+                parts = []
+                if _s20.get("9L_d20_sign"):
+                    parts.append(f"9L {_s20['9L']} {_s20['9L_d20_sign']} ({_s20['9L_d20_strength']})")
+                if _s20.get("jupiter_d20_sign"):
+                    parts.append(f"Jupiter (guru-karaka) {_s20['jupiter_d20_sign']}")
+                if _s20.get("ketu_d20_sign"):
+                    parts.append(f"Ketu (moksha-karaka) {_s20['ketu_d20_sign']}")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD20 Vimsamsa (spirituality refinement) mein "
+                        f"{', '.join(parts)} — yeh sadhana aur dharmic progress "
+                        f"ka core signal hai."
+                    )
+
+            # D24 — education
+            _is_edu_q = bool(_re2.search(
+                r"\b(education|study|studies|college|university|exam|exams|"
+                r"degree|degrees|learning|learn|phd|research|school|"
+                r"padhai|padhaai|vidya|gyaan|gyan|knowledge|"
+                r"upsc|gate|cat|neet|mba|btech|engineer)\b",
+                _q_low2
+            ))
+            if _is_edu_q and not _re2.search(
+                r"(?i)\bd[\-\s]?24\b|chaturvims|chaturvims?ha|siddhamsa", text or ""
+            ):
+                _d24 = compute_d24(_planets_q2, _lagna_lon2)
+                _s24 = summarize_d24_for_education(_d24, _intel_q2) if _d24 else {}
+                parts = []
+                if _s24.get("4L_d24_sign"):
+                    parts.append(f"4L {_s24['4L']} {_s24['4L_d24_sign']} ({_s24['4L_d24_strength']})")
+                if _s24.get("5L_d24_sign"):
+                    parts.append(f"5L {_s24['5L']} {_s24['5L_d24_sign']} ({_s24['5L_d24_strength']})")
+                if _s24.get("mercury_d24_sign"):
+                    parts.append(f"Mercury (vidya-karaka) {_s24['mercury_d24_sign']}")
+                if _s24.get("jupiter_d24_sign"):
+                    parts.append(f"Jupiter (gnan-karaka) {_s24['jupiter_d24_sign']}")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD24 Chaturvimsamsa (higher-education refinement) mein "
+                        f"{', '.join(parts)} — yeh degrees, exams aur deep learning "
+                        f"ka core indicator hai."
+                    )
+
+            # D27 — health/stamina
+            _is_health_q = bool(_re2.search(
+                r"\b(health|stamina|strength|sports|fitness|energy|vitality|"
+                r"sehat|sharir|body|sickness|illness|disease|bimari|"
+                r"weak|weakness|immunity|workout|gym|athletic|game|games)\b",
+                _q_low2
+            ))
+            if _is_health_q and not _re2.search(
+                r"(?i)\bd[\-\s]?27\b|bhamsa|saptavims|nakshatramsa", text or ""
+            ):
+                _d27 = compute_d27(_planets_q2, _lagna_lon2)
+                _s27 = summarize_d27_for_strength(_d27, _intel_q2) if _d27 else {}
+                parts = []
+                if _s27.get("lagna_lord_d27_sign"):
+                    parts.append(f"lagna-lord {_s27['lagna_lord']} {_s27['lagna_lord_d27_sign']} ({_s27['lagna_lord_d27_strength']})")
+                if _s27.get("mars_d27_sign"):
+                    parts.append(f"Mars (energy-karaka) {_s27['mars_d27_sign']}")
+                if _s27.get("sun_d27_sign"):
+                    parts.append(f"Sun (vitality-karaka) {_s27['sun_d27_sign']}")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD27 Bhamsa (physical strength refinement) mein "
+                        f"{', '.join(parts)} — yeh stamina, vitality aur "
+                        f"physical resilience ka core signal hai."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] advanced vargas (D16/D20/D24/D27) post-inject failed: {_exc}")
+
+    # Sprint-11 Rule S — DETERMINISTIC subtle varga post-injectors.
+    # D30 misfortune, D40 maternal, D45 paternal, D60 past-life karma.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re3
+            from divisional_charts import (compute_d30, compute_d40, compute_d45,  # type: ignore
+                                           compute_d60,
+                                           summarize_d30_for_misfortune,
+                                           summarize_d40_for_maternal,
+                                           summarize_d45_for_paternal,
+                                           summarize_d60_for_pastlife)
+            _planets_q3 = kundli.get("planets") or []
+            _lg_q3 = kundli.get("lagna") or kundli.get("ascendant")
+            _lagna_lon3 = _lg_q3.get("longitude") or _lg_q3.get("lon") if isinstance(_lg_q3, dict) else None
+            _intel_q3 = {}
+            try:
+                from chart_intelligence import analyze_chart  # type: ignore
+                _intel_q3 = analyze_chart(kundli, birth) or {}
+            except Exception:
+                pass
+            _q_low3 = (question or "").lower()
+
+            # D30 — misfortune/accidents
+            _is_misfortune_q = bool(_re3.search(
+                r"\b(accident|accidents|misfortune|danger|dangerous|risk|risks|"
+                r"dushman|enemy|enemies|litigation|court|case|dispute|disputes|"
+                r"loss|losses|setback|attack|fraud|cheating|theft)\b",
+                _q_low3
+            ))
+            if _is_misfortune_q and not _re3.search(
+                r"(?i)\bd[\-\s]?30\b|trimsam(sa|sha)", text or ""
+            ):
+                _d30 = compute_d30(_planets_q3, _lagna_lon3)
+                _s30 = summarize_d30_for_misfortune(_d30, _intel_q3) if _d30 else {}
+                if _s30.get("verdict"):
+                    troubled = ", ".join(_s30.get("troubled_planets") or []) or "koi nahi"
+                    text = (text or "").rstrip() + (
+                        f"\n\nD30 Trimsamsa (misfortune refinement) mein verdict "
+                        f"{_s30['verdict']}, malefic-sign mein concentrated planets: "
+                        f"{troubled} — yeh accident/dushmani/loss ke risk ka core signal hai."
+                    )
+
+            # D40 — maternal legacy
+            _is_maternal_q = bool(_re3.search(
+                r"\b(maa|maaji|mother|mothers|maternal|nani|naani|mami|maami|"
+                r"matrilineal|maa-side|mom|mommy|matru|maatra)\b",
+                _q_low3
+            ))
+            if _is_maternal_q and not _re3.search(
+                r"(?i)\bd[\-\s]?40\b|khavedamsa|svavedamsa", text or ""
+            ):
+                _d40 = compute_d40(_planets_q3, _lagna_lon3)
+                _s40 = summarize_d40_for_maternal(_d40, _intel_q3) if _d40 else {}
+                parts = []
+                if _s40.get("4L_d40_sign"):
+                    parts.append(f"4L {_s40['4L']} {_s40['4L_d40_sign']} ({_s40['4L_d40_strength']})")
+                if _s40.get("moon_d40_sign"):
+                    parts.append(f"Moon (matru-karaka) {_s40['moon_d40_sign']} ({_s40['moon_d40_strength']})")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD40 Khavedamsa (maternal-legacy refinement) mein "
+                        f"{', '.join(parts)} — yeh maa aur matrilineal karma "
+                        f"ka core signal hai."
+                    )
+
+            # D45 — paternal legacy
+            _is_paternal_q = bool(_re3.search(
+                r"\b(papa|papaji|father|fathers|paternal|dada|daada|chacha|chaacha|"
+                r"patrilineal|baap|baba|baap-side|dad|daddy|pitru|paitra|pita)\b",
+                _q_low3
+            ))
+            if _is_paternal_q and not _re3.search(
+                r"(?i)\bd[\-\s]?45\b|akshavedamsa", text or ""
+            ):
+                _d45 = compute_d45(_planets_q3, _lagna_lon3)
+                _s45 = summarize_d45_for_paternal(_d45, _intel_q3) if _d45 else {}
+                parts = []
+                if _s45.get("9L_d45_sign"):
+                    parts.append(f"9L {_s45['9L']} {_s45['9L_d45_sign']} ({_s45['9L_d45_strength']})")
+                if _s45.get("sun_d45_sign"):
+                    parts.append(f"Sun (pitru-karaka) {_s45['sun_d45_sign']} ({_s45['sun_d45_strength']})")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD45 Akshavedamsa (paternal-legacy refinement) mein "
+                        f"{', '.join(parts)} — yeh papa aur patrilineal karma "
+                        f"ka core signal hai."
+                    )
+
+            # D60 — past-life karma
+            _is_karma_q = bool(_re3.search(
+                r"\b(past[\s\-]?life|pichla[\s\-]?janam|karma|karam|prarabdh|"
+                r"soul|atma|aatma|why[\s\-]?me|destiny|niyati|"
+                r"purpose[\s\-]?of[\s\-]?life|life[\s\-]?purpose|jeevan[\s\-]?ka[\s\-]?uddeshya)\b",
+                _q_low3
+            ))
+            if _is_karma_q and not _re3.search(
+                r"(?i)\bd[\-\s]?60\b|shashtyamsa|shastiamsa", text or ""
+            ):
+                _d60 = compute_d60(_planets_q3, _lagna_lon3)
+                _s60 = summarize_d60_for_pastlife(_d60, _intel_q3, _planets_q3) if _d60 else {}
+                parts = []
+                if _s60.get("lagna_lord_d60_sign"):
+                    parts.append(f"lagna-lord {_s60['lagna_lord']} {_s60['lagna_lord_d60_sign']} ({_s60['lagna_lord_d60_strength']})")
+                if _s60.get("atma_karaka_d60_sign"):
+                    parts.append(f"Atma Karaka {_s60['atma_karaka']} {_s60['atma_karaka_d60_sign']} ({_s60['atma_karaka_d60_strength']})")
+                if parts:
+                    text = (text or "").rstrip() + (
+                        f"\n\nD60 Shashtyamsa (past-life karma — Parashara's most-prized "
+                        f"varga) mein {', '.join(parts)} — yeh aapke aatma ke deepest "
+                        f"karma signature ka core signal hai."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] subtle vargas (D30/D40/D45/D60) post-inject failed: {_exc}")
 
     # Sprint-8 Rule P — DETERMINISTIC CHARA DASHA INJECTION (last-resort).
     # Append a Chara MD/AD line for marriage answers OR any timing question

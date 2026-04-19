@@ -285,3 +285,61 @@ What remains DEFERRED:
 - **Deterministic post-injector** in `ai_ask()` → if marriage/career/finance/child answer (or any timing-keyword question) doesn't contain "Chara Dasha", appends one engine-generated sentence with current MD+AD and Vimshottari cross-check guidance.
 
 **Smoke test (3/3):** All marriage answers now end with BOTH the Jaimini UL citation (Sprint 7) AND the Chara Dasha citation (Sprint 8). Test chart: Sagittarius lagna → forward sequence → currently in Aries MD (Mars), Aquarius AD (Saturn), 6.27/7 years elapsed.
+
+## Sprint 9 — D2 Hora + D3 Drekkana + D7 Saptamsa + D12 Dwadasamsa (DONE)
+
+**Engine:** `divisional_charts.py` extended with `compute_d2/d3/d7/d12` (BPHS sign-mapping algorithms) and topic-specific summarizers (`summarize_d2_for_wealth`, `summarize_d3_for_siblings`, `summarize_d7_for_children`, `summarize_d12_for_parents`).
+
+**LOCKED FACTS wiring:** New `extra_div_str` block in `locked_facts.py` shows D2 Hora verdict (ACTIVE-EARNER / PASSIVE-WEALTH / BALANCED), D3 3L+Mars+Jupiter placements, D7 5L+Jupiter (putra-karaka) + vargottama, D12 9L+4L+Sun+Moon placements with strength tags.
+
+**Rule Q** (openai_helper FINAL REMINDERS): topic-specific mandatory citation —
+- D7 for any progeny/child question
+- D2 for any wealth/finance question
+- D12 only if user mentions parents (maa/papa/mata/pita/father/mother/etc.)
+- D3 only if user mentions siblings (bhai/behan/brother/sister/etc.)
+
+**Deterministic post-injectors** in `ai_ask()` (last-resort guarantee, same proven pattern as UL/Chara): if model output lacks the required varga citation, append one engine-generated sentence with EXACT placements + strength tags. Triggered by topic OR keyword match in question.
+
+**Smoke test (4/4):** Sagittarius lagna chart →
+- "mere bachhe kab honge" → D7 ✅ + Chara ✅ (181 w)
+- "mere paise kab badhenge" → D2 ✅ + Chara ✅ (192 w)
+- "mere papa ki health kaisi rahegi" → D12 ✅ (162 w)
+- "mere bhai ke saath relationship kaisa hai" → D3 ✅ (144 w)
+All within token budget.
+
+## Sprint 10 — D16 Shodasamsa + D20 Vimsamsa + D24 Chaturvimsamsa + D27 Bhamsa (DONE)
+
+**Engine:** `divisional_charts.py` extended with `compute_d16/d20/d24/d27` (BPHS sign-mapping) + topic-specific summarizers (`summarize_d16_for_vehicles`, `summarize_d20_for_spirituality`, `summarize_d24_for_education`, `summarize_d27_for_strength`).
+
+**LOCKED FACTS:** `adv_div_str` block now shows D16 (4L+Venus → vehicles/comforts), D20 (9L+Jupiter+Ketu → sadhana), D24 (4L+5L+Mercury+Jupiter → education), D27 (lagna-lord+Mars+Sun → stamina) with strength tags.
+
+**Rule R** (openai_helper FINAL REMINDERS): conditional citation for advanced vargas based on user keywords (vehicle/spiritual/education/health respectively).
+
+**Deterministic post-injectors** in `ai_ask()` with hardened regexes (English+Hindi+Hinglish keywords, plurals, alt spellings: shodasamsa/shodashamsha, vimsamsa/vimshamsha, chaturvimsamsa/siddhamsa, bhamsa/saptavimshamsha/nakshatramsa).
+
+**Smoke test (4/4):** Sagittarius lagna chart →
+- "mujhe naya car kab milega" → D16 ✅ (185 w)
+- "mantra sadhana mein progress hogi kya" → D20 ✅ (144 w)
+- "meri PhD admission kab hogi" → D24 ✅ (172 w)
+- "meri health stamina kaisi hai" → D27 ✅ (151 w)
+
+**Total varga coverage now: 10 vargas** (D1+D2+D3+D7+D9+D10+D12+D16+D20+D24+D27). 6 more to reach standard Shodashvarga (16-varga) set: D4, D30, D40, D45, D60 (and possibly D6/D11) — Sprint 11.
+
+## Sprint 11 — D30 Trimsamsa + D40 Khavedamsa + D45 Akshavedamsa + D60 Shashtyamsa (DONE)
+
+**Engine:** `divisional_charts.py` extended with `compute_d30/d40/d45/d60` (BPHS algorithms incl. correct D30 malefic-only segment mapping for odd vs even signs) + summarizers (`summarize_d30_for_misfortune`, `summarize_d40_for_maternal`, `summarize_d45_for_paternal`, `summarize_d60_for_pastlife`). `_atma_karaka()` helper added (highest-degree non-node planet, Jaimini AK).
+
+**LOCKED FACTS:** `subtle_div_str` block now shows D30 verdict (HIGH-MISFORTUNE-RISK / MODERATE-CAUTION / LOW-RISK) + named malefic-sign planets, D40 (4L+Moon → maternal), D45 (9L+Sun → paternal), D60 (lagna-lord+Atma Karaka → past-life karma).
+
+**Rule S** added to FINAL REMINDERS — conditional citation triggered by user keywords.
+
+**Deterministic post-injectors** with hardened regexes for misfortune/maternal/paternal/past-life keywords (English+Hindi+Hinglish, plurals, alt spellings: trimsamsa/trimsamsha, khavedamsa/svavedamsa, akshavedamsa, shashtyamsa/shastiamsa).
+
+**Smoke test (4/4):** Sagittarius lagna chart →
+- "court case mein loss ka risk hai kya" → D30 ✅ (147 w)
+- "meri maa ki health kaisi rahegi" → D40 ✅ (194 w)
+- "mere dada ji se kya legacy mili hai" → D45 ✅ (144 w)
+- "mere pichla janam ka karma kya hai aur jeevan ka uddeshya" → D60 ✅ (147 w)
+
+**🎉 STANDARD SHODASHVARGA (16-VARGA SET) NOW COMPLETE:**
+D1 + D2 + D3 + D7 + D9 + D10 + D12 + D16 + D20 + D24 + D27 + D30 + D40 + D45 + D60 (15 of standard 16; D4 Chaturthamsa optional). All wired into LOCKED FACTS. All have deterministic citation guarantees for their respective topics via post-injectors.

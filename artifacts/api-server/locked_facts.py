@@ -336,6 +336,48 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] divisional_charts failed: {exc}")
 
+    # Sprint-9 — D2 Hora + D3 Drekkana + D7 Saptamsa + D12 Dwadasamsa
+    extra_div_str = ""
+    try:
+        from divisional_charts import (compute_d2, compute_d3, compute_d7,  # type: ignore
+                                       compute_d12, format_extra_vargas_summary)
+        _planets = kundli.get("planets") or []
+        d2  = compute_d2(_planets,  lagna_lon)
+        d3  = compute_d3(_planets,  lagna_lon)
+        d7  = compute_d7(_planets,  lagna_lon)
+        d12 = compute_d12(_planets, lagna_lon)
+        extra_div_str = format_extra_vargas_summary(d2, d3, d7, d12, intel)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] extra vargas (D2/D3/D7/D12) failed: {exc}")
+
+    # Sprint-10 — D16 Shodasamsa + D20 Vimsamsa + D24 Chaturvimsamsa + D27 Bhamsa
+    adv_div_str = ""
+    try:
+        from divisional_charts import (compute_d16, compute_d20, compute_d24,  # type: ignore
+                                       compute_d27, format_advanced_vargas_summary)
+        _planets2 = kundli.get("planets") or []
+        d16 = compute_d16(_planets2, lagna_lon)
+        d20 = compute_d20(_planets2, lagna_lon)
+        d24 = compute_d24(_planets2, lagna_lon)
+        d27 = compute_d27(_planets2, lagna_lon)
+        adv_div_str = format_advanced_vargas_summary(d16, d20, d24, d27, intel)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] advanced vargas (D16/D20/D24/D27) failed: {exc}")
+
+    # Sprint-11 — D30 Trimsamsa + D40 Khavedamsa + D45 Akshavedamsa + D60 Shashtyamsa
+    subtle_div_str = ""
+    try:
+        from divisional_charts import (compute_d30, compute_d40, compute_d45,  # type: ignore
+                                       compute_d60, format_subtle_vargas_summary)
+        _planets3 = kundli.get("planets") or []
+        d30 = compute_d30(_planets3, lagna_lon)
+        d40 = compute_d40(_planets3, lagna_lon)
+        d45 = compute_d45(_planets3, lagna_lon)
+        d60 = compute_d60(_planets3, lagna_lon)
+        subtle_div_str = format_subtle_vargas_summary(d30, d40, d45, d60, intel, _planets3)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] subtle vargas (D30/D40/D45/D60) failed: {exc}")
+
     # Sprint-7 — Jaimini Arudha Padas (A1-A12) + Upapada Lagna (UL)
     jm_str = ""
     try:
@@ -456,6 +498,9 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         asp_str,
         kk_str,
         div_str,
+        extra_div_str,
+        adv_div_str,
+        subtle_div_str,
         tr_str,
         _format_dasha_block(kundli),
         pd_str,

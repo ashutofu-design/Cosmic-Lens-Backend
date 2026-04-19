@@ -797,7 +797,17 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **H8** Fixed stars 50+ ✅ NEW — expanded catalog 24→**56** (27 Yogatara junction stars per nakshatra + Abhijit/Vega + Deneb, Markab, Hamal, Toliman); `fixed_stars_expanded_overlap()` ±1° orb
 - Test on chart: Jupiter-Gem H7 STRONG-BENEFIC, Rahu-Aqu H7 Moon CRITICAL marriage, last solar eclipse 2026-02-17 Annular, prenatal solar 1989-08-31 Leo 134.08°, Jupiter on Yogatara-Rohini 0.08°
 
-### Sprint 33+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 34 — Phase I KP Advanced ✅ COMPLETE
+- New module: `vedic/kp/kp_phase_i.py` (~170 lines)
+- **I1 Significators 4-level** ✅ pre-existing in `vedic/kp/kp_deep.py`
+- **I2 Cuspal Interlinks (CIL)** ✅ NEW — for each of 12 cusps: cusp-sub-lord → its house-significations (occupy + own + star-lord-occupy + star-lord-own) → matched against purpose-specific favourable houses → PROMISED/DENIED/UNCLEAR verdict per house
+- **I3 Sub-sub-sub lord (3-deep)** ✅ pre-existing per planet
+- **I4 249 horary numbers** ✅ pre-existing `horary_number_lookup(1..249)`
+- **I5 KP Marriage Matching** ✅ NEW — classical KP rule: cusps 2,7,11 sub-lords must signify {2,7,11}; if they signify {1,6,10} marriage denied. 5-tier verdict: STRONGLY PROMISED → PROMISED → WITH OBSTACLES → DENIED → UNCLEAR
+- **I6 Eclipse pin-point** ✅ pre-existing in kp_deep
+- Test on chart: H7 (Marriage) sub-lord Moon signifies [2,6,8,9,11] → PROMISED; marriage matching = "MARRIAGE WITH OBSTACLES" (both fav and deny hit)
+
+### Sprint 34+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

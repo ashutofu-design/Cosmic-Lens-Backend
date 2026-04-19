@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-34 / Phase I — KP Advanced (I2 CIL + I5 Marriage)
+    kp_phase_i_str = ""
+    try:
+        from vedic.kp.kp_phase_i import (compute_kp_phase_i,  # type: ignore
+                                           format_kp_phase_i_summary)
+        _kpi = compute_kp_phase_i(kundli)
+        kp_phase_i_str = format_kp_phase_i_summary(_kpi)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] kp phase-I (Sprint-34) failed: {exc}")
+
     # Sprint-33 / Phase H — Transits & Eclipses (H2/H3/H6/H7/H8 expansion)
     phase_h_str = ""
     try:
@@ -907,6 +917,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_e_dashas_str,
         varga_phase_f_str,
         phase_h_str,
+        kp_phase_i_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

@@ -36,3 +36,9 @@ id = "Yi8690DjfZhYge6wocx1k"
 uri = "file://.local/qr/expo-go.png"
 type = "image"
 title = "Fresh Expo Go QR — runtime fix applied"
+
+[[outputs]]
+id = "zrZacWUVDYAaYoH8roefV"
+uri = "file://attached_assets/ASK_System_Breakdown.txt"
+type = "text"
+title = "ASK System Breakdown — Full Internal Logic"

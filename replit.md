@@ -994,7 +994,26 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Test chart (Sag lagna): H2 STRONG (+3, Sun+Venus+Rahu), L10=Mercury → "SaaS founder/AI-prompt engineer", BALANCED risk profile, no false daridra alarms
 - LF: 73,450 → **76,171 chars** (+2,721)
 
-### Sprint 48+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 49 / Phase V — REMEDIES DEEP ENGINE ✅ COMPLETE
+- New module: `vedic/remedies/remedies_deep_engine.py` (~340 lines, 11 sections V1-V11)
+- **Same hardened+ethical+modern-reframe approach** as Medical/Financial engines
+- Mandatory ⚠ disclaimer — "Remedies SUPPLEMENT, never substitute action"
+- 3 effort tiers (🟢 LOW / 🟡 MED / 🔴 HIGH) + 3 cost tiers (💰 FREE / 💰💰 / 💰💰💰)
+- **V1**: 9-graha master remedy cards with 7 elements each (gem+weight+finger+day, mantra+count, donation+item+day, color, yantra, fast, FREE alt, modern lifestyle)
+- **V2**: Per-dosha remedies — Manglik, KalSarpa, SadeSati, Pitru, Grahan, Guru-Chandal, Angarak (auto-detected from chart)
+- **V4**: 6/8/12 house-affliction Lal Kitab free remedies
+- **V5**: Lal Kitab free actions per planet
+- **V6**: Modern psychology+neuroscience lifestyle remedies
+- **V7-V8**: Effort + cost tier auto-summary
+- **V9**: Top-7 priority remedies tailored to chart (always FREE-first)
+- **V10**: Daily routine card (4 time-slots: morning/noon/evening/night)
+- **V11**: Weekly day-wise card (Sun-Sat with day-specific actions)
+- **Auto-detection** of needy planets (6/8/12 occupants) + doshas (Manglik, KalSarpa, Grahan, Guru-Chandal, Angarak)
+- Always FREE alternatives alongside paid (Hanuman Chalisa neutralises Mars/Saturn — emphasized)
+- Test chart (Sag lagna): auto-detected Ketu+Mars needy, Manglik+Grahan doshas, full personalized 7-element remedy cards generated, daily+weekly routine printed
+- LF: 76,171 → **81,077 chars** (+4,906)
+
+### Sprint 49+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

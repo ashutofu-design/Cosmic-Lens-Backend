@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-49 / Phase-V — REMEDIES DEEP ENGINE
+    remedies_deep_str = ""
+    try:
+        from vedic.remedies.remedies_deep_engine import run_remedies_engine, format_remedies_engine  # type: ignore
+        remedies_deep_str = format_remedies_engine(run_remedies_engine(kundli))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] remedies deep engine (Sprint-49) failed: {exc}")
+
     # Sprint-48 — FINANCIAL ASTROLOGY ENGINE (deep + ethical wealth audit)
     financial_str = ""
     try:
@@ -1057,6 +1065,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         astro_vastu_str,
         medical_str,
         financial_str,
+        remedies_deep_str,
         modern_reframe_str,
         varga_yogas_str,
         argala_str,

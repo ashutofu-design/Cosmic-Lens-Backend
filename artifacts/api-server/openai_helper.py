@@ -1510,6 +1510,20 @@ def _build_messages(
             "+ KP + dasha) — extend, do NOT skip Jaimini."
         )
 
+    # Sprint-8 Rule P — Chara Dasha cross-check for TIMING questions
+    has_chara = "JAIMINI CHARA DASHA" in lf
+    timing_topics = {"marriage", "career", "finance", "child", "general"}
+    if has_chara and topic in timing_topics:
+        reminder_lines.append(
+            "• 🕐 CHARA DASHA cross-check (Rule P) is MANDATORY when the user is asking "
+            "about TIMING (kab / when / next-period). Pull the CURRENT Chara MD + AD from "
+            "the 'JAIMINI CHARA DASHA' block and weave ONE natural sentence comparing it "
+            "to Vimshottari: 'Chara Dasha mein abhi {SIGN} MD ({lord}) chal raha hai "
+            "({start}→{end}), Vimshottari ke {VimMD-AD} ke saath {AGREE/DISAGREE} hai — "
+            "isliye yeh window {high-confidence/mixed-signal} hai.' If the question is "
+            "purely analysis (no timing), Chara citation is optional."
+        )
+
     # KP (Rule N) — mandatory citation for covered topics when block exists
     has_kp = "KP CROSS-CHECK" in lf
     # Topics matching covered houses (per _classify_topic labels):
@@ -2883,6 +2897,53 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     text = (text or "").rstrip() + ul_sentence
         except Exception as _exc:
             print(f"[ai_ask] UL post-inject failed: {_exc}")
+
+    # Sprint-8 Rule P — DETERMINISTIC CHARA DASHA INJECTION (last-resort).
+    # Append a Chara MD/AD line for marriage answers OR any timing question
+    # ("kab", "when", "next", "kitne saal", etc.) so Rule P is satisfied 100%.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re
+            _q_lower = (question or "").lower()
+            _is_timing_q = bool(_re.search(
+                r"\b(kab|when|next|kitne|future|samay|window|period|"
+                r"upcoming|coming|aane|aayega|aayegi|hoga|hogi)\b",
+                _q_lower
+            ))
+            _need_chara = (
+                topic in ("marriage", "career", "finance", "child")
+                or (_is_timing_q and topic != "remedy")
+            )
+            if _need_chara and not _re.search(r"(?i)chara dasha", text or ""):
+                from chara_dasha import compute_chara_dasha  # type: ignore
+                _lg2 = kundli.get("ascendant")
+                if isinstance(_lg2, dict):
+                    _lg2 = _lg2.get("sign") or _lg2.get("name")
+                _dob = None
+                if isinstance(birth, dict):
+                    _dob = birth.get("date") or birth.get("dob") or birth
+                _cd = compute_chara_dasha(
+                    kundli.get("planets") or [], _lg2, _dob
+                )
+                _md = _cd.get("current_md") if _cd else None
+                _ad = _cd.get("current_ad") if _cd else None
+                if _md:
+                    _ad_part = (
+                        f", AD {_ad['sign']} ({_ad['lord']}) {_ad['start']}→{_ad['end']}"
+                        if _ad else ""
+                    )
+                    chara_sentence = (
+                        f"\n\nChara Dasha (Jaimini timing) mein abhi "
+                        f"{_md['sign']} MD chal raha hai (lord {_md['lord']}, "
+                        f"{_md['start']}→{_md['end']}, "
+                        f"{_md.get('years_elapsed','?')}/{_md['length_years']} "
+                        f"years elapsed{_ad_part}) — yeh Vimshottari ke saath "
+                        f"cross-check ke liye use karein: dono dasha agar "
+                        f"same theme dikhayein toh window high-confidence hai."
+                    )
+                    text = (text or "").rstrip() + chara_sentence
+        except Exception as _exc:
+            print(f"[ai_ask] Chara post-inject failed: {_exc}")
 
     follow_ups = _derive_follow_ups(topic, eff_lang)
     _trace(req_id, "5.FINAL_OUTPUT", text)

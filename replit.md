@@ -267,3 +267,21 @@ What remains DEFERRED:
 **Smoke test (3/3):** All marriage answers now end with the Jaimini UL citation. Example: *"Jaimini paddhati se Upapada Lagna Leo mein hai (lord Sun) — yeh marriage signature neutral hai (UL-lord Sun dusthana 6th from UL — thodi caution)."*
 
 **Roadmap remaining (Sprints 8-15):** Chara Dasha; D7+D12+D2+D3; D24+D16+D20+D27; D30+D40+D45+D60; per-varga deep (lord/aspects/vargottama); Argala+Virodhargala; Sthira+Niryana Shoola dashas; varga-specific yoga/dosha detection.
+
+## Sprint 8 — Jaimini Chara Dasha (DONE)
+
+**Engine:** `artifacts/api-server/chara_dasha.py`
+- `compute_chara_dasha(planets, lagna_sign, dob)` → 12 sign-based mahadashas with classical BPHS length rules:
+  - Starting sign: ODD lagna → start at lagna; EVEN lagna → start at 7th from lagna.
+  - Direction: ODD lagna = forward zodiacal, EVEN lagna = reverse.
+  - Length = (count from sign to its lord in direction) − 1, with exceptions: count=1 → 12y, count=12 → 11y, lord exalted → +1, lord debilitated → −1.
+  - Dual-lord signs (Scorpio/Mars+Ketu, Aquarius/Saturn+Rahu): closer lord wins.
+  - Antardasha = MD/12 sub-periods, same direction.
+- Returns full 12-MD timeline + current MD + current AD with elapsed years.
+
+**Wiring:**
+- `locked_facts.py` block "JAIMINI CHARA DASHA" assembled. DOB extraction extended to accept `{day,month,year,hour,minute}` shape (in addition to date-string).
+- `openai_helper.py` Rule P added (mandatory Chara cross-check for timing topics: marriage/career/finance/child OR any "kab/when/next" question).
+- **Deterministic post-injector** in `ai_ask()` → if marriage/career/finance/child answer (or any timing-keyword question) doesn't contain "Chara Dasha", appends one engine-generated sentence with current MD+AD and Vimshottari cross-check guidance.
+
+**Smoke test (3/3):** All marriage answers now end with BOTH the Jaimini UL citation (Sprint 7) AND the Chara Dasha citation (Sprint 8). Test chart: Sagittarius lagna → forward sequence → currently in Aries MD (Mars), Aquarius AD (Saturn), 6.27/7 years elapsed.

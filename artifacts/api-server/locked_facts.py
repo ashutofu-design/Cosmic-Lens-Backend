@@ -402,7 +402,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         moon_sign_str = kundli.get("moonSign") or kundli.get("moon_sign")
         moon_sign_idx = SIGN_NAMES_TR.index(moon_sign_str) if moon_sign_str in SIGN_NAMES_TR else None
         lagna_for_tr = _lagna_sign_idx(kundli, intel)
-        # DOB extraction (best-effort)
+        # DOB extraction (best-effort) — supports multiple shapes
         dob_dt = None
         if isinstance(birth, dict):
             dob_str = birth.get("date") or birth.get("dob") or birth.get("birthDate")
@@ -411,11 +411,38 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                     dob_dt = datetime.strptime(dob_str[:10], "%Y-%m-%d")
                 except Exception:
                     dob_dt = None
+            # Sprint-8: also accept {day, month, year, hour, minute} shape
+            if dob_dt is None and all(k in birth for k in ("day", "month", "year")):
+                try:
+                    dob_dt = datetime(
+                        int(birth["year"]), int(birth["month"]), int(birth["day"]),
+                        int(birth.get("hour") or 0), int(birth.get("minute") or 0)
+                    )
+                except Exception:
+                    dob_dt = None
         if lagna_for_tr is not None:
             tr = compute_transits(lagna_for_tr, moon_sign_idx, dob=dob_dt)
             tr_str = format_transit_summary(tr) if tr else ""
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] transits failed: {exc}")
+
+    # Sprint-8 — Jaimini Chara Dasha (sign-based mahadasha)
+    cd_str = ""
+    try:
+        from chara_dasha import (compute_chara_dasha,  # type: ignore
+                                 format_chara_dasha_summary)
+        _lg_name = None
+        if intel.get("ascendant"):
+            _lg_name = intel["ascendant"]
+        elif kundli.get("ascendant"):
+            asc = kundli["ascendant"]
+            _lg_name = asc.get("sign") if isinstance(asc, dict) else asc
+        cd = compute_chara_dasha(
+            kundli.get("planets") or [], _lg_name, dob_dt
+        )
+        cd_str = format_chara_dasha_summary(cd) if cd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] chara_dasha failed: {exc}")
 
     # Assemble
     sections = [
@@ -433,6 +460,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_dasha_block(kundli),
         pd_str,
         jm_str,
+        cd_str,
         _format_house_lords(intel),
         kp_str,
         rem_str,

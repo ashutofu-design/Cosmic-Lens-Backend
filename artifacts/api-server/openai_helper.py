@@ -1208,10 +1208,24 @@ _GENERAL_CONCEPT_SIGNALS = (
     "antar kya", "fark kya", "kya antar", "kya fark", "kaun se",
     "kitne prakar", "kitne type", "ke prakar", "ke type",
     "kaise kaam", "kaise work",
+    # Knowledge / origin / authorship / history questions (general, not personal)
+    "kisne likha", "kisne banaya", "kisne banaai", "kisne shuru",
+    "kis ne likha", "kis ne banaya", "kaun ne likha", "kaun ne banaya",
+    "kisne diya", "kisne khoja", "kisne discover",
+    "kab shuru", "kab bana", "kab likha", "kab aaya", "kahan se aaya",
+    "kahan se shuru", "history kya", "history of ", "itihas kya",
+    "origin of", "founder of", "who wrote", "who made", "who created",
+    "who founded", "who discovered", "who invented", "when did",
+    "when was", "where did", "where does", "where is the origin",
     # Devanagari concept words
     "क्या है", "क्या होता", "क्या होती", "क्या मतलब", "मतलब क्या",
     "अंतर क्या", "फर्क क्या", "क्या अंतर", "क्या फर्क",
     "समझाओ", "समझाइये", "समझाइए", "कैसे काम",
+    # Devanagari knowledge/origin/authorship
+    "किसने लिखा", "किसने बनाया", "किसने शुरू", "कौन ने लिखा",
+    "किसने दिया", "किसने खोजा",
+    "कब शुरू", "कब बना", "कब लिखा", "कब आया",
+    "कहां से", "कहाँ से", "इतिहास क्या",
 )
 
 # Personal life-event signals — if ANY appear, we treat as astro even when

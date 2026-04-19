@@ -39,6 +39,12 @@ def _chart_intel():
     from chart_intelligence import analyze_chart, format_intelligence  # type: ignore
     return analyze_chart, format_intelligence
 
+
+def _marriage_engine():
+    """Lazy-load deterministic marriage verdict engine."""
+    from marriage_engine import assess_marriage, format_verdict_for_prompt  # type: ignore
+    return assess_marriage, format_verdict_for_prompt
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -643,13 +649,40 @@ def _build_messages(
     # known facts instead of deriving them itself (single biggest accuracy
     # unlock for the Ask flow).
     intel_str = ""
+    intel_obj = None
     try:
         analyze_chart, format_intelligence = _chart_intel()
-        intel = analyze_chart(kundli, birth)
-        if intel:
-            intel_str = format_intelligence(intel)
+        intel_obj = analyze_chart(kundli, birth)
+        if intel_obj:
+            intel_str = format_intelligence(intel_obj)
     except Exception as exc:
         print(f"[openai_helper] chart_intelligence failed: {exc}")
+
+    # ── DETERMINISTIC MARRIAGE VERDICT ────────────────────────────────────────
+    # For topic == "marriage", we compute the verdict in pure Python BEFORE
+    # the AI is invoked. The AI is then forbidden from changing verdict /
+    # score / timeline / remedy — it is only a narrator.
+    marriage_verdict_block = ""
+    marriage_verdict_obj   = None
+    if topic == "marriage" and isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            kp_dict = None
+            try:
+                kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else None
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for marriage failed: {exc}")
+            assess_marriage, format_verdict_for_prompt = _marriage_engine()
+            marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
+            if marriage_verdict_obj:
+                marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
+                print(f"[openai_helper] marriage verdict: "
+                      f"verdict='{marriage_verdict_obj.get('verdict')}' "
+                      f"score={marriage_verdict_obj.get('score')} "
+                      f"kp={marriage_verdict_obj.get('kp_verdict')} "
+                      f"window={marriage_verdict_obj.get('next_window')}")
+        except Exception as exc:
+            print(f"[openai_helper] marriage_engine failed: {exc}")
+
     focus     = _focus_block(topic)
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
@@ -740,7 +773,42 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             "cannot be precisely given without the dasha, and answer the YOGA part only."
         )
 
+    # ── Narrator-mode prefix for marriage (deterministic verdict path) ───────
+    # When the deterministic engine has produced a verdict, the AI's role
+    # collapses from "decide + narrate" to "narrate ONLY". We pin the
+    # verdict block at the very top of the user message AND override the
+    # default instruction stack with narrator-only rules so the AI cannot
+    # reinterpret, rescore, or change the timeline.
+    narrator_prefix = ""
+    narrator_rules  = ""
+    if marriage_verdict_block:
+        narrator_prefix = (
+            f"{marriage_verdict_block}\n"
+            "⚠️ NARRATOR MODE — THIS IS BINDING ⚠️\n"
+            "The verdict, score, KP verdict, current dasha, next favourable window, "
+            "promised/denied/delay flags, and the recommended remedy planet & remedy text "
+            "above are FINAL and were computed deterministically from the devotee's chart "
+            "by the shastriya engine. You are ONLY a narrator. You MUST:\n"
+            "  • Restate the same VERDICT (do not soften, harden, or hedge).\n"
+            "  • Use the EXACT next_window dasha + EXACT date range provided. Do NOT invent\n"
+            "    a different year-range. If the engine says 'not found', honestly say timing\n"
+            "    is not clearly indicated in the next 12 years, instead of fabricating dates.\n"
+            "  • Cite the same 7th lord, karaka, and KP sub-lord names verbatim.\n"
+            "  • Recommend the SAME remedy planet and same mantra/donation given above.\n"
+            "  • Quote the strongest 2 supporting factors AND, if any, 1 main weakening factor —\n"
+            "    drawn from the lists above. Do not add factors not in the engine output.\n"
+            "  • You may translate to {lang}, smooth language into Acharya ji's warm voice,\n"
+            "    and add the human Pranam/empathy line — but never change the technical content.\n"
+            "If you contradict the engine verdict, score, or window, the answer is WRONG.\n\n"
+        ).format(lang=lang_name)
+        narrator_rules = (
+            "★ MARRIAGE NARRATOR OVERRIDE ★ — Rules 2,3,4,5,6 below are SUPERSEDED for this turn:\n"
+            "you do NOT do Vedic / KP / dasha / transit reasoning yourself. The engine already did.\n"
+            "Just narrate the AUTHORITATIVE block above in Acharya ji's voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
+        )
+
     user = (
+        f"{narrator_prefix}"
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n"
         f"{intel_section}"
         f"{kp_section}"
@@ -750,6 +818,7 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         f"{beh_block}"
         f"{failsafe}"
         f"{variation}\n\n"
+        f"{narrator_rules}"
         "STRICT INSTRUCTIONS — read these top-down. Rule 10 (BREVITY) overrides any tension with rules below. Quality over quantity: pick the strongest 2 chart factors only.\n"
         "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never silently skip one. For each sub-part give a brief micro-verdict in 1 sentence. If a sub-part CANNOT be answered from the chart (e.g. 'ladka ya ladki' — child gender is uncertain in classical astrology), say so honestly in 1 line ('iska theek pata janm-samay ke baad hi chalta hai') instead of inventing.\n"
         "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
@@ -768,7 +837,7 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         "    • DEFAULT structure (when no topic-specific format provided): 3-4 SHORT paragraphs, 1-2 sentences each, blank line between.\n"
         "       - Para 1 (1 line): warm acknowledgement using devotee's name + their concern.\n"
         "       - Para 2 (2 sentences): the 2 STRONGEST chart factors only — planet + house + plain meaning. Mention dasha lord briefly if 'kab/when' is asked.\n"
-        "       - Para 3 (1-2 sentences): clear verdict — haan / nahi / sambhavna, with a tight timing window if asked (e.g. '2025-2027').\n"
+        "       - Para 3 (1-2 sentences): clear verdict — haan / nahi / sambhavna, with a tight timing window if asked. If an AUTHORITATIVE VERDICT block was provided above, use ONLY the dates from its `NARRATE THIS WINDOW EXACTLY AS` line — never invent or round dates.\n"
         "       - Para 4 (1 line, optional — merge into Para 3 if topic format wants 3 paras): ONE remedy — mantra+count+day OR donation. No explanation of how.\n"
         "    • Pick ONLY 2 chart factors total. Skip every other yoga, aspect, sub-cusp. Quality > quantity.\n"
         "    • For multi-part questions: stay within 140 words — give 1 sentence per sub-part inside Para 2-3.\n"
@@ -791,6 +860,27 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             if role == "assistant" and len(text) > 1200:
                 text = text[:1200] + "…"
             msgs.append({"role": role, "content": text})
+
+    # ── High-priority second system message: pin the deterministic verdict ───
+    # Placed RIGHT BEFORE the user turn so it is the freshest instruction the
+    # model sees. This is the strongest lever to stop the AI from inventing
+    # a year-range different from what marriage_engine computed.
+    if marriage_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "TURN-LEVEL OVERRIDE — MARRIAGE NARRATOR MODE.\n"
+                "The following verdict was computed by the deterministic shastriya engine. "
+                "It is the GROUND TRUTH for this turn. You MUST narrate using these exact "
+                "values. The dates, dasha names, planet names, score, and remedy are NOT "
+                "negotiable — copy them verbatim into your reply. Specifically: when stating "
+                "the timing window, use ONLY the date string given on the line that begins "
+                "with '>>> NARRATE THIS WINDOW EXACTLY AS:'. Do not round to year-only, do "
+                "not shift to a different year, do not blend with surrounding dasha periods.\n\n"
+                + marriage_verdict_block
+            ),
+        })
+
     msgs.append({"role": "user", "content": user})
     return msgs
 
@@ -1002,14 +1092,27 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
         birth=birth, topic=topic, history=history,
     )
 
+    # ── Topic-aware sampling ────────────────────────────────────────────────
+    # Marriage uses a deterministic verdict engine — the AI is now a narrator.
+    # Lower temperature + lower penalties = stable verdict/timeline across runs
+    # while still allowing minor wording variation.
+    if topic == "marriage":
+        temperature       = 0.2
+        presence_penalty  = 0.0
+        frequency_penalty = 0.0
+    else:
+        temperature       = 0.85
+        presence_penalty  = 0.4
+        frequency_penalty = 0.35
+
     try:
         resp = client.chat.completions.create(
             model            = model,
             messages         = messages,
-            temperature      = 0.85,
+            temperature      = temperature,
             max_tokens       = 480,    # ≈ 12-18 lines, phone-friendly brevity
-            presence_penalty = 0.4,    # discourage repeating phrases across turns
-            frequency_penalty= 0.35,
+            presence_penalty = presence_penalty,
+            frequency_penalty= frequency_penalty,
         )
     except Exception as exc:
         raise RuntimeError(f"OpenAI request failed: {exc}") from exc

@@ -384,10 +384,28 @@ def format_verdict_for_prompt(v: dict) -> str:
     """Render verdict as a tightly-structured authoritative block for the AI prompt."""
     if not v:
         return ""
+    _MONTHS = ["", "January","February","March","April","May","June",
+                  "July","August","September","October","November","December"]
+    def _hr(ym: str) -> str:
+        # "2025-12" → "December 2025"
+        try:
+            y, m = ym.split("-")
+            return f"{_MONTHS[int(m)]} {y}"
+        except Exception:
+            return ym or "?"
     nw = v.get("next_window") or {}
-    nw_line = (f"  Next favourable Dasha window: {nw.get('dasha')} "
-               f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}"
-               if nw else "  Next favourable Dasha window: not found within computed dasha range")
+    if nw:
+        nw_hr = f"{_hr(nw.get('start',''))} to {_hr(nw.get('end',''))}"
+        nw_line = (
+            f"  Next favourable Dasha window: {nw.get('dasha')} "
+            f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
+            f"  >>> NARRATE THIS WINDOW EXACTLY AS: \"{nw_hr}\" "
+            f"(Maha-Antardasha: {nw.get('dasha')}). DO NOT widen, shift, or change these dates. <<<"
+        )
+    else:
+        nw_line = ("  Next favourable Dasha window: NOT FOUND in next 12 years\n"
+                   "  >>> NARRATE THIS AS: \"agle 12 saal mein koi spasht prabal vivah-yog "
+                   "ka window nahi mil raha\" — DO NOT invent dates. <<<")
     d9 = v.get("d9") or {}
     d9_line = (f"  D9 (Navamsa) 7th lord: {d9.get('d9_7th_lord')} in {d9.get('d9_lord_sign')} "
                f"(D9 house {d9.get('d9_lord_house')})" if d9 else "  D9 7th lord: unavailable")

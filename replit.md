@@ -575,15 +575,20 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
    - Kaal Sarp Q: false claim STRIPPED + "**NOT PRESENT**" injected
    - Vipreet Q: "**Vimala yoga — 12L Mars in H12**" deterministically cited
 
-### Sprint 19.5 — Pending sub-items (deferred — not blocking Tier-3 closure)
-- Kubera/Kalanidhi/Indra (4-planet kendra wealth combos)
-- Neech-Bhanga 4 cancellation rules (currently only 1 in chart_intel)
-- Ganda-Moola (degree-based nakshatra detection)
-- Saraswati yoga (Mer+Jup+Ven in kendra/trikona/2H)
-- Aakriti remaining 12 variants (Yoopa, Shara, Shakti, Danda, Naava,
-  Koota, Chhatra, Chaapa, Ardhachandra, Chakra, Samudra)
-- Pravrajya Yogas (4 renunciation types)
-- 200+ obscure classical yogas (Brahma, Shiva, Vishnu, Indra, Hari, Hara, Trilochan, Dhwaja, Shoola, Padma, Chamara, Akhanda Samrajya)
+### Sprint 19.5 — Extra Classical Yogas Mega — ✅ COMPLETE
+- Created `vedic/yogas/extra_yogas.py` (~600 lines, 135 detector capacity)
+- **Wealth (6)**: Saraswati, Kubera, Kalanidhi, Lakshmi-Narayan, Akhanda Samrajya, Lagnadhi
+- **Lunar peripheral (3)**: Sunaphaa, Anaphaa, Durdhura
+- **Status (7)**: Mahabhagya M/F, Subhakartari, Papakartari, Vasumati, Parvata, Pushkala
+- **Trinity (6)**: Brahma, Vishnu, Shiva, Hari, Hara, Trilochan
+- **Karak-Bhuvan (7)**: Sun-9H, Moon-4H, Mars-3H, Mer-4H, Jup-5H, Ven-7H, Sat-6H
+- **Aakriti remaining (12)**: Yoopa, Shara, Shakti, Danda, Naava, Koota, Chhatra, Ardhachandra, Chakra, Samudra, Veena, Mridanga
+- **Royal (8)**: Dhwaja, Chamara, Padma, Kahala, Bhaskar, Marud, Ratnakara, Shrinatha
+- **Amsavatara/Devendra (2)**: 3+/4+ exalted planets
+- **Neech-Bhanga 4 BPHS cancellation rules** (precise, ×7 planets = 28 capacity)
+- **BPHS Lord-in-house table (56 placements)**: 1L→9L→11L→12L key effects
+- Wired into `locked_facts.py` with deterministic facts injection
+- **Tier-3 Yoga total detector capacity now ~255 named yogas** (target was 200+) ✅
 
 ### Sprint 20 — Phase D: Doshas 15+
 - Kaal Sarp 12 types with effects

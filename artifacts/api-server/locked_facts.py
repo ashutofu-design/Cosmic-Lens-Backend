@@ -528,6 +528,18 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] classical yogas (Sprint-19) failed: {exc}")
 
+    # Sprint-19.5 — Extra classical yogas (Saraswati, Brahma/Vishnu/Shiva,
+    # Lunar peripheral, Karak-Bhuvan, Aakriti remaining 12, Royal yogas,
+    # Amsavatara, Neech-Bhanga 4-rule, BPHS Lord-in-house 60+)
+    extra_yogas_str = ""
+    try:
+        from vedic.yogas.extra_yogas import (detect_extra_yogas,  # type: ignore
+                                             format_extra_yogas_summary)
+        _ey = detect_extra_yogas(kundli.get("planets") or [], _lg_idx_cy)
+        extra_yogas_str = format_extra_yogas_summary(_ey) if _ey else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] extra yogas (Sprint-19.5) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -699,6 +711,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         subtle_div_str,
         deep_div_str,
         classical_yogas_str,
+        extra_yogas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

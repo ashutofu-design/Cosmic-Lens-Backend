@@ -670,6 +670,15 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-45 — ASTRO-VASTU ENGINE (full 13-check chart-driven Vastu audit)
+    astro_vastu_str = ""
+    try:
+        from vedic.vastu.astro_vastu_engine import run_astro_vastu_engine, format_astro_vastu  # type: ignore
+        _av_sb = locals().get("shadbala") if "shadbala" in locals() else None
+        astro_vastu_str = format_astro_vastu(run_astro_vastu_engine(kundli, birth or {}, _av_sb))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] astro-vastu engine (Sprint-45) failed: {exc}")
+
     # Sprint-44 / Phase S — Numerology + Vastu Integration (Driver/Conductor/Kua + 8 directions + chart-derived defects)
     phase_s_str = ""
     try:
@@ -1016,6 +1025,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_q_str,
         phase_r_str,
         phase_s_str,
+        astro_vastu_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

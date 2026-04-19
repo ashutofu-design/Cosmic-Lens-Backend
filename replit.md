@@ -903,7 +903,25 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **S3 Vastu Defects (chart-derived)** ✅ — maps natal houses to home directions; flags zones afflicted by Saturn/Mars/Rahu/Ketu/Sun with specific defect type (Vayu/Fire/Akasha/cut-corner/excess-heat) + remedy zone
 - Test (DOB 1990-01-15, Aarav Kumar, male): Mulank 6 (Venus) + Bhagyank 8 (Saturn) HARMONIOUS, Kua 1 East-group, 4 Vastu defect zones flagged
 
-### Sprint 44+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 45 — ASTRO-VASTU ENGINE (Full) ✅ COMPLETE
+- New module: `vedic/vastu/astro_vastu_engine.py` (~370 lines) — proper deep engine vs Phase S basic
+- **13 checks** wired into LF every request:
+  - V1: 9 zones (8 dir + Brahmasthan) with ruler + element + chart-strength + shadbala rupas
+  - V2: 16 Mahavastu sub-zones with Moon-mapped personal sub-zone
+  - V3: Pancha-Mahabhuta (5-element) balance from chart — dominant/weakest detection
+  - V4: 15-room placement audit (ideal vs avoid directions)
+  - V5: Main entry door direction from Lagna-lord & 4th-lord placement
+  - V6: Per-planet direction strength (uses shadbala when available)
+  - V7: Personal favourable directions (Kua + lord-derived)
+  - V8: Color & gem remedies for all 9 directions
+  - V9: Vedha (axis obstruction) detection on N-S and E-W axes
+  - V10: Plot-shape recommendation from elemental dominance
+  - V11: Brahmasthan (centre) status from 5th & 9th lord avg strength
+  - V12: 16 classical Vastu doshas with chart-trigger predicates
+  - V13: Direction-wise final report card (state + colors + axis-block flag)
+- LF: 55,046 → **60,484 chars** (+5,438 — biggest single sprint to date)
+
+### Sprint 45+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

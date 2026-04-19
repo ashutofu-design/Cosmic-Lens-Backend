@@ -884,7 +884,19 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Heuristic: sunrise=06:00, sunset=18:00 (no lat/lon)
 - LF after Phase Q: **52,434 chars** (+7203 — biggest single-phase boost)
 
-### Sprint 42+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 43 — Phase R Panchang Full ✅ COMPLETE
+- New module: `vedic/panchang/phase_r.py` (~190 lines, swisseph-driven Sun/Moon longitudes)
+- **R1 Tithi (30)** ✅ — name + paksha + lord + deity (Brahma/Vishnu/Vidhata/Yama/…)
+- **R2 Nakshatra of Moon (27)** ✅ — name + pada + lord + deity (Ashwini Kumaras/Yama/Agni/Brahma…)
+- **R3 Yoga (27)** ✅ — Vishkambha→Vaidhriti with planet/deity lord
+- **R4 Karana (11)** ✅ — 7 movable + 4 fixed with deity lord
+- **R5 Vaar + first-Hora** ✅ — weekday + day-lord + first-hora-lord
+- **R6 Ritu / Ayana / Maasa** ✅ — 6-season + 2-ayana + 12-lunar-month classification
+- **R7 Samvatsara** ✅ — full 60-yr Brahaspatya cycle with current name
+- **R8 Eras** ✅ — Shaka, Vikram, Kali Yuga, Bengali Sambat year computations
+- Today (2026-04-19): Shukla Tritiya, Krittika nak, Saubhagya yoga, Garaja karana, Parabhava samvatsara
+
+### Sprint 43+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

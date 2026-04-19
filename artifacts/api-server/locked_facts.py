@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-43 / Phase R — Panchang Full (Tithi + Nakshatra + Yoga + Karana + Vaar + Ritu/Ayana/Maasa + Samvatsara + Eras)
+    phase_r_str = ""
+    try:
+        from vedic.panchang.phase_r import compute_phase_r, format_phase_r  # type: ignore
+        phase_r_str = format_phase_r(compute_phase_r())
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-R panchang (Sprint-43) failed: {exc}")
+
     # Sprint-42 / Phase Q — Muhurta Full (Choghadiya + Hora + Kaal + Abhijit/Brahma + 35 events)
     phase_q_str = ""
     try:
@@ -998,6 +1006,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         lal_kitab_str,
         phase_p_str,
         phase_q_str,
+        phase_r_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

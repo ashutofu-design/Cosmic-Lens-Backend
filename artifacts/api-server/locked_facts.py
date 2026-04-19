@@ -270,6 +270,38 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] planet_strength failed: {exc}")
 
+    # Sprint-2 — Ashtakavarga (Sarvashtakavarga per house)
+    av_str = ""
+    try:
+        from ashtakavarga import compute_ashtakavarga, format_sav_summary  # type: ignore
+        lagna_idx = _lagna_sign_idx(kundli, intel)
+        # Need sign_idx per planet — use dignity rows
+        SIGN_NAMES = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                      "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+        av_planets = []
+        for p in (kundli.get("planets") or []):
+            if not isinstance(p, dict):
+                continue
+            sn = p.get("sign")
+            si = p.get("sign_idx")
+            if si is None and isinstance(sn, str) and sn in SIGN_NAMES:
+                si = SIGN_NAMES.index(sn)
+            av_planets.append({"name": p.get("name"), "sign_idx": si})
+        if lagna_idx is not None:
+            av = compute_ashtakavarga(av_planets, lagna_idx)
+            av_str = format_sav_summary(av) if av else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] ashtakavarga failed: {exc}")
+
+    # Sprint-2 — Aspects (Graha Drishti)
+    asp_str = ""
+    try:
+        from aspects import compute_aspects, format_aspect_summary  # type: ignore
+        asp = compute_aspects(kundli.get("planets") or [], _lagna_sign_idx(kundli, intel))
+        asp_str = format_aspect_summary(asp) if asp else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] aspects failed: {exc}")
+
     # Assemble
     sections = [
         "═════════ LOCKED FACTS — MIRROR EXACTLY, NEVER INVENT ═════════",
@@ -277,6 +309,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_yoga_block(intel.get("yogas") or []),
         _format_dosh_block(dosh) if dosh else f"▸ MANGAL-DOSH: {intel.get('mangal_dosh','(unavailable)')}",
         _format_strength_block(verdicts, intel.get("dignities") or []),
+        av_str,
+        asp_str,
         _format_dasha_block(kundli),
         _format_house_lords(intel),
         "════════════════════════════════════════════════════════════════",

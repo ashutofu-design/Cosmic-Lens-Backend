@@ -161,3 +161,16 @@ End-to-end smoke test against `/api/ask` exposed two interpretive bugs (data lay
 3. **Rule E added — Dasha-lord fidelity** — Mahadasha/Antardasha lord's described tone MUST match its `PLANET STRENGTHS` verdict. WEAK dasha lord = "confusion / effort-without-result", MODERATE = "mixed / kaam pe result", STRONG = "powerful / supportive". Eliminates "Rahu Mahadasha gives growth" hallucination when Rahu row says WEAK.
 
 Smoke test result on tough chart (1 negative yoga, all-weak planets, Rahu-Rahu MD): AI now opens with honest "1 yoga hai, jo NEGATIVE hai: Kemadruma", correctly frames Rahu MD as confusion phase, and anchors hope on 2026 transition — no false positivity.
+
+## Sprint 2 — Ashtakavarga + Aspects (api-server)
+
+Goal: Enrich LOCKED FACTS with two more deterministic engines so AI answers about a specific life-area (career/money/marriage etc.) cite a numerical strength meter, and AI can reference classical planetary aspects without inventing them.
+
+- **`ashtakavarga.py`** (NEW) — `compute_ashtakavarga(planets, lagna_sign_idx)` returns Bhinnashtakavarga (BAV per planet) + Sarvashtakavarga (SAV per house) using BPHS contribution tables. Per-house verdicts: VERY STRONG ≥32, STRONG 28-31, AVERAGE 25-27, WEAK <25. Invariant: SAV total = 337 across 12 houses (validated). `format_sav_summary()` renders compact 2-row block + highlights very-strong/weak houses.
+- **`aspects.py`** (NEW) — `compute_aspects(planets, lagna_sign_idx)` implements classical Graha Drishti: Mars 4/7/8, Jupiter 5/7/9, Saturn 3/7/10, Rahu/Ketu 5/7/9, others 7th. Returns by_planet/on_planet/on_house maps + `key_aspects` highlights (Jupiter on kendra/trikona, Saturn on Lagna/Moon, Mars on 7H/4H, mutual aspects across all rows — bug fixed in review).
+- **`locked_facts.py`** — Both modules wired into the LOCKED FACTS block as `▸ SARVASHTAKAVARGA (SAV) per house` and `▸ KEY ASPECTS (classical Parashari drishti)` sections. Fail-closed: if upstream data malformed, sections drop silently.
+- **`openai_helper.py`** — Two new mirror rules added to instruction 0b:
+  - **RULE F (Ashtakavarga)** — for life-area questions, MUST check the SAV row for the relevant house (career=H10, money=H2/H11, marriage=H7, kids=H5, health=H6, home=H4) and cite the SAV value with verdict. Includes guard: "If SARVASHTAKAVARGA block is missing/unavailable, NEVER invent a number — fall back to dignity/house-lord reasoning."
+  - **RULE G (Aspects)** — Use only aspects from the KEY ASPECTS list, max 1 per answer, never invent.
+- **Smoke test (career question on /tmp/k.json)**: AI correctly opened with "Aapki kundli mein 10th ghar ka SAV 34 hai, jo very strong hai — yeh career mein natural strength dikhata hai" and maintained Rule E ("Rahu Mahadasha … confusion aur effort-without-result type ka phase hai"). Anchored hope on 2026 dasha change (Rule D tier iii).
+- **Architect review fixes applied**: (1) Moon→Moon BAV table reduced to 6 entries (was 7) → fixes SAV invariant 338→337; (2) mutual aspect detection now scans all rows of the candidate planet (was checking only first row); (3) Rule F augmented with "unavailable → don't invent" guard.

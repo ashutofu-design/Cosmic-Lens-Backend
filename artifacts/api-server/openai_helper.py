@@ -914,6 +914,21 @@ def _build_messages(
     except Exception as exc:
         print(f"[openai_helper] locked_facts failed: {exc}")
 
+    # ── Sprint-52 RAG: classical knowledge retrieval (OPINION questions only) ─
+    # Timing questions get ZERO RAG (engine block already gives the answer).
+    # Opinion questions ("job vs business?", "career kya?", "nature kaisa?")
+    # get top-5 chunks from vedic/knowledge/*.md to ground reasoning.
+    rag_context_str = ""
+    try:
+        from vedic.validator.timing_validator import is_timing_question  # type: ignore
+        if question and not is_timing_question(question):
+            from vedic.rag.retriever import retrieve_and_format  # type: ignore
+            rag_context_str = retrieve_and_format(question, k=5, max_chars=3500)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[openai_helper] rag retrieval failed: {exc}")
+    if rag_context_str:
+        locked_facts_str = locked_facts_str + "\n\n" + rag_context_str
+
     # ── DETERMINISTIC MARRIAGE VERDICT ────────────────────────────────────────
     # For topic == "marriage", we compute the verdict in pure Python BEFORE
     # the AI is invoked. The AI is then forbidden from changing verdict /

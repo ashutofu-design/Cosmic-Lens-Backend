@@ -1066,6 +1066,57 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 | Career/nature kya? | chart facts | reasoning (RAG-eligible) |
 
 
+### Sprint 52 — AI BRAIN PHASE 1: RAG (Retrieval-Augmented Generation) ✅ COMPLETE
+**Goal:** Give the AI access to classical Vedic knowledge for OPINION questions WITHOUT compromising the Sprint-51 timing rule (timing = engine only, RAG never used for timing).
+
+**Modules built (~400 lines total):**
+- `vedic/rag/chunker.py` — markdown → semantic chunks (H2 boundary, 800-char cap, 100-char overlap)
+- `vedic/rag/embedder.py` — OpenAI text-embedding-3-small (1536 dims), batched 96/req with retry
+- `vedic/rag/retriever.py` — pgvector cosine search, top-k with similarity score, prompt formatter
+- `vedic/rag/ingest.py` — schema bootstrap + reset + batch upsert pipeline (`python -m vedic.rag.ingest`)
+
+**Knowledge corpus** (~30KB markdown, 6 files in `vedic/knowledge/`):
+- `planets.md` — 9 grahas: significations + classical + modern reframe + remedies (free + premium)
+- `houses.md` — 12 bhavas: body part + significations + strong/weak + modern map (LinkedIn, real-estate portfolio, etc.)
+- `yogas.md` — Raja, Dhana, Pancha Mahapurusha, Daridra, Kemadruma, Sanyasa, Gajakesari, Budhaditya, Adhi, Neechabhanga, Guru-Chandal yogas + modern reframe table (King→CEO etc.)
+- `career.md` — 10th-lord-by-planet → modern profession map + Job vs Business indicators + Sade-Sati impact
+- `relationships.md` — 7th house, Manglik, 36-point Ashtakoot, late-marriage modern reframe, divorce/live-in indicators
+- `dasha_periods.md` — Vimshottari mechanics, nakshatra→starting-MD table, yogakaraka by Lagna, dasha+transit confidence rule + ENGINE vs AI BOUNDARY rule explicitly stated
+
+**Database:**
+- `pgvector` extension v0.8.0 enabled
+- `knowledge_chunks` table: id, source, section, chunk_idx, chunk_text, embedding VECTOR(1536), metadata JSONB
+- IVFFlat cosine index (50 lists)
+- 93 chunks ingested across 6 sources
+
+**Wiring (the critical anti-leak design):**
+- `openai_helper.py` post-locked-facts: calls `is_timing_question(q)` FIRST
+  - If TIMING → RAG **SKIPPED** completely (engine block already gives the answer; no opinion needed)
+  - If OPINION → top-5 chunks retrieved + prepended with banner: "Use this knowledge to REASON — NEVER as a source of dates/timing. Timing comes ONLY from the engine block above."
+- This preserves Sprint-51's hard rule: AI gets background knowledge only when it's NOT a timing question
+
+**Smoke tests verified:**
+- `"shaadi kab hogi"` → timing=True → 0 chunks
+- `"Job karu ya business?"` → timing=False → retrieves Mercury (sim 0.31) + Career Timing Indicators + Core Houses (8H/10H/11H)
+- `"Sade-Sati ka effect career par"` → sim 0.55 (highest), surfaces exact section + Saturn + Rahu
+
+**Architecture state after Sprint 52:**
+| Layer | Status |
+|---|---|
+| Engine (calculations) | ✅ Sprints 18-50 |
+| Timing engine + validator | ✅ Sprint 51 |
+| RAG (knowledge retrieval) | ✅ Sprint 52 |
+| Fine-tuning | ⏳ Sprint 53 (next) |
+| Production deploy | ⏳ Sprint 54 |
+
+**To re-ingest after editing knowledge files:**
+```bash
+cd artifacts/api-server && python3 -m vedic.rag.ingest
+# or full reset:
+cd artifacts/api-server && python3 -m vedic.rag.ingest --reset
+```
+
+
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)
 - Muntha (progressed point)

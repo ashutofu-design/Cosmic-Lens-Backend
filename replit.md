@@ -763,7 +763,22 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - ✗ Shatabdika: gated (7L Mercury in 1H not 7H)
 - **Total dasha systems now**: 19 (Vimshottari + 18 sub-systems)
 
-### Sprint 32 — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 32 — Phase F Per-Varga Full Depth (~144 calc) ✅ COMPLETE
+- **Pre-existing (Sprints 12-15)**:
+  - **F1 Varga aspects** ✅ `vedic/varga/varga_deep.compute_varga_aspects` (per-varga planet-to-planet sign aspects)
+  - **F2 Varga ashtakavarga** ✅ `vedic/varga/varga_deep.compute_varga_ashtakavarga` (BAV/SAV per varga) + `vedic/varga/ashtaka_deep.py` (Trikona Shodhana, Ekadhipatya Shodhana, Sodhya Pinda, transit overlay)
+  - **F4 partial** ✅ `varga_yogas.py` (Pancha-Mahapurusha + Raj + Vipreet across D1/D9/D10/D24/D60)
+- **Sprint 32 new module**: `vedic/varga/varga_phase_f.py` (~280 lines) — adds:
+  - **F3 Varga-Dasha overlay** — current Vimshottari MD (+AD) lord position in EACH of 14 vargas, mapped to life-domain (D9=Marriage, D10=Career, D7=Children, etc.) showing which house events will manifest in that domain
+  - **F4 expansion** — Pancha-Mahapurusha + Sunaphaa/Anaphaa/Durdhura/Kemadruma + Lagnadhi (Adhi) detection added across **D2/D3/D7/D12/D16/D20/D27/D30** (8 new vargas beyond original 5)
+  - **F5 Per-varga doshas** — Mangal Dosh, Kemadruma, Papakartari (Lagna squeeze), Daridra (2H wealth), Surya/Chandra Grahan — detected in all 14 vargas
+- Test on chart (Lagna 258.349°, current MD=Rahu/AD=Rahu):
+  - F3: Rahu placement traced across D2/D3/D7/D9/D10/D12 (e.g., D9 Marriage → Rahu in Leo H12; D10 Career → Rahu in Aries H11)
+  - F4: 4 new yogas (D2 Sunaphaa, D3 Sunaphaa, D7 Anaphaa, D12 Kemadruma)
+  - F5: 7 doshas across vargas (D2 Mangal+Daridra, D3 Mangal, D7 Mangal+Chandra-Grahan, D9 Kemadruma, D12 Kemadruma)
+- **Total varga depth now**: 14 vargas × 3 layers (aspects/ashtaka/yoga-dosha) + per-varga dasha overlay = ~144 sub-calculations
+
+### Sprint 33 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

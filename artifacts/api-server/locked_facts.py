@@ -670,6 +670,25 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-32 / Phase F — Per-Varga Full Depth (F3 + F4-expand + F5)
+    varga_phase_f_str = ""
+    try:
+        from vedic.varga.varga_phase_f import (compute_varga_phase_f,  # type: ignore
+                                                format_varga_phase_f_summary)
+        _cd = (kundli.get("currentDasha") or kundli.get("current_dasha") or {})
+        _md = _cd.get("maha") or _cd.get("md") or ""
+        _ad = _cd.get("antar") or _cd.get("ad") or ""
+        _ll_f = lagna_lon
+        if not isinstance(_ll_f, (int, float)):
+            _ll_f = (kundli.get("ascendantDeg")
+                     or kundli.get("ascendant_deg")
+                     or kundli.get("ascendantLongitude"))
+        _vf = compute_varga_phase_f(kundli.get("planets") or [],
+                                    _ll_f, _md, _ad)
+        varga_phase_f_str = format_varga_phase_f_summary(_vf)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-F varga depth (Sprint-32) failed: {exc}")
+
     # Sprint-31 / Phase E — Tier-5 Dasha gap-fill (7 systems)
     phase_e_dashas_str = ""
     try:
@@ -876,6 +895,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         shadbala_full_str,
         missing_yogas_str,
         phase_e_dashas_str,
+        varga_phase_f_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

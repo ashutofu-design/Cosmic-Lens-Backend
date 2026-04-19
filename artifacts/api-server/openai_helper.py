@@ -498,6 +498,67 @@ def _summarise_history(history: list) -> tuple[str, dict]:
     }
 
 
+# ── Auto language detection from the question text ───────────────────────────
+
+# Common Roman-Hindi (Hinglish) tokens — if any appear, treat the question as
+# Hindi-leaning. Kept conservative: only words that are unambiguously Hindi
+# (not English homographs).
+_HINGLISH_TOKENS = {
+    "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
+    "hai", "hain", "ho", "hoga", "hogi", "hoyega", "hua", "hui", "tha", "thi", "the",
+    "mera", "meri", "mere", "mujhe", "mujhko", "mujhe", "humara", "humari", "hamara",
+    "aap", "aapka", "aapki", "aapke", "tum", "tera", "teri", "tumhara",
+    "acharya", "ji", "beta", "guruji", "panditji", "maharaj",
+    "shaadi", "shadi", "vivah", "biwi", "pati", "patni", "rishta",
+    "naukri", "kaam", "paisa", "paise", "dhan", "santaan", "santan", "bachcha",
+    "swasthya", "bimari", "tabiyat", "padhai", "pyaar", "pyar", "rishtey",
+    "upay", "upaay", "mantra", "puja", "daan", "vrat", "totka",
+    "batao", "bataiye", "bataenge", "kijiye", "karke", "karna",
+    "nahi", "nahin", "haan", "han", "bilkul", "thoda", "bahut",
+    "kundli", "rashi", "nakshatra", "dasha", "graha", "yog", "dosh",
+    "maa", "pita", "papa", "mummy", "bhai", "behan", "didi", "ghar", "gharwale",
+    "abhi", "kabhi", "phir", "fir", "pehle", "baad", "ke baad", "se", "tak",
+    "kr", "krna", "ho jaye", "hojayegi", "hojayega",
+}
+
+
+def _detect_question_lang(question: str, fallback: str) -> str:
+    """
+    Returns 'hi' if the question looks Hindi/Devanagari/Hinglish, else 'en'.
+    Falls back to the supplied `lang` if the question is too short / ambiguous.
+    Other explicit lang codes (ta, te, bn, mr, etc.) pass through unchanged.
+    """
+    q = (question or "").strip()
+    if not q:
+        return fallback or "en"
+
+    # Devanagari Unicode range = direct Hindi
+    for ch in q:
+        if "\u0900" <= ch <= "\u097F":
+            return "hi"
+
+    # Other Indian scripts → respect the explicit `lang` param so we don't
+    # mis-route a Tamil/Bengali/etc. question to English.
+    if (fallback or "").lower() in {"ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "or", "as"}:
+        return fallback
+
+    # Hinglish detection — tokenise on word boundaries
+    import re
+    tokens = re.findall(r"[a-zA-Z]+", q.lower())
+    if not tokens:
+        return fallback or "en"
+
+    hinglish_hits = sum(1 for t in tokens if t in _HINGLISH_TOKENS)
+    # If even ~15% of tokens are clearly Hindi, treat the whole question as Hindi.
+    if hinglish_hits >= 1 and (hinglish_hits / max(1, len(tokens))) >= 0.15:
+        return "hi"
+    if hinglish_hits >= 2:  # short questions like "shaadi kab hogi"
+        return "hi"
+
+    # Default to English when nothing Hindi was detected.
+    return "en"
+
+
 def _build_messages(
     question: str,
     kundli: Any,
@@ -507,7 +568,12 @@ def _build_messages(
     topic: str = "general",
     history: list | None = None,
 ) -> list[dict]:
-    lang_name = _LANG_NAME.get(lang, "English")
+    # Auto-detect language from the question itself so the reply ALWAYS matches
+    # the way the devotee wrote — Hindi/Devanagari → Hindi, Hinglish (Roman
+    # Hindi) → Hindi-tone, plain English → English. The `lang` param is only
+    # used as a fallback when the question is too short / ambiguous.
+    detected = _detect_question_lang(question, lang)
+    lang_name = _LANG_NAME.get(detected, "English")
     chart_str = _kundli_summary(kundli, birth)
     focus     = _focus_block(topic)
     kp_block  = _kp_context(birth, topic)

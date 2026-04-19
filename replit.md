@@ -846,7 +846,13 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Computed using same day/night formula switch as Phase J on Varshaphala chart (falls back to natal)
 - **Total Sahams in LF: 55** (30 + 25)
 
-### Sprint 38+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 39 — Phase N Nadi Astrology ✅ COMPLETE
+- New module: `vedic/nadi/phase_n.py` (~200 lines)
+- **N1 Nadi Amsha (1800-nadi system)** ✅ — 150 nadis/sign × 12 = 1800; each = 0.2° / 12 arcmin; classical Chandra-Kala names. Computed for Lagna + 9 planets. Test chart: Moon in 'Mokshada', Lagna in 'Bhuktida'.
+- **N2 Bhrigu Saral Paddhati** ✅ — simplified karma reading using 9th/10th house + lord placement, classifies into Dharma / Artha / Kama / Moksha-Sankat / Mishra streams. Test chart: Mishra (mixed) — balanced karma path.
+- **N3 Deva-Manushya-Rakshasa Gana per planet** ✅ — via nakshatra placement of all 9 planets (extends classical Moon-only Gana). Returns totals + dominant-Gana classification. Test chart: Manushya 6 / Rakshasa 3 / Deva 0 → Manushya-dominant.
+
+### Sprint 39+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

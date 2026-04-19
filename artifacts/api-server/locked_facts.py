@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-39 / Phase N — Nadi Astrology (1800 amshas + Bhrigu Saral + Gana per planet)
+    phase_n_str = ""
+    try:
+        from vedic.nadi.phase_n import compute_phase_n, format_phase_n  # type: ignore
+        phase_n_str = format_phase_n(compute_phase_n(kundli))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-N nadi (Sprint-39) failed: {exc}")
+
     # Sprint-38 / Phase M — Sahams Extended (+25 → 55 total)
     sahams_m_str = ""
     try:
@@ -962,6 +970,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         avashtas_str,
         lagnas_l_str,
         sahams_m_str,
+        phase_n_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

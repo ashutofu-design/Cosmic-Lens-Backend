@@ -646,11 +646,22 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **Fixed Stars overlap (24 stars)** — Royal Stars (Aldebaran/Regulus/Antares/Fomalhaut), Spica, Vega, Sirius, Algol, Pleiades, Orion stars, etc. Conjunctions with natal planets within 1° orb.
 - Test result on chart: **Saturn Pisces H4 lagna CHALLENGING / H8 moon CRITICAL Ashtama Shani**, Eclipse Rahu Aquarius / Ketu Leo (no impact), **Jupiter exactly on Aldebaran Royal Star at 0.08° — rare auspicious conjunction**
 
-### Sprint 24 — Phase I: KP Advanced (40+)
-- Significators 4-level deep
-- Cuspal Interlinks (CIL)
-- Sub-sub-sub lord (3 deep)
-- 249 horary numbers (each with chart)
+### Sprint 25 — Tier 9 KP Deep ✅ COMPLETE
+- File: `vedic/kp/kp_deep.py` (~280 lines)
+- **Sub-Sub-Sub Lord (3-deep)** — `kp_full_lords(longitude)` returns Sign Lord, Star Lord, Sub, Sub-Sub, Sub-Sub-Sub via proportional Vimshottari subdivision (BPHS-compliant)
+- **4-Level Significators** for all 12 houses — L1=star-of-occupants, L2=occupants, L3=star-of-house-lord, L4=house-lord
+- **Ruling Planets (live)** — Day-Lord (current weekday), Moon Star/Sub (current ephemeris), Lagna lord
+- **249 Horary Number lookup** — `horary_number_lookup(n)` returns sign, nakshatra, star-lord, sub-lord, longitude span for KP horary numbers 1..249
+- **Eclipse pin-point** — next solar + lunar eclipse with KP Sub-Lord active at exact moment
+- Test results on chart:
+  - Ruling Planets now: Sun, Ketu, Jupiter (Day=Sun, Moon Sub-Lord=Ketu, Lagna-Lord=Jupiter)
+  - SSS: Moon Purva-Phalguni → Venus/Mars/Sun/**Jupiter**
+  - 4-level H7 sigs: [Jupiter, Mars, Ketu, Mercury] → Marriage significators
+  - **Next Solar Eclipse: 2026-08-12 in Cancer Ashlesha, KP Sub-Lord = Rahu**
+  - **Next Lunar Eclipse: 2026-08-28 in Aquarius Shatabhisha, KP Sub-Lord = Saturn**
+- **Deferred (need lat/lon birth coords)**: Cuspal sub-lords table, Cuspal Interlinks (CIL), KP marriage compatibility (needs 2 charts)
+
+### Sprint 26 — Tier 10: Astrocartography + Relocation (each with chart)
 - KP marriage matching
 - Eclipse pin-point predictions
 

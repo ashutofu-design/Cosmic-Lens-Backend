@@ -617,6 +617,17 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] transit deep (Sprint-24) failed: {exc}")
 
+    # Sprint-25 — Tier-9 KP Deep (SSS lords, 4-level significators, RP,
+    # 249 horary lookup engine, eclipse pin-point)
+    kp_deep_str = ""
+    try:
+        from vedic.kp.kp_deep import (compute_kp_deep,  # type: ignore
+                                       format_kp_deep_summary)
+        _kpd = compute_kp_deep(kundli)
+        kp_deep_str = format_kp_deep_summary(_kpd) if _kpd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] kp deep (Sprint-25) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -794,6 +805,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         varga_deep_str,
         ashtaka_deep_str,
         transit_deep_str,
+        kp_deep_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

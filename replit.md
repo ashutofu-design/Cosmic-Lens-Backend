@@ -249,3 +249,21 @@ Goal: Add KP (Krishnamurti Paddhati) cuspal sub-lord verdicts as a fructificatio
 
 What remains DEFERRED:
 - **8-route question-router reactivation** — current openai_helper topic detection works; 8-route classifier would be incremental polish, not core capability.
+
+
+## Sprint 7 — Jaimini Upapada Lagna + Arudha Padas (DONE)
+
+**Engine:** `artifacts/api-server/jaimini.py`
+- `compute_arudha_padas(planets, lagna_sign)` → A1-A12 (formula `(2×LordSign − HouseSign) mod 12` with classical 1st/7th-from-itself → 10th-from-Arudha exception).
+- `compute_upapada(arudha_result, planets)` → UL = A12 + UL-lord placement (house-from-UL) + 2nd-from-UL occupants + 12th-from-UL occupants + planets in UL itself + STABLE/STRAINED/MIXED/NEUTRAL verdict + dusthana-caution flag.
+- `format_jaimini_summary()` → LOCKED FACTS block.
+
+**Wiring:**
+- `locked_facts.py` includes the Jaimini block.
+- `openai_helper.py` adds Rule O (mandatory UL citation for marriage), pins it FIRST in FINAL REMINDERS.
+- `marriage_facts['jaimini']` populated for narrator path with template Para 4.
+- **Deterministic post-processor** in `ai_ask()` → if marriage answer doesn't contain "Upapada"/"Jaimini", appends one engine-generated sentence using the live UL data (Hindi translations of verdict tags, dusthana caution, separation flag from Ketu/Saturn/Rahu in 12th-from-UL). 100% reliable Rule O satisfaction.
+
+**Smoke test (3/3):** All marriage answers now end with the Jaimini UL citation. Example: *"Jaimini paddhati se Upapada Lagna Leo mein hai (lord Sun) — yeh marriage signature neutral hai (UL-lord Sun dusthana 6th from UL — thodi caution)."*
+
+**Roadmap remaining (Sprints 8-15):** Chara Dasha; D7+D12+D2+D3; D24+D16+D20+D27; D30+D40+D45+D60; per-varga deep (lord/aspects/vargottama); Argala+Virodhargala; Sthira+Niryana Shoola dashas; varga-specific yoga/dosha detection.

@@ -933,6 +933,41 @@ def _build_messages(
             marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
             if marriage_verdict_obj:
                 marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
+                # Sprint-7: append Jaimini Upapada line so MARRIAGE NARRATOR
+                # mode (which supersedes Rules 2-6) still sees it as ground truth.
+                try:
+                    from jaimini import (compute_arudha_padas,  # type: ignore
+                                         compute_upapada)
+                    _lg = kundli.get("ascendant")
+                    if isinstance(_lg, dict):
+                        _lg = _lg.get("sign") or _lg.get("name")
+                    _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
+                    _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
+                    if _ul:
+                        ul_line = (
+                            f"  Jaimini Upapada (UL=A12): {_ul['ul_sign']} — "
+                            f"lord {_ul['ul_lord']} in {_ul.get('ul_lord_in') or '?'} "
+                            f"({_ul.get('ul_lord_house') or '?'}th from UL); "
+                            f"2nd-from-UL={_ul['second_from_ul']} "
+                            f"(occ: {', '.join(_ul['occupants_2nd']) or 'none'}); "
+                            f"12th-from-UL={_ul['twelfth_from_ul']} "
+                            f"(occ: {', '.join(_ul['occupants_12th']) or 'none'}); "
+                            f"VERDICT: {_ul['verdict']}\n"
+                            "  >>> NARRATE THIS UL VERDICT IN ONE NATURAL SENTENCE — "
+                            "MANDATORY THIS TURN. Pull the exact UL sign, UL-lord, "
+                            "and verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). <<<\n"
+                        )
+                        # Insert just before the trailing ════ line of the block
+                        marker = "════════════════════════════════════════════════════════════════════\n"
+                        if marriage_verdict_block.endswith(marker):
+                            marriage_verdict_block = (
+                                marriage_verdict_block[:-len(marker)]
+                                + ul_line + marker
+                            )
+                        else:
+                            marriage_verdict_block += ul_line
+                except Exception as _exc:
+                    print(f"[openai_helper] jaimini UL inject failed: {_exc}")
                 marriage_use_alt = _detect_marriage_constraint(question, history or [])
                 # Build a CLEAN facts payload — values only, no template,
                 # no jargon labels, no "Pranam beta". The AI receives
@@ -940,6 +975,41 @@ def _build_messages(
                 from marriage_engine import (extract_window_str,
                                              extract_alt_window_str)
                 v = marriage_verdict_obj
+                # Sprint-7: also compute Jaimini Upapada signature for the
+                # narrator path (which bypasses LOCKED FACTS / Rule O reminders).
+                _ul_facts = {}
+                try:
+                    from jaimini import (compute_arudha_padas,  # type: ignore
+                                         compute_upapada)
+                    _lg = kundli.get("ascendant")
+                    if isinstance(_lg, dict):
+                        _lg = _lg.get("sign") or _lg.get("name")
+                    _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
+                    _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
+                    if _ul:
+                        # Distil verdict tag (first 1-2 words before " — ")
+                        verdict_full = _ul.get("verdict", "")
+                        verdict_tag = "NEUTRAL"
+                        for tag in ("STABLE", "STRAINED", "MIXED", "NEUTRAL"):
+                            if tag in verdict_full:
+                                verdict_tag = tag
+                                break
+                        _ul_facts = {
+                            "ul_sign":         _ul.get("ul_sign", ""),
+                            "ul_lord":         _ul.get("ul_lord", ""),
+                            "ul_lord_in":      _ul.get("ul_lord_in") or "",
+                            "ul_lord_house":   _ul.get("ul_lord_house"),
+                            "second_from_ul":  _ul.get("second_from_ul", ""),
+                            "occupants_2nd":   ", ".join(_ul.get("occupants_2nd") or []) or "none",
+                            "twelfth_from_ul": _ul.get("twelfth_from_ul", ""),
+                            "occupants_12th":  ", ".join(_ul.get("occupants_12th") or []) or "none",
+                            "occupants_ul":    ", ".join(_ul.get("occupants_ul") or []) or "none",
+                            "verdict_tag":     verdict_tag,
+                            "verdict_full":    verdict_full,
+                        }
+                except Exception as _exc:
+                    print(f"[openai_helper] jaimini for narrator failed: {_exc}")
+
                 marriage_facts = {
                     "verdict":         (v.get("verdict") or "").strip(),
                     "window_str":      extract_window_str(v) or "",
@@ -953,6 +1023,7 @@ def _build_messages(
                     "marriage_promised": v.get("marriage_promised"),
                     "marriage_denied":   v.get("marriage_denied"),
                     "delay":             v.get("delay"),
+                    "jaimini":           _ul_facts,
                 }
                 print(f"[openai_helper] marriage verdict: "
                       f"verdict='{marriage_facts['verdict']}' "
@@ -1212,6 +1283,16 @@ def _build_messages(
             facts_lines.append(f"  • Marriage significator planet: {f['karaka']}")
         if f["remedy"]:
             facts_lines.append(f"  • Suggested remedy text: {f['remedy']}")
+        # Sprint-7 Rule O: Jaimini UL — MANDATORY citation for marriage answers
+        jm = f.get("jaimini") or {}
+        if jm.get("ul_sign"):
+            facts_lines.append(
+                f"  • Jaimini Upapada Lagna (UL): {jm['ul_sign']} — lord {jm['ul_lord']} "
+                f"in {jm.get('ul_lord_in') or '?'} ({jm.get('ul_lord_house') or '?'}th from UL); "
+                f"2nd-from-UL={jm['second_from_ul']} (occupants: {jm['occupants_2nd']}); "
+                f"12th-from-UL={jm['twelfth_from_ul']} (occupants: {jm['occupants_12th']}); "
+                f"verdict tag: {jm['verdict_tag']} — full: \"{jm['verdict_full']}\""
+            )
         facts_block = "\n".join(facts_lines)
 
         user = (
@@ -1247,8 +1328,9 @@ def _build_messages(
             "     State things as facts: \"hoga\", \"hogi\", \"yeh time strong hai\".\n"
             "  6. NO bullet points, NO numbered lists, NO markdown headers, NO ###.\n"
             "     Write flowing prose — short paragraphs separated by blank lines.\n"
-            "  7. Length: 80–140 words. Phone-friendly. Every sentence must earn\n"
-            "     its place.\n\n"
+            "  7. Length: 100–170 words. Phone-friendly. The Jaimini UL\n"
+            "     sentence (Para 4) is MANDATORY when UL data is in the facts\n"
+            "     above — extend the word budget rather than skip it.\n\n"
             "STYLE — modern professional astrologer over chat. Confident,\n"
             "specific, active voice. Mix of Hindi + English (Hinglish). NO\n"
             "philosophical fluff. NO defensive hedging. NO \"yeh aapko apne\n"
@@ -1266,6 +1348,10 @@ def _build_messages(
             "  Aapke chart me <Planet> strong role play kar raha hai, isliye\n"
             "  shaadi hone ke yog confirm hai — bas timing thoda structured\n"
             "  delay ke saath aa raha hai.\n\n"
+            "  [Para 4 — JAIMINI UPAPADA (MANDATORY when UL data provided above)]\n"
+            "  Jaimini paddhati se Upapada Lagna <UL_SIGN> mein hai (lord\n"
+            "  <UL_LORD>, <Nth> from UL) — yeh marriage signature ko\n"
+            "  <STABLE / STRAINED / MIXED / NEUTRAL> dikha rahi hai.\n\n"
             "  Upay:\n"
             "  Har <Day> \"<mantra>\" 108 baar jaap karein aur <donation> daan\n"
             "  karein — yeh shaadi ke process ko smooth karega.\n"
@@ -1290,7 +1376,8 @@ def _build_messages(
             "  • The single label \"Upay:\" on its own line before the remedy\n"
             "    is ALLOWED and preferred. NO other labels (no \"Reason:\",\n"
             "    \"Timing:\", \"Vajah:\", \"Samay:\").\n"
-            "  • Length: 80–140 words. 3 short paragraphs + Upay block.\n\n"
+            "  • Length: 100–170 words. 4 short paragraphs (Para 4 = Jaimini UL,\n"
+            "    REQUIRED when UL is in the facts) + Upay block.\n\n"
             "Now write the reply — match the template's confident, specific,\n"
             "active-voice delivery exactly."
         )
@@ -1337,6 +1424,7 @@ def _build_messages(
         "    🛡️ DIVISIONAL CHARTS (Rule K): For MARRIAGE questions, MUST consult D9 NAVAMSA — specifically '7L lands in X — STRONG/EXALTED/DEBILITATED' line. The 7L's D9 strength is THE strongest predictor of marriage quality (overrides natal D1 if they conflict). For CAREER questions, MUST consult D10 DASAMSA — '10L lands in X' line is the equivalent. Vargottama planets (D1=D9 or D1=D10) act as if exalted — call them out by name. Cite naturally: 'D9 mein aapka 7L Mercury Pisces (debilitated) jaata hai — isliye natal weakness D9 mein bhi confirm hoti hai, marriage mein patience zaroori.' OR 'D10 mein aapka 10L Mercury Sagittarius (own-sign) jaata hai — career line strong support karta hai D10 mein.' If D9/D10 block missing, do NOT invent positions.\n"
         "    🛡️ PRATYANTAR (Rule L): For PRECISE timing questions ('next 3 mahine kya hoga / next month kaisa', 'specific date / week kaisa'), use the PRATYANTAR block — it gives month-precision sub-periods. Always cite the CURRENT pratyantar lord ('abhi {MD}-{AD}-{PD} chal raha hai, jo {date} tak hai') and the next 1-2 upcoming pratyantars as 'next change-windows'. Combine with PLANET STRENGTHS — if PD lord is WEAK, that mini-window is a low-action phase; if STRONG, it's a green-light window. NEVER invent pratyantar dates not in the block.\n"
         "    🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation): When the KP CROSS-CHECK block is present AND the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage/partner, H10 career/job, H11 gains/income), you MUST include one natural KP citation sentence in the answer. This is NOT optional — failing to cite is the same kind of error as inventing facts. The KP block runs PARALLEL to (not above) Vedic D1/D9/D10/Dasha logic. Verdict semantics: CONFIRMS = clean promise (event-houses signified, no negative house involved); PARTIAL = promise WITH obstruction (event AND negative houses both signified — fructification happens but with delay/struggle); DENIES = no event-house signified at all (unlikely / substantially delayed). Use it ONLY when the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage, H10 career, H11 gains). For those topics, weave ONE natural KP citation alongside Vedic reasoning: 'KP paddhati se bhi {N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' Resolution rules when Vedic and KP disagree: (a) Vedic STRONG + KP CONFIRMS → confident green light; (b) Vedic STRONG + KP PARTIAL → 'hoga lekin patience aur effort lagega'; (c) Vedic STRONG + KP DENIES → 'natal promise hai par KP fructification support nahi karta — significant delay ya alternate timing'; (d) Vedic WEAK + KP CONFIRMS → 'natal weakness hai par KP supportive — possible with conscious effort'. Do NOT use KP for topics outside H1/H2/H5/H7/H10/H11 unless the block explicitly covers them. NEVER invent KP sub-lords if the block is absent — instead say 'KP detail ke liye accurate birth time aur location chahiye'.\n"
+        "    🛡️ JAIMINI ARUDHA / UPAPADA (Rule O): When the JAIMINI ARUDHA PADAS / UPAPADA LAGNA block is present, use it ALONGSIDE Vedic D1/D9. The Arudha Pada is the IMAGE of a house — how it is PERCEIVED in the world (vs the actual house = the reality). Cite naturally only when topic-relevant: A1 = your public image (career/branding questions), A4 = home/lifestyle image, A7 = how partnerships are seen, A10 = career image / reputation, A11 = perceived gains, A12 = UL = MARRIAGE signature. For MARRIAGE questions you MUST add ONE Upapada citation: cite the UL sign + its lord + the 2nd-from-UL occupants + the verdict tag (STABLE / STRAINED / MIXED / NEUTRAL). Example: 'Jaimini paddhati se Upapada Lagna {UL_SIGN} mein hai (lord {UL_LORD} {Nth} from UL), 2nd-from-UL mein {occupants} hain — yeh marriage ko {STABLE/STRAINED} dikha rahi hai.' For non-marriage questions, use Arudha only when image-vs-reality gap is meaningful (e.g. A10 in a different sign than 10H = career REALITY differs from PERCEPTION). NEVER invent Arudha signs not in the block. NEVER use the chart-debugging 'note' field (e.g. 'adjusted from X') in user-facing language — it is internal annotation only.\n"
         "    🛡️ REMEDIES (Rule M — CRITICAL anti-hallucination): If the LOCKED FACTS contains a REMEDIES block, you MUST quote mantras / gemstones / charity items / fast days / yantras EXACTLY as written there — these are sourced from BPHS, Phaladeepika and classical Lal Kitab consensus. NEVER invent a Sanskrit mantra, never invent a gemstone weight, never invent a 'lucky number' or 'lucky stone'. If the REMEDIES block is empty/absent, give a brief generic suggestion ('Hanuman Chalisa daily helps with most afflictions') instead of fabricating specifics. When you cite a remedy, use the 'for: ...' label so the user knows WHY this remedy: e.g. 'Aapke MD lord Saturn ke liye — Saturday ko \"Om Sham Shanaishcharaya Namah\" 108 baar, mustard oil daan, neelam (5-7 ct, silver, middle finger) — par neelam pehle 3 din trial karein.' Always include the gemstone caveat if one is in the block (especially Blue Sapphire's trial-period warning).\n"
         "1) OPEN DIRECTLY in line 1 with a 1-line natural answer or framing — no fake empathy, no \"Beta,\", no \"I sense your concern\". Sound like a smart expert, not a guru.\n"
         "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
@@ -1406,6 +1494,21 @@ def _build_messages(
     # actually present in the LOCKED FACTS for this turn.
     reminder_lines: list[str] = []
     lf = locked_facts_str or ""
+
+    # Sprint-7 Rule O — Jaimini Upapada (PIN FIRST for marriage so recency wins)
+    has_jaimini = "UPAPADA LAGNA" in lf
+    if topic == "marriage" and has_jaimini:
+        reminder_lines.append(
+            "• 🚨 JAIMINI UL CITATION IS MANDATORY THIS TURN (Rule O — pinned first). "
+            "Pull EXACT values from the 'UPAPADA LAGNA' sub-section: UL sign, UL-lord + "
+            "its house-from-UL, verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). Weave ONE "
+            "natural sentence: 'Jaimini paddhati se Upapada {ul_sign} mein hai (lord "
+            "{ul_lord} {Nth} from UL) — marriage signature {VERDICT}.' If 12th-from-UL "
+            "has occupants (Ketu/Saturn/Rahu = separation tendency) or UL-lord is in "
+            "6/8/12 from UL, mention that nuance in the same sentence. Marriage answers "
+            "may use up to 160 words THIS TURN to fit all 4 mandatory citations (D9 + UL "
+            "+ KP + dasha) — extend, do NOT skip Jaimini."
+        )
 
     # KP (Rule N) — mandatory citation for covered topics when block exists
     has_kp = "KP CROSS-CHECK" in lf
@@ -2733,6 +2836,54 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         confidence = 0.55
 
     eff_lang = _resolve_response_lang(question, lang, preferred_language)
+
+    # Sprint-7 Rule O — DETERMINISTIC UPAPADA INJECTION (last-resort).
+    # If topic == "marriage" and the model dropped the Jaimini citation,
+    # append one engine-generated sentence so Rule O is satisfied 100%.
+    if topic == "marriage" and isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _re
+            if not _re.search(r"(?i)upapada|jaimini", text or ""):
+                from jaimini import (compute_arudha_padas,  # type: ignore
+                                     compute_upapada)
+                _lg = kundli.get("ascendant")
+                if isinstance(_lg, dict):
+                    _lg = _lg.get("sign") or _lg.get("name")
+                _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
+                _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
+                if _ul:
+                    tag = "NEUTRAL"
+                    for t in ("STABLE", "STRAINED", "MIXED", "NEUTRAL"):
+                        if t in _ul.get("verdict", ""):
+                            tag = t
+                            break
+                    tag_hi = {
+                        "STABLE":   "stable hai",
+                        "STRAINED": "strain dikha rahi hai",
+                        "MIXED":    "mixed hai (kuch achha, kuch challenge)",
+                        "NEUTRAL":  "neutral hai (koi prabal signal nahi)",
+                    }[tag]
+                    extra_nuance = ""
+                    if (_ul.get("ul_lord_house") or 0) in (6, 8, 12):
+                        extra_nuance = (f" (UL-lord {_ul['ul_lord']} dusthana "
+                                        f"{_ul['ul_lord_house']}th from UL — "
+                                        f"thodi caution)")
+                    elif _ul.get("occupants_12th") and any(
+                        p in ("Ketu", "Saturn", "Rahu")
+                        for p in _ul["occupants_12th"]
+                    ):
+                        sep_pl = ", ".join(_ul["occupants_12th"])
+                        extra_nuance = (f" (12th-from-UL mein {sep_pl} — "
+                                        f"separation tendency)")
+                    ul_sentence = (
+                        f"\n\nJaimini paddhati se Upapada Lagna "
+                        f"{_ul['ul_sign']} mein hai (lord {_ul['ul_lord']}) — "
+                        f"yeh marriage signature {tag_hi}{extra_nuance}."
+                    )
+                    text = (text or "").rstrip() + ul_sentence
+        except Exception as _exc:
+            print(f"[ai_ask] UL post-inject failed: {_exc}")
+
     follow_ups = _derive_follow_ups(topic, eff_lang)
     _trace(req_id, "5.FINAL_OUTPUT", text)
     _trace(req_id, "6.FOLLOW_UPS", {

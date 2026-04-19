@@ -336,6 +336,20 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] divisional_charts failed: {exc}")
 
+    # Sprint-7 — Jaimini Arudha Padas (A1-A12) + Upapada Lagna (UL)
+    jm_str = ""
+    try:
+        from jaimini import (compute_arudha_padas, compute_upapada,  # type: ignore
+                             format_jaimini_summary)
+        lagna_sign = kundli.get("ascendant")
+        if isinstance(lagna_sign, dict):
+            lagna_sign = lagna_sign.get("sign") or lagna_sign.get("name")
+        ar = compute_arudha_padas(kundli.get("planets") or [], lagna_sign)
+        ul = compute_upapada(ar, kundli.get("planets") or []) if ar else {}
+        jm_str = format_jaimini_summary(ar, ul) if ar else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] jaimini failed: {exc}")
+
     # Sprint-4 — Pratyantar dasha (sub-period under current AD)
     pd_str = ""
     try:
@@ -418,6 +432,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         tr_str,
         _format_dasha_block(kundli),
         pd_str,
+        jm_str,
         _format_house_lords(intel),
         kp_str,
         rem_str,

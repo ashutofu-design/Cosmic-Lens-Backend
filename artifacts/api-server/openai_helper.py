@@ -699,6 +699,7 @@ def _build_messages(
     preferred_language: Optional[str] = None,
     mode: str = "astro",
     out_meta: dict | None = None,
+    marriage_subtype: str = "timing",
 ) -> list[dict]:
     # ── LANGUAGE INTELLIGENCE — sticky preference > detection > fallback ─────
     detected = _resolve_response_lang(question, lang, preferred_language)
@@ -820,6 +821,52 @@ def _build_messages(
             print(f"[openai_helper] marriage_engine failed: {exc}")
 
     focus     = _focus_block(topic)
+    # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
+    # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
+    # "kaun sa grah", "7th lord kahan", "explain my chart"), discard the rigid
+    # 3-paragraph timing template and let the AI act as an expert chart reader.
+    # The kundli planet positions, KP block, and intelligence are already in
+    # the prompt — AI uses them to give a real analytical answer.
+    if topic == "marriage" and marriage_subtype == "analysis":
+        # Surface engine context as REFERENCE only (not a locked template)
+        engine_ref = ""
+        if marriage_facts:
+            mf = marriage_facts
+            engine_ref = (
+                "\nENGINE REFERENCE (already established in earlier turns — "
+                "use as background, do NOT repeat the timing template):\n"
+                f"  • Verdict status: {mf.get('verdict','')}\n"
+                f"  • Best window:    {mf.get('window_str','')}\n"
+                f"  • Current dasha:  {mf.get('current_dasha','')}\n"
+                f"  • 7th lord:       {mf.get('seventh_lord','')}\n"
+                f"  • Karaka:         {mf.get('karaka','')}\n"
+            )
+        focus = (
+            "FOCUS — vivah/marriage ANALYTICAL FOLLOW-UP.\n"
+            "The user already knows the timing window. Now they want to UNDERSTAND\n"
+            "their chart deeper — which planet, which house, why delay, what's the\n"
+            "spouse pattern, etc. You are the expert. Read the kundli yourself and\n"
+            "answer the SPECIFIC question they asked.\n\n"
+            "RULES:\n"
+            "  1. Answer the EXACT question. If they ask 'kaun sa grah', name the\n"
+            "     planet from the chart. If 'kyun delay', explain the actual\n"
+            "     malefic/karaka weakness. If 'aur detail batao', dig deeper into\n"
+            "     the 7th house, 7th lord, Venus/Jupiter, navamsa, dasha — pick\n"
+            "     the 2-3 most relevant facts and explain plainly.\n"
+            "  2. Ground every claim in the actual planet positions from the\n"
+            "     BIRTH CHART block above — do NOT invent positions.\n"
+            "  3. Do NOT repeat the timing window unless directly asked. Skip\n"
+            "     the \"strong yog activate ho raha hai\" opener.\n"
+            "  4. Translate Sanskrit inline: \"Saptamesh (7th lord)\", \"Shukra\n"
+            "     (Venus)\", \"Mangal (Mars)\", \"Saptam bhav (7th house)\".\n"
+            "  5. Active-voice Hinglish — confident, specific, no philosophical\n"
+            "     fluff. NO bullets, NO headers, NO \"Pranam beta\".\n"
+            "  6. Length: 80–140 words, 2-3 short paragraphs of flowing prose.\n"
+            "  7. End with ONE sharp practical line — either a remedy if it\n"
+            "     fits the question, or a one-line summary insight. NOT a\n"
+            "     remedy template.\n"
+            f"{engine_ref}"
+        )
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])
@@ -888,9 +935,17 @@ def _build_messages(
     # verdict block at the very top of the user message AND override the
     # default instruction stack with narrator-only rules so the AI cannot
     # reinterpret, rescore, or change the timeline.
+    # Narrator path is reserved for TIMING / REMEDY questions where the
+    # engine's locked window/remedy is the source of truth. For ANALYSIS
+    # questions ("why delayed", "kaun sa grah", "7th lord kahan", "aur detail")
+    # we let the AI read the kundli freely as an expert — narrator template
+    # would just repeat the timing answer and ignore the actual question.
+    _is_marriage_analysis = (
+        topic == "marriage" and marriage_subtype == "analysis"
+    )
     narrator_prefix = ""
     narrator_rules  = ""
-    if marriage_verdict_block:
+    if marriage_verdict_block and not _is_marriage_analysis:
         # Pull the must-quote window string out of the engine object so we
         # can inject it as a hard-coded literal the AI cannot drift on.
         _mw = ""
@@ -975,7 +1030,7 @@ def _build_messages(
     # data — NOT as a pre-formatted template — and is told to write its
     # own natural, conversational reply (ChatGPT-style) using only those
     # locked values. This prevents both fact drift AND robotic templating.
-    if marriage_facts:
+    if marriage_facts and not _is_marriage_analysis:
         f = marriage_facts
         active_window = (
             f["alt_window_str"] if (marriage_use_alt and f["alt_window_str"])
@@ -1798,6 +1853,55 @@ def _is_generic_followup(question: str) -> bool:
     return False
 
 
+# ── MARRIAGE SUBTYPE CLASSIFIER ──────────────────────────────────────────────
+# Within the marriage topic, distinguish what KIND of question the user asked:
+#   "timing"   → "kab hogi" / "when" / window / date / age / year — REQUIRES
+#                deterministic engine output (locked window verbatim).
+#   "remedy"   → "upay batao" / "remedy" — narrator path is fine (engine
+#                provides remedy + window context).
+#   "analysis" → "kyun delay" / "kaun sa grah" / "7th lord kahan" / "aur
+#                detail" / "explain my chart" — AI is the expert; let it read
+#                the kundli freely and answer analytically. NO rigid template.
+_MARRIAGE_REMEDY_RE = re.compile(
+    r"\b(upay|upaay|remedy|totka|jaap|mantra|daan|vrat|puja|paath)\b"
+    r"|उपाय|मंत्र|दान|व्रत|पूजा",
+    re.I,
+)
+_MARRIAGE_TIMING_RE = re.compile(
+    r"\b(kab|kabhi|when|date|window|samay|saal|year|years|month|months|"
+    r"mahina|mahine|umar|umr|age|timing)\b"
+    r"|कब|समय|साल|वर्ष|महीन|उम्र",
+    re.I,
+)
+_MARRIAGE_ANALYSIS_RE = re.compile(
+    r"\b(detail|details|kyun|kyon|why|kaun(?:\s*sa)?|which|kis|kaisa|kaisi|"
+    r"kaise|how|explain|elaborate|samjha(?:o|iye|do)?|batao\s+(?:kyun|kaise)|"
+    r"saptam(?:esh)?|7th\s*(?:lord|house|bhav)|kalatra|venus|shukra|jupiter|"
+    r"guru|mars|mangal|saturn|shani|grah|graha|planet|chart|kundli|kundali|"
+    r"house|bhav|lord|swami|nakshatra|rashi|dasha|antardasha|spouse|life\s*partner|"
+    r"shaadi\s*kaisi|jeevan\s*saathi|patni|pati|biwi)\b"
+    r"|क्यों|कौन|कैसे|समझाओ|समझाइए|ग्रह|घर|भाव|स्वामी|सप्तम|शुक्र|गुरु|मंगल|शनि|दशा|पत्नी|पति",
+    re.I,
+)
+
+
+def _classify_marriage_subtype(question: str) -> str:
+    """Return 'timing' / 'remedy' / 'analysis' / 'general'."""
+    q = (question or "").strip()
+    if not q:
+        return "general"
+    # Remedy first (most specific intent)
+    if _MARRIAGE_REMEDY_RE.search(q):
+        return "remedy"
+    # Analysis next — covers "why/which/explain/detail/planet name" etc.
+    if _MARRIAGE_ANALYSIS_RE.search(q):
+        return "analysis"
+    # Timing words (kab/when/year)
+    if _MARRIAGE_TIMING_RE.search(q):
+        return "timing"
+    return "general"
+
+
 def _last_assistant_topic_was_marriage(history: list) -> bool:
     for h in reversed(history or []):
         if (h or {}).get("role") == "assistant":
@@ -2076,6 +2180,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if mode == "general":
         topic = "general"
 
+    # Marriage subtype: timing / remedy / analysis. Drives whether the locked
+    # narrator template fires (timing/remedy) or AI does free chart analysis
+    # (analysis). Only relevant when topic == marriage; harmless otherwise.
+    marriage_subtype = (
+        _classify_marriage_subtype(question) if topic == "marriage" else "timing"
+    )
+    _trace(req_id, "2.MODE_DETECT.subtype", {
+        "topic": topic, "marriage_subtype": marriage_subtype,
+    })
+
     build_meta: dict = {}
     messages = _build_messages(
         question, kundli, lang, reply_idx,
@@ -2083,6 +2197,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         preferred_language=preferred_language,
         mode=mode,
         out_meta=build_meta,
+        marriage_subtype=marriage_subtype,
     )
 
     # ── Mode/topic-aware sampling ────────────────────────────────────────────
@@ -2348,12 +2463,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # marriage facts meta here — but we still pass an empty out_meta for
     # forward-compat / parity with ai_ask.
     build_meta_stream: dict = {}
+    marriage_subtype_stream = (
+        _classify_marriage_subtype(question) if topic == "marriage" else "timing"
+    )
+    _trace(req_id, "2.MODE_DETECT.subtype(stream)", {
+        "topic": topic, "marriage_subtype": marriage_subtype_stream,
+    })
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
         preferred_language=preferred_language,
         mode=mode,
         out_meta=build_meta_stream,
+        marriage_subtype=marriage_subtype_stream,
     )
     _trace(req_id, "3.PROMPT(stream)", {
         "model": model, "message_count": len(messages),

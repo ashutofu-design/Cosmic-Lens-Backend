@@ -504,7 +504,9 @@ def extract_traits(kundli: Dict[str, Any],
         },
 
         "user_gender":     user_gender,
-        "partner_gender":  "female" if user_gender == "male" else "male",
+        "partner_gender":  ("female" if user_gender == "male"
+                            else "male" if user_gender == "female"
+                            else "unspecified"),
     }
 
     return traits

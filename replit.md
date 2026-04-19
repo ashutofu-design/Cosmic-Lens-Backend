@@ -682,8 +682,22 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - Karakamsa: AK=**Mars** in D9 **Aquarius** (lord Saturn) — soul-dharma theme
 - **Deferred (need lat/lon → sunrise → Ishtakaal)**: Bhava Lagna, Hora Lagna, Ghati Lagna, Vighati Lagna, Pranapada Lagna
 
-### Sprint 28 — Tier 10: Astrocartography + Relocation (next)
-- Needs birth lat/lon — pending real birth data
+### Sprint 28 — Phase A Cleanup & Bugs ✅ COMPLETE (3 of 4)
+- **A1 Folder refactor** — DEFERRED (52 flat files; high-risk import-breaking churn; will batch with future major version)
+- **A2 Age-context layer** ✅ — `vedic/context/age_context.py` (~120 lines)
+  - Computes `current_age` from DOB, life-stage band (10 stages from Balya→Sage), dasha-age window
+  - `age_gates` dict prevents inappropriate advice (e.g. marriage Q for under-18, retirement for under-50)
+  - Test: chart user = **36 years (early career & marriage window)**, dasha 0 yrs remaining → MD just ended
+- **A3 Marriage partner gender bug** ✅ — `partner_portrait_engine.py` line 510
+  - **Bug**: `"female" if user_gender == "male" else "male"` defaulted UNKNOWN → "male", forcing wrong portrait gender
+  - **Fix**: Three-way conditional → `male/female/unspecified` (never assumes when unknown)
+- **A4 Topic classifier** ✅ — `ask_engine.py`
+  - Was: 1 topic (`marriage` only) → 11 topics with multilingual keywords (8 Indian languages)
+  - New `detect_topics()` returns multi-label list; topics: marriage, career, finance, health, education, children, family, spiritual, travel, legal, remedies, timing
+  - Backwards-compat `detect_topic()` returns first match
+  - Test all 6 cases pass: "Should I change my job and invest in stocks?" → `[career, finance]`
+
+### Sprint 29 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

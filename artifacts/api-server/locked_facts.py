@@ -651,6 +651,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] special lagnas (Sprint-27) failed: {exc}")
 
+    # Sprint-28 / Phase A2 — Age context (current_age + life-stage + dasha-age window)
+    age_context_str = ""
+    try:
+        from vedic.context.age_context import (compute_age_context,  # type: ignore
+                                                format_age_context_summary)
+        _ac = compute_age_context(birth or {}, kundli, kundli.get("currentDasha"))
+        age_context_str = format_age_context_summary(_ac) if _ac else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] age context (Sprint-28) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -831,6 +841,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         kp_deep_str,
         rashi_drishti_str,
         special_lagnas_str,
+        age_context_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

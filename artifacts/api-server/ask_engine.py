@@ -83,11 +83,50 @@ def pn(lang, name):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def detect_topic(question: str) -> str:
+_TOPIC_KEYWORDS = {
+    "marriage": MARRIAGE_KWS,
+    "career": ["career","job","work","promotion","business","naukri","kaam","कैरियर","नौकरी","व्यवसाय",
+               "profession","employment","interview","resign","startup","entrepreneur",
+               "வேலை","ఉద్యోగం","চাকরি","नोकरी","નોકરી"],
+    "finance": ["money","wealth","finance","financial","richness","loan","debt","emi","invest",
+                "stock","crypto","property","real estate","gold","savings","income","salary",
+                "paisa","dhan","धन","पैसा","कर्ज","ऋण","निवेश","পয়সা","পৈসা","പണം","ਪੈਸਾ"],
+    "health": ["health","disease","illness","sick","medical","operation","surgery","hospital",
+               "doctor","fever","pain","cancer","diabetes","heart","mental","depression","anxiety",
+               "rog","bimari","रोग","बीमारी","स्वास्थ्य","ஆரோக்கியம்","ఆరోగ్యం","স্বাস্থ্য"],
+    "education": ["education","study","studies","exam","admission","college","university","school",
+                  "phd","degree","scholarship","abroad study","padhai","पढ़ाई","शिक्षा","परीक्षा",
+                  "படிப்பு","విద్య","পড়াশোনা","અભ્યાસ","अभ्यास"],
+    "children": ["child","children","baby","santaan","pregnancy","conceive","fertility","ivf","son","daughter",
+                 "putra","putri","santan","संतान","गर्भधारण","बच्चा","गर्भ","बेटा","बेटी",
+                 "குழந்தை","సంతానం","সন্তান","બાળક"],
+    "family": ["family","parents","mother","father","brother","sister","relative","in-laws",
+               "parivaar","mata","pita","माता","पिता","भाई","बहन","परिवार","குடும்பம்","కుటుంబం","পরিবার"],
+    "spiritual": ["spiritual","spirituality","god","mantra","meditation","puja","temple","guru",
+                  "moksha","liberation","aatma","dharma","bhakti","अध्यात्म","भक्ति","मोक्ष","साधना",
+                  "ஆன்மீகம்","ఆధ్యాత్మికం","আধ্যাত্মিক"],
+    "travel": ["travel","abroad","foreign","visa","immigration","relocate","relocation","journey",
+               "vilayat","videsh","विदेश","यात्रा","प्रवास","বিদেশ","விதேசம்"],
+    "legal": ["legal","court","case","lawsuit","litigation","police","jail","prison","arrest","fir",
+              "kanoon","mukadama","कानून","मुकदमा","कोर्ट","केस","போலீஸ்","కేస్","মামলা"],
+    "remedies": ["remedy","remedies","upay","upaya","mantra","gemstone","ratna","yantra","pooja","puja",
+                 "donation","daan","fast","vrat","उपाय","रत्न","दान","व्रत","மந்திரம்","రత్నం"],
+    "timing": ["when will","timing","muhurat","auspicious time","kab","कब","अच्छा समय","muhurta",
+               "good time","right time","best time","date","day","year","month","period"],
+}
+
+
+def detect_topics(question: str) -> list[str]:
+    """Returns list of topics (multi-label). Empty list if no match → 'general'."""
     q = question.lower()
-    if any(kw in q for kw in MARRIAGE_KWS):
-        return "marriage"
-    return "general"
+    topics = [t for t, kws in _TOPIC_KEYWORDS.items() if any(kw in q for kw in kws)]
+    return topics
+
+
+def detect_topic(question: str) -> str:
+    """Backwards-compat: returns primary topic (first match) or 'general'."""
+    topics = detect_topics(question)
+    return topics[0] if topics else "general"
 
 
 def find_planet(planets, name):

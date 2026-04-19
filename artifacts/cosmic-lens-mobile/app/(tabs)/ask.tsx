@@ -67,8 +67,8 @@ export default function AskScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 
-  // Mode picker: null = show landing, "chat" = Acharya chat, "prashna" = KP 1-249 horary
-  const [mode, setMode] = useState<"chat" | "prashna" | null>(null);
+  // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
+  const [mode, setMode] = useState<"chat" | null>(null);
 
   const [messages, setMessages] = useState<Message[]>(() =>
     showDemo

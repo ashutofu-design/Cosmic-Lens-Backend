@@ -763,27 +763,70 @@ def _build_messages(
     # dasha implications, and "Isliye dhyan dena zaroori hai" closers.
     if mode == "astro" and _is_chart_fact_question(question):
         chart_only = _kundli_summary(kundli, birth)
+
+        # ── Dosha pre-compute (deterministic) ─────────────────────────────
+        # If question is about a specific dosha, run the engine and inject
+        # the verdict so AI doesn't have to "calculate" — just narrates.
+        dosha_facts = ""
+        try:
+            if isinstance(kundli, dict) and kundli.get("planets"):
+                from dosh_engine import analyze_doshas  # type: ignore
+                _d = analyze_doshas(
+                    kundli.get("planets") or [],
+                    (kundli.get("nakshatra") or "") if isinstance(kundli, dict) else "",
+                )
+                _dosh_lines = []
+                for d in (_d.get("dosh_list") or []):
+                    _dosh_lines.append(
+                        f"  • {d.get('name','')}: {d.get('status','')} "
+                        f"— {d.get('headline','')} ({d.get('planet_note','')})"
+                    )
+                if _dosh_lines:
+                    dosha_facts = (
+                        "\n\nLOCKED DOSHA ANALYSIS (computed by engine — use "
+                        "these EXACT verdicts, do not recompute or override):\n"
+                        + "\n".join(_dosh_lines)
+                    )
+        except Exception as exc:
+            print(f"[openai_helper] dosh pre-compute failed: {exc}")
+
         sys_minimal = (
             "You are Acharya Vidyasagar, a warm modern Vedic astrologer who "
             "chats like a knowledgeable friend.\n\n"
             f"REPLY ENTIRELY IN: {lang_name}.\n\n"
-            "The user asked a SIMPLE chart-fact lookup. Reply in EXACTLY 2-3 "
-            "short sentences. NO MORE.\n\n"
+            "The user asked a SIMPLE direct question (chart fact OR a dosha "
+            "yes/no). Reply in EXACTLY 2-3 short sentences. NO MORE.\n\n"
             "FORMAT (strict):\n"
-            "  • Sentence 1: state the fact directly from the chart "
-            "(e.g. \"Aapki Rashi Gemini hai.\").\n"
-            "  • Sentence 2: ONE natural personality / nature line about "
-            "that rashi / lagna / nakshatra / dasha (witty, modern, plain).\n"
-            "  • STOP HERE.\n\n"
+            "  CASE A — Chart fact (rashi / lagna / nakshatra / dasha / "
+            "gana / yoni / etc.):\n"
+            "    • Sentence 1: state the fact directly (e.g. \"Aapki Rashi "
+            "Gemini hai.\").\n"
+            "    • Sentence 2: ONE natural personality / nature line.\n"
+            "    • STOP.\n\n"
+            "  CASE B — Dosha yes/no (\"kya me manglik hun\", \"kaal sarp "
+            "hai\", \"pitru dosh\"):\n"
+            "    • Sentence 1: clear YES or NO using the LOCKED DOSHA "
+            "ANALYSIS below — e.g. \"Haan, aap manglik hain.\" OR \"Nahi, "
+            "aap manglik nahi hain.\" Use the engine's status: 'Active' = "
+            "haan / strong; 'Mild' = haan / partial; 'None' = nahi.\n"
+            "    • Sentence 2: ONE plain reason line stating WHY (the "
+            "exact planet placement from the engine — e.g. \"Mars aapke "
+            "Lagna mein baitha hai.\").\n"
+            "    • Sentence 3 (optional): if the dosh is Mild, ONE soft "
+            "reassurance line. Otherwise STOP after sentence 2.\n\n"
             "ABSOLUTELY BANNED in this reply:\n"
-            "  ✗ House analysis (\"Aapka Moon 7th house mein hai\")\n"
-            "  ✗ Dasha implications (\"Jupiter Mahadasha growth de raha hai\")\n"
-            "  ✗ Remedies / mantras / jaap (\"Om Namah Shivaya 108 baar\")\n"
-            "  ✗ Closing sermons (\"Isliye dhyan dena zaroori hai\")\n"
-            "  ✗ \"Pranam\", \"Beta\", \"Dekhiye\", greetings, headers, bullets\n"
-            "  ✗ Multi-paragraph replies\n\n"
-            "Just the fact + one flavor line. That's the entire reply.\n\n"
+            "  ✗ Current dasha mention (unless the user asked about dasha)\n"
+            "  ✗ Marriage advice / partner advice (unless user asked)\n"
+            "  ✗ Remedies / mantras / jaap (unless user asked for remedy)\n"
+            "  ✗ Closing sermons (\"Isliye dhyan dena zaroori hai\", "
+            "\"Aapko ek achhe partner ki talash karni hogi\")\n"
+            "  ✗ \"Pranam\", \"Beta\", \"Dekhiye\", greetings, headers, "
+            "bullets\n"
+            "  ✗ Multi-paragraph replies (max 3 short sentences total)\n\n"
+            "If the user wants a remedy or deeper analysis, they will ask "
+            "in the next turn. Do NOT volunteer it here.\n\n"
             f"CHART:\n{chart_only}"
+            f"{dosha_facts}"
         )
         return [
             {"role": "system", "content": sys_minimal},
@@ -2011,6 +2054,21 @@ _CHART_FACT_PATTERNS = [
         r"\b(?:current|abhi|abhi\s+kaunsi)\s+(?:dasha|mahadasha)\b",
         r"\b(?:dasha|mahadasha)\s+(?:kya|kaun(?:\s*si)?|chal\s+rahi|hai|he|batao)\b",
         r"\bmer[ai]\s+(?:gana|gan|yoni|tatv[ae]|tatva|nadi|varna)\b",
+        # ── DOSHA YES/NO questions ─────────────────────────────────────────
+        # "kya me manglik hun", "manglik hai", "mangal dosh hai", "kaal sarp",
+        # "pitru dosh", "guru chandal", "grahan dosh" etc.
+        r"\b(?:kya|kya\s+me|kya\s+main)\s+manglik\b",
+        r"\bme\s+manglik\s+hu(?:n|m)?\b",
+        r"\bmain\s+manglik\s+hu(?:n|m)?\b",
+        r"\b(?:mujhe|mer[ai])\s+(?:manglik|mangal\s*dosh)\b",
+        r"\b(?:manglik|mangal\s*dosh)\s+(?:hai|he|hu(?:n|m)?|hain)\b",
+        r"\b(?:kaal\s*sarp|kalsarp|kaalsarp)\s+(?:dosh|hai|he)\b",
+        r"\b(?:mujhe|mer[ai])\s+(?:kaal\s*sarp|kalsarp|kaalsarp)\b",
+        r"\b(?:pitr[ua]|pitra)\s+dosh\s+(?:hai|he)\b",
+        r"\b(?:mujhe|mer[ai])\s+(?:pitr[ua]|pitra)\s+dosh\b",
+        r"\b(?:guru\s*chandal|grahan|daridra|angarak|shrapit|kemadruma)\s+(?:dosh|yog)?\s*(?:hai|he)?\b",
+        r"\b(?:mujhe|mer[ai])\s+(?:guru\s*chandal|grahan|daridra|angarak|shrapit|kemadruma)\b",
+        r"\bdosh\s+(?:hai|he|kaun\s*sa)\b",
     )
 ]
 _CHART_FACT_DEV_PATTERNS = [
@@ -2019,6 +2077,7 @@ _CHART_FACT_DEV_PATTERNS = [
         r"मेरा\s*लग्न", r"लग्न\s*क्या",
         r"मेरा\s*नक्षत्र", r"नक्षत्र\s*क्या",
         r"मेरी\s*दशा", r"कौन\s*सी\s*दशा",
+        r"मांगलिक", r"मंगल\s*दोष", r"काल\s*सर्प", r"पितृ\s*दोष",
     )
 ]
 

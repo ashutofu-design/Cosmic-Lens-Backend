@@ -143,6 +143,29 @@ export interface MoreT {
   askThinking:         string;
   askError:            string;
 
+  // ── Ask Tab — mode picker + chat ──────────────────────────
+  askGreeting:         string;   // "Pranam beta 🙏"
+  askGreetingSub:      string;   // "Aaj kis vidhi se margdarshan chahte hain?"
+  askModeChat:         string;   // "Ask Anything"
+  askModeChatDesc:     string;   // chat description
+  askModeChatMeta:     string;   // "Personalized chat · BPHS aadhar"
+  askModePrashna:      string;   // "Prashna Kundli"
+  askModePrashnaDesc:  string;   // KP number description
+  askModePrashnaMeta:  string;   // "K. S. Krishnamurti · Cuspal Interlinks"
+  askLegacyDivya:      string;   // "Time-based Divya Prashna (current moment)"
+  askInitMessage:      string;   // Acharya intro when chat opens with kundli
+  askDemo1:            string;   // Demo turn 1 (assistant)
+  askDemo2:            string;   // Demo turn 2 (user sample question)
+  askDemo3:            string;   // Demo turn 3 (assistant)
+  askSessionExpired:   string;
+  askPoweredBy:        string;   // "Powered by Advanced Cosmic Intelligence"
+  askAcharyaName:      string;   // "Acharya Vidyasagar"
+
+  // ── Language Picker — Primary indicator ───────────────────
+  langPrimaryActive:   string;   // "PRIMARY"
+  langPrimaryHint:     string;   // "Entire app uses this language"
+  langCurrentBanner:   string;   // "Your primary language" (banner label)
+
   // ── Recently deleted / Delete account ─────────────────────
   recentlyDeleted:     string;
   recentlyDeletedSub:  string;
@@ -424,6 +447,29 @@ const EN: MoreT = {
   askThinking:        "Thinking...",
   askError:           "Could not get an answer. Please try again.",
 
+  // Ask Tab — mode picker + chat
+  askGreeting:        "Pranam 🙏",
+  askGreetingSub:     "Which path of guidance would you like today?",
+  askModeChat:        "Ask Anything",
+  askModeChatDesc:    "Talk directly with the Acharya — kundli, dasha, marriage, career, health — ask anything.",
+  askModeChatMeta:    "Personalized chat · Based on BPHS",
+  askModePrashna:     "Prashna Kundli",
+  askModePrashnaDesc: "Think of any number 1-249 — that number becomes the lagna of your chart, and the cusp's sub-lord gives the precise answer.",
+  askModePrashnaMeta: "K. S. Krishnamurti · Cuspal Interlinks",
+  askLegacyDivya:     "Time-based Divya Prashna (current moment)",
+  askInitMessage:     "Pranam 🙏 I am Acharya Vidyasagar from Kashi. Your kundli is in front of me. Ask any question — marriage, career, health, wealth — without hesitation.",
+  askDemo1:           "Pranam 🙏 I am Acharya Vidyasagar — reading kundlis in Kashi for 35 years. You may ask me anything about your kundli, dasha, marriage, career, or health.",
+  askDemo2:           "How will my career be this year?",
+  askDemo3:           "Without seeing your kundli I can only give general guidance. Please create your birth chart first — then I can give you a fully personalized analysis based on your active grahas, dasha and yogas.",
+  askSessionExpired:  "Session expired — please log out and log in again.",
+  askPoweredBy:       "Powered by Advanced Cosmic Intelligence",
+  askAcharyaName:     "Acharya Vidyasagar",
+
+  // Language Picker — Primary indicator
+  langPrimaryActive:  "PRIMARY",
+  langPrimaryHint:    "Entire app uses this language everywhere",
+  langCurrentBanner:  "Your primary language",
+
   // Recently deleted
   recentlyDeleted:    "Recently Deleted",
   recentlyDeletedSub: "Items deleted in the last 24 hours can be restored",
@@ -699,6 +745,29 @@ const HN: Partial<MoreT> = {
   askThinking:        "Soch raha hu...",
   askError:           "Jawab nahi mil paaya. Dobara try karein.",
 
+  // Ask Tab — mode picker + chat
+  askGreeting:        "Pranam beta 🙏",
+  askGreetingSub:     "Aaj kis vidhi se margdarshan chahte hain?",
+  askModeChat:        "Ask Anything",
+  askModeChatDesc:    "Acharya se seedhi baat — kundli, dasha, vivah, karya, swasthya — koi bhi prashna poochho.",
+  askModeChatMeta:    "Personalized chat · BPHS aadhar",
+  askModePrashna:     "Prashna Kundli",
+  askModePrashnaDesc: "Mann mein ek number 1-249 socho — wahi sankhya aapki kundli ka lagna banegi, cusp sub-lord se sahi jawab.",
+  askModePrashnaMeta: "K. S. Krishnamurti · Cuspal Interlinks",
+  askLegacyDivya:     "Time-based Divya Prashna (current moment)",
+  askInitMessage:     "Pranam beta 🙏 Mai Acharya Vidyasagar — Kashi se. Aapki kundli mere saamne hai. Vivah, karya, swasthya, dhan — jo bhi prashna ho, nishankoch poochiye.",
+  askDemo1:           "Pranam beta 🙏 Mai Acharya Vidyasagar — 35 saal se kundli padh raha hu Kashi mein. Aap apni kundli, dasha, vivah, karya, swasthya — kuch bhi pooch sakte hain, mai margdarshan dunga.",
+  askDemo2:           "Mera career is saal kaisa rahega?",
+  askDemo3:           "Beta, bina kundli dekhe mai sirf saamanya baat keh sakta hu. Aap pehle apni janm-kundli banaiye — phir mai aapke graha, dasha aur yog dekh ke ekdum personalized margdarshan dunga.",
+  askSessionExpired:  "Session expired — kripya logout karke phir login karein.",
+  askPoweredBy:       "Powered by Advanced Cosmic Intelligence",
+  askAcharyaName:     "Acharya Vidyasagar",
+
+  // Language Picker — Primary indicator
+  langPrimaryActive:  "PRIMARY",
+  langPrimaryHint:    "Poori app isi bhasha mein chalegi",
+  langCurrentBanner:  "Aapki primary bhasha",
+
   recentlyDeleted:    "Haal mein delete kiye",
   recentlyDeletedSub: "Pichhle 24 ghante mein delete kiye items wapas la sakte hain",
   noDeletedItems:     "Haal mein kuch delete nahi kiya",
@@ -969,6 +1038,29 @@ const HI: Partial<MoreT> = {
   askDailyLimitOver:  "आज की दैनिक सीमा समाप्त हो गई।",
   askThinking:        "सोच रहा हूँ...",
   askError:           "उत्तर नहीं मिल सका। फिर से कोशिश करें।",
+
+  // Ask Tab — mode picker + chat
+  askGreeting:        "प्रणाम बेटा 🙏",
+  askGreetingSub:     "आज किस विधि से मार्गदर्शन चाहते हैं?",
+  askModeChat:        "कोई भी प्रश्न पूछें",
+  askModeChatDesc:    "आचार्य से सीधी बात — कुंडली, दशा, विवाह, कार्य, स्वास्थ्य — कोई भी प्रश्न पूछें।",
+  askModeChatMeta:    "व्यक्तिगत वार्ता · BPHS आधारित",
+  askModePrashna:     "प्रश्न कुंडली",
+  askModePrashnaDesc: "1 से 249 के बीच कोई संख्या सोचें — वही संख्या आपकी कुंडली का लग्न बनेगी, और कस्प के सब-लॉर्ड से सटीक उत्तर मिलेगा।",
+  askModePrashnaMeta: "के. एस. कृष्णमूर्ति · कस्पल इंटरलिंक्स",
+  askLegacyDivya:     "समय आधारित दिव्य प्रश्न (वर्तमान क्षण)",
+  askInitMessage:     "प्रणाम बेटा 🙏 मैं आचार्य विद्यासागर — काशी से। आपकी कुंडली मेरे सामने है। विवाह, कार्य, स्वास्थ्य, धन — जो भी प्रश्न हो, निःसंकोच पूछिए।",
+  askDemo1:           "प्रणाम बेटा 🙏 मैं आचार्य विद्यासागर — 35 वर्षों से कुंडली पढ़ रहा हूँ काशी में। आप अपनी कुंडली, दशा, विवाह, कार्य, स्वास्थ्य — कुछ भी पूछ सकते हैं, मैं मार्गदर्शन दूँगा।",
+  askDemo2:           "इस वर्ष मेरा करियर कैसा रहेगा?",
+  askDemo3:           "बेटा, बिना कुंडली देखे मैं केवल सामान्य बात कह सकता हूँ। आप पहले अपनी जन्म-कुंडली बनाइए — फिर मैं आपके ग्रह, दशा और योग देखकर एकदम व्यक्तिगत मार्गदर्शन दूँगा।",
+  askSessionExpired:  "सत्र समाप्त — कृपया लॉगआउट करके पुनः लॉगिन करें।",
+  askPoweredBy:       "Advanced Cosmic Intelligence द्वारा संचालित",
+  askAcharyaName:     "आचार्य विद्यासागर",
+
+  // Language Picker — Primary indicator
+  langPrimaryActive:  "मुख्य",
+  langPrimaryHint:    "पूरी ऐप इसी भाषा में चलेगी",
+  langCurrentBanner:  "आपकी मुख्य भाषा",
 
   recentlyDeleted:    "हाल ही में हटाए गए",
   recentlyDeletedSub: "पिछले 24 घंटों में हटाए गए आइटम पुनर्स्थापित किए जा सकते हैं",

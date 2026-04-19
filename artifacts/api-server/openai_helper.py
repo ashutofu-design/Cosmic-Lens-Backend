@@ -1472,9 +1472,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         presence_penalty  = 0.0
         frequency_penalty = 0.0
     else:
-        temperature       = 0.85
-        presence_penalty  = 0.4
-        frequency_penalty = 0.35
+        temperature       = 0.3
+        presence_penalty  = 0.2
+        frequency_penalty = 0.2
 
     def _call_once() -> str:
         try:
@@ -1482,7 +1482,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 model            = model,
                 messages         = messages,
                 temperature      = temperature,
-                max_tokens       = 480,
+                top_p            = 1,
+                max_tokens       = 300,
                 presence_penalty = presence_penalty,
                 frequency_penalty= frequency_penalty,
             )

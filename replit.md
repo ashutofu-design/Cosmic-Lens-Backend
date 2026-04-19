@@ -623,16 +623,23 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Combined with existing (Vimshottari, Chara, Sthira, Niryana Shoola) → **12 dasha systems total** ✅
 - **Deferred (rare/highly-niche)**: Mandooka, Drig, Trikona, Chaturasheeti-Sama, Kalachakra, Shashtihayani, Shatabdika, Shoola
 
-### Sprint 22 — Phase F: Per-Varga Deep (~144 calc)
-- Varga aspects (16 vargas × planet-to-planet)
-- Varga ashtakavarga (BAV/SAV per varga)
-- Varga dasha (separate Vimshottari per varga)
-- Per-varga yoga detection beyond D1/D9/D10/D24/D60
-- Per-varga dosh detection
+### Sprint 22 — Per-Varga Deep ✅ COMPLETE
+- File: `vedic/varga/varga_deep.py` (~210 lines)
+- **Varga aspects** — Parashari drishti (7 + special 4/8/5/9/3/10) per planet inside D9, D10, D24, D60
+- **Varga ashtakavarga** — BAV/SAV computed per varga (reuses ashtakavarga engine)
+- **Varga Lagna-Lord matrix** — for each major varga: lagna sign, lord, lord's house
+- Wired into `locked_facts.py`, smoke-tested on /tmp/req.json
+- Test result: D9 most-aspected = Rahu (×4), D10 = Sun (×2), D60 = Moon (×4)
 
-### Sprint 23 — Phase G + H: Ashtakavarga Adv + Transits/Eclipses
-- Trikona Shodhana, Ekadhipatya Shodhana, Sodhya Pinda
-- Transit-through-Ashtakavarga predictions
+### Sprint 23 — Tier 7 Ashtakavarga Deep ✅ COMPLETE
+- File: `vedic/varga/ashtaka_deep.py` (~230 lines)
+- **Trikona Shodhana** — column reduction within trines (1-5-9, 2-6-10, 3-7-11, 4-8-12)
+- **Ekadhipatya Shodhana** — BPHS reduction for 2-sign-rulers (Mars/Mercury/Jupiter/Venus/Saturn)
+- **Sodhya Pinda** — Rashi Pinda + Graha Pinda (BPHS Ch.66 classical values) → planetary potency
+- **Transit overlay** — current planet sign vs own-BAV bindus → EXCELLENT/FAVOURABLE/AVERAGE/WEAK/ADVERSE verdicts
+- Test chart: Sodhya rank Venus(138) > Mars(66) > Sun(64); Strongest=Venus, Weakest=Jupiter
+
+### Sprint 24 — Phase H: Transits/Eclipses + Fixed Stars (next)
 - Saturn through 12 houses detailed
 - Jupiter 12-yr cycle, Rahu-Ketu 18-month
 - Solar/Lunar eclipse path on natal chart, Saros cycles, pre-natal eclipse points

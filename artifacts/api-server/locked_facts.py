@@ -575,6 +575,37 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] extra dashas (Sprint-21) failed: {exc}")
 
+    # Sprint-22 — Per-Varga Deep (aspects + ashtakavarga + lagna-lord matrix)
+    varga_deep_str = ""
+    try:
+        from vedic.varga.varga_deep import (compute_varga_deep_all,  # type: ignore
+                                            format_varga_deep_summary)
+        _vd = compute_varga_deep_all(kundli.get("planets") or [], lagna_lon)
+        varga_deep_str = format_varga_deep_summary(_vd) if _vd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] varga deep (Sprint-22) failed: {exc}")
+
+    # Sprint-23 — Tier-7 Ashtakavarga Deep (Trikona/Ekadhipatya Shodhana,
+    # Sodhya Pinda, Transit overlay)
+    ashtaka_deep_str = ""
+    try:
+        from vedic.varga.ashtaka_deep import (compute_ashtaka_deep,  # type: ignore
+                                              format_ashtaka_deep_summary,
+                                              SIGN_NAMES as _SN)
+        _lg_ad = kundli.get("ascendant")
+        _lg_si = _SN.index(_lg_ad) if isinstance(_lg_ad, str) and _lg_ad in _SN else None
+        # Use natal positions as transit-baseline (real transit can be wired later)
+        _transits = {p["name"]: _SN.index(p["sign"])
+                     for p in (kundli.get("planets") or [])
+                     if isinstance(p, dict) and p.get("name") in
+                     ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn")
+                     and p.get("sign") in _SN}
+        _ad = compute_ashtaka_deep(kundli.get("planets") or [], _lg_si,
+                                   transit_signs=_transits)
+        ashtaka_deep_str = format_ashtaka_deep_summary(_ad) if _ad else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] ashtaka deep (Sprint-23) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -748,6 +779,9 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         classical_yogas_str,
         extra_yogas_str,
         deep_doshas_str,
+        extra_dashas_str,
+        varga_deep_str,
+        ashtaka_deep_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

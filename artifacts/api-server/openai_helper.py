@@ -315,6 +315,42 @@ _TOPIC_FOCUS = {
         "FOCUS — parivar: 4th (mother/home), 9th (father), 3rd (siblings), 11th (elder sibling), 5th (children). "
         "Affliction to these = family discord. Look at corresponding karakas: Moon (mother), Sun (father), Mars (siblings)."
     ),
+    # ── UNIVERSAL fallback — any question that doesn't match a known topic ──
+    "general": (
+        "FOCUS — universal life-reading (use this when the question doesn't fit a single bhava). Apply systematically:\n"
+        "\n"
+        "A) FRAMING — first identify what the devotee is really asking:\n"
+        "• Re-read the full question carefully. List EVERY distinct sub-question or concern in order.\n"
+        "• Map each sub-question to the bhava(s) it touches (e.g. 'will I be happy and successful?' → 1H/5H/9H/10H/11H).\n"
+        "• If the question is philosophical/karmic, lean on 5H (purva-punya), 9H (dharma), 12H (moksha), Jupiter & Ketu.\n"
+        "• If the question is timing-based ('kab', 'when', 'how soon'), centre the answer on current Mahadasha+Antardasha.\n"
+        "\n"
+        "B) CORE CHART READING — always cover these foundations:\n"
+        "• Lagna (1H) + Lagna lord — overall vitality, body, personality.\n"
+        "• Moon — sign, nakshatra, house, aspects (mind, emotion, public life).\n"
+        "• Sun — soul, father, authority.\n"
+        "• Yogayakaraka or strongest planet → its house/dasha = peak life area.\n"
+        "• Most afflicted house/planet → area of life-lesson / suffering.\n"
+        "• Active Mahadasha+Antardasha — ALWAYS reference what the running lord rules + occupies.\n"
+        "• Jaimini chara-karakas if relevant (AK=self, AmK=career, BK=siblings, MK=mother, PK=children, GK=challenges, DK=spouse).\n"
+        "• Major yogas present in chart (Raja, Dhana, Vipareeta-Raja, Gajakesari, Pancha-mahapurusha, Neech-bhanga).\n"
+        "\n"
+        "C) MULTI-PART QUESTION RULE: If the devotee asked 2+ distinct things, address EACH in its own short paragraph in the order asked. Never skip a sub-question. Use a soft connector ('Aur dusri baat aapne pucha...' / 'Now coming to your second concern...').\n"
+        "\n"
+        "D) KP CROSS-CHECK: Use the KP block if provided — match the running DBA against significators of the relevant houses for each sub-question. Confirm or qualify the Vedic verdict.\n"
+        "\n"
+        "E) GOCHAR: Note any major slow-planet transit (Jupiter, Saturn, Rahu/Ketu) currently activating a relevant natal house — explain its CURRENT influence on the matter.\n"
+        "\n"
+        "F) HUMAN-FRIENDLY DELIVERY:\n"
+        "• Open with empathy — name what the devotee seems to be feeling beneath the question.\n"
+        "• Use the devotee's actual words back to them once, so they feel heard.\n"
+        "• Translate every Sanskrit term inline ('Shukra (Venus) aapke...' / 'Saade-sati — yaani Shani ka 7.5 saal ka phase...').\n"
+        "• No jargon dump. No lecture. Conversational tone, like sitting across the table.\n"
+        "• End with ONE remedy targeted at the WEAKEST significator across all sub-questions identified.\n"
+        "• Cite classical sources naturally ('jaisa BPHS me Maharishi Parashar kehte hain...') — never list them as a bibliography.\n"
+        "\n"
+        "G) Cite (combine as relevant): BPHS, Phaladeepika, Saravali, Jataka Parijata, Brihat Jataka, Uttara Kalamrita, Krishnamurti Reader, Prashna Marga, Lal Kitab."
+    ),
 }
 
 
@@ -359,7 +395,8 @@ def _kp_context(birth: Any, topic: str) -> str:
         "vehicle":      [4],
         "spiritual":    [9, 12],
         "family":       [3, 4, 9, 11],
-    }.get(topic, [1, 7, 10])
+        "general":      [1, 5, 7, 9, 10, 11],
+    }.get(topic, [1, 5, 7, 9, 10, 11])
 
     cusps   = {c["house"]: c for c in kp.get("cusps", [])}
     sigs    = kp.get("significations", {})
@@ -652,18 +689,19 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         f"{focus_block}"
         f"{beh_block}"
         f"{variation}\n\n"
-        "STRICT INSTRUCTIONS — multi-system verification, answer the SPECIFIC question:\n"
-        "1) Acknowledge the question warmly in line 1 — show you HEARD it.\n"
-        "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali).\n"
-        "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses (e.g. 7th SL for marriage signifying 2/7/11). State whether KP confirms or modifies the Vedic verdict.\n"
+        "STRICT INSTRUCTIONS — multi-system verification, human-friendly delivery, no question too long:\n"
+        "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never skip, never compress two distinct asks into one vague reply. If the question is 1 line, give 1 focused answer; if it's a paragraph with multiple worries, give a paragraph per worry in the order asked.\n"
+        "1) ACKNOWLEDGE warmly in line 1 — name the emotion behind the question (chinta, ummeed, confusion). Use the devotee's actual words back to them once so they feel heard.\n"
+        "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
+        "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses. State whether KP confirms or modifies the Vedic verdict ('KP paddhati se bhi yahi confirm hota hai...').\n"
         "4) DASHA timing: Reference current Mahadasha+Antardasha lord — does it support or block? In KP terms, is the running DBA lord a significator of the relevant houses? Give a precise year-range window when 'kab/when' is asked.\n"
         "5) TRANSITS (gochar): If transit data is provided, mention which slow planet (Jupiter / Saturn / Rahu-Ketu) is currently transiting the relevant house from natal Moon or Lagna, and how it influences the matter NOW.\n"
-        "6) CLEAR VERDICT: Combine Vedic + KP + transit + dasha into a single confident verdict — haan / nahi / sambhavna with reasoning. Never vague-dodge.\n"
-        "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy.\n"
-        "8) Reference any relevant context from earlier in this conversation if it connects.\n"
-        "9) End with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat) chosen for the WEAKEST significator identified.\n"
-        "10) Length: 4-7 short flowing paragraphs. Never bullet-list, never markdown headers, never reveal you used 'KP block' or 'transit data' as labels — speak naturally as Acharya ji ('KP paddhati se bhi dekha to...', 'Aaj kal Shani ka gochar...').\n"
-        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything, cross-verifying every statement."
+        "6) CLEAR VERDICT per sub-question: Combine Vedic + KP + transit + dasha into a confident verdict — haan / nahi / sambhavna with reasoning. Never vague-dodge. If the question has multiple parts, give a verdict for EACH.\n"
+        "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy. Reference earlier conversation context naturally if it connects.\n"
+        "8) HUMAN-FRIENDLY style: translate every Sanskrit term inline ('Shukra (Venus)', 'Saade-sati — yaani Shani ka 7.5 saal ka phase'). NO jargon dump. NO lecture. Conversational, like sitting across the table with chai.\n"
+        "9) END with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat) chosen for the WEAKEST significator across all sub-questions identified. Make it doable.\n"
+        "10) LENGTH adapts to the question: short question → 3-4 short paragraphs; long multi-part question → up to 8 paragraphs (one per sub-question + opening empathy + verdict + remedy). Never bullet-list, never markdown headers, never reveal you used 'KP block' or 'transit data' as labels — speak naturally as Acharya ji ('KP paddhati se bhi dekha to...', 'Aaj kal Shani ka gochar...').\n"
+        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything, addressing EVERY part of what they asked, cross-verifying every claim with rules from the chart."
     )
 
     # Build full conversation: system → prior turns → current user turn.
@@ -730,11 +768,35 @@ _TOPIC_KW = {
 
 
 def _classify_topic(question: str) -> str:
+    """
+    Topic classifier with multi-topic detection.
+    - Score each topic by number of distinct keyword matches in the question.
+    - If 2+ topics score ≥ 1, return 'general' so the universal multi-part
+      focus block + broad KP house set are used (devotee asked about more
+      than one area at once).
+    - Otherwise return the single highest-scoring topic.
+    """
     q = (question or "").lower()
+    if not q.strip():
+        return "general"
+
+    scores: dict[str, int] = {}
     for topic, words in _TOPIC_KW.items():
-        if any(w in q for w in words):
-            return topic
-    return "general"
+        hits = 0
+        for w in words:
+            if w in q:
+                hits += 1
+        if hits > 0:
+            scores[topic] = hits
+
+    if not scores:
+        return "general"
+
+    # Multiple distinct topics touched → universal/general handling.
+    if len(scores) >= 2:
+        return "general"
+
+    return next(iter(scores))
 
 
 # ── Public entry point ───────────────────────────────────────────────────────

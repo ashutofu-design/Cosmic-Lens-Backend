@@ -226,6 +226,27 @@ export default function AskScreen() {
         <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
+      {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
+      {mode === "chat" && (
+        <View style={[s.modeSwitch, { backgroundColor: (C as any).bgCard2 ?? C.bgCard, borderColor: C.border }]}>
+          <View style={[s.modeSwitchSeg, { backgroundColor: C.accentBg, borderColor: `${C.accent}80` }]}>
+            <Feather name="message-circle" size={13} color={C.accent} />
+            <Text style={[s.modeSwitchText, { color: C.accent }]}>Ask Anything</Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (showDemo) { router.push("/onboarding"); return; }
+              router.push("/prashna-kundli");
+            }}
+            style={({ pressed }) => [s.modeSwitchSeg, pressed && { opacity: 0.7 }]}
+          >
+            <Feather name="hash" size={13} color={C.textMuted} />
+            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>Prashna Kundli</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Demo banner */}
       {showDemo && (
         <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>

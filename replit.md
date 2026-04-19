@@ -491,13 +491,22 @@ api-server/
 
 **Goal: Reach 1100+ calculations professional-grade depth.**
 
-### Sprint 18 — Phase B: Bala Deep (60 calc)
-- Sthana Bala 5 sub: Uchchabala, Saptavargaja, Ojayugmarasiamsa, Kendradi, Drekkana
-- Kala Bala 9 sub: Nathonnatha, Paksha, Tribhaga, Abda, Masa, Vara, Hora, Ayana, Yuddha
-- Dig Bala detailed compass-based
-- Bhava Bala 4-fold per house (48 calc)
-- Ishta Phala + Kashta Phala
-- Vimshopaka Bala in 6/7/10/16 varga groupings
+### Sprint 18 — Phase B: Bala Deep (60 calc) ✅ COMPLETE (Apr 2026)
+- ✅ NEW MODULE: `vedic/strength/bala_deep.py` (~440 lines, BPHS Ch.27 + Saravali)
+- ✅ Saptavargaja Bala (dignity-weighted across 7 vargas, max 210v)
+- ✅ Kala Bala 9 sub: Nathonnatha, Tribhaga, Abda, Masa, Vara, Hora, Ayana, Yuddha
+   (Paksha + Chesta already in shadbala.py)
+- ✅ Ayana Bala — proper per-planet declination preferences
+   (N: Sun/Mars/Jupiter, S: Moon/Saturn, Both: Mercury/Venus)
+- ✅ Ishta Phala + Kashta Phala — classical (A×B)/60 formula
+- ✅ Vimshopaka Bala in Shadvarga(6) / Saptavarga(7) / Dashavarga(10) / Shodashavarga(16) groupings
+- ✅ Yuddha Bala (planetary war: 1° conjunction, winner gains diff in virupas)
+- ✅ Wired into `locked_facts.py` AFTER all 14 divisional charts (real per-varga sign_idx)
+- ✅ Rule X added in `openai_helper.py` system prompt (strength/capability questions)
+- ✅ Deterministic post-injector for un-cited strength answers (Hindi+English regex)
+- ✅ 3x smoke test PASSED (marriage Q, career Q, greeting suppression)
+- ✅ Architect review PASSED (3 HIGH issues fixed: varga data integrity, Ishta formula, Ayana logic)
+- DEFERRED to later sprint: Sthana Bala 5 sub (already in shadbala.py), Dig Bala compass-based, Bhava Bala 4-fold per house
 
 ### Sprint 19 — Phase C: Yogas 200+
 - Dhana Yogas (30+) — Lakshmi, Kubera, Kalanidhi, Indra

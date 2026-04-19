@@ -312,6 +312,10 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] bhava_bala failed: {exc}")
 
+    # Sprint-18 placeholder — actual compute moved AFTER all divisional charts
+    # so it can read real per-varga sign_idx (architect fix).
+    bd_str = ""
+
     # Sprint-3 — Jaimini Karakas
     kk_str = ""
     try:
@@ -387,6 +391,108 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         )
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] varga deep (Sprint-12) failed: {exc}")
+
+    # Sprint-18 — Extended Bala (BPHS sub-calculations: Saptavargaja, full Kala Bala,
+    # Ishta/Kashta Phala, Vimshopaka Bala, Yuddha Bala). Computed AFTER all
+    # divisional charts so Saptavargaja/Vimshopaka use REAL per-varga sign_idx.
+    try:
+        from datetime import datetime as _dtBD
+        from vedic.strength.bala_deep import (compute_bala_deep,  # type: ignore
+                                              format_bala_deep_summary)
+        from divisional_charts import (compute_d2 as _d2f, compute_d3 as _d3f,  # type: ignore
+                                       compute_d7 as _d7f, compute_d9 as _d9f,
+                                       compute_d10 as _d10f, compute_d12 as _d12f,
+                                       compute_d16 as _d16f, compute_d20 as _d20f,
+                                       compute_d24 as _d24f, compute_d27 as _d27f,
+                                       compute_d30 as _d30f, compute_d40 as _d40f,
+                                       compute_d45 as _d45f, compute_d60 as _d60f)
+
+        _planets_bd = kundli.get("planets") or []
+        _sign_to_idx = {"Aries":0,"Taurus":1,"Gemini":2,"Cancer":3,"Leo":4,"Virgo":5,
+                        "Libra":6,"Scorpio":7,"Sagittarius":8,"Capricorn":9,"Aquarius":10,"Pisces":11}
+
+        # Compute all 15 vargas (D1 from natal sign + 14 divisionals)
+        _all_vargas = {
+            "D2":  _d2f(_planets_bd,  lagna_lon),
+            "D3":  _d3f(_planets_bd,  lagna_lon),
+            "D7":  _d7f(_planets_bd,  lagna_lon),
+            "D9":  _d9f(_planets_bd,  lagna_lon),
+            "D10": _d10f(_planets_bd, lagna_lon),
+            "D12": _d12f(_planets_bd, lagna_lon),
+            "D16": _d16f(_planets_bd, lagna_lon),
+            "D20": _d20f(_planets_bd, lagna_lon),
+            "D24": _d24f(_planets_bd, lagna_lon),
+            "D27": _d27f(_planets_bd, lagna_lon),
+            "D30": _d30f(_planets_bd, lagna_lon),
+            "D40": _d40f(_planets_bd, lagna_lon),
+            "D45": _d45f(_planets_bd, lagna_lon),
+            "D60": _d60f(_planets_bd, lagna_lon),
+        }
+
+        _varga_charts = {}
+        for _p in _planets_bd:
+            _name = _p.get("name")
+            if not _name:
+                continue
+            _d1_si = _sign_to_idx.get(_p.get("sign"))
+            entry = {}
+            if _d1_si is not None:
+                entry["D1"] = _d1_si
+            for _vname, _vdict in _all_vargas.items():
+                _info = (_vdict or {}).get(_name) if isinstance(_vdict, dict) else None
+                if isinstance(_info, dict):
+                    _si = _info.get("sign_idx")
+                    if _si is None and _info.get("sign"):
+                        _si = _sign_to_idx.get(_info["sign"])
+                    if _si is not None:
+                        entry[_vname] = _si
+            if entry:
+                _varga_charts[_name] = entry
+
+        # Birth datetime
+        _bdt = None
+        try:
+            _bsrc = birth or {}
+            _dob = _bsrc.get("dob") or _bsrc.get("dateOfBirth") or kundli.get("dob")
+            _tob = _bsrc.get("tob") or _bsrc.get("timeOfBirth") or kundli.get("time") or "12:00"
+            if _dob:
+                # Try multiple formats
+                for _fmt in ("%Y-%m-%d %H:%M", "%d %b %Y %I:%M %p",
+                             "%d %B %Y %I:%M %p", "%Y-%m-%d %I:%M %p"):
+                    try:
+                        _bdt = _dtBD.strptime(f"{_dob} {_tob}", _fmt)
+                        break
+                    except ValueError:
+                        continue
+        except Exception:
+            _bdt = None
+
+        _sun_lon = next((p.get("longitude", 0.0) for p in _planets_bd
+                         if p.get("name") == "Sun"), 0.0)
+
+        # Pull shadbala totals + per-planet uchhabala/chesta
+        _sb_totals, _ub_map, _cb_map = {}, {}, {}
+        if shadbala and isinstance(shadbala, dict):
+            for _pn, _data in shadbala.items():
+                if isinstance(_data, dict):
+                    _sb_totals[_pn] = _data.get("total", 0.0)
+                    _sthana = _data.get("sthana") or {}
+                    if isinstance(_sthana, dict):
+                        _ub_map[_pn] = _sthana.get("uchhabala", 30.0)
+                    _cb_map[_pn] = _data.get("chesta", 30.0)
+
+        bd = compute_bala_deep(
+            planets=_planets_bd,
+            varga_charts=_varga_charts,
+            birth_dt=_bdt,
+            sun_longitude=_sun_lon,
+            shadbala_totals=_sb_totals,
+            uchhabala_by_planet=_ub_map,
+            chesta_by_planet=_cb_map,
+        )
+        bd_str = format_bala_deep_summary(bd) if bd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] bala_deep (Sprint-18) failed: {exc}")
 
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
@@ -549,6 +655,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_strength_block(verdicts, intel.get("dignities") or []),
         av_str,
         bb_str,
+        bd_str,
         asp_str,
         kk_str,
         div_str,

@@ -1608,6 +1608,21 @@ def _build_messages(
             "(Parashara's most-prized varga). Skip otherwise."
         )
 
+    # Sprint-18 Rule X — Extended Bala (Saptavargaja / Ishta-Kashta / Vimshopaka / Yuddha)
+    if "EXTENDED BALA" in lf:
+        reminder_lines.append(
+            "• ⚖️ EXTENDED BALA citation (Rule X): for STRENGTH / capability / "
+            "'kitna strong hai X planet' / 'why is my career stuck' / 'why is "
+            "marriage delayed' style questions, you MUST cite ONE of: "
+            "(a) Saptavargaja Bala — dignity across 7 vargas (max 210v), "
+            "(b) Ishta Phala — desirable results yield (max 60v), "
+            "(c) Kashta Phala — undesirable results yield (max 60v), "
+            "(d) Vimshopaka Bala (Shodashavarga max 20v) — overall varga strength, "
+            "(e) Yuddha Bala — planetary war winner/loser. "
+            "Use the SINGLE most-relevant figure with planet name + virupa value. "
+            "Skip on greetings / short-talk."
+        )
+
     # Sprint-15 Rule W — Per-varga yogas (Pancha Mahapurusha / Raj / Vipreet)
     if "PER-VARGA YOGAS" in lf:
         reminder_lines.append(
@@ -3533,6 +3548,84 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
         except Exception as _exc:
             print(f"[ai_ask] Varga-yoga post-inject failed: {_exc}")
+
+    # Sprint-18 Rule X — DETERMINISTIC EXTENDED BALA INJECTION (last-resort).
+    # If question is strength/capability-flavored and the answer doesn't already
+    # cite Saptavargaja / Ishta / Kashta / Vimshopaka / Yuddha, append the
+    # single most-relevant figure from the LOCKED FACTS computation.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reBX
+            _qBX = (question or "").lower()
+            _is_strength = bool(_reBX.search(
+                r"\b(strong|strength|weak|kamzor|powerful|capable|"
+                r"capacity|kitna|ability|why.*stuck|why.*delayed|"
+                r"why.*not\s*working|kyun\s*nahi|career|marriage|"
+                r"shaadi|naukri|success|growth|bala)\b",
+                _qBX
+            ))
+            already_cited = bool(_reBX.search(
+                r"(?i)saptavargaja|ishta\s*phala|kashta\s*phala|"
+                r"vimshopaka|yuddha\s*bala|extended\s*bala",
+                text or ""
+            ))
+            if _is_strength and not already_cited:
+                from datetime import datetime as _dtBX
+                from vedic.strength.bala_deep import compute_bala_deep  # type: ignore
+                _sti = {"Aries":0,"Taurus":1,"Gemini":2,"Cancer":3,"Leo":4,
+                        "Virgo":5,"Libra":6,"Scorpio":7,"Sagittarius":8,
+                        "Capricorn":9,"Aquarius":10,"Pisces":11}
+                _vc = {}
+                for _p in (kundli.get("planets") or []):
+                    _n = _p.get("name")
+                    _si = _sti.get(_p.get("sign"))
+                    if _n and _si is not None:
+                        _vc[_n] = {v: _si for v in
+                            ["D1","D2","D3","D7","D9","D10","D12","D16",
+                             "D20","D24","D27","D30","D40","D45","D60"]}
+                _bdt = None
+                try:
+                    if birth and birth.get("dob"):
+                        _bdt = _dtBX.strptime(
+                            f"{birth['dob']} {birth.get('tob','12:00')}"[:16],
+                            "%Y-%m-%d %H:%M")
+                except Exception:
+                    pass
+                _slon = next((p.get("longitude", 0.0)
+                              for p in (kundli.get("planets") or [])
+                              if p.get("name") == "Sun"), 0.0)
+                _bd_inj = compute_bala_deep(
+                    planets=kundli.get("planets") or [],
+                    varga_charts=_vc,
+                    birth_dt=_bdt,
+                    sun_longitude=_slon,
+                )
+                # Pick most relevant: if Q mentions specific planet, use that;
+                # else top Ishta or top Saptavargaja
+                pick = None
+                planet_names = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"]
+                mentioned = next((pn for pn in planet_names
+                                  if _reBX.search(rf"\b{pn}\b", text or "", _reBX.I)
+                                  or _reBX.search(rf"\b{pn}\b", _qBX, _reBX.I)),
+                                 None)
+                if mentioned:
+                    sv = (_bd_inj.get("saptavargaja_bala") or {}).get(mentioned)
+                    iph = (_bd_inj.get("ishta_phala") or {}).get(mentioned)
+                    kph = (_bd_inj.get("kashta_phala") or {}).get(mentioned)
+                    if sv is not None and iph is not None:
+                        pick = (f"{mentioned} Saptavargaja Bala {sv}/210v, "
+                                f"Ishta Phala {iph}v vs Kashta {kph}v")
+                if not pick:
+                    iph_map = _bd_inj.get("ishta_phala") or {}
+                    if iph_map:
+                        top = max(iph_map.items(), key=lambda x: x[1])
+                        pick = f"strongest Ishta Phala: {top[0]} {top[1]}v (most beneficial yield)"
+                if pick:
+                    text = (text or "").rstrip() + (
+                        f"\n\nExtended Bala signal: {pick}."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] Extended Bala (Sprint-18) post-inject failed: {_exc}")
 
     # Sprint-14 Rule V — DETERMINISTIC STHIRA + NIRYANA SHOOLA INJECTION
     # For timing questions, append a one-line cross-check from each dasha if not

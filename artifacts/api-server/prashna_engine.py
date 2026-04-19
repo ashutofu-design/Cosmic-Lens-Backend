@@ -21,7 +21,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from kp_engine import calculate_kp
+from kp_engine import (
+    calculate_kp,
+    VIMSHOTTARI_SEQ, VIMSHOTTARI_YRS, NAKSHA_EXTENT,
+    NAKSHATRAS, SIGNS, get_kp_lords, get_kp_house, get_owned_houses,
+    format_deg_sign, ALL_PLANETS,
+)
 
 
 # ── Astrologer's seat (locked) ──────────────────────────────────────────────
@@ -414,3 +419,249 @@ def list_categories() -> List[Dict[str, str]]:
         {"key": k, "label_hi": v["label_hi"], "label_en": v["label_en"]}
         for k, v in CATEGORIES.items()
     ]
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  KP-249 Number System (K. S. Krishnamurti — Cuspal Interlinks Theory)
+# ════════════════════════════════════════════════════════════════════════════
+#  The querent picks a number 1-249. Each number maps to a fixed sub-division
+#  of the 360° zodiac. That sub's mid-longitude becomes the FORCED LAGNA of
+#  the horary chart cast at the current moment at the astrologer's seat.
+#
+#  Total = 27 nakshatras × 9 sub-lords = 243 raw subs. Subs that straddle a
+#  sign boundary are split into TWO entries (one per sign), giving 249.
+#
+#  Source: KP Reader VI, Chapter 9 — "Horary by Number".
+# ════════════════════════════════════════════════════════════════════════════
+
+def _build_kp_249_table() -> List[Dict[str, Any]]:
+    table: List[Dict[str, Any]] = []
+    for nidx in range(27):
+        n_lord = VIMSHOTTARI_SEQ[nidx % 9]            # Ashwini=Ketu, Bharani=Venus, ...
+        start_idx = VIMSHOTTARI_SEQ.index(n_lord)
+        cursor = nidx * NAKSHA_EXTENT
+        for k in range(9):
+            sub = VIMSHOTTARI_SEQ[(start_idx + k) % 9]
+            sub_extent = NAKSHA_EXTENT * VIMSHOTTARI_YRS[sub] / 120.0
+            sub_start, sub_end = cursor, cursor + sub_extent
+            cursor = sub_end
+
+            sign_a = int(sub_start / 30.0 + 1e-9) % 12
+            sign_b = int((sub_end - 1e-9) / 30.0) % 12
+            if sign_a == sign_b:
+                table.append({"start": sub_start, "end": sub_end,
+                              "sign_idx": sign_a, "naksh_idx": nidx, "sub_lord": sub})
+            else:
+                boundary = (sign_a + 1) * 30.0
+                table.append({"start": sub_start, "end": boundary,
+                              "sign_idx": sign_a, "naksh_idx": nidx, "sub_lord": sub})
+                table.append({"start": boundary, "end": sub_end,
+                              "sign_idx": sign_b, "naksh_idx": nidx, "sub_lord": sub})
+    for i, row in enumerate(table):
+        row["num"] = i + 1
+    return table
+
+
+KP_249_TABLE = _build_kp_249_table()
+KP_249_COUNT = len(KP_249_TABLE)   # = 249
+
+
+def number_to_lagna(n: int) -> Dict[str, Any]:
+    """Map a KP horary number to the forced ascendant (midpoint of its sub)."""
+    if n < 1 or n > KP_249_COUNT:
+        raise ValueError(f"Number must be 1..{KP_249_COUNT}")
+    row = KP_249_TABLE[n - 1]
+    mid = (row["start"] + row["end"]) / 2.0
+    return {
+        "number":    n,
+        "longitude": mid,
+        "sign":      SIGNS[row["sign_idx"]],
+        "nakshatra": NAKSHATRAS[row["naksh_idx"]],
+        "sub_lord":  row["sub_lord"],
+        "degree":    format_deg_sign(mid),
+    }
+
+
+def _cast_number_chart(forced_lagna_lon: float, now: datetime) -> Dict[str, Any]:
+    """
+    Cast a horary chart with the lagna FORCED to a specific longitude (from
+    the querent's KP number), planet positions taken from the current moment
+    at Bhubaneswar. Cusps are derived equal-house from the forced lagna —
+    the standard simplification for KP horary number prashna.
+    """
+    is_pm = now.hour >= 12
+    hr12  = now.hour % 12 or 12
+
+    base = calculate_kp({
+        "day": now.day, "month": now.month, "year": now.year,
+        "hour": hr12,   "minute": now.minute,
+        "ampm": "PM" if is_pm else "AM",
+        "lat":  ASTROLOGER_SEAT["lat"],
+        "lon":  ASTROLOGER_SEAT["lon"],
+        "tz":   ASTROLOGER_SEAT["tz_offset"],
+    })
+
+    # Equal-house cusps from forced lagna
+    new_cusps = [(forced_lagna_lon + 30.0 * h) % 360 for h in range(12)]
+    cusps_out = []
+    for h, clon in enumerate(new_cusps):
+        sl, nl, sb, ss = get_kp_lords(clon)
+        naksha_idx = int(clon / NAKSHA_EXTENT) % 27
+        cusps_out.append({
+            "house":     h + 1,
+            "longitude": round(clon, 4),
+            "degree":    format_deg_sign(clon),
+            "sign":      SIGNS[int(clon / 30) % 12],
+            "sl": sl, "nl": nl, "sb": sb, "ss": ss,
+            "nakshatra": NAKSHATRAS[naksha_idx],
+        })
+
+    # Recompute planet→house using new cusps
+    planet_lons = {p["name"]: p["longitude"] for p in base["planets"]}
+    new_house_map = {p: get_kp_house(planet_lons[p], new_cusps) for p in ALL_PLANETS}
+    planets_out = []
+    for p in base["planets"]:
+        p2 = dict(p)
+        p2["house"] = new_house_map[p["name"]]
+        planets_out.append(p2)
+
+    # Recompute significations under new cusps
+    def houses_for_lord(lord: str) -> List[int]:
+        h_occ = [new_house_map[lord]] if lord in new_house_map else []
+        h_own = get_owned_houses(lord, new_cusps)
+        return sorted(set(h_occ + h_own))
+
+    sig_out = {}
+    for p in planets_out:
+        pname = p["name"]
+        owned = get_owned_houses(pname, new_cusps)
+        sig_out[pname] = {
+            "nl_lord":   p["nl"],
+            "sb_lord":   p["sb"],
+            "ss_lord":   p["ss"],
+            "pl":        sorted(set([p["house"]] + owned)),
+            "sl":        houses_for_lord(p["nl"]),
+            "sb_houses": houses_for_lord(p["sb"]),
+            "ss_houses": houses_for_lord(p["ss"]),
+        }
+
+    return {
+        "cusps":          cusps_out,
+        "planets":        planets_out,
+        "significations": sig_out,
+        "ayanamsa":       base["ayanamsa"],
+    }
+
+
+def ask_number_prashna(number: int,
+                       question: str = "",
+                       category: Optional[str] = None,
+                       now: Optional[datetime] = None) -> Dict[str, Any]:
+    """
+    KP horary by number (1-249). The querent's number forces the lagna; the
+    cuspal sub-lord at the relevant house then yields the verdict.
+    """
+    if not isinstance(number, int) or number < 1 or number > KP_249_COUNT:
+        return {"ok": False, "error": "invalid_number",
+                "message": f"Krupya 1 se {KP_249_COUNT} ke beech sankhya chunein."}
+
+    if category in CATEGORIES:
+        cat_key = category
+    elif question.strip():
+        cat_key = infer_category(question)
+    else:
+        cat_key = "general"
+    cat = CATEGORIES[cat_key]
+
+    if now is None:
+        now = datetime.now(ZoneInfo(ASTROLOGER_SEAT["tz_name"]))
+
+    lagna_info = number_to_lagna(number)
+    chart = _cast_number_chart(lagna_info["longitude"], now)
+    cusps, planets, sig = chart["cusps"], chart["planets"], chart["significations"]
+
+    validity = _validity_check(cusps, planets)
+    if not validity["valid"]:
+        return {
+            "ok":        False,
+            "reason":    "invalid_prashna_time",
+            "validity":  validity,
+            "category":  cat_key,
+            "number":    number,
+            "lagna":     {"sign": lagna_info["sign"], "degree": lagna_info["degree"],
+                          "nakshatra": lagna_info["nakshatra"], "sub_lord": lagna_info["sub_lord"]},
+            "timestamp": now.isoformat(),
+            "place":     ASTROLOGER_SEAT,
+        }
+
+    cusp_verdicts = []
+    for h in cat["primary_cusps"]:
+        cusp = next((c for c in cusps if c["house"] == h), None)
+        if cusp:
+            cusp_verdicts.append(
+                _evaluate_cusp(cusp, sig, cat["positive"], cat["negative"])
+            )
+
+    final = _aggregate_verdict(cusp_verdicts)
+    label_hi, label_en = VERDICT_LABELS[final]
+
+    cusp_lines = [
+        f"{cv['house']}th cusp ({cv['sign']} {cv['degree']}) — Sub-Lord "
+        f"{cv['sub_lord']} → houses {cv['signifies']}; "
+        f"+{cv['pos_hits']} / -{cv['neg_hits']} => {cv['verdict']}"
+        for cv in cusp_verdicts
+    ]
+
+    if final in ("YES", "YES_LIKELY"):
+        meaning = cat["positive_meaning"]
+    elif final in ("NO", "NO_LIKELY"):
+        meaning = cat["negative_meaning"]
+    else:
+        meaning = "Sthithi mishrit hai — kuch graha haan keh rahe hain, kuch nahi."
+
+    q_line = f"Aap ka prashna: \"{question.strip()}\"\n\n" if question.strip() else ""
+    narrative = (
+        q_line +
+        f"Sankhya: {number}\n"
+        f"Vargi-karan: {cat['label_hi']}\n"
+        f"Forced Lagna: {lagna_info['sign']} {lagna_info['degree']} "
+        f"(Nakshatra: {lagna_info['nakshatra']}, Sub-Lord: {lagna_info['sub_lord']})\n\n"
+        f"Cusp vishleshan:\n  • " + "\n  • ".join(cusp_lines) + "\n\n"
+        f"Nirnaay: {label_hi} — {meaning}.\n"
+        f"{_timing_hint(cusp_verdicts, planets)}"
+    )
+
+    return {
+        "ok":             True,
+        "number":         number,
+        "question":       question.strip(),
+        "category":       cat_key,
+        "category_label": cat["label_hi"],
+        "place":          ASTROLOGER_SEAT,
+        "timestamp":      now.isoformat(),
+        "lagna": {
+            "sign":      lagna_info["sign"],
+            "degree":    lagna_info["degree"],
+            "nakshatra": lagna_info["nakshatra"],
+            "sub_lord":  lagna_info["sub_lord"],
+        },
+        "verdict": {
+            "code":     final,
+            "label_hi": label_hi,
+            "label_en": label_en,
+            "meaning":  meaning,
+        },
+        "cusp_analysis":  cusp_verdicts,
+        "timing":         _timing_hint(cusp_verdicts, planets),
+        "narrative":      narrative,
+        "classical_refs": [
+            "KP Reader VI (K. S. Krishnamurti) — Horary by number (1-249)",
+            "Cuspal Interlinks Theory — sub-lord forced ascendant",
+            "Prashna Marga, Adhyaya 5 — cuspal lord rulership",
+            "Krishneeyam — prashna validity rules",
+        ],
+        "chart": {
+            "cusps":   cusps,
+            "planets": planets,
+        },
+    }

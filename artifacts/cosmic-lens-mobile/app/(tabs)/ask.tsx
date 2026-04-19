@@ -247,6 +247,28 @@ export default function AskScreen() {
         </LinearGradient>
       </Pressable>
 
+      {/* Prashna Kundli (KP 1-249) entry */}
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/prashna-kundli"); }}
+        style={{ marginHorizontal: 12, marginBottom: 10, borderRadius: 14, overflow: "hidden" }}
+      >
+        <LinearGradient
+          colors={["#0e7490", "#0891b2", "#14b8a6"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 }}
+        >
+          <Text style={{ fontSize: 22 }}>🔢</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Prashna Kundli (KP 1-249)</Text>
+            <Text style={{ color: "#ffffffcc", fontSize: 11, marginTop: 2 }}>
+              Ek number socho 1-249 — cusp sub-lord ka sahi jawab
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color="#fff" />
+        </LinearGradient>
+      </Pressable>
+
       {/* Messages */}
       <FlatList
         ref={listRef}

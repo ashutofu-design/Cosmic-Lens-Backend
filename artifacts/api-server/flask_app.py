@@ -4082,6 +4082,73 @@ def prashna_ask_route():
     return jsonify(result)
 
 
+# ── Prashna Kundli — KP Number Horary (1-249) ────────────────────────────────
+
+@app.route("/api/prashna/number-ask", methods=["POST"])
+def prashna_number_ask_route():
+    """
+    KP Horary by number (Cuspal Interlinks Theory). The querent picks a
+    number 1-249; that number forces the lagna of a chart cast at the
+    current moment in Bhubaneswar. The cuspal sub-lord at the relevant
+    house yields a deterministic Yes/No/Conditional verdict.
+
+    Body JSON:
+      {
+        "number":   <int 1..249>            (required),
+        "question": "Mera vivah kab hoga?"  (optional, used for category infer),
+        "category": "marriage" | ...        (optional, overrides inference),
+        "user_id":  <int>                   (optional, for daily quota)
+      }
+    """
+    from prashna_engine import ask_number_prashna, KP_249_COUNT
+    from subscription_helper import consume_question, effective_plan
+
+    data     = request.get_json(force=True, silent=True) or {}
+    raw_n    = data.get("number")
+    question = (data.get("question") or "").strip()
+    category = data.get("category")
+    user_id  = data.get("user_id")
+
+    try:
+        number = int(raw_n)
+    except (TypeError, ValueError):
+        return jsonify({"error": f"number must be an integer 1..{KP_249_COUNT}"}), 400
+    if number < 1 or number > KP_249_COUNT:
+        return jsonify({"error": f"number must be 1..{KP_249_COUNT}"}), 400
+
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          (
+                    f"Aaj ka {quota['limit']} prashna ka limit poora ho gaya. "
+                    "Pro upgrade karein for unlimited."
+                ),
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+
+    try:
+        result = ask_number_prashna(number=number, question=question, category=category)
+    except Exception:
+        app.logger.exception("[Prashna Number] failed")
+        return jsonify({
+            "error":   "internal_error",
+            "message": "Prashna kundli banane mein samasya hui. Punah prayaas karein.",
+        }), 500
+
+    return jsonify(result)
+
+
 # ── Future Partner Portrait — async task with progress ───────────────────────
 
 @app.route("/api/partner-portrait/start", methods=["POST"])

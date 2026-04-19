@@ -698,6 +698,7 @@ def _build_messages(
     history: list | None = None,
     preferred_language: Optional[str] = None,
     mode: str = "astro",
+    out_meta: dict | None = None,
 ) -> list[dict]:
     # ── LANGUAGE INTELLIGENCE — sticky preference > detection > fallback ─────
     detected = _resolve_response_lang(question, lang, preferred_language)
@@ -774,8 +775,8 @@ def _build_messages(
     # score / timeline / remedy — it is only a narrator.
     marriage_verdict_block = ""
     marriage_verdict_obj   = None
-    marriage_baked_answer  = ""   # pre-composed final answer (Step A)
-    marriage_use_alt       = False # constraint-aware: use next_alt_window (Step B)
+    marriage_facts         : dict | None = None  # locked facts for narration
+    marriage_use_alt       = False # constraint-aware: use next_alt_window
     if topic == "marriage" and isinstance(kundli, dict) and kundli.get("planets"):
         try:
             kp_dict = None
@@ -787,24 +788,34 @@ def _build_messages(
             marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
             if marriage_verdict_obj:
                 marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
-                # ── Constraint detection: did the devotee reject the primary
-                # window? ("yeh time nahi chahiye / next year batao / is date
-                # ke baad / uske baad / dusra time / not this window …")
                 marriage_use_alt = _detect_marriage_constraint(question, history or [])
-                # Build the pre-baked answer in the resolved language; AI's
-                # job collapses to "polish wording, do not change facts".
-                from marriage_engine import format_final_answer  # type: ignore
-                marriage_baked_answer = format_final_answer(
-                    marriage_verdict_obj, lang_code=detected,
-                    use_alt=marriage_use_alt,
-                )
+                # Build a CLEAN facts payload — values only, no template,
+                # no jargon labels, no "Pranam beta". The AI receives
+                # these as locked data and writes its own natural reply.
+                from marriage_engine import (extract_window_str,
+                                             extract_alt_window_str)
+                v = marriage_verdict_obj
+                marriage_facts = {
+                    "verdict":         (v.get("verdict") or "").strip(),
+                    "window_str":      extract_window_str(v) or "",
+                    "alt_window_str":  extract_alt_window_str(v) or "",
+                    "current_dasha":   (v.get("current_dasha") or "").strip(),
+                    "seventh_lord":    (v.get("seventh_lord") or "").strip(),
+                    "karaka":          (v.get("karaka") or "").strip(),
+                    "remedy":          (v.get("remedy") or "").strip(),
+                    "score":            v.get("score"),
+                    "kp_verdict":      (v.get("kp_verdict") or "").strip(),
+                    "marriage_promised": v.get("marriage_promised"),
+                    "marriage_denied":   v.get("marriage_denied"),
+                    "delay":             v.get("delay"),
+                }
                 print(f"[openai_helper] marriage verdict: "
-                      f"verdict='{marriage_verdict_obj.get('verdict')}' "
-                      f"score={marriage_verdict_obj.get('score')} "
-                      f"kp={marriage_verdict_obj.get('kp_verdict')} "
+                      f"verdict='{marriage_facts['verdict']}' "
+                      f"score={marriage_facts['score']} "
+                      f"kp={marriage_facts['kp_verdict']} "
                       f"use_alt={marriage_use_alt} "
-                      f"window={marriage_verdict_obj.get('next_window')} "
-                      f"alt_window={marriage_verdict_obj.get('next_alt_window')}")
+                      f"window='{marriage_facts['window_str']}' "
+                      f"alt='{marriage_facts['alt_window_str']}'")
         except Exception as exc:
             print(f"[openai_helper] marriage_engine failed: {exc}")
 
@@ -959,48 +970,91 @@ def _build_messages(
     # the user payload so it is the first instruction the model parses.
     lang_lock_block = _strict_lang_block(detected)
 
-    # ── SINGLE-CALL MARRIAGE PATH ────────────────────────────────────────────
-    # When we have a baked answer, the AI is reduced to a TONE polisher.
-    # No chart context, no STRICT INSTRUCTIONS, no narrator override — the
-    # facts are already final. This eliminates the validator-retry loop
-    # because the model only has 4 short paragraphs to rephrase.
-    if marriage_baked_answer:
+    # ── MARRIAGE NARRATOR PATH (facts-locked, language-free) ─────────────────
+    # Engine has computed the EXACT facts. The AI is given those facts as
+    # data — NOT as a pre-formatted template — and is told to write its
+    # own natural, conversational reply (ChatGPT-style) using only those
+    # locked values. This prevents both fact drift AND robotic templating.
+    if marriage_facts:
+        f = marriage_facts
+        active_window = (
+            f["alt_window_str"] if (marriage_use_alt and f["alt_window_str"])
+            else f["window_str"]
+        )
+        if isinstance(out_meta, dict):
+            out_meta["marriage_facts"]   = marriage_facts
+            out_meta["marriage_use_alt"] = marriage_use_alt
+            out_meta["active_window"]    = active_window
         constraint_note = (
-            "CONTEXT: the devotee just rejected the primary timing window. "
-            "Acknowledge that gently in line 1, then deliver the next window from the answer below.\n\n"
-        ) if marriage_use_alt else ""
+            "CONTEXT: the user just rejected the primary timing window. "
+            "Acknowledge that gently in 1 line, then deliver the alternate "
+            "window naturally.\n\n"
+        ) if (marriage_use_alt and f["alt_window_str"]) else ""
+
+        # Compact, label-free facts payload — pure values.
+        facts_lines = [
+            f"  • Verdict (use this exact phrase or a faithful translation): {f['verdict']}",
+            f"  • Marriage time window (USE VERBATIM): {active_window}",
+        ]
+        if (not marriage_use_alt) and f["alt_window_str"]:
+            facts_lines.append(
+                f"  • Alternate later window (mention only if naturally relevant): "
+                f"{f['alt_window_str']}"
+            )
+        if f["current_dasha"]:
+            facts_lines.append(f"  • Currently running dasha period: {f['current_dasha']}")
+        if f["seventh_lord"]:
+            facts_lines.append(f"  • Lord of the marriage house (7th): {f['seventh_lord']}")
+        if f["karaka"]:
+            facts_lines.append(f"  • Marriage significator planet: {f['karaka']}")
+        if f["remedy"]:
+            facts_lines.append(f"  • Suggested remedy text: {f['remedy']}")
+        facts_block = "\n".join(facts_lines)
+
         user = (
             f"{lang_lock_block}"
             f"{tone_blacklist}"
             f"{constraint_note}"
-            "═══ FINAL ANSWER (you may ONLY polish wording for warm tone) ═══\n"
-            f"{marriage_baked_answer}\n"
-            "═════════════════════════════════════════════════════════════════\n\n"
-            "STRICT POLISH RULES — read top-down. Violating ANY rule = wrong reply:\n"
-            "  1. DO NOT change any verdict word, planet name, dasha name, date, year,\n"
-            "     month, or remedy text. Copy them VERBATIM into your reply.\n"
-            "  2. You MAY: smooth the phrasing into a natural expert voice; merge labels\n"
-            "     (Vajah/Samay/Upay) into flowing sentences; translate non-fact words\n"
-            f"    to the user's language ({lang_name}). NO guru/Pandit opener.\n"
-            "  3. NO bullet points, NO numbered lists, NO markdown headers.\n"
-            "  4. Total length 90–130 words across 3 short paragraphs.\n"
-            "  5. NEVER write any of these phrases: \"I sense your concern\",\n"
-            "     \"I understand\", \"based on your chart\", \"let me analyze\", \"Pranam\",\n"
-            "     \"Beta\", \"Beta Q\", \"Dekhiye beta\", \"As an AI\". Speak naturally.\n"
-            "  6. NEVER use hedging / uncertainty words. Acharya ji STATES, never speculates.\n"
-            "     ✗ FORBIDDEN: chance, chances, possibility, possible, likely, unlikely,\n"
-            "       may, might, perhaps, around, approx, approximately, roughly, early,\n"
-            "       late, by the end of, ho sakta hai, ho sakti hai, ho sakte hain,\n"
-            "       sambhavna, sambhavnayein, shayad, lagta hai, ho sakega, ho sakegi.\n"
-            "     ✓ REQUIRED forms: \"hoga\", \"hogi\", \"honge\", \"yeh hi time hai\",\n"
-            "       \"clear dikhta hai\", \"delay hoga\", \"yeh period active hai\",\n"
-            "       \"isi me plan karein\".\n"
-            "     The dates above are EXACT month-year — say them VERBATIM, never\n"
-            "     reduce them to \"around 2026\" or \"late 2026\".\n"
-            "  7. STYLE: open with \"Seedhi baat —\" or a direct factual line, then state the timing\n"
-            "     as a fact. Three short paragraphs: (1) verdict + window, (2) reason\n"
-            "     in 1–2 lines, (3) remedy in 1 line. Total 90–130 words.\n"
-            f"\nDEVOTEE'S QUESTION (for tone matching only — do NOT re-answer it):\n\"{question}\"\n"
+            "═══ LOCKED ASTROLOGICAL FACTS (computed by deterministic engine) ═══\n"
+            "These are the EXACT truth for this user. You MAY freely choose how\n"
+            "to phrase the language around them, but you MUST NOT change any of\n"
+            "these values, dates, planet names, or the remedy text:\n\n"
+            f"{facts_block}\n"
+            "════════════════════════════════════════════════════════════════════\n\n"
+            f"USER'S QUESTION:\n\"{question}\"\n\n"
+            "YOUR JOB:\n"
+            "Write a natural, warm, intelligent reply — exactly the way a smart\n"
+            "friend who happens to be an expert astrologer would explain this\n"
+            f"over chat. Reply entirely in {lang_name}.\n\n"
+            "HARD RULES (any violation = wrong reply):\n"
+            "  1. The marriage time window string above MUST appear VERBATIM in\n"
+            "     your reply. No rounding (\"around 2027\", \"late 2027\"), no\n"
+            "     paraphrasing, no year-only — write the exact month-year range.\n"
+            "  2. NO greetings: no \"Pranam\", \"Beta\", \"Namaste\", \"Dekhiye beta\",\n"
+            "     \"Acharya ji\", \"Pandit ji\". Speak peer-to-peer, like a friend.\n"
+            "  3. NO jargon labels — do NOT write \"Reason:\", \"Timing:\", \"Remedy:\",\n"
+            "     \"Vajah:\", \"Samay:\", \"Upay:\", \"7th lord\", \"kalatra-karaka\".\n"
+            "     Translate them into normal speech (\"shaadi ke ghar ka swami\",\n"
+            "     \"shaadi ka karak grah\" — or just say the planet's name and\n"
+            "     explain its role in 1 plain sentence).\n"
+            "  4. NO meta phrases: \"I sense\", \"I understand\", \"let me analyze\",\n"
+            "     \"based on your chart\", \"as an AI\".\n"
+            "  5. NO hedging: no \"shayad\", \"ho sakta hai\", \"lagta hai\", \"around\",\n"
+            "     \"approximately\", \"chance\", \"possibility\", \"may\", \"might\".\n"
+            "     State things as facts: \"hoga\", \"hogi\", \"yeh time strong hai\".\n"
+            "  6. NO bullet points, NO numbered lists, NO markdown headers, NO ###.\n"
+            "     Write flowing prose — short paragraphs separated by blank lines.\n"
+            "  7. Length: 80–140 words. Phone-friendly. Every sentence must earn\n"
+            "     its place.\n\n"
+            "STYLE — think ChatGPT explaining to a friend:\n"
+            "  • Open with the verdict + the exact window naturally in 1–2 lines.\n"
+            "  • 1–2 sentences explaining WHICH planet/dasha is supporting and\n"
+            "    why, in plain language (translate any Sanskrit term inline).\n"
+            "  • If a meaningful remedy is provided above, weave it in as a\n"
+            "    friendly suggestion at the end (1 line). If no remedy, skip it.\n"
+            "  • Tone: confident, warm, intelligent, modern. NOT preachy, NOT\n"
+            "    gurulike, NOT a textbook.\n\n"
+            "Now write the reply — natural, intelligent, ChatGPT-style."
         )
         msgs: list[dict] = [{"role": "system", "content": system}]
         msgs.append({"role": "user", "content": user})
@@ -1461,6 +1515,41 @@ def _general_reply_leaks_chart(text: str) -> bool:
     return False
 
 
+# ── Marriage narrator validator ──────────────────────────────────────────────
+# After the AI writes its natural marriage reply, we must verify it actually
+# echoed the deterministic engine's window string verbatim. If the AI rounded
+# ("around 2027"), shifted the year, or dropped the window entirely → regen
+# with a hard-override prompt.
+_MARRIAGE_BANNED_LABELS = re.compile(
+    r"\b(reason|timing|remedy|vajah|samay|upay|7th\s*lord|kalatra[-\s]?karaka)\s*[:\-—]",
+    re.I,
+)
+_MARRIAGE_BANNED_GREETINGS = re.compile(
+    r"\b(pranam|namaste|dekhiye\s+beta|acharya\s+ji|pandit\s+ji|beta\s*[,!])",
+    re.I,
+)
+
+
+def _marriage_reply_violates(text: str, locked_window: str) -> tuple[bool, str]:
+    """Validate AI's marriage narration against locked engine facts.
+
+    Returns (violated, reason). Triggers a single regenerate when True.
+    """
+    if not text:
+        return True, "empty"
+    if locked_window:
+        # Window must appear verbatim — case/whitespace tolerant only.
+        norm_t = re.sub(r"\s+", " ", text).lower()
+        norm_w = re.sub(r"\s+", " ", locked_window).lower()
+        if norm_w not in norm_t:
+            return True, f"missing_window:{locked_window!r}"
+    if _MARRIAGE_BANNED_LABELS.search(text):
+        return True, "jargon_label"
+    if _MARRIAGE_BANNED_GREETINGS.search(text):
+        return True, "guru_greeting"
+    return False, ""
+
+
 _SIMPLE_DEFINITION_HEAD = (
     "kya hai", "kya hota hai", "kya hoti hai", "kya hote hain",
     "kya matlab", "matlab kya", "kise kehte", "kya kehte",
@@ -1868,11 +1957,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if mode == "general":
         topic = "general"
 
+    build_meta: dict = {}
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
         preferred_language=preferred_language,
         mode=mode,
+        out_meta=build_meta,
     )
 
     # ── Mode/topic-aware sampling ────────────────────────────────────────────
@@ -1969,10 +2060,36 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             text = _call_once()
             _trace(req_id, "4c.RAW_AI_REGEN", text)
 
+    # ── Marriage narrator validator — verifies AI echoed locked window verbatim
+    # and didn't relapse into jargon labels or guru greetings. ONE auto-regen.
+    if (mode == "astro" and topic == "marriage"
+            and build_meta.get("marriage_facts")):
+        active_w = build_meta.get("active_window") or ""
+        violated, why_m = _marriage_reply_violates(text, active_w)
+        _trace(req_id, "4b.MARRIAGE_VALIDATOR",
+               {"violated": violated, "reason": why_m,
+                "locked_window": active_w})
+        if violated:
+            override = (
+                "\n\n=== HARD OVERRIDE — REGENERATE (marriage narrator) ===\n"
+                "Previous attempt violated the marriage narration rules.\n"
+                f"Failure: {why_m}\n"
+                f"You MUST include the EXACT phrase \"{active_w}\" verbatim "
+                "in your reply (no rounding, no paraphrasing).\n"
+                "You MUST NOT use the labels Reason:/Timing:/Remedy:/Vajah:/"
+                "Samay:/Upay:/7th lord/kalatra-karaka.\n"
+                "You MUST NOT open with Pranam/Beta/Namaste/Dekhiye beta/"
+                "Acharya ji/Pandit ji.\n"
+                "Write 80–140 words of natural flowing prose, peer-to-peer, "
+                "ChatGPT-style. No bullets, no headers."
+            )
+            messages = list(messages)
+            messages[0] = {"role": "system",
+                           "content": messages[0]["content"] + override}
+            text = _call_once()
+            _trace(req_id, "4c.RAW_AI_REGEN(marriage)", text)
+
     # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
-    # The single-call marriage path uses a pre-baked, fact-locked answer from
-    # marriage_engine.format_final_answer(), so no validator retry is needed:
-    # the model is only polishing wording, not deciding facts.
     pre_scrub = text
     text = _scrub_brand_tone(text)
     if pre_scrub != text:
@@ -2102,11 +2219,17 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         raise RuntimeError(_client_err or "OpenAI client not configured")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    # Streaming path is only used for non-marriage astro turns (marriage and
+    # general both branch to ai_ask oneshot above), so we don't need the
+    # marriage facts meta here — but we still pass an empty out_meta for
+    # forward-compat / parity with ai_ask.
+    build_meta_stream: dict = {}
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
         preferred_language=preferred_language,
         mode=mode,
+        out_meta=build_meta_stream,
     )
     _trace(req_id, "3.PROMPT(stream)", {
         "model": model, "message_count": len(messages),

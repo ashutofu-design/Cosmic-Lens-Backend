@@ -564,6 +564,17 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] deep doshas (Sprint-20) failed: {exc}")
 
+    # Sprint-21 — Tier-5 Extra Dashas (Yogini, Ashtottari, Narayana, Karaka,
+    # Naisargika, Tara, Brahma, Yogardha + Pinda/Amshayur longevity)
+    extra_dashas_str = ""
+    try:
+        from vedic.dashas.dasha_extras import (compute_all_extra_dashas,  # type: ignore
+                                               format_extra_dashas_summary)
+        _ed = compute_all_extra_dashas(kundli)
+        extra_dashas_str = format_extra_dashas_summary(_ed) if _ed else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] extra dashas (Sprint-21) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:

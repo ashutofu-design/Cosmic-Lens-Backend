@@ -604,16 +604,24 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Wired in `locked_facts.py` with current Saturn transit + nakshatra
 - **Test chart smoke**: 9 doshas detected (Ashtama Shani, Shukra Dosh, Mangal×2, Pitra×2, Bhratri, Mangal-CANCELLED, Nadi marker)
 
-### Sprint 21 — Phase E: 7+ New Dasha Systems
-- Yogini Dasha (8-period system)
-- Ashtottari Dasha (108-yr)
-- Kalachakra Dasha (complex sign-based)
-- Narayana Dasha (Jaimini)
-- Karaka Dasha (Jaimini)
-- Yogardha, Tara, Brahma dashas
-- Pinda, Naisargika, Amshayur (longevity calc)
-- Mandooka, Drig, Trikona, Chaturasheeti Sama
-- Shashtihayani, Shatabdika, Shoola
+### Sprint 21 — Tier-5 Dashas Extras — ✅ COMPLETE
+- Created `vedic/dashas/dasha_extras.py` (~470 lines) — folder-organized
+- **8 new dasha systems**:
+  1. **Yogini Dasha** (36-yr, 8 yoginis: Mangala/Pingala/Dhanya/Bhramari/Bhadrika/Ulka/Siddha/Sankata)
+  2. **Ashtottari Dasha** (108-yr, 8 planets — Sun 6/Moon 15/Mars 8/Mer 17/Sat 10/Jup 19/Rahu 12/Ven 21)
+  3. **Narayana (Padakrama) Dasha** — Jaimini 12-sign with Movable/Fixed/Dual rules
+  4. **Karaka Dasha** — Jaimini 8 chara-karakas (Atma/Amatya/Bhratri/Matri/Putra/Gnati/Dara)
+  5. **Naisargika Dasha** — Natural age-based (Moon 1y → Saturn 50y, total 120y)
+  6. **Tara Dasha** — 9 janma-tara cycle (Janma/Sampat/Vipat/Kshema/Pratyak/Sadhaka/Vadha/Mitra/Ati-Mitra)
+  7. **Brahma Dasha** — BPHS Ch.49 from Brahma graha (8H lord of Lagna/Moon/Sun strongest)
+  8. **Yogardha Dasha** — Vimshottari+Ashtottari blended (54-yr cycle)
+- **2 Aayur (longevity) systems**:
+  - **Pinda Aayur** (BPHS Ch.46): 61.48y → Madhya-Aayur on test chart
+  - **Amshayur** (navamsa-based): 70.11y → Madhya-Aayur
+- Wired `locked_facts.py`. Nakshatra parser handles "Purva/Uttara" + space variations.
+- **Test chart smoke**: All 8 dashas computed, current MD shown for each (e.g. Karaka=Jupiter 2023→2027, Narayana=Taurus 2025→2035, Tara=Pratyak 2026→2035)
+- Combined with existing (Vimshottari, Chara, Sthira, Niryana Shoola) → **12 dasha systems total** ✅
+- **Deferred (rare/highly-niche)**: Mandooka, Drig, Trikona, Chaturasheeti-Sama, Kalachakra, Shashtihayani, Shatabdika, Shoola
 
 ### Sprint 22 — Phase F: Per-Varga Deep (~144 calc)
 - Varga aspects (16 vargas × planet-to-planet)

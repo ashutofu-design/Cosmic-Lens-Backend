@@ -93,11 +93,13 @@ def compute_yogini_dasha(nakshatra_name: str, dob: Any) -> dict:
     start = (nak + 1) % 8
     seq = []
     cursor = dob_dt
-    for i in range(8):
+    # 3 cycles × 8 yoginis = 108 years coverage
+    for i in range(24):
         idx = (start + i) % 8
         name, years, theme = YOGINIS[idx]
         end = cursor + timedelta(days=years * 365.25)
         seq.append({"yogini": name, "years": years, "theme": theme,
+                    "cycle": (i // 8) + 1,
                     "start": cursor.strftime("%Y-%m-%d"),
                     "end": end.strftime("%Y-%m-%d")})
         cursor = end

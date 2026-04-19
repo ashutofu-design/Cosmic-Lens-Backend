@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-44 / Phase S — Numerology + Vastu Integration (Driver/Conductor/Kua + 8 directions + chart-derived defects)
+    phase_s_str = ""
+    try:
+        from vedic.numerology.phase_s import compute_phase_s, format_phase_s  # type: ignore
+        phase_s_str = format_phase_s(compute_phase_s(kundli, birth or {}))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-S numerology+vastu (Sprint-44) failed: {exc}")
+
     # Sprint-43 / Phase R — Panchang Full (Tithi + Nakshatra + Yoga + Karana + Vaar + Ritu/Ayana/Maasa + Samvatsara + Eras)
     phase_r_str = ""
     try:
@@ -1007,6 +1015,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_p_str,
         phase_q_str,
         phase_r_str,
+        phase_s_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

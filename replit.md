@@ -896,7 +896,14 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **R8 Eras** ✅ — Shaka, Vikram, Kali Yuga, Bengali Sambat year computations
 - Today (2026-04-19): Shukla Tritiya, Krittika nak, Saubhagya yoga, Garaja karana, Parabhava samvatsara
 
-### Sprint 43+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 44 — Phase S Numerology + Vastu Integration ✅ COMPLETE
+- New module: `vedic/numerology/phase_s.py` (~190 lines)
+- **S1 Numerology** ✅ — Driver (Mulank from DOB-day), Conductor (Bhagyank from full DOB), Kua number (year+gender), Name number (Chaldean); each mapped to ruling planet + nature; friend/enemy number tables; driver↔conductor compatibility verdict; Kua best-4-directions for living/sleeping
+- **S2 House Direction Analysis** ✅ — full 8-zone Vastu Purusha Mandala (N/NE/E/SE/S/SW/W/NW) with ruler planet + element + life-domain
+- **S3 Vastu Defects (chart-derived)** ✅ — maps natal houses to home directions; flags zones afflicted by Saturn/Mars/Rahu/Ketu/Sun with specific defect type (Vayu/Fire/Akasha/cut-corner/excess-heat) + remedy zone
+- Test (DOB 1990-01-15, Aarav Kumar, male): Mulank 6 (Venus) + Bhagyank 8 (Saturn) HARMONIOUS, Kua 1 East-group, 4 Vastu defect zones flagged
+
+### Sprint 44+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

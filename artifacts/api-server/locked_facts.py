@@ -661,6 +661,15 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] age context (Sprint-28) failed: {exc}")
 
+    # Sprint-29 / Phase B — Full Shadbala sub-bala formatter
+    shadbala_full_str = ""
+    try:
+        from vedic.strength.shadbala_full_format import format_shadbala_full  # type: ignore
+        _bd_for_fmt = locals().get("bd") or None
+        shadbala_full_str = format_shadbala_full(shadbala, _bd_for_fmt)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -842,6 +851,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         rashi_drishti_str,
         special_lagnas_str,
         age_context_str,
+        shadbala_full_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

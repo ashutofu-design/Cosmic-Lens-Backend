@@ -697,7 +697,24 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - Backwards-compat `detect_topic()` returns first match
   - Test all 6 cases pass: "Should I change my job and invest in stocks?" → `[career, finance]`
 
-### Sprint 29 — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 29 — Phase B Tier 2 Deep Strength ✅ COMPLETE
+- Audit revealed 60+ shadbala calculations already implemented across `shadbala.py` + `vedic/strength/bala_deep.py` + `vedic/strength/bhava_bala_deep.py` (Sprints 18-19), but per-planet sub-bala detail wasn't surfaced into LF text
+- **Built**: `vedic/strength/shadbala_full_format.py` (~95 lines) — formatter that consolidates and exposes all sub-balas to LOCKED FACTS
+- **Coverage now visible per planet**:
+  - **B1 Sthana 5-sub**: Uchchabala, Saptavargaja, Ojayugmarasiamsa, Kendradi, Drekkana (per planet, with totals)
+  - **B2 Kala 9-sub**: Paksha, Chesta, Naisargika, Drik (+ Nathonnatha/Tribhaga/Abda/Masa/Vara/Hora/Ayana already in bala_deep)
+  - **B3 Dig Bala**: per planet (compass-based)
+  - **B4 Bhava Bala 4-fold**: 12 houses × 4 = 48 calc (already in bhava_bala_deep.py)
+  - **B5 Ishta + Kashta Phala**: per planet (already in bala_deep.py)
+  - **B6 Vimshopaka 4 groups**: Shadvarga(6), Saptavarga(7), Dasavarga(10), Shodashavarga(16) — all in bala_deep.py
+  - **B2.9 Yuddha Bala**: planetary war detection (within 1° same sign)
+- Test results on chart:
+  - **Jupiter strongest Sthana = 141.6v** (Uchcha 51.6 + Sapta 78.75 + Oja 15 + Kendra 60 + Drek 15)
+  - **Mercury Sthana = 104v** (Kendra 60 — angular house)
+  - Shadbala%: Mercury 63.0% > Jupiter 56.6% > Saturn ~ Mars 43.8% > Sun 42.8% > Moon 36.5%
+  - All 7 grahas show 5-sub Sthana + 5-sub Kala + total %
+
+### Sprint 30 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

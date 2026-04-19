@@ -862,7 +862,19 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **O6 Remedies DB** ✅ — pre-existing `remedies_db.py` (992 lines, 1000+ remedies) — referenced
 - Test chart: Teva #19 Kisan-type, all 9 karaks displaced, 4 active Rin (Pitri+Stree+Self+Karz), age 36 → Jupiter dasha
 
-### Sprint 40+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 41 — Phase P Compatibility Profile (30+ matchable attrs) ✅ COMPLETE
+- New module: `vedic/compat/phase_p.py` (~250 lines)
+- **P1 Ashtakoot Milan attrs** ✅ — 8 koot self-attributes: Varna, Vashya, Tara-idx, Yoni, Graha-Maitri lord, Gana, Bhakoot sign, Nadi
+- **P2 Dashakoot extras** ✅ — Rajju + Vedha-partner-nakshatra
+- **P3 Dasha Sandhi** ✅ — Moon at last/first 25% of nakshatra (~3°20') flagged as transitional
+- **P4 Mahendra / Stree-Deergha / Vedha source indices** ✅ — exposed for partner-chart pair matching
+- **P5 Yoni 14-categories detail** ✅ — animal + gender + compatible/incompatible-yoni lists
+- **P6 Linga (M/F/E) + Gana detail** ✅ — per-nakshatra classical mapping
+- **P7 Rajju 5 types** ✅ — Pada/Janu/Nabhi/Kantha/Shira + dosha effect if same-Rajju partner
+- **P8 Vashya 5 types** ✅ — Chatushpada/Manushya/Jalachara/Vanachara/Keeta + which classes it controls
+- Test chart Moon=P.Phalguni Leo: Yoni=Rat-F, Rajju=Janu, Vashya=Vanachara, Gana=Manushya, Nadi=Pitta
+
+### Sprint 41+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

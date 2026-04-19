@@ -697,10 +697,47 @@ def _build_messages(
     topic: str = "general",
     history: list | None = None,
     preferred_language: Optional[str] = None,
+    mode: str = "astro",
 ) -> list[dict]:
     # ── LANGUAGE INTELLIGENCE — sticky preference > detection > fallback ─────
     detected = _resolve_response_lang(question, lang, preferred_language)
     lang_name = _LANG_NAME.get(detected, "English")
+
+    # ── GENERAL MODE — slim payload, no chart, no scaffolding ───────────────
+    # COSMIC ENGINE system prompt's GENERAL MODE branch handles tone &
+    # structure. We just hand it the question + language hint + recent
+    # conversation context. No chart data, no narrator block, no STRICT
+    # INSTRUCTIONS (those exist to constrain chart-based predictions).
+    if mode == "general":
+        # Minimal system prompt addendum for general mode
+        sys_general = (
+            "You are answering in GENERAL MODE — no backend astrology data is\n"
+            "attached. Use your own knowledge to explain clearly, like ChatGPT.\n"
+            "Do NOT cite any specific birth chart, planets, or dasha. Do NOT\n"
+            "invent personal predictions. If the user implicitly asks for a\n"
+            "personal prediction, gently redirect them to ask with their\n"
+            "kundli context.\n\n"
+            f"REPLY ENTIRELY IN: {lang_name}.\n"
+            "OUTPUT: 80–120 words, short paragraphs, natural human tone.\n"
+            "BANNED: \"Pranam\", \"Beta\", fake sympathy, over-praise, hedging\n"
+            "(maybe / possible / likely / chances / ho sakta hai / shayad).\n"
+            "USE: \"Seedhi baat\", \"Simple samjho\", \"Clear difference yeh hai\".\n"
+        )
+        # Reuse the COSMIC ENGINE system prompt as the role definition, then
+        # append the general-mode addendum.
+        from_template_system = _cosmic_engine_system(lang_name)
+        msgs: list[dict] = [
+            {"role": "system", "content": from_template_system + "\n\n" + sys_general},
+        ]
+        # Attach last 6 conversation turns (text-only) for context continuity.
+        for h in (history or [])[-6:]:
+            r = h.get("role")
+            t = h.get("content") or h.get("text") or ""
+            if r in ("user", "assistant") and t:
+                msgs.append({"role": r, "content": t})
+        msgs.append({"role": "user", "content": question})
+        return msgs
+
     chart_str = _kundli_summary(kundli, birth)
     # Pre-computed chart intelligence — dignities, yogas, mangal-dosh,
     # sade-sati, house-lord placements, aspects. The AI now interprets
@@ -769,156 +806,7 @@ def _build_messages(
         )
 
     # ── COSMIC ENGINE SYSTEM PROMPT (with temperament control) ───────────────
-    system = f"""ROLE:
-You are an Advanced Cosmic Intelligence Engine.
-You are NOT an AI assistant.
-You speak like a real expert — natural, clear, confident.
-
-------------------------------------------
-MODEL TEMPERAMENT (STRICT BEHAVIOR CONTROL)
-------------------------------------------
-
-- Keep responses stable, not random
-- Avoid creativity beyond given data
-- Maintain consistency across same questions
-
-Behavior rules:
-- No over-explaining
-- No dramatic tone
-- No unnecessary expansion
-- No repetition
-
-Think → controlled, precise, human-like
-
-------------------------------------------
-MODE SWITCH (CRITICAL)
-------------------------------------------
-
-You operate in TWO MODES:
-
-1. ASTRO MODE (when backend data is provided)
-2. GENERAL MODE (when no backend data is provided)
-
-------------------------------------------
-ASTRO MODE (STRICT)
-------------------------------------------
-
-If structured backend data is given:
-
-Input will include:
-- verdict
-- timeline
-- reasons[]
-- remedy
-
-RULES:
-- Do NOT create astrology logic
-- Do NOT modify facts or dates
-- Do NOT guess anything
-
-You ONLY convert result into natural human explanation
-
-FORMAT:
-1. Direct answer
-2. Reason (2–3 lines)
-3. Timeline
-4. Optional advice
-
-CONFIDENCE:
-- Speak with certainty
-- Example: "shaadi hogi"
-- NOT: "ho sakti hai"
-
-STRICT BAN WORDS:
-- maybe / possible / likely / chances
-- ho sakta hai / shayad / sambhavna
-- "based on your chart"
-- "I think"
-
-------------------------------------------
-GENERAL MODE (NO BACKEND DATA)
-------------------------------------------
-
-If no backend data:
-
-- Answer like ChatGPT
-- Use logic + knowledge
-- Be helpful and clear
-
-STYLE:
-- Simple explanation
-- Balanced comparison
-- Clear conclusion
-
-------------------------------------------
-TONE (VERY IMPORTANT)
-------------------------------------------
-
-- Natural human tone
-- Friendly but not emotional
-- Expert but not robotic
-
-DO NOT:
-- Use "Pranam"
-- Use fake sympathy
-- Over-praise user
-
-USE:
-- "Seedhi baat"
-- "Simple samjho"
-- "Clear difference yeh hai"
-
-------------------------------------------
-LANGUAGE CONTROL
-------------------------------------------
-
-- Match user language:
-  Hindi → Hindi
-  Hinglish → Hinglish
-  English → English
-
-- If user preference given → override
-
-REPLY ENTIRELY IN: {lang_name}.
-
-------------------------------------------
-CONSISTENCY LOCK
-------------------------------------------
-
-- Same question → same answer
-- No contradiction
-- No randomness
-
-------------------------------------------
-OUTPUT CONTROL
-------------------------------------------
-
-- Short paragraphs
-- 80–120 words
-- No long lecture
-- No repetition
-
-------------------------------------------
-HARD SAFETY
-------------------------------------------
-
-If backend data exists:
-→ NEVER override it
-
-If backend data does NOT exist:
-→ Answer normally
-
-------------------------------------------
-FINAL BEHAVIOR
-
-You behave like:
-- A real expert
-- Calm, controlled, and precise
-- Smart like ChatGPT
-- Accurate like a calculation engine
-
-Never break character."""
-
+    system = _cosmic_engine_system(lang_name)
     focus_block = f"\n\nSHASTRIYA FOCUS for this question:\n{focus}\n" if focus else ""
 
     # ── Behavior-aware coaching block ────────────────────────────────────────
@@ -1299,6 +1187,223 @@ def _classify_topic(question: str) -> str:
     return next(iter(scores))
 
 
+# ── ASTRO vs GENERAL mode classifier ─────────────────────────────────────────
+# Routes the question into one of two pipelines:
+#   "astro"   → personal life-event prediction (uses chart + deterministic
+#               engines + narrator scaffolding). Default.
+#   "general" → concept / comparison / explanation question. AI answers from
+#               its own knowledge; no chart, no scaffolding, ChatGPT-style.
+# Heuristic: GENERAL only if a concept signal is present AND no personal
+# pronoun / future-tense / timing signal is present. Otherwise ASTRO.
+_GENERAL_CONCEPT_SIGNALS = (
+    # English / Hinglish concept words
+    "what is", "what are", "what's", "explain", "explanation",
+    "difference between", "difference b/w", "what is the difference",
+    " vs ", " v/s ", " versus ", "compare ", "comparison",
+    "how does", "how do ", "how works", "how it works", "meaning of",
+    "definition of", "types of", "list of", "examples of", "kinds of",
+    # Hinglish concept words
+    "kya hai", "kya hota", "kya hoti", "kya hote", "kya matlab",
+    "matlab kya", "samjhao", "samjhaiye", "samjha do", "samjhna hai",
+    "antar kya", "fark kya", "kya antar", "kya fark", "kaun se",
+    "kitne prakar", "kitne type", "ke prakar", "ke type",
+    "kaise kaam", "kaise work",
+    # Devanagari concept words
+    "क्या है", "क्या होता", "क्या होती", "क्या मतलब", "मतलब क्या",
+    "अंतर क्या", "फर्क क्या", "क्या अंतर", "क्या फर्क",
+    "समझाओ", "समझाइये", "समझाइए", "कैसे काम",
+)
+
+# Personal life-event signals — if ANY appear, we treat as astro even when
+# concept words are present (e.g. "meri shaadi kab hogi" — concept word "kab"
+# but personal predict).
+_PERSONAL_PREDICT_SIGNALS = (
+    # personal pronouns
+    "mera ", "meri ", "mere ", "mujhe", "mujhko", "mujh ko", "humara",
+    "hamari", "hamare", "hamein", "humein",
+    "my ", "mine ", "i will", "i am", "i have", "will i ", "for me",
+    "should i", "can i ", "am i ",
+    # Devanagari personal
+    "मेरा", "मेरी", "मेरे", "मुझे", "मुझको", "हमारा", "हमारी", "हमें",
+    # personal life-events / timing markers (predictive intent)
+    "kab hoga", "kab hogi", "kab honge", "kab milega", "kab milegi",
+    "kab aayega", "kab aayegi", "kab tak", "kab shaadi", "kab vivah",
+    "kaisa rahega", "kaisi rahegi", "kaise rahega",
+    "when will", "when do i", "when can i",
+    "कब होगा", "कब होगी", "कब मिलेगा", "कब मिलेगी", "कब तक", "कब शादी",
+)
+
+
+_COSMIC_ENGINE_SYSTEM_TEMPLATE = """ROLE:
+You are an Advanced Cosmic Intelligence Engine.
+You are NOT an AI assistant.
+You speak like a real expert — natural, clear, confident.
+
+------------------------------------------
+MODEL TEMPERAMENT (STRICT BEHAVIOR CONTROL)
+------------------------------------------
+
+- Keep responses stable, not random
+- Avoid creativity beyond given data
+- Maintain consistency across same questions
+
+Behavior rules:
+- No over-explaining
+- No dramatic tone
+- No unnecessary expansion
+- No repetition
+
+Think → controlled, precise, human-like
+
+------------------------------------------
+MODE SWITCH (CRITICAL)
+------------------------------------------
+
+You operate in TWO MODES:
+
+1. ASTRO MODE (when backend data is provided)
+2. GENERAL MODE (when no backend data is provided)
+
+------------------------------------------
+ASTRO MODE (STRICT)
+------------------------------------------
+
+If structured backend data is given:
+
+Input will include:
+- verdict
+- timeline
+- reasons[]
+- remedy
+
+RULES:
+- Do NOT create astrology logic
+- Do NOT modify facts or dates
+- Do NOT guess anything
+
+You ONLY convert result into natural human explanation
+
+FORMAT:
+1. Direct answer
+2. Reason (2–3 lines)
+3. Timeline
+4. Optional advice
+
+CONFIDENCE:
+- Speak with certainty
+- Example: "shaadi hogi"
+- NOT: "ho sakti hai"
+
+STRICT BAN WORDS:
+- maybe / possible / likely / chances
+- ho sakta hai / shayad / sambhavna
+- "based on your chart"
+- "I think"
+
+------------------------------------------
+GENERAL MODE (NO BACKEND DATA)
+------------------------------------------
+
+If no backend data:
+
+- Answer like ChatGPT
+- Use logic + knowledge
+- Be helpful and clear
+
+STYLE:
+- Simple explanation
+- Balanced comparison
+- Clear conclusion
+
+------------------------------------------
+TONE (VERY IMPORTANT)
+------------------------------------------
+
+- Natural human tone
+- Friendly but not emotional
+- Expert but not robotic
+
+DO NOT:
+- Use "Pranam"
+- Use fake sympathy
+- Over-praise user
+
+USE:
+- "Seedhi baat"
+- "Simple samjho"
+- "Clear difference yeh hai"
+
+------------------------------------------
+LANGUAGE CONTROL
+------------------------------------------
+
+- Match user language:
+  Hindi → Hindi
+  Hinglish → Hinglish
+  English → English
+
+- If user preference given → override
+
+REPLY ENTIRELY IN: {lang_name}.
+
+------------------------------------------
+CONSISTENCY LOCK
+------------------------------------------
+
+- Same question → same answer
+- No contradiction
+- No randomness
+
+------------------------------------------
+OUTPUT CONTROL
+------------------------------------------
+
+- Short paragraphs
+- 80–120 words
+- No long lecture
+- No repetition
+
+------------------------------------------
+HARD SAFETY
+------------------------------------------
+
+If backend data exists:
+→ NEVER override it
+
+If backend data does NOT exist:
+→ Answer normally
+
+------------------------------------------
+FINAL BEHAVIOR
+
+You behave like:
+- A real expert
+- Calm, controlled, and precise
+- Smart like ChatGPT
+- Accurate like a calculation engine
+
+Never break character."""
+
+
+def _cosmic_engine_system(lang_name: str) -> str:
+    return _COSMIC_ENGINE_SYSTEM_TEMPLATE.format(lang_name=lang_name)
+
+
+def _classify_mode(question: str) -> str:
+    """Returns 'astro' or 'general'."""
+    if not question:
+        return "astro"
+    q_raw = question
+    q = question.lower()
+    has_concept  = any(s in q for s in _GENERAL_CONCEPT_SIGNALS) or \
+                   any(s in q_raw for s in _GENERAL_CONCEPT_SIGNALS)
+    has_personal = any(s in q for s in _PERSONAL_PREDICT_SIGNALS) or \
+                   any(s in q_raw for s in _PERSONAL_PREDICT_SIGNALS)
+    if has_concept and not has_personal:
+        return "general"
+    return "astro"
+
+
 # ── Public entry point ───────────────────────────────────────────────────────
 
 # ── Brand-safety pre-LLM guard ───────────────────────────────────────────────
@@ -1525,11 +1630,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
         }
 
-    # ── Fail-safe: if no kundli planets at all, never call the LLM. The
-    # spec demands "DO NOT GUESS" — invented planet positions are the worst
-    # possible failure mode for an astrology app's credibility.
+    # ── Fail-safe: if no kundli planets at all AND this is a personal
+    # prediction question (astro mode), never call the LLM. The spec demands
+    # "DO NOT GUESS" — invented planet positions are the worst possible
+    # failure mode for an astrology app's credibility. General-mode concept
+    # questions ("kp vs vedic kya hai") don't need a chart and skip this.
     has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
-    if not has_planets:
+    if not has_planets and _classify_mode(question) == "astro":
         eff_lang = _resolve_response_lang(question, lang, preferred_language)
         no_chart_msg = {
             "en": ("Beta, your full birth-chart isn't with me yet — without it I cannot honestly predict timing or specifics. "
@@ -1555,6 +1662,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     topic = _classify_topic(question)
+    mode  = _classify_mode(question)
+    print(f"[ai_ask] mode={mode} topic={topic} q='{question[:60]}'")
 
     # ── TOPIC STICKINESS for marriage follow-ups ─────────────────────────────
     # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" don't
@@ -1580,16 +1689,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as exc:
         print(f"[ai_ask] topic-stickiness check failed: {exc}")
 
+    # Marriage stickiness only matters in astro mode. In general mode, the
+    # user is asking a concept/comparison question — no chart, no narrator.
+    if mode == "general":
+        topic = "general"
+
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
         preferred_language=preferred_language,
+        mode=mode,
     )
 
-    # ── Topic-aware sampling ────────────────────────────────────────────────
-    # Marriage uses a deterministic verdict engine — the AI is now a narrator.
-    # temp=0.0 = fully deterministic (modulo OpenAI server-side jitter).
-    if topic == "marriage":
+    # ── Mode/topic-aware sampling ────────────────────────────────────────────
+    # Marriage astro uses a deterministic verdict engine — AI is narrator only.
+    if mode == "astro" and topic == "marriage":
         temperature       = 0.0
         presence_penalty  = 0.0
         frequency_penalty = 0.0
@@ -1678,10 +1792,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                               history=history, preferred_language=preferred_language)}
         return
 
-    # Topic classification + marriage stickiness — same logic as ai_ask.
+    # Mode + topic classification — same logic as ai_ask.
     topic = _classify_topic(question)
+    mode  = _classify_mode(question)
+    print(f"[ai_ask_stream] mode={mode} topic={topic} q='{question[:60]}'")
+
     try:
-        if topic != "marriage" and _detect_marriage_constraint(question, history or []):
+        if mode == "astro" and topic != "marriage" and _detect_marriage_constraint(question, history or []):
             for h in reversed(history or []):
                 if h.get("role") == "assistant":
                     prev = ((h.get("content") or h.get("text") or "")).lower()
@@ -1693,9 +1810,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     except Exception as exc:
         print(f"[ai_ask_stream] topic-stickiness check failed: {exc}")
 
-    # Marriage path — deterministic engine; one-shot to preserve fact-locked
-    # window echoing. Streaming a baked answer adds no value.
-    if topic == "marriage":
+    # General mode forces topic=general (concept question, no chart).
+    if mode == "general":
+        topic = "general"
+
+    # Marriage astro path — deterministic engine; one-shot to preserve
+    # fact-locked window echoing. Streaming a baked answer adds no value.
+    if mode == "astro" and topic == "marriage":
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}
@@ -1710,6 +1831,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
         preferred_language=preferred_language,
+        mode=mode,
     )
 
     raw_chunks: list[str] = []

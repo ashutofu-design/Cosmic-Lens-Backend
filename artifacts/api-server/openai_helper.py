@@ -903,6 +903,17 @@ def _build_messages(
     except Exception as exc:
         print(f"[openai_helper] chart_intelligence failed: {exc}")
 
+    # ── LOCKED FACTS (Sprint 1) ──────────────────────────────────────────────
+    # One assembled, structured block with EXPLICIT counts and named lists for
+    # yogas, doshas, planet strengths, dasha. The AI is instructed (rules
+    # below) to MIRROR these values verbatim — never invent counts/names.
+    locked_facts_str = ""
+    try:
+        from locked_facts import build_locked_facts  # type: ignore
+        locked_facts_str = build_locked_facts(kundli, birth) or ""
+    except Exception as exc:
+        print(f"[openai_helper] locked_facts failed: {exc}")
+
     # ── DETERMINISTIC MARRIAGE VERDICT ────────────────────────────────────────
     # For topic == "marriage", we compute the verdict in pure Python BEFORE
     # the AI is invoked. The AI is then forbidden from changing verdict /
@@ -1041,6 +1052,7 @@ def _build_messages(
     kp_section    = f"\n\n{kp_block}\n" if kp_block else ""
     tr_section    = f"\n\n{tr_block}\n" if tr_block else ""
     intel_section = f"\n\n{intel_str}\n" if intel_str else ""
+    locked_section = f"\n\n{locked_facts_str}\n" if locked_facts_str else ""
 
     # Fail-safe context flags for the AI
     has_chart  = bool(chart_str and chart_str != "(no birth chart provided)")
@@ -1291,6 +1303,7 @@ def _build_messages(
         f"{tone_blacklist}"
         f"{narrator_prefix}"
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n"
+        f"{locked_section}"
         f"{intel_section}"
         f"{kp_section}"
         f"{tr_section}\n"
@@ -1302,7 +1315,16 @@ def _build_messages(
         f"{narrator_rules}"
         "STRICT INSTRUCTIONS — read these top-down. Rule 10 (BREVITY) overrides any tension with rules below. Quality over quantity: pick the strongest 2 chart factors only.\n"
         "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never silently skip one. For each sub-part give a brief micro-verdict in 1 sentence. If a sub-part CANNOT be answered from the chart (e.g. 'ladka ya ladki' — child gender is uncertain in classical astrology), say so honestly in 1 line ('iska theek pata janm-samay ke baad hi chalta hai') instead of inventing.\n"
-        "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
+        "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, LOCKED FACTS, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'YOGA LIST' or 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
+        "0b) 🔒 LOCKED FACTS — MIRROR EXACTLY (HIGHEST PRIORITY) 🔒\n"
+        "    The 'LOCKED FACTS — MIRROR EXACTLY, NEVER INVENT' block above is the GROUND TRUTH for this chart. Four absolute rules:\n"
+        "    • RULE A — COUNTING questions (kitne / how many / kaunsa-kaunsa): Use the EXACT number from 'YOGA COUNT' or 'DOSHA COUNT'. NEVER round, NEVER guess, NEVER say 'kuch', 'kai', 'thode' when an exact number is given. Example: if 'YOGA COUNT: 3', say '3 yog hain' — never '2-3' or 'kuch'.\n"
+        "    • RULE B — NAMING questions (kaunse / which / list): List ALL names from the YOGA LIST / ACTIVE DOSHAS / MILD DOSHAS sections, in the same order. Do NOT add yogas or doshas not present in the lists. Do NOT skip ones that ARE present.\n"
+        "    • RULE C — STRENGTH questions (X strong/weak/powerful hai?): Use the EXACT verdict from 'PLANET STRENGTHS' (STRONG / MODERATE / WEAK). Never wobble. If user says 'Saturn powerful hai na?' and the table says WEAK, gently correct: 'Aapki kundli mein Saturn weak position mein hai (debilitated/etc), powerful nahi.'\n"
+        "    • RULE D — EMPATHY + FACT FUSION: When the user is stressed/sad/seeking reassurance ('pareshan hun', 'kuch achha bata', 'umeed nahi rahi'), OPEN with the strongest POSITIVE fact from the LOCKED FACTS (a strong yoga, a strong planet, a beneficial dasha). Acknowledge mood in 1 line, then deliver the concrete fact. Example: 'Sun lo — aapke chart mein 3 powerful Raj Yog baithe hain, jisme [exact yoga name] specially strong hai. Jo aap feel kar rahe ho woh time ka phase hai, kismat ka nahi.' NEVER respond to emotional questions with vague platitudes when concrete strong facts exist in the LOCKED FACTS.\n"
+        "    Violation of A/B/C/D = wrong reply. The LOCKED FACTS block overrides any other source of information.\n"
+        "    🛡️ BREVITY EXEMPTION: For COUNTING (Rule A) and NAMING (Rule B) questions specifically — Rule 0b OVERRIDES Rule 10's '2 chart factors only' limit. If user asks 'kitne yog' or 'kaunse dosh', you MUST list the EXACT count and the FULL list of names from LOCKED FACTS in a single line, even if it cites more than 2 items. Word limit still applies (140 words), but the list of names is non-negotiable. Example: 'Aapke chart mein 5 yog hain — Gajakesari, Budhaditya, Lakshmi, Adhi, Amala. Inme se Lakshmi yoga sabse strong hai...'\n"
+        "    🛡️ EMOTIONAL ASKS: When the question is emotional/reassurance ('pareshan hun', 'kuch achha bata', 'umeed nahi', 'kya hoga mera') AND LOCKED FACTS contains at least 1 yoga, your FIRST 1-2 sentences MUST mention the YOGA COUNT and at least the strongest yoga's name verbatim. Then give empathy + verdict. Skipping the count is a Rule 0b violation.\n"
         "1) OPEN DIRECTLY in line 1 with a 1-line natural answer or framing — no fake empathy, no \"Beta,\", no \"I sense your concern\". Sound like a smart expert, not a guru.\n"
         "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
         "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses. State whether KP confirms or modifies the Vedic verdict ('KP paddhati se bhi yahi confirm hota hai...').\n"

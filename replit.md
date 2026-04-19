@@ -134,3 +134,20 @@ Brand-safety: every new user-facing string uses "Cosmic Vision" — no AI/OpenAI
 - `GET /api/moon_history` — Moon position history
 - `POST /api/ask` — Ask astrology question
 - `POST /api/register`, `POST /api/login` — Auth
+
+## Sprint 1 Day 1 — Locked Facts Protocol (api-server)
+
+Goal: AI mirrors deterministic chart facts (yoga count/names, dosha count/names, planet strength verdicts, current dasha) instead of vague language. Especially for emotional asks ("yaar pareshan hun") — first line must cite exact yoga count + strongest yoga name.
+
+- **`planet_strength.py`** (NEW) — `verdict_for_planet(...)` returns `{verdict: STRONG|MODERATE|WEAK, reason}`. Shadbala-first (>=100% STRONG, 70-100 MODERATE, <70 WEAK), composite fallback uses dignity+house+combust+retro.
+- **`locked_facts.py`** (NEW) — `build_locked_facts(kundli, birth)` assembles MIRROR-EXACT block: LAGNA/MOON SIGN/NAKSHATRA, YOGA COUNT+LIST, DOSHA COUNT+LIST (active+mild), PLANET STRENGTHS table, CURRENT DASHA window, HOUSE-LORDS summary. Dasha keys normalized to support both `{maha, antar, startDate}` (kundli_engine output) and legacy `{mahadasha, ad, start}`.
+- **`chart_intelligence.py`** — `_detect_yogas` extended with 5 high-value yogas: Lakshmi, Saraswati, Adhi (strict — all 3 benefics in 6/7/8 from Moon, ≥2 distinct houses), Amala (strict — alone in 10th, no malefic co-tenant), Dharma-Karmadhipati (9L+10L conjunct or parivartana).
+- **`openai_helper.py`** — `locked_facts_str` injected as `═══ LOCKED FACTS — MIRROR EXACTLY ═══` block BEFORE `intel_section` in analysis-branch user message. Instruction 0b adds 4 strict mirror rules:
+  - RULE A — exact COUNT for "kitne / how many"
+  - RULE B — full NAME LIST for "kaunse / which"
+  - RULE C — exact STRENGTH verdict (STRONG/MODERATE/WEAK)
+  - RULE D — empathy + fact fusion: emotional asks open with strongest positive fact
+  - 🛡️ Brevity-exemption clause: Rule 0b OVERRIDES Rule 10's "2 chart factors" cap for counting/naming questions
+  - 🛡️ Emotional-ask clause: first 1-2 sentences MUST cite YOGA COUNT + strongest yoga name when ≥1 yoga exists
+- **Untouched branches**: greeting / general / minimal / marriage deterministic narrator paths — only the analysis branch wraps intel with locked facts.
+- **Router kill-switch**: `COSMIC_DISABLE_INTENT_ROUTER=1` still in place (8-route classifier deferred).

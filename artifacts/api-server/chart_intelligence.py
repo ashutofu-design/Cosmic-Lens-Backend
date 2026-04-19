@@ -303,6 +303,99 @@ def _detect_yogas(pmap: dict[str, dict], lagna_sign: Optional[int]) -> list[str]
         if in_dusthanas >= 2:
             yogas.append("Vipareeta-Raja-yoga (dusthana lords in dusthanas — adversity converts to gain)")
 
+    # ── Sprint-1 additions: 5 high-value yogas ─────────────────────────────
+    BENEFICS = {"Jupiter", "Venus", "Mercury"}  # Mercury = conditional benefic
+    NATURAL_BENEFICS = {"Jupiter", "Venus"}     # purer naturals (Moon waxing also)
+
+    # Lakshmi Yoga — 9th lord in own/exalt/friend AND Venus strong (own/exalt) in kendra/trikona
+    if lagna_sign is not None:
+        ninth_sign = (lagna_sign + 8) % 12
+        ninth_lord = SIGN_LORDS[ninth_sign]
+        nl_info    = pmap.get(ninth_lord) or {}
+        nl_sign    = nl_info.get("sign_idx")
+        nl_dig     = _dignity(ninth_lord, nl_sign, nl_info.get("deg_in_sign"))
+        nl_strong  = nl_dig in {"exalted", "moolatrikona", "own-sign", "friend's-sign"}
+        ven_info   = pmap.get("Venus") or {}
+        ven_sign   = ven_info.get("sign_idx")
+        ven_dig    = _dignity("Venus", ven_sign, ven_info.get("deg_in_sign"))
+        ven_house  = house("Venus")
+        ven_strong = (ven_dig in {"exalted", "moolatrikona", "own-sign"}
+                      and ven_house in {1, 4, 5, 7, 9, 10})
+        if nl_strong and ven_strong:
+            yogas.append("Lakshmi yoga (9L well-placed + Venus strong in kendra/trikona — wealth, beauty, prosperity)")
+
+    # Saraswati Yoga — Jupiter, Mercury, Venus together OR in any kendra/2nd/trikona,
+    # AND Jupiter in own/exalt/friend's sign
+    sar_houses = {1, 2, 4, 5, 7, 9, 10}
+    jup_h, mer_h, ven_h = house("Jupiter"), house("Mercury"), house("Venus")
+    if jup_h and mer_h and ven_h:
+        if all(h in sar_houses for h in (jup_h, mer_h, ven_h)):
+            jup_dig = _dignity("Jupiter", sign_of("Jupiter"),
+                               (pmap.get("Jupiter") or {}).get("deg_in_sign"))
+            if jup_dig in {"exalted", "moolatrikona", "own-sign", "friend's-sign"}:
+                yogas.append("Saraswati yoga (Jupiter+Mercury+Venus in kendra/trikona/2nd, Jupiter strong — knowledge, wisdom, eloquence)")
+
+    # Adhi Yoga — natural benefics (Jup, Mer, Ven) ALL THREE present across 6th/7th/8th
+    # from Moon (classical strict definition — BPHS).
+    if mh and sign_of("Moon") is not None:
+        moon_s = sign_of("Moon")
+        positions_from_moon = {}
+        for ben in BENEFICS:
+            bs = sign_of(ben)
+            if bs is None:
+                continue
+            positions_from_moon[ben] = _house_from_lagna(bs, moon_s)
+        in_678_houses = {fm for fm in positions_from_moon.values() if fm in (6, 7, 8)}
+        # Strict: all 3 benefics positioned somewhere within 6/7/8 AND covering at least 2 distinct houses
+        all_in_678 = (len(positions_from_moon) == 3
+                      and all(fm in (6, 7, 8) for fm in positions_from_moon.values())
+                      and len(in_678_houses) >= 2)
+        if all_in_678:
+            yogas.append("Adhi yoga (Jupiter+Venus+Mercury all in 6th/7th/8th from Moon — leadership, success, comforts)")
+
+    # Amala Yoga — natural benefic (Jup or Ven) ALONE in 10th from Lagna OR from Moon
+    # (no malefic co-tenant in that 10th sign)
+    MALEFICS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
+    moon_s = sign_of("Moon")
+    for ben in NATURAL_BENEFICS:
+        bh_lag = house(ben)
+        bs = sign_of(ben)
+        from_moon = (_house_from_lagna(bs, moon_s) if (bs is not None and moon_s is not None) else None)
+        in_10th_lag = (bh_lag == 10)
+        in_10th_moon = (from_moon == 10)
+        if not (in_10th_lag or in_10th_moon):
+            continue
+        # Determine the sign of the 10th house we're checking
+        target_sign = None
+        if in_10th_lag and lagna_sign is not None:
+            target_sign = (lagna_sign + 9) % 12
+        elif in_10th_moon and moon_s is not None:
+            target_sign = (moon_s + 9) % 12
+        # Check no malefic shares that sign
+        co_tenants = [n for n, info in pmap.items()
+                      if n != ben and info.get("sign_idx") == target_sign]
+        if not any(c in MALEFICS for c in co_tenants):
+            ref = "Lagna" if in_10th_lag else "Moon"
+            yogas.append(f"Amala yoga ({ben} alone in 10th from {ref}, no malefic co-tenant — spotless reputation, lasting fame)")
+            break
+
+    # Dharma-Karmadhipati Yoga — 9L and 10L in mutual conjunction OR exchange
+    if lagna_sign is not None:
+        ninth_lord = SIGN_LORDS[(lagna_sign + 8) % 12]
+        tenth_lord = SIGN_LORDS[(lagna_sign + 9) % 12]
+        if ninth_lord != tenth_lord:
+            n_sign = sign_of(ninth_lord)
+            t_sign = sign_of(tenth_lord)
+            if n_sign is not None and t_sign is not None:
+                # Conjunction (same sign)
+                if n_sign == t_sign:
+                    yogas.append(f"Dharma-Karmadhipati yoga (9L {ninth_lord} + 10L {tenth_lord} conjunct — fortune meets karma, raja-yoga of dharma)")
+                # Parivartana (mutual sign exchange)
+                else:
+                    if (t_sign in OWN_SIGNS.get(ninth_lord, []) and
+                        n_sign in OWN_SIGNS.get(tenth_lord, [])):
+                        yogas.append(f"Dharma-Karmadhipati Parivartana (9L {ninth_lord} ↔ 10L {tenth_lord} sign exchange — powerful raja-yoga)")
+
     return yogas
 
 

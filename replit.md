@@ -669,10 +669,21 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - Lagna view (key for Karaka Kendradi analysis)
 - Test result: Lagna Sagittarius (dual) Rashi-aspects Gemini, Virgo, Pisces → Jupiter aspected. Mars receives 4 rashi-aspects (Ketu, Rahu, Sun, Venus).
 
-### Sprint 27 — Tier 10: Astrocartography + Relocation (next)
-- Local space astrocartography (planet rising/setting lines on world map)
-- Relocation chart (recompute houses for new lat/lon)
-- Parans (planetary line crossings)
+### Sprint 27 — Special Lagnas ✅ COMPLETE
+- File: `vedic/jaimini/special_lagnas.py` (~210 lines)
+- **Sree Lagna** (wealth ascendant) — Lagna_lon + (Moon's nakshatra-progress × 27), mod 360°
+- **Indu Lagna** (wealth-yoga) — kala-sum of 9th-from-Lagna lord + 9th-from-Moon lord, counted from Moon sign
+- **Bhrigu Bindu** (event-trigger) — Rahu-Moon midpoint (shorter arc); transits over BB activate karmic events
+- **Karakamsa Lagna** (soul-dharma) — sign of Atmakaraka in D9
+- Test results on chart:
+  - Sree Lagna: **Aries 21.61°** (lord Mars)
+  - Indu Lagna: **Cancer** (lord Moon) — kala 30+6=12
+  - Bhrigu Bindu: **Scorpio 6.01°**
+  - Karakamsa: AK=**Mars** in D9 **Aquarius** (lord Saturn) — soul-dharma theme
+- **Deferred (need lat/lon → sunrise → Ishtakaal)**: Bhava Lagna, Hora Lagna, Ghati Lagna, Vighati Lagna, Pranapada Lagna
+
+### Sprint 28 — Tier 10: Astrocartography + Relocation (next)
+- Needs birth lat/lon — pending real birth data
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

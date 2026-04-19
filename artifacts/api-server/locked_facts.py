@@ -641,6 +641,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] rashi drishti (Sprint-26) failed: {exc}")
 
+    # Sprint-27 — Special Lagnas (Sree, Indu, Bhrigu Bindu, Karakamsa)
+    special_lagnas_str = ""
+    try:
+        from vedic.jaimini.special_lagnas import (compute_special_lagnas,  # type: ignore
+                                                   format_special_lagnas_summary)
+        _sl = compute_special_lagnas(kundli)
+        special_lagnas_str = format_special_lagnas_summary(_sl) if _sl else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] special lagnas (Sprint-27) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -820,6 +830,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         transit_deep_str,
         kp_deep_str,
         rashi_drishti_str,
+        special_lagnas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

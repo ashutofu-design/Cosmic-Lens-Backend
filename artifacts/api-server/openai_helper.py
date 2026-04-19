@@ -550,33 +550,41 @@ def _summarise_history(history: list) -> tuple[str, dict]:
 _HINGLISH_TOKENS = {
     "kab", "kya", "kyon", "kyun", "kaise", "kaun", "kahan", "kitna", "kitne",
     "hai", "hain", "ho", "hoga", "hogi", "hoyega", "hua", "hui", "tha", "thi", "the",
-    "mera", "meri", "mere", "mujhe", "mujhko", "mujhe", "humara", "humari", "hamara",
+    "mai", "main", "mei", "mein", "me",
+    "mera", "meri", "mere", "mujhe", "mujhko", "humara", "humari", "hamara",
     "aap", "aapka", "aapki", "aapke", "tum", "tera", "teri", "tumhara",
     "acharya", "ji", "beta", "guruji", "panditji", "maharaj",
     "shaadi", "shadi", "vivah", "biwi", "pati", "patni", "rishta",
-    "naukri", "kaam", "paisa", "paise", "dhan", "santaan", "santan", "bachcha",
+    "naukri", "naukari", "kaam", "paisa", "paise", "dhan", "santaan", "santan", "bachcha",
     "swasthya", "bimari", "tabiyat", "padhai", "pyaar", "pyar", "rishtey",
     "upay", "upaay", "mantra", "puja", "daan", "vrat", "totka",
     "batao", "bataiye", "bataenge", "kijiye", "karke", "karna",
-    "nahi", "nahin", "haan", "han", "bilkul", "thoda", "bahut",
-    "kundli", "rashi", "nakshatra", "dasha", "graha", "yog", "dosh",
+    "karu", "karoon", "karunga", "karungi", "karenge", "karna",
+    "jau", "jaun", "jaunga", "jaungi", "jaye", "jaayega", "jaayegi",
+    "ruk", "rukna", "ruke", "rukoon",
+    "soch", "socha", "sochna", "raha", "rahi", "rahe", "rahega", "rahegi",
+    "lega", "legi", "lega", "milega", "milegi", "milti", "milta",
+    "nahi", "nahin", "haan", "han", "bilkul", "thoda", "bahut", "zyada", "kam",
+    "kundli", "rashi", "nakshatra", "dasha", "graha", "yog", "dosh", "manglik",
     "maa", "pita", "papa", "mummy", "bhai", "behan", "didi", "ghar", "gharwale",
-    "abhi", "kabhi", "phir", "fir", "pehle", "baad", "ke baad", "se", "tak",
-    "kr", "krna", "ho jaye", "hojayegi", "hojayega",
+    "abhi", "kabhi", "phir", "fir", "pehle", "baad", "se", "tak", "ya", "aur",
+    "kr", "krna", "hojayegi", "hojayega", "lagta", "lagti", "lagte",
 }
 
 
 def _detect_question_lang(question: str, fallback: str) -> str:
     """
-    Returns 'hi' if the question looks Hindi/Devanagari/Hinglish, else 'en'.
-    Falls back to the supplied `lang` if the question is too short / ambiguous.
-    Other explicit lang codes (ta, te, bn, mr, etc.) pass through unchanged.
+    Returns:
+      'hi' → Devanagari script (pure Hindi)
+      'hn' → Roman-Hindi (Hinglish — Hindi words written in English letters)
+      'en' → English
+      Other Indian-script lang codes pass through from `fallback`.
     """
     q = (question or "").strip()
     if not q:
         return fallback or "en"
 
-    # Devanagari Unicode range = direct Hindi
+    # Devanagari Unicode range = pure Hindi
     for ch in q:
         if "\u0900" <= ch <= "\u097F":
             return "hi"
@@ -586,20 +594,25 @@ def _detect_question_lang(question: str, fallback: str) -> str:
     if (fallback or "").lower() in {"ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "or", "as"}:
         return fallback
 
-    # Hinglish detection — tokenise on word boundaries
+    # Hinglish (Roman-Hindi) detection — tokenise on word boundaries
     import re
     tokens = re.findall(r"[a-zA-Z]+", q.lower())
     if not tokens:
         return fallback or "en"
 
     hinglish_hits = sum(1 for t in tokens if t in _HINGLISH_TOKENS)
-    # If even ~15% of tokens are clearly Hindi, treat the whole question as Hindi.
-    if hinglish_hits >= 1 and (hinglish_hits / max(1, len(tokens))) >= 0.15:
-        return "hi"
-    if hinglish_hits >= 2:  # short questions like "shaadi kab hogi"
-        return "hi"
+    # ≥1 Hinglish token AND ≥10% of tokens, OR ≥2 absolute hits → Hinglish.
+    # Tighter threshold catches short prompts like "Mai abhi job switch karu ya ruk jau?"
+    if hinglish_hits >= 2:
+        return "hn"
+    if hinglish_hits >= 1 and (hinglish_hits / max(1, len(tokens))) >= 0.10:
+        return "hn"
 
-    # Default to English when nothing Hindi was detected.
+    # If the user explicitly chose 'hi' or 'hn' in app settings, honor it
+    # rather than collapsing to English.
+    fb = (fallback or "").lower()
+    if fb in {"hi", "hn"}:
+        return fb
     return "en"
 
 
@@ -731,8 +744,8 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         f"{beh_block}"
         f"{failsafe}"
         f"{variation}\n\n"
-        "STRICT INSTRUCTIONS — multi-system verification, human-friendly delivery, no question too long:\n"
-        "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never skip, never compress two distinct asks into one vague reply. If the question is 1 line, give 1 focused answer; if it's a paragraph with multiple worries, give a paragraph per worry in the order asked.\n"
+        "STRICT INSTRUCTIONS — read these top-down. Rule 10 (BREVITY) overrides any tension with rules below. Quality over quantity: pick the strongest 2 chart factors only.\n"
+        "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never silently skip one. For each sub-part give a brief micro-verdict in 1 sentence. If a sub-part CANNOT be answered from the chart (e.g. 'ladka ya ladki' — child gender is uncertain in classical astrology), say so honestly in 1 line ('iska theek pata janm-samay ke baad hi chalta hai') instead of inventing.\n"
         "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
         "1) ACKNOWLEDGE warmly in line 1 — name the emotion behind the question (chinta, ummeed, confusion). Use the devotee's actual words back to them once so they feel heard.\n"
         "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
@@ -741,10 +754,20 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         "5) TRANSITS (gochar): If transit data is provided, mention which slow planet (Jupiter / Saturn / Rahu-Ketu) is currently transiting the relevant house from natal Moon or Lagna, and how it influences the matter NOW.\n"
         "6) CLEAR VERDICT per sub-question: Combine Vedic + KP + transit + dasha into a confident verdict — haan / nahi / sambhavna with reasoning. Never vague-dodge. If the question has multiple parts, give a verdict for EACH.\n"
         "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy. Reference earlier conversation context naturally if it connects.\n"
-        "8) HUMAN-FRIENDLY style: translate every Sanskrit term inline ('Shukra (Venus)', 'Saade-sati — yaani Shani ka 7.5 saal ka phase'). NO jargon dump. NO lecture. Conversational, like sitting across the table with chai.\n"
-        "9) END with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat) chosen for the WEAKEST significator across all sub-questions identified. Make it doable.\n"
-        "10) LENGTH adapts to the question: short question → 3-4 short paragraphs; long multi-part question → up to 8 paragraphs (one per sub-question + opening empathy + verdict + remedy). Never bullet-list, never markdown headers, never reveal you used 'KP block' or 'transit data' as labels — speak naturally as Acharya ji ('KP paddhati se bhi dekha to...', 'Aaj kal Shani ka gochar...').\n"
-        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything, addressing EVERY part of what they asked, cross-verifying every claim with rules from the chart."
+        "8) HUMAN-FRIENDLY style: translate every Sanskrit term inline ('Shukra (Venus)', 'Saade-sati — yaani Shani ka 7.5 saal ka phase'). NO jargon dump. NO lecture. Conversational, like a wise elder talking, NOT like a textbook.\n"
+        "9) END with EXACTLY ONE short remedy (1 line: mantra+count+day OR donation OR vrat) for the weakest significator. One line only — no lecture on how to do it.\n"
+        "10) ⚠️ STRICT BREVITY — HARD LIMIT ⚠️\n"
+        "    • TOTAL answer = 100 to 140 WORDS. NEVER more. Count words as you write.\n"
+        "    • Exactly 4 SHORT paragraphs, 1-2 sentences each. Blank line between paragraphs.\n"
+        "    • Para 1 (1 line): warm acknowledgement using devotee's name + their concern.\n"
+        "    • Para 2 (2 sentences): the 2 STRONGEST chart factors only — name the planet + house + what it means in plain words. Mention dasha lord briefly if 'kab/when' is asked.\n"
+        "    • Para 3 (1-2 sentences): clear verdict — haan / nahi / sambhavna, with a tight timing window if asked (e.g. '2025-2027').\n"
+        "    • Para 4 (1 line): one remedy — mantra+count+day OR donation. No explanation of how.\n"
+        "    • Pick ONLY 2 chart factors total. Skip every other yoga, aspect, sub-cusp. Quality > quantity.\n"
+        "    • For multi-part questions: stay within 140 words — give 1 sentence per sub-part inside Para 2-3.\n"
+        "    • NO bullets, NO numbered lists, NO markdown headers, NO '###', NO 'Section 1/2/3'.\n"
+        "    • NEVER reveal labels like 'KP block', 'transit data', 'intel'. Speak naturally as Acharya ji.\n"
+        "Now respond as Acharya Vidyasagar — warm, wise, MAXIMALLY CONCISE. Phone-friendly. Every sentence must earn its place."
     )
 
     # Build full conversation: system → prior turns → current user turn.
@@ -977,7 +1000,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
             model            = model,
             messages         = messages,
             temperature      = 0.85,
-            max_tokens       = 1100,   # richer multi-paragraph answers + classical refs
+            max_tokens       = 480,    # ≈ 12-18 lines, phone-friendly brevity
             presence_penalty = 0.4,    # discourage repeating phrases across turns
             frequency_penalty= 0.35,
         )

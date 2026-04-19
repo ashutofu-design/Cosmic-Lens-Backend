@@ -590,12 +590,19 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Wired into `locked_facts.py` with deterministic facts injection
 - **Tier-3 Yoga total detector capacity now ~255 named yogas** (target was 200+) ✅
 
-### Sprint 20 — Phase D: Doshas 15+
-- Kaal Sarp 12 types with effects
-- Pitra Dosh (3 detection rules)
-- Guru Chandal Yog
-- Nadi Dosh (compatibility-related)
-- Kantaka Shani, Shrapit Dosh, Vish Yog, Angarak Yog
+### Sprint 20 — Tier-4 Doshas Deep — ✅ COMPLETE
+- Created `vedic/doshas/dosh_deep.py` (~340 lines) — folder-organized
+- **Mangal Dosh full BPHS**: 6-house check (1/2/4/7/8/12) ×3 references (Lagna/Moon/Venus) + 8 cancellation rules (own/exalt sign, Jupiter conj, Cancer/Leo, age 28+, mutual cancel, Pisces/Sagittarius, Lagnesh strong, 7L exalted)
+- **Pitra Dosh — 3 BPHS reasons**: (a) Sun conj Rahu/Ketu, (b) 9L in 6/8/12, (c) Sun in 9H with Saturn affliction
+- **Sade-Sati phase deep**: Rising / Peak / Setting based on Sat-vs-Moon transit
+- **Kantaka Shani**: Saturn currently in 1/4/7/10 from natal Moon (live transit)
+- **Vish Yog deep**: Sat+Moon close conj OR Sat 7th-aspect on Moon
+- **Nadi Dosh marker**: Self-Nadi (Aadi/Madhya/Antya) for compatibility prep
+- **Karaka Doshas (7)**: Matri/Putra/Bhratri/Chandra/Guru/Shukra/Pitra-karaka — debilitation, dusthana, Rahu/Ketu conj, combust check
+- **Grahan Dosh deep**: Surya/Chandra Grahan within 5° orb (eclipse formation)
+- **Shrapit Dosh deep**: Sat+Rahu/Ketu conj — past-life karmic curse signature
+- Wired in `locked_facts.py` with current Saturn transit + nakshatra
+- **Test chart smoke**: 9 doshas detected (Ashtama Shani, Shukra Dosh, Mangal×2, Pitra×2, Bhratri, Mangal-CANCELLED, Nadi marker)
 
 ### Sprint 21 — Phase E: 7+ New Dasha Systems
 - Yogini Dasha (8-period system)

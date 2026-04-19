@@ -540,6 +540,30 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] extra yogas (Sprint-19.5) failed: {exc}")
 
+    # Sprint-20 — Tier-4 Doshas Deep (Mangal full BPHS, Pitra 3-reasons,
+    # Sade-Sati phase, Kantaka Shani, Vish Yog, Karaka Doshas, Grahan, Shrapit)
+    deep_doshas_str = ""
+    try:
+        from vedic.doshas.dosh_deep import (detect_deep_doshas,  # type: ignore
+                                            format_deep_doshas_summary)
+        # Try to get current Saturn sign for transit-based doshas
+        _cur_sat = None
+        try:
+            from chart_intelligence import _current_saturn_sign  # type: ignore
+            _cur_sat = _current_saturn_sign()
+        except Exception:
+            pass
+        _nak = (kundli.get("nakshatra") or
+                (kundli.get("moon") or {}).get("nakshatra") or "")
+        if isinstance(_nak, dict):
+            _nak = _nak.get("name", "")
+        _dd = detect_deep_doshas(kundli.get("planets") or [], _lg_idx_cy,
+                                 current_saturn_sign=_cur_sat,
+                                 nakshatra_name=_nak)
+        deep_doshas_str = format_deep_doshas_summary(_dd) if _dd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] deep doshas (Sprint-20) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -712,6 +736,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         deep_div_str,
         classical_yogas_str,
         extra_yogas_str,
+        deep_doshas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

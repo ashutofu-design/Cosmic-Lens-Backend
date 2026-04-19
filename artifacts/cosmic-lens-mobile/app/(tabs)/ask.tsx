@@ -67,6 +67,9 @@ export default function AskScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 
+  // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
+  const [mode, setMode] = useState<"chat" | null>(null);
+
   const [messages, setMessages] = useState<Message[]>(() =>
     showDemo
       ? DEMO_MESSAGES
@@ -209,6 +212,15 @@ export default function AskScreen() {
     >
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
+        {mode === "chat" && (
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setMode(null); }}
+            hitSlop={12}
+            style={s.backBtn}
+          >
+            <Feather name="chevron-left" size={20} color={C.text} />
+          </Pressable>
+        )}
         <View style={s.headerDot} />
         <Text style={[s.headerTitle, { color: C.text }]}>Acharya Vidyasagar</Text>
         <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
@@ -225,50 +237,96 @@ export default function AskScreen() {
         </Pressable>
       )}
 
-      {/* Divya Prashna entry */}
-      <Pressable
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/divya-prashna"); }}
-        style={{ marginHorizontal: 12, marginBottom: 8, borderRadius: 14, overflow: "hidden" }}
-      >
-        <LinearGradient
-          colors={["#7c3aed", "#a855f7", "#ec4899"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 }}
-        >
-          <Text style={{ fontSize: 22 }}>🔮</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Divya Prashna</Text>
-            <Text style={{ color: "#ffffffcc", fontSize: 11, marginTop: 2 }}>
-              Apna sawaal pucho — turant Vedic horary jawab
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={18} color="#fff" />
-        </LinearGradient>
-      </Pressable>
+      {/* ───── Mode Picker (default landing) ────────────────────────────── */}
+      {mode === null && (
+        <View style={s.pickerWrap}>
+          <Text style={[s.pickerHi, { color: C.text }]}>Pranam beta 🙏</Text>
+          <Text style={[s.pickerSub, { color: C.textMid }]}>
+            Aaj kis vidhi se margdarshan chahte hain?
+          </Text>
 
-      {/* Prashna Kundli (KP 1-249) entry */}
-      <Pressable
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/prashna-kundli"); }}
-        style={{ marginHorizontal: 12, marginBottom: 10, borderRadius: 14, overflow: "hidden" }}
-      >
-        <LinearGradient
-          colors={["#0e7490", "#0891b2", "#14b8a6"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 }}
-        >
-          <Text style={{ fontSize: 22 }}>🔢</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "800" }}>Prashna Kundli (KP 1-249)</Text>
-            <Text style={{ color: "#ffffffcc", fontSize: 11, marginTop: 2 }}>
-              Ek number socho 1-249 — cusp sub-lord ka sahi jawab
-            </Text>
-          </View>
-          <Feather name="chevron-right" size={18} color="#fff" />
-        </LinearGradient>
-      </Pressable>
+          {/* Card 1: Ask Anything (Chat) */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (showDemo) { router.push("/onboarding"); return; }
+              setMode("chat");
+            }}
+            style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
+          >
+            <LinearGradient
+              colors={["#1e40af", "#3b82f6", "#06b6d4"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={s.modeGrad}
+            >
+              <Text style={s.modeEmoji}>💬</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.modeTitle}>Ask Anything</Text>
+                <Text style={s.modeBody}>
+                  Acharya se seedhi baat — kundli, dasha, vivah, karya, swasthya — koi bhi prashna poochho.
+                </Text>
+                <View style={s.modeMeta}>
+                  <Feather name="message-circle" size={11} color="#ffffffcc" />
+                  <Text style={s.modeMetaText}>Personalized chat · BPHS aadhar</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={20} color="#fff" />
+            </LinearGradient>
+          </Pressable>
 
+          {/* Card 2: Prashna Kundli (KP 1-249) */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (showDemo) { router.push("/onboarding"); return; }
+              router.push("/prashna-kundli");
+            }}
+            style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
+          >
+            <LinearGradient
+              colors={["#0e7490", "#0891b2", "#14b8a6"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={s.modeGrad}
+            >
+              <Text style={s.modeEmoji}>🔢</Text>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={s.modeTitle}>Prashna Kundli</Text>
+                  <View style={s.modeBadge}>
+                    <Text style={s.modeBadgeText}>KP 1-249</Text>
+                  </View>
+                </View>
+                <Text style={s.modeBody}>
+                  Mann mein ek number 1-249 socho — wahi sankhya aapki kundli ka lagna banegi, cusp sub-lord se sahi jawab.
+                </Text>
+                <View style={s.modeMeta}>
+                  <Feather name="hash" size={11} color="#ffffffcc" />
+                  <Text style={s.modeMetaText}>K. S. Krishnamurti · Cuspal Interlinks</Text>
+                </View>
+              </View>
+              <Feather name="chevron-right" size={20} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+
+          {/* Optional: small Divya Prashna link (legacy, less prominent) */}
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              if (showDemo) { router.push("/onboarding"); return; }
+              router.push("/divya-prashna");
+            }}
+            style={s.legacyLink}
+          >
+            <Feather name="clock" size={12} color={C.textMuted} />
+            <Text style={[s.legacyLinkText, { color: C.textMuted }]}>
+              Time-based Divya Prashna (current moment)
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ───── Chat Mode ────────────────────────────────────────────────── */}
+      {mode === "chat" && (<>
       {/* Messages */}
       <FlatList
         ref={listRef}
@@ -316,6 +374,7 @@ export default function AskScreen() {
           </LinearGradient>
         </Pressable>
       </View>
+      </>)}
 
       {/* ── Daily quota exhausted modal ──────────────────────────────────── */}
       <Modal
@@ -433,6 +492,35 @@ const s = StyleSheet.create({
   },
   headerTitle: { color: "#dde8f4", fontSize: 16, fontWeight: "700" },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
+  backBtn: {
+    position: "absolute", left: 12, top: 0, bottom: 0,
+    justifyContent: "center", paddingHorizontal: 4,
+  },
+
+  // ── Mode picker ─────────────────────────────────────────────────────────
+  pickerWrap: { paddingHorizontal: 16, paddingTop: 28, gap: 14 },
+  pickerHi:   { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
+  pickerSub:  { fontSize: 13, marginBottom: 14 },
+  modeCard:   { borderRadius: 18, overflow: "hidden" },
+  modeGrad: {
+    paddingHorizontal: 18, paddingVertical: 18,
+    flexDirection: "row", alignItems: "center", gap: 14,
+  },
+  modeEmoji: { fontSize: 36 },
+  modeTitle: { color: "#fff", fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
+  modeBody:  { color: "#ffffffd0", fontSize: 12.5, lineHeight: 17, marginTop: 4 },
+  modeMeta:  { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
+  modeMetaText: { color: "#ffffffcc", fontSize: 10.5, fontWeight: "600" },
+  modeBadge: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8,
+  },
+  modeBadgeText: { color: "#fff", fontSize: 9.5, fontWeight: "800", letterSpacing: 0.3 },
+  legacyLink: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 14, marginTop: 4,
+  },
+  legacyLinkText: { fontSize: 12, fontWeight: "600" },
 
   demoBanner: {
     flexDirection: "row", alignItems: "center", gap: 7,

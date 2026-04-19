@@ -708,38 +708,45 @@ def _build_messages(
     # with bullets allowed when helpful. No guru tone, no Beta/Pranam, no
     # kundli reference, no forced remedy.
     if mode == "general":
+        sub_mode = _classify_general_submode(question)
+        if sub_mode == "simple":
+            format_block = (
+                "QUESTION TYPE: SIMPLE (short definition / lookup).\n"
+                "FORMAT FOR THIS REPLY:\n"
+                "  • 2–3 lines TOTAL. No more.\n"
+                "  • NO bullet points, NO headers, NO sections.\n"
+                "  • One direct sentence answering the question, then 1 line of\n"
+                "    micro-context if useful. Stop.\n"
+            )
+        else:  # explain
+            format_block = (
+                "QUESTION TYPE: EXPLAIN (concept / comparison / how-it-works /\n"
+                "  history / origin).\n"
+                "FORMAT FOR THIS REPLY:\n"
+                "  • 1 short intro line (NOT a header).\n"
+                "  • 3–5 light bullet points — each bullet 1 line, bold the key\n"
+                "    term at the start (`**Term**: short explanation`).\n"
+                "  • 1 short closing line that ties it together.\n"
+                "  • Total length 80–160 words. NO ### markdown headers.\n"
+            )
         sys_general = (
-            "SYSTEM PROMPT — HUMAN STYLE MODE\n\n"
-            "You are a highly intelligent conversational assistant.\n\n"
-            "Your goal:\n"
-            "- Answer clearly\n"
-            "- Sound natural (like ChatGPT)\n"
-            "- No overacting, no guru tone\n"
-            "- No unnecessary emotions\n\n"
-            "RULES:\n"
-            "1. Keep answers simple and structured\n"
-            "2. Use bullet points when helpful\n"
-            "3. No fake empathy (\"I sense your concern\")\n"
-            "4. No forced spiritual tone\n"
-            "5. No kundli reference unless question is astrology-personal\n"
-            "6. No remedy unless user asks\n\n"
-            "STYLE:\n"
-            "- Friendly but normal\n"
-            "- Clear explanation\n"
-            "- Slight guidance tone\n"
-            "- Not robotic, not dramatic\n\n"
-            "EXAMPLE STYLE:\n"
-            "\"Simple samjho — Saturn discipline aur delay ka planet hai...\"\n\n"
-            "NOT:\n"
-            "\"Pranam beta, main aapki chinta samajhta hoon...\"\n\n"
-            "IMPORTANT:\n"
-            "- If question is general → DO NOT use kundli\n"
-            "- If question is personal astrology → use backend data\n\n"
-            "BANNED PHRASES (never use):\n"
-            "  Pranam, Beta, Beta Q, I sense your, I understand your, fake sympathy.\n"
-            "BANNED HEDGING (be confident):\n"
-            "  maybe, possible, likely, chances, ho sakta hai, shayad, sambhavna,\n"
-            "  I think, perhaps, around (for dates).\n\n"
+            "SYSTEM PROMPT — HUMAN STYLE MODE (ADAPTIVE)\n\n"
+            "You are a highly intelligent conversational assistant. Sound\n"
+            "natural like ChatGPT — smart, adaptive, NOT robotic, NOT a guru.\n\n"
+            "ADAPTIVE FORMAT: choose the layout based on the question type\n"
+            "given below. NEVER force the same structure on every reply.\n\n"
+            f"{format_block}\n"
+            "GLOBAL RULES (always):\n"
+            "  1. No fake empathy (\"I sense your concern\", \"I understand\").\n"
+            "  2. No spiritual / guru tone.\n"
+            "  3. No reference to the user's kundli, chart, planets, dasha,\n"
+            "     rashi, or nakshatra (this is a general question).\n"
+            "  4. No remedy / upay unless the user explicitly asked.\n"
+            "  5. Friendly-but-normal voice. State things confidently.\n\n"
+            "BANNED PHRASES: Pranam, Beta, Beta Q, Dekhiye beta, I sense your,\n"
+            "  I understand your, As an AI, based on your chart.\n"
+            "BANNED HEDGING: maybe, possible, likely, chances, ho sakta hai,\n"
+            "  shayad, sambhavna, I think, perhaps, around (for dates).\n\n"
             f"REPLY ENTIRELY IN: {lang_name}."
         )
         msgs: list[dict] = [{"role": "system", "content": sys_general}]
@@ -1441,6 +1448,42 @@ def _general_reply_leaks_chart(text: str) -> bool:
         if rgx.search(text):
             return True
     return False
+
+
+_SIMPLE_DEFINITION_HEAD = (
+    "kya hai", "kya hota hai", "kya hoti hai", "kya hote hain",
+    "kya matlab", "matlab kya", "kise kehte", "kya kehte",
+    "what is", "what's", "what are", "meaning of", "definition of",
+    "क्या है", "क्या होता है", "क्या होती है", "क्या मतलब",
+)
+_EXPLAIN_SIGNALS = (
+    "kaise", "difference", "antar", "fark", " vs ", " v/s ", " versus ",
+    "compare", "explain", "samjhao", "samjhaiye", "samjha do",
+    "kisne", "kis ne", "kaun ne", "kab shuru", "kab bana", "kab likha",
+    "history", "itihas", "origin", "founder", "kahan se", "कहां से", "कहाँ से",
+    "kitne prakar", "kitne type", "ke prakar", "ke type", "types of",
+    "list of", "examples of", "kinds of", "how does", "how do ", "how works",
+    "किसने", "कौन ने", "अंतर", "फर्क", "इतिहास", "समझाओ", "समझाइ",
+)
+
+
+def _classify_general_submode(question: str) -> str:
+    """Classify a general-mode question as 'simple' (short definition) or
+    'explain' (concept / comparison / how / origin). Used to pick the
+    response format inside the Human Style prompt."""
+    if not question:
+        return "explain"
+    q = question.lower().strip()
+    # Strong "explain" signals win — even "X kya hai" can be explain-worthy if
+    # it asks comparison or origin alongside.
+    if any(s in q for s in _EXPLAIN_SIGNALS):
+        return "explain"
+    # Very short definition asks → simple. Threshold: ≤ 6 words AND contains
+    # a definition opener like "kya hai" / "what is".
+    word_count = len(q.split())
+    if word_count <= 7 and any(s in q for s in _SIMPLE_DEFINITION_HEAD):
+        return "simple"
+    return "explain"
 
 
 def _classify_mode(question: str) -> str:

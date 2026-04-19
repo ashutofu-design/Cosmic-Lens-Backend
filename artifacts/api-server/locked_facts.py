@@ -628,6 +628,19 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] kp deep (Sprint-25) failed: {exc}")
 
+    # Sprint-26 — Jaimini Rashi Drishti (sign aspects, BPHS Ch.7)
+    rashi_drishti_str = ""
+    try:
+        from vedic.jaimini.rashi_drishti import (compute_rashi_drishti,  # type: ignore
+                                                 format_rashi_drishti_summary,
+                                                 SIGN_NAMES as _SN_RD)
+        _lg_rd = kundli.get("ascendant")
+        _lg_si_rd = _SN_RD.index(_lg_rd) if isinstance(_lg_rd, str) and _lg_rd in _SN_RD else None
+        _rd = compute_rashi_drishti(kundli.get("planets") or [], _lg_si_rd)
+        rashi_drishti_str = format_rashi_drishti_summary(_rd) if _rd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] rashi drishti (Sprint-26) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -806,6 +819,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         ashtaka_deep_str,
         transit_deep_str,
         kp_deep_str,
+        rashi_drishti_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

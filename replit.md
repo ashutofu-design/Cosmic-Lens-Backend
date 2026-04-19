@@ -661,9 +661,18 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - **Next Lunar Eclipse: 2026-08-28 in Aquarius Shatabhisha, KP Sub-Lord = Saturn**
 - **Deferred (need lat/lon birth coords)**: Cuspal sub-lords table, Cuspal Interlinks (CIL), KP marriage compatibility (needs 2 charts)
 
-### Sprint 26 — Tier 10: Astrocartography + Relocation (each with chart)
-- KP marriage matching
-- Eclipse pin-point predictions
+### Sprint 26 — Tier Jaimini Advanced ✅ COMPLETE
+- Audit revealed 5 of 6 already done: Karakas (Sprint 21 dasha_extras), Arudha A1-A12 (jaimini.py), Upapada (jaimini.py), Argala/Virodhargala (existing), Pada Lagna (= Arudha A1, jaimini.py)
+- **Built missing piece**: `vedic/jaimini/rashi_drishti.py` (~110 lines)
+  - **Rashi Drishti** (BPHS Ch.7) — sign-to-sign aspects: Movable→Fixed (except adjacent), Fixed→Movable (except adjacent), Dual↔Dual
+  - Computes per-sign aspect map + reverse lookup (which planets aspect each natal planet via rashi drishti)
+  - Lagna view (key for Karaka Kendradi analysis)
+- Test result: Lagna Sagittarius (dual) Rashi-aspects Gemini, Virgo, Pisces → Jupiter aspected. Mars receives 4 rashi-aspects (Ketu, Rahu, Sun, Venus).
+
+### Sprint 27 — Tier 10: Astrocartography + Relocation (next)
+- Local space astrocartography (planet rising/setting lines on world map)
+- Relocation chart (recompute houses for new lat/lon)
+- Parans (planetary line crossings)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

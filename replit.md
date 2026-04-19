@@ -506,7 +506,33 @@ api-server/
 - ✅ Deterministic post-injector for un-cited strength answers (Hindi+English regex)
 - ✅ 3x smoke test PASSED (marriage Q, career Q, greeting suppression)
 - ✅ Architect review PASSED (3 HIGH issues fixed: varga data integrity, Ishta formula, Ayana logic)
-- DEFERRED to later sprint: Sthana Bala 5 sub (already in shadbala.py), Dig Bala compass-based, Bhava Bala 4-fold per house
+
+### Sprint 18.5 — Bhava Bala Deep (48 calc) ✅ COMPLETE (Apr 2026)
+- ✅ NEW MODULE: `vedic/strength/bhava_bala_deep.py` (~180 lines, BPHS Ch.28)
+- ✅ Full 4-fold BPHS Bhava Bala per house (12 houses × 4 = 48 calculations):
+   1. **Bhavadhipati Bala** (house lord's Shadbala total)
+   2. **Bhava Digbala** (Kendra=60v, Panapara=30v, Apoklima=15v)
+   3. **Bhava Drishti Bala** (sum of aspect virupas: Jup+60, Mer/Ven+45, Moon+30,
+       Mars/Sat-60, Sun/Rahu/Ketu-30)
+   4. **Bhava Naisargika** (lord's natural strength: Sun=60..Saturn=8.57)
+- ✅ BPHS-correct required minimums per house (H1=475, H4=500, H7=425, H10=550, etc.)
+- ✅ Verdict bands: STRONG ≥100% req, MODERATE ≥70%, WEAK <70%
+- ✅ Top-3 / Bottom-3 rankings by required-ratio (relative within chart)
+- ✅ Wired into `locked_facts.py` after basic Bhava Bala
+- ✅ Rule X+ added in `openai_helper.py` for house-strength questions
+- ✅ Deterministic post-injector with multi-form house detection:
+   - Digit-first: "7th house", "10th ghar", "5 bhava"
+   - Digit-last: "house 7", "ghar 10"
+   - Short form: "h7"
+   - Hindi ordinals: pehla/doosra/teesra/chautha/panchwa/chhatha/saatva/aathva/
+     navwa/daswa/gyarawa/barahwa (also Sanskrit: pratham/dwitiya/...) + ghar/bhava
+- ✅ 5x smoke test PASSED (English digit, Hindi ordinal, digit-after, suppression)
+- ✅ Architect review PASSED (1 HIGH issue fixed: regex too restrictive)
+
+**🎯 TIER 2 (Bala/Strength) NOW 100% COMPLETE** —
+all 8 items: Shadbala 6-fold, Bhava Bala basic+deep (4-fold/48 calc), Ashtakavarga
+BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
+(6/7/10/16) + bonus Yuddha Bala.
 
 ### Sprint 19 — Phase C: Yogas 200+
 - Dhana Yogas (30+) — Lakshmi, Kubera, Kalanidhi, Indra

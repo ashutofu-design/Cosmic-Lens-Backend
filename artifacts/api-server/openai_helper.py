@@ -1623,6 +1623,19 @@ def _build_messages(
             "Skip on greetings / short-talk."
         )
 
+    # Sprint-18.5 Rule X+ — Bhava Bala Deep (4-fold per house)
+    if "BHAVA BALA DEEP" in lf:
+        reminder_lines.append(
+            "• 🏠 BHAVA BALA DEEP citation (Rule X+): for HOUSE-strength / "
+            "'mera 7th ghar / 10th house weak hai' / 'kyun ye area "
+            "strong/weak hai' style questions, you MUST cite the relevant "
+            "house's TOTAL bhava bala / required ratio (e.g., 'H7=386v vs "
+            "required 425v, ratio 0.91x = MODERATE') and identify which of "
+            "the 4 components (Adhipati lord-strength, Digbala house-type, "
+            "Drishti aspects, Naisargika lord-natural) is dragging it down. "
+            "Skip on greetings / non-house questions."
+        )
+
     # Sprint-15 Rule W — Per-varga yogas (Pancha Mahapurusha / Raj / Vipreet)
     if "PER-VARGA YOGAS" in lf:
         reminder_lines.append(
@@ -3626,6 +3639,110 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
         except Exception as _exc:
             print(f"[ai_ask] Extended Bala (Sprint-18) post-inject failed: {_exc}")
+
+    # Sprint-18.5 Rule X+ — DETERMINISTIC BHAVA BALA DEEP INJECTION (last-resort).
+    # If user mentions a specific house and answer doesn't cite its 4-fold balance,
+    # append the relevant H#'s breakdown.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reBH
+            _qBH = (question or "").lower()
+            # Hindi ordinal → number mapping
+            _hindi_ordinals = {
+                "pehla": 1, "pehlay": 1, "pratham": 1,
+                "doosra": 2, "dusra": 2, "dvitiya": 2,
+                "teesra": 3, "tisra": 3, "tritiya": 3,
+                "chautha": 4, "chotha": 4, "chaturth": 4,
+                "panchwa": 5, "paanchva": 5, "panchama": 5, "pancham": 5,
+                "chhatha": 6, "shastha": 6, "shashtam": 6,
+                "saatva": 7, "satwa": 7, "saptam": 7, "saptama": 7,
+                "aathva": 8, "ashtam": 8, "ashtama": 8,
+                "navwa": 9, "navam": 9, "navama": 9,
+                "daswa": 10, "dasham": 10, "dashama": 10,
+                "gyarawa": 11, "ekadash": 11, "ekadasha": 11,
+                "barahwa": 12, "dwadash": 12, "dwadasha": 12,
+            }
+            _h_num = None
+            # Pattern 1: digit BEFORE house word — "7th house", "10th ghar", "5 bhava"
+            _m1 = _reBH.search(
+                r"(?:^|[\s])(\d{1,2})(?:st|nd|rd|th)?\s*(?:house|ghar|bhava|bhav)\b",
+                _qBH
+            )
+            # Pattern 2: digit AFTER house word — "house 7", "ghar 10"
+            _m2 = _reBH.search(
+                r"\b(?:house|ghar|bhava|bhav)\s+(\d{1,2})\b", _qBH
+            )
+            # Pattern 3: short form "h7"
+            _m3 = _reBH.search(r"\bh(\d{1,2})\b", _qBH)
+            # Pattern 4: Hindi ordinal + house word — "saatva ghar", "chautha bhava"
+            _m4 = None
+            for _ord, _num in _hindi_ordinals.items():
+                if _reBH.search(rf"\b{_ord}\s*(?:ghar|bhava|bhav|house)\b", _qBH):
+                    _m4 = _num
+                    break
+            for _g in (_m1, _m2, _m3):
+                if _g:
+                    try:
+                        _h_num = int(_g.group(1))
+                        break
+                    except (TypeError, ValueError):
+                        continue
+            if _h_num is None and _m4 is not None:
+                _h_num = _m4
+            already_cited_bbd = bool(_reBH.search(
+                r"(?i)bhava\s*bala|adhipati\s*bala|bhava\s*dig|drishti\s*bala|bhava\s*deep",
+                text or ""
+            ))
+            if _h_num is not None and not already_cited_bbd:
+                if _h_num and 1 <= _h_num <= 12:
+                    from vedic.strength.bhava_bala_deep import compute_bhava_bala_deep  # type: ignore
+                    _intel_bh = None
+                    try:
+                        from chart_intelligence import analyze_chart  # type: ignore
+                        _intel_bh = analyze_chart(kundli)
+                    except Exception:
+                        _intel_bh = None
+                    _sb_bh = None
+                    try:
+                        from shadbala import compute_shadbala  # type: ignore
+                        _planets_norm = [{"name": p["name"],
+                                          "lon": p.get("longitude", 0),
+                                          "house": p.get("house", 1),
+                                          "retrograde": p.get("retrograde", False)}
+                                         for p in (kundli.get("planets") or [])]
+                        _sb_bh = compute_shadbala(_planets_norm, lagna_house=1)
+                    except Exception:
+                        _sb_bh = None
+                    # Lagna fallback for derive-from-lagna path
+                    _lg_post = kundli.get("ascendant") or kundli.get("lagna")
+                    _lg_sign_post = (_lg_post.get("sign")
+                                     if isinstance(_lg_post, dict) else _lg_post)
+                    _sti_post = {"Aries":0,"Taurus":1,"Gemini":2,"Cancer":3,"Leo":4,
+                                 "Virgo":5,"Libra":6,"Scorpio":7,"Sagittarius":8,
+                                 "Capricorn":9,"Aquarius":10,"Pisces":11}
+                    _lg_idx_post = (_sti_post.get(_lg_sign_post)
+                                    if isinstance(_lg_sign_post, str) else None)
+                    bbd_inj = compute_bhava_bala_deep(
+                        _intel_bh, _sb_bh, None, _lg_idx_post
+                    ) or {}
+                    h_info = (bbd_inj.get("houses") or {}).get(_h_num)
+                    if h_info:
+                        weakest_comp = min(
+                            [("Adhipati(lord-Shadbala)", h_info["adhipati_bala"] / 500.0),
+                             ("Digbala(house-type)", h_info["dig_bala"] / 60.0),
+                             ("Drishti(aspects)", (h_info["drishti_bala"] + 120) / 240.0),
+                             ("Naisargika(lord-natural)", h_info["naisargika"] / 60.0)],
+                            key=lambda x: x[1]
+                        )[0]
+                        text = (text or "").rstrip() + (
+                            f"\n\nBhava Bala Deep signal: H{_h_num} (lord "
+                            f"{h_info.get('lord','?')}) total {h_info['total']}v "
+                            f"vs required {h_info['required']}v "
+                            f"(ratio {h_info['ratio']}x = {h_info['verdict']}). "
+                            f"Weakest component: {weakest_comp}."
+                        )
+        except Exception as _exc:
+            print(f"[ai_ask] Bhava Bala Deep (Sprint-18.5) post-inject failed: {_exc}")
 
     # Sprint-14 Rule V — DETERMINISTIC STHIRA + NIRYANA SHOOLA INJECTION
     # For timing questions, append a one-line cross-check from each dasha if not

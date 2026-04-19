@@ -312,6 +312,23 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] bhava_bala failed: {exc}")
 
+    # Sprint-18.5 — Bhava Bala Deep (BPHS 4-fold per house: Adhipati + Digbala
+    # + Drishti + Naisargika = 12 × 4 = 48 calculations)
+    bbd_str = ""
+    try:
+        from vedic.strength.bhava_bala_deep import (compute_bhava_bala_deep,  # type: ignore
+                                                    format_bhava_bala_deep_summary)
+        _sign_to_idx_bb = {"Aries":0,"Taurus":1,"Gemini":2,"Cancer":3,"Leo":4,"Virgo":5,
+                           "Libra":6,"Scorpio":7,"Sagittarius":8,"Capricorn":9,
+                           "Aquarius":10,"Pisces":11}
+        _lg_bb = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign_bb = _lg_bb.get("sign") if isinstance(_lg_bb, dict) else _lg_bb
+        _lg_idx_bb = _sign_to_idx_bb.get(_lg_sign_bb) if isinstance(_lg_sign_bb, str) else None
+        bbd = compute_bhava_bala_deep(intel, shadbala, asp_obj, _lg_idx_bb)
+        bbd_str = format_bhava_bala_deep_summary(bbd) if bbd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] bhava_bala_deep (Sprint-18.5) failed: {exc}")
+
     # Sprint-18 placeholder — actual compute moved AFTER all divisional charts
     # so it can read real per-varga sign_idx (architect fix).
     bd_str = ""
@@ -655,6 +672,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_strength_block(verdicts, intel.get("dignities") or []),
         av_str,
         bb_str,
+        bbd_str,
         bd_str,
         asp_str,
         kk_str,

@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-50 — ASTROCARTOGRAPHY ENGINE (Tier-1 mundane + Tier-2 lines)
+    astrocarto_str = ""
+    try:
+        from vedic.astrocarto.astrocartography_engine import run_astrocartography, format_astrocartography  # type: ignore
+        astrocarto_str = format_astrocartography(run_astrocartography(kundli, birth))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] astrocartography (Sprint-50) failed: {exc}")
+
     # Sprint-49 / Phase-V — REMEDIES DEEP ENGINE
     remedies_deep_str = ""
     try:
@@ -1066,6 +1074,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         medical_str,
         financial_str,
         remedies_deep_str,
+        astrocarto_str,
         modern_reframe_str,
         varga_yogas_str,
         argala_str,

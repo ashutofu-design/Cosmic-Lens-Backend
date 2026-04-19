@@ -1013,7 +1013,25 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Test chart (Sag lagna): auto-detected Ketu+Mars needy, Manglik+Grahan doshas, full personalized 7-element remedy cards generated, daily+weekly routine printed
 - LF: 76,171 → **81,077 chars** (+4,906)
 
-### Sprint 49+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 50 — ASTROCARTOGRAPHY ENGINE ✅ COMPLETE (Tier-1 Mundane + Tier-2 Lines stub)
+- New module: `vedic/astrocarto/astrocartography_engine.py` (~310 lines, 9 sections G1-G9)
+- 2-tier design: Tier-1 (mundane rulership, no coords needed) immediate; Tier-2 (precise MC/IC/Asc/Desc lines) ready when birth coords supplied
+- Mandatory ⚠ disclaimer — "energetic affinity, not guaranteed luck"
+- 9-planet × global-region rulership (classical mundane astrology) — countries, energy, best-for
+- **G1**: Best countries (top 3 strong planets in chart) with primary+secondary lists
+- **G2**: Caution countries (weak-planet rulership avoidance)
+- **G3**: 9 career-purpose × location matrix (Love/Wealth/Fame/Spirituality/Health/Career/Long-haul/Foreign/Family)
+- **G4**: Domain-specific top picks
+- **G5**: 8-direction Vastu lucky directions (N/S/E/W/NE/NW/SE/SW) per planet rulership with LUCKY/NEUTRAL/WEAK verdicts
+- **G6**: Indian state/city recommendations per strong planet
+- **G7**: 7 city-archetype categories (Cosmopolitan-tech / Spiritual / Luxury-creative / Research-academic / Long-haul-builder / Foreign-viral-tech / Healing-wellness)
+- **G8**: Relocation timing dasha-aware
+- **G9**: Tier-2 precise lines stub — auto-detects supplied lat/lon, shows PENDING otherwise
+- Built-in 0-10 planet-strength scorer (house+own+exalt+debil)
+- Test chart (Sag lagna): Moon/Mercury/Jupiter/Saturn all 7/10, recommended NYC/SF/Singapore/Bengaluru for Mercury career, Mumbai for Moon, lucky directions N/NW/W/NE
+- LF: 81,077 → **86,779 chars** (+5,702)
+
+### Sprint 50+ — Engine layer complete; AI Brain phase next
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

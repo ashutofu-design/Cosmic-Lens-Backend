@@ -369,3 +369,65 @@ Naisargika (natural) friendship table added (Friend/Neutral/Enemy per planet pai
 - ⏳ Sprint 13: Argala + Virodhargala (Jaimini intervention/obstruction)
 - ⏳ Sprint 14: Sthira + Niryana Shoola dashas
 - ⏳ Sprint 15: Per-varga yoga/dosha detection
+
+## Sprint 13 — Argala / Virodhargala (DONE)
+
+**Engine** (`argala.py`): For each of 12 houses from lagna, computes:
+- 4 Argala slots (2nd, 4th, 5th, 11th) + Paap-Argala (3rd, malefics only)
+- Virodhargala (counter-intervention) from 12th, 10th, 9th, 3rd, 11th respectively
+- Net benefic/malefic verdict per house: STRONG-BENEFIC / STRONG-MALEFIC / MIXED / MILD / NEUTRAL
+
+**LOCKED FACTS**: Topic-relevant houses (e.g. marriage→7,2,8,12) shown with overall verdicts and contributing slots.
+
+**Rule U** + **deterministic post-injector**: For marriage/career/finance/child/health questions, if primary-house argala is non-NEUTRAL and not cited, append a one-line "Argala (Jaimini intervention) — H7 (Gemini) overall STRONG-MALEFIC: 2-house se Ketu (MALEFIC ARGALA)" clause. Question-keyword based trigger so topic mis-classification doesn't break it.
+
+**Smoke test**: 3/3 marriage runs auto-cite Argala consistently.
+
+## Sprint 14 — Sthira Dasha + Niryana Shoola Dasha (DONE)
+
+**Engine** (`extra_jaimini_dashas.py`): Two additional Jaimini sign-based mahadasha systems:
+
+1. **Sthira Dasha (96-yr cycle)** — fixed-length per-sign: Movable=7, Fixed=8, Dual=9 yrs. Starts from Lagna sign, forward direction. Used for life-stability themes.
+2. **Niryana Shoola Dasha (108-yr cycle)** — uniform 9 yrs/sign, starts from Lagna, forward. Used for longevity/life-direction analysis.
+
+Both expose `current_md` + `current_ad` with start/end dates and elapsed years, mirroring Chara Dasha's shape.
+
+**LOCKED FACTS**: Both blocks show current MD + AD with date windows.
+
+**Rule V** + **deterministic post-injector**: For timing questions (kab/when/marriage/career/etc.), append a one-line cross-check from each dasha if not cited. The model now has THREE dasha layers to triangulate (Vimshottari + Chara + Sthira/Niryana).
+
+**Smoke test**: 3/3 marriage runs cite Sthira + Niryana + Chara + Argala + Upapada (5 deterministic citations every time).
+
+## Sprint 15 — Per-varga Yoga / Dosha Detection (DONE)
+
+**Engine** (`varga_yogas.py`): Scans D1, D9, D10, D24, D60 vargas for classical yogas:
+
+1. **Pancha Mahapurusha** — Mars/Mercury/Jupiter/Venus/Saturn in own/exalt sign placed in kendra (1/4/7/10) from varga lagna → Ruchaka/Bhadra/Hamsa/Malavya/Sasa.
+2. **Raj Yoga (simplified)** — Kendra-lord + trikona-lord conjunct in same varga sign.
+3. **Vipreet Raj Yoga** — Two of {6L, 8L, 12L} conjunct in a dusthana (6/8/12) of the varga.
+
+Higher vargas (D9-D60) require longitude data; D1 detection works on sign-only fallback (some kundli payloads only have sign strings).
+
+**LOCKED FACTS**: PER-VARGA YOGAS block lists every detected yoga with planet + sign + house + varga.
+
+**Rule W** + **deterministic post-injector**: If yogas detected and not cited, append the single most-important yoga (priority Mahapurusha > Raj > Vipreet) with one-line interpretation. Skips silently when no yogas exist (no fabrication).
+
+**Verified detection**: Synthetic chart with Jupiter exalted in Cancer (4th from Aries lagna) correctly produces "Hamsa Yoga (Jupiter Exalted in Cancer, H4 of D1)" + Ruchaka + Sasa + D9/D10 Raj/Vipreet yogas. Test chart legitimately produces zero (no Mahapurusha qualifies).
+
+## STANDARD VEDIC ENGINE — COMPLETE ✅
+
+**Sprints 1-15 all done.** Full Shastriya engine delivers:
+
+| Layer | Coverage |
+|---|---|
+| Core Vedic | Yogas, dosh, dignities, dasha (Vimshottari incl. PD/Sookshma), transits, KP sub-lords |
+| Jaimini classical | Karakas, Arudha Padas (A1-A12), Upapada Lagna, Chara Dasha, Argala/Virodhargala, Sthira Dasha, Niryana Shoola Dasha |
+| Divisional (Shodashvarga 16-set) | D1, D2, D3, D7, D9, D10, D12, D16, D20, D24, D27, D30, D40, D45, D60 + Vargottama matrix + Shadvarga Bala (20-pt composite) + Varga-Lagna-lord placements |
+| Per-varga yogas | Pancha Mahapurusha, Raj Yoga, Vipreet Raj Yoga across D1/D9/D10/D24/D60 |
+| Determinism | Rules A-W + 8 question-keyword based post-injectors that auto-cite mandatory facts even if AI mis-classifies topic |
+
+**Brand voice maintained**: "Powered by Advanced Cosmic Intelligence" — AI never named; AI = language layer only; backend = facts; post-injectors = mandatory citation safety net.
+
+**Open follow-ups (deferred per user)**:
+- Age-context layer (current_age + life-stage aware reasoning) — would prevent generic "2024-2026 active period" answers without age contextualization
+- Marriage partner gender inference — bug noted on canvas

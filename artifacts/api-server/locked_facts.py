@@ -388,6 +388,50 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] varga deep (Sprint-12) failed: {exc}")
 
+    # Sprint-15 — Per-varga yoga / dosha detection
+    varga_yogas_str = ""
+    try:
+        from varga_yogas import (detect_all_varga_yogas,  # type: ignore
+                                 format_varga_yogas_summary)
+        _lg_vy = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign_vy = (_lg_vy.get("sign") if isinstance(_lg_vy, dict) else _lg_vy)
+        _vy = detect_all_varga_yogas(
+            kundli.get("planets") or [], lagna_lon, _lg_sign_vy
+        )
+        varga_yogas_str = format_varga_yogas_summary(_vy) if _vy else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] varga yogas (Sprint-15) failed: {exc}")
+
+    # Sprint-14 — Sthira Dasha + Niryana Shoola Dasha (extra Jaimini sign-dashas)
+    sthira_str = ""
+    niryana_str = ""
+    try:
+        from extra_jaimini_dashas import (compute_sthira_dasha,  # type: ignore
+                                          compute_niryana_shoola,
+                                          format_sthira_summary,
+                                          format_niryana_summary)
+        _lg_xj = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign_xj = (_lg_xj.get("sign") if isinstance(_lg_xj, dict) else _lg_xj)
+        _dob_xj = birth if birth else None
+        _sth = compute_sthira_dasha(_lg_sign_xj, _dob_xj)
+        _nir = compute_niryana_shoola(_lg_sign_xj, _dob_xj)
+        sthira_str  = format_sthira_summary(_sth)  if _sth else ""
+        niryana_str = format_niryana_summary(_nir) if _nir else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] extra Jaimini dashas (Sprint-14) failed: {exc}")
+
+    # Sprint-13 — Argala / Virodhargala (Jaimini intervention)
+    argala_str = ""
+    try:
+        from argala import compute_argala, format_argala_summary  # type: ignore
+        _lg_arg = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign_arg = (_lg_arg.get("sign") if isinstance(_lg_arg, dict) else _lg_arg)
+        _arg = compute_argala(kundli.get("planets") or [], _lg_sign_arg)
+        _argala_topic = (kundli.get("_topic") or "general").lower()
+        argala_str = format_argala_summary(_arg, topic=_argala_topic) if _arg else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] argala (Sprint-13) failed: {exc}")
+
     # Sprint-7 — Jaimini Arudha Padas (A1-A12) + Upapada Lagna (UL)
     jm_str = ""
     try:
@@ -512,6 +556,10 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         adv_div_str,
         subtle_div_str,
         deep_div_str,
+        varga_yogas_str,
+        argala_str,
+        sthira_str,
+        niryana_str,
         tr_str,
         _format_dasha_block(kundli),
         pd_str,

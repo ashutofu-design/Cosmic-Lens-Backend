@@ -1608,6 +1608,42 @@ def _build_messages(
             "(Parashara's most-prized varga). Skip otherwise."
         )
 
+    # Sprint-15 Rule W — Per-varga yogas (Pancha Mahapurusha / Raj / Vipreet)
+    if "PER-VARGA YOGAS" in lf:
+        reminder_lines.append(
+            "• 🌟 PER-VARGA YOGAS reinforcement (Rule W): if the LOCKED FACTS "
+            "list a Pancha Mahapurusha (Ruchaka/Bhadra/Hamsa/Malavya/Sasa), "
+            "Raj Yoga or Vipreet Raj Yoga in any varga (D1/D9/D10/D24/D60), "
+            "you MUST cite at least the SINGLE most-relevant yoga to the "
+            "topic in one short clause. Mahapurusha = lifelong elevation; "
+            "Raj Yoga = power/status rise; Vipreet Raj = adversity → "
+            "unexpected rise. Use yoga name + varga + key planet."
+        )
+
+    # Sprint-14 Rule V — Sthira Dasha + Niryana Shoola Dasha
+    has_sthira = "STHIRA DASHA" in lf
+    has_niryana = "NIRYANA SHOOLA" in lf
+    if has_sthira or has_niryana:
+        reminder_lines.append(
+            "• 🔆 STHIRA / NIRYANA SHOOLA DASHA reinforcement (Rule V): for "
+            "TIMING questions (kab, when, future windows), if the answer cites "
+            "Vimshottari or Chara Dasha, ALSO cite Sthira Dasha (life-stability "
+            "layer, 96-yr cycle) and/or Niryana Shoola Dasha (longevity / "
+            "life-direction, 108-yr cycle) as a third cross-check — only when "
+            "they reinforce or modify the timing window. Skip for non-timing Qs."
+        )
+
+    # Sprint-13 Rule U — Argala / Virodhargala intervention
+    if "ARGALA / VIRODHARGALA" in lf:
+        reminder_lines.append(
+            "• ⚖️ ARGALA / VIRODHARGALA reinforcement (Rule U): when answering "
+            "marriage/career/finance/child/health questions, if the relevant "
+            "house has STRONG-BENEFIC or STRONG-MALEFIC argala in the LOCKED "
+            "FACTS, weave ONE short clause about it — e.g., '7th house pe "
+            "Jupiter ka benefic argala hai (relationship support)' or "
+            "'10th house pe malefic argala (career obstacles)'. Skip if NEUTRAL."
+        )
+
     # Sprint-12 Rule T — Per-varga deep signals (Vargottama matrix + Shadvarga Bala)
     has_vargottama = "VARGOTTAMA MATRIX" in lf
     has_shadvarga  = "SHADVARGA BALA"    in lf
@@ -3449,6 +3485,156 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 )
         except Exception as _exc:
             print(f"[ai_ask] varga deep (Sprint-12) post-inject failed: {_exc}")
+
+    # Sprint-15 Rule W — DETERMINISTIC PER-VARGA YOGA INJECTION (last-resort).
+    # If detected yogas are present and not cited, append the single most-relevant
+    # one (priority: Pancha Mahapurusha > Raj > Vipreet).
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reVY
+            already_cited = bool(_reVY.search(
+                r"(?i)mahapurusha|ruchaka|bhadra|hamsa|malavya|sasa|"
+                r"raj\s*yoga|vipreet",
+                text or ""
+            ))
+            if not already_cited:
+                from varga_yogas import detect_all_varga_yogas  # type: ignore
+                _lgVY = kundli.get("ascendant") or kundli.get("lagna")
+                _lonVY = (_lgVY.get("longitude") or _lgVY.get("lon")
+                          if isinstance(_lgVY, dict) else None)
+                _vy = detect_all_varga_yogas(
+                    kundli.get("planets") or [], _lonVY
+                ) or {}
+                pick = None
+                if _vy.get("pancha_mahapurusha"):
+                    y = _vy["pancha_mahapurusha"][0]
+                    pick = (
+                        f"{y['yoga']} ({y['planet']} {y['via']} in "
+                        f"{y['sign']}, H{y['house']} of {y['varga']}) — "
+                        f"lifelong elevation in this planet's domain"
+                    )
+                elif _vy.get("raj_yoga"):
+                    y = _vy["raj_yoga"][0]
+                    pick = (
+                        f"Raj Yoga ({', '.join(y['planets'])} conjunct in "
+                        f"{y['sign']}, H{y['house']} of {y['varga']}) — "
+                        f"power & status rise"
+                    )
+                elif _vy.get("vipreet_raj_yoga"):
+                    y = _vy["vipreet_raj_yoga"][0]
+                    pick = (
+                        f"Vipreet Raj Yoga ({', '.join(y['planets'])} in "
+                        f"{y['sign']}, H{y['house']} of {y['varga']}) — "
+                        f"adversity transforms into unexpected rise"
+                    )
+                if pick:
+                    text = (text or "").rstrip() + (
+                        f"\n\nClassical yoga signal: {pick}."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] Varga-yoga post-inject failed: {_exc}")
+
+    # Sprint-14 Rule V — DETERMINISTIC STHIRA + NIRYANA SHOOLA INJECTION
+    # For timing questions, append a one-line cross-check from each dasha if not
+    # already cited. Only fires if the question is timing-flavored.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reSN
+            _qSN = (question or "").lower()
+            _is_timing = bool(_reSN.search(
+                r"\b(kab|when|next|kitne|future|samay|window|period|"
+                r"upcoming|coming|aane|aayega|aayegi|hoga|hogi|"
+                r"shaadi|marriage|career|naukri|promotion|child|santaan)\b",
+                _qSN
+            ))
+            if _is_timing:
+                from extra_jaimini_dashas import (compute_sthira_dasha,  # type: ignore
+                                                  compute_niryana_shoola)
+                _lgSN = kundli.get("ascendant") or kundli.get("lagna")
+                _lgsSN = _lgSN.get("sign") if isinstance(_lgSN, dict) else _lgSN
+                _dobSN = birth if birth else None
+                # Sthira
+                if not _reSN.search(r"(?i)sthira", text or ""):
+                    _sth = compute_sthira_dasha(_lgsSN, _dobSN) or {}
+                    _md = _sth.get("current_md") or {}
+                    if _md.get("sign"):
+                        text = (text or "").rstrip() + (
+                            f"\n\nSthira Dasha (Jaimini stability layer) — "
+                            f"abhi {_md['sign']} MD ({_md['length_years']} yrs, "
+                            f"{_md['start']}→{_md['end']}, "
+                            f"{_md.get('years_elapsed','?')}/"
+                            f"{_md['length_years']} elapsed) — "
+                            f"life-stability theme is colored by "
+                            f"{_md['sign']}."
+                        )
+                # Niryana Shoola
+                if not _reSN.search(r"(?i)niryana|shoola", text or ""):
+                    _nir = compute_niryana_shoola(_lgsSN, _dobSN) or {}
+                    _mdN = _nir.get("current_md") or {}
+                    if _mdN.get("sign"):
+                        text = (text or "").rstrip() + (
+                            f"\n\nNiryana Shoola Dasha (longevity / "
+                            f"life-direction) — abhi {_mdN['sign']} MD "
+                            f"(9 yrs, {_mdN['start']}→{_mdN['end']}, "
+                            f"{_mdN.get('years_elapsed','?')}/9 elapsed)."
+                        )
+        except Exception as _exc:
+            print(f"[ai_ask] Sthira/Niryana post-inject failed: {_exc}")
+
+    # Sprint-13 Rule U — DETERMINISTIC ARGALA INJECTION (last-resort).
+    # If the answer concerns marriage/career/finance/child/health and a relevant
+    # house has STRONG-BENEFIC or STRONG-MALEFIC argala, append a single clause.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reAR
+            _qAR = (question or "").lower()
+            _topic_houses_AR = {
+                "marriage":  [7, 2],
+                "career":    [10, 6],
+                "finance":   [2, 11],
+                "child":     [5, 9],
+                "health":    [1, 6],
+            }
+            _kw_topic = None
+            if topic in _topic_houses_AR:
+                _kw_topic = topic
+            else:
+                if _reAR.search(r"(shaadi|shadi|vivah|marriage|spouse|partner|patni|pati|rishta)", _qAR):
+                    _kw_topic = "marriage"
+                elif _reAR.search(r"(career|naukri|job|business|kaam|promotion|kaam-kaaj)", _qAR):
+                    _kw_topic = "career"
+                elif _reAR.search(r"(paisa|wealth|finance|dhan|money|earning|income|kamai)", _qAR):
+                    _kw_topic = "finance"
+                elif _reAR.search(r"(child|santaan|baby|pregnan|garbh|aulaad)", _qAR):
+                    _kw_topic = "child"
+                elif _reAR.search(r"(health|bimari|swasth|disease|rog|illness)", _qAR):
+                    _kw_topic = "health"
+            if _kw_topic and not _reAR.search(r"(?i)argala", text or ""):
+                from argala import compute_argala  # type: ignore
+                _lgAR = kundli.get("ascendant") or kundli.get("lagna")
+                _lgsAR = _lgAR.get("sign") if isinstance(_lgAR, dict) else _lgAR
+                _arg = compute_argala(kundli.get("planets") or [], _lgsAR)
+                _hh = _topic_houses_AR[_kw_topic][0]
+                _info = (_arg or {}).get(_hh) or {}
+                _ov = _info.get("overall") or "NEUTRAL"
+                if _ov in ("STRONG-BENEFIC", "STRONG-MALEFIC", "MIXED"):
+                    # find the strongest contributing slot
+                    _bits = []
+                    for sig in (_info.get("argala_signals") or []):
+                        if sig["planets_argala"]:
+                            _bits.append(
+                                f"{sig['slot']}-house se "
+                                f"{', '.join(sig['planets_argala'])} "
+                                f"({sig['verdict']})"
+                            )
+                    _join = "; ".join(_bits[:2]) if _bits else _ov
+                    text = (text or "").rstrip() + (
+                        f"\n\nArgala (Jaimini intervention) — "
+                        f"H{_hh} ({_info.get('house_sign','')}) overall "
+                        f"{_ov}: {_join}."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] Argala post-inject failed: {_exc}")
 
     # Sprint-7 Rule O — DETERMINISTIC UPAPADA LAGNA INJECTION (last-resort).
     # Marriage answers MUST cite UL + UL-lord placement. If model skipped it,

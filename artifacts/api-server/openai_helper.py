@@ -755,13 +755,60 @@ def _build_messages(
         msgs.append({"role": "user", "content": question})
         return msgs
 
+    # ── AI INTENT ROUTER ─────────────────────────────────────────────────────
+    # A tiny gpt-4o-mini call classifies the question into one of 8 routes.
+    # We use it only for astro mode (general mode is already handled above).
+    # On any failure the router returns "analysis" → falls through to the
+    # full pipeline, so the regex-based _is_chart_fact_question() also stays
+    # as a hard safety net for the simple/dosha/transparency cases.
+    intent_route: str = ""
+    if mode == "astro":
+        try:
+            from intent_router import classify_intent  # type: ignore
+            intent_route = classify_intent(question, history=history, client=_get_client())
+            if isinstance(out_meta, dict):
+                out_meta["intent_route"] = intent_route
+        except Exception as _exc:
+            intent_route = ""
+
+    # Greeting → tiny warm reply, no chart, no scaffolding.
+    if mode == "astro" and intent_route == "greeting":
+        sys_greet = (
+            "You are a warm Vedic astrologer chatting with a returning user. "
+            "Reply to their greeting in ONE short, friendly sentence. NO "
+            "chart reference, NO planet talk, NO advice. Just a human, warm "
+            "acknowledgement. Optionally add ONE short sentence inviting "
+            "them to ask their question. Maximum 2 sentences total.\n"
+            "BANNED: Pranam, Beta, Dekhiye beta, As an AI, I sense.\n"
+            f"REPLY ENTIRELY IN: {lang_name}."
+        )
+        msgs = [{"role": "system", "content": sys_greet}]
+        for h in (history or [])[-4:]:
+            r = h.get("role")
+            t = h.get("content") or h.get("text") or ""
+            if r in ("user", "assistant") and t:
+                msgs.append({"role": r, "content": t})
+        msgs.append({"role": "user", "content": question})
+        return msgs
+
+    # General concept question (no chart needed) — re-use the strict
+    # general-mode prompt path by recursing once with mode="general".
+    if mode == "astro" and intent_route == "general":
+        return _build_messages(
+            question=question, kundli=kundli, lang=lang, reply_idx=reply_idx,
+            birth=birth, topic=topic, history=history,
+            preferred_language=preferred_language, mode="general",
+            out_meta=out_meta, marriage_subtype=marriage_subtype,
+        )
+
     # ── SIMPLE CHART-FACT MINIMAL PROMPT ─────────────────────────────────────
     # For pure lookup questions ("mera rashi kya hai", "lagna batao", etc.)
     # we strip ALL noise (focus / KP / transit / intel / behavior / narrator)
     # and use a tight 2-3 sentence prompt. Same model, same flow — just clean.
     # This is the ONLY way to reliably stop the AI from padding with houses,
     # dasha implications, and "Isliye dhyan dena zaroori hai" closers.
-    if mode == "astro" and _is_chart_fact_question(question):
+    _route_is_minimal = intent_route in ("simple_fact", "dosha_check", "transparency")
+    if mode == "astro" and (_route_is_minimal or _is_chart_fact_question(question)):
         chart_only = _kundli_summary(kundli, birth)
 
         # ── Dosha pre-compute (deterministic) ─────────────────────────────

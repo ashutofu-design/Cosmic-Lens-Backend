@@ -146,49 +146,141 @@ def _kundli_summary(kundli: Any, birth: Any = None) -> str:
 
 _TOPIC_FOCUS = {
     "marriage": (
-        "FOCUS for marriage/spouse questions: examine the 7th house and its lord, "
-        "Venus (kalatra-karaka, look at sign/house/aspects), Jupiter (for women — pati-karaka), "
-        "Mangal-dosh (Mars in 1/4/7/8/12 from Lagna or Moon), Navamsa 7th lord conceptually, "
-        "and the CURRENT Mahadasha+Antardasha lord — does it rule/aspect 2/7/11 (marriage trikona)? "
-        "If yes the timing window is open; if it rules 6/8/12 from 7th, expect delay or friction. "
-        "Cite Phaladeepika Ch.10 (vivah-yog) and BPHS Ch.80 (kalatra-bhava) when relevant. "
-        "Give a reasoned timing window (a year-range tied to the dasha), not a fixed date."
+        "FOCUS — vivah/marriage: Apply ALL these classical rules systematically:\n"
+        "• 7th house & its lord (kalatra-bhava) — sign, occupants, aspects on it.\n"
+        "• Venus (kalatra-karaka for men) — sign, house, dignity (exalt/debilitated/own), aspects.\n"
+        "• Jupiter (pati-karaka for women) — same checks.\n"
+        "• Navamsa (D-9) conceptually — 7th lord of D-9 indicates spouse nature.\n"
+        "• Mangal-dosh: Mars in 1/4/7/8/12 from Lagna OR Moon OR Venus (cancellation rules: Mars in own/exalt sign, "
+        "  Mars aspected by Jupiter, both partners with dosh, etc.).\n"
+        "• Dara-karaka (lowest-degree planet in Jaimini) for spouse archetype.\n"
+        "• 2nd house (kutumb), 4th (domestic happiness), 8th (mangalya/longevity of bond), 11th (fulfillment of desire).\n"
+        "• Current Mahadasha+Antardasha — does the lord rule/aspect/occupy 2/7/11? If yes → marriage window OPEN. "
+        "  If lord rules 6/8/12 from 7H → delay, friction, or breakup risk.\n"
+        "• Saturn-Venus or Mars-Venus conjunctions/aspects = friction patterns.\n"
+        "• Cite: BPHS Ch.80 (Kalatra-bhava), Phaladeepika Ch.10 (Vivah-yog), Saravali Ch.36, Jataka Parijata Ch.13.\n"
+        "• Give a YEAR-RANGE timing tied to the favourable dasha (never a fixed date)."
     ),
     "career": (
-        "FOCUS for career/job questions: 10th house & its lord, Sun (raj-karaka), Saturn (karma-karaka), "
-        "Mercury (vyapaar-karaka), 6th house (service/competition), 11th (gains). "
-        "Read the current Mahadasha-Antardasha lord — if it rules 2/6/10/11, growth window is open."
+        "FOCUS — career/job/business: Apply systematically:\n"
+        "• 10th house & lord (karma-bhava) — strength, occupants, aspects.\n"
+        "• Sun (raj-karaka — govt/authority), Saturn (karma-karaka — discipline/service), "
+        "Mercury (vyapaar-karaka — commerce/communication), Mars (technical/military/sports/competition).\n"
+        "• 6th (service, competition, debt-from-work), 2nd (income/savings), 11th (gains/promotion).\n"
+        "• Amatya-karaka (2nd highest degree planet, Jaimini) shows profession nature.\n"
+        "• Raja-yogas: kendra-trikona lord conjunction, exchange (parivartana), Vipareeta-Raja-yoga (6/8/12 lords mutual).\n"
+        "• Current Dasha lord — if it rules/occupies 2/6/10/11 → growth phase. If it rules 8/12 → instability/transfer/loss.\n"
+        "• Saturn transit over 10th house = career karma activation.\n"
+        "• For business specifically: 7th house (partnerships), Mercury+Jupiter strength, Lakshmi-yoga.\n"
+        "• Cite: BPHS Ch.34 (Karma-bhava), Phaladeepika Ch.6, Uttara Kalamrita."
     ),
     "finance": (
-        "FOCUS: 2nd house (sanchita-dhana), 11th (labha), 5th (purva-punya wealth), "
-        "Jupiter (dhana-karaka), Venus (bhog), Lagna lord strength, current dasha lord's house ownership. "
-        "Look for dhana-yogas: 2L+5L+9L+11L mutual relations."
+        "FOCUS — dhan/wealth: Apply ALL these:\n"
+        "• 2nd house (sanchita-dhana — accumulated), 11th (labha — gains/income), 5th (purva-punya wealth/speculation), "
+        "9th (bhagya-dhana — fortune-given).\n"
+        "• Jupiter (dhana-karaka), Venus (bhog & luxury), Mercury (commerce/trading).\n"
+        "• Dhana-yogas: 2L+11L conjunction/aspect, 5L+9L (Lakshmi-yoga), 9L+11L mutual, exchange between 2/5/9/11 lords.\n"
+        "• Daridra-yogas (poverty): 2L or 11L in 6/8/12, Lagna-lord weak.\n"
+        "• For loans/debt: 6th house, Saturn-Mars on 2/11.\n"
+        "• For speculation/stocks/lottery: 5th house & lord, Jupiter-Mercury combo, but warn 8/12 affliction = loss.\n"
+        "• Current Dasha lord ruling 2/5/9/11 = wealth period.\n"
+        "• Cite: BPHS Ch.32 (Dhana-bhava), Saravali Ch.33."
     ),
     "health": (
-        "FOCUS: Lagna & Lagna-lord strength, 6th house (roga), 8th (chronic), 12th (hospitalisation), "
-        "Sun (vitality), Moon (mind/fluids), Mars (blood/inflammation), Saturn (chronic/joints), "
-        "current dasha lord's affliction to Lagna or 6/8/12. Always remind devotee to consult a qualified doctor."
+        "FOCUS — swasthya: Apply ALL these:\n"
+        "• Lagna & Lagna-lord (vital strength), Moon (mental/fluid), Sun (vitality/heart/eyes), Mars (blood/muscle/inflammation), "
+        "Saturn (chronic/bones/joints/longevity), Rahu (mystery illness/poison), Ketu (sudden/surgery).\n"
+        "• 6th (acute disease/infection), 8th (chronic/surgery/longevity), 12th (hospitalisation/sleep/loss).\n"
+        "• Body-part assignment by sign: Mesh=head, Vrish=throat, Mithun=lungs/arms, Karka=chest, Simh=heart/spine, "
+        "Kanya=intestine, Tula=kidney, Vrishchik=reproductive, Dhanu=hips/thighs, Makar=knees, Kumbh=calves, Meen=feet.\n"
+        "• Affliction = malefic conjunction/aspect to Lagna or relevant house.\n"
+        "• Current Dasha lord afflicting Lagna/6/8/12 = health-attention period.\n"
+        "• MANDATORY: always say 'qualified doctor se zaroor consult karein — jyotish margdarshan deti hai, diagnosis nahi'.\n"
+        "• Cite: BPHS Ch.41 (Aristha — disease yogas), Phaladeepika Ch.12, Maharishi Charaka."
     ),
     "child": (
-        "FOCUS: 5th house & its lord, Jupiter (putra-karaka), 9th house (santati), Saptamsha (D-7) conceptually, "
-        "current dasha-antar of 5L or Jupiter."
+        "FOCUS — santan/child:\n"
+        "• 5th house & lord (putra-bhava), Jupiter (putra-karaka), 9th (santati continuation).\n"
+        "• Saptamsha (D-7) conceptually for children.\n"
+        "• Putra-dosh / Bhrigu-dosh patterns: 5th lord in 6/8/12, Rahu/Saturn in 5H, malefic aspect on 5L.\n"
+        "• For conception delay: also check 2nd (kutumb), Moon-Jupiter relation.\n"
+        "• Current Dasha-Antar of 5L, Jupiter, or 9L = conception window.\n"
+        "• Always be COMPASSIONATE — couples asking this are emotionally vulnerable. Recommend medical consult parallel to remedies.\n"
+        "• Cite: BPHS Ch.37 (Putra-bhava), Jataka Parijata Ch.10, Saravali Ch.30."
     ),
     "education": (
-        "FOCUS: 4th (basic schooling), 5th (intellect/buddhi), 9th (higher learning), Mercury (buddhi-karaka), "
-        "Jupiter (vidya-karaka), 2nd (memory/speech), current dasha activating these houses."
+        "FOCUS — vidya/exam:\n"
+        "• 4th (basic schooling/comfort), 5th (intellect/buddhi/competitive), 9th (higher/dharmic learning), 2nd (memory/speech).\n"
+        "• Mercury (buddhi-karaka), Jupiter (vidya/wisdom/teacher), Sun (focus/willpower).\n"
+        "• Saraswati-yoga: Mercury+Venus+Jupiter in kendra/trikona.\n"
+        "• For exams specifically: current transit of Jupiter/Mercury over 5/9, Dasha-Antar of 4L/5L/9L/Mercury/Jupiter.\n"
+        "• For competitive (UPSC/NEET/JEE etc.): also 6th (vijay over competition), 10th (selection/posting).\n"
+        "• Combust Mercury or Mercury-Saturn = slow/struggle but eventual depth.\n"
+        "• Cite: BPHS Ch.35, Phaladeepika Ch.6."
     ),
     "travel": (
-        "FOCUS: 3rd (short journeys), 9th (long/dharmic travel), 12th (foreign settlement), "
-        "Rahu (foreign lands), Moon-Mercury connection, dasha lord in 3/9/12."
+        "FOCUS — yatra/foreign:\n"
+        "• 3rd (short journeys/courage), 9th (long/dharmic/foreign), 12th (videsh-vaas — settlement abroad).\n"
+        "• Rahu (foreign lands/unconventional), Moon (movement), Mercury (commerce travel).\n"
+        "• Foreign settlement yog: 12L in good house, 9L+12L connection, Rahu in 9/12, Lagna-lord in 12.\n"
+        "• Visa/passport stuck: 12L afflicted, Rahu-Saturn on 9/12.\n"
+        "• Current Dasha lord ruling 3/9/12 = travel period.\n"
+        "• Cite: BPHS Ch.39, Phaladeepika Ch.7."
     ),
     "relationship": (
-        "FOCUS: 5th (romance), 7th (committed bond), Venus (love-karaka for men), Mars (love-karaka for women), "
-        "Moon's emotional condition, current dasha mood."
+        "FOCUS — pyaar/relationship (pre-marriage):\n"
+        "• 5th house (romance/affair) & lord, 7th (committed bond), 11th (friend-circle/desire-fulfilment).\n"
+        "• Venus (love-karaka for men), Mars (love-karaka for women).\n"
+        "• Moon's nakshatra-lord & sign = emotional template.\n"
+        "• Love-marriage yogas: 5L+7L conjunction/exchange, Venus+Mars conjunction, Rahu+Venus = unconventional union.\n"
+        "• Breakup signals: 7L in 6/8/12, Saturn-Rahu on 5/7, current dasha of 6L or 8L.\n"
+        "• Inter-caste/family-opposition: Rahu involvement with 7H/Venus.\n"
+        "• Be empathetic — many devotees are heartbroken when they ask this."
+    ),
+    "litigation": (
+        "FOCUS — court case/legal:\n"
+        "• 6th (vijay over enemy/case), 8th (sudden reversal/chronic case), 12th (jail/exit), 11th (gain from case).\n"
+        "• Mars (energy to fight), Saturn (delay/chronic), Mercury (paperwork/argument), Jupiter (judge/dharma).\n"
+        "• 6L stronger than 7L = win; 7L stronger = opponent wins; 6L+7L equal = settlement.\n"
+        "• Current Dasha lord — if ruling 6/11 = win-window; if ruling 7/8/12 = adverse.\n"
+        "• Always advise consulting a qualified vakil — jyotish only shows trend, not legal advice.\n"
+        "• Cite: BPHS Ch.36 (Shatru-bhava), Prashna Marga Ch.13."
+    ),
+    "property": (
+        "FOCUS — property/ghar:\n"
+        "• 4th house & lord (sukh-sthan — home/land/vehicle), Mars (real estate karaka), Venus (luxury/vehicle), Mercury (paperwork/registration).\n"
+        "• Buying yog: 4L strong + dasha of 4L/Mars/Venus, Jupiter transit over 4H.\n"
+        "• Disputes: 4L+8L involvement, Rahu in 4H = unclear title.\n"
+        "• Selling: 4L in 3/12, weak 4L period.\n"
+        "• Cite: BPHS Ch.31 (Sukha-bhava), Phaladeepika Ch.9."
+    ),
+    "vehicle": (
+        "FOCUS — vahan: 4th house (vahan-sthan), Venus (vahan-karaka), Mars (engine/movement). "
+        "Buying yog: 4L+Venus dasha, Jupiter transit on 4H. Accident risk: 8L on 4H, Mars-Saturn affliction. "
+        "Cite: BPHS Ch.31."
+    ),
+    "vastu": (
+        "FOCUS — vastu: refer to direction-element mapping (NE=water/Ishan, SE=fire/Agni, SW=earth/Nairutya, NW=air/Vayavya). "
+        "Suggest specific room placements per Mayamatam/Manasara. For deeper scan recommend in-app Vastu Drishti or AstroVastu PRO."
     ),
     "remedy": (
-        "FOCUS: identify the most afflicted/weak planet causing the problem, then prescribe the classical remedy — "
-        "specific mantra (Vedic or Beej), day, count (108 / 1008 / 11000), donation, fast, gemstone (only if dasha favours), "
-        "yantra. Always cite source (Lal Kitab / BPHS / regional tradition)."
+        "FOCUS — upay: identify the SPECIFIC most-afflicted/weak planet causing the problem from the chart, then prescribe ONE classical remedy:\n"
+        "• Mantra (Vedic moolmantra OR Beej-mantra), exact count (108 / 1008 / 11000 / 125000), specific day & hora.\n"
+        "• Donation (daan) — what, to whom, which day (planet's day).\n"
+        "• Fast (vrat) — which day, what to eat/avoid.\n"
+        "• Gemstone — ONLY if dasha favours that planet AND the planet is functional benefic; else skip and suggest substitute.\n"
+        "• Rudraksha mukhi for the planet, yantra, kavach.\n"
+        "• Lal Kitab totka if pattern matches.\n"
+        "• Cite source: BPHS Shanti-adhyay, Lal Kitab, Mantra Maharnava, regional Pandit-tradition."
+    ),
+    "spiritual": (
+        "FOCUS — moksha/spiritual: 9th (dharma), 12th (moksha-sthan), Jupiter (guru/wisdom), Ketu (renunciation/jnana). "
+        "Moksha-yogas: 12L in 9, Ketu in 12, Jupiter+Ketu, Saturn in 12 with Jupiter aspect. "
+        "Suggest a sadhana matching the strongest of these planets. Cite: BPHS Ch.40, Brihat Jataka."
+    ),
+    "family": (
+        "FOCUS — parivar: 4th (mother/home), 9th (father), 3rd (siblings), 11th (elder sibling), 5th (children). "
+        "Affliction to these = family discord. Look at corresponding karakas: Moon (mother), Sun (father), Mars (siblings)."
     ),
 }
 
@@ -197,10 +289,55 @@ def _focus_block(topic: str) -> str:
     return _TOPIC_FOCUS.get(topic, "")
 
 
-def _build_messages(question: str, kundli: Any, lang: str, reply_idx: int, birth: Any = None, topic: str = "general") -> list[dict]:
+def _summarise_history(history: list) -> tuple[str, dict]:
+    """
+    Returns (compact_summary, behavior_signals).
+    behavior_signals: { topic_counts, repeats, last_topic, total_user_turns }
+    """
+    if not isinstance(history, list) or not history:
+        return "", {"topic_counts": {}, "repeats": 0, "last_topic": None, "total_user_turns": 0}
+
+    user_qs: list[str] = []
+    topics: list[str]  = []
+    for m in history:
+        if not isinstance(m, dict):
+            continue
+        role = (m.get("role") or "").lower()
+        text = (m.get("text") or "").strip()
+        if not text:
+            continue
+        if role == "user":
+            user_qs.append(text)
+            topics.append(_classify_topic(text))
+
+    # Repeat-question detection: same topic asked >1 time, OR near-duplicate text.
+    topic_counts: dict[str, int] = {}
+    for t in topics:
+        topic_counts[t] = topic_counts.get(t, 0) + 1
+    repeats = sum(1 for c in topic_counts.values() if c > 1)
+
+    return "", {
+        "topic_counts": topic_counts,
+        "repeats": repeats,
+        "last_topic": topics[-1] if topics else None,
+        "total_user_turns": len(user_qs),
+        "recent_user_qs": user_qs[-3:],  # for in-prompt reference
+    }
+
+
+def _build_messages(
+    question: str,
+    kundli: Any,
+    lang: str,
+    reply_idx: int,
+    birth: Any = None,
+    topic: str = "general",
+    history: list | None = None,
+) -> list[dict]:
     lang_name = _LANG_NAME.get(lang, "English")
     chart_str = _kundli_summary(kundli, birth)
     focus     = _focus_block(topic)
+    _, beh    = _summarise_history(history or [])
     variation = ""
     if reply_idx > 0:
         variation = (
@@ -240,38 +377,107 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
 
     focus_block = f"\n\nSHASTRIYA FOCUS for this question:\n{focus}\n" if focus else ""
 
+    # ── Behavior-aware coaching block ────────────────────────────────────────
+    beh_block = ""
+    if beh.get("total_user_turns", 0) > 0:
+        same_topic_count = beh["topic_counts"].get(topic, 0)
+        prior_q_lines = "\n".join(f"  - \"{q}\"" for q in beh.get("recent_user_qs", []))
+        beh_lines = [
+            f"\n\nDEVOTEE BEHAVIOR (use this to feel like a real Pandit who remembers):",
+            f"  Total prior questions in THIS conversation: {beh['total_user_turns']}",
+            f"  Times asked about '{topic}' before this turn: {same_topic_count}",
+        ]
+        if beh.get("last_topic") and beh["last_topic"] != topic:
+            beh_lines.append(f"  Topic shift: previously discussing '{beh['last_topic']}' → now '{topic}'. Briefly bridge if natural.")
+        if same_topic_count >= 1:
+            beh_lines.append(
+                f"  ⚠️ The devotee has already asked about '{topic}' {same_topic_count} time(s). "
+                "They are anxious / not fully convinced. DO NOT repeat your earlier wording. "
+                "Acknowledge gently ('Beta, aapne ye baat phir poochi — mai samajhta hu chinta hai...'), "
+                "go DEEPER this time — different planet, different yog, different angle, OR a stronger remedy."
+            )
+        if beh.get("recent_user_qs"):
+            beh_lines.append(f"  Recent prior questions:\n{prior_q_lines}")
+        beh_block = "\n".join(beh_lines)
+
     user = (
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n\n"
-        f"DEVOTEE IS ASKING:\n\"{question}\"\n"
+        f"DEVOTEE IS ASKING NOW:\n\"{question}\"\n"
         f"{focus_block}"
+        f"{beh_block}"
         f"{variation}\n\n"
-        "INSTRUCTIONS — answer the SPECIFIC question above (do not give a generic reading): "
-        "1) Acknowledge the question in your first line. "
-        "2) Cite specific planets/houses from THIS chart that answer it (use the focus block above). "
-        "3) Reference the CURRENT Mahadasha-Antardasha to give a timing window if asked about 'kab' (when). "
-        "4) Give a clear answer (haan / nahi / sambhavna) — never dodge. "
-        "5) End with ONE specific actionable remedy.\n"
-        "Now respond as Acharya Vidyasagar — warm, flowing, directly addressing this exact question."
+        "STRICT INSTRUCTIONS — answer the SPECIFIC question (no generic reading):\n"
+        "1) Acknowledge the question warmly in line 1 — show you HEARD it.\n"
+        "2) Apply EVERY relevant rule from the SHASTRIYA FOCUS block above — cite the actual planets/houses/dignity from THIS chart.\n"
+        "3) Reference CURRENT Mahadasha+Antardasha lord — does it support or block? Give a year-range if 'kab' is asked.\n"
+        "4) Give a clear verdict — haan / nahi / sambhavna sath karan ke. Never vague-dodge.\n"
+        "5) If devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, stronger remedy.\n"
+        "6) Reference any relevant context from earlier in this conversation if it connects.\n"
+        "7) End with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat).\n"
+        "8) Length: 4-6 short flowing paragraphs. Never bullet-list, never markdown headers.\n"
+        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything they've said."
     )
 
-    return [
-        {"role": "system", "content": system},
-        {"role": "user",   "content": user},
-    ]
+    # Build full conversation: system → prior turns → current user turn.
+    msgs: list[dict] = [{"role": "system", "content": system}]
+    if isinstance(history, list):
+        for m in history[-10:]:
+            if not isinstance(m, dict):
+                continue
+            role = (m.get("role") or "").lower()
+            text = (m.get("text") or "").strip()
+            if not text or role not in ("user", "assistant"):
+                continue
+            # Trim long assistant turns to keep context budget sane
+            if role == "assistant" and len(text) > 1200:
+                text = text[:1200] + "…"
+            msgs.append({"role": role, "content": text})
+    msgs.append({"role": "user", "content": user})
+    return msgs
 
 
 # ── Topic classifier (lightweight, keyword-based) ─────────────────────────────
 
 _TOPIC_KW = {
-    "marriage":    ["marriage", "shaadi", "spouse", "wife", "husband", "vivah", "partner"],
-    "career":      ["career", "job", "naukri", "business", "promotion", "kaam"],
-    "finance":     ["money", "wealth", "finance", "paisa", "dhan", "loan", "debt", "investment"],
-    "health":      ["health", "illness", "disease", "swasthya", "bimari", "operation"],
-    "education":   ["study", "exam", "education", "padhai", "result", "college", "degree"],
-    "relationship":["love", "relationship", "girlfriend", "boyfriend", "breakup", "rishta"],
-    "travel":      ["travel", "abroad", "videsh", "foreign", "yatra", "visa"],
-    "child":       ["child", "santan", "baby", "pregnan", "putra"],
-    "remedy":      ["remedy", "upay", "mantra", "puja", "stone", "ratna", "gemstone"],
+    "marriage":    ["marriage", "shaadi", "shadi", "spouse", "wife", "husband", "vivah", "partner",
+                    "biwi", "pati", "patni", "dulhan", "dulha", "vivaah", "rishta-shadi", "engagement",
+                    "sagai", "mangni", "kalatra", "saptam"],
+    "career":      ["career", "job", "naukri", "naukari", "business", "vyapar", "vyapaar", "promotion",
+                    "kaam", "office", "boss", "salary", "transfer", "dhanda", "interview", "resign",
+                    "switch", "freelance", "startup"],
+    "finance":     ["money", "wealth", "finance", "paisa", "paise", "dhan", "loan", "debt", "karz",
+                    "investment", "share", "stock", "property", "lottery", "income", "tax", "loss",
+                    "profit", "savings", "fixed deposit", "mutual fund", "crypto"],
+    "health":      ["health", "illness", "disease", "swasthya", "bimari", "operation", "surgery",
+                    "doctor", "hospital", "rog", "kasht", "dard", "pain", "tabiyat", "fever",
+                    "diabetes", "blood pressure", "bp", "cancer", "heart", "depression", "anxiety",
+                    "mental health", "stress"],
+    "education":   ["study", "exam", "education", "padhai", "result", "college", "degree", "school",
+                    "vidya", "graduation", "phd", "masters", "ias", "upsc", "neet", "jee", "gate",
+                    "competitive", "scholarship", "admission"],
+    "relationship":["love", "relationship", "girlfriend", "boyfriend", "breakup", "rishta", "rishtey",
+                    "pyaar", "pyar", "ladka", "ladki", "dating", "crush", "ex", "love marriage",
+                    "inter-caste", "family opposition"],
+    "travel":      ["travel", "abroad", "videsh", "foreign", "yatra", "visa", "passport", "trip",
+                    "settlement", "us", "canada", "uk", "australia", "germany", "dubai", "migrate",
+                    "immigration", "tirth", "pilgrimage"],
+    "child":       ["child", "santan", "santaan", "baby", "pregnan", "putra", "putri", "beti", "beta",
+                    "garbh", "ivf", "infertility", "adoption", "miscarriage", "delivery"],
+    "litigation":  ["court", "case", "mukadma", "lawsuit", "legal", "vakil", "lawyer", "police",
+                    "fir", "jail", "bail", "judgement", "decision", "appeal", "divorce case",
+                    "property dispute"],
+    "property":    ["house", "ghar", "makaan", "property", "plot", "flat", "land", "zameen",
+                    "real estate", "construction", "naya ghar", "purchase", "selling house"],
+    "vehicle":     ["car", "bike", "vehicle", "gaadi", "scooter", "motorcycle", "vahan"],
+    "vastu":       ["vastu", "ghar ka vastu", "office vastu", "direction", "disha", "puja room",
+                    "kitchen", "bedroom direction", "main door", "entrance"],
+    "remedy":      ["remedy", "upay", "upaay", "mantra", "puja", "stone", "ratna", "gemstone",
+                    "donation", "daan", "vrat", "fasting", "totka", "yantra", "rudraksha", "ritual",
+                    "havan", "abhishek"],
+    "spiritual":   ["moksha", "spiritual", "guru", "deeksha", "meditation", "dhyan", "tapasya",
+                    "purpose of life", "destiny", "karma", "previous birth", "purva janma"],
+    "family":      ["family", "parivar", "parents", "mata", "pita", "father", "mother", "bhai",
+                    "behan", "in-laws", "sasural", "saas", "sasur"],
 }
 
 
@@ -285,7 +491,7 @@ def _classify_topic(question: str) -> str:
 
 # ── Public entry point ───────────────────────────────────────────────────────
 
-def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, birth: Any = None) -> dict:
+def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, birth: Any = None, history: list | None = None) -> dict:
     """
     Returns: { text, topic, confidence, source }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
@@ -296,16 +502,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     topic = _classify_topic(question)
-    messages = _build_messages(question, kundli, lang, reply_idx, birth=birth, topic=topic)
+    messages = _build_messages(
+        question, kundli, lang, reply_idx,
+        birth=birth, topic=topic, history=history,
+    )
 
     try:
         resp = client.chat.completions.create(
             model            = model,
             messages         = messages,
-            temperature      = 0.9,    # higher = more natural human variation
-            max_tokens       = 800,
-            presence_penalty = 0.3,    # discourage repeating same phrases across replies
-            frequency_penalty= 0.3,    # discourage robotic patterns
+            temperature      = 0.85,
+            max_tokens       = 1100,   # richer multi-paragraph answers + classical refs
+            presence_penalty = 0.4,    # discourage repeating phrases across turns
+            frequency_penalty= 0.35,
         )
     except Exception as exc:
         raise RuntimeError(f"OpenAI request failed: {exc}") from exc

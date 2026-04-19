@@ -115,6 +115,13 @@ export default function AskScreen() {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (user?.api_key) headers["X-API-Key"] = user.api_key;
 
+        // Conversation memory: send last 10 turns (excluding the thinking placeholder
+        // and the just-sent user message which is sent separately as `question`).
+        const history = messages
+          .filter(m => !m.loading && m.id !== "thinking")
+          .slice(-10)
+          .map(m => ({ role: m.role, text: m.text }));
+
         const res = await apiFetch(`${API_BASE}/api/ask`, {
           method: "POST",
           headers,
@@ -122,6 +129,7 @@ export default function AskScreen() {
             question: text.trim(),
             kundli,
             birthData,
+            history,
             lang: language,
             user_id: user?.id,
           }),

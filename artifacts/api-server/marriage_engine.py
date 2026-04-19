@@ -74,6 +74,81 @@ def _sign_idx(sign_name: Any) -> Optional[int]:
         return None
 
 
+def _maybe_shadbala(kundli: dict, lagna_sign_idx: Optional[int]) -> dict:
+    """Lazily compute Shadbala for the 7 classical grahas. Returns {} on any failure."""
+    if lagna_sign_idx is None:
+        return {}
+    try:
+        from shadbala import compute_shadbala
+        raw = (kundli or {}).get("planets") or []
+        # shadbala.py expects each planet dict to have "lon" (float).
+        # kundli_engine returns "longitude" — translate without mutating originals.
+        planets = []
+        for p in raw:
+            if not isinstance(p, dict): continue
+            lon = p.get("lon", p.get("longitude"))
+            if not isinstance(lon, (int, float)): continue
+            planets.append({**p, "lon": float(lon)})
+        moon = next((p for p in planets if p.get("name") == "Moon"), None)
+        sun  = next((p for p in planets if p.get("name") == "Sun"),  None)
+        moon_sun_angle = None
+        if moon and sun:
+            moon_sun_angle = (moon["lon"] - sun["lon"]) % 360.0
+        return compute_shadbala(planets, lagna_sign_idx, moon_sun_angle) or {}
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _shadbala_band(pct: Optional[float]) -> str:
+    """Bucket strength_pct into qualitative bands for narration & scoring."""
+    if pct is None:
+        return "unknown"
+    if pct >= 110: return "very-strong"
+    if pct >= 90:  return "strong"
+    if pct >= 70:  return "moderate"
+    if pct >= 50:  return "weak"
+    return "very-weak"
+
+
+def _maybe_jupiter_trigger(kundli: dict,
+                           lagna_sign_idx: Optional[int],
+                           moon_sign_idx:  Optional[int],
+                           dasha_window:   Optional[dict]) -> dict:
+    """
+    Compute Jupiter transit windows over the next 3 years and (if possible)
+    intersect them with the next favourable Maha-Antardasha window to produce
+    a tighter "marriage trigger" timing block. Safe-failing — returns {} on error.
+    """
+    if lagna_sign_idx is None:
+        return {}
+    try:
+        from transit_engine import (
+            jupiter_marriage_trigger_windows,
+            intersect_window_with_jupiter,
+        )
+        today = datetime.utcnow()
+        jup_windows = jupiter_marriage_trigger_windows(
+            lagna_sign_idx, moon_sign_idx, start=today, years_ahead=3)
+        # Is Jupiter currently in a trigger sign?
+        active = next(
+            (w for w in jup_windows
+             if datetime.fromisoformat(w["start"]) <= today
+             <= datetime.fromisoformat(w["end"])),
+            None,
+        )
+        refined = None
+        if dasha_window:
+            refined = intersect_window_with_jupiter(dasha_window, jup_windows)
+        return {
+            "jupiter_active_now": bool(active),
+            "active_window":      active,
+            "all_windows":        jup_windows,
+            "refined_window":     refined,
+        }
+    except Exception as e:
+        return {"_error": str(e)}
+
+
 def _safe_iso_date(s: str) -> Optional[datetime]:
     if not isinstance(s, str) or not s:
         return None
@@ -178,6 +253,28 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
     house_lords  = {h.get("house"): h for h in (intel.get("house_lords") or [])}
     pmap         = {p.get("name"): p for p in (kundli.get("planets") or []) if p.get("name")}
 
+    # ── Pre-compute Shadbala (used to weight scoring) ────────────────────────
+    asc_name      = (kundli.get("ascendant") or "").strip().capitalize()
+    moon_name     = (kundli.get("moonSign") or "").strip().capitalize()
+    lagna_idx     = _sign_idx(asc_name)
+    moon_idx      = _sign_idx(moon_name)
+    shad          = _maybe_shadbala(kundli, lagna_idx)
+    if shad and "_error" not in shad:
+        trace.append(
+            "Shadbala computed: " + ", ".join(
+                f"{p}={shad[p]['strength_pct']}%" for p in shad if isinstance(shad.get(p), dict)
+            )
+        )
+    elif shad.get("_error"):
+        trace.append(f"Shadbala unavailable: {shad['_error']}")
+
+    def _sb(planet: str) -> Optional[float]:
+        d = shad.get(planet) if isinstance(shad, dict) else None
+        if not isinstance(d, dict):
+            return None
+        v = d.get("strength_pct")
+        return float(v) if isinstance(v, (int, float)) else None
+
     # ── 7th lord placement & strength ────────────────────────────────────────
     seventh         = house_lords.get(7) or {}
     seventh_lord    = seventh.get("lord") or ""
@@ -257,6 +354,37 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
     trace.append(f"Current Dasha {cur_md}-{cur_ad} supports = {current_supports}")
     trace.append(f"Next favourable window: {next_window}")
 
+    # ── JUPITER TRANSIT TRIGGER ──────────────────────────────────────────────
+    # Compute Jupiter's transit windows over 1/5/7 from Lagna and from Moon.
+    # Intersect with the next favourable Dasha-Antardasha window. The
+    # intersection is the *tight* marriage trigger band — strongest classical
+    # timing combination (dasha + transit synchronisation, BPHS principle).
+    jup_trig = _maybe_jupiter_trigger(kundli, lagna_idx, moon_idx, next_window)
+    if jup_trig and "_error" not in jup_trig:
+        trace.append(f"Jupiter active now: {jup_trig.get('jupiter_active_now')} "
+                     f"({jup_trig.get('active_window')})")
+        if jup_trig.get("refined_window"):
+            rw_block = jup_trig["refined_window"]
+            trace.append(f"Refined trigger window (dasha ∩ Jupiter transit): "
+                         f"{rw_block['start']} → {rw_block['end']} "
+                         f"via {rw_block.get('jupiter_hits')}")
+            # Promote refined window into next_window for narration
+            if next_window is not None:
+                next_window = dict(next_window)
+                next_window["refined_start"]  = rw_block["start"][:7]
+                next_window["refined_end"]    = rw_block["end"][:7]
+                next_window["jupiter_hits"]   = rw_block.get("jupiter_hits")
+                next_window["jupiter_sign"]   = rw_block.get("jupiter_sign")
+                next_window["reason"] = (
+                    next_window.get("reason", "") +
+                    f" + Jupiter transits {rw_block.get('jupiter_sign')} "
+                    f"(hits {rw_block.get('jupiter_hits')}) during this period"
+                )
+        elif next_window:
+            trace.append("No Jupiter ∩ Dasha intersection — dasha window stays as-is")
+    elif jup_trig.get("_error"):
+        trace.append(f"Jupiter transit unavailable: {jup_trig['_error']}")
+
     # ── STEP 5: SCORING ──────────────────────────────────────────────────────
     score = 50
     rs: list[str] = []
@@ -289,6 +417,54 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         score += 15; rs.append(kp_reason)
     elif kp_verdict == "denied":
         score -= 20; rw.append(kp_reason)
+
+    # ── SHADBALA-WEIGHTED REFINEMENT ─────────────────────────────────────────
+    # Classical Parashari Shadbala: a planet that meets/exceeds its required
+    # virupa minimum is a *karyakarta* (capable of producing the result of
+    # the houses it owns/aspects). For marriage, the three planets that
+    # MUST be capable of producing the result are: 7th lord, kalatra-karaka
+    # (Venus or Jupiter by gender), and Jupiter (kalyana karaka — universal
+    # benefic for shubh-karya). We amplify each planet's existing score
+    # contribution by its strength_pct band.
+    sb_7l   = _sb(seventh_lord)
+    sb_kar  = _sb(karaka)
+    sb_jup  = _sb("Jupiter")
+    sb_breakdown = {
+        seventh_lord: {"pct": sb_7l,  "band": _shadbala_band(sb_7l)},
+        karaka:       {"pct": sb_kar, "band": _shadbala_band(sb_kar)},
+        "Jupiter":    {"pct": sb_jup, "band": _shadbala_band(sb_jup)},
+    }
+
+    def _apply_sb(label: str, pct: Optional[float]):
+        nonlocal score
+        if pct is None:
+            return
+        if pct >= 110:
+            score += 6
+            rs.append(f"{label} Shadbala very-strong ({pct:.0f}% of required) — full karyakarta")
+        elif pct >= 90:
+            score += 3
+            rs.append(f"{label} Shadbala strong ({pct:.0f}%) — capable of producing marriage result")
+        elif pct < 70 and pct >= 50:
+            score -= 3
+            rw.append(f"{label} Shadbala weak ({pct:.0f}% of required minimum)")
+        elif pct < 50:
+            score -= 6
+            rw.append(f"{label} Shadbala very-weak ({pct:.0f}%) — struggles to deliver marriage karya")
+
+    _apply_sb(f"7th lord {seventh_lord}", sb_7l)
+    _apply_sb(f"Karaka {karaka}",         sb_kar)
+    # Jupiter (kalyana karaka) gets a smaller weight — only the boost half
+    if sb_jup is not None:
+        if sb_jup >= 110:
+            score += 4
+            rs.append(f"Jupiter (kalyana karaka) Shadbala very-strong ({sb_jup:.0f}%) — universal benefic at full power")
+        elif sb_jup >= 90:
+            score += 2
+            rs.append(f"Jupiter (kalyana karaka) Shadbala strong ({sb_jup:.0f}%)")
+        elif sb_jup < 50:
+            score -= 3
+            rw.append(f"Jupiter very-weak ({sb_jup:.0f}%) — shubh-karya support reduced")
 
     # Marriage-supportive yogas
     yogas = intel.get("yogas") or []
@@ -329,13 +505,20 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         verdict = "Vivah mein significant rukawat — gambhir upay aur dharma-paalan zaroori"
         promised, denied = (kp_verdict != "denied"), (kp_verdict == "denied")
 
-    # Confidence: based on data completeness + score conviction
+    # Confidence: based on data completeness + score conviction.
+    # Shadbala + Jupiter trigger materially raise the conviction since they
+    # add two independent classical confirmations (strength + transit).
     data_bonus = 0
     if kp_verdict in ("promised", "denied"): data_bonus += 15
     if next_window:                          data_bonus += 10
     if seventh_lord and sl_dig:              data_bonus += 5
     if (intel.get("dignities") or []):       data_bonus += 5
-    confidence = min(95, 50 + data_bonus + abs(score - 50) // 4)
+    if shad and "_error" not in shad and len(shad) >= 5:
+        data_bonus += 5                       # Shadbala available
+    if jup_trig and (jup_trig.get("refined_window")
+                     or jup_trig.get("jupiter_active_now")):
+        data_bonus += 5                       # Jupiter trigger present
+    confidence = min(97, 50 + data_bonus + abs(score - 50) // 4)
 
     # ── D9 NAVAMSA ───────────────────────────────────────────────────────────
     d9_info = _d9_seventh_lord_info(kundli)
@@ -376,8 +559,43 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         "d9":                   d9_info,
         "remedy":               remedy,
         "remedy_for_planet":    weakest_planet,
+        "shadbala":             sb_breakdown,
+        "jupiter_trigger":      jup_trig,
         "logic_trace":          trace,
     }
+
+
+def _shad_line(v: dict) -> str:
+    sb = v.get("shadbala") or {}
+    if not sb:
+        return ""
+    parts = []
+    for planet, info in sb.items():
+        if not isinstance(info, dict): continue
+        pct  = info.get("pct")
+        band = info.get("band")
+        if pct is None: continue
+        parts.append(f"{planet}={pct:.0f}% ({band})")
+    if not parts:
+        return ""
+    return "  Shadbala (planet karyakarta strength): " + ", ".join(parts) + "\n"
+
+
+def _jup_line(v: dict) -> str:
+    jt = v.get("jupiter_trigger") or {}
+    if not jt or jt.get("_error"):
+        return ""
+    out = ""
+    if jt.get("jupiter_active_now") and jt.get("active_window"):
+        aw = jt["active_window"]
+        out += (f"  Jupiter currently transiting {aw.get('sign')} "
+                f"(hits {aw.get('hits')}) until {aw.get('end')}\n")
+    rw = jt.get("refined_window")
+    if rw:
+        out += (f"  Refined trigger band (Dasha ∩ Jupiter): "
+                f"{rw.get('start')} → {rw.get('end')} "
+                f"via Jupiter in {rw.get('jupiter_sign')} {rw.get('jupiter_hits')}\n")
+    return out
 
 
 def format_verdict_for_prompt(v: dict) -> str:
@@ -395,13 +613,30 @@ def format_verdict_for_prompt(v: dict) -> str:
             return ym or "?"
     nw = v.get("next_window") or {}
     if nw:
-        nw_hr = f"{_hr(nw.get('start',''))} to {_hr(nw.get('end',''))}"
-        nw_line = (
-            f"  Next favourable Dasha window: {nw.get('dasha')} "
-            f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
-            f"  >>> NARRATE THIS WINDOW EXACTLY AS: \"{nw_hr}\" "
-            f"(Maha-Antardasha: {nw.get('dasha')}). DO NOT widen, shift, or change these dates. <<<"
-        )
+        # Prefer the refined (dasha ∩ Jupiter transit) sub-window if available.
+        ref_s = nw.get("refined_start")
+        ref_e = nw.get("refined_end")
+        if ref_s and ref_e and ref_s != nw.get("start") and ref_e != nw.get("end"):
+            primary_hr = f"{_hr(ref_s)} to {_hr(ref_e)}"
+            nw_line = (
+                f"  Next favourable Dasha window: {nw.get('dasha')} "
+                f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
+                f"  REFINED window (Dasha ∩ Jupiter transit through "
+                f"{nw.get('jupiter_sign')}, hits {nw.get('jupiter_hits')}): "
+                f"{ref_s} → {ref_e}\n"
+                f"  >>> NARRATE THIS WINDOW EXACTLY AS: \"{primary_hr}\" "
+                f"(Dasha {nw.get('dasha')} + Jupiter transit through "
+                f"{nw.get('jupiter_sign')} — both classical triggers active). "
+                f"DO NOT widen, shift, or change these dates. <<<"
+            )
+        else:
+            nw_hr = f"{_hr(nw.get('start',''))} to {_hr(nw.get('end',''))}"
+            nw_line = (
+                f"  Next favourable Dasha window: {nw.get('dasha')} "
+                f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
+                f"  >>> NARRATE THIS WINDOW EXACTLY AS: \"{nw_hr}\" "
+                f"(Maha-Antardasha: {nw.get('dasha')}). DO NOT widen, shift, or change these dates. <<<"
+            )
     else:
         nw_line = ("  Next favourable Dasha window: NOT FOUND in next 12 years\n"
                    "  >>> NARRATE THIS AS: \"agle 12 saal mein koi spasht prabal vivah-yog "
@@ -423,6 +658,8 @@ def format_verdict_for_prompt(v: dict) -> str:
         f"  7th lord:         {v.get('seventh_lord')} ({v.get('seventh_lord_dignity')})\n"
         f"  Karaka:           {v.get('karaka')} ({v.get('karaka_dignity')})\n"
         f"  Current Dasha:    {v.get('current_dasha')} (supports 2/7/11 = {v.get('current_dasha_supports')})\n"
+        f"{_shad_line(v)}"
+        f"{_jup_line(v)}"
         f"{nw_line}\n"
         f"{d9_line}\n"
         "  Strong supporting factors:\n"

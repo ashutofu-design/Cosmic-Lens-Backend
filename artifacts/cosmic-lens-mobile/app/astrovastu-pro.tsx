@@ -459,6 +459,8 @@ export default function AstroVastuProScreen() {
                 ) : null}
                 <ScanBasisBadge
                   visionRoomFindings={result.vision_room_findings}
+                  visionUsed={(result as any).vision_used}
+                  visionFindingsCount={(result as any).vision_findings_count}
                   perRoomBasis={(result.rooms || []).map((rr: any) => ({
                     room_type: rr.room_type, direction_basis: rr.direction_basis,
                   }))}
@@ -516,6 +518,8 @@ export default function AstroVastuProScreen() {
               </View>
               <ScanBasisBadge
                 visionRoomFindings={result.vision_room_findings}
+                visionUsed={(result as any).vision_used}
+                visionFindingsCount={(result as any).vision_findings_count}
                 perRoomBasis={(result.rooms || []).map((rr: any) => ({
                   room_type: rr.room_type, direction_basis: rr.direction_basis,
                 }))}

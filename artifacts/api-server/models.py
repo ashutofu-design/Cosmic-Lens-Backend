@@ -36,6 +36,10 @@ class User(db.Model):
     daily_questions_used = db.Column(db.Integer, default=0, nullable=False)
     daily_questions_date = db.Column(db.String(10), default="", nullable=False) # YYYY-MM-DD
 
+    # ── Preferred response language (overrides per-question detection) ────────
+    # Allowed: "en" | "hi" | "hn" | NULL (auto-detect from each question)
+    preferred_language = db.Column(db.String(4), nullable=True)
+
     # ── Daily Kundli generation quota ─────────────────────────────────────────
     daily_kundlis_used = db.Column(db.Integer, default=0, nullable=False)
     daily_kundlis_date = db.Column(db.String(10), default="", nullable=False)   # YYYY-MM-DD
@@ -72,6 +76,7 @@ class User(db.Model):
             "is_pro":       self.is_pro and plan_active,
             "plan":         self.plan if plan_active else "free",
             "plan_expiry":  self.plan_expiry.isoformat() if self.plan_expiry else None,
+            "preferred_language": self.preferred_language,   # null → auto-detect
             "created_at":   self.created_at.isoformat() if self.created_at else None,
         }
 

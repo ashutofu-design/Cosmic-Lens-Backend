@@ -33,13 +33,31 @@ export type VisionRoomFindings = {
 type Props = {
   visionRoomFindings?: VisionRoomFindings | null;
   perRoomBasis?: Array<{ room_type: string; direction_basis?: string }>;
+  /**
+   * report.vision_used (top-level flag from backend). When true and no
+   * per-room basis says "magnetometer", the badge surfaces "Visual
+   * inference" — the floor-plan was read by Cosmic Vision even if no
+   * room photos were submitted.
+   */
+  visionUsed?: boolean;
+  /** report.vision_findings_count (top-level flag from backend). */
+  visionFindingsCount?: number;
 };
 
-export function ScanBasisBadge({ visionRoomFindings, perRoomBasis }: Props) {
+export function ScanBasisBadge({
+  visionRoomFindings,
+  perRoomBasis,
+  visionUsed,
+  visionFindingsCount,
+}: Props) {
   const C = useC();
 
   const analyzed = visionRoomFindings?.rooms_analyzed || 0;
   const applied  = visionRoomFindings?.applied_score_delta || 0;
+  const findingsCount = typeof visionFindingsCount === "number"
+    ? visionFindingsCount
+    : (visionRoomFindings?.per_room || [])
+        .reduce((sum, r) => sum + (r.findings_count || 0), 0);
 
   // Determine basis from per-room data (priority) or from per_room.direction_basis
   const bases = new Set<string>();
@@ -51,15 +69,27 @@ export function ScanBasisBadge({ visionRoomFindings, perRoomBasis }: Props) {
   });
 
   const compassConfirmed = bases.has("magnetometer");
-  const visualOnly       = !compassConfirmed && (bases.has("visual_inference") || bases.has("assumed"));
+  const anyVisionRan     = !!visionUsed || analyzed > 0
+                            || bases.has("visual_inference");
 
-  // If nothing to show (no vision, no photos), render nothing — keeps card clean.
-  if (analyzed === 0 && bases.size === 0) return null;
+  // Per spec: badge ALWAYS reflects actual data — three distinct labels.
+  const tone = compassConfirmed
+    ? { fg: "#10b981", bg: "#10b98115", label: "Compass-confirmed", icon: "compass" as const }
+    : anyVisionRan
+    ? { fg: "#f59e0b", bg: "#f59e0b15", label: "Visual inference",  icon: "eye"     as const }
+    : { fg: C.textMid, bg: C.textMid + "15", label: "Assumed layout", icon: "help-circle" as const };
 
-  const tone =
-    compassConfirmed ? { fg: "#10b981", bg: "#10b98115", label: "Compass-confirmed", icon: "compass" as const }
-    : visualOnly     ? { fg: "#f59e0b", bg: "#f59e0b15", label: "Visual inference",   icon: "eye"     as const }
-    :                  { fg: C.accent,   bg: C.accent + "15", label: "Cosmic Vision",  icon: "zap"    as const };
+  // Footer line — always shows what backend reported.
+  const meta: string[] = [];
+  if (analyzed > 0) {
+    meta.push(`${analyzed} room photo${analyzed === 1 ? "" : "s"} analyzed`);
+  } else if (visionUsed) {
+    meta.push("Floor plan read by Cosmic Vision");
+  } else {
+    meta.push("Default Vastu layout assumed");
+  }
+  if (findingsCount > 0) meta.push(`${findingsCount} finding${findingsCount === 1 ? "" : "s"}`);
+  if (applied !== 0)     meta.push(`Score Δ ${applied > 0 ? "+" : ""}${applied}`);
 
   return (
     <View style={[s.wrap, { borderColor: tone.fg + "55", backgroundColor: tone.bg }]}>
@@ -69,14 +99,15 @@ export function ScanBasisBadge({ visionRoomFindings, perRoomBasis }: Props) {
           Scan basis: {tone.label}
         </Text>
         <Text style={[s.body, { color: C.textMid }]}>
-          {analyzed > 0
-            ? `${analyzed} room photo${analyzed === 1 ? "" : "s"} analyzed by Cosmic Vision`
-            : "Floor plan only — no room photos provided"}
-          {applied !== 0 ? `  ·  Score adjustment: ${applied > 0 ? "+" : ""}${applied}` : ""}
+          {meta.join("  ·  ")}
         </Text>
-        {visualOnly && analyzed > 0 ? (
+        {tone.label === "Visual inference" ? (
           <Text style={[s.hint, { color: C.textMid }]}>
             Tip: Capture room photos with compass for sensor-confirmed accuracy.
+          </Text>
+        ) : tone.label === "Assumed layout" ? (
+          <Text style={[s.hint, { color: C.textMid }]}>
+            Tip: Upload a floor plan or room photos for a more accurate read.
           </Text>
         ) : null}
       </View>

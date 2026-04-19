@@ -219,6 +219,8 @@ export default function AstroVastuProResultScreen() {
           ) : null}
           <ScanBasisBadge
             visionRoomFindings={result.vision_room_findings}
+            visionUsed={(result as any).vision_used}
+            visionFindingsCount={(result as any).vision_findings_count}
             perRoomBasis={rooms.map((r) => ({
               room_type: r.room_type, direction_basis: r.direction_basis,
             }))}

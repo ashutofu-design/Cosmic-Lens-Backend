@@ -20,7 +20,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 # Lazy KP/transit calculators — only loaded when needed so test paths don't
 # need swisseph configured.
@@ -628,6 +628,66 @@ def _detect_question_lang(question: str, fallback: str) -> str:
     return "en"
 
 
+def _resolve_response_lang(question: str, lang: str,
+                           preferred_language: Optional[str]) -> str:
+    """
+    Final language decision per the Language Intelligence spec:
+      1. user.preferred_language    (highest — sticky personal pref)
+      2. detected language of the question (per-message smart match)
+      3. app default language `lang`        (lowest — fallback)
+    """
+    pl = (preferred_language or "").strip().lower()
+    if pl in {"en", "hi", "hn"}:
+        return pl
+    return _detect_question_lang(question, lang)
+
+
+def _strict_lang_block(code: str) -> str:
+    """Hard, non-negotiable per-language enforcement block injected as the
+    very first thing the model sees inside the user-turn payload. Per spec:
+    consistency MUST hold for the entire reply; no mid-response switching."""
+    if code == "hi":
+        return (
+            "════════════════════ LANGUAGE LOCK — हिन्दी ════════════════════\n"
+            "Reply ENTIRELY in pure Hindi (Devanagari script — देवनागरी).\n"
+            "  • Every sentence must be Hindi. No Hinglish (no Roman script).\n"
+            "  • No English words except proper nouns (names, places).\n"
+            "  • Sanskrit terms (Saptamesh, Karaka, Mahadasha) stay in Devanagari.\n"
+            "  • Numbers may be either Devanagari (१-९) or Western (1-9).\n"
+            "  • The ENTIRE response from first word to last must stay in Hindi —\n"
+            "    NEVER switch language mid-response. This is non-negotiable.\n"
+            "═══════════════════════════════════════════════════════════════\n\n"
+        )
+    if code == "hn":
+        return (
+            "═════════════════ LANGUAGE LOCK — HINGLISH ═════════════════\n"
+            "Reply ENTIRELY in Hinglish (Hindi words written in English/Roman script).\n"
+            "  • Natural conversational Hinglish — the way an Indian Pandit ji\n"
+            "    speaks to devotees on phone: \"Beta, aapki kundli mein...\".\n"
+            "  • NO Devanagari script anywhere. NO pure-English-only paragraphs.\n"
+            "  • Astrology terms in Roman: Saptamesh, Karaka, Mahadasha, Sade-Sati.\n"
+            "  • Even if the devotee wrote the question in Devanagari Hindi or\n"
+            "    pure English, you MUST still reply in Hinglish — this is the\n"
+            "    devotee's chosen preference.\n"
+            "  • The ENTIRE response stays in Hinglish — never switch mid-reply.\n"
+            "═══════════════════════════════════════════════════════════════\n\n"
+        )
+    # default: English
+    return (
+        "═════════════════ LANGUAGE LOCK — ENGLISH ═════════════════\n"
+        "Reply ENTIRELY in clear, natural English.\n"
+        "  • No Hindi/Hinglish words mixed in. Use English equivalents:\n"
+        "    \"7th lord\" not \"Saptamesh\", \"main period\" not \"Mahadasha\",\n"
+        "    \"7-and-a-half year Saturn cycle\" not \"Sade-Sati\".\n"
+        "  • Sanskrit names of yogas/planets are allowed (e.g. \"Mangal Dosha\",\n"
+        "    \"Gajakesari Yoga\") but ALWAYS followed by a brief English meaning.\n"
+        "  • Even if the devotee wrote the question in Hindi or Hinglish, you\n"
+        "    MUST still reply in English — this is the devotee's chosen preference.\n"
+        "  • The ENTIRE response stays in English — never switch mid-reply.\n"
+        "═══════════════════════════════════════════════════════════════\n\n"
+    )
+
+
 def _build_messages(
     question: str,
     kundli: Any,
@@ -636,12 +696,10 @@ def _build_messages(
     birth: Any = None,
     topic: str = "general",
     history: list | None = None,
+    preferred_language: Optional[str] = None,
 ) -> list[dict]:
-    # Auto-detect language from the question itself so the reply ALWAYS matches
-    # the way the devotee wrote — Hindi/Devanagari → Hindi, Hinglish (Roman
-    # Hindi) → Hindi-tone, plain English → English. The `lang` param is only
-    # used as a fallback when the question is too short / ambiguous.
-    detected = _detect_question_lang(question, lang)
+    # ── LANGUAGE INTELLIGENCE — sticky preference > detection > fallback ─────
+    detected = _resolve_response_lang(question, lang, preferred_language)
     lang_name = _LANG_NAME.get(detected, "English")
     chart_str = _kundli_summary(kundli, birth)
     # Pre-computed chart intelligence — dignities, yogas, mangal-dosh,

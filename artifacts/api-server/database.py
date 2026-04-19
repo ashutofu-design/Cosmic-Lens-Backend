@@ -93,6 +93,10 @@ def init_db(app):
                     conn.execute(text(
                         "CREATE INDEX IF NOT EXISTS ix_avpl_property_name ON astrovastu_pro_logs (property_name)"
                     ))
+                    # Language Intelligence — sticky user preference for reply language.
+                    conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(4)"
+                    ))
                     # One-time pre-launch wipe of legacy email/google users.
                     # GUARDED behind COSMIC_WIPE_USERS env var so it never runs by accident.
                     if os.environ.get("COSMIC_WIPE_USERS") == "1":
@@ -114,6 +118,7 @@ def init_db(app):
                         "ALTER TABLE business_vastu_logs ADD COLUMN report_json TEXT",
                         "ALTER TABLE astrovastu_pro_logs ADD COLUMN report_json TEXT",
                         "ALTER TABLE astrovastu_pro_logs ADD COLUMN property_name VARCHAR(120)",
+                        "ALTER TABLE users ADD COLUMN preferred_language VARCHAR(4)",
                     ):
                         try:
                             conn.execute(text(stmt))

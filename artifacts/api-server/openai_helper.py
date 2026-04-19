@@ -1737,6 +1737,82 @@ def _detect_marriage_constraint(question: str, history: list) -> bool:
     return False
 
 
+# ── GENERIC FOLLOWUP DETECTION ────────────────────────────────────────────────
+# Short, topic-less prompts like "aur detail mein batao" / "iska upay batao" /
+# "aur batao" / "explain more" don't contain marriage keywords, so the topic
+# classifier returns "general" and we lose the marriage flow. When such a
+# generic followup is detected AND the previous assistant turn was about
+# marriage, we sticky-inherit the topic so the deterministic engine + template
+# fire again.
+_GENERIC_FOLLOWUP_PATTERNS = [
+    re.compile(p, re.I) for p in (
+        # "more detail" asks
+        r"\baur\s+(?:thoda\s+)?detail\b",
+        r"\bdetail\s+m[ae]i?n?\s+batao\b",
+        r"\bdetail\s+(?:se\s+)?batao\b",
+        r"\bzyada\s+detail\b",
+        r"\bin\s+detail\b",
+        r"\bmore\s+detail",
+        r"\bexplain\s+more\b",
+        r"\belaborate\b",
+        r"\btell\s+me\s+more\b",
+        # "tell me more / again"
+        r"\baur\s+batao\b",
+        r"\baur\s+bataiye\b",
+        r"\bphir\s+se\s+batao\b",
+        r"\bdobara\s+batao\b",
+        # remedy followups
+        r"\biska\s+upay\b",
+        r"\bupay\s+batao\b",
+        r"\bremedy\s+batao\b",
+        r"\bkoi\s+upay\b",
+        # "what about..." / "and...?"
+        r"^\s*aur\s*\??\s*$",
+        r"^\s*phir\s*\??\s*$",
+        r"^\s*kyun\s*\??\s*$",
+        r"^\s*kaise\s*\??\s*$",
+    )
+]
+_DEV_FOLLOWUP_PATTERNS = [
+    re.compile(p) for p in (
+        r"और\s*विस्तार",          # aur vistar
+        r"विस्तार\s*से\s*बताओ",   # vistar se batao
+        r"और\s*बताओ",             # aur batao
+        r"उपाय\s*बताओ",           # upay batao
+        r"फिर\s*से\s*बताओ",       # phir se batao
+    )
+]
+
+
+def _is_generic_followup(question: str) -> bool:
+    q = (question or "").strip()
+    if not q:
+        return False
+    # Very short prompts (≤6 tokens) are usually followups; check patterns.
+    for rx in _GENERIC_FOLLOWUP_PATTERNS:
+        if rx.search(q):
+            return True
+    for rx in _DEV_FOLLOWUP_PATTERNS:
+        if rx.search(q):
+            return True
+    return False
+
+
+def _last_assistant_topic_was_marriage(history: list) -> bool:
+    for h in reversed(history or []):
+        if (h or {}).get("role") == "assistant":
+            prev = ((h.get("content") or h.get("text") or "")).lower()
+            if any(k in prev for k in (
+                "vivah", "shaadi", "shadi", "marriage",
+                "विवाह", "शादी", "spouse", "wife", "husband",
+                "kalatra", "saptam",
+            )):
+                return True
+            # Only inspect the most recent assistant turn.
+            return False
+    return False
+
+
 _TONE_SCRUB_PATTERNS = [
     # (regex, replacement)  — case-insensitive, applied once per response.
     (re.compile(r"\bI sense your concern[.,]?\s*", re.I), ""),
@@ -1967,13 +2043,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     })
 
     # ── TOPIC STICKINESS for marriage follow-ups ─────────────────────────────
-    # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" don't
+    # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" AND
+    # generic followups like "aur detail mein batao" / "iska upay batao" don't
     # contain marriage keywords, so the classifier returns "general" and the
     # baked-answer path never fires — letting the AI hallucinate a fake date.
-    # Force topic="marriage" when (a) constraint detected AND (b) the prior
-    # assistant turn talked about vivah/shaadi/marriage timing.
+    # Force topic="marriage" when (a) constraint OR generic followup detected
+    # AND (b) the prior assistant turn talked about vivah/shaadi/marriage.
     try:
-        if topic != "marriage" and _detect_marriage_constraint(question, history or []):
+        if topic != "marriage" and (
+            _detect_marriage_constraint(question, history or [])
+            or (_is_generic_followup(question)
+                and _last_assistant_topic_was_marriage(history or []))
+        ):
             for h in reversed(history or []):
                 if (h.get("role") == "assistant"):
                     # Mobile client sends history as {role, text}; older callers
@@ -2217,13 +2298,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     })
 
     try:
-        if mode == "astro" and topic != "marriage" and _detect_marriage_constraint(question, history or []):
+        if mode == "astro" and topic != "marriage" and (
+            _detect_marriage_constraint(question, history or [])
+            or (_is_generic_followup(question)
+                and _last_assistant_topic_was_marriage(history or []))
+        ):
             for h in reversed(history or []):
                 if h.get("role") == "assistant":
                     prev = ((h.get("content") or h.get("text") or "")).lower()
                     if any(k in prev for k in
                            ("vivah", "shaadi", "shadi", "marriage",
-                            "विवाह", "शादी", "spouse", "wife", "husband")):
+                            "विवाह", "शादी", "spouse", "wife", "husband",
+                            "kalatra", "saptam")):
                         topic = "marriage"
                         break
     except Exception as exc:

@@ -959,7 +959,21 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Test chart now shows: 10 yogas all TENDENCY-only (0 STRONG), Bhanga score 9 (STRONG cancellation), Vipreet Yoga partial-present, Saturn long-life potential — net positive verdict instead of fear-mongering
 - LF: 67,411 → **68,972 chars**
 
-### Sprint 46+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 47 — MODERN CONTEXT REFRAME ENGINE ✅ COMPLETE
+- New module: `vedic/reframe/modern_context_engine.py` (~360 lines)
+- **Core philosophy** (user-stated): "Old astrology gave correct results for THEIR environment. Today same placements unlock superpowers because the world has changed."
+- **7 reframe outputs** wired into LF every request:
+  - R1: Planet-in-House modern reframe (50+ "classical bad" combos mapped to modern careers)
+  - R2: Planet-in-Sign modern reframe (10+ notable sign combos)
+  - R3: "Afflicted" planet → modern superpower mapping (all 9 grahas)
+  - R4: Top 25 modern profession suggestions (chart-derived & deduplicated)
+  - R5: Internet-age advantages (digital-nomad/creator-economy/crypto/eSports/wellness)
+  - R6: Old-fear vs New-reframe master table (15 universal placements)
+  - R7: Top 3 hidden superpowers in this chart
+- Test chart (Sag lagna): Saturn-H1 → "long-haul founder/monk-CEO", Ketu-H8 → "trauma therapist/hypnotist", Mars-H12 → "special-forces/intelligence agent"
+- LF: 68,972 → **73,450 chars** (+4,478)
+
+### Sprint 47+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

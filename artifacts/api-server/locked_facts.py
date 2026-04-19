@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-47 — MODERN CONTEXT REFRAME ENGINE (old astrology in TODAY's world)
+    modern_reframe_str = ""
+    try:
+        from vedic.reframe.modern_context_engine import run_modern_reframe, format_modern_reframe  # type: ignore
+        modern_reframe_str = format_modern_reframe(run_modern_reframe(kundli))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] modern reframe (Sprint-47) failed: {exc}")
+
     # Sprint-46 — MEDICAL ASTROLOGY ENGINE (full 20-check deep chart-driven medical audit)
     medical_str = ""
     try:
@@ -1040,6 +1048,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_s_str,
         astro_vastu_str,
         medical_str,
+        modern_reframe_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

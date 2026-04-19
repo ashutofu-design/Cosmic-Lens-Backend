@@ -53,6 +53,7 @@ type Result = {
   reason?: string;
   message?: string;
   validity?: { valid: boolean; reason?: string; message?: string };
+  caution?: { reason?: string; classical_ref?: string };
   lagna?: { sign: string; degree: string; nakshatra?: string; sub_lord?: string };
   verdict?: { code: string; label_hi: string; label_en: string; meaning: string };
   cusp_analysis?: CuspAnalysis[];

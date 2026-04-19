@@ -82,7 +82,6 @@ export default function AskScreen() {
         ]
   );
   const [input, setInput] = useState("");
-  const [prashnaNumber, setPrashnaNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [quotaModal, setQuotaModal] = useState<null | {
     used: number;
@@ -97,99 +96,6 @@ export default function AskScreen() {
   }, []);
 
   useEffect(() => { scrollToEnd(); }, [messages]);
-
-  const sendPrashna = useCallback(
-    async (numStr: string, qText: string) => {
-      if (loading) return;
-      const n = parseInt(numStr, 10);
-      if (!Number.isFinite(n) || n < 1 || n > 249) {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: "assistant",
-          text: "⚠️ Number 1 se 249 ke beech hona chahiye. Mann shant karke ek sankhya sochiye.",
-        }]);
-        return;
-      }
-      if (showDemo) { router.push("/onboarding"); return; }
-
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        text: `🔢 Sankhya: ${n}${qText.trim() ? ` — ${qText.trim()}` : ""}`,
-      };
-      const thinkMsg: Message = { id: "thinking", role: "assistant", text: "", loading: true };
-      setMessages(prev => [...prev, userMsg, thinkMsg]);
-      setPrashnaNumber("");
-      setInput("");
-      setLoading(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (user?.api_key) headers["X-API-Key"] = user.api_key;
-
-        const res = await apiFetch(`${API_BASE}/api/prashna/number-ask`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            number: n,
-            question: qText.trim(),
-            user_id: user?.id,
-          }),
-        });
-        const json = await res.json().catch(() => ({} as any));
-
-        if (res.status === 402) {
-          setMessages(prev => prev.filter(m => m.id !== "thinking" && m.id !== userMsg.id));
-          setPrashnaNumber(numStr);
-          setInput(qText);
-          setQuotaModal({
-            used:    json?.quota?.used  ?? 0,
-            limit:   json?.quota?.limit ?? 0,
-            plan:    json?.plan         ?? "free",
-            message: json?.message      ?? t.askDailyLimitOver,
-          });
-          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
-          return;
-        }
-
-        const v = json?.verdict;
-        const c = json?.caution;
-        let answer = "";
-        if (v) {
-          answer += `${v.label_hi || v.label || ""}\n${v.meaning || ""}\n`;
-        }
-        if (json?.timing) answer += `\n⏰ ${json.timing}`;
-        if (Array.isArray(json?.cusp_analysis) && json.cusp_analysis.length) {
-          const cuspLines = json.cusp_analysis.slice(0, 3).map((cu: any) =>
-            `• Bhav ${cu.house}: ${cu.sub_lord || ""}${cu.verdict_note ? ` — ${cu.verdict_note}` : ""}`
-          ).join("\n");
-          if (cuspLines) answer += `\n\n📊 Cusp Analysis:\n${cuspLines}`;
-        }
-        if (c?.reason) answer += `\n\n⚠️ Saavdhani: ${c.reason}`;
-        if (!answer.trim()) answer = json?.error || "Kshama karein, abhi prashna ka jawab nahi mil paaya.";
-
-        setMessages(prev =>
-          prev.filter(m => m.id !== "thinking").concat({
-            id: Date.now().toString(),
-            role: "assistant",
-            text: answer.trim(),
-          })
-        );
-      } catch {
-        setMessages(prev =>
-          prev.filter(m => m.id !== "thinking").concat({
-            id: Date.now().toString(),
-            role: "assistant",
-            text: "Network error — thodi der baad try karein.",
-          })
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [loading, showDemo, user?.id, user?.api_key, t.askDailyLimitOver]
-  );
 
   const send = useCallback(
     async (text: string) => {

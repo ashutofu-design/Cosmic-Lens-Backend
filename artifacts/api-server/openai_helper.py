@@ -18,7 +18,19 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
+
+# Lazy KP/transit calculators — only loaded when needed so test paths don't
+# need swisseph configured.
+def _kp_calc():
+    from kp_engine import calculate_kp  # type: ignore
+    return calculate_kp
+
+
+def _swe():
+    import swisseph as swe  # type: ignore
+    return swe
 
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
@@ -146,20 +158,41 @@ def _kundli_summary(kundli: Any, birth: Any = None) -> str:
 
 _TOPIC_FOCUS = {
     "marriage": (
-        "FOCUS — vivah/marriage: Apply ALL these classical rules systematically:\n"
-        "• 7th house & its lord (kalatra-bhava) — sign, occupants, aspects on it.\n"
-        "• Venus (kalatra-karaka for men) — sign, house, dignity (exalt/debilitated/own), aspects.\n"
-        "• Jupiter (pati-karaka for women) — same checks.\n"
-        "• Navamsa (D-9) conceptually — 7th lord of D-9 indicates spouse nature.\n"
-        "• Mangal-dosh: Mars in 1/4/7/8/12 from Lagna OR Moon OR Venus (cancellation rules: Mars in own/exalt sign, "
-        "  Mars aspected by Jupiter, both partners with dosh, etc.).\n"
-        "• Dara-karaka (lowest-degree planet in Jaimini) for spouse archetype.\n"
-        "• 2nd house (kutumb), 4th (domestic happiness), 8th (mangalya/longevity of bond), 11th (fulfillment of desire).\n"
-        "• Current Mahadasha+Antardasha — does the lord rule/aspect/occupy 2/7/11? If yes → marriage window OPEN. "
-        "  If lord rules 6/8/12 from 7H → delay, friction, or breakup risk.\n"
-        "• Saturn-Venus or Mars-Venus conjunctions/aspects = friction patterns.\n"
-        "• Cite: BPHS Ch.80 (Kalatra-bhava), Phaladeepika Ch.10 (Vivah-yog), Saravali Ch.36, Jataka Parijata Ch.13.\n"
-        "• Give a YEAR-RANGE timing tied to the favourable dasha (never a fixed date)."
+        "FOCUS — vivah/marriage: This is THE most important question. Multi-system verification mandatory.\n"
+        "\n"
+        "A) VEDIC (Parashari) — apply EVERY rule:\n"
+        "• 7th house & its lord (kalatra-bhava) — sign, occupants, aspects, dignity.\n"
+        "• Venus (kalatra-karaka for men) — sign, house, dignity (exalt/debilitated/own/combust), aspects.\n"
+        "• Jupiter (pati-karaka for women) — same complete checks.\n"
+        "• Navamsa (D-9) conceptually — 7th lord of D-9 indicates spouse nature & true marriage promise.\n"
+        "• Mangal-dosh: Mars in 1/4/7/8/12 from Lagna OR Moon OR Venus. Cancellation: Mars in own/exalt sign, "
+        "  Mars aspected by Jupiter, both partners doshi, Mars in even sign for women, etc.\n"
+        "• Dara-karaka (lowest-degree planet in Jaimini DK) for spouse archetype + UL (Upapada Lagna) for marriage promise.\n"
+        "• 2nd (kutumb), 4th (domestic sukh), 8th (mangalya/longevity of bond), 11th (fulfillment of desire).\n"
+        "• Saturn-Venus / Mars-Venus / Rahu-Venus conjunctions/aspects = friction, delay, or unconventional union patterns.\n"
+        "• Vivah-yogas: 7L+Venus together, 2L+7L+11L combination, Lagna lord aspecting 7H, exchange between 2/7/11 lords.\n"
+        "• Denial-yogas: 7L combust, 7H heavily afflicted by Saturn+Rahu+Ketu, Venus debilitated without neech-bhanga.\n"
+        "\n"
+        "B) KP (Krishnamurti Paddhati) cross-check — IF KP block provided, USE IT:\n"
+        "• PRIMARY KP RULE: 7th cusp Sub-Lord must signify houses 2, 7, or 11 (in PL, NL-houses, or SB-houses) → marriage PROMISED. "
+        "  If 7th SL signifies primarily 1/6/10/12 → DENIED or heavy delay.\n"
+        "• 11th cusp Sub-Lord = fulfillment of desire (must signify 2/7/11 too).\n"
+        "• 2nd cusp Sub-Lord = family/kutumb addition (signifying 2/7/11 confirms).\n"
+        "• KP TIMING: marriage occurs in joint period of Dasha-Bhukti-Antar lords ALL signifying 2/7/11. "
+        "  Look at the planetary significators table — match the running DBA against 2/7/11 significators.\n"
+        "• If KP verdict differs from Vedic verdict, KP gets the casting vote on TIMING, Vedic on YOGA STRENGTH.\n"
+        "\n"
+        "C) GOCHAR (current transits) cross-check — IF transit block provided:\n"
+        "• Jupiter transit over natal 7H, 7L, Venus, or 5L (from Moon AND Lagna) = marriage activation period.\n"
+        "• Saturn transit over 7H = delay or settlement, but Saturn aspecting 7H from 5H/9H = mature commitment.\n"
+        "• Rahu transit over 7H = unconventional/sudden alliance; Ketu = separation tendency.\n"
+        "• Saade-sati phase often correlates with marriage delay — note if Saturn currently on 12/1/2 from natal Moon.\n"
+        "\n"
+        "D) FINAL VERDICT format:\n"
+        "• Combine A+B+C into ONE confident verdict. If all three agree → strong yes/no. If they conflict → state which dominates and why.\n"
+        "• Give a YEAR-RANGE (never fixed date) tied to the favourable Dasha-Bhukti window confirmed by KP significators AND a supportive Jupiter/Venus transit.\n"
+        "• Cite classics: BPHS Ch.80 (Kalatra-bhava), Phaladeepika Ch.10 (Vivah-yog), Saravali Ch.36, Jataka Parijata Ch.13, "
+        "  Krishnamurti Reader VI (Marriage), Prashna Marga Ch.18."
     ),
     "career": (
         "FOCUS — career/job/business: Apply systematically:\n"
@@ -289,6 +322,146 @@ def _focus_block(topic: str) -> str:
     return _TOPIC_FOCUS.get(topic, "")
 
 
+# ── KP (Krishnamurti Paddhati) cross-verification context ────────────────────
+
+_KP_PLANET_FROM_LON_CACHE: dict = {}
+
+
+def _kp_context(birth: Any, topic: str) -> str:
+    """
+    Compute KP cusps + significators from birthData and return a compact text
+    block focussed on the houses relevant to the question topic. Returns empty
+    string on any failure (best-effort enrichment).
+    """
+    if not isinstance(birth, dict):
+        return ""
+    required = ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz")
+    if not all(k in birth and birth[k] is not None for k in required):
+        return ""
+
+    try:
+        kp = _kp_calc()(birth)
+    except Exception:
+        return ""
+
+    # Topic → which houses to surface
+    topic_houses = {
+        "marriage":     [2, 7, 11],
+        "relationship": [5, 7, 11],
+        "career":       [2, 6, 10, 11],
+        "finance":      [2, 5, 9, 11],
+        "health":       [1, 6, 8, 12],
+        "child":        [2, 5, 11],
+        "education":    [4, 5, 9],
+        "travel":       [3, 9, 12],
+        "litigation":   [6, 8, 11],
+        "property":     [4, 11],
+        "vehicle":      [4],
+        "spiritual":    [9, 12],
+        "family":       [3, 4, 9, 11],
+    }.get(topic, [1, 7, 10])
+
+    cusps   = {c["house"]: c for c in kp.get("cusps", [])}
+    sigs    = kp.get("significations", {})
+
+    lines: list[str] = ["KP (Krishnamurti Paddhati) cross-check:"]
+
+    # Cusp sub-lord verdict for each focus house
+    for h in topic_houses:
+        c = cusps.get(h)
+        if not c:
+            continue
+        sb_lord = c.get("sb")
+        sb_sig  = sigs.get(sb_lord, {})
+        sb_houses = sorted(set(sb_sig.get("pl", []) + sb_sig.get("sb_houses", [])))
+        lines.append(
+            f"  • H{h} cusp: SL={c.get('sl')}, NL={c.get('nl')}, "
+            f"Sub-Lord={sb_lord}, Sub-Sub={c.get('ss')}; "
+            f"Sub-Lord {sb_lord} signifies houses {sb_houses}"
+        )
+
+    # KP significator summary for ALL planets — relevant for DBA matching
+    lines.append("  Planetary significators (PL = occupied + owned houses):")
+    for p in kp.get("planets", []):
+        name = p.get("name")
+        sig  = sigs.get(name, {})
+        pl   = sig.get("pl", [])
+        nl_h = sig.get("sl", [])  # houses ruled by nakshatra-lord
+        sb_h = sig.get("sb_houses", [])
+        lines.append(
+            f"    {name} (H{p.get('house')}, NL={p.get('nl')}, SB={p.get('sb')}): "
+            f"PL={pl}, NL-houses={nl_h}, SB-houses={sb_h}"
+        )
+
+    # Topic-specific KP verdict guidance
+    if topic == "marriage":
+        lines.append(
+            "  KP MARRIAGE RULE (Krishnamurti Reader VI): If the 7th cusp Sub-Lord "
+            "is a significator of houses 2, 7, or 11 (in PL, SB-houses, or NL-houses), "
+            "marriage is PROMISED. If the Sub-Lord signifies primarily 1, 6, 10, or 12 "
+            "(houses negating marriage), it is DENIED or heavily delayed. "
+            "Timing: marriage occurs in the joint period (Dasha-Bhukti-Antar) when ALL THREE "
+            "lords are significators of 2/7/11. Cross-verify the Vedic verdict with this KP rule."
+        )
+    elif topic == "child":
+        lines.append(
+            "  KP CHILD RULE: 5th cusp Sub-Lord must signify 2/5/11 for child promised; "
+            "if it signifies 1/4/10/12 it is denied. Timing in joint period of 5L+11L+Jupiter significators."
+        )
+    elif topic == "career":
+        lines.append(
+            "  KP CAREER RULE: 10th cusp Sub-Lord signifying 2/6/10/11 = strong career; "
+            "joint period of 2/6/10/11 significators = job change/promotion."
+        )
+    elif topic == "litigation":
+        lines.append(
+            "  KP LITIGATION RULE: 6th cusp SL signifying 6/11 → win; signifying 7/8/12 → loss/settlement."
+        )
+
+    return "\n".join(lines)
+
+
+# ── Current planetary transits (today, sidereal Lahiri) ─────────────────────
+
+_SIGN_NAMES = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+
+
+def _transit_context() -> str:
+    """Current sidereal positions of the 9 grahas — for transit (gochar) reasoning."""
+    try:
+        swe = _swe()
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        now = datetime.now(timezone.utc)
+        ut_dec = now.hour + now.minute / 60.0 + now.second / 3600.0
+        jd = swe.julday(now.year, now.month, now.day, ut_dec)
+        flags = swe.FLG_SIDEREAL | swe.FLG_SPEED
+        bodies = [
+            ("Sun", swe.SUN), ("Moon", swe.MOON), ("Mars", swe.MARS),
+            ("Mercury", swe.MERCURY), ("Jupiter", swe.JUPITER),
+            ("Venus", swe.VENUS), ("Saturn", swe.SATURN),
+        ]
+        lines = [f"Current transits (today, sidereal Lahiri, UTC {now:%Y-%m-%d %H:%M}):"]
+        for name, pid in bodies:
+            res, _ = swe.calc_ut(jd, pid, flags)
+            lon = res[0] % 360
+            sign = _SIGN_NAMES[int(lon / 30)]
+            speed = res[3]
+            retro = " (R)" if speed < 0 else ""
+            lines.append(f"  {name}: {lon:5.2f}° {sign}{retro}")
+        # Rahu/Ketu
+        rres, _ = swe.calc_ut(jd, swe.MEAN_NODE, flags)
+        rlon = rres[0] % 360
+        klon = (rlon + 180) % 360
+        lines.append(f"  Rahu: {rlon:5.2f}° {_SIGN_NAMES[int(rlon/30)]}")
+        lines.append(f"  Ketu: {klon:5.2f}° {_SIGN_NAMES[int(klon/30)]}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _summarise_history(history: list) -> tuple[str, dict]:
     """
     Returns (compact_summary, behavior_signals).
@@ -337,6 +510,8 @@ def _build_messages(
     lang_name = _LANG_NAME.get(lang, "English")
     chart_str = _kundli_summary(kundli, birth)
     focus     = _focus_block(topic)
+    kp_block  = _kp_context(birth, topic)
+    tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])
     variation = ""
     if reply_idx > 0:
@@ -400,22 +575,29 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             beh_lines.append(f"  Recent prior questions:\n{prior_q_lines}")
         beh_block = "\n".join(beh_lines)
 
+    kp_section = f"\n\n{kp_block}\n" if kp_block else ""
+    tr_section = f"\n\n{tr_block}\n" if tr_block else ""
+
     user = (
-        f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n\n"
+        f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n"
+        f"{kp_section}"
+        f"{tr_section}\n"
         f"DEVOTEE IS ASKING NOW:\n\"{question}\"\n"
         f"{focus_block}"
         f"{beh_block}"
         f"{variation}\n\n"
-        "STRICT INSTRUCTIONS — answer the SPECIFIC question (no generic reading):\n"
+        "STRICT INSTRUCTIONS — multi-system verification, answer the SPECIFIC question:\n"
         "1) Acknowledge the question warmly in line 1 — show you HEARD it.\n"
-        "2) Apply EVERY relevant rule from the SHASTRIYA FOCUS block above — cite the actual planets/houses/dignity from THIS chart.\n"
-        "3) Reference CURRENT Mahadasha+Antardasha lord — does it support or block? Give a year-range if 'kab' is asked.\n"
-        "4) Give a clear verdict — haan / nahi / sambhavna sath karan ke. Never vague-dodge.\n"
-        "5) If devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, stronger remedy.\n"
-        "6) Reference any relevant context from earlier in this conversation if it connects.\n"
-        "7) End with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat).\n"
-        "8) Length: 4-6 short flowing paragraphs. Never bullet-list, never markdown headers.\n"
-        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything they've said."
+        "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali).\n"
+        "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses (e.g. 7th SL for marriage signifying 2/7/11). State whether KP confirms or modifies the Vedic verdict.\n"
+        "4) DASHA timing: Reference current Mahadasha+Antardasha lord — does it support or block? In KP terms, is the running DBA lord a significator of the relevant houses? Give a precise year-range window when 'kab/when' is asked.\n"
+        "5) TRANSITS (gochar): If transit data is provided, mention which slow planet (Jupiter / Saturn / Rahu-Ketu) is currently transiting the relevant house from natal Moon or Lagna, and how it influences the matter NOW.\n"
+        "6) CLEAR VERDICT: Combine Vedic + KP + transit + dasha into a single confident verdict — haan / nahi / sambhavna with reasoning. Never vague-dodge.\n"
+        "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy.\n"
+        "8) Reference any relevant context from earlier in this conversation if it connects.\n"
+        "9) End with EXACTLY ONE specific actionable remedy (mantra+count+day OR donation OR vrat) chosen for the WEAKEST significator identified.\n"
+        "10) Length: 4-7 short flowing paragraphs. Never bullet-list, never markdown headers, never reveal you used 'KP block' or 'transit data' as labels — speak naturally as Acharya ji ('KP paddhati se bhi dekha to...', 'Aaj kal Shani ka gochar...').\n"
+        "Now respond as Acharya Vidyasagar — warm, wise, remembering everything, cross-verifying every statement."
     )
 
     # Build full conversation: system → prior turns → current user turn.

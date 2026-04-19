@@ -1397,6 +1397,72 @@ def _build_messages(
             ),
         })
 
+    # ── Final reminders (recency-bias citation pin) ──────────────────────────
+    # The main system prompt has 14 rules; under gpt-4o-mini the model
+    # sometimes drops the MANDATORY-citation ones (KP, Remedies, D9/D10) when
+    # the question is plain topic-driven phrasing. We re-pin only those 4
+    # critical ones here as the LAST instruction the model sees, so recency
+    # bias makes them stick. Tailor by topic + only mention blocks that are
+    # actually present in the LOCKED FACTS for this turn.
+    reminder_lines: list[str] = []
+    lf = locked_facts_str or ""
+
+    # KP (Rule N) — mandatory citation for covered topics when block exists
+    has_kp = "KP CROSS-CHECK" in lf
+    # Topics matching covered houses (per _classify_topic labels):
+    #   marriage→H7, relationship→H7, career→H10, finance→H2/H11,
+    #   child→H5, health→H1, general→any (let model pick)
+    kp_topics = {"marriage", "relationship", "career", "finance",
+                 "child", "health", "general"}
+    if has_kp and topic in kp_topics:
+        reminder_lines.append(
+            "• KP citation is MANDATORY this turn. Find the relevant house in the "
+            "'KP CROSS-CHECK' block (H7=marriage, H10=career, H2/H11=money, H5=children, "
+            "H1=health/vitality) and weave ONE natural sentence: 'KP paddhati se bhi "
+            "{N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' "
+            "Skipping this is a hallucination-class error."
+        )
+
+    # Remedies (Rule M) — quote verbatim, never invent
+    has_rem = "REMEDIES" in lf and "MANTRA:" in lf
+    if has_rem:
+        reminder_lines.append(
+            "• If you cite ANY remedy this turn, copy the mantra / gemstone / charity / "
+            "fast-day / yantra VERBATIM from the REMEDIES block above. Use the 'for: ...' "
+            "label so the user knows WHY. NEVER invent a Sanskrit mantra (e.g. do NOT "
+            "write 'Om Shum Shukraya Namah' if it is not in the block) and NEVER invent "
+            "carat weights or 'lucky stones'. If the needed planet has no remedy listed, "
+            "fall back to 'Hanuman Chalisa daily' — do NOT fabricate."
+        )
+
+    # D9 / D10 (Rule K) — mandatory consultation for marriage/career
+    has_d9  = "D9 NAVAMSA" in lf or "NAVAMSA" in lf
+    has_d10 = "D10 DASAMSA" in lf or "DASAMSA" in lf
+    if topic == "marriage" and has_d9:
+        reminder_lines.append(
+            "• Marriage question: you MUST cite the 7L's D9 placement from the "
+            "DIVISIONAL CHARTS block (one line, e.g. 'D9 mein 7L Mercury Pisces "
+            "debilitated jaata hai — natal weakness D9 mein bhi confirm hoti hai')."
+        )
+    if topic == "career" and has_d10:
+        reminder_lines.append(
+            "• Career question: you MUST cite the 10L's D10 placement from the "
+            "DIVISIONAL CHARTS block (one line, e.g. 'D10 mein 10L Mercury Sagittarius "
+            "own-sign mein jaata hai — career line strong support karta hai D10 mein')."
+        )
+
+    if reminder_lines:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔔 FINAL REMINDERS — read these LAST before composing your reply:\n"
+                + "\n".join(reminder_lines)
+                + "\n\nThese are MANDATORY citations for this turn. They sit ABOVE "
+                  "the brevity rule — if Rule 10 (140-word cap) and these reminders "
+                  "conflict, trim the prose, NOT the citations."
+            ),
+        })
+
     msgs.append({"role": "user", "content": user})
     return msgs
 

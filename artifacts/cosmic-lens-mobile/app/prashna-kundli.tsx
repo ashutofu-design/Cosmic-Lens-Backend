@@ -242,8 +242,29 @@ export default function PrashnaKundliScreen() {
                 <Text style={{ color: C.textMid, fontSize: 12, fontWeight: "600" }}>Naya prashna</Text>
               </Pressable>
 
+              {/* Caution banner (advisory — verdict still shown below) */}
+              {(result.caution || (result as any).validity) && (
+                <View style={[s.invalid, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
+                  <Feather name="alert-triangle" size={18} color={C.warningText} />
+                  <Text style={[s.invalidTitle, { color: C.warningText, fontSize: 13 }]}>
+                    Prashna kaal sangya — saavdhani
+                  </Text>
+                  <Text style={{ color: C.warningText, fontSize: 12, marginTop: 4, textAlign: "center", lineHeight: 17 }}>
+                    {result.caution?.reason
+                      || (result as any).validity?.reason
+                      || (result as any).validity?.message
+                      || "Lagna avastha sangya — uttar margdarshan-roop mein lijiye, antim nirnaay nahi."}
+                  </Text>
+                  {result.caution?.classical_ref && (
+                    <Text style={{ color: C.warningText, fontSize: 10, marginTop: 4, opacity: 0.75, fontStyle: "italic" }}>
+                      Aadhar: {result.caution.classical_ref}
+                    </Text>
+                  )}
+                </View>
+              )}
+
               {/* Verdict card */}
-              {result.ok && result.verdict && (
+              {result.verdict && (
                 <LinearGradient
                   colors={[`${verdictColor(result.verdict.code)}25`, `${verdictColor(result.verdict.code)}10`]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -255,17 +276,6 @@ export default function PrashnaKundliScreen() {
                   </Text>
                   <Text style={[s.verdictMeaning, { color: C.text }]}>{result.verdict.meaning}</Text>
                 </LinearGradient>
-              )}
-
-              {/* Invalid prashna */}
-              {!result.ok && result.validity && (
-                <View style={[s.invalid, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
-                  <Feather name="alert-triangle" size={20} color={C.warningText} />
-                  <Text style={[s.invalidTitle, { color: C.warningText }]}>Yeh prashna kaal abhi shubh nahi</Text>
-                  <Text style={{ color: C.warningText, fontSize: 12, marginTop: 6, textAlign: "center" }}>
-                    {result.validity.message || "Mann shant karke thodi der baad punah prayaas karein."}
-                  </Text>
-                </View>
               )}
 
               {/* Lagna */}

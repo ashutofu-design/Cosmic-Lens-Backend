@@ -581,17 +581,16 @@ def ask_number_prashna(number: int,
     cusps, planets, sig = chart["cusps"], chart["planets"], chart["significations"]
 
     validity = _validity_check(cusps, planets)
+    # Validity is now ADVISORY only — always compute the verdict so the
+    # querent never sees an empty answer. If validity fails we attach a
+    # `caution` flag the UI can surface as a banner above the verdict.
+    caution = None
     if not validity["valid"]:
-        return {
-            "ok":        False,
-            "reason":    "invalid_prashna_time",
-            "validity":  validity,
-            "category":  cat_key,
-            "number":    number,
-            "lagna":     {"sign": lagna_info["sign"], "degree": lagna_info["degree"],
-                          "nakshatra": lagna_info["nakshatra"], "sub_lord": lagna_info["sub_lord"]},
-            "timestamp": now.isoformat(),
-            "place":     ASTROLOGER_SEAT,
+        caution = {
+            "level":           "warning",
+            "reason":          validity.get("reason"),
+            "classical_ref":   validity.get("classical_ref"),
+            "retry_after_min": validity.get("retry_after_min"),
         }
 
     cusp_verdicts = []
@@ -651,6 +650,7 @@ def ask_number_prashna(number: int,
             "label_en": label_en,
             "meaning":  meaning,
         },
+        "caution":        caution,
         "cusp_analysis":  cusp_verdicts,
         "timing":         _timing_hint(cusp_verdicts, planets),
         "narrative":      narrative,

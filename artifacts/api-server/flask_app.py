@@ -525,6 +525,33 @@ def get_authed_user(user_id: int):
 
 # ── Kundli save/load routes ────────────────────────────────────────────────────
 
+@app.route("/api/user/<int:user_id>/language", methods=["GET", "PUT"])
+def user_language_pref(user_id):
+    """Get or set the user's sticky preferred reply language.
+
+    GET  → { preferred_language: "en"|"hi"|"hn"|null }
+    PUT  → body { preferred_language: "en"|"hi"|"hn"|null }
+           Setting null reverts to per-question auto-detection.
+    """
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+    if request.method == "GET":
+        return jsonify({"preferred_language": user.preferred_language})
+
+    data = request.get_json(force=True, silent=True) or {}
+    raw = data.get("preferred_language", None)
+    if raw is None or (isinstance(raw, str) and raw.strip().lower() in {"", "auto", "null"}):
+        user.preferred_language = None
+    else:
+        v = str(raw).strip().lower()
+        if v not in {"en", "hi", "hn"}:
+            return jsonify({"error": "preferred_language must be one of: en, hi, hn, null"}), 400
+        user.preferred_language = v
+    db.session.commit()
+    return jsonify({"preferred_language": user.preferred_language})
+
+
 @app.route("/api/user/<int:user_id>/kundli", methods=["GET"])
 def get_user_kundli(user_id):
     """Get saved kundli + user profile (including subscription plan) for a user."""
@@ -3999,9 +4026,14 @@ def ask_route():
     # deterministic rule-based engine so the user never sees an outage.
     result = None
     used_ai = False
+    # Sticky reply-language preference: set by user in app settings; overrides
+    # per-question language detection. None → fall back to detection + lang.
+    preferred_language = (user.preferred_language if user else None)
+
     if openai_available():
         try:
-            result = ai_ask(question, kundli, lang, reply_idx, birth=birth, history=history)
+            result = ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                            history=history, preferred_language=preferred_language)
             used_ai = True
         except Exception as exc:
             print(f"[ask] OpenAI failed, falling back to rule engine: {exc}")

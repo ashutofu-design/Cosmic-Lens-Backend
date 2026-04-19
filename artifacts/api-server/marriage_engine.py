@@ -598,26 +598,83 @@ def _jup_line(v: dict) -> str:
     return out
 
 
-def format_verdict_for_prompt(v: dict) -> str:
-    """Render verdict as a tightly-structured authoritative block for the AI prompt."""
+_MONTHS = ["", "January","February","March","April","May","June",
+              "July","August","September","October","November","December"]
+
+def _ym_to_human(ym: str) -> str:
+    """\"2025-12\" → \"December 2025\". Returns input unchanged if malformed."""
+    try:
+        y, m = (ym or "").split("-")[:2]
+        return f"{_MONTHS[int(m)]} {y}"
+    except Exception:
+        return ym or "?"
+
+
+def extract_window_str(v: dict) -> str:
+    """
+    Single source of truth for the human-readable timing window string.
+    Returns the EXACT phrase the AI is required to echo verbatim, e.g.
+    "April 2026 to June 2026". Empty string if no window.
+    The AI validator uses this to detect violations and force a retry.
+    """
     if not v:
         return ""
-    _MONTHS = ["", "January","February","March","April","May","June",
-                  "July","August","September","October","November","December"]
-    def _hr(ym: str) -> str:
-        # "2025-12" → "December 2025"
-        try:
-            y, m = ym.split("-")
-            return f"{_MONTHS[int(m)]} {y}"
-        except Exception:
-            return ym or "?"
+    nw = v.get("next_window") or {}
+    if not nw:
+        return ""
+    ref_s, ref_e = nw.get("refined_start"), nw.get("refined_end")
+    if ref_s and ref_e and ref_s != nw.get("start") and ref_e != nw.get("end"):
+        return f"{_ym_to_human(ref_s)} to {_ym_to_human(ref_e)}"
+    return f"{_ym_to_human(nw.get('start',''))} to {_ym_to_human(nw.get('end',''))}"
+
+
+def _engine_json_envelope(v: dict) -> str:
+    """
+    JSON envelope at the very top of the prompt block. The AI is told to
+    treat every value here as IMMUTABLE — copy verbatim, do not paraphrase.
+    """
+    import json as _json
+    window_str = extract_window_str(v)
+    nw = v.get("next_window") or {}
+    payload = {
+        "final_verdict":   v.get("verdict"),
+        "score":           v.get("score"),
+        "confidence_pct":  v.get("confidence"),
+        "marriage_promised": v.get("marriage_promised"),
+        "marriage_denied":   v.get("marriage_denied"),
+        "delay":             v.get("delay"),
+        "kp_verdict":        v.get("kp_verdict"),
+        "current_dasha":     v.get("current_dasha"),
+        "next_dasha_window": (f"{nw.get('start')} → {nw.get('end')}" if nw else None),
+        "timeline_start":    nw.get("refined_start") or nw.get("start") or None,
+        "timeline_end":      nw.get("refined_end")   or nw.get("end")   or None,
+        "must_use_window_str": window_str or None,
+        "remedy_planet":   v.get("remedy_for_planet"),
+        "remedy":          v.get("remedy"),
+    }
+    return (
+        "═══ ENGINE JSON (IMMUTABLE — COPY VALUES VERBATIM) ═══\n"
+        + _json.dumps(payload, ensure_ascii=False, indent=2)
+        + "\n═════════════════════════════════════════════════════\n"
+    )
+
+
+def format_verdict_for_prompt(v: dict) -> str:
+    """Render verdict as a tightly-structured authoritative block for the AI prompt.
+
+    Layout:
+      1. JSON envelope (machine-precise, top of block — what the AI MUST copy)
+      2. Human-readable detail block (context for the narrator)
+    """
+    if not v:
+        return ""
     nw = v.get("next_window") or {}
     if nw:
         # Prefer the refined (dasha ∩ Jupiter transit) sub-window if available.
         ref_s = nw.get("refined_start")
         ref_e = nw.get("refined_end")
         if ref_s and ref_e and ref_s != nw.get("start") and ref_e != nw.get("end"):
-            primary_hr = f"{_hr(ref_s)} to {_hr(ref_e)}"
+            primary_hr = f"{_ym_to_human(ref_s)} to {_ym_to_human(ref_e)}"
             nw_line = (
                 f"  Next favourable Dasha window: {nw.get('dasha')} "
                 f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
@@ -630,7 +687,7 @@ def format_verdict_for_prompt(v: dict) -> str:
                 f"DO NOT widen, shift, or change these dates. <<<"
             )
         else:
-            nw_hr = f"{_hr(nw.get('start',''))} to {_hr(nw.get('end',''))}"
+            nw_hr = f"{_ym_to_human(nw.get('start',''))} to {_ym_to_human(nw.get('end',''))}"
             nw_line = (
                 f"  Next favourable Dasha window: {nw.get('dasha')} "
                 f"({nw.get('start')} → {nw.get('end')}) — {nw.get('reason')}\n"
@@ -648,6 +705,7 @@ def format_verdict_for_prompt(v: dict) -> str:
     rw = "\n".join(f"    - {r}" for r in (v.get("reasons_weak") or [])) or "    (none)"
 
     return (
+        _engine_json_envelope(v) + "\n"
         "════════════════════════════════════════════════════════════════════\n"
         "AUTHORITATIVE MARRIAGE VERDICT (deterministically computed by engine)\n"
         "════════════════════════════════════════════════════════════════════\n"

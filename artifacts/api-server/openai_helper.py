@@ -840,32 +840,69 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
     narrator_prefix = ""
     narrator_rules  = ""
     if marriage_verdict_block:
+        # Pull the must-quote window string out of the engine object so we
+        # can inject it as a hard-coded literal the AI cannot drift on.
+        _mw = ""
+        try:
+            from marriage_engine import extract_window_str  # type: ignore
+            _mw = extract_window_str(marriage_verdict_obj or {})
+        except Exception:
+            _mw = ""
+        must_window_line = (
+            f"  • The TIMING WINDOW you write MUST contain the EXACT string: \"{_mw}\".\n"
+            f"    Do NOT shorten to year-only, do NOT shift months, do NOT replace 'to' with\n"
+            f"    'around / by / late / early'. Copy those words verbatim.\n"
+        ) if _mw else (
+            "  • The engine found no clear window in the next 12 years — say so honestly.\n"
+            "    Do NOT invent a year-range to fill the silence.\n"
+        )
         narrator_prefix = (
             f"{marriage_verdict_block}\n"
             "⚠️ NARRATOR MODE — THIS IS BINDING ⚠️\n"
-            "The verdict, score, KP verdict, current dasha, next favourable window, "
-            "promised/denied/delay flags, and the recommended remedy planet & remedy text "
-            "above are FINAL and were computed deterministically from the devotee's chart "
-            "by the shastriya engine. You are ONLY a narrator. You MUST:\n"
-            "  • Restate the same VERDICT (do not soften, harden, or hedge).\n"
-            "  • Use the EXACT next_window dasha + EXACT date range provided. Do NOT invent\n"
-            "    a different year-range. If the engine says 'not found', honestly say timing\n"
-            "    is not clearly indicated in the next 12 years, instead of fabricating dates.\n"
+            "The ENGINE JSON above is the GROUND TRUTH for this turn. Treat every value\n"
+            "in it as IMMUTABLE. You are ONLY a narrator. You MUST:\n"
+            f"{must_window_line}"
+            "  • Restate the same final_verdict (do not soften, harden, or hedge it).\n"
             "  • Cite the same 7th lord, karaka, and KP sub-lord names verbatim.\n"
             "  • Recommend the SAME remedy planet and same mantra/donation given above.\n"
             "  • Quote the strongest 2 supporting factors AND, if any, 1 main weakening factor —\n"
-            "    drawn from the lists above. Do not add factors not in the engine output.\n"
-            "  • You may translate to {lang}, smooth language into Acharya ji's warm voice,\n"
-            "    and add the human Pranam/empathy line — but never change the technical content.\n"
-            "If you contradict the engine verdict, score, or window, the answer is WRONG.\n\n"
+            "    drawn ONLY from the lists above. Do not add factors not in the engine output.\n"
+            "  • BANNED hedging words for this turn (do NOT use any of these): \"around\",\n"
+            "    \"approximately\", \"roughly\", \"likely\", \"possibly\", \"perhaps\", \"maybe\",\n"
+            "    \"might\", \"could be\", \"sometime\", \"by the end of\", \"early\", \"late\",\n"
+            "    \"in or around\". The window is exact — speak with quiet certainty, not hedges.\n"
+            "  • You may smooth language into Acharya ji's warm voice and translate to {lang},\n"
+            "    but NEVER change technical content (verdict, dates, planets, remedy).\n"
+            "If you contradict the engine verdict, score, or window — the answer is WRONG\n"
+            "and will be rejected.\n\n"
         ).format(lang=lang_name)
         narrator_rules = (
             "★ MARRIAGE NARRATOR OVERRIDE ★ — Rules 2,3,4,5,6 below are SUPERSEDED for this turn:\n"
             "you do NOT do Vedic / KP / dasha / transit reasoning yourself. The engine already did.\n"
-            "Just narrate the AUTHORITATIVE block above in Acharya ji's voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
+            "Just narrate the ENGINE JSON above in Acharya ji's voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
         )
 
+    # ── Brand-tone blacklist (always applied, every topic) ───────────────────
+    # These are the AI-style phrases the user explicitly called out as breaking
+    # the human-Pandit illusion. The model is told not to produce them; a
+    # post-response scrubber (in ai_ask) also strips any that slip through.
+    tone_blacklist = (
+        "BANNED PHRASES — never write these (they ruin Acharya ji's human voice):\n"
+        "  ✗ \"I sense your concern\"   ✗ \"I understand\"   ✗ \"I can see that\"\n"
+        "  ✗ \"significant topic\"      ✗ \"important matter\"   ✗ \"let me analyze\"\n"
+        "  ✗ \"based on your chart\"    ✗ \"according to the data\"\n"
+        "  ✗ \"Pranam\" as a greeting (use \"Beta,\" or \"Dekhiye beta,\" instead)\n"
+        "  ✗ \"As an AI\" / \"As a language model\" — you are a human Pandit.\n\n"
+    )
+
+    # ── LANGUAGE LOCK — strict per-language enforcement (always injected) ────
+    # Hard, non-negotiable per-language enforcement. Placed at the very top of
+    # the user payload so it is the first instruction the model parses.
+    lang_lock_block = _strict_lang_block(detected)
+
     user = (
+        f"{lang_lock_block}"
+        f"{tone_blacklist}"
         f"{narrator_prefix}"
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n"
         f"{intel_section}"
@@ -1100,7 +1137,45 @@ _BRAND_SAFE_REDIRECT = {
 }
 
 
-def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, birth: Any = None, history: list | None = None) -> dict:
+_TONE_SCRUB_PATTERNS = [
+    # (regex, replacement)  — case-insensitive, applied once per response.
+    (re.compile(r"\bI sense your concern[.,]?\s*", re.I), ""),
+    (re.compile(r"\bI understand[.,]?\s*",          re.I), ""),
+    (re.compile(r"\bI can see that\b",              re.I), "Aapki kundli mein"),
+    (re.compile(r"\bsignificant topic\b",           re.I), "important question"),
+    (re.compile(r"\bbased on your chart[.,]?\s*",   re.I), ""),
+    (re.compile(r"\baccording to the data[.,]?\s*", re.I), ""),
+    (re.compile(r"\blet me analyze\b[.,]?\s*",      re.I), ""),
+    (re.compile(r"^\s*Pranam[.,]?\s*",              re.I), "Beta, "),
+    (re.compile(r"\bAs an AI\b[^.]*\.",             re.I), ""),
+    (re.compile(r"\bAs a language model\b[^.]*\.",  re.I), ""),
+]
+
+
+def _scrub_brand_tone(text: str) -> str:
+    """Strip AI-style phrases that break the human-Pandit illusion."""
+    if not text:
+        return text
+    out = text
+    for rx, repl in _TONE_SCRUB_PATTERNS:
+        out = rx.sub(repl, out)
+    # Collapse double spaces / orphan punctuation introduced by removals.
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"\n{3,}",   "\n\n", out)
+    out = re.sub(r"^[ \t,;.]+", "",  out)
+    return out.strip()
+
+
+def _has_required_window(text: str, must_window_str: str) -> bool:
+    """True iff the AI output literally contains the engine's window string."""
+    if not must_window_str:
+        return True   # nothing to enforce
+    return must_window_str.lower() in (text or "").lower()
+
+
+def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
+           birth: Any = None, history: list | None = None,
+           preferred_language: Optional[str] = None) -> dict:
     """
     Returns: { text, topic, confidence, source }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
@@ -1108,7 +1183,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
     # calling the LLM at all. Cheap, deterministic, never leaks chart data.
     if _is_brand_unsafe(question):
-        eff_lang = _detect_question_lang(question, lang)
+        eff_lang = _resolve_response_lang(question, lang, preferred_language)
         msg = _BRAND_SAFE_REDIRECT.get(eff_lang) or _BRAND_SAFE_REDIRECT["hn"]
         return {
             "text":       msg,
@@ -1122,7 +1197,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
     # possible failure mode for an astrology app's credibility.
     has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
     if not has_planets:
-        eff_lang = _detect_question_lang(question, lang)
+        eff_lang = _resolve_response_lang(question, lang, preferred_language)
         no_chart_msg = {
             "en": ("Beta, your full birth-chart isn't with me yet — without it I cannot honestly predict timing or specifics. "
                    "Please save your birth details (date, exact time, and place) first; once I can see your kundli, I will guide you with full clarity."),
@@ -1148,14 +1223,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
+        preferred_language=preferred_language,
     )
 
     # ── Topic-aware sampling ────────────────────────────────────────────────
     # Marriage uses a deterministic verdict engine — the AI is now a narrator.
-    # Lower temperature + lower penalties = stable verdict/timeline across runs
-    # while still allowing minor wording variation.
+    # temp=0.0 = fully deterministic (modulo OpenAI server-side jitter).
     if topic == "marriage":
-        temperature       = 0.2
+        temperature       = 0.0
         presence_penalty  = 0.0
         frequency_penalty = 0.0
     else:
@@ -1163,21 +1238,73 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
         presence_penalty  = 0.4
         frequency_penalty = 0.35
 
-    try:
-        resp = client.chat.completions.create(
-            model            = model,
-            messages         = messages,
-            temperature      = temperature,
-            max_tokens       = 480,    # ≈ 12-18 lines, phone-friendly brevity
-            presence_penalty = presence_penalty,
-            frequency_penalty= frequency_penalty,
-        )
-    except Exception as exc:
-        raise RuntimeError(f"OpenAI request failed: {exc}") from exc
+    def _call_once() -> str:
+        try:
+            r = client.chat.completions.create(
+                model            = model,
+                messages         = messages,
+                temperature      = temperature,
+                max_tokens       = 480,
+                presence_penalty = presence_penalty,
+                frequency_penalty= frequency_penalty,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"OpenAI request failed: {exc}") from exc
+        t = (r.choices[0].message.content or "").strip() if r.choices else ""
+        if not t:
+            raise RuntimeError("OpenAI returned empty response")
+        return t
 
-    text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    text = _call_once()
+
+    # ── Marriage validator: enforce engine window appears verbatim ──────────
+    # If the AI dropped or paraphrased the window, retry ONCE with a stricter
+    # final reminder appended. Any second failure is logged but accepted —
+    # we still scrub the tone so the user sees a clean reply.
+    if topic == "marriage":
+        try:
+            from marriage_engine import extract_window_str  # type: ignore
+            # Re-run engine to get the exact window we required in the prompt.
+            kp_dict = None
+            try:
+                kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else None
+            except Exception:
+                kp_dict = None
+            from chart_intelligence import analyze_chart  # type: ignore
+            try:
+                _intel = analyze_chart(kundli, birth)
+            except Exception:
+                _intel = {}
+            from marriage_engine import assess_marriage  # type: ignore
+            _v = assess_marriage(kundli, _intel or {}, kp_dict or {}, birth)
+            must_window = extract_window_str(_v or {})
+        except Exception as exc:
+            print(f"[ai_ask] could not recompute marriage window for validator: {exc}")
+            must_window = ""
+        if must_window and not _has_required_window(text, must_window):
+            print(f"[ai_ask] MARRIAGE VALIDATOR FAIL — required window "
+                  f"\"{must_window}\" missing from output. Retrying once.")
+            messages.append({"role": "assistant", "content": text})
+            messages.append({"role": "user", "content": (
+                "Your previous reply did NOT contain the EXACT timing window "
+                f"\"{must_window}\" required by the engine. Rewrite your reply "
+                "now, in the same voice, but make sure those exact words appear "
+                "as the timing. Do not add hedging words like 'around' or 'late'. "
+                "Keep everything else the same.")})
+            try:
+                text = _call_once()
+            except Exception as exc:
+                print(f"[ai_ask] marriage retry failed: {exc}")
+            if not _has_required_window(text, must_window):
+                print(f"[ai_ask] MARRIAGE VALIDATOR — still missing after retry; "
+                      f"prepending engine window literal to preserve correctness.")
+                # Last-resort: prepend a single line so user sees the right window.
+                text = f"Beta, vivah ka prabal yog {must_window} mein dikh raha hai. " + text
+
+    # ── Tone scrubber (always) — strip any blacklisted AI-style phrases ─────
+    text = _scrub_brand_tone(text)
     if not text:
-        raise RuntimeError("OpenAI returned empty response")
+        raise RuntimeError("OpenAI returned empty response after scrub")
 
     # Derive confidence from data completeness — high (0.95) if planets +
     # dasha + birth coords all present (KP usable), medium (0.75) if planets

@@ -677,7 +677,7 @@ def extract_alt_window_str(v: dict) -> str:
 # These are filled in by Python BEFORE the AI is called. The AI's job collapses
 # from "decide + compose" to "polish wording" — single OpenAI call, no retry.
 _LANG_GREETING = {
-    "hn": "Beta,",      "hi": "बेटा,",     "en": "Dear devotee,",
+    "hn": "Seedhi baat —", "hi": "सीधी बात —", "en": "Straight answer —",
 }
 _LANG_REASON_LABEL = {
     "hn": "Vajah",      "hi": "वजह",       "en": "Reason",

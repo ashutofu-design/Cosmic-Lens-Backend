@@ -907,7 +907,25 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
         "  ✗ \"significant topic\"      ✗ \"important matter\"   ✗ \"let me analyze\"\n"
         "  ✗ \"based on your chart\"    ✗ \"according to the data\"\n"
         "  ✗ \"Pranam\" as a greeting (use \"Beta,\" or \"Dekhiye beta,\" instead)\n"
-        "  ✗ \"As an AI\" / \"As a language model\" — you are a human Pandit.\n\n"
+        "  ✗ \"As an AI\" / \"As a language model\" — you are a human Pandit.\n"
+        "\n"
+        "BANNED HEDGING / UNCERTAINTY VOCABULARY — Acharya ji STATES, never speculates.\n"
+        "Any of these words = wrong reply. Replace with the certain form on the right.\n"
+        "  ✗ chance / chances              ✗ possibility / possible\n"
+        "  ✗ likely / unlikely             ✗ may / might / perhaps\n"
+        "  ✗ around / approx / approximately / roughly\n"
+        "  ✗ ho sakta hai → hoga           ✗ ho sakti hai → hogi\n"
+        "  ✗ ho sakte hain → honge         ✗ sambhavna / sambhavnayein → REMOVE\n"
+        "  ✗ shayad → REMOVE               ✗ lagta hai → hai (state directly)\n"
+        "  ✗ ho sakega / sakegi → hoga / hogi\n"
+        "  ✗ \"early 2026\" / \"late 2026\" → use the EXACT month-year window\n"
+        "  ✗ \"by the end of 2026\"        → use the EXACT month-year window\n"
+        "\n"
+        "REQUIRED CERTAIN VOCABULARY — use these phrasings for finality:\n"
+        "  ✓ \"hoga\" / \"hogi\"            ✓ \"yeh hi time hai\"\n"
+        "  ✓ \"clear dikhta hai\"          ✓ \"delay hoga\"\n"
+        "  ✓ \"yeh period active hai\"     ✓ \"isi me plan karein\"\n"
+        "  ✓ \"Seedhi baat —\" opener is preferred for direct timing answers.\n\n"
     )
 
     # ── LANGUAGE LOCK — strict per-language enforcement (always injected) ────
@@ -944,9 +962,19 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             "  5. NEVER write any of these AI-style phrases: \"I sense your concern\",\n"
             "     \"I understand\", \"based on your chart\", \"let me analyze\", \"Pranam\",\n"
             "     \"As an AI\". Speak ONLY as Acharya Vidyasagar.\n"
-            "  6. NEVER use hedging words: \"around\", \"likely\", \"possibly\", \"maybe\",\n"
-            "     \"approximately\", \"roughly\", \"early\", \"late\", \"by the end of\".\n"
-            "     The dates above are exact — speak with quiet certainty.\n"
+            "  6. NEVER use hedging / uncertainty words. Acharya ji STATES, never speculates.\n"
+            "     ✗ FORBIDDEN: chance, chances, possibility, possible, likely, unlikely,\n"
+            "       may, might, perhaps, around, approx, approximately, roughly, early,\n"
+            "       late, by the end of, ho sakta hai, ho sakti hai, ho sakte hain,\n"
+            "       sambhavna, sambhavnayein, shayad, lagta hai, ho sakega, ho sakegi.\n"
+            "     ✓ REQUIRED forms: \"hoga\", \"hogi\", \"honge\", \"yeh hi time hai\",\n"
+            "       \"clear dikhta hai\", \"delay hoga\", \"yeh period active hai\",\n"
+            "       \"isi me plan karein\".\n"
+            "     The dates above are EXACT month-year — say them VERBATIM, never\n"
+            "     reduce them to \"around 2026\" or \"late 2026\".\n"
+            "  7. STYLE: open with \"Seedhi baat —\" or \"Beta,\" then state the timing\n"
+            "     as a fact. Three short paragraphs: (1) verdict + window, (2) reason\n"
+            "     in 1–2 lines, (3) remedy in 1 line. Total 90–130 words.\n"
             f"\nDEVOTEE'S QUESTION (for tone matching only — do NOT re-answer it):\n\"{question}\"\n"
         )
         msgs: list[dict] = [{"role": "system", "content": system}]
@@ -1200,6 +1228,9 @@ _BRAND_SAFE_REDIRECT = {
 _MARRIAGE_CONSTRAINT_PATTERNS = [
     re.compile(r"\b(yeh|is|iss)\s+(time|window|date|saal|year|month|month|mahine)\s+(nahi|not|avoid|skip)", re.I),
     re.compile(r"\b(time|window|date|year|saal)\s+(nahi|not)\s+chahi", re.I),
+    # Month-name-year + "nahi chahi" e.g. "November 2026 nahi chahiye"
+    re.compile(r"\b(?:january|february|march|april|may|june|july|august|"
+               r"september|october|november|december)\s+\d{4}\s+(nahi|not)\b", re.I),
     re.compile(r"\b(next|aagla|agla)\s+(year|saal|window|month)\b", re.I),
     re.compile(r"\b(uske|iske|is\s+ke)\s+baad\b", re.I),
     re.compile(r"\bafter\s+(this|that|november|october|december|january|2025|2026|2027)\b", re.I),
@@ -1237,6 +1268,50 @@ _TONE_SCRUB_PATTERNS = [
     (re.compile(r"^\s*Pranam[.,]?\s*",              re.I), "Beta, "),
     (re.compile(r"\bAs an AI\b[^.]*\.",             re.I), ""),
     (re.compile(r"\bAs a language model\b[^.]*\.",  re.I), ""),
+
+    # ── HEDGE / UNCERTAINTY → CERTAINTY (Hinglish + Hindi) ─────────────────
+    # Generalised verb-stem swap: ANY "<stem> sakta hai / sakti hai / sakte
+    # hain / sakega / sakegi" → certain future. Stem is preserved.
+    # Examples caught: ho/pa/mil/nikal/de/le/ja/aa/dikh/ban/badh/ghat/kar
+    # sakta hai → kar gives "karega", etc.
+    (re.compile(r"\b(\w+)\s+sakte\s+hain\b",        re.I), r"\1enge"),
+    (re.compile(r"\b(\w+)\s+sakti\s+hain\b",        re.I), r"\1engi"),
+    (re.compile(r"\b(\w+)\s+sakta\s+hai\b",         re.I), r"\1ega"),
+    (re.compile(r"\b(\w+)\s+sakti\s+hai\b",         re.I), r"\1egi"),
+    (re.compile(r"\b(\w+)\s+sakega\b",              re.I), r"\1ega"),
+    (re.compile(r"\b(\w+)\s+sakegi\b",              re.I), r"\1egi"),
+    (re.compile(r"\bsambhavnaye?in?\b",             re.I), "yog"),
+    (re.compile(r"\bsambhavna\b",                   re.I), "yog"),
+    (re.compile(r"\bshayad\s+",                     re.I), ""),
+    (re.compile(r"\blagta\s+hai\b",                 re.I), "hai"),
+    # Devanagari hedges
+    (re.compile(r"हो सकता है"),                       "होगा"),
+    (re.compile(r"हो सकती है"),                       "होगी"),
+    (re.compile(r"हो सकते हैं"),                      "होंगे"),
+    (re.compile(r"शायद\s*",                          re.U), ""),
+    (re.compile(r"संभावना"),                          "योग"),
+    # English hedges
+    (re.compile(r"\baround\s+(?=\w)",               re.I), ""),
+    (re.compile(r"\bapproximately\s+",              re.I), ""),
+    (re.compile(r"\bapprox\.?\s+",                  re.I), ""),
+    (re.compile(r"\broughly\s+",                    re.I), ""),
+    (re.compile(r"\bperhaps\s+",                    re.I), ""),
+    (re.compile(r"\bpossibly\s+",                   re.I), ""),
+    (re.compile(r"\bquite\s+possibly\s+",           re.I), ""),
+    (re.compile(r"\bmight\s+be\b",                  re.I), "is"),
+    (re.compile(r"\bmay\s+be\b",                    re.I), "is"),
+    (re.compile(r"\bis\s+likely\s+to\b",            re.I), "will"),
+    (re.compile(r"\bwill\s+likely\b",               re.I), "will"),
+    (re.compile(r"\blikely\s+",                     re.I), ""),
+    (re.compile(r"\bunlikely\s+",                   re.I), "not "),
+    (re.compile(r"\bthere\s+is\s+a\s+(strong\s+|good\s+)?chance\s+(that\s+)?", re.I), ""),
+    (re.compile(r"\bthere'?s\s+a\s+(strong\s+|good\s+)?chance\s+(that\s+)?",   re.I), ""),
+    # Soften timing fuzz: "by the end of 2026" / "early 2026" / "late 2026"
+    (re.compile(r"\bby\s+the\s+end\s+of\s+",        re.I), ""),
+    (re.compile(r"\bin\s+early\s+(?=\d{4})",        re.I), "in "),
+    (re.compile(r"\bin\s+late\s+(?=\d{4})",         re.I), "in "),
+    (re.compile(r"\bearly\s+(?=\d{4})",             re.I), ""),
+    (re.compile(r"\blate\s+(?=\d{4})",              re.I), ""),
 ]
 
 
@@ -1308,6 +1383,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     topic = _classify_topic(question)
+
+    # ── TOPIC STICKINESS for marriage follow-ups ─────────────────────────────
+    # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" don't
+    # contain marriage keywords, so the classifier returns "general" and the
+    # baked-answer path never fires — letting the AI hallucinate a fake date.
+    # Force topic="marriage" when (a) constraint detected AND (b) the prior
+    # assistant turn talked about vivah/shaadi/marriage timing.
+    try:
+        if topic != "marriage" and _detect_marriage_constraint(question, history or []):
+            for h in reversed(history or []):
+                if (h.get("role") == "assistant"):
+                    prev = (h.get("content") or "").lower()
+                    if any(k in prev for k in
+                           ("vivah", "shaadi", "shadi", "marriage",
+                            "विवाह", "शादी", "spouse", "wife", "husband")):
+                        topic = "marriage"
+                        print("[ai_ask] topic stickiness: forced topic=marriage "
+                              "(constraint detected on follow-up)")
+                        break
+    except Exception as exc:
+        print(f"[ai_ask] topic-stickiness check failed: {exc}")
+
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,

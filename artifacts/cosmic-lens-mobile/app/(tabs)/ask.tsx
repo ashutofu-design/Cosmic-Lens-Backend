@@ -320,55 +320,6 @@ export default function AskScreen() {
         <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
-      {/* ── Mode switcher pill (chat ⇄ prashna) ───────────────────────────── */}
-      {(mode === "chat" || mode === "prashna") && (
-        <View style={[s.modeSwitch, { backgroundColor: (C as any).bgCard2 ?? C.bgCard, borderColor: C.border }]}>
-          <Pressable
-            onPress={() => {
-              if (mode === "chat") return;
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setMode("chat");
-            }}
-            style={({ pressed }) => [
-              s.modeSwitchSeg,
-              mode === "chat" && { backgroundColor: C.accentBg, borderColor: `${C.accent}80` },
-              pressed && mode !== "chat" && { opacity: 0.7 },
-            ]}
-          >
-            <Feather name="message-circle" size={13} color={mode === "chat" ? C.accent : C.textMuted} />
-            <Text style={[s.modeSwitchText, { color: mode === "chat" ? C.accent : C.textMuted }]}>
-              Advance Ask Engine
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              if (mode === "prashna") return;
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (showDemo) { router.push("/onboarding"); return; }
-              setMode("prashna");
-              setMessages(prev => {
-                if (prev.some(m => m.id === "prashna-init")) return prev;
-                return [...prev, {
-                  id: "prashna-init",
-                  role: "assistant",
-                  text: "🔢 Prashna Kundli (KP 1-249) — mann ko shant karke ek number 1 se 249 ke beech sochiye, neeche likhiye. Aap apna prashna bhi saath mein likh sakte hain. Wahi sankhya aapki prashna-kundli ka lagna banegi.",
-                }];
-              });
-            }}
-            style={({ pressed }) => [
-              s.modeSwitchSeg,
-              mode === "prashna" && { backgroundColor: C.accentBg, borderColor: `${C.accent}80` },
-              pressed && mode !== "prashna" && { opacity: 0.7 },
-            ]}
-          >
-            <Feather name="hash" size={13} color={mode === "prashna" ? C.accent : C.textMuted} />
-            <Text style={[s.modeSwitchText, { color: mode === "prashna" ? C.accent : C.textMuted }]}>
-              Prashna Kundli
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {/* Demo banner */}
       {showDemo && (
         <Pressable style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]} onPress={() => router.push("/onboarding")}>
@@ -422,12 +373,7 @@ export default function AskScreen() {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
-              setMode("prashna");
-              setMessages(prev => prev.some(m => m.id === "prashna-init") ? prev : [...prev, {
-                id: "prashna-init",
-                role: "assistant",
-                text: "🔢 Prashna Kundli (KP 1-249) — mann ko shant karke ek number 1 se 249 ke beech sochiye, neeche likhiye. Aap apna prashna bhi saath mein likh sakte hain. Wahi sankhya aapki prashna-kundli ka lagna banegi.",
-              }]);
+              router.push("/prashna-kundli");
             }}
             style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
           >
@@ -473,8 +419,8 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* ───── Chat / Prashna Mode ──────────────────────────────────────── */}
-      {(mode === "chat" || mode === "prashna") && (<>
+      {/* ───── Chat Mode ────────────────────────────────────────────────── */}
+      {mode === "chat" && (<>
       {/* Messages */}
       <FlatList
         ref={listRef}
@@ -485,8 +431,8 @@ export default function AskScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Starter chips (only chat mode, single init) */}
-      {mode === "chat" && messages.length <= 1 && !showDemo && (
+      {/* Starter chips (only if single init message) */}
+      {messages.length <= 1 && !showDemo && (
         <View style={s.starters}>
           {STARTERS.map(q => (
             <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: `${C.accent}30` }]} onPress={() => send(q)}>
@@ -496,47 +442,21 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* ── Prashna number-entry row (above question) ─────────────────── */}
-      {mode === "prashna" && (
-        <View style={[s.prashnaNumRow, { backgroundColor: C.bg, borderTopColor: C.border }]}>
-          <View style={[s.prashnaNumWrap, { backgroundColor: C.bgCard, borderColor: `${C.accent}50` }]}>
-            <Feather name="hash" size={14} color={C.accent} />
-            <TextInput
-              style={[s.prashnaNumInput, { color: C.text }]}
-              value={prashnaNumber}
-              onChangeText={(v) => setPrashnaNumber(v.replace(/[^0-9]/g, "").slice(0, 3))}
-              placeholder="1 — 249"
-              placeholderTextColor={C.textMuted}
-              keyboardType="number-pad"
-              maxLength={3}
-              editable={!showDemo && !loading}
-            />
-          </View>
-          <Text style={[s.prashnaNumHint, { color: C.textMuted }]}>
-            Sankhya sochiye (lagna nirdharit)
-          </Text>
-        </View>
-      )}
-
       {/* Input row */}
       <View style={[s.inputRow, { paddingBottom: botPad + 90, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
           style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}
           onChangeText={setInput}
-          placeholder={mode === "prashna" ? "Apna prashna likhiye (vaikalpik)…" : t.askPlaceholder}
+          placeholder={t.askPlaceholder}
           placeholderTextColor={C.textMuted}
           multiline
           editable={!showDemo}
-          onSubmitEditing={() => mode === "prashna" ? sendPrashna(prashnaNumber, input) : send(input)}
+          onSubmitEditing={() => send(input)}
           returnKeyType="send"
         />
         <Pressable
-          onPress={() => {
-            if (showDemo) { router.push("/onboarding"); return; }
-            if (mode === "prashna") sendPrashna(prashnaNumber, input);
-            else send(input);
-          }}
+          onPress={() => (showDemo ? router.push("/onboarding") : send(input))}
           style={({ pressed }) => [s.sendBtn, pressed && { opacity: 0.7 }]}
         >
           <LinearGradient

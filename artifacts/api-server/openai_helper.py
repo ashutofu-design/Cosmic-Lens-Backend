@@ -722,6 +722,8 @@ def _build_messages(
     # score / timeline / remedy — it is only a narrator.
     marriage_verdict_block = ""
     marriage_verdict_obj   = None
+    marriage_baked_answer  = ""   # pre-composed final answer (Step A)
+    marriage_use_alt       = False # constraint-aware: use next_alt_window (Step B)
     if topic == "marriage" and isinstance(kundli, dict) and kundli.get("planets"):
         try:
             kp_dict = None
@@ -733,11 +735,24 @@ def _build_messages(
             marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
             if marriage_verdict_obj:
                 marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
+                # ── Constraint detection: did the devotee reject the primary
+                # window? ("yeh time nahi chahiye / next year batao / is date
+                # ke baad / uske baad / dusra time / not this window …")
+                marriage_use_alt = _detect_marriage_constraint(question, history or [])
+                # Build the pre-baked answer in the resolved language; AI's
+                # job collapses to "polish wording, do not change facts".
+                from marriage_engine import format_final_answer  # type: ignore
+                marriage_baked_answer = format_final_answer(
+                    marriage_verdict_obj, lang_code=detected,
+                    use_alt=marriage_use_alt,
+                )
                 print(f"[openai_helper] marriage verdict: "
                       f"verdict='{marriage_verdict_obj.get('verdict')}' "
                       f"score={marriage_verdict_obj.get('score')} "
                       f"kp={marriage_verdict_obj.get('kp_verdict')} "
-                      f"window={marriage_verdict_obj.get('next_window')}")
+                      f"use_alt={marriage_use_alt} "
+                      f"window={marriage_verdict_obj.get('next_window')} "
+                      f"alt_window={marriage_verdict_obj.get('next_alt_window')}")
         except Exception as exc:
             print(f"[openai_helper] marriage_engine failed: {exc}")
 
@@ -899,6 +914,44 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
     # Hard, non-negotiable per-language enforcement. Placed at the very top of
     # the user payload so it is the first instruction the model parses.
     lang_lock_block = _strict_lang_block(detected)
+
+    # ── SINGLE-CALL MARRIAGE PATH ────────────────────────────────────────────
+    # When we have a baked answer, the AI is reduced to a TONE polisher.
+    # No chart context, no STRICT INSTRUCTIONS, no narrator override — the
+    # facts are already final. This eliminates the validator-retry loop
+    # because the model only has 4 short paragraphs to rephrase.
+    if marriage_baked_answer:
+        constraint_note = (
+            "CONTEXT: the devotee just rejected the primary timing window. "
+            "Acknowledge that gently in line 1, then deliver the next window from the answer below.\n\n"
+        ) if marriage_use_alt else ""
+        user = (
+            f"{lang_lock_block}"
+            f"{tone_blacklist}"
+            f"{constraint_note}"
+            "═══ FINAL ANSWER (you may ONLY polish wording for warm tone) ═══\n"
+            f"{marriage_baked_answer}\n"
+            "═════════════════════════════════════════════════════════════════\n\n"
+            "STRICT POLISH RULES — read top-down. Violating ANY rule = wrong reply:\n"
+            "  1. DO NOT change any verdict word, planet name, dasha name, date, year,\n"
+            "     month, or remedy text. Copy them VERBATIM into your reply.\n"
+            "  2. You MAY: smooth the phrasing into Acharya ji's warm voice; merge labels\n"
+            "     (Vajah/Samay/Upay) into flowing sentences; add ONE empathetic opener\n"
+            "     using \"Beta,\" or \"Dekhiye beta,\"; translate non-fact words to the\n"
+            f"    devotee's language ({lang_name}).\n"
+            "  3. NO bullet points, NO numbered lists, NO markdown headers.\n"
+            "  4. Total length 90–130 words across 3 short paragraphs.\n"
+            "  5. NEVER write any of these AI-style phrases: \"I sense your concern\",\n"
+            "     \"I understand\", \"based on your chart\", \"let me analyze\", \"Pranam\",\n"
+            "     \"As an AI\". Speak ONLY as Acharya Vidyasagar.\n"
+            "  6. NEVER use hedging words: \"around\", \"likely\", \"possibly\", \"maybe\",\n"
+            "     \"approximately\", \"roughly\", \"early\", \"late\", \"by the end of\".\n"
+            "     The dates above are exact — speak with quiet certainty.\n"
+            f"\nDEVOTEE'S QUESTION (for tone matching only — do NOT re-answer it):\n\"{question}\"\n"
+        )
+        msgs: list[dict] = [{"role": "system", "content": system}]
+        msgs.append({"role": "user", "content": user})
+        return msgs
 
     user = (
         f"{lang_lock_block}"
@@ -1137,6 +1190,41 @@ _BRAND_SAFE_REDIRECT = {
 }
 
 
+# ── Constraint detector ─────────────────────────────────────────────────────
+# When a devotee rejects the primary marriage window, we must hand back the
+# pre-computed ALT window — never let the AI invent a new year. Triggers:
+#   "yeh time nahi chahiye"   "is window mein nahi"   "next year batao"
+#   "is date ke baad batao"   "uske baad"            "after this"
+#   "dusra time"              "another window"        "agla window"
+#   "iske alawa"              "skip this"             "not this"
+_MARRIAGE_CONSTRAINT_PATTERNS = [
+    re.compile(r"\b(yeh|is|iss)\s+(time|window|date|saal|year|month|month|mahine)\s+(nahi|not|avoid|skip)", re.I),
+    re.compile(r"\b(time|window|date|year|saal)\s+(nahi|not)\s+chahi", re.I),
+    re.compile(r"\b(next|aagla|agla)\s+(year|saal|window|month)\b", re.I),
+    re.compile(r"\b(uske|iske|is\s+ke)\s+baad\b", re.I),
+    re.compile(r"\bafter\s+(this|that|november|october|december|january|2025|2026|2027)\b", re.I),
+    re.compile(r"\b(dusra|doosra|another|alag|other)\s+(time|window|date|saal|year)\b", re.I),
+    re.compile(r"\b(skip|avoid)\s+(this|yeh|is)\b", re.I),
+    re.compile(r"\biske\s+alawa\b", re.I),
+    re.compile(r"\bnot\s+this\s+(window|time|date|year)\b", re.I),
+]
+
+def _detect_marriage_constraint(question: str, history: list) -> bool:
+    """Did the devotee just reject the engine's primary window?
+
+    We check the current question text (strongest signal). History is
+    inspected lightly only when the current Q is a short follow-up like
+    "uske baad?" — those need context to confirm intent.
+    """
+    q = (question or "").strip()
+    if not q:
+        return False
+    for rx in _MARRIAGE_CONSTRAINT_PATTERNS:
+        if rx.search(q):
+            return True
+    return False
+
+
 _TONE_SCRUB_PATTERNS = [
     # (regex, replacement)  — case-insensitive, applied once per response.
     (re.compile(r"\bI sense your concern[.,]?\s*", re.I), ""),
@@ -1257,51 +1345,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     text = _call_once()
 
-    # ── Marriage validator: enforce engine window appears verbatim ──────────
-    # If the AI dropped or paraphrased the window, retry ONCE with a stricter
-    # final reminder appended. Any second failure is logged but accepted —
-    # we still scrub the tone so the user sees a clean reply.
-    if topic == "marriage":
-        try:
-            from marriage_engine import extract_window_str  # type: ignore
-            # Re-run engine to get the exact window we required in the prompt.
-            kp_dict = None
-            try:
-                kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else None
-            except Exception:
-                kp_dict = None
-            from chart_intelligence import analyze_chart  # type: ignore
-            try:
-                _intel = analyze_chart(kundli, birth)
-            except Exception:
-                _intel = {}
-            from marriage_engine import assess_marriage  # type: ignore
-            _v = assess_marriage(kundli, _intel or {}, kp_dict or {}, birth)
-            must_window = extract_window_str(_v or {})
-        except Exception as exc:
-            print(f"[ai_ask] could not recompute marriage window for validator: {exc}")
-            must_window = ""
-        if must_window and not _has_required_window(text, must_window):
-            print(f"[ai_ask] MARRIAGE VALIDATOR FAIL — required window "
-                  f"\"{must_window}\" missing from output. Retrying once.")
-            messages.append({"role": "assistant", "content": text})
-            messages.append({"role": "user", "content": (
-                "Your previous reply did NOT contain the EXACT timing window "
-                f"\"{must_window}\" required by the engine. Rewrite your reply "
-                "now, in the same voice, but make sure those exact words appear "
-                "as the timing. Do not add hedging words like 'around' or 'late'. "
-                "Keep everything else the same.")})
-            try:
-                text = _call_once()
-            except Exception as exc:
-                print(f"[ai_ask] marriage retry failed: {exc}")
-            if not _has_required_window(text, must_window):
-                print(f"[ai_ask] MARRIAGE VALIDATOR — still missing after retry; "
-                      f"prepending engine window literal to preserve correctness.")
-                # Last-resort: prepend a single line so user sees the right window.
-                text = f"Beta, vivah ka prabal yog {must_window} mein dikh raha hai. " + text
-
-    # ── Tone scrubber (always) — strip any blacklisted AI-style phrases ─────
+    # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
+    # The single-call marriage path uses a pre-baked, fact-locked answer from
+    # marriage_engine.format_final_answer(), so no validator retry is needed:
+    # the model is only polishing wording, not deciding facts.
     text = _scrub_brand_tone(text)
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")

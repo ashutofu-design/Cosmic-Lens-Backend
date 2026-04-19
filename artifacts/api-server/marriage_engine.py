@@ -32,7 +32,7 @@ function pure. Caller can attach `transit_trigger` later if available.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 SIGNS = [
@@ -385,6 +385,37 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
     elif jup_trig.get("_error"):
         trace.append(f"Jupiter transit unavailable: {jup_trig['_error']}")
 
+    # ── NEXT-AFTER WINDOW (constraint-aware follow-up) ───────────────────────
+    # If the devotee rejects the primary window ("yeh time nahi chahiye / next
+    # year batao"), we must hand back a SECOND deterministic window — never
+    # let the AI guess. We re-scan dashas starting AFTER next_window.end and
+    # apply the same Jupiter-trigger refinement.
+    next_alt_window = None
+    if next_window and next_window.get("end"):
+        try:
+            end_ym = next_window["end"]                     # "YYYY-MM"
+            after_dt = datetime.strptime(end_ym + "-28", "%Y-%m-%d") + timedelta(days=5)
+            cand = _next_dasha_window(kundli.get("dashas") or [],
+                                      significators_271, after_dt)
+            if cand:
+                jt2 = _maybe_jupiter_trigger(kundli, lagna_idx, moon_idx, cand)
+                if jt2 and "_error" not in jt2 and jt2.get("refined_window"):
+                    rw2 = jt2["refined_window"]
+                    cand = dict(cand)
+                    cand["refined_start"] = rw2["start"][:7]
+                    cand["refined_end"]   = rw2["end"][:7]
+                    cand["jupiter_hits"]  = rw2.get("jupiter_hits")
+                    cand["jupiter_sign"]  = rw2.get("jupiter_sign")
+                    cand["reason"] = (
+                        cand.get("reason", "") +
+                        f" + Jupiter transits {rw2.get('jupiter_sign')} "
+                        f"(hits {rw2.get('jupiter_hits')}) during this period"
+                    )
+                next_alt_window = cand
+                trace.append(f"Next-after-primary window: {next_alt_window}")
+        except Exception as exc:
+            trace.append(f"next_alt_window scan failed: {exc}")
+
     # ── STEP 5: SCORING ──────────────────────────────────────────────────────
     score = 50
     rs: list[str] = []
@@ -556,6 +587,7 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         "current_dasha_supports": current_supports,
         "current_dasha":        f"{cur_md}-{cur_ad}".strip("-"),
         "next_window":          next_window,
+        "next_alt_window":      next_alt_window,
         "d9":                   d9_info,
         "remedy":               remedy,
         "remedy_for_planet":    weakest_planet,
@@ -628,6 +660,108 @@ def extract_window_str(v: dict) -> str:
     return f"{_ym_to_human(nw.get('start',''))} to {_ym_to_human(nw.get('end',''))}"
 
 
+def extract_alt_window_str(v: dict) -> str:
+    """Same as extract_window_str, but for next_alt_window (constraint-aware)."""
+    if not v:
+        return ""
+    nw = v.get("next_alt_window") or {}
+    if not nw:
+        return ""
+    ref_s, ref_e = nw.get("refined_start"), nw.get("refined_end")
+    if ref_s and ref_e and ref_s != nw.get("start") and ref_e != nw.get("end"):
+        return f"{_ym_to_human(ref_s)} to {_ym_to_human(ref_e)}"
+    return f"{_ym_to_human(nw.get('start',''))} to {_ym_to_human(nw.get('end',''))}"
+
+
+# ── Pre-baked, fact-locked answer templates ──────────────────────────────────
+# These are filled in by Python BEFORE the AI is called. The AI's job collapses
+# from "decide + compose" to "polish wording" — single OpenAI call, no retry.
+_LANG_GREETING = {
+    "hn": "Beta,",      "hi": "बेटा,",     "en": "Dear devotee,",
+}
+_LANG_REASON_LABEL = {
+    "hn": "Vajah",      "hi": "वजह",       "en": "Reason",
+}
+_LANG_TIMING_LABEL = {
+    "hn": "Samay",      "hi": "समय",       "en": "Timing",
+}
+_LANG_REMEDY_LABEL = {
+    "hn": "Upay",       "hi": "उपाय",      "en": "Remedy",
+}
+_LANG_AFTER_LABEL = {
+    "hn": "Aap is window ko avoid karna chahte hain — agla sashakt yog",
+    "hi": "यदि आप यह समय छोड़ना चाहते हैं — अगला सशक्त योग",
+    "en": "If you wish to skip that window — the next strong yog",
+}
+_LANG_NO_WINDOW = {
+    "hn": "Agle 12 saal mein koi spasht prabal vivah-yog nahi mil raha — dheeraj rakhein.",
+    "hi": "अगले १२ वर्षों में कोई स्पष्ट प्रबल विवाह-योग नहीं मिल रहा — धैर्य रखें।",
+    "en": "No strong marriage yog appears in the next 12 years — patience is advised.",
+}
+
+
+def format_final_answer(v: dict, lang_code: str = "hn", use_alt: bool = False) -> str:
+    """
+    Build a fully-baked, fact-locked answer the AI only has to polish for tone.
+    Single source of truth for verdict / dasha / dates / remedy.
+
+    Args:
+      v          : verdict dict from assess_marriage()
+      lang_code  : "hn" (Hinglish, default), "hi" (Devanagari), "en" (English)
+      use_alt    : if True, narrate next_alt_window instead of next_window
+                   (used when the devotee rejects the primary window).
+    """
+    if not v:
+        return ""
+    code = lang_code if lang_code in _LANG_GREETING else "hn"
+    g    = _LANG_GREETING[code]
+    L_R  = _LANG_REASON_LABEL[code]
+    L_T  = _LANG_TIMING_LABEL[code]
+    L_X  = _LANG_REMEDY_LABEL[code]
+    L_A  = _LANG_AFTER_LABEL[code]
+
+    # Verdict line — uses the engine's already-localised Hinglish phrase.
+    verdict = v.get("verdict") or ""
+
+    # Pick reasons (top 2 strong, top 1 weak) — no AI invention.
+    rs = (v.get("reasons_strong") or [])[:2]
+    rw = (v.get("reasons_weak")   or [])[:1]
+    reason_bits = []
+    if rs:
+        reason_bits.append("; ".join(rs))
+    if rw:
+        reason_bits.append(f"weakening: {rw[0]}")
+    reason_line = ". ".join(reason_bits) if reason_bits else "—"
+
+    # Timing — primary OR alt (constraint mode).
+    primary = extract_window_str(v)
+    alt     = extract_alt_window_str(v)
+    if use_alt and alt:
+        timing_line = alt
+    elif primary:
+        timing_line = primary
+    else:
+        return f"{g} {_LANG_NO_WINDOW[code]}"
+
+    # Optional after-line so even non-constraint replies hint that an alt exists.
+    after_line = ""
+    if (not use_alt) and alt:
+        after_line = f"\n{L_A}: {alt}."
+
+    cur_dasha = v.get("current_dasha") or ""
+    sl_name   = v.get("seventh_lord") or ""
+    karaka    = v.get("karaka") or ""
+    remedy    = v.get("remedy") or ""
+
+    return (
+        f"{g} {verdict}.\n\n"
+        f"{L_R}: 7th lord {sl_name}, kalatra-karaka {karaka}, "
+        f"current dasha {cur_dasha}. {reason_line}.\n\n"
+        f"{L_T}: {timing_line}.{after_line}\n\n"
+        f"{L_X}: {remedy}."
+    )
+
+
 def _engine_json_envelope(v: dict) -> str:
     """
     JSON envelope at the very top of the prompt block. The AI is told to
@@ -635,7 +769,9 @@ def _engine_json_envelope(v: dict) -> str:
     """
     import json as _json
     window_str = extract_window_str(v)
-    nw = v.get("next_window") or {}
+    alt_str    = extract_alt_window_str(v)
+    nw  = v.get("next_window") or {}
+    nw2 = v.get("next_alt_window") or {}
     payload = {
         "final_verdict":   v.get("verdict"),
         "score":           v.get("score"),
@@ -649,6 +785,8 @@ def _engine_json_envelope(v: dict) -> str:
         "timeline_start":    nw.get("refined_start") or nw.get("start") or None,
         "timeline_end":      nw.get("refined_end")   or nw.get("end")   or None,
         "must_use_window_str": window_str or None,
+        "next_alt_window_str": alt_str or None,
+        "next_alt_dasha":      (f"{nw2.get('dasha')}" if nw2 else None),
         "remedy_planet":   v.get("remedy_for_planet"),
         "remedy":          v.get("remedy"),
     }

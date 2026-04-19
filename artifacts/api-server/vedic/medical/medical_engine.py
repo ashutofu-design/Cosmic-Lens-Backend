@@ -216,6 +216,165 @@ def _make_yogas():
 
 DISEASE_YOGAS = _make_yogas()
 
+# ─── Safety / accuracy layer ────────────────────────────────────────────────
+# Each disease yoga is re-scored by counting SUPPORTING FACTORS.
+# Severity tiers (classical 3-confirmation rule):
+#   TENDENCY  = 1 supporting factor   (mild — chart inclination only)
+#   RISK      = 2 supporting factors  (moderate — keep an eye on lifestyle)
+#   STRONG    = 3+ supporting factors (significant — recommend medical screening)
+# Even STRONG never means diagnosis. ALWAYS pair with disclaimer.
+def _count_supporting_factors(disease_name, h_map, p_si, sb_total):
+    """Counts independent confirmations for a disease yoga."""
+    factors = 0
+    afflicted_houses = h_map.get(6,[]) + h_map.get(8,[]) + h_map.get(12,[])
+    malefics = ("Saturn","Mars","Rahu","Ketu","Sun")
+    benefics = ("Jupiter","Venus","Mercury","Moon")
+
+    # Generic confirmation rules per disease family
+    family_rules = {
+        "Diabetes (Madhumeha)": [
+            "Jupiter" in afflicted_houses,
+            "Venus" in afflicted_houses,
+            sb_total.get("Jupiter",6) < 5 if sb_total else False,
+            sb_total.get("Venus",6) < 5 if sb_total else False,
+            any(m in h_map.get(5,[]) for m in malefics),  # 5th = pancreas
+        ],
+        "Hypertension (BP)": [
+            "Sun" in p_si and p_si.get("Sun",0) in (0,4,8),
+            "Mars" in (h_map.get(1,[]) + h_map.get(4,[])),
+            sb_total.get("Sun",6) > 7 if sb_total else False,
+            "Saturn" in h_map.get(1,[]),
+        ],
+        "Heart disease": [
+            "Sun" in (h_map.get(4,[])+h_map.get(5,[])),
+            any(m in (h_map.get(4,[])+h_map.get(5,[])) for m in malefics),
+            p_si.get("Sun")==p_si.get("Saturn"),
+            sb_total.get("Sun",6) < 4 if sb_total else False,
+        ],
+        "Cancer risk (general)": [
+            "Moon" in afflicted_houses,
+            "Saturn" in afflicted_houses,
+            "Rahu" in afflicted_houses,
+            p_si.get("Moon")==p_si.get("Saturn"),
+            p_si.get("Moon")==p_si.get("Rahu"),
+        ],
+        "Mental disturbance": [
+            "Saturn" in h_map.get(4,[]),
+            "Rahu" in h_map.get(4,[]),
+            p_si.get("Moon")==p_si.get("Saturn"),
+            p_si.get("Moon")==p_si.get("Rahu"),
+            "Mercury" in afflicted_houses,
+        ],
+        "Stroke risk": [
+            "Sun" in p_si and p_si.get("Sun",0) in (0,4,8),
+            "Saturn" in h_map.get(1,[]),
+            "Rahu" in (h_map.get(1,[])+h_map.get(4,[])),
+            p_si.get("Sun")==p_si.get("Rahu"),
+        ],
+        "Paralysis": [
+            p_si.get("Saturn")==p_si.get("Rahu"),
+            "Saturn" in (h_map.get(1,[])+h_map.get(4,[])),
+            "Rahu" in (h_map.get(1,[])+h_map.get(4,[])),
+            "Mercury" in afflicted_houses,
+        ],
+        "Hair loss / baldness": [
+            "Sun" in h_map.get(11,[]),
+            "Mars" in h_map.get(11,[]),
+            "Saturn" in h_map.get(1,[]),
+            "Mercury" in afflicted_houses,  # vata
+        ],
+    }
+    rules = family_rules.get(disease_name)
+    if rules:
+        factors = sum(1 for r in rules if r)
+    else:
+        # Default: count single-trigger as 1 factor
+        factors = 1
+    return factors
+
+def _severity_from_factors(n: int) -> str:
+    if n >= 3: return "STRONG"
+    if n == 2: return "RISK"
+    if n == 1: return "TENDENCY"
+    return "NONE"
+
+# Arishta Bhanga (cancellation of disease yoga) — classical rules
+def _arishta_bhanga_score(h_map, p_si, sb_total):
+    """Higher score = more disease-yoga CANCELLATION (good)."""
+    score = 0
+    notes = []
+    benefics = ("Jupiter","Venus","Mercury","Moon")
+
+    # Jupiter in/aspecting 6/8/12 → cancels disease yogas
+    for h in (6,8,12):
+        if "Jupiter" in h_map.get(h,[]):
+            score += 2; notes.append(f"Jupiter in {h}th cancels disease yogas")
+    # Benefic in kendra (1/4/7/10)
+    for h in (1,4,7,10):
+        for b in benefics:
+            if b in h_map.get(h,[]):
+                score += 1; notes.append(f"{b} in kendra H{h}"); break
+    # Strong Lagna lord
+    if sb_total:
+        # Get lagna lord by checking 1st house planets indirectly
+        for p, rupas in sb_total.items():
+            if rupas >= 7:
+                score += 1
+    # Vipreet Raja Yoga: 6/8/12 lord in another dushtana
+    # (handled in main engine — flag here)
+    return {"score": score, "notes": notes,
+            "verdict": ("STRONG cancellation" if score>=4 else
+                        "MODERATE cancellation" if score>=2 else
+                        "WEAK cancellation")}
+
+# Vipreet Raja Yoga detection — when 6/8/12 lord is in another dushtana
+# This actually CONVERTS disease yoga into HEALTH/WEALTH yoga.
+def _vipreet_raja_yoga(h_map, p_si, lagna_si):
+    lord6  = SIGN_LORDS[(lagna_si+5)%12]
+    lord8  = SIGN_LORDS[(lagna_si+7)%12]
+    lord12 = SIGN_LORDS[(lagna_si+11)%12]
+    dushtana_houses = {6,8,12}
+    triggered = []
+    for L, label in ((lord6,"6th"),(lord8,"8th"),(lord12,"12th")):
+        for h, pl in h_map.items():
+            if L in pl and h in dushtana_houses and h != ((SIGN_LORDS.index(L)+1) if L in SIGN_LORDS else -1):
+                triggered.append(f"{label} lord {L} in H{h}")
+    if len(triggered) >= 2:
+        return {"present": True, "type": "FULL Vipreet Raja Yoga",
+                "details": triggered,
+                "effect": "Converts disease/loss yogas into HEALTH & WEALTH gains"}
+    elif triggered:
+        return {"present": True, "type": "Partial Vipreet Raja Yoga",
+                "details": triggered,
+                "effect": "Partial cancellation of disease yogas"}
+    return {"present": False}
+
+# Ayushkaraka (Saturn) — longevity karaka
+def _ayushkaraka_analysis(h_map, p_si, sb_total):
+    sat_house = next((h for h,pl in h_map.items() if "Saturn" in pl), None)
+    sat_rupas = sb_total.get("Saturn") if sb_total else None
+    placement_quality = ("EXCELLENT" if sat_house in (3,6,11) else
+                         "GOOD" if sat_house in (1,4,5,7,9,10) else
+                         "POOR" if sat_house in (8,12) else
+                         "NEUTRAL")
+    strength = ("STRONG" if (sat_rupas and sat_rupas>=6) else
+                "WEAK" if (sat_rupas and sat_rupas<=4) else
+                "MODERATE")
+    return {"saturn_house": sat_house, "saturn_rupas": round(sat_rupas,2) if sat_rupas else None,
+            "placement_quality": placement_quality, "strength": strength,
+            "verdict": ("LONG life potential" if (placement_quality in ("EXCELLENT","GOOD")
+                                                   and strength in ("STRONG","MODERATE"))
+                        else "AVERAGE longevity"),
+            "rule": "Saturn = Ayushkaraka (longevity giver). Strength + good placement = long life."}
+
+MEDICAL_DISCLAIMER = (
+    "⚕ MEDICAL DISCLAIMER (MANDATORY): These are CHART TENDENCIES from classical Vedic "
+    "astrology — NOT a medical diagnosis. NEVER stop, start, or change any treatment based "
+    "on this. Single 'yoga' = inclination only; only when 3+ INDEPENDENT factors confirm "
+    "AND symptoms exist, consider consulting a qualified medical practitioner for proper "
+    "screening. Astrology supplements wellness awareness — it does not replace medicine."
+)
+
 # M8 — Nakshatra → Nadi (1=Vata/Aadi, 2=Pitta/Madhya, 3=Kapha/Antya), 27 nakshatras
 NAKSHATRA_NADI = [1,2,3,3,2,1,1,2,3,3,2,1,1,2,3,3,2,1,1,2,3,3,2,1,1,2,3]
 NADI_NAMES = {1:"Aadi (Vata)", 2:"Madhya (Pitta)", 3:"Antya (Kapha)"}
@@ -327,17 +486,46 @@ def run_medical_engine(kundli: dict, birth: dict | None = None,
     out["m5_roga_bala"] = {"score": score, "rating": rb_rating,
                            "interpretation": f"{rb_rating} disease vulnerability"}
 
-    # M6 Disease yogas — run all
+    # M6 Disease yogas — run all WITH SEVERITY SCORING (3-confirmation rule)
     triggered = []
     for name, basis, fn in DISEASE_YOGAS:
         try:
             if fn(h_map, planet_set, p_si, sb_total):
-                triggered.append({"yoga": name, "basis": basis})
+                factors = _count_supporting_factors(name, h_map, p_si, sb_total)
+                severity = _severity_from_factors(factors)
+                if severity == "NONE": continue
+                triggered.append({"yoga": name, "basis": basis,
+                                  "supporting_factors": factors,
+                                  "severity": severity})
         except Exception:
             pass
+    # Sort by severity (STRONG → RISK → TENDENCY)
+    sev_rank = {"STRONG":0,"RISK":1,"TENDENCY":2}
+    triggered.sort(key=lambda x: sev_rank.get(x["severity"],9))
+    sev_count = {"STRONG":0,"RISK":0,"TENDENCY":0}
+    for t in triggered: sev_count[t["severity"]] = sev_count.get(t["severity"],0)+1
     out["m6_disease_yogas"] = {"total_checked": len(DISEASE_YOGAS),
                                "triggered_count": len(triggered),
-                               "triggered": triggered}
+                               "severity_breakdown": sev_count,
+                               "triggered": triggered,
+                               "interpretation_rule": (
+                                   "TENDENCY = chart inclination only (1 factor); "
+                                   "RISK = moderate (2 factors — watch lifestyle); "
+                                   "STRONG = significant (3+ factors — recommend medical screening). "
+                                   "Cross-check with Arishta Bhanga & Vipreet Yoga before concluding."
+                               )}
+
+    # M6b — Arishta Bhanga (cancellation of disease yogas)
+    out["m6b_arishta_bhanga"] = _arishta_bhanga_score(h_map, p_si, sb_total)
+
+    # M6c — Vipreet Raja Yoga (converts disease yoga into health/wealth gain)
+    out["m6c_vipreet_raja_yoga"] = _vipreet_raja_yoga(h_map, p_si, lagna_si)
+
+    # M6d — Ayushkaraka (Saturn) longevity analysis
+    out["m6d_ayushkaraka"] = _ayushkaraka_analysis(h_map, p_si, sb_total)
+
+    # Disclaimer attached to engine output
+    out["medical_disclaimer"] = MEDICAL_DISCLAIMER
 
     # M7 Constitutional type
     dosha_count = {"Vata":0, "Pitta":0, "Kapha":0}
@@ -489,7 +677,12 @@ def run_medical_engine(kundli: dict, birth: dict | None = None,
 def format_medical_engine(r: dict) -> str:
     if not r or not r.get("available"):
         return "▸ MEDICAL ASTROLOGY ENGINE: ❌ unavailable"
-    L = ["▸ MEDICAL ASTROLOGY ENGINE — FULL DEEP AUDIT (Sprint-46) — 20 checks"]
+    L = [
+        "▸ MEDICAL ASTROLOGY ENGINE — FULL DEEP AUDIT (Sprint-46 hardened) — 20+4 checks",
+        "  " + "═"*78,
+        "  ⚕ " + MEDICAL_DISCLAIMER,
+        "  " + "═"*78,
+    ]
 
     # M1
     L.append("  M1 KALAPURUSHA (12-sign body map):")
@@ -520,13 +713,39 @@ def format_medical_engine(r: dict) -> str:
     rb5 = r["m5_roga_bala"]
     L.append(f"  M5 ROGA-BALA disease score: {rb5['score']} → {rb5['rating']} — {rb5['interpretation']}")
 
-    # M6
+    # M6 with severity tiers
     dy = r["m6_disease_yogas"]
-    L.append(f"  M6 DISEASE YOGAS — {dy['triggered_count']}/{dy['total_checked']} triggered:")
+    sb_ = dy.get("severity_breakdown",{})
+    L.append(f"  M6 DISEASE YOGAS — {dy['triggered_count']}/{dy['total_checked']} triggered "
+             f"(STRONG:{sb_.get('STRONG',0)} RISK:{sb_.get('RISK',0)} TENDENCY:{sb_.get('TENDENCY',0)})")
+    L.append(f"      ▪ {dy['interpretation_rule']}")
     for y in dy["triggered"]:
-        L.append(f"      ⚠ {y['yoga']} — basis: {y['basis']}")
+        sev = y["severity"]
+        icon = "🔴" if sev=="STRONG" else "🟡" if sev=="RISK" else "🟢"
+        L.append(f"      {icon} [{sev:<8} • {y['supporting_factors']} factors] "
+                 f"{y['yoga']} — basis: {y['basis']}")
     if not dy["triggered"]:
         L.append("      ▪ No major disease yogas detected ✅")
+
+    # M6b Arishta Bhanga (cancellation)
+    ab = r.get("m6b_arishta_bhanga",{})
+    L.append(f"  M6b ARISHTA BHANGA (disease-yoga cancellation) — score {ab.get('score',0)} → {ab.get('verdict','-')}")
+    for n in ab.get("notes",[])[:5]: L.append(f"        ✚ {n}")
+
+    # M6c Vipreet Raja Yoga
+    v = r.get("m6c_vipreet_raja_yoga",{})
+    if v.get("present"):
+        L.append(f"  M6c VIPREET RAJA YOGA — {v['type']} ✅")
+        for d in v.get("details",[]): L.append(f"        ✚ {d}")
+        L.append(f"        ▶ Effect: {v['effect']}")
+    else:
+        L.append("  M6c VIPREET RAJA YOGA — not present")
+
+    # M6d Ayushkaraka
+    ay = r.get("m6d_ayushkaraka",{})
+    L.append(f"  M6d AYUSHKARAKA (Saturn longevity) — H{ay.get('saturn_house')} • "
+             f"placement {ay.get('placement_quality')} • strength {ay.get('strength')} → {ay.get('verdict')}")
+    L.append(f"        ▪ {ay.get('rule','')}")
 
     # M7
     c = r["m7_constitution"]

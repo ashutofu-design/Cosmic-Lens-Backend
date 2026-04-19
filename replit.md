@@ -946,6 +946,19 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - M20: 36 body-part drekkana report card with affliction state
 - LF: 60,484 → **67,411 chars** (+6,927 — new biggest single sprint)
 
+### Sprint 46-HARDENED — Medical Engine SAFETY + ACCURACY pass ✅
+- ⚕ **MANDATORY medical disclaimer banner** at top of every medical output (NOT a diagnosis; never stop/start treatment; consult qualified doctor only when 3+ factors AND symptoms)
+- 🟢🟡🔴 **Severity tiers (3-confirmation rule)** — every triggered yoga re-scored:
+  - TENDENCY (1 factor) — chart inclination only
+  - RISK (2 factors) — watch lifestyle
+  - STRONG (3+ factors) — recommend medical screening
+- ✅ **Arishta Bhanga (cancellation)** — Jupiter in 6/8/12, benefic in kendras, lagna lord strength → cancels disease yogas
+- ✅ **Vipreet Raja Yoga** — 6/8/12 lord in another dushtana CONVERTS disease yoga into health+wealth gain
+- 🌟 **Ayushkaraka Saturn analysis** — house placement + strength → longevity verdict
+- 🔧 **Tightened predicates** for serious diseases (Diabetes, BP, Heart, Cancer, Mental, Stroke, Paralysis, Hair-loss) — 4-5 supporting-factor rules each (no false alarms from single weak signal)
+- Test chart now shows: 10 yogas all TENDENCY-only (0 STRONG), Bhanga score 9 (STRONG cancellation), Vipreet Yoga partial-present, Saturn long-life potential — net positive verdict instead of fear-mongering
+- LF: 67,411 → **68,972 chars**
+
 ### Sprint 46+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas

@@ -1234,7 +1234,9 @@ _MARRIAGE_CONSTRAINT_PATTERNS = [
     re.compile(r"\b(next|aagla|agla)\s+(year|saal|window|month)\b", re.I),
     re.compile(r"\b(uske|iske|is\s+ke)\s+baad\b", re.I),
     re.compile(r"\bafter\s+(this|that|november|october|december|january|2025|2026|2027)\b", re.I),
-    re.compile(r"\b(dusra|doosra|another|alag|other)\s+(time|window|date|saal|year)\b", re.I),
+    re.compile(r"\b(dusra|doosra|another|alternate|alag|other)\s+(time|window|date|saal|year)\b", re.I),
+    re.compile(r"\b(show|give|batao|dikha)\s+(an?\s+)?alternate\s+(window|time|date)\b", re.I),
+    re.compile(r"\balternate\s+(time|window|date)\s+(bhi\s+)?(batao|chahiye)\b", re.I),
     re.compile(r"\b(skip|avoid)\s+(this|yeh|is)\b", re.I),
     re.compile(r"\biske\s+alawa\b", re.I),
     re.compile(r"\bnot\s+this\s+(window|time|date|year)\b", re.I),
@@ -1336,11 +1338,56 @@ def _has_required_window(text: str, must_window_str: str) -> bool:
     return must_window_str.lower() in (text or "").lower()
 
 
+_FOLLOW_UPS_BY_TOPIC = {
+    "marriage": {
+        "hn": ["Iska upay batao", "Alternate time bhi batao", "Mangal dosh hai kya?"],
+        "hi": ["इसका उपाय बताइए", "वैकल्पिक समय बताइए", "क्या मंगल दोष है?"],
+        "en": ["Suggest a remedy", "Show an alternate window", "Do I have manglik dosha?"],
+    },
+    "career": {
+        "hn": ["Job change ka time?", "Promotion kab hogi?", "Best career field batao"],
+        "hi": ["नौकरी बदलने का समय?", "पदोन्नति कब?", "सर्वश्रेष्ठ क्षेत्र बताइए"],
+        "en": ["When to switch jobs?", "Next promotion timing?", "Best career field for me"],
+    },
+    "finance": {
+        "hn": ["Dhan-yog kab khulta hai?", "Loan/karz kab utrega?", "Investment ka shubh time?"],
+        "hi": ["धन-योग कब खुलेगा?", "कर्ज़ कब उतरेगा?", "निवेश का शुभ समय?"],
+        "en": ["When does my wealth-yoga open?", "When will I be debt-free?", "Auspicious time to invest?"],
+    },
+    "health": {
+        "hn": ["Swasthya ka upay batao", "Kis ang mein dosh hai?", "Aushadhi ke liye shubh din?"],
+        "hi": ["स्वास्थ्य का उपाय बताइए", "किस अंग में दोष है?", "औषधि का शुभ दिन?"],
+        "en": ["Suggest a health remedy", "Which body area is afflicted?", "Auspicious day to start treatment?"],
+    },
+    "education": {
+        "hn": ["Padhai mein safalta kab?", "Foreign study ka yog?", "Vidya ka upay batao"],
+        "hi": ["पढ़ाई में सफलता कब?", "विदेश अध्ययन का योग?", "विद्या का उपाय?"],
+        "en": ["When will I succeed in studies?", "Foreign study yoga?", "Remedy for studies"],
+    },
+    "general": {
+        "hn": ["Aur detail mein batao", "Iska upay batao", "Aaj ka muhurat?"],
+        "hi": ["और विस्तार से बताइए", "इसका उपाय बताइए", "आज का मुहूर्त?"],
+        "en": ["Tell me in more detail", "Suggest a remedy", "What's today's muhurat?"],
+    },
+}
+
+def _derive_follow_ups(topic: str, lang: str) -> list[str]:
+    """Return 3 short, deterministic follow-up suggestion chips for the
+    given topic + reply language. Falls back to general topic and Hinglish
+    if either key is unknown. Pure-Python, zero LLM cost."""
+    key = (topic or "general").lower()
+    if key not in _FOLLOW_UPS_BY_TOPIC:
+        key = "general"
+    by_lang = _FOLLOW_UPS_BY_TOPIC[key]
+    eff = lang if lang in by_lang else "hn"
+    return list(by_lang.get(eff) or by_lang["hn"])[:3]
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
            birth: Any = None, history: list | None = None,
            preferred_language: Optional[str] = None) -> dict:
     """
-    Returns: { text, topic, confidence, source }
+    Returns: { text, topic, confidence, source, follow_ups }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
     """
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
@@ -1353,6 +1400,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "topic":      "off_topic",
             "confidence": 1.0,
             "source":     "brand_guard",
+            "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
         }
 
     # ── Fail-safe: if no kundli planets at all, never call the LLM. The
@@ -1370,11 +1418,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                    "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga."),
         }.get(eff_lang) or ("Beta, abhi mere paas aapki poori janm-kundli nahi hai — iske bina mai imaandari se koi timing ya specific bhavishyavani nahi kar sakta. "
                             "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga.")
+        _t = _classify_topic(question)
         return {
             "text":       no_chart_msg,
-            "topic":      _classify_topic(question),
+            "topic":      _t,
             "confidence": 0.0,
             "source":     "no_chart_failsafe",
+            "follow_ups": _derive_follow_ups(_t, eff_lang),
         }
 
     client = _get_client()
@@ -1394,7 +1444,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         if topic != "marriage" and _detect_marriage_constraint(question, history or []):
             for h in reversed(history or []):
                 if (h.get("role") == "assistant"):
-                    prev = (h.get("content") or "").lower()
+                    # Mobile client sends history as {role, text}; older callers
+                    # may send {role, content}. Accept either to avoid silently
+                    # missing the topic-stickiness signal on a follow-up.
+                    prev = ((h.get("content") or h.get("text") or "")).lower()
                     if any(k in prev for k in
                            ("vivah", "shaadi", "shadi", "marriage",
                             "विवाह", "शादी", "spouse", "wife", "husband")):
@@ -1465,11 +1518,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     else:
         confidence = 0.55
 
+    eff_lang = _resolve_response_lang(question, lang, preferred_language)
     return {
         "text":       text,
         "topic":      topic,
         "confidence": confidence,
         "source":     "openai",
+        "follow_ups": _derive_follow_ups(topic, eff_lang),
     }
 
 

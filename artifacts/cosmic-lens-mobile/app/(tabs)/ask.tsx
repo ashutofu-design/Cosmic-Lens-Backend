@@ -1,14 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -17,6 +17,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
+import { MarkdownReply } from "@/components/MarkdownReply";
+import { MessageActionsSheet } from "@/components/MessageActionsSheet";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -30,6 +33,7 @@ interface Message {
   role: "user" | "assistant";
   text: string;
   loading?: boolean;
+  followUps?: string[];
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -89,7 +93,24 @@ export default function AskScreen() {
     plan: string;
     message: string;
   }>(null);
+  // Long-press action sheet target message
+  const [actionsFor, setActionsFor] = useState<Message | null>(null);
   const listRef = useRef<FlatList>(null);
+
+  // Find the user question that produced a given assistant message. Used by
+  // Regenerate so we re-ask the question paired to the LONG-PRESSED bubble,
+  // not just the latest one in the thread (architect bug #2 fix).
+  const findPrecedingUserQuestion = useCallback(
+    (assistantId: string): string => {
+      const idx = messages.findIndex((m) => m.id === assistantId);
+      if (idx <= 0) return "";
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i].role === "user") return messages[i].text;
+      }
+      return "";
+    },
+    [messages],
+  );
 
   const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -98,16 +119,54 @@ export default function AskScreen() {
   useEffect(() => { scrollToEnd(); }, [messages]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { regenerate?: boolean; targetAssistantId?: string }) => {
       if (!text.trim() || loading) return;
       if (showDemo) {
         router.push("/onboarding");
         return;
       }
-      const userMsg: Message = { id: Date.now().toString(), role: "user", text: text.trim() };
+      const isRegen = !!opts?.regenerate;
+      const targetId = opts?.targetAssistantId;
+
+      // ── Snapshot-based state derivation ─────────────────────────────────
+      // Compute `trimmed` (post-strip) and `history` from a single snapshot
+      // so the request body, the quota-restore path, and the optimistic UI
+      // never disagree (avoids stale-closure bugs on rapid regenerate).
+      const original = messages;
+      let trimmed = original;
+      if (isRegen) {
+        if (targetId) {
+          // Regenerate THIS specific assistant bubble — drop it and any
+          // assistant turns after it; preserve everything before.
+          const idx = original.findIndex((m) => m.id === targetId);
+          if (idx >= 0) {
+            trimmed = original.slice(0, idx);
+            // Also drop any trailing assistant turns that followed it (rare,
+            // but safe).
+            while (trimmed.length > 0 && trimmed[trimmed.length - 1].role === "assistant") {
+              trimmed = trimmed.slice(0, -1);
+            }
+          }
+        } else {
+          // No specific target: drop trailing assistant turn(s).
+          while (
+            trimmed.length > 0 &&
+            (trimmed[trimmed.length - 1].role === "assistant" || trimmed[trimmed.length - 1].id === "thinking")
+          ) {
+            trimmed = trimmed.slice(0, -1);
+          }
+        }
+      }
+
+      const userMsg: Message | null = isRegen
+        ? null
+        : { id: Date.now().toString() + "_u", role: "user", text: text.trim() };
       const thinkMsg: Message = { id: "thinking", role: "assistant", text: "", loading: true };
-      setMessages(prev => [...prev, userMsg, thinkMsg]);
-      setInput("");
+      const nextWithUser = userMsg ? [...trimmed, userMsg] : trimmed;
+      const nextWithThink: Message[] = [...nextWithUser, thinkMsg];
+
+      setMessages(nextWithThink);
+      if (!isRegen) setInput("");
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -115,12 +174,13 @@ export default function AskScreen() {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (user?.api_key) headers["X-API-Key"] = user.api_key;
 
-        // Conversation memory: send last 10 turns (excluding the thinking placeholder
-        // and the just-sent user message which is sent separately as `question`).
-        const history = messages
-          .filter(m => !m.loading && m.id !== "thinking")
+        // Conversation memory: build from POST-strip snapshot (not state),
+        // excluding the new user message which is sent separately as
+        // `question`. Keep last 10 turns for context budget.
+        const history = trimmed
+          .filter((m) => !m.loading && m.id !== "thinking")
           .slice(-10)
-          .map(m => ({ role: m.role, text: m.text }));
+          .map((m) => ({ role: m.role, text: m.text }));
 
         const res = await apiFetch(`${API_BASE}/api/ask`, {
           method: "POST",
@@ -138,10 +198,18 @@ export default function AskScreen() {
 
         // ── Quota exhausted (HTTP 402) ─────────────────────────────────────
         if (res.status === 402) {
-          // Remove the thinking bubble and the user's just-sent message
-          // (they didn't actually consume an answer).
-          setMessages(prev => prev.filter(m => m.id !== "thinking" && m.id !== userMsg.id));
-          setInput(text); // restore input so they can retry after upgrade
+          // For regenerate: restore the FULL original (including the answer
+          // that was about to be replaced) so the user doesn't lose visible
+          // content when they hit a quota wall.
+          if (isRegen) {
+            setMessages(original);
+          } else {
+            // Fresh question: drop the unanswered user msg + thinking; restore input.
+            setMessages((prev) =>
+              prev.filter((m) => m.id !== "thinking" && (!userMsg || m.id !== userMsg.id)),
+            );
+            setInput(text);
+          }
           setQuotaModal({
             used:    json?.quota?.used  ?? 0,
             limit:   json?.quota?.limit ?? 0,
@@ -167,46 +235,100 @@ export default function AskScreen() {
         const answer =
           json.text ?? json.answer ?? json.response ??
           "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
-        setMessages(prev =>
-          prev.filter(m => m.id !== "thinking").concat({ id: Date.now().toString(), role: "assistant", text: answer })
-        );
-      } catch {
+        const followUps: string[] = Array.isArray(json.follow_ups) ? json.follow_ups.slice(0, 3) : [];
+        const newAssistantId = Date.now().toString() + "_a";
         setMessages(prev =>
           prev.filter(m => m.id !== "thinking").concat({
+            id: newAssistantId, role: "assistant", text: answer, followUps,
+          })
+        );
+      } catch {
+        // On network failure during regenerate, restore original so the
+        // user keeps the previously-visible answer instead of a dead thread.
+        if (isRegen) {
+          setMessages(original);
+        }
+        setMessages((prev) =>
+          prev.filter((m) => m.id !== "thinking").concat({
             id: Date.now().toString(),
             role: "assistant",
             text: "Network error — thodi der baad try karein.",
-          })
+          }),
         );
       } finally {
         setLoading(false);
       }
     },
-    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, language]
+    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, language, messages, t.askDailyLimitOver],
   );
+
+  // Latest assistant message id — only this one shows follow-up chips.
+  const latestAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && !m.loading) return m.id;
+    }
+    return null;
+  }, [messages]);
 
   const renderMsg = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const isLatestAssistant = !isUser && item.id === latestAssistantId;
     return (
-      <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
-        {!isUser && (
-          <View style={[s.avatar, { backgroundColor: C.accentBg, borderColor: `${C.accent}30` }]}>
-            <Text style={{ fontSize: 12 }}>🔭</Text>
-          </View>
-        )}
-        <View style={[s.bubbleInner, isUser
-          ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}30` }]
-          : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}>
-          {item.loading ? (
-            <ActivityIndicator size="small" color={C.accent} />
-          ) : (
-            <Text style={[s.bubbleText, isUser
-              ? [s.bubbleTextUser, { color: C.text }]
-              : [s.bubbleTextAssist, { color: C.textMid }]]}>
-              {item.text}
-            </Text>
+      <View>
+        <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
+          {!isUser && (
+            <View style={[s.avatar, { backgroundColor: C.accentBg, borderColor: `${C.accent}30` }]}>
+              <Text style={{ fontSize: 12 }}>🔭</Text>
+            </View>
           )}
+          <Pressable
+            onLongPress={() => {
+              if (isUser || item.loading) return;
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+              setActionsFor(item);
+            }}
+            delayLongPress={350}
+            style={[s.bubbleInner, isUser
+              ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}30` }]
+              : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}
+          >
+            {item.loading ? (
+              <AcharyaTypingDots caption="Acharya ji likh rahe hain…" />
+            ) : isUser ? (
+              <Text style={[s.bubbleText, s.bubbleTextUser, { color: C.text }]}>{item.text}</Text>
+            ) : (
+              <MarkdownReply text={item.text} />
+            )}
+          </Pressable>
         </View>
+
+        {/* Follow-up suggestion chips — only on the latest assistant reply */}
+        {isLatestAssistant && item.followUps && item.followUps.length > 0 && !loading && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.followUpsRow}
+          >
+            {item.followUps.map((q, idx) => (
+              <Pressable
+                key={`${item.id}_fu_${idx}`}
+                onPress={() => {
+                  try { Haptics.selectionAsync(); } catch {}
+                  send(q);
+                }}
+                style={({ pressed }) => [
+                  s.followUpChip,
+                  { backgroundColor: C.bgCard, borderColor: `${C.accent}50` },
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Feather name="corner-down-right" size={11} color={C.accent} />
+                <Text style={[s.followUpText, { color: C.accent }]}>{q}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
       </View>
     );
   };
@@ -404,6 +526,19 @@ export default function AskScreen() {
         </Pressable>
       </View>
       </>)}
+
+      {/* ── Long-press actions sheet (Copy / Share / Regenerate) ─────────── */}
+      <MessageActionsSheet
+        visible={!!actionsFor}
+        text={actionsFor?.text || ""}
+        canRegenerate={!loading && !!actionsFor && !!findPrecedingUserQuestion(actionsFor.id)}
+        onClose={() => setActionsFor(null)}
+        onRegenerate={() => {
+          if (!actionsFor) return;
+          const q = findPrecedingUserQuestion(actionsFor.id);
+          if (q) send(q, { regenerate: true, targetAssistantId: actionsFor.id });
+        }}
+      />
 
       {/* ── Daily quota exhausted modal ──────────────────────────────────── */}
       <Modal
@@ -644,6 +779,24 @@ const s = StyleSheet.create({
   bubbleText:       { fontSize: 13, lineHeight: 20 },
   bubbleTextUser:   { color: "#dde8f4" },
   bubbleTextAssist: { color: "#94a3b8" },
+
+  followUpsRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  followUpChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  followUpText: { fontSize: 12, fontWeight: "600" },
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,

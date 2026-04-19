@@ -1636,6 +1636,31 @@ def _build_messages(
             "Skip on greetings / non-house questions."
         )
 
+    # Sprint-19 Rule Y — Classical Yogas Mega (Vipreet/Dhana/KaalSarp/Nabhasa/Pravrajya)
+    if "CLASSICAL YOGAS" in lf:
+        reminder_lines.append(
+            "• 🔱 CLASSICAL YOGAS citation (Rule Y): the LOCKED FACTS contain "
+            "the Sprint-19 Classical Yogas block (Named Vipreet — "
+            "Harsha/Sarala/Vimala; 10+ Dhana yogas by lord-pairs; Negative — "
+            "Daridra/Guru-Chandal/Shakat/Vish/Angarak/Pitra-dosh; Kaal Sarp "
+            "12 variants — Anant/Kulik/Vasuki/Shankhpal/Padma/Mahapadma/"
+            "Takshak/Karkotak/Shankhachood/Ghatak/Vishdhar/Sheshnag; Nabhasa "
+            "Sankhya 7 — Vallaki/Damaru/Pasha/Kedara/Soola/Yuga/Gola; "
+            "Nabhasa Ashraya 3 — Rajju/Musala/Nala; Nabhasa Dala 2 — "
+            "Kamala-Dala/Mala-Dala; Nabhasa Aakriti subset — "
+            "Gada/Shakata/Pakshi/Vajra/Yava/Kamala/Vapi/Sarpa; Pravrajya — "
+            "Sannyasa variants by leading planet). When user asks about "
+            "wealth/dhana/dauloth/paisa, you MUST cite at least ONE Dhana "
+            "yoga from the block (with the specific lord-pair). When user "
+            "asks about Kaal Sarp / sarp dosh / snake-yoga / 'mera kaal "
+            "sarp hai kya', you MUST cite the EXACT variant name (e.g., "
+            "'Anant Kaal Sarp — Rahu in H1') if present, OR confirm 'no "
+            "Kaal Sarp detected' if absent. When user asks about renunciation"
+            " / sannyasa / spiritual-detachment, cite Pravrajya yoga. NEVER "
+            "invent yogas not in the block. The polarity icons (✅/⚠️/◐) "
+            "indicate POSITIVE/NEGATIVE/MIXED — preserve that tone."
+        )
+
     # Sprint-15 Rule W — Per-varga yogas (Pancha Mahapurusha / Raj / Vipreet)
     if "PER-VARGA YOGAS" in lf:
         reminder_lines.append(
@@ -3743,6 +3768,145 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         )
         except Exception as _exc:
             print(f"[ai_ask] Bhava Bala Deep (Sprint-18.5) post-inject failed: {_exc}")
+
+    # Sprint-19 Rule Y — DETERMINISTIC CLASSICAL YOGAS INJECTION (anti-hallucination).
+    # If user asks about Kaal Sarp / Dhana / Vipreet / Pravrajya / Nabhasa and the
+    # answer either invents a yoga not in our detector OR fails to confirm absence,
+    # surgically strip the false claim and append the correct deterministic verdict.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reCY
+            _qCY = (question or "").lower()
+
+            from vedic.yogas.classical_yogas import detect_classical_yogas  # type: ignore
+            _lgCY = kundli.get("ascendant") or kundli.get("lagna")
+            _lgsCY = _lgCY.get("sign") if isinstance(_lgCY, dict) else _lgCY
+            _stiCY = {"Aries":0,"Taurus":1,"Gemini":2,"Cancer":3,"Leo":4,
+                      "Virgo":5,"Libra":6,"Scorpio":7,"Sagittarius":8,
+                      "Capricorn":9,"Aquarius":10,"Pisces":11}
+            _lgiCY = (_stiCY.get(_lgsCY) if isinstance(_lgsCY, str)
+                      else _lgsCY if isinstance(_lgsCY, int) else None)
+            _yogas = detect_classical_yogas(kundli.get("planets") or [], _lgiCY)
+
+            # ── Kaal Sarp anti-hallucination ────────────────────────────
+            _is_kaalsarp_q = bool(_reCY.search(
+                r"(?i)kaal\s*sarp|kaalsarp|kal\s*sarp|sarp\s*dosh|"
+                r"snake\s*yog|naag\s*dosh", _qCY))
+            if _is_kaalsarp_q:
+                _ks_entries = [y for y in _yogas if y.get("category") == "Kaal Sarp"]
+                _ks_actual = next(
+                    (y for y in _ks_entries
+                     if "yoga" in y.get("name", "").lower()
+                     and "status" not in y.get("name", "").lower()),
+                    None
+                )
+                # Detect AI's claim of Kaal Sarp (positive form, NOT preceded by negation)
+                _ans_claims_ks = bool(_reCY.search(
+                    r"(?i)(kaal\s*sarp|sarp\s*dosh)\s*"
+                    r"(?!.{0,30}(nahi|nahin|not|no\b|never|absent))"
+                    r"[^.\n]{0,40}(hai\b|present|yes|haan|mild|partial|"
+                    r"detected|exists|banaa|bana)", text or ""))
+                # Robust denial detection — covers many phrasings (single (?i) at start)
+                _ans_denies_ks = bool(_reCY.search(
+                    r"(?i)((kaal\s*sarp|sarp\s*dosh)[^.\n]{0,60}"
+                    r"(nahi|nahin|not\s+(present|detected|there|formed)|"
+                    r"no\s+(kaal|sarp)|absent|none|na\s+ho))|"
+                    r"((not|no|absent|nahi|nahin)[^.\n]{0,30}"
+                    r"(kaal\s*sarp|sarp\s*dosh))", text or ""))
+
+                if _ks_actual:
+                    # Yoga IS present — ensure exact variant cited
+                    _variant = _reCY.search(
+                        r"\(([^)]+)\s+variant\)", _ks_actual.get("name", "")
+                    )
+                    _vname = _variant.group(1) if _variant else "unspecified"
+                    if not _reCY.search(rf"(?i){_reCY.escape(_vname)}", text or ""):
+                        text = (text or "") + (
+                            f"\n\n📌 Deterministic Kaal Sarp signal: "
+                            f"**{_ks_actual['name']}** PRESENT — "
+                            f"{_ks_actual.get('detail','')}"
+                        )
+                else:
+                    # Yoga is NOT present — strip any false-positive sentences
+                    if _ans_claims_ks and not _ans_denies_ks:
+                        # Surgical strip: remove sentences that falsely claim Kaal Sarp
+                        _sentences = _reCY.split(r"(?<=[.!?])\s+", text or "")
+                        _kept = []
+                        for _s in _sentences:
+                            if _reCY.search(
+                                r"(?i)(kaal\s*sarp|sarp\s*dosh)[^.\n]{0,40}"
+                                r"(hai|present|yes|haan|mild|partial|detected|"
+                                r"exists|banaa|bana)", _s
+                            ):
+                                continue   # drop the false claim
+                            _kept.append(_s)
+                        text = " ".join(_kept).strip()
+                        # Append the deterministic truth
+                        _absent_entry = next(
+                            (y for y in _ks_entries if "NOT" in y.get("name", "")),
+                            None
+                        )
+                        _detail = (_absent_entry.get("detail", "")
+                                   if _absent_entry
+                                   else "all 7 planets not enclosed by Rahu↔Ketu axis")
+                        text = text + (
+                            f"\n\n📌 Deterministic Kaal Sarp check: "
+                            f"**NOT PRESENT** — {_detail}. "
+                            "Aapke chart mein Kaal Sarp dosh nahi hai."
+                        )
+                    elif not _ans_claims_ks and not _ans_denies_ks:
+                        # Answer didn't address it at all — append clear absence
+                        text = (text or "") + (
+                            "\n\n📌 Deterministic Kaal Sarp check: "
+                            "**NOT PRESENT** — aapke chart mein Kaal Sarp "
+                            "configuration nahi hai (planets Rahu↔Ketu axis "
+                            "ke beech enclosed nahi hain)."
+                        )
+
+            # ── Dhana yoga anti-hallucination ───────────────────────────
+            _is_dhana_q = bool(_reCY.search(
+                r"(?i)dhana?\s*yog|wealth\s*yog|paisa\s*yog|"
+                r"daulat|samriddhi|prosperity", _qCY))
+            if _is_dhana_q:
+                _dhana_list = [y for y in _yogas if y.get("category") == "Dhana"]
+                _ans_cites_dhana = bool(_reCY.search(
+                    r"(?i)dhana?\s*yog", text or ""))
+                if _dhana_list and not _ans_cites_dhana:
+                    _top = _dhana_list[0]
+                    text = (text or "") + (
+                        f"\n\n📌 Deterministic Dhana signal: "
+                        f"**{_top['name']}** — {_top.get('detail','')}"
+                    )
+                elif not _dhana_list and _ans_cites_dhana:
+                    text = (text or "") + (
+                        "\n\n📌 Deterministic Dhana check: koi pre-defined "
+                        "Dhana yoga (1L+2L/5L/9L/11L type lord-pair) "
+                        "detect nahi hua. Wealth ke liye general planetary "
+                        "strength + dasha period dekhna padega."
+                    )
+
+            # ── Vipreet Raja anti-hallucination ─────────────────────────
+            _is_vipreet_q = bool(_reCY.search(
+                r"(?i)vipreet|vipareet|harsha|sarala|vimala", _qCY))
+            if _is_vipreet_q:
+                _vip_list = [y for y in _yogas if y.get("category") == "Vipreet Raja"]
+                _ans_cites_vip = bool(_reCY.search(
+                    r"(?i)harsha|sarala|vimala", text or ""))
+                if _vip_list and not _ans_cites_vip:
+                    _top = _vip_list[0]
+                    text = (text or "") + (
+                        f"\n\n📌 Deterministic Vipreet signal: "
+                        f"**{_top['name']}** — {_top.get('detail','')}"
+                    )
+                elif not _vip_list:
+                    text = (text or "") + (
+                        "\n\n📌 Deterministic Vipreet check: aapke chart mein "
+                        "Harsha (6L), Sarala (8L), ya Vimala (12L) "
+                        "konfiguration nahi hai — none of the dusthana lords "
+                        "are placed in 6/8/12 houses."
+                    )
+        except Exception as _excCY:
+            print(f"[ai_ask] Classical Yogas (Sprint-19) post-inject failed: {_excCY}")
 
     # Sprint-14 Rule V — DETERMINISTIC STHIRA + NIRYANA SHOOLA INJECTION
     # For timing questions, append a one-line cross-check from each dasha if not

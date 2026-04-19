@@ -511,6 +511,23 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] bala_deep (Sprint-18) failed: {exc}")
 
+    # Sprint-19 — Classical yogas mega-detector (Vipreet/Dhana/Negative/KaalSarp/Nabhasa/Pravrajya)
+    classical_yogas_str = ""
+    try:
+        from vedic.yogas.classical_yogas import (detect_classical_yogas,  # type: ignore
+                                                 format_classical_yogas_summary)
+        _lg_cy = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign_cy = (_lg_cy.get("sign") if isinstance(_lg_cy, dict) else _lg_cy)
+        _sti_cy = {n: i for i, n in enumerate([
+            "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+            "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"])}
+        _lg_idx_cy = (_sti_cy.get(_lg_sign_cy) if isinstance(_lg_sign_cy, str)
+                      else _lg_sign_cy if isinstance(_lg_sign_cy, int) else None)
+        _cy = detect_classical_yogas(kundli.get("planets") or [], _lg_idx_cy)
+        classical_yogas_str = format_classical_yogas_summary(_cy) if _cy else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] classical yogas (Sprint-19) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -681,6 +698,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         adv_div_str,
         subtle_div_str,
         deep_div_str,
+        classical_yogas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

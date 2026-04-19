@@ -534,13 +534,54 @@ all 8 items: Shadbala 6-fold, Bhava Bala basic+deep (4-fold/48 calc), Ashtakavar
 BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 (6/7/10/16) + bonus Yuddha Bala.
 
-### Sprint 19 — Phase C: Yogas 200+
-- Dhana Yogas (30+) — Lakshmi, Kubera, Kalanidhi, Indra
-- Neech-Bhanga Raj Yoga (4 cancellation rules)
-- Gajakesari, Budhaditya, Saraswati, Adhi, Lakshmi
-- Daridra Yogas, Kemadruma, Chandra-Mangal, Guru-Chandal
-- Kaal Sarp 12 variants (Anant, Kulik, Vasuki, Shankhpal, Padma, Mahapadma, Takshak, Karkotak, Shankhachuda, Ghatak, Vishdhar, Sheshnag)
-- Nabhasa Yogas (32) — Aakriti(20) + Sankhya(7) + Ashraya(3) + Dala(2)
+### Sprint 19 — Phase C: Classical Yogas Mega ✅ COMPLETE (Apr 2026)
+- ✅ NEW MODULE: `vedic/yogas/classical_yogas.py` (~430 lines)
+- ✅ Detected categories (~30+ named yogas, hundreds of variants):
+   1. **Named Vipreet Raja (3)**: Harsha (6L→6/8/12), Sarala (8L→6/8/12),
+      Vimala (12L→6/8/12)
+   2. **Dhana Yogas (10 lord-pairs)**: 1L+2L, 1L+5L, 1L+9L, 1L+11L, 2L+5L,
+      2L+9L, 2L+11L (Lakshmi signature), 5L+9L, 5L+11L, 9L+11L —
+      conjunction OR parivartana (sign exchange)
+   3. **Negative named (6+)**: Daridra (11L in dusthana), Guru-Chandal
+      (Jup+Rahu/Ketu), Shakat (Moon 6/8/12 from Jup), Vish (Moon+Sat),
+      Angarak (Mars+Rahu), Pitra Dosh (Sun+Rahu OR 9H affliction)
+   4. **Kaal Sarp 12 variants**: Anant/Kulik/Vasuki/Shankhpal/Padma/
+      Mahapadma/Takshak/Karkotak/Shankhachood/Ghatak/Vishdhar/Sheshnag —
+      named by Rahu's house, with Rahu↔Ketu axis validation +
+      forward/backward arc detection
+   5. **Nabhasa Sankhya (7)**: Vallaki(7signs)/Damaru(6)/Pasha(5)/
+      Kedara(4)/Soola(3)/Yuga(2)/Gola(1)
+   6. **Nabhasa Ashraya (3)**: Rajju (all chara), Musala (all sthira),
+      Nala (all dwiswabhava)
+   7. **Nabhasa Dala (2)**: Kamala-Dala (benefics in kendras only),
+      Mala-Dala (malefics in kendras only)
+   8. **Nabhasa Aakriti subset**: Gada/Shakata/Pakshi/Vajra/Yava/Kamala/
+      Vapi (Panapara+Apoklima)/Sarpa
+   9. **Pravrajya (Sannyasa)**: 4+ planets in one house, leading-planet
+      determines variant (Sun/Moon/Mars/Mercury/Jupiter/Venus/Saturn-led)
+- ✅ Always emits **Kaal Sarp status entry** (PRESENT or NOT PRESENT) —
+   anti-hallucination guarantee
+- ✅ Wired into `locked_facts.py` after deep_div (sections list line 704)
+- ✅ Rule Y added in `openai_helper.py` system prompt
+- ✅ **Deterministic post-injector (Sprint-19)** with 3 anti-halluc paths:
+   - **Kaal Sarp**: surgical sentence-strip if AI invents "mild kaal sarp",
+     replaced with exact "NOT PRESENT" verdict
+   - **Dhana**: appends top Dhana yoga if user asks but AI didn't cite
+   - **Vipreet**: appends Vimala/Sarala/Harsha if detected; or denies
+     cleanly if absent
+- ✅ Unit test PASSED (6 yogas detected on simulated chart)
+- ✅ 3x smoke test PASSED:
+   - Dhana Q: AI cites correct 9L+11L (Sun+Venus Capricorn) lord-pair
+   - Kaal Sarp Q: false claim STRIPPED + "**NOT PRESENT**" injected
+   - Vipreet Q: "**Vimala yoga — 12L Mars in H12**" deterministically cited
+
+### Sprint 19.5 — Pending sub-items (deferred — not blocking Tier-3 closure)
+- Kubera/Kalanidhi/Indra (4-planet kendra wealth combos)
+- Neech-Bhanga 4 cancellation rules (currently only 1 in chart_intel)
+- Ganda-Moola (degree-based nakshatra detection)
+- Saraswati yoga (Mer+Jup+Ven in kendra/trikona/2H)
+- Aakriti remaining 12 variants (Yoopa, Shara, Shakti, Danda, Naava,
+  Koota, Chhatra, Chaapa, Ardhachandra, Chakra, Samudra)
 - Pravrajya Yogas (4 renunciation types)
 - 200+ obscure classical yogas (Brahma, Shiva, Vishnu, Indra, Hari, Hara, Trilochan, Dhwaja, Shoola, Padma, Chamara, Akhanda Samrajya)
 

@@ -992,9 +992,12 @@ def _build_messages(
         ) if (marriage_use_alt and f["alt_window_str"]) else ""
 
         # Compact, label-free facts payload — pure values.
+        # IMPORTANT: the verdict string is an internal status code for your
+        # understanding only. NEVER echo it verbatim into the reply — express
+        # the same meaning warmly in your own conversational words.
         facts_lines = [
-            f"  • Verdict (use this exact phrase or a faithful translation): {f['verdict']}",
-            f"  • Marriage time window (USE VERBATIM): {active_window}",
+            f"  • Internal status (DO NOT echo verbatim — for your understanding only): {f['verdict']}",
+            f"  • Marriage time window (USE VERBATIM in your reply): {active_window}",
         ]
         if (not marriage_use_alt) and f["alt_window_str"]:
             facts_lines.append(
@@ -1047,14 +1050,32 @@ def _build_messages(
             "  7. Length: 80–140 words. Phone-friendly. Every sentence must earn\n"
             "     its place.\n\n"
             "STYLE — think ChatGPT explaining to a friend:\n"
-            "  • Open with the verdict + the exact window naturally in 1–2 lines.\n"
-            "  • 1–2 sentences explaining WHICH planet/dasha is supporting and\n"
-            "    why, in plain language (translate any Sanskrit term inline).\n"
-            "  • If a meaningful remedy is provided above, weave it in as a\n"
-            "    friendly suggestion at the end (1 line). If no remedy, skip it.\n"
+            "  • OPEN with a warm, natural acknowledgment in your OWN words —\n"
+            "    NEVER copy the internal status string verbatim. Translate its\n"
+            "    meaning into compassionate, human language. Examples:\n"
+            "      ✗ BAD (verbatim status): \"Vivah mein gehre rukawat / denial\n"
+            "        — extensive remedies zaroori. Aapki shaadi ka samay ...\"\n"
+            "      ✓ GOOD (warm framing for a difficult chart): \"Aapke chart\n"
+            "        mein shaadi ka pehlu thoda complex dikh raha hai — kuch\n"
+            "        challenges hain, lekin sahi time aur upay ke saath cheezein\n"
+            "        sambhal jaati hain. Sabse achha window aane wala hai\n"
+            "        <window verbatim> ke beech ...\"\n"
+            "      ✓ GOOD (positive chart): \"Aapki shaadi ka yog strong dikh\n"
+            "        raha hai. Sabse achha time <window verbatim> ke beech aa\n"
+            "        raha hai ...\"\n"
+            "  • The exact window string from the facts MUST appear verbatim —\n"
+            "    that is the only fact you must echo word-for-word.\n"
+            "  • 1–2 sentences explaining WHICH planet/dasha is supporting or\n"
+            "    challenging, in plain language (translate Sanskrit inline).\n"
+            "  • If a remedy is provided, weave it in at the end as a friendly\n"
+            "    suggestion in 1 line — NOT as a stern instruction.\n"
+            "  • SOFTEN clinical words: \"denial\" → \"thoda complex\" / \"thoda\n"
+            "    challenging\". \"extensive remedies zaroori\" → \"thode upay help\n"
+            "    karenge\". \"rukawat\" → \"thodi der\" or \"thoda time lagega\".\n"
+            "    Be honest about challenges but never alarming.\n"
             "  • Tone: confident, warm, intelligent, modern. NOT preachy, NOT\n"
-            "    gurulike, NOT a textbook.\n\n"
-            "Now write the reply — natural, intelligent, ChatGPT-style."
+            "    gurulike, NOT a textbook, NOT scary.\n\n"
+            "Now write the reply — natural, warm, intelligent, ChatGPT-style."
         )
         msgs: list[dict] = [{"role": "system", "content": system}]
         msgs.append({"role": "user", "content": user})

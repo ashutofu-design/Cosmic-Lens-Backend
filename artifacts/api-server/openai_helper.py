@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -655,7 +656,7 @@ ABSOLUTE RULES — never break these:
 
 9. KEEP LENGTH conversational: 3-6 short paragraphs. Like a real conversation, not a lecture.
 
-10. ONLY answer Vedic astrology, kundli, jyotish, vastu, numerology, mantras, remedies, dharma, and spiritual life questions. If asked about anything off-topic (coding, news, sports, etc.), gently redirect: "Beta, mai sirf jyotish aur dharma ke prashno mein margdarshan kar sakta hu. Aap apni kundli ya jeevan se judi koi baat poochhein, mai zaroor bataunga."
+10. ONLY answer Vedic astrology, kundli, jyotish, vastu, numerology, mantras, remedies, dharma, and spiritual life questions. If asked about anything off-topic — sports/match outcomes (cricket/IPL/football), election results, stock-price predictions, lottery numbers, news/current affairs, coding, gambling, who-will-die, or any kind of fortune-telling about external events not connected to the devotee's own life path — DO NOT engage with the chart at all. Reply ONLY with this exact brand-safe redirect (translate to {lang_name} if not Hindi/English): "Beta, jyotish aapke jeevan-path par margdarshan ke liye hai — match, election, ya bahar ki ghatnaon ki bhavishyavani iska kaam nahi. Aap apni shaadi, career, swasthya, parivar, ya jeevan se judi koi baat poochhein, mai poore mann se uttar dunga." Then STOP.
 
 REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casually, you reply warmly; if formally, you reply respectfully but still as a human Pandit."""
 
@@ -751,8 +752,8 @@ _TOPIC_KW = {
                     "pyaar", "pyar", "ladka", "ladki", "dating", "crush", "ex", "love marriage",
                     "inter-caste", "family opposition"],
     "travel":      ["travel", "abroad", "videsh", "foreign", "yatra", "visa", "passport", "trip",
-                    "settlement", "us", "canada", "uk", "australia", "germany", "dubai", "migrate",
-                    "immigration", "tirth", "pilgrimage"],
+                    "settlement", "usa", "u.s.", "canada", "uk", "u.k.", "australia", "germany",
+                    "dubai", "migrate", "immigration", "tirth", "pilgrimage"],
     "child":       ["child", "santan", "santaan", "baby", "pregnan", "putra", "putri", "beti", "beta",
                     "garbh", "ivf", "infertility", "adoption", "miscarriage", "delivery"],
     "litigation":  ["court", "case", "mukadma", "lawsuit", "legal", "vakil", "lawyer", "police",
@@ -772,6 +773,27 @@ _TOPIC_KW = {
                     "behan", "in-laws", "sasural", "saas", "sasur"],
 }
 
+# Devanagari (Hindi-script) keywords per topic — matched separately so we
+# don't have to lowercase non-Latin text. Substring matching is safe here
+# because each entry is itself a meaningful Hindi word.
+_TOPIC_KW_DEV = {
+    "marriage":    ["शादी", "विवाह", "पति", "पत्नी", "जीवनसाथी", "सगाई", "मंगनी", "दूल्हा", "दुल्हन"],
+    "career":      ["नौकरी", "करियर", "व्यापार", "व्यवसाय", "काम", "धंधा", "तरक्की", "प्रमोशन", "ट्रांसफर", "इंटरव्यू"],
+    "finance":     ["पैसा", "पैसे", "धन", "कर्ज", "क़र्ज़", "लोन", "आय", "नुकसान", "मुनाफा", "संपत्ति", "लक्ष्मी"],
+    "health":      ["स्वास्थ्य", "बीमारी", "रोग", "दर्द", "पेट", "तबीयत", "बुखार", "ऑपरेशन", "अस्पताल", "तनाव", "नींद"],
+    "education":   ["पढ़ाई", "विद्या", "परीक्षा", "रिज़ल्ट", "रिजल्ट", "कॉलेज", "स्कूल", "डिग्री", "एडमिशन"],
+    "relationship":["प्यार", "प्रेम", "रिश्ता", "रिश्ते", "लड़का", "लड़की", "ब्रेकअप", "गर्लफ्रेंड", "बॉयफ्रेंड"],
+    "travel":      ["यात्रा", "विदेश", "विसा", "वीज़ा", "पासपोर्ट", "तीर्थ", "प्रवास"],
+    "child":       ["संतान", "बच्चा", "बच्ची", "पुत्र", "पुत्री", "गर्भ", "गर्भावस्था", "बेटा", "बेटी"],
+    "litigation":  ["कोर्ट", "मुकदमा", "केस", "वकील", "पुलिस", "जेल", "तलाक"],
+    "property":    ["घर", "मकान", "ज़मीन", "जमीन", "प्लॉट", "फ्लैट", "संपत्ति"],
+    "vehicle":     ["गाड़ी", "वाहन", "बाइक", "स्कूटर"],
+    "vastu":       ["वास्तु", "दिशा", "रसोई", "बेडरूम", "मुख्य द्वार", "पूजा घर"],
+    "remedy":      ["उपाय", "मंत्र", "पूजा", "रत्न", "दान", "व्रत", "हवन", "टोटका", "यंत्र", "रुद्राक्ष"],
+    "spiritual":   ["मोक्ष", "आध्यात्मिक", "गुरु", "ध्यान", "तपस्या", "कर्म", "पूर्व जन्म"],
+    "family":      ["परिवार", "माता", "पिता", "भाई", "बहन", "ससुराल", "सास", "ससुर"],
+}
+
 
 def _classify_topic(question: str) -> str:
     """
@@ -782,18 +804,36 @@ def _classify_topic(question: str) -> str:
       than one area at once).
     - Otherwise return the single highest-scoring topic.
     """
-    q = (question or "").lower()
+    q_raw = (question or "")
+    q = q_raw.lower()
     if not q.strip():
         return "general"
 
+    import re
     scores: dict[str, int] = {}
     for topic, words in _TOPIC_KW.items():
         hits = 0
         for w in words:
-            if w in q:
-                hits += 1
+            # Word-boundary match for short keywords (≤4 chars) to avoid
+            # false positives like "us" inside "business". Longer keywords
+            # use plain substring match (faster + handles hyphenation).
+            if len(w) <= 4:
+                if re.search(r"\b" + re.escape(w) + r"\b", q):
+                    hits += 1
+            else:
+                if w in q:
+                    hits += 1
         if hits > 0:
             scores[topic] = hits
+
+    # Devanagari pass — substring match is safe for full Hindi words.
+    for topic, words in _TOPIC_KW_DEV.items():
+        hits = 0
+        for w in words:
+            if w in q_raw:
+                hits += 1
+        if hits > 0:
+            scores[topic] = scores.get(topic, 0) + hits
 
     if not scores:
         return "general"
@@ -807,11 +847,62 @@ def _classify_topic(question: str) -> str:
 
 # ── Public entry point ───────────────────────────────────────────────────────
 
+# ── Brand-safety pre-LLM guard ───────────────────────────────────────────────
+# Hard refuse list: questions about external events the app must never engage
+# with — sports/election/lottery/news predictions and similar fortune-telling.
+_BRAND_UNSAFE_PATTERNS = [
+    # sports / matches
+    r"\b(match|cricket|ipl|world cup|t20|odi|football|fifa|nba|tournament)\b.*\b(jeet|win|kaun|who|result|score)",
+    r"\b(jeet|win|kaun|who).*\b(match|cricket|ipl|world cup|t20|odi)\b",
+    r"\b(india|pakistan|australia|england|sri lanka|new zealand|south africa)\s+(vs|v|versus)\s+\w+",
+    # elections
+    r"\b(election|chunav|vote|poll).*\b(jeet|win|kaun|who|result)",
+    r"\b(modi|rahul|kejriwal|trump|biden).*\b(jeet|win|election)",
+    # lottery / gambling
+    r"\b(lottery|lucky number|jackpot|satta|matka|powerball)\b",
+    r"\b(stock|share|crypto|bitcoin).*(price|prediction|tomorrow|kal)",
+    # generic fortune-telling about others
+    r"\bkaun (jeet|haar|marega|janega)",
+    r"\bwho will (win|lose|die)",
+]
+_BRAND_UNSAFE_RE = [re.compile(p, re.IGNORECASE) for p in _BRAND_UNSAFE_PATTERNS]
+
+
+def _is_brand_unsafe(question: str) -> bool:
+    if not question:
+        return False
+    return any(rx.search(question) for rx in _BRAND_UNSAFE_RE)
+
+
+_BRAND_SAFE_REDIRECT = {
+    "en": ("Beta, jyotish is a guide to your own life-path — predicting match results, election outcomes, "
+           "stock prices, or other external events is not what these classics teach. "
+           "Please ask me about your marriage, career, health, family, or any matter from your own life — I'll guide you with full heart."),
+    "hi": ("बेटा, ज्योतिष आपके अपने जीवन-पथ का मार्गदर्शन है — मैच, चुनाव, शेयर बाज़ार या बाहरी घटनाओं की भविष्यवाणी इसका कार्य नहीं। "
+           "कृपया अपनी शादी, करियर, स्वास्थ्य, परिवार या जीवन से जुड़ा कोई प्रश्न पूछिए — मैं पूरे मन से उत्तर दूँगा।"),
+    "hn": ("Beta, jyotish aapke khud ke jeevan-path ka margdarshan hai — match, election, stock-price, ya "
+           "kisi bhi bahar ki ghatna ki bhavishyavani iska kaam nahi. "
+           "Kripya apni shaadi, career, swasthya, parivar, ya jeevan se judi koi baat poochhein — main poore mann se uttar dunga."),
+}
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, birth: Any = None, history: list | None = None) -> dict:
     """
     Returns: { text, topic, confidence, source }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
     """
+    # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
+    # calling the LLM at all. Cheap, deterministic, never leaks chart data.
+    if _is_brand_unsafe(question):
+        eff_lang = _detect_question_lang(question, lang)
+        msg = _BRAND_SAFE_REDIRECT.get(eff_lang) or _BRAND_SAFE_REDIRECT["hn"]
+        return {
+            "text":       msg,
+            "topic":      "off_topic",
+            "confidence": 1.0,
+            "source":     "brand_guard",
+        }
+
     client = _get_client()
     if client is None:
         raise RuntimeError(_client_err or "OpenAI client not configured")

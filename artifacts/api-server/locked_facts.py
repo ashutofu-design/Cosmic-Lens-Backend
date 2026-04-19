@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-33 / Phase H — Transits & Eclipses (H2/H3/H6/H7/H8 expansion)
+    phase_h_str = ""
+    try:
+        from vedic.transits.phase_h import (compute_phase_h_transits,  # type: ignore
+                                              format_phase_h_summary)
+        _ph = compute_phase_h_transits(kundli, birth)
+        phase_h_str = format_phase_h_summary(_ph)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-H transits (Sprint-33) failed: {exc}")
+
     # Sprint-32 / Phase F — Per-Varga Full Depth (F3 + F4-expand + F5)
     varga_phase_f_str = ""
     try:
@@ -896,6 +906,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         missing_yogas_str,
         phase_e_dashas_str,
         varga_phase_f_str,
+        phase_h_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

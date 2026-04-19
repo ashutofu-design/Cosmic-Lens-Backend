@@ -786,7 +786,18 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
   - **G4 Transit-through-Ashtakavarga predictions** ✅ — `transit_overlay()` returns per-planet verdict (EXCELLENT ≥5, FAVOURABLE 4, AVERAGE 3, WEAK ≤2 bindus in current transit sign of own-BAV)
 - Test on chart: Sun reduced [3,3,5,2,3,4,4,4,4,5,6,5] → [0,0,0,0,0,1,0,0,0,0,2,3]; Sodhya Pinda ranking Venus 138 > Mars 66 > Sun/Moon 64 > Saturn 60 > Mercury 40 > Jupiter 29; Transit Sun-Cap 5 EXCELLENT, Mars-Sco 1 WEAK, Jup-Gem 5 EXCELLENT
 
-### Sprint 33 — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 33 — Phase H Transits & Eclipses ✅ COMPLETE
+- New module: `vedic/transits/phase_h.py` (~340 lines)
+- **H1** Saturn-through-houses ✅ pre-existing in transit_deep.py
+- **H2** Jupiter 12-yr cycle ✅ NEW — `jupiter_through_houses()` returns verdict+detail per house from Lagna AND Moon (12 mappings)
+- **H3** Rahu-Ketu 18-mo axis ✅ NEW — `rahu_ketu_through_houses()` returns 4 readings (Rahu/Ketu × Lagna/Moon)
+- **H4/H5** Eclipse impact ✅ pre-existing in transit_deep.py (`eclipse_impact()`, ±5° orb)
+- **H6** Saros cycles ✅ NEW — `find_recent_eclipses()` returns last+next solar+lunar (real swisseph dates) + Saros siblings (±18yr 11d)
+- **H7** Pre-natal eclipse points ✅ NEW — `prenatal_eclipses()` returns last solar+lunar before birth with sensitive sidereal degrees
+- **H8** Fixed stars 50+ ✅ NEW — expanded catalog 24→**56** (27 Yogatara junction stars per nakshatra + Abhijit/Vega + Deneb, Markab, Hamal, Toliman); `fixed_stars_expanded_overlap()` ±1° orb
+- Test on chart: Jupiter-Gem H7 STRONG-BENEFIC, Rahu-Aqu H7 Moon CRITICAL marriage, last solar eclipse 2026-02-17 Annular, prenatal solar 1989-08-31 Leo 134.08°, Jupiter on Yogatara-Rohini 0.08°
+
+### Sprint 33+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

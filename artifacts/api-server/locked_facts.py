@@ -606,6 +606,17 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] ashtaka deep (Sprint-23) failed: {exc}")
 
+    # Sprint-24 — Tier-8 Transit Deep (Saturn 12-house detail, Eclipse axis,
+    # Fixed Stars overlap)
+    transit_deep_str = ""
+    try:
+        from vedic.transits.transit_deep import (compute_transit_deep,  # type: ignore
+                                                 format_transit_deep_summary)
+        _td = compute_transit_deep(kundli)
+        transit_deep_str = format_transit_deep_summary(_td) if _td else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] transit deep (Sprint-24) failed: {exc}")
+
     # Sprint-15 — Per-varga yoga / dosha detection
     varga_yogas_str = ""
     try:
@@ -782,6 +793,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         extra_dashas_str,
         varga_deep_str,
         ashtaka_deep_str,
+        transit_deep_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

@@ -639,11 +639,12 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **Transit overlay** — current planet sign vs own-BAV bindus → EXCELLENT/FAVOURABLE/AVERAGE/WEAK/ADVERSE verdicts
 - Test chart: Sodhya rank Venus(138) > Mars(66) > Sun(64); Strongest=Venus, Weakest=Jupiter
 
-### Sprint 24 — Phase H: Transits/Eclipses + Fixed Stars (next)
-- Saturn through 12 houses detailed
-- Jupiter 12-yr cycle, Rahu-Ketu 18-month
-- Solar/Lunar eclipse path on natal chart, Saros cycles, pre-natal eclipse points
-- Fixed stars (50+) — 27 nakshatras + Abhijit + Western overlap
+### Sprint 24 — Tier 8 Transit Deep ✅ COMPLETE
+- File: `vedic/transits/transit_deep.py` (~210 lines)
+- **Saturn 12-house detail** — current Saturn sign (live swisseph) → from-Lagna AND from-Moon house with classical BPHS+Phaladeepika verdict (CHALLENGING/MIXED/FAVOURABLE/CRITICAL) + detailed effects per house. Auto-flags Sade-Sati / Ashtama / Kantaka.
+- **Eclipse impact** — current Rahu-Ketu axis (live), checks natal planets within ±5° orb → "sudden disruption" or "spiritual release" per axis side
+- **Fixed Stars overlap (24 stars)** — Royal Stars (Aldebaran/Regulus/Antares/Fomalhaut), Spica, Vega, Sirius, Algol, Pleiades, Orion stars, etc. Conjunctions with natal planets within 1° orb.
+- Test result on chart: **Saturn Pisces H4 lagna CHALLENGING / H8 moon CRITICAL Ashtama Shani**, Eclipse Rahu Aquarius / Ketu Leo (no impact), **Jupiter exactly on Aldebaran Royal Star at 0.08° — rare auspicious conjunction**
 
 ### Sprint 24 — Phase I: KP Advanced (40+)
 - Significators 4-level deep

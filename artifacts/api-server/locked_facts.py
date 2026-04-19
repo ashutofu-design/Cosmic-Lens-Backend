@@ -345,6 +345,15 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] pratyantar failed: {exc}")
 
+    # Sprint-6 — KP Cuspal Sub-Lord cross-check (best-effort — needs lat/lon/tz)
+    kp_str = ""
+    try:
+        from kp_locked_facts import compute_kp_summary, format_kp_summary  # type: ignore
+        kp_sum = compute_kp_summary(birth, kundli)
+        kp_str = format_kp_summary(kp_sum) if kp_sum else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] kp cross-check failed: {exc}")
+
     # Sprint-5 — Remedies (deterministic, classical) — built BEFORE transits
     # so it can use verdicts/dosh/topic that are already available.
     rem_str = ""
@@ -410,6 +419,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_dasha_block(kundli),
         pd_str,
         _format_house_lords(intel),
+        kp_str,
         rem_str,
         "════════════════════════════════════════════════════════════════",
     ]

@@ -223,10 +223,29 @@ Goal: Replace per-answer remedy hallucination (AI was fabricating mantras like "
   3. **Kal-Sarpa name match** — old `"kal sarp"|"kalsarp"` substring check missed common `"Kaal Sarp Dosh"`; replaced with `"kal" in n and "sarp" in n` after dash/underscore normalisation.
   4. **Formatter `for:` label** — added missing colon to align with Rule M's enforcement pattern.
 
+## Sprint 6 — KP Cuspal Sub-Lord Cross-Check (api-server)
+
+Goal: Add KP (Krishnamurti Paddhati) cuspal sub-lord verdicts as a fructification cross-check to the LOCKED FACTS — the classical KP rule that says an event under house H only manifests if the SUB-LORD of cusp H signifies that house's event-set.
+
+- **Discovery** — `kp_engine.py` already fully built (Placidus cusps via swisseph, sub-lord SL/NL/SB/SS computation per longitude, planet significations dict). Was used by prashna/marriage/partner-portrait but NOT by the conversational LOCKED FACTS pipeline.
+- **`kp_locked_facts.py`** (NEW) — Adapter that:
+  1. `_to_kp_input()` — accepts structured `birth` dict OR parses `kundli.dob` ("15 Jan 1990") + `kundli.time` ("06:30 AM") + lat/lon/tz fallback. Treats `0` as VALID for tz/lat (UTC, equator) — only `None`/empty-string is "missing".
+  2. `_verdict_for()` — classical KP gating: PROMISE if sub-lord signifies any house in the event-set; DENIES if signifies only negative-set houses; PARTIAL if signifies BOTH event AND negative houses (obstruction/delay).
+  3. Per-house event sets: H1 {1,5,9,11}, H2 {2,6,10,11}, H5 {2,5,11}, H7 {2,7,11}, H10 {2,6,10,11}, H11 {2,6,10,11}. Per-house negative sets per Krishnamurti negation conventions.
+  4. `compute_kp_summary()` + `format_kp_summary()` — defensive type checks throughout (handles malformed `calculate_kp` output without crashing).
+- **`locked_facts.py`** — Wired between Pratyantar and Remedies. Best-effort: silently absent if birth lacks lat/lon/tz (mobile client supplies these for saved kundlis).
+- **`openai_helper.py`** — **Rule N** added (mandatory citation): when KP block is present and question maps to H1/H2/H5/H7/H10/H11, AI must weave one natural KP citation. Resolution rules for Vedic⇄KP disagreement codified (Strong+Confirms = green light; Strong+Denies = "delay/alternate timing"; Weak+Confirms = "possible with effort"). NEVER invent KP sub-lords if block absent.
+- **Architect review fixes applied**:
+  1. `_missing()` helper — `0`/`0.0` no longer collapse to None (fixes UTC tz=0, equator lat=0).
+  2. `_verdict_for` — added negative-house set; now distinguishes clean PROMISE from PARTIAL (obstruction). Matches K.S. Krishnamurti's classical gating.
+  3. Rule N rewording — softened "FINAL arbiter" → "PARALLEL cross-check" (no override of D9/D10/Dasha), retained MANDATORY-citation requirement for compliance.
+  4. Defensive isinstance guards in `compute_kp_summary` / `format_kp_summary` for malformed engine output.
+- **Smoke test**: career Q with Delhi birth → AI cited *"KP paddhati se bhi 10th cusp ka sub-lord Moon hai, jo is growth ko support nahi karta"*. Block correctly emits 6 houses with verdict + signified/obstructed house lists. Unit tests pass for missing-detection (tz=0, lat=0) and verdict logic (DENIES/PARTIAL/CONFIRMS/UNKNOWN).
+- **Known limitation**: Mandatory KP citation is intermittent under gpt-4o-mini with the now-very-long system prompt — model reliably cites when nudged or for direct KP questions, but sometimes drops the citation under topic-driven phrasing. Mitigations for a future polish pass: model upgrade, prompt restructure (rules at end for recency), or post-response verification.
+
 ## Session Final Status
 
-5 sprints complete in this session. LOCKED FACTS now contains 13 deterministic blocks (lagna/moon/nak → yogas → doshas → planet strengths → SAV → bhava bala → aspects → karakas → D9/D10 → transits → dasha → pratyantar → house lords → remedies). 13 mirror prompt rules (A–M) ensure verbatim citation and zero hallucination.
+6 sprints complete in this session. LOCKED FACTS now contains 14 deterministic blocks (lagna/moon/nak → yogas → doshas → planet strengths → SAV → bhava bala → aspects → karakas → D9/D10 → transits → dasha → pratyantar → house lords → KP cusp cross-check → remedies). 14 mirror prompt rules (A–N) ensure verbatim citation and zero hallucination.
 
-What was DEFERRED from original Sprint-5 scope:
-- **KP cuspal sub-lord** — requires birth-time Placidus cusp computation (swisseph) which the current kundli payload does not include; would need a separate cusp-engine module first.
-- **8-route question-router reactivation** — current openai_helper topic detection is working well enough; 8-route classifier would be incremental polish, not core capability.
+What remains DEFERRED:
+- **8-route question-router reactivation** — current openai_helper topic detection works; 8-route classifier would be incremental polish, not core capability.

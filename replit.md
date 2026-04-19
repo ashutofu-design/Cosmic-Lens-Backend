@@ -826,7 +826,20 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - 9 grahas × 4 systems = 36 classifications, 23 unique states ⇒ 180+ combinations
 - Test: Sun Cap = Mrita+Sushupti+Kshudita+Deena (utterly weak), Mars Sco = Jagrat+Garvit+Swastha (full power), Jupiter retro Gemini = Shakta (retro override exalts), Venus combust = Peedita+Kshudita+Kshobhit (3 afflictions)
 
-### Sprint 36+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 37 — Phase L Special Lagnas ✅ COMPLETE
+- New module: `vedic/jaimini/lagnas_phase_l.py` (~180 lines)
+- Pre-existing in `vedic/jaimini/special_lagnas.py`: Sree Lagna, Indu Lagna (L3), Bhrigu Bindu, Karakamsa
+- **L1 Bhava Lagna** ✅ — Sun + (ghatis/5)×30° (advances 1 sign per 2 hrs)
+- **L1 Hora Lagna** ✅ — Sun + (ghatis/2.5)×30° (advances 1 sign per hour)
+- **L1 Ghati Lagna** ✅ — Sun + ghatis×30° (advances 1 sign per ghati)
+- **L2 Vighati Lagna** ✅ — Sun + ghatis×60° (sub-cycle micro-timing)
+- **L2 Pranapada Lagna** ✅ — formula with movable/fixed/dual offset (0/240/120) + (vighatis%12)×30°
+- **L4 Varnada Lagna** ✅ — Jaimini count from Aries/Pisces by Lagna parity, combined with Hora Lagna parity
+- IshtaKaal computed from birth time vs 06:00 sunrise (heuristic; no lat/lon)
+- Test chart: 45 ghatis ishtakaal → Bhava Libra, Hora Cancer (wealth), Ghati Libra (power), Vighati Cancer, Pranapada Capricorn (health), Varnada Pisces
+- **Total special lagnas in LF: 10** (Sree, Indu, Bhrigu Bindu, Karakamsa + 6 new)
+
+### Sprint 37+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

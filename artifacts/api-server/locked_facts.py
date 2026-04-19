@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-37 / Phase L — Special Lagnas (Bhava/Hora/Ghati/Vighati/Pranapada/Varnada)
+    lagnas_l_str = ""
+    try:
+        from vedic.jaimini.lagnas_phase_l import (compute_lagnas_phase_l,  # type: ignore
+                                                    format_lagnas_phase_l_summary)
+        _lp = compute_lagnas_phase_l(kundli, birth)
+        lagnas_l_str = format_lagnas_phase_l_summary(_lp)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-L special lagnas (Sprint-37) failed: {exc}")
+
     # Sprint-36 / Phase K — Avashtas (planetary states)
     avashtas_str = ""
     try:
@@ -940,6 +950,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         kp_phase_i_str,
         phase_j_str,
         avashtas_str,
+        lagnas_l_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

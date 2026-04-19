@@ -11,6 +11,7 @@ DATABASE SETUP (portable):
 
 import os
 import sys
+import json
 import secrets
 import urllib.parse
 from datetime import datetime
@@ -22,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kundli_engine import calculate_kundli
 from kp_engine import calculate_kp
 from ask_engine import process_ask
-from openai_helper import ai_ask, vastu_scan, is_available as openai_available
+from openai_helper import ai_ask, ai_ask_stream, vastu_scan, is_available as openai_available
 from dosh_engine import analyze_doshas
 from energy_engine import calculate_energy
 from database import db, init_db
@@ -4052,6 +4053,157 @@ def ask_route():
         result["plan"]   = effective_plan(user) if user else "free"
         result["source"] = result.get("source", "ai" if used_ai else "rules")
     return jsonify(result)
+
+
+# ── Streaming variant of /api/ask ────────────────────────────────────────────
+# Returns either:
+#   • text/event-stream  — token deltas for the streamable OpenAI path, ending
+#                          with a single {"done": true, ...} payload that
+#                          carries the FINAL scrubbed text + topic + follow_ups
+#                          + quota + plan. Mobile must trust `text` from the
+#                          done event over the accumulated deltas (scrubber
+#                          may have removed banned words).
+#   • application/json   — single-shot result for non-streamable paths
+#                          (brand_guard, no-chart fail-safe, marriage
+#                          deterministic engine). Same shape as /api/ask so
+#                          the frontend can branch purely on Content-Type.
+@app.route("/api/ask/stream", methods=["POST"])
+def ask_stream_route():
+    from subscription_helper import consume_question, effective_plan
+    import itertools
+
+    data = request.get_json(force=True, silent=True) or {}
+    question  = data.get("question", "")
+    kundli    = data.get("kundli")
+    birth     = data.get("birthData") or data.get("birth")
+    history   = data.get("history") or []
+    lang      = data.get("lang", "en")
+    reply_idx = int(data.get("replyIdx", 0))
+    user_id   = data.get("user_id")
+
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+
+    # ── Auth + quota — identical contract to /api/ask ────────────────────────
+    user = None
+    if user_id:
+        try:
+            uid_int = int(str(user_id).strip())
+        except (TypeError, ValueError):
+            uid_int = None
+        user = User.query.get(uid_int) if uid_int is not None else None
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        api_key = request.headers.get("X-API-Key", "").strip()
+        if not api_key or user.api_key != api_key:
+            return jsonify({"error": "Unauthorized"}), 401
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
+    else:
+        quota = {"used": 0, "limit": 1}
+
+    preferred_language = (user.preferred_language if user else None)
+    quota_payload = {"used": quota["used"], "limit": quota["limit"]}
+    plan_payload  = effective_plan(user) if user else "free"
+
+    # ── No OpenAI → degrade gracefully to rule-engine JSON (no streaming). ──
+    if not openai_available():
+        try:
+            result = process_ask(question, kundli, lang, reply_idx)
+        except Exception as exc:
+            import traceback; traceback.print_exc()
+            return jsonify({"error": str(exc)}), 500
+        if isinstance(result, dict):
+            result["quota"]  = quota_payload
+            result["plan"]   = plan_payload
+            result["source"] = result.get("source", "rules")
+        return jsonify(result)
+
+    # ── Probe first event to decide stream vs one-shot vs hard-fallback ────
+    try:
+        gen   = ai_ask_stream(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)
+        first = next(gen)
+    except StopIteration:
+        first = None
+    except Exception as exc:
+        print(f"[ask/stream] generator setup failed → fallback to ai_ask: {exc}")
+        first = None
+
+    # On any stream-setup failure, fall back to non-streaming ai_ask → rule_engine
+    if first is None:
+        used_ai = True
+        try:
+            result = ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                            history=history, preferred_language=preferred_language)
+        except Exception as exc:
+            print(f"[ask/stream] ai_ask fallback failed → rule engine: {exc}")
+            used_ai = False
+            try:
+                result = process_ask(question, kundli, lang, reply_idx)
+            except Exception as exc2:
+                import traceback; traceback.print_exc()
+                return jsonify({"error": str(exc2)}), 500
+        if isinstance(result, dict):
+            result["quota"]  = quota_payload
+            result["plan"]   = plan_payload
+            result["source"] = result.get("source", "ai" if used_ai else "rules")
+        return jsonify(result)
+
+    # One-shot paths (brand_guard / no_chart / marriage) → return as JSON.
+    if first.get("kind") == "oneshot":
+        result = first.get("data") or {}
+        if isinstance(result, dict):
+            result["quota"]  = quota_payload
+            result["plan"]   = plan_payload
+            result["source"] = result.get("source", "ai")
+        return jsonify(result)
+
+    # ── True SSE stream ──────────────────────────────────────────────────────
+    def sse():
+        try:
+            for evt in itertools.chain([first], gen):
+                kind = evt.get("kind")
+                if kind == "delta":
+                    yield "data: " + json.dumps(
+                        {"delta": evt.get("text", "")},
+                        ensure_ascii=False,
+                    ) + "\n\n"
+                elif kind == "final":
+                    yield "data: " + json.dumps({
+                        "done":       True,
+                        "text":       evt.get("text", ""),
+                        "topic":      evt.get("topic", "general"),
+                        "confidence": evt.get("confidence", 0.0),
+                        "source":     evt.get("source", "openai_stream"),
+                        "follow_ups": evt.get("follow_ups", []),
+                        "quota":      quota_payload,
+                        "plan":       plan_payload,
+                    }, ensure_ascii=False) + "\n\n"
+        except Exception as exc:
+            print(f"[ask/stream] mid-stream error: {exc}")
+            yield "data: " + json.dumps(
+                {"error": str(exc)},
+                ensure_ascii=False,
+            ) + "\n\n"
+
+    from flask import Response
+    return Response(
+        sse(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control":      "no-cache, no-transform",
+            "Connection":         "keep-alive",
+            "X-Accel-Buffering":  "no",
+        },
+    )
 
 
 # ── Divya Prashna — Horary (Time Prashna) ────────────────────────────────────

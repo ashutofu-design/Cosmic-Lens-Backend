@@ -1528,6 +1528,119 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     }
 
 
+# ── Streaming variant ────────────────────────────────────────────────────────
+# ai_ask_stream() yields dict events for the Flask SSE route to forward.
+#   {"kind": "oneshot", "data": {...}}   — non-streamable (brand_guard /
+#                                          no_chart / marriage); send as JSON.
+#   {"kind": "delta",   "text": "..."}   — incremental token chunk.
+#   {"kind": "final",   "text": "...", "topic": "...", "confidence": x.x,
+#                       "follow_ups": [...], "source": "openai_stream"}
+# The marriage path stays one-shot deterministic (no faux-stream); brand
+# guard and no-chart fail-safes likewise. Everything else streams.
+def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
+                  birth: Any = None, history: list | None = None,
+                  preferred_language: Optional[str] = None):
+    # Brand-safety gate — non-streamable.
+    if _is_brand_unsafe(question):
+        yield {"kind": "oneshot",
+               "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)}
+        return
+
+    # No chart — non-streamable fail-safe.
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    if not has_planets:
+        yield {"kind": "oneshot",
+               "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)}
+        return
+
+    # Topic classification + marriage stickiness — same logic as ai_ask.
+    topic = _classify_topic(question)
+    try:
+        if topic != "marriage" and _detect_marriage_constraint(question, history or []):
+            for h in reversed(history or []):
+                if h.get("role") == "assistant":
+                    prev = ((h.get("content") or h.get("text") or "")).lower()
+                    if any(k in prev for k in
+                           ("vivah", "shaadi", "shadi", "marriage",
+                            "विवाह", "शादी", "spouse", "wife", "husband")):
+                        topic = "marriage"
+                        break
+    except Exception as exc:
+        print(f"[ai_ask_stream] topic-stickiness check failed: {exc}")
+
+    # Marriage path — deterministic engine; one-shot to preserve fact-locked
+    # window echoing. Streaming a baked answer adds no value.
+    if topic == "marriage":
+        yield {"kind": "oneshot",
+               "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)}
+        return
+
+    client = _get_client()
+    if client is None:
+        raise RuntimeError(_client_err or "OpenAI client not configured")
+
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    messages = _build_messages(
+        question, kundli, lang, reply_idx,
+        birth=birth, topic=topic, history=history,
+        preferred_language=preferred_language,
+    )
+
+    raw_chunks: list[str] = []
+    try:
+        stream = client.chat.completions.create(
+            model            = model,
+            messages         = messages,
+            temperature      = 0.85,
+            max_tokens       = 480,
+            presence_penalty = 0.4,
+            frequency_penalty= 0.35,
+            stream           = True,
+        )
+        for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+            except Exception:
+                delta = None
+            if delta:
+                raw_chunks.append(delta)
+                yield {"kind": "delta", "text": delta}
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI stream failed: {exc}") from exc
+
+    raw_text = ("".join(raw_chunks)).strip()
+    if not raw_text:
+        raise RuntimeError("OpenAI returned empty stream")
+
+    final_text = _scrub_brand_tone(raw_text)
+    if not final_text:
+        raise RuntimeError("OpenAI returned empty after scrub")
+
+    has_dasha  = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
+    has_coords = isinstance(birth, dict) and birth.get("lat") is not None and birth.get("lon") is not None
+    if has_planets and has_dasha and has_coords:
+        confidence = 0.95
+    elif has_planets and has_dasha:
+        confidence = 0.85
+    elif has_planets:
+        confidence = 0.75
+    else:
+        confidence = 0.55
+
+    eff_lang = _resolve_response_lang(question, lang, preferred_language)
+    yield {
+        "kind":       "final",
+        "text":       final_text,
+        "topic":      topic,
+        "confidence": confidence,
+        "source":     "openai_stream",
+        "follow_ups": _derive_follow_ups(topic, eff_lang),
+    }
+
+
 # ── Vastu Drishti Scan (vision) ──────────────────────────────────────────────
 
 _VASTU_LANG_HINT = {

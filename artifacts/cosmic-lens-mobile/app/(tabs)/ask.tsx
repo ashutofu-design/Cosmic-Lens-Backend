@@ -33,6 +33,7 @@ interface Message {
   role: "user" | "assistant";
   text: string;
   loading?: boolean;
+  streaming?: boolean;
   followUps?: string[];
 }
 
@@ -73,6 +74,14 @@ export default function AskScreen() {
 
   // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
   const [mode, setMode] = useState<"chat" | null>(null);
+
+  // ── Request ownership ────────────────────────────────────────────────────
+  // Each send() bumps requestIdRef. Stream callbacks gate every state mutation
+  // on `myReqId === requestIdRef.current` so a superseded in-flight stream
+  // can't clobber the newer conversation. abortRef lets a new send actually
+  // cancel the previous fetch (frees the OpenAI quota faster too).
+  const requestIdRef = useRef(0);
+  const abortRef     = useRef<AbortController | null>(null);
 
   const [messages, setMessages] = useState<Message[]>(() =>
     showDemo
@@ -165,13 +174,45 @@ export default function AskScreen() {
       const nextWithUser = userMsg ? [...trimmed, userMsg] : trimmed;
       const nextWithThink: Message[] = [...nextWithUser, thinkMsg];
 
+      // ── Acquire request ownership ─────────────────────────────────────
+      // Bump counter, capture local id; abort any in-flight stream from a
+      // previous (now-superseded) call. State mutations below are gated on
+      // `myReqId === requestIdRef.current` so stale completions are ignored.
+      const myReqId = ++requestIdRef.current;
+      try { abortRef.current?.abort(); } catch {}
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const isCurrent = () => myReqId === requestIdRef.current;
+
       setMessages(nextWithThink);
       if (!isRegen) setInput("");
       setLoading(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+      // ── Centralised failure handler ───────────────────────────────────
+      // For regenerate: silently restore the original thread (no error
+      // bubble — user keeps the prior visible answer + chips intact).
+      // For fresh sends: drop think bubble, append a single error bubble.
+      const failQuietly = (errMsg: string) => {
+        if (!isCurrent()) return;
+        if (isRegen) {
+          setMessages(original);
+        } else {
+          setMessages((prev) =>
+            prev.filter((m) => m.id !== "thinking").concat({
+              id: Date.now().toString(),
+              role: "assistant",
+              text: errMsg,
+            }),
+          );
+        }
+      };
+
       try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "Accept":       "text/event-stream, application/json",
+        };
         if (user?.api_key) headers["X-API-Key"] = user.api_key;
 
         // Conversation memory: build from POST-strip snapshot (not state),
@@ -182,7 +223,9 @@ export default function AskScreen() {
           .slice(-10)
           .map((m) => ({ role: m.role, text: m.text }));
 
-        const res = await apiFetch(`${API_BASE}/api/ask`, {
+        // Use raw fetch (not apiFetch) — apiFetch's network-retry can re-issue
+        // the request mid-stream; SSE responses must not be retried.
+        const res = await fetch(`${API_BASE}/api/ask/stream`, {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -193,18 +236,23 @@ export default function AskScreen() {
             lang: language,
             user_id: user?.id,
           }),
+          signal: ctrl.signal,
         });
-        const json = await res.json().catch(() => ({} as any));
+
+        // Stale completion — a newer send superseded us; drop quietly.
+        if (!isCurrent()) return;
+
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        const isStream = ct.includes("text/event-stream");
 
         // ── Quota exhausted (HTTP 402) ─────────────────────────────────────
+        // Backend always returns JSON for 402 — same as one-shot path.
         if (res.status === 402) {
-          // For regenerate: restore the FULL original (including the answer
-          // that was about to be replaced) so the user doesn't lose visible
-          // content when they hit a quota wall.
+          const json = await res.json().catch(() => ({} as any));
+          if (!isCurrent()) return;
           if (isRegen) {
             setMessages(original);
           } else {
-            // Fresh question: drop the unanswered user msg + thinking; restore input.
             setMessages((prev) =>
               prev.filter((m) => m.id !== "thinking" && (!userMsg || m.id !== userMsg.id)),
             );
@@ -220,43 +268,167 @@ export default function AskScreen() {
           return;
         }
 
-        // ── Auth error (401) ──────────────────────────────────────────────
+        // ── Auth error (401) — restore on regenerate, error bubble on fresh
         if (res.status === 401) {
+          failQuietly("Session expired — kripya logout karke phir login karein.");
+          return;
+        }
+
+        // ── Other non-2xx (5xx etc) — same restore matrix as auth.
+        if (!res.ok) {
+          failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
+          return;
+        }
+
+        // ── One-shot JSON path (brand_guard / no_chart / marriage) ───────
+        if (!isStream) {
+          const json = await res.json().catch(() => null);
+          if (!isCurrent()) return;
+          if (!json || typeof json !== "object") {
+            failQuietly("Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
+            return;
+          }
+          const answer =
+            json.text ?? json.answer ?? json.response ??
+            "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
+          const followUps: string[] = Array.isArray(json.follow_ups) ? json.follow_ups.slice(0, 3) : [];
+          const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
-              id: Date.now().toString(),
-              role: "assistant",
-              text: "Session expired — kripya logout karke phir login karein.",
+              id: newAssistantId, role: "assistant", text: answer, followUps,
             })
           );
           return;
         }
 
-        const answer =
-          json.text ?? json.answer ?? json.response ??
-          "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
-        const followUps: string[] = Array.isArray(json.follow_ups) ? json.follow_ups.slice(0, 3) : [];
+        // ── True SSE streaming path ────────────────────────────────────────
+        // Replace the thinking bubble with an empty assistant bubble that
+        // we'll append delta tokens to in real time. On `done`, swap the
+        // accumulated text with the scrubbed `text` from the done event
+        // (scrubber may have removed banned words → trust server).
         const newAssistantId = Date.now().toString() + "_a";
         setMessages(prev =>
           prev.filter(m => m.id !== "thinking").concat({
-            id: newAssistantId, role: "assistant", text: answer, followUps,
+            id: newAssistantId, role: "assistant", text: "", streaming: true,
           })
         );
-      } catch {
-        // On network failure during regenerate, restore original so the
-        // user keeps the previously-visible answer instead of a dead thread.
-        if (isRegen) {
-          setMessages(original);
+
+        // Feature detection — RN bridged fetch on some Expo Go builds buffers
+        // the entire body and exposes only .text(). Fall back to one-shot SSE
+        // parse so the user still gets the answer (just no token-by-token).
+        const reader: ReadableStreamDefaultReader<Uint8Array> | null =
+          (res.body && typeof (res.body as any).getReader === "function")
+            ? (res.body as any).getReader()
+            : null;
+
+        const decoder: TextDecoder | null =
+          typeof TextDecoder !== "undefined" ? new TextDecoder() : null;
+
+        let accumulated     = "";
+        let finalText       = "";
+        let finalFollowUps: string[] = [];
+        let sawDone         = false;
+        let midError: string | null = null;
+
+        const handleEvent = (raw: string) => {
+          const dataLine = raw.split("\n").find(l => l.startsWith("data:"));
+          if (!dataLine) return;
+          const dataStr = dataLine.slice(5).trim();
+          if (!dataStr) return;
+          let evt: any;
+          try { evt = JSON.parse(dataStr); } catch { return; }
+          if (evt.error) { midError = String(evt.error); return; }
+          if (typeof evt.delta === "string" && evt.delta.length > 0) {
+            accumulated += evt.delta;
+            if (!isCurrent()) return;       // drop stale paint
+            setMessages(prev => {
+              const idx = prev.findIndex(m => m.id === newAssistantId);
+              if (idx < 0) return prev;
+              const next = [...prev];
+              next[idx] = { ...next[idx], text: accumulated };
+              return next;
+            });
+          }
+          if (evt.done) {
+            sawDone = true;
+            finalText = String(evt.text || accumulated || "");
+            finalFollowUps = Array.isArray(evt.follow_ups) ? evt.follow_ups.slice(0, 3) : [];
+          }
+        };
+
+        if (reader && decoder) {
+          let buffer = "";
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nlnl: number;
+            while ((nlnl = buffer.indexOf("\n\n")) >= 0) {
+              const evtRaw = buffer.slice(0, nlnl);
+              buffer = buffer.slice(nlnl + 2);
+              handleEvent(evtRaw);
+            }
+          }
+          if (buffer.trim()) handleEvent(buffer);
+        } else {
+          // No streaming reader → fetch full body and parse all events.
+          const body = await res.text();
+          if (!isCurrent()) return;
+          for (const part of body.split("\n\n")) {
+            if (part.trim()) handleEvent(part);
+          }
         }
-        setMessages((prev) =>
-          prev.filter((m) => m.id !== "thinking").concat({
-            id: Date.now().toString(),
-            role: "assistant",
-            text: "Network error — thodi der baad try karein.",
-          }),
-        );
+
+        // Strict finalisation: a stream that never sent `done` is treated as
+        // a failure regardless of partial text — partial deltas have NOT been
+        // tone-scrubbed and may contain banned words. Trust only the server's
+        // `done.text` (post-scrub) for what we publish.
+        if (!sawDone) {
+          // Abort the bubble we created and route through the standard
+          // restore matrix (regen → restore original; fresh → error bubble).
+          if (isCurrent()) {
+            setMessages(prev => prev.filter(m => m.id !== newAssistantId));
+          }
+          failQuietly(midError || "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.");
+          return;
+        }
+
+        // Stale check before final commit.
+        if (!isCurrent()) return;
+
+        // Swap in scrubbed final text + follow_ups; clear streaming flag.
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.id === newAssistantId);
+          if (idx < 0) return prev;
+          const next = [...prev];
+          next[idx] = {
+            ...next[idx],
+            text:      finalText || accumulated,
+            followUps: finalFollowUps,
+            streaming: false,
+          };
+          return next;
+        });
+      } catch (e: any) {
+        // Two abort cases to disambiguate:
+        //   • Superseded by a newer send → !isCurrent(): the new owner has
+        //     already painted UI; we silently exit.
+        //   • Current-request abort (e.g. unmount, manual cancel, navigate
+        //     away mid-stream): we are still the owner, so route through
+        //     the standard restore matrix to avoid a stuck thinking bubble.
+        if (!isCurrent()) return;
+        if (e?.name === "AbortError") {
+          // Drop the in-progress streaming bubble (if any) before restoring.
+          setMessages(prev => prev.filter(m => !m.streaming));
+          failQuietly("Cancelled.");
+          return;
+        }
+        failQuietly("Network error — thodi der baad try karein.");
       } finally {
-        setLoading(false);
+        // Only the latest in-flight request clears the loading flag; older
+        // (aborted) ones must not flip it off while a newer call is pending.
+        if (isCurrent()) setLoading(false);
       }
     },
     [loading, showDemo, kundli, birthData, user?.id, user?.api_key, language, messages, t.askDailyLimitOver],

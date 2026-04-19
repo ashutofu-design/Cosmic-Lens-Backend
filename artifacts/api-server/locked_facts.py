@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-42 / Phase Q — Muhurta Full (Choghadiya + Hora + Kaal + Abhijit/Brahma + 35 events)
+    phase_q_str = ""
+    try:
+        from vedic.muhurta.phase_q import compute_phase_q, format_phase_q  # type: ignore
+        phase_q_str = format_phase_q(compute_phase_q())
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-Q muhurta (Sprint-42) failed: {exc}")
+
     # Sprint-41 / Phase P — Compatibility Profile (8 Ashtakoot + Dashakoot + Rajju + Vedha)
     phase_p_str = ""
     try:
@@ -989,6 +997,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_n_str,
         lal_kitab_str,
         phase_p_str,
+        phase_q_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

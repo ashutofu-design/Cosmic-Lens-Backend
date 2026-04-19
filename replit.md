@@ -874,7 +874,17 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **P8 Vashya 5 types** ✅ — Chatushpada/Manushya/Jalachara/Vanachara/Keeta + which classes it controls
 - Test chart Moon=P.Phalguni Leo: Yoni=Rat-F, Rajju=Janu, Vashya=Vanachara, Gana=Manushya, Nadi=Pitta
 
-### Sprint 41+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 42 — Phase Q Muhurta Full ✅ COMPLETE
+- New module: `vedic/muhurta/phase_q.py` (~220 lines)
+- **Q1 Choghadiya** ✅ — 8 day + 8 night = 16 windows, weekday-keyed start, full quality classification (Amrit/Shubh/Labh/Char/Kaal/Rog/Udveg)
+- **Q2 Hora** ✅ — 24 hourly windows starting at sunrise, planet-lord cycle Sun→Venus→Mercury→Moon→Saturn→Jupiter→Mars, best-use guidance per lord
+- **Q3 Inauspicious Kaal** ✅ — Rahu Kaal, Yamaganda Kaal, Gulika Kaal slot computation per weekday
+- **Q4 Special muhurtas** ✅ — Abhijit Muhurta (8th day-muhurta = midday ±24m, invalid on Tuesdays), Brahma Muhurta (96-48 min before sunrise)
+- **Q5 Event muhurtas** ✅ — **35 classical events** rated against today's available choghadiya + hora windows (Marriage, Engagement, Naamkaran, Annaprashana, Mundan, Upanayana, Griha Pravesh, Bhumi Pujan, Vahana Kreya, Property, Business start, Investment, Job interview, Travel domestic/foreign, Surgery elective/emergency, Medicine start, Court case, Contract, Settlement, Diksha, Mantra Sadhana, Yagna, Charity, New clothes, Jewellery, Vidyarambha, Music, Cremation, Funeral rites, Tonsure)
+- Heuristic: sunrise=06:00, sunset=18:00 (no lat/lon)
+- LF after Phase Q: **52,434 chars** (+7203 — biggest single-phase boost)
+
+### Sprint 42+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

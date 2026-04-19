@@ -52,17 +52,67 @@ DIGNITY_RANK = {
 PROMISE_HOUSES = {2, 7, 11}
 DENIAL_HOUSES  = {1, 6, 10, 12}
 
-REMEDY_BY_PLANET = {
-    "Venus":   'Shukravar (Friday) ko 108 baar "Om Shum Shukraya Namah" jaap karein, safed mishri ka daan',
-    "Jupiter": 'Guruvar (Thursday) ko 108 baar "Om Gum Gurave Namah" jaap karein, peeli daal ka daan',
-    "Mars":    'Mangalvar (Tuesday) ko Hanuman Chalisa 11 baar paath, gud ka daan',
-    "Saturn":  'Shanivar (Saturday) ko 108 baar "Om Sham Shanaischaraya Namah" jaap, til-tel ka daan',
-    "Mercury": 'Budhvar (Wednesday) ko 108 baar "Om Bum Budhaya Namah" jaap, hari sabzi ka daan',
-    "Sun":     'Ravivar (Sunday) ko Surya ko tambe ke lote se jal arpan + 108 baar "Om Suryaya Namah"',
-    "Moon":    'Somvar (Monday) ko 108 baar "Om Som Somaya Namah" jaap, doodh-chawal ka daan',
-    "Rahu":    'Shanivar ko Durga Saptashati ka paath, kambal daan',
-    "Ketu":    'Mangalvar ko Ganesh Atharvashirsha paath, til daan',
+# Day-name → Hindi vaar (for the narration string)
+_DAY_HI = {
+    "Sunday":    "Ravivar",  "Monday":   "Somvar",   "Tuesday":  "Mangalvar",
+    "Wednesday": "Budhvar",  "Thursday": "Guruvar",  "Friday":   "Shukravar",
+    "Saturday":  "Shanivar",
 }
+
+# One-line emergency fallback (used only if remedies.py is unavailable
+# at runtime). The single source of truth is remedies._REMEDY_TABLE.
+_FALLBACK_REMEDY = (
+    'Hanuman Chalisa daily paath karein — sab grahon ki ashanti shaant karta hai'
+)
+
+
+def _remedy_for_planet(planet: str) -> str:
+    """
+    Return a one-line marriage-narration remedy string for `planet`, sourced
+    VERBATIM from the canonical `remedies._REMEDY_TABLE` (Sprint 5). Single
+    source of truth — eliminates the old hard-coded duplicate that diverged
+    (e.g. wrong 'Om Shum Shukraya Namah' vs proper BPHS
+    'Om Draam Dreem Draum Sah Shukraya Namah').
+    """
+    try:
+        from remedies import _REMEDY_TABLE  # type: ignore
+    except Exception:
+        return _FALLBACK_REMEDY
+    entry = _REMEDY_TABLE.get(planet)
+    if not isinstance(entry, dict):
+        return _FALLBACK_REMEDY
+    mantra   = entry.get("mantra")  or {}
+    charity  = entry.get("charity") or []
+    trans    = mantra.get("transliteration") or ""
+    count    = mantra.get("count") or 108
+    day_en   = (mantra.get("day") or "").split(" ")[0]   # "Saturday (or Wednesday)" → "Saturday"
+    day_hi   = _DAY_HI.get(day_en, day_en or "is din")
+    daan     = (charity[0].lower() if charity else "appropriate items")
+    if not trans:
+        return _FALLBACK_REMEDY
+    return (
+        f'{day_hi} ({day_en}) ko {count} baar "{trans}" jaap karein, '
+        f'{daan} ka daan'
+    )
+
+
+# Backwards-compatible accessor — anything that used to read REMEDY_BY_PLANET[X]
+# now goes through the dynamic lookup so the canonical remedies.py stays the
+# single source of truth.
+class _RemedyView:
+    def get(self, planet, default=None):
+        out = _remedy_for_planet(planet) if planet else None
+        return out if out else (default if default is not None else _FALLBACK_REMEDY)
+    def __getitem__(self, planet):
+        return _remedy_for_planet(planet)
+    def __contains__(self, planet):
+        try:
+            from remedies import _REMEDY_TABLE  # type: ignore
+            return planet in _REMEDY_TABLE
+        except Exception:
+            return False
+
+REMEDY_BY_PLANET = _RemedyView()
 
 
 def _sign_idx(sign_name: Any) -> Optional[int]:

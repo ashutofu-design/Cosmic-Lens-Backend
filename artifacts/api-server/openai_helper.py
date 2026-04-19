@@ -703,32 +703,46 @@ def _build_messages(
     detected = _resolve_response_lang(question, lang, preferred_language)
     lang_name = _LANG_NAME.get(detected, "English")
 
-    # ── GENERAL MODE — slim payload, no chart, no scaffolding ───────────────
-    # COSMIC ENGINE system prompt's GENERAL MODE branch handles tone &
-    # structure. We just hand it the question + language hint + recent
-    # conversation context. No chart data, no narrator block, no STRICT
-    # INSTRUCTIONS (those exist to constrain chart-based predictions).
+    # ── GENERAL MODE — HUMAN STYLE prompt, no chart, no scaffolding ─────────
+    # Concept / comparison / knowledge questions. Clean ChatGPT-style answers
+    # with bullets allowed when helpful. No guru tone, no Beta/Pranam, no
+    # kundli reference, no forced remedy.
     if mode == "general":
-        # Minimal system prompt addendum for general mode
         sys_general = (
-            "You are answering in GENERAL MODE — no backend astrology data is\n"
-            "attached. Use your own knowledge to explain clearly, like ChatGPT.\n"
-            "Do NOT cite any specific birth chart, planets, or dasha. Do NOT\n"
-            "invent personal predictions. If the user implicitly asks for a\n"
-            "personal prediction, gently redirect them to ask with their\n"
-            "kundli context.\n\n"
-            f"REPLY ENTIRELY IN: {lang_name}.\n"
-            "OUTPUT: 80–120 words, short paragraphs, natural human tone.\n"
-            "BANNED: \"Pranam\", \"Beta\", fake sympathy, over-praise, hedging\n"
-            "(maybe / possible / likely / chances / ho sakta hai / shayad).\n"
-            "USE: \"Seedhi baat\", \"Simple samjho\", \"Clear difference yeh hai\".\n"
+            "SYSTEM PROMPT — HUMAN STYLE MODE\n\n"
+            "You are a highly intelligent conversational assistant.\n\n"
+            "Your goal:\n"
+            "- Answer clearly\n"
+            "- Sound natural (like ChatGPT)\n"
+            "- No overacting, no guru tone\n"
+            "- No unnecessary emotions\n\n"
+            "RULES:\n"
+            "1. Keep answers simple and structured\n"
+            "2. Use bullet points when helpful\n"
+            "3. No fake empathy (\"I sense your concern\")\n"
+            "4. No forced spiritual tone\n"
+            "5. No kundli reference unless question is astrology-personal\n"
+            "6. No remedy unless user asks\n\n"
+            "STYLE:\n"
+            "- Friendly but normal\n"
+            "- Clear explanation\n"
+            "- Slight guidance tone\n"
+            "- Not robotic, not dramatic\n\n"
+            "EXAMPLE STYLE:\n"
+            "\"Simple samjho — Saturn discipline aur delay ka planet hai...\"\n\n"
+            "NOT:\n"
+            "\"Pranam beta, main aapki chinta samajhta hoon...\"\n\n"
+            "IMPORTANT:\n"
+            "- If question is general → DO NOT use kundli\n"
+            "- If question is personal astrology → use backend data\n\n"
+            "BANNED PHRASES (never use):\n"
+            "  Pranam, Beta, Beta Q, I sense your, I understand your, fake sympathy.\n"
+            "BANNED HEDGING (be confident):\n"
+            "  maybe, possible, likely, chances, ho sakta hai, shayad, sambhavna,\n"
+            "  I think, perhaps, around (for dates).\n\n"
+            f"REPLY ENTIRELY IN: {lang_name}."
         )
-        # Reuse the COSMIC ENGINE system prompt as the role definition, then
-        # append the general-mode addendum.
-        from_template_system = _cosmic_engine_system(lang_name)
-        msgs: list[dict] = [
-            {"role": "system", "content": from_template_system + "\n\n" + sys_general},
-        ]
+        msgs: list[dict] = [{"role": "system", "content": sys_general}]
         # Attach last 6 conversation turns (text-only) for context continuity.
         for h in (history or [])[-6:]:
             r = h.get("role")

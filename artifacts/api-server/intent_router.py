@@ -76,10 +76,25 @@ _CLASSIFIER_PROMPT = (
     "yoga effect, conditional 'agar X hai toh kya'. Generally needs "
     "engine facts + AI interpretation. Default for any chart-based "
     "question that is NOT a pure lookup, dosha check, transparency, "
-    "or timing question.\n\n"
+    "or timing question.\n"
+    "  IMPORTANT — these are ALL analysis (about USER's own chart):\n"
+    "    'saturn powerful hai ya weak' / 'mera saturn strong hai kya' /\n"
+    "    'jupiter achha hai ya kharab' / 'mars kaisa hai mera' /\n"
+    "    'venus weak hai kya' / 'rahu mere liye achha hai' /\n"
+    "    'mera 7th house kaisa hai' / 'mere liye career kaisa hai' /\n"
+    "    'love marriage hogi ya arrange' / 'kaisa rahega 2027'.\n"
+    "  Even when question lacks the word 'mera/my', if it asks about a\n"
+    "  specific planet/house/yoga's quality (strong/weak/good/bad) it\n"
+    "  is about the user's own chart unless they explicitly ask the\n"
+    "  generic concept ('X kya hota hai', 'X meaning'). When in doubt\n"
+    "  between analysis vs general, PREFER analysis.\n\n"
     "• general — concept/knowledge question that needs NO personal "
-    "chart. Examples: 'manglik kya hota hai', 'rahu ka matlab', "
-    "'navagraha kaun se hain', 'difference between rashi and lagna'.\n\n"
+    "chart. Must be a clear definition/concept ask, not a chart "
+    "judgement. Examples: 'manglik kya hota hai', 'rahu ka matlab "
+    "kya hai', 'navagraha kaun se hain', 'difference between rashi "
+    "and lagna', 'shadbala kaise calculate hota hai'.\n"
+    "  NOT general: 'saturn strong hai ya weak', 'mars achha hai ya "
+    "kharab' — these are personal chart judgements → analysis.\n\n"
     "• greeting — pure social opener with no question: 'hi', 'hello', "
     "'namaste', 'pranam', 'thanks', 'thank you', 'good morning'.\n\n"
     "OUTPUT FORMAT: exactly one of these tokens, lowercase, no quotes:\n"
@@ -122,18 +137,34 @@ def classify_intent(
     if cached:
         return cached
 
-    # If a follow-up is REALLY short (<= 3 words) and the previous user
-    # turn exists, prepend it so the classifier has context. Example:
-    # last user said "mera mars kaha hai", now they say "kyun".
+    # Always prepend the LAST assistant + user turn (when available) so
+    # the classifier can disambiguate follow-ups like "saturn powerful
+    # hai ya weak" (looks general standalone, but is clearly about the
+    # user's chart given the prior assistant turn talked about their
+    # Saturn position). We only prepend for short-to-medium questions
+    # (≤ 12 words) — longer questions usually carry their own context.
     user_msg = question.strip()
-    if history and len(question.split()) <= 3:
+    if history and len(question.split()) <= 12:
         prev_user = ""
+        prev_asst = ""
         for h in reversed(history[-6:]):
-            if (h.get("role") == "user") and h.get("content"):
-                prev_user = (h.get("content") or "").strip()
+            role = h.get("role")
+            content = (h.get("content") or h.get("text") or "").strip()
+            if not content:
+                continue
+            if role == "assistant" and not prev_asst:
+                prev_asst = content[:240]
+            elif role == "user" and not prev_user:
+                prev_user = content[:240]
+            if prev_user and prev_asst:
                 break
+        ctx_bits = []
         if prev_user:
-            user_msg = f"[previous question: {prev_user}]\n[current: {question.strip()}]"
+            ctx_bits.append(f"[previous user question: {prev_user}]")
+        if prev_asst:
+            ctx_bits.append(f"[previous assistant reply: {prev_asst}]")
+        if ctx_bits:
+            user_msg = "\n".join(ctx_bits) + f"\n[current question: {question.strip()}]"
 
     try:
         if client is None:

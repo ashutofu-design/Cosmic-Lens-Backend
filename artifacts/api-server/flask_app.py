@@ -3964,7 +3964,14 @@ def ask_route():
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
     if user_id:
-        user = User.query.get(user_id)
+        # user_id may arrive as a JSON string from the mobile client. Coerce
+        # to int safely; treat anything non-numeric as anonymous rather than
+        # crashing the SQLAlchemy primary-key lookup.
+        try:
+            uid_int = int(str(user_id).strip())
+        except (TypeError, ValueError):
+            uid_int = None
+        user = User.query.get(uid_int) if uid_int is not None else None
         if not user:
             return jsonify({"error": "User not found"}), 404
         api_key = request.headers.get("X-API-Key", "").strip()

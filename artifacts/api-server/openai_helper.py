@@ -619,6 +619,18 @@ def _build_messages(
     detected = _detect_question_lang(question, lang)
     lang_name = _LANG_NAME.get(detected, "English")
     chart_str = _kundli_summary(kundli, birth)
+    # Pre-computed chart intelligence — dignities, yogas, mangal-dosh,
+    # sade-sati, house-lord placements, aspects. The AI now interprets
+    # known facts instead of deriving them itself (single biggest accuracy
+    # unlock for the Ask flow).
+    intel_str = ""
+    try:
+        analyze_chart, format_intelligence = _chart_intel()
+        intel = analyze_chart(kundli, birth)
+        if intel:
+            intel_str = format_intelligence(intel)
+    except Exception as exc:
+        print(f"[openai_helper] chart_intelligence failed: {exc}")
     focus     = _focus_block(topic)
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
@@ -685,19 +697,43 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             beh_lines.append(f"  Recent prior questions:\n{prior_q_lines}")
         beh_block = "\n".join(beh_lines)
 
-    kp_section = f"\n\n{kp_block}\n" if kp_block else ""
-    tr_section = f"\n\n{tr_block}\n" if tr_block else ""
+    kp_section    = f"\n\n{kp_block}\n" if kp_block else ""
+    tr_section    = f"\n\n{tr_block}\n" if tr_block else ""
+    intel_section = f"\n\n{intel_str}\n" if intel_str else ""
+
+    # Fail-safe context flags for the AI
+    has_chart  = bool(chart_str and chart_str != "(no birth chart provided)")
+    has_dasha  = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    failsafe = ""
+    if not has_chart or not has_planets:
+        failsafe = (
+            "\n⚠️ DATA STATUS: The devotee's birth chart is incomplete or missing. "
+            "DO NOT invent planet positions, dasha details, or yogas. "
+            "Reply gently in {lang}: 'Beta, aapki kundli ki poori jankari mere paas nahi hai. "
+            "Kripya pehle apna janm vivaran (date, time, place) save karein, phir mai sahi margdarshan de paunga.' "
+            "Do not predict timing or specifics without the chart."
+        ).format(lang=lang_name)
+    elif not has_dasha:
+        failsafe = (
+            "\n⚠️ DATA STATUS: Current Dasha (Mahadasha/Antardasha) is missing in the chart data. "
+            "DO NOT invent a dasha period. If the question asks 'kab/when', clearly say timing "
+            "cannot be precisely given without the dasha, and answer the YOGA part only."
+        )
 
     user = (
         f"DEVOTEE'S BIRTH CHART:\n{chart_str}\n"
+        f"{intel_section}"
         f"{kp_section}"
         f"{tr_section}\n"
         f"DEVOTEE IS ASKING NOW:\n\"{question}\"\n"
         f"{focus_block}"
         f"{beh_block}"
+        f"{failsafe}"
         f"{variation}\n\n"
         "STRICT INSTRUCTIONS — multi-system verification, human-friendly delivery, no question too long:\n"
         "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never skip, never compress two distinct asks into one vague reply. If the question is 1 line, give 1 focused answer; if it's a paragraph with multiple worries, give a paragraph per worry in the order asked.\n"
+        "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
         "1) ACKNOWLEDGE warmly in line 1 — name the emotion behind the question (chinta, ummeed, confusion). Use the devotee's actual words back to them once so they feel heard.\n"
         "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
         "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses. State whether KP confirms or modifies the Vedic verdict ('KP paddhati se bhi yahi confirm hota hai...').\n"
@@ -903,6 +939,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
             "source":     "brand_guard",
         }
 
+    # ── Fail-safe: if no kundli planets at all, never call the LLM. The
+    # spec demands "DO NOT GUESS" — invented planet positions are the worst
+    # possible failure mode for an astrology app's credibility.
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    if not has_planets:
+        eff_lang = _detect_question_lang(question, lang)
+        no_chart_msg = {
+            "en": ("Beta, your full birth-chart isn't with me yet — without it I cannot honestly predict timing or specifics. "
+                   "Please save your birth details (date, exact time, and place) first; once I can see your kundli, I will guide you with full clarity."),
+            "hi": ("बेटा, अभी मेरे पास आपकी पूरी जन्म-कुंडली नहीं है — इसके बिना मैं ईमानदारी से कोई समय या विशेष भविष्यवाणी नहीं कर सकता। "
+                   "कृपया पहले अपना जन्म विवरण (तिथि, सही समय और स्थान) सहेजें; जैसे ही मैं आपकी कुंडली देख सकूँगा, पूरी स्पष्टता से मार्गदर्शन दूँगा।"),
+            "hn": ("Beta, abhi mere paas aapki poori janm-kundli nahi hai — iske bina mai imaandari se koi timing ya specific bhavishyavani nahi kar sakta. "
+                   "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga."),
+        }.get(eff_lang) or ("Beta, abhi mere paas aapki poori janm-kundli nahi hai — iske bina mai imaandari se koi timing ya specific bhavishyavani nahi kar sakta. "
+                            "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga.")
+        return {
+            "text":       no_chart_msg,
+            "topic":      _classify_topic(question),
+            "confidence": 0.0,
+            "source":     "no_chart_failsafe",
+        }
+
     client = _get_client()
     if client is None:
         raise RuntimeError(_client_err or "OpenAI client not configured")
@@ -930,10 +988,25 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0, bir
     if not text:
         raise RuntimeError("OpenAI returned empty response")
 
+    # Derive confidence from data completeness — high (0.95) if planets +
+    # dasha + birth coords all present (KP usable), medium (0.75) if planets
+    # only, low (0.55) if just birth fields without a chart.
+    has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    has_dasha   = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
+    has_coords  = isinstance(birth, dict) and birth.get("lat") is not None and birth.get("lon") is not None
+    if has_planets and has_dasha and has_coords:
+        confidence = 0.95
+    elif has_planets and has_dasha:
+        confidence = 0.85
+    elif has_planets:
+        confidence = 0.75
+    else:
+        confidence = 0.55
+
     return {
         "text":       text,
-        "topic":      _classify_topic(question),
-        "confidence": 0.85,
+        "topic":      topic,
+        "confidence": confidence,
         "source":     "openai",
     }
 

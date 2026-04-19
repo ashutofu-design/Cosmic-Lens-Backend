@@ -32,6 +32,12 @@ def _swe():
     import swisseph as swe  # type: ignore
     return swe
 
+
+def _chart_intel():
+    """Lazy-load chart_intelligence to keep test paths import-light."""
+    from chart_intelligence import analyze_chart, format_intelligence  # type: ignore
+    return analyze_chart, format_intelligence
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None

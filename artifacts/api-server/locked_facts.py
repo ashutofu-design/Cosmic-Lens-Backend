@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-40 / Phase O — Lal Kitab Full (Teva + Pakka Ghar + Karak + Rin + Age-dasha)
+    lal_kitab_str = ""
+    try:
+        from vedic.lalkitab.lal_kitab_full import compute_lal_kitab, format_lal_kitab  # type: ignore
+        lal_kitab_str = format_lal_kitab(compute_lal_kitab(kundli, birth))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-O lal-kitab (Sprint-40) failed: {exc}")
+
     # Sprint-39 / Phase N — Nadi Astrology (1800 amshas + Bhrigu Saral + Gana per planet)
     phase_n_str = ""
     try:
@@ -971,6 +979,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         lagnas_l_str,
         sahams_m_str,
         phase_n_str,
+        lal_kitab_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

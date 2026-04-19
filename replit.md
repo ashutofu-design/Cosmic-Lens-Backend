@@ -852,7 +852,17 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **N2 Bhrigu Saral Paddhati** ✅ — simplified karma reading using 9th/10th house + lord placement, classifies into Dharma / Artha / Kama / Moksha-Sankat / Mishra streams. Test chart: Mishra (mixed) — balanced karma path.
 - **N3 Deva-Manushya-Rakshasa Gana per planet** ✅ — via nakshatra placement of all 9 planets (extends classical Moon-only Gana). Returns totals + dominant-Gana classification. Test chart: Manushya 6 / Rakshasa 3 / Deva 0 → Manushya-dominant.
 
-### Sprint 39+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 40 — Phase O Lal Kitab Full ✅ COMPLETE
+- New module: `vedic/lalkitab/lal_kitab_full.py` (~210 lines)
+- **O1 Teva** ✅ — 1-of-35 chart-type classification (Raja/Vyapari/Kisan/Sadhu/Mishra) using Sun-Moon-Mars house positions
+- **O2 Pakka Ghar** ✅ — permanent-house assignment per planet (Sun=H1, Moon=H4, Mars=H3, Mercury=H7, Jupiter=H9, Venus=H7, Saturn=H10, Rahu=H12, Ketu=H6); flags displaced planets needing upaya
+- **O3 Karak Grahas** ✅ — 9 life-area significators with active/displaced verdict
+- **O4 Rin (debts)** ✅ — 6-rule detection: Pitri / Matri / Stree / Bhratru / Self / Karz Rin
+- **O5 Lal Kitab Varshfal Dasha** ✅ — 36-yr age-cycle (planets rule by age band 0-6 Mercury → 6-12 Ketu → … → 108-120 Saturn)
+- **O6 Remedies DB** ✅ — pre-existing `remedies_db.py` (992 lines, 1000+ remedies) — referenced
+- Test chart: Teva #19 Kisan-type, all 9 karaks displaced, 4 active Rin (Pitri+Stree+Self+Karz), age 36 → Jupiter dasha
+
+### Sprint 40+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

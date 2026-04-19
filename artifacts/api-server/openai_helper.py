@@ -871,11 +871,11 @@ REPLY ENTIRELY IN: {lang_name}. Match the devotee's tone — if they wrote casua
             "    \"approximately\", \"roughly\", \"likely\", \"possibly\", \"perhaps\", \"maybe\",\n"
             "    \"might\", \"could be\", \"sometime\", \"by the end of\", \"early\", \"late\",\n"
             "    \"in or around\". The window is exact — speak with quiet certainty, not hedges.\n"
-            "  • You may smooth language into Acharya ji's warm voice and translate to {lang},\n"
+            f"  • You may smooth language into Acharya ji's warm voice and translate to {lang_name},\n"
             "    but NEVER change technical content (verdict, dates, planets, remedy).\n"
             "If you contradict the engine verdict, score, or window — the answer is WRONG\n"
             "and will be rejected.\n\n"
-        ).format(lang=lang_name)
+        )
         narrator_rules = (
             "★ MARRIAGE NARRATOR OVERRIDE ★ — Rules 2,3,4,5,6 below are SUPERSEDED for this turn:\n"
             "you do NOT do Vedic / KP / dasha / transit reasoning yourself. The engine already did.\n"

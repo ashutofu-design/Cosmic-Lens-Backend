@@ -807,7 +807,17 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **I6 Eclipse pin-point** ✅ pre-existing in kp_deep
 - Test on chart: H7 (Marriage) sub-lord Moon signifies [2,6,8,9,11] → PROMISED; marriage matching = "MARRIAGE WITH OBSTACLES" (both fav and deny hit)
 
-### Sprint 34+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 35 — Phase J Tajik / Varshaphala ✅ COMPLETE
+- New module: `vedic/tajik/varshaphala.py` (~360 lines)
+- **J1 Varshaphala (Sun-Return chart)** ✅ — bisection-search swisseph for moment when transit Sun = natal Sun (sidereal); returns full 9-planet VS chart with speeds + retrograde flags
+- **J2 Muntha (progressed point)** ✅ — 1 sign/yr from natal Lagna; verdict by favourable houses {1,2,3,5,9,10,11}
+- **J3 Sahams (30 sensitive points)** ✅ — Punya, Vidya, Yasha, Mitra, Mahatmya, Ascha, Samartha, Bhratri, Gaurava, Pitri, Rajya, Matri, Putra, Jeeva, Karma, Roga, Kali, Sastra, Bandhu, Mrityu, Paradesha, Artha, Paradara, Vanik, Karyasiddhi, Vivaha, Santana, Surya, Sastraganga, Bandhana — day/night formula switching
+- **J4 Tajik aspects (5 types)** ✅ — Ittasala (applying), Eesarafa (separating), Mukabala (180°), Iqbal (<1° applying), Idbar (<1° separating); deeptamsha orbs per planet
+- **J5 Tajik 16 Yogas** ✅ — 6 most-common detection rules: Ittasala, Eesarafa, Nakta (light transfer), Yamaya, Manaoo, Kambool
+- **J6 Munis (3-yr period)** ✅ — 7 Munis (Vasishta/Kashyapa/Bharadvaja/Atri/Vishvamitra/Gautama/Jamadagni) cyclic 3-yr blocks with effect descriptions
+- Test on chart year 37: VS 2026-01-15 05:35 UTC; Muntha Sag H1 FAVOURABLE; 30 Sahams; 16 aspects; 4 yogas detected
+
+### Sprint 35+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

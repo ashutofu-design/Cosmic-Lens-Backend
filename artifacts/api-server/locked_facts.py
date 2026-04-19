@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-35 / Phase J — Tajik / Varshaphala (Annual)
+    phase_j_str = ""
+    try:
+        from vedic.tajik.varshaphala import (compute_phase_j_tajik,  # type: ignore
+                                              format_phase_j_summary)
+        _pj = compute_phase_j_tajik(kundli, birth)
+        phase_j_str = format_phase_j_summary(_pj)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-J tajik (Sprint-35) failed: {exc}")
+
     # Sprint-34 / Phase I — KP Advanced (I2 CIL + I5 Marriage)
     kp_phase_i_str = ""
     try:
@@ -918,6 +928,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         varga_phase_f_str,
         phase_h_str,
         kp_phase_i_str,
+        phase_j_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

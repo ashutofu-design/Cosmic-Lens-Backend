@@ -973,7 +973,28 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - Test chart (Sag lagna): Saturn-H1 → "long-haul founder/monk-CEO", Ketu-H8 → "trauma therapist/hypnotist", Mars-H12 → "special-forces/intelligence agent"
 - LF: 68,972 → **73,450 chars** (+4,478)
 
-### Sprint 47+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 48 — FINANCIAL ASTROLOGY ENGINE ✅ COMPLETE
+- New module: `vedic/financial/financial_engine.py` (~390 lines, 13 checks F1-F13)
+- **Same hardened+ethical+modern-reframe approach as Medical engine**
+- Mandatory ⚠ disclaimer banner — "NOT financial advice; consult SEBI-registered planner"
+- 3 severity tiers: 🟢 POTENTIAL / 🟡 ABILITY / 🔴 STRONG
+- **F1**: Wealth-house occupants & lords (H2/5/9/11)
+- **F2**: Dhana Yogas (Lakshmi, Kubera, Chandra-Mangala, Vasumati, Maha Lakshmi, Guru-Dhana)
+- **F3**: Daridra check with **Bhanga (cancellation) detection** — strict 3+ factor rule, never fear-mongers
+- **F4**: Income source from L10 (9 planets × classical+modern career mapping)
+- **F5**: Debt/loan risk tiered (LOW/MODERATE/ELEVATED)
+- **F6**: Real-estate ability (4th + Mars)
+- **F7**: Foreign income (12th + benefics + Rahu)
+- **F8**: Speculation/trading ability with explicit "paper-trade first" warning
+- **F9**: Career-income from 10th-house occupants
+- **F10**: Top wealth strategies tailored to chart
+- **F11**: Risk profile (CONSERVATIVE/BALANCED/AGGRESSIVE)
+- **F12**: 15-year wealth roadmap
+- **F13**: Wealth-house scorecard (per-house verdict)
+- Test chart (Sag lagna): H2 STRONG (+3, Sun+Venus+Rahu), L10=Mercury → "SaaS founder/AI-prompt engineer", BALANCED risk profile, no false daridra alarms
+- LF: 73,450 → **76,171 chars** (+2,721)
+
+### Sprint 48+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

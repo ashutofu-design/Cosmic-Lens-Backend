@@ -670,6 +670,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-48 — FINANCIAL ASTROLOGY ENGINE (deep + ethical wealth audit)
+    financial_str = ""
+    try:
+        from vedic.financial.financial_engine import run_financial_engine, format_financial_engine  # type: ignore
+        financial_str = format_financial_engine(run_financial_engine(kundli))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] financial engine (Sprint-48) failed: {exc}")
+
     # Sprint-47 — MODERN CONTEXT REFRAME ENGINE (old astrology in TODAY's world)
     modern_reframe_str = ""
     try:
@@ -1048,6 +1056,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_s_str,
         astro_vastu_str,
         medical_str,
+        financial_str,
         modern_reframe_str,
         varga_yogas_str,
         argala_str,

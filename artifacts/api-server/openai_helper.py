@@ -803,6 +803,14 @@ def _build_messages(
             "Gemini hai.\").\n"
             "    • Sentence 2: ONE natural personality / nature line.\n"
             "    • STOP.\n\n"
+            "  CASE C — \"How do you know\" / transparency follow-up "
+            "(\"tumko kaise pata\", \"kaise jaana\", \"how do you know\"):\n"
+            "    • Sentence 1: state the SOURCE plainly — \"Aapki janm "
+            "date, time, aur place se planets calculate hote hain.\"\n"
+            "    • Sentence 2: state the SPECIFIC fact from the chart — "
+            "e.g. \"Aapka Mars Capricorn 22° pe hai aur Lagna Libra hai, "
+            "isliye Mars 4th house mein baitha hai.\"\n"
+            "    • STOP. NO dasha, NO advice, NO remedy.\n\n"
             "  CASE B — Dosha yes/no (\"kya me manglik hun\", \"kaal sarp "
             "hai\", \"pitru dosh\"):\n"
             "    • Sentence 1: clear YES or NO using the LOCKED DOSHA "
@@ -2069,6 +2077,18 @@ _CHART_FACT_PATTERNS = [
         r"\b(?:guru\s*chandal|grahan|daridra|angarak|shrapit|kemadruma)\s+(?:dosh|yog)?\s*(?:hai|he)?\b",
         r"\b(?:mujhe|mer[ai])\s+(?:guru\s*chandal|grahan|daridra|angarak|shrapit|kemadruma)\b",
         r"\bdosh\s+(?:hai|he|kaun\s*sa)\b",
+        # ── TRANSPARENCY / "how do you know" follow-ups ───────────────────
+        # User asks how AI derived a chart fact: "tumko kaise pata", "kaise
+        # jaana", "kahan se aaya", "kaise samjha", "how do you know", etc.
+        # These are short clarifying follow-ups — answer in 1-2 sentences
+        # explaining the source (birth date/time/place + planet calc).
+        r"\b(?:tumko|tujhe|aapko|tumhe)\s+kaise\s+pata\b",
+        r"\bkaise\s+(?:pata|jaana|jaane|jaante|samjha|samjhe|samjhi|maloom)\b",
+        r"\bkahan\s+se\s+(?:aaya|pata|jaana|jaane)\b",
+        r"\bhow\s+do\s+you\s+know\b",
+        r"\bhow\s+did\s+you\s+(?:know|find|figure)\b",
+        r"\bproof\s+kya\s+hai\b",
+        r"\bsource\s+(?:kya|kaha)\b",
     )
 ]
 _CHART_FACT_DEV_PATTERNS = [
@@ -2086,7 +2106,9 @@ def _is_chart_fact_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
-    if len(q.split()) > 8:
+    # Allow up to 14 words — meta follow-ups like "tumko kaise pata mera
+    # mars 1st house me he" run 10-12 words and are still simple lookups.
+    if len(q.split()) > 14:
         return False
     for rx in _CHART_FACT_PATTERNS:
         if rx.search(q):

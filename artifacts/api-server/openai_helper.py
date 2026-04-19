@@ -755,6 +755,41 @@ def _build_messages(
         msgs.append({"role": "user", "content": question})
         return msgs
 
+    # ── SIMPLE CHART-FACT MINIMAL PROMPT ─────────────────────────────────────
+    # For pure lookup questions ("mera rashi kya hai", "lagna batao", etc.)
+    # we strip ALL noise (focus / KP / transit / intel / behavior / narrator)
+    # and use a tight 2-3 sentence prompt. Same model, same flow — just clean.
+    # This is the ONLY way to reliably stop the AI from padding with houses,
+    # dasha implications, and "Isliye dhyan dena zaroori hai" closers.
+    if mode == "astro" and _is_chart_fact_question(question):
+        chart_only = _kundli_summary(kundli, birth)
+        sys_minimal = (
+            "You are Acharya Vidyasagar, a warm modern Vedic astrologer who "
+            "chats like a knowledgeable friend.\n\n"
+            f"REPLY ENTIRELY IN: {lang_name}.\n\n"
+            "The user asked a SIMPLE chart-fact lookup. Reply in EXACTLY 2-3 "
+            "short sentences. NO MORE.\n\n"
+            "FORMAT (strict):\n"
+            "  • Sentence 1: state the fact directly from the chart "
+            "(e.g. \"Aapki Rashi Gemini hai.\").\n"
+            "  • Sentence 2: ONE natural personality / nature line about "
+            "that rashi / lagna / nakshatra / dasha (witty, modern, plain).\n"
+            "  • STOP HERE.\n\n"
+            "ABSOLUTELY BANNED in this reply:\n"
+            "  ✗ House analysis (\"Aapka Moon 7th house mein hai\")\n"
+            "  ✗ Dasha implications (\"Jupiter Mahadasha growth de raha hai\")\n"
+            "  ✗ Remedies / mantras / jaap (\"Om Namah Shivaya 108 baar\")\n"
+            "  ✗ Closing sermons (\"Isliye dhyan dena zaroori hai\")\n"
+            "  ✗ \"Pranam\", \"Beta\", \"Dekhiye\", greetings, headers, bullets\n"
+            "  ✗ Multi-paragraph replies\n\n"
+            "Just the fact + one flavor line. That's the entire reply.\n\n"
+            f"CHART:\n{chart_only}"
+        )
+        return [
+            {"role": "system", "content": sys_minimal},
+            {"role": "user",   "content": question},
+        ]
+
     chart_str = _kundli_summary(kundli, birth)
     # Pre-computed chart intelligence — dignities, yogas, mangal-dosh,
     # sade-sati, house-lord placements, aspects. The AI now interprets
@@ -1952,6 +1987,55 @@ _MARRIAGE_ANALYSIS_RE = re.compile(
     r"|क्यों|कौन|कैसे|समझाओ|समझाइए|ग्रह|घर|भाव|स्वामी|सप्तम|शुक्र|गुरु|मंगल|शनि|दशा|पत्नी|पति",
     re.I,
 )
+
+
+# ── SIMPLE CHART-FACT DETECTOR ───────────────────────────────────────────────
+# When the user asks a pure lookup ("mera rashi kya hai", "lagna batao",
+# "current dasha", "nakshatra"), the prompt's many sections (focus, KP,
+# transit, intel, behavior) overpower any "be brief" instruction and force
+# 4-paragraph replies. The detector lets us strip ALL of that noise and use
+# a minimal prompt for these specific cases, so the AI naturally answers in
+# 2-3 sentences. Same model call, same flow — just less noise.
+_CHART_FACT_PATTERNS = [
+    re.compile(p, re.I) for p in (
+        r"\bmer[ai]\s+(?:rashi|raashi|rasi|moon\s*sign|sun\s*sign|chandra\s*rashi|surya\s*rashi)\b",
+        r"\b(rashi|raashi|moon\s*sign|sun\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|he|kahiye|tell|what)\b",
+        r"\bwhat(?:'s|\s+is)\s+my\s+(?:rashi|moon\s*sign|sun\s*sign|zodiac|sign)\b",
+        r"\bmer[ai]\s+(?:lagn[ae]?|ascendant|rising\s*sign)\b",
+        r"\b(lagn[ae]?|ascendant|rising\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|he|tell|what)\b",
+        r"\bwhat(?:'s|\s+is)\s+my\s+(?:lagna|ascendant|rising\s*sign)\b",
+        r"\bmer[ai]\s+(?:nakshatra|nakshatr|janm\s*nakshatra|birth\s*star)\b",
+        r"\b(nakshatra|nakshatr|birth\s*star)\s+(?:kya|kaun(?:\s*sa)?|batao|bataiye|hai|he|tell|what)\b",
+        r"\bwhat(?:'s|\s+is)\s+my\s+(?:nakshatra|birth\s*star)\b",
+        r"\bmer[ai]\s+(?:dasha|mahadasha|antardasha|current\s+dasha)\b",
+        r"\b(?:current|abhi|abhi\s+kaunsi)\s+(?:dasha|mahadasha)\b",
+        r"\b(?:dasha|mahadasha)\s+(?:kya|kaun(?:\s*si)?|chal\s+rahi|hai|he|batao)\b",
+        r"\bmer[ai]\s+(?:gana|gan|yoni|tatv[ae]|tatva|nadi|varna)\b",
+    )
+]
+_CHART_FACT_DEV_PATTERNS = [
+    re.compile(p) for p in (
+        r"मेरी\s*राशि", r"राशि\s*क्या",
+        r"मेरा\s*लग्न", r"लग्न\s*क्या",
+        r"मेरा\s*नक्षत्र", r"नक्षत्र\s*क्या",
+        r"मेरी\s*दशा", r"कौन\s*सी\s*दशा",
+    )
+]
+
+
+def _is_chart_fact_question(question: str) -> bool:
+    q = (question or "").strip()
+    if not q:
+        return False
+    if len(q.split()) > 8:
+        return False
+    for rx in _CHART_FACT_PATTERNS:
+        if rx.search(q):
+            return True
+    for rx in _CHART_FACT_DEV_PATTERNS:
+        if rx.search(q):
+            return True
+    return False
 
 
 def _classify_marriage_subtype(question: str) -> str:

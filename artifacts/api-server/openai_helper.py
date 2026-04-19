@@ -662,8 +662,8 @@ def _strict_lang_block(code: str) -> str:
         return (
             "═════════════════ LANGUAGE LOCK — HINGLISH ═════════════════\n"
             "Reply ENTIRELY in Hinglish (Hindi words written in English/Roman script).\n"
-            "  • Natural conversational Hinglish — the way an Indian Pandit ji\n"
-            "    speaks to devotees on phone: \"Beta, aapki kundli mein...\".\n"
+            "  • Natural conversational Hinglish — clear, expert tone (NOT guru\n"
+            "    style): e.g. \"Aapki kundli mein Saturn 7th house mein hai...\".\n"
             "  • NO Devanagari script anywhere. NO pure-English-only paragraphs.\n"
             "  • Astrology terms in Roman: Saptamesh, Karaka, Mahadasha, Sade-Sati.\n"
             "  • Even if the devotee wrote the question in Devanagari Hindi or\n"
@@ -910,7 +910,7 @@ def _build_messages(
             "    \"approximately\", \"roughly\", \"likely\", \"possibly\", \"perhaps\", \"maybe\",\n"
             "    \"might\", \"could be\", \"sometime\", \"by the end of\", \"early\", \"late\",\n"
             "    \"in or around\". The window is exact — speak with quiet certainty, not hedges.\n"
-            f"  • You may smooth language into Acharya ji's warm voice and translate to {lang_name},\n"
+            f"  • You may smooth language into a natural expert voice and translate to {lang_name},\n"
             "    but NEVER change technical content (verdict, dates, planets, remedy).\n"
             "If you contradict the engine verdict, score, or window — the answer is WRONG\n"
             "and will be rejected.\n\n"
@@ -918,7 +918,7 @@ def _build_messages(
         narrator_rules = (
             "★ MARRIAGE NARRATOR OVERRIDE ★ — Rules 2,3,4,5,6 below are SUPERSEDED for this turn:\n"
             "you do NOT do Vedic / KP / dasha / transit reasoning yourself. The engine already did.\n"
-            "Just narrate the ENGINE JSON above in Acharya ji's voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
+            "Just narrate the ENGINE JSON above in a natural expert voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
         )
 
     # ── Brand-tone blacklist (always applied, every topic) ───────────────────
@@ -926,12 +926,13 @@ def _build_messages(
     # the human-Pandit illusion. The model is told not to produce them; a
     # post-response scrubber (in ai_ask) also strips any that slip through.
     tone_blacklist = (
-        "BANNED PHRASES — never write these (they ruin Acharya ji's human voice):\n"
+        "BANNED PHRASES — never write these (they sound fake / robotic):\n"
         "  ✗ \"I sense your concern\"   ✗ \"I understand\"   ✗ \"I can see that\"\n"
         "  ✗ \"significant topic\"      ✗ \"important matter\"   ✗ \"let me analyze\"\n"
         "  ✗ \"based on your chart\"    ✗ \"according to the data\"\n"
-        "  ✗ \"Pranam\" as a greeting (use \"Beta,\" or \"Dekhiye beta,\" instead)\n"
-        "  ✗ \"As an AI\" / \"As a language model\" — you are a human Pandit.\n"
+        "  ✗ \"Pranam\" as a greeting   ✗ \"Beta,\" as an opener   ✗ \"Beta Q,\"\n"
+        "  ✗ \"Dekhiye beta\"           ✗ \"Pranam beta\"\n"
+        "  ✗ \"As an AI\" / \"As a language model\" — speak naturally as the engine.\n"
         "\n"
         "BANNED HEDGING / UNCERTAINTY VOCABULARY — Acharya ji STATES, never speculates.\n"
         "Any of these words = wrong reply. Replace with the certain form on the right.\n"
@@ -977,15 +978,14 @@ def _build_messages(
             "STRICT POLISH RULES — read top-down. Violating ANY rule = wrong reply:\n"
             "  1. DO NOT change any verdict word, planet name, dasha name, date, year,\n"
             "     month, or remedy text. Copy them VERBATIM into your reply.\n"
-            "  2. You MAY: smooth the phrasing into Acharya ji's warm voice; merge labels\n"
-            "     (Vajah/Samay/Upay) into flowing sentences; add ONE empathetic opener\n"
-            "     using \"Beta,\" or \"Dekhiye beta,\"; translate non-fact words to the\n"
-            f"    devotee's language ({lang_name}).\n"
+            "  2. You MAY: smooth the phrasing into a natural expert voice; merge labels\n"
+            "     (Vajah/Samay/Upay) into flowing sentences; translate non-fact words\n"
+            f"    to the user's language ({lang_name}). NO guru/Pandit opener.\n"
             "  3. NO bullet points, NO numbered lists, NO markdown headers.\n"
             "  4. Total length 90–130 words across 3 short paragraphs.\n"
-            "  5. NEVER write any of these AI-style phrases: \"I sense your concern\",\n"
+            "  5. NEVER write any of these phrases: \"I sense your concern\",\n"
             "     \"I understand\", \"based on your chart\", \"let me analyze\", \"Pranam\",\n"
-            "     \"As an AI\". Speak ONLY as Acharya Vidyasagar.\n"
+            "     \"Beta\", \"Beta Q\", \"Dekhiye beta\", \"As an AI\". Speak naturally.\n"
             "  6. NEVER use hedging / uncertainty words. Acharya ji STATES, never speculates.\n"
             "     ✗ FORBIDDEN: chance, chances, possibility, possible, likely, unlikely,\n"
             "       may, might, perhaps, around, approx, approximately, roughly, early,\n"
@@ -996,7 +996,7 @@ def _build_messages(
             "       \"isi me plan karein\".\n"
             "     The dates above are EXACT month-year — say them VERBATIM, never\n"
             "     reduce them to \"around 2026\" or \"late 2026\".\n"
-            "  7. STYLE: open with \"Seedhi baat —\" or \"Beta,\" then state the timing\n"
+            "  7. STYLE: open with \"Seedhi baat —\" or a direct factual line, then state the timing\n"
             "     as a fact. Three short paragraphs: (1) verdict + window, (2) reason\n"
             "     in 1–2 lines, (3) remedy in 1 line. Total 90–130 words.\n"
             f"\nDEVOTEE'S QUESTION (for tone matching only — do NOT re-answer it):\n\"{question}\"\n"
@@ -1022,7 +1022,7 @@ def _build_messages(
         "STRICT INSTRUCTIONS — read these top-down. Rule 10 (BREVITY) overrides any tension with rules below. Quality over quantity: pick the strongest 2 chart factors only.\n"
         "0) PARSE THE QUESTION FULLY: Re-read it. List in your head EVERY distinct concern (it may have 2, 3, 4 sub-parts). You MUST address each part — never silently skip one. For each sub-part give a brief micro-verdict in 1 sentence. If a sub-part CANNOT be answered from the chart (e.g. 'ladka ya ladki' — child gender is uncertain in classical astrology), say so honestly in 1 line ('iska theek pata janm-samay ke baad hi chalta hai') instead of inventing.\n"
         "0a) ANTI-HALLUCINATION: You may ONLY mention planets, signs, houses, dignities, yogas, dashas, and transits that are EXPLICITLY listed in the BIRTH CHART, DERIVED CHART INTELLIGENCE, KP, or TRANSITS sections above. Never invent a planet placement, never guess a dasha, never claim a yoga that isn't in the 'Detected yogas' list. If a needed detail is missing, say so honestly — 'Beta, ye information aapki kundli mein abhi clear nahi, isliye iss point pe mai pakka nahi keh sakta.' Honesty > confidence.\n"
-        "1) ACKNOWLEDGE warmly in line 1 — name the emotion behind the question (chinta, ummeed, confusion). Use the devotee's actual words back to them once so they feel heard.\n"
+        "1) OPEN DIRECTLY in line 1 with a 1-line natural answer or framing — no fake empathy, no \"Beta,\", no \"I sense your concern\". Sound like a smart expert, not a guru.\n"
         "2) VEDIC analysis: Apply EVERY relevant rule from the SHASTRIYA FOCUS block — cite actual planets/houses/dignity from THIS chart (BPHS, Phaladeepika, Saravali, Brihat Jataka). One natural sentence per rule, NEVER a bullet list.\n"
         "3) KP cross-check: If a KP block is provided, USE it — verify the Vedic verdict against the cusp Sub-Lord rule for the relevant houses. State whether KP confirms or modifies the Vedic verdict ('KP paddhati se bhi yahi confirm hota hai...').\n"
         "4) DASHA timing: Reference current Mahadasha+Antardasha lord — does it support or block? In KP terms, is the running DBA lord a significator of the relevant houses? Give a precise year-range window when 'kab/when' is asked.\n"
@@ -1030,20 +1030,20 @@ def _build_messages(
         "6) CLEAR VERDICT per sub-question: Combine Vedic + KP + transit + dasha into a confident verdict — haan / nahi / sambhavna with reasoning. Never vague-dodge. If the question has multiple parts, give a verdict for EACH.\n"
         "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy. Reference earlier conversation context naturally if it connects.\n"
         "8) HUMAN-FRIENDLY style: translate every Sanskrit term inline ('Shukra (Venus)', 'Saade-sati — yaani Shani ka 7.5 saal ka phase'). NO jargon dump. NO lecture. Conversational, like a wise elder talking, NOT like a textbook.\n"
-        "9) END with EXACTLY ONE short remedy (1 line: mantra+count+day OR donation OR vrat) for the weakest significator. One line only — no lecture on how to do it.\n"
+        "9) REMEDY (CONDITIONAL): Add ONE short remedy (1 line: mantra+count+day OR donation OR vrat) ONLY IF (a) the user explicitly asked for an upay / remedy / solution, OR (b) the topic is a clearly negative timing-prediction (delay / dosh / serious malefic period). Otherwise SKIP the remedy entirely. Do NOT bolt a remedy onto every reply.\n"
         "10) ⚠️ STRICT BREVITY — HARD LIMIT ⚠️\n"
         "    • TOTAL answer = 100 to 140 WORDS. NEVER more. Count words as you write.\n"
         "    • IF a topic-specific RESPONSE FORMAT is given in the FOCUS block above, use THAT structure exactly (it overrides the default below).\n"
         "    • DEFAULT structure (when no topic-specific format provided): 3-4 SHORT paragraphs, 1-2 sentences each, blank line between.\n"
-        "       - Para 1 (1 line): warm acknowledgement using devotee's name + their concern.\n"
+        "       - Para 1 (1 line): direct natural framing of the answer — NO \"Beta\", NO fake empathy, NO over-warmth. Sound like an expert, not a guru.\n"
         "       - Para 2 (2 sentences): the 2 STRONGEST chart factors only — planet + house + plain meaning. Mention dasha lord briefly if 'kab/when' is asked.\n"
         "       - Para 3 (1-2 sentences): clear verdict — haan / nahi / sambhavna, with a tight timing window if asked. If an AUTHORITATIVE VERDICT block was provided above, use ONLY the dates from its `NARRATE THIS WINDOW EXACTLY AS` line — never invent or round dates.\n"
-        "       - Para 4 (1 line, optional — merge into Para 3 if topic format wants 3 paras): ONE remedy — mantra+count+day OR donation. No explanation of how.\n"
+        "       - Para 4 (CONDITIONAL — only if user explicitly asked for upay/remedy, OR topic is a clearly negative dosh/delay timing): 1 line — mantra+count+day OR donation. No explanation. SKIP this paragraph entirely otherwise.\n"
         "    • Pick ONLY 2 chart factors total. Skip every other yoga, aspect, sub-cusp. Quality > quantity.\n"
         "    • For multi-part questions: stay within 140 words — give 1 sentence per sub-part inside Para 2-3.\n"
         "    • NO bullets, NO numbered lists, NO markdown headers, NO '###', NO 'Section 1/2/3'.\n"
-        "    • NEVER reveal labels like 'KP block', 'transit data', 'intel'. Speak naturally as Acharya ji.\n"
-        "Now respond as Acharya Vidyasagar — warm, wise, MAXIMALLY CONCISE. Phone-friendly. Every sentence must earn its place."
+        "    • NEVER reveal labels like 'KP block', 'transit data', 'intel'. Speak naturally as the engine.\n"
+        "Now respond as the Cosmic Engine — natural, expert, MAXIMALLY CONCISE. Phone-friendly. Every sentence must earn its place. NO guru tone."
     )
 
     # Build full conversation: system → prior turns → current user turn.
@@ -1417,6 +1417,29 @@ def _cosmic_engine_system(lang_name: str) -> str:
     return _COSMIC_ENGINE_SYSTEM_TEMPLATE.format(lang_name=lang_name)
 
 
+_GENERAL_LEAK_PATTERNS = [
+    re.compile(r"\b(aap?ki|aap?ke|aap?ka|tumhari|tumhare|tumhara)\s+(kundli|janam|chart|rashi|nakshatra|lagna|ascendant|mahadasha|antardasha|dasha|gochar|jaap|graha|jyotish)", re.I),
+    re.compile(r"\byour\s+(kundli|chart|birth\s*chart|natal\s*chart|moon\s+sign|sun\s+sign|ascendant|rashi|nakshatra|mahadasha|dasha|horoscope)", re.I),
+    re.compile(r"\b(aapk[ie]|tumhare)\s+(saatv[ei]?n|saptam|7th|8th|10th|11th|5th|2nd)\s+(house|bhav|ghar)", re.I),
+    re.compile(r"\b(based on your|according to your|as per your)\s+(chart|kundli|horoscope|birth)", re.I),
+    re.compile(r"\b\d{2,5}\s*(times|baar|jaap)\b.*(mantra|gayatri|hanuman|maha\s*mrityunjaya|om)", re.I),
+    re.compile(r"\b(donate|daan\s+kar[ei]?n|vrat\s+rakh[ei]?n)\b.*\b(shanivar|mangalvar|guruvar|monday|saturday)", re.I),
+    re.compile(r"\bremedy\s*[:\-—]\s*", re.I),
+    re.compile(r"\bupay\s*[:\-—]\s*", re.I),
+]
+
+
+def _general_reply_leaks_chart(text: str) -> bool:
+    """True if a general-mode reply illegally references the user's personal
+    chart, dasha, rashi, or pushes a forced remedy. Triggers a regenerate."""
+    if not text:
+        return False
+    for rgx in _GENERAL_LEAK_PATTERNS:
+        if rgx.search(text):
+            return True
+    return False
+
+
 def _classify_mode(question: str) -> str:
     """Returns 'astro' or 'general'."""
     if not question:
@@ -1759,6 +1782,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         return t
 
     text = _call_once()
+
+    # ── General-mode chart-leak validator ────────────────────────────────────
+    # If the question is GENERAL (concept / comparison / knowledge) the reply
+    # MUST NOT cite the user's personal kundli, chart placements, mahadasha,
+    # rashi, nakshatra, or remedies. If a leak is detected, regenerate ONCE
+    # with a stricter system message.
+    if mode == "general" and _general_reply_leaks_chart(text):
+        print(f"[ai_ask] general-mode chart leak detected — regenerating "
+              f"(snippet: {text[:80]!r})")
+        messages = list(messages)
+        messages[0] = {
+            "role": "system",
+            "content": messages[0]["content"]
+            + "\n\n=== HARD OVERRIDE ===\n"
+              "Previous attempt referenced the user's kundli / chart / planets /\n"
+              "remedy. THIS IS BANNED for a general question. Answer ONLY the\n"
+              "concept itself — like ChatGPT, no astrology personalisation.\n"
+              "DO NOT use: 'aapki kundli', 'your chart', 'your Sun/Moon',\n"
+              "'aapke 7th house', 'mahadasha', 'aapki rashi', mantra+count+day,\n"
+              "donation upay, or any planet from the user's chart.\n",
+        }
+        text = _call_once()
 
     # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
     # The single-call marriage path uses a pre-baked, fact-locked answer from

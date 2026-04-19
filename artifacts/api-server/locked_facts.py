@@ -75,13 +75,60 @@ def _lagna_sign_idx(kundli: dict, intel: dict) -> Optional[int]:
     return None
 
 
+# ── Yoga polarity classifier ────────────────────────────────────────────────
+# Tags each detected yoga as POSITIVE / NEGATIVE / NEUTRAL so the AI never
+# mistakes a misery-yoga (e.g. Kemadruma) for a "blessing yoga". Matched by
+# substring on the yoga name. Extend lists as new detectors are added.
+_NEGATIVE_YOGA_KEYWORDS = (
+    "Kemadruma", "Daridra", "Shakata", "Visha yoga", "Visha-yoga",
+    "Punarphoo", "Kala Sarpa", "Kalasarpa", "Kaal Sarp", "Kaal-Sarp",
+    "Guru-Chandala", "Guru Chandal", "Angarak", "Pisach",
+)
+_NEUTRAL_YOGA_KEYWORDS = (
+    "Vipareeta",  # adversity-converts — context-dependent, mark neutral
+)
+
+
+def _yoga_polarity(name: str) -> str:
+    s = (name or "")
+    if any(k.lower() in s.lower() for k in _NEGATIVE_YOGA_KEYWORDS):
+        return "NEGATIVE"
+    if any(k.lower() in s.lower() for k in _NEUTRAL_YOGA_KEYWORDS):
+        return "NEUTRAL"
+    return "POSITIVE"
+
+
+_POLARITY_TAG = {"POSITIVE": "[+ POSITIVE]", "NEGATIVE": "[− NEGATIVE]", "NEUTRAL": "[~ NEUTRAL]"}
+
+
 def _format_yoga_block(yogas: list) -> str:
     if not yogas:
-        return "▸ YOGA COUNT: 0\n▸ YOGA LIST: (none of the major classical yogas detected)"
-    lines = [f"▸ YOGA COUNT: {len(yogas)}", "▸ YOGA LIST:"]
-    for i, y in enumerate(yogas, 1):
-        # yoga strings already include short interpretation in chart_intelligence
-        lines.append(f"   {i}. {y}")
+        return ("▸ YOGA COUNT: 0\n"
+                "▸ POSITIVE YOGAS: 0   NEGATIVE: 0   NEUTRAL: 0\n"
+                "▸ YOGA LIST: (none of the major classical yogas detected)")
+    pos = neg = neu = 0
+    rows = []
+    for y in yogas:
+        pol = _yoga_polarity(y)
+        if pol == "POSITIVE":   pos += 1
+        elif pol == "NEGATIVE": neg += 1
+        else:                   neu += 1
+        rows.append((pol, y))
+    # Clean (raw) name = yoga string up to "(" or " yoga" — used for safe
+    # name-listing in user-facing replies (Rule B). Polarity tags are for
+    # AI internal reasoning ONLY and must never be echoed to the user.
+    def _clean(y: str) -> str:
+        s = y.split("(")[0].strip()
+        return s if s else y
+    raw_names = [_clean(y) for _, y in rows]
+    lines = [
+        f"▸ YOGA COUNT: {len(yogas)}",
+        f"▸ POSITIVE YOGAS: {pos}   NEGATIVE: {neg}   NEUTRAL: {neu}",
+        f"▸ YOGA NAMES (raw, USE THESE for any 'kaunse yog' answer — NEVER include the [+/−/~] tags below): {', '.join(raw_names)}",
+        "▸ YOGA LIST (with polarity tags — POSITIVE=blessing, NEGATIVE=struggle, NEUTRAL=context-dependent. Tags are FOR YOUR REASONING ONLY, do NOT echo to user):",
+    ]
+    for i, (pol, y) in enumerate(rows, 1):
+        lines.append(f"   {i}. {_POLARITY_TAG[pol]} {y}")
     return "\n".join(lines)
 
 

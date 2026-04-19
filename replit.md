@@ -151,3 +151,13 @@ Goal: AI mirrors deterministic chart facts (yoga count/names, dosha count/names,
   - 🛡️ Emotional-ask clause: first 1-2 sentences MUST cite YOGA COUNT + strongest yoga name when ≥1 yoga exists
 - **Untouched branches**: greeting / general / minimal / marriage deterministic narrator paths — only the analysis branch wraps intel with locked facts.
 - **Router kill-switch**: `COSMIC_DISABLE_INTENT_ROUTER=1` still in place (8-route classifier deferred).
+
+### Sprint 1 Day 1.5 — Polarity + Dasha Fidelity (smoke-test driven)
+
+End-to-end smoke test against `/api/ask` exposed two interpretive bugs (data layer was fine, AI framing was off). Fixed:
+
+1. **Yoga polarity tagging** — `locked_facts.py` now classifies each detected yoga as POSITIVE / NEGATIVE / NEUTRAL via substring match on negative keywords (Kemadruma, Daridra, Shakata, Vish, Punarphoo, Kalasarpa, Guru-Chandala, Angarak, Pisach) and neutral (Vipareeta). YOGA LIST renders with `[+ POSITIVE]` / `[− NEGATIVE]` / `[~ NEUTRAL]` tags + a `POSITIVE YOGAS: x  NEGATIVE: y  NEUTRAL: z` summary line. Prevents AI from labelling Kemadruma as "strong yoga".
+2. **Rule D refined (3-tier emotional ask)** — In `openai_helper.py` 0b: (i) prefer POSITIVE yoga count, (ii) else strongest STRONG planet, (iii) else honest reframe + next-dasha hope-anchor. Explicitly forbids labelling NEGATIVE-tagged yogas as positive.
+3. **Rule E added — Dasha-lord fidelity** — Mahadasha/Antardasha lord's described tone MUST match its `PLANET STRENGTHS` verdict. WEAK dasha lord = "confusion / effort-without-result", MODERATE = "mixed / kaam pe result", STRONG = "powerful / supportive". Eliminates "Rahu Mahadasha gives growth" hallucination when Rahu row says WEAK.
+
+Smoke test result on tough chart (1 negative yoga, all-weak planets, Rahu-Rahu MD): AI now opens with honest "1 yoga hai, jo NEGATIVE hai: Kemadruma", correctly frames Rahu MD as confusion phase, and anchors hope on 2026 transition — no false positivity.

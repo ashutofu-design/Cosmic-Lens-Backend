@@ -3450,6 +3450,49 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception as _exc:
             print(f"[ai_ask] varga deep (Sprint-12) post-inject failed: {_exc}")
 
+    # Sprint-7 Rule O — DETERMINISTIC UPAPADA LAGNA INJECTION (last-resort).
+    # Marriage answers MUST cite UL + UL-lord placement. If model skipped it,
+    # append a one-line UL signature so Rule O is satisfied 100%.
+    if isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            import re as _reUL
+            _qUL = (question or "").lower()
+            _is_marriage_q = (
+                topic == "marriage"
+                or bool(_reUL.search(
+                    r"(shaadi|shadi|vivah|marriage|spouse|partner|"
+                    r"husband|wife|patni|pati|life\s*partner|"
+                    r"jeevan\s*sathi|relationship|rishta)",
+                    _qUL
+                ))
+            )
+            if _is_marriage_q and not _reUL.search(r"(?i)upapada|\bUL\b", text or ""):
+                from jaimini import compute_arudha_padas, compute_upapada  # type: ignore
+                _lgUL = kundli.get("ascendant") or kundli.get("lagna")
+                _lgsign_UL = _lgUL.get("sign") if isinstance(_lgUL, dict) else _lgUL
+                _ar = compute_arudha_padas(kundli.get("planets") or [], _lgsign_UL)
+                _up = compute_upapada(_ar, kundli.get("planets") or [])
+                if _up and _up.get("ul_sign"):
+                    _occ_2nd = _up.get("occupants_2nd") or []
+                    _occ_part = (
+                        f", 2nd-from-UL ({_up['second_from_ul']}) mein "
+                        + ", ".join(_occ_2nd)
+                        if _occ_2nd else
+                        f", 2nd-from-UL ({_up['second_from_ul']}) khaali"
+                    )
+                    _ul_lord_part = (
+                        f"; UL-lord {_up['ul_lord']} {_up['ul_lord_in']} mein "
+                        f"({_up['ul_lord_house']}th from UL)"
+                        if _up.get("ul_lord_in") else ""
+                    )
+                    text = (text or "").rstrip() + (
+                        f"\n\nUpapada Lagna (Jaimini marriage signature): "
+                        f"UL {_up['ul_sign']}{_ul_lord_part}{_occ_part}. "
+                        f"Verdict — {_up.get('verdict','')}."
+                    )
+        except Exception as _exc:
+            print(f"[ai_ask] Upapada post-inject failed: {_exc}")
+
     # Sprint-8 Rule P — DETERMINISTIC CHARA DASHA INJECTION (last-resort).
     # Append a Chara MD/AD line for marriage answers OR any timing question
     # ("kab", "when", "next", "kitne saal", etc.) so Rule P is satisfied 100%.

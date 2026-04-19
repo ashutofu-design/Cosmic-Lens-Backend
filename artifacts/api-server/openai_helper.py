@@ -827,7 +827,7 @@ def _build_messages(
     # 3-paragraph timing template and let the AI act as an expert chart reader.
     # The kundli planet positions, KP block, and intelligence are already in
     # the prompt — AI uses them to give a real analytical answer.
-    if topic == "marriage" and marriage_subtype == "analysis":
+    if topic == "marriage" and marriage_subtype not in ("timing", "remedy"):
         # Surface engine context as REFERENCE only (not a locked template)
         engine_ref = ""
         if marriage_facts:
@@ -941,7 +941,7 @@ def _build_messages(
     # we let the AI read the kundli freely as an expert — narrator template
     # would just repeat the timing answer and ignore the actual question.
     _is_marriage_analysis = (
-        topic == "marriage" and marriage_subtype == "analysis"
+        topic == "marriage" and marriage_subtype not in ("timing", "remedy")
     )
     narrator_prefix = ""
     narrator_rules  = ""
@@ -1535,13 +1535,39 @@ CONSISTENCY LOCK
 - No randomness
 
 ------------------------------------------
-OUTPUT CONTROL
+OUTPUT CONTROL — JUDGE THE QUESTION
 ------------------------------------------
 
-- Short paragraphs
-- 80–120 words
-- No long lecture
-- No repetition
+You are smart. READ the user's question and decide reply length + depth
+yourself. Match the answer to what was actually asked. NEVER pad simple
+questions with unrequested dasha / houses / remedies. NEVER under-answer
+big life questions.
+
+Calibration guide (NOT rigid rules — use judgment):
+
+  • Simple chart-fact lookup
+    ("mera rashi kya hai", "lagna batao", "current dasha kya hai",
+     "nakshatra kya hai", "moon sign batao")
+    → 2-3 sentences. State the fact + ONE natural personality/nature line.
+    → NO houses, NO dasha breakdown, NO remedy, NO affirmation.
+
+  • Short follow-up / clarification
+    ("aur batao", "matlab kya hai", "iska reason kya hai")
+    → 3-5 sentences. Go one layer deeper on the SAME thread. Don't restart.
+
+  • Real analytical question
+    ("kyun ho raha hai", "kaun sa grah responsible", "7th lord kahan",
+     "career mein kya scope hai")
+    → 1-2 short paragraphs (60-120 words). Specific, grounded in the chart.
+
+  • Big life question
+    ("meri zindagi kaisi rahegi", "shaadi kaisi rahegi", "career path")
+    → 2-3 paragraphs (120-180 words). Full analytical depth.
+
+Rules that ALWAYS hold regardless of length:
+  - No long lectures, no padding, no repetition
+  - Active voice, confident, no hedging
+  - If a remedy doesn't fit the question, DON'T add one
 
 ------------------------------------------
 HARD SAFETY
@@ -1885,62 +1911,6 @@ _MARRIAGE_ANALYSIS_RE = re.compile(
 )
 
 
-# ── SIMPLE CHART-FACT QUESTIONS ──────────────────────────────────────────────
-# Direct lookup-style asks like "mera rashi kya hai", "lagna kya hai", "moon
-# sign", "nakshatra batao". User wants the FACT + a 1-line nature blurb —
-# NOT a 4-paragraph reading with dasha + houses + remedies.
-_CHART_FACT_PATTERNS = [
-    re.compile(p, re.I) for p in (
-        # rashi / sun / moon sign
-        r"\bmer[ai]\s+(?:rashi|raashi|rasi|moon\s*sign|sun\s*sign|chandra\s*rashi|surya\s*rashi)\b",
-        r"\b(rashi|raashi|moon\s*sign|sun\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|kahiye|tell|what)\b",
-        r"\bwhat(?:'s|\s+is)\s+my\s+(?:rashi|moon\s*sign|sun\s*sign|zodiac|sign)\b",
-        # lagna / ascendant
-        r"\bmer[ai]\s+(?:lagn[ae]?|ascendant|rising\s*sign)\b",
-        r"\b(lagn[ae]?|ascendant|rising\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|tell|what)\b",
-        r"\bwhat(?:'s|\s+is)\s+my\s+(?:lagna|ascendant|rising\s*sign)\b",
-        # nakshatra
-        r"\bmer[ai]\s+(?:nakshatra|nakshatr|janm\s*nakshatra|birth\s*star)\b",
-        r"\b(nakshatra|nakshatr|birth\s*star)\s+(?:kya|kaun(?:\s*sa)?|batao|bataiye|hai|tell|what)\b",
-        r"\bwhat(?:'s|\s+is)\s+my\s+(?:nakshatra|birth\s*star)\b",
-        # current dasha
-        r"\bmer[ai]\s+(?:dasha|mahadasha|antardasha|current\s+dasha)\b",
-        r"\b(?:current|abhi|abhi\s+kaunsi)\s+(?:dasha|mahadasha)\b",
-        r"\b(?:dasha|mahadasha)\s+(?:kya|kaun(?:\s*si)?|chal\s+rahi|hai|batao)\b",
-        # gana / yoni / tatva
-        r"\bmer[ai]\s+(?:gana|gan|yoni|tatv[ae]|tatva|nadi|varna)\b",
-    )
-]
-_CHART_FACT_DEV_PATTERNS = [
-    re.compile(p) for p in (
-        r"मेरी\s*राशि",
-        r"राशि\s*क्या",
-        r"मेरा\s*लग्न",
-        r"लग्न\s*क्या",
-        r"मेरा\s*नक्षत्र",
-        r"नक्षत्र\s*क्या",
-        r"मेरी\s*दशा",
-        r"कौन\s*सी\s*दशा",
-    )
-]
-
-
-def _is_chart_fact_question(question: str) -> bool:
-    q = (question or "").strip()
-    if not q:
-        return False
-    # Long questions are NOT simple chart-facts — likely have follow-up intent.
-    if len(q.split()) > 8:
-        return False
-    for rx in _CHART_FACT_PATTERNS:
-        if rx.search(q):
-            return True
-    for rx in _CHART_FACT_DEV_PATTERNS:
-        if rx.search(q):
-            return True
-    return False
-
-
 def _classify_marriage_subtype(question: str) -> str:
     """Return 'timing' / 'remedy' / 'analysis' / 'general'."""
     q = (question or "").strip()
@@ -2193,59 +2163,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         raise RuntimeError(_client_err or "OpenAI client not configured")
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-
-    # ── CHART-FACT SHORT-CIRCUIT ─────────────────────────────────────────────
-    # Direct lookup-style asks ("mera rashi kya hai", "lagna batao", "current
-    # dasha kya hai") deserve a 1-3 sentence direct answer with a touch of
-    # personality — NOT a full astro reading. Skip the heavy pipeline.
-    if has_planets and _is_chart_fact_question(question):
-        eff_lang = _resolve_response_lang(question, lang, preferred_language)
-        lang_name = _LANG_NAME.get(eff_lang, "English")
-        chart_str = _kundli_summary(kundli, birth)
-        _trace(req_id, "2.MODE_DETECT", {
-            "path": "chart_fact_shortcut",
-            "lang": eff_lang,
-        })
-        concise_system = (
-            "You are Acharya Vidyasagar, a warm modern Vedic astrologer who "
-            "chats like a knowledgeable friend.\n\n"
-            f"REPLY IN: {lang_name}.\n\n"
-            "The user asked a SIMPLE chart-lookup question. Reply in 2-3 short "
-            "sentences ONLY:\n"
-            "  1) State the fact directly from the chart below (e.g. \"Aapki "
-            "Rashi Gemini hai.\").\n"
-            "  2) Add ONE natural personality/nature line about that "
-            "rashi/lagna/nakshatra/dasha (1 line max — curious, witty, modern).\n"
-            "  3) Stop. NO houses, NO dasha breakdown, NO remedies, NO "
-            "\"current period challenges\", NO emotional advice, NO "
-            "affirmations. Just the fact + 1 flavor line.\n\n"
-            "Tone: casual, warm, confident. NO \"Pranam\", NO \"Beta\", NO "
-            "headers, NO bullets. Plain conversational sentences.\n\n"
-            f"CHART:\n{chart_str}"
-        )
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": concise_system},
-                    {"role": "user",   "content": question},
-                ],
-                temperature=0.5,
-                max_tokens=180,
-            )
-            text = (resp.choices[0].message.content or "").strip()
-            _trace(req_id, "7.FINAL_OUTPUT(chart_fact)",
-                   {"len": len(text), "preview": text[:200]})
-            return {
-                "text":       text,
-                "topic":      "chart_fact",
-                "confidence": 1.0,
-                "source":     "chart_fact_shortcut",
-                "follow_ups": _derive_follow_ups("general", eff_lang),
-            }
-        except Exception as exc:
-            print(f"[ai_ask] chart_fact shortcut failed → falling back: {exc}")
-            # Fall through to regular pipeline on error.
 
     topic = _classify_topic(question)
     mode, mode_reason = _classify_mode_with_reason(question)

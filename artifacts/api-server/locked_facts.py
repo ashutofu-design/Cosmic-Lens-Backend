@@ -295,12 +295,56 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
 
     # Sprint-2 — Aspects (Graha Drishti)
     asp_str = ""
+    asp_obj = None
     try:
         from aspects import compute_aspects, format_aspect_summary  # type: ignore
-        asp = compute_aspects(kundli.get("planets") or [], _lagna_sign_idx(kundli, intel))
-        asp_str = format_aspect_summary(asp) if asp else ""
+        asp_obj = compute_aspects(kundli.get("planets") or [], _lagna_sign_idx(kundli, intel))
+        asp_str = format_aspect_summary(asp_obj) if asp_obj else ""
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] aspects failed: {exc}")
+
+    # Sprint-3 — Bhava Bala (house strength composite)
+    bb_str = ""
+    try:
+        from bhava_bala import compute_bhava_bala, format_bhava_bala_summary  # type: ignore
+        bb = compute_bhava_bala(intel, verdicts, asp_obj)
+        bb_str = format_bhava_bala_summary(bb) if bb else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] bhava_bala failed: {exc}")
+
+    # Sprint-3 — Jaimini Karakas
+    kk_str = ""
+    try:
+        from karakas import compute_karakas, format_karakas_summary  # type: ignore
+        kk = compute_karakas(kundli.get("planets") or [])
+        kk_str = format_karakas_summary(kk) if kk else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] karakas failed: {exc}")
+
+    # Sprint-3 — Transits (Saturn / Jupiter / Rahu vs natal)
+    tr_str = ""
+    try:
+        from transits import compute_transits, format_transit_summary  # type: ignore
+        from datetime import datetime
+        SIGN_NAMES_TR = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                         "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+        moon_sign_str = kundli.get("moonSign") or kundli.get("moon_sign")
+        moon_sign_idx = SIGN_NAMES_TR.index(moon_sign_str) if moon_sign_str in SIGN_NAMES_TR else None
+        lagna_for_tr = _lagna_sign_idx(kundli, intel)
+        # DOB extraction (best-effort)
+        dob_dt = None
+        if isinstance(birth, dict):
+            dob_str = birth.get("date") or birth.get("dob") or birth.get("birthDate")
+            if isinstance(dob_str, str) and len(dob_str) >= 10:
+                try:
+                    dob_dt = datetime.strptime(dob_str[:10], "%Y-%m-%d")
+                except Exception:
+                    dob_dt = None
+        if lagna_for_tr is not None:
+            tr = compute_transits(lagna_for_tr, moon_sign_idx, dob=dob_dt)
+            tr_str = format_transit_summary(tr) if tr else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] transits failed: {exc}")
 
     # Assemble
     sections = [
@@ -310,7 +354,10 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_dosh_block(dosh) if dosh else f"▸ MANGAL-DOSH: {intel.get('mangal_dosh','(unavailable)')}",
         _format_strength_block(verdicts, intel.get("dignities") or []),
         av_str,
+        bb_str,
         asp_str,
+        kk_str,
+        tr_str,
         _format_dasha_block(kundli),
         _format_house_lords(intel),
         "════════════════════════════════════════════════════════════════",

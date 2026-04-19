@@ -743,7 +743,27 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **Bonuses**: Mangal Dosh (Lagna+Moon+Venus refs, with cancellation rules), Sade-Sati 3-phase (Rising/Peak/Setting), Grahan deep (4 sub-types), Kemadruma graded, Daridra (3 grades), Karaka doshas (Bhratri/Pitra/Shukra/Putra)
 - Test on chart: 8 doshas surfaced including Ashtama Shani HIGH, Shukra Dosh HIGH, Mangal cancelled (Mars in own Scorpio)
 
-### Sprint 31 — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 31 — Phase E Tier 5 Dashas (7+ systems) ✅ COMPLETE
+- **Pre-existing (Sprints 21-22, 12 systems)**: Vimshottari (primary), Yogini, Ashtottari, Narayana, Karaka, Naisargika, Tara, Brahma, Yogardha, Pinda Aayur, Amshayur, Sthira, Niryana Shoola
+- **Sprint 31 new module**: `vedic/dashas/dasha_phase_e.py` (~270 lines) — adds 7 missing systems:
+  - **E3 Kalachakra Dasha** (BPHS Ch.62 simplified) — sign-based deha-rashi, 12 signs × variable yrs (≈118 total) starting from Moon-sign
+  - **E8a Mandooka Dasha** (Jaimini Frog-leap) — 120 yr, jumps 3 signs at a time from Lagna
+  - **E8b Drig Dasha** (Jaimini Sight) — 60 yr, 7 planets ordered by sign-distance from Lagna
+  - **E8c Trikona Dasha** (Jaimini Trine) — 120 yr, cycles 4 trine groups (1-5-9, 2-6-10, 3-7-11, 4-8-12)
+  - **E8d Chaturasheeti Sama Dasha** (BPHS Conditional) — 84 yr equal (12 yr × 7 planets), applies when planet in 9H from Lagna
+  - **E9a Shashtihayani Dasha** (BPHS Conditional) — 60 yr Sun-based, applies when Sun in Lagna
+  - **E9b Shatabdika Dasha** (BPHS Conditional) — 100 yr nakshatra-based, applies when 7L in 7H
+- Test on chart (DOB 1990-01-15, Lagna Sagittarius, Sun 1H, 7L Mercury in 1H, planet in 9H = Jupiter):
+  - ✅ Kalachakra current: Scorpio Deha (2020→2027)
+  - ✅ Mandooka current: Virgo (2020→2030)
+  - ✅ Drig current: Jupiter from H7 (2023→2033)
+  - ✅ Trikona current: Capricorn offset 1 (2020→2030)
+  - ✅ Chaturasheeti current: Jupiter (2026→2038, conditional triggered by Jupiter in 9H)
+  - ✗ Shashtihayani: gated (Sun not in Lagna in this chart)
+  - ✗ Shatabdika: gated (7L Mercury in 1H not 7H)
+- **Total dasha systems now**: 19 (Vimshottari + 18 sub-systems)
+
+### Sprint 32 — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

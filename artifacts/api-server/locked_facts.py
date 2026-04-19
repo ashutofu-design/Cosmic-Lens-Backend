@@ -670,6 +670,18 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-31 / Phase E — Tier-5 Dasha gap-fill (7 systems)
+    phase_e_dashas_str = ""
+    try:
+        from vedic.dashas.dasha_phase_e import (compute_all_phase_e_dashas,  # type: ignore
+                                                  format_phase_e_summary)
+        _ke = dict(kundli)
+        _ke["dob"] = _ke.get("dob") or birth.get("dob") or birth.get("date")
+        _pe = compute_all_phase_e_dashas(_ke)
+        phase_e_dashas_str = format_phase_e_summary(_pe)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] phase-E dashas (Sprint-31) failed: {exc}")
+
     # Sprint-30 / Phase C — Missing yogas (Indra + Shoola Nabhasa)
     missing_yogas_str = ""
     try:
@@ -863,6 +875,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         age_context_str,
         shadbala_full_str,
         missing_yogas_str,
+        phase_e_dashas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

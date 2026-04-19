@@ -206,3 +206,27 @@ Goal: Refine marriage answers using D9 Navamsa (the strongest classical predicto
   1. **Pratyantar `_parse_date`** — was using format-string-length slicing which silently dropped time components; replaced with robust `datetime.fromisoformat()` + 'Z' normalization that preserves full datetime precision.
   2. **Pratyantar out-of-window honesty** — old code forced `current_pd = pds[0]` if `when` fell outside AD window (could mis-state reality); now returns explicit `out_of_window: true` and the formatter emits *"do NOT invent a current pratyantar"* guard.
   3. **Divisional summary anti-hallucination** — when 7L/10L cannot be resolved, formatter now emits explicit *"7L D9 placement: UNAVAILABLE (do NOT invent — fall back to natal 7L)"* line so Rule K cannot pressure the model into fabrication.
+
+## Sprint 5 — Remedies Engine (api-server)
+
+Goal: Replace per-answer remedy hallucination (AI was fabricating mantras like "Om Shum Shukraya Namah") with a single deterministic source of truth — classical Vedic remedies sourced from BPHS, Phaladeepika, and Lal Kitab consensus.
+
+- **`remedies.py`** (NEW) — Per-planet `_REMEDY_TABLE` with 9 entries (Sun→Ketu) containing: mantra (Sanskrit + transliteration + count + day), gemstone (name + carat range + metal + finger + caveat where applicable), charity items, fast day, colour, yantra. Special dosha-specific bundles for Sade-Sati, Mangal Dosh, and Kal-Sarpa Yoga (each with classical multi-line mantra + Hanuman/Naga-puja extras).
+- **`select_remedies()`** prioritises: (1) special doshas, (2) running Mahadasha lord if WEAK / combust / debilitated, (3) topic-relevant house lord (7L for marriage, 10L for career, etc.) if weak, (4) truly weakest remaining planet by score (not dict order). Returns max 3 remedies.
+- **Caveats baked in** — Blue Sapphire trial-period warning, Hessonite/Cat's-Eye flagged as "post-classical (Lal Kitab tradition) — not strict BPHS". Charity items are concrete, not generic ("Black sesame in flowing water" not "do something with black").
+- **`locked_facts.py`** — Wired between Pratyantar and house-lords sections. Verdicts unwrapped from `{planet:{verdict, reason, score}}` to flat string map; full dict passed as `planet_scores=` for true weakest-planet ranking.
+- **`openai_helper.py`** — **Rule M** added: AI MUST quote remedies VERBATIM from the REMEDIES block, NEVER invent Sanskrit, weights, or "lucky stones". Must use the `for: ...` label so user knows WHY this remedy. If REMEDIES block is empty, fall back to generic "Hanuman Chalisa" advice — never fabricate specifics.
+- **Smoke test (job dikkat Q)**: AI cited *"Rahu ke liye 'Om Bhraam Bhreem Bhraum Sah Rahave Namah' 108 baar Saturday ko"* — exact mantra from block, correct planet (running MD lord), correct day. Rule M firing. Pass.
+- **Architect review fixes applied**:
+  1. **True weakest fallback** — replaced "first WEAK planet in dict iteration" with sorted-by-score lowest-first selection.
+  2. **MD-lord robust extraction** — `_md_lord()` now accepts `maha | mahadasha | md | planet | lord` keys.
+  3. **Kal-Sarpa name match** — old `"kal sarp"|"kalsarp"` substring check missed common `"Kaal Sarp Dosh"`; replaced with `"kal" in n and "sarp" in n` after dash/underscore normalisation.
+  4. **Formatter `for:` label** — added missing colon to align with Rule M's enforcement pattern.
+
+## Session Final Status
+
+5 sprints complete in this session. LOCKED FACTS now contains 13 deterministic blocks (lagna/moon/nak → yogas → doshas → planet strengths → SAV → bhava bala → aspects → karakas → D9/D10 → transits → dasha → pratyantar → house lords → remedies). 13 mirror prompt rules (A–M) ensure verbatim citation and zero hallucination.
+
+What was DEFERRED from original Sprint-5 scope:
+- **KP cuspal sub-lord** — requires birth-time Placidus cusp computation (swisseph) which the current kundli payload does not include; would need a separate cusp-engine module first.
+- **8-route question-router reactivation** — current openai_helper topic detection is working well enough; 8-route classifier would be incremental polish, not core capability.

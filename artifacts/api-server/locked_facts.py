@@ -345,6 +345,30 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] pratyantar failed: {exc}")
 
+    # Sprint-5 — Remedies (deterministic, classical) — built BEFORE transits
+    # so it can use verdicts/dosh/topic that are already available.
+    rem_str = ""
+    try:
+        from remedies import select_remedies, format_remedies_summary  # type: ignore
+        active_doshas = []
+        if isinstance(dosh, dict):
+            for d in dosh.get("dosh_list", []):
+                if d.get("status") in ("Active", "Mild"):
+                    active_doshas.append(d.get("name") or "")
+        # sade-sati flag from intel if engines added it
+        if intel.get("sade_sati_active"):
+            active_doshas.append("Sade-Sati")
+        topic = (kundli.get("_topic") or "").lower()  # may be set by caller
+        # verdicts is {planet: {verdict, reason, score}} — unwrap to {planet: "WEAK"|...}
+        verdict_strs = {p: (v.get("verdict") if isinstance(v, dict) else v)
+                        for p, v in (verdicts or {}).items()}
+        rem = select_remedies(verdict_strs, kundli.get("currentDasha") or {},
+                              active_doshas, intel, topic,
+                              planet_scores=verdicts)
+        rem_str = format_remedies_summary(rem)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] remedies failed: {exc}")
+
     # Sprint-3 — Transits (Saturn / Jupiter / Rahu vs natal)
     tr_str = ""
     try:
@@ -386,6 +410,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_dasha_block(kundli),
         pd_str,
         _format_house_lords(intel),
+        rem_str,
         "════════════════════════════════════════════════════════════════",
     ]
     # Drop empty sections (e.g. no house lords)

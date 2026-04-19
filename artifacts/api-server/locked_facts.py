@@ -321,6 +321,30 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] karakas failed: {exc}")
 
+    # Sprint-4 — D9 / D10 divisional charts
+    div_str = ""
+    try:
+        from divisional_charts import compute_d9, compute_d10, format_divisional_summary  # type: ignore
+        # Lagna longitude — best effort: try kundli.lagna.longitude or intel
+        lagna_lon = None
+        lg = kundli.get("lagna") or kundli.get("ascendant")
+        if isinstance(lg, dict):
+            lagna_lon = lg.get("longitude") or lg.get("lon")
+        d9  = compute_d9(kundli.get("planets") or [], lagna_lon)
+        d10 = compute_d10(kundli.get("planets") or [], lagna_lon)
+        div_str = format_divisional_summary(d9, d10, intel)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] divisional_charts failed: {exc}")
+
+    # Sprint-4 — Pratyantar dasha (sub-period under current AD)
+    pd_str = ""
+    try:
+        from pratyantar import compute_pratyantar, format_pratyantar_summary  # type: ignore
+        pd = compute_pratyantar(kundli.get("currentDasha") or {})
+        pd_str = format_pratyantar_summary(pd) if pd else ""
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] pratyantar failed: {exc}")
+
     # Sprint-3 — Transits (Saturn / Jupiter / Rahu vs natal)
     tr_str = ""
     try:
@@ -357,8 +381,10 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         bb_str,
         asp_str,
         kk_str,
+        div_str,
         tr_str,
         _format_dasha_block(kundli),
+        pd_str,
         _format_house_lords(intel),
         "════════════════════════════════════════════════════════════════",
     ]

@@ -190,3 +190,19 @@ Goal: Three more deterministic engines so AI can answer (a) "kab" / timing quest
 - **Smoke test 1 (marriage timing)**: AI cited Saptamesh Mercury weak + Venus combust → partner artistic + Rahu MD honest framing + 12-yr Jupiter cycle. Pass.
 - **Smoke test 2 (life purpose)**: AI opened with "Aapka Atmakaraka Saturn hai, jo aapko discipline aur structure ki taraf le jaata hai" — Rule I cited correctly. Rule E maintained. Pass.
 - **Architect review fixes applied**: (1) Karakas — removed Rahu from `_ELIGIBLE`, doc updated to "strict 7-karaka, Rahu/Ketu excluded"; (2) Bhava Bala — recalibrated weights (lord ±20 not ±30, Jupiter aspect +18 not +30) so no single factor dominates; (3) Bhava Bala legend + Rule J re-aligned to relative-rank semantics (was inconsistently mixing absolute thresholds + relative ranking).
+
+## Sprint 4 — Divisional Charts (D9 + D10) + Pratyantar Dasha (api-server)
+
+Goal: Refine marriage answers using D9 Navamsa (the strongest classical predictor of marriage quality), refine career answers using D10 Dasamsa, and add month-precision timing via Vimshottari Pratyantar (sub-period under current AD).
+
+- **`divisional_charts.py`** (NEW) — `compute_d9` + `compute_d10` implement BPHS Ch. 7 varga rules: D9 seed = same/9th/5th sign for movable/fixed/dual signs; D10 seed = same/9th sign for odd/even signs. Detects **Vargottama** planets (D1 sign = D9/D10 sign → exceptional strength). `summarize_d9_for_marriage` extracts 7L's D9 placement + strength (EXALTED/DEBIL/OWN/NEUTRAL) — the single most important signal for marriage quality. `summarize_d10_for_career` does the equivalent for 10L. Test chart: 7L Mercury → Virgo D9 (EXALTED), Venus → Pisces D9 (EXALTED), Sun is Vargottama; 10L Mercury → Sagittarius D10 (own-sign).
+- **`pratyantar.py`** (NEW) — `compute_pratyantar(currentDasha, when)` uses standard Vimshottari proportions: PD_duration = AD_duration × (PD_lord_years / 120), order starts at AD lord, walks 9-step cycle. Returns current PD + next 3 upcoming PDs as month-precision windows. Falls back to honest "out_of_window" marker (not invention) when `when` is outside AD bounds.
+- **`locked_facts.py`** — Both blocks wired between Karakas and Transits sections. Lagna longitude best-effort extracted for D9/D10 lagna sign.
+- **`openai_helper.py`** — Two new mirror rules:
+  - **RULE K (Divisional Charts)** — for marriage Qs MUST consult D9 7L line; for career Qs MUST consult D10 10L line. D9/D10 strength can OVERRIDE conflicting natal D1 verdict (a 7L weak in D1 but EXALTED in D9 = much better marriage outcome than D1 alone suggests). Vargottama planets must be called out by name.
+  - **RULE L (Pratyantar)** — for precise timing Qs (next 3-6 months, specific weeks), cite current PD lord + window AND the next 1-2 upcoming PDs as "change-windows". Combine with planet strengths for green/yellow/red light verdicts.
+- **Smoke test (career Q)**: AI cited *"D10 chart mein aapka 10L Mercury Sagittarius mein hai, jo apne sign mein hai"* + *"Aane wale Jupiter pratyantar (2026-05-30 se) se growth aur opportunities"* — both Rule K and Rule L firing simultaneously with real computed values. Pass.
+- **Architect review fixes applied**:
+  1. **Pratyantar `_parse_date`** — was using format-string-length slicing which silently dropped time components; replaced with robust `datetime.fromisoformat()` + 'Z' normalization that preserves full datetime precision.
+  2. **Pratyantar out-of-window honesty** — old code forced `current_pd = pds[0]` if `when` fell outside AD window (could mis-state reality); now returns explicit `out_of_window: true` and the formatter emits *"do NOT invent a current pratyantar"* guard.
+  3. **Divisional summary anti-hallucination** — when 7L/10L cannot be resolved, formatter now emits explicit *"7L D9 placement: UNAVAILABLE (do NOT invent — fall back to natal 7L)"* line so Rule K cannot pressure the model into fabrication.

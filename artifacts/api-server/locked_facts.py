@@ -670,6 +670,16 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] shadbala full format (Sprint-29) failed: {exc}")
 
+    # Sprint-36 / Phase K — Avashtas (planetary states)
+    avashtas_str = ""
+    try:
+        from vedic.avashtas.avashtas import (compute_avashtas,  # type: ignore
+                                              format_avashtas_summary)
+        _av = compute_avashtas(kundli)
+        avashtas_str = format_avashtas_summary(_av)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] avashtas (Sprint-36) failed: {exc}")
+
     # Sprint-35 / Phase J — Tajik / Varshaphala (Annual)
     phase_j_str = ""
     try:
@@ -929,6 +939,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         phase_h_str,
         kp_phase_i_str,
         phase_j_str,
+        avashtas_str,
         varga_yogas_str,
         argala_str,
         sthira_str,

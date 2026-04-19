@@ -817,7 +817,16 @@ BAV+SAV, Sthana Bala 5 sub, Kala Bala 9 sub, Ishta-Kashta Phala, Vimshopaka Bala
 - **J6 Munis (3-yr period)** ✅ — 7 Munis (Vasishta/Kashyapa/Bharadvaja/Atri/Vishvamitra/Gautama/Jamadagni) cyclic 3-yr blocks with effect descriptions
 - Test on chart year 37: VS 2026-01-15 05:35 UTC; Muntha Sag H1 FAVOURABLE; 30 Sahams; 16 aspects; 4 yogas detected
 
-### Sprint 35+ — Tier 10: Astrocartography + Relocation (pending coords)
+### Sprint 36 — Phase K Avashtas (Planetary States) ✅ COMPLETE
+- New module: `vedic/avashtas/avashtas.py` (~210 lines)
+- **K1 Baladi (5 by degree)** ✅ — Bala/Kumara/Yuva/Vridha/Mrita per 6° band, reversed in even signs; rashmi multiplier (0.25/0.5/1.0/0.5/0.25)
+- **K2 Jagradadi (3)** ✅ — Jagrat (own/exalted), Swapna (friend/neutral), Sushupti (enemy/debilitated)
+- **K3 Lajjitadi (6)** ✅ — Lajjit (with Rahu/Ketu ≤8°), Garvit (own/exa/MT), Kshudita (enemy sign/conj), Trishit (watery sign + 7th malefic), Mudit (with friend), Kshobhit (combust by Sun ≤8°)
+- **K4 Deeptadi (9)** ✅ — Deepta/Swastha/Mudita/Shanta/Shakta(retro)/Peedita(combust)/Deena/Vikala/Khala — precedence ladder with combust + retrograde overrides
+- 9 grahas × 4 systems = 36 classifications, 23 unique states ⇒ 180+ combinations
+- Test: Sun Cap = Mrita+Sushupti+Kshudita+Deena (utterly weak), Mars Sco = Jagrat+Garvit+Swastha (full power), Jupiter retro Gemini = Shakta (retro override exalts), Venus combust = Peedita+Kshudita+Kshobhit (3 afflictions)
+
+### Sprint 36+ — Tier 10: Astrocartography + Relocation (pending coords)
 
 ### Sprint 25 — Phase J: Tajik Annual + Phase L: Special Lagnas
 - Varshaphala (Sun-return chart)

@@ -60,3 +60,45 @@ id = "Gdv4BgcXl_rmitROllGUn"
 uri = "file://exports/Numerology_v3_no_vastu.pdf"
 type = "pdf"
 title = "Numerology Report v3 — Vastu hata diya, pure number-based"
+
+[[outputs]]
+id = "8zoO7309dIpAXkUp25bHD"
+uri = "file://exports/Numerology_premium.pdf"
+type = "pdf"
+title = "Premium Numerology Report v4 (₹99 me ₹500 wala feel)"
+
+[[outputs]]
+id = "ufzoG9wqgZEgmm0oRSHWm"
+uri = "file://exports/pdf_pages_final/page-1.jpg"
+type = "image"
+title = "Page 1 — Premium Cover (decorative border + value-prop box)"
+
+[[outputs]]
+id = "Sem-ZwncpGtyBzeeQypM1"
+uri = "file://exports/pdf_pages_final/page-2.jpg"
+type = "image"
+title = "Page 2 — Core Numbers (overlap bug FIXED)"
+
+[[outputs]]
+id = "ZXDCxurNPQSgyBFB93WhU"
+uri = "file://exports/pdf_pages_final/page-3.jpg"
+type = "image"
+title = "Page 3 — Driver 5 Personality Deep-Dive (NEW)"
+
+[[outputs]]
+id = "iYF5F6NNnA3UMGxUlyzxy"
+uri = "file://exports/pdf_pages_final/page-4.jpg"
+type = "image"
+title = "Page 4 — Conductor 6 Personality Deep-Dive (NEW)"
+
+[[outputs]]
+id = "uMqK4b5UUt60Yxx_19uJk"
+uri = "file://exports/pdf_pages_final/page-5.jpg"
+type = "image"
+title = "Page 5 — Lo Shu Grid (11 bug FIXED → shows 1 ×2)"
+
+[[outputs]]
+id = "xsdV2Js6GyhukX87Pe1zf"
+uri = "file://exports/pdf_pages_final/page-9.jpg"
+type = "image"
+title = "Page 9 — Detailed Remedies (NEW: exact mantra+day+direction+items)"

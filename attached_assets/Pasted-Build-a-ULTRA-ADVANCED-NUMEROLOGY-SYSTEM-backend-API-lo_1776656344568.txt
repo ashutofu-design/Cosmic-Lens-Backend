@@ -1,0 +1,119 @@
+Build a ULTRA-ADVANCED NUMEROLOGY SYSTEM (backend + API + logic engine) with complete professional-grade features.
+
+INPUT:
+- Full Name
+- Date of Birth
+
+MODULES TO IMPLEMENT:
+
+1. CORE NUMBERS:
+- Life Path, Destiny, Soul Urge, Personality, Birthday, Maturity
+
+2. ADVANCED NUMBERS:
+- Karmic Debt (13,14,16,19)
+- Karmic Lessons
+- Master Numbers (11,22,33)
+- Hidden Passion
+- Balance Number
+- Subconscious Self
+- Rational Thought
+
+3. GRID SYSTEM:
+- Lo Shu Grid (3x3)
+- Arrow Strength/Weakness
+- Number frequency
+- Missing planes
+
+4. NAME ENGINE:
+- Name analysis
+- Birth vs current name comparison
+- Name correction suggestions (multiple options)
+- Letter frequency & sound analysis
+- Signature analysis
+- Business name generator
+
+5. MULTI-SYSTEM SUPPORT:
+- Pythagorean
+- Chaldean
+- Vedic
+- Kabbalah
+- Cross-verify and produce ONE unified result
+
+6. TIME ENGINE:
+- Personal Year, Month, Day
+- Pinnacles
+- Challenges
+- Essence cycles
+
+7. EVENT ENGINE:
+- Detect timing windows
+- Predict important life events
+- Decision timing
+
+8. COMPATIBILITY:
+- Love, business, name compatibility
+- Return score (0–100%)
+
+9. CAREER & MONEY:
+- Career suggestions
+- Wealth cycles
+- Risk analysis
+
+10. SPIRITUAL & KARMIC:
+- Past life interpretation
+- Soul path
+- Repeating numbers
+
+11. FORECAST:
+- 1-year prediction
+- Monthly breakdown
+- Lucky/unlucky dates
+
+12. REMEDIES:
+- Lucky number, color, day
+- Gemstones
+- Name correction
+
+13. SCORING ENGINE:
+- Career %, Love %, Wealth %, Fame %
+- Confidence score
+
+14. SIMULATION ENGINE:
+- Compare decisions
+- Predict outcome changes
+
+15. REAL-TIME ENGINE:
+- Daily prediction
+- Notification logic
+
+16. AI LAYER:
+- Generate human-like explanations
+- Chat-based assistant
+
+RULES:
+- Do NOT show raw calculations
+- Always provide a FINAL VERDICT
+- Resolve conflicts using priority:
+  Life Path > Name > Time > Others
+- Keep explanations simple but powerful
+
+OUTPUT FORMAT (JSON):
+{
+ "summary": "...",
+ "career": "...",
+ "love": "...",
+ "yearFocus": "...",
+ "scores": {
+   "career": 0-100,
+   "love": 0-100,
+   "wealth": 0-100
+ },
+ "lucky": {
+   "number": "...",
+   "color": "...",
+   "day": "..."
+ }
+}
+
+GOAL:
+Create a complete decision-making numerology engine that gives ONE clear direction instead of multiple conflicting interpretations.

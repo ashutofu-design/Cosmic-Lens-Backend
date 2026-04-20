@@ -465,7 +465,252 @@ def _number_analysis_block(s, value: str, kind: str,
             ]))
             flow.append(at)
 
+    # ─── DEEP-DIVE elaboration (T107) ────────────────────────────────
+    flow += _phone_deep_dive(s, value, kind, driver, conductor, lang)
+
     flow.append(Spacer(1, 5 * mm))
+    return flow
+
+
+_DIGIT_PLANET = {0:"Ketu-shadow", 1:"Sun", 2:"Moon", 3:"Jupiter", 4:"Rahu",
+                 5:"Mercury", 6:"Venus", 7:"Ketu", 8:"Saturn", 9:"Mars"}
+
+_DIGIT_VIBE = {
+    0: ("dissolves the previous digit's energy",  "neutralising"),
+    1: ("leadership, ego, single-pointed focus",  "high"),
+    2: ("emotion, sensitivity, partnership",       "soft"),
+    3: ("communication, optimism, expansion",      "high"),
+    4: ("structure, sudden shifts, friction",      "heavy"),
+    5: ("speed, change, commerce, networking",     "very high"),
+    6: ("love, beauty, family, luxury",            "warm"),
+    7: ("intuition, isolation, depth, research",   "deep"),
+    8: ("power, money, karma, hard lessons",       "heavy"),
+    9: ("courage, war, real-estate, sports",       "fiery"),
+}
+
+# Cheiro's classic combination conflicts
+_BAD_COMBOS = {
+    (4, 8): "Saturn-Rahu collision — slowdowns, legal stuck, sudden losses",
+    (8, 4): "Saturn-Rahu collision — slowdowns, legal stuck, sudden losses",
+    (5, 8): "Mercury-Saturn jam — communication breaks under pressure",
+    (8, 5): "Mercury-Saturn jam — communication breaks under pressure",
+    (6, 8): "Venus-Saturn drain — relationship & money friction",
+    (8, 6): "Venus-Saturn drain — relationship & money friction",
+    (1, 8): "Sun-Saturn enmity — ego clashes, authority disputes",
+    (8, 1): "Sun-Saturn enmity — ego clashes, authority disputes",
+}
+
+_FRIENDLY_COMBOS = {
+    (1, 3): "Sun-Jupiter — leadership + wisdom, excellent for elders/seniors",
+    (3, 1): "Jupiter-Sun — same",
+    (2, 7): "Moon-Ketu — spiritual, intuitive, healing professions",
+    (7, 2): "Ketu-Moon — same",
+    (3, 6): "Jupiter-Venus — wealth + beauty, perfect for luxury/wedding industries",
+    (6, 3): "Venus-Jupiter — same",
+    (5, 6): "Mercury-Venus — sales, social media, content creators thrive",
+    (6, 5): "Venus-Mercury — same",
+    (1, 5): "Sun-Mercury — entrepreneurship, public speaking, branding",
+    (5, 1): "Mercury-Sun — same",
+}
+
+
+def _digit_positions_kv(value: str, lang: str) -> List[Any]:
+    """Return rows describing position-roles within the number."""
+    digits = [c for c in value if c.isdigit()]
+    if len(digits) < 4:
+        return []
+    first = digits[0]
+    middle = digits[len(digits)//2]
+    last = digits[-1]
+    last4 = "".join(digits[-4:])
+    rows = [
+        [_T(lang, "🔆 First digit (overall theme)",
+                  "🔆 पहला अंक (कुल विषय)",
+                  "🔆 First digit (overall theme)"),
+         f"{first} → {_DIGIT_PLANET.get(int(first),'?')} — sets the "
+         f"<b>opening vibration</b> heard before others know your number"],
+        [_T(lang, "⚖️ Middle digit (daily friction zone)",
+                  "⚖️ मध्य अंक (दैनिक घर्षण-क्षेत्र)",
+                  "⚖️ Middle digit (daily friction zone)"),
+         f"{middle} → {_DIGIT_PLANET.get(int(middle),'?')} — colours your "
+         f"<b>routine calls</b> and reactive moments"],
+        [_T(lang, "🎯 Last digit (closing vibration)",
+                  "🎯 अंतिम अंक (समापन कंपन)",
+                  "🎯 Last digit (closing vibration)"),
+         f"{last} → {_DIGIT_PLANET.get(int(last),'?')} — the energy a "
+         f"<b>caller carries away</b> after the conversation ends"],
+        [_T(lang, "🔮 Last 4 (Cheiro's destiny block)",
+                  "🔮 अंतिम 4 (चीरो का नियति-खंड)",
+                  "🔮 Last 4 (Cheiro's destiny block)"),
+         f"{last4} — the digits that <b>auto-fill in OTPs, SMS previews</b>, "
+         "and stick in people's memory; the karmic signature of the number"],
+    ]
+    return rows
+
+
+def _planetary_chain(value: str) -> str:
+    digits = [c for c in value if c.isdigit()]
+    chain = " → ".join(_DIGIT_PLANET.get(int(d), "?") for d in digits[-6:])
+    return chain
+
+
+def _detect_combos(value: str):
+    digits = [int(c) for c in value if c.isdigit()]
+    bad, good = [], []
+    for i in range(len(digits) - 1):
+        pair = (digits[i], digits[i+1])
+        if pair in _BAD_COMBOS:
+            bad.append((f"{pair[0]}{pair[1]}", _BAD_COMBOS[pair]))
+        if pair in _FRIENDLY_COMBOS:
+            good.append((f"{pair[0]}{pair[1]}", _FRIENDLY_COMBOS[pair]))
+    return bad, good
+
+
+def _phone_deep_dive(s, value: str, kind: str, driver: int, conductor: int,
+                     lang: str = "hinglish") -> List[Any]:
+    """Position-role + planetary-chain + combo warnings + usage strategy."""
+    flow: List[Any] = []
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(Paragraph(_T(lang,
+        f"🔬 Deep-Dive: Position-Role Decoding",
+        f"🔬 गहन विश्लेषण: स्थान-भूमिका डिकोडिंग",
+        f"🔬 Deep-Dive: Position-Role Decoding"), s["h2"]))
+    flow.append(Paragraph(_T(lang,
+        "Numerology doesn't only sum digits — it reads <b>where each digit sits</b>. "
+        "The first digit sets the opening vibe, the middle digit colours daily friction, "
+        "the last digit is the energy a caller leaves with, and the last-4 (Cheiro's "
+        "rule) is the karmic signature people memorise.",
+        "अंक-शास्त्र केवल अंकों का योग नहीं — यह पढ़ता है <b>कौन-सा अंक कहाँ बैठा है</b>। "
+        "पहला अंक शुरुआती कंपन तय करता है, मध्य अंक दैनिक घर्षण को रंगता है, अंतिम "
+        "अंक वह ऊर्जा है जो कॉल करने वाला साथ ले जाता है, और अंतिम-4 (चीरो नियम) "
+        "वह कर्म-हस्ताक्षर है जो लोग याद रखते हैं।",
+        "Numerology sirf digits sum nahi karti — yeh padhti hai <b>kaunsa digit "
+        "kahan baitha hai</b>. Pehla digit opening vibe set karta hai, middle "
+        "digit daily friction colour karta hai, last digit wo energy hai jo caller "
+        "saath le jaata hai, aur last-4 (Cheiro rule) wo karmic signature hai jo "
+        "log yaad rakhte hain."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    pos_rows = _digit_positions_kv(value, lang)
+    if pos_rows:
+        prows = [[Paragraph(r[0], s["body"]), Paragraph(r[1], s["body"])]
+                 for r in pos_rows]
+        pt = Table(prows, colWidths=[60 * mm, 120 * mm])
+        pt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F0F9FF")),
+            ("BOX",        (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("INNERGRID",  (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+            ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",(0, 0), (-1, -1), 7),
+            ("RIGHTPADDING",(0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ]))
+        flow.append(pt)
+        flow.append(Spacer(1, 4 * mm))
+
+    # ─ Planetary chain visual
+    chain = _planetary_chain(value)
+    flow.append(Paragraph(_T(lang,
+        "🪐 Planetary Chain (last 6 digits)", "🪐 ग्रह-शृंखला (अंतिम 6 अंक)",
+        "🪐 Planetary Chain (last 6 digits)"), s["h3"]))
+    flow.append(Paragraph(
+        f"<b>{chain}</b>",
+        ParagraphStyle("chain", fontName="Helvetica-Bold", fontSize=11,
+                       textColor=BRAND_PURPLE, leading=16, alignment=1,
+                       spaceBefore=2, spaceAfter=4)))
+    flow.append(Paragraph(_T(lang,
+        "Read this chain left-to-right as <b>energy hand-offs</b>. A smooth chain "
+        "(friendly planets in sequence) means the number flows for you. Sharp jumps "
+        "(enemy planets back-to-back) mean tension every time the number is dialed.",
+        "इस शृंखला को बायें से दायें <b>ऊर्जा हस्तांतरण</b> के रूप में पढ़ें। सहज शृंखला "
+        "(मित्र-ग्रह क्रम में) = नंबर आपके लिए बहता है। तेज़ छलाँग (शत्रु-ग्रह पास-पास) "
+        "= हर बार डायल करने पर तनाव।",
+        "Is chain ko left-to-right <b>energy hand-offs</b> ke roop me padho. Smooth "
+        "chain (friendly planets sequence me) = number aapke liye flow karta hai. "
+        "Sharp jumps (enemy planets back-to-back) = har baar dial karne par tension."),
+        s["body"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ─ Combo warnings
+    bad, good = _detect_combos(value)
+    if bad:
+        flow.append(Paragraph(_T(lang,
+            "⚠️ Conflict Combinations Detected",
+            "⚠️ टकराव-संयोजन पाये गये",
+            "⚠️ Conflict Combinations Detected"), s["h3"]))
+        for combo, why in bad:
+            flow.append(Paragraph(f"• <b>{combo}</b> — {why}", s["body"]))
+        flow.append(Spacer(1, 2 * mm))
+    if good:
+        flow.append(Paragraph(_T(lang,
+            "✅ Friendly Combinations Detected",
+            "✅ मित्र-संयोजन पाये गये",
+            "✅ Friendly Combinations Detected"), s["h3"]))
+        for combo, why in good:
+            flow.append(Paragraph(f"• <b>{combo}</b> — {why}", s["body"]))
+        flow.append(Spacer(1, 3 * mm))
+    if not bad and not good:
+        flow.append(Paragraph(_T(lang,
+            "<b>Combo Check:</b> No major Cheiro-classified conflicts or super-"
+            "friendly pairings in this number — neutral combination zone.",
+            "<b>संयोजन-जाँच:</b> इस नंबर में कोई बड़ा चीरो-वर्गीकृत टकराव या अति-"
+            "मैत्री युग्म नहीं — तटस्थ संयोजन क्षेत्र।",
+            "<b>Combo Check:</b> Is number me koi major Cheiro-classified conflict "
+            "ya super-friendly pair nahi — neutral combination zone."),
+            s["body"]))
+        flow.append(Spacer(1, 3 * mm))
+
+    # ─ Usage strategy (mobile only)
+    if kind == "mobile":
+        flow.append(Paragraph(_T(lang,
+            "📞 How to USE this number daily for maximum return",
+            "📞 अधिकतम लाभ के लिए इस नंबर का दैनिक उपयोग कैसे करें",
+            "📞 Max return ke liye is number ka daily use kaise karein"),
+            s["h3"]))
+        digits = [int(c) for c in value if c.isdigit()]
+        last_d = digits[-1] if digits else driver
+        last_planet = _DIGIT_PLANET.get(last_d, "—")
+        usage_rows = [
+            [_T(lang, "📲 Best time to MAKE important calls",
+                       "📲 महत्वपूर्ण कॉल करने का सर्वश्रेष्ठ समय",
+                       "📲 Best time to MAKE important calls"),
+             f"{last_planet} hora — within ±2 hours of sunrise/sunset for "
+             "maximum vibration alignment"],
+            [_T(lang, "📵 Best time to SILENCE the phone",
+                       "📵 फ़ोन silent करने का सर्वश्रेष्ठ समय",
+                       "📵 Best time to SILENCE the phone"),
+             "Saturn hora (8th hour after sunrise) — protects against "
+             "draining conversations"],
+            [_T(lang, "🎁 Sectors this number attracts naturally",
+                       "🎁 क्षेत्र जो यह नंबर स्वाभाविक रूप से आकर्षित करता है",
+                       "🎁 Sectors this number attracts naturally"),
+             {1:"Government, leadership, branding", 2:"Healing, food, public service",
+              3:"Education, content, finance", 4:"Tech, real-estate, infra",
+              5:"Sales, trading, social media", 6:"Luxury, weddings, beauty",
+              7:"Spiritual, research, IT", 8:"Banking, mining, logistics",
+              9:"Defence, sports, surgery"}.get(last_d, "Mixed sectors")],
+            [_T(lang, "🔇 Use silently — don't share publicly if",
+                       "🔇 चुपचाप उपयोग करें — सार्वजनिक रूप से न दें यदि",
+                       "🔇 Use silently — don't share publicly if"),
+             "Last-4 reduces to 4 or 8 — keep this for personal contacts only, "
+             "use a different number for business cards"],
+        ]
+        urows = [[Paragraph(r[0], s["body"]), Paragraph(r[1], s["body"])]
+                 for r in usage_rows]
+        ut = Table(urows, colWidths=[65 * mm, 115 * mm])
+        ut.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FFFBEB")),
+            ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+            ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        flow.append(ut)
+
     return flow
 
 
@@ -1085,6 +1330,356 @@ def _name_correction_section(s, name: str, driver: int, conductor: int,
             s, "No correction needed",
             out.get("note", ""), "GOOD",
         ))
+
+    # ─── DEEP-DIVE elaboration (T107) ────────────────────────────────
+    flow += _name_correction_deep_dive(
+        s, name, driver, conductor, out, lang)
+    return flow
+
+
+# ─── Name Correction Deep-Dive ───────────────────────────────────────
+
+def _letter_contribution_table(s, name: str, lang: str) -> List[Any]:
+    """Show each letter's Chaldean value + planet — heaviest first."""
+    flow: List[Any] = []
+    cha_map = {
+        'a':1,'i':1,'j':1,'q':1,'y':1,
+        'b':2,'k':2,'r':2,
+        'c':3,'g':3,'l':3,'s':3,
+        'd':4,'m':4,'t':4,
+        'e':5,'h':5,'n':5,'x':5,
+        'u':6,'v':6,'w':6,
+        'o':7,'z':7,
+        'f':8,'p':8,
+    }
+    rows = [[
+        Paragraph(f"<b>{_T(lang, 'Letter', 'अक्षर', 'Letter')}</b>",  s["body"]),
+        Paragraph(f"<b>{_T(lang, 'Value', 'मान', 'Value')}</b>",     s["body"]),
+        Paragraph(f"<b>{_T(lang, 'Planet', 'ग्रह', 'Planet')}</b>",  s["body"]),
+        Paragraph(f"<b>{_T(lang, 'Energy', 'ऊर्जा', 'Energy')}</b>", s["body"]),
+    ]]
+    seen = []
+    for ch in name.lower():
+        if ch.isalpha():
+            v = cha_map.get(ch, 0)
+            seen.append((ch.upper(), v, _DIGIT_PLANET.get(v, '?'),
+                         _DIGIT_VIBE.get(v, ('—', '—'))[0]))
+    seen_sorted = sorted(seen, key=lambda x: -x[1])
+    for ch, v, pl, en in seen_sorted:
+        rows.append([Paragraph(ch, s["body"]),
+                     Paragraph(str(v), s["body"]),
+                     Paragraph(pl, s["body"]),
+                     Paragraph(en, s["body"])])
+    t = Table(rows, colWidths=[20*mm, 18*mm, 35*mm, 107*mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FAF5FF")),
+        ("BOX",        (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("INNERGRID",  (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",      (0, 0), (2, -1), "CENTER"),
+        ("LEFTPADDING",(0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",(0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]))
+    flow.append(t)
+    return flow
+
+
+def _diff_letters(orig: str, variant: str) -> str:
+    """Describe what changed between original and variant."""
+    o, v = orig.lower(), variant.lower()
+    if len(v) > len(o):
+        added = [c.upper() for c in v if c not in o]
+        if added:
+            return f"added '{added[0]}'"
+    if len(v) < len(o):
+        removed = [c.upper() for c in o if c not in v]
+        if removed:
+            return f"removed '{removed[0]}'"
+    diffs = [(o[i], v[i]) for i in range(min(len(o), len(v))) if o[i] != v[i]]
+    if diffs:
+        return f"replaced '{diffs[0][0].upper()}' → '{diffs[0][1].upper()}'"
+    return "letter case / order tweak"
+
+
+def _name_correction_deep_dive(s, name: str, driver: int, conductor: int,
+                               out: Dict[str, Any],
+                               lang: str = "hinglish") -> List[Any]:
+    flow: List[Any] = []
+
+    # Section A — Letter contribution map of the original
+    flow.append(Spacer(1, 6 * mm))
+    flow.append(Paragraph(_T(lang,
+        "🔬 Letter-by-Letter Contribution Map",
+        "🔬 अक्षर-दर-अक्षर योगदान मानचित्र",
+        "🔬 Letter-by-Letter Contribution Map"), s["h2"]))
+    flow.append(Paragraph(_T(lang,
+        f"Below is each letter of <b>{name}</b> ranked by its Chaldean weight. "
+        f"The heaviest letters dominate your name's vibration — adding or removing "
+        f"a heavy letter shifts the energy more than touching a light one.",
+        f"नीचे <b>{name}</b> के प्रत्येक अक्षर का चाल्डियन भार-क्रम है। सबसे भारी "
+        f"अक्षर नाम-कंपन पर हावी होते हैं — भारी अक्षर जोड़ना/हटाना हल्के से अधिक "
+        f"ऊर्जा बदलता है।",
+        f"Neeche <b>{name}</b> ke har letter ka Chaldean weight ranking hai. Sabse "
+        f"heavy letters naam ki vibration par dominate karte hain — heavy letter "
+        f"add/remove karna light se zyada energy shift karta hai."),
+        s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow += _letter_contribution_table(s, name, lang)
+    flow.append(Spacer(1, 5 * mm))
+
+    # Section B — Per-variant breakdown (top 3)
+    suggestions = (out.get("suggestions") or [])[:3]
+    if suggestions:
+        flow.append(Paragraph(_T(lang,
+            "🎯 Top-3 Variants — Detailed Breakdown",
+            "🎯 शीर्ष-3 विकल्प — विस्तृत विवरण",
+            "🎯 Top-3 Variants — Detailed Breakdown"), s["h2"]))
+        flow.append(Paragraph(_T(lang,
+            "For each candidate: <b>what changed</b>, <b>planetary impact</b>, "
+            "<b>where to use it first</b>, and <b>signature design hint</b>.",
+            "प्रत्येक उम्मीदवार के लिए: <b>क्या बदला</b>, <b>ग्रह-प्रभाव</b>, "
+            "<b>पहले कहाँ उपयोग करें</b>, और <b>हस्ताक्षर डिज़ाइन सुझाव</b>।",
+            "Har candidate ke liye: <b>kya badla</b>, <b>planetary impact</b>, "
+            "<b>pehle kahan use karein</b>, aur <b>signature design hint</b>."),
+            s["body_mid"]))
+        flow.append(Spacer(1, 3 * mm))
+
+        usage_zones = {
+            1: "Government work, leadership branding, LinkedIn headline",
+            2: "Family WhatsApp, healing/therapy practice, food brands",
+            3: "Educational platforms, content creation, finance domain",
+            4: "Tech startups, real-estate decks, infrastructure projects",
+            5: "Sales pitches, social media handles, trading apps",
+            6: "Wedding cards, beauty/luxury brands, hospitality",
+            7: "Spiritual teaching, research papers, meditation apps",
+            8: "Banking/legal documents, large institutional roles",
+            9: "Defence services, sports branding, surgical practice",
+        }
+        sig_hints = {
+            1: "Bold uppercase, single underscore — Sun energy needs a clean line",
+            2: "Curved cursive, dots over the i's — Moon energy needs softness",
+            3: "Slight upward slant, expansive loops — Jupiter wants growth",
+            4: "Avoid breaks, no curls — Rahu needs stability, simple block",
+            5: "Quick fluid strokes, fast-flowing — Mercury wants speed",
+            6: "Rounded, decorative flourish at start — Venus wants beauty",
+            7: "Minimal, almost monk-like — Ketu wants simplicity",
+            8: "Heavy press, thick base-line — Saturn wants weight",
+            9: "Sharp upstroke, ends with a point — Mars wants direction",
+        }
+
+        for idx, sug in enumerate(suggestions, 1):
+            v_name = sug.get("name", "")
+            v_num  = sug.get("name_number", 0)
+            v_score = sug.get("harmony_score", 0)
+            delta = sug.get("delta", 0)
+            delta_str = f"+{delta}" if delta > 0 else (str(delta) if delta < 0 else "—")
+            change = _diff_letters(name, v_name)
+            planet = _DIGIT_PLANET.get(int(v_num) if isinstance(v_num, int) else 0, "—")
+            usage = usage_zones.get(int(v_num) if isinstance(v_num, int) else 0,
+                                    "Mixed contexts")
+            sig = sig_hints.get(int(v_num) if isinstance(v_num, int) else 0,
+                                "Smooth flowing strokes")
+
+            head = _T(lang,
+                f"#{idx}  {v_name}  —  Score {v_score}/100  ({delta_str} vs original)",
+                f"#{idx}  {v_name}  —  स्कोर {v_score}/100  ({delta_str} मूल से)",
+                f"#{idx}  {v_name}  —  Score {v_score}/100  ({delta_str} vs original)")
+            flow.append(Paragraph(f"<b>{head}</b>",
+                ParagraphStyle(f"vh{idx}", fontName="Helvetica-Bold",
+                               fontSize=11, textColor=BRAND_PURPLE,
+                               leading=14, spaceBefore=4, spaceAfter=2)))
+            v_rows = [
+                [_T(lang, "✏️ What changed", "✏️ क्या बदला", "✏️ What changed"),
+                 change],
+                [_T(lang, "🪐 New name number → Planet",
+                          "🪐 नया नाम-अंक → ग्रह",
+                          "🪐 New name number → Planet"),
+                 f"{v_num} → {planet}"],
+                [_T(lang, "🎁 Where to use this version FIRST",
+                          "🎁 इस संस्करण को पहले कहाँ उपयोग करें",
+                          "🎁 Where to use this version FIRST"),
+                 usage],
+                [_T(lang, "✍️ Signature design hint",
+                          "✍️ हस्ताक्षर डिज़ाइन सुझाव",
+                          "✍️ Signature design hint"),
+                 sig],
+            ]
+            vt_rows = [[Paragraph(r[0], s["body"]), Paragraph(r[1], s["body"])]
+                       for r in v_rows]
+            vt = Table(vt_rows, colWidths=[55 * mm, 125 * mm])
+            vt.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F0FDF4")),
+                ("BOX",        (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+                ("INNERGRID",  (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+                ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING",(0, 0), (-1, -1), 7),
+                ("RIGHTPADDING",(0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+            ]))
+            flow.append(vt)
+            flow.append(Spacer(1, 4 * mm))
+
+    # Section C — 90-day transition plan
+    flow.append(Paragraph(_T(lang,
+        "📅 90-Day Safe Transition Plan",
+        "📅 90-दिन सुरक्षित परिवर्तन योजना",
+        "📅 90-Day Safe Transition Plan"), s["h2"]))
+    flow.append(Paragraph(_T(lang,
+        "Don't change everything overnight — the universe needs to ratify the new "
+        "vibration. Roll out in phases so the new energy stabilises:",
+        "रातों-रात सब कुछ न बदलें — ब्रह्मांड को नया कंपन पुष्ट करने के लिए समय "
+        "चाहिए। चरणों में लागू करें ताकि नयी ऊर्जा स्थिर हो:",
+        "Raaton-raat sab kuchh mat badlo — universe ko nayi vibration ratify karne "
+        "ke liye time chahiye. Phases me roll-out karo taaki nayi energy stabilise ho:"),
+        s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    plan_rows = [
+        [_T(lang, "Day 1–7", "दिन 1–7", "Day 1–7"),
+         _T(lang,
+            "Practice the new <b>signature</b> 21 times daily on plain paper. "
+            "Don't share with anyone yet — just feel it.",
+            "नये <b>हस्ताक्षर</b> को रोज़ 21 बार सादे काग़ज़ पर अभ्यास करें। किसी को "
+            "अभी न बताएं — केवल महसूस करें।",
+            "Naye <b>signature</b> ko roz 21 baar plain paper par practice karein. "
+            "Kisi ko abhi mat batao — sirf feel karo.")],
+        [_T(lang, "Day 8–21", "दिन 8–21", "Day 8–21"),
+         _T(lang,
+            "Update <b>email signature</b>, WhatsApp display name, and the name on "
+            "online shopping/food-delivery apps. Low-stakes test environment.",
+            "<b>ईमेल हस्ताक्षर</b>, WhatsApp प्रदर्शन-नाम, और ऑनलाइन ख़रीद/भोजन-"
+            "वितरण ऐप में नाम अपडेट करें। कम-जोखिम परीक्षण वातावरण।",
+            "<b>Email signature</b>, WhatsApp display name, aur online shopping/"
+            "food-delivery apps ka naam update karo. Low-stakes test environment.")],
+        [_T(lang, "Day 22–45", "दिन 22–45", "Day 22–45"),
+         _T(lang,
+            "Switch <b>social media</b> handles (Instagram, LinkedIn, Twitter/X, "
+            "Facebook). Notify close friends/family in person. Update business cards.",
+            "<b>सोशल मीडिया</b> हैंडल बदलें (Instagram, LinkedIn, Twitter/X, "
+            "Facebook)। निकट मित्रों/परिवार को व्यक्तिगत रूप से सूचित करें। "
+            "व्यवसाय-कार्ड अपडेट करें।",
+            "<b>Social media</b> handles switch karo (Instagram, LinkedIn, Twitter/X, "
+            "Facebook). Close friends/family ko in-person batao. Business cards update karo.")],
+        [_T(lang, "Day 46–75", "दिन 46–75", "Day 46–75"),
+         _T(lang,
+            "Use the new spelling in <b>professional contexts</b> — bylines, invoice "
+            "headers, contract drafts (signed name remains old, but draft as new). "
+            "Update bank's KYC name <i>only if</i> signature variant is government-acceptable.",
+            "<b>व्यावसायिक संदर्भों</b> में नयी वर्तनी का उपयोग करें — bylines, "
+            "चालान-शीर्षक, अनुबंध-मसौदे (हस्ताक्षर पुराना ही, मसौदा नया)। बैंक KYC "
+            "केवल तब बदलें जब हस्ताक्षर सरकारी-स्वीकार्य हो।",
+            "<b>Professional contexts</b> me nayi spelling use karo — bylines, "
+            "invoice headers, contract drafts (signed name purana hi, draft naya). "
+            "Bank KYC tabhi badlo jab signature variant govt-acceptable ho.")],
+        [_T(lang, "Day 76–90", "दिन 76–90", "Day 76–90"),
+         _T(lang,
+            "Final phase: <b>legal name change</b> (Gazette notification in India "
+            "via affidavit + 2-newspaper publication, ~₹2-5K). Update PAN, Aadhaar, "
+            "passport, voter ID. The new vibration is now anchored in the cosmos.",
+            "अंतिम चरण: <b>क़ानूनी नाम-परिवर्तन</b> (भारत में राजपत्र सूचना — "
+            "हलफ़नामा + 2-समाचारपत्र प्रकाशन, लगभग ₹2-5 हज़ार)। PAN, आधार, "
+            "पासपोर्ट, मतदाता पहचान अपडेट। नयी कंपन अब ब्रह्मांड में स्थिर।",
+            "Final phase: <b>legal name change</b> (India me Gazette notification — "
+            "affidavit + 2-newspaper publication, lagbhag ₹2-5K). PAN, Aadhaar, "
+            "passport, voter ID update. Nayi vibration ab cosmos me anchor.")],
+    ]
+    pt_rows = [[Paragraph(r[0], s["body"]), Paragraph(r[1], s["body"])]
+               for r in plan_rows]
+    pt = Table(pt_rows, colWidths=[28 * mm, 152 * mm])
+    pt.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FAF5FF")),
+        ("BOX",        (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("INNERGRID",  (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+        ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",(0, 0), (-1, -1), 7),
+        ("RIGHTPADDING",(0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ]))
+    flow.append(pt)
+    flow.append(Spacer(1, 4 * mm))
+
+    # Section D — Common pitfalls
+    flow.append(Paragraph(_T(lang,
+        "⚠️ Common Mistakes to Avoid",
+        "⚠️ टालने योग्य सामान्य ग़लतियाँ",
+        "⚠️ Common Mistakes to Avoid"), s["h2"]))
+    pitfalls_en = [
+        "<b>Don't change all documents in one week</b> — the energy gets confused, "
+        "you'll feel ungrounded for months.",
+        "<b>Don't pick a variant just because it 'sounds nicer'</b> — pick by "
+        "harmony score, not by aesthetics. Looks come second.",
+        "<b>Don't keep two active spellings forever</b> — within 1 year migrate "
+        "fully or revert. Mixed signal = mixed manifestation.",
+        "<b>Don't change the spelling during a 9-Personal-Year</b> — that year is "
+        "for closure, not new identity. Wait for 1-Personal-Year.",
+        "<b>Don't ignore the family/spouse name effect</b> — if married, also "
+        "check the joint-vibration with spouse's name before legal change.",
+    ]
+    pitfalls_hi = [
+        "<b>एक सप्ताह में सारे दस्तावेज़ न बदलें</b> — ऊर्जा भ्रमित होती है, महीनों "
+        "तक उखड़ा-उखड़ा महसूस होगा।",
+        "<b>केवल 'सुंदर लगने' के कारण विकल्प न चुनें</b> — सामंजस्य-स्कोर देखें, "
+        "सौंदर्य नहीं। रूप दूसरे स्थान पर।",
+        "<b>दो सक्रिय वर्तनियाँ हमेशा न रखें</b> — 1 वर्ष में पूरी तरह माइग्रेट करें "
+        "या वापस लौटें। मिश्रित संकेत = मिश्रित प्रकटीकरण।",
+        "<b>9-Personal-Year में वर्तनी न बदलें</b> — वह वर्ष समापन के लिए, नयी "
+        "पहचान के लिए नहीं। 1-Personal-Year की प्रतीक्षा करें।",
+        "<b>परिवार/जीवनसाथी प्रभाव की उपेक्षा न करें</b> — विवाहित हैं तो क़ानूनी "
+        "परिवर्तन से पहले जीवनसाथी के नाम के साथ संयुक्त-कंपन भी जाँचें।",
+    ]
+    pitfalls_hg = [
+        "<b>Ek hafte me saare documents mat badlo</b> — energy confuse hoti hai, "
+        "mahino tak ungrounded feel hoga.",
+        "<b>Sirf 'sound nicer' ke karan variant mat chuno</b> — harmony score "
+        "dekho, aesthetics nahi. Looks doosre number par.",
+        "<b>Do active spellings hamesha mat rakho</b> — 1 saal me poori tarah "
+        "migrate karo ya revert karo. Mixed signal = mixed manifestation.",
+        "<b>9-Personal-Year me spelling mat badlo</b> — wo year closure ke liye, "
+        "nayi identity ke liye nahi. 1-Personal-Year ka wait karo.",
+        "<b>Family/spouse name ka effect ignore mat karo</b> — married ho to "
+        "legal change se pehle spouse ke naam ke saath joint-vibration bhi check karo.",
+    ]
+    pf_list = pitfalls_en if lang == "english" else (
+        pitfalls_hi if lang == "hindi" else pitfalls_hg)
+    for p in pf_list:
+        flow.append(Paragraph(f"• {p}", s["body"]))
+        flow.append(Spacer(1, 1 * mm))
+
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 The science behind 'why phased rollout works'",
+        "📖 'चरणबद्ध रोलआउट क्यों काम करता है' का विज्ञान",
+        "📖 'Phased rollout kyu kaam karta hai' ka science",
+        "Numerology operates through <b>repetition × time × emotional charge</b>. "
+        "When you suddenly switch your name everywhere, three things happen: (1) "
+        "the OLD vibration is still echoing through old contracts, files, and "
+        "people's memory — creating <b>karmic interference</b>; (2) the NEW "
+        "vibration hasn't accumulated enough repetitions to dominate; (3) your own "
+        "subconscious experiences identity-vertigo. Phased rollout solves all three: "
+        "the old name <b>fades</b> as the new name <b>compounds</b>, and your psyche "
+        "adapts in graceful 21-day micro-cycles (the same cycle Vedic mantras use). "
+        "This is why corrected names take 6-9 months to 'kick in' — not 6 days.",
+        "अंक-शास्त्र <b>दोहराव × समय × भावनात्मक आवेश</b> से चलता है। एकाएक नाम बदलने "
+        "पर तीन बातें होती हैं: (1) पुराना कंपन पुराने अनुबंधों, फ़ाइलों, स्मृति में "
+        "गूँज रहा — <b>कर्मिक हस्तक्षेप</b>; (2) नये कंपन की पर्याप्त पुनरावृत्तियाँ "
+        "नहीं; (3) अवचेतन को पहचान-चक्कर। चरणबद्ध रोलआउट तीनों को हल करता है: "
+        "पुराना नाम <b>मिटता है</b> जब नया <b>संचित</b> होता है, और मन 21-दिन के "
+        "सूक्ष्म-चक्रों में अनुकूलित होता है (वही चक्र जो वैदिक मंत्र उपयोग करते हैं)। "
+        "इसलिए सुधरे नाम 6-9 महीनों में 'काम करना' शुरू करते हैं — 6 दिनों में नहीं।",
+        "Numerology <b>repetition × time × emotional charge</b> se kaam karti hai. "
+        "Achanak naam badalne par teen cheezein hoti hain: (1) PURANI vibration "
+        "purane contracts, files, logon ki memory me ab bhi echo kar rahi — "
+        "<b>karmic interference</b>; (2) NAYI vibration ki kaafi repetitions abhi "
+        "nahi hui dominate karne ke liye; (3) khud ka subconscious identity-vertigo "
+        "anubhav karta hai. Phased rollout teeno solve karta hai: purana naam "
+        "<b>fade</b> hota hai jab naya <b>compound</b> hota hai, aur psyche 21-din "
+        "ke micro-cycles me adapt karta hai (wahi cycle jo Vedic mantras use karte "
+        "hain). Isiliye corrected names 6-9 mahino me 'kick in' karte hain — "
+        "6 dino me nahi."))
+
     return flow
 
 

@@ -336,3 +336,21 @@ id = "iF1PQnUHH3rJ1C14SEdnO"
 uri = "file://attached_assets/exports/Life_Mastery_v6_hg.pdf"
 type = "pdf"
 title = "Life Mastery v6 (28 pages) — Hinglish"
+
+[[outputs]]
+id = "SBGrGTATkC9eT1MBWlMNc"
+uri = "file://attached_assets/exports/Life_Mastery_v7_en.pdf"
+type = "pdf"
+title = "Life Mastery v7 (37 pages, deep phone+name) — English"
+
+[[outputs]]
+id = "QDaGMApEo6N3pSCBJ3lGR"
+uri = "file://attached_assets/exports/Life_Mastery_v7_hi.pdf"
+type = "pdf"
+title = "Life Mastery v7 (37 pages) — हिंदी"
+
+[[outputs]]
+id = "cOqS7bsCJ1LhZvIKjAVnK"
+uri = "file://attached_assets/exports/Life_Mastery_v7_hg.pdf"
+type = "pdf"
+title = "Life Mastery v7 (37 pages) — Hinglish"

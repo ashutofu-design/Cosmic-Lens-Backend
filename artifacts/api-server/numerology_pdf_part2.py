@@ -2780,7 +2780,7 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
     flow: List[Any] = []
     # Recompute with proper conductor
     forecast = _nr.monthly_forecast_pack(driver, conductor, year, lang)
-    pack = _nr.business_launch_pack(driver, year)
+    pack = _nr.business_launch_pack(driver, year, lang)
     pack["best_launch_months"] = [
         {"month": m["month"], "verdict": m["verdict"]}
         for m in forecast["months"] if m["verdict"] in ("EXCELLENT", "GOOD")
@@ -2792,6 +2792,34 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
         f"🏢 BUSINESS LAUNCH CALCULATOR ({year})")
     flow.append(Paragraph(title, s["page_title"]))
     flow.append(Spacer(1, 3 * mm))
+
+    # ── Best business types card (what biz is best for this driver) ──
+    biz_list = pack.get("best_business_types") or []
+    if biz_list:
+        biz_html = "<br/>".join(f"✓ {b}" for b in biz_list)
+        biz_title = _T(lang,
+            f"💼 BEST BUSINESS FIELDS FOR DRIVER {driver} ({_nr._PLANETS.get(driver,'—')})",
+            f"💼 आपके driver {driver} ({_nr._PLANETS.get(driver,'—')}) के लिए सर्वश्रेष्ठ व्यवसाय क्षेत्र",
+            f"💼 Aapke Driver {driver} ({_nr._PLANETS.get(driver,'—')}) ke liye BEST Business Fields")
+        flow.append(_premium_card(s, biz_title, biz_html,
+                                  bg_color=colors.HexColor("#FFF8E1"),
+                                  border_color=BRAND_GOLD, lang=lang))
+        flow.append(Spacer(1, 3 * mm))
+        flow.append(Paragraph(_T(lang,
+            "<i>Classical Cheiro/Sepharial rule: your driver's ruling planet amplifies "
+            "these industries. Start-ups in these fields tend to outperform; ventures "
+            "far outside this list need extra numerological remedies to thrive.</i>",
+            "<i>शास्त्रीय चीरो/सेफ़ेरियल नियम: आपके driver का स्वामी-ग्रह इन उद्योगों "
+            "को प्रबल करता है। इन क्षेत्रों के स्टार्ट-अप बेहतर प्रदर्शन करते हैं; इस "
+            "सूची से बहुत बाहर के व्यवसायों को सफल बनाने के लिए अतिरिक्त अंक-शास्त्रीय "
+            "उपाय चाहिए।</i>",
+            "<i>Classical Cheiro/Sepharial rule: aapke driver ka ruling planet in "
+            "industries ko amplify karta hai. Start-ups in these fields tend to "
+            "outperform; iss list se bahut bahar ke ventures ko thrive karne ke liye "
+            "extra numerological remedies chahiye.</i>"),
+            ParagraphStyle("biz_sub", fontName=_F("oblique", lang), fontSize=9,
+                           textColor=TEXT_SOFT, leading=13, spaceAfter=8)))
+        flow.append(Spacer(1, 3 * mm))
 
     flow.append(_explain_card(s, lang,
         "📖 Why timing & numerology matter for business",

@@ -1398,8 +1398,128 @@ def mantras_pack(driver: int) -> Dict[str, Any]:
 _DIRECTION = {1: "East", 2: "North-West", 3: "North-East", 4: "South-West",
               5: "North", 6: "South-East", 7: "South-West", 8: "West", 9: "South"}
 
+# Driver → industries/business lines that amplify the planet's energy.
+# (Classical Cheiro + Sepharial industry-planet mapping)
+_BEST_BUSINESS_EN = {
+    1: ["Leadership / Founder-CEO roles", "Gold &amp; jewellery",
+        "Government contracts / PSU tenders", "Solo consulting / personal brand",
+        "Luxury goods", "Media ownership / publishing house",
+        "Politics-linked ventures"],
+    2: ["Dairy &amp; milk products", "Water / beverages / bottled-water",
+        "Hospitality &amp; catering", "Textiles &amp; clothing",
+        "Cosmetics &amp; personal-care", "Mother-child &amp; baby products",
+        "Food processing (liquids, curd, ghee)"],
+    3: ["Education / coaching / training", "Publishing &amp; content",
+        "Legal / advisory / consulting", "Finance &amp; wealth management",
+        "Religious / spiritual products", "HR, recruitment &amp; mentoring",
+        "Astrology / counselling"],
+    4: ["IT / software / SaaS", "Import-export &amp; foreign trade",
+        "Social media / digital platforms", "Disruptive / unconventional products",
+        "Cryptocurrency / fintech", "Electronics &amp; gadgets",
+        "Research-based startups"],
+    5: ["Marketing / advertising agency", "Media, PR, journalism",
+        "Sales / trading / affiliate business", "Travel &amp; tourism",
+        "Stationery, publishing, printing", "Commission-based brokerage",
+        "Communication apps / telecom"],
+    6: ["Fashion, apparel &amp; footwear", "Beauty &amp; cosmetics",
+        "Entertainment &amp; event planning", "Wedding &amp; luxury weddings",
+        "Hotels, restaurants, cafes", "Interior design &amp; décor",
+        "Auto &amp; vehicle showroom", "Jewellery &amp; perfumery"],
+    7: ["Spiritual retreats / yoga studios", "Research &amp; analytics",
+        "Writing, films, photography", "Astrology / tarot / healing",
+        "Psychology / therapy", "Alternative medicine (Ayurveda, Reiki)",
+        "Philosophical publishing / museums"],
+    8: ["Real estate &amp; construction", "Mining, metals &amp; steel",
+        "Heavy logistics &amp; warehousing", "Banking, NBFC, insurance",
+        "Long-term asset management", "Iron, coal, cement trading",
+        "Discipline-heavy manufacturing"],
+    9: ["Sports, fitness &amp; gyms", "Defence, security, police-adjacent",
+        "Engineering &amp; manufacturing", "Fire, weapons, heavy machinery",
+        "Real-estate (construction side)", "Surgery, emergency medicine",
+        "Red-industry (meat, spices, iron)"],
+}
 
-def business_launch_pack(driver: int, year: int = 2026) -> Dict[str, Any]:
+_BEST_BUSINESS_HI = {
+    1: ["नेतृत्व / संस्थापक-सीईओ भूमिकाएँ", "सोना एवं आभूषण",
+        "सरकारी ठेके / PSU निविदाएँ", "एकल परामर्श / व्यक्तिगत ब्रांड",
+        "विलासिता वस्तुएँ", "मीडिया स्वामित्व / प्रकाशन गृह",
+        "राजनीति से जुड़े उद्यम"],
+    2: ["डेयरी एवं दुग्ध उत्पाद", "जल / पेय / बोतलबंद पानी",
+        "आतिथ्य एवं खानपान", "वस्त्र एवं कपड़ा",
+        "सौंदर्य एवं व्यक्तिगत देखभाल", "माँ-शिशु एवं शिशु उत्पाद",
+        "खाद्य प्रसंस्करण (तरल, दही, घी)"],
+    3: ["शिक्षा / कोचिंग / प्रशिक्षण", "प्रकाशन एवं कंटेंट",
+        "विधिक / परामर्श / सलाह", "वित्त एवं धन प्रबंधन",
+        "धार्मिक / आध्यात्मिक उत्पाद", "एचआर, भर्ती एवं मार्गदर्शन",
+        "ज्योतिष / परामर्श"],
+    4: ["आईटी / सॉफ़्टवेयर / SaaS", "आयात-निर्यात एवं विदेश व्यापार",
+        "सोशल मीडिया / डिजिटल प्लेटफ़ॉर्म", "अनोखे / असामान्य उत्पाद",
+        "क्रिप्टो / फ़िनटेक", "इलेक्ट्रॉनिक्स एवं गैजेट",
+        "अनुसंधान आधारित स्टार्टअप"],
+    5: ["मार्केटिंग / विज्ञापन एजेंसी", "मीडिया, पीआर, पत्रकारिता",
+        "बिक्री / व्यापार / सहबद्ध व्यवसाय", "यात्रा एवं पर्यटन",
+        "स्टेशनरी, प्रकाशन, प्रिंटिंग", "कमीशन आधारित दलाली",
+        "संचार ऐप्स / टेलीकॉम"],
+    6: ["फ़ैशन, वस्त्र एवं जूते", "सौंदर्य एवं प्रसाधन",
+        "मनोरंजन एवं इवेंट प्लानिंग", "विवाह एवं विलासिता विवाह",
+        "होटल, रेस्तरां, कैफ़े", "आंतरिक सज्जा एवं डेकोर",
+        "ऑटो एवं वाहन शोरूम", "आभूषण एवं इत्र"],
+    7: ["आध्यात्मिक रिट्रीट / योग स्टूडियो", "शोध एवं विश्लेषण",
+        "लेखन, फ़िल्म, फ़ोटोग्राफ़ी", "ज्योतिष / टैरो / हीलिंग",
+        "मनोविज्ञान / चिकित्सा", "वैकल्पिक चिकित्सा (आयुर्वेद, रेकी)",
+        "दार्शनिक प्रकाशन / संग्रहालय"],
+    8: ["रियल एस्टेट एवं निर्माण", "खनन, धातु एवं इस्पात",
+        "भारी लॉजिस्टिक्स एवं वेयरहाउसिंग", "बैंकिंग, NBFC, बीमा",
+        "दीर्घकालिक संपत्ति प्रबंधन", "लोहा, कोयला, सीमेंट व्यापार",
+        "अनुशासन-प्रधान निर्माण"],
+    9: ["खेल, फ़िटनेस एवं जिम", "रक्षा, सुरक्षा, पुलिस-संबद्ध",
+        "इंजीनियरिंग एवं विनिर्माण", "अग्नि, शस्त्र, भारी मशीनरी",
+        "रियल एस्टेट (निर्माण पक्ष)", "सर्जरी, आपातकालीन चिकित्सा",
+        "लाल-उद्योग (मांस, मसाले, लोहा)"],
+}
+
+_BEST_BUSINESS_HG = {
+    1: ["Leadership / founder-CEO roles", "Gold &amp; jewellery business",
+        "Government contracts / PSU tenders", "Solo consulting / personal brand",
+        "Luxury goods", "Media ownership / publishing house",
+        "Politics-linked ventures"],
+    2: ["Dairy / milk products", "Paani, beverages, bottled-water",
+        "Hospitality aur catering", "Textiles aur kapda",
+        "Cosmetics aur personal care", "Mother-child aur baby products",
+        "Food processing (liquids, curd, ghee)"],
+    3: ["Education / coaching / training", "Publishing aur content",
+        "Legal / advisory / consulting", "Finance aur wealth management",
+        "Religious / spiritual products", "HR, recruitment aur mentoring",
+        "Astrology / counselling"],
+    4: ["IT / software / SaaS", "Import-export aur foreign trade",
+        "Social media / digital platforms", "Disruptive / unconventional products",
+        "Crypto / fintech", "Electronics aur gadgets",
+        "Research-based startups"],
+    5: ["Marketing / advertising agency", "Media, PR, journalism",
+        "Sales / trading / affiliate business", "Travel aur tourism",
+        "Stationery, publishing, printing", "Commission-based brokerage",
+        "Communication apps / telecom"],
+    6: ["Fashion, apparel aur footwear", "Beauty aur cosmetics",
+        "Entertainment aur event planning", "Wedding aur luxury weddings",
+        "Hotels, restaurants, cafes", "Interior design aur décor",
+        "Auto / vehicle showroom", "Jewellery aur perfumery"],
+    7: ["Spiritual retreats / yoga studios", "Research aur analytics",
+        "Writing, films, photography", "Astrology / tarot / healing",
+        "Psychology / therapy", "Ayurveda, Reiki, alternative medicine",
+        "Philosophical publishing / museums"],
+    8: ["Real estate aur construction", "Mining, metals aur steel",
+        "Heavy logistics aur warehousing", "Banking, NBFC, insurance",
+        "Long-term asset management", "Iron, coal, cement trading",
+        "Discipline-heavy manufacturing"],
+    9: ["Sports, fitness aur gyms", "Defence, security, police-adjacent",
+        "Engineering aur manufacturing", "Fire, weapons, heavy machinery",
+        "Real-estate (construction side)", "Surgery, emergency medicine",
+        "Red-industry (meat, spices, iron)"],
+}
+
+
+def business_launch_pack(driver: int, year: int = 2026,
+                         lang: str = "hinglish") -> Dict[str, Any]:
     forecast = monthly_forecast_pack(driver, driver, year)  # use driver as conductor stand-in if unknown
     # Actually need real conductor — caller will pass via overload
     # For Part 2 use, we recompute with actual conductor in render
@@ -1410,23 +1530,59 @@ def business_launch_pack(driver: int, year: int = 2026) -> Dict[str, Any]:
     name_numbers = friends[:3] if friends else [driver]
     partner_numbers = friends[:3] if friends else [driver]
 
+    lmap = (lang or "hinglish").lower()
+    if lmap == "english":
+        biz = _BEST_BUSINESS_EN.get(driver, [])
+    elif lmap == "hindi":
+        biz = _BEST_BUSINESS_HI.get(driver, [])
+    else:
+        biz = _BEST_BUSINESS_HG.get(driver, [])
+
+    # Localised tip strings
+    if lmap == "english":
+        name_tip = (f"Keep your company/brand name so its letter-total reduces "
+                    f"to {name_numbers[0] if name_numbers else driver} or "
+                    f"{name_numbers[1] if len(name_numbers)>1 else driver} — "
+                    f"use Chaldean numerology.")
+        logo_tip = (f"Let {_PLANETS.get(driver,'—')}'s colours dominate the logo.")
+        invoice_tip = (f"Start your first invoice number from "
+                       f"{name_numbers[0] if name_numbers else driver} "
+                       f"or a master number (11 / 22).")
+    elif lmap == "hindi":
+        name_tip = (f"कंपनी/ब्रांड नाम ऐसा रखें कि उसके अक्षरों का कुल योग "
+                    f"{name_numbers[0] if name_numbers else driver} या "
+                    f"{name_numbers[1] if len(name_numbers)>1 else driver} पर रिड्यूस हो — "
+                    f"चाल्डियन अंक-शास्त्र का प्रयोग करें।")
+        logo_tip = (f"लोगो में {_PLANETS.get(driver,'—')} के रंग प्रमुख रखें।")
+        invoice_tip = (f"पहला इनवॉइस नंबर "
+                       f"{name_numbers[0] if name_numbers else driver} "
+                       f"या मास्टर संख्या (11 / 22) से शुरू करें।")
+    else:
+        name_tip = (f"Company/brand name ke letters ka total reduce karke "
+                    f"{name_numbers[0] if name_numbers else driver} ya "
+                    f"{name_numbers[1] if len(name_numbers)>1 else driver} aaye — "
+                    f"Chaldean numerology use karein.")
+        logo_tip = (f"Logo me {_PLANETS.get(driver,'—')} ke colours dominate karein.")
+        invoice_tip = (f"Pehla invoice number "
+                       f"{name_numbers[0] if name_numbers else driver} "
+                       f"ya 11/22 (master) se shuru karein.")
+
     return {
         "driver": driver,
         "office_direction": _DIRECTION.get(driver, "East"),
         "office_facing": "Sit facing your direction — desk should face it.",
         "best_launch_months": [{"month": m["month"], "verdict": m["verdict"]}
                                 for m in best_months_top],
+        "best_business_types": biz,
         "best_company_name_numbers": name_numbers,
         "best_partner_numbers": partner_numbers,
         "avoid_partner_numbers": [n for n in range(1, 10) if _rel(driver, n) == "E"],
-        "name_tip": f"Company/brand name ke letters ka total reduce karke "
-                    f"{name_numbers[0] if name_numbers else driver} ya {name_numbers[1] if len(name_numbers)>1 else driver} aaye — "
-                    "Chaldean numerology use karein.",
-        "logo_tip": f"Logo me {_PLANETS.get(driver,'—')} ke colours dominate karein.",
+        "name_tip": name_tip,
+        "logo_tip": logo_tip,
         "registration_day": {1: "Sunday", 2: "Monday", 3: "Thursday", 4: "Saturday",
                              5: "Wednesday", 6: "Friday", 7: "Tuesday",
                              8: "Saturday", 9: "Tuesday"}.get(driver, "Sunday"),
-        "first_invoice_tip": f"Pehla invoice number {name_numbers[0] if name_numbers else driver} ya 11/22 (master) se shuru karein.",
+        "first_invoice_tip": invoice_tip,
     }
 
 

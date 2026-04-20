@@ -960,6 +960,122 @@ def _risk_alerts_section(s, driver: int) -> List[Any]:
     return flow
 
 
+def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None) -> List[Any]:
+    """Premium Lucky Colours page — vehicle, dress, business, day-wise."""
+    flow: List[Any] = []
+    pack = _nr.lucky_colours_pack(driver)
+
+    flow.append(Paragraph("🎨 LUCKY COLOURS — Aapke Liye Specially Picked", s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        "<i>Driver number ke planet ke aadhar par chosen — daily life me use karein.</i>",
+        ParagraphStyle("lc_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    # Primary / Secondary / Avoid table
+    rows = [
+        [Paragraph("<b>✓ Primary (most lucky)</b>", s["body_mid"]),
+         Paragraph(f"<font color='#15803D'>{', '.join(pack['primary'])}</font>", s["body"])],
+        [Paragraph("<b>✓ Secondary (supportive)</b>", s["body_mid"]),
+         Paragraph(f"<font color='#0369A1'>{', '.join(pack['secondary'])}</font>", s["body"])],
+        [Paragraph("<b>⚠ Avoid (drains energy)</b>", s["body_mid"]),
+         Paragraph(f"<font color='#B91C1C'>{', '.join(pack['avoid'])}</font>", s["body"])],
+        [Paragraph("<b>💎 Gemstone tone</b>", s["body_mid"]),
+         Paragraph(pack["gemstone_tone"], s["body"])],
+    ]
+    t = Table(rows, colWidths=[55 * mm, 125 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, -1), colors.HexColor("#FFFBEB")),
+        ("BOX",            (0, 0), (-1, -1), 1.0, BRAND_GOLD),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#FCD34D")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 8),
+        ("TOPPADDING",     (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    # Vehicle colour card (specially bigger if vehicle was provided)
+    veh_heading = "🚗 GADI / VEHICLE COLOUR"
+    if vehicle:
+        veh_heading += f" — Aapki gadi ({vehicle}) ke liye"
+    flow.append(_premium_card(s, veh_heading, pack["vehicle"],
+                              bg_color=colors.HexColor("#EFF6FF"),
+                              border_color=colors.HexColor("#1D4ED8")))
+    flow.append(Spacer(1, 4 * mm))
+
+    # Business / Branding
+    flow.append(_premium_card(s, "🏢 BUSINESS / BRAND COLOUR",
+                              pack["business"],
+                              bg_color=colors.HexColor("#F3E8FF"),
+                              border_color=BRAND_PURPLE))
+    flow.append(Spacer(1, 4 * mm))
+
+    return flow
+
+
+def _day_dress_section(s, driver: int) -> List[Any]:
+    """Day-wise colour to wear — Mon-Sun planetary table."""
+    flow: List[Any] = []
+    pack = _nr.lucky_colours_pack(driver)
+
+    flow.append(Paragraph("👕 KIS DIN KAUNSA COLOUR PEHNEIN", s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        "<i>Vedic planetary days ke according — har din ka 'power colour' pehno aur "
+        "us din ki energy unlock karo.</i>",
+        ParagraphStyle("dd_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    header_style = ParagraphStyle("dd_h", fontName="Helvetica-Bold", fontSize=10,
+                                  textColor=colors.white, leading=13, alignment=TA_CENTER)
+    rows = [[Paragraph("<b>Day</b>", header_style),
+             Paragraph("<b>Planet</b>", header_style),
+             Paragraph("<b>Colour to Wear</b>", header_style),
+             Paragraph("<b>Purpose</b>", header_style)]]
+    for d in pack["day_dress"]:
+        rows.append([
+            Paragraph(f"<b>{d['day']}</b>", s["body_mid"]),
+            Paragraph(d["planet"], s["body"]),
+            Paragraph(f"<font color='#B45309'><b>{d['colour']}</b></font>", s["body"]),
+            Paragraph(d["purpose"], s["small"]),
+        ])
+    t = Table(rows, colWidths=[24 * mm, 36 * mm, 50 * mm, 70 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND",     (0, 1), (-1, -1), colors.HexColor("#FFFBEB")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.HexColor("#FFFBEB"), colors.HexColor("#FEF3C7")]),
+        ("BOX",            (0, 0), (-1, -1), 0.8, BRAND_GOLD),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#FCD34D")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 6),
+        ("TOPPADDING",     (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(_premium_card(
+        s, "💡 PRO TIP — How to use this",
+        "<b>Roz 7 colours nahi yaad rakhne — sirf important din ka colour focus karein.</b><br/>"
+        "• Job interview = us din ke planet ka colour<br/>"
+        "• First date = Friday ka White/Pink<br/>"
+        "• Court date / govt work = Saturday ka Deep Blue<br/>"
+        "• Business launch = Thursday ka Yellow ya Sunday ka Golden<br/>"
+        "• Family function = Monday ka White / Friday ka Pink<br/>"
+        f"<br/>Aapka personal driver-{driver} ka primary colour bhi MIX kar sakte ho — "
+        "white shirt + driver-colour tie/scarf style.",
+        bg_color=colors.HexColor("#F0F9FF"),
+        border_color=colors.HexColor("#0369A1"),
+    ))
+    return flow
+
+
 def _why_impact_action_block(s, kind: str, reduced: int) -> List[Any]:
     """Append Why+Impact+Action narrative for a number — used inside each
     mobile/vehicle/house deep-analysis page."""
@@ -1033,7 +1149,7 @@ def render_part2_pdf(*,
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=18 * mm, bottomMargin=20 * mm,
-                            title=f"Practical Numerology — {name}",
+                            title=f"Life Mastery Report — {name}",
                             author="Cosmic Lens")
     story: List[Any] = []
     # Page 1 — Cover
@@ -1064,11 +1180,20 @@ def render_part2_pdf(*,
     story += _risk_alerts_section(s, driver)
     story.append(PageBreak())
 
-    # Page 8 — Driver/Conductor technical intro
+    # ─── Part 2 EXTRAS — Lucky Colours + Day-wise Dress + Practical numbers ───
+    # Page 8 — 🎨 Lucky Colours (vehicle + business + gemstone tone)
+    story += _lucky_colours_section(s, driver, vehicle=vehicle)
+    story.append(PageBreak())
+
+    # Page 9 — 👕 Day-wise Dress Colour table (Mon-Sun planetary)
+    story += _day_dress_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 10 — Driver/Conductor technical intro
     story += _driver_conductor_intro(s, name, dob, driver, conductor)
     story.append(PageBreak())
 
-    # Page 9-11 — Mobile / Vehicle / House deep analysis (with Why·Impact·Action)
+    # Page 11-13 — Mobile / Vehicle / House deep analysis (with Why·Impact·Action)
     if mobile:
         story += _number_analysis_block(s, mobile, "mobile", driver, conductor)
         story.append(PageBreak())
@@ -1079,27 +1204,27 @@ def render_part2_pdf(*,
         story += _number_analysis_block(s, house, "house", driver, conductor)
         story.append(PageBreak())
 
-    # Page 6 — Number Compatibility Matrix
+    # Page 14 — Number Compatibility Matrix
     story += _compatibility_matrix_section(s, driver)
     story.append(PageBreak())
 
-    # Page 7 — Letter-by-letter table
+    # Page 15 — Letter-by-letter table
     story += _letter_table_section(s, name)
     story.append(PageBreak())
 
-    # Page 8 — Pythagorean vs Chaldean summary
+    # Page 16 — Pythagorean vs Chaldean summary
     story += _name_numerology_section(s, name)
     story.append(PageBreak())
 
-    # Page 9 — Name correction
+    # Page 17 — Name correction
     story += _name_correction_section(s, name, driver, conductor)
     story.append(PageBreak())
 
-    # Page 10 — Signature & branding
+    # Page 18 — Signature & branding
     story += _signature_section(s, name, driver)
     story.append(PageBreak())
 
-    # Page 11 — 90-day implementation plan
+    # Page 19 — 90-day implementation plan
     story += _timeline_section(s)
     story += _disclaimer(s)
 

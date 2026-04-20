@@ -1054,11 +1054,57 @@ def render_numerology_pdf(*,
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
                             topMargin=18 * mm, bottomMargin=20 * mm,
-                            title=f"Numerology Report — {name}",
+                            title=f"Soul Blueprint Report — {name}",
                             author="Cosmic Lens")
     story: List[Any] = []
     story += _cover(s, name, dob, gender)
     story.append(PageBreak())
+
+    # ─── NEW: 6 premium narrative pages (deep consultation feel) ───────
+    # Compute driver + conductor locally for narrative engine
+    try:
+        from numerology_pdf_part2 import (
+            _styles as _p2_styles,
+            _life_summary_block as _p2_blueprint,
+            _life_essence_section as _p2_identity,
+            _career_blueprint_section as _p2_career,
+            _love_pattern_section as _p2_love,
+            _wealth_health_spirit_section as _p2_health,
+            _risk_alerts_section as _p2_risks,
+        )
+        _digits = [int(c) for c in dob if c.isdigit()]
+        try:
+            _day_n = int(dob.split("-")[2])
+        except (IndexError, ValueError):
+            _day_n = 0
+
+        def _reduce(n: int) -> int:
+            n = abs(int(n))
+            while n > 9:
+                n = sum(int(d) for d in str(n))
+            return n
+
+        _driver = _reduce(_day_n) if _day_n else 0
+        _conductor = _reduce(sum(_digits)) if _digits else 0
+
+        if _driver:
+            _ps = _p2_styles()
+            story += _p2_blueprint(_ps, name, _driver, _conductor)
+            story.append(PageBreak())
+            story += _p2_identity(_ps, _driver)
+            story.append(PageBreak())
+            story += _p2_career(_ps, _driver)
+            story.append(PageBreak())
+            story += _p2_love(_ps, _driver)
+            story.append(PageBreak())
+            story += _p2_health(_ps, _driver)
+            story.append(PageBreak())
+            story += _p2_risks(_ps, _driver)
+            story.append(PageBreak())
+    except Exception:
+        # If narrative engine unavailable, skip premium pages but keep core report
+        pass
+
     story += _core_numbers(s, phase_s)
     story.append(PageBreak())
     story += _personality_section(s, phase_s, extended)

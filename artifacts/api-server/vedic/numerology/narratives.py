@@ -924,3 +924,114 @@ def why_impact_action_for_number(reduced: int, kind: str) -> Dict[str, str]:
         action = ACTION.get((kind, reduced), "")
 
     return {"why": why, "impact": impact, "action": action, "planet": planet}
+
+
+# ─── Lucky Colours pack (Part 2 only) ──────────────────────────────────
+
+_LUCKY_COLOURS: Dict[int, Dict[str, Any]] = {
+    1: {
+        "primary":   ["Golden", "Bright Orange", "Deep Yellow"],
+        "secondary": ["Copper", "Bronze", "Royal Red"],
+        "avoid":     ["Black", "Dark Blue", "Grey"],
+        "vehicle":   "Golden, Cream, Pearl White, Bright Red — Surya ki energy reflect karne wale colours. Avoid: Black, Dark Blue.",
+        "business":  "Logo me Gold + Orange combo — leadership + warmth project karta hai.",
+        "gemstone_tone": "Ruby red, sunstone orange — accessories me use karein.",
+    },
+    2: {
+        "primary":   ["Pearl White", "Cream", "Silver"],
+        "secondary": ["Sea Green", "Light Blue", "Soft Pink"],
+        "avoid":     ["Black", "Bright Red", "Dark Brown"],
+        "vehicle":   "Pearl White, Silver, Cream, Light Blue — Chandra ki shanti energy. Avoid: Bright Red, Black.",
+        "business":  "Logo me Silver + White + Soft Blue — calming, trustworthy feel.",
+        "gemstone_tone": "Pearl + moonstone tones — soft, reflective accessories.",
+    },
+    3: {
+        "primary":   ["Bright Yellow", "Saffron", "Golden Yellow"],
+        "secondary": ["Light Pink", "Light Purple", "Cream"],
+        "avoid":     ["Dark Green", "Black", "Steel Grey"],
+        "vehicle":   "Yellow, Cream, Golden Beige — Brihaspati ki shubh energy. Avoid: Dark Green, Black.",
+        "business":  "Logo me Yellow + Purple combo — wisdom + prosperity feel.",
+        "gemstone_tone": "Yellow Sapphire + Topaz tones — gold-rim accessories.",
+    },
+    4: {
+        "primary":   ["Electric Blue", "Steel Grey", "Khaki"],
+        "secondary": ["Light Green", "Off-White", "Beige"],
+        "avoid":     ["Black", "Dark Red", "Deep Maroon"],
+        "vehicle":   "Steel Grey, Electric Blue, Khaki, Off-White — modern Rahu-friendly. Avoid: Pure Black, Deep Red.",
+        "business":  "Logo me Blue + Grey + White — tech, modern, trustworthy.",
+        "gemstone_tone": "Hessonite (gomed) brown-orange tones — minimal accessories.",
+    },
+    5: {
+        "primary":   ["Light Green", "Parrot Green", "Turquoise"],
+        "secondary": ["White", "Light Blue", "Light Yellow"],
+        "avoid":     ["Black", "Dark Brown", "Deep Maroon"],
+        "vehicle":   "Light Green, Turquoise, White, Light Blue — Mercury ki chanchal energy. Avoid: Black.",
+        "business":  "Logo me Green + White — fresh, agile, communication-friendly.",
+        "gemstone_tone": "Emerald green tones — modern, sleek accessories.",
+    },
+    6: {
+        "primary":   ["Pure White", "Light Pink", "Sky Blue"],
+        "secondary": ["Cream", "Light Purple", "Pastel Green"],
+        "avoid":     ["Black", "Deep Red", "Dark Brown"],
+        "vehicle":   "White, Cream, Pearl, Light Pink, Sky Blue — Shukra ki saundarya energy. Avoid: Black, Deep Red.",
+        "business":  "Logo me White + Rose Gold + Soft Pink — luxury, beauty, premium feel.",
+        "gemstone_tone": "Diamond + Crystal clear tones — elegant accessories.",
+    },
+    7: {
+        "primary":   ["Light Grey", "Smoke Grey", "Multi-color"],
+        "secondary": ["Off-White", "Soft Lavender", "Pale Yellow"],
+        "avoid":     ["Bright Red", "Pitch Black", "Deep Orange"],
+        "vehicle":   "Light Grey, Smoke Grey, Multi-tone, Off-White — Ketu ki mystic energy. Avoid: Bright Red.",
+        "business":  "Logo me Grey + Multi-color accent — unique, mystic, original feel.",
+        "gemstone_tone": "Cat's eye (lehsunia) — earthy, neutral accessories.",
+    },
+    8: {
+        "primary":   ["Deep Blue", "Black", "Dark Purple"],
+        "secondary": ["Iron Grey", "Deep Brown", "Maroon"],
+        "avoid":     ["Bright Yellow", "Bright Red", "Bright Orange"],
+        "vehicle":   "Black, Deep Blue, Iron Grey, Dark Brown — Shani ki gambheer energy. Avoid: Bright Yellow, Bright Orange.",
+        "business":  "Logo me Black + Deep Blue + Silver — authority, structure, longevity.",
+        "gemstone_tone": "Blue Sapphire + Onyx — heavy, structured accessories.",
+    },
+    9: {
+        "primary":   ["Bright Red", "Crimson", "Maroon"],
+        "secondary": ["Saffron", "Deep Orange", "Coral"],
+        "avoid":     ["Pure Black", "Steel Grey"],
+        "vehicle":   "Red, Maroon, Crimson, Deep Orange — Mangal ki shoorveer energy. Avoid: Pure Black.",
+        "business":  "Logo me Red + Gold — bold, action-oriented, energy-packed.",
+        "gemstone_tone": "Red Coral (moonga) tones — bold accessories.",
+    },
+}
+
+
+# Day-wise dress colour (universal — Vedic planetary day)
+_DAY_DRESS_COLOURS: List[Dict[str, str]] = [
+    {"day": "Monday",    "planet": "Chandra (Moon)",   "colour": "Pearl White / Silver / Cream",
+     "purpose": "Mental peace, family harmony, emotional calm. Mother-related work auspicious."},
+    {"day": "Tuesday",   "planet": "Mangal (Mars)",    "colour": "Red / Maroon / Crimson",
+     "purpose": "Courage, victory in disputes, sports/competition. Avoid soft pastels."},
+    {"day": "Wednesday", "planet": "Budha (Mercury)",  "colour": "Green / Light Green / Turquoise",
+     "purpose": "Communication, business deals, education. Sales calls strong."},
+    {"day": "Thursday",  "planet": "Brihaspati (Jupiter)", "colour": "Yellow / Saffron / Golden",
+     "purpose": "Wisdom, prosperity, teaching, spiritual study. Best for finance decisions."},
+    {"day": "Friday",    "planet": "Shukra (Venus)",   "colour": "White / Light Pink / Sky Blue",
+     "purpose": "Love, marriage, beauty, luxury, art. Date night / wedding events ideal."},
+    {"day": "Saturday",  "planet": "Shani (Saturn)",   "colour": "Deep Blue / Black / Dark Purple",
+     "purpose": "Hard work, discipline, dealing with elders/government. Long-term commitments."},
+    {"day": "Sunday",    "planet": "Surya (Sun)",      "colour": "Golden / Orange / Bright Yellow",
+     "purpose": "Authority, leadership, government work, father-related matters. Power day."},
+]
+
+
+def lucky_colours_pack(driver: int) -> Dict[str, Any]:
+    """Return complete lucky colours pack for a driver number — used in Part 2."""
+    pack = _LUCKY_COLOURS.get(driver, {})
+    return {
+        "primary":     pack.get("primary", []),
+        "secondary":   pack.get("secondary", []),
+        "avoid":       pack.get("avoid", []),
+        "vehicle":     pack.get("vehicle", "—"),
+        "business":    pack.get("business", "—"),
+        "gemstone_tone": pack.get("gemstone_tone", "—"),
+        "day_dress":   _DAY_DRESS_COLOURS,
+    }

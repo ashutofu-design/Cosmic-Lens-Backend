@@ -228,3 +228,15 @@ id = "5vphPAj30YjfI_HJdNiIT"
 uri = "file://attached_assets/exports/Premium_Numerology_18pages.pdf"
 type = "pdf"
 title = "Premium Numerology Report — 18 pages (₹1499 depth)"
+
+[[outputs]]
+id = "cJDkz7QtPq0qxXNw9tcC4"
+uri = "file://attached_assets/exports/Part1_Soul_Blueprint_16pages.pdf"
+type = "pdf"
+title = "Part 1 — Soul Blueprint Report (₹99 • 16 pages)"
+
+[[outputs]]
+id = "vVVwnI65ghD3kBAe-4e6U"
+uri = "file://attached_assets/exports/Part2_Life_Mastery_20pages.pdf"
+type = "pdf"
+title = "Part 2 — Life Mastery Report (₹1499 • 20 pages)"

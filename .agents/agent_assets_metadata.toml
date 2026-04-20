@@ -150,3 +150,75 @@ id = "Wo73z5448a-IELjnwkUlF"
 uri = "file://exports/Numerology_part2.pdf"
 type = "pdf"
 title = "Part 2 — Practical Numerology Tools (full)"
+
+[[outputs]]
+id = "5toN_xqjTCmRcoW-Q6Ch2"
+uri = "file://exports/pdf_pages_v6/p2-01.jpg"
+type = "image"
+title = "Page 1 — Cover (₹149 value-prop box)"
+
+[[outputs]]
+id = "fboea69vQZaanTgEltFmK"
+uri = "file://exports/pdf_pages_v6/p2-02.jpg"
+type = "image"
+title = "Page 2 — Driver/Conductor signature (NEW)"
+
+[[outputs]]
+id = "WCXL4buHzzD_FWN24-IHv"
+uri = "file://exports/pdf_pages_v6/p2-03.jpg"
+type = "image"
+title = "Page 3 — Mobile DEEP analysis (digit-by-digit + Cheiro last-4 + alerts + alternatives)"
+
+[[outputs]]
+id = "taY4Isizzt81PEforwUry"
+uri = "file://exports/pdf_pages_v6/p2-04.jpg"
+type = "image"
+title = "Page 4 — Vehicle DEEP analysis"
+
+[[outputs]]
+id = "w8yeG5SJGmHJG2QTN4SnS"
+uri = "file://exports/pdf_pages_v6/p2-05.jpg"
+type = "image"
+title = "Page 5 — House DEEP analysis"
+
+[[outputs]]
+id = "mxgKIr34YAvtMAVADe7pr"
+uri = "file://exports/pdf_pages_v6/p2-06.jpg"
+type = "image"
+title = "Page 6 — Number Compatibility Matrix (NEW — your Driver vs all 1-9)"
+
+[[outputs]]
+id = "3AM_EMy1CNRq3XgoUOJBV"
+uri = "file://exports/pdf_pages_v6/p2-07.jpg"
+type = "image"
+title = "Page 7 — Letter-by-letter table (NEW)"
+
+[[outputs]]
+id = "adS5_8wEIn8K7YUjzza-O"
+uri = "file://exports/pdf_pages_v6/p2-08.jpg"
+type = "image"
+title = "Page 8 — Pythagorean vs Chaldean summary"
+
+[[outputs]]
+id = "PBUuPzO41YgJSscb5JMQE"
+uri = "file://exports/pdf_pages_v6/p2-09.jpg"
+type = "image"
+title = "Page 9 — Name Correction with harmony scores"
+
+[[outputs]]
+id = "VbYa35bDC2nQqYArNIT2U"
+uri = "file://exports/pdf_pages_v6/p2-10.jpg"
+type = "image"
+title = "Page 10 — Signature & Branding (NEW)"
+
+[[outputs]]
+id = "i4VG8xGgjnnA3JsFQWfL3"
+uri = "file://exports/pdf_pages_v6/p2-11.jpg"
+type = "image"
+title = "Page 11 — 90-Day Implementation Plan (NEW)"
+
+[[outputs]]
+id = "gGgItK6ls8PcT7WunqBRv"
+uri = "file://exports/Numerology_part2_v2.pdf"
+type = "pdf"
+title = "Part 2 v2 — Full PDF (11 pages, ₹149 value)"

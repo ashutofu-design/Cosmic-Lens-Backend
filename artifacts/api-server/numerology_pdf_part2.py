@@ -165,26 +165,27 @@ def _cover(s, name: str, dob: str) -> List[Any]:
 
 def _number_analysis_block(s, value: str, kind: str,
                            driver: int, conductor: int) -> List[Any]:
-    """Render a single number-analysis section."""
+    """Render a deep number-analysis section: digit-by-digit, last-4, alerts, alternatives."""
     flow: List[Any] = []
     out = _ta.analyze_number_string(value, kind=kind, driver=driver, conductor=conductor)
     if not out.get("ok"):
         return flow
 
     titles = {
-        "mobile":  "Mobile Number Analysis",
-        "vehicle": "Vehicle Number Analysis",
-        "house":   "House Number Analysis",
+        "mobile":  "Mobile Number — Deep Analysis",
+        "vehicle": "Vehicle Number — Deep Analysis",
+        "house":   "House Number — Deep Analysis",
     }
     flow.append(Paragraph(titles.get(kind, "Number Analysis"), s["h2"]))
 
+    # ─ Summary table
     rows = [
         ["Number entered:", str(out.get("input"))],
         ["Calculation:",    out.get("calculation_chain", "—")],
         ["Reduced to:",     f"{out.get('reduced')} ({out.get('planet') or '—'})"],
         ["Energy:",         out.get("energy", "—")],
-        ["Your Driver:",    str(driver)],
-        ["Your Conductor:", str(conductor)],
+        ["Your Driver:",    f"{driver} ({_planet_for(driver)})"],
+        ["Your Conductor:", f"{conductor} ({_planet_for(conductor)})"],
     ]
     t = Table(rows, colWidths=[40 * mm, 140 * mm])
     t.setStyle(TableStyle([
@@ -205,16 +206,324 @@ def _number_analysis_block(s, value: str, kind: str,
         body += f"<br/><br/>{extra}"
     flow.append(_verdict_box(
         s,
-        f"Verdict: {out.get('verdict')}",
+        f"Overall Verdict: {out.get('verdict')}",
         body,
         out.get("verdict", ""),
     ))
-    flow.append(Spacer(1, 3 * mm))
+    flow.append(Spacer(1, 4 * mm))
 
+    # ─ Digit-by-digit breakdown
+    db = _ta.digit_breakdown(value)
+    if db:
+        flow.append(Paragraph("<b>Digit-by-Digit Vibration:</b>", s["h3"]))
+        d_rows = [["Digit", "Planet", "Energy / Meaning"]]
+        for d in db:
+            d_rows.append([str(d["digit"]), d["planet"], d["meaning"]])
+        dt = Table(d_rows, colWidths=[18 * mm, 30 * mm, 132 * mm])
+        dt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+            ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0, 0), (-1, -1), 9),
+            ("ALIGN",      (0, 0), (1, -1), "CENTER"),
+            ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F4FF")]),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING",   (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+        ]))
+        flow.append(dt)
+        flow.append(Spacer(1, 3 * mm))
+
+    # ─ Last-4 (Cheiro rule, mobile only)
+    if kind == "mobile":
+        l4 = _ta.last_four_analysis(value)
+        if l4.get("ok"):
+            flow.append(_verdict_box(
+                s, f"Cheiro's Last-4 Rule — {l4.get('last4')}",
+                f"Last 4 digits sum = {l4.get('sum')} → reduces to <b>{l4.get('reduced')}</b>. "
+                f"{l4.get('note')}",
+                "NEUTRAL",
+            ))
+            flow.append(Spacer(1, 3 * mm))
+
+    # ─ Pattern alerts
+    alerts = _ta.repeating_digit_alerts(value)
+    if alerts:
+        flow.append(Paragraph("<b>Pattern Alerts:</b>", s["h3"]))
+        for a in alerts:
+            flow.append(Paragraph(a, s["body"]))
+        flow.append(Spacer(1, 3 * mm))
+
+    # ─ Practical tip
     tip = out.get("tip", "")
     if tip:
-        flow.append(Paragraph(f"<b>Practical tip:</b> {tip}", s["body"]))
+        flow.append(Paragraph(f"<b>Practical Tip:</b> {tip}", s["body"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ─ Lucky alternatives (mobile/vehicle: where user can swap)
+    if kind in ("mobile", "vehicle") and out.get("verdict") in ("AVOID", "NEUTRAL"):
+        alts = _ta.lucky_number_alternatives(driver, conductor, base_value=value, count=6)
+        if alts:
+            flow.append(Paragraph(
+                f"<b>Suggested Alternatives</b> — last 1-2 digits change karke ye numbers "
+                "aapke liye favourable ban jaayenge:", s["h3"]))
+            a_rows = [["Suggested Number", "Sum", "Reduces to", "Matches", "Verdict"]]
+            for a in alts:
+                a_rows.append([a["number"], str(a["sum"]), str(a["reduced"]),
+                               a["matches"], a["verdict"]])
+            at = Table(a_rows, colWidths=[55 * mm, 20 * mm, 30 * mm, 40 * mm, 35 * mm])
+            at.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), BRAND_GOLD),
+                ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+                ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE",   (0, 0), (-1, -1), 9),
+                ("ALIGN",      (1, 0), (-1, -1), "CENTER"),
+                ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FFFBEB")]),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 5),
+                ("TOPPADDING",   (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+            ]))
+            flow.append(at)
+
+    flow.append(Spacer(1, 5 * mm))
+    return flow
+
+
+def _planet_for(n: int) -> str:
+    PLANETS = {1:"Sun", 2:"Moon", 3:"Jupiter", 4:"Rahu", 5:"Mercury",
+               6:"Venus", 7:"Ketu", 8:"Saturn", 9:"Mars"}
+    return PLANETS.get(n, "—")
+
+
+def _driver_conductor_intro(s, name: str, dob: str, driver: int, conductor: int) -> List[Any]:
+    """Page 2 — explain user's Driver + Conductor with planets."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Your Number Signature"))
+    flow.append(Paragraph(
+        f"Har person ke 2 sabse important numbers hote hain — Driver aur Conductor. "
+        f"Ye {dob} ki janma-tithi se nikle hain aur aapki har choice — mobile, vehicle, "
+        "ghar, naam — inhi ke hisaab se evaluate ki jaani chahiye.",
+        s["body"]))
     flow.append(Spacer(1, 6 * mm))
+
+    rows = [
+        ["", "Driver (Mulank)", "Conductor (Bhagyank)"],
+        ["Number", str(driver), str(conductor)],
+        ["Planet", _planet_for(driver), _planet_for(conductor)],
+        ["Source", "Birth date (day only)", "Full DOB total reduced"],
+        ["Influence", "Daily personality, instant reactions",
+         "Long-term fortune, destiny flow"],
+        ["Use for", "Quick decisions, daily choices",
+         "Investments, career path, marriage"],
+    ]
+    t = Table(rows, colWidths=[35 * mm, 70 * mm, 75 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME",   (0, 1), (0, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR",  (0, 1), (0, -1), TEXT_MID),
+        ("BACKGROUND", (1, 1), (-1, 1), colors.HexColor("#FFF4E6")),
+        ("FONTNAME",   (1, 1), (-1, 1), "Helvetica-Bold"),
+        ("FONTSIZE",   (1, 1), (-1, 1), 18),
+        ("FONTSIZE",   (0, 0), (-1, -1), 10),
+        ("ALIGN",      (1, 0), (-1, -1), "CENTER"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#DDD")),
+        ("ROWBACKGROUNDS", (0, 2), (-1, -1), [colors.white, colors.HexColor("#F8F4FF")]),
+        ("TOPPADDING",   (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+    flow.append(_verdict_box(
+        s, "How to Read This Report",
+        "1. Har number ka analysis aapke Driver aur Conductor ke saath compare karke kiya gaya hai.<br/>"
+        "2. Verdict colours: <b>Hara</b> = favourable, <b>Peela</b> = neutral, <b>Laal</b> = avoid.<br/>"
+        "3. End me 30-day implementation plan aur signature recommendations.",
+        "NEUTRAL",
+    ))
+    return flow
+
+
+def _compatibility_matrix_section(s, driver: int) -> List[Any]:
+    """Show user's driver vs all 1-9 compatibility."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Number Compatibility Matrix"))
+    flow.append(Paragraph(
+        f"Aapka Driver Number <b>{driver}</b> ({_planet_for(driver)}) baaki sab numbers "
+        "(1-9) ke saath kaisa interact karta hai. Ye knowledge use kare — "
+        "partner select karte waqt, business associate chunte waqt, ghar/mobile/vehicle ka "
+        "number lete waqt.",
+        s["body_mid"]))
+    flow.append(Spacer(1, 5 * mm))
+
+    matrix = _ta.compatibility_matrix(driver)
+    rows = [["Number", "Planet", "Type", "Score", "Practical Advice"]]
+    for m in matrix:
+        rows.append([
+            str(m["number"]), m["planet"], m["label"],
+            f"{m['score']}/100", m["advice"],
+        ])
+    t = Table(rows, colWidths=[20 * mm, 25 * mm, 25 * mm, 22 * mm, 88 * mm])
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, -1), 9),
+        ("ALIGN",      (0, 0), (3, -1), "CENTER"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 5),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]
+    # Color rows by type
+    for i, m in enumerate(matrix, start=1):
+        bg = _verdict_color({"FRIEND": "GOOD", "TWIN": "EXCELLENT",
+                             "ENEMY": "AVOID", "NEUTRAL": "MIXED"}[m["label"]])
+        style.append(("BACKGROUND", (0, i), (-1, i), bg))
+    t.setStyle(TableStyle(style))
+    flow.append(t)
+    return flow
+
+
+def _letter_table_section(s, name: str) -> List[Any]:
+    """Page showing per-letter numerology values."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Name — Letter by Letter"))
+    flow.append(Paragraph(
+        f"<b>{name}</b> — har akshar ki Pythagorean aur Chaldean value. "
+        "Vowels (A/E/I/O/U) Soul Urge banate hain (aapki inner desire), "
+        "consonants Personality (duniya jo dekhti hai).",
+        s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    rows = [["Letter", "Type", "Pythagorean", "Chaldean"]]
+    for r in _ta.letter_by_letter(name):
+        if r["letter"] == " ":
+            continue
+        rows.append([
+            r["letter"],
+            "Vowel" if r["vowel"] else "Consonant",
+            str(r["pythagorean"]),
+            str(r["chaldean"]) if r["chaldean"] else "— (no 9 in Chaldean)",
+        ])
+    t = Table(rows, colWidths=[25 * mm, 35 * mm, 50 * mm, 70 * mm])
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME",   (0, 1), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, -1), 10),
+        ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
+        ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]
+    # Highlight vowel rows
+    for i, r in enumerate(rows[1:], start=1):
+        if r[1] == "Vowel":
+            style.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFF4E6")))
+    t.setStyle(TableStyle(style))
+    flow.append(t)
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(Paragraph(
+        "<i>Pythagorean (A=1..I=9, J=1..R=9, S=1..Z=8) — modern, used worldwide.<br/>"
+        "Chaldean (sound-based, 1-8 only, 9 sacred and absent) — ancient, used by "
+        "Cheiro for predictions.</i>",
+        s["small"]))
+    return flow
+
+
+def _signature_section(s, name: str, driver: int) -> List[Any]:
+    """Initial-letter analysis + signature recommendations."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Signature & Branding Recommendations"))
+
+    sig = _ta.signature_advice(name, driver)
+    if not sig.get("ok"):
+        return flow
+
+    rows = [
+        ["First Letter:", f"{sig['first_letter']} (value {sig['first_letter_value']}, "
+                          f"{sig['first_letter_planet']})"],
+        ["Initial energy:", sig.get("initial_meaning", "")],
+        ["Signature style for Driver:", sig.get("signature_tip", "")],
+    ]
+    t = Table(rows, colWidths=[55 * mm, 125 * mm])
+    t.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR",(0, 0), (0, -1), TEXT_MID),
+        ("VALIGN",   (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#EEE")),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(Paragraph("<b>Universal Signature Rules:</b>", s["h3"]))
+    for rule in sig.get("general_rules") or []:
+        flow.append(Paragraph(f"• {rule}", s["body"]))
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(_verdict_box(
+        s, "Branding Tip",
+        "Business naam ya brand name banate waqt — Chaldean number 1, 3, 5 ya 6 ka "
+        "expression total target kare. <br/>"
+        "<b>Avoid:</b> 8 (Saturn) starting brand names — initial 4-7 saal struggle. "
+        "<b>Best:</b> 5 (Mercury) or 3 (Jupiter) for modern businesses.",
+        "EXCELLENT",
+    ))
+    return flow
+
+
+def _timeline_section(s) -> List[Any]:
+    """30-day implementation timeline."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Your 90-Day Implementation Plan"))
+    flow.append(Paragraph(
+        "Numerology corrections kabhi raat ko nahi badalte — slow rollout zaruri hai. "
+        "Yeh schedule follow kare:",
+        s["body_mid"]))
+    flow.append(Spacer(1, 5 * mm))
+
+    rows = [["Phase", "Action Plan"]]
+    for item in _ta.implementation_timeline():
+        rows.append([item["phase"], item["action"]])
+    t = Table(rows, colWidths=[35 * mm, 145 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME",   (0, 1), (0, -1), "Helvetica-Bold"),
+        ("TEXTCOLOR",  (0, 1), (0, -1), BRAND_GOLD),
+        ("FONTSIZE",   (0, 0), (-1, -1), 10),
+        ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+        ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#E5E7EB")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F4FF")]),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 6 * mm))
+
+    flow.append(_verdict_box(
+        s, "Final Reminder",
+        "Numerology ek powerful supportive tool hai — par effort, integrity aur "
+        "consistent action ka koi substitute nahi. Vibration ko apna karne ke baad "
+        "kaam karna aur bhi zaruri ho jaata hai. Mehnat + correct vibration = unstoppable.",
+        "EXCELLENT",
+    ))
     return flow
 
 
@@ -417,32 +726,47 @@ def render_part2_pdf(*,
                             title=f"Practical Numerology — {name}",
                             author="Cosmic Lens")
     story: List[Any] = []
+    # Page 1 — Cover
     story += _cover(s, name, dob)
     story.append(PageBreak())
 
-    # Number analysis page (mobile/vehicle/house)
-    if mobile or vehicle or house:
-        story.append(_section_title(s, "Your Numbers — Vibrational Analysis"))
-        story.append(Paragraph(
-            f"Aapka Driver Number: <b>{driver}</b> &nbsp;&nbsp; "
-            f"Aapka Conductor Number: <b>{conductor}</b><br/>"
-            "Niche diye gaye numbers in dono ke saath compare kiye gaye hain.",
-            s["body_mid"]))
-        story.append(Spacer(1, 4 * mm))
-        if mobile:
-            story += _number_analysis_block(s, mobile, "mobile", driver, conductor)
-        if vehicle:
-            story += _number_analysis_block(s, vehicle, "vehicle", driver, conductor)
-        if house:
-            story += _number_analysis_block(s, house, "house", driver, conductor)
+    # Page 2 — Driver/Conductor intro
+    story += _driver_conductor_intro(s, name, dob, driver, conductor)
+    story.append(PageBreak())
+
+    # Page 3-5 — Mobile / Vehicle / House deep analysis (one per page break)
+    if mobile:
+        story += _number_analysis_block(s, mobile, "mobile", driver, conductor)
+        story.append(PageBreak())
+    if vehicle:
+        story += _number_analysis_block(s, vehicle, "vehicle", driver, conductor)
+        story.append(PageBreak())
+    if house:
+        story += _number_analysis_block(s, house, "house", driver, conductor)
         story.append(PageBreak())
 
-    # Name numerology
+    # Page 6 — Number Compatibility Matrix
+    story += _compatibility_matrix_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 7 — Letter-by-letter table
+    story += _letter_table_section(s, name)
+    story.append(PageBreak())
+
+    # Page 8 — Pythagorean vs Chaldean summary
     story += _name_numerology_section(s, name)
     story.append(PageBreak())
 
-    # Name correction
+    # Page 9 — Name correction
     story += _name_correction_section(s, name, driver, conductor)
+    story.append(PageBreak())
+
+    # Page 10 — Signature & branding
+    story += _signature_section(s, name, driver)
+    story.append(PageBreak())
+
+    # Page 11 — 90-day implementation plan
+    story += _timeline_section(s)
     story += _disclaimer(s)
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)

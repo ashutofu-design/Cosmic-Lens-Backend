@@ -1,5 +1,5 @@
 """
-numerology/tier_a.py — Premium feature pack (Tier A).
+numerology/tier_a.py — Premium feature pack (Tier A + Part-2 helpers).
 
 Five high-engagement, classical features added to make the ₹99 report
 feel like ₹500-2000 product:
@@ -484,6 +484,265 @@ def _name_score(name: str, target_driver: int, target_conductor: int) -> int:
         score -= 15
 
     return max(0, min(100, score))
+
+
+# ─── Part-2 deep-dive helpers ────────────────────────────────────────
+
+def digit_breakdown(value: str) -> List[Dict[str, Any]]:
+    """Break a number string into per-digit list with planet + meaning."""
+    DIGIT_MEANING = {
+        0: ("—",       "Void / amplifier — multiplies adjacent digit's energy."),
+        1: ("Sun",     "Leadership, ego, authority, fame."),
+        2: ("Moon",    "Emotion, public, mother, fluctuation."),
+        3: ("Jupiter", "Wisdom, finance, expansion, dharma."),
+        4: ("Rahu",    "Sudden change, illusion, rebellion, tech."),
+        5: ("Mercury", "Business, communication, intelligence, agility."),
+        6: ("Venus",   "Love, luxury, beauty, vehicles, women."),
+        7: ("Ketu",    "Spirituality, mystery, isolation, research."),
+        8: ("Saturn",  "Karma, hardship turning to wealth, discipline."),
+        9: ("Mars",    "Courage, war, energy, brothers, action."),
+    }
+    out = []
+    for d in _digits_of(value):
+        planet, meaning = DIGIT_MEANING.get(d, ("—", ""))
+        out.append({"digit": d, "planet": planet, "meaning": meaning})
+    return out
+
+
+def repeating_digit_alerts(value: str) -> List[str]:
+    """Detect concerning patterns: e.g. lots of 4s/8s = Rahu/Saturn heavy."""
+    digits = _digits_of(value)
+    if not digits:
+        return []
+    alerts: List[str] = []
+    counts: Dict[int, int] = {}
+    for d in digits:
+        counts[d] = counts.get(d, 0) + 1
+    total = len(digits)
+
+    if counts.get(4, 0) >= 3:
+        alerts.append("⚠ 4 (Rahu) bahut baar — sudden disruptions, "
+                      "tech glitches, unexpected events frequent.")
+    if counts.get(8, 0) >= 3:
+        alerts.append("⚠ 8 (Saturn) bahut baar — initial struggle bahut, "
+                      "par disciplined log ke liye long-term wealth.")
+    if counts.get(0, 0) >= 3:
+        alerts.append("⚠ Multiple 0s — energy void, neighbor digits ki "
+                      "energy ko amplify ya nullify karte hain.")
+    if total >= 4 and counts.get(7, 0) >= 3:
+        alerts.append("ℹ 7 (Ketu) repeated — spiritual but isolating; "
+                      "social/business ke liye mixed.")
+    if total >= 6 and counts.get(1, 0) + counts.get(3, 0) + counts.get(6, 0) >= 5:
+        alerts.append("✓ Bahut saare 1/3/6 — natural prosperity & "
+                      "favourable vibration.")
+    return alerts
+
+
+def last_four_analysis(value: str) -> Dict[str, Any]:
+    """Cheiro: last 4 digits of a phone number have most influence."""
+    digits = _digits_of(value)
+    if len(digits) < 4:
+        return {"ok": False}
+    last4 = digits[-4:]
+    last4_sum = sum(last4)
+    return {
+        "ok": True,
+        "last4": "".join(str(d) for d in last4),
+        "sum": last4_sum,
+        "reduced": _reduce(last4_sum),
+        "note": "Cheiro ke according — last 4 digits sabse jyada vibration deti hain.",
+    }
+
+
+def lucky_number_alternatives(driver: int, conductor: int,
+                              base_value: str | None = None,
+                              count: int = 6,
+                              length: int = 10) -> List[Dict[str, Any]]:
+    """Generate sample 'good' number variations near base_value (or random)
+    that score well against driver+conductor.
+
+    Tries swapping the last 1-2 digits of the base to get a friendlier sum.
+    """
+    if not driver:
+        return []
+    targets = set([driver] + (NUMBER_FRIENDS.get(driver) or []))
+    if conductor:
+        targets.update([conductor] + (NUMBER_FRIENDS.get(conductor) or []))
+
+    base_digits = _digits_of(base_value or "")
+    suggestions: List[Dict[str, Any]] = []
+    seen = set()
+
+    if len(base_digits) >= 4:
+        # Try swapping the last digit through 0-9
+        prefix = base_digits[:-1]
+        prefix_sum = sum(prefix)
+        for last in range(10):
+            cand_sum = prefix_sum + last
+            cand_red = _reduce(cand_sum)
+            if cand_red in targets:
+                cand = "".join(str(d) for d in prefix) + str(last)
+                if cand == "".join(str(d) for d in base_digits):
+                    continue
+                if cand in seen:
+                    continue
+                seen.add(cand)
+                verdict = ("EXCELLENT" if cand_red == driver
+                           else "FAVOURABLE")
+                suggestions.append({
+                    "number": cand,
+                    "sum": cand_sum,
+                    "reduced": cand_red,
+                    "verdict": verdict,
+                    "matches": ("Driver" if cand_red == driver
+                                else "Conductor" if cand_red == conductor
+                                else "Friend of Driver"),
+                })
+
+        # Also try last 2 digits
+        if len(suggestions) < count and len(base_digits) >= 5:
+            prefix2 = base_digits[:-2]
+            prefix2_sum = sum(prefix2)
+            for tens in range(10):
+                for ones in range(10):
+                    cand_sum = prefix2_sum + tens + ones
+                    cand_red = _reduce(cand_sum)
+                    if cand_red == driver:
+                        cand = "".join(str(d) for d in prefix2) + str(tens) + str(ones)
+                        if cand in seen or cand == "".join(str(d) for d in base_digits):
+                            continue
+                        seen.add(cand)
+                        suggestions.append({
+                            "number": cand,
+                            "sum": cand_sum,
+                            "reduced": cand_red,
+                            "verdict": "EXCELLENT",
+                            "matches": "Driver",
+                        })
+                        if len(suggestions) >= count * 2:
+                            break
+                if len(suggestions) >= count * 2:
+                    break
+
+    # Sort: driver-matches first, then friends
+    suggestions.sort(key=lambda s: (
+        0 if s["reduced"] == driver else
+        1 if s["reduced"] == conductor else 2,
+        s["number"],
+    ))
+    return suggestions[:count]
+
+
+def compatibility_matrix(driver: int) -> List[Dict[str, Any]]:
+    """How user's driver pairs with each of 1-9. Returns 9 rows."""
+    if not driver:
+        return []
+    out = []
+    friends = NUMBER_FRIENDS.get(driver) or []
+    enemies = NUMBER_ENEMIES.get(driver) or []
+    for n in range(1, 10):
+        if n == driver:
+            label, score, advice = ("TWIN", 90,
+                "Same vibration — strong resonance, par echo-chamber risk.")
+        elif n in friends:
+            label, score, advice = ("FRIEND", 80,
+                "Natural support, harmonious interactions.")
+        elif n in enemies:
+            label, score, advice = ("ENEMY", 25,
+                "Friction, misunderstandings — extra patience zaruri.")
+        else:
+            label, score, advice = ("NEUTRAL", 55,
+                "Balanced — neither natural ally nor obstacle.")
+        out.append({
+            "number": n,
+            "planet": PLANET_BY_NUMBER.get(n, "—"),
+            "label": label,
+            "score": score,
+            "advice": advice,
+        })
+    return out
+
+
+def letter_by_letter(name: str) -> List[Dict[str, Any]]:
+    """Per-letter Pythagorean + Chaldean breakdown for visual table."""
+    rows: List[Dict[str, Any]] = []
+    for c in (name or ""):
+        if c.isalpha():
+            cl = c.lower()
+            rows.append({
+                "letter": c.upper(),
+                "vowel": cl in _VOWELS,
+                "pythagorean": _PYTH.get(cl, 0),
+                "chaldean": CHALDEAN_MAP.get(cl, 0),  # 0 if not in chaldean (i.e., maps to 9)
+            })
+        elif c == " ":
+            rows.append({"letter": " ", "vowel": False,
+                         "pythagorean": "—", "chaldean": "—"})
+    return rows
+
+
+def signature_advice(name: str, driver: int) -> Dict[str, Any]:
+    """Initial-letter & signature recommendations."""
+    letters = _letters_only(name)
+    if not letters:
+        return {"ok": False}
+    first = letters[0]
+    first_val = _PYTH.get(first, 0)
+    first_planet = PLANET_BY_NUMBER.get(first_val, "—")
+
+    INITIAL_ADVICE = {
+        1: "Strong start — leadership presence in every interaction.",
+        2: "Soft, diplomatic start — people feel safe around you.",
+        3: "Joyful expressive start — natural communicator.",
+        4: "Stable, dependable start — slow burn but reliable.",
+        5: "Dynamic, restless start — change-bringer.",
+        6: "Warm, nurturing start — beauty/family attracted to you.",
+        7: "Mysterious, deep start — others sense hidden wisdom.",
+        8: "Powerful, formidable start — material success magnet.",
+        9: "Universal, humanitarian start — wide appeal.",
+    }
+
+    # Signature direction recommendation: based on driver
+    SIG_DIRECTION = {
+        1: "Upward stroke — solar energy supports you.",
+        2: "Smooth curves — lunar fluidity matches your nature.",
+        3: "Bold outward strokes — Jupiter expansion.",
+        4: "Sharp angles — Rahu's modern edge (avoid sloppy).",
+        5: "Quick, light strokes — Mercury's speed.",
+        6: "Rounded, beautiful loops — Venus aesthetic.",
+        7: "Minimal, mysterious — Ketu's restraint.",
+        8: "Strong descenders — Saturn's depth.",
+        9: "Energetic strokes with completion — Mars finishing power.",
+    }
+
+    return {
+        "ok": True,
+        "first_letter": first.upper(),
+        "first_letter_value": first_val,
+        "first_letter_planet": first_planet,
+        "initial_meaning": INITIAL_ADVICE.get(first_val, ""),
+        "signature_tip": SIG_DIRECTION.get(driver, ""),
+        "general_rules": [
+            "Signature hamesha upward angle me end karein (rising fortune).",
+            "Apna pura naam clearly likhein — incomplete signature = incomplete results.",
+            "Underline ke saath sign karna confidence aur stability deta hai.",
+            "Cross-cuts (line cutting through name) avoid kare — self-sabotage indicator.",
+        ],
+    }
+
+
+def implementation_timeline() -> List[Dict[str, str]]:
+    """30-day rollout plan for name correction / number changes."""
+    return [
+        {"phase": "Day 1-7",
+         "action": "Naya name spelling sirf signature aur social media par use karna start kare. Old documents abhi mat badle."},
+        {"phase": "Day 8-21",
+         "action": "Email signature, business cards, WhatsApp display name — sab jagah update kare. Mantra japna start kare driver number ke planet ka (e.g., 108 baar)."},
+        {"phase": "Day 22-40",
+         "action": "Vibrational shift mahsoos hone lagega — naye opportunities, naye contacts. Mobile/vehicle change ki planning is window me kare."},
+        {"phase": "Day 41-90",
+         "action": "Major life domains me effect dikhega — career conversations, relationship dynamics. Patience zaruri — full integration 90 din lagti hai."},
+    ]
 
 
 def name_correction_suggestions(name: str, driver: int, conductor: int,

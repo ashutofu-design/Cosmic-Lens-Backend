@@ -1804,7 +1804,7 @@ def _life_summary_block(s, name: str, driver: int, conductor: int,
 def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: 'Aap Kaun Ho?' — 3-paragraph identity story."""
     flow: List[Any] = []
-    n = _nr.narrative_for(driver) or {}
+    n = _nr.narrative_for(driver, lang) or {}
     flow.append(Paragraph(_T(lang,
         "🌟 WHO YOU REALLY ARE — Your True Identity",
         "🌟 आप कौन हो — आपकी असली पहचान",
@@ -1891,7 +1891,7 @@ def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Career Blueprint — fields, mistakes, growth timing."""
     flow: List[Any] = []
-    n = _nr.narrative_for(driver) or {}
+    n = _nr.narrative_for(driver, lang) or {}
     flow.append(Paragraph(_T(lang,
         "💼 CAREER BLUEPRINT — Your Professional Path",
         "💼 करियर ब्लूप्रिंट — आपकी व्यावसायिक राह",
@@ -1955,7 +1955,7 @@ def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[An
 def _love_pattern_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Love & Relationship deep-dive."""
     flow: List[Any] = []
-    n = _nr.narrative_for(driver) or {}
+    n = _nr.narrative_for(driver, lang) or {}
     flow.append(Paragraph(_T(lang,
         "💕 LOVE PATTERN — The Reality of Your Relationships",
         "💕 प्रेम-पैटर्न — रिश्तों की असलियत",
@@ -2012,7 +2012,7 @@ def _love_pattern_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 def _wealth_health_spirit_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Money + Health + Spiritual path combined."""
     flow: List[Any] = []
-    n = _nr.narrative_for(driver) or {}
+    n = _nr.narrative_for(driver, lang) or {}
     flow.append(Paragraph(_T(lang,
         "🕉️ HEALTH & DHARMA — Body + Soul",
         "🕉️ स्वास्थ्य और धर्म — शरीर + आत्मा",
@@ -2066,7 +2066,7 @@ def _wealth_health_spirit_section(s, driver: int, lang: str = "hinglish") -> Lis
 def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Risk Alerts + Golden Opportunity Periods."""
     flow: List[Any] = []
-    n = _nr.narrative_for(driver) or {}
+    n = _nr.narrative_for(driver, lang) or {}
     flow.append(Paragraph(_T(lang,
         "⚠️ RISK ALERTS & 🌟 GOLDEN PERIODS",
         "⚠️ जोखिम चेतावनी और 🌟 स्वर्णिम अवसर",

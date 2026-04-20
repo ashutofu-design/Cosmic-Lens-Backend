@@ -22,7 +22,7 @@ Deep, story-style content per driver number (1-9) covering:
 from typing import Dict, Any, List
 
 
-_NARRATIVES: Dict[int, Dict[str, Any]] = {
+_NARRATIVES_HG: Dict[int, Dict[str, Any]] = {
 
     1: {
         "title": "The Sovereign — Sun-ruled Leader",
@@ -764,9 +764,130 @@ _NARRATIVES: Dict[int, Dict[str, Any]] = {
 }
 
 
-def narrative_for(driver: int) -> Dict[str, Any]:
-    """Return the narrative pack for a given driver number (1-9)."""
-    return _NARRATIVES.get(driver, {})
+# ─── English narratives ────────────────────────────────────────────────
+# Pure English translation of _NARRATIVES_HG. Drivers without an entry
+# fall back to the Hinglish version (graceful degradation).
+
+_NARRATIVES_EN: Dict[int, Dict[str, Any]] = {
+
+    1: {
+        "title": "The Sovereign — Sun-ruled Leader",
+        "tagline": "You were born to lead this world.",
+        "life_essence": [
+            "Your life runs on a single thread — 'I will do it my way.' "
+            "Number 1 is ruled by the Sun, and the Sun never walks behind anyone — "
+            "it sees only its own path. From childhood you must have felt that you "
+            "could not blend into the crowd, because deep inside you are a leader — "
+            "not a follower.",
+
+            "Your greatest strength is vision and original thinking. While others "
+            "are still asking 'how will this happen', you are already asking 'when "
+            "will it happen'. This quality can place you in the top three in any "
+            "field. But the same quality can leave you lonely in relationships — "
+            "because not everyone can keep up with your pace.",
+
+            "The Sun has one important message: 'brilliance cannot be hidden'. If "
+            "you dim your own light to make others comfortable, dimness will enter "
+            "your life too. You have to learn to live with your radiance — "
+            "politely, but firmly.",
+        ],
+        "career_pattern": [
+            "You are not built for a servile role — you will become a boss or an "
+            "independent professional. Best fields: business owner, government "
+            "leader, doctor (especially heart/eye specialist), politics, military "
+            "officer, civil services, executive coaching, jewellery trade, "
+            "construction. You need a role where you can take the final decision.",
+
+            "Common mistake: while in a job you will clash with your boss over ego. "
+            "Solution: after age 30 it is right to leave the job and start something "
+            "of your own. The Sun's energy suffocates in an 'employee' role.",
+
+            "Growth timing: 22-24 (foundation), 28-32 (first big break), 36-40 "
+            "(peak power), 45-50 (legacy phase). Sunday is your power day — hold "
+            "important meetings and launches on Sunday morning.",
+        ],
+        "love_pattern": [
+            "In love you are intense — you cannot sustain a half-hearted "
+            "relationship. When you love, you love completely; when you break up, "
+            "you break completely.",
+
+            "The common reason for break-ups: you start dominating, and your "
+            "partner feels suffocated. Or your partner tries to 'change' you — "
+            "which a Number 1 will never tolerate.",
+
+            "Ideal partner: Numbers 2, 4, or 7 work best — they ground your energy. "
+            "Number 1 + Number 1 is explosive (twin suns burn each other).",
+        ],
+        "money_pattern":
+            "Money comes to you in a zigzag pattern — sometimes a flood, sometimes "
+            "a drought. A fixed salary will never satisfy you. Invest in stocks, "
+            "business, and real estate. Gold (the Sun's metal) is your lucky "
+            "store of value.",
+        "health_pattern":
+            "Watch the heart, eyes, blood pressure and back — they all fall under "
+            "the Sun. Do 7 rounds of Surya Namaskar every morning — a direct "
+            "planetary tonic.",
+        "spiritual_path":
+            "Your dharma is 'awakening others through your own light'. In spiritual "
+            "practice the Aditya Hridaya Stotra (on Sundays) gives great strength. "
+            "Becoming a guru is your path.",
+        "strengths": [
+            "Vision — you can see five years ahead",
+            "Decision speed — no analysis paralysis",
+            "Magnetism — people are naturally drawn to you",
+            "Original thinking — you do not copy-paste",
+            "Crisis leadership — you stay calm in emergencies",
+        ],
+        "challenges": [
+            "Ego clashes with authority figures (boss, father)",
+            "Loneliness at the top — no peer-level company",
+            "Impatience with slow people",
+            "Tendency to overrule advice",
+            "Pride that cannot handle criticism",
+        ],
+        "risk_alerts": [
+            "Conflict with a father-figure between 28-32 is possible — patience is essential",
+            "Strict heart-health watch after 40 — annual check-up is mandatory",
+            "Avoid partnership business unless the agreement is crystal-clear",
+            "'Yes-men' will be magnetised to you — they will eventually betray you",
+            "You impulse-buy on Sundays — take big decisions on Tuesdays",
+        ],
+        "golden_periods":
+            "Sun-strong years are your peak. Whenever a Personal Year of 1, 5 or 9 "
+            "arrives — that is your launch year. For 2026 specifically: calculate "
+            "your Personal Year and decide accordingly. Mid-March to mid-July is "
+            "your annual power window (Sun exalted in Aries).",
+    },
+}
+
+
+# ─── Hindi (Devanagari) narratives ─────────────────────────────────────
+# Drivers without an entry fall back to the Hinglish version.
+
+_NARRATIVES_HI: Dict[int, Dict[str, Any]] = {}
+
+
+def narrative_for(driver: int, lang: str = "hinglish") -> Dict[str, Any]:
+    """Return the narrative pack for a given driver number (1-9), in the
+    requested language. Falls back to Hinglish when the requested-language
+    entry is not yet populated, so partial translations stay safe."""
+    lang = (lang or "hinglish").lower()
+    table: Dict[int, Dict[str, Any]]
+    if lang == "english":
+        table = _NARRATIVES_EN
+    elif lang == "hindi":
+        table = _NARRATIVES_HI
+    else:
+        table = _NARRATIVES_HG
+    n = table.get(driver)
+    if n:
+        return n
+    # Fallback: Hinglish (always populated)
+    return _NARRATIVES_HG.get(driver, {})
+
+
+# Backwards-compat alias for any external import that still references _NARRATIVES.
+_NARRATIVES = _NARRATIVES_HG
 
 
 def life_summary_block(driver: int, conductor: int, name: str) -> Dict[str, str]:

@@ -140,9 +140,9 @@ def _cover(s, name: str, dob: str, gender: str | None) -> List[Any]:
     out.append(Spacer(1, 60 * mm))
     out.append(Paragraph(
         "This report integrates Pythagorean and Chaldean (Cheiro) systems, "
-        "the Lo Shu magic square, classical Indian Ank-shastra (Driver/Conductor) "
-        "and Vastu Kua, with personal-year cycles, pinnacles, challenges and "
-        "lucky-attribute catalogs.",
+        "the Lo Shu magic square and classical Indian Ank-shastra "
+        "(Driver/Conductor) — with personal-year cycles, pinnacles, "
+        "challenges and lucky-attribute catalogs.",
         s["body_mid"]))
     out.append(Spacer(1, 8 * mm))
     out.append(Paragraph(
@@ -209,10 +209,6 @@ def _core_numbers(s, ps: dict) -> List[Any]:
     out.append(_label_value_table([
         ("Friend numbers (Driver)", friends or "—"),
         ("Enemy numbers (Driver)", enemies or "—"),
-        ("Kua number", _safe(s1.get("kua_number"))),
-        ("Kua group", _safe(s1.get("kua_group"))),
-        ("Best 4 directions",
-         ", ".join(s1.get("kua_best_4_directions") or []) or "—"),
     ]))
     return out
 
@@ -494,7 +490,7 @@ def _career_lucky(s, pr: dict) -> List[Any]:
     return out
 
 
-def _directions(s, ps: dict) -> List[Any]:
+def _directions_DEPRECATED(s, ps: dict) -> List[Any]:
     dirs = ps.get("s2_directions") or []
     out: List[Any] = []
     if not dirs:
@@ -592,8 +588,6 @@ def render_numerology_pdf(*,
     story += _pinnacles(s, practical)
     story.append(PageBreak())
     story += _career_lucky(s, practical)
-    story.append(PageBreak())
-    story += _directions(s, phase_s)
     story += _disclaimer(s)
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

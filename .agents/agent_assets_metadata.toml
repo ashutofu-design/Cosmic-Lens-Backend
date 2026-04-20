@@ -54,3 +54,9 @@ id = "p5Q2gd33FHdEnLPBQc56R"
 uri = "file://exports/Numerology_Einstein_v2.pdf"
 type = "pdf"
 title = "Numerology Report — Einstein (v2, master numbers + karmic debt now visible)"
+
+[[outputs]]
+id = "Gdv4BgcXl_rmitROllGUn"
+uri = "file://exports/Numerology_v3_no_vastu.pdf"
+type = "pdf"
+title = "Numerology Report v3 — Vastu hata diya, pure number-based"

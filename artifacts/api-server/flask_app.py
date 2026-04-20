@@ -3538,9 +3538,14 @@ def astrovastu_pro_pdf(log_id: int):
 # Stateless endpoint: accepts birth details, computes numerology on-the-fly,
 # returns a multi-page PDF. No DB log (numerology has no chart-payload state).
 # ─────────────────────────────────────────────────────────────────────────────
-@app.route("/api/numerology/pdf", methods=["POST"])
+@app.route("/api/numerology/pdf", methods=["GET", "POST"])
 def numerology_pdf():
-    body = request.get_json(silent=True) or {}
+    # Accept both POST JSON body and GET query parameters
+    # (GET allows mobile clients to open the PDF via Linking.openURL).
+    if request.method == "GET":
+        body = request.args.to_dict() or {}
+    else:
+        body = request.get_json(silent=True) or {}
     name = (body.get("name") or "").strip()
     dob  = (body.get("dob")  or "").strip()
     tob  = (body.get("tob")  or "12:00").strip()

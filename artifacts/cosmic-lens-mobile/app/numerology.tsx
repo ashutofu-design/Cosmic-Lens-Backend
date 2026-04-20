@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
+import { API_BASE } from "@/lib/apiConfig";
 import {
   Platform, Pressable, ScrollView, StyleSheet,
   Text, View,
@@ -422,6 +424,136 @@ const ps = StyleSheet.create({
   rel:  { fontSize:9 },
 });
 
+// ── PRO Report Panel ──────────────────────────────────────────────────────────
+function ProReportPanel({ profile }: { profile: ProfileEntry }) {
+  const C = useC();
+  const [opening, setOpening] = useState(false);
+
+  const bd = profile.birthData;
+
+  const openPdf = async () => {
+    if (!bd) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setOpening(true);
+    try {
+      const dob =
+        `${bd.year}-${String(bd.month).padStart(2, "0")}-${String(bd.day).padStart(2, "0")}`;
+      const tob =
+        bd.hour != null && bd.minute != null
+          ? `${String(bd.hour).padStart(2, "0")}:${String(bd.minute).padStart(2, "0")}`
+          : "12:00";
+      const params = new URLSearchParams({
+        name: bd.name,
+        dob,
+        tob,
+        gender: (profile.gender || "male").toLowerCase(),
+      });
+      const url = `${API_BASE}/api/numerology/pdf?${params.toString()}`;
+      await Linking.openURL(url);
+    } catch (e) {
+      // best-effort: silent failure on browser launch
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const sections = [
+    { icon: "🎯", title: "Core Numbers",       sub: "Driver, Conductor, Name + planet rulers + compatibility" },
+    { icon: "🔢", title: "Lo Shu Grid (3×3)",  sub: "Your magic-square: missing & repeated numbers + meaning" },
+    { icon: "🌟", title: "Identity Numbers",   sub: "Life-Path, Soul-Urge, Personality, Expression + Master + Karmic" },
+    { icon: "📜", title: "Cheiro Compound",    sub: "Classical occult meaning of your DOB + Name compound" },
+    { icon: "📅", title: "Personal Cycles",    sub: "Personal Year, Month, Day with themes (live timing)" },
+    { icon: "⛰️", title: "Pinnacles & Challenges", sub: "Life's 4 phases — energies + karmic lessons" },
+    { icon: "💼", title: "Career & Lucky",     sub: "Suitable fields + lucky colors, gems, day, mantra, ishta" },
+  ];
+
+  return (
+    <View style={{ gap: 12 }}>
+      {/* Hero card */}
+      <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(245,158,11,0.35)" }]}>
+        <View style={pp.heroRow}>
+          <View style={[pp.heroIcon, { backgroundColor: "rgba(245,158,11,0.15)" }]}>
+            <Text style={{ fontSize: 28 }}>📄</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={pp.tagRow}>
+              <View style={[pp.tag, { backgroundColor: "#f59e0b" }]}>
+                <Text style={pp.tagTxt}>PRO REPORT</Text>
+              </View>
+              <View style={[pp.tag, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
+                <Text style={[pp.tagTxt, { color: "#16a34a" }]}>FREE</Text>
+              </View>
+            </View>
+            <Text style={[pp.heroTitle, { color: C.text }]}>
+              Numerology PRO PDF
+            </Text>
+            <Text style={[pp.heroSub, { color: C.textMuted }]}>
+              8-page detailed report — instant download
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* What's inside */}
+      <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
+      {sections.map((sec, i) => (
+        <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
+            <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
+          </View>
+          <Feather name="check" size={16} color="#22c55e" />
+        </View>
+      ))}
+
+      {/* Generate button */}
+      <Pressable
+        onPress={openPdf}
+        disabled={opening}
+        style={[pp.cta, opening && { opacity: 0.6 }]}
+      >
+        <View style={pp.ctaInner}>
+          <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
+          <Text style={pp.ctaTxt}>{opening ? "Opening report…" : "Generate PRO Report"}</Text>
+        </View>
+      </Pressable>
+
+      {/* Foot note */}
+      <View style={[pp.note, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Feather name="info" size={12} color={C.textMuted} />
+        <Text style={[pp.noteTxt, { color: C.textMuted }]}>
+          Report opens in your browser. PDF can be saved or shared from there.
+          All numbers are deterministic — recomputable any time.
+        </Text>
+      </View>
+    </View>
+  );
+}
+const pp = StyleSheet.create({
+  hero:        { borderRadius: 16, borderWidth: 1.5, padding: 16 },
+  heroRow:     { flexDirection: "row", alignItems: "center", gap: 14 },
+  heroIcon:    { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  tagRow:      { flexDirection: "row", gap: 6, marginBottom: 4 },
+  tag:         { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  tagTxt:      { fontSize: 9, fontWeight: "900", color: "#fff", letterSpacing: 1 },
+  heroTitle:   { fontSize: 16, fontWeight: "800" },
+  heroSub:     { fontSize: 11, marginTop: 2 },
+  sectionLabel:{ fontSize: 9, fontWeight: "800", letterSpacing: 2, marginTop: 4, marginBottom: -4 },
+  row:         { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
+  rowTitle:    { fontSize: 13, fontWeight: "800" },
+  rowSub:      { fontSize: 11, marginTop: 1, lineHeight: 15 },
+  cta:         {
+                 borderRadius: 16, overflow: "hidden", backgroundColor: "#f59e0b",
+                 shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 6 },
+                 shadowOpacity: 0.4, shadowRadius: 12, elevation: 10,
+               },
+  ctaInner:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16 },
+  ctaTxt:      { color: "#fff", fontSize: 15, fontWeight: "900" },
+  note:        { borderRadius: 12, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  noteTxt:     { fontSize: 11, lineHeight: 16, flex: 1 },
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function NumerologyScreen() {
   const C       = useC();
@@ -442,6 +574,9 @@ export default function NumerologyScreen() {
   const [expLP,   setExpLP]   = useState(true);
   const [expDest, setExpDest] = useState(false);
   const [expSoul, setExpSoul] = useState(false);
+
+  // Pattern A — Free / PRO Report tab
+  const [tab, setTab] = useState<"free" | "pro">("free");
 
   // All calculations — instant, no API call
   const nums = useMemo(() => {
@@ -534,8 +669,49 @@ export default function NumerologyScreen() {
           </View>
         )}
 
+        {/* Pattern A — Segmented tab toggle (Free | PRO Report) */}
+        {bd && (
+          <View style={[s.tabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            <Pressable
+              onPress={() => { setTab("free"); Haptics.selectionAsync(); }}
+              style={[
+                s.tabBtn,
+                tab === "free" && { backgroundColor: C.accent },
+              ]}
+            >
+              <Feather name="hash" size={13} color={tab === "free" ? "#fff" : C.textMuted} />
+              <Text style={[
+                s.tabTxt,
+                { color: tab === "free" ? "#fff" : C.textMuted },
+              ]}>
+                Free Numerology
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setTab("pro"); Haptics.selectionAsync(); }}
+              style={[
+                s.tabBtn,
+                tab === "pro" && { backgroundColor: "#f59e0b" },
+              ]}
+            >
+              <Feather name="file-text" size={13} color={tab === "pro" ? "#fff" : C.textMuted} />
+              <Text style={[
+                s.tabTxt,
+                { color: tab === "pro" ? "#fff" : C.textMuted },
+              ]}>
+                PRO Report
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* PRO Report tab */}
+        {bd && tab === "pro" && (
+          <ProReportPanel profile={profile!} />
+        )}
+
         {/* Free section */}
-        {nums && (
+        {nums && tab === "free" && (
           <>
             <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numFreeSection}</Text>
             <Text style={[s.sectionSub, { color: C.textMuted }]}>{t.numTapHint}</Text>
@@ -667,4 +843,9 @@ const s = StyleSheet.create({
 
   footer:    { borderRadius:12, borderWidth:1, padding:12, flexDirection:"row", alignItems:"flex-start", gap:8 },
   footerTxt: { fontSize:11, lineHeight:17, flex:1 },
+
+  tabBar:    { flexDirection:"row", padding:4, borderRadius:14, borderWidth:1, gap:4 },
+  tabBtn:    { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center",
+               gap:6, paddingVertical:10, borderRadius:10 },
+  tabTxt:    { fontSize:12, fontWeight:"800", letterSpacing:0.3 },
 });

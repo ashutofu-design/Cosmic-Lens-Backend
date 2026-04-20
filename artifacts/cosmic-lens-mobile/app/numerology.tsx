@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "@/lib/apiConfig";
 import {
   Platform, Pressable, ScrollView, StyleSheet,
-  Text, View,
+  Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
@@ -427,104 +427,268 @@ const ps = StyleSheet.create({
 // ── PRO Report Panel ──────────────────────────────────────────────────────────
 function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
-  const [opening, setOpening] = useState(false);
-
   const bd = profile.birthData;
 
-  const openPdf = async () => {
+  // sub-tab: choose between Standard (Part 1) and Practical Tools (Part 2)
+  const [sub, setSub] = useState<"std" | "tools">("std");
+  const [opening, setOpening] = useState(false);
+
+  // Pro+ Tools inputs
+  const [mobile, setMobile]   = useState("");
+  const [vehicle, setVehicle] = useState("");
+  const [house, setHouse]     = useState("");
+  const [err, setErr]         = useState<string | null>(null);
+
+  const dobStr = bd
+    ? `${bd.year}-${String(bd.month).padStart(2, "0")}-${String(bd.day).padStart(2, "0")}`
+    : "";
+  const tobStr = bd && bd.hour != null && bd.minute != null
+    ? `${String(bd.hour).padStart(2, "0")}:${String(bd.minute).padStart(2, "0")}`
+    : "12:00";
+
+  const openStandard = async () => {
     if (!bd) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setOpening(true);
     try {
-      const dob =
-        `${bd.year}-${String(bd.month).padStart(2, "0")}-${String(bd.day).padStart(2, "0")}`;
-      const tob =
-        bd.hour != null && bd.minute != null
-          ? `${String(bd.hour).padStart(2, "0")}:${String(bd.minute).padStart(2, "0")}`
-          : "12:00";
       const params = new URLSearchParams({
-        name: bd.name,
-        dob,
-        tob,
+        name: bd.name, dob: dobStr, tob: tobStr,
         gender: (profile.gender || "male").toLowerCase(),
       });
-      const url = `${API_BASE}/api/numerology/pdf?${params.toString()}`;
-      await Linking.openURL(url);
-    } catch (e) {
-      // best-effort: silent failure on browser launch
-    } finally {
-      setOpening(false);
-    }
+      await Linking.openURL(`${API_BASE}/api/numerology/pdf?${params.toString()}`);
+    } finally { setOpening(false); }
   };
 
-  const sections = [
-    { icon: "🎯", title: "Core Numbers",       sub: "Driver, Conductor, Name + planet rulers + compatibility" },
-    { icon: "🔢", title: "Lo Shu Grid (3×3)",  sub: "Your magic-square: missing & repeated numbers + meaning" },
-    { icon: "🌟", title: "Identity Numbers",   sub: "Life-Path, Soul-Urge, Personality, Expression + Master + Karmic" },
-    { icon: "📜", title: "Cheiro Compound",    sub: "Classical occult meaning of your DOB + Name compound" },
-    { icon: "📅", title: "Personal Cycles",    sub: "Personal Year, Month, Day with themes (live timing)" },
-    { icon: "⛰️", title: "Pinnacles & Challenges", sub: "Life's 4 phases — energies + karmic lessons" },
-    { icon: "💼", title: "Career & Lucky",     sub: "Suitable fields + lucky colors, gems, day, mantra, ishta" },
+  const openTools = async () => {
+    if (!bd) return;
+    setErr(null);
+    if (!mobile && !vehicle && !house) {
+      setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setOpening(true);
+    try {
+      const params = new URLSearchParams({
+        name: bd.name, dob: dobStr,
+        ...(mobile  ? { mobile }  : {}),
+        ...(vehicle ? { vehicle } : {}),
+        ...(house   ? { house }   : {}),
+      });
+      await Linking.openURL(`${API_BASE}/api/numerology/pdf_pro?${params.toString()}`);
+    } finally { setOpening(false); }
+  };
+
+  const stdSections = [
+    { icon: "🎯", title: "Core Numbers",       sub: "Driver, Conductor, Name + planet rulers" },
+    { icon: "🔢", title: "Lo Shu Grid (3×3)",  sub: "Missing & repeated numbers + meaning" },
+    { icon: "🌟", title: "Identity Numbers",   sub: "Life-Path, Soul-Urge, Personality, Expression" },
+    { icon: "🔮", title: "Karmic + Hidden Passion", sub: "Karmic Lessons + Maturity Number" },
+    { icon: "📜", title: "Cheiro Compound",    sub: "Occult meaning of your DOB + Name compound" },
+    { icon: "📅", title: "Personal Cycles",    sub: "Personal Year, Month, Day with themes" },
+    { icon: "💼", title: "Career & Lucky",     sub: "Fields + lucky colors, gems, day, mantra" },
+  ];
+
+  const toolSections = [
+    { icon: "📱", title: "Mobile Number — Deep",   sub: "Digit-by-digit + Cheiro last-4 + alerts + lucky alternatives" },
+    { icon: "🚗", title: "Vehicle Number — Deep",  sub: "Vibration check + favourable plate suggestions" },
+    { icon: "🏠", title: "House Number — Deep",    sub: "Family/wealth/peace verdict for your home" },
+    { icon: "🤝", title: "Compatibility Matrix",   sub: "Your Driver vs all 1-9 (friend/enemy/neutral)" },
+    { icon: "🔤", title: "Letter-by-Letter Table", sub: "Pythagorean + Chaldean per letter" },
+    { icon: "✍️", title: "Signature & Branding",   sub: "First-letter analysis + signature direction" },
+    { icon: "📆", title: "90-Day Action Plan",     sub: "Step-by-step rollout for name/number changes" },
   ];
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Hero card */}
-      <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(245,158,11,0.35)" }]}>
-        <View style={pp.heroRow}>
-          <View style={[pp.heroIcon, { backgroundColor: "rgba(245,158,11,0.15)" }]}>
-            <Text style={{ fontSize: 28 }}>📄</Text>
-          </View>
+      {/* Sub-tab toggle: Standard ₹99 vs Practical Tools ₹149 */}
+      <View style={[pp.subTabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+        <Pressable
+          onPress={() => { setSub("std"); Haptics.selectionAsync(); }}
+          style={[pp.subTabBtn, sub === "std" && { backgroundColor: "#f59e0b" }]}
+        >
+          <Text style={{ fontSize: 16 }}>📄</Text>
           <View style={{ flex: 1 }}>
-            <View style={pp.tagRow}>
-              <View style={[pp.tag, { backgroundColor: "#f59e0b" }]}>
-                <Text style={pp.tagTxt}>PRO REPORT</Text>
-              </View>
-              <View style={[pp.tag, { backgroundColor: "rgba(34,197,94,0.18)" }]}>
-                <Text style={[pp.tagTxt, { color: "#16a34a" }]}>FREE</Text>
-              </View>
-            </View>
-            <Text style={[pp.heroTitle, { color: C.text }]}>
-              Numerology PRO PDF
+            <Text style={[pp.subTabTitle, { color: sub === "std" ? "#fff" : C.text }]}>
+              Standard Report
             </Text>
-            <Text style={[pp.heroSub, { color: C.textMuted }]}>
-              8-page detailed report — instant download
+            <Text style={[pp.subTabSub, { color: sub === "std" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
+              ₹99  •  10 pages
             </Text>
           </View>
-        </View>
+        </Pressable>
+        <Pressable
+          onPress={() => { setSub("tools"); Haptics.selectionAsync(); }}
+          style={[pp.subTabBtn, sub === "tools" && { backgroundColor: "#7c3aed" }]}
+        >
+          <Text style={{ fontSize: 16 }}>🛠️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[pp.subTabTitle, { color: sub === "tools" ? "#fff" : C.text }]}>
+              Practical Tools
+            </Text>
+            <Text style={[pp.subTabSub, { color: sub === "tools" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
+              ₹149  •  11 pages
+            </Text>
+          </View>
+        </Pressable>
       </View>
 
-      {/* What's inside */}
-      <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
-      {sections.map((sec, i) => (
-        <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
-            <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
+      {/* ── STANDARD REPORT ─────────────────────────────────────── */}
+      {sub === "std" && (
+        <>
+          <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(245,158,11,0.35)" }]}>
+            <View style={pp.heroRow}>
+              <View style={[pp.heroIcon, { backgroundColor: "rgba(245,158,11,0.15)" }]}>
+                <Text style={{ fontSize: 28 }}>📄</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={pp.tagRow}>
+                  <View style={[pp.tag, { backgroundColor: "#f59e0b" }]}>
+                    <Text style={pp.tagTxt}>PRO REPORT</Text>
+                  </View>
+                </View>
+                <Text style={[pp.heroTitle, { color: C.text }]}>Numerology PRO PDF</Text>
+                <Text style={[pp.heroSub, { color: C.textMuted }]}>
+                  10-page detailed personal report — instant download
+                </Text>
+              </View>
+            </View>
           </View>
-          <Feather name="check" size={16} color="#22c55e" />
-        </View>
-      ))}
 
-      {/* Generate button */}
-      <Pressable
-        onPress={openPdf}
-        disabled={opening}
-        style={[pp.cta, opening && { opacity: 0.6 }]}
-      >
-        <View style={pp.ctaInner}>
-          <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
-          <Text style={pp.ctaTxt}>{opening ? "Opening report…" : "Generate PRO Report"}</Text>
-        </View>
-      </Pressable>
+          <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
+          {stdSections.map((sec, i) => (
+            <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
+                <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
+              </View>
+              <Feather name="check" size={16} color="#22c55e" />
+            </View>
+          ))}
+
+          <Pressable onPress={openStandard} disabled={opening}
+            style={[pp.cta, opening && { opacity: 0.6 }]}>
+            <View style={pp.ctaInner}>
+              <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
+              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Standard Report"}</Text>
+            </View>
+          </Pressable>
+        </>
+      )}
+
+      {/* ── PRACTICAL TOOLS (Pro+) ──────────────────────────────── */}
+      {sub === "tools" && (
+        <>
+          <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(124,58,237,0.4)" }]}>
+            <View style={pp.heroRow}>
+              <View style={[pp.heroIcon, { backgroundColor: "rgba(124,58,237,0.15)" }]}>
+                <Text style={{ fontSize: 28 }}>🛠️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={pp.tagRow}>
+                  <View style={[pp.tag, { backgroundColor: "#7c3aed" }]}>
+                    <Text style={pp.tagTxt}>PRO+ TOOLS</Text>
+                  </View>
+                  <View style={[pp.tag, { backgroundColor: "rgba(245,158,11,0.18)" }]}>
+                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>PRACTICAL</Text>
+                  </View>
+                </View>
+                <Text style={[pp.heroTitle, { color: C.text }]}>Practical Numerology Tools</Text>
+                <Text style={[pp.heroSub, { color: C.textMuted }]}>
+                  Aapke real Mobile, Vehicle aur House numbers ka deep analysis
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Profile shown (read-only) */}
+          <View style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Feather name="user" size={18} color={C.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={[pp.rowTitle, { color: C.text }]}>{bd?.name || "—"}</Text>
+              <Text style={[pp.rowSub, { color: C.textMuted }]}>DOB: {dobStr}</Text>
+            </View>
+          </View>
+
+          {/* Inputs */}
+          <Text style={[pp.sectionLabel, { color: C.textDim }]}>YOUR NUMBERS (kam se kam ek)</Text>
+
+          <View style={pp.inputBlock}>
+            <Text style={[pp.inputLabel, { color: C.textDim }]}>📱 Mobile Number</Text>
+            <TextInput
+              value={mobile}
+              onChangeText={setMobile}
+              placeholder="9876543210"
+              placeholderTextColor={C.textMuted}
+              keyboardType="phone-pad"
+              maxLength={15}
+              style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
+            />
+          </View>
+
+          <View style={pp.inputBlock}>
+            <Text style={[pp.inputLabel, { color: C.textDim }]}>🚗 Vehicle Number (optional)</Text>
+            <TextInput
+              value={vehicle}
+              onChangeText={(v) => setVehicle(v.toUpperCase())}
+              placeholder="DL01AB1234"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="characters"
+              maxLength={15}
+              style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
+            />
+          </View>
+
+          <View style={pp.inputBlock}>
+            <Text style={[pp.inputLabel, { color: C.textDim }]}>🏠 House / Flat Number (optional)</Text>
+            <TextInput
+              value={house}
+              onChangeText={(v) => setHouse(v.toUpperCase())}
+              placeholder="B-204"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="characters"
+              maxLength={15}
+              style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
+            />
+          </View>
+
+          {err && (
+            <View style={[pp.errBox]}>
+              <Feather name="alert-circle" size={14} color="#dc2626" />
+              <Text style={pp.errTxt}>{err}</Text>
+            </View>
+          )}
+
+          <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
+          {toolSections.map((sec, i) => (
+            <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
+                <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
+              </View>
+              <Feather name="check" size={16} color="#22c55e" />
+            </View>
+          ))}
+
+          <Pressable onPress={openTools} disabled={opening}
+            style={[pp.cta, { backgroundColor: "#7c3aed", shadowColor: "#7c3aed" },
+                    opening && { opacity: 0.6 }]}>
+            <View style={pp.ctaInner}>
+              <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
+              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Practical Tools PDF"}</Text>
+            </View>
+          </Pressable>
+        </>
+      )}
 
       {/* Foot note */}
       <View style={[pp.note, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Feather name="info" size={12} color={C.textMuted} />
         <Text style={[pp.noteTxt, { color: C.textMuted }]}>
           Report opens in your browser. PDF can be saved or shared from there.
-          All numbers are deterministic — recomputable any time.
+          All numbers are 100% deterministic — same inputs always give same result.
         </Text>
       </View>
     </View>
@@ -552,6 +716,20 @@ const pp = StyleSheet.create({
   ctaTxt:      { color: "#fff", fontSize: 15, fontWeight: "900" },
   note:        { borderRadius: 12, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 8 },
   noteTxt:     { fontSize: 11, lineHeight: 16, flex: 1 },
+  subTabBar:   { flexDirection: "row", padding: 4, borderRadius: 14, borderWidth: 1, gap: 4 },
+  subTabBtn:   { flex: 1, flexDirection: "row", alignItems: "center", gap: 8,
+                 paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10 },
+  subTabTitle: { fontSize: 12, fontWeight: "900" },
+  subTabSub:   { fontSize: 10, marginTop: 1, fontWeight: "700" },
+  inputBlock:  { gap: 6 },
+  inputLabel:  { fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
+  input:       { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14,
+                 paddingVertical: 12, fontSize: 15, fontWeight: "700",
+                 letterSpacing: 0.5 },
+  errBox:      { flexDirection: "row", alignItems: "center", gap: 6,
+                 backgroundColor: "rgba(220,38,38,0.1)", borderRadius: 10,
+                 padding: 10, borderWidth: 1, borderColor: "rgba(220,38,38,0.3)" },
+  errTxt:      { fontSize: 12, color: "#dc2626", fontWeight: "700", flex: 1 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────

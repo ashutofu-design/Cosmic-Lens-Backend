@@ -354,3 +354,9 @@ id = "cOqS7bsCJ1LhZvIKjAVnK"
 uri = "file://attached_assets/exports/Life_Mastery_v7_hg.pdf"
 type = "pdf"
 title = "Life Mastery (37 pages) — Hinglish"
+
+[[outputs]]
+id = "jeUH9yZv_5GG5rI81jqEy"
+uri = "file://attached_assets/qr/cosmic-lens-expo.png"
+type = "image"
+title = "Cosmic Lens — Expo Go QR Code (scan in Expo Go app)"

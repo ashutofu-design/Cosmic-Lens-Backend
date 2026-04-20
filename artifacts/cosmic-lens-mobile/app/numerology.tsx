@@ -482,7 +482,10 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   };
 
   const openStandard = async () => {
-    if (!bd) return;
+    if (!bd) {
+      setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
+      return;
+    }
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr, tob: tobStr,
       gender: (profile.gender || "male").toLowerCase(),
@@ -496,8 +499,11 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   };
 
   const openTools = async () => {
-    if (!bd) return;
     setErr(null);
+    if (!bd) {
+      setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
+      return;
+    }
     if (!mobile && !vehicle && !house) {
       setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
       return;

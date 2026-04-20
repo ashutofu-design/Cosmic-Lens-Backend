@@ -1317,3 +1317,25 @@ api-server/ai_brain/
 ---
 
 # 🔚 ROADMAP END — This is the source of truth for all future work
+
+## Life Mastery Report v9 — A-to-Z 17-Tier Edition (2026-04-20)
+
+**Goal**: Expand ₹1499 "Life Mastery Report" PDF into a 17-tier A-to-Z edition (~110-130 pages, 3 langs EN/HI/HG). Standard Report removed — single Life Mastery PDF only.
+
+### Phase 1 — Foundation (Tier 1 + Tier 2) ✅ COMPLETE
+
+**Tier 1 — Core Numerology (13 sub-numbers)**
+- `vedic/numerology/core_ext.py`: maturity, balance, hidden_passion, karmic_lessons calcs
+- `vedic/numerology/tier1_content.py`: 3-lang narratives (13 dicts)
+- `_tier1_core_numbers_section` in `numerology_pdf_part2.py`: Life Path, Expression, Soul Urge, Personality, Birthday, Maturity, Balance, Hidden Passion, Karmic Debt, Karmic Lessons, Personal Year, Pinnacles, Challenges
+
+**Tier 2 — Vedic Classical Core**
+- `vedic/numerology/vedic_classical.py`: Sun/Moon Rashi (sidereal/Lahiri via pyswisseph), Nakshatra+Pada, Vimshottari Mahadasha (120yr timeline anchored on DOB+TOB), Sadhe Sati + Dhaiya detection, Navagraha strength proxy, Ishta Devata + Personal Yantra
+- `_tier2_vedic_classical_section` in `numerology_pdf_part2.py`: 6 premium sections w/ Lo Shu 3×3 grid visual + Mahadasha timeline table + Navagraha bar chart
+- `render_part2_pdf` now accepts `tob` param; `/api/numerology/pdf_pro` route passes tob through; mobile `numerology.tsx` includes tob in query params
+
+**Smoke test**: 42 pages across EN/HI/HG, all Tier 1+2 content rendering correctly. Mahadasha cycle exactly 120 years from birth.
+
+### Phase 2 — Tiers 3+4+8 (Remedies + Audits + Health) — PENDING
+### Phase 3 — Tiers 5+7+9+11+12 (Relationships, Wealth, Career, Lucky, Timing) — PENDING
+### Phase 4 — Tiers 10+13+14+15+6+16+17 (Spiritual, Digital, Family, Legacy, Dashboard, Appendix, App-tie-in) — PENDING

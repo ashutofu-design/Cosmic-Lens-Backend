@@ -431,8 +431,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
   const bd = profile.birthData;
 
-  // sub-tab: choose between Standard (Part 1) and Life Mastery Report (Part 2)
-  const [sub, setSub] = useState<"std" | "tools">("std");
+  // Single product: Life Mastery Report (Part 2) only — Standard removed.
   const [lang, setLang] = useState<"english" | "hindi" | "hinglish">("hinglish");
   const [opening, setOpening] = useState(false);
 
@@ -481,23 +480,6 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     }
   };
 
-  const openStandard = async () => {
-    if (!bd) {
-      setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
-      return;
-    }
-    const params = new URLSearchParams({
-      name: bd.name, dob: dobStr, tob: tobStr,
-      gender: (profile.gender || "male").toLowerCase(),
-      lang,
-    });
-    const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
-    await downloadAndShare(
-      `${API_BASE}/api/numerology/pdf?${params.toString()}`,
-      `Numerology_${safeName}.pdf`,
-    );
-  };
-
   const openTools = async () => {
     setErr(null);
     if (!bd) {
@@ -511,6 +493,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr,
       lang,
+      ...(tobStr  ? { tob: tobStr } : {}),
       ...(mobile  ? { mobile }  : {}),
       ...(vehicle ? { vehicle } : {}),
       ...(house   ? { house }   : {}),
@@ -521,16 +504,6 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       `Numerology_Tools_${safeName}.pdf`,
     );
   };
-
-  const stdSections = [
-    { icon: "🎯", title: "Core Numbers",       sub: "Driver, Conductor, Name + planet rulers" },
-    { icon: "🔢", title: "Lo Shu Grid (3×3)",  sub: "Missing & repeated numbers + meaning" },
-    { icon: "🌟", title: "Identity Numbers",   sub: "Life-Path, Soul-Urge, Personality, Expression" },
-    { icon: "🔮", title: "Karmic + Hidden Passion", sub: "Karmic Lessons + Maturity Number" },
-    { icon: "📜", title: "Cheiro Compound",    sub: "Occult meaning of your DOB + Name compound" },
-    { icon: "📅", title: "Personal Cycles",    sub: "Personal Year, Month, Day with themes" },
-    { icon: "💼", title: "Career & Lucky",     sub: "Fields + lucky colors, gems, day, mantra" },
-  ];
 
   const toolSections = [
     { icon: "⭐", title: "Life Blueprint Card",        sub: "Core personality + 2026 focus + biggest strength/challenge" },
@@ -549,84 +522,8 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Sub-tab toggle: Standard ₹99 vs Life Mastery Report ₹1499 */}
-      <View style={[pp.subTabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-        <Pressable
-          onPress={() => { setSub("std"); Haptics.selectionAsync(); }}
-          style={[pp.subTabBtn, sub === "std" && { backgroundColor: "#f59e0b" }]}
-        >
-          <Text style={{ fontSize: 16 }}>📄</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[pp.subTabTitle, { color: sub === "std" ? "#fff" : C.text }]}>
-              Standard Report
-            </Text>
-            <Text style={[pp.subTabSub, { color: sub === "std" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
-              ₹99  •  10 pages
-            </Text>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={() => { setSub("tools"); Haptics.selectionAsync(); }}
-          style={[pp.subTabBtn, sub === "tools" && { backgroundColor: "#7c3aed" }]}
-        >
-          <Text style={{ fontSize: 16 }}>🛠️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[pp.subTabTitle, { color: sub === "tools" ? "#fff" : C.text }]}>
-              Life Mastery Report
-            </Text>
-            <Text style={[pp.subTabSub, { color: sub === "tools" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
-              ₹1499  •  26 pages
-            </Text>
-          </View>
-        </Pressable>
-      </View>
-
-      {/* ── STANDARD REPORT ─────────────────────────────────────── */}
-      {sub === "std" && (
-        <>
-          <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(245,158,11,0.35)" }]}>
-            <View style={pp.heroRow}>
-              <View style={[pp.heroIcon, { backgroundColor: "rgba(245,158,11,0.15)" }]}>
-                <Text style={{ fontSize: 28 }}>📄</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={pp.tagRow}>
-                  <View style={[pp.tag, { backgroundColor: "#f59e0b" }]}>
-                    <Text style={pp.tagTxt}>PRO REPORT</Text>
-                  </View>
-                </View>
-                <Text style={[pp.heroTitle, { color: C.text }]}>Numerology PRO PDF</Text>
-                <Text style={[pp.heroSub, { color: C.textMuted }]}>
-                  10-page detailed personal report — instant download
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
-          {stdSections.map((sec, i) => (
-            <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
-                <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
-              </View>
-              <Feather name="check" size={16} color="#22c55e" />
-            </View>
-          ))}
-
-          <Pressable onPress={openStandard} disabled={opening}
-            style={[pp.cta, opening && { opacity: 0.6 }]}>
-            <View style={pp.ctaInner}>
-              <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
-              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Standard Report"}</Text>
-            </View>
-          </Pressable>
-        </>
-      )}
-
-      {/* ── LIFE MASTERY REPORT (Pro+) ──────────────────────────── */}
-      {sub === "tools" && (
+      {/* ── LIFE MASTERY REPORT (single product) ─────────────────── */}
+      {true && (
         <>
           <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(124,58,237,0.4)" }]}>
             <View style={pp.heroRow}>

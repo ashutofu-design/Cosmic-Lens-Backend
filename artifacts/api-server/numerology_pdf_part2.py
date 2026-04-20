@@ -3522,13 +3522,871 @@ def _brand_digital_section(s, name: str, driver: int, lang: str = "hinglish") ->
     return flow
 
 
+# ══════════════════════════════════════════════════════════════════════
+#  TIER 1 — Core Numerology Numbers (A-to-Z edition)
+#  Life Path · Expression · Soul Urge · Personality · Birthday · Maturity
+#  Balance · Hidden Passion · Karmic Debt · Karmic Lessons · Personal Year
+#  Pinnacles · Challenges  →  ~8-10 pages
+# ══════════════════════════════════════════════════════════════════════
+
+def _tier1_core_numbers_section(s, name: str, dob: str,
+                                lang: str = "hinglish") -> List[Any]:
+    """Tier 1 — 13 core Pythagorean numbers with full 3-lang narratives."""
+    from vedic.numerology.extended import compute_extended_numerology
+    from vedic.numerology.practical import compute_pinnacles_challenges
+    from vedic.numerology import core_ext as _cx
+    from vedic.numerology import tier1_content as _t1c
+
+    flow: List[Any] = []
+
+    # ── Build data ────────────────────────────────────────────────
+    ext = compute_extended_numerology({"name": name, "dob": dob})
+    if not ext.get("available"):
+        return flow  # DOB unparseable; skip silently
+
+    lp_info = ext["life_path"]
+    lp = lp_info.get("life_path", 0)
+    bday_num = lp_info.get("birthday_number", 0)
+
+    nt = ext["name_triad"]
+    expr = nt.get("expression") if nt.get("available") else None
+    soul = nt.get("soul_urge") if nt.get("available") else None
+    pers = nt.get("personality") if nt.get("available") else None
+
+    pc = ext["personal_cycles"]
+    py = pc.get("personal_year", 0)
+
+    kd = ext["karmic_debt"]
+    has_kd = kd.get("has_karmic_debt", False)
+    kd_list = kd.get("debts", [])
+
+    maturity = _cx.maturity_number(lp, expr) if (lp and expr) else 0
+    balance = _cx.balance_number(name)
+    hp = _cx.hidden_passion(name)
+    kl = _cx.karmic_lessons(name)
+
+    # Pinnacles + challenges (practical.py expects date object)
+    try:
+        from datetime import datetime as _dt
+        _dob_obj = _dt.strptime(dob, "%Y-%m-%d").date() if isinstance(dob, str) else dob
+        pin_ch = compute_pinnacles_challenges(_dob_obj)
+    except Exception as _e:
+        import logging; logging.getLogger(__name__).warning("pin_ch failed: %s", _e)
+        pin_ch = None
+
+    # ── Title & intro explainer ───────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🔢 TIER 1 — YOUR CORE NUMBERS (A-Z)",
+        "🔢 टियर 1 — आपके मूल अंक (A-Z)",
+        "🔢 TIER 1 — AAPKE CORE NUMBERS (A-Z)"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why these 13 numbers matter more than anything else",
+        "📖 ये 13 अंक सबसे ज़्यादा क्यों मायने रखते हैं",
+        "📖 Yeh 13 numbers sabse zyada kyu matter karte hain",
+        "Pythagorean numerology — the system used across 100+ countries for 2,500+ years — "
+        "reduces <b>your name and birth-date</b> to 13 core vibrations. Together they reveal "
+        "your life's <b>mission, gifts, karmic debts, hidden drives, and timing windows</b>. "
+        "Every tier below this one is built on these numbers. Read slowly — this is the "
+        "spine of your entire report.",
+        "पाइथागोरस अंक-शास्त्र — 100+ देशों में 2,500+ वर्षों से प्रयोग होने वाली पद्धति — "
+        "<b>आपके नाम और जन्म-तिथि</b> को 13 मूल कंपनों में सार-रूप देती है। ये मिलकर आपके जीवन "
+        "के <b>मिशन, वरदान, कर्म-ऋण, गुप्त प्रेरणा, और समय-खिड़कियों</b> को प्रकट करते हैं। "
+        "इसके बाद की हर टियर इन्हीं अंकों पर टिकी है। धीरे पढ़िए — यह पूरी रिपोर्ट की रीढ़ है।",
+        "Pythagorean numerology — 100+ countries me 2,500+ saal se use hone waali system — "
+        "<b>aapke naam aur janma-tithi</b> ko 13 core vibrations me reduce karti hai. Yeh "
+        "milkar aapki life ka <b>mission, gifts, karmic debts, hidden drives aur timing "
+        "windows</b> reveal karte hain. Iske baad ka har tier inhi numbers par tika hai. "
+        "Dheere padhiye — yeh poori report ki reedh hai.",
+        bg="#FDF4FF", border="#7C3AED"))
+    flow.append(Spacer(1, 5 * mm))
+
+    # ── 1. LIFE PATH ──────────────────────────────────────────────
+    lp_txt = _t1c.t1_get(_t1c.LIFE_PATH, lp, lang) or _T(lang,
+        "Life Path shapes your entire journey.",
+        "जीवन-पथ आपकी पूरी यात्रा को आकार देता है।",
+        "Life Path aapki poori yatra ko shape karta hai.")
+    flow.append(_premium_card(s,
+        _T(lang,
+           f"1️⃣  LIFE PATH NUMBER — {lp}",
+           f"1️⃣  जीवन-पथ अंक — {lp}",
+           f"1️⃣  LIFE PATH NUMBER — {lp}"),
+        f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+        + _T(lang,
+             "The sum of your full birth-date reduced — the single most important number in your chart. It describes the road you're here to walk.",
+             "आपकी पूरी जन्म-तिथि का सार — आपकी कुंडली का सबसे महत्वपूर्ण अंक। यह वह मार्ग है जिस पर आप चलने आए हैं।",
+             "Aapki poori janma-tithi ka sum reduce kiya — aapki chart ka sabse important number. Yeh woh road hai jis par aap chalne aaye ho.")
+        + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {lp_txt}",
+        bg_color=colors.HexColor("#F5F3FF"), border_color=BRAND_PURPLE, lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. EXPRESSION ─────────────────────────────────────────────
+    if expr:
+        exp_txt = _t1c.t1_get(_t1c.EXPRESSION, expr, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"2️⃣  EXPRESSION / DESTINY NUMBER — {expr}",
+               f"2️⃣  अभिव्यक्ति / नियति अंक — {expr}",
+               f"2️⃣  EXPRESSION / DESTINY NUMBER — {expr}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "The total value of every letter in your full name — describes what you're meant to DO, achieve, and be known for.",
+                 "आपके पूरे नाम के हर अक्षर का कुल मान — यह बताता है आप क्या <b>करने</b>, उपलब्ध करने और जाने जाने आए हैं।",
+                 "Aapke poore naam ke har letter ka total value — batata hai aap kya <b>karne</b>, achieve karne aur known hone aaye ho.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {exp_txt}",
+            bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#C2410C"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. SOUL URGE ──────────────────────────────────────────────
+    if soul:
+        soul_txt = _t1c.t1_get(_t1c.SOUL_URGE, soul, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"3️⃣  SOUL URGE (HEART'S DESIRE) — {soul}",
+               f"3️⃣  आत्म-इच्छा (हृदय-इच्छा) — {soul}",
+               f"3️⃣  SOUL URGE (HEART'S DESIRE) — {soul}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Sum of only the VOWELS in your name — what your heart truly craves, often different from what you chase publicly.",
+                 "आपके नाम के केवल स्वरों का योग — आपका हृदय वास्तव में क्या चाहता है, अक्सर उससे भिन्न जो आप सार्वजनिक रूप से पीछा करते हैं।",
+                 "Aapke naam ke sirf VOWELS ka sum — aapka dil sach me kya chahta hai, aksar jo publicly chase karte ho usse alag.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {soul_txt}",
+            bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#BE123C"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. PERSONALITY ────────────────────────────────────────────
+    if pers:
+        pers_txt = _t1c.t1_get(_t1c.PERSONALITY, pers, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"4️⃣  PERSONALITY NUMBER — {pers}",
+               f"4️⃣  व्यक्तित्व अंक — {pers}",
+               f"4️⃣  PERSONALITY NUMBER — {pers}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Sum of only the CONSONANTS in your name — how the world first perceives you before they know you.",
+                 "आपके नाम के केवल व्यंजनों का योग — दुनिया पहली बार आपको कैसे देखती है, जानने से पहले।",
+                 "Aapke naam ke sirf CONSONANTS ka sum — duniya aapko pehli baar kaise perceive karti hai, jaanne se pehle.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {pers_txt}",
+            bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    flow.append(PageBreak())
+
+    # ── 5. BIRTHDAY ───────────────────────────────────────────────
+    if bday_num:
+        b_txt = _t1c.t1_get(_t1c.BIRTHDAY, bday_num, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"5️⃣  BIRTHDAY NUMBER — {bday_num}",
+               f"5️⃣  जन्म-दिवस अंक — {bday_num}",
+               f"5️⃣  BIRTHDAY NUMBER — {bday_num}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "The day of the month you were born — a secondary gift that flavours your whole life.",
+                 "महीने का वह दिन जब आप पैदा हुए — एक द्वितीयक वरदान जो आपके पूरे जीवन में स्वाद जोड़ता है।",
+                 "Mahine ka woh din jab aap paida hue — ek secondary gift jo aapki poori life me flavour add karta hai.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {b_txt}",
+            bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. MATURITY ───────────────────────────────────────────────
+    if maturity:
+        mat_txt = _t1c.t1_get(_t1c.MATURITY, maturity, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"6️⃣  MATURITY NUMBER — {maturity}  (activates ~35+)",
+               f"6️⃣  परिपक्वता अंक — {maturity}  (लगभग 35+ पर सक्रिय)",
+               f"6️⃣  MATURITY NUMBER — {maturity}  (activates ~35+)"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Life Path + Expression reduced. The 'true self' that emerges after mid-30s when ego settles and real mission appears.",
+                 "जीवन-पथ + अभिव्यक्ति का सार। 'वास्तविक स्वरूप' जो मध्य-30 के बाद अहंकार शांत होने पर प्रकट होता है।",
+                 "Life Path + Expression reduce kiya. 'True self' jo mid-30s ke baad ego settle hone par emerge hota hai.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {mat_txt}",
+            bg_color=colors.HexColor("#EEF2FF"), border_color=colors.HexColor("#4338CA"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. BALANCE ────────────────────────────────────────────────
+    if balance:
+        bal_txt = _t1c.t1_get(_t1c.BALANCE, balance, lang)
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"7️⃣  BALANCE NUMBER — {balance}  (crisis-recovery)",
+               f"7️⃣  संतुलन अंक — {balance}  (संकट-पुनः-स्थापना)",
+               f"7️⃣  BALANCE NUMBER — {balance}  (crisis-recovery)"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Sum of the first letter of each name-word — reveals HOW you recover when life knocks you down.",
+                 "आपके नाम के हर शब्द के पहले अक्षर का योग — जीवन गिराए तो आप कैसे उठते हैं।",
+                 "Aapke naam ke har word ke first letter ka sum — life giraa de to aap kaise uthte ho.")
+            + f"<br/><br/><b>{_T(lang, 'Your recovery mode', 'आपकी पुनः-स्थापना विधि', 'Aapka recovery mode')}:</b> {bal_txt}",
+            bg_color=colors.HexColor("#F0FDFA"), border_color=colors.HexColor("#0D9488"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. HIDDEN PASSION ─────────────────────────────────────────
+    if hp.get("value"):
+        hp_val = hp["value"]
+        hp_txt = _t1c.t1_get(_t1c.HIDDEN_PASSION, hp_val, lang)
+        tied = ""
+        if len(hp.get("values", [])) > 1:
+            tied = " (" + _T(lang,
+                "tied with ", "के साथ बराबर ", "ke saath tied: ") + \
+                ", ".join(str(v) for v in hp["values"][1:]) + ")"
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"8️⃣  HIDDEN PASSION — {hp_val}{tied}",
+               f"8️⃣  गुप्त प्रेरणा — {hp_val}{tied}",
+               f"8️⃣  HIDDEN PASSION — {hp_val}{tied}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "The most-repeated letter value in your name — your secret obsession, the thing you'll always circle back to.",
+                 "आपके नाम में सबसे अधिक दोहराया गया अक्षर-मान — आपकी गुप्त लगन, जिस पर आप हमेशा वापस आएँगे।",
+                 "Aapke naam me sabse zyada repeated letter-value — aapki secret obsession, jis par aap hamesha wapas aaoge.")
+            + f"<br/><br/><b>{_T(lang, 'Your hidden drive', 'आपकी छुपी प्रेरणा', 'Aapki chhupi drive')}:</b> {hp_txt}",
+            bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#A16207"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    flow.append(PageBreak())
+
+    # ── 9. KARMIC DEBT ────────────────────────────────────────────
+    if has_kd and kd_list:
+        body_parts = []
+        for d in kd_list:
+            kd_v = d.get("value")
+            src = d.get("source", "")
+            detail = _t1c.t1_get(_t1c.KARMIC_DEBT_DETAIL, kd_v, lang) or d.get("meaning", "")
+            body_parts.append(
+                f"<b>⚠ {kd_v}</b> ({src}): {detail}")
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"9️⃣  KARMIC DEBT — {len(kd_list)} detected",
+               f"9️⃣  कर्म-ऋण — {len(kd_list)} पाए गए",
+               f"9️⃣  KARMIC DEBT — {len(kd_list)} detected"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Specific numbers (13/14/16/19) in your chart flag unfinished business from past lives. Ignoring them → repeated patterns. Addressing them → rapid soul growth.",
+                 "आपकी कुंडली में विशिष्ट संख्याएँ (13/14/16/19) पूर्व-जन्मों के अधूरे कर्म दर्शाती हैं। उपेक्षा → दोहराए पैटर्न। ध्यान → तीव्र आत्म-विकास।",
+                 "Aapki chart me specific numbers (13/14/16/19) past-lives ka unfinished karma flag karte hain. Ignore → repeated patterns. Address → rapid soul growth.")
+            + "<br/><br/>" + "<br/><br/>".join(body_parts),
+            bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#B91C1C"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+    else:
+        flow.append(_premium_card(s,
+            _T(lang,
+               "9️⃣  KARMIC DEBT — ✓ CLEAN",
+               "9️⃣  कर्म-ऋण — ✓ शुद्ध",
+               "9️⃣  KARMIC DEBT — ✓ CLEAN"),
+            _T(lang,
+               "No karmic-debt numbers (13/14/16/19) detected in your chart. Your past-life ledger is clean — which means fewer 'forced' lessons. Use this freedom wisely.",
+               "आपकी कुंडली में कोई कर्म-ऋण संख्या (13/14/16/19) नहीं। आपका पूर्व-जन्म खाता शुद्ध है — कम 'बाध्य' पाठ। इस स्वतंत्रता का बुद्धिमानी से उपयोग करें।",
+               "Aapki chart me koi karmic-debt number (13/14/16/19) nahi. Aapka past-life ledger clean hai — kam 'forced' lessons. Iss freedom ka wisely use karo."),
+            bg_color=colors.HexColor("#F0FDF4"), border_color=colors.HexColor("#15803D"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 10. KARMIC LESSONS ────────────────────────────────────────
+    if kl:
+        body_parts = []
+        for n in kl:
+            body_parts.append(f"<b>{n}</b> → " + _t1c.t1_get(_t1c.KARMIC_LESSON, n, lang))
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"🔟  KARMIC LESSONS — {len(kl)} missing: {', '.join(str(n) for n in kl)}",
+               f"🔟  कर्म-पाठ — {len(kl)} अनुपस्थित: {', '.join(str(n) for n in kl)}",
+               f"🔟  KARMIC LESSONS — {len(kl)} missing: {', '.join(str(n) for n in kl)}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Digits 1-9 that DO NOT appear in your name's letter values. Each missing digit = a life-skill you came to develop from scratch.",
+                 "अंक 1-9 जो आपके नाम के अक्षर-मानों में नहीं आते। प्रत्येक अनुपस्थित अंक = जीवन-कौशल जो आप शून्य से विकसित करने आए हैं।",
+                 "Digits 1-9 jo aapke naam ke letter-values me nahi aate. Har missing digit = ek life-skill jo aap zero se develop karne aaye ho.")
+            + "<br/><br/>" + "<br/><br/>".join(body_parts),
+            bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+    else:
+        flow.append(_premium_card(s,
+            _T(lang,
+               "🔟  KARMIC LESSONS — ✓ ALL NINE PRESENT",
+               "🔟  कर्म-पाठ — ✓ सभी नौ उपस्थित",
+               "🔟  KARMIC LESSONS — ✓ SAARE NAU PRESENT"),
+            _T(lang,
+               "Rare — all digits 1-9 appear in your name. You arrived with a complete toolkit. No 'missing' lessons; instead, you're here to MASTER (not learn) each vibration.",
+               "दुर्लभ — आपके नाम में 1-9 सभी अंक मौजूद। आप पूर्ण उपकरण-किट के साथ आए हैं। कोई 'अनुपस्थित' पाठ नहीं; बल्कि आप हर कंपन में महारत पाने आए हैं।",
+               "Rare — aapke naam me 1-9 saare digits maujood. Aap complete toolkit ke saath aaye ho. Koi 'missing' lesson nahi; balki aap har vibration MASTER karne aaye ho."),
+            bg_color=colors.HexColor("#F0FDF4"), border_color=colors.HexColor("#15803D"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 11. PERSONAL YEAR ─────────────────────────────────────────
+    if py:
+        py_txt = _t1c.t1_get(_t1c.PERSONAL_YEAR, py, lang)
+        from datetime import datetime as _dt
+        cur_yr = _dt.now().year
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"1️⃣1️⃣  PERSONAL YEAR ({cur_yr}) — {py}",
+               f"1️⃣1️⃣  व्यक्तिगत वर्ष ({cur_yr}) — {py}",
+               f"1️⃣1️⃣  PERSONAL YEAR ({cur_yr}) — {py}"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Your personal 9-year cycle position for this calendar year. Tells you what kind of energy THIS year is opening for you.",
+                 "इस कैलेंडर वर्ष में आपकी व्यक्तिगत 9-वर्षीय चक्र स्थिति। बताता है इस वर्ष किस प्रकार की ऊर्जा आपके लिए खुल रही है।",
+                 "Iss calendar year me aapki personal 9-year cycle position. Batata hai iss saal kis tarah ki energy aapke liye khul rahi hai.")
+            + f"<br/><br/><b>{_T(lang, 'Your theme for', 'आपका विषय', 'Aapka theme')} {cur_yr}:</b> {py_txt}",
+            bg_color=colors.HexColor("#F5F3FF"), border_color=BRAND_PURPLE, lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    flow.append(PageBreak())
+
+    # ── 12. PINNACLES ─────────────────────────────────────────────
+    if pin_ch and pin_ch.get("pinnacles"):
+        pins = pin_ch.get("pinnacles") or []
+        body_lines = []
+        for i, p in enumerate(pins, 1):
+            num = p.get("number") or p.get("value") or 0
+            period = p.get("period") or f"{p.get('start_age','?')}–{p.get('end_age','?')}"
+            desc = _t1c.t1_get(_t1c.PINNACLE, num, lang)
+            body_lines.append(
+                f"<b>Pinnacle {i}</b> ({period}): "
+                f"<b>{num}</b> — {desc}")
+        flow.append(_premium_card(s,
+            _T(lang,
+               "1️⃣2️⃣  FOUR PINNACLES — Life's Peak Phases",
+               "1️⃣2️⃣  चार शिखर — जीवन के उच्च चरण",
+               "1️⃣2️⃣  FOUR PINNACLES — Life ke Peak Phases"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Your life splits into 4 peak eras — each with a dominant theme that shapes the opportunities of that age-range.",
+                 "आपका जीवन 4 शिखर युगों में बँटा है — प्रत्येक का एक प्रमुख विषय जो उस आयु-सीमा के अवसरों को आकार देता है।",
+                 "Aapki life 4 peak eras me bat-ti hai — har ek ka ek dominant theme jo uss age-range ke opportunities ko shape karta hai.")
+            + "<br/><br/>" + "<br/><br/>".join(body_lines),
+            bg_color=colors.HexColor("#EEF2FF"), border_color=colors.HexColor("#4338CA"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 13. CHALLENGES ────────────────────────────────────────────
+    if pin_ch and pin_ch.get("challenges"):
+        chs = pin_ch.get("challenges") or []
+        body_lines = []
+        for i, c in enumerate(chs, 1):
+            num = c.get("number") or c.get("value") or 0
+            period = c.get("period") or f"{c.get('start_age','?')}–{c.get('end_age','?')}"
+            desc = _t1c.t1_get(_t1c.CHALLENGE, num, lang)
+            body_lines.append(
+                f"<b>Challenge {i}</b> ({period}): "
+                f"<b>{num}</b> — {desc}")
+        flow.append(_premium_card(s,
+            _T(lang,
+               "1️⃣3️⃣  FOUR CHALLENGES — Life's Core Lessons",
+               "1️⃣3️⃣  चार चुनौतियाँ — जीवन के मूल पाठ",
+               "1️⃣3️⃣  FOUR CHALLENGES — Life ke Core Lessons"),
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "Each pinnacle has a paired challenge — the lesson you MUST master before the era delivers its full gift.",
+                 "प्रत्येक शिखर के साथ एक जोड़ी-चुनौती है — वह पाठ जिसे आप उस युग का पूरा वरदान पाने से पहले सीखें।",
+                 "Har pinnacle ke saath ek paired challenge hota hai — woh lesson jo aapko us era ka full gift milne se pehle master karna hai.")
+            + "<br/><br/>" + "<br/><br/>".join(body_lines),
+            bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#BE123C"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── Tier 1 wrap ───────────────────────────────────────────────
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "✅ Tier 1 complete — foundation set",
+        "✅ टियर 1 पूर्ण — आधार स्थापित",
+        "✅ Tier 1 complete — foundation set",
+        "You now know your 13 core numbers. Everything that follows — Lo Shu grid, dashas, "
+        "yantra, remedies, career calendars, compatibility — builds on top of these. "
+        "Keep this page bookmarked; refer back whenever a later section references 'your Life Path' or 'your Expression'.",
+        "अब आप अपने 13 मूल अंक जानते हैं। आगे आने वाला सब कुछ — लो शू ग्रिड, दशा, यंत्र, उपाय, "
+        "करियर कैलेंडर, अनुकूलता — इन्हीं पर आधारित है। यह पृष्ठ बुकमार्क रखें; बाद में जब भी "
+        "कोई सेक्शन 'आपके जीवन-पथ' या 'आपकी अभिव्यक्ति' का संदर्भ दे, वापस यहाँ आएँ।",
+        "Ab aap apne 13 core numbers jaante ho. Aage jo bhi aayega — Lo Shu grid, dashas, "
+        "yantra, remedies, career calendars, compatibility — sab inhi par based hai. Iss "
+        "page ko bookmark karo; baad me jab bhi koi section 'aapke Life Path' ya 'aapki "
+        "Expression' ka reference de, wapas yahan aao.",
+        bg="#F0FDF4", border="#15803D"))
+
+    return flow
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TIER 2 — VEDIC CLASSICAL (Rashi, Nakshatra, Lo Shu, Dasha, Sadhe Sati,
+# Navagraha, Ishta Devata, Yantra)  — T305
+# ═══════════════════════════════════════════════════════════════════════════
+def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
+                                    driver: int, lang: str = "hinglish") -> list:
+    """Render ~10-14 pages of Vedic classical core for Life Mastery Report."""
+    from vedic.numerology.vedic_classical import (
+        compute_tier2_bundle, RASHIS, NAKSHATRAS,
+    )
+    from vedic.numerology.extended import compute_lo_shu, LO_SHU_MEANING
+    from datetime import datetime as _dt
+    from reportlab.platypus import Paragraph, Spacer, PageBreak, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+
+    flow: list = []
+
+    # ── Compute bundle ────────────────────────────────────────────────
+    try:
+        bundle = compute_tier2_bundle(dob, tob, driver)
+    except Exception as e:
+        import logging; logging.getLogger(__name__).warning("tier2 bundle failed: %s", e)
+        return flow
+
+    try:
+        dob_obj = _dt.strptime(dob, "%Y-%m-%d").date()
+        lo = compute_lo_shu(dob_obj)
+    except Exception:
+        lo = None
+
+    rn = bundle["rashi_nakshatra"]
+    md = bundle["mahadasha"]
+    ss = bundle["sadhe_sati"]
+    nav = bundle["navagraha_strengths"]
+    ishta = bundle["ishta_devata"]
+
+    def _rn_label(tup):
+        if not tup: return "—"
+        en, hi, alt = tup
+        if lang == "hindi":  return f"{hi} ({alt})"
+        if lang == "english": return f"{alt} ({en})"
+        return f"{en} / {alt}"
+
+    # (Caller adds PageBreak before this section — don't add another.)
+
+    # ── Title ────────────────────────────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🕉️ TIER 2 — VEDIC CLASSICAL CORE",
+        "🕉️ टियर 2 — वैदिक शास्त्रीय आधार",
+        "🕉️ TIER 2 — VEDIC CLASSICAL CORE"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why Vedic classical matters alongside numerology",
+        "📖 संख्याशास्त्र के साथ वैदिक शास्त्रीय क्यों मायने रखता है",
+        "📖 Numerology ke saath Vedic classical kyu matter karta hai",
+        "Numerology reveals the vibrations of your name and birth-date. Vedic classical astrology reveals "
+        "the planetary timing that activates or delays those vibrations. Your Moon Rashi shows your inner "
+        "emotional world, your Nakshatra reveals your soul's natural gifts, your Mahadasha tells you which "
+        "planet is currently dictating your life's chapter, Sadhe Sati warns of Saturn's pressure phases, "
+        "and your Lo Shu grid maps which elements are abundant vs missing. Together they form a GPS: "
+        "numerology gives the destination, Vedic classical gives the road conditions.",
+        "संख्याशास्त्र आपके नाम और जन्म-तिथि के स्पंदनों को प्रकट करता है। वैदिक शास्त्रीय ज्योतिष "
+        "ग्रहों के काल-क्रम को प्रकट करता है जो उन स्पंदनों को सक्रिय या विलंबित करता है। आपकी चंद्र "
+        "राशि आपके भीतरी भाव-जगत को दर्शाती है, आपका नक्षत्र आत्मा के सहज वरदान प्रकट करता है, "
+        "आपकी महादशा बताती है कि अभी कौन सा ग्रह आपके जीवन-अध्याय को संचालित कर रहा है, "
+        "साढ़ेसाती शनि के दबाव काल की चेतावनी देती है, और लो शू ग्रिड यह दर्शाता है कि कौन से तत्व "
+        "आपमें प्रचुर हैं और कौन से गायब। मिलकर वे एक GPS बनते हैं: संख्याशास्त्र गंतव्य देता है, "
+        "वैदिक शास्त्रीय सड़क की स्थिति बताती है।",
+        "Numerology aapke name aur DOB ki vibrations reveal karti hai. Vedic classical astrology woh "
+        "planetary timing reveal karta hai jo un vibrations ko activate ya delay karta hai. Aapki Moon "
+        "Rashi aapki inner emotional world dikhati hai, Nakshatra aapki soul ke natural gifts reveal "
+        "karta hai, Mahadasha batati hai ki abhi kaunsa planet aapki life ka chapter dictate kar raha hai, "
+        "Sadhe Sati Shani ke pressure phases ki warning deti hai, aur Lo Shu grid dikhata hai ki kaun se "
+        "elements aapme abundant hain aur kaun missing. Milkar yeh ek GPS banta hai: numerology "
+        "destination deti hai, Vedic classical road conditions batata hai.",
+        bg="#FFF7ED", border="#C2410C"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Sun & Moon Rashi card ─────────────────────────────────────
+    sun_label = _rn_label(rn.get("sun_rashi"))
+    moon_label = _rn_label(rn.get("moon_rashi"))
+    moon_lord = rn.get("moon_rashi_lord") or "—"
+    sun_lord = rn.get("sun_rashi_lord") or "—"
+    src = rn.get("source", "computed")
+    body_rashi = (
+        f"<b>{_T(lang,'☀️ Sun Rashi (Surya Rashi)','☀️ सूर्य राशि','☀️ Sun Rashi (Surya Rashi)')}:</b> "
+        f"<b>{sun_label}</b> — {_T(lang,'ruled by','स्वामी','ruled by')} <b>{sun_lord}</b>. "
+        f"{_T(lang,'This is your soul-identity; it drives ego, vitality, and outer-world direction.','यह आपकी आत्म-पहचान है; यह अहंकार, जीवन-शक्ति, और बाह्य-जगत दिशा को संचालित करती है।','Yeh aapki soul-identity hai; yeh ego, vitality, aur outer-world direction drive karta hai.')}<br/><br/>"
+        f"<b>{_T(lang,'🌙 Moon Rashi (Janma Rashi)','🌙 चंद्र राशि (जन्म राशि)','🌙 Moon Rashi (Janma Rashi)')}:</b> "
+        f"<b>{moon_label}</b> — {_T(lang,'ruled by','स्वामी','ruled by')} <b>{moon_lord}</b>. "
+        f"{_T(lang,'This is your inner emotional world — how you feel, process relationships, and recharge. In Vedic astrology, Moon Rashi is MORE important than Sun Rashi because it governs the mind.','यह आपकी भीतरी भाव-दुनिया है — आप कैसे अनुभव करते हैं, रिश्ते संसाधित करते हैं, और ऊर्जा भरते हैं। वैदिक ज्योतिष में चंद्र राशि सूर्य राशि से अधिक महत्वपूर्ण है क्योंकि यह मन की स्वामी है।','Yeh aapki inner emotional world hai — kaise feel karte ho, relationships process karte ho, aur recharge karte ho. Vedic astrology me Moon Rashi Sun Rashi se ZYAADA important hai kyunki yeh mind govern karti hai.')}"
+    )
+    if src.startswith("fallback"):
+        body_rashi += f"<br/><br/><i>{_T(lang,'(Moon position approximated — exact birth time improves accuracy.)','(चंद्र स्थिति अनुमानित — सटीक जन्म-समय से सटीकता बढ़ेगी।)','(Moon position approximated — exact birth time se accuracy badhegi.)')}</i>"
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  SUN & MOON RASHI — Your Dual Identity",
+               "1️⃣  सूर्य एवं चंद्र राशि — आपकी द्वि-पहचान",
+               "1️⃣  SUN & MOON RASHI — Aapki Dual Identity"),
+        body_rashi,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Nakshatra card ────────────────────────────────────────────
+    nak = rn.get("nakshatra")
+    pada = rn.get("pada")
+    if nak:
+        nak_en, nak_hi, nak_lord = nak
+        nak_label = (nak_hi if lang == "hindi" else nak_en)
+        body_nak = (
+            f"<b>{_T(lang,'Your Nakshatra (Janma Nakshatra)','आपका नक्षत्र (जन्म नक्षत्र)','Aapka Nakshatra (Janma Nakshatra)')}:</b> "
+            f"<b>{nak_label}</b><br/>"
+            f"<b>{_T(lang,'Pada','पाद','Pada')}:</b> {pada}<br/>"
+            f"<b>{_T(lang,'Ruling Planet','स्वामी ग्रह','Ruling Planet')}:</b> <b>{nak_lord}</b><br/><br/>"
+            + _T(lang,
+                 "Nakshatras are the 27 lunar mansions — each 13°20' of the zodiac. Your birth Nakshatra is where "
+                 "the Moon was when you were born, and it reveals your soul's natural temperament, karmic inclinations, "
+                 "and the first Mahadasha lord that shaped your early years. Its ruling planet becomes your 'Atma Karaka' "
+                 "signature — the planet whose worship, mantras, and discipline bring the deepest inner peace.",
+                 "नक्षत्र 27 चंद्र-भवन हैं — प्रत्येक राशिचक्र का 13°20'। आपका जन्म नक्षत्र वह है जहाँ जन्म के समय चंद्रमा था, "
+                 "और यह आपकी आत्मा के स्वाभाविक स्वभाव, कर्म-झुकाव, और पहले महादशा स्वामी को प्रकट करता है जिसने "
+                 "आपके प्रारंभिक वर्षों को आकार दिया। इसका स्वामी ग्रह आपका 'आत्म कारक' हस्ताक्षर बनता है — वह ग्रह "
+                 "जिसकी पूजा, मंत्र, और साधना गहनतम आंतरिक शांति लाती है।",
+                 "Nakshatras 27 lunar mansions hain — har ek zodiac ka 13°20'. Aapka birth Nakshatra woh hai jahan "
+                 "birth ke time Moon tha, aur yeh aapki soul ka natural temperament, karmic inclinations, aur "
+                 "first Mahadasha lord reveal karta hai jo aapke early years shape karta hai. Iska ruling planet "
+                 "aapka 'Atma Karaka' signature ban-ta hai — woh planet jiski puja, mantras, aur discipline sabse "
+                 "deep inner peace laati hai.")
+        )
+        flow.append(_premium_card(s,
+            _T(lang, "2️⃣  JANMA NAKSHATRA — Your Soul's Star",
+                   "2️⃣  जन्म नक्षत्र — आपकी आत्मा का तारा",
+                   "2️⃣  JANMA NAKSHATRA — Aapki Soul ka Star"),
+            body_nak,
+            bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#6D28D9"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Lo Shu Grid (3x3 visual) ──────────────────────────────────
+    if lo:
+        flow.append(PageBreak())
+        flow.append(Paragraph(_T(lang,
+            "3️⃣  LO SHU GRID — Your Elemental Map",
+            "3️⃣  लो शू ग्रिड — आपका तत्व-नक्शा",
+            "3️⃣  LO SHU GRID — Aapka Elemental Map"), s["page_title"]))
+        flow.append(Spacer(1, 2 * mm))
+        # Build 3x3 grid table from compute_lo_shu grid_visual
+        grid = lo.get("grid_visual") or [["·"]*3]*3
+        cell_style = ParagraphStyle("LoShuCell", parent=s["body"], fontSize=22,
+                                     alignment=1, textColor=colors.HexColor("#0F172A"),
+                                     leading=26)
+        cell_style_empty = ParagraphStyle("LoShuCellEmpty", parent=s["body"], fontSize=22,
+                                           alignment=1, textColor=colors.HexColor("#CBD5E1"), leading=26)
+        grid_rows = []
+        for row in grid:
+            trow = []
+            for cell in row:
+                st = cell_style_empty if (cell == "·" or not cell) else cell_style
+                trow.append(Paragraph(str(cell), st))
+            grid_rows.append(trow)
+        tbl = Table(grid_rows, colWidths=[25*mm]*3, rowHeights=[25*mm]*3)
+        tbl.setStyle(TableStyle([
+            ("BOX", (0,0), (-1,-1), 1.2, colors.HexColor("#0F172A")),
+            ("INNERGRID", (0,0), (-1,-1), 0.8, colors.HexColor("#64748B")),
+            ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#FEF9C3")),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ]))
+        # Center the table
+        wrap = Table([[tbl]], colWidths=[175*mm])
+        wrap.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER")]))
+        flow.append(wrap)
+        flow.append(Spacer(1, 3 * mm))
+
+        # Present / missing / repeated analysis
+        present = lo.get("present_numbers", [])
+        missing = lo.get("missing_numbers", [])
+        repeated = lo.get("repeated_numbers", {})
+        complete_planes = lo.get("complete_planes", [])
+
+        miss_lines = []
+        for m in lo.get("missing_meanings", []):
+            miss_lines.append(f"<b>{m['number']}</b> — {m['missing']}")
+        rep_lines = []
+        for r in lo.get("repeated_meanings", []):
+            rep_lines.append(f"<b>{r['number']}</b> ×{r['count']} — {r['trait']}")
+
+        body_lo = (
+            f"<b>{_T(lang,'Present numbers','उपस्थित अंक','Present numbers')}:</b> "
+            f"{', '.join(str(n) for n in present) or '—'}<br/>"
+            f"<b>{_T(lang,'Missing numbers','गायब अंक','Missing numbers')}:</b> "
+            f"{', '.join(str(n) for n in missing) or '—'}<br/>"
+            f"<b>{_T(lang,'Repeated numbers','दोहराए गए अंक','Repeated numbers')}:</b> "
+            f"{', '.join(f'{k}×{v}' for k,v in repeated.items()) or '—'}<br/>"
+            f"<b>{_T(lang,'Complete planes','पूर्ण तल','Complete planes')}:</b> "
+            f"{', '.join(complete_planes) or '—'}<br/><br/>"
+        )
+        if miss_lines:
+            body_lo += f"<b>{_T(lang,'What your missing numbers mean','आपके गायब अंकों का अर्थ','Aapke missing numbers ka matlab')}:</b><br/>"
+            body_lo += "<br/>".join(miss_lines) + "<br/><br/>"
+        if rep_lines:
+            body_lo += f"<b>{_T(lang,'What your repeated numbers amplify','आपके दोहराए गए अंक क्या बढ़ाते हैं','Aapke repeated numbers kya amplify karte hain')}:</b><br/>"
+            body_lo += "<br/>".join(rep_lines)
+
+        flow.append(_premium_card(s,
+            _T(lang, "Lo Shu Grid Analysis — Your Elemental Fingerprint",
+                   "लो शू ग्रिड विश्लेषण — आपका तत्व-अंगूठा",
+                   "Lo Shu Grid Analysis — Aapka Elemental Fingerprint"),
+            body_lo,
+            bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Mahadasha ──────────────────────────────────────────────────
+    if md.get("available"):
+        flow.append(PageBreak())
+        flow.append(Paragraph(_T(lang,
+            "4️⃣  VIMSHOTTARI MAHADASHA — Your 120-Year Planetary Timeline",
+            "4️⃣  विम्शोत्तरी महादशा — आपकी 120-वर्षीय ग्रह-काल-रेखा",
+            "4️⃣  VIMSHOTTARI MAHADASHA — Aapki 120-Year Planetary Timeline"), s["page_title"]))
+        flow.append(Spacer(1, 2 * mm))
+
+        cur = md.get("current") or {}
+        nxt = md.get("next") or {}
+        body_md_head = (
+            f"<b>{_T(lang,'First Mahadasha at birth','जन्म पर प्रथम महादशा','Birth pe first Mahadasha')}:</b> "
+            f"<b>{md.get('first_lord','—')}</b> "
+            f"({_T(lang,'remaining','शेष','remaining')} {md.get('first_remaining_years','?')} "
+            f"{_T(lang,'years','वर्ष','years')})<br/><br/>"
+            f"<b>{_T(lang,'🔴 CURRENT Mahadasha','🔴 वर्तमान महादशा','🔴 CURRENT Mahadasha')}:</b> "
+            f"<b>{cur.get('lord','—')}</b> — {cur.get('start','?')} → {cur.get('end','?')} "
+            f"({cur.get('years','?')} {_T(lang,'years','वर्ष','years')})<br/>"
+            f"<b>{_T(lang,'🟡 NEXT Mahadasha','🟡 अगली महादशा','🟡 NEXT Mahadasha')}:</b> "
+            f"<b>{nxt.get('lord','—')}</b> — {nxt.get('start','?')} → {nxt.get('end','?')} "
+            f"({nxt.get('years','?')} {_T(lang,'years','वर्ष','years')})"
+        )
+        flow.append(_premium_card(s,
+            _T(lang, "Your Active Planetary Ruler",
+                   "आपका सक्रिय ग्रह-स्वामी",
+                   "Aapka Active Planetary Ruler"),
+            body_md_head,
+            bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#B91C1C"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+        # Timeline table
+        tl = md.get("timeline") or []
+        rows = [[_T(lang,"Mahadasha","महादशा","Mahadasha"),
+                 _T(lang,"From","से","From"),
+                 _T(lang,"To","तक","To"),
+                 _T(lang,"Years","वर्ष","Years")]]
+        cur_key = cur.get("lord") if cur else None
+        cur_start = cur.get("start") if cur else None
+        highlight_row = None
+        for i, t in enumerate(tl[:10], 1):
+            rows.append([f"{t['lord']}{' ★' if t.get('partial') else ''}",
+                         t["start"], t["end"], str(t["years"])])
+            if cur_key and t["lord"] == cur_key and t["start"] == cur_start:
+                highlight_row = i
+        mtbl = Table(rows, colWidths=[40*mm, 40*mm, 40*mm, 25*mm])
+        tstyle = [
+            ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+            ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#1E293B")),
+            ("TEXTCOLOR",(0,0),(-1,0), colors.white),
+            ("FONTSIZE",(0,0),(-1,-1), 9),
+            ("GRID",(0,0),(-1,-1), 0.4, colors.HexColor("#64748B")),
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ALIGN",(1,0),(-1,-1),"CENTER"),
+            ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
+            ("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4),
+        ]
+        if highlight_row:
+            tstyle.append(("BACKGROUND",(0,highlight_row),(-1,highlight_row), colors.HexColor("#FECACA")))
+            tstyle.append(("FONTNAME",(0,highlight_row),(-1,highlight_row), "Helvetica-Bold"))
+        mtbl.setStyle(TableStyle(tstyle))
+        flow.append(mtbl)
+        flow.append(Spacer(1, 2 * mm))
+        flow.append(Paragraph(_T(lang,
+            "<i>★ = partial period (you were born mid-dasha). Highlighted row = current.</i>",
+            "<i>★ = आंशिक काल (आप दशा के बीच में पैदा हुए)। हाइलाइट पंक्ति = वर्तमान।</i>",
+            "<i>★ = partial period (aap dasha ke beech me paida hue). Highlighted row = current.</i>"),
+            s["body"]))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Sadhe Sati ─────────────────────────────────────────────────
+    if ss.get("available"):
+        if ss.get("active"):
+            banner_en = f"⚠️ SADHE SATI ACTIVE — {ss.get('phase','?')}"
+            banner_hi = f"⚠️ साढ़ेसाती सक्रिय — {ss.get('phase','?')}"
+            banner_hg = f"⚠️ SADHE SATI ACTIVE — {ss.get('phase','?')}"
+            bg, border = "#FEE2E2", "#991B1B"
+            body = _T(lang,
+                "Saturn is currently transiting near your natal Moon. This is a 7.5-year period of slow, "
+                "grinding lessons around responsibility, patience, and karmic cleansing. Key rules: "
+                "no impulsive decisions, respect elders, do not lend money freely, worship Shani/Hanuman "
+                "on Saturdays, light a sesame-oil diya, donate black items. The tests are real — but those "
+                "who pass emerge stronger, wiser, and more disciplined.",
+                "शनि इस समय आपके जन्म चंद्रमा के पास गोचर कर रहा है। यह 7.5-वर्ष का धीमा, पीसने वाला "
+                "काल है — जिम्मेदारी, धैर्य, और कर्म-शुद्धि के पाठ। मुख्य नियम: आवेगपूर्ण निर्णय न लें, "
+                "बुज़ुर्गों का सम्मान करें, मुफ़्त में पैसा उधार न दें, शनिवार को शनि/हनुमान की पूजा करें, "
+                "तिल-तेल का दीया जलाएँ, काले सामान का दान करें। परीक्षा वास्तविक है — पर जो पास होते हैं "
+                "वे अधिक मज़बूत, बुद्धिमान, और अनुशासित बनते हैं।",
+                "Shani abhi aapke natal Moon ke paas transit kar raha hai. Yeh 7.5-year ka slow, grinding "
+                "phase hai — responsibility, patience, aur karmic cleansing ke lessons. Key rules: "
+                "impulsive decisions mat lo, elders ka respect karo, free me paisa udhaar mat do, "
+                "Saturday ko Shani/Hanuman ki puja karo, til ka diya jalao, black items donate karo. "
+                "Tests real hain — par jo pass hote hain woh stronger, wiser, aur disciplined ban-te hain.")
+        elif ss.get("small_panoti"):
+            banner_en = "🟡 DHAIYA (SMALL PANOTI) ACTIVE — mini Saturn phase"
+            banner_hi = "🟡 ढैय्या (छोटी पनोती) सक्रिय — लघु शनि काल"
+            banner_hg = "🟡 DHAIYA (CHHOTI PANOTI) ACTIVE — mini Shani phase"
+            bg, border = "#FEF3C7", "#B45309"
+            body = _T(lang,
+                "Saturn is in the 4th or 8th house from your natal Moon — a 2.5-year 'mini Sadhe Sati' called "
+                "Dhaiya or Kantaka Shani. Expect delays, extra workload, family/property tension. Lighter "
+                "than full Sadhe Sati but real. Remedies: Saturday Hanuman Chalisa, donate black sesame, "
+                "avoid new property/vehicle in inauspicious muhurats.",
+                "शनि आपके जन्म चंद्रमा से 4थे या 8वें भाव में है — 2.5-वर्ष की 'मिनी साढ़ेसाती' जिसे ढैय्या "
+                "या कंटक शनि कहते हैं। देरी, अतिरिक्त कार्यभार, परिवार/संपत्ति तनाव अपेक्षित। पूर्ण "
+                "साढ़ेसाती से हल्की पर वास्तविक। उपाय: शनिवार हनुमान चालीसा, काला तिल दान, अशुभ "
+                "मुहूर्त में नई संपत्ति/वाहन से बचें।",
+                "Shani aapke natal Moon se 4th ya 8th house me hai — 2.5-year ki 'mini Sadhe Sati' jise "
+                "Dhaiya ya Kantaka Shani kehte hain. Delays, extra workload, family/property tension expected. "
+                "Full Sadhe Sati se halki par real. Remedies: Saturday Hanuman Chalisa, black til donate karo, "
+                "inauspicious muhurat me new property/vehicle se bacho.")
+        else:
+            banner_en = "✅ SADHE SATI CLEAR — Saturn not currently pressuring your Moon"
+            banner_hi = "✅ साढ़ेसाती मुक्त — शनि अभी आपके चंद्रमा पर दबाव नहीं डाल रहा"
+            banner_hg = "✅ SADHE SATI CLEAR — Shani abhi aapke Moon pe pressure nahi daal raha"
+            bg, border = "#D1FAE5", "#047857"
+            body = _T(lang,
+                "You are currently outside Sadhe Sati and Dhaiya windows. Saturn is positioned far enough "
+                "from your natal Moon that there's no classical Saturn-stress phase running. Use this "
+                "window for long-term commitments — marriage, property, new business, big moves. The next "
+                "Sadhe Sati will arrive in 5-15 years (Saturn takes ~29.5 years to orbit) — enjoy this "
+                "smoother patch.",
+                "आप इस समय साढ़ेसाती और ढैय्या खिड़कियों के बाहर हैं। शनि आपके जन्म चंद्रमा से काफी दूर "
+                "है कि कोई शास्त्रीय शनि-तनाव काल नहीं चल रहा। इस खिड़की का उपयोग दीर्घकालिक "
+                "प्रतिबद्धताओं के लिए करें — विवाह, संपत्ति, नया व्यवसाय, बड़े कदम। अगली साढ़ेसाती "
+                "5-15 वर्षों में आएगी (शनि की कक्षा ~29.5 वर्ष) — इस सुगम काल का आनंद लें।",
+                "Aap abhi Sadhe Sati aur Dhaiya windows ke bahar ho. Shani aapke natal Moon se kaafi door "
+                "hai ki koi classical Shani-stress phase nahi chal raha. Iss window ka use long-term "
+                "commitments ke liye karo — marriage, property, new business, big moves. Agli Sadhe Sati "
+                "5-15 years me aayegi (Shani ki orbit ~29.5 years) — iss smooth patch ka enjoy karo.")
+        flow.append(_premium_card(s,
+            _T(lang, banner_en, banner_hi, banner_hg), body,
+            bg_color=colors.HexColor(bg), border_color=colors.HexColor(border), lang=lang))
+        flow.append(Paragraph(
+            _T(lang,
+               f"<i>Saturn currently in house {ss.get('house_from_moon','?')} from your natal Moon.</i>",
+               f"<i>शनि वर्तमान में आपके जन्म चंद्रमा से भाव {ss.get('house_from_moon','?')} में।</i>",
+               f"<i>Shani abhi aapke natal Moon se house {ss.get('house_from_moon','?')} me.</i>"),
+            s["body"]))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Navagraha Strength Bars ───────────────────────────────────
+    flow.append(PageBreak())
+    flow.append(Paragraph(_T(lang,
+        "5️⃣  NAVAGRAHA STRENGTH — Your 9-Planet Power Map",
+        "5️⃣  नवग्रह बल — आपका 9-ग्रह शक्ति-नक्शा",
+        "5️⃣  NAVAGRAHA STRENGTH — Aapka 9-Planet Power Map"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    # Build horizontal bar-style table
+    nav_order = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"]
+    nav_hi = {"Sun":"सूर्य","Moon":"चंद्र","Mars":"मंगल","Mercury":"बुध","Jupiter":"बृहस्पति",
+              "Venus":"शुक्र","Saturn":"शनि","Rahu":"राहु","Ketu":"केतु"}
+    nav_rows = [[_T(lang,"Planet","ग्रह","Planet"),
+                 _T(lang,"Strength (0-100)","बल (0-100)","Strength (0-100)"),
+                 _T(lang,"Bar","बार","Bar")]]
+    for p in nav_order:
+        score = nav.get(p, 50)
+        bar_len = int(score / 5)  # 0-20 chars
+        bar = "█" * bar_len + "░" * (20 - bar_len)
+        label = f"{nav_hi[p]} ({p})" if lang == "hindi" else p
+        nav_rows.append([label, str(score), bar])
+    ntbl = Table(nav_rows, colWidths=[45*mm, 30*mm, 70*mm])
+    ntbl_style = [
+        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),
+        ("BACKGROUND",(0,0),(-1,0), colors.HexColor("#0F172A")),
+        ("TEXTCOLOR",(0,0),(-1,0), colors.white),
+        ("GRID",(0,0),(-1,-1), 0.4, colors.HexColor("#94A3B8")),
+        ("FONTSIZE",(0,0),(-1,-1), 10),
+        ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("ALIGN",(1,1),(1,-1),"CENTER"),
+    ]
+    # Color-code by score
+    for i, p in enumerate(nav_order, 1):
+        score = nav.get(p, 50)
+        if score >= 80:
+            c = colors.HexColor("#D1FAE5")
+        elif score >= 60:
+            c = colors.HexColor("#FEF9C3")
+        else:
+            c = colors.HexColor("#FEE2E2")
+        ntbl_style.append(("BACKGROUND",(0,i),(-1,i), c))
+    ntbl.setStyle(TableStyle(ntbl_style))
+    flow.append(ntbl)
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_explain_card(s, lang,
+        "How to read your Navagraha strength map",
+        "अपने नवग्रह बल-नक्शे को कैसे पढ़ें",
+        "Apne Navagraha strength map ko kaise padhein",
+        "Strength is computed from: (a) your Driver-planet friendship hierarchy, (b) classical "
+        "Shadbala-style friend/enemy relationships, and (c) a +15 boost if the planet is your current "
+        "Mahadasha lord. GREEN (80+) = strong ally — worship, gemstone, and mantra yield fast results. "
+        "YELLOW (60-79) = neutral — general remedies. RED (<60) = weakened/afflicted — do not skip "
+        "remedies; these are exactly the planets that delay or disrupt until you address them.",
+        "बल की गणना: (क) आपके ड्राइवर-ग्रह मित्रता क्रम से, (ख) शास्त्रीय शड्बल मैत्री/शत्रुता से, "
+        "(ग) वर्तमान महादशा स्वामी हो तो +15 बढ़ावा। हरा (80+) = मज़बूत सहयोगी — पूजा, रत्न, मंत्र तुरंत "
+        "फल देते हैं। पीला (60-79) = तटस्थ — सामान्य उपाय। लाल (<60) = कमज़ोर/पीड़ित — उपाय न छोड़ें; "
+        "यही ग्रह देरी/विघ्न लाते हैं।",
+        "Strength compute: (a) aapki Driver-planet friendship hierarchy se, (b) classical Shadbala-style "
+        "friend/enemy se, (c) current Mahadasha lord ho to +15 boost. GREEN (80+) = strong ally — puja, "
+        "gemstone, mantra fast results dete hain. YELLOW (60-79) = neutral — general remedies. "
+        "RED (<60) = weakened/afflicted — remedies SKIP mat karo; yahi planets delays ya disruptions laate hain.",
+        bg="#F1F5F9", border="#475569"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Ishta Devata + Personal Yantra ────────────────────────────
+    body_ishta = (
+        f"<b>{_T(lang,'Your Driver-Ruling Planet','आपका ड्राइवर-स्वामी ग्रह','Aapka Driver-Ruling Planet')}:</b> "
+        f"<b>{ishta['planet']}</b><br/>"
+        f"<b>{_T(lang,'Personal Ishta Devata','व्यक्तिगत इष्ट देवता','Personal Ishta Devata')}:</b> "
+        f"<b>{ishta['deity']}</b><br/>"
+        f"<b>{_T(lang,'Personal Yantra','व्यक्तिगत यंत्र','Personal Yantra')}:</b> "
+        f"<b>{ishta['yantra']}</b><br/><br/>"
+        + _T(lang,
+             "Your Ishta Devata is the form of the Divine that responds fastest to your vibration. Worshiping "
+             "this deity on the planet's weekday (Sun=Sun, Mon=Moon, Tue=Mars, Wed=Mercury, Thu=Jupiter, "
+             "Fri=Venus, Sat=Saturn, plus Rahu=Sat evening / Ketu=Tue evening) aligns your mind with your "
+             "ruling grah. Install the Personal Yantra above your meditation seat or in your pooja room; "
+             "energize it with 108 mantra recitations on the planet's weekday at sunrise. Within 21 days "
+             "you will feel a visible shift in clarity, decisions, and synchronicities.",
+             "आपके इष्ट देवता दिव्यता का वह रूप हैं जो आपके स्पंदन पर सबसे तेज़ प्रतिक्रिया देता है। "
+             "ग्रह के वार पर इस देवता की पूजा (रवि=सूर्य, सोम=चंद्र, मंगल=मंगल, बुध=बुध, गुरु=बृहस्पति, "
+             "शुक्र=शुक्र, शनि=शनि; राहु=शनि शाम / केतु=मंगल शाम) आपके मन को अपने स्वामी ग्रह से जोड़ती है। "
+             "व्यक्तिगत यंत्र को ध्यान-आसन या पूजा-कक्ष में स्थापित करें; ग्रह के वार पर सूर्योदय पर 108 "
+             "मंत्र-जप से ऊर्जावान करें। 21 दिनों में स्पष्टता, निर्णय, और संयोगों में दृश्यमान परिवर्तन महसूस होगा।",
+             "Aapke Ishta Devata Divinity ka woh form hain jo aapki vibration pe sabse fast respond karte hain. "
+             "Planet ke weekday pe iss deity ki puja (Sun=Surya, Mon=Chandra, Tue=Mangal, Wed=Budh, "
+             "Thu=Brihaspati, Fri=Shukra, Sat=Shani; Rahu=Sat evening / Ketu=Tue evening) aapke mind ko "
+             "ruling grah se align karti hai. Personal Yantra ko meditation seat ya puja room me install "
+             "karo; planet ke weekday pe sunrise pe 108 mantra recitations se energize karo. 21 din me "
+             "clarity, decisions, aur synchronicities me visible shift feel hoga.")
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  ISHTA DEVATA & PERSONAL YANTRA — Your Fast-Track to the Divine",
+               "6️⃣  इष्ट देवता एवं व्यक्तिगत यंत्र — दिव्यता का त्वरित-मार्ग",
+               "6️⃣  ISHTA DEVATA & PERSONAL YANTRA — Divine ka Fast-Track"),
+        body_ishta,
+        bg_color=colors.HexColor("#FDF2F8"), border_color=colors.HexColor("#BE185D"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── Closing card ─────────────────────────────────────────────────
+    flow.append(_explain_card(s, lang,
+        "✅ Tier 2 complete — Vedic classical foundation set",
+        "✅ टियर 2 पूर्ण — वैदिक शास्त्रीय आधार स्थापित",
+        "✅ Tier 2 complete — Vedic classical foundation set",
+        "You now know your Sun + Moon rashi, Nakshatra, Lo Shu elemental map, current Mahadasha, "
+        "Sadhe Sati status, full Navagraha strength map, and personal Ishta-Yantra. Next tiers apply "
+        "these — remedies will target your weakest planets, career timing will pivot on your dasha, "
+        "and relationship chapters will factor in Moon-Moon compatibility. Bookmark this page.",
+        "अब आप अपनी सूर्य + चंद्र राशि, नक्षत्र, लो शू तत्व-नक्शा, वर्तमान महादशा, साढ़ेसाती स्थिति, "
+        "पूर्ण नवग्रह बल-नक्शा, और व्यक्तिगत इष्ट-यंत्र जानते हैं। अगले टियर इन्हें लागू करेंगे — उपाय "
+        "आपके सबसे कमज़ोर ग्रहों को लक्षित करेंगे, करियर-समय आपकी दशा पर निर्भर करेगा, और रिश्ते "
+        "के अध्याय चंद्र-चंद्र अनुकूलता पर आधारित होंगे। यह पृष्ठ बुकमार्क करें।",
+        "Ab aap apni Sun + Moon rashi, Nakshatra, Lo Shu elemental map, current Mahadasha, Sadhe Sati "
+        "status, full Navagraha strength map, aur personal Ishta-Yantra jaante ho. Next tiers inhe apply "
+        "karenge — remedies aapke weakest planets ko target karenge, career timing aapki dasha pe pivot "
+        "karegi, aur relationship chapters Moon-Moon compatibility par depend karenge. Iss page ko bookmark karo.",
+        bg="#F0FDF4", border="#15803D"))
+
+    return flow
+
+
 def render_part2_pdf(*,
                      name: str,
                      dob: str,
                      mobile: Optional[str],
                      vehicle: Optional[str],
                      house: Optional[str],
-                     lang: str = "hinglish") -> bytes:
+                     lang: str = "hinglish",
+                     tob: Optional[str] = None) -> bytes:
     """Render the Practical Numerology Tools (Part 2) PDF."""
     # Compute Driver + Conductor from dob
     digits = [int(c) for c in dob if c.isdigit()]
@@ -3564,7 +4422,15 @@ def render_part2_pdf(*,
     story += _life_summary_block(s, name, driver, conductor, lang=lang)
     story.append(PageBreak())
 
-    # Page 3 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
+    # Pages 3-10 — 🔢 TIER 1 — 13 Core Numerology Numbers (A-Z edition)
+    story += _tier1_core_numbers_section(s, name, dob, lang=lang)
+    story.append(PageBreak())
+
+    # Pages 11-22 — 🕉️ TIER 2 — Vedic Classical Core
+    story += _tier2_vedic_classical_section(s, name, dob, tob, driver, lang=lang)
+    story.append(PageBreak())
+
+    # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
     story += _life_essence_section(s, driver, lang=lang)
     story.append(PageBreak())
 

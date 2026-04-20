@@ -5046,6 +5046,7 @@ def numerology_pdf_pro():
     mobile  = (body.get("mobile")  or "").strip() or None
     vehicle = (body.get("vehicle") or "").strip() or None
     house   = (body.get("house")   or "").strip() or None
+    tob     = (body.get("tob")     or body.get("time_of_birth") or "").strip() or None
     lang    = (body.get("lang")    or "hinglish").strip().lower()
     if lang not in ("english", "hindi", "hinglish"):
         lang = "hinglish"
@@ -5064,7 +5065,7 @@ def numerology_pdf_pro():
     try:
         from numerology_pdf_part2 import render_part2_pdf
         pdf_bytes = render_part2_pdf(
-            name=name, dob=dob,
+            name=name, dob=dob, tob=tob,
             mobile=mobile, vehicle=vehicle, house=house,
             lang=lang,
         )

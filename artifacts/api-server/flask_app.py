@@ -4868,6 +4868,158 @@ def numerology_advanced():
     })
 
 
+# ── Tier-A premium tools (Mobile/Vehicle/House/Compatibility/etc) ─────────────
+from vedic.numerology import tier_a as _tier_a
+
+
+def _driver_conductor_from_dob(dob_str: str):
+    """Extract Driver (day reduced) + Conductor (full DOB sum reduced) from yyyy-mm-dd."""
+    try:
+        parts = (dob_str or "").split("-")
+        if len(parts) != 3:
+            return None, None
+        day = int(parts[2])
+        digits = [int(c) for c in dob_str if c.isdigit()]
+        # Reduce
+        def _r(n):
+            n = abs(int(n))
+            while n > 9:
+                n = sum(int(d) for d in str(n))
+            return n
+        return _r(day), _r(sum(digits))
+    except (TypeError, ValueError, IndexError):
+        return None, None
+
+
+@app.route("/api/numerology/number_check", methods=["POST"])
+def numerology_number_check():
+    """Analyze a mobile / vehicle / house number against a person's DOB.
+
+    POST body: {
+        "value": "9876543210"  (string with digits — non-digits stripped),
+        "kind": "mobile" | "vehicle" | "house",
+        "dob": "1990-05-15"   (yyyy-mm-dd, used to derive Driver/Conductor)
+    }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    value = (data.get("value") or "").strip()
+    kind = (data.get("kind") or "mobile").lower()
+    dob = (data.get("dob") or "").strip()
+
+    if not value:
+        return jsonify({"error": "value is required"}), 400
+    if kind not in ("mobile", "vehicle", "house"):
+        return jsonify({"error": "kind must be mobile, vehicle or house"}), 400
+
+    drv, cnd = _driver_conductor_from_dob(dob) if dob else (None, None)
+    out = _tier_a.analyze_number_string(value, kind=kind, driver=drv, conductor=cnd)
+    if not out.get("ok"):
+        return jsonify(out), 400
+    return jsonify(out)
+
+
+@app.route("/api/numerology/compatibility", methods=["POST"])
+def numerology_compatibility():
+    """Calculate love or business compatibility between two DOBs.
+
+    POST body: {
+        "person1_dob": "1990-05-15",
+        "person2_dob": "1992-08-23",
+        "kind": "love" | "business"   (default love)
+    }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    p1 = (data.get("person1_dob") or "").strip()
+    p2 = (data.get("person2_dob") or "").strip()
+    kind = (data.get("kind") or "love").lower()
+    if kind not in ("love", "business"):
+        kind = "love"
+    out = _tier_a.compatibility(p1, p2, kind=kind)
+    if not out.get("ok"):
+        return jsonify(out), 400
+    return jsonify(out)
+
+
+@app.route("/api/numerology/karmic_lessons", methods=["POST"])
+def numerology_karmic_lessons():
+    """Karmic Lessons + Hidden Passion + Maturity Number — name-based deep analysis.
+
+    POST body: { "name": "Albert Einstein", "dob": "1879-03-14" (optional, for maturity) }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    name = (data.get("name") or "").strip()
+    dob = (data.get("dob") or "").strip()
+
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+
+    karmic = _tier_a.karmic_lessons(name)
+    passion = _tier_a.hidden_passion(name)
+
+    # Maturity number requires life-path + expression
+    chaldean = _tier_a.chaldean_name_numbers(name)
+    maturity = None
+    if dob:
+        digits = [int(c) for c in dob if c.isdigit()]
+        if digits:
+            lp = sum(digits)
+            while lp > 9 and lp not in (11, 22, 33):
+                lp = sum(int(d) for d in str(lp))
+            # Use Pythagorean expression for maturity (classical convention)
+            from vedic.numerology.extended import _PYTH
+            letters = "".join(c for c in name.lower() if c.isalpha())
+            ex = sum(_PYTH.get(c, 0) for c in letters)
+            while ex > 9 and ex not in (11, 22, 33):
+                ex = sum(int(d) for d in str(ex))
+            maturity = _tier_a.maturity_number(lp, ex)
+
+    return jsonify({
+        "name": name,
+        "karmic_lessons": karmic,
+        "hidden_passion": passion,
+        "chaldean": chaldean,
+        "maturity": maturity,
+    })
+
+
+@app.route("/api/numerology/name_correction", methods=["POST"])
+def numerology_name_correction():
+    """Suggest spelling variants for better Driver/Conductor harmony.
+
+    POST body: { "name": "...", "dob": "yyyy-mm-dd" }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    name = (data.get("name") or "").strip()
+    dob = (data.get("dob") or "").strip()
+    if not name or not dob:
+        return jsonify({"error": "name and dob are required"}), 400
+
+    drv, cnd = _driver_conductor_from_dob(dob)
+    if not drv:
+        return jsonify({"error": "Invalid DOB (use yyyy-mm-dd)"}), 400
+
+    out = _tier_a.name_correction_suggestions(name, drv, cnd)
+    if not out.get("ok"):
+        return jsonify(out), 400
+    return jsonify(out)
+
+
+@app.route("/api/numerology/chaldean", methods=["POST"])
+def numerology_chaldean():
+    """Strict Chaldean name numerology (no 9, Cheiro standard).
+
+    POST body: { "name": "Mukesh Ambani" }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    out = _tier_a.chaldean_name_numbers(name)
+    if not out.get("ok"):
+        return jsonify(out), 400
+    return jsonify(out)
+
+
 # ── Serve React frontend in production ────────────────────────────────────────
 _DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      "..", "cosmic-lens", "dist", "public")

@@ -1287,4 +1287,33 @@ api-server/ai_brain/
 
 ---
 
+## Numerology Premium Pack — Tier A (2026-04-20)
+
+**Engine:** `vedic/numerology/tier_a.py` — 7 deterministic features (zero AI):
+- `analyze_number_string(value, kind, driver, conductor)` — mobile/vehicle/house 3-in-1
+- `compatibility(p1_dob, p2_dob, kind=love|business)` — per-axis Driver/Conductor/Life-path scoring
+- `karmic_lessons(name)` — missing letters → numbers + Hinglish lessons
+- `hidden_passion(name)` — most-frequent letter-number talents
+- `maturity_number(life_path, expression)` — fires age 30-35
+- `chaldean_name_numbers(name)` — strict no-9 Cheiro alphabet
+- `name_correction_suggestions(name, driver, conductor)` — 6 spelling-variant strategies, scored
+
+**Helper data:** `vedic/numerology/meanings.py` — rich personality + remedies for nums 1-9.
+
+**Premium PDF v4** (`numerology_pdf.py`): cover w/ value-prop box, personality deep-dive (strengths/watch-out/famous people), detailed remedies (mantra+day+direction+count+gem), Lo Shu "11" bug fixed, core-numbers overlap fixed. 9 pages, 20.9KB. Sample: `exports/Numerology_premium.pdf`.
+
+**Flask routes** (`flask_app.py` ~L4897-5040):
+- `POST /api/numerology/number_check` — body: `{value, kind, dob}`
+- `POST /api/numerology/compatibility` — body: `{person1_dob, person2_dob, kind}`
+- `POST /api/numerology/karmic_lessons` — body: `{name, dob}` — returns karmic + passion + chaldean + maturity
+- `POST /api/numerology/name_correction` — body: `{name, dob}`
+- `POST /api/numerology/chaldean` — body: `{name}`
+
+**Pending:** wire Tier A into PDF as new sections; mobile UI Tools tab.
+
+**Tier B (next):** monthly forecast, lucky dates calendar, celebrity comparison, business launch date.
+**DO-NOT-BUILD (Tier C):** Kabbalah, "Vedic alphabet" (doesn't exist), Event Engine (legal risk), AI numerology layer (brand violation).
+
+---
+
 # 🔚 ROADMAP END — This is the source of truth for all future work

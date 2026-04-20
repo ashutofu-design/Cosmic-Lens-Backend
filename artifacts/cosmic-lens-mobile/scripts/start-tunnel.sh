@@ -124,6 +124,13 @@ if [ "$TUNNEL_OK" = false ]; then
   kill "$METRO_PID" 2>/dev/null || true
   pkill -f "ngrok" 2>/dev/null || true
   sleep 2
+  # Tell Metro that the public URL is the loca.lt subdomain on port 443 (https).
+  # Without these the manifest embeds ":18987" in the bundle URL and Expo Go
+  # cannot fetch the JS bundle through loca.lt.
+  METRO_SUB="cosmiclens-metro"
+  export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_SUB.loca.lt"
+  export EXPO_PACKAGER_PROXY_URL="https://$METRO_SUB.loca.lt"
+  export EXPO_MANIFEST_PROXY_URL="https://$METRO_SUB.loca.lt"
   pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
   METRO_PID=$!
 

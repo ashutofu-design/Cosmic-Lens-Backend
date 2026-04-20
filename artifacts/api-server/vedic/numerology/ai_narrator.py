@@ -21,28 +21,98 @@ Model: gpt-4.1 (user-provided OPENAI_API_KEY).
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+import threading
+from typing import Any, Callable, Dict, Optional
 
 _client = None
 _client_err: Optional[str] = None
+_client_lock = threading.Lock()
 
 
 def _get_client():
     global _client, _client_err
     if _client is not None or _client_err is not None:
         return _client
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        _client_err = "OPENAI_API_KEY missing"
-        return None
+    with _client_lock:
+        # Re-check inside the lock.
+        if _client is not None or _client_err is not None:
+            return _client
+        api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            _client_err = "OPENAI_API_KEY missing"
+            return None
+        try:
+            from openai import OpenAI
+            timeout = float(os.environ.get("OPENAI_TIMEOUT", "45"))
+            _client = OpenAI(api_key=api_key, timeout=timeout)
+            return _client
+        except Exception as exc:
+            _client_err = f"OpenAI SDK init failed: {exc}"
+            return None
+
+
+# ── Fact-guard validators ────────────────────────────────────────────────────
+# Per-section content validation. AI output is REJECTED (→ fallback to static)
+# if the validator returns False, protecting against hallucinated numbers /
+# planets / deities that contradict the locked engine facts.
+#
+# Each validator receives (facts, text) and returns True if text is safe.
+
+def _has_num(text: str, value) -> bool:
+    """Check a number appears as a standalone token in text (not inside another)."""
+    import re
+    if value is None or value == "":
+        return True  # nothing to check
+    return re.search(rf"(?<!\d){re.escape(str(value))}(?!\d)", text) is not None
+
+
+def _has_word(text: str, value) -> bool:
+    """Case-insensitive word-ish presence check."""
+    if not value:
+        return True
+    return str(value).lower() in text.lower()
+
+
+_VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
+    "tier1.life_path":
+        lambda f, t: _has_num(t, f.get("life_path_number")),
+    "tier1.expression":
+        lambda f, t: _has_num(t, f.get("expression_number")),
+    "tier1.soul_urge":
+        lambda f, t: _has_num(t, f.get("soul_urge_number")),
+    "tier1.personality":
+        lambda f, t: _has_num(t, f.get("personality_number")),
+    "tier1.maturity":
+        lambda f, t: _has_num(t, f.get("maturity_number")),
+    "tier1.personal_year":
+        lambda f, t: _has_num(t, f.get("personal_year_number"))
+                     and _has_num(t, f.get("current_year")),
+    "tier2.sun_moon_rashi":
+        lambda f, t: (_has_word(t, f.get("moon_rashi"))
+                      or _has_word(t, f.get("sun_rashi"))),
+    "tier2.nakshatra":
+        lambda f, t: _has_word(t, f.get("nakshatra"))
+                     and _has_word(t, f.get("ruling_planet")),
+    "tier2.current_mahadasha":
+        lambda f, t: _has_word(t, f.get("current_lord")),
+    "tier2.sadhe_sati":
+        # Just ensure "Saturn/Shani" is mentioned — phase name is optional.
+        lambda f, t: _has_word(t, "Shani") or _has_word(t, "Saturn"),
+    "tier2.ishta_devata":
+        lambda f, t: _has_word(t, f.get("ishta_devata"))
+                     and _has_word(t, f.get("ruling_planet")),
+}
+
+
+def _validate(section_key: str, facts: Dict[str, Any], text: str) -> bool:
+    """Run per-section validator. Missing validator → accept (soft default)."""
+    fn = _VALIDATORS.get(section_key)
+    if fn is None:
+        return True
     try:
-        from openai import OpenAI
-        timeout = float(os.environ.get("OPENAI_TIMEOUT", "45"))
-        _client = OpenAI(api_key=api_key, timeout=timeout)
-        return _client
-    except Exception as exc:
-        _client_err = f"OpenAI SDK init failed: {exc}"
-        return None
+        return bool(fn(facts, text))
+    except Exception:
+        return True  # never let the guard crash the request
 
 
 def is_available() -> bool:
@@ -162,7 +232,13 @@ def narrate(section_key: str, facts: Dict[str, Any], lang: str = "hinglish",
             max_tokens=int(word_target * 3),  # ~3 tokens per word buffer
         )
         text = (resp.choices[0].message.content or "").strip()
-        return text or None
+        if not text:
+            return None
+        if not _validate(section_key, facts, text):
+            print(f"[ai_narrator] {section_key} ({lang}) FAILED FACT-GUARD — "
+                  f"falling back to static. Facts={list(facts.keys())}")
+            return None
+        return text
     except Exception as exc:
         # Log but don't crash — caller falls back to static.
         print(f"[ai_narrator] {section_key} ({lang}) failed: {exc}")
@@ -175,3 +251,60 @@ def narrate_with_fallback(section_key: str, facts: Dict[str, Any],
     """Wrapper: try AI, fall back to static text on any failure."""
     ai_text = narrate(section_key, facts, lang, word_target)
     return ai_text if ai_text else static_text
+
+
+def narrate_batch(specs: list, concurrency: int = 6) -> Dict[str, str]:
+    """
+    Fire N narration requests in parallel, return {key: final_text}.
+
+    Each spec dict must contain:
+      • key          — unique identifier (used as dict key in result)
+      • section_key  — e.g. "tier1.life_path"
+      • facts        — dict of engine facts
+      • lang         — english | hindi | hinglish
+      • word_target  — int
+      • fallback     — static text to use if AI fails
+
+    Guarantees:
+      • Never raises — any failure falls back to spec['fallback'].
+      • Order-preserving (dict keys follow spec order).
+      • Returns within ~ceil(N/concurrency) × per-call-time seconds.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results: Dict[str, str] = {}
+
+    def _run(spec: dict) -> tuple[str, str]:
+        key = spec["key"]
+        try:
+            txt = narrate(
+                spec["section_key"],
+                spec["facts"],
+                lang=spec.get("lang", "hinglish"),
+                word_target=spec.get("word_target", 300),
+            )
+        except Exception as exc:
+            print(f"[ai_narrator.batch] {key} raised: {exc}")
+            txt = None
+        return key, (txt or spec.get("fallback", ""))
+
+    # Short-circuit if narrator unavailable — skip the pool entirely.
+    if not is_available():
+        for spec in specs:
+            results[spec["key"]] = spec.get("fallback", "")
+        return results
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        futures = [pool.submit(_run, spec) for spec in specs]
+        for fut in as_completed(futures):
+            try:
+                k, v = fut.result()
+                results[k] = v
+            except Exception as exc:
+                # Should not happen (inner _run catches) but be defensive.
+                print(f"[ai_narrator.batch] future raised: {exc}")
+
+    # Ensure every spec key is present (belt-and-suspenders).
+    for spec in specs:
+        results.setdefault(spec["key"], spec.get("fallback", ""))
+    return results

@@ -3529,14 +3529,31 @@ def _brand_digital_section(s, name: str, driver: int, lang: str = "hinglish") ->
 #  Pinnacles · Challenges  →  ~8-10 pages
 # ══════════════════════════════════════════════════════════════════════
 
+def _ai_to_html(text: str) -> str:
+    """Convert AI narrator plain-text output into ReportLab-safe flowable HTML.
+
+    AI returns markdown-free prose with blank-line paragraph breaks.
+    ReportLab's Paragraph parser treats stray '<' '&' as markup, so escape
+    them first, then convert newlines to <br/> breaks.
+    """
+    import html as _html
+    if not text:
+        return ""
+    safe = _html.escape(text.strip(), quote=False)
+    safe = safe.replace("\n\n", "<br/><br/>").replace("\n", "<br/>")
+    return safe
+
+
 def _tier1_core_numbers_section(s, name: str, dob: str,
-                                lang: str = "hinglish") -> List[Any]:
+                                lang: str = "hinglish",
+                                ai_texts: Optional[Dict[str, str]] = None) -> List[Any]:
     """Tier 1 — 13 core Pythagorean numbers with full 3-lang narratives."""
     from vedic.numerology.extended import compute_extended_numerology
     from vedic.numerology.practical import compute_pinnacles_challenges
     from vedic.numerology import core_ext as _cx
     from vedic.numerology import tier1_content as _t1c
 
+    ai_texts = ai_texts or {}
     flow: List[Any] = []
 
     # ── Build data ────────────────────────────────────────────────
@@ -3606,68 +3623,96 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
         "Life Path shapes your entire journey.",
         "जीवन-पथ आपकी पूरी यात्रा को आकार देता है।",
         "Life Path aapki poori yatra ko shape karta hai.")
+    _ai_lp = ai_texts.get("t1.life_path", "").strip()
+    if _ai_lp:
+        _body_lp = _ai_to_html(_ai_lp)
+    else:
+        _body_lp = (
+            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+            + _T(lang,
+                 "The sum of your full birth-date reduced — the single most important number in your chart. It describes the road you're here to walk.",
+                 "आपकी पूरी जन्म-तिथि का सार — आपकी कुंडली का सबसे महत्वपूर्ण अंक। यह वह मार्ग है जिस पर आप चलने आए हैं।",
+                 "Aapki poori janma-tithi ka sum reduce kiya — aapki chart ka sabse important number. Yeh woh road hai jis par aap chalne aaye ho.")
+            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {lp_txt}"
+        )
     flow.append(_premium_card(s,
         _T(lang,
            f"1️⃣  LIFE PATH NUMBER — {lp}",
            f"1️⃣  जीवन-पथ अंक — {lp}",
            f"1️⃣  LIFE PATH NUMBER — {lp}"),
-        f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-        + _T(lang,
-             "The sum of your full birth-date reduced — the single most important number in your chart. It describes the road you're here to walk.",
-             "आपकी पूरी जन्म-तिथि का सार — आपकी कुंडली का सबसे महत्वपूर्ण अंक। यह वह मार्ग है जिस पर आप चलने आए हैं।",
-             "Aapki poori janma-tithi ka sum reduce kiya — aapki chart ka sabse important number. Yeh woh road hai jis par aap chalne aaye ho.")
-        + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {lp_txt}",
+        _body_lp,
         bg_color=colors.HexColor("#F5F3FF"), border_color=BRAND_PURPLE, lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
     # ── 2. EXPRESSION ─────────────────────────────────────────────
     if expr:
         exp_txt = _t1c.t1_get(_t1c.EXPRESSION, expr, lang)
+        _ai_ex = ai_texts.get("t1.expression", "").strip()
+        if _ai_ex:
+            _body_ex = _ai_to_html(_ai_ex)
+        else:
+            _body_ex = (
+                f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+                + _T(lang,
+                     "The total value of every letter in your full name — describes what you're meant to DO, achieve, and be known for.",
+                     "आपके पूरे नाम के हर अक्षर का कुल मान — यह बताता है आप क्या <b>करने</b>, उपलब्ध करने और जाने जाने आए हैं।",
+                     "Aapke poore naam ke har letter ka total value — batata hai aap kya <b>karne</b>, achieve karne aur known hone aaye ho.")
+                + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {exp_txt}"
+            )
         flow.append(_premium_card(s,
             _T(lang,
                f"2️⃣  EXPRESSION / DESTINY NUMBER — {expr}",
                f"2️⃣  अभिव्यक्ति / नियति अंक — {expr}",
                f"2️⃣  EXPRESSION / DESTINY NUMBER — {expr}"),
-            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-            + _T(lang,
-                 "The total value of every letter in your full name — describes what you're meant to DO, achieve, and be known for.",
-                 "आपके पूरे नाम के हर अक्षर का कुल मान — यह बताता है आप क्या <b>करने</b>, उपलब्ध करने और जाने जाने आए हैं।",
-                 "Aapke poore naam ke har letter ka total value — batata hai aap kya <b>karne</b>, achieve karne aur known hone aaye ho.")
-            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {exp_txt}",
+            _body_ex,
             bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#C2410C"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
     # ── 3. SOUL URGE ──────────────────────────────────────────────
     if soul:
         soul_txt = _t1c.t1_get(_t1c.SOUL_URGE, soul, lang)
+        _ai_su = ai_texts.get("t1.soul_urge", "").strip()
+        if _ai_su:
+            _body_su = _ai_to_html(_ai_su)
+        else:
+            _body_su = (
+                f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+                + _T(lang,
+                     "Sum of only the VOWELS in your name — what your heart truly craves, often different from what you chase publicly.",
+                     "आपके नाम के केवल स्वरों का योग — आपका हृदय वास्तव में क्या चाहता है, अक्सर उससे भिन्न जो आप सार्वजनिक रूप से पीछा करते हैं।",
+                     "Aapke naam ke sirf VOWELS ka sum — aapka dil sach me kya chahta hai, aksar jo publicly chase karte ho usse alag.")
+                + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {soul_txt}"
+            )
         flow.append(_premium_card(s,
             _T(lang,
                f"3️⃣  SOUL URGE (HEART'S DESIRE) — {soul}",
                f"3️⃣  आत्म-इच्छा (हृदय-इच्छा) — {soul}",
                f"3️⃣  SOUL URGE (HEART'S DESIRE) — {soul}"),
-            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-            + _T(lang,
-                 "Sum of only the VOWELS in your name — what your heart truly craves, often different from what you chase publicly.",
-                 "आपके नाम के केवल स्वरों का योग — आपका हृदय वास्तव में क्या चाहता है, अक्सर उससे भिन्न जो आप सार्वजनिक रूप से पीछा करते हैं।",
-                 "Aapke naam ke sirf VOWELS ka sum — aapka dil sach me kya chahta hai, aksar jo publicly chase karte ho usse alag.")
-            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {soul_txt}",
+            _body_su,
             bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#BE123C"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
     # ── 4. PERSONALITY ────────────────────────────────────────────
     if pers:
         pers_txt = _t1c.t1_get(_t1c.PERSONALITY, pers, lang)
+        _ai_pe = ai_texts.get("t1.personality", "").strip()
+        if _ai_pe:
+            _body_pe = _ai_to_html(_ai_pe)
+        else:
+            _body_pe = (
+                f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+                + _T(lang,
+                     "Sum of only the CONSONANTS in your name — how the world first perceives you before they know you.",
+                     "आपके नाम के केवल व्यंजनों का योग — दुनिया पहली बार आपको कैसे देखती है, जानने से पहले।",
+                     "Aapke naam ke sirf CONSONANTS ka sum — duniya aapko pehli baar kaise perceive karti hai, jaanne se pehle.")
+                + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {pers_txt}"
+            )
         flow.append(_premium_card(s,
             _T(lang,
                f"4️⃣  PERSONALITY NUMBER — {pers}",
                f"4️⃣  व्यक्तित्व अंक — {pers}",
                f"4️⃣  PERSONALITY NUMBER — {pers}"),
-            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-            + _T(lang,
-                 "Sum of only the CONSONANTS in your name — how the world first perceives you before they know you.",
-                 "आपके नाम के केवल व्यंजनों का योग — दुनिया पहली बार आपको कैसे देखती है, जानने से पहले।",
-                 "Aapke naam ke sirf CONSONANTS ka sum — duniya aapko pehli baar kaise perceive karti hai, jaanne se pehle.")
-            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {pers_txt}",
+            _body_pe,
             bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
@@ -3693,17 +3738,24 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
     # ── 6. MATURITY ───────────────────────────────────────────────
     if maturity:
         mat_txt = _t1c.t1_get(_t1c.MATURITY, maturity, lang)
+        _ai_mt = ai_texts.get("t1.maturity", "").strip()
+        if _ai_mt:
+            _body_mt = _ai_to_html(_ai_mt)
+        else:
+            _body_mt = (
+                f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+                + _T(lang,
+                     "Life Path + Expression reduced. The 'true self' that emerges after mid-30s when ego settles and real mission appears.",
+                     "जीवन-पथ + अभिव्यक्ति का सार। 'वास्तविक स्वरूप' जो मध्य-30 के बाद अहंकार शांत होने पर प्रकट होता है।",
+                     "Life Path + Expression reduce kiya. 'True self' jo mid-30s ke baad ego settle hone par emerge hota hai.")
+                + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {mat_txt}"
+            )
         flow.append(_premium_card(s,
             _T(lang,
                f"6️⃣  MATURITY NUMBER — {maturity}  (activates ~35+)",
                f"6️⃣  परिपक्वता अंक — {maturity}  (लगभग 35+ पर सक्रिय)",
                f"6️⃣  MATURITY NUMBER — {maturity}  (activates ~35+)"),
-            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-            + _T(lang,
-                 "Life Path + Expression reduced. The 'true self' that emerges after mid-30s when ego settles and real mission appears.",
-                 "जीवन-पथ + अभिव्यक्ति का सार। 'वास्तविक स्वरूप' जो मध्य-30 के बाद अहंकार शांत होने पर प्रकट होता है।",
-                 "Life Path + Expression reduce kiya. 'True self' jo mid-30s ke baad ego settle hone par emerge hota hai.")
-            + f"<br/><br/><b>{_T(lang, 'Your meaning', 'आपका अर्थ', 'Aapka meaning')}:</b> {mat_txt}",
+            _body_mt,
             bg_color=colors.HexColor("#EEF2FF"), border_color=colors.HexColor("#4338CA"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
@@ -3820,17 +3872,24 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
         py_txt = _t1c.t1_get(_t1c.PERSONAL_YEAR, py, lang)
         from datetime import datetime as _dt
         cur_yr = _dt.now().year
+        _ai_py = ai_texts.get("t1.personal_year", "").strip()
+        if _ai_py:
+            _body_py = _ai_to_html(_ai_py)
+        else:
+            _body_py = (
+                f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
+                + _T(lang,
+                     "Your personal 9-year cycle position for this calendar year. Tells you what kind of energy THIS year is opening for you.",
+                     "इस कैलेंडर वर्ष में आपकी व्यक्तिगत 9-वर्षीय चक्र स्थिति। बताता है इस वर्ष किस प्रकार की ऊर्जा आपके लिए खुल रही है।",
+                     "Iss calendar year me aapki personal 9-year cycle position. Batata hai iss saal kis tarah ki energy aapke liye khul rahi hai.")
+                + f"<br/><br/><b>{_T(lang, 'Your theme for', 'आपका विषय', 'Aapka theme')} {cur_yr}:</b> {py_txt}"
+            )
         flow.append(_premium_card(s,
             _T(lang,
                f"1️⃣1️⃣  PERSONAL YEAR ({cur_yr}) — {py}",
                f"1️⃣1️⃣  व्यक्तिगत वर्ष ({cur_yr}) — {py}",
                f"1️⃣1️⃣  PERSONAL YEAR ({cur_yr}) — {py}"),
-            f"<b>{_T(lang, 'What it is', 'यह क्या है', 'Yeh kya hai')}:</b> "
-            + _T(lang,
-                 "Your personal 9-year cycle position for this calendar year. Tells you what kind of energy THIS year is opening for you.",
-                 "इस कैलेंडर वर्ष में आपकी व्यक्तिगत 9-वर्षीय चक्र स्थिति। बताता है इस वर्ष किस प्रकार की ऊर्जा आपके लिए खुल रही है।",
-                 "Iss calendar year me aapki personal 9-year cycle position. Batata hai iss saal kis tarah ki energy aapke liye khul rahi hai.")
-            + f"<br/><br/><b>{_T(lang, 'Your theme for', 'आपका विषय', 'Aapka theme')} {cur_yr}:</b> {py_txt}",
+            _body_py,
             bg_color=colors.HexColor("#F5F3FF"), border_color=BRAND_PURPLE, lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
@@ -3912,7 +3971,8 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
 # Navagraha, Ishta Devata, Yantra)  — T305
 # ═══════════════════════════════════════════════════════════════════════════
 def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
-                                    driver: int, lang: str = "hinglish") -> list:
+                                    driver: int, lang: str = "hinglish",
+                                    ai_texts: Optional[Dict[str, str]] = None) -> list:
     """Render ~10-14 pages of Vedic classical core for Life Mastery Report."""
     from vedic.numerology.vedic_classical import (
         compute_tier2_bundle, RASHIS, NAKSHATRAS,
@@ -3923,6 +3983,7 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
     from reportlab.lib import colors
     from reportlab.lib.units import mm
 
+    ai_texts = ai_texts or {}
     flow: list = []
 
     # ── Compute bundle ────────────────────────────────────────────────
@@ -4002,11 +4063,16 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
     )
     if src.startswith("fallback"):
         body_rashi += f"<br/><br/><i>{_T(lang,'(Moon position approximated — exact birth time improves accuracy.)','(चंद्र स्थिति अनुमानित — सटीक जन्म-समय से सटीकता बढ़ेगी।)','(Moon position approximated — exact birth time se accuracy badhegi.)')}</i>"
+    _ai_rashi = ai_texts.get("t2.rashi", "").strip()
+    if _ai_rashi:
+        body_rashi_final = _ai_to_html(_ai_rashi)
+    else:
+        body_rashi_final = body_rashi
     flow.append(_premium_card(s,
         _T(lang, "1️⃣  SUN & MOON RASHI — Your Dual Identity",
                "1️⃣  सूर्य एवं चंद्र राशि — आपकी द्वि-पहचान",
                "1️⃣  SUN & MOON RASHI — Aapki Dual Identity"),
-        body_rashi,
+        body_rashi_final,
         bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"), lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
@@ -4036,11 +4102,13 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
                  "aapka 'Atma Karaka' signature ban-ta hai — woh planet jiski puja, mantras, aur discipline sabse "
                  "deep inner peace laati hai.")
         )
+        _ai_nak = ai_texts.get("t2.nakshatra", "").strip()
+        body_nak_final = _ai_to_html(_ai_nak) if _ai_nak else body_nak
         flow.append(_premium_card(s,
             _T(lang, "2️⃣  JANMA NAKSHATRA — Your Soul's Star",
                    "2️⃣  जन्म नक्षत्र — आपकी आत्मा का तारा",
                    "2️⃣  JANMA NAKSHATRA — Aapki Soul ka Star"),
-            body_nak,
+            body_nak_final,
             bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#6D28D9"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
@@ -4140,11 +4208,13 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
             f"<b>{nxt.get('lord','—')}</b> — {nxt.get('start','?')} → {nxt.get('end','?')} "
             f"({nxt.get('years','?')} {_T(lang,'years','वर्ष','years')})"
         )
+        _ai_md = ai_texts.get("t2.mahadasha", "").strip()
+        body_md_final = _ai_to_html(_ai_md) if _ai_md else body_md_head
         flow.append(_premium_card(s,
             _T(lang, "Your Active Planetary Ruler",
                    "आपका सक्रिय ग्रह-स्वामी",
                    "Aapka Active Planetary Ruler"),
-            body_md_head,
+            body_md_final,
             bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#B91C1C"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
@@ -4247,8 +4317,10 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
                 "hai ki koi classical Shani-stress phase nahi chal raha. Iss window ka use long-term "
                 "commitments ke liye karo — marriage, property, new business, big moves. Agli Sadhe Sati "
                 "5-15 years me aayegi (Shani ki orbit ~29.5 years) — iss smooth patch ka enjoy karo.")
+        _ai_ss = ai_texts.get("t2.sadhe_sati", "").strip()
+        body_ss_final = _ai_to_html(_ai_ss) if _ai_ss else body
         flow.append(_premium_card(s,
-            _T(lang, banner_en, banner_hi, banner_hg), body,
+            _T(lang, banner_en, banner_hi, banner_hg), body_ss_final,
             bg_color=colors.HexColor(bg), border_color=colors.HexColor(border), lang=lang))
         flow.append(Paragraph(
             _T(lang,
@@ -4349,11 +4421,13 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
              "karo; planet ke weekday pe sunrise pe 108 mantra recitations se energize karo. 21 din me "
              "clarity, decisions, aur synchronicities me visible shift feel hoga.")
     )
+    _ai_ishta = ai_texts.get("t2.ishta_devata", "").strip()
+    body_ishta_final = _ai_to_html(_ai_ishta) if _ai_ishta else body_ishta
     flow.append(_premium_card(s,
         _T(lang, "6️⃣  ISHTA DEVATA & PERSONAL YANTRA — Your Fast-Track to the Divine",
                "6️⃣  इष्ट देवता एवं व्यक्तिगत यंत्र — दिव्यता का त्वरित-मार्ग",
                "6️⃣  ISHTA DEVATA & PERSONAL YANTRA — Divine ka Fast-Track"),
-        body_ishta,
+        body_ishta_final,
         bg_color=colors.HexColor("#FDF2F8"), border_color=colors.HexColor("#BE185D"), lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
@@ -4377,6 +4451,261 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
         bg="#F0FDF4", border="#15803D"))
 
     return flow
+
+
+def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
+                              driver: int, lang: str) -> Dict[str, str]:
+    """
+    Pre-generate AI narrations for the 11 flagship cards (6 Tier 1 + 5 Tier 2).
+
+    Runs all 11 OpenAI calls in parallel via narrate_batch.
+    Returns {key: text} — empty string for any spec that has no static fallback
+    available (renderer will then use its own built-in static text).
+
+    Never raises. Any engine-side exception → returns empty dict, all cards
+    fall back to static.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    try:
+        from vedic.numerology.ai_narrator import narrate_batch, is_available
+    except Exception as exc:
+        log.warning("ai_narrator import failed: %s", exc)
+        return {}
+
+    if not is_available():
+        return {}  # short-circuit — no API key, skip AI entirely
+
+    specs: list = []
+
+    # ── Tier 1 facts (engine) ────────────────────────────────────────
+    try:
+        from vedic.numerology.extended import compute_extended_numerology
+        from vedic.numerology import core_ext as _cx
+        from vedic.numerology import tier1_content as _t1c
+        from datetime import datetime as _dt
+
+        ext = compute_extended_numerology({"name": name, "dob": dob})
+        if ext.get("available"):
+            lp_info = ext["life_path"]
+            lp = lp_info.get("life_path", 0)
+            nt = ext["name_triad"]
+            expr = nt.get("expression") if nt.get("available") else None
+            soul = nt.get("soul_urge") if nt.get("available") else None
+            pers = nt.get("personality") if nt.get("available") else None
+            pc = ext["personal_cycles"]
+            py = pc.get("personal_year", 0)
+            maturity = _cx.maturity_number(lp, expr) if (lp and expr) else 0
+            cur_yr = _dt.now().year
+
+            if lp:
+                specs.append({
+                    "key": "t1.life_path",
+                    "section_key": "tier1.life_path",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "dob": dob,
+                        "life_path_number": lp,
+                        "classical_meaning": _t1c.t1_get(_t1c.LIFE_PATH, lp, lang),
+                    },
+                    "fallback": "",
+                })
+            if expr:
+                specs.append({
+                    "key": "t1.expression",
+                    "section_key": "tier1.expression",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "expression_number": expr,
+                        "classical_meaning": _t1c.t1_get(_t1c.EXPRESSION, expr, lang),
+                    },
+                    "fallback": "",
+                })
+            if soul:
+                specs.append({
+                    "key": "t1.soul_urge",
+                    "section_key": "tier1.soul_urge",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "soul_urge_number": soul,
+                        "classical_meaning": _t1c.t1_get(_t1c.SOUL_URGE, soul, lang),
+                    },
+                    "fallback": "",
+                })
+            if pers:
+                specs.append({
+                    "key": "t1.personality",
+                    "section_key": "tier1.personality",
+                    "lang": lang,
+                    "word_target": 260,
+                    "facts": {
+                        "person_name": name,
+                        "personality_number": pers,
+                        "classical_meaning": _t1c.t1_get(_t1c.PERSONALITY, pers, lang),
+                    },
+                    "fallback": "",
+                })
+            if maturity:
+                specs.append({
+                    "key": "t1.maturity",
+                    "section_key": "tier1.maturity",
+                    "lang": lang,
+                    "word_target": 260,
+                    "facts": {
+                        "person_name": name,
+                        "maturity_number": maturity,
+                        "life_path_number": lp,
+                        "expression_number": expr,
+                        "classical_meaning": _t1c.t1_get(_t1c.MATURITY, maturity, lang),
+                    },
+                    "fallback": "",
+                })
+            if py:
+                specs.append({
+                    "key": "t1.personal_year",
+                    "section_key": "tier1.personal_year",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "personal_year_number": py,
+                        "current_year": cur_yr,
+                        "classical_meaning": _t1c.t1_get(_t1c.PERSONAL_YEAR, py, lang),
+                    },
+                    "fallback": "",
+                })
+    except Exception as exc:
+        log.warning("tier1 facts build failed: %s", exc)
+
+    # ── Tier 2 facts (engine) ────────────────────────────────────────
+    try:
+        from vedic.numerology.vedic_classical import compute_tier2_bundle
+        bundle = compute_tier2_bundle(dob, tob, driver)
+        rn = bundle.get("rashi_nakshatra", {}) or {}
+        md = bundle.get("mahadasha", {}) or {}
+        ss = bundle.get("sadhe_sati", {}) or {}
+        ishta = bundle.get("ishta_devata", {}) or {}
+
+        def _rn_str(tup):
+            if not tup:
+                return "—"
+            en, hi, _alt = tup
+            return en if lang != "hindi" else hi
+
+        sun_rashi = rn.get("sun_rashi")
+        moon_rashi = rn.get("moon_rashi")
+        if sun_rashi or moon_rashi:
+            specs.append({
+                "key": "t2.rashi",
+                "section_key": "tier2.sun_moon_rashi",
+                "lang": lang,
+                "word_target": 320,
+                "facts": {
+                    "person_name": name,
+                    "sun_rashi": _rn_str(sun_rashi),
+                    "sun_rashi_lord": rn.get("sun_rashi_lord"),
+                    "moon_rashi": _rn_str(moon_rashi),
+                    "moon_rashi_lord": rn.get("moon_rashi_lord"),
+                    "source": rn.get("source", "computed"),
+                },
+                "fallback": "",
+            })
+
+        nak = rn.get("nakshatra")
+        if nak:
+            nak_en, nak_hi, nak_lord = nak
+            specs.append({
+                "key": "t2.nakshatra",
+                "section_key": "tier2.nakshatra",
+                "lang": lang,
+                "word_target": 320,
+                "facts": {
+                    "person_name": name,
+                    "nakshatra": nak_en if lang != "hindi" else nak_hi,
+                    "pada": rn.get("pada"),
+                    "ruling_planet": nak_lord,
+                    "moon_rashi": _rn_str(moon_rashi),
+                },
+                "fallback": "",
+            })
+
+        if md.get("available"):
+            cur = md.get("current") or {}
+            nxt = md.get("next") or {}
+            specs.append({
+                "key": "t2.mahadasha",
+                "section_key": "tier2.current_mahadasha",
+                "lang": lang,
+                "word_target": 340,
+                "facts": {
+                    "person_name": name,
+                    "birth_first_lord": md.get("first_lord"),
+                    "current_lord": cur.get("lord"),
+                    "current_start": cur.get("start"),
+                    "current_end": cur.get("end"),
+                    "current_years": cur.get("years"),
+                    "next_lord": nxt.get("lord"),
+                    "next_start": nxt.get("start"),
+                },
+                "fallback": "",
+            })
+
+        if ss.get("available"):
+            specs.append({
+                "key": "t2.sadhe_sati",
+                "section_key": "tier2.sadhe_sati",
+                "lang": lang,
+                "word_target": 300,
+                "facts": {
+                    "person_name": name,
+                    "active": bool(ss.get("active")),
+                    "phase": ss.get("phase"),
+                    "small_panoti": bool(ss.get("small_panoti")),
+                    "house_from_moon": ss.get("house_from_moon"),
+                    "moon_rashi": _rn_str(moon_rashi),
+                },
+                "fallback": "",
+            })
+
+        if ishta.get("planet"):
+            specs.append({
+                "key": "t2.ishta_devata",
+                "section_key": "tier2.ishta_devata",
+                "lang": lang,
+                "word_target": 280,
+                "facts": {
+                    "person_name": name,
+                    "driver_number": driver,
+                    "ruling_planet": ishta.get("planet"),
+                    "ishta_devata": ishta.get("deity"),
+                    "personal_yantra": ishta.get("yantra"),
+                },
+                "fallback": "",
+            })
+    except Exception as exc:
+        log.warning("tier2 facts build failed: %s", exc)
+
+    if not specs:
+        return {}
+
+    try:
+        import time
+        t0 = time.time()
+        results = narrate_batch(specs, concurrency=6)
+        elapsed = time.time() - t0
+        ok = sum(1 for v in results.values() if v and v.strip())
+        log.info("ai_narrator batch: %d/%d sections ok in %.1fs (lang=%s)",
+                 ok, len(specs), elapsed, lang)
+        return results
+    except Exception as exc:
+        log.warning("narrate_batch failed: %s", exc)
+        return {}
 
 
 def render_part2_pdf(*,
@@ -4407,6 +4736,9 @@ def render_part2_pdf(*,
 
     _CUR_LANG.set((lang or "hinglish").lower())
     s = _styles(lang)
+
+    # ── AI narrations for 11 flagship cards (parallel, ~30-50s) ───────
+    ai_texts = _build_flagship_ai_texts(name, dob, tob, driver, lang)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
@@ -4423,11 +4755,11 @@ def render_part2_pdf(*,
     story.append(PageBreak())
 
     # Pages 3-10 — 🔢 TIER 1 — 13 Core Numerology Numbers (A-Z edition)
-    story += _tier1_core_numbers_section(s, name, dob, lang=lang)
+    story += _tier1_core_numbers_section(s, name, dob, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
 
     # Pages 11-22 — 🕉️ TIER 2 — Vedic Classical Core
-    story += _tier2_vedic_classical_section(s, name, dob, tob, driver, lang=lang)
+    story += _tier2_vedic_classical_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

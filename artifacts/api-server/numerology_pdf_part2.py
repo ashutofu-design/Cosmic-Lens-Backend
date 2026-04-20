@@ -2291,6 +2291,506 @@ def _why_impact_action_block(s, kind: str, reduced: int) -> List[Any]:
 
 # ─── Public entry ────────────────────────────────────────────────────
 
+# ─── NEW ₹1499 Premium Sections (T106: 5-year, property, invest, family, brand) ───
+
+_PY_THEMES_P2 = {
+    1: ("New beginnings — leadership, fresh launches", "Mar, Sep", "Nov–Dec"),
+    2: ("Patience — partnerships, diplomacy, slow build", "Jun, Aug", "Jan–Feb"),
+    3: ("Creative expression, networking, public visibility", "May, Sep", "Feb"),
+    4: ("Foundation building, hard work, system design", "Apr, Aug", "Sep"),
+    5: ("Change, travel, freedom, new experiences", "Mar, Jul, Nov", "Apr"),
+    6: ("Family, duty, healing relationships, home", "Jun, Oct", "Jul"),
+    7: ("Introspection, study, retreat, deep skill", "Jul, Nov", "Mar–Apr"),
+    8: ("Power, money, execution, harvest of effort", "Aug, Oct", "May"),
+    9: ("Completion, release, mentoring, closure", "Sep, Dec", "Jun"),
+}
+
+
+def _personal_year_p2(dob: str, year: int) -> int:
+    parts = dob.split("-")
+    try:
+        m, d = int(parts[1]), int(parts[2])
+    except (IndexError, ValueError):
+        return 0
+    n = sum(int(c) for c in str(year)) + m + d
+    while n > 9:
+        n = sum(int(c) for c in str(n))
+    return n if n else 0
+
+
+_PROPERTY_GUIDE = {
+    1: ("East (Sun rises — leadership facing)", "1, 9, 10, 19, 28",
+        "Mar / Sep (Sun-aligned)", "Bedroom NE • Front door E • Avoid NW",
+        "Square plot, golden/maroon facade, central courtyard"),
+    2: ("North-West (Moon — emotional anchor)", "2, 7, 11, 20, 29",
+        "Jun / Aug (Moon-aligned)", "Bedroom NW • Front door NW • Avoid SE",
+        "Curved corners, white/silver facade, water feature"),
+    3: ("North-East (Jupiter — wisdom, prosperity)", "3, 12, 21, 30",
+        "May / Sep (Jupiter-aligned)", "Bedroom NE • Front door NE • Avoid W",
+        "Yellow/saffron facade, pooja room NE, lots of light"),
+    4: ("South-West (Rahu/Stability — earthing)", "4, 13, 22, 31",
+        "Apr (Rahu-aligned)", "Bedroom SW • Front door W • Avoid centre fire",
+        "Stone/dark facade, heavy wood, no centre staircase"),
+    5: ("North (Mercury — communication, commerce)", "5, 14, 23",
+        "Jul (Mercury-aligned)", "Bedroom N • Front door N • Avoid SW dampness",
+        "Green facade, glass + wood mix, open balconies"),
+    6: ("South-East (Venus — love, luxury)", "6, 15, 24",
+        "Jun / Oct (Venus-aligned)", "Bedroom SE/S • Front door SE • Avoid NW kitchen",
+        "Pink/white facade, garden visible, kitchen SE"),
+    7: ("North-East (Ketu — spiritual sanctuary)", "7, 16, 25",
+        "Nov (Ketu-aligned)", "Bedroom N • Front door N/E • Avoid SW",
+        "Violet/grey facade, meditation room NE, minimalist"),
+    8: ("West (Saturn — stability, scale)", "8, 17, 26, 35",
+        "Aug (Saturn-aligned)", "Bedroom W/SW • Front door W • Avoid centre",
+        "Black/navy facade, granite floors, no central pillar"),
+    9: ("South (Mars — strength, ownership)", "9, 18, 27",
+        "Oct (Mars-aligned)", "Bedroom S • Front door S • Avoid NW",
+        "Red/coral facade, stone construction, fortress feel"),
+}
+
+_INVEST_CALENDAR = {
+    1: ("Stocks Apr-Jun (Sun zone)", "Akshay Tritiya peak buy",
+        "Mar / Sep prime", "Large-cap SIP — index funds",
+        "F&O on Saturdays (Saturn vs Sun)"),
+    2: ("Stocks Mon (Moon day) — defensive only", "Aug (Raksha Bandhan)",
+        "Jun excellent", "SIP excellent — debt-heavy balanced",
+        "Speculation in Saturn months (Dec-Feb)"),
+    3: ("Stocks Thu (Jupiter day), May/Sep", "Diwali / Akshay Tritiya",
+        "Apr launch zone", "ELSS long-term, dividend-paying",
+        "F&O trading — your patience can't sustain it"),
+    4: ("Avoid stocks — only blue-chip", "Avoid Mar (Rahu vol)",
+        "SIP-style mortgage Apr/Aug", "Index funds, recurring deposits",
+        "Crypto, penny stocks (Rahu trap)"),
+    5: ("Stocks Wed (Mercury day) — your forte", "Akshaya Tritiya",
+        "Jul prime", "Thematic / sectoral / international",
+        "F&O without strict stop-loss"),
+    6: ("Stocks Fri (Venus day) — luxury sector", "High allocation Akshay+Diwali",
+        "Jun / Oct prime", "Balanced + REIT (real-estate)",
+        "Aggressive bets in Saturn-month (Dec-Feb)"),
+    7: ("Stocks long-term value Jul/Nov", "Low allocation — minimalist",
+        "Nov contemplative buy", "Index ETF, sovereign bonds",
+        "Trading in Saturn months — your number prefers depth"),
+    8: ("Stocks long-game (no day timing — patience)", "High allocation (Saturn loves gold)",
+        "Aug-Sep your zone", "Large-cap, infrastructure",
+        "Anything fast — you compound, not flip"),
+    9: ("Stocks Tue (Mars day) Sep/Dec", "Moderate allocation",
+        "Oct ownership window", "Aggressive small-cap, defense sector",
+        "Leverage Tuesday post-market — Mars overheats"),
+}
+
+_FAMILY_PLANNING = {
+    1: ("Personal Year 1 or 8 (leadership / harvest cycles)",
+        "1, 4, 8 (driven legacy match)",
+        "A, I, J, Q, Y (Sun letters — Cheiro 1)"),
+    2: ("Personal Year 2 or 7 (sensitive / spiritual cycles)",
+        "2, 7, 9 (sensitive depth match)",
+        "B, K, R (Moon letters — Cheiro 2)"),
+    3: ("Personal Year 3 or 6 (creative / family cycles)",
+        "3, 6, 9 (joyful expansion match)",
+        "C, G, L, S (Jupiter letters — Cheiro 3)"),
+    4: ("Personal Year 4 or 1 (foundation / new-life cycles)",
+        "1, 5, 8 (stable + dynamic match)",
+        "D, M, T (Rahu letters — Cheiro 4)"),
+    5: ("Personal Year 5 or 1 (change / fresh-start cycles)",
+        "1, 5, 9 (movement match)",
+        "E, H, N, X (Mercury letters — Cheiro 5)"),
+    6: ("Personal Year 6 or 2 (family / partnership cycles)",
+        "3, 6, 9 (loving harmony match)",
+        "U, V, W (Venus letters — Cheiro 6)"),
+    7: ("Personal Year 7 or 2 (introspection / partnership cycles)",
+        "2, 4, 7 (deep contemplative match)",
+        "O, Z (Ketu letters — Cheiro 7)"),
+    8: ("Personal Year 8 or 4 (power / foundation cycles)",
+        "4, 8, 1 (power match)",
+        "F, P (Saturn letters — Cheiro 8)"),
+    9: ("Personal Year 9 or 3 (closure / creative cycles)",
+        "3, 6, 9 (passionate match)",
+        "(Mars letters absent — pick child by Driver 9 from DOB)"),
+}
+
+_BRAND_DIGITAL = {
+    1: ("1, 19, 28, 37, 46 (single-digit 1)", "7 letters ideal",
+        ".com (premium leadership)", "1 word tagline (single power-word)",
+        "Sun symbol — circle, gold, lion"),
+    2: ("2, 11, 20, 29, 47 (Cheiro 2)", "9 letters ideal",
+        ".co / .in (gentle / community)", "2 words tagline (paired duality)",
+        "Moon symbol — crescent, silver, water"),
+    3: ("3, 12, 21, 30, 48 (Cheiro 3)", "6 letters ideal",
+        ".org / .com (wisdom / abundance)", "3 words tagline (triad rhythm)",
+        "Jupiter symbol — yellow, lotus, sun-rays"),
+    4: ("4, 13, 22, 31, 40 (Cheiro 4)", "8 letters ideal",
+        ".in / .net (utility, infrastructure)", "4 words tagline (foundation)",
+        "Rahu symbol — geometric, dark indigo, abstract"),
+    5: ("5, 14, 23, 32, 41 (Cheiro 5)", "5 letters ideal",
+        ".io / .co (tech, agile)", "5 words tagline (movement)",
+        "Mercury symbol — wing, green, star-burst"),
+    6: ("6, 15, 24, 33, 42 (Cheiro 6)", "6 letters ideal",
+        ".com / .luxe (luxury, beauty)", "6 words tagline (lyrical)",
+        "Venus symbol — flower, pink/white, swan"),
+    7: ("7, 16, 25, 34, 43 (Cheiro 7)", "7 letters ideal",
+        ".co / .ai (depth, mystery)", "7 words tagline (philosophical)",
+        "Ketu symbol — eye, violet, abstract spiral"),
+    8: ("8, 17, 26, 35, 44 (Cheiro 8)", "8 letters ideal",
+        ".com / .group (institution)", "8 words tagline (statement)",
+        "Saturn symbol — square, black, mountain"),
+    9: ("9, 18, 27, 36, 45 (Cheiro 9)", "9 letters ideal",
+        ".in / .com (warrior, ownership)", "9 words tagline (manifesto)",
+        "Mars symbol — flame, red, shield"),
+}
+
+
+def _five_year_section(s, dob: str, driver: int, lang: str = "hinglish") -> List[Any]:
+    """5-year forecast — Personal Year for next 5 years with theme + peaks."""
+    flow: List[Any] = []
+    flow.append(_section_title(s, _T(lang,
+        "🔮 5-Year Outlook — Year-by-Year Forecast",
+        "🔮 5-वर्षीय दृष्टिकोण — वर्ष-दर-वर्ष पूर्वानुमान",
+        "🔮 5-Year Outlook — Year-by-Year Forecast")))
+    flow.append(Paragraph(_T(lang,
+        "Each year carries a different Personal Year vibration. Use this 5-year map "
+        "to plan launches, marriages, big purchases, and rest periods <b>before</b> "
+        "they arrive — not after.",
+        "प्रत्येक वर्ष का अलग Personal Year कंपन है। इस 5-वर्षीय मानचित्र से लॉन्च, "
+        "विवाह, बड़ी ख़रीद, विश्राम-काल पहले से योजित करें — बाद में नहीं।",
+        "Har year ka alag Personal Year vibration hota hai. Is 5-year map se "
+        "launches, marriage, badi purchases, rest periods <b>pehle</b> plan karo — "
+        "baad me nahi."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    from datetime import datetime
+    yr = datetime.now().year
+    rows = [[
+        Paragraph(f"<b>{_T(lang,'Year','वर्ष','Year')}</b>",  s["body"]),
+        Paragraph(f"<b>{_T(lang,'PY #','PY #','PY #')}</b>",   s["body"]),
+        Paragraph(f"<b>{_T(lang,'Theme','विषय','Theme')}</b>", s["body"]),
+        Paragraph(f"<b>{_T(lang,'Peak','शिखर','Peak')}</b>",   s["body"]),
+        Paragraph(f"<b>{_T(lang,'Slow','धीमा','Slow')}</b>",   s["body"]),
+    ]]
+    for offset in range(5):
+        y = yr + offset
+        py = _personal_year_p2(dob, y) or driver
+        theme, peak, slow = _PY_THEMES_P2.get(py, _PY_THEMES_P2[1])
+        rows.append([
+            Paragraph(str(y), s["body"]),
+            Paragraph(str(py), s["body"]),
+            Paragraph(theme, s["body_mid"]),
+            Paragraph(peak, s["body_mid"]),
+            Paragraph(slow, s["body_mid"]),
+        ])
+    t = Table(rows, colWidths=[14*mm, 12*mm, 92*mm, 32*mm, 30*mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EDE9FE")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 How to use a 5-year forecast — your decision-timing super-power",
+        "📖 5-वर्षीय पूर्वानुमान का उपयोग — आपकी निर्णय-समय महाशक्ति",
+        "📖 5-year forecast ka use kaise karein — aapki decision-timing superpower",
+        "Most people make life's biggest moves (marriage, business launch, home buy, "
+        "career switch) on <b>random months</b> — then wonder why one launches in a "
+        "1-year (it explodes), another in a 7-year (it dies). Personal Years are "
+        "<b>predictable energy weather</b>: 1=launch, 4=build, 8=harvest are <b>action</b> "
+        "years; 7=study, 9=close are <b>release</b> years; 2,5,6 are <b>relationship/"
+        "change</b> years. With this 5-year map you can <b>pre-position</b>: stack "
+        "your launch in a 1 or 8, your wedding in a 6, your sabbatical in a 7. "
+        "Plan your next half-decade backwards from this single page.",
+        "अधिकांश लोग जीवन के सबसे बड़े निर्णय (विवाह, व्यापार-लॉन्च, घर-ख़रीद, करियर-"
+        "बदलाव) <b>यादृच्छिक महीनों</b> में लेते हैं — फिर हैरान कि एक 1-वर्ष में फूटा "
+        "(सफल), दूसरा 7-वर्ष में मरा। Personal Years <b>पूर्वानुमेय ऊर्जा-मौसम</b> है: "
+        "1=लॉन्च, 4=निर्माण, 8=फसल = <b>कार्य</b> वर्ष; 7=अध्ययन, 9=समापन = <b>विमुक्ति</b> "
+        "वर्ष; 2,5,6 = <b>संबंध/परिवर्तन</b> वर्ष। इस 5-वर्षीय मानचित्र से <b>पूर्व-स्थिति</b>: "
+        "लॉन्च 1 या 8 में, विवाह 6 में, सब्बाटिकल 7 में। अगला अर्ध-दशक इस एक पृष्ठ "
+        "से पीछे की ओर नियोजित करें।",
+        "Zyadatar log life ke biggest moves (marriage, business launch, home buy, "
+        "career switch) <b>random months</b> me lete hain — phir wonder karte hain "
+        "ek 1-year me kyu bhada (success), doosra 7-year me kyu mara. Personal "
+        "Years <b>predictable energy weather</b> hain: 1=launch, 4=build, 8=harvest = "
+        "<b>action</b> years; 7=study, 9=close = <b>release</b> years; 2,5,6 = "
+        "<b>relationship/change</b> years. Is 5-year map se <b>pre-position</b> "
+        "karo: launch 1 ya 8 me, wedding 6 me, sabbatical 7 me. Apna agla "
+        "half-decade is ek page se backwards plan karo."))
+    return flow
+
+
+def _kv_table_p2(rows, col_widths=None):
+    cw = col_widths or [55 * mm, 125 * mm]
+    t = Table(rows, colWidths=cw)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FAF5FF")),
+        ("TEXTCOLOR", (0, 0), (0, -1), BRAND_PURPLE),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#E2E8F0")),
+    ]))
+    return t
+
+
+def _property_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
+    flow: List[Any] = []
+    direction, nums, month, layout, design = _PROPERTY_GUIDE.get(driver, _PROPERTY_GUIDE[1])
+    flow.append(_section_title(s, _T(lang,
+        "🏡 Property & Real Estate Buying Guide",
+        "🏡 संपत्ति और रियल एस्टेट ख़रीद गाइड",
+        "🏡 Property & Real Estate Buying Guide")))
+    flow.append(Paragraph(_T(lang,
+        f"For Driver {driver}, every property decision — direction, house number, "
+        f"month of registration, room placement — should align with your ruling "
+        f"planet. A misaligned home can quietly drain wealth and health for decades.",
+        f"Driver {driver} के लिए, संपत्ति के हर निर्णय — दिशा, मकान-संख्या, पंजीकरण-माह, "
+        f"कक्ष-स्थापन — को शासक ग्रह से मेल खाना चाहिए। असंगत घर दशकों तक धन और "
+        f"स्वास्थ्य चुपचाप क्षीण कर सकता है।",
+        f"Driver {driver} ke liye, property ka har decision — direction, house number, "
+        f"registration month, room placement — ruling planet se align hona chahiye. "
+        f"Misaligned ghar decades tak chupchaap wealth aur health drain kar sakta hai."),
+        s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table_p2([
+        [_T(lang, "🧭 Best Facing Direction", "🧭 सर्वश्रेष्ठ दिशा",
+            "🧭 Best Facing Direction"), direction],
+        [_T(lang, "🏠 Lucky House Numbers", "🏠 शुभ मकान संख्या",
+            "🏠 Lucky House Numbers"), nums],
+        [_T(lang, "📅 Best Registration Month", "📅 सर्वश्रेष्ठ पंजीकरण माह",
+            "📅 Best Registration Month"), month],
+        [_T(lang, "🛏️ Room Placement", "🛏️ कक्ष-स्थापन",
+            "🛏️ Room Placement"), layout],
+        [_T(lang, "🎨 Design / Material", "🎨 डिज़ाइन / सामग्री",
+            "🎨 Design / Material"), design],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why house direction beats house price for long-term wealth",
+        "📖 दीर्घ-काल धन के लिए मकान की दिशा क़ीमत से अधिक क्यों मायने रखती है",
+        "📖 Long-term wealth ke liye house direction price se kyu zyada matter karti hai",
+        "Vastu + numerology together encode <b>thousands of years</b> of observation: "
+        "specific directions concentrate specific planetary energies. An East-facing "
+        "home for a Driver 1 person amplifies Sun energy daily — leadership, vitality, "
+        "recognition all rise. The same East-facing home for a Driver 8 (Saturn) "
+        "creates <b>chronic friction</b> because Sun and Saturn are enemies. Similarly, "
+        "house numbers (the number you reduce your address to) <b>vibrate constantly</b> "
+        "in your subconscious. Picking the wrong number/direction silently drains "
+        "wealth and peace for decades, while alignment compounds positively. Use this "
+        "page when buying, renting, or even renovating — the spend is one-time, the "
+        "energy lasts a lifetime.",
+        "वास्तु + अंक-शास्त्र मिलकर <b>हज़ारों वर्षों</b> का अवलोकन कोड करते हैं: विशेष "
+        "दिशाएँ विशेष ग्रह-ऊर्जा केंद्रित करती हैं। Driver 1 के लिए पूर्व-मुखी घर सूर्य-ऊर्जा "
+        "दैनिक बढ़ाता है — नेतृत्व, जीवन-शक्ति, पहचान। Driver 8 (शनि) के लिए वही पूर्व-"
+        "मुखी घर <b>पुराना घर्षण</b> क्योंकि सूर्य-शनि शत्रु हैं। मकान-संख्याएँ अवचेतन में "
+        "<b>लगातार स्पंदित</b> होती हैं। ग़लत संख्या/दिशा दशकों तक धन और शांति चुपचाप "
+        "क्षीण करती है, संरेखण सकारात्मक रूप से चक्रवृद्धि करता है। ख़रीदते, किराए पर "
+        "लेते, या नवीकरण करते समय इस पृष्ठ का उपयोग करें — व्यय एक-बार, ऊर्जा जीवन-भर।",
+        "Vastu + numerology mil ke <b>thousands of years</b> ki observation code "
+        "karte hain: specific directions specific planetary energies concentrate "
+        "karti hain. Driver 1 ke liye East-facing home Sun energy daily amplify "
+        "karta hai — leadership, vitality, recognition sab badhte hain. Wahi East-"
+        "facing home Driver 8 (Saturn) ke liye <b>chronic friction</b> create karta "
+        "hai kyunki Sun aur Saturn dushman hain. House numbers (jo number aap apne "
+        "address ko reduce karte ho) subconscious me <b>constantly vibrate</b> karte "
+        "hain. Galat number/direction decades tak silently wealth aur peace drain "
+        "karta hai, alignment positively compound karta hai. Buying, renting, ya "
+        "renovating karte time is page ka use karein — spend ek baar, energy "
+        "lifetime."))
+    return flow
+
+
+def _invest_calendar_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
+    flow: List[Any] = []
+    stocks, gold, realty, mutual, avoid = _INVEST_CALENDAR.get(driver, _INVEST_CALENDAR[1])
+    flow.append(_section_title(s, _T(lang,
+        "📈 Investment & Trading Calendar",
+        "📈 निवेश और ट्रेडिंग कैलेंडर",
+        "📈 Investment & Trading Calendar")))
+    flow.append(Paragraph(_T(lang,
+        f"Each asset class responds to a different planet. Driver {driver} should "
+        f"trade and invest only on aligned days/months — random timing erodes returns.",
+        f"प्रत्येक संपत्ति वर्ग अलग ग्रह पर प्रतिक्रिया करता है। Driver {driver} को संरेखित "
+        f"दिनों/महीनों में ही व्यापार और निवेश करना चाहिए — यादृच्छिक समय रिटर्न घटाता है।",
+        f"Har asset class alag planet par react karta hai. Driver {driver} sirf "
+        f"aligned days/months me trade aur invest karein — random timing returns "
+        f"erode karti hai."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table_p2([
+        [_T(lang, "📊 Stocks / Equity", "📊 स्टॉक / इक्विटी", "📊 Stocks / Equity"), stocks],
+        [_T(lang, "🥇 Gold / Silver", "🥇 सोना / चाँदी", "🥇 Gold / Silver"), gold],
+        [_T(lang, "🏢 Real Estate", "🏢 रियल एस्टेट", "🏢 Real Estate"), realty],
+        [_T(lang, "📁 Mutual Funds / SIP", "📁 म्यूचुअल फंड / SIP",
+            "📁 Mutual Funds / SIP"), mutual],
+        [_T(lang, "❌ Avoid This", "❌ इससे बचें", "❌ Avoid This"), avoid],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why your number predicts your investment edge AND blind-spot",
+        "📖 आपका अंक आपकी निवेश-धार और अंध-बिंदु क्यों भविष्यवाणी करता है",
+        "📖 Aapka number aapki investment edge aur blind-spot kyu predict karta hai",
+        "Markets move on <b>collective psychology</b>, but individual returns move on "
+        "<b>personal alignment</b>. Mercury (5) people have natural trader-instinct — "
+        "Wednesdays + earnings season are their tail-wind. Saturn (8) people have "
+        "<b>compound-builder DNA</b> — they ruin themselves by trying to day-trade. "
+        "Mars (9) people thrive on Tuesdays and high-conviction bets but blow up on "
+        "leverage. Knowing your <b>natural asset class</b> + <b>natural rhythm</b> + "
+        "<b>blind-spot to avoid</b> is the difference between alpha and account-zero. "
+        "This page is your personal trading constitution — print it, stick it on your "
+        "trading desk, never break it.",
+        "बाज़ार <b>सामूहिक मनोविज्ञान</b> पर चलते हैं, पर व्यक्तिगत रिटर्न <b>व्यक्तिगत "
+        "संरेखण</b> पर। बुध (5) व्यक्तियों में स्वाभाविक व्यापारी-वृत्ति — बुधवार + परिणाम-"
+        "मौसम अनुकूल पवन। शनि (8) में <b>चक्रवृद्धि-निर्माता DNA</b> — डे-ट्रेडिंग में "
+        "बर्बादी। मंगल (9) मंगलवार + उच्च-विश्वास दाँव में पनपते पर लीवरेज में फूटते। "
+        "अपना <b>स्वाभाविक संपत्ति-वर्ग</b> + <b>स्वाभाविक लय</b> + <b>टालने योग्य अंध-बिंदु</b> "
+        "जानना अल्फा और शून्य-खाते के बीच का अंतर है। इस पृष्ठ को व्यापार-डेस्क पर "
+        "लगाएँ — कभी न तोड़ें।",
+        "Markets <b>collective psychology</b> par chalte hain, par individual returns "
+        "<b>personal alignment</b> par. Mercury (5) logon me natural trader-instinct — "
+        "Wednesdays + earnings season tail-wind. Saturn (8) logon me <b>compound-"
+        "builder DNA</b> — day-trade try karke khud ko barbaad karte hain. Mars (9) "
+        "log Tuesdays + high-conviction bets me thrive but leverage par blow up. "
+        "Apna <b>natural asset class</b> + <b>natural rhythm</b> + <b>avoid karne wala "
+        "blind-spot</b> jaanna alpha aur account-zero ka fark hai. Yeh page aapka "
+        "personal trading constitution hai — print karo, trading desk par chipkao, "
+        "kabhi mat todo."))
+    return flow
+
+
+def _family_planning_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
+    flow: List[Any] = []
+    conception, baby_drv, letters = _FAMILY_PLANNING.get(driver, _FAMILY_PLANNING[1])
+    flow.append(_section_title(s, _T(lang,
+        "👶 Family & Child Planning Guide",
+        "👶 परिवार और संतान योजना मार्गदर्शिका",
+        "👶 Family & Child Planning Guide")))
+    flow.append(Paragraph(_T(lang,
+        f"As a Driver {driver} parent, certain Personal Year windows make conception "
+        f"smoother, certain baby Driver numbers create harmony, and certain first "
+        f"letters give your child planetary alignment with you.",
+        f"Driver {driver} माता-पिता के रूप में, विशेष Personal Year खिड़कियाँ गर्भधारण "
+        f"सहज बनाती हैं, विशेष शिशु Driver संख्याएँ सामंजस्य उत्पन्न करती हैं, और विशेष "
+        f"प्रथम-अक्षर शिशु को आपके साथ ग्रह-संरेखण देते हैं।",
+        f"Driver {driver} parent ke roop me, specific Personal Year windows "
+        f"conception ko smooth karti hain, specific baby Driver numbers harmony "
+        f"create karte hain, aur specific first letters child ko aapke saath "
+        f"planetary alignment dete hain."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table_p2([
+        [_T(lang, "🌱 Best Conception Window", "🌱 श्रेष्ठ गर्भधारण खिड़की",
+            "🌱 Best Conception Window"), conception],
+        [_T(lang, "👶 Baby's Ideal Driver Number", "👶 शिशु का आदर्श Driver",
+            "👶 Baby's Ideal Driver Number"), baby_drv],
+        [_T(lang, "🔤 Lucky First Letters for Baby Name", "🔤 शिशु-नाम के शुभ प्रथम अक्षर",
+            "🔤 Lucky First Letters for Baby Name"), letters],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why parent-child number harmony shapes the next 18 years",
+        "📖 माता-पिता और शिशु अंक-सामंजस्य अगले 18 वर्षों को क्यों आकार देता है",
+        "📖 Parent-child number harmony agle 18 saal kyu shape karta hai",
+        "A child born in your <b>aligned Personal Year</b> arrives with a soul-"
+        "vibration that meshes with your current life-chapter — fewer power struggles, "
+        "smoother bonding. The baby's <b>Driver number</b> sets their default "
+        "personality engine; choosing a conception window that produces a "
+        "compatible Driver creates <b>natural harmony</b> for 18+ years. The first "
+        "letter of the baby's name then locks in the planetary energy further (Vedic "
+        "tradition assigns each letter to a planet via Cheiro mapping). This page is "
+        "for <b>conscious parents</b> who want to give their child the cleanest "
+        "energetic start — pick the window, pick the letter, then let nature do the rest.",
+        "<b>संरेखित Personal Year</b> में जन्मा बच्चा ऐसी आत्म-कंपन के साथ आता है जो आपके "
+        "वर्तमान जीवन-अध्याय से मिलती है — कम शक्ति-संघर्ष, सहज बंधन। शिशु का "
+        "<b>Driver अंक</b> उसका डिफ़ॉल्ट व्यक्तित्व-इंजन है; संगत Driver उत्पन्न करने वाली "
+        "गर्भधारण-खिड़की 18+ वर्षों का <b>स्वाभाविक सामंजस्य</b> देती है। नाम का प्रथम "
+        "अक्षर ग्रह-ऊर्जा को और स्थिर करता है (वैदिक परंपरा प्रत्येक अक्षर को Cheiro-मानचित्र "
+        "से ग्रह सौंपती है)। यह पृष्ठ <b>सजग माता-पिता</b> के लिए है जो शिशु को सबसे "
+        "स्वच्छ ऊर्जा-शुरुआत देना चाहते हैं — खिड़की चुनें, अक्षर चुनें, बाक़ी प्रकृति पर छोड़ें।",
+        "<b>Aligned Personal Year</b> me janma bachcha aisi soul-vibration ke saath "
+        "aata hai jo aapke current life-chapter se mesh karti hai — kam power "
+        "struggles, smoother bonding. Baby ka <b>Driver number</b> uska default "
+        "personality engine set karta hai; compatible Driver produce karne wali "
+        "conception window 18+ saal ka <b>natural harmony</b> deti hai. Naam ka "
+        "pehla letter planetary energy aur lock karta hai (Vedic tradition har "
+        "letter ko Cheiro mapping se planet assign karti hai). Yeh page <b>conscious "
+        "parents</b> ke liye hai jo apne child ko cleanest energetic start dena "
+        "chahte hain — window chuno, letter chuno, baaki nature par chhodo."))
+    return flow
+
+
+def _brand_digital_section(s, name: str, driver: int, lang: str = "hinglish") -> List[Any]:
+    flow: List[Any] = []
+    compound, length, domain, tagline, logo = _BRAND_DIGITAL.get(driver, _BRAND_DIGITAL[1])
+    flow.append(_section_title(s, _T(lang,
+        "🌐 Brand & Digital Identity Numerology",
+        "🌐 ब्रांड और डिजिटल पहचान अंक-शास्त्र",
+        "🌐 Brand & Digital Identity Numerology")))
+    flow.append(Paragraph(_T(lang,
+        f"In the digital era, your brand name, domain, tagline, and logo numbers "
+        f"vibrate <b>millions of times daily</b>. Driver {driver} should align every "
+        f"digital touchpoint with these numerological recipes.",
+        f"डिजिटल युग में, आपका ब्रांड-नाम, डोमेन, टैगलाइन, और लोगो संख्याएँ <b>दैनिक "
+        f"लाखों बार</b> स्पंदित होती हैं। Driver {driver} को प्रत्येक डिजिटल स्पर्श-बिंदु "
+        f"इन अंक-शास्त्रीय व्यंजनों से मेल खाना चाहिए।",
+        f"Digital era me, aapka brand name, domain, tagline aur logo numbers "
+        f"<b>daily millions of times</b> vibrate karte hain. Driver {driver} ko har "
+        f"digital touchpoint inn numerology recipes se align karna chahiye."),
+        s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table_p2([
+        [_T(lang, "🎯 Brand Compound Number", "🎯 ब्रांड संयुक्त संख्या",
+            "🎯 Brand Compound Number"), compound],
+        [_T(lang, "📏 Ideal Brand Name Length", "📏 आदर्श ब्रांड-नाम लंबाई",
+            "📏 Ideal Brand Name Length"), length],
+        [_T(lang, "🔗 Domain Extension", "🔗 डोमेन एक्सटेंशन",
+            "🔗 Domain Extension"), domain],
+        [_T(lang, "✏️ Tagline Word Count", "✏️ टैगलाइन शब्द-गणना",
+            "✏️ Tagline Word Count"), tagline],
+        [_T(lang, "🎨 Logo Symbology", "🎨 लोगो प्रतीकवाद",
+            "🎨 Logo Symbology"), logo],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why brand numerology matters more in the digital age than ever",
+        "📖 डिजिटल युग में ब्रांड अंक-शास्त्र पहले से अधिक क्यों मायने रखता है",
+        "📖 Digital age me brand numerology pehle se zyada kyu matter karta hai",
+        "Every time someone <b>types your brand name</b>, <b>visits your domain</b>, "
+        "<b>reads your tagline</b>, or <b>sees your logo</b> — they vibrate that "
+        "number into your business field. Multiply by millions of impressions per "
+        "month and you have either a <b>compounding tail-wind</b> or a slow drag. "
+        "Big companies hire numerologists because they know: a brand-name with the "
+        "wrong compound number requires <b>10× the marketing spend</b> to overcome "
+        "the dissonance. Your brand should target a compound number that resonates "
+        "with your Driver. Domain extension carries the macro vibration; tagline "
+        "word-count locks rhythm; logo symbology grounds the planetary identity. "
+        "Optimise once — benefit forever.",
+        "जब कोई <b>आपका ब्रांड-नाम टाइप करता है</b>, <b>डोमेन देखता है</b>, <b>टैगलाइन "
+        "पढ़ता है</b>, या <b>लोगो देखता है</b> — वे उस संख्या को आपके व्यापार-क्षेत्र में "
+        "स्पंदित करते हैं। प्रति माह लाखों इम्प्रेशंस से गुणा करें — या तो <b>चक्रवृद्धि अनुकूल "
+        "पवन</b> या धीमा घसीट। बड़ी कंपनियाँ अंक-शास्त्रियों को रखती हैं क्योंकि वे जानते "
+        "हैं: ग़लत संयुक्त संख्या वाला ब्रांड-नाम असंगति पार करने को <b>10× विपणन व्यय</b> "
+        "माँगता है। आपके ब्रांड को Driver से प्रतिध्वनित संयुक्त संख्या लक्षित करनी चाहिए। "
+        "डोमेन एक्सटेंशन समष्टि कंपन वहन करता है; टैगलाइन शब्द-गणना लय बंद करती है; "
+        "लोगो प्रतीकवाद ग्रह-पहचान को आधार देता है। एक बार अनुकूलित करें — हमेशा लाभ।",
+        "Har baar koi <b>aapka brand name type</b> karta hai, <b>domain visit</b> "
+        "karta hai, <b>tagline padhta</b> hai, ya <b>logo dekhta</b> hai — wo us "
+        "number ko aapke business field me vibrate karta hai. Million impressions "
+        "per month se multiply karein to ya to <b>compounding tail-wind</b> ya "
+        "slow drag milta hai. Badi companies numerologists hire karti hain kyunki "
+        "wo jaante hain: galat compound number wala brand-name dissonance overcome "
+        "karne ke liye <b>10× marketing spend</b> demand karta hai. Aapka brand ek "
+        "aisa compound number target kare jo aapke Driver se resonate kare. Domain "
+        "extension macro vibration carry karta hai; tagline word-count rhythm lock "
+        "karti hai; logo symbology planetary identity ground karti hai. Ek baar "
+        "optimise karo — hamesha benefit."))
+    return flow
+
+
 def render_part2_pdf(*,
                      name: str,
                      dob: str,
@@ -2423,7 +2923,20 @@ def render_part2_pdf(*,
     story += _signature_section(s, name, driver, lang=lang)
     story.append(PageBreak())
 
-    # Page 19 — 90-day implementation plan
+    # ─── ₹1499 Premium add-ons (T106) ────────────────────────────────
+    story.append(PageBreak())
+    story += _five_year_section(s, dob, driver, lang=lang)
+    story.append(PageBreak())
+    story += _property_section(s, driver, lang=lang)
+    story.append(PageBreak())
+    story += _invest_calendar_section(s, driver, lang=lang)
+    story.append(PageBreak())
+    story += _family_planning_section(s, driver, lang=lang)
+    story.append(PageBreak())
+    story += _brand_digital_section(s, name, driver, lang=lang)
+    story.append(PageBreak())
+
+    # Page final — 90-day implementation plan
     story += _timeline_section(s, lang=lang)
     story += _disclaimer(s)
 

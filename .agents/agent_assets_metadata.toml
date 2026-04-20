@@ -318,3 +318,21 @@ id = "oCrYnbNytyIAuZtFPj-Qm"
 uri = "file://attached_assets/exports/Soul_Blueprint_v3_hg.pdf"
 type = "pdf"
 title = "Soul Blueprint v3 (21 pages) — Hinglish"
+
+[[outputs]]
+id = "pS_yipiytxusQo_4ED8y_"
+uri = "file://attached_assets/exports/Life_Mastery_v6_en.pdf"
+type = "pdf"
+title = "Life Mastery v6 (28 pages) — English"
+
+[[outputs]]
+id = "zFhvU62TElMzWXsZprdsB"
+uri = "file://attached_assets/exports/Life_Mastery_v6_hi.pdf"
+type = "pdf"
+title = "Life Mastery v6 (28 pages) — हिंदी"
+
+[[outputs]]
+id = "iF1PQnUHH3rJ1C14SEdnO"
+uri = "file://attached_assets/exports/Life_Mastery_v6_hg.pdf"
+type = "pdf"
+title = "Life Mastery v6 (28 pages) — Hinglish"

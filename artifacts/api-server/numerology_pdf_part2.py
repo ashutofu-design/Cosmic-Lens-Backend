@@ -246,7 +246,7 @@ def _on_page(canvas, doc):
     canvas.line(15 * mm, 12 * mm, 195 * mm, 12 * mm)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(TEXT_SOFT)
-    canvas.drawString(15 * mm, 8 * mm, "Cosmic Lens — Practical Numerology Tools")
+    canvas.drawString(15 * mm, 8 * mm, "Cosmic Lens — Life Mastery Report")
     canvas.drawRightString(195 * mm, 8 * mm, f"Page {doc.page}")
     canvas.restoreState()
 
@@ -295,12 +295,12 @@ def _verdict_box(s, title: str, body: str, verdict: str, lang: str = "hinglish")
 def _cover(s, name: str, dob: str, lang: str = "hinglish") -> List[Any]:
     flow: List[Any] = []
     flow.append(Spacer(1, 24 * mm))
-    flow.append(Paragraph("PRACTICAL NUMEROLOGY TOOLS", s["tagline"]))
+    flow.append(Paragraph("LIFE MASTERY REPORT", s["tagline"]))
     flow.append(Spacer(1, 3 * mm))
     flow.append(Paragraph(_T(lang,
-        "— Life Mastery Report —",
-        "— जीवन महारत रिपोर्ट —",
-        "— Life Mastery Report —"),
+        "— Advanced Numerology Blueprint —",
+        "— उन्नत अंक-शास्त्र ब्लूप्रिंट —",
+        "— Advanced Numerology Blueprint —"),
         ParagraphStyle("cover_subtitle", fontName=_F("oblique", lang),
                        fontSize=12, textColor=BRAND_PURPLE,
                        alignment=TA_CENTER, leading=16)))

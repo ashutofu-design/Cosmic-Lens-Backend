@@ -431,7 +431,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
   const bd = profile.birthData;
 
-  // sub-tab: choose between Standard (Part 1) and Practical Tools (Part 2)
+  // sub-tab: choose between Standard (Part 1) and Life Mastery Report (Part 2)
   const [sub, setSub] = useState<"std" | "tools">("std");
   const [lang, setLang] = useState<"english" | "hindi" | "hinglish">("hinglish");
   const [opening, setOpening] = useState(false);
@@ -549,7 +549,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Sub-tab toggle: Standard ₹99 vs Practical Tools ₹1499 */}
+      {/* Sub-tab toggle: Standard ₹99 vs Life Mastery Report ₹1499 */}
       <View style={[pp.subTabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
         <Pressable
           onPress={() => { setSub("std"); Haptics.selectionAsync(); }}
@@ -572,7 +572,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
           <Text style={{ fontSize: 16 }}>🛠️</Text>
           <View style={{ flex: 1 }}>
             <Text style={[pp.subTabTitle, { color: sub === "tools" ? "#fff" : C.text }]}>
-              Practical Tools
+              Life Mastery Report
             </Text>
             <Text style={[pp.subTabSub, { color: sub === "tools" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
               ₹1499  •  26 pages
@@ -625,7 +625,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
         </>
       )}
 
-      {/* ── PRACTICAL TOOLS (Pro+) ──────────────────────────────── */}
+      {/* ── LIFE MASTERY REPORT (Pro+) ──────────────────────────── */}
       {sub === "tools" && (
         <>
           <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(124,58,237,0.4)" }]}>
@@ -639,12 +639,12 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                     <Text style={pp.tagTxt}>PRO+ TOOLS</Text>
                   </View>
                   <View style={[pp.tag, { backgroundColor: "rgba(245,158,11,0.18)" }]}>
-                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>PRACTICAL</Text>
+                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>PREMIUM</Text>
                   </View>
                 </View>
-                <Text style={[pp.heroTitle, { color: C.text }]}>Practical Numerology Tools</Text>
+                <Text style={[pp.heroTitle, { color: C.text }]}>Life Mastery Report</Text>
                 <Text style={[pp.heroSub, { color: C.textMuted }]}>
-                  Aapke real Mobile, Vehicle aur House numbers ka deep analysis
+                  26-page deep report — Mobile, Vehicle, House + Career, Love, Money blueprint
                 </Text>
               </View>
             </View>
@@ -758,7 +758,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                     opening && { opacity: 0.6 }]}>
             <View style={pp.ctaInner}>
               <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
-              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Practical Tools PDF"}</Text>
+              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Life Mastery Report"}</Text>
             </View>
           </Pressable>
         </>

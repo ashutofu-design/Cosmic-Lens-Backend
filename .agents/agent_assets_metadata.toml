@@ -396,3 +396,21 @@ id = "GQjPiX-jxpyfOLLIh7aIj"
 uri = "file://attached_assets/cover_preview/cover_hinglish-01.jpg"
 type = "image"
 title = "Cover — Hinglish"
+
+[[outputs]]
+id = "EnqETYXGuGLpTu663PGBI"
+uri = "file://attached_assets/cover_v2/cover_english-01.jpg"
+type = "image"
+title = "Cover — English (final)"
+
+[[outputs]]
+id = "uHi2jXwufiMzKFoJVdgXb"
+uri = "file://attached_assets/cover_v2/cover_hindi-01.jpg"
+type = "image"
+title = "Cover — Hindi (final)"
+
+[[outputs]]
+id = "MOgOlJIwqwSpIWeAghxkQ"
+uri = "file://attached_assets/cover_v2/cover_hinglish-01.jpg"
+type = "image"
+title = "Cover — Hinglish (final)"

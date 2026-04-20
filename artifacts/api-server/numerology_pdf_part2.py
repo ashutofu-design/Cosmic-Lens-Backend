@@ -98,6 +98,23 @@ def _T(lang: str, en: str, hi: str, hg: str) -> str:
     return hg
 
 
+def _F(weight: str, lang: str = "hinglish") -> str:
+    """Return font name appropriate for language.
+
+    weight: 'reg' | 'bold' | 'oblique'
+    In Hindi mode we route everything to Noto Sans Devanagari (which also
+    ships Latin glyphs), so mixed Devanagari + Latin renders cleanly with
+    no missing-glyph squares.
+    """
+    if (lang or "").lower() == "hindi":
+        return _DEVA_BOLD if weight == "bold" else _DEVA_REG
+    if weight == "bold":
+        return "Helvetica-Bold"
+    if weight == "oblique":
+        return "Helvetica-Oblique"
+    return "Helvetica"
+
+
 def _explain_card(s, lang: str, title_en: str, title_hi: str, title_hg: str,
                   body_en: str, body_hi: str, body_hg: str,
                   bg="#F0FDF4", border="#15803D") -> Any:
@@ -126,16 +143,15 @@ def _explain_card(s, lang: str, title_en: str, title_hi: str, title_hg: str,
 def _styles(lang: str = "hinglish") -> Dict[str, ParagraphStyle]:
     """Build paragraph styles.
 
-    Devanagari font (Noto Sans Devanagari) only ships glyphs for Devanagari,
-    so we use it ONLY for headings/titles that we author as pure Devanagari
-    in Hindi mode.  Body/small/captions stay on Helvetica (Latin) — they
-    often contain Hinglish data tables and would render as missing-glyph
-    boxes if forced to NotoDeva.
+    Hindi mode routes ALL text through Noto Sans Devanagari (which ships
+    Latin glyphs too) so mixed Devanagari + Latin renders cleanly with no
+    missing-glyph squares.
     """
     base = getSampleStyleSheet()
     is_hi = (lang or "").lower() == "hindi"
     H_BOLD = _DEVA_BOLD if is_hi else "Helvetica-Bold"
     H_REG  = _DEVA_REG  if is_hi else "Helvetica"
+    H_OBL  = _DEVA_REG  if is_hi else "Helvetica-Oblique"
     return {
         "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName=H_BOLD,
                              fontSize=22, leading=28, textColor=BRAND_PURPLE,
@@ -146,11 +162,11 @@ def _styles(lang: str = "hinglish") -> Dict[str, ParagraphStyle]:
         "h3": ParagraphStyle("h3", parent=base["Heading3"], fontName=H_BOLD,
                              fontSize=11, leading=14, textColor=TEXT_DARK,
                              spaceBefore=6, spaceAfter=2),
-        "body": ParagraphStyle("body", parent=base["BodyText"], fontName="Helvetica",
+        "body": ParagraphStyle("body", parent=base["BodyText"], fontName=H_REG,
                                fontSize=10, leading=14, textColor=TEXT_DARK),
-        "body_mid": ParagraphStyle("body_mid", parent=base["BodyText"], fontName="Helvetica",
+        "body_mid": ParagraphStyle("body_mid", parent=base["BodyText"], fontName=H_REG,
                                    fontSize=9.5, leading=13, textColor=TEXT_MID),
-        "small": ParagraphStyle("small", parent=base["BodyText"], fontName="Helvetica",
+        "small": ParagraphStyle("small", parent=base["BodyText"], fontName=H_REG,
                                 fontSize=8, leading=10, textColor=TEXT_SOFT),
         "cover_name": ParagraphStyle("cover_name", parent=base["Heading1"],
                                      fontName=H_BOLD, fontSize=28, leading=34,
@@ -160,7 +176,7 @@ def _styles(lang: str = "hinglish") -> Dict[str, ParagraphStyle]:
                                     fontName=H_REG, fontSize=12, leading=16,
                                     textColor=TEXT_MID, alignment=TA_CENTER),
         "tagline": ParagraphStyle("tagline", parent=base["BodyText"],
-                                  fontName="Helvetica-Oblique", fontSize=11, leading=14,
+                                  fontName=H_OBL, fontSize=11, leading=14,
                                   textColor=BRAND_GOLD, alignment=TA_CENTER,
                                   spaceAfter=6),
         "page_title": ParagraphStyle("page_title", parent=base["Heading1"],
@@ -196,14 +212,14 @@ def _verdict_color(verdict: str):
     return colors.HexColor("#E5E7EB")
 
 
-def _verdict_box(s, title: str, body: str, verdict: str) -> Table:
+def _verdict_box(s, title: str, body: str, verdict: str, lang: str = "hinglish") -> Table:
     bg = _verdict_color(verdict)
     inner = [
         [Paragraph(f"<b>{title}</b>", ParagraphStyle(
-            "vbt", fontName="Helvetica-Bold", fontSize=10.5,
+            "vbt", fontName=_F("bold", lang), fontSize=10.5,
             textColor=TEXT_DARK, leading=14))],
         [Paragraph(body, ParagraphStyle(
-            "vbb", fontName="Helvetica", fontSize=9.5,
+            "vbb", fontName=_F("reg", lang), fontSize=9.5,
             textColor=TEXT_DARK, leading=13))],
     ]
     t = Table(inner, colWidths=[180 * mm])
@@ -222,7 +238,7 @@ def _verdict_box(s, title: str, body: str, verdict: str) -> Table:
 
 # ─── Cover ───────────────────────────────────────────────────────────
 
-def _cover(s, name: str, dob: str) -> List[Any]:
+def _cover(s, name: str, dob: str, lang: str = "hinglish") -> List[Any]:
     flow: List[Any] = []
     flow.append(Spacer(1, 30 * mm))
     flow.append(Paragraph("PRACTICAL NUMEROLOGY TOOLS", s["tagline"]))
@@ -233,7 +249,7 @@ def _cover(s, name: str, dob: str) -> List[Any]:
 
     box_inner = [
         [Paragraph("<b>Is Premium Report Me Aapko Milega:</b>", ParagraphStyle(
-            "ct", fontName="Helvetica-Bold", fontSize=12, textColor=TEXT_DARK,
+            "ct", fontName=_F("bold", lang), fontSize=12, textColor=TEXT_DARK,
             alignment=TA_CENTER, leading=16))],
         [Paragraph(
             "✓ <b>Life Blueprint Card</b> — core personality + 2026 focus<br/>"
@@ -245,7 +261,7 @@ def _cover(s, name: str, dob: str) -> List[Any]:
             "✓ <b>Mobile / Vehicle / House</b> — Why · Impact · Action format me<br/>"
             "✓ <b>Name Numerology</b> + Name Correction (top 3 variants)<br/>"
             "✓ <b>Compatibility Matrix</b>, signature design, 90-day plan",
-            ParagraphStyle("cb", fontName="Helvetica", fontSize=10,
+            ParagraphStyle("cb", fontName=_F("reg", lang), fontSize=10,
                            textColor=TEXT_MID, alignment=TA_CENTER, leading=15))],
     ]
     bt = Table(box_inner, colWidths=[170 * mm])
@@ -260,7 +276,7 @@ def _cover(s, name: str, dob: str) -> List[Any]:
     flow.append(bt)
     flow.append(Spacer(1, 25 * mm))
     flow.append(Paragraph("Powered by Advanced Cosmic Intelligence",
-                          ParagraphStyle("brand", fontName="Helvetica-Oblique",
+                          ParagraphStyle("brand", fontName=_F("oblique", lang),
                                          fontSize=10, textColor=BRAND_PURPLE,
                                          alignment=TA_CENTER)))
     return flow
@@ -379,8 +395,7 @@ def _number_analysis_block(s, value: str, kind: str,
         s,
         f"Overall Verdict: {out.get('verdict')}",
         body,
-        out.get("verdict", ""),
-    ))
+        out.get("verdict", ""), lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
     # ─ Digit-by-digit breakdown
@@ -416,8 +431,7 @@ def _number_analysis_block(s, value: str, kind: str,
                 s, f"Cheiro's Last-4 Rule — {l4.get('last4')}",
                 f"Last 4 digits sum = {l4.get('sum')} → reduces to <b>{l4.get('reduced')}</b>. "
                 f"{l4.get('note')}",
-                "NEUTRAL",
-            ))
+                "NEUTRAL", lang=lang))
             flow.append(Spacer(1, 3 * mm))
 
     # ─ Pattern alerts
@@ -616,7 +630,7 @@ def _phone_deep_dive(s, value: str, kind: str, driver: int, conductor: int,
         "🪐 Planetary Chain (last 6 digits)"), s["h3"]))
     flow.append(Paragraph(
         f"<b>{chain}</b>",
-        ParagraphStyle("chain", fontName="Helvetica-Bold", fontSize=11,
+        ParagraphStyle("chain", fontName=_F("bold", lang), fontSize=11,
                        textColor=BRAND_PURPLE, leading=16, alignment=1,
                        spaceBefore=2, spaceAfter=4)))
     flow.append(Paragraph(_T(lang,
@@ -800,8 +814,7 @@ def _driver_conductor_intro(s, name: str, dob: str, driver: int, conductor: int,
         "1. Har number ka analysis aapke Driver aur Conductor ke saath compare karke kiya gaya hai.<br/>"
         "2. Verdict colours: <b>Hara</b> = favourable, <b>Peela</b> = neutral, <b>Laal</b> = avoid.<br/>"
         "3. End me 30-day implementation plan aur signature recommendations.",
-        "NEUTRAL",
-    ))
+        "NEUTRAL", lang=lang))
     return flow
 
 
@@ -1030,8 +1043,7 @@ def _signature_section(s, name: str, driver: int, lang: str = "hinglish") -> Lis
         "expression total target kare. <br/>"
         "<b>Avoid:</b> 8 (Saturn) starting brand names — initial 4-7 saal struggle. "
         "<b>Best:</b> 5 (Mercury) or 3 (Jupiter) for modern businesses.",
-        "EXCELLENT",
-    ))
+        "EXCELLENT", lang=lang))
     return flow
 
 
@@ -1107,8 +1119,7 @@ def _timeline_section(s, lang: str = "hinglish") -> List[Any]:
         "Numerology ek powerful supportive tool hai — par effort, integrity aur "
         "consistent action ka koi substitute nahi. Vibration ko apna karne ke baad "
         "kaam karna aur bhi zaruri ho jaata hai. Mehnat + correct vibration = unstoppable.",
-        "EXCELLENT",
-    ))
+        "EXCELLENT", lang=lang))
     return flow
 
 
@@ -1215,7 +1226,7 @@ def _name_numerology_section(s, name: str, lang: str = "hinglish") -> List[Any]:
     flow.append(Spacer(1, 4 * mm))
     flow.append(_verdict_box(
         s, "Strict Chaldean Note",
-        cha.get("note", ""), "NEUTRAL"))
+        cha.get("note", ""), "NEUTRAL", lang=lang))
     return flow
 
 
@@ -1279,8 +1290,7 @@ def _name_correction_section(s, name: str, driver: int, conductor: int,
         s,
         f"Current Name: {orig.get('name')} — Score {orig.get('harmony_score')}/100 ({orig.get('verdict')})",
         f"Name number: <b>{orig.get('name_number')}</b> — Driver {driver}, Conductor {conductor} ke saath compatibility.",
-        orig.get("verdict", ""),
-    ))
+        orig.get("verdict", ""), lang=lang))
     flow.append(Spacer(1, 5 * mm))
 
     flow.append(Paragraph("<b>Top Suggested Variants:</b>", s["h3"]))
@@ -1323,13 +1333,11 @@ def _name_correction_section(s, name: str, driver: int, conductor: int,
         flow.append(_verdict_box(
             s, "Recommended Action",
             "<br/>".join(body_lines) + "<br/><br/>" + (out.get("note") or ""),
-            "EXCELLENT",
-        ))
+            "EXCELLENT", lang=lang))
     else:
         flow.append(_verdict_box(
             s, "No correction needed",
-            out.get("note", ""), "GOOD",
-        ))
+            out.get("note", ""), "GOOD", lang=lang))
 
     # ─── DEEP-DIVE elaboration (T107) ────────────────────────────────
     flow += _name_correction_deep_dive(
@@ -1487,7 +1495,7 @@ def _name_correction_deep_dive(s, name: str, driver: int, conductor: int,
                 f"#{idx}  {v_name}  —  स्कोर {v_score}/100  ({delta_str} मूल से)",
                 f"#{idx}  {v_name}  —  Score {v_score}/100  ({delta_str} vs original)")
             flow.append(Paragraph(f"<b>{head}</b>",
-                ParagraphStyle(f"vh{idx}", fontName="Helvetica-Bold",
+                ParagraphStyle(f"vh{idx}", fontName=_F("bold", lang),
                                fontSize=11, textColor=BRAND_PURPLE,
                                leading=14, spaceBefore=4, spaceAfter=2)))
             v_rows = [
@@ -1699,16 +1707,16 @@ def _disclaimer(s) -> List[Any]:
 # ─── Premium narrative pages (₹1499 depth) ───────────────────────────
 
 def _premium_card(s, heading: str, body_html: str,
-                  bg_color=None, border_color=None) -> Table:
+                  bg_color=None, border_color=None, lang: str = "hinglish") -> Table:
     """Reusable two-row card: heading + body, with brand color frame."""
     bg = bg_color or colors.HexColor("#FAF5FF")
     bd = border_color or BRAND_PURPLE
     inner = [
         [Paragraph(f"<b>{heading}</b>", ParagraphStyle(
-            "pcardh", fontName="Helvetica-Bold", fontSize=11,
+            "pcardh", fontName=_F("bold", lang), fontSize=11,
             textColor=bd, leading=14))],
         [Paragraph(body_html, ParagraphStyle(
-            "pcardb", fontName="Helvetica", fontSize=10,
+            "pcardb", fontName=_F("reg", lang), fontSize=10,
             textColor=TEXT_DARK, leading=14, spaceBefore=2))],
     ]
     t = Table(inner, colWidths=[180 * mm])
@@ -1738,7 +1746,7 @@ def _life_summary_block(s, name: str, driver: int, conductor: int,
         "<i>Built from your kundli and birth date — 100% personalised.</i>",
         "<i>आपकी कुंडली और जन्म-तिथि के आधार पर तैयार — 100% personalised.</i>",
         "<i>Aapki kundli aur janma-tithi ke aadhar par taiyaar — 100% personalized.</i>"),
-        ParagraphStyle("ls_sub", fontName="Helvetica-Oblique", fontSize=10,
+        ParagraphStyle("ls_sub", fontName=_F("oblique", lang), fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
     flow.append(_explain_card(s, lang,
         "📖 What is this 'Life Blueprint' card?",
@@ -1796,7 +1804,7 @@ def _life_summary_block(s, name: str, driver: int, conductor: int,
     flow.append(Paragraph(
         "<i>Yeh page aapke liye 'consultation summary' jaisa hai. Agle pages me har "
         "section ka deep explanation milega — Why, Impact aur Action ke saath.</i>",
-        ParagraphStyle("ls_foot", fontName="Helvetica-Oblique", fontSize=9,
+        ParagraphStyle("ls_foot", fontName=_F("oblique", lang), fontSize=9,
                        textColor=TEXT_SOFT, leading=13, alignment=TA_CENTER)))
     return flow
 
@@ -1812,7 +1820,7 @@ def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     flow.append(Spacer(1, 2 * mm))
     flow.append(Paragraph(
         f"<i>{n.get('title', '')} — {n.get('tagline', '')}</i>",
-        ParagraphStyle("le_sub", fontName="Helvetica-Oblique", fontSize=11,
+        ParagraphStyle("le_sub", fontName=_F("oblique", lang), fontSize=11,
                        textColor=BRAND_GOLD, leading=15, spaceAfter=8)))
     flow.append(_explain_card(s, lang,
         "📖 Why does your Driver number define your identity?",
@@ -1857,10 +1865,10 @@ def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         sc = [[
             _premium_card(s, "5 HIDDEN STRENGTHS", s_html,
                           bg_color=colors.HexColor("#F0FDF4"),
-                          border_color=colors.HexColor("#15803D")),
+                          border_color=colors.HexColor("#15803D"), lang=lang),
             _premium_card(s, "5 HIDDEN CHALLENGES", c_html,
                           bg_color=colors.HexColor("#FEF2F2"),
-                          border_color=colors.HexColor("#B91C1C")),
+                          border_color=colors.HexColor("#B91C1C"), lang=lang),
         ]]
         # Wrap each card in a fixed-width column
         sc_table = Table(sc, colWidths=[88 * mm, 88 * mm])
@@ -1872,11 +1880,11 @@ def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         # Re-render each card with smaller width to fit
         s_card = _premium_card(s, "5 HIDDEN STRENGTHS", s_html,
                                bg_color=colors.HexColor("#F0FDF4"),
-                               border_color=colors.HexColor("#15803D"))
+                               border_color=colors.HexColor("#15803D"), lang=lang)
         s_card._argW = [88 * mm]
         c_card = _premium_card(s, "5 HIDDEN CHALLENGES", c_html,
                                bg_color=colors.HexColor("#FEF2F2"),
-                               border_color=colors.HexColor("#B91C1C"))
+                               border_color=colors.HexColor("#B91C1C"), lang=lang)
         c_card._argW = [88 * mm]
         side = Table([[s_card, c_card]], colWidths=[91 * mm, 91 * mm])
         side.setStyle(TableStyle([
@@ -1938,8 +1946,7 @@ def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[An
             labels[i] if i < len(labels) else f"Insight {i+1}",
             para,
             bg_color=bg_colors_seq[i % 3],
-            border_color=border_colors_seq[i % 3],
-        ))
+            border_color=border_colors_seq[i % 3], lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
     # Money + Health quick cards
@@ -1947,7 +1954,7 @@ def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[An
         flow.append(_premium_card(s, _T(lang, "💰 MONEY PATTERN — How money will come to you", "💰 धन-पैटर्न — पैसा कैसे आएगा", "💰 MONEY PATTERN — Paisa kaise aayega"),
                                   n["money_pattern"],
                                   bg_color=colors.HexColor("#FFFBEB"),
-                                  border_color=BRAND_GOLD))
+                                  border_color=BRAND_GOLD, lang=lang))
         flow.append(Spacer(1, 4 * mm))
     return flow
 
@@ -2003,8 +2010,7 @@ def _love_pattern_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
             labels[i] if i < len(labels) else f"Insight {i+1}",
             para,
             bg_color=bg_colors_seq[i % 3],
-            border_color=border_colors_seq[i % 3],
-        ))
+            border_color=border_colors_seq[i % 3], lang=lang))
         flow.append(Spacer(1, 4 * mm))
     return flow
 
@@ -2050,14 +2056,14 @@ def _wealth_health_spirit_section(s, driver: int, lang: str = "hinglish") -> Lis
         flow.append(_premium_card(s, "🩺 HEALTH PATTERN — Body kya keh rahi hai",
                                   n["health_pattern"],
                                   bg_color=colors.HexColor("#ECFEFF"),
-                                  border_color=colors.HexColor("#0E7490")))
+                                  border_color=colors.HexColor("#0E7490"), lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
     if n.get("spiritual_path"):
         flow.append(_premium_card(s, "🙏 SPIRITUAL PATH — Aapka dharma",
                                   n["spiritual_path"],
                                   bg_color=colors.HexColor("#FEF3C7"),
-                                  border_color=BRAND_GOLD))
+                                  border_color=BRAND_GOLD, lang=lang))
         flow.append(Spacer(1, 4 * mm))
 
     return flow
@@ -2109,8 +2115,7 @@ def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
             s, "5 SPECIFIC RISKS — Inhe Avoid Karein",
             risk_html,
             bg_color=colors.HexColor("#FEF2F2"),
-            border_color=colors.HexColor("#B91C1C"),
-        ))
+            border_color=colors.HexColor("#B91C1C"), lang=lang))
         flow.append(Spacer(1, 5 * mm))
 
     if n.get("golden_periods"):
@@ -2118,8 +2123,7 @@ def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
             s, _T(lang, "🌟 GOLDEN OPPORTUNITY WINDOW — Make your big moves on these days", "🌟 स्वर्णिम अवसर खिड़की — इन दिनों पर बड़ा कदम उठाएं", "🌟 GOLDEN OPPORTUNITY WINDOW — Inn dino par bada move karein"),
             n["golden_periods"],
             bg_color=colors.HexColor("#FFFBEB"),
-            border_color=BRAND_GOLD,
-        ))
+            border_color=BRAND_GOLD, lang=lang))
         flow.append(Spacer(1, 5 * mm))
 
     flow.append(_premium_card(
@@ -2129,8 +2133,7 @@ def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         "Apni greatest strength par double-down karein, biggest challenge par awareness "
         "rakhein, aur risk windows me extra cautious. Golden period me bada decision lein.",
         bg_color=colors.HexColor("#F0F9FF"),
-        border_color=colors.HexColor("#0369A1"),
-    ))
+        border_color=colors.HexColor("#0369A1"), lang=lang))
     return flow
 
 
@@ -2149,7 +2152,7 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
         "<i>Chosen from your Driver number's planet — use them in daily life.</i>",
         "<i>आपके Driver नंबर के ग्रह के आधार पर चुने — दैनिक जीवन में प्रयोग करें।</i>",
         "<i>Driver number ke planet ke aadhar par chosen — daily life me use karein.</i>"),
-        ParagraphStyle("lc_sub", fontName="Helvetica-Oblique", fontSize=10,
+        ParagraphStyle("lc_sub", fontName=_F("oblique", lang), fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
     flow.append(_explain_card(s, lang,
         "📖 Why do colours matter in numerology?",
@@ -2209,14 +2212,14 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
         veh_heading += f" — Aapki gadi ({vehicle}) ke liye"
     flow.append(_premium_card(s, veh_heading, pack["vehicle"],
                               bg_color=colors.HexColor("#EFF6FF"),
-                              border_color=colors.HexColor("#1D4ED8")))
+                              border_color=colors.HexColor("#1D4ED8"), lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
     # Business / Branding
     flow.append(_premium_card(s, _T(lang, "🏢 BUSINESS / BRAND COLOUR", "🏢 व्यवसाय / ब्रांड का रंग", "🏢 BUSINESS / BRAND COLOUR"),
                               pack["business"],
                               bg_color=colors.HexColor("#F3E8FF"),
-                              border_color=BRAND_PURPLE))
+                              border_color=BRAND_PURPLE, lang=lang))
     flow.append(Spacer(1, 4 * mm))
 
     return flow
@@ -2239,7 +2242,7 @@ def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         "ऊर्जा खोलिये।</i>",
         "<i>Vedic planetary days ke according — har din ka 'power colour' pehno aur "
         "us din ki energy unlock karo.</i>"),
-        ParagraphStyle("dd_sub", fontName="Helvetica-Oblique", fontSize=10,
+        ParagraphStyle("dd_sub", fontName=_F("oblique", lang), fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
     flow.append(_explain_card(s, lang,
         "📖 Why does the day-of-week colour matter?",
@@ -2266,7 +2269,7 @@ def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         bg="#F0F9FF", border="#0C4A6E"))
     flow.append(Spacer(1, 4 * mm))
 
-    header_style = ParagraphStyle("dd_h", fontName="Helvetica-Bold", fontSize=10,
+    header_style = ParagraphStyle("dd_h", fontName=_F("bold", lang), fontSize=10,
                                   textColor=colors.white, leading=13, alignment=TA_CENTER)
     rows = [[Paragraph("<b>Day</b>", header_style),
              Paragraph("<b>Planet</b>", header_style),
@@ -2308,8 +2311,7 @@ def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         f"<br/>Aapka personal driver-{driver} ka primary colour bhi MIX kar sakte ho — "
         "white shirt + driver-colour tie/scarf style.",
         bg_color=colors.HexColor("#F0F9FF"),
-        border_color=colors.HexColor("#0369A1"),
-    ))
+        border_color=colors.HexColor("#0369A1"), lang=lang))
     return flow
 
 
@@ -2366,7 +2368,7 @@ def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026,
     flow.append(Paragraph(label_html, s["body_mid"]))
     flow.append(Spacer(1, 4 * mm))
 
-    header_style = ParagraphStyle("mf_h", fontName="Helvetica-Bold", fontSize=9,
+    header_style = ParagraphStyle("mf_h", fontName=_F("bold", lang), fontSize=9,
                                   textColor=colors.white, leading=12, alignment=TA_CENTER)
     rows = [[
         Paragraph("<b>Month</b>", header_style),
@@ -2460,10 +2462,10 @@ def _deep_compat_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         f"नीचे: आपका driver <b>{driver}</b> ({planet}) हर संख्या के साथ 3 क्षेत्रों में कैसा व्यवहार करता है।",
         f"Neeche: aapka driver <b>{driver}</b> ({planet}) baaki har number ke saath 3 life areas me kaisa interact karta hai.")
     flow.append(Paragraph(f"<i>{intro}</i>",
-        ParagraphStyle("dc_sub", fontName="Helvetica-Oblique", fontSize=10,
+        ParagraphStyle("dc_sub", fontName=_F("oblique", lang), fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
 
-    header = ParagraphStyle("dc_h", fontName="Helvetica-Bold", fontSize=10,
+    header = ParagraphStyle("dc_h", fontName=_F("bold", lang), fontSize=10,
                             textColor=colors.white, leading=13, alignment=TA_CENTER)
     rows = [[Paragraph("<b>#</b>", header), Paragraph("<b>Planet</b>", header),
              Paragraph("<b>Type</b>", header), Paragraph("<b>💕 Love</b>", header),
@@ -2508,11 +2510,11 @@ def _deep_compat_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     worst = ", ".join(f"<b>{r['number']}</b> ({r['planet']})" for r in pack["top3_worst"])
     flow.append(_premium_card(s, "🏆 TOP 3 BEST MATCHES (har context me strong)", best,
                               bg_color=colors.HexColor("#F0FDF4"),
-                              border_color=colors.HexColor("#15803D")))
+                              border_color=colors.HexColor("#15803D"), lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "⛔ TOP 3 WORST MATCHES (extra effort lagega)", worst,
                               bg_color=colors.HexColor("#FEF2F2"),
-                              border_color=colors.HexColor("#B91C1C")))
+                              border_color=colors.HexColor("#B91C1C"), lang=lang))
     return flow
 
 
@@ -2583,15 +2585,15 @@ def _lucky_numbers_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 
     flow.append(_premium_card(s, "🏧 ATM PIN / Bank Number Tip", pack["atm_pin_tip"],
                               bg_color=colors.HexColor("#EFF6FF"),
-                              border_color=colors.HexColor("#1D4ED8")))
+                              border_color=colors.HexColor("#1D4ED8"), lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🏦 Account / Locker Number Tip", pack["account_tip"],
                               bg_color=colors.HexColor("#F3E8FF"),
-                              border_color=BRAND_PURPLE))
+                              border_color=BRAND_PURPLE, lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🎰 Lottery / Contest Tip", pack["lottery_tip"],
                               bg_color=colors.HexColor("#FFFBEB"),
-                              border_color=BRAND_GOLD))
+                              border_color=BRAND_GOLD, lang=lang))
     return flow
 
 
@@ -2646,23 +2648,23 @@ def _mantras_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
                               f"<font color='#6B7280' size='9'>Count: {pack.get('count', '—')} | "
                               f"Best time: {pack.get('best_time', '—')}</font>",
                               bg_color=colors.HexColor("#FEF3C7"),
-                              border_color=BRAND_GOLD))
+                              border_color=BRAND_GOLD, lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "💎 GEMSTONE (ratna)", pack.get("stone", "—"),
                               bg_color=colors.HexColor("#F0F9FF"),
-                              border_color=colors.HexColor("#0369A1")))
+                              border_color=colors.HexColor("#0369A1"), lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🔯 YANTRA", pack.get("yantra", "—"),
                               bg_color=colors.HexColor("#F3E8FF"),
-                              border_color=BRAND_PURPLE))
+                              border_color=BRAND_PURPLE, lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🪔 DAAN (Charity)", pack.get("daan", "—"),
                               bg_color=colors.HexColor("#FFFBEB"),
-                              border_color=colors.HexColor("#B45309")))
+                              border_color=colors.HexColor("#B45309"), lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "👕 COLOUR FOCUS", pack.get("color_focus", "—"),
                               bg_color=colors.HexColor("#FDF2F8"),
-                              border_color=colors.HexColor("#DB2777")))
+                              border_color=colors.HexColor("#DB2777"), lang=lang))
     return flow
 
 
@@ -2747,15 +2749,15 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
 
     flow.append(_premium_card(s, "💼 NAME TIP", pack["name_tip"],
                               bg_color=colors.HexColor("#FFFBEB"),
-                              border_color=BRAND_GOLD))
+                              border_color=BRAND_GOLD, lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🎨 LOGO TIP", pack["logo_tip"],
                               bg_color=colors.HexColor("#F3E8FF"),
-                              border_color=BRAND_PURPLE))
+                              border_color=BRAND_PURPLE, lang=lang))
     flow.append(Spacer(1, 3 * mm))
     flow.append(_premium_card(s, "🧾 FIRST INVOICE TIP", pack["first_invoice_tip"],
                               bg_color=colors.HexColor("#DCFCE7"),
-                              border_color=colors.HexColor("#15803D")))
+                              border_color=colors.HexColor("#15803D"), lang=lang))
     return flow
 
 
@@ -2807,7 +2809,7 @@ def _celebrity_match_section(s, driver: int, lang: str = "hinglish") -> List[Any
         flow.append(Paragraph("No celebrity matches available for this driver.", s["body"]))
         return flow
 
-    header = ParagraphStyle("cm_h", fontName="Helvetica-Bold", fontSize=10,
+    header = ParagraphStyle("cm_h", fontName=_F("bold", lang), fontSize=10,
                             textColor=colors.white, leading=13, alignment=TA_CENTER)
     rows = [[Paragraph("<b>Name</b>", header),
              Paragraph("<b>Born</b>", header),
@@ -3114,14 +3116,14 @@ def _five_year_section(s, dob: str, driver: int, lang: str = "hinglish") -> List
     return flow
 
 
-def _kv_table_p2(rows, col_widths=None):
+def _kv_table_p2(rows, col_widths=None, lang: str = "hinglish"):
     cw = col_widths or [55 * mm, 125 * mm]
     t = Table(rows, colWidths=cw)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#FAF5FF")),
         ("TEXTCOLOR", (0, 0), (0, -1), BRAND_PURPLE),
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTNAME", (0, 0), (0, -1), _F("bold", lang)),
+        ("FONTNAME", (1, 0), (1, -1), _F("reg", lang)),
         ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -3164,7 +3166,7 @@ def _property_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
             "🛏️ Room Placement"), layout],
         [_T(lang, "🎨 Design / Material", "🎨 डिज़ाइन / सामग्री",
             "🎨 Design / Material"), design],
-    ]))
+    ], lang=lang))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
         "📖 Why house direction beats house price for long-term wealth",
@@ -3224,7 +3226,7 @@ def _invest_calendar_section(s, driver: int, lang: str = "hinglish") -> List[Any
         [_T(lang, "📁 Mutual Funds / SIP", "📁 म्यूचुअल फंड / SIP",
             "📁 Mutual Funds / SIP"), mutual],
         [_T(lang, "❌ Avoid This", "❌ इससे बचें", "❌ Avoid This"), avoid],
-    ]))
+    ], lang=lang))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
         "📖 Why your number predicts your investment edge AND blind-spot",
@@ -3284,7 +3286,7 @@ def _family_planning_section(s, driver: int, lang: str = "hinglish") -> List[Any
             "👶 Baby's Ideal Driver Number"), baby_drv],
         [_T(lang, "🔤 Lucky First Letters for Baby Name", "🔤 शिशु-नाम के शुभ प्रथम अक्षर",
             "🔤 Lucky First Letters for Baby Name"), letters],
-    ]))
+    ], lang=lang))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
         "📖 Why parent-child number harmony shapes the next 18 years",
@@ -3348,7 +3350,7 @@ def _brand_digital_section(s, name: str, driver: int, lang: str = "hinglish") ->
             "✏️ Tagline Word Count"), tagline],
         [_T(lang, "🎨 Logo Symbology", "🎨 लोगो प्रतीकवाद",
             "🎨 Logo Symbology"), logo],
-    ]))
+    ], lang=lang))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
         "📖 Why brand numerology matters more in the digital age than ever",
@@ -3420,7 +3422,7 @@ def render_part2_pdf(*,
                             author="Cosmic Lens")
     story: List[Any] = []
     # Page 1 — Cover
-    story += _cover(s, name, dob)
+    story += _cover(s, name, dob, lang=lang)
     story.append(PageBreak())
 
     # Page 2 — ⭐ LIFE BLUEPRINT (premium summary card — instant ₹1499 feel)

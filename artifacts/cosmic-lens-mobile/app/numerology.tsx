@@ -486,6 +486,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr, tob: tobStr,
       gender: (profile.gender || "male").toLowerCase(),
+      lang,
     });
     const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
     await downloadAndShare(

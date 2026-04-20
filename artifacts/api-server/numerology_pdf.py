@@ -26,6 +26,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     PageBreak,
     Paragraph,
@@ -40,6 +42,81 @@ from vedic.numerology.meanings import (
     cheiro_compound_fallback,
     get_personality,
 )
+
+# ── Devanagari font registration (Hindi mode) ──────────────────────────
+_DEVA_REG  = "Helvetica"
+_DEVA_BOLD = "Helvetica-Bold"
+
+
+def _find_devanagari_fonts():
+    import os
+    candidates = [
+        "/usr/share/fonts/truetype/noto",
+        "/usr/share/fonts/noto",
+        "/run/current-system/sw/share/fonts/truetype/noto",
+    ]
+    try:
+        for entry in os.listdir("/nix/store"):
+            if "noto-fonts-extra" in entry:
+                candidates.append(f"/nix/store/{entry}/share/fonts/truetype/noto")
+                break
+    except Exception:
+        pass
+    for d in candidates:
+        reg  = f"{d}/NotoSansDevanagari-Medium.ttf"
+        bold = f"{d}/NotoSansDevanagari-ExtraBold.ttf"
+        import os
+        if os.path.exists(reg) and os.path.exists(bold):
+            return reg, bold
+    return None
+
+
+try:
+    _paths = _find_devanagari_fonts()
+    if _paths:
+        try:
+            pdfmetrics.registerFont(TTFont("NotoDeva", _paths[0]))
+            pdfmetrics.registerFont(TTFont("NotoDeva-Bold", _paths[1]))
+        except Exception:
+            pass
+        _DEVA_REG  = "NotoDeva"
+        _DEVA_BOLD = "NotoDeva-Bold"
+except Exception:
+    pass
+
+
+# ─── Language helpers ───────────────────────────────────────────────────
+def _T(lang: str, en: str, hi: str, hg: str) -> str:
+    lang = (lang or "hinglish").lower()
+    if lang == "english":
+        return en
+    if lang == "hindi":
+        return hi
+    return hg
+
+
+def _explain_card(s, lang: str, title_en: str, title_hi: str, title_hg: str,
+                  body_en: str, body_hi: str, body_hg: str,
+                  bg="#F0FDF4", border="#15803D"):
+    title = _T(lang, title_en, title_hi, title_hg)
+    body  = _T(lang, body_en,  body_hi,  body_hg)
+    fname = _DEVA_REG if (lang or "").lower() == "hindi" else "Helvetica"
+    para = Paragraph(
+        f"<font color='{border}'><b>{title}</b></font><br/><br/>"
+        f"<font color='#1F2937'>{body}</font>",
+        ParagraphStyle("ec_p1", fontName=fname, fontSize=9.5, leading=14,
+                       textColor=colors.HexColor("#1F2937"),
+                       leftIndent=4, rightIndent=4))
+    t = Table([[para]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.HexColor(bg)),
+        ("BOX",          (0, 0), (-1, -1), 1.2, colors.HexColor(border)),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    return t
 
 # Brand palette (matches mobile app + existing pdf_renderer)
 BRAND_PURPLE = colors.HexColor("#7C3AED")
@@ -63,16 +140,19 @@ def _safe(s: Any) -> str:
     return str(s)
 
 
-def _styles() -> Dict[str, ParagraphStyle]:
+def _styles(lang: str = "hinglish") -> Dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
+    is_hi = (lang or "").lower() == "hindi"
+    H_BOLD = _DEVA_BOLD if is_hi else "Helvetica-Bold"
+    H_REG  = _DEVA_REG  if is_hi else "Helvetica"
     return {
-        "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName="Helvetica-Bold",
+        "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName=H_BOLD,
                               fontSize=22, leading=28, textColor=BRAND_PURPLE,
                               alignment=TA_CENTER, spaceAfter=6),
-        "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName="Helvetica-Bold",
+        "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName=H_BOLD,
                               fontSize=14, leading=18, textColor=BRAND_PURPLE,
                               spaceBefore=10, spaceAfter=6),
-        "h3": ParagraphStyle("h3", parent=base["Heading3"], fontName="Helvetica-Bold",
+        "h3": ParagraphStyle("h3", parent=base["Heading3"], fontName=H_BOLD,
                               fontSize=11, leading=14, textColor=TEXT_DARK,
                               spaceBefore=6, spaceAfter=2),
         "body": ParagraphStyle("body", parent=base["BodyText"], fontName="Helvetica",
@@ -82,7 +162,7 @@ def _styles() -> Dict[str, ParagraphStyle]:
         "small": ParagraphStyle("small", parent=base["BodyText"], fontName="Helvetica",
                                  fontSize=8, leading=10, textColor=TEXT_SOFT),
         "cover_name": ParagraphStyle("cover_name", parent=base["Heading1"],
-                                     fontName="Helvetica-Bold", fontSize=28, leading=34,
+                                     fontName=H_BOLD, fontSize=28, leading=34,
                                      textColor=TEXT_DARK, alignment=TA_CENTER,
                                      spaceBefore=8, spaceAfter=8),
         "cover_sub": ParagraphStyle("cover_sub", parent=base["BodyText"],
@@ -1044,12 +1124,13 @@ def render_numerology_pdf(*,
                           practical: dict,
                           partner_dob: str | None = None,
                           partner_name: str | None = None,
-                          compat_kind: str = "love") -> bytes:
+                          compat_kind: str = "love",
+                          lang: str = "hinglish") -> bytes:
     """Render a multi-page numerology PDF. Returns the PDF binary.
 
     Optional partner_dob enables a compatibility section.
     """
-    s = _styles()
+    s = _styles(lang)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
@@ -1088,41 +1169,256 @@ def render_numerology_pdf(*,
         _conductor = _reduce(sum(_digits)) if _digits else 0
 
         if _driver:
-            _ps = _p2_styles()
-            story += _p2_blueprint(_ps, name, _driver, _conductor)
+            _ps = _p2_styles(lang)
+            story += _p2_blueprint(_ps, name, _driver, _conductor, lang=lang)
             story.append(PageBreak())
-            story += _p2_identity(_ps, _driver)
+            story += _p2_identity(_ps, _driver, lang=lang)
             story.append(PageBreak())
-            story += _p2_career(_ps, _driver)
+            story += _p2_career(_ps, _driver, lang=lang)
             story.append(PageBreak())
-            story += _p2_love(_ps, _driver)
+            story += _p2_love(_ps, _driver, lang=lang)
             story.append(PageBreak())
-            story += _p2_health(_ps, _driver)
+            story += _p2_health(_ps, _driver, lang=lang)
             story.append(PageBreak())
-            story += _p2_risks(_ps, _driver)
+            story += _p2_risks(_ps, _driver, lang=lang)
             story.append(PageBreak())
     except Exception:
         # If narrative engine unavailable, skip premium pages but keep core report
         pass
 
     story += _core_numbers(s, phase_s)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Why these 'core numbers' matter most",
+        "📖 ये 'मूल अंक' सबसे अधिक क्यों मायने रखते हैं",
+        "📖 Ye 'core numbers' sabse zyada kyu matter karte hain",
+        "Your <b>Driver</b> (birth-day reduced) shows the role you play <b>by default</b> — "
+        "the energy that drives daily decisions. Your <b>Conductor</b> (full DOB reduced) "
+        "is the <b>life-purpose layer</b> — the destination behind every decision. "
+        "<b>Name number</b> shows how the <b>world receives you</b> (first impression, "
+        "branding). When all three align, life feels effortless; when they clash, "
+        "you feel pulled in different directions. Read these as the <b>3-axis compass</b> "
+        "of your blueprint — every section ahead is downstream of these three numbers.",
+        "आपका <b>Driver</b> (जन्म-तिथि कम करके) वह भूमिका है जो आप <b>स्वाभाविक रूप से</b> "
+        "निभाते हैं — दैनिक निर्णयों की ऊर्जा। <b>Conductor</b> (पूरी DOB कम करके) "
+        "<b>जीवन-उद्देश्य</b> है — हर निर्णय के पीछे की मंज़िल। <b>नाम अंक</b> दिखाता है "
+        "<b>दुनिया आपको कैसे देखती है</b> (पहला प्रभाव, ब्रांडिंग)। तीनों सही दिशा में हों "
+        "तो जीवन सहज; टकराव हो तो खिंचाव महसूस होता है। इन्हें ब्लूप्रिंट के <b>3-अक्ष कम्पास</b> "
+        "की तरह पढ़ें — आगे के सभी खंड इन्हीं तीन अंकों से निकलते हैं।",
+        "Aapka <b>Driver</b> (birthday reduced) wo role hai jo aap <b>by default</b> play "
+        "karte ho — daily decisions ki energy. <b>Conductor</b> (full DOB reduced) "
+        "<b>life-purpose layer</b> hai — har decision ke peeche ki destination. "
+        "<b>Name number</b> dikhata hai <b>world aapko kaise receive karti hai</b> "
+        "(first impression, branding). Teeno align hon to life effortless; clash ho "
+        "to alag-alag direction me kheechte ho. Inhe blueprint ke <b>3-axis compass</b> "
+        "ki tarah padho — aage ke saare sections in teen numbers se hi aate hain."))
     story.append(PageBreak())
     story += _personality_section(s, phase_s, extended)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Soul Urge vs Personality vs Expression — what's the difference?",
+        "📖 Soul Urge vs Personality vs Expression — अंतर क्या है?",
+        "📖 Soul Urge vs Personality vs Expression — fark kya hai?",
+        "Three layers of 'who you are': <b>Soul Urge</b> (vowels of name) = your "
+        "<b>inner motivation</b>, what your heart actually wants. <b>Personality</b> "
+        "(consonants) = the <b>mask others see</b>, your social armor. "
+        "<b>Expression</b> (full name) = the <b>tools you have</b> to fulfil the urge. "
+        "When all three are similar — you feel authentic. When Soul Urge differs from "
+        "Personality — you wear a mask at work. When Expression doesn't match the "
+        "Urge — you feel mis-equipped. Use this section to find which layer is "
+        "creating internal friction.",
+        "'आप कौन हैं' की तीन परतें: <b>Soul Urge</b> (नाम के स्वर) = आपकी <b>आंतरिक प्रेरणा</b>, "
+        "जो दिल वास्तव में चाहता है। <b>Personality</b> (व्यंजन) = <b>दूसरों को दिखने वाला मुखौटा</b>, "
+        "सामाजिक कवच। <b>Expression</b> (पूरा नाम) = प्रेरणा को पूरा करने के <b>उपकरण</b>। "
+        "तीनों समान हों तो आप प्रामाणिक महसूस करते हैं। Soul Urge और Personality अलग हों "
+        "तो काम पर मुखौटा पहनते हैं। Expression Urge से मेल न खाए तो साधन-हीन महसूस करते हैं। "
+        "इस खंड से पहचानें कि कौन-सी परत आंतरिक टकराव पैदा कर रही है।",
+        "Teen layers of 'aap kaun ho': <b>Soul Urge</b> (naam ke vowels) = aapki "
+        "<b>inner motivation</b>, dil sach me kya chahta hai. <b>Personality</b> "
+        "(consonants) = <b>doosron ko dikhne wala mask</b>, social armor. "
+        "<b>Expression</b> (full name) = urge ko poora karne ke <b>tools</b>. "
+        "Teeno similar hon to authentic feel hota hai. Soul Urge aur Personality "
+        "alag hon to kaam par mask pehente ho. Expression Urge se match na kare "
+        "to mis-equipped feel hota hai. Is section se pehchano kaunsi layer "
+        "internal friction create kar rahi hai."))
     story.append(PageBreak())
     # NEW: Karmic + Passion + Maturity deep-dive
     story += _karmic_passion_maturity(s, name, dob, phase_s, extended)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Karmic debt, Passion & Maturity — your 3 hidden engines",
+        "📖 Karmic ऋण, Passion और Maturity — आपके 3 छिपे इंजन",
+        "📖 Karmic debt, Passion aur Maturity — aapke 3 chhupe engines",
+        "<b>Karmic numbers</b> (13/14/16/19) flag patterns carried over — they "
+        "demand specific lessons (responsibility, freedom-balance, ego-death, "
+        "self-reliance respectively) before life flows. <b>Passion number</b> = the "
+        "letter that appears <b>most often</b> in your name = the energy you "
+        "<b>over-use unconsciously</b> (your default tool). <b>Maturity number</b> "
+        "(Driver + Life Path) = the person you <b>truly become after age 35-45</b> — "
+        "your second-half identity. Read these together to see what you must "
+        "<b>release</b>, what you <b>over-rely on</b>, and what you're <b>growing into</b>.",
+        "<b>कर्मिक अंक</b> (13/14/16/19) पुराने पैटर्न दर्शाते हैं — विशेष पाठ माँगते हैं "
+        "(ज़िम्मेदारी, स्वतंत्रता-संतुलन, अहंकार-मृत्यु, आत्मनिर्भरता) तभी जीवन प्रवाहित होता है। "
+        "<b>Passion अंक</b> = नाम में <b>सबसे अधिक बार आया अक्षर</b> = वह ऊर्जा जिसे आप "
+        "<b>अनजाने में अधिक प्रयोग करते हैं</b> (default उपकरण)। <b>Maturity अंक</b> "
+        "(Driver + Life Path) = वह व्यक्ति जो आप <b>35-45 की उम्र के बाद वास्तव में बनते हैं</b> — "
+        "आपकी दूसरी-छमाही पहचान। साथ पढ़ें यह जानने के लिए कि क्या <b>छोड़ना</b> है, "
+        "किस पर <b>अधिक निर्भर</b> हैं, और किसमें <b>विकसित</b> हो रहे हैं।",
+        "<b>Karmic numbers</b> (13/14/16/19) carried-over patterns flag karte hain — "
+        "specific lessons demand karte hain (responsibility, freedom-balance, "
+        "ego-death, self-reliance) tab life flow karti hai. <b>Passion number</b> = "
+        "naam me <b>sabse zyada baar aane wala letter</b> = wo energy jo aap "
+        "<b>unconsciously over-use karte ho</b> (default tool). <b>Maturity number</b> "
+        "(Driver + Life Path) = wo insaan jo aap <b>age 35-45 ke baad sach me bante ho</b> — "
+        "aapki second-half identity. Saath padho yeh jaanne ke liye kya <b>release</b> "
+        "karna hai, kispar <b>over-rely</b> karte ho, aur kismein <b>grow</b> kar rahe ho."))
     story.append(PageBreak())
     story += _lo_shu(s, extended)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 The 3×3 Lo Shu Grid — your DNA on a chessboard",
+        "📖 3×3 Lo Shu Grid — शतरंज पर आपका DNA",
+        "📖 3×3 Lo Shu Grid — chess board par aapka DNA",
+        "Lo Shu Grid (developed in China 4000+ years ago) maps your full DOB into "
+        "a <b>3×3 magic square</b>. Numbers that <b>repeat</b> are your superpowers; "
+        "numbers <b>missing</b> are your blind-spots. Three <b>arrows</b> emerge: "
+        "<b>Mind</b> plane (4-9-2 row, planning ability), <b>Soul</b> plane (3-5-7, "
+        "emotional resilience), <b>Practical</b> plane (8-1-6, execution). A complete "
+        "row/column/diagonal = a <b>Raj Yog</b> (success line). Use the grid to "
+        "diagnose <b>exactly where</b> you leak energy and which planet's remedy "
+        "(gemstone, mantra, daan) fills the missing cell.",
+        "Lo Shu Grid (4000+ साल पहले चीन में विकसित) आपकी पूरी DOB को <b>3×3 जादुई वर्ग</b> "
+        "में मैप करता है। <b>दोहराए</b> गए अंक आपकी महाशक्तियाँ; <b>लुप्त</b> अंक blind-spot। "
+        "तीन <b>तीर</b> निकलते हैं: <b>मन</b> समतल (4-9-2 पंक्ति, योजना क्षमता), <b>आत्मा</b> "
+        "समतल (3-5-7, भावनात्मक लचीलापन), <b>व्यावहारिक</b> समतल (8-1-6, निष्पादन)। "
+        "पूर्ण पंक्ति/स्तंभ/विकर्ण = <b>राज योग</b> (सफलता रेखा)। ग्रिड से ठीक-ठीक पहचानें "
+        "ऊर्जा कहाँ रिसती है और कौन सा ग्रह उपाय (रत्न, मंत्र, दान) रिक्त कक्ष भरता है।",
+        "Lo Shu Grid (4000+ saal pehle China me develop hua) aapki poori DOB ko "
+        "<b>3×3 magic square</b> me map karta hai. <b>Repeat</b> hone wale numbers "
+        "aapki superpowers; <b>missing</b> numbers blind-spots. Teen <b>arrows</b> "
+        "nikalte hain: <b>Mind</b> plane (4-9-2 row, planning ability), <b>Soul</b> "
+        "plane (3-5-7, emotional resilience), <b>Practical</b> plane (8-1-6, execution). "
+        "Complete row/column/diagonal = <b>Raj Yog</b> (success line). Grid se "
+        "diagnose karo <b>exactly kahan</b> energy leak hoti hai aur kaunsa planet ka "
+        "remedy (gemstone, mantra, daan) missing cell bharta hai."))
     story.append(PageBreak())
     story += _identity(s, extended)
-    story.append(Spacer(1, 4 * mm))
-    story += _cycles(s, extended)
+    story.append(Spacer(1, 3 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Why your Personal Year/Month/Day shifts your luck",
+        "📖 आपका Personal Year/Month/Day भाग्य कैसे बदलता है",
+        "📖 Personal Year/Month/Day aapki luck kaise badalta hai",
+        "Numerology divides every life into <b>9-year cycles</b>. Each year carries a "
+        "specific theme: <b>1</b>=new beginnings, <b>2</b>=patience/partnership, "
+        "<b>3</b>=expression/joy, <b>4</b>=hard work/foundation, <b>5</b>=change/travel, "
+        "<b>6</b>=family/duty, <b>7</b>=introspection/study, <b>8</b>=power/money, "
+        "<b>9</b>=completion/release. Acting <b>against</b> your Personal Year theme "
+        "creates friction (a 7-year is for study, not launching a startup). Personal "
+        "<b>Month</b> and <b>Day</b> are sub-cycles — use them to time meetings, "
+        "negotiations, and big purchases.",
+        "अंक-शास्त्र हर जीवन को <b>9-वर्षीय चक्रों</b> में बाँटता है। हर वर्ष का विषय: "
+        "<b>1</b>=नई शुरुआत, <b>2</b>=धैर्य/साझेदारी, <b>3</b>=अभिव्यक्ति/आनंद, "
+        "<b>4</b>=परिश्रम/नींव, <b>5</b>=बदलाव/यात्रा, <b>6</b>=परिवार/कर्तव्य, "
+        "<b>7</b>=आत्म-निरीक्षण/अध्ययन, <b>8</b>=शक्ति/धन, <b>9</b>=समापन/मुक्ति। "
+        "Personal Year विषय के <b>विरुद्ध</b> कार्य करना घर्षण पैदा करता है (7-वर्ष "
+        "अध्ययन के लिए है, स्टार्टअप के नहीं)। Personal <b>Month</b> और <b>Day</b> "
+        "उप-चक्र — मीटिंग, बातचीत, बड़ी खरीद का समय इन्हीं से तय करें।",
+        "Numerology har life ko <b>9-saal ke cycles</b> me divide karti hai. Har year "
+        "ka specific theme: <b>1</b>=naye shuruaat, <b>2</b>=patience/partnership, "
+        "<b>3</b>=expression/joy, <b>4</b>=mehnat/foundation, <b>5</b>=change/travel, "
+        "<b>6</b>=family/duty, <b>7</b>=introspection/study, <b>8</b>=power/money, "
+        "<b>9</b>=completion/release. Apne Personal Year theme ke <b>against</b> kaam "
+        "karna friction create karta hai (7-year study ke liye hai, startup launch "
+        "nahi). Personal <b>Month</b> aur <b>Day</b> sub-cycles — meetings, "
+        "negotiations, badi purchase ka timing inhi se decide karo."))
     story.append(PageBreak())
     story += _pinnacles(s, practical)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Pinnacles & Challenges — your 4 life-chapters",
+        "📖 Pinnacles और Challenges — आपके 4 जीवन-अध्याय",
+        "📖 Pinnacles aur Challenges — aapke 4 life-chapters",
+        "Life isn't linear — numerology splits it into <b>4 Pinnacle periods</b> "
+        "(roughly 0-30, 30-39, 39-48, 48+). Each Pinnacle has a <b>theme</b> "
+        "(opportunity that opens) and a paired <b>Challenge</b> (lesson that must "
+        "be passed). The first Pinnacle = childhood DNA. Second = career-building "
+        "decade. Third = legacy-building. Fourth = wisdom/teaching years. Knowing "
+        "your <b>current Pinnacle</b> tells you what doors will open <b>this decade</b>; "
+        "knowing your <b>current Challenge</b> tells you what to <b>stop fighting</b> and "
+        "start integrating.",
+        "जीवन रैखिक नहीं — अंक-शास्त्र इसे <b>4 Pinnacle काल</b> में विभाजित करता है "
+        "(लगभग 0-30, 30-39, 39-48, 48+)। प्रत्येक Pinnacle का <b>विषय</b> (खुलने वाला अवसर) "
+        "और जुड़ी <b>Challenge</b> (पास करने योग्य पाठ) है। पहला Pinnacle = बचपन का DNA। "
+        "दूसरा = करियर-निर्माण दशक। तीसरा = विरासत-निर्माण। चौथा = ज्ञान/शिक्षण वर्ष। "
+        "अपनी <b>वर्तमान Pinnacle</b> जानें — पता चलेगा <b>इस दशक</b> कौन से दरवाज़े "
+        "खुलेंगे; <b>वर्तमान Challenge</b> बताएगी क्या <b>लड़ना बंद</b> करें और एकीकृत करें।",
+        "Life linear nahi — numerology ise <b>4 Pinnacle periods</b> me split karti "
+        "hai (roughly 0-30, 30-39, 39-48, 48+). Har Pinnacle ka <b>theme</b> "
+        "(opportunity jo khulta hai) aur paired <b>Challenge</b> (lesson jo paas "
+        "karna hota hai). First Pinnacle = childhood DNA. Second = career-building "
+        "decade. Third = legacy-building. Fourth = wisdom/teaching years. <b>Current "
+        "Pinnacle</b> jaano — pata chalega <b>is decade</b> kaunse doors open honge; "
+        "<b>current Challenge</b> batayegi kya <b>fight karna band</b> karein aur integrate."))
     story.append(PageBreak())
     story += _career_lucky(s, practical)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Career & Lucky catalog — why these specific picks?",
+        "📖 करियर और शुभ कैटलॉग — ये विशेष चयन क्यों?",
+        "📖 Career aur Lucky catalog — ye specific picks kyu?",
+        "These are <b>not generic suggestions</b> — they're filtered through your "
+        "Driver+Conductor harmony. <b>Career list</b> = professions whose ruling "
+        "planet matches your numbers (e.g., Number 5 = Mercury = communication/"
+        "trading/IT). <b>Lucky days</b> = weekdays ruled by your friendly planets. "
+        "<b>Lucky direction</b> = vastu-corner where your planet sits strongest. "
+        "<b>Lucky gem</b> = the stone that amplifies your weakest cell in the Lo Shu "
+        "grid. Use this catalog as a <b>daily filter</b> — pick the day, direction, and "
+        "colour that matches before any major action.",
+        "ये <b>सामान्य सुझाव नहीं</b> — आपके Driver+Conductor सामंजस्य से छने हुए हैं। "
+        "<b>करियर सूची</b> = वे पेशे जिनके शासक ग्रह आपके अंकों से मेल खाते हैं (जैसे "
+        "Number 5 = बुध = संचार/व्यापार/IT)। <b>शुभ दिन</b> = आपके मित्र ग्रहों के "
+        "वार। <b>शुभ दिशा</b> = वास्तु-कोण जहाँ आपका ग्रह सबसे बलवान बैठा है। "
+        "<b>शुभ रत्न</b> = वह पत्थर जो Lo Shu ग्रिड के सबसे कमज़ोर कक्ष को बढ़ाता है। "
+        "इस कैटलॉग को <b>दैनिक फ़िल्टर</b> की तरह उपयोग करें — किसी भी बड़े कार्य से "
+        "पहले मेल खाते दिन, दिशा, रंग चुनें।",
+        "Ye <b>generic suggestions nahi</b> — aapke Driver+Conductor harmony se "
+        "filter ho ke aaye hain. <b>Career list</b> = wo professions jinke ruling "
+        "planet aapke numbers se match karte hain (jaise Number 5 = Mercury = "
+        "communication/trading/IT). <b>Lucky days</b> = aapke friendly planets ke "
+        "weekdays. <b>Lucky direction</b> = vastu-corner jahan aapka planet sabse "
+        "strong baitha hai. <b>Lucky gem</b> = wo stone jo Lo Shu grid ke weakest "
+        "cell ko amplify karta hai. Is catalog ko <b>daily filter</b> ki tarah use "
+        "karo — kisi bhi major action se pehle matching day, direction, colour chuno."))
     story.append(PageBreak())
     story += _remedies_section(s, phase_s)
+    story.append(Spacer(1, 4 * mm))
+    story.append(_explain_card(s, lang,
+        "📖 Why these remedies work (and how to apply them)",
+        "📖 ये उपाय क्यों काम करते हैं (और कैसे करें)",
+        "📖 Ye remedies kyu kaam karte hain (aur kaise apply karein)",
+        "Remedies are <b>frequency-correctors</b> — each gemstone, mantra, yantra, "
+        "and daan emits the wavelength of one specific planet. Wear/chant/donate "
+        "the one matching your <b>weakest cell</b> in the Lo Shu grid to fill the "
+        "energy gap. <b>Order matters</b>: start with daan (charity — clears karmic "
+        "blocks), then mantra (108x daily, 40 days — rewires subconscious), then "
+        "gemstone (touch skin, right hand for males/left for females, energised on "
+        "ruling weekday). Avoid stacking multiple gemstones — they fight. Pick "
+        "<b>one</b> remedy from each category and commit for 90 days.",
+        "उपाय <b>आवृत्ति-सुधारक</b> हैं — प्रत्येक रत्न, मंत्र, यंत्र और दान एक विशेष ग्रह की "
+        "तरंग-दैर्ध्य उत्सर्जित करते हैं। Lo Shu ग्रिड के <b>सबसे कमज़ोर कक्ष</b> से मेल खाते "
+        "उपाय पहनें/जपें/दान करें ताकि ऊर्जा अंतर भर जाए। <b>क्रम महत्त्वपूर्ण</b>: पहले दान "
+        "(कर्म-अवरोध हटाता है), फिर मंत्र (108x प्रतिदिन, 40 दिन — अवचेतन को पुनर्लिखित "
+        "करता है), फिर रत्न (त्वचा-स्पर्श, पुरुष दायाँ हाथ/स्त्री बायाँ, शासक वार पर अभिमंत्रित)। "
+        "कई रत्न एक साथ न पहनें — आपस में टकराते हैं। प्रत्येक श्रेणी से <b>एक</b> उपाय चुनें "
+        "और 90 दिनों के लिए प्रतिबद्ध हों।",
+        "Remedies <b>frequency-correctors</b> hain — har gemstone, mantra, yantra "
+        "aur daan ek specific planet ki wavelength emit karte hain. Lo Shu grid ke "
+        "<b>weakest cell</b> se matching remedy pehno/chant karo/donate karo taaki "
+        "energy gap bhar jaaye. <b>Order matters</b>: pehle daan (karmic blocks "
+        "clear karta hai), phir mantra (108x daily, 40 days — subconscious rewire), "
+        "phir gemstone (skin-touch, males right hand/females left, ruling weekday "
+        "par energised). Multiple gemstones stack mat karo — fight karte hain. Har "
+        "category se <b>ek</b> remedy chuno aur 90 din ke liye commit karo."))
     # NEW: Optional compatibility section
     if partner_dob:
         story.append(PageBreak())

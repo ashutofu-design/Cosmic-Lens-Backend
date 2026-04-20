@@ -269,19 +269,85 @@ def _cover(s, name: str, dob: str) -> List[Any]:
 # ─── Number analysis sections ────────────────────────────────────────
 
 def _number_analysis_block(s, value: str, kind: str,
-                           driver: int, conductor: int) -> List[Any]:
+                           driver: int, conductor: int,
+                           lang: str = "hinglish") -> List[Any]:
     """Render a deep number-analysis section: digit-by-digit, last-4, alerts, alternatives."""
     flow: List[Any] = []
     out = _ta.analyze_number_string(value, kind=kind, driver=driver, conductor=conductor)
     if not out.get("ok"):
         return flow
 
-    titles = {
-        "mobile":  "Mobile Number — Deep Analysis",
-        "vehicle": "Vehicle Number — Deep Analysis",
-        "house":   "House Number — Deep Analysis",
+    titles_en = {"mobile": "Mobile Number — Deep Analysis",
+                 "vehicle": "Vehicle Number — Deep Analysis",
+                 "house":   "House Number — Deep Analysis"}
+    titles_hi = {"mobile": "मोबाइल नंबर — गहन विश्लेषण",
+                 "vehicle": "वाहन नंबर — गहन विश्लेषण",
+                 "house":   "घर नंबर — गहन विश्लेषण"}
+    titles_hg = {"mobile": "Mobile Number — Deep Analysis",
+                 "vehicle": "Vehicle Number — Deep Analysis",
+                 "house":   "House Number — Deep Analysis"}
+    flow.append(Paragraph(_T(lang,
+        titles_en.get(kind, "Number Analysis"),
+        titles_hi.get(kind, "नंबर विश्लेषण"),
+        titles_hg.get(kind, "Number Analysis")), s["h2"]))
+
+    # Per-kind explain card
+    why_en = {
+        "mobile": ("Your mobile number is the digit-string you carry every minute — every "
+                   "call, message and notification flows through its vibration. Numerology "
+                   "treats the <b>last 4 digits sum</b> (Cheiro's rule), the <b>full digit "
+                   "sum</b> reduced, and the <b>repeating-digit patterns</b> as three "
+                   "independent layers. The card below decodes each layer and tells you "
+                   "if the number supports your Driver+Conductor or fights it."),
+        "vehicle": ("Your vehicle is your daily moving aura — the registration number's "
+                    "vibration influences accident-proneness, fuel efficiency, smoothness "
+                    "of journeys, and resale luck. The full registration is reduced and "
+                    "matched against your Driver/Conductor. Verdict + safer alternatives "
+                    "(if needed) follow."),
+        "house": ("Your house/flat number is the energy gateway you cross every day. It "
+                  "decides the home's <b>peace, prosperity and family health quotient</b>. "
+                  "Hard to change, but knowing the vibration helps with remedies — pots, "
+                  "colours, name-plate adjustments."),
     }
-    flow.append(Paragraph(titles.get(kind, "Number Analysis"), s["h2"]))
+    why_hi = {
+        "mobile": ("आपका मोबाइल नंबर वो अंक-शृंखला है जिसे आप हर पल लिये चलते हैं — हर "
+                   "कॉल, संदेश और सूचना उसी कंपन से बहती है। अंक-शास्त्र इसे तीन परतों "
+                   "में देखता है: <b>अंतिम 4 अंकों का योग</b> (चीरो नियम), <b>पूर्ण योग</b> "
+                   "का संकुचन, और <b>दोहराव-पैटर्न</b>। नीचे का कार्ड हर परत को खोलकर "
+                   "बताता है कि नंबर आपके Driver+Conductor का साथ देता है या विरोध।"),
+        "vehicle": ("आपका वाहन एक चलती-फिरती आभा है — पंजीकरण-संख्या का कंपन दुर्घटना-"
+                    "प्रवृत्ति, ईंधन-दक्षता, यात्रा की सहजता और पुनर्बिक्री-भाग्य पर "
+                    "प्रभाव डालता है। पूर्ण नंबर को संकुचित कर आपके Driver/Conductor "
+                    "से मिलाया गया है — verdict और सुरक्षित विकल्प नीचे।"),
+        "house": ("आपका मकान/फ्लैट नंबर वो ऊर्जा-द्वार है जिसे आप रोज़ लांघते हैं। यह घर "
+                  "की <b>शांति, समृद्धि और पारिवारिक स्वास्थ्य</b> तय करता है। बदलना "
+                  "कठिन है, पर कंपन जानकर उपाय — कलश, रंग, नेम-प्लेट — किये जा सकते हैं।"),
+    }
+    why_hg = {
+        "mobile": ("Aapka mobile number wo digit-string hai jo aap har minute carry karte "
+                   "ho — har call, message, notification usi vibration se flow hota hai. "
+                   "Numerology iss number ko 3 independent layers me dekhti hai: <b>last "
+                   "4 digits ka sum</b> (Cheiro rule), <b>full sum reduced</b>, aur "
+                   "<b>repeating-digit patterns</b>. Neeche card har layer decode karta "
+                   "hai aur batata hai number aapke Driver+Conductor ko support karta "
+                   "hai ya fight."),
+        "vehicle": ("Aapka vehicle ek daily moving aura hai — registration number ka "
+                    "vibration accident-prone-ness, fuel efficiency, smoothness of "
+                    "journey, aur resale luck par effect daalta hai. Full number reduce "
+                    "karke aapke Driver/Conductor se match kiya — verdict + safer "
+                    "alternatives (agar zarurat hai) neeche."),
+        "house": ("Aapka house/flat number wo energy gateway hai jise aap roz cross karte "
+                  "ho. Yeh ghar ki <b>peace, prosperity aur family health</b> tay karta "
+                  "hai. Badalna mushkil, par vibration jaan ke remedies — pots, colours, "
+                  "name-plate adjustments — kiye ja sakte hain."),
+    }
+    flow.append(_explain_card(s, lang,
+        f"📖 Why does your {kind} number matter?",
+        f"📖 आपका {kind} नंबर क्यों मायने रखता है?",
+        f"📖 Aapka {kind} number kyun matter karta hai?",
+        why_en.get(kind, ""), why_hi.get(kind, ""), why_hg.get(kind, ""),
+        bg="#F0F9FF", border="#0369A1"))
+    flow.append(Spacer(1, 4 * mm))
 
     # ─ Summary table
     rows = [
@@ -409,16 +475,50 @@ def _planet_for(n: int) -> str:
     return PLANETS.get(n, "—")
 
 
-def _driver_conductor_intro(s, name: str, dob: str, driver: int, conductor: int) -> List[Any]:
+def _driver_conductor_intro(s, name: str, dob: str, driver: int, conductor: int,
+                            lang: str = "hinglish") -> List[Any]:
     """Page 2 — explain user's Driver + Conductor with planets."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Your Number Signature"))
-    flow.append(Paragraph(
-        f"Har person ke 2 sabse important numbers hote hain — Driver aur Conductor. "
-        f"Ye {dob} ki janma-tithi se nikle hain aur aapki har choice — mobile, vehicle, "
-        "ghar, naam — inhi ke hisaab se evaluate ki jaani chahiye.",
+    flow.append(_section_title(s, _T(lang,
+        "Your Number Signature",
+        "आपका अंक-हस्ताक्षर",
+        "Aapka Number Signature")))
+    flow.append(Paragraph(_T(lang,
+        f"Every person has 2 most important numbers — <b>Driver</b> and <b>Conductor</b>. "
+        f"They are derived from your birth-date <b>{dob}</b>, and every choice you make "
+        "— mobile, vehicle, house, name — should be evaluated against them.",
+        f"हर व्यक्ति के 2 सबसे महत्वपूर्ण नंबर होते हैं — <b>Driver</b> और <b>Conductor</b>। "
+        f"ये आपकी जन्म-तिथि <b>{dob}</b> से निकले हैं, और आपका हर चुनाव — मोबाइल, "
+        "वाहन, घर, नाम — इन्हीं के अनुसार जांचा जाना चाहिए।",
+        f"Har person ke 2 sabse important numbers hote hain — <b>Driver</b> aur "
+        f"<b>Conductor</b>. Ye {dob} ki janma-tithi se nikle hain aur aapki har "
+        "choice — mobile, vehicle, ghar, naam — inhi ke hisaab se evaluate ki jaani chahiye."),
         s["body"]))
-    flow.append(Spacer(1, 6 * mm))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Driver vs Conductor — what's the difference?",
+        "📖 Driver बनाम Conductor — अंतर क्या है?",
+        "📖 Driver vs Conductor — fark kya hai?",
+        "<b>Driver (Mulank)</b> = your birth-DAY only, reduced to 1-9. It rules your "
+        "<b>day-to-day personality</b>, instant reactions, what people see in the first "
+        "meeting. <b>Conductor (Bhagyank)</b> = the FULL birth-date sum reduced. It "
+        "rules your <b>destiny, long-term fortune, marriage and big-money flow</b>. "
+        "When both are friendly with each other you have a smooth life; when they "
+        "clash, you feel a constant inner tug-of-war. The table below shows yours.",
+        "<b>Driver (मूलांक)</b> = केवल आपका जन्म-दिवस, 1-9 तक संकुचित। यह आपकी "
+        "<b>दैनिक व्यक्तित्व</b>, तत्काल प्रतिक्रिया, और पहली मुलाकात की छवि तय करता "
+        "है। <b>Conductor (भाग्यांक)</b> = पूर्ण जन्म-तिथि का योग संकुचित। यह आपकी "
+        "<b>नियति, दीर्घकालिक भाग्य, विवाह और बड़ा धन</b> शासित करता है। जब दोनों "
+        "मित्र हों तो जीवन सहज; टकराव हो तो भीतर रस्साकशी अनुभव होती है। नीचे की "
+        "तालिका में आपके दोनों दिखाये गये हैं।",
+        "<b>Driver (Mulank)</b> = sirf aapka birth-DAY, 1-9 reduce karke. Yeh aapki "
+        "<b>day-to-day personality</b>, instant reactions, aur first meeting impression "
+        "rule karta hai. <b>Conductor (Bhagyank)</b> = poori birth-date ka sum "
+        "reduced. Yeh aapki <b>destiny, long-term fortune, shaadi aur big money</b> "
+        "rule karta hai. Jab dono friendly hote hain to life smooth; jab clash karte "
+        "hain to ek constant inner tug-of-war feel hota hai. Neeche table me aapke dono.",
+        bg="#FAF5FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
 
     rows = [
         ["", "Driver (Mulank)", "Conductor (Bhagyank)"],
@@ -460,17 +560,48 @@ def _driver_conductor_intro(s, name: str, dob: str, driver: int, conductor: int)
     return flow
 
 
-def _compatibility_matrix_section(s, driver: int) -> List[Any]:
+def _compatibility_matrix_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Show user's driver vs all 1-9 compatibility."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Number Compatibility Matrix"))
-    flow.append(Paragraph(
+    flow.append(_section_title(s, _T(lang,
+        "Number Compatibility Matrix",
+        "अंक-संगति तालिका",
+        "Number Compatibility Matrix")))
+    flow.append(Paragraph(_T(lang,
+        f"How your Driver Number <b>{driver}</b> ({_planet_for(driver)}) interacts with "
+        "all the other numbers (1-9). Use this knowledge when selecting a partner, "
+        "choosing a business associate, or buying a house/mobile/vehicle number.",
+        f"आपका Driver नंबर <b>{driver}</b> ({_planet_for(driver)}) बाकी सभी अंकों "
+        "(1-9) से कैसे क्रिया करता है। इस ज्ञान का उपयोग करें — साथी चुनते समय, "
+        "व्यावसायिक भागीदार चुनते समय, या घर/मोबाइल/वाहन का नंबर लेते समय।",
         f"Aapka Driver Number <b>{driver}</b> ({_planet_for(driver)}) baaki sab numbers "
-        "(1-9) ke saath kaisa interact karta hai. Ye knowledge use kare — "
-        "partner select karte waqt, business associate chunte waqt, ghar/mobile/vehicle ka "
-        "number lete waqt.",
-        s["body_mid"]))
-    flow.append(Spacer(1, 5 * mm))
+        "(1-9) ke saath kaisa interact karta hai. Ye knowledge use kare — partner "
+        "select karte waqt, business associate chunte waqt, ghar/mobile/vehicle ka "
+        "number lete waqt."), s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 How to read this 1-9 matrix",
+        "📖 इस 1-9 तालिका को कैसे पढ़ें",
+        "📖 Iss 1-9 matrix ko kaise read karein",
+        "Each row = one number from 1 to 9, with its planet and a relationship label: "
+        "<b>TWIN</b> = same number, mirror energy. <b>FRIEND</b> = planets are mutually "
+        "supportive — natural harmony. <b>NEUTRAL</b> = neither help nor harm. "
+        "<b>ENEMY</b> = planetary clash — extra effort needed. The score (0-100) is a "
+        "compatibility index. Use it as a <b>quick filter</b>, not a verdict — even "
+        "ENEMY pairings can work with conscious adjustment.",
+        "हर पंक्ति = 1 से 9 तक का एक अंक, उसका ग्रह और संबंध-लेबल: <b>TWIN</b> = "
+        "समान संख्या, दर्पण-ऊर्जा। <b>FRIEND</b> = ग्रह परस्पर सहायक — स्वाभाविक "
+        "सामंजस्य। <b>NEUTRAL</b> = न मदद न हानि। <b>ENEMY</b> = ग्रह-टकराव — अधिक "
+        "प्रयास आवश्यक। 0-100 स्कोर एक सामंजस्य-सूचकांक है। इसे <b>शीघ्र फ़िल्टर</b> "
+        "मानिये, अंतिम निर्णय नहीं — सजग समायोजन से ENEMY जोड़ी भी चल सकती है।",
+        "Har row = 1 se 9 tak ka ek number, uska planet aur relationship label: "
+        "<b>TWIN</b> = same number, mirror energy. <b>FRIEND</b> = planets mutually "
+        "supportive — natural harmony. <b>NEUTRAL</b> = neither help nor harm. "
+        "<b>ENEMY</b> = planetary clash — extra effort needed. Score (0-100) ek "
+        "compatibility index hai. Isse <b>quick filter</b> ki tarah use karein, final "
+        "verdict nahi — conscious adjustment se ENEMY pair bhi chal sakti hai.",
+        bg="#FAF5FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
 
     matrix = _ta.compatibility_matrix(driver)
     rows = [["Number", "Planet", "Type", "Score", "Practical Advice"]]
@@ -502,15 +633,50 @@ def _compatibility_matrix_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _letter_table_section(s, name: str) -> List[Any]:
+def _letter_table_section(s, name: str, lang: str = "hinglish") -> List[Any]:
     """Page showing per-letter numerology values."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Name — Letter by Letter"))
-    flow.append(Paragraph(
+    flow.append(_section_title(s, _T(lang,
+        "Name — Letter by Letter",
+        "नाम — अक्षर दर अक्षर",
+        "Name — Letter by Letter")))
+    flow.append(Paragraph(_T(lang,
+        f"<b>{name}</b> — Pythagorean and Chaldean value of every letter. "
+        "Vowels (A/E/I/O/U) form the Soul Urge (your inner desire); consonants "
+        "form the Personality (what the world sees).",
+        f"<b>{name}</b> — हर अक्षर का Pythagorean और Chaldean मान। स्वर "
+        "(A/E/I/O/U) Soul Urge बनाते हैं (आपकी भीतर की इच्छा), व्यंजन Personality "
+        "(जो दुनिया देखती है)।",
         f"<b>{name}</b> — har akshar ki Pythagorean aur Chaldean value. "
         "Vowels (A/E/I/O/U) Soul Urge banate hain (aapki inner desire), "
-        "consonants Personality (duniya jo dekhti hai).",
-        s["body_mid"]))
+        "consonants Personality (duniya jo dekhti hai)."), s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why does each letter carry a number?",
+        "📖 हर अक्षर एक अंक क्यों रखता है?",
+        "📖 Har letter ek number kyun rakhta hai?",
+        "Letters are sound-vibrations. Sanskrit, Hebrew and Greek alphabets all "
+        "assign numerical values to letters because <b>each sound resonates at a "
+        "specific frequency</b>. Pythagoras formalised the modern 1-9 system "
+        "(A=1, J=1, S=1...). Cheiro restored the older Chaldean sound-system "
+        "(1-8 only; 9 is sacred and unwritten). Every name therefore has an "
+        "<b>Expression number</b> (full sum), a <b>Soul Urge</b> (vowels only) "
+        "and a <b>Personality</b> (consonants only). The table below decodes yours.",
+        "अक्षर ध्वनि-कंपन हैं। संस्कृत, हिब्रू और ग्रीक — सभी अंकीय मान देते हैं "
+        "क्योंकि <b>प्रत्येक ध्वनि एक विशिष्ट आवृत्ति पर अनुनादित होती है</b>। "
+        "पाइथागोरस ने आधुनिक 1-9 प्रणाली बनायी (A=1, J=1, S=1...)। चीरो ने प्राचीन "
+        "चाल्डियन ध्वनि-प्रणाली पुनर्जीवित की (केवल 1-8; 9 सम्माननीय और अलिखित)। "
+        "हर नाम का अतः एक <b>Expression अंक</b> (पूर्ण योग), एक <b>Soul Urge</b> "
+        "(केवल स्वर) और एक <b>Personality</b> (केवल व्यंजन) होता है। नीचे की "
+        "तालिका आपके सब डिकोड करती है।",
+        "Letters sound-vibrations hain. Sanskrit, Hebrew aur Greek — sab numerical "
+        "values dete hain kyunki <b>har sound ek specific frequency par resonate "
+        "karta hai</b>. Pythagoras ne modern 1-9 system formalise kiya (A=1, J=1, "
+        "S=1...). Cheiro ne ancient Chaldean sound-system revive kiya (sirf 1-8; "
+        "9 sacred aur unwritten). Har naam ka isliye ek <b>Expression number</b> "
+        "(full sum), ek <b>Soul Urge</b> (sirf vowels) aur ek <b>Personality</b> "
+        "(sirf consonants) hota hai. Neeche table aapke sab decode karta hai.",
+        bg="#FAF5FF", border="#5B21B6"))
     flow.append(Spacer(1, 4 * mm))
 
     rows = [["Letter", "Type", "Pythagorean", "Chaldean"]]
@@ -550,14 +716,43 @@ def _letter_table_section(s, name: str) -> List[Any]:
     return flow
 
 
-def _signature_section(s, name: str, driver: int) -> List[Any]:
+def _signature_section(s, name: str, driver: int, lang: str = "hinglish") -> List[Any]:
     """Initial-letter analysis + signature recommendations."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Signature & Branding Recommendations"))
+    flow.append(_section_title(s, _T(lang,
+        "Signature & Branding Recommendations",
+        "हस्ताक्षर और ब्रांडिंग सुझाव",
+        "Signature & Branding Recommendations")))
 
     sig = _ta.signature_advice(name, driver)
     if not sig.get("ok"):
         return flow
+
+    flow.append(_explain_card(s, lang,
+        "📖 Why does your signature shape your success?",
+        "📖 हस्ताक्षर सफलता को क्यों आकार देता है?",
+        "📖 Signature aapki success ko kaise shape karta hai?",
+        "Your signature is the most-repeated motion of your life — every cheque, "
+        "contract, document. Graphologists and numerologists agree that a signature "
+        "is a <b>frozen affirmation of your subconscious self-image</b>. The first "
+        "letter, slope, underline and dot placement each radiate a frequency. A "
+        "Driver-aligned signature can <b>open income channels and remove invisible "
+        "blocks</b> in months. The card below gives the rules tuned to your number.",
+        "हस्ताक्षर आपके जीवन की सबसे अधिक दोहरायी जाने वाली क्रिया है — हर चेक, "
+        "अनुबंध, दस्तावेज़। ग्राफोलॉजिस्ट और अंक-शास्त्री सहमत हैं कि हस्ताक्षर एक "
+        "<b>अवचेतन आत्म-छवि की जमी हुई पुष्टि</b> है। पहला अक्षर, ढलान, अंडरलाइन "
+        "और बिंदु की स्थिति — सब आवृत्तियाँ विकीर्ण करते हैं। Driver-संरेखित "
+        "हस्ताक्षर महीनों में <b>आय-स्रोत खोल सकता है और अदृश्य अवरोध हटा सकता है</b>। "
+        "नीचे आपके अंक के अनुसार नियम।",
+        "Aapka signature jeevan ki sabse zyada repeat hone wali motion hai — har "
+        "cheque, contract, document. Graphologists aur numerologists sahmat hain ki "
+        "signature ek <b>subconscious self-image ki frozen affirmation</b> hai. "
+        "First letter, slope, underline aur dot placement — sab frequencies radiate "
+        "karte hain. Driver-aligned signature mahino me <b>income channels khol "
+        "sakta hai aur invisible blocks hata sakta hai</b>. Neeche aapke number ke "
+        "tuned rules.",
+        bg="#F0FDF4", border="#15803D"))
+    flow.append(Spacer(1, 4 * mm))
 
     rows = [
         ["First Letter:", f"{sig['first_letter']} (value {sig['first_letter_value']}, "
@@ -595,15 +790,50 @@ def _signature_section(s, name: str, driver: int) -> List[Any]:
     return flow
 
 
-def _timeline_section(s) -> List[Any]:
+def _timeline_section(s, lang: str = "hinglish") -> List[Any]:
     """30-day implementation timeline."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Your 90-Day Implementation Plan"))
-    flow.append(Paragraph(
+    flow.append(_section_title(s, _T(lang,
+        "Your 90-Day Implementation Plan",
+        "आपकी 90-दिवसीय कार्यान्वयन योजना",
+        "Aapka 90-Day Implementation Plan")))
+    flow.append(Paragraph(_T(lang,
+        "Numerology corrections never happen overnight — a slow rollout is essential. "
+        "Follow this schedule:",
+        "अंक-शास्त्र के सुधार कभी रातों-रात नहीं होते — धीरे-धीरे लागू करना आवश्यक "
+        "है। यह अनुसूची अपनाइये:",
         "Numerology corrections kabhi raat ko nahi badalte — slow rollout zaruri hai. "
-        "Yeh schedule follow kare:",
-        s["body_mid"]))
-    flow.append(Spacer(1, 5 * mm))
+        "Yeh schedule follow kare:"), s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why a 90-day rollout instead of 'change everything today'?",
+        "📖 90-दिन की योजना क्यों, सब आज ही क्यों नहीं?",
+        "📖 90-din ka rollout kyun, sab aaj hi kyun nahi?",
+        "When you change too many vibrations at once — name spelling + mobile + "
+        "vehicle + signature + colours — your subconscious goes into <b>identity "
+        "shock</b>. Old patterns clash with new ones, you feel anxious, and the "
+        "energy fails to settle. A staged 90-day rollout lets each change "
+        "<b>integrate before the next one is layered on</b>. Phase 1 = mindset & "
+        "easy wins; Phase 2 = practical (mobile, signature); Phase 3 = identity "
+        "(name, brand). This sequence is the difference between a stable upgrade "
+        "and a chaotic restart.",
+        "जब आप एक साथ बहुत-सी कंपन-तरंगें बदलते हैं — नाम-वर्तनी + मोबाइल + वाहन "
+        "+ हस्ताक्षर + रंग — तो अवचेतन <b>पहचान-धक्के</b> में चला जाता है। पुराने "
+        "पैटर्न नये से टकराते हैं, बेचैनी होती है, ऊर्जा स्थिर नहीं हो पाती। 90-दिन "
+        "की चरणबद्ध योजना हर बदलाव को <b>अगले से पहले एकीकृत होने का समय</b> देती "
+        "है। फेज़ 1 = सोच और आसान जीतें; फेज़ 2 = व्यवहारिक (मोबाइल, हस्ताक्षर); "
+        "फेज़ 3 = पहचान (नाम, ब्रांड)। यह क्रम स्थिर उन्नयन और अराजक पुनः-शुरुआत "
+        "के बीच का अंतर है।",
+        "Jab aap ek saath bahut saari vibrations badalte ho — naam-spelling + "
+        "mobile + vehicle + signature + colours — to subconscious <b>identity "
+        "shock</b> me chala jaata hai. Old patterns naye se clash karte hain, "
+        "anxiety hoti hai, energy settle nahi hoti. 90-din ka staged rollout har "
+        "change ko <b>agle se pehle integrate hone ka time</b> deta hai. Phase 1 = "
+        "mindset & easy wins; Phase 2 = practical (mobile, signature); Phase 3 = "
+        "identity (name, brand). Yeh sequence stable upgrade aur chaotic restart "
+        "ka difference banata hai.",
+        bg="#FFFBEB", border="#B45309"))
+    flow.append(Spacer(1, 4 * mm))
 
     rows = [["Phase", "Action Plan"]]
     for item in _ta.implementation_timeline():
@@ -639,18 +869,50 @@ def _timeline_section(s) -> List[Any]:
 
 # ─── Name numerology section (Pythagorean + Chaldean) ────────────────
 
-def _name_numerology_section(s, name: str) -> List[Any]:
+def _name_numerology_section(s, name: str, lang: str = "hinglish") -> List[Any]:
     """Side-by-side Pythagorean vs Chaldean name analysis."""
     from vedic.numerology.extended import _PYTH, _VOWELS
 
     flow: List[Any] = []
-    flow.append(_section_title(s, "Name Numerology — Dual Alphabet Analysis"))
-    flow.append(Paragraph(
-        f"Aapka naam: <b>{name}</b><br/>"
-        "Pythagorean (modern, spiritual) aur Chaldean (ancient, professional) "
-        "dono systems se compute kiya gaya hai.",
+    flow.append(_section_title(s, _T(lang,
+        "Name Numerology — Dual Alphabet Analysis",
+        "नाम-अंकशास्त्र — दोहरे वर्णमाला विश्लेषण",
+        "Name Numerology — Dual Alphabet Analysis")))
+    flow.append(Paragraph(_T(lang,
+        f"Your name: <b>{name}</b><br/>Computed in both systems — Pythagorean "
+        "(modern, spiritual) and Chaldean (ancient, professional).",
+        f"आपका नाम: <b>{name}</b><br/>पाइथागोरियन (आधुनिक, आध्यात्मिक) और "
+        "चाल्डियन (प्राचीन, व्यावसायिक) — दोनों प्रणालियों से गणना की गयी।",
+        f"Aapka naam: <b>{name}</b><br/>Pythagorean (modern, spiritual) aur "
+        "Chaldean (ancient, professional) dono systems se compute kiya gaya hai."),
         s["body_mid"]))
-    flow.append(Spacer(1, 5 * mm))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Pythagorean vs Chaldean — which one matters more?",
+        "📖 Pythagorean बनाम Chaldean — कौन-सा अधिक मायने रखता है?",
+        "📖 Pythagorean vs Chaldean — kaunsa zyada matter karta hai?",
+        "Both. They answer different questions. <b>Pythagorean</b> (1-9, sequential A-Z) "
+        "is the simpler, modern system — best for <b>personal traits and life path</b>. "
+        "<b>Chaldean</b> (1-8 only, 9 sacred & absent, sound-based) is the ancient "
+        "system Cheiro used — best for <b>business names, brand reputation, and "
+        "public-facing destiny</b>. Big consultations check Chaldean for the brand "
+        "and Pythagorean for the founder's personal vibration. Below you see both, "
+        "side by side.",
+        "दोनों। दोनों अलग-अलग प्रश्नों का उत्तर देते हैं। <b>पाइथागोरियन</b> (1-9, "
+        "क्रमिक A-Z) सरल आधुनिक प्रणाली — <b>व्यक्तिगत लक्षण और जीवन-पथ</b> के लिए "
+        "श्रेष्ठ। <b>चाल्डियन</b> (केवल 1-8, 9 सम्माननीय और अनुपस्थित, ध्वनि-आधारित) "
+        "प्राचीन प्रणाली — चीरो की पसंद — <b>व्यावसायिक नाम, ब्रांड प्रतिष्ठा और "
+        "सार्वजनिक नियति</b> के लिए श्रेष्ठ। बड़े परामर्श ब्रांड के लिए चाल्डियन और "
+        "संस्थापक के लिए पाइथागोरियन देखते हैं। नीचे दोनों side-by-side।",
+        "Dono. Dono alag questions ka jawab dete hain. <b>Pythagorean</b> (1-9, "
+        "sequential A-Z) simple modern system — <b>personal traits aur life path</b> "
+        "ke liye best. <b>Chaldean</b> (sirf 1-8, 9 sacred aur absent, sound-based) "
+        "ancient system jo Cheiro use karta tha — <b>business names, brand "
+        "reputation, public-facing destiny</b> ke liye best. Bade consultations brand "
+        "ke liye Chaldean aur founder ke liye Pythagorean check karte hain. Neeche "
+        "dono side-by-side.",
+        bg="#FAF5FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
 
     letters = "".join(c for c in name.lower() if c.isalpha())
     py_total = sum(_PYTH.get(c, 0) for c in letters)
@@ -714,15 +976,52 @@ def _name_numerology_section(s, name: str) -> List[Any]:
 
 # ─── Name correction section ─────────────────────────────────────────
 
-def _name_correction_section(s, name: str, driver: int, conductor: int) -> List[Any]:
+def _name_correction_section(s, name: str, driver: int, conductor: int,
+                             lang: str = "hinglish") -> List[Any]:
     """Top spelling variants with harmony scores."""
     flow: List[Any] = []
-    flow.append(_section_title(s, "Name Correction — Spelling Variants"))
-    flow.append(Paragraph(
-        "Naam ki spelling thoda badalne se vibration shift hota hai. "
-        "Ye variants aapke Driver aur Conductor numbers ke saath harmony "
-        "ke aadhar par scored hain (0-100).",
-        s["body_mid"]))
+    flow.append(_section_title(s, _T(lang,
+        "Name Correction — Spelling Variants",
+        "नाम सुधार — वर्तनी विकल्प",
+        "Name Correction — Spelling Variants")))
+    flow.append(Paragraph(_T(lang,
+        "A small change in spelling shifts the vibration. These variants are scored "
+        "(0-100) by their harmony with your Driver and Conductor numbers.",
+        "नाम की वर्तनी में छोटा-सा परिवर्तन कंपन को बदल देता है। ये विकल्प आपके "
+        "Driver और Conductor अंकों के साथ सामंजस्य के आधार पर 0-100 स्कोर किये गये।",
+        "Naam ki spelling thoda badalne se vibration shift hota hai. Ye variants "
+        "aapke Driver aur Conductor numbers ke saath harmony ke aadhar par scored "
+        "hain (0-100)."), s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Can a single extra letter really change my life?",
+        "📖 क्या एक अतिरिक्त अक्षर वाकई जीवन बदल सकता है?",
+        "📖 Ek extra letter kya sach me life badal sakta hai?",
+        "Yes — but the mechanism is misunderstood. Adding/removing one letter changes "
+        "the <b>name's expression number</b>, which changes how your name <b>sounds "
+        "and is written</b> repeatedly across documents, contracts, social media. "
+        "Over time the new vibration repeats <b>thousands of times</b> and slowly "
+        "rewrites the subconscious. Famous examples: Amitabh Bachchan, Ekta Kapoor, "
+        "Ajay Devgn — all corrected spellings. The variants below are <b>ranked by "
+        "harmony score</b> — pick a top-3 candidate and apply it gradually (signature "
+        "first, then social, then official).",
+        "हाँ — पर तंत्र को ग़लत समझा जाता है। एक अक्षर जोड़ना/हटाना नाम के "
+        "<b>Expression अंक</b> को बदलता है, जिससे नाम का <b>उच्चारण और लेखन</b> "
+        "दस्तावेज़ों, अनुबंधों, सोशल मीडिया पर बार-बार बदल जाता है। समय के साथ नया "
+        "कंपन <b>हज़ारों बार</b> दोहराता है और अवचेतन को धीरे-धीरे फिर से लिखता है। "
+        "प्रसिद्ध उदाहरण: अमिताभ बच्चन, एकता कपूर, अजय देवगन — सबने वर्तनी सुधारी। "
+        "नीचे विकल्प <b>सामंजस्य-स्कोर</b> के क्रम में हैं — शीर्ष-3 में से चुनें और "
+        "धीरे-धीरे अपनाएं (पहले हस्ताक्षर, फिर सोशल, फिर आधिकारिक)।",
+        "Haan — par mechanism misunderstand hota hai. Ek letter add/remove karne se "
+        "naam ka <b>Expression number</b> change hota hai, jisse naam <b>kaise "
+        "sound karta aur likha jaata hai</b> wo documents, contracts, social media "
+        "par baar-baar shift hota hai. Time ke saath nayi vibration <b>hazaaron baar</b> "
+        "repeat hoti hai aur subconscious ko slowly rewrite karti hai. Famous "
+        "examples: Amitabh Bachchan, Ekta Kapoor, Ajay Devgn — sabne spelling "
+        "correct ki. Neeche variants <b>harmony score</b> ke order me hain — top-3 "
+        "candidate chunein aur gradually apply karein (signature first, phir social, "
+        "phir official).",
+        bg="#F0FDF4", border="#15803D"))
     flow.append(Spacer(1, 4 * mm))
 
     out = _ta.name_correction_suggestions(name, driver, conductor, limit=8)
@@ -829,17 +1128,46 @@ def _premium_card(s, heading: str, body_html: str,
     return t
 
 
-def _life_summary_block(s, name: str, driver: int, conductor: int) -> List[Any]:
+def _life_summary_block(s, name: str, driver: int, conductor: int,
+                        lang: str = "hinglish") -> List[Any]:
     """Premium Life Summary card — top of report (instant ₹1499 feel)."""
     flow: List[Any] = []
     summary = _nr.life_summary_block(driver, conductor, name)
 
-    flow.append(Paragraph("⭐ YOUR LIFE BLUEPRINT", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "⭐ YOUR LIFE BLUEPRINT",
+        "⭐ आपका जीवन-नक्शा (LIFE BLUEPRINT)",
+        "⭐ AAPKA LIFE BLUEPRINT"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        "<i>Aapki kundli aur janma-tithi ke aadhar par taiyaar — 100% personalized.</i>",
+    flow.append(Paragraph(_T(lang,
+        "<i>Built from your kundli and birth date — 100% personalised.</i>",
+        "<i>आपकी कुंडली और जन्म-तिथि के आधार पर तैयार — 100% personalised.</i>",
+        "<i>Aapki kundli aur janma-tithi ke aadhar par taiyaar — 100% personalized.</i>"),
         ParagraphStyle("ls_sub", fontName="Helvetica-Oblique", fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+    flow.append(_explain_card(s, lang,
+        "📖 What is this 'Life Blueprint' card?",
+        "📖 यह 'जीवन नक्शा' कार्ड क्या है?",
+        "📖 Yeh 'Life Blueprint' card kya hai?",
+        "Numerology says your <b>Driver number</b> (birth-date day reduced) and <b>Conductor "
+        "number</b> (full-date sum reduced) together form the spine of your personality, "
+        "your ruling planet, and your destiny pattern. The card below is your one-glance "
+        "<b>consultation summary</b> — the five things a numerologist would tell you in "
+        "the first five minutes if you walked into their office. Use it as a quick mirror; "
+        "the next pages explain each item with the <i>Why · Impact · Action</i> framework.",
+        "अंक-शास्त्र कहता है कि आपका <b>Driver number</b> (जन्म दिन का योग) और <b>Conductor "
+        "number</b> (पूरी जन्म-तिथि का योग) मिलकर आपके स्वभाव, ग्रह-स्वामी और भाग्य की रेखा "
+        "तय करते हैं। नीचे का कार्ड आपके लिए एक-नज़र में <b>परामर्श-सार</b> है — वही पाँच "
+        "बातें जो कोई अनुभवी अंक-ज्योतिषी पहले पाँच मिनट में आपको बताता। इसे शीशा मानिये; "
+        "अगले पन्ने हर बात को 'क्यों · असर · क्या करें' तरीके से समझाते हैं।",
+        "Numerology kehti hai aapka <b>Driver number</b> (birth-date day reduce karke) "
+        "aur <b>Conductor number</b> (poori date ka sum reduce karke) milkar aapki "
+        "personality, ruling planet aur destiny pattern banate hain. Neeche ka card aapka "
+        "<b>one-glance consultation summary</b> hai — wahi 5 baatein jo koi numerologist "
+        "office me first 5 minute me bata deta. Isse mirror ki tarah use karein; agle "
+        "pages me har point ka <i>Why · Impact · Action</i> framework se deep explanation hai.",
+        bg="#FFF7ED", border="#C2410C"))
+    flow.append(Spacer(1, 4 * mm))
 
     rows = [
         [Paragraph("<b>Core Personality</b>", s["body_mid"]),
@@ -878,16 +1206,46 @@ def _life_summary_block(s, name: str, driver: int, conductor: int) -> List[Any]:
     return flow
 
 
-def _life_essence_section(s, driver: int) -> List[Any]:
+def _life_essence_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: 'Aap Kaun Ho?' — 3-paragraph identity story."""
     flow: List[Any] = []
     n = _nr.narrative_for(driver) or {}
-    flow.append(Paragraph("🌟 AAP KAUN HO — Your True Identity", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "🌟 WHO YOU REALLY ARE — Your True Identity",
+        "🌟 आप कौन हो — आपकी असली पहचान",
+        "🌟 AAP KAUN HO — Your True Identity"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
     flow.append(Paragraph(
         f"<i>{n.get('title', '')} — {n.get('tagline', '')}</i>",
         ParagraphStyle("le_sub", fontName="Helvetica-Oblique", fontSize=11,
                        textColor=BRAND_GOLD, leading=15, spaceAfter=8)))
+    flow.append(_explain_card(s, lang,
+        "📖 Why does your Driver number define your identity?",
+        "📖 Driver नंबर आपकी पहचान क्यों तय करता है?",
+        "📖 Driver number aapki identity kyun decide karta hai?",
+        f"Your Driver number is <b>{driver}</b> — derived from the day you were born. "
+        "In Vedic numerology, this single digit carries the imprint of the planet that "
+        "ruled the sky on that day, and that planet's signature shapes your <b>core "
+        "personality, hidden strengths and recurring blocks</b> for the rest of your life. "
+        "The 3 stories below are not horoscope-style guesses — they are the lived patterns "
+        "people of your number consistently report. The strengths/challenges grids show "
+        "the 5+5 traits you should nurture and the 5 you should consciously guard against.",
+        f"आपका Driver नंबर <b>{driver}</b> है — आपके जन्म-दिवस से निकाला गया। "
+        "वैदिक अंक-शास्त्र में यह एक अंक उस ग्रह की छाप रखता है जो उस दिन आकाश में "
+        "प्रमुख था, और वही ग्रह आपकी <b>मूल पहचान, छुपी शक्तियाँ और बार-बार आने वाली "
+        "रुकावटें</b> जीवन-भर के लिए तय करता है। नीचे दी गई 3 कहानियाँ राशिफल जैसी "
+        "अटकलें नहीं हैं — ये आपकी संख्या वाले लोगों के बार-बार दिखे पैटर्न हैं। "
+        "नीचे की Strengths/Challenges सूचियाँ वो 5+5 गुण दिखाती हैं जिन्हें आपको "
+        "बढ़ाना है और 5 कमज़ोरियाँ जिनसे सजग रहना है।",
+        f"Aapka Driver number <b>{driver}</b> hai — birth-date day se nikla. "
+        "Vedic numerology me yeh ek digit us planet ki imprint rakhta hai jo us din sky "
+        "me prominent tha — aur wahi planet aapki <b>core personality, hidden strengths "
+        "aur recurring blocks</b> jeevan-bhar ke liye tay karta hai. Neeche 3 stories "
+        "horoscope-style guess nahi — yeh aapke number wale logo ke baar-baar dikhe "
+        "patterns hain. Neeche ki Strengths/Challenges lists wo 5+5 traits dikhati hain "
+        "jo nurture karne hain aur 5 weak points jinse bachna hai.",
+        bg="#F5F3FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
     paras = n.get("life_essence") or []
     for i, para in enumerate(paras, 1):
         flow.append(Paragraph(f"<b>Story {i}:</b>", s["h3"]))
@@ -935,11 +1293,41 @@ def _life_essence_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _career_blueprint_section(s, driver: int) -> List[Any]:
+def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Career Blueprint — fields, mistakes, growth timing."""
     flow: List[Any] = []
     n = _nr.narrative_for(driver) or {}
-    flow.append(Paragraph("💼 CAREER BLUEPRINT — Your Professional Path", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "💼 CAREER BLUEPRINT — Your Professional Path",
+        "💼 करियर ब्लूप्रिंट — आपकी व्यावसायिक राह",
+        "💼 CAREER BLUEPRINT — Aapka Professional Path"), s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 How does numerology decide your career?",
+        "📖 अंक-शास्त्र आपका करियर कैसे तय करता है?",
+        "📖 Numerology aapka career kaise decide karta hai?",
+        "Each Driver number is ruled by a planet, and every planet rules certain "
+        "<b>professions, work-styles and timing of success</b>. For example, Sun (1) "
+        "drives leadership and govt roles; Moon (2) suits people-services and creative "
+        "fields; Saturn (8) rules large systems, real estate and slow-but-certain wealth. "
+        "The card below tells you <b>which fields fit, the recurring mistake your number "
+        "tends to make</b>, and the <b>age windows</b> when your hard work converts to "
+        "real result. Use this as a course-correction lens — not a job ad.",
+        "हर Driver संख्या किसी ग्रह द्वारा शासित होती है, और हर ग्रह कुछ निश्चित "
+        "<b>पेशे, कार्य-शैली और सफलता के समय</b> का स्वामी होता है। उदाहरण: सूर्य (1) "
+        "नेतृत्व और सरकारी पदों का स्वामी; चंद्र (2) सेवा और रचनात्मक क्षेत्र; शनि (8) "
+        "बड़ी प्रणालियाँ, real estate और धीरे-धीरे आता निश्चित धन। नीचे कार्ड बताता है "
+        "<b>कौन से क्षेत्र आपके लिए सही हैं, आपकी संख्या वाले लोग कौन-सी ग़लती बार-बार "
+        "करते हैं</b>, और <b>वो आयु-खिड़कियाँ</b> जब मेहनत असली फल देती है। इसे "
+        "course-correction के शीशे की तरह देखें — नौकरी विज्ञापन नहीं।",
+        "Har Driver number kisi planet se ruled hota hai, aur har planet kuch specific "
+        "<b>professions, work-style aur success ka timing</b> rule karta hai. Example: "
+        "Sun (1) leadership aur govt roles; Moon (2) people-services aur creative fields; "
+        "Saturn (8) bade systems, real estate aur slow-but-certain wealth. Neeche card "
+        "batata hai <b>kaunse fields fit hain, aapke number wale kya recurring mistake "
+        "karte hain</b>, aur <b>age windows</b> jab mehnat result me convert hoti hai. "
+        "Isse course-correction lens ki tarah use karein — job ad nahi.",
+        bg="#EFF6FF", border="#1D4ED8"))
     flow.append(Spacer(1, 4 * mm))
     paras = n.get("career_pattern") or []
     labels = ["WHY (Aap kis kaam ke liye bane ho)",
@@ -969,11 +1357,40 @@ def _career_blueprint_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _love_pattern_section(s, driver: int) -> List[Any]:
+def _love_pattern_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Love & Relationship deep-dive."""
     flow: List[Any] = []
     n = _nr.narrative_for(driver) or {}
-    flow.append(Paragraph("💕 LOVE PATTERN — Rishton ki Reality", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "💕 LOVE PATTERN — The Reality of Your Relationships",
+        "💕 प्रेम-पैटर्न — रिश्तों की असलियत",
+        "💕 LOVE PATTERN — Rishton ki Reality"), s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why does numerology have a 'love pattern'?",
+        "📖 अंक-शास्त्र में 'प्रेम-पैटर्न' क्यों होता है?",
+        "📖 Numerology me 'love pattern' kyun hota hai?",
+        "Love is not random chemistry — it is the meeting of two planetary energies. "
+        "Your Driver number's planet decides <b>how you express love</b> (passionate / "
+        "calm / dramatic / loyal), <b>what triggers a breakup</b>, and <b>which numbers "
+        "naturally harmonise with you</b>. The 3 cards below — Love Style, Breakup "
+        "Trigger, Ideal Partner Number — are the same patterns thousands of people of "
+        "your number consistently report. Knowing them lets you stop blaming the "
+        "partner and start fixing the pattern.",
+        "प्रेम संयोग नहीं है — यह दो ग्रह-ऊर्जाओं का मिलन है। आपके Driver नंबर का ग्रह "
+        "तय करता है <b>आप प्रेम कैसे जताते हैं</b> (जोशीला / शांत / नाटकीय / निष्ठावान), "
+        "<b>क्या रिश्ते को तोड़ता है</b>, और <b>कौन से नंबर आपसे स्वाभाविक रूप से मेल "
+        "खाते हैं</b>। नीचे की 3 कार्ड्स — Love Style, Breakup Trigger, Ideal Partner — "
+        "वही पैटर्न हैं जो आपकी संख्या वाले हज़ारों लोग बार-बार बताते हैं। इन्हें जानकर "
+        "आप साथी को दोष देना बंद कर पैटर्न ठीक करना शुरू करते हैं।",
+        "Love random chemistry nahi — yeh do planetary energies ka meeting hai. Aapke "
+        "Driver number ka planet decide karta hai <b>aap pyar kaise express karte ho</b> "
+        "(passionate / calm / dramatic / loyal), <b>kya breakup trigger karta hai</b>, "
+        "aur <b>kaunse numbers aapse natural harmony rakhte hain</b>. Neeche ki 3 "
+        "cards — Love Style, Breakup Trigger, Ideal Partner — wahi patterns hain jo "
+        "aapke number wale hazaaron log baar-baar report karte hain. Inhe jaan ke aap "
+        "partner ko blame karna band kar pattern fix karna shuru karte ho.",
+        bg="#FDF2F8", border="#BE185D"))
     flow.append(Spacer(1, 4 * mm))
     paras = n.get("love_pattern") or []
     labels = ["LOVE STYLE (Aap pyar me kaise ho)",
@@ -997,11 +1414,41 @@ def _love_pattern_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _wealth_health_spirit_section(s, driver: int) -> List[Any]:
+def _wealth_health_spirit_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Money + Health + Spiritual path combined."""
     flow: List[Any] = []
     n = _nr.narrative_for(driver) or {}
-    flow.append(Paragraph("🕉️ HEALTH & DHARMA — Body + Soul", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "🕉️ HEALTH & DHARMA — Body + Soul",
+        "🕉️ स्वास्थ्य और धर्म — शरीर + आत्मा",
+        "🕉️ HEALTH & DHARMA — Body + Soul"), s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why combine Health and Dharma on one page?",
+        "📖 Health और Dharma एक ही पेज पर क्यों?",
+        "📖 Health aur Dharma ek hi page par kyun?",
+        "Vedic numerology treats the body as a temple of the soul — what your planet "
+        "rules in the body (Sun=heart, Moon=mind, Mars=blood, Saturn=joints) is exactly "
+        "what your <b>spiritual practice</b> must strengthen. The Health card below shows "
+        "the organs/systems your number must guard and small daily disciplines that pay "
+        "off; the Dharma card shows the <b>soul-purpose</b> your number was born to "
+        "fulfil — service, art, leadership, teaching, building, healing. Together they "
+        "answer: <i>'kis kaam ke liye yeh sharir mila hai?'</i>",
+        "वैदिक अंक-शास्त्र शरीर को आत्मा का मंदिर मानता है — आपके ग्रह का शरीर पर शासन "
+        "(सूर्य=हृदय, चंद्र=मन, मंगल=रक्त, शनि=जोड़) ठीक वही है जिसे आपकी <b>आध्यात्मिक "
+        "साधना</b> मज़बूत करती है। नीचे Health कार्ड वो अंग/तंत्र दिखाता है जिन्हें "
+        "बचाना है और छोटी दैनिक आदतें जो लंबे समय में फल देती हैं; Dharma कार्ड वो "
+        "<b>आत्म-उद्देश्य</b> बताता है जिसके लिए आपकी संख्या जन्मी है — सेवा, कला, "
+        "नेतृत्व, शिक्षण, निर्माण, उपचार। दोनों मिलकर जवाब देते हैं: <i>'किस काम के लिए "
+        "यह शरीर मिला है?'</i>",
+        "Vedic numerology body ko soul ka mandir maanti hai — aapke planet ka body par "
+        "rule (Sun=heart, Moon=mind, Mars=blood, Saturn=joints) wahi hai jise aapki "
+        "<b>spiritual practice</b> strengthen karti hai. Neeche Health card wo organs/"
+        "systems dikhata hai jinhe guard karna hai aur chhoti daily disciplines jo lambe "
+        "samay me fal deti hain; Dharma card wo <b>soul-purpose</b> batata hai jiske "
+        "liye aapka number paida hua — service, art, leadership, teaching, building, "
+        "healing. Dono milkar jawab dete hain: <i>'kis kaam ke liye yeh sharir mila hai?'</i>",
+        bg="#ECFDF5", border="#047857"))
     flow.append(Spacer(1, 4 * mm))
 
     if n.get("health_pattern"):
@@ -1021,11 +1468,43 @@ def _wealth_health_spirit_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _risk_alerts_section(s, driver: int) -> List[Any]:
+def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Page: Risk Alerts + Golden Opportunity Periods."""
     flow: List[Any] = []
     n = _nr.narrative_for(driver) or {}
-    flow.append(Paragraph("⚠️ RISK ALERTS & 🌟 GOLDEN PERIODS", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "⚠️ RISK ALERTS & 🌟 GOLDEN PERIODS",
+        "⚠️ जोखिम चेतावनी और 🌟 स्वर्णिम अवसर",
+        "⚠️ RISK ALERTS & 🌟 GOLDEN PERIODS"), s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 What are 'risk windows' and 'golden periods'?",
+        "📖 'जोखिम-समय' और 'स्वर्णिम अवधि' का क्या अर्थ है?",
+        "📖 'Risk windows' aur 'golden periods' ka kya matlab?",
+        "Every Driver number runs through cycles where its planet's energy is "
+        "<b>blocked, debilitated or weak</b> — those are <b>risk windows</b>, the months "
+        "when accidents, money loss, legal issues, and ego clashes spike. Conversely "
+        "there are months when the planet is <b>exalted and friendly</b> — the "
+        "<b>golden window</b>. Same effort gives 3× result. The card below lists 5 "
+        "specific risks of your number and the upcoming golden window. Action: postpone "
+        "big decisions in risk months, and front-load launches/agreements/marriages in "
+        "the golden window.",
+        "हर Driver नंबर ऐसे चक्र से गुज़रता है जब उसके ग्रह की ऊर्जा <b>अवरुद्ध, "
+        "नीचा या कमज़ोर</b> होती है — ये <b>जोखिम-खिड़कियाँ</b> हैं, वो महीने जब "
+        "दुर्घटना, धन-हानि, कानूनी झंझट और अहंकार-टकराव बढ़ते हैं। इसके विपरीत कुछ "
+        "महीने ग्रह <b>उच्च और मित्र-स्थिति</b> में होता है — <b>स्वर्णिम खिड़की</b>। "
+        "समान मेहनत 3 गुना फल देती है। नीचे का कार्ड आपकी संख्या के 5 विशिष्ट जोखिम "
+        "और आगामी स्वर्णिम-खिड़की दिखाता है। क्या करें: जोखिम-मासों में बड़े निर्णय "
+        "टालें; स्वर्णिम-खिड़की में लॉन्च/समझौते/विवाह करें।",
+        "Har Driver number aise cycles se guzarta hai jab uske planet ki energy "
+        "<b>blocked, debilitated ya weak</b> hoti hai — yeh <b>risk windows</b> hain, wo "
+        "mahine jab accident, money-loss, legal issue aur ego-clash spike karte hain. "
+        "Iske ulta kuch mahine planet <b>exalted aur friendly</b> hota hai — "
+        "<b>golden window</b>. Same mehnat 3× result deti hai. Neeche card aapke number "
+        "ke 5 specific risks aur upcoming golden window dikhata hai. Action: risk "
+        "months me bade decisions postpone karein; golden window me launches/agreements/"
+        "shaadi front-load karein.",
+        bg="#FEF2F2", border="#991B1B"))
     flow.append(Spacer(1, 4 * mm))
 
     risks = n.get("risk_alerts") or []
@@ -1060,17 +1539,49 @@ def _risk_alerts_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None) -> List[Any]:
+def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
+                           lang: str = "hinglish") -> List[Any]:
     """Premium Lucky Colours page — vehicle, dress, business, day-wise."""
     flow: List[Any] = []
     pack = _nr.lucky_colours_pack(driver)
 
-    flow.append(Paragraph("🎨 LUCKY COLOURS — Aapke Liye Specially Picked", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "🎨 LUCKY COLOURS — Specially Picked for You",
+        "🎨 शुभ रंग — आपके लिए विशेष रूप से चुने हुए",
+        "🎨 LUCKY COLOURS — Aapke Liye Specially Picked"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        "<i>Driver number ke planet ke aadhar par chosen — daily life me use karein.</i>",
+    flow.append(Paragraph(_T(lang,
+        "<i>Chosen from your Driver number's planet — use them in daily life.</i>",
+        "<i>आपके Driver नंबर के ग्रह के आधार पर चुने — दैनिक जीवन में प्रयोग करें।</i>",
+        "<i>Driver number ke planet ke aadhar par chosen — daily life me use karein.</i>"),
         ParagraphStyle("lc_sub", fontName="Helvetica-Oblique", fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+    flow.append(_explain_card(s, lang,
+        "📖 Why do colours matter in numerology?",
+        "📖 अंक-शास्त्र में रंगों का महत्व क्यों?",
+        "📖 Numerology me colours ka importance kyun?",
+        "Each planet emits a specific frequency of light — and colours ARE light "
+        "frequencies. Wearing the colour of your ruling planet is the simplest, "
+        "fastest <b>energy alignment</b> you can do — no mantras, no rituals, just "
+        "wear it. Conversely, the 'avoid' colours actively drain your number. The "
+        "card below gives <b>Primary, Secondary, Avoid, Gemstone tone, Vehicle and "
+        "Brand</b> colours specifically for your number — based on classical "
+        "Cheiro / Saint Germain colour-planet mapping.",
+        "हर ग्रह एक विशिष्ट प्रकाश-आवृत्ति उत्सर्जित करता है — और रंग प्रकाश की ही "
+        "आवृत्तियाँ हैं। अपने स्वामी-ग्रह का रंग पहनना सबसे सरल, सबसे तेज़ "
+        "<b>ऊर्जा-संरेखण</b> है — कोई मंत्र नहीं, कोई कर्मकांड नहीं, बस पहनिये। इसके "
+        "विपरीत 'avoid' रंग आपकी संख्या को क्षीण करते हैं। नीचे का कार्ड आपकी संख्या "
+        "के लिए <b>प्राथमिक, सहायक, अवॉइड, रत्न-छाया, वाहन और ब्रांड</b> रंग देता है "
+        "— शास्त्रीय चीरो / सेंट जर्मेन रंग-ग्रह मानचित्र के अनुसार।",
+        "Har planet ek specific light frequency emit karta hai — aur colours light "
+        "frequencies HI hain. Apne ruling planet ka colour pehnna sabse simple, sabse "
+        "fast <b>energy alignment</b> hai — koi mantra nahi, koi ritual nahi, bas "
+        "pehno. Iske ulta 'avoid' colours actively aapki number ki energy drain karte "
+        "hain. Neeche card aapke number ke liye <b>Primary, Secondary, Avoid, "
+        "Gemstone tone, Vehicle aur Brand</b> colours deta hai — classical Cheiro / "
+        "Saint Germain colour-planet mapping ke aadhar par.",
+        bg="#FFFBEB", border="#B45309"))
+    flow.append(Spacer(1, 4 * mm))
 
     # Primary / Secondary / Avoid table
     rows = [
@@ -1116,18 +1627,49 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None) -> Lis
     return flow
 
 
-def _day_dress_section(s, driver: int) -> List[Any]:
+def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Day-wise colour to wear — Mon-Sun planetary table."""
     flow: List[Any] = []
     pack = _nr.lucky_colours_pack(driver)
 
-    flow.append(Paragraph("👕 KIS DIN KAUNSA COLOUR PEHNEIN", s["page_title"]))
+    flow.append(Paragraph(_T(lang,
+        "👕 WHICH COLOUR TO WEAR ON WHICH DAY",
+        "👕 किस दिन कौन-सा रंग पहनें",
+        "👕 KIS DIN KAUNSA COLOUR PEHNEIN"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
+    flow.append(Paragraph(_T(lang,
+        "<i>Per the Vedic planetary days — wear each day's 'power colour' to unlock "
+        "that day's energy.</i>",
+        "<i>वैदिक ग्रह-दिवसों के अनुसार — हर दिन का 'शक्ति-रंग' पहनकर उस दिन की "
+        "ऊर्जा खोलिये।</i>",
         "<i>Vedic planetary days ke according — har din ka 'power colour' pehno aur "
-        "us din ki energy unlock karo.</i>",
+        "us din ki energy unlock karo.</i>"),
         ParagraphStyle("dd_sub", fontName="Helvetica-Oblique", fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+    flow.append(_explain_card(s, lang,
+        "📖 Why does the day-of-week colour matter?",
+        "📖 दिन-विशेष रंग का महत्व क्यों?",
+        "📖 Day-of-week colour ka importance kyun?",
+        "Each weekday is ruled by a specific planet — Sunday by Sun, Monday by Moon, "
+        "Tuesday by Mars, and so on. Wearing that planet's colour on its day "
+        "<b>resonates with the ambient cosmic frequency</b>, making the day's energy "
+        "work <i>with</i> you instead of around you. Think of it as choosing the "
+        "right radio frequency. The table below combines this with your personal "
+        "Driver number — so your everyday outfit becomes a quiet daily upgrade.",
+        "हर सप्ताह-दिवस का स्वामी एक विशिष्ट ग्रह है — रविवार सूर्य, सोमवार चंद्र, "
+        "मंगलवार मंगल, इत्यादि। उस दिन उसी ग्रह का रंग पहनना <b>उस दिन की "
+        "ब्रह्मांडीय आवृत्ति से अनुनाद</b> बनाता है, जिससे दिन की ऊर्जा आपके "
+        "<i>साथ</i> काम करती है, न कि आपके आसपास। इसे सही रेडियो-फ्रीक्वेंसी चुनना "
+        "मानिये। नीचे की तालिका इसे आपके व्यक्तिगत Driver नंबर से जोड़ती है — "
+        "रोज़मर्रा का पहनावा एक मूक दैनिक अपग्रेड बन जाता है।",
+        "Har weekday ka swami ek specific planet hai — Sunday=Sun, Monday=Moon, "
+        "Tuesday=Mars, etc. Us din wahi planet ka colour pehnna <b>us din ki ambient "
+        "cosmic frequency se resonance</b> banata hai, jiske wajah se din ki energy "
+        "aapke <i>saath</i> kaam karti hai, na ki around. Ise sahi radio frequency "
+        "tune karna samjho. Neeche table iss principle ko aapke personal Driver "
+        "number se combine karta hai — daily outfit ek silent daily upgrade ban jaata hai.",
+        bg="#F0F9FF", border="#0C4A6E"))
+    flow.append(Spacer(1, 4 * mm))
 
     header_style = ParagraphStyle("dd_h", fontName="Helvetica-Bold", fontSize=10,
                                   textColor=colors.white, leading=13, alignment=TA_CENTER)
@@ -1787,36 +2329,36 @@ def render_part2_pdf(*,
     story.append(PageBreak())
 
     # Page 2 — ⭐ LIFE BLUEPRINT (premium summary card — instant ₹1499 feel)
-    story += _life_summary_block(s, name, driver, conductor)
+    story += _life_summary_block(s, name, driver, conductor, lang=lang)
     story.append(PageBreak())
 
     # Page 3 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
-    story += _life_essence_section(s, driver)
+    story += _life_essence_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 4 — 💼 Career Blueprint (Why + Mistake + Timing + Money pattern)
-    story += _career_blueprint_section(s, driver)
+    story += _career_blueprint_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 5 — 💕 Love Pattern (Style + Triggers + Ideal Partner)
-    story += _love_pattern_section(s, driver)
+    story += _love_pattern_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 6 — 🕉️ Health & Dharma (Body + Spirit)
-    story += _wealth_health_spirit_section(s, driver)
+    story += _wealth_health_spirit_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 7 — ⚠️ Risk Alerts + 🌟 Golden Periods + Executive Summary
-    story += _risk_alerts_section(s, driver)
+    story += _risk_alerts_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # ─── Part 2 EXTRAS — Lucky Colours + Day-wise Dress + Practical numbers ───
     # Page 8 — 🎨 Lucky Colours (vehicle + business + gemstone tone)
-    story += _lucky_colours_section(s, driver, vehicle=vehicle)
+    story += _lucky_colours_section(s, driver, vehicle=vehicle, lang=lang)
     story.append(PageBreak())
 
     # Page 9 — 👕 Day-wise Dress Colour table (Mon-Sun planetary)
-    story += _day_dress_section(s, driver)
+    story += _day_dress_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # ─── Premium Tier B sections (₹1499 deep value) ────────────────────
@@ -1847,42 +2389,42 @@ def render_part2_pdf(*,
     story.append(PageBreak())
 
     # Page 16 — Driver/Conductor technical intro
-    story += _driver_conductor_intro(s, name, dob, driver, conductor)
+    story += _driver_conductor_intro(s, name, dob, driver, conductor, lang=lang)
     story.append(PageBreak())
 
     # Page 11-13 — Mobile / Vehicle / House deep analysis (with Why·Impact·Action)
     if mobile:
-        story += _number_analysis_block(s, mobile, "mobile", driver, conductor)
+        story += _number_analysis_block(s, mobile, "mobile", driver, conductor, lang=lang)
         story.append(PageBreak())
     if vehicle:
-        story += _number_analysis_block(s, vehicle, "vehicle", driver, conductor)
+        story += _number_analysis_block(s, vehicle, "vehicle", driver, conductor, lang=lang)
         story.append(PageBreak())
     if house:
-        story += _number_analysis_block(s, house, "house", driver, conductor)
+        story += _number_analysis_block(s, house, "house", driver, conductor, lang=lang)
         story.append(PageBreak())
 
     # Page 14 — Number Compatibility Matrix
-    story += _compatibility_matrix_section(s, driver)
+    story += _compatibility_matrix_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 15 — Letter-by-letter table
-    story += _letter_table_section(s, name)
+    story += _letter_table_section(s, name, lang=lang)
     story.append(PageBreak())
 
     # Page 16 — Pythagorean vs Chaldean summary
-    story += _name_numerology_section(s, name)
+    story += _name_numerology_section(s, name, lang=lang)
     story.append(PageBreak())
 
     # Page 17 — Name correction
-    story += _name_correction_section(s, name, driver, conductor)
+    story += _name_correction_section(s, name, driver, conductor, lang=lang)
     story.append(PageBreak())
 
     # Page 18 — Signature & branding
-    story += _signature_section(s, name, driver)
+    story += _signature_section(s, name, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 19 — 90-day implementation plan
-    story += _timeline_section(s)
+    story += _timeline_section(s, lang=lang)
     story += _disclaimer(s)
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)

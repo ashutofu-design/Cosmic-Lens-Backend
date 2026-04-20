@@ -3556,6 +3556,9 @@ def numerology_pdf():
     compat_kind  = (body.get("compat_kind") or "love").strip().lower()
     if compat_kind not in ("love", "business"):
         compat_kind = "love"
+    lang = (body.get("lang") or "hinglish").strip().lower()
+    if lang not in ("english", "hindi", "hinglish"):
+        lang = "hinglish"
 
     if not name or not dob:
         return jsonify({"error": "missing_fields",
@@ -3608,7 +3611,7 @@ def numerology_pdf():
             name=name, dob=dob, gender=gender,
             phase_s=ps, extended=ex, practical=pr,
             partner_dob=partner_dob, partner_name=partner_name,
-            compat_kind=compat_kind,
+            compat_kind=compat_kind, lang=lang,
         )
     except Exception as e:
         # Log full trace internally; never leak exception details to client.

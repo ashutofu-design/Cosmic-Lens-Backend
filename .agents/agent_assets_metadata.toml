@@ -264,3 +264,39 @@ id = "GCLZ0iEiwKvg6XRbsxHKi"
 uri = "file://attached_assets/exports/Part2_Life_Mastery_v4_hinglish.pdf"
 type = "pdf"
 title = "Part 2 — Life Mastery (Hinglish, 26 pages)"
+
+[[outputs]]
+id = "qCinQZZYyYuFBTGvtJ5vF"
+uri = "file://attached_assets/exports/Soul_Blueprint_v2_en.pdf"
+type = "pdf"
+title = "Soul Blueprint (Part 1) — English"
+
+[[outputs]]
+id = "mugBYZXKuJmoFvz5xp9LR"
+uri = "file://attached_assets/exports/Soul_Blueprint_v2_hi.pdf"
+type = "pdf"
+title = "Soul Blueprint (Part 1) — हिंदी"
+
+[[outputs]]
+id = "vGP9H5oh_o57TDra2o4nz"
+uri = "file://attached_assets/exports/Life_Mastery_v5_en.pdf"
+type = "pdf"
+title = "Life Mastery (Part 2) — English"
+
+[[outputs]]
+id = "wN82crTj8DOsLjfDDKFkO"
+uri = "file://attached_assets/exports/Life_Mastery_v5_hi.pdf"
+type = "pdf"
+title = "Life Mastery (Part 2) — हिंदी"
+
+[[outputs]]
+id = "QhKKhPEtyPXh0Ae6vRmIR"
+uri = "file://attached_assets/exports/Soul_Blueprint_v2_hg.pdf"
+type = "pdf"
+title = "Soul Blueprint (Part 1) — Hinglish"
+
+[[outputs]]
+id = "NZR1jz3NDbajPvQzwyuWY"
+uri = "file://attached_assets/exports/Life_Mastery_v5_hg.pdf"
+type = "pdf"
+title = "Life Mastery (Part 2) — Hinglish"

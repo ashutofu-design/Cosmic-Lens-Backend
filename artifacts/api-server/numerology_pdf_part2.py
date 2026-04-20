@@ -437,7 +437,7 @@ def _number_analysis_block(s, value: str, kind: str,
     # ─ Why · Impact · Action narrative (premium ₹1499 layer)
     reduced = out.get("reduced")
     if isinstance(reduced, int) and 1 <= reduced <= 9:
-        flow += _why_impact_action_block(s, kind, reduced)
+        flow += _why_impact_action_block(s, kind, reduced, lang)
 
     # ─ Lucky alternatives (mobile/vehicle: where user can swap)
     if kind in ("mobile", "vehicle") and out.get("verdict") in ("AVOID", "NEUTRAL"):
@@ -1727,7 +1727,7 @@ def _life_summary_block(s, name: str, driver: int, conductor: int,
                         lang: str = "hinglish") -> List[Any]:
     """Premium Life Summary card — top of report (instant ₹1499 feel)."""
     flow: List[Any] = []
-    summary = _nr.life_summary_block(driver, conductor, name)
+    summary = _nr.life_summary_block(driver, conductor, name, lang)
 
     flow.append(Paragraph(_T(lang,
         "⭐ YOUR LIFE BLUEPRINT",
@@ -1925,8 +1925,8 @@ def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[An
         bg="#EFF6FF", border="#1D4ED8"))
     flow.append(Spacer(1, 4 * mm))
     paras = n.get("career_pattern") or []
-    labels = ["WHY (Aap kis kaam ke liye bane ho)",
-              "COMMON MISTAKE (jo aap karte ho)",
+    labels = [_T(lang, "WHY (What you are made for)", "क्यों (आप किस काम के लिए बने हो)", "WHY (Aap kis kaam ke liye bane ho)"),
+              _T(lang, "COMMON MISTAKE (what you tend to do)", "सामान्य गलती (जो आप करते हो)", "COMMON MISTAKE (jo aap karte ho)"),
               "GROWTH TIMING (kab milega result)"]
     border_colors_seq = [BRAND_PURPLE, colors.HexColor("#B91C1C"), colors.HexColor("#15803D")]
     bg_colors_seq = [colors.HexColor("#FAF5FF"),
@@ -1944,7 +1944,7 @@ def _career_blueprint_section(s, driver: int, lang: str = "hinglish") -> List[An
 
     # Money + Health quick cards
     if n.get("money_pattern"):
-        flow.append(_premium_card(s, "💰 MONEY PATTERN — Paisa kaise aayega",
+        flow.append(_premium_card(s, _T(lang, "💰 MONEY PATTERN — How money will come to you", "💰 धन-पैटर्न — पैसा कैसे आएगा", "💰 MONEY PATTERN — Paisa kaise aayega"),
                                   n["money_pattern"],
                                   bg_color=colors.HexColor("#FFFBEB"),
                                   border_color=BRAND_GOLD))
@@ -1988,8 +1988,8 @@ def _love_pattern_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         bg="#FDF2F8", border="#BE185D"))
     flow.append(Spacer(1, 4 * mm))
     paras = n.get("love_pattern") or []
-    labels = ["LOVE STYLE (Aap pyar me kaise ho)",
-              "BREAKUP TRIGGER (rishta kyun tutta hai)",
+    labels = [_T(lang, "LOVE STYLE (how you are in love)", "प्रेम-शैली (आप प्यार में कैसे हो)", "LOVE STYLE (Aap pyar me kaise ho)"),
+              _T(lang, "BREAKUP TRIGGER (why relationships break)", "ब्रेकअप-कारण (रिश्ता क्यों टूटता है)", "BREAKUP TRIGGER (rishta kyun tutta hai)"),
               "IDEAL PARTNER (kis number wala suit karega)"]
     border_colors_seq = [colors.HexColor("#DB2777"),
                          colors.HexColor("#B91C1C"),
@@ -2115,7 +2115,7 @@ def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 
     if n.get("golden_periods"):
         flow.append(_premium_card(
-            s, "🌟 GOLDEN OPPORTUNITY WINDOW — Inn dino par bada move karein",
+            s, _T(lang, "🌟 GOLDEN OPPORTUNITY WINDOW — Make your big moves on these days", "🌟 स्वर्णिम अवसर खिड़की — इन दिनों पर बड़ा कदम उठाएं", "🌟 GOLDEN OPPORTUNITY WINDOW — Inn dino par bada move karein"),
             n["golden_periods"],
             bg_color=colors.HexColor("#FFFBEB"),
             border_color=BRAND_GOLD,
@@ -2123,7 +2123,7 @@ def _risk_alerts_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
         flow.append(Spacer(1, 5 * mm))
 
     flow.append(_premium_card(
-        s, "📌 EXECUTIVE SUMMARY — Pichle pages ka ek-line saar",
+        s, _T(lang, "📌 EXECUTIVE SUMMARY — One-line summary of previous pages", "📌 कार्यकारी सारांश — पिछले पृष्ठों का एक-पंक्ति सार", "📌 EXECUTIVE SUMMARY — Pichle pages ka ek-line saar"),
         f"Aap <b>{(n.get('title') or 'Number ' + str(driver))}</b> ho. "
         f"{n.get('tagline', '')} "
         "Apni greatest strength par double-down karein, biggest challenge par awareness "
@@ -2138,7 +2138,7 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
                            lang: str = "hinglish") -> List[Any]:
     """Premium Lucky Colours page — vehicle, dress, business, day-wise."""
     flow: List[Any] = []
-    pack = _nr.lucky_colours_pack(driver)
+    pack = _nr.lucky_colours_pack(driver, lang)
 
     flow.append(Paragraph(_T(lang,
         "🎨 LUCKY COLOURS — Specially Picked for You",
@@ -2204,7 +2204,7 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
     flow.append(Spacer(1, 5 * mm))
 
     # Vehicle colour card (specially bigger if vehicle was provided)
-    veh_heading = "🚗 GADI / VEHICLE COLOUR"
+    veh_heading = _T(lang, "🚗 VEHICLE COLOUR", "🚗 वाहन का रंग", "🚗 GADI / VEHICLE COLOUR")
     if vehicle:
         veh_heading += f" — Aapki gadi ({vehicle}) ke liye"
     flow.append(_premium_card(s, veh_heading, pack["vehicle"],
@@ -2213,7 +2213,7 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
     flow.append(Spacer(1, 4 * mm))
 
     # Business / Branding
-    flow.append(_premium_card(s, "🏢 BUSINESS / BRAND COLOUR",
+    flow.append(_premium_card(s, _T(lang, "🏢 BUSINESS / BRAND COLOUR", "🏢 व्यवसाय / ब्रांड का रंग", "🏢 BUSINESS / BRAND COLOUR"),
                               pack["business"],
                               bg_color=colors.HexColor("#F3E8FF"),
                               border_color=BRAND_PURPLE))
@@ -2225,7 +2225,7 @@ def _lucky_colours_section(s, driver: int, vehicle: Optional[str] = None,
 def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Day-wise colour to wear — Mon-Sun planetary table."""
     flow: List[Any] = []
-    pack = _nr.lucky_colours_pack(driver)
+    pack = _nr.lucky_colours_pack(driver, lang)
 
     flow.append(Paragraph(_T(lang,
         "👕 WHICH COLOUR TO WEAR ON WHICH DAY",
@@ -2317,7 +2317,7 @@ def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026,
                               lang: str = "hinglish") -> List[Any]:
     """12-month personal forecast — month-by-month theme + best dates."""
     flow: List[Any] = []
-    pack = _nr.monthly_forecast_pack(driver, conductor, year)
+    pack = _nr.monthly_forecast_pack(driver, conductor, year, lang)
 
     title = _T(lang,
         f"🗓️ YOUR {year} — 12-MONTH FORECAST",
@@ -2671,7 +2671,7 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
     """Business launch calculator — best months, name, partners, direction."""
     flow: List[Any] = []
     # Recompute with proper conductor
-    forecast = _nr.monthly_forecast_pack(driver, conductor, year)
+    forecast = _nr.monthly_forecast_pack(driver, conductor, year, lang)
     pack = _nr.business_launch_pack(driver, year)
     pack["best_launch_months"] = [
         {"month": m["month"], "verdict": m["verdict"]}
@@ -2842,11 +2842,11 @@ def _celebrity_match_section(s, driver: int, lang: str = "hinglish") -> List[Any
     return flow
 
 
-def _why_impact_action_block(s, kind: str, reduced: int) -> List[Any]:
+def _why_impact_action_block(s, kind: str, reduced: int, lang: str = "hinglish") -> List[Any]:
     """Append Why+Impact+Action narrative for a number — used inside each
     mobile/vehicle/house deep-analysis page."""
     flow: List[Any] = []
-    pack = _nr.why_impact_action_for_number(reduced, kind)
+    pack = _nr.why_impact_action_for_number(reduced, kind, lang)
     if not pack or not pack.get("why"):
         return flow
 

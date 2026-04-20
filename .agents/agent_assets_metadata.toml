@@ -360,3 +360,21 @@ id = "jeUH9yZv_5GG5rI81jqEy"
 uri = "file://attached_assets/qr/cosmic-lens-expo.png"
 type = "image"
 title = "Cosmic Lens — Updated QR (Replit dev domain, more reliable)"
+
+[[outputs]]
+id = "0sGIvz2_00CsU1ASJbKWz"
+uri = "file://out_pdfs/Life_Mastery_EN.pdf"
+type = "pdf"
+title = "Life Mastery — English (after bulk translate)"
+
+[[outputs]]
+id = "41zCpa5EIe-HMPVSR9jN4"
+uri = "file://out_pdfs/Life_Mastery_HI.pdf"
+type = "pdf"
+title = "Life Mastery — हिंदी (after bulk translate)"
+
+[[outputs]]
+id = "EbVsbrNLUD_S3AT8bCb8R"
+uri = "file://out_pdfs/Life_Mastery_HG.pdf"
+type = "pdf"
+title = "Life Mastery — Hinglish (control)"

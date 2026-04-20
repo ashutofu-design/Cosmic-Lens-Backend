@@ -1023,6 +1023,345 @@ _DAY_DRESS_COLOURS: List[Dict[str, str]] = [
 ]
 
 
+# ─── Planet directory + relationship table (used by all helpers) ───────
+
+_PLANETS = {1: "Sun", 2: "Moon", 3: "Jupiter", 4: "Rahu", 5: "Mercury",
+            6: "Venus", 7: "Ketu", 8: "Saturn", 9: "Mars"}
+
+# Vedic planet relationship table — F=Friend, N=Neutral, E=Enemy
+# Rows = perspective-of, Cols = target. Score 1 (worst) to 5 (best).
+_REL: Dict[int, Dict[int, str]] = {
+    1: {1: "T", 2: "F", 3: "F", 4: "E", 5: "N", 6: "E", 7: "E", 8: "E", 9: "F"},
+    2: {1: "F", 2: "T", 3: "N", 4: "E", 5: "F", 6: "N", 7: "E", 8: "N", 9: "N"},
+    3: {1: "F", 2: "N", 3: "T", 4: "N", 5: "E", 6: "E", 7: "N", 8: "N", 9: "F"},
+    4: {1: "E", 2: "E", 3: "N", 4: "T", 5: "F", 6: "F", 7: "N", 8: "F", 9: "E"},
+    5: {1: "N", 2: "F", 3: "E", 4: "F", 5: "T", 6: "F", 7: "F", 8: "N", 9: "N"},
+    6: {1: "E", 2: "N", 3: "E", 4: "F", 5: "F", 6: "T", 7: "F", 8: "F", 9: "N"},
+    7: {1: "E", 2: "E", 3: "N", 4: "N", 5: "F", 6: "F", 7: "T", 8: "F", 9: "E"},
+    8: {1: "E", 2: "N", 3: "N", 4: "F", 5: "N", 6: "F", 7: "F", 8: "T", 9: "E"},
+    9: {1: "F", 2: "N", 3: "F", 4: "E", 5: "N", 6: "N", 7: "E", 8: "E", 9: "T"},
+}
+
+_REL_SCORE = {"T": 95, "F": 80, "N": 60, "E": 30}  # T=Twin, F=Friend, N=Neutral, E=Enemy
+_REL_LABEL = {"T": "TWIN",   "F": "FRIEND", "N": "NEUTRAL", "E": "ENEMY"}
+
+
+def _rel(a: int, b: int) -> str:
+    """Return relationship code T/F/N/E from a's perspective."""
+    return _REL.get(a, {}).get(b, "N")
+
+
+# ─── 1. Monthly Forecast pack ────────────────────────────────────────────
+
+def _reduce(n: int) -> int:
+    n = abs(int(n))
+    while n > 9:
+        n = sum(int(d) for d in str(n))
+    return n
+
+
+_MONTH_THEMES = {
+    1: "🚀 New Beginnings — naya kaam start karne ka mahina. Independent decisions liye jayein. Networking strong.",
+    2: "🤝 Patience + Partnership — wait + listen. Doosron ke saath collaborate karein. Avoid forcing decisions.",
+    3: "✨ Creativity + Joy — social events, expressing yourself, writing/teaching. Networking phala-phool.",
+    4: "🛠️ Hard Work + Foundation — system banayein, paperwork complete karein. Slow but steady.",
+    5: "🌪️ Change + Movement — travel, new contacts, sudden opportunities. Flexibility maximum chahiye.",
+    6: "❤️ Love + Family — relationship investment, beauty/home projects. Major announcements possible.",
+    7: "🧘 Reflection + Spiritual — solo time, study, meditation. Big decisions postpone karein.",
+    8: "💼 Power + Money — business deals close hote hain, promotions/contracts. Discipline sabse important.",
+    9: "🔥 Completion + Release — old chapters band karein. Donations, forgiveness. Naya aane wala hai.",
+}
+
+
+def monthly_forecast_pack(driver: int, conductor: int, year: int = 2026) -> Dict[str, Any]:
+    """Return 12-month forecast for given year — personal year/month + theme + best dates."""
+    # Personal Year = (driver + conductor + year_reduced) reduced
+    personal_year = _reduce(driver + conductor + _reduce(year))
+
+    months = []
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    for i, mname in enumerate(month_names, start=1):
+        # Personal Month = personal_year + month_number reduced
+        pm = _reduce(personal_year + i)
+        # Best dates: those whose reduced number = friend/twin of driver
+        best_dates = []
+        for d in range(1, 32):
+            r = _reduce(d)
+            if _rel(driver, r) in ("T", "F"):
+                best_dates.append(d)
+        # Trim best dates to top 5 (every-month consistent set)
+        best5 = best_dates[:5]
+        months.append({
+            "month": mname,
+            "personal_month": pm,
+            "theme": _MONTH_THEMES.get(pm, "Steady month."),
+            "best_dates": best5,
+            "verdict": "EXCELLENT" if pm in (1, 5, 8) else
+                       "GOOD"      if pm in (3, 6, 9) else
+                       "GENTLE"    if pm in (2, 7) else "WORK",
+        })
+    return {
+        "year": year,
+        "personal_year": personal_year,
+        "year_theme": _MONTH_THEMES.get(personal_year, "Self-growth year."),
+        "months": months,
+    }
+
+
+# ─── 2. Deep Compatibility Matrix (Love / Marriage / Business) ────────────
+
+def deep_compatibility_pack(driver: int) -> Dict[str, Any]:
+    """Per-number love / marriage / business compatibility breakdown."""
+    rows = []
+    for n in range(1, 10):
+        code = _rel(driver, n)
+        base = _REL_SCORE[code]
+        # Slight modulation for context
+        love     = base + (5 if n in (2, 6) else 0) - (5 if n == 8 else 0)
+        marriage = base + (5 if n in (1, 6) else 0) - (10 if n == 7 else 0)
+        business = base + (5 if n in (5, 8) else 0) - (5 if n == 7 else 0)
+        rows.append({
+            "number": n,
+            "planet": _PLANETS[n],
+            "label": _REL_LABEL[code],
+            "love": max(20, min(100, love)),
+            "marriage": max(20, min(100, marriage)),
+            "business": max(20, min(100, business)),
+        })
+
+    # Top 3 best & worst by average
+    sorted_avg = sorted(rows, key=lambda r: -(r["love"] + r["marriage"] + r["business"]))
+    return {
+        "driver": driver,
+        "rows": rows,
+        "top3_best": sorted_avg[:3],
+        "top3_worst": sorted_avg[-3:][::-1],
+    }
+
+
+# ─── 3. Lucky Numbers pack ─────────────────────────────────────────────
+
+def lucky_numbers_pack(driver: int) -> Dict[str, Any]:
+    friends = [n for n in range(1, 10) if _rel(driver, n) in ("T", "F")]
+    enemies = [n for n in range(1, 10) if _rel(driver, n) == "E"]
+
+    lucky_dates_of_month = sorted({d for d in range(1, 32) if _reduce(d) in friends})
+    unlucky_dates = sorted({d for d in range(1, 32) if _reduce(d) in enemies})
+
+    # Lucky double-digit picks (for PIN/account suffix) — pairs that reduce to friend
+    lucky_pairs = []
+    for tens in range(1, 10):
+        for ones in range(0, 10):
+            num = tens * 10 + ones
+            if _reduce(num) in friends and num not in lucky_pairs:
+                lucky_pairs.append(num)
+    lucky_pairs = lucky_pairs[:8]
+
+    LUCKY_DAY = {1: "Sunday", 2: "Monday", 3: "Thursday", 4: "Saturday",
+                 5: "Wednesday", 6: "Friday", 7: "Tuesday", 8: "Saturday", 9: "Tuesday"}
+
+    return {
+        "single_digit_lucky":  friends,
+        "single_digit_avoid":  enemies,
+        "lucky_dates":         lucky_dates_of_month,
+        "unlucky_dates":       unlucky_dates,
+        "lucky_double_digit":  lucky_pairs,
+        "lucky_day":           LUCKY_DAY.get(driver, "Sunday"),
+        "atm_pin_tip":         f"4-digit PIN ke digits ka sum reduce karke {friends[0] if friends else driver} ya {friends[1] if len(friends)>1 else driver} aaye.",
+        "account_tip":         f"Account/locker ke last 2-3 digits ka reduce {friends[0] if friends else driver} ho — bank choice me yeh dhyan rakhein.",
+        "lottery_tip":         f"Lottery/contest entries {LUCKY_DAY.get(driver,'Sunday')} ko karein, dates {lucky_dates_of_month[:3]} preferred.",
+    }
+
+
+# ─── 4. Mantras + Remedies pack ────────────────────────────────────────
+
+_MANTRA_PACK: Dict[int, Dict[str, str]] = {
+    1: {
+        "mantra": "Om Hraam Hreem Hroum Sah Suryaya Namah)",
+        "count": "108 times daily, 7000 in 40-day cycle",
+        "best_time": "Sunday sunrise (5:30-7:00 AM)",
+        "stone": "Manik (Ruby) — gold ring, ring finger, right hand, Sunday sunrise",
+        "yantra": "Surya Yantra — gold/copper plate, east wall of pooja room",
+        "daan": "Wheat, jaggery, copper, red cloth — Sunday to Brahmin or temple",
+        "color_focus": "Wear red/orange on Sunday",
+    },
+    2: {
+        "mantra": "Om Shraam Shreem Shroum Sah Chandramase Namah)",
+        "count": "108 times daily, 11000 in 40-day cycle",
+        "best_time": "Monday early morning (4:30-6:00 AM)",
+        "stone": "Moti (Pearl) — silver ring, little finger, right hand, Monday before sunrise",
+        "yantra": "Chandra Yantra — silver, north-west wall",
+        "daan": "Rice, milk, white cloth, sugar — Monday at temple",
+        "color_focus": "Wear white/silver on Monday",
+    },
+    3: {
+        "mantra": "Om Graam Greem Groum Sah Gurave Namah)",
+        "count": "108 times daily, 19000 in 40-day cycle",
+        "best_time": "Thursday sunrise",
+        "stone": "Pukhraj (Yellow Sapphire) — gold ring, index finger, right hand, Thursday sunrise",
+        "yantra": "Brihaspati Yantra — gold or yellow paper, north-east wall",
+        "daan": "Yellow lentils (chana dal), turmeric, gold, banana, yellow cloth — Thursday",
+        "color_focus": "Wear yellow on Thursday",
+    },
+    4: {
+        "mantra": "Om Bhraam Bhreem Bhroum Sah Rahave Namah)",
+        "count": "108 times daily, 18000 in 40-day cycle",
+        "best_time": "Saturday twilight (5-7 PM)",
+        "stone": "Gomed (Hessonite) — silver ring, middle finger, right hand, Saturday twilight",
+        "yantra": "Rahu Yantra — silver/lead plate, south-west",
+        "daan": "Black lentils (urad), black sesame, blue cloth — Saturday to needy",
+        "color_focus": "Wear electric blue/grey on Saturday",
+    },
+    5: {
+        "mantra": "Om Braam Breem Broum Sah Budhaya Namah)",
+        "count": "108 times daily, 9000 in 40-day cycle",
+        "best_time": "Wednesday morning",
+        "stone": "Panna (Emerald) — gold ring, little finger, right hand, Wednesday morning",
+        "yantra": "Budha Yantra — green silk, north wall",
+        "daan": "Green moong dal, green vegetables, green cloth — Wednesday",
+        "color_focus": "Wear green on Wednesday",
+    },
+    6: {
+        "mantra": "Om Draam Dreem Droum Sah Shukraya Namah)",
+        "count": "108 times daily, 16000 in 40-day cycle",
+        "best_time": "Friday early morning",
+        "stone": "Heera (Diamond) or White Sapphire — silver/platinum, middle finger, Friday morning",
+        "yantra": "Shukra Yantra — silver, south-east",
+        "daan": "White rice, sugar, white cloth, dairy — Friday",
+        "color_focus": "Wear white/pink on Friday",
+    },
+    7: {
+        "mantra": "Om Sraam Sreem Sroum Sah Ketave Namah)",
+        "count": "108 times daily, 17000 in 40-day cycle",
+        "best_time": "Tuesday/Saturday evening",
+        "stone": "Lehsunia (Cat's Eye) — silver ring, middle finger, right hand, Tuesday evening",
+        "yantra": "Ketu Yantra — multi-color silk, south-west",
+        "daan": "Multi-color blanket, dog feeding, sesame, urad — Tuesday/Saturday",
+        "color_focus": "Wear multi-color/grey on Tuesday or Saturday",
+    },
+    8: {
+        "mantra": "Om Praam Preem Proum Sah Shanaishcharaya Namah)",
+        "count": "108 times daily, 23000 in 40-day cycle",
+        "best_time": "Saturday early morning or twilight",
+        "stone": "Neelam (Blue Sapphire) — silver ring, middle finger, right hand, Saturday twilight (TEST 3 days first!)",
+        "yantra": "Shani Yantra — iron/lead, west wall",
+        "daan": "Black sesame, mustard oil, black cloth, iron, leather shoes to needy — Saturday",
+        "color_focus": "Wear deep blue/black on Saturday",
+    },
+    9: {
+        "mantra": "Om Kraam Kreem Kroum Sah Bhaumaya Namah)",
+        "count": "108 times daily, 10000 in 40-day cycle",
+        "best_time": "Tuesday sunrise",
+        "stone": "Moonga (Red Coral) — gold/copper ring, ring finger, right hand, Tuesday sunrise",
+        "yantra": "Mangal Yantra — copper plate, south wall",
+        "daan": "Red lentils (masoor), red cloth, jaggery, copper — Tuesday at Hanuman temple",
+        "color_focus": "Wear red on Tuesday",
+    },
+}
+
+
+def mantras_pack(driver: int) -> Dict[str, Any]:
+    pack = _MANTRA_PACK.get(driver, {})
+    return {
+        "planet": _PLANETS.get(driver, "—"),
+        **pack,
+    }
+
+
+# ─── 5. Business Launch Calculator ─────────────────────────────────────
+
+_DIRECTION = {1: "East", 2: "North-West", 3: "North-East", 4: "South-West",
+              5: "North", 6: "South-East", 7: "South-West", 8: "West", 9: "South"}
+
+
+def business_launch_pack(driver: int, year: int = 2026) -> Dict[str, Any]:
+    forecast = monthly_forecast_pack(driver, driver, year)  # use driver as conductor stand-in if unknown
+    # Actually need real conductor — caller will pass via overload
+    # For Part 2 use, we recompute with actual conductor in render
+    best_months = [m for m in forecast["months"] if m["verdict"] in ("EXCELLENT", "GOOD")]
+    best_months_top = best_months[:6]
+
+    friends = [n for n in range(1, 10) if _rel(driver, n) in ("T", "F")]
+    name_numbers = friends[:3] if friends else [driver]
+    partner_numbers = friends[:3] if friends else [driver]
+
+    return {
+        "driver": driver,
+        "office_direction": _DIRECTION.get(driver, "East"),
+        "office_facing": "Sit facing your direction — desk should face it.",
+        "best_launch_months": [{"month": m["month"], "verdict": m["verdict"]}
+                                for m in best_months_top],
+        "best_company_name_numbers": name_numbers,
+        "best_partner_numbers": partner_numbers,
+        "avoid_partner_numbers": [n for n in range(1, 10) if _rel(driver, n) == "E"],
+        "name_tip": f"Company/brand name ke letters ka total reduce karke "
+                    f"{name_numbers[0] if name_numbers else driver} ya {name_numbers[1] if len(name_numbers)>1 else driver} aaye — "
+                    "Chaldean numerology use karein.",
+        "logo_tip": f"Logo me {_PLANETS.get(driver,'—')} ke colours dominate karein.",
+        "registration_day": {1: "Sunday", 2: "Monday", 3: "Thursday", 4: "Saturday",
+                             5: "Wednesday", 6: "Friday", 7: "Tuesday",
+                             8: "Saturday", 9: "Tuesday"}.get(driver, "Sunday"),
+        "first_invoice_tip": f"Pehla invoice number {name_numbers[0] if name_numbers else driver} ya 11/22 (master) se shuru karein.",
+    }
+
+
+# ─── 6. Celebrity Match ────────────────────────────────────────────────
+
+_CELEBRITY_MATCH: Dict[int, List[Dict[str, str]]] = {
+    1: [
+        {"name": "Mukesh Ambani",   "born": "19 April",     "lesson": "Vision + risk-taking — empire build kiya from scratch."},
+        {"name": "Lata Mangeshkar", "born": "28 September", "lesson": "Solo excellence — one voice, decades dominate."},
+        {"name": "Ratan Tata",      "born": "28 December",  "lesson": "Quiet authority + ethics — leadership ka best example."},
+        {"name": "Bill Gates",      "born": "28 October",   "lesson": "Innovation + philanthropy — wealth ko purpose se jodna."},
+    ],
+    2: [
+        {"name": "Shahrukh Khan",     "born": "2 November",  "lesson": "Charm + emotional intelligence — sab ke saath connect."},
+        {"name": "Amitabh Bachchan",  "born": "11 October",  "lesson": "Reinvention + voice — har generation ke saath grow."},
+        {"name": "Mahatma Gandhi",    "born": "2 October",   "lesson": "Soft power — non-violence se duniya badli."},
+    ],
+    3: [
+        {"name": "Rajinikanth", "born": "12 December", "lesson": "Authentic style + spiritual core — fame ke baad bhi grounded."},
+        {"name": "Anushka Sharma", "born": "1 May (3)", "lesson": "Multi-talent expansion — actor + producer + entrepreneur."},
+        {"name": "Generic 3-driver", "born": "3rd / 12th / 21st / 30th", "lesson": "Communication + creativity ka natural gift."},
+    ],
+    4: [
+        {"name": "Barack Obama", "born": "4 August", "lesson": "Disruption + structure — system ko outside-in se badla."},
+        {"name": "Generic 4-driver", "born": "4th / 13th / 22nd / 31st", "lesson": "Tech + foreign opportunities, sudden breakthroughs."},
+    ],
+    5: [
+        {"name": "Virat Kohli",       "born": "5 November",  "lesson": "Aggression + adaptability — har format me dominate."},
+        {"name": "Aamir Khan",        "born": "14 March",    "lesson": "Versatility + perfectionism — multi-discipline mastery."},
+        {"name": "Mark Zuckerberg",   "born": "14 May",      "lesson": "Communication empire — connection ka business."},
+        {"name": "Albert Einstein",   "born": "14 March",    "lesson": "Curiosity + intellectual courage — paradigms badle."},
+    ],
+    6: [
+        {"name": "Sachin Tendulkar", "born": "24 April",   "lesson": "Beauty + consistency — record over flash."},
+        {"name": "A.R. Rahman",      "born": "6 January",  "lesson": "Art + spiritual depth — music ko sadhana banaya."},
+        {"name": "Steve Jobs",       "born": "24 February","lesson": "Aesthetic obsession — design ko religion banaya."},
+        {"name": "A.P.J. Kalam",     "born": "15 October", "lesson": "Service + grace — power ko humility se carry kiya."},
+    ],
+    7: [
+        {"name": "M.S. Dhoni", "born": "7 July", "lesson": "Calm under pressure — chaos me solo clarity."},
+        {"name": "Generic 7-driver", "born": "7th / 16th / 25th", "lesson": "Mystery + introspection — thinkers + healers."},
+    ],
+    8: [
+        {"name": "Narendra Modi",   "born": "17 September", "lesson": "Discipline + long game — slow but unstoppable rise."},
+        {"name": "Saurav Ganguly",  "born": "8 July",       "lesson": "Authority + comeback — kabhi haar nahi maani."},
+        {"name": "Roger Federer",   "born": "8 August",     "lesson": "Longevity + structure — graceful empire."},
+    ],
+    9: [
+        {"name": "Salman Khan",   "born": "27 December", "lesson": "Raw energy + loyalty — passion-driven empire."},
+        {"name": "Akshay Kumar",  "born": "9 September", "lesson": "Discipline + action — early rise + zero drama."},
+        {"name": "Generic 9-driver", "born": "9th / 18th / 27th", "lesson": "Warriors + healers — dono modes available."},
+    ],
+}
+
+
+def celebrity_match_pack(driver: int) -> List[Dict[str, str]]:
+    return _CELEBRITY_MATCH.get(driver, [])
+
+
 def lucky_colours_pack(driver: int) -> Dict[str, Any]:
     """Return complete lucky colours pack for a driver number — used in Part 2."""
     pack = _LUCKY_COLOURS.get(driver, {})

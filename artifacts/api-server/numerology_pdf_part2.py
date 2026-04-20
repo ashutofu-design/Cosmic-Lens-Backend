@@ -1076,6 +1076,332 @@ def _day_dress_section(s, driver: int) -> List[Any]:
     return flow
 
 
+def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026) -> List[Any]:
+    """12-month personal forecast — month-by-month theme + best dates."""
+    flow: List[Any] = []
+    pack = _nr.monthly_forecast_pack(driver, conductor, year)
+
+    flow.append(Paragraph(f"🗓️ {year} KA 12-MAHINE KA FORECAST", s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        f"<b>Personal Year:</b> {pack['personal_year']} — <i>{pack['year_theme']}</i>",
+        s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    header_style = ParagraphStyle("mf_h", fontName="Helvetica-Bold", fontSize=9,
+                                  textColor=colors.white, leading=12, alignment=TA_CENTER)
+    rows = [[
+        Paragraph("<b>Month</b>", header_style),
+        Paragraph("<b>PM</b>", header_style),
+        Paragraph("<b>Verdict</b>", header_style),
+        Paragraph("<b>Theme</b>", header_style),
+        Paragraph("<b>Best Dates</b>", header_style),
+    ]]
+    VERDICT_BG = {"EXCELLENT": colors.HexColor("#DCFCE7"),
+                  "GOOD":      colors.HexColor("#FEF3C7"),
+                  "GENTLE":    colors.HexColor("#E0F2FE"),
+                  "WORK":      colors.HexColor("#FEE2E2")}
+
+    style_rows = [
+        ("BACKGROUND",     (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("BOX",            (0, 0), (-1, -1), 0.8, BRAND_PURPLE),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 5),
+        ("TOPPADDING",     (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 5),
+        ("FONTSIZE",       (0, 0), (-1, -1), 8),
+    ]
+    for i, m in enumerate(pack["months"], start=1):
+        rows.append([
+            Paragraph(f"<b>{m['month']}</b>", s["body_mid"]),
+            Paragraph(f"<b>{m['personal_month']}</b>", s["body_mid"]),
+            Paragraph(f"<b>{m['verdict']}</b>", s["small"]),
+            Paragraph(m["theme"], s["small"]),
+            Paragraph(", ".join(str(d) for d in m["best_dates"]), s["small"]),
+        ])
+        style_rows.append(("BACKGROUND", (0, i), (-1, i),
+                          VERDICT_BG.get(m["verdict"], colors.HexColor("#F8FAFC"))))
+
+    t = Table(rows, colWidths=[18 * mm, 12 * mm, 22 * mm, 100 * mm, 28 * mm])
+    t.setStyle(TableStyle(style_rows))
+    flow.append(t)
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(Paragraph(
+        "<i>PM = Personal Month number. Best Dates = aapke driver ke friend numbers ke days.</i>",
+        s["small"]))
+    return flow
+
+
+def _deep_compat_section(s, driver: int) -> List[Any]:
+    """Love + Marriage + Business compatibility per number 1-9."""
+    flow: List[Any] = []
+    pack = _nr.deep_compatibility_pack(driver)
+
+    flow.append(Paragraph("💑 DEEP COMPATIBILITY — Love · Marriage · Business",
+                         s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        f"<i>Aapka driver <b>{driver}</b> ({_nr._PLANETS.get(driver, '—')}) baaki har number ke saath "
+        "kaisa interact karta hai — 3 contexts me alag-alag.</i>",
+        ParagraphStyle("dc_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    header = ParagraphStyle("dc_h", fontName="Helvetica-Bold", fontSize=10,
+                            textColor=colors.white, leading=13, alignment=TA_CENTER)
+    rows = [[Paragraph("<b>#</b>", header), Paragraph("<b>Planet</b>", header),
+             Paragraph("<b>Type</b>", header), Paragraph("<b>💕 Love</b>", header),
+             Paragraph("<b>💍 Marriage</b>", header), Paragraph("<b>💼 Business</b>", header)]]
+
+    LABEL_BG = {"TWIN":   colors.HexColor("#FFFBEB"),
+                "FRIEND": colors.HexColor("#DCFCE7"),
+                "NEUTRAL":colors.HexColor("#F3F4F6"),
+                "ENEMY":  colors.HexColor("#FEE2E2")}
+
+    style_rows = [
+        ("BACKGROUND",  (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+        ("BOX",         (0, 0), (-1, -1), 0.8, BRAND_PURPLE),
+        ("INNERGRID",   (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",       (0, 0), (-1, -1), "CENTER"),
+        ("FONTSIZE",    (0, 0), (-1, -1), 9),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING",(0, 0), (-1, -1), 4),
+        ("TOPPADDING",  (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ]
+    for i, r in enumerate(pack["rows"], start=1):
+        rows.append([
+            Paragraph(f"<b>{r['number']}</b>", s["body_mid"]),
+            Paragraph(r["planet"], s["body"]),
+            Paragraph(f"<b>{r['label']}</b>", s["small"]),
+            Paragraph(f"<b>{r['love']}</b>/100", s["body_mid"]),
+            Paragraph(f"<b>{r['marriage']}</b>/100", s["body_mid"]),
+            Paragraph(f"<b>{r['business']}</b>/100", s["body_mid"]),
+        ])
+        style_rows.append(("BACKGROUND", (0, i), (-1, i),
+                          LABEL_BG.get(r["label"], colors.white)))
+    t = Table(rows, colWidths=[14 * mm, 28 * mm, 26 * mm, 36 * mm, 36 * mm, 36 * mm])
+    t.setStyle(TableStyle(style_rows))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    # Top 3 best + worst
+    best = ", ".join(f"<b>{r['number']}</b> ({r['planet']})" for r in pack["top3_best"])
+    worst = ", ".join(f"<b>{r['number']}</b> ({r['planet']})" for r in pack["top3_worst"])
+    flow.append(_premium_card(s, "🏆 TOP 3 BEST MATCHES (har context me strong)", best,
+                              bg_color=colors.HexColor("#F0FDF4"),
+                              border_color=colors.HexColor("#15803D")))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "⛔ TOP 3 WORST MATCHES (extra effort lagega)", worst,
+                              bg_color=colors.HexColor("#FEF2F2"),
+                              border_color=colors.HexColor("#B91C1C")))
+    return flow
+
+
+def _lucky_numbers_section(s, driver: int) -> List[Any]:
+    """Lucky numbers, dates, PIN, account, lottery tips."""
+    flow: List[Any] = []
+    pack = _nr.lucky_numbers_pack(driver)
+
+    flow.append(Paragraph("🔢 LUCKY NUMBERS — Aapke Personal Power Numbers",
+                         s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    rows = [
+        [Paragraph("<b>✓ Lucky single digits</b>", s["body_mid"]),
+         Paragraph(f"<font color='#15803D'><b>{', '.join(str(n) for n in pack['single_digit_lucky'])}</b></font>", s["body"])],
+        [Paragraph("<b>⚠ Avoid single digits</b>", s["body_mid"]),
+         Paragraph(f"<font color='#B91C1C'>{', '.join(str(n) for n in pack['single_digit_avoid']) or '—'}</font>", s["body"])],
+        [Paragraph("<b>🌟 Lucky day of week</b>", s["body_mid"]),
+         Paragraph(f"<b>{pack['lucky_day']}</b>", s["body"])],
+        [Paragraph("<b>📅 Lucky dates of month</b>", s["body_mid"]),
+         Paragraph(", ".join(str(d) for d in pack["lucky_dates"]), s["body"])],
+        [Paragraph("<b>📅 Avoid these dates</b>", s["body_mid"]),
+         Paragraph(f"<font color='#B91C1C'>{', '.join(str(d) for d in pack['unlucky_dates']) or '—'}</font>", s["body"])],
+        [Paragraph("<b>🎯 Lucky double-digits</b><br/><font size='8' color='#6B7280'>(PIN/account suffix)</font>", s["body_mid"]),
+         Paragraph(", ".join(str(n) for n in pack["lucky_double_digit"]), s["body"])],
+    ]
+    t = Table(rows, colWidths=[55 * mm, 125 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, -1), colors.HexColor("#FFFBEB")),
+        ("BOX",            (0, 0), (-1, -1), 1.0, BRAND_GOLD),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#FCD34D")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 8),
+        ("TOPPADDING",     (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(_premium_card(s, "🏧 ATM PIN / Bank Number Tip", pack["atm_pin_tip"],
+                              bg_color=colors.HexColor("#EFF6FF"),
+                              border_color=colors.HexColor("#1D4ED8")))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🏦 Account / Locker Number Tip", pack["account_tip"],
+                              bg_color=colors.HexColor("#F3E8FF"),
+                              border_color=BRAND_PURPLE))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🎰 Lottery / Contest Tip", pack["lottery_tip"],
+                              bg_color=colors.HexColor("#FFFBEB"),
+                              border_color=BRAND_GOLD))
+    return flow
+
+
+def _mantras_section(s, driver: int) -> List[Any]:
+    """Personalized mantras + remedies (gemstone, yantra, daan)."""
+    flow: List[Any] = []
+    pack = _nr.mantras_pack(driver)
+
+    flow.append(Paragraph(f"📿 MANTRAS & REMEDIES — {pack.get('planet', '')} Sadhana",
+                         s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        "<i>Aapke driver number ke planet ke liye specially designed remedies — "
+        "Vedic + classical numerology school se.</i>",
+        ParagraphStyle("mr_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    flow.append(_premium_card(s, "🕉️ MANTRA (beej + complete)",
+                              f"<b>{pack.get('mantra', '—')}</b><br/>"
+                              f"<font color='#6B7280' size='9'>Count: {pack.get('count', '—')} | "
+                              f"Best time: {pack.get('best_time', '—')}</font>",
+                              bg_color=colors.HexColor("#FEF3C7"),
+                              border_color=BRAND_GOLD))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "💎 GEMSTONE (ratna)", pack.get("stone", "—"),
+                              bg_color=colors.HexColor("#F0F9FF"),
+                              border_color=colors.HexColor("#0369A1")))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🔯 YANTRA", pack.get("yantra", "—"),
+                              bg_color=colors.HexColor("#F3E8FF"),
+                              border_color=BRAND_PURPLE))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🪔 DAAN (Charity)", pack.get("daan", "—"),
+                              bg_color=colors.HexColor("#FFFBEB"),
+                              border_color=colors.HexColor("#B45309")))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "👕 COLOUR FOCUS", pack.get("color_focus", "—"),
+                              bg_color=colors.HexColor("#FDF2F8"),
+                              border_color=colors.HexColor("#DB2777")))
+    return flow
+
+
+def _business_launch_section(s, driver: int, conductor: int, year: int = 2026) -> List[Any]:
+    """Business launch calculator — best months, name, partners, direction."""
+    flow: List[Any] = []
+    # Recompute with proper conductor
+    forecast = _nr.monthly_forecast_pack(driver, conductor, year)
+    pack = _nr.business_launch_pack(driver, year)
+    pack["best_launch_months"] = [
+        {"month": m["month"], "verdict": m["verdict"]}
+        for m in forecast["months"] if m["verdict"] in ("EXCELLENT", "GOOD")
+    ][:6]
+
+    flow.append(Paragraph(f"🏢 BUSINESS LAUNCH CALCULATOR ({year})", s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    rows = [
+        [Paragraph("<b>📅 Best launch months</b>", s["body_mid"]),
+         Paragraph(", ".join(f"<b>{m['month']}</b> ({m['verdict']})"
+                            for m in pack["best_launch_months"]) or "—", s["body"])],
+        [Paragraph("<b>🗓️ Best registration day</b>", s["body_mid"]),
+         Paragraph(f"<b>{pack['registration_day']}</b>", s["body"])],
+        [Paragraph("<b>🧭 Office direction</b>", s["body_mid"]),
+         Paragraph(f"Sit facing <b>{pack['office_direction']}</b>", s["body"])],
+        [Paragraph("<b>🔢 Best company-name numbers</b>", s["body_mid"]),
+         Paragraph(", ".join(str(n) for n in pack["best_company_name_numbers"]), s["body"])],
+        [Paragraph("<b>🤝 Best partner numbers</b>", s["body_mid"]),
+         Paragraph(f"<font color='#15803D'>{', '.join(str(n) for n in pack['best_partner_numbers'])}</font>", s["body"])],
+        [Paragraph("<b>⛔ Avoid partner numbers</b>", s["body_mid"]),
+         Paragraph(f"<font color='#B91C1C'>{', '.join(str(n) for n in pack['avoid_partner_numbers']) or '—'}</font>", s["body"])],
+    ]
+    t = Table(rows, colWidths=[55 * mm, 125 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, -1), colors.HexColor("#F0F9FF")),
+        ("BOX",            (0, 0), (-1, -1), 1.0, colors.HexColor("#0369A1")),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#7DD3FC")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 8),
+        ("TOPPADDING",     (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(_premium_card(s, "💼 NAME TIP", pack["name_tip"],
+                              bg_color=colors.HexColor("#FFFBEB"),
+                              border_color=BRAND_GOLD))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🎨 LOGO TIP", pack["logo_tip"],
+                              bg_color=colors.HexColor("#F3E8FF"),
+                              border_color=BRAND_PURPLE))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_premium_card(s, "🧾 FIRST INVOICE TIP", pack["first_invoice_tip"],
+                              bg_color=colors.HexColor("#DCFCE7"),
+                              border_color=colors.HexColor("#15803D")))
+    return flow
+
+
+def _celebrity_match_section(s, driver: int) -> List[Any]:
+    """Famous people with same driver number."""
+    flow: List[Any] = []
+    matches = _nr.celebrity_match_pack(driver)
+
+    flow.append(Paragraph(f"🌟 CELEBRITY MATCH — Aapke Jaise Famous Log",
+                         s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        f"<i>Driver number <b>{driver}</b> ke duniya bhar ke famous log — unka journey study karein, "
+        "patterns dekho, motivation lo.</i>",
+        ParagraphStyle("cm_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    if not matches:
+        flow.append(Paragraph("No celebrity matches available for this driver.", s["body"]))
+        return flow
+
+    header = ParagraphStyle("cm_h", fontName="Helvetica-Bold", fontSize=10,
+                            textColor=colors.white, leading=13, alignment=TA_CENTER)
+    rows = [[Paragraph("<b>Name</b>", header),
+             Paragraph("<b>Born</b>", header),
+             Paragraph("<b>Aap Kya Seekh Sakte Ho</b>", header)]]
+    for m in matches:
+        rows.append([
+            Paragraph(f"<b>{m['name']}</b>", s["body_mid"]),
+            Paragraph(m["born"], s["body"]),
+            Paragraph(m["lesson"], s["small"]),
+        ])
+    t = Table(rows, colWidths=[42 * mm, 30 * mm, 108 * mm])
+    style_rows = [
+        ("BACKGROUND",     (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",      (0, 0), (-1, 0), colors.white),
+        ("BOX",            (0, 0), (-1, -1), 0.8, BRAND_PURPLE),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#CBD5E1")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.HexColor("#FFFBEB"), colors.HexColor("#FEF3C7")]),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 6),
+        ("TOPPADDING",     (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 6),
+    ]
+    t.setStyle(TableStyle(style_rows))
+    flow.append(t)
+    flow.append(Spacer(1, 5 * mm))
+    flow.append(Paragraph(
+        "<i>Lesson: Aap inn celebrities se 'pattern' seekho — exact path nahi. "
+        "Same driver hone se aapki natural strengths similar hain.</i>",
+        s["small"]))
+    return flow
+
+
 def _why_impact_action_block(s, kind: str, reduced: int) -> List[Any]:
     """Append Why+Impact+Action narrative for a number — used inside each
     mobile/vehicle/house deep-analysis page."""
@@ -1189,7 +1515,34 @@ def render_part2_pdf(*,
     story += _day_dress_section(s, driver)
     story.append(PageBreak())
 
-    # Page 10 — Driver/Conductor technical intro
+    # ─── Premium Tier B sections (₹1499 deep value) ────────────────────
+    # Page 10 — 🗓️ 12-Month Forecast (current year)
+    from datetime import datetime
+    _yr = datetime.now().year
+    story += _monthly_forecast_section(s, driver, conductor, year=_yr)
+    story.append(PageBreak())
+
+    # Page 11 — 💑 Deep Compatibility (Love/Marriage/Business per number)
+    story += _deep_compat_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 12 — 🔢 Lucky Numbers (single, double, dates, PIN, lottery)
+    story += _lucky_numbers_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 13 — 📿 Mantras + Remedies (mantra, gemstone, yantra, daan)
+    story += _mantras_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 14 — 🏢 Business Launch Calculator
+    story += _business_launch_section(s, driver, conductor, year=_yr)
+    story.append(PageBreak())
+
+    # Page 15 — 🌟 Celebrity Match (famous people same driver)
+    story += _celebrity_match_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 16 — Driver/Conductor technical intro
     story += _driver_conductor_intro(s, name, dob, driver, conductor)
     story.append(PageBreak())
 

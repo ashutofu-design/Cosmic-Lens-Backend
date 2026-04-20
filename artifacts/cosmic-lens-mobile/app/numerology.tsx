@@ -566,7 +566,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               Practical Tools
             </Text>
             <Text style={[pp.subTabSub, { color: sub === "tools" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
-              ₹1499  •  18 pages
+              ₹1499  •  26 pages
             </Text>
           </View>
         </Pressable>

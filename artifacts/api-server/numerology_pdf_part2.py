@@ -13,6 +13,8 @@ Pure deterministic engine output rendered to A4 PDF — zero AI.
 from __future__ import annotations
 
 import io
+import re
+import contextvars
 from typing import Any, Dict, List, Optional
 
 from reportlab.lib import colors
@@ -23,8 +25,60 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
-    PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    PageBreak, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
+from reportlab.platypus import Paragraph as _RLParagraph
+
+# ── Mixed-script auto-wrapping ────────────────────────────────────────
+# In Hindi mode the body font is NotoSansDevanagari which lacks Latin
+# glyphs.  We auto-wrap Latin runs in <font name='Helvetica'> so any
+# hardcoded English/Hinglish label still renders, even in Hindi reports.
+_CUR_LANG: "contextvars.ContextVar[str]" = contextvars.ContextVar(
+    "cur_lang", default="hinglish"
+)
+_LATIN_RUN_RE = re.compile(r"([A-Za-z][A-Za-z0-9 \-_/&\.,;:!?'\"\(\)\[\]]*)")
+
+
+def _autowrap_latin(text: str) -> str:
+    """Wrap consecutive Latin runs in <font name='Helvetica'>...</font>.
+
+    Skips text inside HTML tags (so <font>, <b>, <i>, color attrs etc. are
+    preserved).  Applied only when the current render lang is Hindi.
+    """
+    if _CUR_LANG.get() != "hindi":
+        return text
+    parts = re.split(r"(<[^>]+>)", text)
+    out = []
+    inside_font = 0
+    for p in parts:
+        if not p:
+            continue
+        if p.startswith("<"):
+            # Only treat <font name=...> as a real family override — a plain
+            # <font color=...> or <font size=...> doesn't change the family,
+            # so Latin runs inside it still need Helvetica wrapping.
+            tag = p.lower()
+            if tag.startswith("<font") and "name=" in tag:
+                inside_font += 1
+            elif tag.startswith("</font") and inside_font > 0:
+                inside_font -= 1
+            out.append(p)
+            continue
+        if inside_font > 0:
+            out.append(p)
+            continue
+        out.append(_LATIN_RUN_RE.sub(
+            lambda m: f"<font name='Helvetica'>{m.group(1)}</font>", p))
+    return "".join(out)
+
+
+class Paragraph(_RLParagraph):  # type: ignore[misc]
+    """Drop-in Paragraph that auto-wraps Latin runs in Hindi mode."""
+
+    def __init__(self, text, *args, **kwargs):  # noqa: D401
+        if isinstance(text, str):
+            text = _autowrap_latin(text)
+        super().__init__(text, *args, **kwargs)
 
 from vedic.numerology import tier_a as _ta
 from vedic.numerology import narratives as _nr
@@ -3413,6 +3467,7 @@ def render_part2_pdf(*,
     driver = _r(day) if day else 0
     conductor = _r(sum(digits)) if digits else 0
 
+    _CUR_LANG.set((lang or "hinglish").lower())
     s = _styles(lang)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,

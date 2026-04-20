@@ -42,3 +42,15 @@ id = "zrZacWUVDYAaYoH8roefV"
 uri = "file://attached_assets/ASK_System_Breakdown.txt"
 type = "text"
 title = "ASK System Breakdown — Full Internal Logic"
+
+[[outputs]]
+id = "eThSlrSPneQuEK6s6wVq_"
+uri = "file://exports/Numerology_Sample.pdf"
+type = "pdf"
+title = "Numerology Report — Rahul Sharma (sample)"
+
+[[outputs]]
+id = "p5Q2gd33FHdEnLPBQc56R"
+uri = "file://exports/Numerology_Einstein_v2.pdf"
+type = "pdf"
+title = "Numerology Report — Einstein (v2, master numbers + karmic debt now visible)"

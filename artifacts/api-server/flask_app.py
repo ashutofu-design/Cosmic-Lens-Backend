@@ -3534,6 +3534,79 @@ def astrovastu_pro_pdf(log_id: int):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Sprint 53-N4 — Numerology PDF report
+# Stateless endpoint: accepts birth details, computes numerology on-the-fly,
+# returns a multi-page PDF. No DB log (numerology has no chart-payload state).
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/numerology/pdf", methods=["POST"])
+def numerology_pdf():
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    dob  = (body.get("dob")  or "").strip()
+    tob  = (body.get("tob")  or "12:00").strip()
+    gender = (body.get("gender") or "").strip() or None
+
+    if not name or not dob:
+        return jsonify({"error": "missing_fields",
+                        "message": "name and dob (YYYY-MM-DD) required"}), 400
+
+    # Strict DOB validation (calendar-correct)
+    from datetime import datetime as _dt
+    try:
+        _dt.strptime(dob, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "invalid_dob",
+                        "message": "dob must be a valid date in YYYY-MM-DD format"}), 400
+
+    # Optional tob validation (HH:MM 24h)
+    if tob:
+        try:
+            _dt.strptime(tob, "%H:%M")
+        except ValueError:
+            return jsonify({"error": "invalid_tob",
+                            "message": "tob must be in HH:MM 24-hour format"}), 400
+
+    birth = {"name": name, "dob": dob, "tob": tob, "gender": gender or "male"}
+
+    try:
+        from vedic.numerology.phase_s import compute_phase_s
+        from vedic.numerology.extended import compute_extended_numerology
+        from vedic.numerology.practical import compute_practical
+        from numerology_pdf import render_numerology_pdf
+
+        ps = compute_phase_s({}, birth) or {}
+        ex = compute_extended_numerology(birth) or {}
+        pr = compute_practical(birth) or {}
+
+        # Require at least the core numerology block (extended) to be available;
+        # phase_s often defaults to True via static directions.
+        if not ex.get("available"):
+            return jsonify({"error": "compute_failed",
+                            "message": "numerology engines returned no data"}), 500
+
+        pdf_bytes = render_numerology_pdf(
+            name=name, dob=dob, gender=gender,
+            phase_s=ps, extended=ex, practical=pr,
+        )
+    except Exception as e:
+        # Log full trace internally; never leak exception details to client.
+        app.logger.exception("[numerology/pdf] render failed: %s", e)
+        return jsonify({"error": "render_failed",
+                        "message": "Failed to render PDF. Please try again."}), 500
+
+    safe_name = "".join(c for c in name if c.isalnum() or c in "_- ").strip().replace(" ", "_") or "report"
+    fname = f"Numerology_{safe_name}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Phase 5 — Reports history (combined BIZ + PRO)
 # ─────────────────────────────────────────────────────────────────────────────
 def _grade_for(score: int) -> str:

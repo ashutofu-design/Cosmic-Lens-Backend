@@ -889,14 +889,166 @@ def _disclaimer(s) -> List[Any]:
 
 # ─── Public entry ────────────────────────────────────────────────────
 
+# ─── Tier-A enrichment sections (karmic + passion + maturity + compat) ─────
+
+def _karmic_passion_maturity(s, name: str, dob: str, phase_s: dict, extended: dict) -> List[Any]:
+    """One-page deep-dive: Karmic Lessons + Hidden Passion + Maturity Number."""
+    from vedic.numerology import tier_a as _ta
+
+    flow: List[Any] = []
+    flow.append(_section_title(s, "Karmic Lessons & Hidden Talents"))
+    flow.append(Paragraph(
+        "Aapke naam aur janma-tithi se nikle 3 deep insights — jo aapki "
+        "soul-journey ka blueprint dikhate hain.",
+        s["body_mid"]))
+    flow.append(Spacer(1, 5 * mm))
+
+    # 1. Karmic lessons
+    klr = _ta.karmic_lessons(name)
+    if klr.get("ok"):
+        missing = klr.get("missing_numbers") or []
+        flow.append(Paragraph("<b>Karmic Lessons</b> — soul ne is janam me ye seekhne aaya hai:",
+                              s["h3"]))
+        if missing:
+            for item in klr.get("lessons") or []:
+                flow.append(Paragraph(
+                    f"<b>{item['number']}.</b> {item['lesson']}", s["body"]))
+        else:
+            flow.append(Paragraph(
+                "Aapke naam me sabhi 1-9 numbers represent hain — balanced soul, "
+                "no specific karmic lesson uthane ki zaroorat.", s["body"]))
+        flow.append(Spacer(1, 4 * mm))
+
+    # 2. Hidden Passion
+    hpr = _ta.hidden_passion(name)
+    if hpr.get("ok"):
+        dom = hpr.get("dominant_numbers") or []
+        flow.append(Paragraph(
+            f"<b>Hidden Passion</b> — Number(s) <b>{', '.join(str(n) for n in dom)}</b> "
+            "aapke naam me sabse jyada baar aate hain. Yeh aapke natural talents hain:",
+            s["h3"]))
+        for item in hpr.get("meanings") or []:
+            flow.append(Paragraph(f"<b>{item['number']}.</b> {item['passion']}", s["body"]))
+        flow.append(Paragraph(
+            "<i>Career, hobbies, business — inhi vibrations ke around build karne se "
+            "max success milegi.</i>", s["body_mid"]))
+        flow.append(Spacer(1, 4 * mm))
+
+    # 3. Maturity Number
+    try:
+        # Pull life_path from extended (preferred) else compute
+        lp = (extended.get("life_path") or {}).get("number") if isinstance(extended.get("life_path"), dict) else extended.get("life_path")
+        ex = (extended.get("expression") or {}).get("number") if isinstance(extended.get("expression"), dict) else extended.get("expression")
+        if not lp or not ex:
+            # Fallback: compute from dob + name
+            from vedic.numerology.extended import _PYTH
+            digits = [int(c) for c in dob if c.isdigit()]
+            lp_raw = sum(digits)
+            while lp_raw > 9 and lp_raw not in (11, 22, 33):
+                lp_raw = sum(int(d) for d in str(lp_raw))
+            lp = lp_raw
+            letters = "".join(c for c in name.lower() if c.isalpha())
+            ex_raw = sum(_PYTH.get(c, 0) for c in letters)
+            while ex_raw > 9 and ex_raw not in (11, 22, 33):
+                ex_raw = sum(int(d) for d in str(ex_raw))
+            ex = ex_raw
+
+        mat = _ta.maturity_number(int(lp or 0), int(ex or 0))
+        if mat.get("ok"):
+            flow.append(Paragraph("<b>Maturity Number</b> — late-life dominant theme:", s["h3"]))
+            flow.append(_callout_box(
+                s,
+                f"Maturity Number: {mat.get('maturity')} ({mat.get('planet') or '—'})",
+                f"{mat.get('meaning','')}<br/><br/>"
+                f"<i>Activates around age 30-35.</i> Life-path {lp} + Expression {ex} = {mat.get('raw_sum')}.",
+                colors.HexColor("#FFF4E6"),
+            ))
+    except Exception:
+        pass
+
+    return flow
+
+
+def _compatibility_section(s, user_dob: str, partner_dob: str,
+                            partner_name: str | None, kind: str) -> List[Any]:
+    """Optional compatibility report — only if partner_dob provided."""
+    from vedic.numerology import tier_a as _ta
+    flow: List[Any] = []
+    out = _ta.compatibility(user_dob, partner_dob, kind=kind)
+    if not out.get("ok"):
+        return flow
+
+    title = "Compatibility Report — Love" if kind == "love" else "Compatibility Report — Business"
+    flow.append(_section_title(s, title))
+    pname = partner_name or "Partner"
+    flow.append(Paragraph(
+        f"Aap ({user_dob}) aur <b>{pname}</b> ({partner_dob}) ke beech ki "
+        "vibrational compatibility — Driver, Conductor aur Life-Path par.",
+        s["body_mid"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    # Overall score callout
+    overall = out.get("overall_score", 0)
+    verdict = out.get("verdict", "")
+    bg = (colors.HexColor("#D4EDDA") if overall >= 60
+          else colors.HexColor("#FFF3CD") if overall >= 45
+          else colors.HexColor("#F8D7DA"))
+    flow.append(_callout_box(
+        s,
+        f"Overall Compatibility: {overall}/100 — {verdict}",
+        out.get("advice", ""),
+        bg,
+    ))
+    flow.append(Spacer(1, 4 * mm))
+
+    # Per-axis breakdown
+    rows = [["Axis", "You", "Partner", "Score", "Type"]]
+    for axis_name in ("driver", "conductor", "life_path"):
+        ax = (out.get("axes") or {}).get(axis_name) or {}
+        rows.append([
+            axis_name.replace("_", " ").title(),
+            str(ax.get("p1", "—")),
+            str(ax.get("p2", "—")),
+            f"{ax.get('score', 0)}/100",
+            ax.get("label", "—"),
+        ])
+    t = Table(rows, colWidths=[35*mm, 25*mm, 30*mm, 25*mm, 35*mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+        ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0, 0), (-1, -1), 9.5),
+        ("ALIGN",      (1, 0), (-1, -1), "CENTER"),
+        ("GRID",       (0, 0), (-1, -1), 0.5, colors.HexColor("#DDD")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8F4FF")]),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(Paragraph(
+        "<i>Note: Numerology is one indicator. Marriage decisions ke liye "
+        "kundli matching (Ashtakoota / Manglik check) bhi karwana zaruri hai.</i>",
+        s["small"]))
+    return flow
+
+
 def render_numerology_pdf(*,
                           name: str,
                           dob: str,
                           gender: str | None,
                           phase_s: dict,
                           extended: dict,
-                          practical: dict) -> bytes:
-    """Render a multi-page numerology PDF. Returns the PDF binary."""
+                          practical: dict,
+                          partner_dob: str | None = None,
+                          partner_name: str | None = None,
+                          compat_kind: str = "love") -> bytes:
+    """Render a multi-page numerology PDF. Returns the PDF binary.
+
+    Optional partner_dob enables a compatibility section.
+    """
     s = _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -911,6 +1063,9 @@ def render_numerology_pdf(*,
     story.append(PageBreak())
     story += _personality_section(s, phase_s, extended)
     story.append(PageBreak())
+    # NEW: Karmic + Passion + Maturity deep-dive
+    story += _karmic_passion_maturity(s, name, dob, phase_s, extended)
+    story.append(PageBreak())
     story += _lo_shu(s, extended)
     story.append(PageBreak())
     story += _identity(s, extended)
@@ -922,6 +1077,10 @@ def render_numerology_pdf(*,
     story += _career_lucky(s, practical)
     story.append(PageBreak())
     story += _remedies_section(s, phase_s)
+    # NEW: Optional compatibility section
+    if partner_dob:
+        story.append(PageBreak())
+        story += _compatibility_section(s, dob, partner_dob, partner_name, compat_kind)
     story += _disclaimer(s)
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

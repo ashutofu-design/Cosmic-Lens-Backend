@@ -102,3 +102,51 @@ id = "xsdV2Js6GyhukX87Pe1zf"
 uri = "file://exports/pdf_pages_final/page-9.jpg"
 type = "image"
 title = "Page 9 — Detailed Remedies (NEW: exact mantra+day+direction+items)"
+
+[[outputs]]
+id = "dgsgLcGLf-i4VOxhXygA2"
+uri = "file://exports/pdf_pages_v5/p1_karmic-04.jpg"
+type = "image"
+title = "Part 1 — NEW page 4: Karmic Lessons + Hidden Passion + Maturity"
+
+[[outputs]]
+id = "BuBNwrFlnVZ8QC2lQiC9T"
+uri = "file://exports/pdf_pages_v5/p1_compat-10.jpg"
+type = "image"
+title = "Part 1 — NEW page 10: Compatibility (only when partner DOB given)"
+
+[[outputs]]
+id = "J5ztogSlt56kno8SyNOA2"
+uri = "file://exports/pdf_pages_v5/p2-1.jpg"
+type = "image"
+title = "Part 2 (₹149) — Cover"
+
+[[outputs]]
+id = "q57lQkQtepTtrmShr7LmN"
+uri = "file://exports/pdf_pages_v5/p2-2.jpg"
+type = "image"
+title = "Part 2 — Mobile / Vehicle / House analysis"
+
+[[outputs]]
+id = "0Lk4lAaY-4WFGc1UK1XWt"
+uri = "file://exports/pdf_pages_v5/p2-4.jpg"
+type = "image"
+title = "Part 2 — Name Numerology (Pythagorean + Chaldean)"
+
+[[outputs]]
+id = "FYEoiqLMlWncplUl1-AJS"
+uri = "file://exports/pdf_pages_v5/p2-5.jpg"
+type = "image"
+title = "Part 2 — Name Correction with harmony scores"
+
+[[outputs]]
+id = "0SrUJUVvxlErcahZorTY4"
+uri = "file://exports/Numerology_part1_v5.pdf"
+type = "pdf"
+title = "Part 1 — Enriched Premium PDF (full)"
+
+[[outputs]]
+id = "Wo73z5448a-IELjnwkUlF"
+uri = "file://exports/Numerology_part2.pdf"
+type = "pdf"
+title = "Part 2 — Practical Numerology Tools (full)"

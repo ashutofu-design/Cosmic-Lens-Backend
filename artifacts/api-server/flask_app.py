@@ -3550,10 +3550,25 @@ def numerology_pdf():
     dob  = (body.get("dob")  or "").strip()
     tob  = (body.get("tob")  or "12:00").strip()
     gender = (body.get("gender") or "").strip() or None
+    # Optional compatibility add-on (Part 1 enrichment)
+    partner_dob  = (body.get("partner_dob") or "").strip() or None
+    partner_name = (body.get("partner_name") or "").strip() or None
+    compat_kind  = (body.get("compat_kind") or "love").strip().lower()
+    if compat_kind not in ("love", "business"):
+        compat_kind = "love"
 
     if not name or not dob:
         return jsonify({"error": "missing_fields",
                         "message": "name and dob (YYYY-MM-DD) required"}), 400
+
+    # Validate partner_dob format if given
+    if partner_dob:
+        from datetime import datetime as _dt2
+        try:
+            _dt2.strptime(partner_dob, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "invalid_partner_dob",
+                            "message": "partner_dob must be YYYY-MM-DD"}), 400
 
     # Strict DOB validation (calendar-correct)
     from datetime import datetime as _dt
@@ -3592,6 +3607,8 @@ def numerology_pdf():
         pdf_bytes = render_numerology_pdf(
             name=name, dob=dob, gender=gender,
             phase_s=ps, extended=ex, practical=pr,
+            partner_dob=partner_dob, partner_name=partner_name,
+            compat_kind=compat_kind,
         )
     except Exception as e:
         # Log full trace internally; never leak exception details to client.
@@ -5002,6 +5019,63 @@ def numerology_name_correction():
     if not out.get("ok"):
         return jsonify(out), 400
     return jsonify(out)
+
+
+@app.route("/api/numerology/pdf_pro", methods=["GET", "POST"])
+def numerology_pdf_pro():
+    """Part 2 PDF — Practical Numerology Tools (₹149 add-on).
+
+    Body: {
+        "name":   "...",
+        "dob":    "yyyy-mm-dd",
+        "mobile":  "9876543210"  (optional),
+        "vehicle": "DL01AB1234"  (optional),
+        "house":   "B-204"       (optional)
+    }
+    """
+    if request.method == "GET":
+        body = request.args.to_dict() or {}
+    else:
+        body = request.get_json(silent=True) or {}
+
+    name = (body.get("name") or "").strip()
+    dob  = (body.get("dob")  or "").strip()
+    mobile  = (body.get("mobile")  or "").strip() or None
+    vehicle = (body.get("vehicle") or "").strip() or None
+    house   = (body.get("house")   or "").strip() or None
+
+    if not name or not dob:
+        return jsonify({"error": "missing_fields",
+                        "message": "name and dob (YYYY-MM-DD) required"}), 400
+
+    from datetime import datetime as _dt
+    try:
+        _dt.strptime(dob, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "invalid_dob",
+                        "message": "dob must be valid YYYY-MM-DD"}), 400
+
+    try:
+        from numerology_pdf_part2 import render_part2_pdf
+        pdf_bytes = render_part2_pdf(
+            name=name, dob=dob,
+            mobile=mobile, vehicle=vehicle, house=house,
+        )
+    except Exception as e:
+        app.logger.exception("[numerology/pdf_pro] render failed: %s", e)
+        return jsonify({"error": "render_failed",
+                        "message": "Failed to render Part 2 PDF."}), 500
+
+    safe_name = "".join(c for c in name if c.isalnum() or c in "_- ").strip().replace(" ", "_") or "report"
+    fname = f"Numerology_Pro_{safe_name}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
 
 
 @app.route("/api/numerology/chaldean", methods=["POST"])

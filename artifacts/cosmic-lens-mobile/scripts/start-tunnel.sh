@@ -8,12 +8,41 @@ LOG_FILE="/tmp/expo-raw.log"
 pkill -f "ngrok" 2>/dev/null || true
 sleep 1
 
-# API is exposed via localtunnel (cosmiclens-api.loca.lt) — that domain is
-# configured as the default in lib/apiConfig.ts, so we DO NOT export
-# EXPO_PUBLIC_DOMAIN here (which would override it with the kirk.replit.dev
-# URL that Indian cellular carriers block).
-PUBLIC_API_URL="https://cosmiclens-api.loca.lt"
-echo "[startup] API accessible at: $PUBLIC_API_URL"
+# API is exposed via localtunnel (cosmiclens-api.loca.lt). The kirk.replit.dev
+# domain is blocked on Indian cellular carriers (Jio/Airtel), so we spin up
+# a localtunnel on the API port (8080) here, with auto-reconnect.
+API_PORT=8080
+API_SUB="cosmiclens-api"
+PUBLIC_API_URL="https://${API_SUB}.loca.lt"
+
+pkill -f "lt --port ${API_PORT}" 2>/dev/null || true
+
+(
+  while true; do
+    echo "[lt-api] starting tunnel → ${API_SUB}.loca.lt (port ${API_PORT})"
+    lt --port "${API_PORT}" --subdomain "${API_SUB}" 2>&1 | sed 's/^/[lt-api] /'
+    echo "[lt-api] exited; retrying in 3s"
+    sleep 3
+  done
+) &
+LT_API_PID=$!
+
+# Verify API tunnel is reachable
+for i in $(seq 1 15); do
+  if curl -sf -m 3 -H "bypass-tunnel-reminder: true" \
+       "${PUBLIC_API_URL}/api/health" >/dev/null 2>&1 \
+     || curl -sf -m 3 -H "bypass-tunnel-reminder: true" \
+       "${PUBLIC_API_URL}/" >/dev/null 2>&1; then
+    echo "[startup] API tunnel READY: $PUBLIC_API_URL"
+    break
+  fi
+  sleep 2
+done
+
+# Force the mobile app to use this tunnel URL (overrides the dev fallback that
+# points to kirk.replit.dev which is blocked on Indian cellular).
+export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
+echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
 METRO_PORT="${PORT:-18987}"
 

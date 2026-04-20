@@ -265,8 +265,8 @@ importers:
         specifier: 4.1.3
         version: 4.1.3
       '@expo/ngrok-bin':
-        specifier: 2.2.8
-        version: 2.2.8
+        specifier: 2.3.42
+        version: 2.3.42
       '@expo/vector-icons':
         specifier: ^15.0.3
         version: 15.1.1(expo-font@14.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -1311,24 +1311,10 @@ packages:
   '@expo/multipart-body-parser@2.0.0':
     resolution: {integrity: sha512-yS/wsqlj0d8ZKETEN7ro3dZtjdMhpte8wp+xUzjUQC3jizxcE0E62xgvGquJObiYUMGoCF5qRYr2t78STPEaSw==}
 
-  '@expo/ngrok-bin-darwin-ia32@2.2.8':
-    resolution: {integrity: sha512-Mgept4WvXobcNQbxV0f8Nqrukl4HsAM4ExfFOC5BJ1PinlZisb1lQYp+PGu/3DuOYAinAspbL/3m77JkhT5Oow==}
-    cpu: [ia32]
-    os: [darwin]
-
-  '@expo/ngrok-bin-linux-x64@2.2.8':
-    resolution: {integrity: sha512-jNhnnfMR/yAgUV1LnAheq/WWB/Tkdgm5sxZhN0fjN00CeiYTVyNuCsii2tdjXJCGrxdpb6RzvOxjLGstIT0mUQ==}
-    cpu: [x64]
-    os: [linux]
-
   '@expo/ngrok-bin-linux-x64@2.3.41':
     resolution: {integrity: sha512-LcU3MbYHv7Sn2eFz8Yzo2rXduufOvX1/hILSirwCkH+9G8PYzpwp2TeGqVWuO+EmvtBe6NEYwgdQjJjN6I4L1A==}
     cpu: [x64]
     os: [linux]
-
-  '@expo/ngrok-bin@2.2.8':
-    resolution: {integrity: sha512-UjMKIuNfV8HaZPARdyqPb+SjlXe5vSpph98AAtUBaP4dDZQcYsOc/+wQsTs6CFYwOJtIUG4WM5ChT4/bJgXEaQ==}
-    hasBin: true
 
   '@expo/ngrok-bin@2.3.42':
     resolution: {integrity: sha512-kyhORGwv9XpbPeNIrX6QZ9wDVCDOScyTwxeS+ScNmUqYoZqD9LRmEqF7bpDh5VonTsrXgWrGl7wD2++oSHcaTQ==}
@@ -3158,6 +3144,7 @@ packages:
   '@xmldom/xmldom@0.8.12':
     resolution: {integrity: sha512-9k/gHF6n/pAi/9tqr3m3aqkuiNosYTurLLUtc7xQ9sxB/wm7WPygCv8GYa6mS0fLJEHhqMC1ATYhz++U/lRHqg==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -8201,19 +8188,8 @@ snapshots:
     dependencies:
       multipasta: 0.2.7
 
-  '@expo/ngrok-bin-darwin-ia32@2.2.8':
-    optional: true
-
-  '@expo/ngrok-bin-linux-x64@2.2.8':
-    optional: true
-
   '@expo/ngrok-bin-linux-x64@2.3.41':
     optional: true
-
-  '@expo/ngrok-bin@2.2.8':
-    optionalDependencies:
-      '@expo/ngrok-bin-darwin-ia32': 2.2.8
-      '@expo/ngrok-bin-linux-x64': 2.2.8
 
   '@expo/ngrok-bin@2.3.42':
     optionalDependencies:

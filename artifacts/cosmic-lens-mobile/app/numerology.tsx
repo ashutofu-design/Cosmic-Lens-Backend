@@ -524,18 +524,23 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   ];
 
   const toolSections = [
-    { icon: "📱", title: "Mobile Number — Deep",   sub: "Digit-by-digit + Cheiro last-4 + alerts + lucky alternatives" },
-    { icon: "🚗", title: "Vehicle Number — Deep",  sub: "Vibration check + favourable plate suggestions" },
-    { icon: "🏠", title: "House Number — Deep",    sub: "Family/wealth/peace verdict for your home" },
-    { icon: "🤝", title: "Compatibility Matrix",   sub: "Your Driver vs all 1-9 (friend/enemy/neutral)" },
-    { icon: "🔤", title: "Letter-by-Letter Table", sub: "Pythagorean + Chaldean per letter" },
-    { icon: "✍️", title: "Signature & Branding",   sub: "First-letter analysis + signature direction" },
-    { icon: "📆", title: "90-Day Action Plan",     sub: "Step-by-step rollout for name/number changes" },
+    { icon: "⭐", title: "Life Blueprint Card",        sub: "Core personality + 2026 focus + biggest strength/challenge" },
+    { icon: "🌟", title: "Aap Kaun Ho — Identity",    sub: "3-paragraph story + 5 hidden strengths + 5 challenges" },
+    { icon: "💼", title: "Career Blueprint",          sub: "Best fields, common mistakes, growth timing, money pattern" },
+    { icon: "💕", title: "Love Pattern — Deep",       sub: "Relationship style, breakup triggers, ideal partner number" },
+    { icon: "🩺", title: "Health & Spiritual Path",   sub: "Body signals + dharma + mantra + donation schedule" },
+    { icon: "⚠️", title: "Risk Alerts + Golden Period", sub: "5 specific risks + when to make biggest moves" },
+    { icon: "📱", title: "Mobile Number — Deep",      sub: "Why · Impact · Action format + Cheiro last-4 + alternatives" },
+    { icon: "🚗", title: "Vehicle Number — Deep",     sub: "Why · Impact · Action + favourable plate suggestions" },
+    { icon: "🏠", title: "House Number — Deep",       sub: "Why · Impact · Action + remedy schedule" },
+    { icon: "🤝", title: "Compatibility Matrix",      sub: "Your Driver vs all 1-9 (friend/enemy/neutral)" },
+    { icon: "🔤", title: "Name Numerology + Letters", sub: "Pythagorean + Chaldean + letter-by-letter breakdown" },
+    { icon: "✍️", title: "Signature & 90-Day Plan",   sub: "Signature design + step-by-step implementation" },
   ];
 
   return (
     <View style={{ gap: 12 }}>
-      {/* Sub-tab toggle: Standard ₹99 vs Practical Tools ₹149 */}
+      {/* Sub-tab toggle: Standard ₹99 vs Practical Tools ₹1499 */}
       <View style={[pp.subTabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
         <Pressable
           onPress={() => { setSub("std"); Haptics.selectionAsync(); }}
@@ -561,7 +566,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               Practical Tools
             </Text>
             <Text style={[pp.subTabSub, { color: sub === "tools" ? "rgba(255,255,255,0.85)" : C.textMuted }]}>
-              ₹149  •  11 pages
+              ₹1499  •  18 pages
             </Text>
           </View>
         </Pressable>

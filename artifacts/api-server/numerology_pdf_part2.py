@@ -25,6 +25,7 @@ from reportlab.platypus import (
 )
 
 from vedic.numerology import tier_a as _ta
+from vedic.numerology import narratives as _nr
 
 BRAND_PURPLE = colors.HexColor("#5B21B6")
 BRAND_GOLD = colors.HexColor("#D97706")
@@ -131,17 +132,21 @@ def _cover(s, name: str, dob: str) -> List[Any]:
     flow.append(Spacer(1, 18 * mm))
 
     box_inner = [
-        [Paragraph("<b>Is Report Me Aapko Milega:</b>", ParagraphStyle(
+        [Paragraph("<b>Is Premium Report Me Aapko Milega:</b>", ParagraphStyle(
             "ct", fontName="Helvetica-Bold", fontSize=12, textColor=TEXT_DARK,
             alignment=TA_CENTER, leading=16))],
         [Paragraph(
-            "✓ Mobile Number Analysis (Driver/Conductor verdict)<br/>"
-            "✓ Vehicle &amp; House Number check (optional)<br/>"
-            "✓ Name Numerology (Pythagorean + Chaldean dono)<br/>"
-            "✓ Name Correction — top 3 spelling variants with harmony score<br/>"
-            "✓ Practical action steps — what to keep, what to change",
-            ParagraphStyle("cb", fontName="Helvetica", fontSize=10.5,
-                           textColor=TEXT_MID, alignment=TA_CENTER, leading=16))],
+            "✓ <b>Life Blueprint Card</b> — core personality + 2026 focus<br/>"
+            "✓ <b>Aap Kaun Ho</b> — 3-paragraph identity story (5 strengths + 5 challenges)<br/>"
+            "✓ <b>Career Blueprint</b> — best fields, mistakes, growth timing, money pattern<br/>"
+            "✓ <b>Love Pattern</b> — relationship style, breakup triggers, ideal partner<br/>"
+            "✓ <b>Health &amp; Dharma</b> — body signals + spiritual path<br/>"
+            "✓ <b>Risk Alerts &amp; Golden Periods</b> — kab cautious, kab bada move<br/>"
+            "✓ <b>Mobile / Vehicle / House</b> — Why · Impact · Action format me<br/>"
+            "✓ <b>Name Numerology</b> + Name Correction (top 3 variants)<br/>"
+            "✓ <b>Compatibility Matrix</b>, signature design, 90-day plan",
+            ParagraphStyle("cb", fontName="Helvetica", fontSize=10,
+                           textColor=TEXT_MID, alignment=TA_CENTER, leading=15))],
     ]
     bt = Table(box_inner, colWidths=[170 * mm])
     bt.setStyle(TableStyle([
@@ -262,6 +267,11 @@ def _number_analysis_block(s, value: str, kind: str,
     if tip:
         flow.append(Paragraph(f"<b>Practical Tip:</b> {tip}", s["body"]))
     flow.append(Spacer(1, 4 * mm))
+
+    # ─ Why · Impact · Action narrative (premium ₹1499 layer)
+    reduced = out.get("reduced")
+    if isinstance(reduced, int) and 1 <= reduced <= 9:
+        flow += _why_impact_action_block(s, kind, reduced)
 
     # ─ Lucky alternatives (mobile/vehicle: where user can swap)
     if kind in ("mobile", "vehicle") and out.get("verdict") in ("AVOID", "NEUTRAL"):
@@ -692,6 +702,306 @@ def _disclaimer(s) -> List[Any]:
     ]
 
 
+# ─── Premium narrative pages (₹1499 depth) ───────────────────────────
+
+def _premium_card(s, heading: str, body_html: str,
+                  bg_color=None, border_color=None) -> Table:
+    """Reusable two-row card: heading + body, with brand color frame."""
+    bg = bg_color or colors.HexColor("#FAF5FF")
+    bd = border_color or BRAND_PURPLE
+    inner = [
+        [Paragraph(f"<b>{heading}</b>", ParagraphStyle(
+            "pcardh", fontName="Helvetica-Bold", fontSize=11,
+            textColor=bd, leading=14))],
+        [Paragraph(body_html, ParagraphStyle(
+            "pcardb", fontName="Helvetica", fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceBefore=2))],
+    ]
+    t = Table(inner, colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), bg),
+        ("BOX",        (0, 0), (-1, -1), 0.6, bd),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, 0), 7),
+        ("BOTTOMPADDING",(0, -1), (-1, -1), 8),
+    ]))
+    return t
+
+
+def _life_summary_block(s, name: str, driver: int, conductor: int) -> List[Any]:
+    """Premium Life Summary card — top of report (instant ₹1499 feel)."""
+    flow: List[Any] = []
+    summary = _nr.life_summary_block(driver, conductor, name)
+
+    flow.append(Paragraph("⭐ YOUR LIFE BLUEPRINT", s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        "<i>Aapki kundli aur janma-tithi ke aadhar par taiyaar — 100% personalized.</i>",
+        ParagraphStyle("ls_sub", fontName="Helvetica-Oblique", fontSize=10,
+                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+
+    rows = [
+        [Paragraph("<b>Core Personality</b>", s["body_mid"]),
+         Paragraph(summary["core_personality"], s["body"])],
+        [Paragraph("<b>Tagline</b>", s["body_mid"]),
+         Paragraph(f"<i>{summary['tagline']}</i>", s["body"])],
+        [Paragraph("<b>Primary Planet</b>", s["body_mid"]),
+         Paragraph(f"{summary['primary_planet']} (Driver {driver})", s["body"])],
+        [Paragraph("<b>Secondary Planet</b>", s["body_mid"]),
+         Paragraph(f"{summary['secondary_planet']} (Conductor {conductor})", s["body"])],
+        [Paragraph("<b>Biggest Strength</b>", s["body_mid"]),
+         Paragraph(f"<font color='#15803D'>✓ {summary['biggest_strength']}</font>", s["body"])],
+        [Paragraph("<b>Biggest Challenge</b>", s["body_mid"]),
+         Paragraph(f"<font color='#B91C1C'>⚠ {summary['biggest_challenge']}</font>", s["body"])],
+        [Paragraph("<b>2026 Focus</b>", s["body_mid"]),
+         Paragraph(f"<b>{summary['2026_focus']}</b>", s["body"])],
+    ]
+    t = Table(rows, colWidths=[42 * mm, 138 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",     (0, 0), (-1, -1), colors.HexColor("#FFFBEB")),
+        ("BOX",            (0, 0), (-1, -1), 1.2, BRAND_GOLD),
+        ("INNERGRID",      (0, 0), (-1, -1), 0.3, colors.HexColor("#FCD34D")),
+        ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",    (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING",   (0, 0), (-1, -1), 8),
+        ("TOPPADDING",     (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING",  (0, 0), (-1, -1), 7),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 6 * mm))
+    flow.append(Paragraph(
+        "<i>Yeh page aapke liye 'consultation summary' jaisa hai. Agle pages me har "
+        "section ka deep explanation milega — Why, Impact aur Action ke saath.</i>",
+        ParagraphStyle("ls_foot", fontName="Helvetica-Oblique", fontSize=9,
+                       textColor=TEXT_SOFT, leading=13, alignment=TA_CENTER)))
+    return flow
+
+
+def _life_essence_section(s, driver: int) -> List[Any]:
+    """Page: 'Aap Kaun Ho?' — 3-paragraph identity story."""
+    flow: List[Any] = []
+    n = _nr.narrative_for(driver) or {}
+    flow.append(Paragraph("🌟 AAP KAUN HO — Your True Identity", s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        f"<i>{n.get('title', '')} — {n.get('tagline', '')}</i>",
+        ParagraphStyle("le_sub", fontName="Helvetica-Oblique", fontSize=11,
+                       textColor=BRAND_GOLD, leading=15, spaceAfter=8)))
+    paras = n.get("life_essence") or []
+    for i, para in enumerate(paras, 1):
+        flow.append(Paragraph(f"<b>Story {i}:</b>", s["h3"]))
+        flow.append(Paragraph(para, s["body"]))
+        flow.append(Spacer(1, 4 * mm))
+
+    # Strengths + Challenges side-by-side
+    strengths = n.get("strengths") or []
+    challenges = n.get("challenges") or []
+    if strengths or challenges:
+        flow.append(Spacer(1, 3 * mm))
+        s_html = "<br/>".join([f"<font color='#15803D'>✓</font> {x}" for x in strengths])
+        c_html = "<br/>".join([f"<font color='#B91C1C'>⚠</font> {x}" for x in challenges])
+        sc = [[
+            _premium_card(s, "5 HIDDEN STRENGTHS", s_html,
+                          bg_color=colors.HexColor("#F0FDF4"),
+                          border_color=colors.HexColor("#15803D")),
+            _premium_card(s, "5 HIDDEN CHALLENGES", c_html,
+                          bg_color=colors.HexColor("#FEF2F2"),
+                          border_color=colors.HexColor("#B91C1C")),
+        ]]
+        # Wrap each card in a fixed-width column
+        sc_table = Table(sc, colWidths=[88 * mm, 88 * mm])
+        sc_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        # Re-render each card with smaller width to fit
+        s_card = _premium_card(s, "5 HIDDEN STRENGTHS", s_html,
+                               bg_color=colors.HexColor("#F0FDF4"),
+                               border_color=colors.HexColor("#15803D"))
+        s_card._argW = [88 * mm]
+        c_card = _premium_card(s, "5 HIDDEN CHALLENGES", c_html,
+                               bg_color=colors.HexColor("#FEF2F2"),
+                               border_color=colors.HexColor("#B91C1C"))
+        c_card._argW = [88 * mm]
+        side = Table([[s_card, c_card]], colWidths=[91 * mm, 91 * mm])
+        side.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        flow.append(side)
+    return flow
+
+
+def _career_blueprint_section(s, driver: int) -> List[Any]:
+    """Page: Career Blueprint — fields, mistakes, growth timing."""
+    flow: List[Any] = []
+    n = _nr.narrative_for(driver) or {}
+    flow.append(Paragraph("💼 CAREER BLUEPRINT — Your Professional Path", s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    paras = n.get("career_pattern") or []
+    labels = ["WHY (Aap kis kaam ke liye bane ho)",
+              "COMMON MISTAKE (jo aap karte ho)",
+              "GROWTH TIMING (kab milega result)"]
+    border_colors_seq = [BRAND_PURPLE, colors.HexColor("#B91C1C"), colors.HexColor("#15803D")]
+    bg_colors_seq = [colors.HexColor("#FAF5FF"),
+                     colors.HexColor("#FEF2F2"),
+                     colors.HexColor("#F0FDF4")]
+    for i, para in enumerate(paras):
+        flow.append(_premium_card(
+            s,
+            labels[i] if i < len(labels) else f"Insight {i+1}",
+            para,
+            bg_color=bg_colors_seq[i % 3],
+            border_color=border_colors_seq[i % 3],
+        ))
+        flow.append(Spacer(1, 4 * mm))
+
+    # Money + Health quick cards
+    if n.get("money_pattern"):
+        flow.append(_premium_card(s, "💰 MONEY PATTERN — Paisa kaise aayega",
+                                  n["money_pattern"],
+                                  bg_color=colors.HexColor("#FFFBEB"),
+                                  border_color=BRAND_GOLD))
+        flow.append(Spacer(1, 4 * mm))
+    return flow
+
+
+def _love_pattern_section(s, driver: int) -> List[Any]:
+    """Page: Love & Relationship deep-dive."""
+    flow: List[Any] = []
+    n = _nr.narrative_for(driver) or {}
+    flow.append(Paragraph("💕 LOVE PATTERN — Rishton ki Reality", s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+    paras = n.get("love_pattern") or []
+    labels = ["LOVE STYLE (Aap pyar me kaise ho)",
+              "BREAKUP TRIGGER (rishta kyun tutta hai)",
+              "IDEAL PARTNER (kis number wala suit karega)"]
+    border_colors_seq = [colors.HexColor("#DB2777"),
+                         colors.HexColor("#B91C1C"),
+                         colors.HexColor("#15803D")]
+    bg_colors_seq = [colors.HexColor("#FDF2F8"),
+                     colors.HexColor("#FEF2F2"),
+                     colors.HexColor("#F0FDF4")]
+    for i, para in enumerate(paras):
+        flow.append(_premium_card(
+            s,
+            labels[i] if i < len(labels) else f"Insight {i+1}",
+            para,
+            bg_color=bg_colors_seq[i % 3],
+            border_color=border_colors_seq[i % 3],
+        ))
+        flow.append(Spacer(1, 4 * mm))
+    return flow
+
+
+def _wealth_health_spirit_section(s, driver: int) -> List[Any]:
+    """Page: Money + Health + Spiritual path combined."""
+    flow: List[Any] = []
+    n = _nr.narrative_for(driver) or {}
+    flow.append(Paragraph("🕉️ HEALTH & DHARMA — Body + Soul", s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    if n.get("health_pattern"):
+        flow.append(_premium_card(s, "🩺 HEALTH PATTERN — Body kya keh rahi hai",
+                                  n["health_pattern"],
+                                  bg_color=colors.HexColor("#ECFEFF"),
+                                  border_color=colors.HexColor("#0E7490")))
+        flow.append(Spacer(1, 4 * mm))
+
+    if n.get("spiritual_path"):
+        flow.append(_premium_card(s, "🙏 SPIRITUAL PATH — Aapka dharma",
+                                  n["spiritual_path"],
+                                  bg_color=colors.HexColor("#FEF3C7"),
+                                  border_color=BRAND_GOLD))
+        flow.append(Spacer(1, 4 * mm))
+
+    return flow
+
+
+def _risk_alerts_section(s, driver: int) -> List[Any]:
+    """Page: Risk Alerts + Golden Opportunity Periods."""
+    flow: List[Any] = []
+    n = _nr.narrative_for(driver) or {}
+    flow.append(Paragraph("⚠️ RISK ALERTS & 🌟 GOLDEN PERIODS", s["page_title"]))
+    flow.append(Spacer(1, 4 * mm))
+
+    risks = n.get("risk_alerts") or []
+    if risks:
+        risk_html = "<br/>".join([f"<font color='#B91C1C'>⚠</font> {r}" for r in risks])
+        flow.append(_premium_card(
+            s, "5 SPECIFIC RISKS — Inhe Avoid Karein",
+            risk_html,
+            bg_color=colors.HexColor("#FEF2F2"),
+            border_color=colors.HexColor("#B91C1C"),
+        ))
+        flow.append(Spacer(1, 5 * mm))
+
+    if n.get("golden_periods"):
+        flow.append(_premium_card(
+            s, "🌟 GOLDEN OPPORTUNITY WINDOW — Inn dino par bada move karein",
+            n["golden_periods"],
+            bg_color=colors.HexColor("#FFFBEB"),
+            border_color=BRAND_GOLD,
+        ))
+        flow.append(Spacer(1, 5 * mm))
+
+    flow.append(_premium_card(
+        s, "📌 EXECUTIVE SUMMARY — Pichle pages ka ek-line saar",
+        f"Aap <b>{(n.get('title') or 'Number ' + str(driver))}</b> ho. "
+        f"{n.get('tagline', '')} "
+        "Apni greatest strength par double-down karein, biggest challenge par awareness "
+        "rakhein, aur risk windows me extra cautious. Golden period me bada decision lein.",
+        bg_color=colors.HexColor("#F0F9FF"),
+        border_color=colors.HexColor("#0369A1"),
+    ))
+    return flow
+
+
+def _why_impact_action_block(s, kind: str, reduced: int) -> List[Any]:
+    """Append Why+Impact+Action narrative for a number — used inside each
+    mobile/vehicle/house deep-analysis page."""
+    flow: List[Any] = []
+    pack = _nr.why_impact_action_for_number(reduced, kind)
+    if not pack or not pack.get("why"):
+        return flow
+
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(Paragraph(
+        f"<b>📖 Aapke {kind.title()} Number Ka Story</b> "
+        f"(Why · Impact · Action format)",
+        s["h3"]))
+
+    rows = [
+        [Paragraph(f"<b>WHY</b><br/><font size='8' color='#6B7280'>(yeh kyun important hai)</font>",
+                   s["body_mid"]),
+         Paragraph(pack.get("why", "—"), s["body"])],
+        [Paragraph(f"<b>IMPACT</b><br/><font size='8' color='#6B7280'>(aapki life me kya hoga)</font>",
+                   s["body_mid"]),
+         Paragraph(pack.get("impact", "—"), s["body"])],
+        [Paragraph(f"<b>ACTION</b><br/><font size='8' color='#6B7280'>(aap kya karein)</font>",
+                   s["body_mid"]),
+         Paragraph(pack.get("action", "—"), s["body"])],
+    ]
+    t = Table(rows, colWidths=[34 * mm, 146 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (0, -1), colors.HexColor("#F3E8FF")),
+        ("BACKGROUND",   (1, 0), (1, -1), colors.HexColor("#FAFAFA")),
+        ("BOX",          (0, 0), (-1, -1), 0.5, BRAND_PURPLE),
+        ("INNERGRID",    (0, 0), (-1, -1), 0.3, colors.HexColor("#E5E7EB")),
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING",   (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 3 * mm))
+    return flow
+
+
 # ─── Public entry ────────────────────────────────────────────────────
 
 def render_part2_pdf(*,
@@ -730,11 +1040,35 @@ def render_part2_pdf(*,
     story += _cover(s, name, dob)
     story.append(PageBreak())
 
-    # Page 2 — Driver/Conductor intro
+    # Page 2 — ⭐ LIFE BLUEPRINT (premium summary card — instant ₹1499 feel)
+    story += _life_summary_block(s, name, driver, conductor)
+    story.append(PageBreak())
+
+    # Page 3 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
+    story += _life_essence_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 4 — 💼 Career Blueprint (Why + Mistake + Timing + Money pattern)
+    story += _career_blueprint_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 5 — 💕 Love Pattern (Style + Triggers + Ideal Partner)
+    story += _love_pattern_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 6 — 🕉️ Health & Dharma (Body + Spirit)
+    story += _wealth_health_spirit_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 7 — ⚠️ Risk Alerts + 🌟 Golden Periods + Executive Summary
+    story += _risk_alerts_section(s, driver)
+    story.append(PageBreak())
+
+    # Page 8 — Driver/Conductor technical intro
     story += _driver_conductor_intro(s, name, dob, driver, conductor)
     story.append(PageBreak())
 
-    # Page 3-5 — Mobile / Vehicle / House deep analysis (one per page break)
+    # Page 9-11 — Mobile / Vehicle / House deep analysis (with Why·Impact·Action)
     if mobile:
         story += _number_analysis_block(s, mobile, "mobile", driver, conductor)
         story.append(PageBreak())

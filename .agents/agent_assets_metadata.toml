@@ -222,3 +222,9 @@ id = "gGgItK6ls8PcT7WunqBRv"
 uri = "file://exports/Numerology_part2_v2.pdf"
 type = "pdf"
 title = "Part 2 v2 — Full PDF (11 pages, ₹149 value)"
+
+[[outputs]]
+id = "5vphPAj30YjfI_HJdNiIT"
+uri = "file://attached_assets/exports/Premium_Numerology_18pages.pdf"
+type = "pdf"
+title = "Premium Numerology Report — 18 pages (₹1499 depth)"

@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
+import * as Sharing from "expo-sharing";
 import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "@/lib/apiConfig";
 import {
@@ -446,17 +448,49 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     ? `${String(bd.hour).padStart(2, "0")}:${String(bd.minute).padStart(2, "0")}`
     : "12:00";
 
-  const openStandard = async () => {
-    if (!bd) return;
+  // Download PDF in-app and offer Share sheet (works around localtunnel
+  // interstitial that breaks Linking.openURL in Safari).
+  const downloadAndShare = async (url: string, fileName: string) => {
+    setErr(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setOpening(true);
     try {
-      const params = new URLSearchParams({
-        name: bd.name, dob: dobStr, tob: tobStr,
-        gender: (profile.gender || "male").toLowerCase(),
+      const dest = `${FileSystem.cacheDirectory}${fileName}`;
+      const res = await FileSystem.downloadAsync(url, dest, {
+        headers: { "bypass-tunnel-reminder": "true" },
       });
-      await Linking.openURL(`${API_BASE}/api/numerology/pdf?${params.toString()}`);
-    } finally { setOpening(false); }
+      if (res.status !== 200) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(res.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: fileName,
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        // Fallback: open URL directly
+        await Linking.openURL(url);
+      }
+    } catch (e: any) {
+      setErr(`PDF download fail hua: ${e?.message || "unknown error"}. Internet check kare aur dobara try kare.`);
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const openStandard = async () => {
+    if (!bd) return;
+    const params = new URLSearchParams({
+      name: bd.name, dob: dobStr, tob: tobStr,
+      gender: (profile.gender || "male").toLowerCase(),
+    });
+    const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
+    await downloadAndShare(
+      `${API_BASE}/api/numerology/pdf?${params.toString()}`,
+      `Numerology_${safeName}.pdf`,
+    );
   };
 
   const openTools = async () => {
@@ -466,17 +500,17 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setOpening(true);
-    try {
-      const params = new URLSearchParams({
-        name: bd.name, dob: dobStr,
-        ...(mobile  ? { mobile }  : {}),
-        ...(vehicle ? { vehicle } : {}),
-        ...(house   ? { house }   : {}),
-      });
-      await Linking.openURL(`${API_BASE}/api/numerology/pdf_pro?${params.toString()}`);
-    } finally { setOpening(false); }
+    const params = new URLSearchParams({
+      name: bd.name, dob: dobStr,
+      ...(mobile  ? { mobile }  : {}),
+      ...(vehicle ? { vehicle } : {}),
+      ...(house   ? { house }   : {}),
+    });
+    const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
+    await downloadAndShare(
+      `${API_BASE}/api/numerology/pdf_pro?${params.toString()}`,
+      `Numerology_Tools_${safeName}.pdf`,
+    );
   };
 
   const stdSections = [

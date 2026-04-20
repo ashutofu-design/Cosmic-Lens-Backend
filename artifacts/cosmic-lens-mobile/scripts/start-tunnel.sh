@@ -147,12 +147,22 @@ if [ "$TUNNEL_OK" = false ]; then
   ) &
   LT_METRO_PID=$!
 
-  # Verify localtunnel actually came up (sometimes the subdomain is taken).
-  for i in $(seq 1 15); do
-    if curl -sf -m 3 "https://$METRO_SUB.loca.lt/status" \
-        -H "bypass-tunnel-reminder: true" 2>/dev/null | grep -q "packager-status:running"; then
+  # Verify localtunnel actually came up. We check two things:
+  #  1) The lt-metro logs show our requested subdomain was assigned
+  #  2) OR /status responds (metro may still be compiling on first hit)
+  for i in $(seq 1 30); do
+    if grep -q "your url is: https://$METRO_SUB.loca.lt" "$LOG_FILE" 2>/dev/null \
+       || curl -sf -m 3 "https://$METRO_SUB.loca.lt/status" \
+            -H "bypass-tunnel-reminder: true" 2>/dev/null | grep -q "packager-status:running"; then
       EXPO_URL="exp://$METRO_SUB.loca.lt"
       echo "[startup] Metro localtunnel ready: $EXPO_URL"
+      break
+    fi
+    # Also check for any random subdomain assignment (loca.lt fallback)
+    RANDOM_URL=$(grep -oE 'your url is: https://[a-z0-9-]+\.loca\.lt' "$LOG_FILE" 2>/dev/null | tail -1 | sed 's|your url is: https://||')
+    if [ -n "$RANDOM_URL" ] && [ "$i" -ge 15 ]; then
+      EXPO_URL="exp://$RANDOM_URL"
+      echo "[startup] Metro localtunnel ready (random subdomain): $EXPO_URL"
       break
     fi
     sleep 2

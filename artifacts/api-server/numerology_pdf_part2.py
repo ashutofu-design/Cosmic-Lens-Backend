@@ -294,12 +294,32 @@ def _verdict_box(s, title: str, body: str, verdict: str, lang: str = "hinglish")
 
 def _cover(s, name: str, dob: str, lang: str = "hinglish") -> List[Any]:
     flow: List[Any] = []
-    flow.append(Spacer(1, 30 * mm))
+    flow.append(Spacer(1, 24 * mm))
     flow.append(Paragraph("PRACTICAL NUMEROLOGY TOOLS", s["tagline"]))
-    flow.append(Spacer(1, 8 * mm))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(Paragraph(_T(lang,
+        "— Life Mastery Report —",
+        "— जीवन महारत रिपोर्ट —",
+        "— Life Mastery Report —"),
+        ParagraphStyle("cover_subtitle", fontName=_F("oblique", lang),
+                       fontSize=12, textColor=BRAND_PURPLE,
+                       alignment=TA_CENTER, leading=16)))
+    flow.append(Spacer(1, 14 * mm))
+
+    # Report Prepared For block
+    flow.append(Paragraph(_T(lang,
+        "Report Prepared For",
+        "रिपोर्ट तैयार की गई",
+        "Report Prepared For"),
+        ParagraphStyle("cover_rpf", fontName=_F("reg", lang),
+                       fontSize=11, textColor=TEXT_SOFT,
+                       alignment=TA_CENTER, leading=14, spaceAfter=4)))
     flow.append(Paragraph(name, s["cover_name"]))
-    flow.append(Paragraph(f"Janma-tithi: {dob}", s["cover_sub"]))
-    flow.append(Spacer(1, 18 * mm))
+    flow.append(Paragraph(_T(lang,
+        f"Date of Birth: {dob}",
+        f"जन्म-तिथि: {dob}",
+        f"Janma-tithi: {dob}"), s["cover_sub"]))
+    flow.append(Spacer(1, 14 * mm))
 
     box_inner = [
         [Paragraph("<b>Is Premium Report Me Aapko Milega:</b>", ParagraphStyle(
@@ -328,11 +348,43 @@ def _cover(s, name: str, dob: str, lang: str = "hinglish") -> List[Any]:
         ("BOTTOMPADDING", (0, -1), (-1, -1), 14),
     ]))
     flow.append(bt)
-    flow.append(Spacer(1, 25 * mm))
-    flow.append(Paragraph("Powered by Advanced Cosmic Intelligence",
-                          ParagraphStyle("brand", fontName=_F("oblique", lang),
-                                         fontSize=10, textColor=BRAND_PURPLE,
-                                         alignment=TA_CENTER)))
+    flow.append(Spacer(1, 18 * mm))
+
+    # ── Authorship / branding block ──────────────────────────────
+    # Kept in English for all languages (brand + credibility).
+    brand_line = ParagraphStyle(
+        "brand_line", fontName="Helvetica-Bold", fontSize=11,
+        textColor=BRAND_PURPLE, alignment=TA_CENTER, leading=15)
+    brand_sub = ParagraphStyle(
+        "brand_sub", fontName="Helvetica", fontSize=9.5,
+        textColor=TEXT_SOFT, alignment=TA_CENTER, leading=13)
+    brand_italic = ParagraphStyle(
+        "brand_italic", fontName="Helvetica-Oblique", fontSize=9,
+        textColor=TEXT_SOFT, alignment=TA_CENTER, leading=12)
+    designer_style = ParagraphStyle(
+        "designer", fontName="Helvetica-Bold", fontSize=11,
+        textColor=TEXT_DARK, alignment=TA_CENTER, leading=15)
+
+    flow.append(Paragraph("Advanced Numerology Intelligence System", brand_line))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(Paragraph(
+        "Generated using Cosmic Lens™ Predictive Engine (v4.1)", brand_sub))
+    flow.append(Spacer(1, 8 * mm))
+
+    # Thin divider
+    divider = Table([[""]], colWidths=[60 * mm], rowHeights=[0.6])
+    divider.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, -1), 0.6, BRAND_GOLD),
+    ]))
+    flow.append(divider)
+    flow.append(Spacer(1, 5 * mm))
+
+    flow.append(Paragraph("Designed &amp; Interpreted by", brand_sub))
+    flow.append(Spacer(1, 1 * mm))
+    flow.append(Paragraph("Ashutosh Bharadwaj", designer_style))
+    flow.append(Spacer(1, 6 * mm))
+    flow.append(Paragraph(
+        "Digitally Authenticated — No Signature Required", brand_italic))
     return flow
 
 

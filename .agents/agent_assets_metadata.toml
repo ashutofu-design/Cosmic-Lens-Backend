@@ -378,3 +378,21 @@ id = "EbVsbrNLUD_S3AT8bCb8R"
 uri = "file://out_pdfs/Life_Mastery_HG.pdf"
 type = "pdf"
 title = "Life Mastery — Hinglish"
+
+[[outputs]]
+id = "UzImq7gv9MjCKd8paIR5r"
+uri = "file://attached_assets/cover_preview/cover_english-01.jpg"
+type = "image"
+title = "Cover — English"
+
+[[outputs]]
+id = "XcBPp9uocLvJpq4D4KfZx"
+uri = "file://attached_assets/cover_preview/cover_hindi-01.jpg"
+type = "image"
+title = "Cover — Hindi"
+
+[[outputs]]
+id = "GQjPiX-jxpyfOLLIh7aIj"
+uri = "file://attached_assets/cover_preview/cover_hinglish-01.jpg"
+type = "image"
+title = "Cover — Hinglish"

@@ -5,7 +5,7 @@ generated = []
 id = "gIgSKMcdYDwUSk6USscTr"
 uri = "file://qr_cosmic_lens.png"
 type = "image"
-title = "Cosmic Lens — Expo Go QR (latest tunnel)"
+title = "Cosmic Lens — Expo Go QR (Replit dev domain, stable)"
 
 [[outputs]]
 id = "2cj_EQaPovDAF7NpfDKO0"

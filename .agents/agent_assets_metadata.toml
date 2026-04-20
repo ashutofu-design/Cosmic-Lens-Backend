@@ -246,3 +246,21 @@ id = "MyGI2YzNCQKrTOxXTmIEr"
 uri = "file://attached_assets/exports/Part2_Life_Mastery_v3.pdf"
 type = "pdf"
 title = "Part 2 — Life Mastery Report (₹1499 • 26 pages)"
+
+[[outputs]]
+id = "Xup5tYooNF88wg86WnumV"
+uri = "file://attached_assets/exports/Part2_Life_Mastery_v4_english.pdf"
+type = "pdf"
+title = "Part 2 — Life Mastery (English, 26 pages)"
+
+[[outputs]]
+id = "lpar0SunT4cxBisd6nt4i"
+uri = "file://attached_assets/exports/Part2_Life_Mastery_v4_hindi.pdf"
+type = "pdf"
+title = "Part 2 — Life Mastery (हिंदी, 26 pages)"
+
+[[outputs]]
+id = "GCLZ0iEiwKvg6XRbsxHKi"
+uri = "file://attached_assets/exports/Part2_Life_Mastery_v4_hinglish.pdf"
+type = "pdf"
+title = "Part 2 — Life Mastery (Hinglish, 26 pages)"

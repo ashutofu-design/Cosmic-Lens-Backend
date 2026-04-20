@@ -433,6 +433,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
 
   // sub-tab: choose between Standard (Part 1) and Practical Tools (Part 2)
   const [sub, setSub] = useState<"std" | "tools">("std");
+  const [lang, setLang] = useState<"english" | "hindi" | "hinglish">("hinglish");
   const [opening, setOpening] = useState(false);
 
   // Pro+ Tools inputs
@@ -502,6 +503,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     }
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr,
+      lang,
       ...(mobile  ? { mobile }  : {}),
       ...(vehicle ? { vehicle } : {}),
       ...(house   ? { house }   : {}),
@@ -649,6 +651,39 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               <Text style={[pp.rowSub, { color: C.textMuted }]}>DOB: {dobStr}</Text>
             </View>
           </View>
+
+          {/* ── Language toggle ─────────────────────────────────── */}
+          <Text style={[pp.sectionLabel, { color: C.textDim }]}>📝 REPORT LANGUAGE</Text>
+          <View style={[pp.subTabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+            {(["english", "hindi", "hinglish"] as const).map((L) => {
+              const active = lang === L;
+              const labels: Record<typeof L, { t: string; s: string; flag: string }> = {
+                english:  { t: "English",  s: "Pure English",       flag: "🇬🇧" },
+                hindi:    { t: "हिंदी",     s: "शुद्ध हिंदी",         flag: "🇮🇳" },
+                hinglish: { t: "Hinglish", s: "Hindi + English mix", flag: "🇮🇳" },
+              };
+              return (
+                <Pressable
+                  key={L}
+                  onPress={() => { setLang(L); Haptics.selectionAsync(); }}
+                  style={[pp.subTabBtn, active && { backgroundColor: "#7c3aed" }]}
+                >
+                  <Text style={{ fontSize: 16 }}>{labels[L].flag}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[pp.subTabTitle, { color: active ? "#fff" : C.text }]}>
+                      {labels[L].t}
+                    </Text>
+                    <Text style={[pp.subTabSub, { color: active ? "rgba(255,255,255,0.85)" : C.textMuted, fontSize: 10 }]}>
+                      {labels[L].s}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={[pp.rowSub, { color: C.textMuted, fontSize: 11, marginTop: -4 }]}>
+            Premium sections (forecast, compatibility, mantras, business, celebrity) ki explanations selected language me aayengi.
+          </Text>
 
           {/* Inputs */}
           <Text style={[pp.sectionLabel, { color: C.textDim }]}>YOUR NUMBERS (kam se kam ek)</Text>

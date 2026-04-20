@@ -20,12 +20,63 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
 from vedic.numerology import tier_a as _ta
 from vedic.numerology import narratives as _nr
+
+# ── Devanagari font registration (Hindi mode) ──────────────────────────
+# Latin (English/Hinglish) keeps Helvetica.  For Hindi narratives we
+# register Noto Sans Devanagari from the Nix-managed font store.
+_DEVA_REG  = "Helvetica"        # fallback if font missing
+_DEVA_BOLD = "Helvetica-Bold"
+
+
+def _find_devanagari_fonts() -> Optional[tuple]:
+    """Locate Noto Sans Devanagari TTFs without scanning all of /nix/store.
+
+    Strategy: single ``os.listdir('/nix/store')`` to find the
+    ``noto-fonts-extra`` derivation, then probe a fixed sub-path.
+    """
+    import os
+    candidates: List[str] = []
+    # 1) Standard FHS locations (cheap).
+    candidates += [
+        "/usr/share/fonts/truetype/noto",
+        "/usr/share/fonts/noto",
+        "/run/current-system/sw/share/fonts/truetype/noto",
+    ]
+    # 2) Single-shot Nix store lookup — listdir is one syscall.
+    try:
+        for entry in os.listdir("/nix/store"):
+            if "noto-fonts-extra" in entry:
+                candidates.append(
+                    f"/nix/store/{entry}/share/fonts/truetype/noto"
+                )
+                break
+    except Exception:
+        pass
+    for d in candidates:
+        reg  = os.path.join(d, "NotoSansDevanagari-Medium.ttf")
+        bold = os.path.join(d, "NotoSansDevanagari-ExtraBold.ttf")
+        if os.path.exists(reg) and os.path.exists(bold):
+            return reg, bold
+    return None
+
+
+try:
+    _paths = _find_devanagari_fonts()
+    if _paths:
+        pdfmetrics.registerFont(TTFont("NotoDeva", _paths[0]))
+        pdfmetrics.registerFont(TTFont("NotoDeva-Bold", _paths[1]))
+        _DEVA_REG  = "NotoDeva"
+        _DEVA_BOLD = "NotoDeva-Bold"
+except Exception:
+    pass
 
 BRAND_PURPLE = colors.HexColor("#5B21B6")
 BRAND_GOLD = colors.HexColor("#D97706")
@@ -34,16 +85,65 @@ TEXT_MID = colors.HexColor("#4B5563")
 TEXT_SOFT = colors.HexColor("#6B7280")
 
 
-def _styles() -> Dict[str, ParagraphStyle]:
+# ─── Language helper ────────────────────────────────────────────────────
+# `lang` ∈ {"english", "hindi", "hinglish"}.  Default is hinglish.
+
+def _T(lang: str, en: str, hi: str, hg: str) -> str:
+    """Pick string based on selected language."""
+    lang = (lang or "hinglish").lower()
+    if lang == "english":
+        return en
+    if lang == "hindi":
+        return hi
+    return hg
+
+
+def _explain_card(s, lang: str, title_en: str, title_hi: str, title_hg: str,
+                  body_en: str, body_hi: str, body_hg: str,
+                  bg="#F0FDF4", border="#15803D") -> Any:
+    """Reusable explanation callout block — used in every new section."""
+    title = _T(lang, title_en, title_hi, title_hg)
+    body  = _T(lang, body_en,  body_hi,  body_hg)
+    fname = _DEVA_REG if (lang or "").lower() == "hindi" else "Helvetica"
+    para = Paragraph(
+        f"<font color='{border}'><b>{title}</b></font><br/><br/>"
+        f"<font color='#1F2937'>{body}</font>",
+        ParagraphStyle("ec", fontName=fname, fontSize=9.5, leading=14,
+                       textColor=colors.HexColor("#1F2937"),
+                       leftIndent=4, rightIndent=4))
+    t = Table([[para]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), colors.HexColor(bg)),
+        ("BOX",          (0, 0), (-1, -1), 1.2, colors.HexColor(border)),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    return t
+
+
+def _styles(lang: str = "hinglish") -> Dict[str, ParagraphStyle]:
+    """Build paragraph styles.
+
+    Devanagari font (Noto Sans Devanagari) only ships glyphs for Devanagari,
+    so we use it ONLY for headings/titles that we author as pure Devanagari
+    in Hindi mode.  Body/small/captions stay on Helvetica (Latin) — they
+    often contain Hinglish data tables and would render as missing-glyph
+    boxes if forced to NotoDeva.
+    """
     base = getSampleStyleSheet()
+    is_hi = (lang or "").lower() == "hindi"
+    H_BOLD = _DEVA_BOLD if is_hi else "Helvetica-Bold"
+    H_REG  = _DEVA_REG  if is_hi else "Helvetica"
     return {
-        "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName="Helvetica-Bold",
+        "h1": ParagraphStyle("h1", parent=base["Heading1"], fontName=H_BOLD,
                              fontSize=22, leading=28, textColor=BRAND_PURPLE,
                              alignment=TA_CENTER, spaceAfter=6),
-        "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName="Helvetica-Bold",
+        "h2": ParagraphStyle("h2", parent=base["Heading2"], fontName=H_BOLD,
                              fontSize=15, leading=18, textColor=BRAND_PURPLE,
                              spaceBefore=10, spaceAfter=6),
-        "h3": ParagraphStyle("h3", parent=base["Heading3"], fontName="Helvetica-Bold",
+        "h3": ParagraphStyle("h3", parent=base["Heading3"], fontName=H_BOLD,
                              fontSize=11, leading=14, textColor=TEXT_DARK,
                              spaceBefore=6, spaceAfter=2),
         "body": ParagraphStyle("body", parent=base["BodyText"], fontName="Helvetica",
@@ -53,18 +153,18 @@ def _styles() -> Dict[str, ParagraphStyle]:
         "small": ParagraphStyle("small", parent=base["BodyText"], fontName="Helvetica",
                                 fontSize=8, leading=10, textColor=TEXT_SOFT),
         "cover_name": ParagraphStyle("cover_name", parent=base["Heading1"],
-                                     fontName="Helvetica-Bold", fontSize=28, leading=34,
+                                     fontName=H_BOLD, fontSize=28, leading=34,
                                      textColor=TEXT_DARK, alignment=TA_CENTER,
                                      spaceBefore=8, spaceAfter=8),
         "cover_sub": ParagraphStyle("cover_sub", parent=base["BodyText"],
-                                    fontName="Helvetica", fontSize=12, leading=16,
+                                    fontName=H_REG, fontSize=12, leading=16,
                                     textColor=TEXT_MID, alignment=TA_CENTER),
         "tagline": ParagraphStyle("tagline", parent=base["BodyText"],
                                   fontName="Helvetica-Oblique", fontSize=11, leading=14,
                                   textColor=BRAND_GOLD, alignment=TA_CENTER,
                                   spaceAfter=6),
         "page_title": ParagraphStyle("page_title", parent=base["Heading1"],
-                                     fontName="Helvetica-Bold", fontSize=18, leading=22,
+                                     fontName=H_BOLD, fontSize=18, leading=22,
                                      textColor=BRAND_PURPLE, spaceAfter=6),
     }
 
@@ -1076,16 +1176,57 @@ def _day_dress_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026) -> List[Any]:
+def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026,
+                              lang: str = "hinglish") -> List[Any]:
     """12-month personal forecast — month-by-month theme + best dates."""
     flow: List[Any] = []
     pack = _nr.monthly_forecast_pack(driver, conductor, year)
 
-    flow.append(Paragraph(f"🗓️ {year} KA 12-MAHINE KA FORECAST", s["page_title"]))
-    flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        f"<b>Personal Year:</b> {pack['personal_year']} — <i>{pack['year_theme']}</i>",
-        s["body_mid"]))
+    title = _T(lang,
+        f"🗓️ YOUR {year} — 12-MONTH FORECAST",
+        f"🗓️ {year} का 12-महीने का भविष्यफल",
+        f"🗓️ {year} KA 12-MAHINE KA FORECAST")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ─── Yeh Kya Hai? — opening explanation ─────────────────────────
+    flow.append(_explain_card(s, lang,
+        "📖 What is Personal Year & Personal Month?",
+        "📖 पर्सनल ईयर और पर्सनल मंथ क्या है?",
+        "📖 Personal Year aur Personal Month kya hai?",
+        # body
+        f"Every year of your life carries a unique number (1-9) called your <b>Personal Year</b>. "
+        f"It is calculated as: <b>Driver ({driver}) + Conductor ({conductor}) + Year ({year})</b>, all reduced. "
+        f"Your Personal Year for {year} is <b>{pack['personal_year']}</b>. "
+        f"This shapes the overall theme — career push, love, change, rest, money, completion. "
+        f"<b>Personal Month</b> = Personal Year + month number. Each month has its own energy. "
+        f"Use this calendar to <b>plan launches, weddings, travel, investments, and rest periods</b> in advance — "
+        f"you stop fighting the wind and start sailing with it.",
+        # hindi
+        f"आपके जीवन का हर साल एक विशेष संख्या (1-9) रखता है, जिसे <b>Personal Year</b> कहते हैं। "
+        f"गणना: <b>Driver ({driver}) + Conductor ({conductor}) + Year ({year})</b>, reduce करके। "
+        f"आपका {year} का Personal Year <b>{pack['personal_year']}</b> है। यह पूरे साल की मुख्य ऊर्जा तय करता है — "
+        f"करियर, प्रेम, बदलाव, विश्राम, धन, अंत। <b>Personal Month</b> = Personal Year + month number. "
+        f"इस calendar से <b>लॉन्च, विवाह, यात्रा, निवेश, विश्राम</b> पहले से प्लान करें — "
+        f"आप हवा से लड़ना बंद करके उसके साथ बहना शुरू करते हैं।",
+        # hinglish
+        f"Aapke jeevan ka har saal ek unique number (1-9) hota hai jise <b>Personal Year</b> kehte hain. "
+        f"Calculation: <b>Driver ({driver}) + Conductor ({conductor}) + Year ({year})</b>, reduce karke. "
+        f"Aapka {year} ka Personal Year <b>{pack['personal_year']}</b> hai. Yeh poore saal ka theme tay karta hai — "
+        f"career push, love, change, rest, money, completion. <b>Personal Month</b> = Personal Year + month number. "
+        f"Har mahine ki apni energy hoti hai. Iss calendar se <b>launches, shaadi, travel, investments, aur rest</b> "
+        f"pehle se plan karein — aap hawa se ladna band karte ho aur uske saath bahna shuru karte ho.",
+        bg="#EFF6FF", border="#1D4ED8"))
+    flow.append(Spacer(1, 5 * mm))
+
+    pyear_label = _T(lang, "Personal Year", "पर्सनल ईयर", "Personal Year")
+    if (lang or "").lower() == "hindi":
+        label_html = (f'<font name="{_DEVA_BOLD}">{pyear_label}:</font> '
+                      f"{pack['personal_year']} — <i>{pack['year_theme']}</i>")
+    else:
+        label_html = (f"<b>{pyear_label}:</b> {pack['personal_year']} — "
+                      f"<i>{pack['year_theme']}</i>")
+    flow.append(Paragraph(label_html, s["body_mid"]))
     flow.append(Spacer(1, 4 * mm))
 
     header_style = ParagraphStyle("mf_h", fontName="Helvetica-Bold", fontSize=9,
@@ -1135,17 +1276,53 @@ def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026) 
     return flow
 
 
-def _deep_compat_section(s, driver: int) -> List[Any]:
+def _deep_compat_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Love + Marriage + Business compatibility per number 1-9."""
     flow: List[Any] = []
     pack = _nr.deep_compatibility_pack(driver)
+    planet = _nr._PLANETS.get(driver, "—")
 
-    flow.append(Paragraph("💑 DEEP COMPATIBILITY — Love · Marriage · Business",
-                         s["page_title"]))
-    flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        f"<i>Aapka driver <b>{driver}</b> ({_nr._PLANETS.get(driver, '—')}) baaki har number ke saath "
-        "kaisa interact karta hai — 3 contexts me alag-alag.</i>",
+    title = _T(lang,
+        "💑 DEEP COMPATIBILITY — Love · Marriage · Business",
+        "💑 गहरी अनुकूलता — प्रेम · विवाह · व्यवसाय",
+        "💑 DEEP COMPATIBILITY — Love · Marriage · Business")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    flow.append(_explain_card(s, lang,
+        "📖 How does this compatibility table work?",
+        "📖 यह अनुकूलता तालिका कैसे काम करती है?",
+        "📖 Yeh compatibility table kaise kaam karti hai?",
+        f"Each number 1-9 is ruled by a planet. Your driver <b>{driver}</b> is ruled by <b>{planet}</b>. "
+        f"Vedic astrology has a fixed planet-relationship table: <b>Friend, Neutral, Enemy, Twin</b>. "
+        f"Same logic applies to numbers. We score every number on three real-life contexts: "
+        f"<b>💕 Love</b> (dating, attraction, chemistry), <b>💍 Marriage</b> (long-term living, family, in-laws), "
+        f"and <b>💼 Business</b> (partnership, money, decisions). A high score (80-95) means easy flow. "
+        f"Low (20-30) means real friction — possible but needs effort + remedies. "
+        f"<b>Use this when</b>: meeting someone serious, evaluating a partner, choosing a business associate, "
+        f"or even understanding why your boss/sibling clashes with you.",
+        f"प्रत्येक संख्या 1-9 का एक स्वामी ग्रह है। आपके driver <b>{driver}</b> का स्वामी <b>{planet}</b> है। "
+        f"वैदिक ज्योतिष में ग्रहों का संबंध तय है: <b>मित्र, समान, शत्रु, स्वयं</b>। यही नियम संख्याओं पर भी लागू होता है। "
+        f"हम हर संख्या को 3 क्षेत्रों में स्कोर देते हैं: <b>💕 प्रेम</b> (आकर्षण, केमिस्ट्री), "
+        f"<b>💍 विवाह</b> (दीर्घकालिक जीवन, परिवार), और <b>💼 व्यवसाय</b> (साझेदारी, धन)। "
+        f"उच्च स्कोर (80-95) = सहज प्रवाह। निम्न (20-30) = घर्षण, उपायों से संभव। "
+        f"<b>उपयोग करें</b>: गंभीर मुलाकात, साथी मूल्यांकन, बिज़नेस पार्टनर, बॉस/भाई-बहन के रिश्ते समझने में।",
+        f"Har number 1-9 ka ek ruling planet hai. Aapke driver <b>{driver}</b> ka planet <b>{planet}</b> hai. "
+        f"Vedic astrology me planet-relationship table fixed hai: <b>Friend, Neutral, Enemy, Twin</b>. "
+        f"Yahi logic numbers pe apply hota hai. Hum har number ko 3 real-life contexts me score dete hain: "
+        f"<b>💕 Love</b> (dating, attraction, chemistry), <b>💍 Marriage</b> (long-term saath rehna, family, in-laws), "
+        f"aur <b>💼 Business</b> (partnership, paisa, decisions). High score (80-95) = easy flow. "
+        f"Low (20-30) = real friction — possible hai but effort + remedies chahiye. "
+        f"<b>Iska use kab karein</b>: kisi ko seriously milte waqt, partner evaluate karte waqt, business associate chunte waqt, "
+        f"ya boss/bhai-behen ke clash ko samajhne ke liye.",
+        bg="#EFF6FF", border="#1D4ED8"))
+    flow.append(Spacer(1, 5 * mm))
+
+    intro = _T(lang,
+        f"Below: how your driver <b>{driver}</b> ({planet}) interacts with each number across 3 life areas.",
+        f"नीचे: आपका driver <b>{driver}</b> ({planet}) हर संख्या के साथ 3 क्षेत्रों में कैसा व्यवहार करता है।",
+        f"Neeche: aapka driver <b>{driver}</b> ({planet}) baaki har number ke saath 3 life areas me kaisa interact karta hai.")
+    flow.append(Paragraph(f"<i>{intro}</i>",
         ParagraphStyle("dc_sub", fontName="Helvetica-Oblique", fontSize=10,
                        textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
 
@@ -1202,14 +1379,42 @@ def _deep_compat_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _lucky_numbers_section(s, driver: int) -> List[Any]:
+def _lucky_numbers_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Lucky numbers, dates, PIN, account, lottery tips."""
     flow: List[Any] = []
     pack = _nr.lucky_numbers_pack(driver)
 
-    flow.append(Paragraph("🔢 LUCKY NUMBERS — Aapke Personal Power Numbers",
-                         s["page_title"]))
-    flow.append(Spacer(1, 4 * mm))
+    title = _T(lang,
+        "🔢 LUCKY NUMBERS — Your Personal Power Numbers",
+        "🔢 शुभ अंक — आपकी निजी शक्ति संख्याएँ",
+        "🔢 LUCKY NUMBERS — Aapke Personal Power Numbers")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    flow.append(_explain_card(s, lang,
+        "📖 Why do lucky numbers matter?",
+        "📖 शुभ अंक क्यों ज़रूरी हैं?",
+        "📖 Lucky numbers kyu zaroori hain?",
+        "Numbers are not random — they carry vibrations. When you pick a phone number, vehicle plate, "
+        "ATM PIN, account number, flat number, or even a wedding date that <b>matches your driver's friends</b>, "
+        "the energy flows with you instead of against you. Conversely, repeated exposure to <b>enemy numbers</b> "
+        "(in your daily-use objects) creates subtle, persistent friction — slow phone, money leaks, arguments, "
+        "missed opportunities. <b>This page is your shopping list.</b> Print it, save it on your phone, share with family. "
+        "Whenever you choose a new number for anything — pick from the green list, avoid the red list. "
+        "Over years, the cumulative effect is significant.",
+        "अंक यादृच्छिक नहीं होते — हर अंक की कंपन (vibration) होती है। जब आप फ़ोन नंबर, वाहन प्लेट, ATM पिन, "
+        "खाता संख्या, फ्लैट या विवाह तिथि चुनते समय <b>अपने driver के मित्र अंक</b> चुनते हैं, ऊर्जा आपके साथ बहती है। "
+        "इसके विपरीत, दैनिक वस्तुओं में <b>शत्रु अंकों</b> का बार-बार सामना सूक्ष्म लेकिन निरंतर घर्षण पैदा करता है — "
+        "धीमा फ़ोन, धन हानि, कलह, खोए हुए अवसर। <b>यह पृष्ठ आपकी ख़रीदारी सूची है।</b> इसे सहेजें, परिवार के साथ साझा करें। "
+        "जब भी कोई नया अंक चुनें — हरी सूची से चुनें, लाल सूची से बचें। वर्षों में संचयी प्रभाव बहुत बड़ा होता है।",
+        "Numbers random nahi hote — har number ki ek vibration hoti hai. Jab aap phone number, vehicle plate, "
+        "ATM PIN, account number, flat number, ya shaadi ki date apne <b>driver ke friend numbers</b> se match karte ho, "
+        "energy aapke saath bahti hai. Aur agar daily-use objects me <b>enemy numbers</b> ho to subtle but persistent "
+        "friction milti hai — slow phone, paisa leak, arguments, missed opportunities. <b>Yeh page aapki shopping list hai.</b> "
+        "Print karein, phone me save karein, family ke saath share karein. Jab bhi naya number chunna ho — green list se chunein, "
+        "red list avoid karein. Saalon me cumulative effect bahut bada hota hai.",
+        bg="#FFFBEB", border="#B45309"))
+    flow.append(Spacer(1, 5 * mm))
 
     rows = [
         [Paragraph("<b>✓ Lucky single digits</b>", s["body_mid"]),
@@ -1253,19 +1458,51 @@ def _lucky_numbers_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _mantras_section(s, driver: int) -> List[Any]:
+def _mantras_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Personalized mantras + remedies (gemstone, yantra, daan)."""
     flow: List[Any] = []
     pack = _nr.mantras_pack(driver)
+    planet = pack.get('planet', '')
 
-    flow.append(Paragraph(f"📿 MANTRAS & REMEDIES — {pack.get('planet', '')} Sadhana",
-                         s["page_title"]))
-    flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        "<i>Aapke driver number ke planet ke liye specially designed remedies — "
-        "Vedic + classical numerology school se.</i>",
-        ParagraphStyle("mr_sub", fontName="Helvetica-Oblique", fontSize=10,
-                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+    title = _T(lang,
+        f"📿 MANTRAS & REMEDIES — {planet} Sadhana",
+        f"📿 मंत्र और उपाय — {planet} साधना",
+        f"📿 MANTRAS & REMEDIES — {planet} Sadhana")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    flow.append(_explain_card(s, lang,
+        f"📖 Why these {planet} remedies?",
+        f"📖 ये {planet} उपाय क्यों?",
+        f"📖 Yeh {planet} remedies kyu?",
+        f"Your driver number is ruled by <b>{planet}</b>. When this planet is strong, you experience clarity, "
+        "energy, and luck. When weak or afflicted (by transits, dasha, or birth chart), you face obstacles, "
+        "low mood, repeated failures. The 5 remedies below are the <b>classical Vedic toolkit</b> to strengthen "
+        f"{planet}: <b>(1) Mantra</b> — sound vibration that resonates with the planet, "
+        "<b>(2) Gemstone</b> — wearable lens that channels the planet's ray, "
+        "<b>(3) Yantra</b> — geometric grid placed in your home/office that holds the energy, "
+        "<b>(4) Daan</b> — donations that pacify the planet's negative side, "
+        "<b>(5) Colour</b> — daily wear to align your aura. "
+        "<b>Start with mantra + colour</b> (free, immediate). Then add gemstone (after consultation) and daan. "
+        "40 days minimum to feel the shift.",
+        f"आपके driver संख्या का स्वामी <b>{planet}</b> है। यह ग्रह बलवान होने पर स्पष्टता, ऊर्जा, भाग्य देता है। "
+        "कमज़ोर या पीड़ित होने पर बाधाएँ, उदासी, बार-बार असफलता आती है। नीचे दिए 5 उपाय <b>शास्त्रीय वैदिक उपकरण</b> हैं "
+        f"{planet} को बल देने के लिए: <b>(1) मंत्र</b> — ध्वनि कंपन, <b>(2) रत्न</b> — पहनने योग्य लेंस, "
+        "<b>(3) यंत्र</b> — ज्यामितीय ग्रिड घर/ऑफ़िस में, <b>(4) दान</b> — ग्रह की नकारात्मक पक्ष शांत करता है, "
+        "<b>(5) रंग</b> — आभा को संरेखित करने के लिए। <b>मंत्र + रंग से शुरू करें</b> (निःशुल्क, तुरंत)। "
+        "फिर रत्न (परामर्श के बाद) और दान जोड़ें। बदलाव महसूस करने के लिए कम से कम 40 दिन।",
+        f"Aapke driver number ka swami <b>{planet}</b> hai. Yeh planet strong hone par clarity, energy, luck deta hai. "
+        "Weak ya afflicted hone par (transits, dasha, ya birth chart se) obstacles, low mood, baar-baar failures aate hain. "
+        f"Neeche diye 5 remedies <b>classical Vedic toolkit</b> hain {planet} ko strong karne ke liye: "
+        "<b>(1) Mantra</b> — sound vibration jo planet ke saath resonate karti hai, "
+        "<b>(2) Gemstone</b> — wearable lens jo planet ki ray channel karta hai, "
+        "<b>(3) Yantra</b> — geometric grid ghar/office me jo energy hold karta hai, "
+        "<b>(4) Daan</b> — donations jo planet ka negative side shaant karte hain, "
+        "<b>(5) Colour</b> — daily wear jo aura ko align karta hai. "
+        "<b>Mantra + colour se shuru karein</b> (free, immediate). Phir gemstone (consultation ke baad) aur daan add karein. "
+        "Shift mehsoos karne ke liye minimum 40 din.",
+        bg="#FEF3C7", border="#B45309"))
+    flow.append(Spacer(1, 5 * mm))
 
     flow.append(_premium_card(s, "🕉️ MANTRA (beej + complete)",
                               f"<b>{pack.get('mantra', '—')}</b><br/>"
@@ -1292,7 +1529,8 @@ def _mantras_section(s, driver: int) -> List[Any]:
     return flow
 
 
-def _business_launch_section(s, driver: int, conductor: int, year: int = 2026) -> List[Any]:
+def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
+                             lang: str = "hinglish") -> List[Any]:
     """Business launch calculator — best months, name, partners, direction."""
     flow: List[Any] = []
     # Recompute with proper conductor
@@ -1303,8 +1541,43 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026) -
         for m in forecast["months"] if m["verdict"] in ("EXCELLENT", "GOOD")
     ][:6]
 
-    flow.append(Paragraph(f"🏢 BUSINESS LAUNCH CALCULATOR ({year})", s["page_title"]))
-    flow.append(Spacer(1, 4 * mm))
+    title = _T(lang,
+        f"🏢 BUSINESS LAUNCH CALCULATOR ({year})",
+        f"🏢 व्यवसाय शुभारंभ कैलकुलेटर ({year})",
+        f"🏢 BUSINESS LAUNCH CALCULATOR ({year})")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    flow.append(_explain_card(s, lang,
+        "📖 Why timing & numerology matter for business",
+        "📖 व्यवसाय में समय और अंकशास्त्र क्यों मायने रखते हैं",
+        "📖 Business me timing aur numerology kyu matter karte hain",
+        "Two startups with the same product, same capital, same team can have completely different fates — "
+        "the difference is often <b>timing of launch + foundational numbers</b>. In Vedic tradition, the moment "
+        "you register your company, sign the lease, or sell the first invoice locks in a 'birth chart' for the venture. "
+        "If those moments align with your driver's friendly numbers and planet-friendly days, growth is fluid. "
+        "If they clash, you experience constant cash-flow stress, partner disputes, and stagnation despite hard work. "
+        "<b>This page gives you a complete launch playbook</b>: which months are green-light, which weekday to sign papers, "
+        "what direction your office should face, what numbers your company name should reduce to, and which partner "
+        "numbers will multiply your success vs drain it. Use this <b>before</b> launching, not after.",
+        "एक ही उत्पाद, एक ही पूँजी, एक ही टीम वाले दो स्टार्टअप का भाग्य बिल्कुल अलग हो सकता है — फ़र्क़ अक्सर "
+        "<b>लॉन्च के समय और मूलभूत अंकों</b> में होता है। वैदिक परंपरा में जिस क्षण आप कंपनी रजिस्टर करते हैं, "
+        "लीज़ साइन करते हैं, या पहला इनवॉइस बेचते हैं, वह क्षण उद्यम का 'जन्म-कुंडली' लॉक कर देता है। "
+        "यदि वे क्षण आपके driver के मित्र अंकों और ग्रह-अनुकूल दिनों से मेल खाते हैं, तो विकास सहज होता है। "
+        "अन्यथा निरंतर नकदी तनाव, साझेदार विवाद, और मेहनत के बावजूद ठहराव। "
+        "<b>यह पृष्ठ संपूर्ण लॉन्च प्लेबुक देता है</b>: कौन-से महीने हरी झंडी, किस दिन कागज़ साइन करें, "
+        "ऑफ़िस की दिशा, कंपनी नाम किस अंक पर रिड्यूस हो, और कौन-से साझेदार अंक सफलता गुणा करेंगे। "
+        "इसका उपयोग लॉन्च से <b>पहले</b> करें, बाद में नहीं।",
+        "Same product, same capital, same team waale do startups ka bhagya bilkul alag ho sakta hai — fark aksar "
+        "<b>launch ki timing + foundational numbers</b> me hota hai. Vedic tradition me jis moment aap company register "
+        "karte ho, lease sign karte ho, ya pehla invoice bechte ho — wo moment venture ki 'birth chart' lock kar deta hai. "
+        "Agar wo moments aapke driver ke friendly numbers aur planet-friendly days se align hain, growth fluid hoti hai. "
+        "Agar clash hai, constant cash-flow stress, partner disputes, mehnat ke bawajood stagnation milti hai. "
+        "<b>Yeh page complete launch playbook deta hai</b>: kaun se months green-light hain, kis weekday papers sign karne hain, "
+        "office kis direction me face kare, company name kis number pe reduce ho, aur kaun se partner numbers success "
+        "multiply karenge vs drain karenge. Iska use launch se <b>pehle</b> karein, baad me nahi.",
+        bg="#F0F9FF", border="#0369A1"))
+    flow.append(Spacer(1, 5 * mm))
 
     rows = [
         [Paragraph("<b>📅 Best launch months</b>", s["body_mid"]),
@@ -1349,19 +1622,49 @@ def _business_launch_section(s, driver: int, conductor: int, year: int = 2026) -
     return flow
 
 
-def _celebrity_match_section(s, driver: int) -> List[Any]:
+def _celebrity_match_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
     """Famous people with same driver number."""
     flow: List[Any] = []
     matches = _nr.celebrity_match_pack(driver)
 
-    flow.append(Paragraph(f"🌟 CELEBRITY MATCH — Aapke Jaise Famous Log",
-                         s["page_title"]))
-    flow.append(Spacer(1, 2 * mm))
-    flow.append(Paragraph(
-        f"<i>Driver number <b>{driver}</b> ke duniya bhar ke famous log — unka journey study karein, "
-        "patterns dekho, motivation lo.</i>",
-        ParagraphStyle("cm_sub", fontName="Helvetica-Oblique", fontSize=10,
-                       textColor=TEXT_SOFT, leading=14, spaceAfter=8)))
+    title = _T(lang,
+        "🌟 CELEBRITY MATCH — Famous People Like You",
+        "🌟 सेलिब्रिटी मैच — आपके जैसे प्रसिद्ध व्यक्ति",
+        "🌟 CELEBRITY MATCH — Aapke Jaise Famous Log")
+    flow.append(Paragraph(title, s["page_title"]))
+    flow.append(Spacer(1, 3 * mm))
+
+    flow.append(_explain_card(s, lang,
+        "📖 Why look at celebrities with your driver number?",
+        "📖 अपने driver अंक वाले सेलिब्रिटीज़ क्यों देखें?",
+        "📖 Apne driver number waale celebrities kyu dekhein?",
+        f"You share your driver number <b>{driver}</b> with these famous personalities. That doesn't mean your "
+        "life will copy theirs — but it does mean your <b>core wiring is similar</b>: the same instinctive strengths, "
+        "the same blind spots, the same kind of opportunities that life keeps placing in front of you. Studying their "
+        "journey is like reading a manual written by someone with your operating system. Notice <b>three things</b>: "
+        "(1) what natural talent they amplified instead of fighting, (2) what setback nearly broke them and how they "
+        "responded, (3) what ethical/spiritual practice kept them grounded at the top. You don't need to become them — "
+        "you need to recognise the <b>pattern of your own number</b> so you stop apologising for who you are and start "
+        "leveraging it. <b>Pick one celebrity</b> from this list, read their biography this month, and journal what "
+        "applies to you.",
+        f"आप अपना driver अंक <b>{driver}</b> इन प्रसिद्ध व्यक्तियों के साथ साझा करते हैं। इसका अर्थ नहीं कि आपका जीवन "
+        "उनकी नकल करेगा — पर इसका अर्थ है कि आपकी <b>मूल बनावट समान है</b>: वही सहज शक्तियाँ, वही अंध-बिंदु, "
+        "वही प्रकार के अवसर जो जीवन आपके सामने रखता रहता है। उनकी यात्रा पढ़ना किसी ऐसे व्यक्ति की लिखी मैनुअल पढ़ने जैसा है "
+        "जिसका 'ऑपरेटिंग सिस्टम' आपके जैसा है। <b>तीन बातें</b> देखें: (1) किस सहज प्रतिभा को बढ़ाया, उससे लड़े नहीं, "
+        "(2) किस झटके ने तोड़ने को था और प्रतिक्रिया कैसी रही, (3) कौन-सी नैतिक/आध्यात्मिक साधना ने शिखर पर भी जमीन से जोड़ रखा। "
+        "उनके जैसा बनने की ज़रूरत नहीं — अपने अंक का <b>पैटर्न पहचानने</b> की ज़रूरत है। "
+        "<b>एक सेलिब्रिटी चुनें</b>, इस महीने उनकी जीवनी पढ़ें, और जर्नल में लिखें क्या आप पर लागू होता है।",
+        f"Aap apna driver number <b>{driver}</b> in famous logon ke saath share karte ho. Iska matlab yeh nahi ki aapki "
+        "life unki copy hogi — lekin iska matlab hai aapki <b>core wiring same hai</b>: wahi natural strengths, wahi "
+        "blind spots, wahi tarah ke opportunities jo life baar-baar saamne rakhti hai. Inki journey padhna aise hai "
+        "jaise koi aapke 'operating system' wala manual likha ho. <b>Teen cheezein dekhein</b>: (1) kis natural talent "
+        "ko amplify kiya, usse lade nahi, (2) kis setback ne tod ne ki kosish ki aur response kya tha, (3) kaun si "
+        "ethical/spiritual practice ne shikhar par bhi grounded rakha. Inke jaisa banne ki zarurat nahi — apne number "
+        "ka <b>pattern recognise</b> karne ki zarurat hai taaki aap apne aap ke liye apologise karna band karein aur "
+        "leverage karna shuru karein. <b>Ek celebrity chunein</b>, iss mahine unki biography padhein, journal me likhein "
+        "kya aap par apply hota hai.",
+        bg="#FFFBEB", border="#B45309"))
+    flow.append(Spacer(1, 5 * mm))
 
     if not matches:
         flow.append(Paragraph("No celebrity matches available for this driver.", s["body"]))
@@ -1451,7 +1754,8 @@ def render_part2_pdf(*,
                      dob: str,
                      mobile: Optional[str],
                      vehicle: Optional[str],
-                     house: Optional[str]) -> bytes:
+                     house: Optional[str],
+                     lang: str = "hinglish") -> bytes:
     """Render the Practical Numerology Tools (Part 2) PDF."""
     # Compute Driver + Conductor from dob
     digits = [int(c) for c in dob if c.isdigit()]
@@ -1470,7 +1774,7 @@ def render_part2_pdf(*,
     driver = _r(day) if day else 0
     conductor = _r(sum(digits)) if digits else 0
 
-    s = _styles()
+    s = _styles(lang)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
@@ -1519,27 +1823,27 @@ def render_part2_pdf(*,
     # Page 10 — 🗓️ 12-Month Forecast (current year)
     from datetime import datetime
     _yr = datetime.now().year
-    story += _monthly_forecast_section(s, driver, conductor, year=_yr)
+    story += _monthly_forecast_section(s, driver, conductor, year=_yr, lang=lang)
     story.append(PageBreak())
 
     # Page 11 — 💑 Deep Compatibility (Love/Marriage/Business per number)
-    story += _deep_compat_section(s, driver)
+    story += _deep_compat_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 12 — 🔢 Lucky Numbers (single, double, dates, PIN, lottery)
-    story += _lucky_numbers_section(s, driver)
+    story += _lucky_numbers_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 13 — 📿 Mantras + Remedies (mantra, gemstone, yantra, daan)
-    story += _mantras_section(s, driver)
+    story += _mantras_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 14 — 🏢 Business Launch Calculator
-    story += _business_launch_section(s, driver, conductor, year=_yr)
+    story += _business_launch_section(s, driver, conductor, year=_yr, lang=lang)
     story.append(PageBreak())
 
     # Page 15 — 🌟 Celebrity Match (famous people same driver)
-    story += _celebrity_match_section(s, driver)
+    story += _celebrity_match_section(s, driver, lang=lang)
     story.append(PageBreak())
 
     # Page 16 — Driver/Conductor technical intro

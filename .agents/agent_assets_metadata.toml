@@ -300,3 +300,21 @@ id = "NZR1jz3NDbajPvQzwyuWY"
 uri = "file://attached_assets/exports/Life_Mastery_v5_hg.pdf"
 type = "pdf"
 title = "Life Mastery (Part 2) — Hinglish"
+
+[[outputs]]
+id = "xBF-wpus1LeQPpexov_7Y"
+uri = "file://attached_assets/exports/Soul_Blueprint_v3_en.pdf"
+type = "pdf"
+title = "Soul Blueprint v3 (21 pages) — English"
+
+[[outputs]]
+id = "vHMAVx41jlA1Bxa9uAj_i"
+uri = "file://attached_assets/exports/Soul_Blueprint_v3_hi.pdf"
+type = "pdf"
+title = "Soul Blueprint v3 (21 pages) — हिंदी"
+
+[[outputs]]
+id = "oCrYnbNytyIAuZtFPj-Qm"
+uri = "file://attached_assets/exports/Soul_Blueprint_v3_hg.pdf"
+type = "pdf"
+title = "Soul Blueprint v3 (21 pages) — Hinglish"

@@ -1115,6 +1115,480 @@ def _compatibility_section(s, user_dob: str, partner_dob: str,
     return flow
 
 
+# ─── NEW Part 1 sections (T105: 5 extra pages for ₹99 value) ───────────
+
+# Per-driver data tables
+_BODY_HEALTH = {
+    1: ("Heart, eyes, brain, upper back",
+        "Ginger, honey, oranges, saffron, almonds",
+        "Hypertension, eye-strain, headaches"),
+    2: ("Stomach, breast, chest, body fluids",
+        "Milk, rice, melon, cucumber, coconut water",
+        "Digestion issues, mood swings, water retention"),
+    3: ("Hips, thighs, liver, ears",
+        "Turmeric, chickpeas, banana, ghee, dates",
+        "Liver issues, weight gain, sciatica"),
+    4: ("Nervous system, head, lungs",
+        "Garlic, onion, dark grains, lentils",
+        "Anxiety, asthma, nervous disorders"),
+    5: ("Nervous system, lungs, hands, speech",
+        "Green vegetables, mint, mung dal, leafy salads",
+        "Nervous tension, throat-lung issues, insomnia"),
+    6: ("Throat, kidneys, reproductive organs, skin",
+        "Dairy, white rice, fruits, sweet vegetables",
+        "Kidney/throat/skin issues, blood-sugar imbalance"),
+    7: ("Feet, joints, immunity, lymphatic",
+        "Simple sattvic food, fruits, plenty of water",
+        "Low immunity, joint pain, undiagnosed fatigue"),
+    8: ("Bones, teeth, knees, joints, spine",
+        "Black sesame, mustard oil, iron-rich greens",
+        "Arthritis, depression, bone density issues"),
+    9: ("Blood, muscles, head, marrow",
+        "Lentils, beetroot, chillies, dark chocolate",
+        "Blood pressure, accidents, fevers, anger-spikes"),
+}
+
+_DAILY_CLOCK = {
+    1: ("5:30 AM", "9 AM – 11 AM (Sun peak)", "Sunrise — light cardio",
+        "5 AM (pre-Sun) — Aditya Hriday", "10:30 PM"),
+    2: ("6:00 AM", "7 PM – 9 PM (Moon peak)", "6:30 PM — gentle yoga/swim",
+        "Moonrise — Chandra mantra 108x", "11:00 PM"),
+    3: ("5:45 AM", "10 AM – 12 PM (Jupiter peak)", "7 AM — pranayama + walk",
+        "Thursday 4 AM — Guru mantra", "10:00 PM"),
+    4: ("5:15 AM", "6 AM – 8 AM (Rahu hour — breakthroughs)", "Dawn — long brisk walk",
+        "4 – 5 AM — Bhairav/Shiv mantra", "11:00 PM"),
+    5: ("6:00 AM", "11 AM – 1 PM (Mercury peak)", "Sunset — varied cardio",
+        "Pre-dawn — Vishnu Sahasranam", "11:30 PM"),
+    6: ("6:30 AM", "4 PM – 6 PM (Venus peak)", "Evening — dance/yoga/sports",
+        "Dusk — Lakshmi/Shukra mantra", "11:00 PM"),
+    7: ("4:30 AM", "4 AM – 6 AM (Brahma muhurta — Ketu)", "Pre-dawn slow walk",
+        "Pre-dawn — silent meditation 30 min", "9:30 PM"),
+    8: ("5:00 AM", "7 PM – 9 PM (Saturn peak — Saturday best)", "Dawn — strength training",
+        "Saturday 4 AM — Shani mantra", "10:30 PM"),
+    9: ("5:30 AM", "6 AM – 8 AM (Mars sunrise)", "Dawn — high-intensity cardio",
+        "Tuesday 4 AM — Hanuman Chalisa 7x", "10:30 PM"),
+}
+
+_AUTO_COMPAT = {
+    1: ("1, 4, 8 (driven match)", "2 (gentle complement)",
+        "6 (luxury vs leadership clash)",
+        "4, 8 (executors & builders)", "3 (lacks discipline)"),
+    2: ("2, 4, 7 (sensitive match)", "6, 9 (caring complement)",
+        "5 (chaos overwhelms)",
+        "6, 9 (sales & operations)", "8 (dominator)"),
+    3: ("3, 6, 9 (joy match)", "1 (mentor pair)",
+        "4 (rigid vs free)",
+        "1, 9 (vision & expansion)", "5 (scattered focus)"),
+    4: ("1, 5, 7 (stability match)", "8 (long-term builder)",
+        "6 (luxury bias clashes)",
+        "1, 8 (long-game builders)", "9 (aggressive pace)"),
+    5: ("1, 5, 9 (movement match)", "6 (charm complement)",
+        "2 (clingy energy)",
+        "6, 9 (charm & drive)", "7 (introverted pace)"),
+    6: ("3, 6, 9 (love match)", "2 (caring partner)",
+        "1 (ego dominates)",
+        "2, 9 (people-focused)", "7 (loner mismatch)"),
+    7: ("2, 4, 7 (depth match)", "1 (anchoring complement)",
+        "5 (surface energy)",
+        "4, 8 (research & finance)", "3 (showy distraction)"),
+    8: ("4, 8, 1 (power match)", "6 (sensual balance)",
+        "9 (volatile clash)",
+        "1, 4 (long-term scale)", "2 (over-emotional)"),
+    9: ("3, 6, 9 (passion match)", "1 (warrior pair)",
+        "8 (clash of titans)",
+        "3, 5 (fast pace)", "4 (slow pace mismatch)"),
+}
+
+_WEALTH_CHAKRA = {
+    1: ("Founder equity / leadership salary / personal brand",
+        "30 : 70 (lean save, bold invest)",
+        "1, 9", "Gold / maroon",
+        "Status purchases without ROI"),
+    2: ("Partnership share / commissions / consulting",
+        "60 : 40 (savings-friendly)",
+        "2, 7", "Silver / cream",
+        "Emotional spends on others"),
+    3: ("Teaching, consulting, royalties, content",
+        "40 : 60 (invest in your own brand)",
+        "3, 9", "Yellow / saffron",
+        "Over-generous lending without contracts"),
+    4: ("Engineering, operator role, salaried + side-asset",
+        "70 : 30 (heavy save, slow invest)",
+        "4, 8", "Dark navy / charcoal",
+        "Speculative trading & F&O"),
+    5: ("Sales, multi-stream, commission, trading",
+        "30 : 70 (fast turnover)",
+        "5, 3", "Green / light grey",
+        "Too many parallel ventures"),
+    6: ("Luxury, beauty, hospitality, family business",
+        "50 : 50 (balanced)",
+        "6, 9", "White / pink / sky blue",
+        "Aesthetic spends over income-assets"),
+    7: ("Research, IP, spiritual services, niche author",
+        "60 : 40 (frugal but consistent)",
+        "7, 2", "Violet / smoky grey",
+        "Under-pricing your work"),
+    8: ("Real estate, infrastructure, long-game scale-ups",
+        "40 : 60 (long-horizon)",
+        "8, 4", "Black / midnight blue",
+        "Short-term trading & quick flips"),
+    9: ("Defense, sports, medicine, real estate, surgery",
+        "30 : 70 (warrior risk-taker)",
+        "9, 3", "Red / coral",
+        "High-leverage gambles & ego-bets"),
+}
+
+_PY_THEMES = {
+    1: ("New beginnings, leadership, fresh launches",
+        "Mar, Sep", "Nov–Dec", "1, 10, 19, 28",
+        "Start the project you've delayed", "Don't wait for perfect conditions"),
+    2: ("Patience, partnerships, diplomacy",
+        "Jun, Aug", "Jan–Feb", "2, 11, 20, 29",
+        "Collaborate, find your co-founder", "Don't push hard or rush decisions"),
+    3: ("Creativity, expression, social expansion",
+        "May, Sep", "Feb", "3, 12, 21, 30",
+        "Publish, network, perform", "Don't isolate or self-doubt"),
+    4: ("Foundation building, hard work, systems",
+        "Apr, Aug", "Sep", "4, 13, 22, 31",
+        "Build the system, document everything", "Don't quit when it gets boring"),
+    5: ("Change, travel, freedom, new experiences",
+        "Mar, Jul, Nov", "Apr", "5, 14, 23",
+        "Travel, switch jobs, learn skills", "Don't sign long-term contracts"),
+    6: ("Family, duty, healing, home",
+        "Jun, Oct", "Jul", "6, 15, 24",
+        "Repair relationships, build the home", "Don't take on others' burdens"),
+    7: ("Introspection, study, spirituality, retreat",
+        "Jul, Nov", "Mar–Apr", "7, 16, 25",
+        "Read, retreat, deepen one skill", "Don't launch big public moves"),
+    8: ("Power, money, execution, harvest",
+        "Aug, Oct", "May", "8, 17, 26",
+        "Negotiate raises, close big deals", "Don't ignore health for hustle"),
+    9: ("Completion, release, generosity, closure",
+        "Sep, Dec", "Jun", "9, 18, 27",
+        "Close loops, give back, mentor", "Don't start anything brand new"),
+}
+
+
+def _personal_year(dob: str, year: int) -> int:
+    parts = dob.split("-")
+    try:
+        m, d = int(parts[1]), int(parts[2])
+    except (IndexError, ValueError):
+        return 0
+    n = sum(int(c) for c in str(year)) + m + d
+    while n > 9 and n not in (11, 22, 33):
+        n = sum(int(c) for c in str(n))
+    return n if n <= 9 else (1 + (n - 1) % 9)
+
+
+def _section_title2(s, text: str):
+    return Paragraph(text, s["page_title"])
+
+
+def _kv_table(rows: List[tuple], col_widths=None) -> Table:
+    """Two-column label/value rows with brand styling."""
+    cw = col_widths or [55 * mm, 125 * mm]
+    t = Table(rows, colWidths=cw)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (0, -1), BG_GRID),
+        ("TEXTCOLOR",    (0, 0), (0, -1), BRAND_PURPLE),
+        ("FONTNAME",     (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME",     (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE",     (0, 0), (-1, -1), 9.5),
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING",   (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ("BOX",          (0, 0), (-1, -1), 0.5, BORDER),
+        ("LINEBELOW",    (0, 0), (-1, -2), 0.3, BORDER),
+    ]))
+    return t
+
+
+def _year_ahead_section(s, lang: str, dob: str, driver: int) -> List[Any]:
+    """Current Personal Year mood-map: theme, peak/slow months, lucky dates."""
+    flow: List[Any] = []
+    yr = datetime.now().year
+    py = _personal_year(dob, yr) or driver
+    theme, peak, slow, dates, do_, dont = _PY_THEMES.get(py, _PY_THEMES[1])
+    flow.append(_section_title2(s, _T(lang,
+        f"🗓️ Year Ahead — Personal Year {py} ({yr})",
+        f"🗓️ आगामी वर्ष — Personal Year {py} ({yr})",
+        f"🗓️ Year Ahead — Personal Year {py} ({yr})")))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table([
+        [_T(lang, "Year Theme", "वर्ष का विषय", "Year Theme"), theme],
+        [_T(lang, "Peak Months", "शिखर महीने", "Peak Months"), peak],
+        [_T(lang, "Slow Months", "धीमे महीने", "Slow Months"), slow],
+        [_T(lang, "Lucky Dates", "शुभ तिथियाँ", "Lucky Dates"), dates],
+        [_T(lang, "✅ Do This Year", "✅ इस वर्ष करें", "✅ Do This Year"), do_],
+        [_T(lang, "❌ Avoid This Year", "❌ इस वर्ष टालें", "❌ Avoid This Year"), dont],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        f"📖 What is a Personal Year and why does it shift everything?",
+        f"📖 Personal Year क्या है और यह सब क्यों बदल देता है?",
+        f"📖 Personal Year kya hai aur ye sab kyu badal deta hai?",
+        "Your <b>Personal Year</b> is calculated from your birth-month + birth-day + "
+        "current year — it cycles 1→9 and resets every 9 years. Each year carries a "
+        "<b>specific energetic theme</b>; acting <b>aligned</b> with the theme makes "
+        "things flow, acting <b>against</b> creates friction. A 7-year is for "
+        "introspection, NOT launching a startup. An 8-year is for executing money "
+        "moves, NOT meditating in a cave. Use the peak months for big decisions, "
+        "slow months for rest/planning, lucky dates for signing/launching/proposing. "
+        "This single page is your <b>year-long compass</b>.",
+        "<b>Personal Year</b> आपके जन्म-माह + जन्म-तिथि + वर्तमान वर्ष से निकलता है — "
+        "यह 1→9 चक्र चलता है और हर 9 वर्ष में रीसेट होता है। प्रत्येक वर्ष का अपना "
+        "<b>ऊर्जा विषय</b> है; विषय के <b>अनुकूल</b> कार्य करने से प्रवाह आता है, "
+        "<b>विरुद्ध</b> करने से घर्षण। 7-वर्ष आत्म-निरीक्षण के लिए है, स्टार्टअप के नहीं। "
+        "8-वर्ष धन-निर्णयों के लिए है, ध्यान-गुफा के नहीं। शिखर महीनों में बड़े निर्णय, "
+        "धीमे महीनों में विश्राम/योजना, शुभ तिथियों पर हस्ताक्षर/लॉन्च/प्रस्ताव। यह "
+        "एक पृष्ठ आपका <b>वर्ष-भर का दिशा-सूचक</b> है।",
+        "<b>Personal Year</b> aapke birth-month + birth-day + current year se nikalta "
+        "hai — yeh 1→9 cycle chalta hai aur har 9 saal me reset hota hai. Har year ka "
+        "<b>specific energetic theme</b> hota hai; theme ke <b>aligned</b> kaam karne "
+        "se flow aata hai, <b>against</b> karne se friction. 7-year introspection ke "
+        "liye hai, startup launch karne ke liye nahi. 8-year money moves execute "
+        "karne ke liye hai, cave me dhyan ke liye nahi. Peak months me bade decisions, "
+        "slow months me rest/planning, lucky dates par signing/launching/proposing. "
+        "Yeh ek page aapka <b>year-long compass</b> hai."))
+    return flow
+
+
+def _auto_compat_section(s, lang: str, driver: int) -> List[Any]:
+    """Quick compatibility card — best/avoid for marriage and business."""
+    flow: List[Any] = []
+    best_m, alt_m, avoid_m, best_b, avoid_b = _AUTO_COMPAT.get(driver, _AUTO_COMPAT[1])
+    flow.append(_section_title2(s, _T(lang,
+        "💑 Quick Compatibility — Marriage & Business",
+        "💑 त्वरित अनुकूलता — विवाह और व्यापार",
+        "💑 Quick Compatibility — Marriage & Business")))
+    flow.append(Paragraph(_T(lang,
+        f"Based on your Driver {driver} — these are the numbers most likely to "
+        f"create harmony or friction. Check the <b>birth-day</b> of your partner / "
+        f"co-founder / boss to predict the chemistry.",
+        f"आपके Driver {driver} के आधार पर — ये अंक सामंजस्य या घर्षण उत्पन्न करते हैं। "
+        f"साथी / सह-संस्थापक / बॉस की <b>जन्म-तिथि</b> देखें केमिस्ट्री का अनुमान लगाएँ।",
+        f"Aapke Driver {driver} ke based — ye numbers harmony ya friction create karte "
+        f"hain. Apne partner / co-founder / boss ki <b>birth-day</b> dekho chemistry "
+        f"predict karne ke liye."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table([
+        [_T(lang, "💍 Marriage — Best", "💍 विवाह — सर्वश्रेष्ठ", "💍 Marriage — Best"), best_m],
+        [_T(lang, "💍 Marriage — Also Good", "💍 विवाह — अच्छा", "💍 Marriage — Also Good"), alt_m],
+        [_T(lang, "💍 Marriage — Avoid", "💍 विवाह — टालें", "💍 Marriage — Avoid"), avoid_m],
+        [_T(lang, "🤝 Business — Best", "🤝 व्यापार — सर्वश्रेष्ठ", "🤝 Business — Best"), best_b],
+        [_T(lang, "🤝 Business — Avoid", "🤝 व्यापार — टालें", "🤝 Business — Avoid"), avoid_b],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why number-compatibility predicts relationship friction",
+        "📖 अंक-अनुकूलता रिश्तों का घर्षण क्यों भविष्यवाणी करती है",
+        "📖 Number-compatibility kyu relationship friction predict karti hai",
+        "Two people with <b>compatible Drivers</b> have rulers (planets) that are "
+        "naturally friendly — Sun-Jupiter, Moon-Mercury, Mars-Venus etc. Their "
+        "<b>energy waveforms align</b>, conversations flow, decisions feel mutual. "
+        "<b>Incompatible Drivers</b> have hostile planet rulers (Sun-Saturn, "
+        "Mars-Mercury, Venus-Sun) — even with love, daily friction wears the bond "
+        "down. <b>Marriage</b> needs emotional + values match (look at Driver). "
+        "<b>Business</b> needs execution + risk style match (look at Conductor). "
+        "Use this card before saying yes to anyone — partner, co-founder, or boss.",
+        "<b>संगत Drivers</b> वाले दो लोगों के शासक ग्रह स्वाभाविक मित्र होते हैं — "
+        "सूर्य-गुरु, चंद्र-बुध, मंगल-शुक्र आदि। उनकी <b>ऊर्जा-तरंगें मिलती</b> हैं, बातचीत "
+        "बहती है, निर्णय परस्पर लगते हैं। <b>असंगत Drivers</b> में शासक ग्रह शत्रु "
+        "(सूर्य-शनि, मंगल-बुध, शुक्र-सूर्य) — प्रेम होने पर भी दैनिक घर्षण बंधन को घिसता है। "
+        "<b>विवाह</b> के लिए भावनात्मक + मूल्य मेल चाहिए (Driver देखें)। <b>व्यापार</b> "
+        "के लिए निष्पादन + जोखिम शैली मेल (Conductor देखें)। किसी को हाँ कहने से पहले "
+        "इस कार्ड को देखें — साथी, सह-संस्थापक, या बॉस।",
+        "Do log jinke <b>compatible Drivers</b> ho, unke ruling planets naturally "
+        "friend hote hain — Sun-Jupiter, Moon-Mercury, Mars-Venus etc. Unki <b>energy "
+        "waveforms align</b> karti hain, baat-cheet flow karti hai, decisions mutual "
+        "feel hote hain. <b>Incompatible Drivers</b> ke ruling planets hostile (Sun-"
+        "Saturn, Mars-Mercury, Venus-Sun) — pyaar hone par bhi daily friction bond ko "
+        "ghisti hai. <b>Marriage</b> ke liye emotional + values match chahiye (Driver "
+        "dekho). <b>Business</b> ke liye execution + risk style match (Conductor "
+        "dekho). Kisi ko haan kehne se pehle is card ko dekho — partner, co-founder, "
+        "ya boss."))
+    return flow
+
+
+def _daily_clock_section(s, lang: str, driver: int) -> List[Any]:
+    """24-hour optimal schedule based on planet hours."""
+    flow: List[Any] = []
+    wake, peak, ex, med, sleep = _DAILY_CLOCK.get(driver, _DAILY_CLOCK[1])
+    flow.append(_section_title2(s, _T(lang,
+        "⏰ Daily Energy Clock — Your 24-Hour Blueprint",
+        "⏰ दैनिक ऊर्जा घड़ी — आपका 24-घंटे का ब्लूप्रिंट",
+        "⏰ Daily Energy Clock — Your 24-Hour Blueprint")))
+    flow.append(Paragraph(_T(lang,
+        "Each planet rules specific hours. By aligning your wake, work, exercise, "
+        "and sleep windows with your ruling planet, you stop fighting your biology.",
+        "प्रत्येक ग्रह विशिष्ट घंटों पर शासन करता है। अपने जागने, कार्य, व्यायाम और नींद "
+        "को शासक ग्रह से मिलाकर आप अपनी जीव-विज्ञान से लड़ना बंद कर देते हैं।",
+        "Har planet specific hours rule karta hai. Apne wake, work, exercise aur "
+        "sleep windows ko ruling planet se align karke aap apni biology se ladna "
+        "band kar dete ho."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table([
+        [_T(lang, "🌅 Wake Up", "🌅 जागें", "🌅 Wake Up"), wake],
+        [_T(lang, "⚡ Peak Productivity", "⚡ शिखर उत्पादकता", "⚡ Peak Productivity"), peak],
+        [_T(lang, "🏃 Exercise Window", "🏃 व्यायाम समय", "🏃 Exercise Window"), ex],
+        [_T(lang, "🧘 Meditation Window", "🧘 ध्यान समय", "🧘 Meditation Window"), med],
+        [_T(lang, "🌙 Sleep By", "🌙 सोएँ", "🌙 Sleep By"), sleep],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why timing your day to your planet doubles your output",
+        "📖 ग्रह-अनुसार दिनचर्या उत्पादकता क्यों दोगुनी करती है",
+        "📖 Planet-based timing aapki output kyu double karta hai",
+        "Ancient Vedic timekeeping divides each day into <b>24 planetary hours</b> "
+        "(horā). Each hour belongs to one planet — when you operate during your "
+        "<b>ruling planet's hour</b>, you have a tail-wind: focus is sharper, energy "
+        "is high, decisions are crisp. Working in your <b>enemy planet's hour</b> "
+        "creates fog, fatigue, and bad calls. Same logic applies to exercise (use "
+        "Mars/Sun hours for strength, Moon hours for swimming/yoga) and sleep "
+        "(Saturn/Ketu hours = deepest restorative sleep). This page tells you the "
+        "exact hours your body and mind are <b>biologically optimised</b> for each "
+        "task — stop fighting it.",
+        "प्राचीन वैदिक काल-गणना दिन को <b>24 ग्रह-घंटों</b> (होरा) में बाँटती है। "
+        "प्रत्येक घंटा एक ग्रह का — अपने <b>शासक ग्रह के घंटे</b> में कार्य करते समय "
+        "अनुकूल पवन: फ़ोकस तीक्ष्ण, ऊर्जा उच्च, निर्णय स्पष्ट। <b>शत्रु-ग्रह के घंटे</b> "
+        "में धुंध, थकान, ग़लत निर्णय। यही तर्क व्यायाम (शक्ति के लिए मंगल/सूर्य घंटे, "
+        "तैराकी/योग के लिए चंद्र घंटे) और नींद (शनि/केतु घंटे = गहन पुनर्स्थापना) पर। "
+        "यह पृष्ठ बताता है किस कार्य के लिए शरीर-मन <b>जैविक रूप से अनुकूलित</b> है।",
+        "Ancient Vedic time-keeping har din ko <b>24 planetary hours</b> (horā) me "
+        "divide karti hai. Har hour ek planet ka — apne <b>ruling planet ke hour</b> "
+        "me kaam karte time tail-wind milti hai: focus sharp, energy high, decisions "
+        "crisp. <b>Enemy planet ke hour</b> me fog, fatigue, ghalat calls. Yahi logic "
+        "exercise (strength ke liye Mars/Sun hours, swimming/yoga ke liye Moon hours) "
+        "aur sleep (Saturn/Ketu hours = deepest restorative sleep) par. Yeh page "
+        "batata hai exact hours kab body-mind <b>biologically optimised</b> hai har "
+        "task ke liye — fight karna band karo."))
+    return flow
+
+
+def _body_health_section(s, lang: str, driver: int) -> List[Any]:
+    """Body parts ruled, food affinities, common ailments."""
+    flow: List[Any] = []
+    parts, foods, ailments = _BODY_HEALTH.get(driver, _BODY_HEALTH[1])
+    flow.append(_section_title2(s, _T(lang,
+        "🧬 Body & Health Blueprint",
+        "🧬 शरीर और स्वास्थ्य ब्लूप्रिंट",
+        "🧬 Body & Health Blueprint")))
+    flow.append(Paragraph(_T(lang,
+        f"Your Driver {driver} rules specific organs and systems. Knowing them lets "
+        f"you choose the right diet, anticipate vulnerabilities, and act early.",
+        f"आपका Driver {driver} विशिष्ट अंगों और तंत्रों पर शासन करता है। यह जानकर सही "
+        f"आहार, संभावित कमज़ोरी, और प्रारंभिक कार्रवाई संभव है।",
+        f"Aapka Driver {driver} specific organs aur systems rule karta hai. Yeh jaan "
+        f"ke sahi diet chuno, vulnerabilities anticipate karo, aur early act karo."),
+        s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table([
+        [_T(lang, "🫀 Organs / Systems Ruled", "🫀 शासित अंग / तंत्र",
+            "🫀 Organs / Systems Ruled"), parts],
+        [_T(lang, "🥗 Power Foods", "🥗 शक्तिवर्धक आहार", "🥗 Power Foods"), foods],
+        [_T(lang, "⚠️ Common Vulnerabilities", "⚠️ सामान्य कमज़ोरियाँ",
+            "⚠️ Common Vulnerabilities"), ailments],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 How a single number maps to your body's weak points",
+        "📖 एक अंक शरीर के कमज़ोर बिंदुओं से कैसे जुड़ा है",
+        "📖 Ek number aapki body ke weak points se kaise judta hai",
+        "Each Driver number is ruled by a planet — and Vedic science assigns each "
+        "planet to a <b>specific organ system</b>. Sun = heart and eyes (it 'shines' "
+        "from the chest). Moon = stomach and fluids (it controls tides). Mars = "
+        "blood and muscles (war-energy). Saturn = bones and joints (the slow rigid "
+        "structure). Knowing your ruling planet means you know which body part is "
+        "your <b>natural strong-point</b> AND which is the first to break under "
+        "stress. The 'Power Foods' here are <b>traditionally aligned</b> to fortify "
+        "those organs; the 'Vulnerabilities' are the early-warning list — annual "
+        "screenings for these are non-negotiable.",
+        "प्रत्येक Driver अंक एक ग्रह द्वारा शासित — वैदिक विज्ञान प्रत्येक ग्रह को "
+        "<b>विशिष्ट अंग-तंत्र</b> सौंपता है। सूर्य = हृदय और नेत्र (छाती से 'चमकता')। "
+        "चंद्र = पेट और तरल (ज्वार नियंत्रण)। मंगल = रक्त और मांसपेशियाँ (युद्ध-ऊर्जा)। "
+        "शनि = हड्डियाँ और जोड़ (धीमी कठोर संरचना)। शासक ग्रह जानने से पता चलता है "
+        "कौन सा अंग <b>स्वाभाविक रूप से सशक्त</b> है और कौन तनाव में पहले टूटेगा। "
+        "'शक्तिवर्धक आहार' उन अंगों को मज़बूत करते हैं; 'कमज़ोरियाँ' पूर्व-चेतावनी सूची "
+        "है — इनकी वार्षिक जाँच अनिवार्य है।",
+        "Har Driver number ek planet se ruled — aur Vedic science har planet ko "
+        "<b>specific organ system</b> assign karta hai. Sun = heart aur eyes (chest "
+        "se 'shine' karta hai). Moon = stomach aur fluids (tides control karta hai). "
+        "Mars = blood aur muscles (war-energy). Saturn = bones aur joints (slow "
+        "rigid structure). Apna ruling planet jaan ke pata chalta hai kaunsa body "
+        "part <b>naturally strong</b> hai AUR kaunsa stress me pehle break karega. "
+        "'Power Foods' yahan <b>traditionally aligned</b> hain un organs ko fortify "
+        "karne ke liye; 'Vulnerabilities' early-warning list hai — inki annual "
+        "screenings non-negotiable hain."))
+    return flow
+
+
+def _wealth_chakra_section(s, lang: str, driver: int) -> List[Any]:
+    """Money pattern: income style, save:invest ratio, lucky digits, wallet colour."""
+    flow: List[Any] = []
+    income, ratio, digits, wallet, avoid = _WEALTH_CHAKRA.get(driver, _WEALTH_CHAKRA[1])
+    flow.append(_section_title2(s, _T(lang,
+        "💰 Wealth & Money Chakra",
+        "💰 धन और मनी चक्र",
+        "💰 Wealth & Money Chakra")))
+    flow.append(Paragraph(_T(lang,
+        f"Your Driver {driver} dictates HOW you earn best, HOW much to save vs "
+        f"invest, and which numbers/colours amplify wealth flow.",
+        f"आपका Driver {driver} तय करता है आप कैसे सबसे अच्छा कमाते हैं, बचत बनाम "
+        f"निवेश का अनुपात क्या हो, और कौन से अंक/रंग धन-प्रवाह बढ़ाते हैं।",
+        f"Aapka Driver {driver} decide karta hai aap KAISE best earn karte ho, "
+        f"save vs invest ka ratio kya ho, aur kaunse numbers/colours wealth flow "
+        f"amplify karte hain."), s["body_mid"]))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_kv_table([
+        [_T(lang, "💼 Best Income Style", "💼 सर्वश्रेष्ठ आय शैली",
+            "💼 Best Income Style"), income],
+        [_T(lang, "📊 Save : Invest Ratio", "📊 बचत : निवेश अनुपात",
+            "📊 Save : Invest Ratio"), ratio],
+        [_T(lang, "🔢 Lucky Bank-Account Last Digit", "🔢 शुभ खाता अंतिम अंक",
+            "🔢 Lucky Bank-Account Last Digit"), digits],
+        [_T(lang, "👛 Lucky Wallet Colour", "👛 शुभ बटुआ रंग",
+            "👛 Lucky Wallet Colour"), wallet],
+        [_T(lang, "❌ Avoid This Money Habit", "❌ इस धन-आदत से बचें",
+            "❌ Avoid This Money Habit"), avoid],
+    ]))
+    flow.append(Spacer(1, 4 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 Why your number predicts HOW you make and lose money",
+        "📖 आपका अंक धन कमाने और गँवाने का तरीक़ा क्यों भविष्यवाणी करता है",
+        "📖 Aapka number paisa kamaane aur ganwane ka tareeka kyu predict karta hai",
+        "Each Driver has a <b>natural money relationship</b> coded by its ruling "
+        "planet. Sun (1) = leadership-equity pull. Moon (2) = relational/emotional "
+        "spending. Jupiter (3) = teaching-royalties abundance. Rahu (4) = sudden "
+        "spikes-crashes. Mercury (5) = trader/multi-stream agility. Venus (6) = "
+        "luxury-aesthetic spend. Ketu (7) = minimalist + hidden wealth. Saturn (8) = "
+        "long-game compound builder. Mars (9) = warrior big-bet. Force-fitting an "
+        "8 into trader-life or a 5 into salaried-engineer = chronic money stress. "
+        "Use the <b>Best Income Style</b> as your filter — say no to opportunities "
+        "that don't fit it. The Save:Invest ratio + lucky wallet colour are micro-"
+        "amplifiers; the income style is the macro lever.",
+        "प्रत्येक Driver का <b>स्वाभाविक धन-संबंध</b> शासक ग्रह से कोडित। सूर्य (1) = "
+        "नेतृत्व-इक्विटी। चंद्र (2) = संबंध/भावनात्मक व्यय। गुरु (3) = शिक्षण-रॉयल्टी "
+        "समृद्धि। राहु (4) = अचानक उछाल-पतन। बुध (5) = व्यापारी/बहु-स्रोत चपलता। "
+        "शुक्र (6) = विलासिता-व्यय। केतु (7) = न्यूनतम + छिपा धन। शनि (8) = दीर्घ-काल "
+        "चक्रवृद्धि निर्माता। मंगल (9) = योद्धा बड़े दाँव। 8 को व्यापारी जीवन में या 5 को "
+        "वेतनभोगी इंजीनियर में बलपूर्वक फ़िट करना = पुराना धन-तनाव। <b>सर्वश्रेष्ठ आय शैली</b> "
+        "को फ़िल्टर बनाएँ — असंगत अवसरों को न कहें। बचत-निवेश अनुपात + शुभ बटुआ रंग "
+        "सूक्ष्म-प्रवर्धक हैं; आय शैली मूल लीवर है।",
+        "Har Driver ka <b>natural money relationship</b> ruling planet se coded hai. "
+        "Sun (1) = leadership-equity pull. Moon (2) = relational/emotional spending. "
+        "Jupiter (3) = teaching-royalty abundance. Rahu (4) = sudden spikes-crashes. "
+        "Mercury (5) = trader/multi-stream agility. Venus (6) = luxury-aesthetic "
+        "spend. Ketu (7) = minimalist + hidden wealth. Saturn (8) = long-game compound "
+        "builder. Mars (9) = warrior big-bet. 8 ko trader-life me ya 5 ko salaried-"
+        "engineer me force-fit karna = chronic money stress. <b>Best Income Style</b> "
+        "ko apna filter banao — fit na hone wali opportunities ko na bolo. Save:Invest "
+        "ratio + lucky wallet colour micro-amplifiers; income style macro lever hai."))
+    return flow
+
+
 def render_numerology_pdf(*,
                           name: str,
                           dob: str,
@@ -1389,6 +1863,32 @@ def render_numerology_pdf(*,
         "strong baitha hai. <b>Lucky gem</b> = wo stone jo Lo Shu grid ke weakest "
         "cell ko amplify karta hai. Is catalog ko <b>daily filter</b> ki tarah use "
         "karo — kisi bhi major action se pehle matching day, direction, colour chuno."))
+    story.append(PageBreak())
+    # NEW Part 1 add-ons (year ahead, compat, daily clock, body-health, wealth)
+    try:
+        _digits_p1 = [int(c) for c in dob if c.isdigit()]
+        try:
+            _day_p1 = int(dob.split("-")[2])
+        except (IndexError, ValueError):
+            _day_p1 = 0
+        def _r1(n):
+            n = abs(int(n))
+            while n > 9:
+                n = sum(int(d) for d in str(n))
+            return n
+        _drv1 = _r1(_day_p1) if _day_p1 else 1
+    except Exception:
+        _drv1 = 1
+    story.append(PageBreak())
+    story += _year_ahead_section(s, lang, dob, _drv1)
+    story.append(PageBreak())
+    story += _auto_compat_section(s, lang, _drv1)
+    story.append(PageBreak())
+    story += _daily_clock_section(s, lang, _drv1)
+    story.append(PageBreak())
+    story += _body_health_section(s, lang, _drv1)
+    story.append(PageBreak())
+    story += _wealth_chakra_section(s, lang, _drv1)
     story.append(PageBreak())
     story += _remedies_section(s, phase_s)
     story.append(Spacer(1, 4 * mm))

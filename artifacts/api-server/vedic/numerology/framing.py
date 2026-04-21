@@ -18,7 +18,22 @@ Usage from a tier renderer:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
+
+# Devanagari Unicode range (incl. vedic extensions). Wrap any run of
+# Devanagari characters in a <font name="NotoDeva"> tag so reportlab uses
+# the registered Devanagari TTF instead of Helvetica (which renders
+# Devanagari as ▉▉▉ tofu boxes). Safe to call on already-tagged HTML
+# because we only match raw Devanagari character runs.
+_DEVA_RE = re.compile(r"([\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF]+)")
+
+def _deva_safe(text: str) -> str:
+    """Wrap Devanagari runs in <font name='NotoDeva'> so they render in
+    PDFs even when the surrounding paragraph style uses Helvetica."""
+    if not text:
+        return text
+    return _DEVA_RE.sub(r"<font name='NotoDeva'>\1</font>", str(text))
 
 # ── Planet table (Cheiro / classical) ──────────────────────────────────
 PLANET_BY_DRIVER: Dict[int, str] = {
@@ -463,8 +478,8 @@ def numerology_closing_toolkit_block(s: Dict[str, Any], driver: int, conductor: 
         [_T(lang, "Daily Mantra (108×)", "दैनिक मंत्र (108×)", "Daily Mantra (108×)"), lk["mantra"]],
     ]
 
-    para_rows = [[Paragraph(f"<b>{r[0]}</b>", s["body"]),
-                  Paragraph(str(r[1]), s["body"])] for r in rows]
+    para_rows = [[Paragraph(_deva_safe(f"<b>{r[0]}</b>"), s["body"]),
+                  Paragraph(_deva_safe(str(r[1])), s["body"])] for r in rows]
     tbl = Table([[Paragraph(f"<b>{title}</b>", s["body"]), ""]] + para_rows,
                 colWidths=[60 * mm, 110 * mm])
     tbl.setStyle(TableStyle([

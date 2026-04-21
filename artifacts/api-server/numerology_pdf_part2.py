@@ -37,6 +37,46 @@ _CUR_LANG: "contextvars.ContextVar[str]" = contextvars.ContextVar(
     "cur_lang", default="hinglish"
 )
 _LATIN_RUN_RE = re.compile(r"([A-Za-z][A-Za-z0-9 \-_/&\.,;:!?'\"\(\)\[\]]*)")
+_DEVA_RUN_RE = re.compile(r"([\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF][\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF\s\d×()०-९।॥]*)")
+
+
+def _autowrap_deva(text: str) -> str:
+    """Wrap consecutive Devanagari runs in <font name='NotoDeva'>...</font>.
+
+    Mirror of `_autowrap_latin` for the inverse direction: in
+    English/Hinglish mode the body font is Helvetica which lacks
+    Devanagari glyphs, so any Hindi label/mantra leaking through (e.g.
+    LUCKY['mantra'], PLANET_HI, label_hi) renders as ▉▉▉ tofu boxes.
+    Wrapping Devanagari runs in NotoDeva fixes that universally.
+
+    Skips text inside existing <font name=...> overrides (so already-
+    wrapped Devanagari isn't double-tagged).  Runs only in non-Hindi
+    modes — Hindi mode already uses NotoDeva as the base font.
+    """
+    if _CUR_LANG.get() == "hindi":
+        return text
+    if not _DEVA_RUN_RE.search(text):
+        return text
+    parts = re.split(r"(<[^>]+>)", text)
+    out = []
+    inside_font = 0
+    for p in parts:
+        if not p:
+            continue
+        if p.startswith("<"):
+            tag = p.lower()
+            if tag.startswith("<font") and "name=" in tag:
+                inside_font += 1
+            elif tag.startswith("</font") and inside_font > 0:
+                inside_font -= 1
+            out.append(p)
+            continue
+        if inside_font > 0:
+            out.append(p)
+            continue
+        out.append(_DEVA_RUN_RE.sub(
+            lambda m: f"<font name='NotoDeva'>{m.group(1)}</font>", p))
+    return "".join(out)
 
 
 def _autowrap_latin(text: str) -> str:
@@ -78,6 +118,7 @@ class Paragraph(_RLParagraph):  # type: ignore[misc]
     def __init__(self, text, *args, **kwargs):  # noqa: D401
         if isinstance(text, str):
             text = _autowrap_latin(text)
+            text = _autowrap_deva(text)
         super().__init__(text, *args, **kwargs)
 
 from vedic.numerology import tier_a as _ta

@@ -66,8 +66,10 @@ export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
 export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"
 export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
 
-echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST)..."
-pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
+echo "[startup] Starting Metro on port $METRO_PORT with --tunnel (ngrok exp.direct)..."
+# Unset Replit expo proxy envs so ngrok URL is used (not kirk.replit.dev).
+unset EXPO_PACKAGER_PROXY_URL EXPO_MANIFEST_PROXY_URL REACT_NATIVE_PACKAGER_HOSTNAME
+pnpm exec expo start --tunnel --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 
 # Wait for Metro to bind locally.

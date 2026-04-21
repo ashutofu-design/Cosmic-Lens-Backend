@@ -1346,6 +1346,28 @@ api-server/ai_brain/
 
 **Smoke test**: PDF jumped 46→52 pages, full render 20-31s (was 27s for 11 calls), zero fact-guard rejections. Tested with 3 fresh profiles.
 
-### Phase 2 (cont.) — Tiers 4+8 (Audits + Health) — PENDING
-### Phase 3 — Tiers 5+7+9+11+12 (Relationships, Wealth, Career, Lucky, Timing) — PENDING
-### Phase 4 — Tiers 10+13+14+15+6+16+17 (Spiritual, Digital, Family, Legacy, Dashboard, Appendix, App-tie-in) — PENDING
+### Phase 3 — Tiers 4 + 5 (Audits + Relationships) ✅ COMPLETE (2026-04-21)
+
+**Tier 4 — Personal Audits / Doshas (10 cards)**
+- `vedic/numerology/audits.py`: `compute_audits_bundle(kundli, dob, tob, driver)` aggregator wraps `dosh_engine.analyze_doshas` (9 standard doshas) + `vedic.doshas.dosh_deep.detect_deep_doshas` (BPHS-precise rules). Deep findings are grouped by family (`mangal`, `pitra`, `shani_extra`, `vish`, `karaka`, `grahan`, `shrapit`, `nadi`) and merged into the 9 dosha cards via an explicit `(card_key, primary_key, family_key)` mapping (because the two engines use slightly different key taxonomies — e.g. `manglik` vs `mangal`, `pitru` vs `pitra`).
+- Status promotion: a card whose primary status was `None` is promoted to `Active` if the deep engine flagged HIGH severity in its family, or `Mild` for MEDIUM.
+- Summary score (0-100) is recomputed from the FINAL card statuses (so active+mild+clear always = 9, no double-counting between primary and deep).
+- Standalone blocks: `shani_extra` (Sade Sati / Ashtama / Kantaka), `karaka_afflictions` (Putra/Matri/Bhratri/Pitri), `vish_yog` (Moon-Saturn).
+- Renderer: `_tier4_audits_section` in `numerology_pdf_part2.py` — title + 9 dosha cards + Shani-extra + Vish + Karaka + audit summary card.
+
+**Tier 5 — Relationships & Compatibility (7 cards + ideal-Nakshatra table)**
+- `vedic/numerology/relationships.py`: `compute_relationships_bundle(kundli, dob, driver, conductor, name)` combines `vedic.compat.phase_p.compute_phase_p` (single-side Ashtakoot DNA) + numerology partner-fit (`NUMBER_FRIENDS`/`NUMBER_ENEMIES` from `phase_s.py`) + ideal-Nakshatra filtering (Yoni-friend AND no Deva-Rakshasa Gana clash) + Mangal-need flag + Nadi guidance + best-effort Upapada marriage stability.
+- **Taxonomy normalization**: `phase_p` emits abbreviated forms (`U.Ashadha`, `Serpent`, `Vata/Pitta/Kapha`); local 27-Nakshatra and 14-Yoni tables use full forms (`Uttara Ashadha`, `Snake`). `_canon_nak` / `_canon_yoni` aliases ensure self-Nakshatra is correctly excluded from the ideal-partner list and yoni lookups don't silently fail. Nadi is now Vata/Pitta/Kapha throughout.
+- Renderer: `_tier5_relationships_section` — title + Compatibility-DNA grid + Yoni temperament + Partner-numerology drivers + Mangal need + Nadi guidance + Marriage-stability + Ideal-partner Moon-Nakshatra table.
+
+**Plumbing**: mobile `numerology.tsx` now sends `lat`/`lon`/`tz`/`place` query params; `/api/numerology/pdf_pro` parses them; `render_part2_pdf` accepts the new params and calls `kundli_engine.calculate_kundli()` to build the full chart, gracefully falling back to skip Tier 4/5 if any are missing.
+
+**AI narration**: 10 new flagship specs (`t4.dosh_overview`, `t4.mangal_audit`, `t4.kaal_sarp_audit`, `t4.shani_afflictions`, `t4.audit_synthesis`, `t5.compatibility_dna`, `t5.yoni_temperament`, `t5.partner_numerology`, `t5.marriage_stability`, `t5.ideal_partner`) added to `_build_flagship_ai_texts` with matching fact-guard validators in `ai_narrator.py`. Total flagship AI calls = 26 (was 16). The `tier4.dosh_overview` validator accepts either the karmic-load score number OR the verdict keyword (covers the score=0 case).
+
+**Bug-fix nuances**:
+- Renamed locals `hh, mm = tob.split(":")` → `_hh, _mn` inside `render_part2_pdf` because the prior name shadowed the reportlab `mm` unit and turned `rightMargin=15*mm` into a string, crashing `SimpleDocTemplate`.
+- Renderer style key is `s["page_title"]` (not `section_title`).
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 New Delhi)**: HTTP 200, **64 pages** (was 52), zero AI fact-guard rejections, audit totals coherent (active=2 + mild=4 + clear=3 = 9), Mangal card now correctly carries 3 deep findings, Nadi="Kapha" → ideal=[Vata, Pitta], self-Nakshatra excluded from ideal-partner list.
+
+### Phase 4 — Tiers 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 — PENDING

@@ -5051,6 +5051,19 @@ def numerology_pdf_pro():
     if lang not in ("english", "hindi", "hinglish"):
         lang = "hinglish"
 
+    # Optional birth-place context — when present, enables Tier 4 (doshas) +
+    # Tier 5 (compatibility). Mobile passes these from saved profile.birthData.
+    def _flt(k):
+        try:
+            v = body.get(k)
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    lat = _flt("lat")
+    lon = _flt("lon")
+    tz  = _flt("tz")
+    place = (body.get("place") or "").strip() or None
+
     if not name or not dob:
         return jsonify({"error": "missing_fields",
                         "message": "name and dob (YYYY-MM-DD) required"}), 400
@@ -5068,6 +5081,7 @@ def numerology_pdf_pro():
             name=name, dob=dob, tob=tob,
             mobile=mobile, vehicle=vehicle, house=house,
             lang=lang,
+            lat=lat, lon=lon, tz=tz, place=place,
         )
     except Exception as e:
         app.logger.exception("[numerology/pdf_pro] render failed: %s", e)

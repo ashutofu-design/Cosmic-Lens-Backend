@@ -4789,8 +4789,408 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
     return flow
 
 
+# ════════════════════════════════════════════════════════════════════════
+# TIER 4 — PERSONAL AUDITS (Doshas: BPHS-precise, 9 cards + synthesis)
+# ════════════════════════════════════════════════════════════════════════
+def _tier4_audits_section(s, name: str, dob: str, tob: Optional[str],
+                           driver: int, *, kundli: Dict[str, Any],
+                           lang: str = "hinglish",
+                           ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 4 — Personal Audits (Doshas)."""
+    from vedic.numerology.audits import compute_audits_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_audits_bundle(kundli, dob, tob, driver)
+    if not bundle.get("available"):
+        return flow
+
+    summary = bundle["summary"]
+    cards = bundle["cards"]
+
+    # ── Title + intro ─────────────────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🛡️ TIER 4 — PERSONAL AUDITS (DOSHA SCAN)",
+        "🛡️ टियर 4 — व्यक्तिगत ऑडिट (दोष-स्कैन)",
+        "🛡️ TIER 4 — PERSONAL AUDITS (DOSHA SCAN)"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 What is a Dosha — and why we audit",
+        "📖 दोष क्या है — और हम audit क्यों करते हैं",
+        "📖 Dosha kya hai — aur hum audit kyu karte hain",
+        "A 'Dosha' is not a curse — it is a <b>karmic friction-pattern</b> visible in the chart. "
+        "The 9 classical doshas (Mangal, Kaal Sarp, Pitru, etc.) plus deep BPHS rules (Sade Sati, "
+        "Vish Yog, Karaka afflictions, Grahan, Shrapit) reveal where life will demand extra effort. "
+        "Knowing them is half the cure — the right Tier 3 remedy on the right dosha at the right time "
+        "is what changes the trajectory.",
+        "'दोष' कोई श्राप नहीं है — यह कुंडली में दिखने वाला <b>कर्म-घर्षण पैटर्न</b> है। 9 शास्त्रीय दोष "
+        "(मंगल, कालसर्प, पितृ आदि) और BPHS-सटीक नियम (साढ़ेसाती, विष-योग, कारक-दोष, ग्रहण, शापित) बताते हैं "
+        "कि जीवन में कहाँ अतिरिक्त प्रयास चाहिए। जानना ही आधा इलाज है।",
+        "'Dosha' koi shrap nahi — yeh kundli me dikhne wala <b>karm-friction pattern</b> hai. 9 classical "
+        "doshas (Mangal, Kaal Sarp, Pitru, etc.) aur deep BPHS rules (Sade Sati, Vish Yog, Karaka "
+        "afflictions, Grahan, Shrapit) batate hain ki life me kahan extra effort chahiye. Jaanna hi "
+        "aadha ilaaj hai — sahi remedy sahi dosh par sahi time pe lagne se trajectory badal jaati hai.",
+        bg="#EEF2FF", border="#4338CA"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. AI Overview / Summary card ─────────────────────────────
+    overview_facts = (
+        f"<b>Active doshas:</b> {summary['active_count']} &nbsp;|&nbsp; "
+        f"<b>Mild:</b> {summary['mild_count']} &nbsp;|&nbsp; "
+        f"<b>Clear:</b> {summary['clear_count']}<br/>"
+        f"<b>Deep findings:</b> 🔴 HIGH {summary['deep_high']} &nbsp;·&nbsp; "
+        f"🟠 MEDIUM {summary['deep_medium']} &nbsp;·&nbsp; ℹ️ INFO {summary['deep_info']}<br/>"
+        f"<b>Karmic-load score:</b> {summary['score']}/100 — <i>{summary['verdict']}</i>"
+    )
+    _ai = ai_texts.get("t4.dosh_overview", "").strip()
+    body_ov = ((_ai_to_html(_ai) + "<br/><br/>") if _ai else "") + overview_facts
+    flow.append(_premium_card(s,
+        _T(lang,
+           f"🔭 OVERALL DOSHA SCAN — {summary['verdict'].split('—')[0].strip()}",
+           f"🔭 कुल दोष-स्कैन — {summary['verdict'].split('—')[0].strip()}",
+           f"🔭 OVERALL DOSHA SCAN — {summary['verdict'].split('—')[0].strip()}"),
+        body_ov,
+        bg_color=colors.HexColor("#EEF2FF"), border_color=colors.HexColor("#4338CA"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── Generic dosha card renderer ───────────────────────────────
+    def _dosh_card(card: Dict[str, Any], idx: int, ai_key: Optional[str] = None,
+                   bg: str = "#FEF3C7", brd: str = "#B45309") -> Any:
+        st = card.get("status", "None")
+        st_emoji = {"Active": "🔴", "Mild": "🟠", "None": "✅"}.get(st, "•")
+        title = f"{idx}️⃣  {card['icon']} {card['name']} — {st_emoji} {st}"
+        body_parts = []
+        ai_txt = ai_texts.get(ai_key, "").strip() if ai_key else ""
+        if ai_txt:
+            body_parts.append(_ai_to_html(ai_txt))
+        if card.get("intro"):
+            body_parts.append(f"<i>{card['intro']}</i>")
+        if card.get("headline"):
+            body_parts.append(f"<b>📌 Headline:</b> {card['headline']}")
+        if card.get("description"):
+            body_parts.append(f"<b>📖 Detail:</b> {card['description']}")
+        if card.get("deep_findings"):
+            lines = []
+            for d in card["deep_findings"][:5]:
+                sev = d.get("sev", "INFO")
+                tag = {"HIGH": "🔴", "MEDIUM": "🟠", "INFO": "ℹ️"}.get(sev, "•")
+                lines.append(f"{tag} <b>{d.get('name')}</b>: {d.get('detail', '')}")
+            body_parts.append("<b>🔬 BPHS deep findings:</b><br/>" + "<br/>".join(lines))
+        if card.get("remedies"):
+            rems = card["remedies"][:5]
+            body_parts.append("<b>📋 Remedies:</b><br/>• " + "<br/>• ".join(rems))
+        return _premium_card(s, title, "<br/><br/>".join(body_parts),
+                              bg_color=colors.HexColor(bg),
+                              border_color=colors.HexColor(brd), lang=lang)
+
+    # ── 2. Mangal Dosh (AI) ───────────────────────────────────────
+    flow.append(_dosh_card(cards["mangal"], 1, "t4.mangal_audit",
+                            bg="#FEE2E2", brd="#B91C1C"))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ── 3. Kaal Sarp Dosh (AI) ────────────────────────────────────
+    flow.append(_dosh_card(cards["kaal_sarp"], 2, "t4.kaal_sarp_audit",
+                            bg="#F3E8FF", brd="#6B21A8"))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ── 4. Pitru Dosh ─────────────────────────────────────────────
+    flow.append(_dosh_card(cards["pitru"], 3, None, bg="#FEF3C7", brd="#B45309"))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ── 5. Shrapit + Grahan combined ──────────────────────────────
+    flow.append(_dosh_card(cards["shrapit"], 4, None, bg="#E0E7FF", brd="#3730A3"))
+    flow.append(Spacer(1, 3 * mm))
+    flow.append(_dosh_card(cards["grahan"], 5, None, bg="#E0E7FF", brd="#3730A3"))
+    flow.append(Spacer(1, 3 * mm))
+
+    # ── 6. Shani extras (Sade Sati / Ashtama / Kantaka) (AI) ─────
+    shani = bundle.get("shani_extra", {})
+    if shani.get("available"):
+        items = shani.get("items", [])
+        body_lines = []
+        ai_txt = ai_texts.get("t4.shani_afflictions", "").strip()
+        if ai_txt:
+            body_lines.append(_ai_to_html(ai_txt))
+        for d in items[:6]:
+            sev = d.get("sev", "INFO")
+            tag = {"HIGH": "🔴", "MEDIUM": "🟠", "INFO": "ℹ️"}.get(sev, "•")
+            body_lines.append(f"{tag} <b>{d.get('name')}</b>: {d.get('detail', '')}")
+        flow.append(_premium_card(s,
+            _T(lang, "6️⃣  ⚖️ SHANI AFFLICTIONS (Sade Sati / Ashtama / Kantaka)",
+               "6️⃣  ⚖️ शनि-कष्ट (साढ़ेसाती / अष्टम / कंटक)",
+               "6️⃣  ⚖️ SHANI AFFLICTIONS (Sade Sati / Ashtama / Kantaka)"),
+            "<br/><br/>".join(body_lines),
+            bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#111827"),
+            lang=lang))
+        flow.append(Spacer(1, 3 * mm))
+
+    # ── 7. Vish Yog ───────────────────────────────────────────────
+    vish = bundle.get("vish_yog", {})
+    if vish.get("available"):
+        items = vish.get("items", [])
+        body_lines = ["<i>Vish Yog forms when Moon and Saturn occupy the same sign / are in mutual aspect — "
+                       "creates emotional heaviness, sleep disturbance, and a tendency to over-worry.</i>"]
+        for d in items[:5]:
+            sev = d.get("sev", "INFO")
+            tag = {"HIGH": "🔴", "MEDIUM": "🟠", "INFO": "ℹ️"}.get(sev, "•")
+            body_lines.append(f"{tag} <b>{d.get('name')}</b>: {d.get('detail', '')}")
+        flow.append(_premium_card(s,
+            _T(lang, "7️⃣  🧪 VISH YOG (Moon-Saturn affliction)",
+               "7️⃣  🧪 विष योग (चंद्र-शनि दोष)",
+               "7️⃣  🧪 VISH YOG (Moon-Saturn affliction)"),
+            "<br/><br/>".join(body_lines),
+            bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+            lang=lang))
+        flow.append(Spacer(1, 3 * mm))
+
+    # ── 8. Karaka afflictions ─────────────────────────────────────
+    karaka = bundle.get("karaka_afflictions", {})
+    if karaka.get("available"):
+        items = karaka.get("items", [])
+        body_lines = ["<i>Karaka = the 'significator' planet for a life-area: Jupiter→children, Moon→mother, "
+                       "Mars→siblings, Sun→father. When the karaka is afflicted, that life-area carries karmic strain.</i>"]
+        for d in items[:6]:
+            sev = d.get("sev", "INFO")
+            tag = {"HIGH": "🔴", "MEDIUM": "🟠", "INFO": "ℹ️"}.get(sev, "•")
+            body_lines.append(f"{tag} <b>{d.get('name')}</b>: {d.get('detail', '')}")
+        flow.append(_premium_card(s,
+            _T(lang, "8️⃣  🪐 KARAKA AFFLICTIONS (Putra/Matri/Bhratri/Pitri)",
+               "8️⃣  🪐 कारक-दोष (पुत्र/मातृ/भ्रातृ/पितृ)",
+               "8️⃣  🪐 KARAKA AFFLICTIONS (Putra/Matri/Bhratri/Pitri)"),
+            "<br/><br/>".join(body_lines),
+            bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#C2410C"),
+            lang=lang))
+        flow.append(Spacer(1, 3 * mm))
+
+    # ── 9. Compact group: Kemadruma + Daridra + Angarak + Guru Chandal ──
+    grp_lines = []
+    for k in ("kemadruma", "daridra", "angarak", "guru_chandal"):
+        c = cards[k]
+        st_emoji = {"Active": "🔴", "Mild": "🟠", "None": "✅"}.get(c.get("status", "None"), "•")
+        grp_lines.append(f"{st_emoji} <b>{c['name']}</b> — {c.get('headline','—')}")
+    flow.append(_premium_card(s,
+        _T(lang, "9️⃣  📊 OTHER AUDITS (Kemadruma · Daridra · Angarak · Guru Chandal)",
+           "9️⃣  📊 अन्य ऑडिट (केमद्रुम · दरिद्र · अंगारक · गुरु-चांडाल)",
+           "9️⃣  📊 OTHER AUDITS (Kemadruma · Daridra · Angarak · Guru Chandal)"),
+        "<br/>".join(grp_lines),
+        bg_color=colors.HexColor("#F9FAFB"), border_color=colors.HexColor("#374151"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 10. Audit synthesis (AI) — what to do first ──────────────
+    syn_ai = ai_texts.get("t4.audit_synthesis", "").strip()
+    syn_facts = (
+        f"<b>Karmic-load score:</b> {summary['score']}/100 ({summary['verdict']})<br/>"
+        f"<b>Priority focus:</b> tackle the 🔴 active doshas first using Tier 3 remedies "
+        f"(weakest planet, current dasha lord, mantra schedule). Mild doshas can run on weekly maintenance."
+    )
+    body_syn = (_ai_to_html(syn_ai) + "<br/><br/>" if syn_ai else "") + syn_facts
+    flow.append(_premium_card(s,
+        _T(lang, "🎯 AUDIT SYNTHESIS — Where to focus your energy",
+           "🎯 ऑडिट संश्लेषण — कहाँ ध्यान दें",
+           "🎯 AUDIT SYNTHESIS — Kahan focus karna hai"),
+        body_syn,
+        bg_color=colors.HexColor("#FFF1F2"), border_color=colors.HexColor("#9F1239"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    return flow
+
+
+# ════════════════════════════════════════════════════════════════════════
+# TIER 5 — RELATIONSHIPS & COMPATIBILITY DNA (single-side, 7 cards)
+# ════════════════════════════════════════════════════════════════════════
+def _tier5_relationships_section(s, name: str, dob: str, driver: int,
+                                  conductor: int, *, kundli: Dict[str, Any],
+                                  lang: str = "hinglish",
+                                  ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 5 — Relationships & Compatibility DNA."""
+    from vedic.numerology.relationships import compute_relationships_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_relationships_bundle(kundli, dob, driver, conductor, name)
+    if not bundle.get("available"):
+        return flow
+
+    dna = bundle["compat_dna"]
+    yoni = bundle["yoni_temperament"]
+    pn = bundle["partner_numerology"]
+    ideal_naks = bundle.get("ideal_nakshatras", [])
+    mangal = bundle["mangal"]
+    nadi = bundle["nadi"]
+    marriage = bundle.get("marriage_stability", {})
+    profile = bundle["ideal_partner_profile"]
+
+    # ── Title + intro ─────────────────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "💞 TIER 5 — RELATIONSHIPS & COMPATIBILITY DNA",
+        "💞 टियर 5 — संबंध और अनुकूलता DNA",
+        "💞 TIER 5 — RELATIONSHIPS & COMPATIBILITY DNA"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 What changes here: from 'me' to 'us'",
+        "📖 यहाँ क्या बदलता है: 'मैं' से 'हम' तक",
+        "📖 Yahan kya badalta hai: 'me' se 'us' tak",
+        "Up to Tier 4 the report was about <b>you alone</b>. Tier 5 is your <b>compatibility DNA</b> — "
+        "the 8 Ashtakoot attributes (Varna, Vashya, Tara, Yoni, Graha-Maitri, Gana, Bhakoot, Nadi) plus "
+        "Numerology partner-fit (driver/conductor harmony) plus Mangal-need flag plus ideal Moon-Nakshatra "
+        "list. With this you can pre-screen any potential partner WITHOUT needing their full kundli — just "
+        "their DOB + Moon-sign + Nakshatra is enough.",
+        "टियर 4 तक रिपोर्ट केवल <b>आपके बारे में</b> थी। टियर 5 आपका <b>compatibility DNA</b> है — 8 अष्टकूट गुण "
+        "(वर्ण, वश्य, तारा, योनि, ग्रह-मैत्री, गण, भकूट, नाड़ी) + अंक-शास्त्र साथी-सामंजस्य + मंगल-आवश्यकता flag "
+        "+ आदर्श चंद्र-नक्षत्र सूची।",
+        "Tier 4 tak report sirf <b>aapke baare me</b> thi. Tier 5 aapka <b>compatibility DNA</b> hai — "
+        "8 Ashtakoot attributes (Varna, Vashya, Tara, Yoni, Graha-Maitri, Gana, Bhakoot, Nadi) + "
+        "numerology partner-fit + Mangal-need flag + ideal Moon-Nakshatra list. Iske saath aap kisi bhi "
+        "potential partner ko unke DOB + Moon-sign + Nakshatra se hi pre-screen kar sakte ho — full "
+        "kundli ki zaroorat nahi.",
+        bg="#FCE7F3", border="#9D174D"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Compatibility DNA card (AI) ────────────────────────────
+    dna_facts = (
+        f"<b>Moon Nakshatra:</b> {dna['moon_nakshatra']} pada {dna['moon_pada']} "
+        f"in {dna['moon_sign']}<br/>"
+        f"<b>Varna:</b> {dna['varna']} &nbsp;·&nbsp; <b>Vashya:</b> {dna['vashya']} "
+        f"&nbsp;·&nbsp; <b>Tara index:</b> {dna['tara_index']}<br/>"
+        f"<b>Yoni:</b> {dna['yoni']} &nbsp;·&nbsp; <b>Graha-Maitri lord:</b> {dna['graha_maitri_lord']}<br/>"
+        f"<b>Gana:</b> {dna['gana']} &nbsp;·&nbsp; <b>Bhakoot sign:</b> {dna['bhakoot_sign']} "
+        f"&nbsp;·&nbsp; <b>Nadi:</b> {dna['nadi']}<br/>"
+        f"<b>Rajju:</b> {dna['rajju']} &nbsp;·&nbsp; <b>Linga:</b> {dna['linga']}"
+    )
+    ai_txt = ai_texts.get("t5.compatibility_dna", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + dna_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🧬 YOUR 8-KOOT COMPATIBILITY DNA",
+           "1️⃣  🧬 आपका 8-कूट अनुकूलता DNA",
+           "1️⃣  🧬 YOUR 8-KOOT COMPATIBILITY DNA"),
+        body,
+        bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Yoni Temperament (AI) ──────────────────────────────────
+    yoni_facts = (
+        f"<b>Your yoni:</b> {yoni['self_yoni']} ({yoni['gender']})<br/>"
+        f"<b>Compatible yonis:</b> {', '.join(yoni['compatible']) or '—'}<br/>"
+        f"<b>Incompatible yonis:</b> {', '.join(yoni['incompatible']) or '—'}"
+    )
+    ai_txt = ai_texts.get("t5.yoni_temperament", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + yoni_facts
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🐯 YONI TEMPERAMENT — physical-instinctive side",
+           "2️⃣  🐯 योनि स्वभाव — शारीरिक-वृत्तिक पक्ष",
+           "2️⃣  🐯 YONI TEMPERAMENT — physical-instinctive side"),
+        body,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#C2410C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Partner Numerology (AI) ────────────────────────────────
+    pn_facts = (
+        f"<b>Your driver:</b> {pn['self_driver']} ({pn['self_planet']}) &nbsp;·&nbsp; "
+        f"<b>conductor:</b> {pn['self_conductor']}<br/>"
+        f"<b>Best partner drivers:</b> {pn['best_partner_drivers']} &nbsp;·&nbsp; "
+        f"<b>Avoid:</b> {pn['challenging_partner_drivers']}<br/>"
+        f"<b>Neutral drivers:</b> {pn['neutral_partner_drivers']}<br/>"
+        f"<b>Best conductors:</b> {pn['best_partner_conductors']} &nbsp;·&nbsp; "
+        f"<b>Avoid conductors:</b> {pn['challenging_partner_conductors']}"
+    )
+    ai_txt = ai_texts.get("t5.partner_numerology", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + pn_facts
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🔢 PARTNER NUMEROLOGY — driver/conductor fit",
+           "3️⃣  🔢 साथी अंक-शास्त्र — driver/conductor sammelan",
+           "3️⃣  🔢 PARTNER NUMEROLOGY — driver/conductor fit"),
+        body,
+        bg_color=colors.HexColor("#ECFEFF"), border_color=colors.HexColor("#0E7490"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Mangal need flag ───────────────────────────────────────
+    mangal_emoji = "🔴" if mangal["self_has_mangal_dosh"] else "✅"
+    mangal_status = "Manglik (Mars-energy partner needed)" if mangal["self_has_mangal_dosh"] else "Non-Manglik (calm-Mars partner ideal)"
+    flow.append(_premium_card(s,
+        _T(lang, f"4️⃣  ♂️ MANGAL NEED — {mangal_emoji} {mangal_status}",
+           f"4️⃣  ♂️ मंगल-आवश्यकता — {mangal_emoji} {mangal_status}",
+           f"4️⃣  ♂️ MANGAL NEED — {mangal_emoji} {mangal_status}"),
+        mangal["guidance"],
+        bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#B91C1C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Nadi + Marriage Stability (AI) ─────────────────────────
+    ms_lines = [
+        f"<b>Your Nadi:</b> {nadi['self_nadi']} → "
+        f"<b>ideal partner Nadi:</b> {', '.join(nadi['ideal_partner_nadi']) or '—'}",
+        f"<i>{nadi['rule']}</i>",
+    ]
+    if marriage.get("available"):
+        ms_lines.append(
+            f"<b>Upapada Lagna sign:</b> {marriage.get('ul_sign')} "
+            f"&nbsp;·&nbsp; <b>verdict:</b> {marriage.get('verdict')}")
+    ai_txt = ai_texts.get("t5.marriage_stability", "").strip()
+    head_html = (_ai_to_html(ai_txt) + "<br/><br/>") if ai_txt else ""
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  💍 NADI + MARRIAGE STABILITY",
+           "5️⃣  💍 नाड़ी + विवाह स्थिरता",
+           "5️⃣  💍 NADI + MARRIAGE STABILITY"),
+        head_html + "<br/>".join(ms_lines),
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#6D28D9"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Ideal Partner Nakshatras table ─────────────────────────
+    if ideal_naks:
+        rows = [["#", "Nakshatra", "Yoni", "Gana", "Match"]]
+        for i, n in enumerate(ideal_naks, 1):
+            rows.append([str(i), n["nakshatra"], n["yoni"], n["gana"], n["match_quality"]])
+        tbl = Table(rows, colWidths=[10*mm, 50*mm, 30*mm, 30*mm, 30*mm])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#9D174D")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9CA3AF")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.HexColor("#FCE7F3"), colors.white]),
+        ]))
+        flow.append(Paragraph(_T(lang,
+            "6️⃣  ✨ IDEAL PARTNER MOON-NAKSHATRAS",
+            "6️⃣  ✨ आदर्श साथी चंद्र-नक्षत्र",
+            "6️⃣  ✨ IDEAL PARTNER MOON-NAKSHATRAS"), s["page_title"]))
+        flow.append(Spacer(1, 2 * mm))
+        flow.append(tbl)
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Ideal Partner Profile synthesis (AI) ──────────────────
+    profile_facts = (
+        "<b>Quick partner pre-screen:</b><br/>• " + "<br/>• ".join(profile["lines"]) + "<br/><br/>"
+        f"<i>{profile['self_summary']}</i>"
+    )
+    ai_txt = ai_texts.get("t5.ideal_partner", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + profile_facts
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  💝 YOUR IDEAL PARTNER PROFILE",
+           "7️⃣  💝 आपका आदर्श साथी प्रोफ़ाइल",
+           "7️⃣  💝 YOUR IDEAL PARTNER PROFILE"),
+        body,
+        bg_color=colors.HexColor("#FDF2F8"), border_color=colors.HexColor("#BE185D"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
-                              driver: int, lang: str) -> Dict[str, str]:
+                              driver: int, lang: str,
+                              kundli: Optional[Dict[str, Any]] = None,
+                              conductor: int = 0) -> Dict[str, str]:
     """
     Pre-generate AI narrations for the 16 flagship cards (6 Tier 1 + 5 Tier 2 + 5 Tier 3).
 
@@ -5133,6 +5533,188 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
     except Exception as exc:
         log.warning("tier3 facts build failed: %s", exc)
 
+    # ── Tier 4 facts (Audits) ─ requires kundli ────────────────────
+    if kundli is not None:
+        try:
+            from vedic.numerology.audits import compute_audits_bundle
+            ab = compute_audits_bundle(kundli, dob, tob, driver)
+            if ab.get("available"):
+                summ = ab["summary"]
+                cards = ab["cards"]
+
+                # t4.dosh_overview — chart-wide karmic load
+                specs.append({
+                    "key": "t4.dosh_overview",
+                    "section_key": "tier4.dosh_overview",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "active_doshas": summ["active_count"],
+                        "mild_doshas": summ["mild_count"],
+                        "deep_high_findings": summ["deep_high"],
+                        "karmic_load_score": summ["score"],
+                        "verdict_keyword": summ["verdict"].split("—")[0].strip(),
+                    },
+                    "fallback": "",
+                })
+
+                m = cards.get("mangal", {})
+                specs.append({
+                    "key": "t4.mangal_audit",
+                    "section_key": "tier4.mangal_audit",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "mangal_status": m.get("status"),
+                        "mangal_headline": m.get("headline"),
+                        "deep_findings_count": len(m.get("deep_findings", [])),
+                    },
+                    "fallback": "",
+                })
+
+                ks = cards.get("kaal_sarp", {})
+                specs.append({
+                    "key": "t4.kaal_sarp_audit",
+                    "section_key": "tier4.kaal_sarp_audit",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "kaal_sarp_status": ks.get("status"),
+                        "kaal_sarp_headline": ks.get("headline"),
+                    },
+                    "fallback": "",
+                })
+
+                shani = ab.get("shani_extra", {})
+                if shani.get("available"):
+                    items = shani.get("items", [])
+                    specs.append({
+                        "key": "t4.shani_afflictions",
+                        "section_key": "tier4.shani_afflictions",
+                        "lang": lang,
+                        "word_target": 300,
+                        "facts": {
+                            "person_name": name,
+                            "shani_finding_count": len(items),
+                            "shani_high_severity": sum(1 for d in items if d.get("sev") == "HIGH"),
+                            "first_shani_finding": items[0].get("name") if items else "",
+                        },
+                        "fallback": "",
+                    })
+
+                specs.append({
+                    "key": "t4.audit_synthesis",
+                    "section_key": "tier4.audit_synthesis",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "karmic_load_score": summ["score"],
+                        "active_doshas": summ["active_count"],
+                        "mild_doshas": summ["mild_count"],
+                        "verdict_keyword": summ["verdict"].split("—")[0].strip(),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier4 facts build failed: %s", exc)
+
+    # ── Tier 5 facts (Relationships) ─ requires kundli ─────────────
+    if kundli is not None:
+        try:
+            from vedic.numerology.relationships import compute_relationships_bundle
+            rb = compute_relationships_bundle(kundli, dob, driver, conductor, name)
+            if rb.get("available"):
+                dna = rb["compat_dna"]
+                yoni = rb["yoni_temperament"]
+                pn = rb["partner_numerology"]
+                mangal = rb["mangal"]
+                profile = rb["ideal_partner_profile"]
+
+                specs.append({
+                    "key": "t5.compatibility_dna",
+                    "section_key": "tier5.compatibility_dna",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "moon_nakshatra": dna.get("moon_nakshatra"),
+                        "moon_sign": dna.get("moon_sign"),
+                        "yoni": dna.get("yoni"),
+                        "gana": dna.get("gana"),
+                        "nadi": dna.get("nadi"),
+                        "varna": dna.get("varna"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t5.yoni_temperament",
+                    "section_key": "tier5.yoni_temperament",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "yoni": yoni.get("self_yoni"),
+                        "yoni_gender": yoni.get("gender"),
+                        "compatible_yonis": yoni.get("compatible"),
+                        "incompatible_yonis": yoni.get("incompatible"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t5.partner_numerology",
+                    "section_key": "tier5.partner_numerology",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "self_driver": pn.get("self_driver"),
+                        "self_planet": pn.get("self_planet"),
+                        "best_partner_drivers": pn.get("best_partner_drivers"),
+                        "challenging_partner_drivers": pn.get("challenging_partner_drivers"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t5.marriage_stability",
+                    "section_key": "tier5.marriage_stability",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "self_nadi": dna.get("nadi"),
+                        "ideal_partner_nadi": rb.get("nadi", {}).get("ideal_partner_nadi"),
+                        "self_has_mangal_dosh": mangal.get("self_has_mangal_dosh"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t5.ideal_partner",
+                    "section_key": "tier5.ideal_partner",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "self_driver": pn.get("self_driver"),
+                        "best_partner_drivers": pn.get("best_partner_drivers"),
+                        "self_yoni": dna.get("yoni"),
+                        "self_moon_nakshatra": dna.get("moon_nakshatra"),
+                        "ideal_nakshatra_examples": [
+                            n["nakshatra"] for n in rb.get("ideal_nakshatras", [])[:3]
+                        ],
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier5 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -5157,15 +5739,28 @@ def render_part2_pdf(*,
                      vehicle: Optional[str],
                      house: Optional[str],
                      lang: str = "hinglish",
-                     tob: Optional[str] = None) -> bytes:
-    """Render the Practical Numerology Tools (Part 2) PDF."""
+                     tob: Optional[str] = None,
+                     lat: Optional[float] = None,
+                     lon: Optional[float] = None,
+                     tz: Optional[float] = None,
+                     place: Optional[str] = None) -> bytes:
+    """Render the Life Mastery Report (Part 2) PDF.
+
+    When `lat`, `lon`, `tz` are all provided AND `tob` is set, a full sidereal
+    kundli is computed and Tier 4 (Doshas/Audits) + Tier 5 (Compatibility) are
+    rendered. Otherwise these tiers are silently skipped.
+    """
     # Compute Driver + Conductor from dob
     digits = [int(c) for c in dob if c.isdigit()]
     parts = dob.split("-")
     try:
         day = int(parts[2])
+        month_num = int(parts[1])
+        year_num = int(parts[0])
     except (IndexError, ValueError):
         day = 0
+        month_num = 0
+        year_num = 0
 
     def _r(n):
         n = abs(int(n))
@@ -5179,8 +5774,34 @@ def render_part2_pdf(*,
     _CUR_LANG.set((lang or "hinglish").lower())
     s = _styles(lang)
 
-    # ── AI narrations for 11 flagship cards (parallel, ~30-50s) ───────
-    ai_texts = _build_flagship_ai_texts(name, dob, tob, driver, lang)
+    # ── Build full kundli (only when birth-place context is present) ──
+    kundli: Optional[Dict[str, Any]] = None
+    if (lat is not None and lon is not None and tz is not None
+            and tob and year_num and month_num and day):
+        try:
+            # NOTE: do NOT use the local name `mm` here — it would shadow the
+            # reportlab `mm` unit imported at module top, breaking SimpleDocTemplate.
+            _hh, _mn = (tob.split(":") + ["0"])[:2]
+            hr_int = int(_hh) % 24
+            ampm_v = "AM" if hr_int < 12 else "PM"
+            hr12 = hr_int if hr_int <= 12 else hr_int - 12
+            if hr12 == 0:
+                hr12 = 12
+            from kundli_engine import calculate_kundli
+            kundli = calculate_kundli({
+                "name": name, "day": day, "month": month_num, "year": year_num,
+                "hour": hr12, "minute": int(_mn), "ampm": ampm_v,
+                "lat": lat, "lon": lon, "tz": tz, "place": place or "",
+            })
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "render_part2_pdf: kundli build failed (%s) — Tier 4/5 will be skipped", exc)
+            kundli = None
+
+    # ── AI narrations for flagship cards (parallel, ~30-90s) ───────
+    ai_texts = _build_flagship_ai_texts(name, dob, tob, driver, lang,
+                                         kundli=kundli, conductor=conductor)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=15 * mm, rightMargin=15 * mm,
@@ -5207,6 +5828,19 @@ def render_part2_pdf(*,
     # Pages 23-32 — 💎 TIER 3 — Personalized Remedies (Vedic + Numerological)
     story += _tier3_remedies_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
+
+    # Pages 33-45 — 🛡️ TIER 4 — Personal Audits (9 doshas, BPHS-precise)
+    if kundli is not None:
+        story += _tier4_audits_section(s, name, dob, tob, driver, kundli=kundli,
+                                        lang=lang, ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 46-58 — 💞 TIER 5 — Relationships & Compatibility DNA
+    if kundli is not None:
+        story += _tier5_relationships_section(s, name, dob, driver, conductor,
+                                               kundli=kundli, lang=lang,
+                                               ai_texts=ai_texts)
+        story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
     story += _life_essence_section(s, driver, lang=lang)

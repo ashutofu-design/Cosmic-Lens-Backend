@@ -497,6 +497,11 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       ...(mobile  ? { mobile }  : {}),
       ...(vehicle ? { vehicle } : {}),
       ...(house   ? { house }   : {}),
+      // ── Birth-place context for Tier 4 (doshas) + Tier 5 (compatibility) ──
+      ...(typeof bd.lat === "number" ? { lat: String(bd.lat) } : {}),
+      ...(typeof bd.lon === "number" ? { lon: String(bd.lon) } : {}),
+      ...(typeof bd.tz  === "number" ? { tz:  String(bd.tz)  } : {}),
+      ...(bd.place ? { place: bd.place } : {}),
     });
     const safeName = bd.name.replace(/[^a-zA-Z0-9]+/g, "_");
     await downloadAndShare(

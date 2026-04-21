@@ -142,6 +142,47 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "tier3.ishta_sadhana":
         lambda f, t: _has_word(t, f.get("ishta_devata"))
                      and _has_word(t, f.get("ruling_planet")),
+    # ── Tier 4 — Personal Audits (Doshas) ────────────────────────────
+    "tier4.dosh_overview":
+        # Score must appear OR verdict keyword (covers score=0 case where the
+        # "0" digit may not appear naturally in the prose).
+        lambda f, t: _has_num(t, f.get("karmic_load_score"))
+                     or _has_word(t, f.get("verdict_keyword")),
+    "tier4.mangal_audit":
+        # AI must mention Mangal/Mars
+        lambda f, t: _has_word(t, "Mangal") or _has_word(t, "Mars")
+                     or _has_word(t, "मंगल"),
+    "tier4.kaal_sarp_audit":
+        # AI must mention Kaal Sarp / Rahu / Ketu
+        lambda f, t: (_has_word(t, "Kaal") or _has_word(t, "Rahu")
+                      or _has_word(t, "Ketu") or _has_word(t, "काल")),
+    "tier4.shani_afflictions":
+        lambda f, t: _has_word(t, "Shani") or _has_word(t, "Saturn")
+                     or _has_word(t, "शनि"),
+    "tier4.audit_synthesis":
+        # Score must appear; or accept if score is 0 (overview already clean)
+        lambda f, t: _has_num(t, f.get("karmic_load_score"))
+                     or f.get("karmic_load_score") == 0,
+    # ── Tier 5 — Relationships & Compatibility ───────────────────────
+    "tier5.compatibility_dna":
+        # Must mention Moon-nakshatra OR moon-sign — the DNA anchor
+        lambda f, t: _has_word(t, f.get("moon_nakshatra"))
+                     or _has_word(t, f.get("moon_sign")),
+    "tier5.yoni_temperament":
+        lambda f, t: _has_word(t, f.get("yoni")),
+    "tier5.partner_numerology":
+        # Must mention self driver number
+        lambda f, t: _has_num(t, f.get("self_driver")),
+    "tier5.marriage_stability":
+        # Must mention either Nadi or Mangal — the stability levers
+        lambda f, t: _has_word(t, "Nadi") or _has_word(t, f.get("self_nadi"))
+                     or _has_word(t, "Mangal") or _has_word(t, "Saturn")
+                     or _has_word(t, "नाड़ी") or _has_word(t, "मंगल"),
+    "tier5.ideal_partner":
+        # Must mention either own driver, own yoni, or own moon-nakshatra
+        lambda f, t: _has_num(t, f.get("self_driver"))
+                     or _has_word(t, f.get("self_yoni"))
+                     or _has_word(t, f.get("self_moon_nakshatra")),
 }
 
 

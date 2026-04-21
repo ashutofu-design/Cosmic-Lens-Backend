@@ -248,6 +248,43 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         # MUST mention BOTH driver number AND money planet — the dual anchor
         lambda f, t: _has_num(t, f.get("driver_number"))
                      and _has_word(t, f.get("money_planet")),
+    # ── Tier 8 — Health & Longevity ──────────────────────────────────
+    # Each validator anchors on a SPECIFIC locked fact (dosha, planet,
+    # MD-lord, driver number) so generic health puff is rejected.
+    "tier8.prakriti":
+        # Must mention the dominant dosha by name (Vata/Pitta/Kapha)
+        lambda f, t: _has_word(t, f.get("dominant_dosha"))
+                     and (_has_word(t, f.get("nakshatra"))
+                          or _has_word(t, f.get("moon_sign"))),
+    "tier8.vitality":
+        # Must mention Sun + Moon AND at least one of the locked house numbers
+        lambda f, t: (_has_word(t, "Sun") or _has_word(t, "Surya")
+                      or _has_word(t, "सूर्य"))
+                     and (_has_word(t, "Moon") or _has_word(t, "Chandra")
+                          or _has_word(t, "चंद्र"))
+                     and (_has_num(t, f.get("sun_house"))
+                          or _has_num(t, f.get("moon_house"))),
+    "tier8.body_parts":
+        # Must mention BOTH driver number AND primary planet (dual anchor)
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("primary_planet")),
+    "tier8.healing_toolkit":
+        # Driver number + primary planet + healing-gem name (triple anchor —
+        # rejects generic "do exercise / eat well" prose)
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("primary_planet"))
+                     and (not f.get("healing_gem") or f.get("healing_gem") == "—"
+                          or _has_word(t, f.get("healing_gem"))),
+    "tier8.health_window":
+        # MD lord + locked verdict token + MD-house number (triple anchor)
+        # so AI cannot pass with contradictory window/house claims.
+        lambda f, t: _has_word(t, f.get("md_lord"))
+                     and any(
+                         _has_word(t, tok)
+                         for tok in (f.get("verdict") or "").replace("-", " ").split()
+                         if len(tok) >= 4
+                     )
+                     and (_has_num(t, f.get("md_house")) if f.get("md_house") else True),
 }
 
 

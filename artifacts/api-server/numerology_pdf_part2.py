@@ -5750,6 +5750,269 @@ def _tier7_wealth_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier8_health_section(s, name: str, dob: str, driver: int,
+                           conductor: int, *, kundli: Dict[str, Any],
+                           lang: str = "hinglish",
+                           ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 8 — Health & Longevity (Ayurvedic Prakriti + 6/8/12 + Markesha + numerology toolkit)."""
+    from vedic.numerology.health import compute_health_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_health_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    prakriti = bundle["prakriti"]
+    sixth = bundle["sixth_house"]
+    eighth = bundle["eighth_house"]
+    twelfth = bundle["twelfth_house"]
+    markesha = bundle["markesha"]
+    saturn = bundle["saturn_profile"]
+    vitality = bundle["vitality"]
+    body_map = bundle["body_map"]
+    healing = bundle["healing_toolkit"]
+    hwin = bundle["health_window"]
+    synthesis = bundle["synthesis_verdict"]
+
+    # ── Title + numerology opener ─────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🩺 TIER 8 — HEALTH & LONGEVITY",
+        "🩺 टियर 8 — स्वास्थ्य और दीर्घायु",
+        "🩺 TIER 8 — HEALTH & LONGEVITY"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "health", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Tier 8 is your <b>complete health & longevity blueprint</b> — Ayurvedic Prakriti (Vata/Pitta/Kapha "
+        "from your Moon nakshatra), 6th-house disease audit, 8th-house longevity snapshot, Markesha "
+        "(classical death-inflictor) planets, Saturn chronic-pattern profile, Sun+Moon vitality scoring, "
+        "body-part vulnerability map, current Mahadasha health window, plus a numerology-driven healing "
+        "toolkit (foods, exercise, gem, mantra) tuned to YOUR driver number. "
+        "<i>Disclaimer: This is astrological tendency, NOT medical advice — always consult licensed doctors "
+        "for diagnosis/treatment.</i>",
+        "टियर 8 आपका <b>संपूर्ण स्वास्थ्य व दीर्घायु खाका</b> है — आयुर्वेदिक प्रकृति (आपकी चंद्र-नक्षत्र से वात/पित्त/कफ), "
+        "छठे भाव का रोग-ऑडिट, आठवें भाव का दीर्घायु-स्नैपशॉट, मारकेश ग्रह, शनि का जीर्ण-पैटर्न, सूर्य-चंद्र जीवन-शक्ति, "
+        "अंग-संवेदनशीलता मैप, वर्तमान महादशा स्वास्थ्य-खिड़की, और आपके मूलांक के अनुसार उपचार-किट। "
+        "<i>अस्वीकरण: यह ज्योतिषीय प्रवृत्ति है, चिकित्सकीय सलाह नहीं — निदान/उपचार के लिए डॉक्टर से सलाह लें।</i>",
+        "Tier 8 aapka <b>complete health & longevity blueprint</b> hai — Ayurvedic Prakriti (Vata/Pitta/Kapha "
+        "aapki Moon nakshatra se), 6th-house disease audit, 8th-house longevity snapshot, Markesha planets, "
+        "Saturn chronic profile, Sun+Moon vitality, body-part vulnerability map, current Mahadasha health "
+        "window, plus numerology healing toolkit (foods, exercise, gem) aapke driver number ke according. "
+        "<i>Disclaimer: Yeh astrological tendency hai, medical advice NAHI — diagnosis/treatment ke liye "
+        "doctor se hi consult karein.</i>",
+        bg="#ECFDF5", border="#047857"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Ayurvedic Prakriti (AI) ────────────────────────────────
+    pk_facts = (
+        f"<b>Moon Sign:</b> {prakriti.get('moon_sign','—')} &nbsp;·&nbsp; "
+        f"<b>Nakshatra:</b> {prakriti.get('nakshatra','—')} (Pada {prakriti.get('pada',0)})<br/>"
+        f"<b>Dominant Dosha:</b> {prakriti.get('dominant_dosha','—')} "
+        f"({prakriti.get('element','—')})<br/>"
+        f"<b>Qualities:</b> {prakriti.get('qualities','')}<br/>"
+        f"<b>Body signs:</b> {prakriti.get('body_signs','')}<br/>"
+        f"<b>Mind signs:</b> {prakriti.get('mind_signs','')}<br/>"
+        f"<b>Vulnerable to:</b> {prakriti.get('vulnerable_to','')}<br/>"
+        f"<b>Balancing lifestyle:</b> {prakriti.get('balancing_lifestyle','')}<br/>"
+        f"<b>Favourable taste:</b> {prakriti.get('favourable_taste','')} &nbsp;·&nbsp; "
+        f"<b>Avoid taste:</b> {prakriti.get('avoid_taste','')}"
+    )
+    ai_txt = ai_texts.get("t8.prakriti", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + pk_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🌿 YOUR AYURVEDIC PRAKRITI (Mind-Body Constitution)",
+           "1️⃣  🌿 आपकी आयुर्वेदिक प्रकृति",
+           "1️⃣  🌿 YOUR AYURVEDIC PRAKRITI"),
+        body,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. 6th House Disease Audit (no AI) ────────────────────────
+    six_lines = [
+        f"<b>6th-house sign:</b> {sixth.get('sign','—')}",
+        f"<b>6th-house lord:</b> {sixth.get('lord','—')} "
+        f"(currently in House {sixth.get('lord_house','—')})",
+        f"<b>Occupants:</b> "
+        f"{', '.join(sixth.get('occupants', [])) if sixth.get('occupants') else '(empty — read via lord)'}",
+        f"<i>The 6th house rules disease, debt, enemies, daily routine. A clean 6th-house "
+        f"with its lord placed in 3/6/10/11 (upachaya houses) is health-supportive — "
+        f"the body fights off illness easily.</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🦠 6TH HOUSE — Disease & Recovery Audit",
+           "2️⃣  🦠 छठा भाव — रोग और स्वास्थ्य-लाभ ऑडिट",
+           "2️⃣  🦠 6TH HOUSE — Disease & Recovery Audit"),
+        "<br/>".join(six_lines),
+        bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#B91C1C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. 8th House Longevity (no AI) ────────────────────────────
+    eig_lines = [
+        f"<b>8th-house sign:</b> {eighth.get('sign','—')}",
+        f"<b>8th-house lord:</b> {eighth.get('lord','—')} "
+        f"(currently in House {eighth.get('lord_house','—')})",
+        f"<b>Occupants:</b> "
+        f"{', '.join(eighth.get('occupants', [])) if eighth.get('occupants') else '(empty)'}",
+        f"<b>12th-house lord:</b> {twelfth.get('lord','—')} (House {twelfth.get('lord_house','—')}) "
+        f"&nbsp;<i>(rules sleep, hospital, foreign healing)</i>",
+        f"<i>The 8th house rules longevity, transformation, chronic conditions, surgery. "
+        f"A strong 8th lord = bounce-back capacity; afflicted 8th = needs ULTRA-discipline post-40.</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🌑 8TH HOUSE — Longevity & Transformation",
+           "3️⃣  🌑 आठवां भाव — दीर्घायु और परिवर्तन",
+           "3️⃣  🌑 8TH HOUSE — Longevity & Transformation"),
+        "<br/>".join(eig_lines),
+        bg_color=colors.HexColor("#1E1B4B0F"), border_color=colors.HexColor("#312E81"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Markesha Planets (no AI) ───────────────────────────────
+    mk_lines = [
+        f"<b>2nd-house lord (Markesha-1):</b> {markesha.get('second_lord','—')} "
+        f"(House {markesha.get('markesha_houses', {}).get(markesha.get('second_lord'),'—')})",
+        f"<b>7th-house lord (Markesha-2):</b> {markesha.get('seventh_lord','—')} "
+        f"(House {markesha.get('markesha_houses', {}).get(markesha.get('seventh_lord'),'—')})",
+        f"<b>Active Markeshas:</b> {', '.join(markesha.get('markeshas', [])) or '—'}",
+        f"<i>{markesha.get('note','')}</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  ⚖️ MARKESHA (Maraka) PLANETS — Caution Windows",
+           "4️⃣  ⚖️ मारकेश ग्रह — सावधानी की खिड़कियाँ",
+           "4️⃣  ⚖️ MARKESHA PLANETS — Caution Windows"),
+        "<br/>".join(mk_lines),
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Saturn Profile (no AI) ─────────────────────────────────
+    sat_lines = [
+        f"<b>Saturn placement:</b> {saturn.get('sign','—')} in House {saturn.get('house','—')}",
+        f"<b>Chronic-pattern signature:</b> "
+        f"{'YES — high vigilance' if saturn.get('is_chronic_signature') else 'NO — low chronic drag'}",
+        f"<b>Verdict:</b> {saturn.get('verdict','—')}",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  🪐 SATURN PROFILE — Chronic & Bone Patterns",
+           "5️⃣  🪐 शनि प्रोफ़ाइल — जीर्ण और हड्डी पैटर्न",
+           "5️⃣  🪐 SATURN PROFILE — Chronic & Bone Patterns"),
+        "<br/>".join(sat_lines),
+        bg_color=colors.HexColor("#1F2937" + "10"), border_color=colors.HexColor("#1F2937"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Sun + Moon Vitality (AI) ───────────────────────────────
+    vit_lines = [
+        f"<b>Sun (physical vitality):</b> House {vitality.get('sun_house','—')} → "
+        f"{vitality.get('physical_vitality','—')}",
+        f"<b>Moon (mental vitality):</b> House {vitality.get('moon_house','—')} → "
+        f"{vitality.get('mental_vitality','—')}",
+        f"<i>Sun = heart, eyes, immunity, daytime energy. Moon = mind, sleep, fluids, emotional stability. "
+        f"Both being strong = robust health blueprint.</i>",
+    ]
+    ai_txt = ai_texts.get("t8.vitality", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(vit_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  ☀️🌙 SUN + MOON VITALITY (Body + Mind Battery)",
+           "6️⃣  ☀️🌙 सूर्य + चंद्र जीवन-शक्ति",
+           "6️⃣  ☀️🌙 SUN + MOON VITALITY"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Body-Part Vulnerability Map (AI) ───────────────────────
+    bm_lines = [
+        f"<b>Driver-{driver} primary planet:</b> {body_map.get('primary_planet','—')}",
+        f"<b>Primary vulnerable areas:</b> {body_map.get('primary_vulnerable','—')}",
+        f"<b>Body parts ruled by {body_map.get('primary_planet','—')}:</b> "
+        f"{body_map.get('primary_body_parts','—')}",
+    ]
+    if body_map.get("secondary_layers"):
+        bm_lines.append("<br/><b>Secondary vulnerability layers (from afflicted houses):</b>")
+        for layer in body_map["secondary_layers"][:4]:
+            bm_lines.append(
+                f"&nbsp;&nbsp;▸ <b>{layer.get('planet')}</b> ({layer.get('from_house')} house): "
+                f"{layer.get('body_parts')}"
+            )
+    ai_txt = ai_texts.get("t8.body_parts", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(bm_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🫀 BODY-PART VULNERABILITY MAP",
+           "7️⃣  🫀 अंग-संवेदनशीलता मानचित्र",
+           "7️⃣  🫀 BODY-PART VULNERABILITY MAP"),
+        body,
+        bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#9F1239"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. Current Dasha Health Window (no AI) ────────────────────
+    hw_lines = [
+        f"<b>Current Mahadasha lord:</b> {hwin.get('md_lord','—')} "
+        f"(House {hwin.get('md_house','—')})",
+        f"<b>Current Antardasha lord:</b> {hwin.get('ad_lord','—')}",
+        f"<b>Mahadasha ends:</b> {hwin.get('md_end_date','—')}",
+        f"<b>Health-window verdict:</b> {hwin.get('verdict','—')}",
+        f"<i>{hwin.get('note','')}</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "8️⃣  ⏳ CURRENT DASHA HEALTH WINDOW",
+           "8️⃣  ⏳ वर्तमान दशा स्वास्थ्य खिड़की",
+           "8️⃣  ⏳ CURRENT DASHA HEALTH WINDOW"),
+        "<br/>".join(hw_lines),
+        bg_color=colors.HexColor("#E0F2FE"), border_color=colors.HexColor("#0369A1"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 9. Numerology Healing Toolkit (AI) ────────────────────────
+    ht_lines = [
+        f"<b>Driver-{driver} ({healing.get('primary_planet','—')}) healing protocol:</b>",
+        f"&nbsp;&nbsp;▸ <b>Power foods:</b> {healing.get('power_foods','—')}",
+        f"&nbsp;&nbsp;▸ <b>Avoid foods:</b> {healing.get('avoid_foods','—')}",
+        f"&nbsp;&nbsp;▸ <b>Best exercise:</b> {healing.get('best_exercise','—')}",
+        f"&nbsp;&nbsp;▸ <b>Healing practice:</b> {healing.get('healing_practice','—')}",
+        f"&nbsp;&nbsp;▸ <b>Lucky healing color:</b> {healing.get('lucky_healing_color','—')}",
+        f"&nbsp;&nbsp;▸ <b>Healing gem:</b> {healing.get('lucky_healing_gem','—')} &nbsp;·&nbsp; "
+        f"<b>Metal:</b> {healing.get('lucky_healing_metal','—')}",
+        f"&nbsp;&nbsp;▸ <b>⚠ Danger-age windows (mandatory checkups):</b> "
+        f"{healing.get('danger_age_windows','—')}",
+    ]
+    ai_txt = ai_texts.get("t8.healing_toolkit", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(ht_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "9️⃣  🌸 NUMEROLOGY HEALING TOOLKIT",
+           "9️⃣  🌸 अंक-शास्त्र उपचार किट",
+           "9️⃣  🌸 NUMEROLOGY HEALING TOOLKIT"),
+        body,
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 10. Synthesis closing (no AI) ─────────────────────────────
+    flow.append(_premium_card(s,
+        _T(lang, "🔟  📜 TIER 8 SYNTHESIS",
+           "🔟  📜 टियर 8 निष्कर्ष",
+           "🔟  📜 TIER 8 SYNTHESIS"),
+        f"<b>{synthesis}</b><br/><br/>"
+        f"<i>Reminder: Astrological health-tendencies are NOT diagnoses. Use them to schedule "
+        f"preventive checkups and tune your lifestyle — never to skip a doctor's visit.</i>",
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "health", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -6481,6 +6744,113 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier7 facts build failed: %s", exc)
 
+    # ── Tier 8 facts (Health & Longevity) ─ requires kundli ────────
+    if kundli is not None:
+        try:
+            from vedic.numerology.health import compute_health_bundle
+            hb = compute_health_bundle(kundli, dob, driver, conductor)
+            if hb.get("available"):
+                hpk = hb["prakriti"]
+                hsix = hb["sixth_house"]
+                heig = hb["eighth_house"]
+                hmk = hb["markesha"]
+                hsat = hb["saturn_profile"]
+                hvit = hb["vitality"]
+                hbm = hb["body_map"]
+                hheal = hb["healing_toolkit"]
+                hwin = hb["health_window"]
+
+                specs.append({
+                    "key": "t8.prakriti",
+                    "section_key": "tier8.prakriti",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "moon_sign": hpk.get("moon_sign"),
+                        "nakshatra": hpk.get("nakshatra"),
+                        "dominant_dosha": hpk.get("dominant_dosha"),
+                        "qualities": hpk.get("qualities"),
+                        "vulnerable_to": hpk.get("vulnerable_to"),
+                        "balancing_lifestyle": hpk.get("balancing_lifestyle"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t8.vitality",
+                    "section_key": "tier8.vitality",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "sun_house": hvit.get("sun_house"),
+                        "moon_house": hvit.get("moon_house"),
+                        "physical_vitality": hvit.get("physical_vitality"),
+                        "mental_vitality": hvit.get("mental_vitality"),
+                        "sun_strong": hvit.get("sun_strong"),
+                        "moon_strong": hvit.get("moon_strong"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t8.body_parts",
+                    "section_key": "tier8.body_parts",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "primary_planet": hbm.get("primary_planet"),
+                        "primary_vulnerable": hbm.get("primary_vulnerable"),
+                        "primary_body_parts": hbm.get("primary_body_parts"),
+                        "secondary_planets": [
+                            l.get("planet") for l in (hbm.get("secondary_layers") or [])[:3]
+                        ],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t8.healing_toolkit",
+                    "section_key": "tier8.healing_toolkit",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "primary_planet": hheal.get("primary_planet"),
+                        "power_foods": hheal.get("power_foods"),
+                        "best_exercise": hheal.get("best_exercise"),
+                        "healing_practice": hheal.get("healing_practice"),
+                        "healing_gem": hheal.get("lucky_healing_gem"),
+                        "healing_color": hheal.get("lucky_healing_color"),
+                        "danger_age_windows": hheal.get("danger_age_windows"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t8.health_window",
+                    "section_key": "tier8.health_window",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "md_lord": hwin.get("md_lord"),
+                        "ad_lord": hwin.get("ad_lord"),
+                        "md_house": hwin.get("md_house"),
+                        "verdict": hwin.get("verdict"),
+                        "is_chronic_signature": hsat.get("is_chronic_signature"),
+                        "saturn_house": hsat.get("house"),
+                        "markeshas": hmk.get("markeshas"),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier8 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -6631,6 +7001,13 @@ def render_part2_pdf(*,
     # Pages 71-82 — 💰 TIER 7 — Wealth & Money DNA
     if kundli is not None:
         story += _tier7_wealth_section(s, name, dob, driver, conductor,
+                                        kundli=kundli, lang=lang,
+                                        ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 83-94 — 🩺 TIER 8 — Health & Longevity
+    if kundli is not None:
+        story += _tier8_health_section(s, name, dob, driver, conductor,
                                         kundli=kundli, lang=lang,
                                         ai_texts=ai_texts)
         story.append(PageBreak())

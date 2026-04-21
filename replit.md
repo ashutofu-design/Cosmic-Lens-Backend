@@ -1435,6 +1435,16 @@ Total validator count: 31 → **36**.
 
 **Known operational note**: The flagship batch is now **21 parallel AI calls** (11 tier1-3 + 5 tier5 + 5 tier6 + 5 tier7) which exceeds gpt-4.1's free-tier 30K TPM cap → tail-end calls (tier5.marriage, tier6.*, tier7.wealth_dna) hit 429 rate-limit and silently fall back to fact-only cards. **Cards still render with full facts**; only the storytelling intro is missing. To resolve at production: either upgrade OpenAI tier or chunk `narrate_batch` into 2 waves of 10-12 specs each with a 60s gap. Not a code defect.
 
-### Phase 5b — Tiers 8-17 — PENDING
+### Phase 5b — Tier 8 (Health & Longevity) ✅ COMPLETE (2026-04-21)
+
+**Tier 8 — Health & Longevity (10 cards)**
+- `vedic/numerology/health.py` (NEW ~470 lines): `compute_health_bundle(kundli, dob, driver, conductor)` produces — Ayurvedic Prakriti (V/P/K) from Moon nakshatra (27-nakshatra classical map + alias normalization for `Dhanishtha`/`Dhanistha` etc.), 6th-house disease audit, 8th-house longevity snapshot, 12th-house brief, **Markesha planets** (2nd-lord + 7th-lord = classical maraka/death-inflictor), Saturn chronic-pattern profile, Sun+Moon vitality scoring, body-part vulnerability map (driver-planet × afflicted-house occupants), numerology healing toolkit (power foods, exercise, gem, mantra, danger-age windows per driver 1-9), current Mahadasha health-window (HEALTH-VIGILANCE / MARKESHA-WINDOW / ROBUST / STEADY), synthesis verdict.
+- **Hard data gate** (architect-flagged): `compute_health_bundle` now refuses to fabricate facts on incomplete kundli — returns `{available: False, reason: "..."}` if ascendant missing/unknown, planets list incomplete (<7), Sun/Moon/Saturn missing, or nakshatra unknown after normalization. No more silent "Aries+Vata" fallback.
+- Renderer: `_tier8_health_section` in `numerology_pdf_part2.py` — title + 10 premium cards (Prakriti AI, 6th-house facts, 8th-house facts, Markesha facts, Saturn facts, Sun-Moon Vitality AI, Body-Part Vulnerability AI, Dasha Health Window facts, Numerology Healing Toolkit AI, Synthesis closing) wrapped in `numerology_opener_block(life_area="health")` + `numerology_closing_toolkit_block`. Inserted between T7 and identity story.
+- **AI narration**: 5 new flagship specs (`t8.prakriti`, `t8.vitality`, `t8.body_parts`, `t8.healing_toolkit`, `t8.health_window`) with **strict triple-anchor validators** in `ai_narrator.py` — vitality requires Sun+Moon names + locked sun/moon house numbers; healing_toolkit requires driver+primary_planet+gem name; health_window requires MD lord + verdict token + MD-house number. Total flagship AI calls = **41** (was 36).
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **80 pages** (was 74), zero engine errors, T8 spans p47-52 with verbatim engine anchors (Driver-6 → Venus, NEUTRAL pair-verdict, full Friday Lakshmi healing protocol). Architect-reviewed fixes: nakshatra alias normalization, hard data gate, tightened triple-anchor validators all applied + verified.
+
+### Phase 5c — Tiers 9-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

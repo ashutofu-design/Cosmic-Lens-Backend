@@ -10,6 +10,7 @@ DATABASE SETUP (portable):
 """
 
 import os
+import re
 import sys
 import json
 import secrets
@@ -733,7 +734,87 @@ def face_reading_analyze():
 
     _response["engines"] = _engines_for_response
     _response["sections"] = _all_sections
+    _response["session_id"] = session_id
+
+    # Cache the report payload + person meta for downstream /report.pdf endpoint
+    if session_id:
+        try:
+            _existing = session_cache.get(session_id) or {}
+            _existing["report_payload"] = {
+                "engines": _projected,
+                "sections": _all_sections,
+                "front_quality": _response["front_quality"],
+                "person": {
+                    "name": request.values.get("name") or "",
+                    "gender": gender,
+                    "age": _age_int,
+                },
+            }
+            # Preserve landmark cache
+            session_cache.put(session_id, _existing)
+        except Exception:
+            pass
+
     return jsonify(_response), 200
+
+
+# ── PDF Report Endpoint ─────────────────────────────────────────────────
+@app.route("/api/face_reading/report.pdf", methods=["GET", "POST"])
+def face_reading_report_pdf():
+    """Stream the ₹1499 Face Intelligence Report as a PDF.
+
+    Inputs (any of):
+        session_id : reuse cached analyze() result (preferred)
+        name       : optional name override for the cover page
+    """
+    try:
+        from vedic.face_reading import session_cache
+        from vedic.face_reading.narrator import assemble_report
+        from vedic.face_reading.pdf_report import render_pdf
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"pdf_unavailable: {e}"}), 500
+
+    session_id = request.values.get("session_id")
+    if not session_id:
+        return jsonify({"ok": False,
+                        "error": "missing_session_id — pehle /api/face_reading/analyze call karo"}), 400
+
+    cached = session_cache.get(session_id)
+    if not cached or "report_payload" not in cached:
+        return jsonify({"ok": False,
+                        "error": "no_report_in_session — analyze ko pehle run karo, fir same session_id se PDF maango"}), 404
+
+    payload = cached["report_payload"]
+    person = dict(payload.get("person") or {})
+    name_override = request.values.get("name")
+    if name_override:
+        person["name"] = name_override
+
+    report = assemble_report(
+        sections=payload["sections"],
+        engines=payload["engines"],
+        person=person,
+        front_quality=payload.get("front_quality"),
+    )
+
+    try:
+        pdf_bytes = render_pdf(report)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"pdf_render_failed: {e}"}), 500
+
+    safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", (person.get("name") or "report"))[:40] or "report"
+    filename = f"cosmic_lens_face_report_{safe_name}.pdf"
+
+    from flask import Response
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "private, no-cache",
+        },
+    )
 
 
 @app.route("/api/geocode", methods=["GET"])

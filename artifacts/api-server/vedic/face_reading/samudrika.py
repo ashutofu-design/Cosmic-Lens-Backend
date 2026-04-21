@@ -913,26 +913,60 @@ def _tilaka_phala_placeholder():
 #  PANCHA-MAHABHUTA (5 elements facial mapping) — NEW v2
 # ─────────────────────────────────────────────────────────────────────────────
 def _pancha_mahabhuta(mukha, oshtha, anthro, p_geom, health_result):
-    """Map face features to 5 elements — Prithvi/Jal/Agni/Vayu/Akash."""
-    prithvi = jal = agni = vayu = akash = 0
-    # Prithvi (earth) — square face, broad jaw, full lips, stable
-    if mukha in ("chaturasra","vishala","vrutta"): prithvi += 2
-    if oshtha in ("sthula","bimba"): prithvi += 1
-    # Jal (water) — round face, full lips, smooth skin
-    if mukha in ("vrutta","hrid"): jal += 2
-    if oshtha in ("bimba","padma","sthula"): jal += 1
-    # Agni (fire) — triangular face, sharp features, high cheekbones
-    if mukha in ("trikona","vyaghra"): agni += 2
+    """Map face features to 5 elements — Prithvi/Jal/Agni/Vayu/Akash.
+
+    v3 — continuous scoring: every element gets a baseline + categorical bonuses
+    + continuous geometric/skin signals. Avoids "single element gets 100%" bias.
+    """
+    # Continuous inputs (with safe defaults)
+    ratios = (anthro or {}).get("ratios") or {}
+    fwhr   = ratios.get("fwhr") or ratios.get("fwhr_value") or 1.85
+    jaw_w  = ratios.get("jaw_width_iod") or 1.0
+    face_h = ratios.get("face_height_iod") or 1.85
+    bs     = ratios.get("brow_separation_iod") or 0.95
+    lip_th = ratios.get("lip_thickness_iod") or 0.18
+    foreh  = ratios.get("forehead_height_iod") or 0.65
+
     cp = (p_geom or {}).get("cheek_prominence", 0.5)
-    if cp > 0.60: agni += 1
-    # Vayu (air) — narrow face, thin lips, dry skin
-    if mukha in ("deergha","pakshi"): vayu += 2
-    if oshtha == "tanu": vayu += 1
-    # Akash (ether) — open features, large trinetra-sthan, spacious
-    bs = ((anthro or {}).get("ratios") or {}).get("brow_separation_iod", 0.95)
-    if bs > 1.05: akash += 2
+    skin = (health_result or {}).get("skin_clarity_0_100") or \
+           (health_result or {}).get("macro_indicators", {}).get("skin_clarity") or 50
+    vit  = (health_result or {}).get("vitality_0_100") or \
+           (health_result or {}).get("macro_indicators", {}).get("vitality") or 50
+
+    # ── Baseline 1.0 each, so no element collapses to 0 unless all signals oppose ──
+    prithvi = jal = agni = vayu = akash = 1.0
+
+    # Prithvi (earth) — broad/stable: square face, wide jaw, full lips, low fwhr
+    if mukha in ("chaturasra", "vishala", "vrutta"): prithvi += 2.0
+    if oshtha in ("sthula", "bimba"):                prithvi += 1.0
+    prithvi += max(0.0, (jaw_w - 0.95) * 6.0)        # wide jaw → up to +2
+    prithvi += max(0.0, (1.85 - fwhr) * 2.5)         # low fwhr → grounded
+
+    # Jal (water) — soft/full: round face, full lips, smooth skin
+    if mukha in ("vrutta", "hrid"):                  jal += 2.0
+    if oshtha in ("bimba", "padma", "sthula"):       jal += 1.0
+    jal += max(0.0, (lip_th - 0.18) * 12.0)          # plumper lips → +0..3
+    jal += max(0.0, (skin - 60) / 40.0) * 1.5        # clear skin → +0..1.5
+
+    # Agni (fire) — sharp/intense: triangular face, high cheek, high fwhr, high vitality
+    if mukha in ("trikona", "vyaghra"):              agni += 2.0
+    agni += max(0.0, (cp - 0.50) * 6.0)              # cheekbones → +0..3
+    agni += max(0.0, (fwhr - 1.85) * 2.5)            # high fwhr → fire
+    agni += max(0.0, (vit - 55) / 45.0) * 1.5        # vitality → fire
+
+    # Vayu (air) — narrow/thin: long face, thin lips, dry/asymmetric
+    if mukha in ("deergha", "pakshi"):               vayu += 2.0
+    if oshtha == "tanu":                             vayu += 1.0
+    vayu += max(0.0, (face_h - 1.85) * 2.5)          # taller face → vayu
+    vayu += max(0.0, (0.18 - lip_th) * 12.0)         # thinner lips → vayu
+
+    # Akash (ether) — spacious/open: wide brow gap, tall forehead
+    akash += max(0.0, (bs - 0.95) * 8.0)             # brow separation → +0..2
+    akash += max(0.0, (foreh - 0.60) * 6.0)          # tall forehead → +0..2
+    if mukha in ("vishala",):                        akash += 1.0
+
     total = prithvi + jal + agni + vayu + akash
-    if total == 0: total = 1
+    if total <= 0: total = 1.0
     pcts = {
         "prithvi_pct": round(prithvi*100/total, 1),
         "jal_pct":     round(jal*100/total, 1),

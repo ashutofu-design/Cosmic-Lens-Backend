@@ -340,17 +340,42 @@ def _memorability(sym, attract, distinctiveness):
 
 
 def _perceived_age(aging_score, vitality, dark_circles, chrono_age):
-    """Apparent age vs chronological age."""
-    if chrono_age is None: return None, None
+    """Apparent age vs chronological age.
+
+    When chrono_age is provided → returns (apparent_age, age_diff).
+    When chrono_age is None → returns an ABSOLUTE age estimate from facial signals
+    alone (calibrated to ~18-70 range), with age_diff = None.
+    """
+    if chrono_age is None:
+        # Absolute estimate from facial-aging signals (anchor=30y baseline).
+        if aging_score is None and vitality is None and dark_circles is None:
+            return None, None
+        est = 30.0
+        n = 0
+        if aging_score is not None:
+            # 0 → -10y (very young), 100 → +30y (very old)
+            est += (aging_score - 25) * 0.40
+            n += 1
+        if vitality is not None:
+            # high vitality → younger
+            est += (50 - vitality) * 0.10
+            n += 1
+        if dark_circles is not None:
+            est += dark_circles * 0.05
+            n += 1
+        if n == 0:
+            return None, None
+        est = max(16.0, min(75.0, est))
+        return round(est, 1), None
+
+    # With chrono_age — relative shift
     age_shift = 0.0
     n = 0
     if aging_score is not None:
-        # Aging score above expected → older
         expected = max(0, (chrono_age - 20) * 1.5)
         age_shift += (aging_score - expected) * 0.15
         n += 1
     if vitality is not None:
-        # Low vitality → older
         age_shift += (50 - vitality) * 0.08
         n += 1
     if dark_circles is not None:

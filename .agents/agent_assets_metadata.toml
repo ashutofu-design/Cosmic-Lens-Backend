@@ -474,3 +474,9 @@ id = "QV7-vCGDrlvPI91TJMU_F"
 uri = "file://attached_assets/face_reading_report_PREMIUM_v5.pdf"
 type = "pdf"
 title = "Face Reading Premium v5 — Photo Cover + Face Map + Charts + Celebrity Match (40 pages)"
+
+[[outputs]]
+id = "xFxbYxWpfxREZJrR1p33q"
+uri = "file://attached_assets/face_reading_report_PREMIUM_v6.pdf"
+type = "pdf"
+title = "Face Reading Pro — v6 (4 bugs fixed)"

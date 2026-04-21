@@ -721,8 +721,11 @@ def face_reading_analyze():
         _mole_out = {"engine": "mole_detector", "version": 1, "ok": False,
                      "error": f"detector_failed: {_e}", "mole_count": 0, "moles": []}
     _section_17 = section_17_secret_markings(_mole_out)
-    if _full_flag:
-        _engines_for_response["mole_detector"] = _mole_out
+    # Always expose mole_detector status (was previously gated behind ?full=true,
+    # which made it look like the engine was silently failing).
+    _engines_for_response["mole_detector"] = _mole_out
+    # Mirror into projected engines so downstream PDF/section_17 can introspect ok flag.
+    _projected["mole_detector"] = _mole_out
 
     _age_int = int(age_val) if age_val else None
     _base_sections = build_report_sections(_projected, gender=gender, age=_age_int)

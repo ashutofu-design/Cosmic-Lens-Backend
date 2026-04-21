@@ -277,11 +277,22 @@ def project_first_impression(r: Dict[str, Any]) -> Dict[str, Any]:
         return None
 
     four_scores = {
+        # `confidence` is not directly produced by the engine. We derive it as
+        # competence × low-threat blend (the same composite used in social-perception
+        # research for "looks confident"). Falls back to competence if threat absent.
         "confidence": _g("confidence"),
-        "trust": _g("trustworthiness", "trust"),
+        "trust":      _g("trustworthiness", "trust"),
         "attraction": _g("attractiveness", "attraction"),
-        "authority": _g("authority", "dominance"),
+        "authority":  _g("authority", "dominance"),
     }
+    if four_scores["confidence"] is None:
+        comp = _g("competence")
+        thr  = _g("threat")
+        if comp is not None and thr is not None:
+            # confidence ≈ 0.65*competence + 0.35*(100-threat)
+            four_scores["confidence"] = round(0.65 * comp + 0.35 * (100 - thr), 1)
+        elif comp is not None:
+            four_scores["confidence"] = round(comp, 1)
 
     return {
         "engine": r.get("engine"),
@@ -377,16 +388,21 @@ def project_samudrika(r: Dict[str, Any]) -> Dict[str, Any]:
     mahabhuta = (r.get("pancha_mahabhuta_facial_mapping")
                  or r.get("pancha_mahabhuta") or r.get("mahabhuta"))
     if isinstance(mahabhuta, dict):
+        # IMPORTANT: 0 is a valid percentage — must NOT use `or` chain (it drops zeros).
+        def _pick(*keys):
+            for k in keys:
+                if k in mahabhuta and mahabhuta[k] is not None:
+                    return mahabhuta[k]
+            return None
         mb_clean = {
-            "prithvi": mahabhuta.get("prithvi_pct") or mahabhuta.get("prithvi") or mahabhuta.get("earth"),
-            "jal":     mahabhuta.get("jal_pct")     or mahabhuta.get("jal")     or mahabhuta.get("water"),
-            "agni":    mahabhuta.get("agni_pct")    or mahabhuta.get("agni")    or mahabhuta.get("fire"),
-            "vayu":    mahabhuta.get("vayu_pct")    or mahabhuta.get("vayu")    or mahabhuta.get("air"),
-            "akash":   mahabhuta.get("akash_pct")   or mahabhuta.get("akash")   or mahabhuta.get("ether"),
-            "dominant": mahabhuta.get("primary_mahabhuta")
-                        or mahabhuta.get("dominant") or mahabhuta.get("dominant_element"),
+            "prithvi": _pick("prithvi_pct", "prithvi", "earth"),
+            "jal":     _pick("jal_pct",     "jal",     "water"),
+            "agni":    _pick("agni_pct",    "agni",    "fire"),
+            "vayu":    _pick("vayu_pct",    "vayu",    "air"),
+            "akash":   _pick("akash_pct",   "akash",   "ether"),
+            "dominant": _pick("primary_mahabhuta", "dominant", "dominant_element"),
         }
-        # drop None values
+        # drop only None — keep zeros (real data signal)
         mb_clean = {k: v for k, v in mb_clean.items() if v is not None}
         if mb_clean:
             out["element_profile"] = mb_clean

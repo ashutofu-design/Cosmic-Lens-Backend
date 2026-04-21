@@ -47,10 +47,7 @@ fi
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
 echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
-# --- Metro tunnel via localtunnel ---
-# We *try* the reserved subdomain first; if localtunnel falls back to a
-# random URL (reserved subdomain unavailable), we use whatever URL it
-# actually published. Either way Metro env vars get the live host.
+# --- Metro tunnel via localtunnel (fast bind) ---
 METRO_PORT="${PORT:-18987}"
 METRO_SUB="cosmiclens-metro"
 
@@ -70,7 +67,6 @@ LT_METRO_LOG="/tmp/lt-metro.log"
 ) &
 LT_METRO_PID=$!
 
-# Wait for lt to publish a URL (could be reserved sub, could be random).
 METRO_PUBLIC_URL=""
 for i in $(seq 1 30); do
   URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_METRO_LOG" 2>/dev/null | tail -1)
@@ -94,13 +90,10 @@ export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"
 export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
 
 echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST)..."
-# --offline disables Expo CLI's remote EAS auth checks that fail with
-# "Input is required, non-interactive mode" when no EXPO_TOKEN is set.
 export EXPO_OFFLINE=1
 pnpm exec expo start --port "$METRO_PORT" --clear --offline 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 
-# Wait for Metro to bind locally.
 for i in $(seq 1 60); do
   if curl -sf -m 2 "http://localhost:$METRO_PORT/status" >/dev/null 2>&1; then
     echo "[startup] Metro local port up."
@@ -109,7 +102,6 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-# Verify the public tunnel actually serves Metro.
 for i in $(seq 1 20); do
   if curl -sf -m 5 "$METRO_PUBLIC_URL/status" 2>/dev/null \
        | grep -q "packager-status:running"; then

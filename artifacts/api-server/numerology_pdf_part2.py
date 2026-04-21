@@ -6645,6 +6645,209 @@ def _tier11_spirituality_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier12_marriage_section(s, name: str, dob: str, driver: int,
+                              conductor: int, *, kundli: Dict[str, Any],
+                              lang: str = "hinglish",
+                              ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 12 — Marriage & Spouse Deep Audit."""
+    from vedic.numerology.marriage import compute_marriage_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_marriage_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t12_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    sap = bundle["saptamesha"]
+    sk = bundle["spouse_karaka"]
+    d9 = bundle["d9_spouse"]
+    mng = bundle["mangal"]
+    tim = bundle["timing"]
+    krm = bundle["karmic"]
+    syn = bundle["synthesis"]
+
+    # ── Title + numerology opener ────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "💍 TIER 12 — MARRIAGE & SPOUSE DEEP AUDIT",
+        "💍 टियर 12 — विवाह और जीवनसाथी गहन जाँच",
+        "💍 TIER 12 — MARRIAGE & SPOUSE DEEP AUDIT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block as _open12
+    flow.extend(_open12(s, driver, conductor, "relationships", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals (vs Tier 5)",
+        "📖 यह टियर क्या प्रकट करता है (टियर 5 से अलग)",
+        "📖 Yeh tier kya reveal karta hai (Tier 5 se alag)",
+        "Tier 5 was your <b>partner pre-screen DNA</b> (Ashtakoot, Yoni, Nadi — match anyone "
+        "with just their DOB). Tier 12 is your <b>chart-based marriage prognosis</b> — "
+        "Saptamesha (7th house + lord), Venus & Jupiter as marriage karakas, the D9 spouse "
+        "picture (D9-7th + Darakaraka), full Mangal Dosha audit with classical cancellations, "
+        "current dasha marriage-timing window, karmic spouse signatures, and a synthesis "
+        "verdict-token + spouse-profile + 6-step action plan.",
+        "टियर 5 आपकी <b>साथी-स्क्रीनिंग DNA</b> थी (अष्टकूट, योनि, नाड़ी)। टियर 12 आपकी <b>कुंडली-आधारित "
+        "विवाह भविष्यवाणी</b> है — सप्तमेश (7वाँ भाव+स्वामी), विवाह-कारक शुक्र-गुरु, D9 जीवनसाथी चित्र "
+        "(D9-7 + दारकारक), पूर्ण मंगल दोष ऑडिट, वर्तमान दशा विवाह-खिड़की, कर्मिक संकेत, और निष्कर्ष।",
+        "Tier 5 aapki <b>partner pre-screen DNA</b> thi (Ashtakoot, Yoni, Nadi). Tier 12 aapki "
+        "<b>chart-based marriage prognosis</b> hai — Saptamesha (7th house + lord), Venus & "
+        "Jupiter as marriage karakas, D9 spouse picture (D9-7th + Darakaraka), full Mangal "
+        "Dosha audit with classical cancellations, current dasha marriage-timing window, "
+        "karmic spouse signatures, aur ek synthesis verdict-token + spouse-profile + action plan.",
+        bg="#FFF1F2", border="#9F1239"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Saptamesha (AI) ────────────────────────────────────────
+    sap_facts = (
+        f"<b>7th house sign:</b> {sap['seventh_sign']}<br/>"
+        f"<b>7th lord:</b> {sap['seventh_lord']} in H{sap['lord_house']} "
+        f"({sap['lord_sign']}, {sap['lord_dignity']})<br/>"
+        f"<b>7th occupants:</b> {', '.join(sap['occupants']) or '—'}<br/>"
+        f"<b>Strength score:</b> {sap['strength_score']}/100 — <b>{sap['verdict']}</b><br/><br/>"
+        f"<b>Spouse temperament from {sap['seventh_sign']}:</b> {sap['spouse_temperament']}"
+    )
+    _emit_ai(ai_texts.get("t12.saptamesha", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  💍 SAPTAMESHA — 7th House & Lord (Marriage Foundation)",
+           "1️⃣  💍 सप्तमेश — 7वाँ भाव और स्वामी",
+           "1️⃣  💍 SAPTAMESHA — 7th House & Lord"),
+        sap_facts,
+        bg_color=colors.HexColor("#FFF1F2"), border_color=colors.HexColor("#9F1239"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Spouse Karaka — Venus + Jupiter (AI) ───────────────────
+    sk_facts = (
+        f"<b>Primary marriage karaka:</b> {sk['primary_karaka']} in {sk['karaka_sign']} "
+        f"H{sk['karaka_house']} ({sk['karaka_dignity']})<br/>"
+        f"<b>Well-placed?</b> {'Yes ✓' if sk['karaka_well_placed'] else 'Needs strengthening'}<br/><br/>"
+        f"<b>Secondary karaka (female-spouse / wisdom):</b> {sk['secondary_karaka']} "
+        f"in {sk['jupiter_sign']} H{sk['jupiter_house']} ({sk['jupiter_dignity']})<br/><br/>"
+        f"<i>{sk['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t12.spouse_karaka", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  💖 SPOUSE KARAKA — Venus & Jupiter Reading",
+           "2️⃣  💖 विवाह कारक — शुक्र और गुरु",
+           "2️⃣  💖 SPOUSE KARAKA — Venus aur Jupiter"),
+        sk_facts,
+        bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. D9 Spouse Picture + Darakaraka (AI) ────────────────────
+    d9_facts = (
+        f"<b>D9 Ascendant:</b> {d9['d9_ascendant']}<br/>"
+        f"<b>D9 7th sign:</b> {d9['d9_seventh_sign']} (lord {d9['d9_seventh_lord']})<br/>"
+        f"<b>D9 7th occupants:</b> {', '.join(d9['d9_seventh_occupants']) or '—'}<br/><br/>"
+        f"<b>Darakaraka (Jaimini soul-spouse):</b> {d9['darakaraka']}<br/>"
+        f"&nbsp;&nbsp;▸ in D1: {d9['darakaraka_sign_d1']}<br/>"
+        f"&nbsp;&nbsp;▸ in D9: {d9['darakaraka_sign_d9']}<br/><br/>"
+        f"<i>{d9['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t12.d9_spouse", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪞 D9 SPOUSE PICTURE — Navamsa-7th & Darakaraka",
+           "3️⃣  🪞 D9 जीवनसाथी चित्र — नवांश-7 और दारकारक",
+           "3️⃣  🪞 D9 SPOUSE PICTURE — Navamsa-7 aur Darakaraka"),
+        d9_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Mangal Dosha Audit (AI) ────────────────────────────────
+    triggers_html = "<br/>".join(f"&nbsp;&nbsp;▸ {t}" for t in mng.get("triggers", [])) or "&nbsp;&nbsp;—"
+    cancel_html = "<br/>".join(f"&nbsp;&nbsp;▸ {c}" for c in mng.get("cancellations", [])) or "&nbsp;&nbsp;—"
+    mng_facts = (
+        f"<b>Mars sign:</b> {mng['mars_sign']} ({mng['mars_dignity']})<br/>"
+        f"<b>Mars house from Lagna:</b> {mng['mars_house_lagna']}<br/>"
+        f"<b>Mars house from Moon:</b> {mng['mars_house_moon']}<br/>"
+        f"<b>Mars house from Venus:</b> {mng['mars_house_venus']}<br/><br/>"
+        f"<b>Triggers:</b><br/>{triggers_html}<br/><br/>"
+        f"<b>Cancellations:</b><br/>{cancel_html}<br/><br/>"
+        f"<b>Severity:</b> {mng['severity']}<br/>"
+        f"<b>Verdict:</b> {mng['verdict']}"
+    )
+    _emit_ai(ai_texts.get("t12.mangal_audit", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🔴 MANGAL DOSHA — Full Audit + Classical Cancellations",
+           "4️⃣  🔴 मंगल दोष — पूर्ण ऑडिट + शास्त्रीय निवारण",
+           "4️⃣  🔴 MANGAL DOSHA — Full Audit + Classical Cancellations"),
+        mng_facts,
+        bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#991B1B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Marriage Timing (AI) ───────────────────────────────────
+    tim_facts = (
+        f"<b>Current Mahadasha:</b> {tim['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {tim['current_ad']}<br/><br/>"
+        f"<b>Marriage activator planets (your chart):</b> {', '.join(tim['activators'])}<br/>"
+        f"<b>2nd lord (family-formation):</b> {tim['second_lord']}<br/>"
+        f"<b>11th lord (gain-of-spouse):</b> {tim['eleventh_lord']}<br/><br/>"
+        f"<b>Window status:</b> {tim['window_status']}<br/>"
+        f"<i>{tim['window_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t12.marriage_timing", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⏰ MARRIAGE TIMING — Current Dasha-Bhukti Window",
+           "5️⃣  ⏰ विवाह समय — वर्तमान दशा-भुक्ति",
+           "5️⃣  ⏰ MARRIAGE TIMING — Current Dasha-Bhukti"),
+        tim_facts,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Karmic Signatures (no AI, rich facts) ──────────────────
+    flags_html = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in krm.get("flags", [])) or "&nbsp;&nbsp;No karmic flags"
+    krm_facts = (
+        f"<b>7th-house occupants:</b> {', '.join(krm['seventh_occupants']) or '—'}<br/>"
+        f"<b>12th-from-7th occupants:</b> {', '.join(krm['twelfth_from_7th_occupants']) or '—'}<br/><br/>"
+        f"<b>Karmic load score:</b> {krm['karmic_score']}/100 — <b>{krm['karmic_verdict']}</b><br/><br/>"
+        f"<b>Signatures:</b><br/>{flags_html}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌑 KARMIC MARRIAGE SIGNATURES — Rahu/Ketu/Saturn in 7th",
+           "6️⃣  🌑 कर्मिक विवाह संकेत — 7वें में राहु/केतु/शनि",
+           "6️⃣  🌑 KARMIC MARRIAGE SIGNATURES — Rahu/Ketu/Saturn in 7th"),
+        krm_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#F59E0B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Synthesis + Spouse Profile + Action Plan (AI) ──────────
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    spouse_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["spouse_profile_lines"])
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["action_plan"])
+    syn_facts = (
+        f"<b>Verdict token:</b> {syn['verdict_token']}<br/><br/>"
+        f"<b>Synthesis:</b><br/>{summary_html}<br/><br/>"
+        f"<b>Spouse Profile:</b><br/>{spouse_html}<br/><br/>"
+        f"<b>6-Step Action Plan:</b><br/>{plan_html}"
+    )
+    _emit_ai(ai_texts.get("t12.marriage_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 MARRIAGE SYNTHESIS + SPOUSE PROFILE + ACTION PLAN",
+           "7️⃣  🌟 विवाह निष्कर्ष + जीवनसाथी प्रोफ़ाइल + कार्य योजना",
+           "7️⃣  🌟 MARRIAGE SYNTHESIS + SPOUSE PROFILE + ACTION PLAN"),
+        syn_facts,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close12
+    flow.extend(_close12(s, driver, conductor, "relationships", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -7761,6 +7964,116 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier11 facts build failed: %s", exc)
 
+        # ── Tier 12 — Marriage & Spouse Deep Audit ────────────────────
+        try:
+            from vedic.numerology.marriage import compute_marriage_bundle
+            mb = compute_marriage_bundle(kundli, dob, driver, conductor)
+            if mb.get("available"):
+                msap = mb["saptamesha"]
+                msk = mb["spouse_karaka"]
+                md9 = mb["d9_spouse"]
+                mmng = mb["mangal"]
+                mtim = mb["timing"]
+                msyn = mb["synthesis"]
+
+                specs.append({
+                    "key": "t12.saptamesha",
+                    "section_key": "tier12.saptamesha",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "seventh_sign": msap["seventh_sign"],
+                        "seventh_lord": msap["seventh_lord"],
+                        "lord_house": msap["lord_house"],
+                        "lord_dignity": msap["lord_dignity"],
+                        "strength_score": msap["strength_score"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t12.spouse_karaka",
+                    "section_key": "tier12.spouse_karaka",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "karaka_planet": msk["primary_karaka"],
+                        "karaka_sign": msk["karaka_sign"],
+                        "karaka_house": msk["karaka_house"],
+                        "karaka_dignity": msk["karaka_dignity"],
+                        "jupiter_sign": msk["jupiter_sign"],
+                        "jupiter_house": msk["jupiter_house"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t12.d9_spouse",
+                    "section_key": "tier12.d9_spouse",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "d9_seventh_sign": md9["d9_seventh_sign"],
+                        "d9_seventh_lord": md9["d9_seventh_lord"],
+                        "darakaraka": md9["darakaraka"],
+                        "darakaraka_sign_d9": md9["darakaraka_sign_d9"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t12.mangal_audit",
+                    "section_key": "tier12.mangal_audit",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "mars_sign": mmng["mars_sign"],
+                        "mars_house_lagna": mmng["mars_house_lagna"],
+                        "mars_house_moon": mmng["mars_house_moon"],
+                        "severity": mmng["severity"],
+                        "verdict": mmng["verdict"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t12.marriage_timing",
+                    "section_key": "tier12.marriage_timing",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": mtim["current_md"],
+                        "current_ad": mtim["current_ad"],
+                        "window_status": mtim["window_status"],
+                        "second_lord": mtim["second_lord"],
+                        "eleventh_lord": mtim["eleventh_lord"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t12.marriage_synthesis",
+                    "section_key": "tier12.marriage_synthesis",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "seventh_sign": msap["seventh_sign"],
+                        "seventh_lord": msap["seventh_lord"],
+                        "karaka_planet": msk["primary_karaka"],
+                        "verdict_token": msyn["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier12 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -7941,6 +8254,13 @@ def render_part2_pdf(*,
         story += _tier11_spirituality_section(s, name, dob, driver, conductor,
                                                 kundli=kundli, lang=lang,
                                                 ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 131-145 — 💍 TIER 12 — Marriage & Spouse Deep Audit
+    if kundli is not None:
+        story += _tier12_marriage_section(s, name, dob, driver, conductor,
+                                            kundli=kundli, lang=lang,
+                                            ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

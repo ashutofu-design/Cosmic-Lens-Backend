@@ -435,6 +435,56 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
                      and any(_has_word(t, tok) for tok in
                              (f.get("verdict_token") or "").split("-")
                              if len(tok) >= 5),
+    # ── Tier 12 — Marriage & Spouse Deep Audit ──────────────────────
+    # Each validator multi-anchors on chart-locked tokens (7th sign,
+    # planet names, house numbers, severity tokens) so AI cannot ship
+    # generic "your spouse will be loving" puff.
+    "tier12.saptamesha":
+        # Triple anchor: 7th sign + 7th lord planet + lord house number.
+        lambda f, t: _has_word(t, f.get("seventh_sign"))
+                     and _has_word(t, f.get("seventh_lord"))
+                     and (_has_num(t, f.get("lord_house"))
+                          if f.get("lord_house") else True),
+    "tier12.spouse_karaka":
+        # Triple anchor: karaka planet (Venus) + karaka sign + karaka house.
+        lambda f, t: _has_word(t, f.get("karaka_planet"))
+                     and _has_word(t, f.get("karaka_sign"))
+                     and (_has_num(t, f.get("karaka_house"))
+                          if f.get("karaka_house") else True),
+    "tier12.d9_spouse":
+        # Triple anchor: D9 7th sign + Darakaraka planet name + Darakaraka
+        # D9 sign (or 'Navamsa'/'D9'/'navamsha' keyword).
+        lambda f, t: _has_word(t, f.get("d9_seventh_sign"))
+                     and _has_word(t, f.get("darakaraka"))
+                     and (_has_word(t, f.get("darakaraka_sign_d9"))
+                          or _has_word(t, "Navamsa") or _has_word(t, "D9")
+                          or _has_word(t, "Darakaraka") or _has_word(t, "navamsha")
+                          or _has_word(t, "नवांश")),
+    "tier12.mangal_audit":
+        # Triple anchor: Mars/Mangal token + severity token + mars-house number
+        # (from Lagna OR from Moon — at least one must appear).
+        lambda f, t: (_has_word(t, "Mars") or _has_word(t, "Mangal")
+                      or _has_word(t, "Kuja") or _has_word(t, "मंगल"))
+                     and _has_word(t, f.get("severity"))
+                     and (_has_num(t, f.get("mars_house_lagna"))
+                          or _has_num(t, f.get("mars_house_moon"))),
+    "tier12.marriage_timing":
+        # Triple anchor: current MD lord + current AD lord + window-status
+        # keyword (HOT/WARM/TACTICAL/PREP — at least one ≥4-char token).
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("window_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier12.marriage_synthesis":
+        # Triple anchor: 7th sign + karaka planet (Venus) + verdict_token
+        # split on '-' (e.g. HARMONIOUS-MARRIAGE-PATH → at least one ≥5-char
+        # token like HARMONIOUS or MARRIAGE).
+        lambda f, t: _has_word(t, f.get("seventh_sign"))
+                     and _has_word(t, f.get("karaka_planet"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
 }
 
 

@@ -1500,6 +1500,23 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **94 pages** (was 92 for T10-only), all 7 T11 cards rendered with real chart data: Moksha Score 68/100 MODERATE, Atmakaraka Moon (H6 Sagittarius), Karakamsa Sagittarius (Jupiter), 12th-from-Karakamsa Scorpio (lord Mars), Vairagya 50/100 MODERATE, synthesis verdict BALANCED-DHARMA-PATH. Architect review: **PASS** — Jaimini Ishta Devata calc classically correct, validator anchor strategy strong, no Sev-1 blockers (only LOW: Rahu-as-AK is alt-school, MINOR: Lord/Goddess/Sri exclusion in deity-token check is tight but acceptable).
 
-### Phase 5d — Tiers 12-17 — PENDING
+### Phase 5d — Tier 12 (Marriage & Spouse Deep Audit) ✅ COMPLETE (2026-04-21)
+
+**Tier 12 — 7 cards** (`vedic/numerology/marriage.py` ~540 lines, NEW):
+1. **Saptamesha** — 7th sign + 7th lord placement, occupants, 0–100 strength score, spouse temperament
+2. **Spouse Karaka** — Venus (primary marriage karaka) + Jupiter (secondary, female-spouse/wisdom) sign/house/dignity
+3. **D9 Spouse Picture + Darakaraka** — Navamsa-7th sign/lord/occupants + Jaimini Darakaraka (lowest deg-in-sign across 7 karakas, opposite of AK) in D1 & D9
+4. **Mangal Dosha Full Audit** — Mars house from Lagna/Moon/Venus, dosha triggers (houses 1,2,4,7,8,12), classical cancellations (own/exalted Mars, Jupiter aspect, Saturn in 7th, Mars in 12th in own sign — each downgrades severity one tier), final SEVERE/MODERATE/MILD/NEUTRALISED verdict
+5. **Marriage Timing** — Current MD/AD lords, marriage-activator planets (7L, Venus, Jupiter, 2L, 11L), window status (ACTIVE/UPCOMING/RECEDING)
+6. **Karmic Signatures** — Rahu/Ketu/Saturn in 7th and 12-from-7th, karmic load score 0–100, classical flags
+7. **Synthesis + Spouse Profile + 6-Step Action Plan** — verdict_token (HARMONIOUS/KARMIC/DELAYED-DHARMIC/TRANSFORMATIVE-MARRIAGE-PATH)
+
+**T12 AI layer** — 6 specs added to `ai_narrator.py` (flagship count 56→62): `t12.saptamesha`, `t12.spouse_karaka`, `t12.d9_spouse`, `t12.mangal_audit`, `t12.marriage_timing`, `t12.marriage_synthesis`. Validators use multi-anchor strategy (chart tokens + planet names + house nums + severity/verdict tokens).
+
+**Renderer pattern fix** — During smoke testing, found `LayoutError`: AI narration paragraphs of certain T12 cards exceeded the 722pt single-frame Table cell limit (single Table row cannot split across pages). Fix: AI prose now emitted as a flowing `Paragraph` BEFORE the facts-only `_premium_card`, allowing prose to break naturally across pages while the visual card stays intact. Pattern applies to all 6 T12 AI-bearing cards.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **103 pages** (was 94 for T11). All 7 T12 cards rendered. Most T12 AI calls hit OpenAI 30k TPM rate-limit and rendered via static fallback (still showed full chart facts: 7th sign Capricorn, 7th lord Saturn, Darakaraka, Mangal severity, dasha window). Architect review: **PASS** — Mangal cancellation logic correct, Darakaraka calc classically correct, 0–100 scoring bounded and coherent, D9 data gates graceful, validators mostly strong (caveat: `t12.d9_spouse` and `t12.mangal_audit` validators are moderately permissive — acceptable for now, follow-up tightening recommended).
+
+### Phase 5d — Tiers 13-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

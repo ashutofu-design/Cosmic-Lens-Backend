@@ -328,9 +328,18 @@ def write_s10(content, engines, person):
 # Section 11 — ATTRACTION & CHARISMA
 # ──────────────────────────────────────────────────────────────────────────
 def write_s11(content, engines, person):
-    score = _num(content.get("charisma_score_100"))
-    style = content.get("attraction_style", "")
-    boost = content.get("magnetism_boost") or content.get("how_to_boost") or ""
+    # Producer keys: natural_attraction_score_10, charisma_type, opposite_gender_perception
+    # Convert /10 to /100 if charisma_score_100 missing.
+    score = content.get("charisma_score_100")
+    if score is None:
+        score = _num(content.get("natural_attraction_score_10")) * 10
+    score = _num(score)
+    style = (content.get("attraction_style")
+             or content.get("charisma_type")
+             or content.get("opposite_gender_perception", ""))
+    boost = (content.get("magnetism_boost")
+             or content.get("how_to_boost")
+             or "Eye-contact 3 sec hold karo, slow speech, aur questions zyada poocho — yeh teen cheezein charisma 6 mahine me 15+ points badhati hain.")
     return _join_para(
         f"Charisma janma-jaat nahi — practiced skill hai. Tumhara current charisma score: <b>{score:.0f}/100</b>.",
         f"Tumhari attraction style: \"{style}\". Yeh batata hai ki log tumhari taraf kis vajah se kheenche jaate hain.",
@@ -344,9 +353,18 @@ def write_s11(content, engines, person):
 # Section 12 — DECISION STYLE
 # ──────────────────────────────────────────────────────────────────────────
 def write_s12(content, engines, person):
-    style = content.get("decision_pattern") or content.get("style") or ""
-    speed = content.get("speed", "")
-    bias = content.get("biggest_bias", "") or content.get("watch_out", "")
+    # Producer keys (section_mapper.s12): fast_vs_slow, logical_vs_emotional, risk_vs_safe
+    style = (content.get("decision_pattern")
+             or content.get("style")
+             or content.get("logical_vs_emotional", "Mixed"))
+    speed = content.get("speed") or content.get("fast_vs_slow", "Moderate")
+    bias = (content.get("biggest_bias")
+            or content.get("watch_out")
+            or {
+                "Risk-taker": "Over-confidence — har bet jeetega yeh maan ke chal padte ho.",
+                "Safe":       "Risk-aversion — chhote nuksaan ke dar se bade opportunities chhod dete ho.",
+                "Balanced":   "Analysis-paralysis — itna soch lete ho ki action late ho jata hai.",
+            }.get(content.get("risk_vs_safe", "Balanced"), "Confirmation bias — jo apni baat support kare wahi sunte ho."))
     return _join_para(
         f"Tumhare har choice ke peeche ek pattern hai — woh pattern tumhe har 5 saal me wahi jagah laata hai jahan tum pehle they.",
         f"Tumhari decision-making style: \"{style}\". Speed: \"{speed}\".",
@@ -409,10 +427,21 @@ def write_s15(content, engines, person):
 # Section 16 — HEALTH SCAN
 # ──────────────────────────────────────────────────────────────────────────
 def write_s16(content, engines, person):
+    # Producer keys: stress_indicator, energy_level, burnout_signal, vitality_score_100
     score = _num(content.get("vitality_score_100") or content.get("overall_health_score"))
-    sleep = content.get("sleep_quality") or content.get("sleep_indicator", "")
-    stress = content.get("stress_signal") or content.get("stress_indicator", "")
-    fitness = content.get("fitness_advice") or content.get("recommended_routine", "")
+    sleep = (content.get("sleep_quality")
+             or content.get("sleep_indicator")
+             or content.get("energy_level")
+             or "Medium")
+    stress = (content.get("stress_signal")
+              or content.get("stress_indicator")
+              or "Medium")
+    burnout = content.get("burnout_signal", "")
+    fitness = (content.get("fitness_advice")
+               or content.get("recommended_routine")
+               or "Daily 30 min movement (walk/yoga/strength), 7+ ghante neend, aur 2L paani — yeh 3 cheezein vitality 12 weeks me 15+ points badha sakti hain.")
+    if burnout and burnout.lower() not in ("low", "none", ""):
+        stress = f"{stress} (burnout signal: {burnout})"
     
     return _join_para(
         f"Yeh medical diagnosis nahi — chehre ke visible signals (skin, eyes, dark circles, lips) ka summary hai.",
@@ -470,8 +499,12 @@ def write_s19(content, engines, person):
 # Section 20 — COMPATIBILITY
 # ──────────────────────────────────────────────────────────────────────────
 def write_s20(content, engines, person):
-    best = content.get("best_match", "") or content.get("ideal_partner", "")
-    avoid = content.get("avoid_match", "") or content.get("avoid_partner", "")
+    best = (content.get("best_match_hi")
+            or content.get("best_match")
+            or content.get("ideal_partner", ""))
+    avoid = (content.get("avoid_match_hi")
+             or content.get("avoid_match")
+             or content.get("avoid_partner", ""))
     elem_best = content.get("element_best_match", "")
     return _join_para(
         f"Compatibility sirf 'love match' nahi — har relationship (friend, business partner, life partner) me kaam karta hai.",

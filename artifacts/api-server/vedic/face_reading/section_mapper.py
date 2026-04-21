@@ -513,11 +513,27 @@ def section_11_attraction_charisma(engines: Dict, gender: Optional[str] = None) 
         "Opposite gender me normal interest aata hai."
     )
 
+    # Charisma /100 — used by PDF score-bar and narrative writer.
+    # Weighted: attraction 50% + extraversion 30% + agreeableness 20%.
+    charisma_100 = round(attraction * 0.5 + E * 0.3 + A * 0.2, 1)
+
+    # Magnetism boost suggestion (deterministic, based on weakest dim)
+    weakest = min(("E", E), ("A", A), ("attraction", attraction), key=lambda x: x[1])
+    boost = {
+        "E":          "Logon ke saath energy share karo — hafte me 2 naye log se 5+ min baat. Extraversion-driven charisma 6 weeks me visible badhega.",
+        "A":          "Genuine compliments roz 3 logon ko do. Warmth signal 30 din me strong hota hai aur log naturally tumhari taraf khinche aate hain.",
+        "attraction": "Posture (chest-up, shoulders-back) + slow speech + 3-sec eye contact — yeh teen cheezein attraction signal me sabse high-leverage hain.",
+    }[weakest[0]]
+
     return {
         "natural_attraction_score_10": _to_10(attraction),
         "phi_beauty_score":            round(_num(phi.get("overall_phi_score")), 1),
         "opposite_gender_perception":  perception,
         "charisma_type":               ctype,
+        # Backward-compat keys (consumed by narrative_writer.s11 + pdf_report bar)
+        "charisma_score_100":          charisma_100,
+        "attraction_style":            ctype,
+        "magnetism_boost":             boost,
     }
 
 
@@ -536,10 +552,25 @@ def section_12_decision_style(engines: Dict) -> Dict:
     log_emo     = "Logical" if (C > 60 and N < 45) else "Emotional" if (A > 60 or N > 55) else "Mixed"
     risk_safe   = "Risk-taker" if (O > 60 and N < 50) else "Safe" if N > 55 else "Balanced"
 
+    # Cognitive bias picked from strongest OCEAN tilt (deterministic)
+    bias_map = [
+        (N > 60, "Negativity bias — sabse pehle problems dikhte hain, opportunities baad me."),
+        (O > 65, "Novelty bias — purane proven solutions ko boring maan ke chhod dete ho."),
+        (C > 65, "Sunk-cost trap — jisme mehnat lag chuki hai usse chhodna mushkil."),
+        (A > 65, "People-pleasing — apni clarity dusron ki khushi ke liye sacrifice."),
+        (E > 65, "Optimism bias — every plan execute ho jayega yeh maan ke chal padte ho."),
+    ]
+    biggest_bias = next((msg for ok, msg in bias_map if ok),
+                       "Confirmation bias — jo apni baat support kare wahi sunte ho.")
+
     return {
         "fast_vs_slow":         fast_slow,
         "logical_vs_emotional": log_emo,
         "risk_vs_safe":         risk_safe,
+        # Backward-compat keys (consumed by narrative_writer.s12)
+        "decision_pattern":     f"{log_emo} & {risk_safe}",
+        "speed":                fast_slow,
+        "biggest_bias":         biggest_bias,
     }
 
 
@@ -607,11 +638,22 @@ def section_16_health_scan(engines: Dict) -> Dict:
     burnout = pick("burnout", "burnout_signal", "fatigue")
 
     vitality = h.get("vitality_score")
+    vit_100 = round(_num(vitality), 1) if vitality is not None else None
+    # Overall health score: vitality - 5 if burnout high, +0 otherwise
+    burnout_pen = 8 if isinstance(burnout, str) and burnout.lower() in ("high", "severe", "elevated") else 0
+    overall = max(0, min(100, (vit_100 or 50) - burnout_pen))
     return {
         "stress_indicator":   stress,
         "energy_level":       energy,
         "burnout_signal":     burnout,
-        "vitality_score_100": round(_num(vitality), 1) if vitality is not None else None,
+        "vitality_score_100": vit_100,
+        # Backward-compat keys (consumed by narrative_writer.s16 + pdf_report bar)
+        "overall_health_score": round(overall, 1),
+        "sleep_indicator":    energy,  # proxy from energy/vitality signal
+        "recommended_routine": (
+            "Daily 30 min movement (walk/yoga/strength), 7+ ghante neend, 2L paani, "
+            "aur subah 10 min sunlight — yeh 4 cheezein vitality 12 weeks me 15+ points badhaati hain."
+        ),
         "vitality_class":     h.get("vitality_class"),
     }
 

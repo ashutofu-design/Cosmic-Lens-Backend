@@ -61,10 +61,11 @@ def section_1_power_summary(engines: Dict, base_sections: Dict) -> Dict:
 
 
 def _section_1_classic(engines: Dict, base_sections: Dict) -> Dict:
-    arche  = _g(engines, "personality", "archetype", "name") or "Balanced Personality"
-    elem   = _g(engines, "samudrika", "element_profile", "dominant_element") or "Balanced"
+    from .consistency_layer import get_dominant_element, get_archetype, get_dominant_trait
+    arche  = get_archetype(engines)
+    elem   = get_dominant_element(engines)
     snap   = _g(engines, "first_impression", "snap_narrative", "line") or ""
-    domt   = _g(engines, "personality", "dominant_trait") or "balanced"
+    domt   = get_dominant_trait(engines)
 
     s7_str = (_g(base_sections, "section_7_personality_synthesis", "top_5_strengths") or [""])[0]
     s7_wk  = (_g(base_sections, "section_7_personality_synthesis", "top_5_weaknesses") or [""])[0]
@@ -75,7 +76,7 @@ def _section_1_classic(engines: Dict, base_sections: Dict) -> Dict:
         f"Tum ek {arche.replace('The ', '')} ho — {elem} element dominant. "
         f"{snap} "
         f"Andar se tum {domt}-driven ho, jo tumhari sabse badi power hai aur "
-        f"sometimes tumhari biggest challenge bhi. "
+        f"kabhi-kabhi tumhari biggest challenge bhi. "
         f"Yeh report tumhari face ki har detail se nikla 100% personalized truth hai."
     )
 
@@ -424,9 +425,10 @@ def section_20_compatibility(engines: Dict) -> Dict:
 # SECTION 21 — FINAL TRUTH PAGE
 # ════════════════════════════════════════════════════════════════════════
 def section_21_final_truth(engines: Dict, base_sections: Dict, new_sections: Dict) -> Dict:
-    arche = _g(engines, "personality", "archetype", "name") or "Balanced Soul"
-    elem  = _g(engines, "samudrika", "element_profile", "dominant_element") or "Balanced"
-    domt  = _g(engines, "personality", "dominant_trait") or "balanced"
+    from .consistency_layer import get_dominant_element, get_archetype, get_dominant_trait
+    arche = get_archetype(engines)
+    elem  = get_dominant_element(engines)
+    domt  = get_dominant_trait(engines)
 
     s7_str = (_g(base_sections, "section_7_personality_synthesis", "top_5_strengths") or [""])[0]
     red_flags = _g(new_sections, "section_10_red_flags", "red_flags_hi") or []
@@ -437,7 +439,7 @@ def section_21_final_truth(engines: Dict, base_sections: Dict, new_sections: Dic
 
     who_you_are = (
         f"Tum {arche} ho — {elem} element dominant, {domt}-driven soul. "
-        f"Tumhari face me likha hai ki tum naturally apne path par akele chalne wale ho — "
+        f"Tumhare face me likha hai ki tum naturally apne path par akele chalne wale ho — "
         f"crowd follow nahi karte, crowd tumhe follow karta hai."
     )
 

@@ -44,9 +44,10 @@ def _ocean(engines):
 def build_section_1_multi_summary(engines: Dict, base_sections: Dict) -> Dict:
     o = _ocean(engines)
     O, C, E, A, N = o["O"], o["C"], o["E"], o["A"], o["N"]
-    arche  = _g(engines, "personality", "archetype", "name") or "Balanced"
-    elem   = _g(engines, "samudrika", "element_profile", "dominant_element") or "Balanced"
-    domt   = _g(engines, "personality", "dominant_trait") or "balanced"
+    from .consistency_layer import get_dominant_element, get_archetype, get_dominant_trait
+    arche  = get_archetype(engines)
+    elem   = get_dominant_element(engines)
+    domt   = get_dominant_trait(engines)
 
     blocks: List[Dict] = []
 

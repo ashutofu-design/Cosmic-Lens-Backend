@@ -739,6 +739,21 @@ def face_reading_analyze():
     # Strip internal markers from final response
     _all_sections.pop("_pending_sections", None)
 
+    # ── Master consistency layer ─────────────────────────────────────────
+    # Builds the single-source-of-truth `final_scores` registry, normalizes
+    # legacy alias keys (best_match ← best_match_hi etc.), strips internal
+    # codes ("A-driven" → "Warmth-driven", "Cosmic Vision" → "Cosmic Lens"),
+    # and runs cross-section consistency validation.
+    try:
+        from vedic.face_reading.consistency_layer import apply_consistency_layer
+        _final_scores = apply_consistency_layer(_projected, _all_sections)
+        _all_sections["final_scores"] = _final_scores
+        _engines_for_response["final_scores"] = _final_scores
+    except Exception as _cl_err:
+        _engines_for_response["final_scores"] = {
+            "ok": False, "error": f"consistency_layer_failed: {_cl_err}",
+        }
+
     # ── PHASE-UPGRADE: Final synthesis layer (additive — runs after all
     # base engines). Strict 6-key contract:
     #   fused_traits / shock_insights / behavior_simulation /

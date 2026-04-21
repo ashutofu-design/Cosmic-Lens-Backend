@@ -1,0 +1,138 @@
+MASTER FIX — FACE READING SYSTEM (CONSISTENCY + VISION + ACCURACY)
+
+Goal: Make system 100% consistent, deterministic, and production-grade. Fix ALL data mismatches, PDF issues, and vision inaccuracies.
+
+---------------------------------------
+
+1. SINGLE SOURCE OF TRUTH (CRITICAL)
+- Create unified object: final_scores
+- ALL outputs (API + PDF + UI) must read ONLY from final_scores
+- Remove raw_score vs final_score mismatch
+- Apply all transformations (shrinkage, normalization) ONCE only
+
+---------------------------------------
+
+2. REMOVE DATA INCONSISTENCY
+- Element, Archetype, Personality → compute ONLY once
+- Store in final_scores
+- Prevent multiple engines generating same label
+- Ensure same value across ALL sections
+
+---------------------------------------
+
+3. PDF RENDER FIX (GLUE LAYER)
+- Fix key mismatches:
+  best_match_hi → best_match
+- Add missing sections (10, 11)
+- Render synthesis sections:
+  - Trait Fusion
+  - Shock Insights
+  - Behavior Simulation
+  - Confidence
+  - Why Reasoning
+  - Lifestyle Remedy
+- Ensure NO empty fields
+
+---------------------------------------
+
+4. CONTRADICTION RESOLUTION ENGINE
+- If multiple rules fire:
+  → apply priority ranking OR merge logic
+- NEVER allow:
+  - auspicious + inauspicious together
+  - high + average overlap
+- Deduplicate outputs
+
+---------------------------------------
+
+5. THRESHOLD FIX (STRICT BANDS)
+- Convert all thresholds to non-overlapping:
+  if z >= 1 → high
+  elif z >= 0 → average
+  else → low
+- Apply globally across all engines
+
+---------------------------------------
+
+6. LABEL CLEANUP (HUMAN READABLE)
+- Replace internal labels:
+  "A-driven" → "Emotion-driven"
+- Remove all technical/internal codes from final output
+
+---------------------------------------
+
+7. VISION QUALITY CONTROL (CRITICAL)
+Before running engines:
+- Check:
+  - blur (Laplacian variance < 30)
+  - brightness (<50 or >230)
+  - face_count == 1
+  - yaw ≤ 15°
+- If fail:
+  → block analysis OR reduce confidence
+  → return "image quality insufficient"
+
+---------------------------------------
+
+8. FACE ROI CROPPING
+- Detect face bounding box
+- Crop + center face
+- Remove background noise
+- Normalize input before landmark detection
+
+---------------------------------------
+
+9. MIRROR / ORIENTATION FIX
+- Detect front-camera mirrored images
+- Auto-correct flip
+- Ensure left-right consistency before analysis
+
+---------------------------------------
+
+10. SCALING NORMALIZATION FIX (IMPORTANT)
+- Remove direct px → mm dependency on camera distance
+- Use relative ratios instead of absolute mm where possible
+- Normalize all features using face-relative scale (IOD ratio only, not real-world mm assumption)
+
+---------------------------------------
+
+11. SOFT CLASSIFICATION (NO HARD RULES)
+- Replace binary thresholds with ranges
+- Add buffer zones to avoid misclassification
+- Example:
+  if 1.45–1.55 → borderline (not strict rectangle/oblong)
+
+---------------------------------------
+
+12. CONFIDENCE ENGINE STRICT MODE
+- Reduce confidence if:
+  - low image quality
+  - conflicting signals
+- Confidence must reflect uncertainty honestly
+
+---------------------------------------
+
+13. CONSISTENCY VALIDATION (FINAL CHECK)
+Before response:
+- All sections must match same values
+- No duplicate/conflicting outputs
+- No empty or missing fields
+- Same input → identical output
+
+---------------------------------------
+
+14. OPENAI USAGE RULE
+- Use OpenAI ONLY for narrative rewriting
+- NEVER for calculations or scores
+- Pass structured JSON → generate human-friendly text
+
+---------------------------------------
+
+RESULT:
+- Fully consistent outputs
+- No contradictions
+- Accurate + stable calculations
+- Clean premium report (₹8000 level)
+- High user trust
+
+END

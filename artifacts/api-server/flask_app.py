@@ -470,6 +470,7 @@ def face_reading_analyze():
         from vedic.face_reading import fwhr as eng4
         from vedic.face_reading import health as eng5
         from vedic.face_reading import personality as eng6
+        from vedic.face_reading import first_impression as eng7
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -638,6 +639,22 @@ def face_reading_analyze():
         age=age_val,
     )
 
+    # Engine 7 — First Impression / Halo Effect
+    eng7_result = eng7.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        anthropometry_result=eng1_result,
+        symmetry_result=eng2_result,
+        phi_result=eng3_result,
+        fwhr_result=eng4_result,
+        health_result=eng5_result,
+        personality_result=eng6_result,
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -654,8 +671,9 @@ def face_reading_analyze():
             "fwhr": eng4_result,
             "health": eng5_result,
             "personality": eng6_result,
+            "first_impression": eng7_result,
         },
-        "engines_complete": 6,
+        "engines_complete": 7,
         "engines_total": 20,
     }), 200
 

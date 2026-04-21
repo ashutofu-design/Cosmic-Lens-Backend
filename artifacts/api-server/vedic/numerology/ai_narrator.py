@@ -596,6 +596,175 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
                      and any(_has_word(t, tok) for tok in
                              (f.get("verdict_token") or "").split("-")
                              if len(tok) >= 5),
+    # ── Tier 15 — Foreign Travel, Settlement & 12th House ──────────
+    "tier15.vyaya_bhava":
+        # Triple anchor: 12th sign + 12L planet + lord-house num.
+        lambda f, t: _has_word(t, f.get("twelfth_sign"))
+                     and _has_word(t, f.get("twelfth_lord"))
+                     and (_has_num(t, f.get("lord_house"))
+                          if f.get("lord_house") else True),
+    "tier15.karakas":
+        # Quad anchor: Rahu (foreign) + Moon (water-travel) keyword + chart-locked
+        # sign anchor (rahu_sign or moon_sign) + chart-locked house num.
+        lambda f, t: (_has_word(t, "Rahu") or _has_word(t, "राहु"))
+                     and (_has_word(t, "Moon") or _has_word(t, "Chandra")
+                          or _has_word(t, "चंद्र"))
+                     and (_has_word(t, f.get("rahu_sign"))
+                          or _has_word(t, f.get("moon_sign")))
+                     and (_has_num(t, f.get("rahu_house"))
+                          or _has_num(t, f.get("moon_house"))),
+    "tier15.yogas_audit":
+        # Triple anchor: foreign/Vyaya/12th keyword + severity token + 12L planet.
+        lambda f, t: (_has_word(t, "foreign") or _has_word(t, "Vyaya")
+                      or _has_word(t, "12th") or _has_word(t, "Bhagya")
+                      or _has_word(t, "विदेश") or _has_word(t, "व्यय"))
+                     and _has_word(t, f.get("severity"))
+                     and _has_word(t, f.get("twelfth_lord")),
+    "tier15.settlement":
+        # Quad anchor: settlement-mode token (SETTLEMENT / EXTENDED-STAY /
+        # FREQUENT-TRAVEL / OCCASIONAL-VISIT — at least one ≥5-char token) +
+        # Rahu OR Moon keyword + 12L planet + chart-locked Rahu/Moon house num
+        # (prevents generic settlement prose from passing without chart anchor).
+        lambda f, t: any(_has_word(t, tok) for tok in
+                         (f.get("mode") or "").replace("-", " ").split()
+                         if len(tok) >= 5)
+                     and (_has_word(t, "Rahu") or _has_word(t, "Moon")
+                          or _has_word(t, "Chandra"))
+                     and _has_word(t, f.get("twelfth_lord"))
+                     and (_has_num(t, f.get("rahu_house"))
+                          or _has_num(t, f.get("moon_house"))),
+    "tier15.travel_timing":
+        # Triple anchor: current MD + current AD + window-status keyword.
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("window_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier15.foreign_synthesis":
+        # Triple anchor: 12th sign + Rahu/Vyaya keyword + verdict_token.
+        lambda f, t: _has_word(t, f.get("twelfth_sign"))
+                     and (_has_word(t, "Rahu") or _has_word(t, "Vyaya")
+                          or _has_word(t, "foreign") or _has_word(t, "विदेश"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
+    # ── Tier 16 — Health, Longevity & 8th House (Ayur Bhava) ───────
+    "tier16.ayur_bhava":
+        # Triple anchor: 8th sign + 8L planet + lord-house num.
+        lambda f, t: _has_word(t, f.get("eighth_sign"))
+                     and _has_word(t, f.get("eighth_lord"))
+                     and (_has_num(t, f.get("lord_house"))
+                          if f.get("lord_house") else True),
+    "tier16.karakas":
+        # Quad anchor: Sun (vitality) + Mars/Saturn (surgery/chronic) +
+        # chart-locked sign anchor + chart-locked house num.
+        lambda f, t: (_has_word(t, "Sun") or _has_word(t, "Surya")
+                      or _has_word(t, "सूर्य"))
+                     and (_has_word(t, "Mars") or _has_word(t, "Mangal")
+                          or _has_word(t, "Saturn") or _has_word(t, "Shani")
+                          or _has_word(t, "मंगल") or _has_word(t, "शनि"))
+                     and (_has_word(t, f.get("sun_sign"))
+                          or _has_word(t, f.get("mars_sign"))
+                          or _has_word(t, f.get("saturn_sign")))
+                     and (_has_num(t, f.get("sun_house"))
+                          or _has_num(t, f.get("mars_house"))
+                          or _has_num(t, f.get("saturn_house"))),
+    "tier16.ayurdaya":
+        # Triple anchor: tier-key (alpa/madhya/purna) + Ayur/longevity keyword
+        # + 8L planet name (chart-locked).
+        lambda f, t: (_has_word(t, (f.get("tier_key") or "").upper())
+                      or _has_word(t, f.get("tier_key"))
+                      or _has_word(t, "PURNA") or _has_word(t, "MADHYA")
+                      or _has_word(t, "ALPA"))
+                     and (_has_word(t, "Ayur") or _has_word(t, "longevity")
+                          or _has_word(t, "Pinda") or _has_word(t, "ायु"))
+                     and _has_word(t, f.get("eighth_lord")),
+    "tier16.maraka":
+        # Quad anchor: 2L + 7L + maraka keyword + chart-locked house num
+        # (prevents generic maraka prose).
+        lambda f, t: _has_word(t, f.get("second_lord"))
+                     and _has_word(t, f.get("seventh_lord"))
+                     and (_has_word(t, "maraka") or _has_word(t, "Maraka")
+                          or _has_word(t, "मारक"))
+                     and (_has_num(t, f.get("second_lord_house"))
+                          or _has_num(t, f.get("seventh_lord_house"))),
+    "tier16.event_timing":
+        # Triple anchor: current MD + current AD + window-status keyword.
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("window_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier16.longevity_synthesis":
+        # Triple anchor: 8th sign + Ayur/health keyword + verdict_token.
+        lambda f, t: _has_word(t, f.get("eighth_sign"))
+                     and (_has_word(t, "Ayur") or _has_word(t, "health")
+                          or _has_word(t, "longevity") or _has_word(t, "ायु")
+                          or _has_word(t, "स्वास्थ्य"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
+    # ── Tier 17 — Moksha Synthesis & Final Life-Mastery Verdict ─────
+    "tier17.moksha_bhava":
+        # Triple anchor: 12th sign + 12L + Ketu sign (chart-locked).
+        lambda f, t: _has_word(t, f.get("twelfth_sign"))
+                     and _has_word(t, f.get("twelfth_lord"))
+                     and (_has_word(t, "Ketu") or _has_word(t, "केतु")
+                          or _has_word(t, "moksha") or _has_word(t, "मोक्ष")),
+    "tier17.atmakaraka":
+        # Triple anchor: Atmakaraka planet + Atmakaraka sign + Atmakaraka/soul keyword.
+        lambda f, t: _has_word(t, f.get("atmakaraka"))
+                     and (_has_word(t, f.get("atmakaraka_sign"))
+                          if f.get("atmakaraka_sign") else True)
+                     and (_has_word(t, "Atmakaraka") or _has_word(t, "atmakaraka")
+                          or _has_word(t, "soul") or _has_word(t, "आत्मकारक")
+                          or _has_word(t, "आत्मा")),
+    "tier17.karakamsha":
+        # Triple anchor: Karakamsha sign + Karakamsha/Navamsha keyword + soul-arena
+        # signal (any meaningful word from the soul_arena description).
+        lambda f, t: _has_word(t, f.get("karakamsha_sign"))
+                     and (_has_word(t, "Karakamsha") or _has_word(t, "karakamsha")
+                          or _has_word(t, "Navamsha") or _has_word(t, "navamsha")
+                          or _has_word(t, "नवमांश") or _has_word(t, "soul"))
+                     and (_has_word(t, f.get("karakamsha_lord"))
+                          if f.get("karakamsha_lord") else True),
+    "tier17.trikona_synthesis":
+        # Triple anchor: trikona-mode token + dharma OR karma keyword + lagna lord.
+        lambda f, t: any(_has_word(t, tok) for tok in
+                         (f.get("mode") or "").split("-") if len(tok) >= 5)
+                     and (_has_word(t, "dharma") or _has_word(t, "Dharma")
+                          or _has_word(t, "karma") or _has_word(t, "Karma")
+                          or _has_word(t, "धर्म") or _has_word(t, "कर्म"))
+                     and _has_word(t, f.get("lagna_lord")),
+    "tier17.life_mission":
+        # Triple anchor: mission-token (e.g. DHARMA-SAGE) + mission keyword
+        # + chart-locked numeric (winner_score).
+        lambda f, t: any(_has_word(t, tok) for tok in
+                         (f.get("mission_token") or "").split("-") if len(tok) >= 5)
+                     and (_has_word(t, "mission") or _has_word(t, "soul")
+                          or _has_word(t, "dharma") or _has_word(t, "मिशन")
+                          or _has_word(t, "धर्म") or _has_word(t, "आत्मा")
+                          or _has_word(t, "लक्ष्य"))
+                     and (_has_num(t, f.get("winner_score"))
+                          if f.get("winner_score") else True),
+    "tier17.evolution_arc":
+        # Triple anchor: current MD + current AD + arc-status keyword.
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("arc_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier17.final_verdict":
+        # Quad anchor: final verdict token + driver number + conductor number
+        # + soul/mastery/life keyword (closes the 17-tier loop with numerology).
+        lambda f, t: any(_has_word(t, tok) for tok in
+                         (f.get("final_verdict_token") or "").split("-")
+                         if len(tok) >= 5)
+                     and _has_num(t, f.get("driver_number"))
+                     and _has_num(t, f.get("conductor_number"))
+                     and (_has_word(t, "soul") or _has_word(t, "mastery")
+                          or _has_word(t, "life") or _has_word(t, "आत्मा")
+                          or _has_word(t, "जीवन") or _has_word(t, "महारत")),
 }
 
 

@@ -7262,6 +7262,696 @@ def _tier14_property_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier15_foreign_section(s, name: str, dob: str, driver: int,
+                              conductor: int, *, kundli: Dict[str, Any],
+                              lang: str = "hinglish",
+                              ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 15 — Foreign Travel, Settlement & 12th House Audit."""
+    from vedic.numerology.foreign import compute_foreign_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_foreign_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t15_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    vb = bundle["vyaya_bhava"]
+    kk = bundle["karakas"]
+    yog = bundle["yogas_audit"]
+    stl = bundle["settlement"]
+    tim = bundle["timing"]
+    krm = bundle["karmic"]
+    syn = bundle["synthesis"]
+
+    flow.append(Paragraph(_T(lang,
+        "✈️ TIER 15 — FOREIGN TRAVEL, SETTLEMENT & 12TH HOUSE AUDIT",
+        "✈️ टियर 15 — विदेश यात्रा, बसावट और 12वें भाव गहन जाँच",
+        "✈️ TIER 15 — FOREIGN TRAVEL, SETTLEMENT & 12TH HOUSE AUDIT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block as _open15
+    flow.extend(_open15(s, driver, conductor, "career", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Your <b>chart-based foreign travel & settlement prognosis</b> — Vyaya Bhava (12th "
+        "house + lord), foreign karakas (Rahu primary, Moon for water/emotional-roots, "
+        "Saturn for long-distance, Jupiter for study-abroad, Ketu for spiritual travel), "
+        "classical foreign-fortune yogas + obstructions, settlement-vs-visit distinction, "
+        "current dasha travel-window, Vyaya-leak signatures, and a synthesis verdict-token "
+        "+ travel profile + country direction + 6-step action plan.",
+        "आपकी <b>कुंडली-आधारित विदेश यात्रा भविष्यवाणी</b> — व्यय भाव (12वाँ भाव+स्वामी), विदेश-कारक (राहु मुख्य, "
+        "चंद्र जल-यात्रा, शनि लंबी-दूरी, गुरु विदेश-शिक्षा, केतु आध्यात्मिक), विदेश-योग और बाधाएँ, बसावट-बनाम-यात्रा, "
+        "वर्तमान दशा यात्रा-खिड़की, व्यय-दोष, और निष्कर्ष + देश दिशा।",
+        "Aapki <b>chart-based foreign travel & settlement prognosis</b> — Vyaya Bhava (12th "
+        "house + lord), foreign karakas (Rahu primary, Moon, Saturn, Jupiter, Ketu), "
+        "classical foreign yogas + obstructions, settlement-vs-visit distinction, current "
+        "dasha travel-window, Vyaya-leak signatures, aur ek synthesis + travel profile + "
+        "country direction + 6-step action plan.",
+        bg="#ECFDF5", border="#047857"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 1. Vyaya Bhava
+    vb_facts = (
+        f"<b>12th house sign:</b> {vb['twelfth_sign']}<br/>"
+        f"<b>12th lord:</b> {vb['twelfth_lord']} in H{vb['lord_house']} "
+        f"({vb['lord_sign']}, {vb['lord_dignity']})<br/>"
+        f"<b>12th occupants:</b> {', '.join(vb['occupants']) or '—'}<br/>"
+        f"<b>Strength score:</b> {vb['strength_score']}/100 — <b>{vb['verdict']}</b><br/><br/>"
+        f"<b>Foreign indication from {vb['twelfth_sign']}:</b> {vb['foreign_indication']}"
+    )
+    _emit_ai(ai_texts.get("t15.vyaya_bhava", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  ✈️ VYAYA BHAVA — 12th House & Lord (Foreign Foundation)",
+           "1️⃣  ✈️ व्यय भाव — 12वाँ भाव और स्वामी",
+           "1️⃣  ✈️ VYAYA BHAVA — 12th House & Lord"),
+        vb_facts,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 2. Foreign Karakas
+    kk_facts = (
+        f"<b>Foreign karaka (NRI/long-stay):</b> Rahu in {kk['rahu_sign']} H{kk['rahu_house']}<br/>"
+        f"<b>Water-travel & emotional-roots karaka:</b> Moon in {kk['moon_sign']} "
+        f"H{kk['moon_house']} ({kk['moon_dignity']})<br/>"
+        f"<b>Long-distance / cold-country karaka:</b> Saturn in {kk['saturn_sign']} "
+        f"H{kk['saturn_house']}<br/>"
+        f"<b>Study-abroad karaka:</b> Jupiter in {kk['jupiter_sign']} H{kk['jupiter_house']}<br/>"
+        f"<b>Spiritual-travel karaka:</b> Ketu in {kk['ketu_sign']} H{kk['ketu_house']}<br/><br/>"
+        f"<b>Country/region indication from Rahu in {kk['rahu_sign']}:</b> "
+        f"{kk['country_indication']}<br/><br/>"
+        f"<i>{kk['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t15.karakas", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🌍 FOREIGN KARAKAS — Rahu + Moon + Saturn + Jupiter + Ketu",
+           "2️⃣  🌍 विदेश कारक — राहु + चंद्र + शनि + गुरु + केतु",
+           "2️⃣  🌍 FOREIGN KARAKAS — Rahu + Moon + Saturn + Jupiter + Ketu"),
+        kk_facts,
+        bg_color=colors.HexColor("#EFF6FF"), border_color=colors.HexColor("#1E40AF"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 3. Foreign Yogas Audit
+    yog_html = "<br/>".join(f"&nbsp;&nbsp;▸ {y}" for y in yog.get("yogas", [])) or "&nbsp;&nbsp;—"
+    obs_html = "<br/>".join(f"&nbsp;&nbsp;▸ {o}" for o in yog.get("obstructions", [])) or "&nbsp;&nbsp;—"
+    yog_facts = (
+        f"<b>12th occupants:</b> {', '.join(yog['twelfth_occupants']) or '—'}<br/>"
+        f"<b>9th occupants:</b> {', '.join(yog['ninth_occupants']) or '—'}<br/>"
+        f"<b>12L house:</b> H{yog['twelfth_lord_house']} | "
+        f"<b>Rahu house:</b> H{yog['rahu_house']} | <b>Moon house:</b> H{yog['moon_house']}<br/><br/>"
+        f"<b>Foreign Yogas active ({yog['yoga_count']}):</b><br/>{yog_html}<br/><br/>"
+        f"<b>Obstructions ({yog['obstruction_count']}):</b><br/>{obs_html}<br/><br/>"
+        f"<b>Score:</b> {yog['score']}/100 — <b>{yog['severity']}</b><br/>"
+        f"<b>Verdict:</b> {yog['verdict']}"
+    )
+    _emit_ai(ai_texts.get("t15.yogas_audit", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🕉️ FOREIGN YOGAS — Classical Audit + Obstructions",
+           "3️⃣  🕉️ विदेश योग — शास्त्रीय ऑडिट + बाधाएँ",
+           "3️⃣  🕉️ FOREIGN YOGAS — Classical Audit + Obstructions"),
+        yog_facts,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 4. Settlement vs Visit
+    stl_factors = "<br/>".join(f"&nbsp;&nbsp;▸ {x}" for x in stl["factors"]) or "&nbsp;&nbsp;—"
+    stl_facts = (
+        f"<b>Settlement score:</b> {stl['settlement_score']}/100<br/>"
+        f"<b>Mode:</b> {stl['mode']}<br/><br/>"
+        f"<b>Narrative:</b> {stl['narrative']}<br/><br/>"
+        f"<b>Contributing factors:</b><br/>{stl_factors}"
+    )
+    _emit_ai(ai_texts.get("t15.settlement", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🏘️ SETTLEMENT vs VISIT — Long-Stay vs Short-Trip Picture",
+           "4️⃣  🏘️ बसावट बनाम यात्रा — दीर्घ-प्रवास vs छोटे-दौरे",
+           "4️⃣  🏘️ SETTLEMENT vs VISIT — Long-Stay vs Short-Trip"),
+        stl_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 5. Travel Timing
+    tim_facts = (
+        f"<b>Current Mahadasha:</b> {tim['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {tim['current_ad']}<br/><br/>"
+        f"<b>Travel-activator planets:</b> {', '.join(tim['activators'])}<br/>"
+        f"<b>12th lord:</b> {tim['twelfth_lord']} | <b>9th lord:</b> {tim['ninth_lord']}<br/><br/>"
+        f"<b>Window status:</b> {tim['window_status']}<br/>"
+        f"<i>{tim['window_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t15.travel_timing", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⏰ TRAVEL TIMING — Current Dasha-Bhukti Window",
+           "5️⃣  ⏰ यात्रा समय — वर्तमान दशा-भुक्ति",
+           "5️⃣  ⏰ TRAVEL TIMING — Current Dasha-Bhukti"),
+        tim_facts,
+        bg_color=colors.HexColor("#FEF9C3"), border_color=colors.HexColor("#854D0E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 6. Vyaya / Karmic Signatures
+    flags_html = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in krm.get("flags", [])) or "&nbsp;&nbsp;No Vyaya/karmic flags detected"
+    krm_facts = (
+        f"<b>12th-house occupants:</b> {', '.join(krm['twelfth_occupants']) or '—'}<br/>"
+        f"<b>Karmic load score:</b> {krm['karmic_score']}/100 — <b>{krm['karmic_verdict']}</b><br/>"
+        f"<b>Moksha-axis active:</b> {'Yes' if krm['moksha_focus'] else 'No'}<br/><br/>"
+        f"<b>Vyaya-Leak / Karmic Signatures:</b><br/>{flags_html}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌑 VYAYA-LEAK SIGNATURES — Saturn/Rahu/Ketu in 12th",
+           "6️⃣  🌑 व्यय-क्षरण संकेत — 12वें में शनि/राहु/केतु",
+           "6️⃣  🌑 VYAYA-LEAK SIGNATURES — Saturn/Rahu/Ketu in 12th"),
+        krm_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#F59E0B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 7. Synthesis
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    prof_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["profile_lines"])
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["action_plan"])
+    syn_facts = (
+        f"<b>Verdict token:</b> {syn['verdict_token']}<br/><br/>"
+        f"<b>Synthesis:</b><br/>{summary_html}<br/><br/>"
+        f"<b>Travel + Country Profile:</b><br/>{prof_html}<br/><br/>"
+        f"<b>6-Step Action Plan:</b><br/>{plan_html}"
+    )
+    _emit_ai(ai_texts.get("t15.foreign_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 FOREIGN SYNTHESIS + COUNTRY PROFILE + ACTION PLAN",
+           "7️⃣  🌟 विदेश निष्कर्ष + देश-प्रोफ़ाइल + कार्य योजना",
+           "7️⃣  🌟 FOREIGN SYNTHESIS + COUNTRY PROFILE + ACTION PLAN"),
+        syn_facts,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close15
+    flow.extend(_close15(s, driver, conductor, "career", lang))
+
+    return flow
+
+
+def _tier16_longevity_section(s, name: str, dob: str, driver: int,
+                                conductor: int, *, kundli: Dict[str, Any],
+                                lang: str = "hinglish",
+                                ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 16 — Health, Longevity & 8th House (Ayur Bhava) Audit.
+    NOTE: Karmic insight only, NOT medical advice. All cards include
+    physician-consultation disclaimer language.
+    """
+    from vedic.numerology.longevity import compute_longevity_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_longevity_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t16_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    ab = bundle["ayur_bhava"]
+    kk = bundle["karakas"]
+    ay = bundle["ayurdaya"]
+    mk = bundle["maraka"]
+    tim = bundle["timing"]
+    rg = bundle["roga"]
+    syn = bundle["synthesis"]
+
+    flow.append(Paragraph(_T(lang,
+        "❤️‍🩹 TIER 16 — HEALTH, LONGEVITY & 8TH HOUSE (AYUR BHAVA) AUDIT",
+        "❤️‍🩹 टियर 16 — स्वास्थ्य, आयु और 8वें भाव (आयु भाव) ऑडिट",
+        "❤️‍🩹 TIER 16 — HEALTH, LONGEVITY & 8TH HOUSE (AYUR BHAVA) AUDIT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block as _open16
+    # life_area "wealth" framing — health = the truest wealth (Option D framing).
+    flow.extend(_open16(s, driver, conductor, "wealth", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Your <b>chart-based health, longevity & transformation prognosis</b> — Ayur Bhava "
+        "(8th house + lord), health karakas (Sun=vitality, Moon=mind/fluids, Mars=blood/"
+        "surgery, Saturn=chronic/bones, Rahu=mystery-illness, Ketu=diagnostic-blindspot), "
+        "Ayurdaya tier (Pinda heuristic), Maraka audit (2L+7L), sudden-event timing window, "
+        "Roga karmic signatures, and synthesis verdict + body-system focus + 7-step action plan. "
+        "<i>This is a karmic-vitality map only — NOT medical advice. Always consult a "
+        "qualified physician for medical concerns.</i>",
+        "आपकी <b>कुंडली-आधारित स्वास्थ्य, आयु और रूपांतरण भविष्यवाणी</b> — आयु भाव (8वाँ भाव+स्वामी), "
+        "स्वास्थ्य-कारक (सूर्य=ऊर्जा, चंद्र=मन/रक्त, मंगल=रक्त/शल्य, शनि=पुराना रोग/अस्थि, राहु=रहस्यमय रोग, "
+        "केतु=निदान-अंधक्षेत्र), आयुर्दाय स्तर, मारक ऑडिट, घटना-समय खिड़की, रोग-संकेत, और निष्कर्ष। "
+        "<i>यह केवल कर्म-स्वास्थ्य मार्ग है, चिकित्सीय सलाह नहीं — कृपया योग्य चिकित्सक से परामर्श लें।</i>",
+        "Aapki <b>chart-based health, longevity & transformation prognosis</b> — Ayur Bhava "
+        "(8th house + lord), health karakas (Sun, Moon, Mars, Saturn, Rahu, Ketu), Ayurdaya "
+        "tier (Pinda heuristic), Maraka audit, sudden-event timing window, Roga signatures, "
+        "aur synthesis + body-system focus + 7-step action plan. "
+        "<i>Yeh sirf karmic vitality map hai, medical advice NAHI — qualified physician se "
+        "consult karein.</i>",
+        bg="#FEF2F2", border="#B91C1C"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 1. Ayur Bhava
+    ab_facts = (
+        f"<b>8th house sign:</b> {ab['eighth_sign']}<br/>"
+        f"<b>8th lord:</b> {ab['eighth_lord']} in H{ab['lord_house']} "
+        f"({ab['lord_sign']}, {ab['lord_dignity']})<br/>"
+        f"<b>8th occupants:</b> {', '.join(ab['occupants']) or '—'}<br/>"
+        f"<b>Strength score:</b> {ab['strength_score']}/100 — <b>{ab['verdict']}</b><br/><br/>"
+        f"<b>Body-system focus from {ab['eighth_sign']}:</b> {ab['body_focus_by_sign']}<br/><br/>"
+        f"<b>Chronic-tendency from 8L in {ab['lord_sign']}:</b> {ab['body_focus_by_lord_sign']}"
+    )
+    _emit_ai(ai_texts.get("t16.ayur_bhava", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  ❤️‍🩹 AYUR BHAVA — 8th House & Lord (Vitality Foundation)",
+           "1️⃣  ❤️‍🩹 आयु भाव — 8वाँ भाव और स्वामी",
+           "1️⃣  ❤️‍🩹 AYUR BHAVA — 8th House & Lord"),
+        ab_facts,
+        bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#B91C1C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 2. Health Karakas
+    kk_facts = (
+        f"<b>Vitality karaka:</b> Sun in {kk['sun_sign']} H{kk['sun_house']} "
+        f"({kk['sun_dignity']})<br/>"
+        f"<b>Mind/fluids karaka:</b> Moon in {kk['moon_sign']} H{kk['moon_house']} "
+        f"({kk['moon_dignity']})<br/>"
+        f"<b>Blood/surgery karaka:</b> Mars in {kk['mars_sign']} H{kk['mars_house']} "
+        f"({kk['mars_dignity']})<br/>"
+        f"<b>Chronic/bones karaka:</b> Saturn in {kk['saturn_sign']} H{kk['saturn_house']} "
+        f"({kk['saturn_dignity']})<br/>"
+        f"<b>Mystery-illness karaka:</b> Rahu in {kk['rahu_sign']} H{kk['rahu_house']}<br/>"
+        f"<b>Diagnostic-blindspot karaka:</b> Ketu in {kk['ketu_sign']} H{kk['ketu_house']}<br/><br/>"
+        f"<i>{kk['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t16.karakas", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  💪 HEALTH KARAKAS — Sun + Moon + Mars + Saturn + Rahu + Ketu",
+           "2️⃣  💪 स्वास्थ्य कारक — सूर्य + चंद्र + मंगल + शनि + राहु + केतु",
+           "2️⃣  💪 HEALTH KARAKAS — Sun + Moon + Mars + Saturn + Rahu + Ketu"),
+        kk_facts,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 3. Ayurdaya tier
+    ay_facts = (
+        f"<b>Ayurdaya proxy score:</b> {ay['score']}/100<br/>"
+        f"<b>Tier:</b> {ay['tier_key'].upper()} — {ay['tier_label']}<br/><br/>"
+        f"<b>8L dignity:</b> {ay['eighth_lord_dignity']} | "
+        f"<b>8L house:</b> H{ay['eighth_lord_house']}<br/>"
+        f"<b>Saturn dignity:</b> {ay['saturn_dignity']}<br/>"
+        f"<b>Lagna lord:</b> {ay['lagna_lord']} ({ay['lagna_lord_dignity']})<br/>"
+        f"<b>Malefics in Lagna:</b> {ay['lagna_malefic_count']} | "
+        f"<b>Malefics in 8th:</b> {ay['eighth_malefic_count']}<br/>"
+        f"<b>Jupiter aspects Lagna:</b> {'Yes' if ay['jupiter_lagna_aspect'] else 'No'} | "
+        f"<b>Jupiter aspects 8th:</b> {'Yes' if ay['jupiter_eighth_aspect'] else 'No'}<br/><br/>"
+        f"<i>{ay['method_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t16.ayurdaya", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪔 AYURDAYA TIER — Pinda Heuristic (Alpa / Madhya / Purna)",
+           "3️⃣  🪔 आयुर्दाय स्तर — पिंड पद्धति (अल्प/मध्य/पूर्ण)",
+           "3️⃣  🪔 AYURDAYA TIER — Pinda Heuristic (Alpa / Madhya / Purna)"),
+        ay_facts,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 4. Maraka audit
+    mk_flags = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in mk["maraka_flags"]) or "&nbsp;&nbsp;No elevated maraka flags"
+    mk_facts = (
+        f"<b>2nd lord (maraka):</b> {mk['second_lord']} in H{mk['second_lord_house']}<br/>"
+        f"<b>7th lord (maraka):</b> {mk['seventh_lord']} in H{mk['seventh_lord_house']}<br/>"
+        f"<b>Saturn (time-lord):</b> H{mk['saturn_house']}<br/>"
+        f"<b>Maraka severity score:</b> {mk['severity_score']}/100<br/><br/>"
+        f"<b>Maraka flags:</b><br/>{mk_flags}<br/><br/>"
+        f"<i>{mk['note']}</i><br/><br/>"
+        f"<b>⚠️ Disclaimer:</b> <i>Maraka audit is a karmic time-keeper map for health-vigilance "
+        f"windows, NOT a death prediction. Always consult a qualified physician for medical "
+        f"concerns.</i>"
+    )
+    _emit_ai(ai_texts.get("t16.maraka", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🕉️ MARAKA AUDIT — 2L + 7L + Saturn (Karmic Time-Keepers)",
+           "4️⃣  🕉️ मारक ऑडिट — 2स्वामी + 7स्वामी + शनि",
+           "4️⃣  🕉️ MARAKA AUDIT — 2L + 7L + Saturn (Karmic Time-Keepers)"),
+        mk_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 5. Sudden-Event Timing
+    tim_facts = (
+        f"<b>Current Mahadasha:</b> {tim['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {tim['current_ad']}<br/><br/>"
+        f"<b>8th-house activator planets:</b> {', '.join(tim['activators'])}<br/>"
+        f"<b>8th lord:</b> {tim['eighth_lord']}<br/><br/>"
+        f"<b>Window status:</b> {tim['window_status']}<br/>"
+        f"<i>{tim['window_note']}</i><br/><br/>"
+        f"<b>⚠️ Disclaimer:</b> <i>Timing windows are karmic-care indicators only. Schedule "
+        f"medical appointments and elective procedures in consultation with a qualified "
+        f"physician — this audit does not replace medical advice.</i>"
+    )
+    _emit_ai(ai_texts.get("t16.event_timing", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⏰ SUDDEN-EVENT TIMING — Current Dasha-Bhukti Window",
+           "5️⃣  ⏰ अकस्मात-घटना समय — वर्तमान दशा-भुक्ति",
+           "5️⃣  ⏰ SUDDEN-EVENT TIMING — Current Dasha-Bhukti"),
+        tim_facts,
+        bg_color=colors.HexColor("#FEF9C3"), border_color=colors.HexColor("#854D0E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 6. Roga signatures
+    rg_flags = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in rg.get("flags", [])) or "&nbsp;&nbsp;No Roga karmic flags detected"
+    rg_facts = (
+        f"<b>6th-house occupants:</b> {', '.join(rg['sixth_occupants']) or '—'}<br/>"
+        f"<b>8th-house occupants:</b> {', '.join(rg['eighth_occupants']) or '—'}<br/>"
+        f"<b>12th-house occupants:</b> {', '.join(rg['twelfth_occupants']) or '—'}<br/>"
+        f"<b>Karmic load score:</b> {rg['karmic_score']}/100 — <b>{rg['karmic_verdict']}</b><br/>"
+        f"<b>Transformation-axis active:</b> {'Yes' if rg['transformation_focus'] else 'No'}<br/><br/>"
+        f"<b>Roga / Karmic Signatures:</b><br/>{rg_flags}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌑 ROGA SIGNATURES — Saturn/Mars/Rahu/Ketu in 6-8-12 Axis",
+           "6️⃣  🌑 रोग संकेत — 6-8-12 अक्ष में शनि/मंगल/राहु/केतु",
+           "6️⃣  🌑 ROGA SIGNATURES — Saturn/Mars/Rahu/Ketu in 6-8-12"),
+        rg_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#F59E0B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 7. Synthesis
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    prof_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["profile_lines"])
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["action_plan"])
+    syn_facts = (
+        f"<b>Verdict token:</b> {syn['verdict_token']}<br/><br/>"
+        f"<b>Synthesis:</b><br/>{summary_html}<br/><br/>"
+        f"<b>Body-System + Tier Profile:</b><br/>{prof_html}<br/><br/>"
+        f"<b>7-Step Action Plan:</b><br/>{plan_html}<br/><br/>"
+        f"<b>⚠️ Disclaimer:</b> <i>{syn['disclaimer']}</i>"
+    )
+    _emit_ai(ai_texts.get("t16.longevity_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 LONGEVITY SYNTHESIS + BODY PROFILE + ACTION PLAN",
+           "7️⃣  🌟 आयु निष्कर्ष + शरीर-प्रोफ़ाइल + कार्य योजना",
+           "7️⃣  🌟 LONGEVITY SYNTHESIS + BODY PROFILE + ACTION PLAN"),
+        syn_facts,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close16
+    flow.extend(_close16(s, driver, conductor, "wealth", lang))
+
+    return flow
+
+
+def _tier17_moksha_section(s, name: str, dob: str, driver: int,
+                            conductor: int, *, kundli: Dict[str, Any],
+                            lang: str = "hinglish",
+                            ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 17 — Moksha Synthesis & Final Life-Mastery Verdict (CAPSTONE).
+    Atmakaraka (Jaimini) + Karakamsha + Trikona-Karma synthesis + Life-Mission
+    archetype + Spiritual Evolution Arc + Final 17-tier closing verdict.
+    """
+    from vedic.numerology.moksha import compute_moksha_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_moksha_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t17_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    mb = bundle["moksha_bhava"]
+    ak = bundle["atmakaraka"]
+    km = bundle["karakamsha"]
+    tk = bundle["trikona_synthesis"]
+    lm = bundle["life_mission"]
+    ev = bundle["evolution_arc"]
+    syn = bundle["synthesis"]
+
+    flow.append(Paragraph(_T(lang,
+        "🕉️ TIER 17 — MOKSHA SYNTHESIS & FINAL LIFE-MASTERY VERDICT",
+        "🕉️ टियर 17 — मोक्ष संश्लेषण और अंतिम जीवन-महारत निष्कर्ष",
+        "🕉️ TIER 17 — MOKSHA SYNTHESIS & FINAL LIFE-MASTERY VERDICT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+
+    from vedic.numerology.framing import numerology_opener_block as _open17
+    # life_area "spirituality" (Option D framing — soul-mission closes the loop).
+    flow.extend(_open17(s, driver, conductor, "spirituality", lang))
+
+    flow.append(_explain_card(s, lang,
+        "📖 What this capstone tier reveals",
+        "📖 यह कैपस्टोन टियर क्या प्रकट करता है",
+        "📖 Yeh capstone tier kya reveal karta hai",
+        "Your <b>complete soul-portrait & life-mission verdict</b> — Moksha Bhava (12th house "
+        "as liberation-axis), Atmakaraka (soul-significator per Jaimini Chara Karaka), "
+        "Karakamsha (soul-arena in D9 Navamsha), Trikona-Karma synthesis (dharma vs effort "
+        "balance), 5 Life-Mission archetypes (DHARMA-SAGE / KARMA-WARRIOR / BHAKTI-DEVOTEE / "
+        "JNANA-SEEKER / MOKSHA-RECLUSE), Spiritual Evolution Arc (current dasha vs mission), "
+        "and the FINAL 17-tier closing verdict + 7-step soul-blueprint that integrates your "
+        "Driver/Conductor numerology back into the soul-mission. <i>This is the T17 capstone "
+        "synthesis — it focuses on soul-direction and the final verdict; for full chart-data "
+        "revisit Tiers 1–16. Read this last, then circle back across all tiers to live the "
+        "practices.</i>",
+        "आपकी <b>संपूर्ण आत्मा-छवि और जीवन-मिशन निष्कर्ष</b> — मोक्ष भाव (12वाँ भाव), आत्मकारक (जैमिनी), "
+        "कारकांश (D9 नवमांश में आत्मा का क्षेत्र), त्रिकोण-कर्म संश्लेषण, 5 जीवन-मिशन आदर्श, आध्यात्मिक "
+        "विकास-चरण, और 17-टियर अंतिम निष्कर्ष + 7-चरण आत्मा-योजना। "
+        "<i>यह आपकी रिपोर्ट का शिखर है।</i>",
+        "Aapki <b>complete soul-portrait & life-mission verdict</b> — Moksha Bhava (12th as "
+        "liberation-axis), Atmakaraka (Jaimini soul-significator), Karakamsha (D9 me soul-arena), "
+        "Trikona-Karma synthesis, 5 life-mission archetypes (DHARMA-SAGE, KARMA-WARRIOR, BHAKTI, "
+        "JNANA, MOKSHA), Evolution Arc, aur FINAL 17-tier verdict + 7-step soul-blueprint. "
+        "<i>Yeh aapki report ka capstone hai — last me padhein, fir practices live karein.</i>",
+        bg="#F5F3FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 1. Moksha Bhava
+    mb_signals = "<br/>".join(f"&nbsp;&nbsp;▸ {s_}" for s_ in mb["moksha_signals"]) \
+                  or "&nbsp;&nbsp;No strong moksha-axis signals; soul's path is engagement, not retreat"
+    mb_facts = (
+        f"<b>12th house sign:</b> {mb['twelfth_sign']}<br/>"
+        f"<b>12th lord (moksha-key):</b> {mb['twelfth_lord']}<br/>"
+        f"<b>12th occupants:</b> {', '.join(mb['twelfth_occupants']) or '—'}<br/>"
+        f"<b>Ketu (moksha karaka):</b> {mb['ketu_sign']} H{mb['ketu_house']}<br/>"
+        f"<b>Moksha-axis signal count:</b> {mb['moksha_signal_count']}<br/><br/>"
+        f"<b>Moksha-axis signals:</b><br/>{mb_signals}<br/><br/>"
+        f"<i>{mb['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t17.moksha_bhava", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🕉️ MOKSHA BHAVA — 12th House as Liberation-Axis",
+           "1️⃣  🕉️ मोक्ष भाव — 12वाँ भाव मुक्ति-अक्ष के रूप में",
+           "1️⃣  🕉️ MOKSHA BHAVA — 12th House as Liberation-Axis"),
+        mb_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 2. Atmakaraka
+    if ak.get("available"):
+        ranked = ", ".join(f"{p} ({d:.2f}°)" for p, d in ak["all_karakas_ranked"][:7])
+        ak_facts = (
+            f"<b>Atmakaraka (soul-significator):</b> {ak['atmakaraka']}<br/>"
+            f"<b>Sign:</b> {ak['atmakaraka_sign']} ({ak['atmakaraka_dignity']})<br/>"
+            f"<b>Degree-within-sign:</b> {ak['atmakaraka_degree']:.4f}°<br/><br/>"
+            f"<b>All Chara Karakas ranked (highest degree first):</b><br/>"
+            f"&nbsp;&nbsp;{ranked}<br/><br/>"
+            f"<i>{ak['method']}</i>"
+        )
+    else:
+        ak_facts = (
+            f"<b>Atmakaraka:</b> Unavailable — {ak.get('reason', 'planetary longitude data missing')}.<br/><br/>"
+            f"<i>Atmakaraka identification requires precise longitude (degrees within sign) for the 7 "
+            f"Jaimini grahas. Without longitude data, the soul-significator cannot be derived. The "
+            f"Karakamsha (soul-arena) below also depends on this calculation.</i>"
+        )
+    _emit_ai(ai_texts.get("t17.atmakaraka", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🌟 ATMAKARAKA — Soul-Significator (Jaimini Chara Karaka)",
+           "2️⃣  🌟 आत्मकारक — आत्मा-संकेतक (जैमिनी चर कारक)",
+           "2️⃣  🌟 ATMAKARAKA — Soul-Significator (Jaimini Chara Karaka)"),
+        ak_facts,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 3. Karakamsha
+    if km.get("available"):
+        km_facts = (
+            f"<b>Karakamsha sign (in D9 Navamsha):</b> {km['karakamsha_sign']}<br/>"
+            f"<b>Karakamsha lord:</b> {km['karakamsha_lord']}<br/><br/>"
+            f"<b>Soul-arena interpretation:</b><br/>"
+            f"&nbsp;&nbsp;{km['soul_arena']}<br/><br/>"
+            f"<i>{km['method']}</i>"
+        )
+    else:
+        km_facts = (
+            f"<b>Karakamsha:</b> Unavailable — {km.get('reason', 'D9 Navamsha not present')}.<br/><br/>"
+            f"<i>Karakamsha is the Atmakaraka's sign in the D9 Navamsha chart. When D9 data or "
+            f"Atmakaraka itself is unavailable, the soul-arena cannot be precisely identified — fall "
+            f"back to the ascendant + Atmakaraka placement (above) and the Life-Mission archetype "
+            f"(below) for soul-direction signals.</i>"
+        )
+    _emit_ai(ai_texts.get("t17.karakamsha", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪷 KARAKAMSHA — Soul's Arena of Dharmic Expression (D9 Navamsha)",
+           "3️⃣  🪷 कारकांश — आत्मा का धार्मिक अभिव्यक्ति-क्षेत्र (D9)",
+           "3️⃣  🪷 KARAKAMSHA — Soul's Arena (D9 Navamsha)"),
+        km_facts,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 4. Trikona-Karma synthesis
+    dh_pl = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in tk["dharma_planets"]) \
+            or "&nbsp;&nbsp;None"
+    ka_pl = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in tk["karma_planets"]) \
+            or "&nbsp;&nbsp;None"
+    tk_facts = (
+        f"<b>Mode:</b> {tk['mode']}<br/>"
+        f"<b>Dharma-trikona score:</b> {tk['dharma_score']} ({tk['dharma_pct']}%)<br/>"
+        f"<b>Karma-houses score:</b> {tk['karma_score']} ({tk['karma_pct']}%)<br/><br/>"
+        f"<b>Lagna lord:</b> {tk['lagna_lord']}<br/>"
+        f"<b>9th lord (dharma-pati):</b> {tk['ninth_lord']}<br/>"
+        f"<b>10th lord (karma-pati):</b> {tk['tenth_lord']}<br/><br/>"
+        f"<b>Dharma planets (in 1/5/9):</b><br/>{dh_pl}<br/><br/>"
+        f"<b>Karma planets (in 3/6/10/11):</b><br/>{ka_pl}<br/><br/>"
+        f"<i>{tk['narrative']}</i>"
+    )
+    _emit_ai(ai_texts.get("t17.trikona_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  ⚖️ TRIKONA-KARMA SYNTHESIS — Dharma vs Effort Balance",
+           "4️⃣  ⚖️ त्रिकोण-कर्म संश्लेषण — धर्म बनाम प्रयास संतुलन",
+           "4️⃣  ⚖️ TRIKONA-KARMA SYNTHESIS — Dharma vs Effort"),
+        tk_facts,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 5. Life-Mission archetype
+    all_scores_html = "<br/>".join(
+        f"&nbsp;&nbsp;▸ {LIFE_KEY_LABELS.get(k, k)}: {v}"
+        for k, v in sorted(lm["all_scores"].items(), key=lambda x: x[1], reverse=True)
+    )
+    lm_facts = (
+        f"<b>Life-Mission archetype:</b> {lm['mission_token']}<br/>"
+        f"<b>Winning score:</b> {lm['winner_score']}<br/>"
+        f"<b>Runner-up archetype:</b> {lm.get('runner_up_token', '—')} "
+        f"(score {lm.get('runner_up_score', 0)})<br/><br/>"
+        f"<b>Mission description:</b><br/>"
+        f"&nbsp;&nbsp;{lm['mission_description']}<br/><br/>"
+        f"<b>All archetype scores:</b><br/>{all_scores_html}<br/><br/>"
+        f"<i>{lm['decision_method']}</i><br/><br/>"
+        f"<b>🪔 Guidance, not destiny:</b> <i>This archetype is a chart-derived signpost for "
+        f"your soul's primary direction — it is GUIDANCE, not predestination. Free will, "
+        f"sincere effort, and conscious choice always shape the actual life that unfolds. "
+        f"Use the runner-up archetype as a complementary thread, and re-read this section "
+        f"quarterly as your awareness deepens.</i>"
+    )
+    _emit_ai(ai_texts.get("t17.life_mission", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  🏹 LIFE-MISSION ARCHETYPE — Soul's Primary Path (1 of 5)",
+           "5️⃣  🏹 जीवन-मिशन आदर्श — आत्मा का प्रमुख मार्ग",
+           "5️⃣  🏹 LIFE-MISSION ARCHETYPE — Soul's Primary Path"),
+        lm_facts,
+        bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#B91C1C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 6. Spiritual Evolution Arc
+    activators_html = ", ".join(ev["mission_activators"]) or "—"
+    ev_facts = (
+        f"<b>Current Mahadasha:</b> {ev['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {ev['current_ad']}<br/>"
+        f"<b>Mission-aligned activator planets:</b> {activators_html}<br/>"
+        f"<b>MD aligned with mission:</b> {'Yes' if ev['md_aligned'] else 'No'}<br/>"
+        f"<b>AD aligned with mission:</b> {'Yes' if ev['ad_aligned'] else 'No'}<br/><br/>"
+        f"<b>Arc status:</b> {ev['arc_status']}<br/>"
+        f"<i>{ev['arc_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t17.evolution_arc", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌒 SPIRITUAL EVOLUTION ARC — Current Dasha vs Mission Alignment",
+           "6️⃣  🌒 आध्यात्मिक विकास चरण — वर्तमान दशा बनाम मिशन",
+           "6️⃣  🌒 SPIRITUAL EVOLUTION ARC — Dasha vs Mission"),
+        ev_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#FBBF24"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # 7. FINAL VERDICT + 7-step soul-blueprint
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    blueprint_html = "<br/>".join(
+        f"&nbsp;&nbsp;<b>{i+1}.</b> {p}" for i, p in enumerate(syn["soul_blueprint"])
+    )
+    final_facts = (
+        f"<b>🏆 FINAL LIFE-MASTERY VERDICT:</b> {syn['final_verdict_token']}<br/>"
+        f"<b>Driver number:</b> {syn['driver_number']} | "
+        f"<b>Conductor number:</b> {syn['conductor_number']}<br/><br/>"
+        f"<b>17-Tier Synthesis Summary:</b><br/>{summary_html}<br/><br/>"
+        f"<b>🌟 7-Step Soul-Blueprint:</b><br/>{blueprint_html}<br/><br/>"
+        f"<b>Closing message:</b><br/>"
+        f"<i>{syn['closing_message']}</i>"
+    )
+    _emit_ai(ai_texts.get("t17.final_verdict", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🏆 FINAL LIFE-MASTERY VERDICT + 7-STEP SOUL-BLUEPRINT",
+           "7️⃣  🏆 अंतिम जीवन-महारत निष्कर्ष + 7-चरण आत्मा-योजना",
+           "7️⃣  🏆 FINAL LIFE-MASTERY VERDICT + 7-STEP SOUL-BLUEPRINT"),
+        final_facts,
+        bg_color=colors.HexColor("#F0FDF4"), border_color=colors.HexColor("#15803D"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close17
+    flow.extend(_close17(s, driver, conductor, "spirituality", lang))
+
+    return flow
+
+
+# Pretty labels for life-mission archetypes (used by T17 renderer).
+LIFE_KEY_LABELS = {
+    "dharma_sage": "DHARMA-SAGE",
+    "karma_warrior": "KARMA-WARRIOR",
+    "bhakti_devotee": "BHAKTI-DEVOTEE",
+    "jnana_seeker": "JNANA-SEEKER",
+    "moksha_recluse": "MOKSHA-RECLUSE",
+}
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -8720,6 +9410,328 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier14 facts build failed: %s", exc)
 
+        # ── Tier 15 — Foreign Travel & 12th House ────────────────────
+        try:
+            from vedic.numerology.foreign import compute_foreign_bundle
+            fb = compute_foreign_bundle(kundli, dob, driver, conductor)
+            if fb.get("available"):
+                fvb = fb["vyaya_bhava"]
+                fkk = fb["karakas"]
+                fyog = fb["yogas_audit"]
+                fstl = fb["settlement"]
+                ftim = fb["timing"]
+                fsyn = fb["synthesis"]
+
+                specs.append({
+                    "key": "t15.vyaya_bhava",
+                    "section_key": "tier15.vyaya_bhava",
+                    "lang": lang, "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "twelfth_sign": fvb["twelfth_sign"],
+                        "twelfth_lord": fvb["twelfth_lord"],
+                        "lord_house": fvb["lord_house"],
+                        "lord_dignity": fvb["lord_dignity"],
+                        "strength_score": fvb["strength_score"],
+                        "foreign_indication": fvb["foreign_indication"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t15.karakas",
+                    "section_key": "tier15.karakas",
+                    "lang": lang, "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "rahu_sign": fkk["rahu_sign"],
+                        "rahu_house": fkk["rahu_house"],
+                        "moon_sign": fkk["moon_sign"],
+                        "moon_house": fkk["moon_house"],
+                        "moon_dignity": fkk["moon_dignity"],
+                        "saturn_sign": fkk["saturn_sign"],
+                        "jupiter_sign": fkk["jupiter_sign"],
+                        "ketu_sign": fkk["ketu_sign"],
+                        "country_indication": fkk["country_indication"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t15.yogas_audit",
+                    "section_key": "tier15.yogas_audit",
+                    "lang": lang, "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "twelfth_lord": fvb["twelfth_lord"],
+                        "yoga_count": fyog["yoga_count"],
+                        "obstruction_count": fyog["obstruction_count"],
+                        "score": fyog["score"],
+                        "severity": fyog["severity"],
+                        "verdict": fyog["verdict"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t15.settlement",
+                    "section_key": "tier15.settlement",
+                    "lang": lang, "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "twelfth_lord": fvb["twelfth_lord"],
+                        "settlement_score": fstl["settlement_score"],
+                        "mode": fstl["mode"],
+                        "narrative": fstl["narrative"],
+                        "rahu_house": fkk["rahu_house"],
+                        "moon_house": fkk["moon_house"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t15.travel_timing",
+                    "section_key": "tier15.travel_timing",
+                    "lang": lang, "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": ftim["current_md"],
+                        "current_ad": ftim["current_ad"],
+                        "window_status": ftim["window_status"],
+                        "twelfth_lord": ftim["twelfth_lord"],
+                        "ninth_lord": ftim["ninth_lord"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t15.foreign_synthesis",
+                    "section_key": "tier15.foreign_synthesis",
+                    "lang": lang, "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "twelfth_sign": fvb["twelfth_sign"],
+                        "twelfth_lord": fvb["twelfth_lord"],
+                        "rahu_sign": fkk["rahu_sign"],
+                        "verdict_token": fsyn["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier15 facts build failed: %s", exc)
+
+        # ── Tier 16 — Health, Longevity & 8th House ──────────────────
+        try:
+            from vedic.numerology.longevity import compute_longevity_bundle
+            lb = compute_longevity_bundle(kundli, dob, driver, conductor)
+            if lb.get("available"):
+                lab = lb["ayur_bhava"]
+                lkk = lb["karakas"]
+                lay = lb["ayurdaya"]
+                lmk = lb["maraka"]
+                ltim = lb["timing"]
+                lsyn = lb["synthesis"]
+
+                specs.append({
+                    "key": "t16.ayur_bhava",
+                    "section_key": "tier16.ayur_bhava",
+                    "lang": lang, "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "eighth_sign": lab["eighth_sign"],
+                        "eighth_lord": lab["eighth_lord"],
+                        "lord_house": lab["lord_house"],
+                        "lord_dignity": lab["lord_dignity"],
+                        "strength_score": lab["strength_score"],
+                        "body_focus": lab["body_focus_by_sign"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t16.karakas",
+                    "section_key": "tier16.karakas",
+                    "lang": lang, "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "sun_sign": lkk["sun_sign"],
+                        "sun_house": lkk["sun_house"],
+                        "sun_dignity": lkk["sun_dignity"],
+                        "moon_sign": lkk["moon_sign"],
+                        "moon_house": lkk["moon_house"],
+                        "moon_dignity": lkk["moon_dignity"],
+                        "mars_sign": lkk["mars_sign"],
+                        "mars_house": lkk["mars_house"],
+                        "saturn_sign": lkk["saturn_sign"],
+                        "saturn_house": lkk["saturn_house"],
+                        "rahu_sign": lkk["rahu_sign"],
+                        "ketu_sign": lkk["ketu_sign"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t16.ayurdaya",
+                    "section_key": "tier16.ayurdaya",
+                    "lang": lang, "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "tier_key": lay["tier_key"],
+                        "tier_label": lay["tier_label"],
+                        "score": lay["score"],
+                        "eighth_lord": lab["eighth_lord"],
+                        "saturn_dignity": lay["saturn_dignity"],
+                        "lagna_lord": lay["lagna_lord"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t16.maraka",
+                    "section_key": "tier16.maraka",
+                    "lang": lang, "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "second_lord": lmk["second_lord"],
+                        "seventh_lord": lmk["seventh_lord"],
+                        "second_lord_house": lmk["second_lord_house"],
+                        "seventh_lord_house": lmk["seventh_lord_house"],
+                        "saturn_house": lmk["saturn_house"],
+                        "severity_score": lmk["severity_score"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t16.event_timing",
+                    "section_key": "tier16.event_timing",
+                    "lang": lang, "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": ltim["current_md"],
+                        "current_ad": ltim["current_ad"],
+                        "window_status": ltim["window_status"],
+                        "eighth_lord": ltim["eighth_lord"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t16.longevity_synthesis",
+                    "section_key": "tier16.longevity_synthesis",
+                    "lang": lang, "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "eighth_sign": lab["eighth_sign"],
+                        "eighth_lord": lab["eighth_lord"],
+                        "tier_key": lay["tier_key"],
+                        "verdict_token": lsyn["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier16 facts build failed: %s", exc)
+
+    # ── Tier 17 facts (Moksha Synthesis & Final Verdict — CAPSTONE) ───
+    if kundli:
+        try:
+            from vedic.numerology.moksha import compute_moksha_bundle
+            mbundle = compute_moksha_bundle(kundli, dob, driver, conductor)
+            if mbundle.get("available"):
+                mmb = mbundle["moksha_bhava"]
+                mak = mbundle["atmakaraka"]
+                mkm = mbundle["karakamsha"]
+                mtk = mbundle["trikona_synthesis"]
+                mlm = mbundle["life_mission"]
+                mev = mbundle["evolution_arc"]
+                msyn = mbundle["synthesis"]
+
+                specs.append({
+                    "key": "t17.moksha_bhava",
+                    "section_key": "tier17.moksha_bhava",
+                    "lang": lang, "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "twelfth_sign": mmb["twelfth_sign"],
+                        "twelfth_lord": mmb["twelfth_lord"],
+                        "ketu_sign": mmb["ketu_sign"],
+                        "ketu_house": mmb["ketu_house"],
+                        "moksha_signal_count": mmb["moksha_signal_count"],
+                    },
+                    "fallback": "",
+                })
+                if mak.get("available"):
+                    specs.append({
+                        "key": "t17.atmakaraka",
+                        "section_key": "tier17.atmakaraka",
+                        "lang": lang, "word_target": 280,
+                        "facts": {
+                            "person_name": name,
+                            "atmakaraka": mak["atmakaraka"],
+                            "atmakaraka_sign": mak["atmakaraka_sign"],
+                            "atmakaraka_dignity": mak["atmakaraka_dignity"],
+                        },
+                        "fallback": "",
+                    })
+                if mkm.get("available"):
+                    specs.append({
+                        "key": "t17.karakamsha",
+                        "section_key": "tier17.karakamsha",
+                        "lang": lang, "word_target": 280,
+                        "facts": {
+                            "person_name": name,
+                            "karakamsha_sign": mkm["karakamsha_sign"],
+                            "karakamsha_lord": mkm["karakamsha_lord"],
+                        },
+                        "fallback": "",
+                    })
+                specs.append({
+                    "key": "t17.trikona_synthesis",
+                    "section_key": "tier17.trikona_synthesis",
+                    "lang": lang, "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "mode": mtk["mode"],
+                        "dharma_pct": mtk["dharma_pct"],
+                        "karma_pct": mtk["karma_pct"],
+                        "lagna_lord": mtk["lagna_lord"],
+                        "ninth_lord": mtk["ninth_lord"],
+                        "tenth_lord": mtk["tenth_lord"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t17.life_mission",
+                    "section_key": "tier17.life_mission",
+                    "lang": lang, "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "mission_token": mlm["mission_token"],
+                        "winner_score": mlm["winner_score"],
+                        "runner_up_token": mlm.get("runner_up_token"),
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t17.evolution_arc",
+                    "section_key": "tier17.evolution_arc",
+                    "lang": lang, "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": mev["current_md"],
+                        "current_ad": mev["current_ad"],
+                        "arc_status": mev["arc_status"],
+                    },
+                    "fallback": "",
+                })
+                specs.append({
+                    "key": "t17.final_verdict",
+                    "section_key": "tier17.final_verdict",
+                    "lang": lang, "word_target": 360,
+                    "facts": {
+                        "person_name": name,
+                        "final_verdict_token": msyn["final_verdict_token"],
+                        "driver_number": driver,
+                        "conductor_number": conductor,
+                        "mission_token": mlm["mission_token"],
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier17 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -8921,6 +9933,26 @@ def render_part2_pdf(*,
         story += _tier14_property_section(s, name, dob, driver, conductor,
                                            kundli=kundli, lang=lang,
                                            ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 176-190 — ✈️ TIER 15 — Foreign Travel, Settlement & 12th House Audit
+    if kundli is not None:
+        story += _tier15_foreign_section(s, name, dob, driver, conductor,
+                                          kundli=kundli, lang=lang,
+                                          ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 191-205 — ❤️‍🩹 TIER 16 — Health, Longevity & 8th House (Ayur Bhava) Audit
+    if kundli is not None:
+        story += _tier16_longevity_section(s, name, dob, driver, conductor,
+                                            kundli=kundli, lang=lang,
+                                            ai_texts=ai_texts)
+        story.append(PageBreak())
+
+        # ── Tier 17 — Moksha Synthesis & Final Life-Mastery Verdict (CAPSTONE) ──
+        story += _tier17_moksha_section(s, name, dob, driver, conductor,
+                                         kundli=kundli, lang=lang,
+                                         ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

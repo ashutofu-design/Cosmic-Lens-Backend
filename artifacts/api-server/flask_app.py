@@ -469,6 +469,7 @@ def face_reading_analyze():
         from vedic.face_reading import phi as eng3
         from vedic.face_reading import fwhr as eng4
         from vedic.face_reading import health as eng5
+        from vedic.face_reading import personality as eng6
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -622,6 +623,21 @@ def face_reading_analyze():
         symmetry_result=eng2_result,
     )
 
+    # Engine 6 — Big Five Personality (OCEAN)
+    eng6_result = eng6.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        anthropometry_result=eng1_result,
+        symmetry_result=eng2_result,
+        fwhr_result=eng4_result,
+        phi_result=eng3_result,
+        health_result=eng5_result,
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -637,8 +653,9 @@ def face_reading_analyze():
             "phi": eng3_result,
             "fwhr": eng4_result,
             "health": eng5_result,
+            "personality": eng6_result,
         },
-        "engines_complete": 5,
+        "engines_complete": 6,
         "engines_total": 20,
     }), 200
 

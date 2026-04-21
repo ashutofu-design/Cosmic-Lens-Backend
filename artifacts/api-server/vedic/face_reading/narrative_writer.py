@@ -240,21 +240,12 @@ def write_s5(content, engines, person):
 # Section 6 — FEATURE ANALYSIS
 # ──────────────────────────────────────────────────────────────────────────
 def write_s6(content, engines, person):
-    eyes = (content.get("eyes") or {}).get("shape_reading", "")
-    nose = (content.get("nose") or {}).get("shape_reading", "")
-    lips = (content.get("lips") or {}).get("shape_reading", "")
-    jaw  = (content.get("jawline_chin") or {}).get("shape_reading", "")
-    fore = (content.get("forehead") or {}).get("shape_reading", "")
-    
-    return _join_para(
-        f"Tumhare har feature ki ek alag kahaani hai — aur jab unhe ek saath padha jata hai, tab puri tasveer nikalti hai.",
-        f"<b>Aankhein:</b> {eyes} Aankhein soul ka mirror kehlati hain — tumhari aankhon me intuition aur trust ka level dikhta hai.",
-        f"<b>Naak:</b> {nose} Vedic me naak wealth aur self-image ka indicator hai.",
-        f"<b>Honth:</b> {lips} Honthon se tumhari communication aur prem-expression style padhi jaati hai.",
-        f"<b>Jabra/Thodi:</b> {jaw} Yeh willpower aur dheeraj ka surest sign hai.",
-        f"<b>Maatha:</b> {fore} Maatha tumhari intelligence aur leadership-potential ka mirror hai.",
-        f"In sab ka sammilit assessment niche structured form me hai — har feature ke under 'medium' ka matlab balanced hai, 'high' ka matlab natural strength, aur 'low' ka matlab conscious development chahiye.",
+    # New deep structure: just return intro_para; PDF renders feature_blocks
+    intro = content.get("intro_para") or (
+        "Tumhare har feature ki ek alag kahaani hai — aur jab unhe ek saath padha "
+        "jata hai, tab puri tasveer nikalti hai."
     )
+    return intro
 
 
 # ──────────────────────────────────────────────────────────────────────────

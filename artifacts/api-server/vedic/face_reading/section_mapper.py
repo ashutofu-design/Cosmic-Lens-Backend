@@ -295,54 +295,9 @@ def _read(samudrika_feature: Optional[Dict], default: str = "balanced") -> str:
 
 
 def section_6_feature_analysis(engines: Dict) -> Dict:
-    sam_f = _g(engines, "samudrika", "features") or {}
-    p     = engines.get("personality", {})
-    fwhr  = engines.get("fwhr", {})
-
-    ocean = p.get("ocean_summary_scores") or {}
-    O = _num(ocean.get("openness"))
-    C = _num(ocean.get("conscientiousness"))
-    E = _num(ocean.get("extraversion"))
-    A = _num(ocean.get("agreeableness"))
-
-    return {
-        "eyes": {
-            "shape_reading":   _read(sam_f.get("eyes")),
-            "emotion_depth":   _band(A),
-            "trust_nature":    _band(A, low=40, high=70),
-            "intuition_level": _band(O, low=45, high=70),
-        },
-        "nose": {
-            "shape_reading":   _read(sam_f.get("nose")),
-            "wealth_mindset":  _band(C),
-            "decision_power":  _band(C, low=45, high=70),
-        },
-        "lips": {
-            "shape_reading":         _read(sam_f.get("lips")),
-            "communication_style":   "expressive" if E > 60 else "reserved" if E < 40 else "balanced",
-            "love_expression":       "warm" if A > 60 else "guarded" if A < 40 else "moderate",
-        },
-        "jawline_chin": {
-            "shape_reading":  _read(sam_f.get("jaw_chin")),
-            "willpower":      _band(C),
-            "dominance_level": _band(_num(fwhr.get("dominance_score"), default=min(100.0, _num(fwhr.get("fwhr_value"), default=1.85) * 30))),
-        },
-        "forehead": {
-            "shape_reading":         _read(sam_f.get("forehead")),
-            "intelligence_pattern":  _band(O),
-            "thinking_ability":      _band((O + C) / 2),
-        },
-        "eyebrows": {
-            "shape_reading":  _read(sam_f.get("eyebrows")),
-            "discipline":     _band(C),
-            "energy_pattern": _band(E),
-        },
-        "ears": {
-            "shape_reading":     _read(sam_f.get("ears")),
-            "learning_ability":  _band(O),
-            "luck_indicator":    _g(engines, "samudrika", "composite_scores", "bhagya", default=70),
-        },
-    }
+    """Section 6 — DEEP feature analysis (7 features × 6 layers each)."""
+    from .feature_deep import build_section_6_deep
+    return build_section_6_deep(engines)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

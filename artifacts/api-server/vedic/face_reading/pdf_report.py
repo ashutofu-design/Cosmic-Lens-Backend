@@ -337,6 +337,7 @@ SECTION_HIDE_KEYS = {
     "section_9_career_money":       {"wealth_score_100"},
     "section_11_attraction_charisma": {"charisma_score_100"},
     "section_16_health_scan":       {"vitality_score_100","overall_health_score"},
+    "section_6_feature_analysis":   {"intro_para","feature_blocks"},
     "section_21_final_truth":       {"brutal_truth","must_do","closing_truth"},
     "bonus_personality_score":      {"leadership_10","money_10","love_10","health_10","intelligence_10"},
 }
@@ -376,9 +377,146 @@ def _render_field(label: str, value: Any, styles) -> List:
     return flowables
 
 
+_BAND_COLORS = {
+    "low":         HexColor("#B85A3E"),
+    "high":        HexColor("#3E7A4F"),
+    "medium":      HexColor("#7A6F4D"),
+    "balanced":    HexColor("#7A6F4D"),
+    "narrow":      HexColor("#B85A3E"),
+    "wide":        HexColor("#3E7A4F"),
+    "close":       HexColor("#B85A3E"),
+    "small":       HexColor("#B85A3E"),
+    "large":       HexColor("#3E7A4F"),
+    "tall":        HexColor("#3E7A4F"),
+    "soft":        HexColor("#7A6F4D"),
+    "sharp":       HexColor("#3E7A4F"),
+    "info":        HexColor("#7A7164"),
+}
+
+
+def _render_feature_block(block: Dict, styles, idx: int) -> List:
+    """Render one of the 7 feature deep-dive blocks (~2 pages)."""
+    out: List = []
+
+    # Sub-banner: maroon bar with feature name (white) + gold underline
+    name_hi = block.get("feature_name_hi", "")
+    name_en = block.get("feature_name_en", "")
+
+    sub_banner_data = [[Paragraph(
+        f'<font color="white"><b>{_safe(name_hi)}</b></font>', styles["score_label"]
+    )]]
+    sb = Table(sub_banner_data, colWidths=[174*mm])
+    sb.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), C_PRIMARY),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    out.append(sb)
+
+    # Gold thin rule
+    out.append(HRFlowable(width="100%", thickness=1.2, color=C_ACCENT,
+                          spaceBefore=0, spaceAfter=4))
+    if name_en:
+        out.append(Paragraph(_safe(name_en), styles["section_title_en"]))
+
+    # Samudrika classical reading (callout box)
+    cls = block.get("samudrika_class", "")
+    phala = block.get("samudrika_phala", "")
+    if phala:
+        label = f"SAMUDRIKA SHASTRA — {cls}".strip(" —")
+        out.append(Spacer(1, 2*mm))
+        out.append(_callout(label, phala, styles))
+
+    # Micro-measurements table
+    micros = block.get("micro_measurements") or []
+    if micros:
+        out.append(Spacer(1, 4*mm))
+        out.append(Paragraph("Micro-Measurements (real engine data)", styles["field_label"]))
+        rows = [["Feature", "Value", "Reading"]]
+        for m in micros:
+            band = m.get("band", "info")
+            color = _BAND_COLORS.get(band, C_INK)
+            value_html = f'<font color="#{color.hexval()[2:].rjust(6,"0")}"><b>{_safe(m.get("value_text",""))}</b></font>'
+            rows.append([
+                Paragraph(f'<b>{_safe(m.get("label",""))}</b>', styles["field_value"]),
+                Paragraph(value_html, styles["field_value"]),
+                Paragraph(_safe(m.get("meaning_hi","")), styles["field_value"]),
+            ])
+        t = Table(rows, colWidths=[55*mm, 28*mm, 91*mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), C_PRIMARY),
+            ("TEXTCOLOR",  (0,0), (-1,0), white),
+            ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",   (0,0), (-1,0), 9.5),
+            ("ALIGN",      (0,0), (-1,0), "LEFT"),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [C_BG_TINT, white]),
+            ("VALIGN",     (0,0), (-1,-1), "TOP"),
+            ("LEFTPADDING",(0,0), (-1,-1), 6),
+            ("RIGHTPADDING",(0,0),(-1,-1), 6),
+            ("TOPPADDING", (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 5),
+            ("LINEBELOW",  (0,0), (-1,0), 0.6, C_ACCENT),
+            ("BOX",        (0,0), (-1,-1), 0.4, C_RULE),
+        ]))
+        out.append(t)
+
+    # Five rich prose paragraphs
+    paras = [
+        ("Personality Meaning",      block.get("personality_meaning")),
+        ("Love & Relationship",      block.get("love_implication")),
+        ("Career & Decision Style",  block.get("career_decision")),
+        ("Stress Response",          block.get("stress_response")),
+        ("Improvement Hack",         block.get("improvement_tip")),
+    ]
+    for label, txt in paras:
+        if not txt: continue
+        out.append(Spacer(1, 4*mm))
+        out.append(Paragraph(_safe(label), styles["field_label"]))
+        out.append(Paragraph(_safe(txt), styles["field_value"]))
+
+    # Page break between feature blocks (so each gets its own ~2 pages)
+    out.append(PageBreak())
+    return out
+
+
+def _render_section_6_deep(sec: Dict, styles) -> List:
+    """Custom renderer for Section 6 — 7-feature deep dive (~14 pages)."""
+    flowables: List = []
+    flowables.append(SectionBanner(sec["no"]))
+    flowables.append(Spacer(1, 4*mm))
+    flowables.append(Paragraph(_safe(sec["title_hi"]), styles["section_title_hi"]))
+    flowables.append(Paragraph(_safe(sec["title_en"]), styles["section_title_en"]))
+
+    content = sec.get("content") or {}
+    intro = content.get("intro_para") or sec.get("narrative") or ""
+    if intro:
+        flowables.append(Paragraph(_safe(intro), styles["narrative"]))
+
+    # Mini index of the 7 features
+    blocks = content.get("feature_blocks") or []
+    if blocks:
+        flowables.append(Spacer(1, 2*mm))
+        flowables.append(Paragraph("Is section me 7 features detail me cover honge:", styles["field_label"]))
+        for i, b in enumerate(blocks, 1):
+            flowables.append(Paragraph(
+                f"{i}. <b>{_safe(b.get('feature_name_hi',''))}</b> — {_safe(b.get('feature_name_en',''))}",
+                styles["field_value"]))
+        flowables.append(PageBreak())
+
+    for i, b in enumerate(blocks):
+        flowables.extend(_render_feature_block(b, styles, i))
+    return flowables
+
+
 def _render_section(sec: Dict, styles) -> List:
     flowables: List = []
     key = sec.get("key", "")
+
+    # Custom deep renderer for Section 6
+    if key == "section_6_feature_analysis":
+        return _render_section_6_deep(sec, styles)
 
     # Banner + titles
     flowables.append(SectionBanner(sec["no"]))

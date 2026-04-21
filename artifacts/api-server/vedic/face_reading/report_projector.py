@@ -62,6 +62,32 @@ def project_anthropometry(r: Dict[str, Any]) -> Dict[str, Any]:
     if "third_lower" in ratios and "lower_face_height_pct" not in indices_raw:
         indices_raw["lower_face_height_pct"] = round(float(ratios["third_lower"]) * 100, 1)
 
+    # Keep micro-measurements needed by Section 6 deep feature analysis
+    keep_mm = {
+        "iod_inner", "outer_eye_span",
+        "right_eye_width", "left_eye_width",
+        "right_eye_height", "left_eye_height",
+        "nose_length", "nose_width_alar",
+        "upper_lip_thickness", "lower_lip_thickness", "mouth_width",
+        "jaw_width", "nose_tip_to_chin", "lip_to_chin",
+        "forehead_height", "forehead_width",
+        "brow_distance_inner",
+    }
+    keep_angles = {
+        "canthal_tilt", "nose_tip_projection", "lip_commissure_tilt",
+        "jaw_angle_gonial", "chin_pointedness",
+        "forehead_slope", "brow_arch_angle",
+    }
+    keep_ratios = {
+        "eye_spacing_to_eye_width", "eye_aspect_ratio_avg",
+        "eye_span_to_face_width",
+        "nose_length_to_face", "nose_width_to_mouth_width",
+        "lip_ratio_upper_to_lower", "mouth_to_face_width",
+        "jaw_to_face_width", "forehead_to_face_width",
+    }
+    mm_full = r.get("measurements_mm") or {}
+    angles_full = r.get("angles_deg") or {}
+
     return {
         "engine": r.get("engine"),
         "version": r.get("version"),
@@ -75,6 +101,9 @@ def project_anthropometry(r: Dict[str, Any]) -> Dict[str, Any]:
             k: v for k, v in indices_raw.items()
             if k in keep_indices
         },
+        "measurements_mm": {k: v for k, v in mm_full.items() if k in keep_mm},
+        "angles_deg":     {k: v for k, v in angles_full.items() if k in keep_angles},
+        "ratios":         {k: v for k, v in ratios.items() if k in keep_ratios},
         "summary": r.get("summary"),
     }
 

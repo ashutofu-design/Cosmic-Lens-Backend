@@ -475,6 +475,8 @@ def face_reading_analyze():
         from vedic.face_reading import session_cache
         from vedic.face_reading.report_projector import project_engines_for_report
         from vedic.face_reading.section_mapper import build_report_sections
+        from vedic.face_reading.mole_detector import detect_moles, section_17_secret_markings
+        from vedic.face_reading.new_sections import build_new_sections
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
 
@@ -675,7 +677,7 @@ def face_reading_analyze():
         age=age_val,
     )
 
-    return jsonify({
+    _response = {
         "ok": True,
         "front_quality": {
             "score": front_ls.quality.score,
@@ -684,36 +686,54 @@ def face_reading_analyze():
             "brightness": front_ls.quality.brightness,
             "sharpness": front_ls.quality.sharpness,
         },
-        "engines": (lambda _full: project_engines_for_report({
-            "anthropometry": eng1_result,
-            "symmetry": eng2_result,
-            "phi": eng3_result,
-            "fwhr": eng4_result,
-            "health": eng5_result,
-            "personality": eng6_result,
-            "first_impression": eng7_result,
-            "samudrika": eng8_result,
-        }, full=_full))(request.values.get("full", "false").lower() in ("1", "true", "yes")),
-        "sections": build_report_sections(
-            project_engines_for_report({
-                "anthropometry": eng1_result,
-                "symmetry": eng2_result,
-                "phi": eng3_result,
-                "fwhr": eng4_result,
-                "health": eng5_result,
-                "personality": eng6_result,
-                "first_impression": eng7_result,
-                "samudrika": eng8_result,
-            }),
-            gender=gender,
-            age=int(age_val) if age_val else None,
-        ),
-        "engines_complete": 8,
+        "engines": None,
+        "sections": None,
+        "engines_complete": 9,
         "engines_total": 9,
         "report_template_version": "21_section_v1",
-        "sections_ready": 13,
-        "sections_total": 21,
-    }), 200
+        "sections_ready": 22,
+        "sections_total": 22,
+    }
+    # Build engines (raw dict), projection, mole detector, and all 22 sections
+    _raw_engines = {
+        "anthropometry": eng1_result,
+        "symmetry": eng2_result,
+        "phi": eng3_result,
+        "fwhr": eng4_result,
+        "health": eng5_result,
+        "personality": eng6_result,
+        "first_impression": eng7_result,
+        "samudrika": eng8_result,
+    }
+    _full_flag = request.values.get("full", "false").lower() in ("1", "true", "yes")
+    _projected = project_engines_for_report(_raw_engines)
+    _engines_for_response = project_engines_for_report(_raw_engines, full=_full_flag)
+
+    # Mole detector (Engine 9 + Section 17)
+    try:
+        _mole_out = detect_moles(getattr(front_ls, "rgb_image", None), front_ls.points_px)
+    except Exception as _e:
+        _mole_out = {"engine": "mole_detector", "version": 1, "ok": False,
+                     "error": f"detector_failed: {_e}", "mole_count": 0, "moles": []}
+    _section_17 = section_17_secret_markings(_mole_out)
+    if _full_flag:
+        _engines_for_response["mole_detector"] = _mole_out
+
+    _age_int = int(age_val) if age_val else None
+    _base_sections = build_report_sections(_projected, gender=gender, age=_age_int)
+    _new_sections = build_new_sections(
+        engines=_projected,
+        base_sections=_base_sections,
+        mole_section_17=_section_17,
+        age=_age_int,
+    )
+    _all_sections = {**_base_sections, **_new_sections}
+    # Strip internal markers from final response
+    _all_sections.pop("_pending_sections", None)
+
+    _response["engines"] = _engines_for_response
+    _response["sections"] = _all_sections
+    return jsonify(_response), 200
 
 
 @app.route("/api/geocode", methods=["GET"])

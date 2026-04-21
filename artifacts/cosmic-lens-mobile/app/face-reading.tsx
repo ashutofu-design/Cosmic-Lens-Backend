@@ -169,7 +169,7 @@ export default function FaceReadingScreen() {
               style={s.priceBadge}
             >
               <Text style={s.priceBadgeText}>₹1499</Text>
-              <Text style={s.priceBadgeSub}> · Coming Soon</Text>
+              <Text style={s.priceBadgeSub}> · Live Now</Text>
             </LinearGradient>
           </View>
         </View>
@@ -259,18 +259,18 @@ export default function FaceReadingScreen() {
         </View>
 
         {/* ───── CTA ───── */}
-        <Pressable style={s.ctaWrap} onPress={() => { /* TODO: notify-me API */ }}>
+        <Pressable style={s.ctaWrap} onPress={() => router.push("/face-reading-upload")}>
           <LinearGradient
             colors={[ACCENT, "#a21caf"]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={s.ctaBtn}
           >
-            <Feather name="bell" size={16} color="#fff" />
-            <Text style={s.ctaText}>Notify Me on Launch</Text>
+            <Feather name="zap" size={16} color="#fff" />
+            <Text style={s.ctaText}>Start My Face Reading</Text>
           </LinearGradient>
         </Pressable>
         <Text style={[s.ctaSub, { color: C.textDim }]}>
-          Engine under final QA. Aapko launch ke din pehle slot milega.
+          3 selfies upload karein → 30-60 seconds mein 40-page PDF report aapke device pe.
         </Text>
       </ScrollView>
     </CosmicBg>

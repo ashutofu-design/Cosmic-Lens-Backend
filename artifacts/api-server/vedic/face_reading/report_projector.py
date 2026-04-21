@@ -47,7 +47,20 @@ def project_anthropometry(r: Dict[str, Any]) -> Dict[str, Any]:
     }
     keep_indices = {
         "facial_index", "nasal_index", "mouth_face_width_index",
+        "forehead_height_pct", "midface_height_pct", "lower_face_height_pct",
+        "fwhr", "eye_separation_ratio", "lip_thickness_ratio",
     }
+
+    # Anthropometry emits ratios.third_upper / third_middle / third_lower as
+    # 0..1 fractions. Convert to height-pct fields used by Section 5 zones.
+    ratios = r.get("ratios") or {}
+    indices_raw = dict(r.get("classical_indices") or {})
+    if "third_upper" in ratios and "forehead_height_pct" not in indices_raw:
+        indices_raw["forehead_height_pct"] = round(float(ratios["third_upper"]) * 100, 1)
+    if "third_middle" in ratios and "midface_height_pct" not in indices_raw:
+        indices_raw["midface_height_pct"] = round(float(ratios["third_middle"]) * 100, 1)
+    if "third_lower" in ratios and "lower_face_height_pct" not in indices_raw:
+        indices_raw["lower_face_height_pct"] = round(float(ratios["third_lower"]) * 100, 1)
 
     return {
         "engine": r.get("engine"),
@@ -59,7 +72,7 @@ def project_anthropometry(r: Dict[str, Any]) -> Dict[str, Any]:
             if k in keep_classifications
         },
         "classical_indices": {
-            k: v for k, v in (r.get("classical_indices") or {}).items()
+            k: v for k, v in indices_raw.items()
             if k in keep_indices
         },
         "summary": r.get("summary"),
@@ -178,12 +191,29 @@ def project_personality(r: Dict[str, Any]) -> Dict[str, Any]:
         return r or {}
 
     composites = r.get("composites") or {}
+
+    # Personality engine emits OCEAN as {"O","C","E","A","N"} but section_mapper
+    # reads {"openness","conscientiousness","extraversion","agreeableness","neuroticism"}.
+    # Normalize both summary_scores and percentiles to long-form keys.
+    _OCEAN_ALIAS = {"O": "openness", "C": "conscientiousness",
+                    "E": "extraversion", "A": "agreeableness", "N": "neuroticism"}
+    def _normalize_ocean(d):
+        if not isinstance(d, dict):
+            return d
+        out = {}
+        for k, v in d.items():
+            long_k = _OCEAN_ALIAS.get(k, k)
+            out[long_k] = v
+            # also keep short-form for any code that reads it
+            out[k] = v
+        return out
+
     return {
         "engine": r.get("engine"),
         "version": r.get("version"),
         "ok": True,
-        "ocean_summary_scores": r.get("ocean_summary_scores"),
-        "ocean_percentiles": r.get("ocean_percentiles"),
+        "ocean_summary_scores": _normalize_ocean(r.get("ocean_summary_scores")),
+        "ocean_percentiles":    _normalize_ocean(r.get("ocean_percentiles")),
         "traits": r.get("traits"),
         "dominant_trait": r.get("dominant_trait"),
         "secondary_trait": r.get("secondary_trait"),
@@ -230,7 +260,14 @@ def project_first_impression(r: Dict[str, Any]) -> Dict[str, Any]:
         "ok": True,
         "first_impression_4": four_scores,
         "first_glance_valence": r.get("first_glance_valence"),
-        "perceived_age": r.get("perceived_age"),
+        # Engine emits perceived_age.apparent_age + age_diff; mapper reads .value/.lower/.upper
+        "perceived_age": (lambda pa: ({
+            "value": pa.get("apparent_age") if isinstance(pa, dict) else None,
+            "apparent_age": pa.get("apparent_age") if isinstance(pa, dict) else None,
+            "age_diff": pa.get("age_diff") if isinstance(pa, dict) else None,
+            "lower": pa.get("lower") if isinstance(pa, dict) else None,
+            "upper": pa.get("upper") if isinstance(pa, dict) else None,
+        }) if isinstance(pa, dict) else pa)(r.get("perceived_age")),
         "snap_narrative": r.get("snap_narrative"),
         "do_not_use_for_hiring": r.get("do_not_use_for_hiring"),
         "disclaimer": r.get("disclaimer"),
@@ -246,18 +283,27 @@ def project_samudrika(r: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(r, dict) or not r.get("ok"):
         return r or {}
 
-    # Strip the heavy Vedic verbiage from each feature dict
+    # Strip the heavy Vedic verbiage from each feature dict.
+    # Real samudrika emits phala_english/phala_hinglish — alias to short forms
+    # that section_mapper._read() expects (phala_hi, phala_en, english).
     def _slim_feature(f: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         if not isinstance(f, dict):
             return f
-        return {
-            k: v for k, v in f.items()
-            if k in {
-                "type", "subtype", "english", "phala_en", "phala_hi",
-                "score", "class", "classification",
-                "trait", "trait_en", "trait_hi",
-            }
-        }
+        out_f = {}
+        # canonical short fields used downstream
+        if f.get("phala_hinglish") or f.get("phala_hi"):
+            out_f["phala_hi"] = f.get("phala_hinglish") or f.get("phala_hi")
+        if f.get("phala_english") or f.get("phala_en"):
+            out_f["phala_en"] = f.get("phala_english") or f.get("phala_en")
+        if f.get("english_name") or f.get("english"):
+            out_f["english"] = f.get("english_name") or f.get("english")
+        if f.get("classification"):
+            out_f["classification"] = f.get("classification")
+        if f.get("transliteration"):
+            out_f["translit"] = f.get("transliteration")
+        if f.get("is_auspicious") is not None:
+            out_f["is_auspicious"] = f.get("is_auspicious")
+        return out_f
 
     out = {
         "engine": r.get("engine"),
@@ -265,60 +311,95 @@ def project_samudrika(r: Dict[str, Any]) -> Dict[str, Any]:
         "ok": True,
     }
 
-    # 7 core features mapped from samudrika regions to template Section 6
+    # Real samudrika nests all 12 regions under mukha_pradesh_analysis.
+    mpa = r.get("mukha_pradesh_analysis") or {}
+
+    # 7 core features mapped from samudrika regions to template Section 6.
+    # Use real samudrika keys first, then loose fallbacks.
     features_map = {
-        "eyes": r.get("netra") or r.get("eyes"),
-        "nose": r.get("nasika") or r.get("nose"),
-        "lips": r.get("oshtha") or r.get("lips"),
-        "jaw_chin": r.get("hanu") or r.get("chibuka") or r.get("jaw"),
-        "forehead": r.get("lalata") or r.get("forehead"),
-        "eyebrows": r.get("bhru") or r.get("eyebrows"),
-        "ears": r.get("karna") or r.get("ears"),
+        "eyes":     mpa.get("04_netra")   or r.get("netra")   or r.get("eyes"),
+        "nose":     mpa.get("05_nasika")  or r.get("nasika")  or r.get("nose"),
+        "lips":     mpa.get("06_oshtha")  or r.get("oshtha")  or r.get("lips"),
+        "jaw_chin": mpa.get("10_hanu")    or mpa.get("07_chibuka") or r.get("hanu") or r.get("chibuka") or r.get("jaw"),
+        "forehead": mpa.get("02_lalata")  or r.get("lalata")  or r.get("forehead"),
+        "eyebrows": mpa.get("03_bhru")    or r.get("bhru")    or r.get("eyebrows"),
+        "ears":     mpa.get("08_karna")   or r.get("karna")   or r.get("ears"),
     }
     out["features"] = {k: _slim_feature(v) for k, v in features_map.items() if v}
 
     # Face shape (mukha-akriti) — slim
-    mukha = r.get("mukha_akriti") or r.get("mukha")
+    mukha = mpa.get("01_mukha_akriti") or r.get("mukha_akriti") or r.get("mukha")
     if mukha:
         out["face_shape"] = _slim_feature(mukha)
 
-    # Complexion (mukha-varna) — slim (no Sanskrit emphasis)
-    varna = r.get("mukha_varna") or r.get("varna")
+    # Complexion (mukha-varna)
+    varna = mpa.get("11_mukha_varna") or r.get("mukha_varna") or r.get("varna")
     if varna:
-        out["complexion"] = (
-            varna.get("english") or varna.get("class") or varna.get("type")
-            if isinstance(varna, dict) else varna
-        )
+        if isinstance(varna, dict):
+            out["complexion"] = (
+                varna.get("english_name") or varna.get("english")
+                or varna.get("classification") or varna.get("class") or varna.get("type")
+            )
+        else:
+            out["complexion"] = varna
 
-    # Pancha-Mahabhuta → kept as element percentages (mapped to Wu Xing later)
-    mahabhuta = r.get("pancha_mahabhuta") or r.get("mahabhuta")
+    # Pancha-Mahabhuta → element profile. Real key is pancha_mahabhuta_facial_mapping
+    # with prithvi_pct/jal_pct/agni_pct/vayu_pct/akash_pct + primary_mahabhuta.
+    mahabhuta = (r.get("pancha_mahabhuta_facial_mapping")
+                 or r.get("pancha_mahabhuta") or r.get("mahabhuta"))
     if isinstance(mahabhuta, dict):
-        # Strip Sanskrit-only fields, keep only numeric mapping
         mb_clean = {
-            k: v for k, v in mahabhuta.items()
-            if k in {"prithvi", "jal", "agni", "vayu", "akash",
-                     "earth", "water", "fire", "air", "ether",
-                     "dominant", "dominant_element", "percentages", "scores"}
+            "prithvi": mahabhuta.get("prithvi_pct") or mahabhuta.get("prithvi") or mahabhuta.get("earth"),
+            "jal":     mahabhuta.get("jal_pct")     or mahabhuta.get("jal")     or mahabhuta.get("water"),
+            "agni":    mahabhuta.get("agni_pct")    or mahabhuta.get("agni")    or mahabhuta.get("fire"),
+            "vayu":    mahabhuta.get("vayu_pct")    or mahabhuta.get("vayu")    or mahabhuta.get("air"),
+            "akash":   mahabhuta.get("akash_pct")   or mahabhuta.get("akash")   or mahabhuta.get("ether"),
+            "dominant": mahabhuta.get("primary_mahabhuta")
+                        or mahabhuta.get("dominant") or mahabhuta.get("dominant_element"),
         }
+        # drop None values
+        mb_clean = {k: v for k, v in mb_clean.items() if v is not None}
         if mb_clean:
             out["element_profile"] = mb_clean
+            # convenience top-level (some sections read .dominant_element directly)
+            if mb_clean.get("dominant"):
+                out["dominant_element"] = mb_clean["dominant"]
 
-    # Saubhagya by 3 aayu-kaal → maps to template Section 15 (age-wise map)
-    saubhagya = r.get("saubhagya_phala") or r.get("saubhagya")
+    # Saubhagya by 3 aayu-kaal → Section 15 age-wise map.
+    # Real key: saubhagya_phala_by_aayu with purva_aayu_0_25 / madhya_aayu_25_50 / uttara_aayu_50_plus
+    saubhagya = (r.get("saubhagya_phala_by_aayu")
+                 or r.get("saubhagya_phala") or r.get("saubhagya"))
     if isinstance(saubhagya, dict):
+        purva  = saubhagya.get("purva_aayu_0_25")  or saubhagya.get("purva_aayu")  or saubhagya.get("0_25")
+        madhya = saubhagya.get("madhya_aayu_25_50") or saubhagya.get("madhya_aayu") or saubhagya.get("25_50")
+        uttara = saubhagya.get("uttara_aayu_50_plus") or saubhagya.get("uttara_aayu") or saubhagya.get("50_plus")
+        def _score(b):
+            return b.get("score") if isinstance(b, dict) else b
         out["age_wise_fortune"] = {
-            k: v for k, v in saubhagya.items()
-            if k in {"purva_aayu", "madhya_aayu", "uttara_aayu",
-                     "0_25", "25_50", "50_plus", "summary"}
+            "purva_aayu":  _score(purva),
+            "madhya_aayu": _score(madhya),
+            "uttara_aayu": _score(uttara),
+            "purva_phala_hi":  (purva  or {}).get("phala_hi") if isinstance(purva, dict)  else None,
+            "madhya_phala_hi": (madhya or {}).get("phala_hi") if isinstance(madhya, dict) else None,
+            "uttara_phala_hi": (uttara or {}).get("phala_hi") if isinstance(uttara, dict) else None,
+            "summary": saubhagya.get("summary"),
         }
 
     # Composite Vedic scores (Bhagya / Buddhi / Dhana / Aayu / Sambandha)
+    # Samudrika emits keys as "<name>_score" (bhagya_score, buddhi_score, ...).
+    # Section_mapper reads short forms (bhagya, buddhi, ...). Alias both.
     composite = r.get("composite_scores") or r.get("composites")
     if isinstance(composite, dict):
         out["composite_scores"] = {
-            k: v for k, v in composite.items()
-            if k in {"bhagya", "buddhi", "dhana", "aayu", "sambandha"}
+            "bhagya":    composite.get("bhagya_score")    or composite.get("bhagya"),
+            "buddhi":    composite.get("buddhi_score")    or composite.get("buddhi"),
+            "dhana":     composite.get("dhana_score")     or composite.get("dhana"),
+            "aayu":      composite.get("aayu_score")      or composite.get("aayu"),
+            "sambandha": composite.get("sambandha_score") or composite.get("sambandha"),
+            "bala":      composite.get("bala_score")      or composite.get("bala"),
         }
+        # drop None entries
+        out["composite_scores"] = {k: v for k, v in out["composite_scores"].items() if v is not None}
 
     # Tilaka framework (placeholder for Section 17 mole detection — to be built)
     tilaka = r.get("tilaka_phala") or r.get("til_phala")

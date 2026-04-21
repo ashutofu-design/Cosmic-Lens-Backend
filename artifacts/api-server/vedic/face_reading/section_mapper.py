@@ -232,17 +232,21 @@ def section_5_core_foundation(engines: Dict) -> Dict:
     # 3 Life Zones — derived from facial proportion (forehead, mid, lower thirds)
     indices = anth.get("classical_indices") or {}
     summary = anth.get("summary") or {}
-    facial_index = _num(indices.get("facial_index"), default=85.0)
-    # Heuristic: if face is long, forehead/lower zones tend to dominate
-    forehead_strength = "balanced"
-    midface_strength  = "balanced"
-    lower_strength    = "balanced"
-    if facial_index > 90:   # long face → forehead emphasis
-        forehead_strength = "strong"
-    elif facial_index < 80:  # short face → lower-face emphasis
-        lower_strength = "strong"
-    else:
-        midface_strength = "strong"
+    # Each zone derived independently from its own proportion pct.
+    # Baseline is ~33.3% (equal thirds). Above 35% = strong, below 31% = subtle.
+    def _zone_strength(pct_value: float) -> str:
+        if pct_value >= 35.0:
+            return "strong"
+        if pct_value <= 31.0:
+            return "subtle"
+        return "balanced"
+
+    fh_pct = _num(indices.get("forehead_height_pct"), default=33.3)
+    mf_pct = _num(indices.get("midface_height_pct"),  default=33.3)
+    lf_pct = _num(indices.get("lower_face_height_pct"), default=33.3)
+    forehead_strength = _zone_strength(fh_pct)
+    midface_strength  = _zone_strength(mf_pct)
+    lower_strength    = _zone_strength(lf_pct)
 
     zones = {
         "forehead_zone": {

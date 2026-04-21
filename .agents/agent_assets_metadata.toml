@@ -432,3 +432,9 @@ id = "eFzCWGg4iRDWXiGAiutHv"
 uri = "file://attached_assets/cover_v2/biz_hi_2p-15.jpg"
 type = "image"
 title = "Business Section — Hindi (page 2)"
+
+[[outputs]]
+id = "xriBag6DbNTxTlfunWYHA"
+uri = "file://attached_assets/expo-qr-latest.png"
+type = "image"
+title = "Latest Expo QR — exp://cosmiclens-metro.loca.lt"

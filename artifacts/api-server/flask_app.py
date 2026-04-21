@@ -471,6 +471,7 @@ def face_reading_analyze():
         from vedic.face_reading import health as eng5
         from vedic.face_reading import personality as eng6
         from vedic.face_reading import first_impression as eng7
+        from vedic.face_reading import samudrika as eng8
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -655,6 +656,23 @@ def face_reading_analyze():
         age=age_val,
     )
 
+    # Engine 8 — Samudrika Shastra (classical Vedic face reading)
+    eng8_result = eng8.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        anthropometry_result=eng1_result,
+        symmetry_result=eng2_result,
+        phi_result=eng3_result,
+        fwhr_result=eng4_result,
+        health_result=eng5_result,
+        personality_result=eng6_result,
+        first_impression_result=eng7_result,
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -672,8 +690,9 @@ def face_reading_analyze():
             "health": eng5_result,
             "personality": eng6_result,
             "first_impression": eng7_result,
+            "samudrika": eng8_result,
         },
-        "engines_complete": 7,
+        "engines_complete": 8,
         "engines_total": 20,
     }), 200
 

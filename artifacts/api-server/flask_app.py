@@ -336,6 +336,7 @@ def face_reading_analyze():
     try:
         from vedic.face_reading.landmarks import extract_landmarks
         from vedic.face_reading import anthropometry as eng1
+        from vedic.face_reading import symmetry as eng2
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
 
@@ -370,6 +371,13 @@ def face_reading_analyze():
         front_ls.quality.image_height,
     )
 
+    # ── Engine 2: Symmetry ─────────────────────────────────────────────────
+    eng2_result = eng2.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -381,8 +389,9 @@ def face_reading_analyze():
         },
         "engines": {
             "anthropometry": eng1_result,
+            "symmetry": eng2_result,
         },
-        "engines_complete": 1,
+        "engines_complete": 2,
         "engines_total": 20,
     }), 200
 

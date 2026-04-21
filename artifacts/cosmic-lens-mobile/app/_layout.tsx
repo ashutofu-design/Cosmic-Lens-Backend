@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import "@/lib/unhandledRejectionLogger";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ZodiacBridge } from "@/components/ZodiacBridge";
 import { ThemeProvider } from "@/context/ThemeContext";

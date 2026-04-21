@@ -86,9 +86,11 @@ if (__DEV__) {
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
-  fetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
+  // Use apiFetch so the bypass-tunnel-reminder header is sent — otherwise
+  // loca.lt returns an HTML interstitial that breaks `.json()` parsing.
+  apiFetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
     .then(r => r.json())
     .then(d => console.log("[CosmicLens] healthz OK ✓", JSON.stringify(d)))
-    .catch(e => console.error("[CosmicLens] healthz FAILED:", e.message, "→", `${API_BASE}/api/healthz`))
+    .catch(e => console.error("[CosmicLens] healthz FAILED:", e?.message || e, "→", `${API_BASE}/api/healthz`))
     .finally(() => clearTimeout(timer));
 }

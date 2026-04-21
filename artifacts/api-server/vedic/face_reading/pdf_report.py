@@ -338,6 +338,9 @@ SECTION_HIDE_KEYS = {
     "section_11_attraction_charisma": {"charisma_score_100"},
     "section_16_health_scan":       {"vitality_score_100","overall_health_score"},
     "section_6_feature_analysis":   {"intro_para","feature_blocks"},
+    "section_7_personality_synthesis": {"intro_para","blocks"},
+    "section_8_love_relationship_dna": {"intro_para","blocks"},
+    "section_14_life_flow":         {"intro_para","blocks"},
     "section_21_final_truth":       {"brutal_truth","must_do","closing_truth"},
     "bonus_personality_score":      {"leadership_10","money_10","love_10","health_10","intelligence_10"},
 }
@@ -510,6 +513,108 @@ def _render_section_6_deep(sec: Dict, styles) -> List:
     return flowables
 
 
+_DEEP_BLOCK_SECTIONS = {
+    "section_7_personality_synthesis",
+    "section_8_love_relationship_dna",
+    "section_9_career_money",
+    "section_14_life_flow",
+}
+
+
+def _render_deep_block(block: Dict, styles, idx: int) -> List:
+    """Render one deep block (heading + key_metric + body + callout + bullets)."""
+    out: List = []
+    h_hi = block.get("heading_hi", "")
+    h_en = block.get("heading_en", "")
+
+    # Sub-banner: maroon bar with block heading
+    sub = [[Paragraph(
+        f'<font color="white"><b>{idx+1}. {_safe(h_hi)}</b></font>', styles["score_label"]
+    )]]
+    sb = Table(sub, colWidths=[174*mm])
+    sb.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), C_PRIMARY),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ("TOPPADDING", (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    out.append(sb)
+    out.append(HRFlowable(width="100%", thickness=1.2, color=C_ACCENT,
+                          spaceBefore=0, spaceAfter=4))
+    if h_en:
+        out.append(Paragraph(_safe(h_en), styles["section_title_en"]))
+
+    # Key metric pill
+    km = block.get("key_metric") or {}
+    if km.get("label") and km.get("value") is not None:
+        pill = [[
+            Paragraph(f'<font color="white"><b>{_safe(km["label"])}</b></font>', styles["field_value"]),
+            Paragraph(f'<font color="white"><b>{_safe(km["value"])}</b></font>', styles["field_value"]),
+        ]]
+        pt = Table(pill, colWidths=[110*mm, 64*mm])
+        pt.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), HexColor("#3E5C7A")),
+            ("LEFTPADDING", (0,0), (-1,-1), 8),
+            ("RIGHTPADDING", (0,0), (-1,-1), 8),
+            ("TOPPADDING", (0,0), (-1,-1), 4),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ("ALIGN", (1,0), (1,0), "RIGHT"),
+        ]))
+        out.append(Spacer(1, 2*mm))
+        out.append(pt)
+
+    # Body (long Hinglish prose)
+    body = block.get("body")
+    if body:
+        out.append(Spacer(1, 3*mm))
+        out.append(Paragraph(_safe(body), styles["field_value"]))
+
+    # Bullets
+    bullets = block.get("bullets") or []
+    for b in bullets:
+        out.append(Paragraph(_safe(b), styles["bullet"], bulletText="•"))
+
+    # Callout (insight box)
+    co = block.get("callout") or {}
+    if co.get("text"):
+        out.append(Spacer(1, 3*mm))
+        out.append(_callout(co.get("label","INSIGHT"), co.get("text",""), styles))
+
+    out.append(Spacer(1, 6*mm))
+    return out
+
+
+def _render_section_deep(sec: Dict, styles) -> List:
+    """Generic renderer for sections 7/8/9/14 — intro_para + blocks[]."""
+    out: List = []
+    out.append(SectionBanner(sec["no"]))
+    out.append(Spacer(1, 4*mm))
+    out.append(Paragraph(_safe(sec["title_hi"]), styles["section_title_hi"]))
+    out.append(Paragraph(_safe(sec["title_en"]), styles["section_title_en"]))
+
+    content = sec.get("content") or {}
+    intro = content.get("intro_para") or sec.get("narrative") or ""
+    if intro:
+        out.append(Paragraph(_safe(intro), styles["narrative"]))
+
+    blocks = content.get("blocks") or []
+    if blocks:
+        out.append(Spacer(1, 4*mm))
+    for i, b in enumerate(blocks):
+        out.extend(_render_deep_block(b, styles, i))
+
+    # Section 9 score bar (wealth) etc.
+    bars = SECTION_SCORE_BARS.get(sec.get("key", ""), [])
+    if bars:
+        for bkey, blabel, bmax in bars:
+            bv = _try_num(content.get(bkey))
+            if bv is not None:
+                out.append(Spacer(1, 2*mm))
+                out.append(ScoreBar(blabel, bv, bmax))
+    return out
+
+
 def _render_section(sec: Dict, styles) -> List:
     flowables: List = []
     key = sec.get("key", "")
@@ -517,6 +622,8 @@ def _render_section(sec: Dict, styles) -> List:
     # Custom deep renderer for Section 6
     if key == "section_6_feature_analysis":
         return _render_section_6_deep(sec, styles)
+    if key in _DEEP_BLOCK_SECTIONS:
+        return _render_section_deep(sec, styles)
 
     # Banner + titles
     flowables.append(SectionBanner(sec["no"]))

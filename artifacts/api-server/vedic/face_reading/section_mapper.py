@@ -333,6 +333,16 @@ _TRAIT_WEAKNESSES = {
 
 
 def section_7_personality_synthesis(engines: Dict) -> Dict:
+    """Section 7 — DEEP behavior patterns + classic strengths/weaknesses block."""
+    from .life_areas_deep import build_section_7_deep
+    base = _section_7_classic(engines)
+    deep = build_section_7_deep(engines)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_7_classic(engines: Dict) -> Dict:
     p = engines.get("personality", {})
     ocean = p.get("ocean_summary_scores") or {}
     archetype = (p.get("archetype") or {}).get("name") or "Balanced"
@@ -419,6 +429,16 @@ def section_7_personality_synthesis(engines: Dict) -> Dict:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def section_9_career_money(engines: Dict) -> Dict:
+    """Section 9 — DEEP career & money + classic kpis."""
+    from .life_areas_deep import build_section_9_deep
+    base = _section_9_classic(engines)
+    deep = build_section_9_deep(engines)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_9_classic(engines: Dict) -> Dict:
     p = engines.get("personality", {})
     ocean = p.get("ocean_summary_scores") or {}
     sam = engines.get("samudrika", {}).get("composite_scores") or {}

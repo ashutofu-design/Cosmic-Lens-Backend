@@ -84,6 +84,16 @@ def section_1_power_summary(engines: Dict, base_sections: Dict) -> Dict:
 # SECTION 8 — LOVE & RELATIONSHIP DNA
 # ════════════════════════════════════════════════════════════════════════
 def section_8_love_relationship_dna(engines: Dict) -> Dict:
+    """Section 8 — DEEP love DNA + classic kpis."""
+    from .life_areas_deep import build_section_8_deep
+    base = _section_8_classic(engines)
+    deep = build_section_8_deep(engines)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_8_classic(engines: Dict) -> Dict:
     o = _ocean(engines)
     A, N, E, C, O = o["A"], o["N"], o["E"], o["C"], o["O"]
     sambandha = _num(_g(engines, "samudrika", "composite_scores", "sambandha"), default=60)
@@ -183,6 +193,16 @@ def section_10_red_flags(engines: Dict) -> Dict:
 # SECTION 14 — LIFE FLOW (Past / Present / Future)
 # ════════════════════════════════════════════════════════════════════════
 def section_14_life_flow(engines: Dict, base_sections: Dict, age: int = None) -> Dict:
+    """Section 14 — DEEP life flow + story mode + classic past/present/future."""
+    from .life_areas_deep import build_section_14_deep
+    base = _section_14_classic(engines, base_sections, age=age)
+    deep = build_section_14_deep(engines, base_sections, age=age)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_14_classic(engines: Dict, base_sections: Dict, age: int = None) -> Dict:
     age_map = _g(base_sections, "section_15_age_wise_map", "scores") or {}
     arche = _g(engines, "personality", "archetype", "name") or "Balanced Personality"
     domt  = _g(engines, "personality", "dominant_trait") or "balanced"

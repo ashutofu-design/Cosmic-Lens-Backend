@@ -6848,6 +6848,212 @@ def _tier12_marriage_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier13_progeny_section(s, name: str, dob: str, driver: int,
+                              conductor: int, *, kundli: Dict[str, Any],
+                              lang: str = "hinglish",
+                              ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 13 — Children, Progeny & Education Deep Audit."""
+    from vedic.numerology.progeny import compute_progeny_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_progeny_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t13_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    pb = bundle["putra_bhava"]
+    pk = bundle["putra_karaka"]
+    d7 = bundle["d7_picture"]
+    yog = bundle["yogas_audit"]
+    tim = bundle["timing"]
+    krm = bundle["karmic"]
+    syn = bundle["synthesis"]
+
+    # ── Title + numerology opener ────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "👶 TIER 13 — CHILDREN, PROGENY & EDUCATION DEEP AUDIT",
+        "👶 टियर 13 — संतान, प्रजनन और शिक्षा गहन जाँच",
+        "👶 TIER 13 — CHILDREN, PROGENY & EDUCATION DEEP AUDIT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block as _open13
+    flow.extend(_open13(s, driver, conductor, "relationships", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Your <b>chart-based progeny prognosis</b> — Putra Bhava (5th house + lord), "
+        "Putrakaraka Jupiter + 5L, the D7 Saptamsa progeny chart, classical Putra-prapti "
+        "Yogas + obstructions, current dasha child-timing window, karmic shapa signatures "
+        "(Naga / Pitru / Sarpa / Brahma / Matru), and a synthesis verdict-token + child "
+        "profile + education-path indication + 6-step action plan.",
+        "आपकी <b>कुंडली-आधारित संतान भविष्यवाणी</b> — पुत्र भाव (5वाँ भाव+स्वामी), पुत्रकारक गुरु+5L, "
+        "D7 सप्तांश संतान-कुंडली, शास्त्रीय पुत्र-प्राप्ति योग और बाधाएँ, वर्तमान दशा संतान-समय खिड़की, "
+        "कर्मिक शाप संकेत (नाग/पितृ/सर्प/ब्रह्म/मातृ), और निष्कर्ष + संतान-स्वरूप + शिक्षा-पथ + कार्य-योजना।",
+        "Aapki <b>chart-based progeny prognosis</b> — Putra Bhava (5th house + lord), "
+        "Putrakaraka Jupiter + 5L, D7 Saptamsa progeny chart, classical Putra-prapti yogas "
+        "aur obstructions, current dasha child-timing window, karmic shapa signatures "
+        "(Naga / Pitru / Sarpa / Brahma / Matru), aur ek synthesis verdict-token + child "
+        "profile + education-path + action plan.",
+        bg="#ECFDF5", border="#047857"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Putra Bhava (AI) ───────────────────────────────────────
+    pb_facts = (
+        f"<b>5th house sign:</b> {pb['fifth_sign']}<br/>"
+        f"<b>5th lord:</b> {pb['fifth_lord']} in H{pb['lord_house']} "
+        f"({pb['lord_sign']}, {pb['lord_dignity']})<br/>"
+        f"<b>5th occupants:</b> {', '.join(pb['occupants']) or '—'}<br/>"
+        f"<b>Strength score:</b> {pb['strength_score']}/100 — <b>{pb['verdict']}</b><br/><br/>"
+        f"<b>Child temperament from {pb['fifth_sign']}:</b> {pb['child_temperament']}<br/><br/>"
+        f"<b>Education path indication:</b> {pb['education_indication']}"
+    )
+    _emit_ai(ai_texts.get("t13.putra_bhava", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  👶 PUTRA BHAVA — 5th House & Lord (Progeny Foundation)",
+           "1️⃣  👶 पुत्र भाव — 5वाँ भाव और स्वामी",
+           "1️⃣  👶 PUTRA BHAVA — 5th House & Lord"),
+        pb_facts,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Putra Karaka — Jupiter + 5L (AI) ───────────────────────
+    pk_facts = (
+        f"<b>Primary Putrakaraka:</b> {pk['primary_karaka']} in {pk['karaka_sign']} "
+        f"H{pk['karaka_house']} ({pk['karaka_dignity']})<br/>"
+        f"<b>Well-placed?</b> {'Yes ✓' if pk['karaka_well_placed'] else 'Needs strengthening'}<br/><br/>"
+        f"<b>Secondary karaka (5L):</b> {pk['secondary_karaka']} "
+        f"in {pk['secondary_sign']} H{pk['secondary_house']} ({pk['secondary_dignity']})<br/><br/>"
+        f"<i>{pk['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t13.putra_karaka", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🌟 PUTRAKARAKA — Jupiter & 5L Reading",
+           "2️⃣  🌟 पुत्रकारक — गुरु और 5वाँ स्वामी",
+           "2️⃣  🌟 PUTRAKARAKA — Jupiter aur 5L"),
+        pk_facts,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. D7 Saptamsa Picture (AI) ───────────────────────────────
+    if d7.get("available"):
+        d7_facts = (
+            f"<b>D7 Ascendant:</b> {d7['d7_ascendant']}<br/>"
+            f"<b>D7 5th sign:</b> {d7['d7_fifth_sign']} (lord {d7['d7_fifth_lord']})<br/>"
+            f"<b>D7 5th occupants:</b> {', '.join(d7['d7_fifth_occupants']) or '—'}<br/>"
+            f"<b>Jupiter in D7:</b> {d7['jupiter_d7_sign']}<br/><br/>"
+            f"<i>{d7['note']}</i>"
+        )
+    else:
+        d7_facts = (
+            f"<i>D7 Saptamsa chart data not available in this kundli build — "
+            f"falling back to D1 progeny indicators only. {d7['note']}</i>"
+        )
+    _emit_ai(ai_texts.get("t13.d7_picture", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪞 D7 SAPTAMSA — The Progeny Chart",
+           "3️⃣  🪞 D7 सप्तांश — संतान कुंडली",
+           "3️⃣  🪞 D7 SAPTAMSA — Progeny Chart"),
+        d7_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Putra Yogas Audit (AI) ─────────────────────────────────
+    yog_html = "<br/>".join(f"&nbsp;&nbsp;▸ {y}" for y in yog.get("yogas", [])) or "&nbsp;&nbsp;—"
+    obs_html = "<br/>".join(f"&nbsp;&nbsp;▸ {o}" for o in yog.get("obstructions", [])) or "&nbsp;&nbsp;—"
+    yog_facts = (
+        f"<b>5th occupants:</b> {', '.join(yog['fifth_occupants']) or '—'}<br/>"
+        f"<b>5L house:</b> H{yog['fifth_lord_house']}<br/><br/>"
+        f"<b>Putra-prapti Yogas active ({yog['yoga_count']}):</b><br/>{yog_html}<br/><br/>"
+        f"<b>Obstructions ({yog['obstruction_count']}):</b><br/>{obs_html}<br/><br/>"
+        f"<b>Score:</b> {yog['score']}/100 — <b>{yog['severity']}</b><br/>"
+        f"<b>Verdict:</b> {yog['verdict']}"
+    )
+    _emit_ai(ai_texts.get("t13.yogas_audit", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🕉️ PUTRA YOGAS — Classical Audit + Obstructions",
+           "4️⃣  🕉️ पुत्र योग — शास्त्रीय ऑडिट + बाधाएँ",
+           "4️⃣  🕉️ PUTRA YOGAS — Classical Audit + Obstructions"),
+        yog_facts,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Children Timing (AI) ───────────────────────────────────
+    tim_facts = (
+        f"<b>Current Mahadasha:</b> {tim['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {tim['current_ad']}<br/><br/>"
+        f"<b>Progeny activator planets (your chart):</b> {', '.join(tim['activators'])}<br/>"
+        f"<b>5th lord:</b> {tim['fifth_lord']}<br/>"
+        f"<b>2nd lord (family-formation):</b> {tim['second_lord']}<br/>"
+        f"<b>11th lord (gain):</b> {tim['eleventh_lord']}<br/><br/>"
+        f"<b>Window status:</b> {tim['window_status']}<br/>"
+        f"<i>{tim['window_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t13.children_timing", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⏰ CHILDREN TIMING — Current Dasha-Bhukti Window",
+           "5️⃣  ⏰ संतान समय — वर्तमान दशा-भुक्ति",
+           "5️⃣  ⏰ CHILDREN TIMING — Current Dasha-Bhukti"),
+        tim_facts,
+        bg_color=colors.HexColor("#FEF9C3"), border_color=colors.HexColor("#854D0E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Karmic / Shapa Signatures (no AI, rich facts) ──────────
+    flags_html = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in krm.get("flags", [])) or "&nbsp;&nbsp;No shapa flags detected"
+    krm_facts = (
+        f"<b>5th-house occupants:</b> {', '.join(krm['fifth_occupants']) or '—'}<br/>"
+        f"<b>9th-house occupants:</b> {', '.join(krm['ninth_occupants']) or '—'}<br/><br/>"
+        f"<b>Karmic load score:</b> {krm['karmic_score']}/100 — <b>{krm['karmic_verdict']}</b><br/><br/>"
+        f"<b>Shapa Signatures:</b><br/>{flags_html}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌑 KARMIC SHAPA SIGNATURES — Naga / Pitru / Sarpa / Brahma / Matru",
+           "6️⃣  🌑 कर्मिक शाप संकेत — नाग / पितृ / सर्प / ब्रह्म / मातृ",
+           "6️⃣  🌑 KARMIC SHAPA SIGNATURES — Naga / Pitru / Sarpa / Brahma / Matru"),
+        krm_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#F59E0B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Synthesis + Child Profile + Action Plan (AI) ───────────
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    child_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["child_profile_lines"])
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["action_plan"])
+    syn_facts = (
+        f"<b>Verdict token:</b> {syn['verdict_token']}<br/><br/>"
+        f"<b>Synthesis:</b><br/>{summary_html}<br/><br/>"
+        f"<b>Child Profile:</b><br/>{child_html}<br/><br/>"
+        f"<b>6-Step Action Plan:</b><br/>{plan_html}"
+    )
+    _emit_ai(ai_texts.get("t13.progeny_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 PROGENY SYNTHESIS + CHILD PROFILE + ACTION PLAN",
+           "7️⃣  🌟 संतान निष्कर्ष + संतान-स्वरूप + कार्य योजना",
+           "7️⃣  🌟 PROGENY SYNTHESIS + CHILD PROFILE + ACTION PLAN"),
+        syn_facts,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close13
+    flow.extend(_close13(s, driver, conductor, "relationships", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -8074,6 +8280,121 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier12 facts build failed: %s", exc)
 
+        # ── Tier 13 — Children, Progeny & Education Deep Audit ────────
+        try:
+            from vedic.numerology.progeny import compute_progeny_bundle
+            pb_bundle = compute_progeny_bundle(kundli, dob, driver, conductor)
+            if pb_bundle.get("available"):
+                ppb = pb_bundle["putra_bhava"]
+                ppk = pb_bundle["putra_karaka"]
+                pd7 = pb_bundle["d7_picture"]
+                pyog = pb_bundle["yogas_audit"]
+                ptim = pb_bundle["timing"]
+                psyn = pb_bundle["synthesis"]
+
+                specs.append({
+                    "key": "t13.putra_bhava",
+                    "section_key": "tier13.putra_bhava",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "fifth_sign": ppb["fifth_sign"],
+                        "fifth_lord": ppb["fifth_lord"],
+                        "lord_house": ppb["lord_house"],
+                        "lord_dignity": ppb["lord_dignity"],
+                        "strength_score": ppb["strength_score"],
+                        "child_temperament": ppb["child_temperament"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t13.putra_karaka",
+                    "section_key": "tier13.putra_karaka",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "karaka_planet": ppk["primary_karaka"],
+                        "karaka_sign": ppk["karaka_sign"],
+                        "karaka_house": ppk["karaka_house"],
+                        "karaka_dignity": ppk["karaka_dignity"],
+                        "secondary_karaka": ppk["secondary_karaka"],
+                        "secondary_sign": ppk["secondary_sign"],
+                        "secondary_house": ppk["secondary_house"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t13.d7_picture",
+                    "section_key": "tier13.d7_picture",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "d7_ascendant": pd7["d7_ascendant"],
+                        "d7_fifth_sign": pd7["d7_fifth_sign"],
+                        "d7_fifth_lord": pd7["d7_fifth_lord"],
+                        "jupiter_d7_sign": pd7["jupiter_d7_sign"],
+                        "available": pd7["available"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t13.yogas_audit",
+                    "section_key": "tier13.yogas_audit",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "fifth_lord": ppb["fifth_lord"],
+                        "yoga_count": pyog["yoga_count"],
+                        "obstruction_count": pyog["obstruction_count"],
+                        "score": pyog["score"],
+                        "severity": pyog["severity"],
+                        "verdict": pyog["verdict"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t13.children_timing",
+                    "section_key": "tier13.children_timing",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": ptim["current_md"],
+                        "current_ad": ptim["current_ad"],
+                        "window_status": ptim["window_status"],
+                        "fifth_lord": ptim["fifth_lord"],
+                        "second_lord": ptim["second_lord"],
+                        "eleventh_lord": ptim["eleventh_lord"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t13.progeny_synthesis",
+                    "section_key": "tier13.progeny_synthesis",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "fifth_sign": ppb["fifth_sign"],
+                        "fifth_lord": ppb["fifth_lord"],
+                        "karaka_planet": ppk["primary_karaka"],
+                        "verdict_token": psyn["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier13 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -8261,6 +8582,13 @@ def render_part2_pdf(*,
         story += _tier12_marriage_section(s, name, dob, driver, conductor,
                                             kundli=kundli, lang=lang,
                                             ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 146-160 — 👶 TIER 13 — Children, Progeny & Education Deep Audit
+    if kundli is not None:
+        story += _tier13_progeny_section(s, name, dob, driver, conductor,
+                                          kundli=kundli, lang=lang,
+                                          ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

@@ -485,6 +485,53 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
                      and any(_has_word(t, tok) for tok in
                              (f.get("verdict_token") or "").split("-")
                              if len(tok) >= 5),
+    # ── Tier 13 — Children, Progeny & Education Deep Audit ──────────
+    # Same multi-anchor strategy: lock to 5th-house sign + chart-locked
+    # planet/house tokens + severity/verdict tokens.
+    "tier13.putra_bhava":
+        # Triple anchor: 5th sign + 5th lord planet + lord house number.
+        lambda f, t: _has_word(t, f.get("fifth_sign"))
+                     and _has_word(t, f.get("fifth_lord"))
+                     and (_has_num(t, f.get("lord_house"))
+                          if f.get("lord_house") else True),
+    "tier13.putra_karaka":
+        # Triple anchor: Jupiter token + Jupiter sign + Jupiter house number.
+        lambda f, t: (_has_word(t, "Jupiter") or _has_word(t, "Guru")
+                      or _has_word(t, "Brihaspati") or _has_word(t, "गुरु"))
+                     and _has_word(t, f.get("karaka_sign"))
+                     and (_has_num(t, f.get("karaka_house"))
+                          if f.get("karaka_house") else True),
+    "tier13.d7_picture":
+        # Triple anchor: D7 keyword + D7 5th sign + D7 5th lord planet.
+        lambda f, t: (_has_word(t, "Saptamsa") or _has_word(t, "Saptamsha")
+                      or _has_word(t, "D7") or _has_word(t, "सप्तांश"))
+                     and _has_word(t, f.get("d7_fifth_sign"))
+                     and _has_word(t, f.get("d7_fifth_lord")),
+    "tier13.yogas_audit":
+        # Triple anchor: Putra/Putrakaraka/Santati keyword + severity token +
+        # 5th-lord planet name (chart-locked anchor).
+        lambda f, t: (_has_word(t, "Putra") or _has_word(t, "Putrakaraka")
+                      or _has_word(t, "Santati") or _has_word(t, "progeny")
+                      or _has_word(t, "पुत्र"))
+                     and _has_word(t, f.get("severity"))
+                     and _has_word(t, f.get("fifth_lord")),
+    "tier13.children_timing":
+        # Triple anchor: current MD lord + current AD lord + window-status
+        # keyword (ACTIVE / WARM / TACTICAL / PREP — at least one ≥4-char token).
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("window_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier13.progeny_synthesis":
+        # Triple anchor: 5th sign + Jupiter (Putrakaraka) + verdict_token
+        # split on '-' (e.g. BLESSED-PROGENY-PATH → at least one ≥5-char token).
+        lambda f, t: _has_word(t, f.get("fifth_sign"))
+                     and (_has_word(t, "Jupiter") or _has_word(t, "Guru")
+                          or _has_word(t, "गुरु"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
 }
 
 

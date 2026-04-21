@@ -1517,6 +1517,23 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **103 pages** (was 94 for T11). All 7 T12 cards rendered. Most T12 AI calls hit OpenAI 30k TPM rate-limit and rendered via static fallback (still showed full chart facts: 7th sign Capricorn, 7th lord Saturn, Darakaraka, Mangal severity, dasha window). Architect review: **PASS** — Mangal cancellation logic correct, Darakaraka calc classically correct, 0–100 scoring bounded and coherent, D9 data gates graceful, validators mostly strong (caveat: `t12.d9_spouse` and `t12.mangal_audit` validators are moderately permissive — acceptable for now, follow-up tightening recommended).
 
-### Phase 5d — Tiers 13-17 — PENDING
+### Phase 5d — Tier 13 (Children, Progeny & Education Deep Audit) ✅ COMPLETE (2026-04-21)
+
+**Tier 13 — 7 cards** (`vedic/numerology/progeny.py` ~480 lines, NEW):
+1. **Putra Bhava** — 5th house sign + lord, occupants, dignity, 0–100 strength score, child temperament + education-path indication by 5th sign.
+2. **Putrakaraka** — Jupiter (primary universal Putra-karaka) + 5L (secondary signator) with sign/house/dignity.
+3. **D7 Saptamsa Picture** — D7 Lagna + D7-5th sign/lord/occupants + Jupiter-in-D7. Graceful fallback when D7 missing.
+4. **Putra Yogas Audit** — 7 classical Putra-prapti yogas (5L+9L combo, Jupiter in 5th, Jupiter aspecting 5th, 5L in Kendra/Trikona, 5L+11L combo, Moon-Jupiter Gajakesari resonance, Santati Yoga) + 7 obstructions (Sat/Rahu/Ketu/Mars/Sun in 5th, 5L in Dusthana, debilitated Jupiter). Severity tokens: BLESSED / MODERATE / CHALLENGED / DENSE-KARMA. 0–100 score.
+5. **Children Timing** — current MD/AD activator analysis (5L, Jupiter, 2L, 11L). Window status: ACTIVE / WARM / TACTICAL / PREP.
+6. **Karmic Shapa Signatures** — Naga, Sarpa, Pitru, Brahma, Matru, Preta shapa flag detection. Karmic-load scoring + STRONG-SHAPA / MODERATE-KARMIC / LIGHT-KARMIC verdict.
+7. **Synthesis + Child Profile + Education Path + 6-step Action Plan** — verdict tokens BLESSED-PROGENY-PATH / DELAYED-DHARMIC-PROGENY / KARMIC-PROGENY-PATH / SHAPA-CLEANSING-REQUIRED.
+
+**T13 AI layer** — 6 specs added to `ai_narrator.py` (flagship count 62→68): `t13.putra_bhava`, `t13.putra_karaka`, `t13.d7_picture`, `t13.yogas_audit`, `t13.children_timing`, `t13.progeny_synthesis`. Validators use multi-anchor strategy: 5th-sign + 5L planet + house anchors for Putra Bhava; Jupiter-token + sign + house for Karaka; D7/Saptamsa keyword + d7-5th-sign + d7-5th-lord for D7; Putra/Putrakaraka/Santati keyword + severity token + 5L for Yogas Audit; MD + AD + window-status for Timing; 5th-sign + Jupiter + verdict-token for Synthesis.
+
+**Renderer pattern** — Reuses the locked T12 layout-safety pattern (AI prose flowing Paragraph BEFORE facts-only `_premium_card`) for all 6 AI-bearing cards. Wrapped with numerology opener+closing using `life_area="relationships"` (relationships framing covers progeny per Option D policy). Wired into `render_part2_pdf` between T12 and identity-story sections.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, hinglish)**: HTTP 200, **100 pages**. All 7 T13 cards rendered correctly. Verdict_token = `DELAYED-DHARMIC-PROGENY` (for this chart with Saturn-influenced 5th-house karma). D7 fallback message rendered cleanly when D7 chart not present in kundli build. Several T13 AI calls succeeded (`t13.putra_bhava`, `t13.putra_karaka` — visible in PDF text), rest fell back to static facts due to OpenAI 30k TPM rate-limit (expected, all structural facts still rendered). Architect review: **PASS** — Putra-yoga classical correctness confirmed (BPHS/Phaladeepika lineage), shapa detection logic sound, synthesis verdict-token decision tree correctly prioritises STRONG-SHAPA > BLESSED > DELAYED > KARMIC, D7 fallback graceful, validator anchors tight enough to block generic puff. Implementation marked **Ready for Production**.
+
+### Phase 5d — Tiers 14-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

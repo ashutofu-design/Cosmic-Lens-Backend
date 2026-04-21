@@ -16,6 +16,7 @@ export interface MoreT {
   catKundliMilan:     string;
   catMuhurat:         string;
   catNumerology:      string;
+  catFaceReading:     string;
   catRemedies:        string;
   catVastu:           string;
   mdRashifalTitle:    string;
@@ -38,6 +39,8 @@ export interface MoreT {
   mdMuhuratSub:       string;
   mdNumerologyTitle:  string;
   mdNumerologySub:    string;
+  mdFaceReadingTitle: string;
+  mdFaceReadingSub:   string;
   mdRemediesTitle:    string;
   mdRemediesSub:      string;
   mdVastuTitle:       string;
@@ -320,6 +323,7 @@ const EN: MoreT = {
   catKundliMilan:     "💑 Match Making",
   catMuhurat:         "⏰ Auspicious Time",
   catNumerology:      "🔢 Numerology",
+  catFaceReading:     "👁️ Face Reading Pro",
   catRemedies:        "💎 Remedies",
   catVastu:           "🏠 Vastu",
   mdRashifalTitle:    "Daily Horoscope",
@@ -342,6 +346,8 @@ const EN: MoreT = {
   mdMuhuratSub:       "Wedding, housewarming, business",
   mdNumerologyTitle:  "Numerology",
   mdNumerologySub:    "Life path, lucky number",
+  mdFaceReadingTitle: "Face Reading Pro",
+  mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
   mdRemediesTitle:    "Planet Remedies",
   mdRemediesSub:      "Mantra, charity, gemstones",
   mdVastuTitle:       "Vastu Tips",
@@ -623,6 +629,7 @@ const HN: Partial<MoreT> = {
   catKundliMilan:     "💑 Kundli Milan",
   catMuhurat:         "⏰ Muhurat",
   catNumerology:      "🔢 Numerology",
+  catFaceReading:     "👁️ Face Reading Pro",
   catRemedies:        "💎 Upay & Remedies",
   catVastu:           "🏠 Vastu",
   mdRashifalTitle:    "Daily Rashifal",
@@ -645,6 +652,8 @@ const HN: Partial<MoreT> = {
   mdMuhuratSub:       "Shadi, Griha, Business",
   mdNumerologyTitle:  "Numerology",
   mdNumerologySub:    "Life path, lucky number",
+  mdFaceReadingTitle: "Face Reading Pro",
+  mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
   mdRemediesTitle:    "Graha Upay",
   mdRemediesSub:      "Mantra, daan, ratan",
   mdVastuTitle:       "Vastu Tips",
@@ -917,6 +926,7 @@ const HI: Partial<MoreT> = {
   catKundliMilan:     "💑 कुंडली मिलान",
   catMuhurat:         "⏰ मुहूर्त",
   catNumerology:      "🔢 अंकशास्त्र",
+  catFaceReading:     "👁️ फेस रीडिंग प्रो",
   catRemedies:        "💎 उपाय और रत्न",
   catVastu:           "🏠 वास्तु",
   mdRashifalTitle:    "दैनिक राशिफल",
@@ -939,6 +949,8 @@ const HI: Partial<MoreT> = {
   mdMuhuratSub:       "विवाह, गृह, व्यापार",
   mdNumerologyTitle:  "अंकशास्त्र",
   mdNumerologySub:    "लाइफ पाथ, लक्की नंबर",
+  mdFaceReadingTitle: "फेस रीडिंग प्रो",
+  mdFaceReadingSub:   "वैदिक + विज्ञान फ्यूजन · 80+ पेज",
   mdRemediesTitle:    "ग्रह उपाय",
   mdRemediesSub:      "मंत्र, दान, रत्न",
   mdVastuTitle:       "वास्तु टिप्स",

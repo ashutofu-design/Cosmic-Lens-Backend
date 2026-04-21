@@ -58,6 +58,12 @@ export default function MoreDrawer({
       ],
     },
     {
+      title: t.catFaceReading,
+      items: [
+        { id: "face-reading", icon: "eye", emoji: "👁️", title: t.mdFaceReadingTitle, subtitle: t.mdFaceReadingSub, route: "/face-reading", accent: "#ec4899", badge: t.badgeNew },
+      ],
+    },
+    {
       title: t.catRemedies,
       items: [
         { id: "remedies",  icon: "zap",         emoji: "⚡", title: t.mdRemediesTitle,  subtitle: t.mdRemediesSub, route: "/remedies",     accent: "#f59e0b" },

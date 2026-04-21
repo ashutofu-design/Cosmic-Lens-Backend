@@ -254,6 +254,70 @@ def healthz():
     return jsonify({"status": "ok"}), 200
 
 
+# ───────────────────────── Face Reading (Step 0: foundation) ─────────────────
+@app.route("/api/face_reading/extract", methods=["POST"])
+def face_reading_extract():
+    """Accept up to 3 selfies (front, left, right), return Mediapipe landmark
+    quality + counts per image. This is the foundation endpoint used by all
+    20 face-reading engines built on top.
+
+    Form-data fields (any of):
+        front : image file (required)
+        left  : image file (optional)
+        right : image file (optional)
+
+    Optional query/body flag:
+        include_points=1 → return full 478-point arrays (heavy, debug only)
+    """
+    try:
+        from vedic.face_reading.landmarks import extract_landmarks, landmark_set_to_dict
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
+
+    include_points = (request.values.get("include_points", "0") in ("1", "true", "yes"))
+
+    angles_to_check = ("front", "left", "right")
+    results = {}
+    overall_issues = []
+
+    for angle in angles_to_check:
+        f = request.files.get(angle)
+        if f is None:
+            if angle == "front":
+                return jsonify({
+                    "ok": False,
+                    "error": "missing_front_image",
+                    "hint": "POST a multipart form with field name 'front' (required), 'left' and 'right' optional.",
+                }), 400
+            continue
+        try:
+            data = f.read()
+            if not data:
+                results[angle] = {"angle": angle, "error": "empty_file"}
+                overall_issues.append(f"{angle}: empty_file")
+                continue
+            ls = extract_landmarks(data, angle=angle)
+            results[angle] = landmark_set_to_dict(ls, include_points=include_points)
+            for iss in ls.quality.issues:
+                overall_issues.append(f"{angle}: {iss}")
+        except Exception as e:
+            results[angle] = {"angle": angle, "error": f"processing_failed: {e}"}
+            overall_issues.append(f"{angle}: processing_failed")
+
+    # Pass/fail decision: front must score ≥ 60 for downstream engines to run
+    front_score = results.get("front", {}).get("quality", {}).get("score", 0)
+    ready_for_engines = front_score >= 60
+
+    return jsonify({
+        "ok": True,
+        "step": "0_foundation",
+        "ready_for_engines": ready_for_engines,
+        "front_score": front_score,
+        "issues": overall_issues,
+        "results": results,
+    }), 200
+
+
 @app.route("/api/geocode", methods=["GET"])
 def geocode():
     import urllib.request, urllib.error, json as _json

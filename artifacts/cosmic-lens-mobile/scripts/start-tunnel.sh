@@ -47,15 +47,12 @@ fi
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
 echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
-# --- Metro tunnel via localtunnel (stable subdomain) ---
-# trycloudflare.com subdomains don't resolve from the Replit container's
-# DNS, so we stay on localtunnel which has a working stable subdomain.
-# The lt client occasionally idle-disconnects — supervisor loop restarts
-# it within 3s, so the URL stays the same across reconnects.
+# --- Metro tunnel via localtunnel ---
+# We *try* the reserved subdomain first; if localtunnel falls back to a
+# random URL (reserved subdomain unavailable), we use whatever URL it
+# actually published. Either way Metro env vars get the live host.
 METRO_PORT="${PORT:-18987}"
 METRO_SUB="cosmiclens-metro"
-METRO_HOST="${METRO_SUB}.loca.lt"
-METRO_PUBLIC_URL="https://$METRO_HOST"
 
 pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
 pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
@@ -72,6 +69,25 @@ LT_METRO_LOG="/tmp/lt-metro.log"
   done
 ) &
 LT_METRO_PID=$!
+
+# Wait for lt to publish a URL (could be reserved sub, could be random).
+METRO_PUBLIC_URL=""
+for i in $(seq 1 30); do
+  URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_METRO_LOG" 2>/dev/null | tail -1)
+  if [ -n "$URL" ]; then
+    METRO_PUBLIC_URL="$URL"
+    break
+  fi
+  sleep 1
+done
+
+if [ -z "$METRO_PUBLIC_URL" ]; then
+  echo "[startup] localtunnel did not publish a URL; aborting"
+  exit 1
+fi
+
+METRO_HOST="${METRO_PUBLIC_URL#https://}"
+echo "[startup] Metro tunnel host: $METRO_HOST"
 
 export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
 export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"

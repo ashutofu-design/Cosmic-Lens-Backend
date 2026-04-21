@@ -468,3 +468,9 @@ id = "1w9sHFxMrhoH01YnExIrq"
 uri = "file://attached_assets/face_reading_report_PREMIUM_v4.pdf"
 type = "pdf"
 title = "Face Reading Premium Report — v4 (Chunk C: Multi-Lens + Staged Plans + Combos + Score Deep)"
+
+[[outputs]]
+id = "QV7-vCGDrlvPI91TJMU_F"
+uri = "file://attached_assets/face_reading_report_PREMIUM_v5.pdf"
+type = "pdf"
+title = "Face Reading Premium v5 — Photo Cover + Face Map + Charts + Celebrity Match (40 pages)"

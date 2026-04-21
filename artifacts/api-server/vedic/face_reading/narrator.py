@@ -39,7 +39,9 @@ SECTION_TITLES: List[Dict[str, str]] = [
 def assemble_report(sections: Dict,
                     engines: Dict,
                     person: Dict | None = None,
-                    front_quality: Dict | None = None) -> Dict:
+                    front_quality: Dict | None = None,
+                    front_image_bytes: bytes | None = None,
+                    front_points_norm: list | None = None) -> Dict:
     """Build the final ordered report structure."""
     person = person or {}
 
@@ -80,10 +82,13 @@ def assemble_report(sections: Dict,
         })
 
     return {
-        "cover":           cover,
-        "front_quality":   front_quality or {},
-        "sections_count":  len(ordered),
-        "sections":        ordered,
+        "cover":             cover,
+        "front_quality":     front_quality or {},
+        "front_image_bytes": front_image_bytes,
+        "front_points_norm": front_points_norm,
+        "engines":           engines,
+        "sections_count":    len(ordered),
+        "sections":          ordered,
         "footer_disclaimer": (
             "Yeh report educational aur self-awareness ke liye hai. "
             "Hiring, medical, ya legal nirnay ke liye use mat karo. "

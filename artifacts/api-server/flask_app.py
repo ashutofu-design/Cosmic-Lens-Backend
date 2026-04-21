@@ -744,10 +744,16 @@ def face_reading_analyze():
     if session_id:
         try:
             _existing = session_cache.get(session_id) or {}
+            # Front photo bytes + normalized landmark points for PDF visuals
+            _front_bytes = (cached or {}).get("front_image_bytes")
+            _front_ls    = ((cached or {}).get("landmark_sets") or {}).get("front")
+            _front_pts   = getattr(_front_ls, "points_norm", None) if _front_ls else None
             _existing["report_payload"] = {
                 "engines": _projected,
                 "sections": _all_sections,
                 "front_quality": _response["front_quality"],
+                "front_image_bytes": _front_bytes,
+                "front_points_norm": _front_pts,
                 "person": {
                     "name": request.values.get("name") or "",
                     "gender": gender,
@@ -799,6 +805,8 @@ def face_reading_report_pdf():
         engines=payload["engines"],
         person=person,
         front_quality=payload.get("front_quality"),
+        front_image_bytes=payload.get("front_image_bytes"),
+        front_points_norm=payload.get("front_points_norm"),
     )
 
     try:

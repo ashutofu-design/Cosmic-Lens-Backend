@@ -22,8 +22,14 @@ from reportlab.lib.colors import HexColor, white, black
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle,
-    KeepTogether, HRFlowable, Flowable,
+    KeepTogether, HRFlowable, Flowable, Image as RLImage,
 )
+from reportlab.lib.utils import ImageReader
+
+from .pdf_visuals import (
+    make_cover_photo, make_face_map, make_radar_chart, make_score_bars,
+)
+from .celebrity_match import build_celebrity_section
 
 
 # ── Color palette (premium maroon + gold + cream) ─────────────────────────
@@ -691,16 +697,31 @@ def _render_section(sec: Dict, styles) -> List:
 
 
 # ── Cover page ────────────────────────────────────────────────────────────
-def _render_cover(cover: Dict, styles) -> List:
+def _render_cover(cover: Dict, styles,
+                  photo_bytes: Optional[bytes] = None,
+                  points_norm: Optional[list] = None) -> List:
     flowables = []
-    flowables.append(Spacer(1, 35 * mm))
+    flowables.append(Spacer(1, 14 * mm))
     flowables.append(Paragraph("PREMIUM REPORT  ·  Rs.1499 EDITION", styles["cover_kicker"]))
     flowables.append(Paragraph(_safe(cover.get("report_title", "Face Intelligence Report")),
                                styles["cover_title"]))
     flowables.append(Paragraph(_safe(cover.get("report_subtitle", "")),
                                styles["cover_subtitle"]))
     flowables.append(HRFlowable(width="50%", thickness=2, color=C_ACCENT,
-                                spaceBefore=12, spaceAfter=20, hAlign="CENTER"))
+                                spaceBefore=8, spaceAfter=14, hAlign="CENTER"))
+
+    # User photo (square cropped + framed)
+    if photo_bytes:
+        try:
+            png_bytes = make_cover_photo(photo_bytes, points_norm, out_size=480)
+            if png_bytes:
+                img = RLImage(BytesIO(png_bytes), width=72*mm, height=72*mm)
+                img.hAlign = "CENTER"
+                flowables.append(img)
+                flowables.append(Spacer(1, 6 * mm))
+        except Exception:
+            pass
+
     flowables.append(Paragraph(_safe(cover.get("name", "Insan")), styles["cover_name"]))
 
     meta_lines = []
@@ -759,6 +780,132 @@ def _render_toc(report: Dict, styles) -> List:
     return flowables
 
 
+# ── Annotated face map page ───────────────────────────────────────────────
+def _render_face_map_page(photo_bytes: bytes, points_norm: list, styles) -> List:
+    flowables = []
+    flowables.append(Paragraph("Tumhare Chehre Ka Map", styles["section_title_hi"]))
+    flowables.append(Paragraph("Face Zone Map · Where Each Reading Comes From",
+                               styles["section_title_en"]))
+    flowables.append(HRFlowable(width="20%", thickness=2, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
+    flowables.append(Paragraph(
+        "Yeh tumhari actual photo hai jisko AI ne 468 landmark points pe analyze kiya. "
+        "Har zone (mastak, aankh, naak, gaal, hoṭh, jabdaa, thoddi) se alag-alag insights nikle hain — "
+        "is map me dekho ki kis area se kya pada gaya hai.",
+        styles["narrative"]))
+    flowables.append(Spacer(1, 4*mm))
+    try:
+        png = make_face_map(photo_bytes, points_norm, max_height=820)
+        if png:
+            img = RLImage(BytesIO(png), width=160*mm, height=180*mm, kind="proportional")
+            img.hAlign = "CENTER"
+            flowables.append(img)
+    except Exception as _e:
+        flowables.append(Paragraph(f"<i>Map unavailable: {_safe(str(_e))}</i>", styles["field_value"]))
+    flowables.append(Spacer(1, 6*mm))
+    flowables.append(Paragraph(
+        "<b>Reading guide:</b> Mastak → openness aur soch ka style. "
+        "Aankhein → emotional depth aur first impression. "
+        "Naak → ambition aur risk-style. "
+        "Gaal → warmth aur approachability. "
+        "Hoṭh → expression aur extraversion. "
+        "Jabdaa → discipline aur leadership. "
+        "Thoddi → resolve aur long-term grit.",
+        styles["narrative"]))
+    return flowables
+
+
+# ── Visual snapshot page ──────────────────────────────────────────────────
+def _render_visual_snapshot_page(engines: Dict, sections: Dict, styles) -> List:
+    flowables = []
+    flowables.append(Paragraph("Vyaktitva Visual Snapshot", styles["section_title_hi"]))
+    flowables.append(Paragraph("Personality at a Glance · Charts",
+                               styles["section_title_en"]))
+    flowables.append(HRFlowable(width="20%", thickness=2, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
+    flowables.append(Paragraph(
+        "Numbers se zyada kuch nahi bolta. Yeh do charts tumhare pure report ka "
+        "<b>visual fingerprint</b> hain — ek polygon shape (Big-5 traits) aur "
+        "ek bar-stack (5 premium scores). Inko save kar lo — 6 mahine baad dobara test "
+        "karo aur compare karo, growth khud dikhegi.",
+        styles["narrative"]))
+    flowables.append(Spacer(1, 4*mm))
+
+    # Radar of OCEAN big-5
+    try:
+        traits = (engines.get("personality") or {}).get("traits") or {}
+        radar_in = {
+            "O": (traits.get("openness")          or {}).get("score"),
+            "C": (traits.get("conscientiousness") or {}).get("score"),
+            "E": (traits.get("extraversion")      or {}).get("score"),
+            "A": (traits.get("agreeableness")     or {}).get("score"),
+            "N": (traits.get("neuroticism")       or {}).get("score"),
+        }
+        png = make_radar_chart({k: (v if v is not None else 50) for k, v in radar_in.items()})
+        img = RLImage(BytesIO(png), width=130*mm, height=130*mm, kind="proportional")
+        img.hAlign = "CENTER"
+        flowables.append(img)
+    except Exception as _e:
+        flowables.append(Paragraph(f"<i>Radar unavailable: {_safe(str(_e))}</i>", styles["field_value"]))
+
+    flowables.append(Spacer(1, 6*mm))
+
+    # Score bars
+    try:
+        bonus = sections.get("bonus_personality_score") or {}
+        scores = {k: bonus.get(k) for k in
+                  ("leadership_10","intelligence_10","money_10","love_10","health_10")}
+        png = make_score_bars(scores)
+        img = RLImage(BytesIO(png), width=160*mm, height=110*mm, kind="proportional")
+        img.hAlign = "CENTER"
+        flowables.append(img)
+    except Exception as _e:
+        flowables.append(Paragraph(f"<i>Bars unavailable: {_safe(str(_e))}</i>", styles["field_value"]))
+
+    return flowables
+
+
+# ── Celebrity match page ──────────────────────────────────────────────────
+def _render_celebrity_page(engines: Dict, styles) -> List:
+    flowables = []
+    flowables.append(Paragraph("Mashhoor Hastiyon Se Tulna",
+                               styles["section_title_hi"]))
+    flowables.append(Paragraph("Celebrity Archetype Match",
+                               styles["section_title_en"]))
+    flowables.append(HRFlowable(width="20%", thickness=2, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
+
+    data = build_celebrity_section(engines.get("personality") or {},
+                                   engines.get("samudrika") or {})
+    flowables.append(Paragraph(_safe(data["intro_para"]), styles["narrative"]))
+    flowables.append(Spacer(1, 6*mm))
+
+    for i, m in enumerate(data["matches"], 1):
+        # Mini-card: name + signature trait + why
+        rows = [
+            [Paragraph(f"<font color='#7B1F1F'><b>#{i}  {_safe(m['name'])}</b></font>",
+                       styles["callout_label"])],
+            [Paragraph(f"<b>Signature pattern:</b> {_safe(m['signature_trait_hi'])}",
+                       styles["field_value"])],
+            [Paragraph(_safe(m["why_hi"]), styles["narrative"])],
+        ]
+        t = Table(rows, colWidths=[170*mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), C_CALLOUT_BG),
+            ("BOX",        (0,0), (-1,-1), 0.8, C_ACCENT),
+            ("LEFTPADDING",(0,0), (-1,-1), 10),
+            ("RIGHTPADDING",(0,0),(-1,-1), 10),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 6),
+        ]))
+        flowables.append(KeepTogether([t, Spacer(1, 5*mm)]))
+
+    flowables.append(Spacer(1, 4*mm))
+    flowables.append(Paragraph(f"<i>{_safe(data['disclaimer_hi'])}</i>",
+                               styles["field_value"]))
+    return flowables
+
+
 # ── Main entrypoint ───────────────────────────────────────────────────────
 def render_pdf(report: Dict) -> bytes:
     buf = BytesIO()
@@ -773,17 +920,38 @@ def render_pdf(report: Dict) -> bytes:
 
     story: List = []
 
-    # 1. Cover
-    story.extend(_render_cover(report.get("cover", {}), styles))
+    photo_bytes = report.get("front_image_bytes")
+    points_norm = report.get("front_points_norm") or []
+    engines     = report.get("engines") or {}
+    sections_dict = {s["key"]: s["content"] for s in report.get("sections", [])}
+
+    # 1. Cover (with user photo)
+    story.extend(_render_cover(report.get("cover", {}), styles,
+                               photo_bytes=photo_bytes, points_norm=points_norm))
     story.append(PageBreak())
 
     # 2. Table of Contents
     story.extend(_render_toc(report, styles))
     story.append(PageBreak())
 
+    # 2b. Annotated face map (only if we have photo + landmarks)
+    if photo_bytes and points_norm and len(points_norm) > 200:
+        story.extend(_render_face_map_page(photo_bytes, points_norm, styles))
+        story.append(PageBreak())
+
+    # 2c. Visual snapshot (radar + score bars)
+    if engines:
+        story.extend(_render_visual_snapshot_page(engines, sections_dict, styles))
+        story.append(PageBreak())
+
     # 3. Sections (each may span multiple pages)
     for sec in report.get("sections", []):
         story.extend(_render_section(sec, styles))
+
+    # 3b. Celebrity match (after all sections, before disclaimer)
+    if engines:
+        story.append(PageBreak())
+        story.extend(_render_celebrity_page(engines, styles))
 
     # 4. Disclaimer
     story.append(PageBreak())

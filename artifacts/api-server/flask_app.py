@@ -739,6 +739,32 @@ def face_reading_analyze():
     # Strip internal markers from final response
     _all_sections.pop("_pending_sections", None)
 
+    # ── PHASE-UPGRADE: Final synthesis layer (additive — runs after all
+    # base engines). Strict 6-key contract:
+    #   fused_traits / shock_insights / behavior_simulation /
+    #   reasoning   / confidence_scores / remedies
+    try:
+        from vedic.face_reading.synthesis_engine import run_synthesis
+        _synthesis = run_synthesis(_projected)
+        _all_sections["synthesis"] = _synthesis
+        # Mirror into engines dict so downstream PDF/API can introspect.
+        _engines_for_response["synthesis"] = {
+            "engine": "synthesis_v1", "ok": True,
+            "counts": {
+                "fused_traits":        len(_synthesis.get("fused_traits", [])),
+                "shock_insights":      len(_synthesis.get("shock_insights", [])),
+                "behavior_simulation": len(_synthesis.get("behavior_simulation", [])),
+                "reasoning":           len(_synthesis.get("reasoning", [])),
+                "confidence_scores":   len(_synthesis.get("confidence_scores", [])),
+                "remedies":            len(_synthesis.get("remedies", [])),
+            },
+        }
+    except Exception as _syn_err:
+        _engines_for_response["synthesis"] = {
+            "engine": "synthesis_v1", "ok": False,
+            "error": f"synthesis_failed: {_syn_err}",
+        }
+
     _response["engines"] = _engines_for_response
     _response["sections"] = _all_sections
     _response["session_id"] = session_id

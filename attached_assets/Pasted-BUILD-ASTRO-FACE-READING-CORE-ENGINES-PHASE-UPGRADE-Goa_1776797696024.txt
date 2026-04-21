@@ -1,0 +1,95 @@
+BUILD — ASTRO + FACE READING CORE ENGINES (PHASE UPGRADE)
+
+Goal: Current system ko premium-level intelligence tak upgrade karna without breaking existing backend.
+
+ADD THESE 6 CORE ENGINES (MANDATORY):
+
+1. TRAIT_FUSION_ENGINE
+- Input: All feature outputs (face + kundli + vastu)
+- Logic: Combine multiple signals into one conclusion
+- Example: (Eyes + Jaw + Symmetry) → Personality trait
+- Output: fused_traits[]
+
+2. SHOCK_INSIGHT_ENGINE
+- Generate 2–3 highly specific, unexpected insights
+- Should feel: “yeh kaise pata?”
+- Use deep pattern combos (not generic statements)
+
+3. BEHAVIOR_SIMULATION_ENGINE
+- Predict real-life actions:
+  - relationship behavior
+  - conflict reaction
+  - decision style
+- Output in scenario format
+
+4. CONFIDENCE_ENGINE
+- Every insight must include confidence score (0–100%)
+- Based on:
+  - signal agreement
+  - image clarity
+  - kundli strength
+
+5. WHY_REASONING_ENGINE
+- For every major result:
+  - explain WHY in 1–2 lines
+- Must reference actual signals (no generic text)
+
+6. LIFESTYLE_REMEDY_ENGINE
+- Convert weaknesses → actionable fixes
+- Include:
+  - behavior change
+  - physical habits
+  - environment suggestions
+
+---------------------------------------
+
+INTEGRATION RULES:
+
+- DO NOT replace existing engines
+- Add as final synthesis layer after all engines run
+- Output pipeline:
+  raw engines → fusion → reasoning → confidence → narrative
+
+---------------------------------------
+
+OPENAI ROLE:
+
+- Use ONLY for:
+  - narrative writing
+  - human tone
+  - clarity
+- DO NOT use AI for core calculations
+
+---------------------------------------
+
+OUTPUT STRUCTURE (STRICT):
+
+{
+  fused_traits: [],
+  shock_insights: [],
+  behavior_simulation: [],
+  reasoning: [],
+  confidence_scores: [],
+  remedies: []
+}
+
+---------------------------------------
+
+CONSTRAINTS:
+
+- No generic lines
+- No repetition
+- Every insight must be traceable to data
+- Tone: premium, sharp, human-like (not robotic, not pandit style)
+
+---------------------------------------
+
+RESULT:
+
+System should feel:
+- Highly intelligent
+- Deeply personalized
+- Psychologically accurate
+- Premium (₹8000 level)
+
+END

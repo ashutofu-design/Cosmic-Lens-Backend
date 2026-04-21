@@ -1445,6 +1445,23 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **80 pages** (was 74), zero engine errors, T8 spans p47-52 with verbatim engine anchors (Driver-6 → Venus, NEUTRAL pair-verdict, full Friday Lakshmi healing protocol). Architect-reviewed fixes: nakshatra alias normalization, hard data gate, tightened triple-anchor validators all applied + verified.
 
-### Phase 5c — Tiers 9-17 — PENDING
+### Phase 5c — Tier 9 (Family, Lineage & Children) ✅ COMPLETE (2026-04-21)
+
+**Tier 9 — Family, Lineage & Children (9 cards)**
+- `vedic/numerology/family.py` (NEW ~390 lines): `compute_family_bundle(kundli, dob, driver, conductor)` produces — 4th-house deep (mother + home + vehicles + inner-peace), 5th-house deep (children + creativity + Purva Punya), 9th-house deep (father + dharma + guru), 7th-house in-law briefing, 12th-house hidden-family/foreign-residence, **Putra-Yoga 0-3 score** (5L-position + Jupiter-position + Jupiter own/exalted sign with Capricorn-debilitation flag), **Pitru-Dosha quick-check** (Sun⊕Rahu / Sun⊕Ketu / 9th-house affliction by Rahu/Ketu/Saturn/Mars), **Property-Yoga 0-3 score** (4L + Mars-real-estate + Venus-vehicles), current Mahadasha family-events window (HOME-FOCUS / CHILDREN-CREATIVITY / FATHER-DHARMA / EXPANSION / INNER-WORK / STEADY), driver-number family-style table (planet + role + parenting + home-vibe + gift + shadow + lucky family-day for drivers 1-9), synthesis verdict.
+- **Hard data gate (architect-fix v1)**: refuses to fabricate when ascendant missing/unknown, planets list <9 (must include Rahu+Ketu — Pitru audit hinges on nodes; missing nodes would silently produce false `CLEAR`), or any of the 9 grahas missing. Returns `{available: False, reason: "..."}`.
+- **Putra-Yoga scoring fix (architect-fix v2)**: `SUPPORTIVE_HOUSES = {1,3,4,5,6,7,9,10,11}` = full kendra ∪ trikona ∪ upachaya (was missing 3 and 6 in v1, under-scoring charts).
+- Renderer: `_tier9_family_section` in `numerology_pdf_part2.py` — title + 9 premium cards (4th/Mother AI, 9th/Father AI, 5th/Children+Putra-yoga AI, Pitru-Audit AI, Property facts, In-law facts, Dasha-window facts, Numerology-family AI, Synthesis facts) wrapped in `numerology_opener_block(life_area="family")` + `numerology_closing_toolkit_block`. Inserted between T8 and identity story.
+- **AI narration**: 5 new flagship specs (`t9.mother_home`, `t9.father_dharma`, `t9.children_creativity`, `t9.lineage_pitru`, `t9.numerology_family`) with **strict multi-anchor validators** in `ai_narrator.py`:
+  - mother_home: 4L name + (4th-sign OR moon-house number)
+  - father_dharma: **triple anchor** — 9L name + Sun token + (9L-house OR sun-house number)
+  - children_creativity: **quadruple anchor** — Jupiter + locked Putra-verdict token + 5L name + (5L-house OR Jupiter-house number)
+  - lineage_pitru: **branched** — if active requires Pitru/tarpan token + (9L name OR driver-number); if clear requires explicit "clear/no/safe" + (9L OR driver-number) so AI cannot invent a dosha that doesn't exist AND must reference the actual chart
+  - numerology_family: driver-number + driver-planet name
+  Total flagship AI calls = **46** (was 41).
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **84 pages** (was 80 for T8-only), Tier 9 spans p51-58 with full Ashutosh-voice AI narration ("Rahul bhai, ek ajeeb si yaad aati hai mujhe — jaise train ke platform par bachpan me khade the, aur papa ne seedha haath pakad liya..." for father_dharma; rich numerology family-style for driver-6/Venus harmonizer). All 3 architect-flagged severe issues (node-gate gap, Putra scoring set, weak validators) fixed and verified.
+
+### Phase 5d — Tiers 10-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

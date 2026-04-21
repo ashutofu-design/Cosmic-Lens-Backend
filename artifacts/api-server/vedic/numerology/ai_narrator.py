@@ -285,6 +285,61 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
                          if len(tok) >= 4
                      )
                      and (_has_num(t, f.get("md_house")) if f.get("md_house") else True),
+    # ── Tier 9 — Family, Lineage & Children ──────────────────────────
+    # Each validator anchors on locked house lord names + key planet anchors
+    # (Moon for mother, Sun for father, Jupiter for children) so generic
+    # family puff is rejected.
+    "tier9.mother_home":
+        # Must mention 4th-house lord by name AND either the sign or moon-house
+        lambda f, t: _has_word(t, f.get("fourth_lord"))
+                     and (_has_word(t, f.get("fourth_sign"))
+                          or _has_num(t, f.get("moon_house"))),
+    "tier9.father_dharma":
+        # Triple anchor: 9L name + Sun token + locked numeric anchor
+        # (9L-house OR sun-house) so generic father puff cannot pass.
+        lambda f, t: _has_word(t, f.get("ninth_lord"))
+                     and (_has_word(t, "Sun") or _has_word(t, "Surya")
+                          or _has_word(t, "सूर्य"))
+                     and (_has_num(t, f.get("ninth_lord_house"))
+                          or _has_num(t, f.get("sun_house"))),
+    "tier9.children_creativity":
+        # Quadruple anchor: Jupiter + locked Putra verdict + 5L name +
+        # numeric house anchor (5L-house OR Jupiter-house).
+        lambda f, t: (_has_word(t, "Jupiter") or _has_word(t, "Brihaspati")
+                      or _has_word(t, "बृहस्पति"))
+                     and _has_word(t, f.get("putra_yoga_verdict"))
+                     and _has_word(t, f.get("fifth_lord"))
+                     and (_has_num(t, f.get("fifth_lord_house"))
+                          or _has_num(t, f.get("jupiter_house"))),
+    "tier9.lineage_pitru":
+        # If pitru active → must mention pitru/tarpan token AND the chart-
+        # specific 9L (or driver number) so AI must actually reference user's
+        # chart, not generic "your ancestors". If clear → must explicitly say
+        # clear/no/safe to acknowledge engine's CLEAR call (prevents AI from
+        # inventing a pitru-dosha that doesn't exist).
+        lambda f, t: (
+            f.get("active") and (
+                _has_word(t, "Pitru") or _has_word(t, "Pitra")
+                or _has_word(t, "tarpan") or _has_word(t, "ancestral")
+                or _has_word(t, "पितृ") or _has_word(t, "तर्पण")
+            ) and (
+                _has_word(t, f.get("ninth_lord"))
+                or _has_num(t, f.get("driver_number"))
+            )
+        ) or (
+            (not f.get("active")) and (
+                _has_word(t, "clear") or _has_word(t, "no major")
+                or _has_word(t, "absent") or _has_word(t, "safe")
+                or _has_word(t, "नहीं") or _has_word(t, "साफ")
+            ) and (
+                _has_word(t, f.get("ninth_lord"))
+                or _has_num(t, f.get("driver_number"))
+            )
+        ),
+    "tier9.numerology_family":
+        # Must mention driver number + driver planet (dual anchor)
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("driver_planet")),
 }
 
 

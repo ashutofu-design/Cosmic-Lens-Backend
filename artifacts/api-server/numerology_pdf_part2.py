@@ -6013,6 +6013,243 @@ def _tier8_health_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier9_family_section(s, name: str, dob: str, driver: int,
+                           conductor: int, *, kundli: Dict[str, Any],
+                           lang: str = "hinglish",
+                           ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 9 — Family, Lineage & Children (4th + 5th + 9th + Putra-yoga + Pitru audit)."""
+    from vedic.numerology.family import compute_family_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_family_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    mh = bundle["mother_home"]
+    fd = bundle["father_dharma"]
+    cc = bundle["children_creativity"]
+    pa = bundle["pitru_audit"]
+    pr = bundle["property_signature"]
+    sf = bundle["spouse_family"]
+    fw = bundle["family_window"]
+    nl = bundle["numerology_layer"]
+    synthesis = bundle["synthesis_verdict"]
+
+    # ── Title + numerology opener ─────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "👨‍👩‍👧 TIER 9 — FAMILY, LINEAGE & CHILDREN",
+        "👨‍👩‍👧 टियर 9 — परिवार, वंश और संतान",
+        "👨‍👩‍👧 TIER 9 — FAMILY, LINEAGE & CHILDREN"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "family", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Tier 9 maps your <b>complete family blueprint</b> — 4th house (mother, home, inner peace, "
+        "vehicles), 5th house (children, creativity, Purva Punya), 9th house (father, dharma, guru), "
+        "Jupiter as Putrakaraka (natural significator of progeny), Putra-Yoga audit, Pitru-Dosha "
+        "ancestral check, property & home-ownership signature, in-law briefing from the 7th house, "
+        "current Mahadasha family-events window, plus your driver-number family-style + lucky family-day.",
+        "टियर 9 आपका <b>संपूर्ण पारिवारिक खाका</b> है — चौथा भाव (माता, घर, आंतरिक शांति), पांचवां भाव (संतान, "
+        "रचनात्मकता, पूर्व पुण्य), नवम भाव (पिता, धर्म, गुरु), बृहस्पति पुत्रकारक, पुत्र-योग ऑडिट, पितृ-दोष जांच, "
+        "संपत्ति/गृह योग, ससुराल पक्ष ब्रीफिंग, वर्तमान महादशा की पारिवारिक खिड़की, और आपकी मूलांक पारिवारिक शैली।",
+        "Tier 9 aapka <b>complete family blueprint</b> hai — 4th house (mother, home, peace, vehicles), "
+        "5th house (children, creativity, Purva Punya), 9th house (father, dharma, guru), Jupiter as "
+        "Putrakaraka, Putra-Yoga audit, Pitru-Dosha check, property/home signature, in-law briefing "
+        "from 7th house, current Mahadasha family-window, plus aapke driver-number ki family-style.",
+        bg="#FDF2F8", border="#9D174D"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. 4th House — Mother & Home (AI) ─────────────────────────
+    mh_facts = (
+        f"<b>4th-house sign:</b> {mh.get('sign','—')}<br/>"
+        f"<b>4th-house lord:</b> {mh.get('lord','—')} (in House {mh.get('lord_house','—')})<br/>"
+        f"<b>Moon house (mother-karaka):</b> {mh.get('moon_house','—')}<br/>"
+        f"<b>Occupants in 4th:</b> "
+        f"{', '.join(mh.get('occupants', [])) if mh.get('occupants') else '(empty — read via lord)'}<br/>"
+        f"<b>Mother bond signature:</b> {mh.get('mother_signature','—')}<br/>"
+        f"<b>Home vibe:</b> {mh.get('home_vibe_keywords','—')}"
+    )
+    ai_txt = ai_texts.get("t9.mother_home", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + mh_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🏡 4TH HOUSE — Mother, Home & Inner Peace",
+           "1️⃣  🏡 चौथा भाव — माता, घर, आंतरिक शांति",
+           "1️⃣  🏡 4TH HOUSE — Mother, Home & Inner Peace"),
+        body,
+        bg_color=colors.HexColor("#EFF6FF"), border_color=colors.HexColor("#1D4ED8"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. 9th House — Father & Dharma (AI) ───────────────────────
+    fd_facts = (
+        f"<b>9th-house sign:</b> {fd.get('sign','—')}<br/>"
+        f"<b>9th-house lord:</b> {fd.get('lord','—')} (in House {fd.get('lord_house','—')})<br/>"
+        f"<b>Sun house (father-karaka):</b> {fd.get('sun_house','—')}<br/>"
+        f"<b>Occupants in 9th:</b> "
+        f"{', '.join(fd.get('occupants', [])) if fd.get('occupants') else '(empty)'}<br/>"
+        f"<b>Father bond signature:</b> {fd.get('father_signature','—')}<br/>"
+        f"<b>Dharma flavour:</b> {fd.get('dharma_keyword','—')}"
+    )
+    ai_txt = ai_texts.get("t9.father_dharma", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + fd_facts
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  👨‍👦 9TH HOUSE — Father, Dharma & Guru",
+           "2️⃣  👨‍👦 नवम भाव — पिता, धर्म, गुरु",
+           "2️⃣  👨‍👦 9TH HOUSE — Father, Dharma & Guru"),
+        body,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. 5th House — Children & Creativity (AI) ─────────────────
+    cc_facts = [
+        f"<b>5th-house sign:</b> {cc.get('sign','—')} &nbsp;·&nbsp; <b>lord:</b> {cc.get('lord','—')} "
+        f"(House {cc.get('lord_house','—')})",
+        f"<b>Jupiter (Putrakaraka):</b> in House {cc.get('jupiter_house','—')}, sign {cc.get('jupiter_sign','—')}",
+        f"<b>Occupants in 5th:</b> "
+        f"{', '.join(cc.get('occupants', [])) if cc.get('occupants') else '(empty)'}",
+        f"<b>Putra-Yoga score:</b> {cc.get('putra_yoga_score',0)}/{cc.get('putra_yoga_max',3)} → "
+        f"<b>VERDICT: {cc.get('putra_yoga_verdict','—')}</b>",
+        "<b>Reasoning:</b>",
+    ]
+    for n in cc.get("putra_yoga_notes", []):
+        cc_facts.append(f"&nbsp;&nbsp;• {n}")
+    cc_facts.append(f"<br/><b>Creativity flavour:</b> {cc.get('creativity_keyword','—')}")
+    ai_txt = ai_texts.get("t9.children_creativity", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(cc_facts)
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  👶 5TH HOUSE — Children, Creativity & Purva Punya",
+           "3️⃣  👶 पांचवां भाव — संतान, रचनात्मकता, पूर्व पुण्य",
+           "3️⃣  👶 5TH HOUSE — Children, Creativity & Purva Punya"),
+        body,
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Pitru-Dosha audit (no AI but anchored on driver) ──────
+    pa_lines = [
+        f"<b>Pitru-Dosha status:</b> {'⚠ ACTIVE' if pa.get('active') else '✓ CLEAR'}",
+    ]
+    if pa.get("factors"):
+        pa_lines.append("<b>Triggering factors found:</b>")
+        for fx in pa["factors"]:
+            pa_lines.append(f"&nbsp;&nbsp;⚠ {fx}")
+    pa_lines.append(f"<br/><b>Remedy guidance:</b> {pa.get('remedy_summary','—')}")
+    ai_txt = ai_texts.get("t9.lineage_pitru", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(pa_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🌳 ANCESTRAL LINEAGE — Pitru-Dosha Audit",
+           "4️⃣  🌳 पैतृक वंश — पितृ-दोष ऑडिट",
+           "4️⃣  🌳 ANCESTRAL LINEAGE — Pitru-Dosha Audit"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Property & Home signature (no AI) ──────────────────────
+    pr_lines = [
+        f"<b>Property-Yoga score:</b> {pr.get('score',0)}/{pr.get('max',3)} → "
+        f"<b>VERDICT: {pr.get('verdict','—')}</b>",
+        f"<b>4th lord:</b> {pr.get('fourth_lord','—')} &nbsp;·&nbsp; "
+        f"<b>Mars house:</b> {pr.get('mars_house','—')} &nbsp;·&nbsp; "
+        f"<b>Venus house:</b> {pr.get('venus_house','—')}",
+        "<b>Reasoning:</b>",
+    ]
+    for n in pr.get("notes", []) or ["No major property yoga — focus on disciplined savings + classical 4th-lord remedies."]:
+        pr_lines.append(f"&nbsp;&nbsp;• {n}")
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  🏘️ PROPERTY, HOME & VEHICLES SIGNATURE",
+           "5️⃣  🏘️ संपत्ति, गृह व वाहन योग",
+           "5️⃣  🏘️ PROPERTY, HOME & VEHICLES SIGNATURE"),
+        "<br/>".join(pr_lines),
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. In-law briefing (7th house, no AI) ─────────────────────
+    sf_lines = [
+        f"<b>7th-house sign:</b> {sf.get('sign','—')} &nbsp;·&nbsp; <b>lord:</b> {sf.get('lord','—')} "
+        f"(House {sf.get('lord_house','—')})",
+        f"<b>In-law family vibe:</b> {sf.get('in_law_keyword','—')}",
+        f"<i>Note: Detailed spouse-compatibility was covered in Tier 5 — this card is the "
+        f"in-law-family briefing only.</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  👰 IN-LAW FAMILY BRIEFING (7th House Lens)",
+           "6️⃣  👰 ससुराल पक्ष ब्रीफिंग (सप्तम भाव)",
+           "6️⃣  👰 IN-LAW FAMILY BRIEFING"),
+        "<br/>".join(sf_lines),
+        bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Current Dasha family window (no AI) ────────────────────
+    fw_lines = [
+        f"<b>Current Mahadasha lord:</b> {fw.get('md_lord','—')} (House {fw.get('md_house','—')})",
+        f"<b>Current Antardasha lord:</b> {fw.get('ad_lord','—')}",
+        f"<b>Mahadasha ends:</b> {fw.get('md_end_date','—')}",
+        f"<b>Family-window verdict:</b> {fw.get('verdict','—')}",
+        f"<i>{fw.get('note','')}</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  ⏳ CURRENT DASHA — Family-Events Window",
+           "7️⃣  ⏳ वर्तमान दशा — पारिवारिक घटना खिड़की",
+           "7️⃣  ⏳ CURRENT DASHA — Family-Events Window"),
+        "<br/>".join(fw_lines),
+        bg_color=colors.HexColor("#E0F2FE"), border_color=colors.HexColor("#0369A1"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. Numerology family layer (AI) ───────────────────────────
+    df = nl.get("driver_family", {})
+    cf = nl.get("conductor_family", {})
+    nl_lines = [
+        f"<b>Driver-{driver} ({df.get('planet','—')}) family-style:</b>",
+        f"&nbsp;&nbsp;▸ <b>Family role:</b> {df.get('family_role','—')}",
+        f"&nbsp;&nbsp;▸ <b>Parenting style:</b> {df.get('parenting_style','—')}",
+        f"&nbsp;&nbsp;▸ <b>Home vibe:</b> {df.get('home_vibe','—')}",
+        f"&nbsp;&nbsp;▸ <b>Gift to family:</b> {df.get('gift_to_family','—')}",
+        f"&nbsp;&nbsp;▸ <b>Shadow to watch:</b> {df.get('shadow','—')}",
+        f"<br/><b>Conductor-{conductor} ({cf.get('planet','—')}) execution layer:</b> "
+        f"{cf.get('family_role','—')}",
+        f"<b>Driver↔Conductor family synergy:</b> {nl.get('synergy_verdict','—')}",
+        f"<b>Lucky family-bonding day:</b> {nl.get('lucky_family_day','—')}",
+    ]
+    ai_txt = ai_texts.get("t9.numerology_family", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(nl_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "8️⃣  🔢 NUMEROLOGY FAMILY LAYER",
+           "8️⃣  🔢 अंक-शास्त्र पारिवारिक परत",
+           "8️⃣  🔢 NUMEROLOGY FAMILY LAYER"),
+        body,
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 9. Synthesis closing (no AI) ──────────────────────────────
+    flow.append(_premium_card(s,
+        _T(lang, "9️⃣  📜 TIER 9 SYNTHESIS",
+           "9️⃣  📜 टियर 9 निष्कर्ष",
+           "9️⃣  📜 TIER 9 SYNTHESIS"),
+        f"<b>{synthesis}</b><br/><br/>"
+        f"<i>Reminder: Family-yogas describe TENDENCIES & karmic patterns — your conscious "
+        f"effort, communication, and rituals shape the actual outcome. Use these as "
+        f"awareness-tools, not as labels.</i>",
+        bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "family", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -6851,6 +7088,103 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier8 facts build failed: %s", exc)
 
+    # ── Tier 9 facts (Family, Lineage & Children) ─ requires kundli ──
+    if kundli is not None:
+        try:
+            from vedic.numerology.family import compute_family_bundle
+            fb = compute_family_bundle(kundli, dob, driver, conductor)
+            if fb.get("available"):
+                fmh = fb["mother_home"]
+                ffd = fb["father_dharma"]
+                fcc = fb["children_creativity"]
+                fpa = fb["pitru_audit"]
+                fnl = fb["numerology_layer"]
+                fdf = fnl.get("driver_family", {})
+
+                specs.append({
+                    "key": "t9.mother_home",
+                    "section_key": "tier9.mother_home",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "fourth_sign": fmh.get("sign"),
+                        "fourth_lord": fmh.get("lord"),
+                        "fourth_lord_house": fmh.get("lord_house"),
+                        "moon_house": fmh.get("moon_house"),
+                        "mother_signature": fmh.get("mother_signature"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t9.father_dharma",
+                    "section_key": "tier9.father_dharma",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "ninth_sign": ffd.get("sign"),
+                        "ninth_lord": ffd.get("lord"),
+                        "ninth_lord_house": ffd.get("lord_house"),
+                        "sun_house": ffd.get("sun_house"),
+                        "father_signature": ffd.get("father_signature"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t9.children_creativity",
+                    "section_key": "tier9.children_creativity",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "fifth_sign": fcc.get("sign"),
+                        "fifth_lord": fcc.get("lord"),
+                        "fifth_lord_house": fcc.get("lord_house"),
+                        "jupiter_house": fcc.get("jupiter_house"),
+                        "jupiter_sign": fcc.get("jupiter_sign"),
+                        "putra_yoga_verdict": fcc.get("putra_yoga_verdict"),
+                        "putra_yoga_score": fcc.get("putra_yoga_score"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t9.lineage_pitru",
+                    "section_key": "tier9.lineage_pitru",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "active": bool(fpa.get("active")),
+                        "factor_count": len(fpa.get("factors") or []),
+                        "ninth_lord": ffd.get("lord"),
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t9.numerology_family",
+                    "section_key": "tier9.numerology_family",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "conductor_number": conductor,
+                        "driver_planet": fdf.get("planet"),
+                        "family_role": fdf.get("family_role"),
+                        "synergy_verdict": fnl.get("synergy_verdict"),
+                        "lucky_family_day": fnl.get("lucky_family_day"),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier9 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -7008,6 +7342,13 @@ def render_part2_pdf(*,
     # Pages 83-94 — 🩺 TIER 8 — Health & Longevity
     if kundli is not None:
         story += _tier8_health_section(s, name, dob, driver, conductor,
+                                        kundli=kundli, lang=lang,
+                                        ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 95-106 — 👨‍👩‍👧 TIER 9 — Family, Lineage & Children
+    if kundli is not None:
+        story += _tier9_family_section(s, name, dob, driver, conductor,
                                         kundli=kundli, lang=lang,
                                         ai_texts=ai_texts)
         story.append(PageBreak())

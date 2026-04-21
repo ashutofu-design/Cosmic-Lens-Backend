@@ -39,6 +39,44 @@ if not app.logger.handlers:
     app.logger.addHandler(_h)
 CORS(app)
 
+# ── Hardening: max upload size (face-reading: 12 MB hard cap) ──────────────
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024   # 16 MB total request
+
+# ── Response compression (gzip / brotli) ───────────────────────────────────
+try:
+    from flask_compress import Compress
+    Compress(app)
+    app.config["COMPRESS_MIMETYPES"] = [
+        "application/json", "text/html", "text/css", "text/xml",
+        "application/javascript", "text/plain",
+    ]
+    app.config["COMPRESS_LEVEL"] = 6
+    app.config["COMPRESS_MIN_SIZE"] = 1024
+except Exception as _e:
+    app.logger.warning(f"flask_compress unavailable: {_e}")
+
+# ── Rate limiting (face-reading endpoints are expensive) ───────────────────
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["1000 per hour", "60 per minute"],
+        storage_uri="memory://",
+    )
+except Exception as _e:
+    limiter = None
+    app.logger.warning(f"flask_limiter unavailable: {_e}")
+
+# Helper that gracefully degrades if limiter not available
+def _rate_limit(spec):
+    def deco(fn):
+        if limiter is None:
+            return fn
+        return limiter.limit(spec)(fn)
+    return deco
+
 # ── Database init ──────────────────────────────────────────────────────────────
 init_db(app)
 
@@ -256,28 +294,38 @@ def healthz():
 
 # ───────────────────────── Face Reading (Step 0: foundation) ─────────────────
 @app.route("/api/face_reading/extract", methods=["POST"])
+@_rate_limit("20 per minute")
 def face_reading_extract():
-    """Accept up to 3 selfies (front, left, right), return Mediapipe landmark
-    quality + counts per image. This is the foundation endpoint used by all
-    20 face-reading engines built on top.
+    """Foundation extraction (Step 0 v3) for the 20-engine face-reading pipeline.
 
-    Form-data fields (any of):
-        front : image file (required)
-        left  : image file (optional)
-        right : image file (optional)
+    Form-data fields:
+        front     : image file (required)
+        left      : image file (optional, profile shot)
+        right     : image file (optional, profile shot)
+        mirror    : 'true' if input is a mirrored selfie (auto-flip applied)
+        gender    : 'M' | 'F' | 'U' (adjusts IOD-mm scale baseline)
+        session_id: reuse existing session_id, else a new one is returned
+        include_points : '1' to include the full 478-point coordinate arrays
 
-    Optional query/body flag:
-        include_points=1 → return full 478-point arrays (heavy, debug only)
+    Returns the per-angle foundation analysis + a session_id which downstream
+    engine endpoints can reuse to avoid re-processing the image.
     """
     try:
         from vedic.face_reading.landmarks import extract_landmarks, landmark_set_to_dict
+        from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
 
     include_points = (request.values.get("include_points", "0") in ("1", "true", "yes"))
+    mirror = (request.values.get("mirror", "false").lower() in ("1", "true", "yes"))
+    gender = (request.values.get("gender", "U") or "U").upper()
+    if gender not in ("M", "F", "U"):
+        gender = "U"
+    session_id = request.values.get("session_id") or session_cache.new_session_id()
 
     angles_to_check = ("front", "left", "right")
     results = {}
+    cached_landmark_sets = {}     # angle → LandmarkSet (kept in session for engines)
     overall_issues = []
 
     for angle in angles_to_check:
@@ -287,7 +335,7 @@ def face_reading_extract():
                 return jsonify({
                     "ok": False,
                     "error": "missing_front_image",
-                    "hint": "POST a multipart form with field name 'front' (required), 'left' and 'right' optional.",
+                    "hint": "POST multipart form with field 'front' (required), 'left'/'right' optional.",
                 }), 400
             continue
         try:
@@ -296,7 +344,9 @@ def face_reading_extract():
                 results[angle] = {"angle": angle, "error": "empty_file"}
                 overall_issues.append(f"{angle}: empty_file")
                 continue
-            ls = extract_landmarks(data, angle=angle)
+            # Profile shots: skip skin/hairline/features (front-only)
+            ls = extract_landmarks(data, angle=angle, mirror=mirror, gender=gender)
+            cached_landmark_sets[angle] = ls
             results[angle] = landmark_set_to_dict(ls, include_points=include_points)
             for iss in ls.quality.issues:
                 overall_issues.append(f"{angle}: {iss}")
@@ -304,69 +354,151 @@ def face_reading_extract():
             results[angle] = {"angle": angle, "error": f"processing_failed: {e}"}
             overall_issues.append(f"{angle}: processing_failed")
 
-    # Pass/fail decision: front must score ≥ 60 for downstream engines to run
+    # Cache for downstream engines
+    session_cache.put(session_id, {
+        "landmark_sets": cached_landmark_sets,
+        "mirror": mirror,
+        "gender": gender,
+    })
+
+    # Pass/fail decision
     front_q = results.get("front", {}).get("quality", {})
     front_score = front_q.get("score", 0)
     ready_for_engines = front_score >= 60
-
-    # Extra hard-fails (regardless of score)
     if front_q.get("face_count", 0) > 1:
         ready_for_engines = False
 
     return jsonify({
         "ok": True,
         "step": "0_foundation",
-        "version": 2,
+        "version": 3,
+        "session_id": session_id,
+        "ttl_seconds": 30 * 60,
+        "input_params": {"mirror": mirror, "gender": gender},
         "ready_for_engines": ready_for_engines,
         "front_score": front_score,
         "issues": overall_issues,
         "angles_processed": [a for a in angles_to_check if a in results],
         "foundation_features": {
-            "exif_rotation":      True,
-            "heic_support":       True,
-            "multi_face_check":   True,
-            "iris_landmarks":     True,
-            "skin_sampling":      True,
-            "hairline_estimate":  True,
-            "expression_check":   True,
-            "occlusion_check":    True,
-            "profile_processing": True,
+            "input_validation":      True,
+            "file_size_cap":         True,
+            "magic_byte_guard":      True,
+            "exif_rotation":         True,
+            "heic_support":          True,
+            "auto_downscale":        True,
+            "mirror_unflip":         True,
+            "white_balance":         True,
+            "multi_face_check":      True,
+            "edge_clipping_check":   True,
+            "distance_estimate":     True,
+            "portrait_blur_check":   True,
+            "pitch_wrap_fix":        True,
+            "iris_landmarks":        True,
+            "iris_mm_scale":         True,
+            "pupil_dilation":        True,
+            "gaze_direction":        True,
+            "skin_sampling":         True,
+            "hairline_estimate":     True,
+            "moles_detection":       True,
+            "oiliness_estimate":     True,
+            "wrinkle_detection":     True,
+            "dark_circles":          True,
+            "beard_mask":            True,
+            "eyebrow_density":       True,
+            "hair_color":            True,
+            "expression_check":      True,
+            "occlusion_check":       True,
+            "profile_processing":    True,
+            "iod_baseline_gender":   True,
+            "session_caching":       True,
+            "gzip_compression":      True,
+            "rate_limiting":         True,
         },
         "results": results,
     }), 200
 
 
+@app.route("/api/face_reading/session/<session_id>", methods=["GET"])
+def face_reading_session(session_id: str):
+    """Inspect a cached foundation session (debug + engine status check)."""
+    try:
+        from vedic.face_reading import session_cache
+        from vedic.face_reading.landmarks import landmark_set_to_dict
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
+    payload = session_cache.get(session_id)
+    if payload is None:
+        return jsonify({"ok": False, "error": "session_not_found_or_expired"}), 404
+    summaries = {a: landmark_set_to_dict(ls)
+                 for a, ls in payload["landmark_sets"].items()}
+    return jsonify({
+        "ok": True,
+        "session_id": session_id,
+        "input_params": {"mirror": payload.get("mirror"),
+                         "gender": payload.get("gender")},
+        "angles": list(payload["landmark_sets"].keys()),
+        "summaries": summaries,
+        "store_stats": session_cache.stats(),
+    }), 200
+
+
 @app.route("/api/face_reading/analyze", methods=["POST"])
+@_rate_limit("10 per minute")
 def face_reading_analyze():
     """Run all available face-reading engines on the supplied selfies.
 
     Form-data fields:
-        front : image file (required)
-        left  : optional
-        right : optional
+        front      : image file (required, OR pass session_id of a previous /extract call)
+        left       : optional
+        right      : optional
+        mirror     : 'true' if input is a mirrored selfie
+        gender     : 'M' | 'F' | 'U'
+        session_id : reuse foundation cache from a previous /extract (skips re-extraction)
 
     Engines completed so far:
-        ✓ Engine 1: Anthropometry (32-point measurements + ratios)
-
-    More engines (Symmetry, Phi, fWHR, Vedic, Fusion, AI Narrator) attach
-    in the same response object as they're built.
+        ✓ Engine 1: Anthropometry  (32-point measurements + ratios)
+        ✓ Engine 2: Symmetry       (pose-corrected 3D + naadi)
     """
     try:
         from vedic.face_reading.landmarks import extract_landmarks
         from vedic.face_reading import anthropometry as eng1
         from vedic.face_reading import symmetry as eng2
+        from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
 
-    front_file = request.files.get("front")
-    if front_file is None:
-        return jsonify({"ok": False, "error": "missing_front_image"}), 400
+    mirror = (request.values.get("mirror", "false").lower() in ("1", "true", "yes"))
+    gender = (request.values.get("gender", "U") or "U").upper()
+    if gender not in ("M", "F", "U"):
+        gender = "U"
+    session_id = request.values.get("session_id")
 
-    front_bytes = front_file.read()
-    if not front_bytes:
-        return jsonify({"ok": False, "error": "empty_front_image"}), 400
+    front_ls = None
+    # ── Try cached session first (free re-runs) ────────────────────────────
+    if session_id:
+        cached = session_cache.get(session_id)
+        if cached and "front" in cached.get("landmark_sets", {}):
+            front_ls = cached["landmark_sets"]["front"]
 
-    front_ls = extract_landmarks(front_bytes, angle="front")
+    # ── Fall back to uploaded file ─────────────────────────────────────────
+    if front_ls is None:
+        front_file = request.files.get("front")
+        if front_file is None:
+            return jsonify({"ok": False,
+                            "error": "missing_front_image_or_valid_session_id"}), 400
+        front_bytes = front_file.read()
+        if not front_bytes:
+            return jsonify({"ok": False, "error": "empty_front_image"}), 400
+        front_ls = extract_landmarks(front_bytes, angle="front",
+                                     mirror=mirror, gender=gender)
+        if session_id is None:
+            session_id = session_cache.new_session_id()
+        session_cache.put(session_id, {
+            "landmark_sets": {"front": front_ls},
+            "mirror": mirror,
+            "gender": gender,
+        })
+
     if not front_ls.quality.face_detected:
         return jsonify({
             "ok": False,

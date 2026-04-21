@@ -47,30 +47,31 @@ fi
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
 echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
-# --- Metro served via Replit's built-in Expo dev domain ---
-# Replit provides a stable HTTPS proxy (REPLIT_EXPO_DEV_DOMAIN) for Metro
-# that doesn't require any third-party tunnel. This is far more reliable
-# than localtunnel/ngrok which keep failing.
+# --- Metro tunnel via localtunnel (stable subdomain) ---
+# trycloudflare.com subdomains don't resolve from the Replit container's
+# DNS, so we stay on localtunnel which has a working stable subdomain.
+# The lt client occasionally idle-disconnects — supervisor loop restarts
+# it within 3s, so the URL stays the same across reconnects.
 METRO_PORT="${PORT:-18987}"
 METRO_SUB="cosmiclens-metro"
+METRO_HOST="${METRO_SUB}.loca.lt"
+METRO_PUBLIC_URL="https://$METRO_HOST"
 
-# Expose Metro via localtunnel with stable subdomain — same URL every restart.
 pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
+pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
 sleep 1
 LT_METRO_LOG="/tmp/lt-metro.log"
 > "$LT_METRO_LOG"
 (
   while true; do
     echo "[lt-metro] starting tunnel attempt"
-    lt --port "${METRO_PORT}" --subdomain "${METRO_SUB}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+    lt --port "${METRO_PORT}" --subdomain "${METRO_SUB}" 2>&1 \
+      | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
     echo "[lt-metro] exited; retrying in 3s" | tee -a "$LT_METRO_LOG"
     sleep 3
   done
 ) &
 LT_METRO_PID=$!
-
-METRO_HOST="${METRO_SUB}.loca.lt"
-METRO_PUBLIC_URL="https://$METRO_HOST"
 
 export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
 export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"

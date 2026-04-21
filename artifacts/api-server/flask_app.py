@@ -305,15 +305,33 @@ def face_reading_extract():
             overall_issues.append(f"{angle}: processing_failed")
 
     # Pass/fail decision: front must score ≥ 60 for downstream engines to run
-    front_score = results.get("front", {}).get("quality", {}).get("score", 0)
+    front_q = results.get("front", {}).get("quality", {})
+    front_score = front_q.get("score", 0)
     ready_for_engines = front_score >= 60
+
+    # Extra hard-fails (regardless of score)
+    if front_q.get("face_count", 0) > 1:
+        ready_for_engines = False
 
     return jsonify({
         "ok": True,
         "step": "0_foundation",
+        "version": 2,
         "ready_for_engines": ready_for_engines,
         "front_score": front_score,
         "issues": overall_issues,
+        "angles_processed": [a for a in angles_to_check if a in results],
+        "foundation_features": {
+            "exif_rotation":      True,
+            "heic_support":       True,
+            "multi_face_check":   True,
+            "iris_landmarks":     True,
+            "skin_sampling":      True,
+            "hairline_estimate":  True,
+            "expression_check":   True,
+            "occlusion_check":    True,
+            "profile_processing": True,
+        },
         "results": results,
     }), 200
 

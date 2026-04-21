@@ -1462,6 +1462,27 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **84 pages** (was 80 for T8-only), Tier 9 spans p51-58 with full Ashutosh-voice AI narration ("Rahul bhai, ek ajeeb si yaad aati hai mujhe — jaise train ke platform par bachpan me khade the, aur papa ne seedha haath pakad liya..." for father_dharma; rich numerology family-style for driver-6/Venus harmonizer). All 3 architect-flagged severe issues (node-gate gap, Putra scoring set, weak validators) fixed and verified.
 
-### Phase 5d — Tiers 10-17 — PENDING
+### Phase 5d — Tier 10 (Transits, Sade-Sati & Yearly Forecast) ✅ COMPLETE (2026-04-21)
+
+**Tier 10 — 7 cards** (`vedic/numerology/transits.py` ~330 lines, NEW):
+1. **Sade-Sati / Shani-Dhaiya status** — live Saturn (Lahiri sidereal) vs natal Moon: RISING (12th from Moon) / PEAK (1st = on Moon) / SETTING (2nd from Moon); Dhaiya/Ardha-Ashtama (4th); Ashtama-Shani (8th); else NO-SADE-SATI with house-from-Moon reported.
+2. **Jupiter Gochar** — 12-house verdict table from natal Moon (FAVOURABLE 2/5/7/9/11; DIFFICULT 3/4/8/12; MIXED 1/6/10).
+3. **Rahu-Ketu axis** — opposite-sign live (Ketu = Rahu+6), per-house notes for both nodes from Lagna.
+4. **Three-layer Dasha (MD → AD → PD)** — walks `dashas[].subDashas.subDashas` to find current MD/AD/PD with end dates + each lord's natal house.
+5. **Personal Year + Personal Month** — canonical formula `_reduce(_reduce(month) + _reduce(day) + _reduce(year))`; 9 themes.
+6. **12-month Sun-transit outlook** — transiting Sun sign at mid-month for next 12 months → natal-house theme.
+7. **Synthesis** — combines all live anchors (Saturn-sign, Jupiter-sign, Rahu-sign, MD lord, PY number).
+
+**Engineering details**:
+- `compute_transits_bundle(kundli, dob, driver, conductor, today=None)` with hard data gate (refuses if asc/9-grahas missing OR pyswisseph unavailable). Live transits via `swisseph` `swe.set_sid_mode(swe.SIDM_LAHIRI)` at midnight UT.
+- 5 new AI specs: `t10.sade_sati`, `t10.jupiter_gochar`, `t10.dasha_layers`, `t10.personal_year`, `t10.year_synthesis` (flagship AI count: **46 → 51**).
+- 5 new multi-anchor validators: quadruple anchor on `tier10.sade_sati` (Saturn + current Saturn sign + natal Moon sign + verdict/phase token); triple on the rest.
+- Wired in `render_part2_pdf` between Tier 9 and identity story.
+
+**Personal-Year unification fix** (architect-flagged UX trust risk): `narratives.monthly_forecast_pack` previously used `(driver+conductor+year)` — different from canonical `(month+day+year)` used by Tier 10, career.py, numerology_pdf.py, numerology_pdf_part2.py. Now accepts `dob=` kwarg and uses canonical formula → **single Personal Year value across the entire report**. Verified: PY = 3 consistently for Rahul Sharma 1990-05-15 in 2026 (was conflicting 1 vs 3 across sections).
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, today=2026-04-21)**: HTTP 200, **92 pages** (was 84 for T9-only), Tier 10 spans p41-44. Live computed: Saturn=Pisces (H4 from Moon=Sagittarius → Ardha-Ashtama Dhaiya zone), Jupiter=Gemini (H7 from Moon → FAVOURABLE), Rahu=Aquarius/Ketu=Leo, MD Rahu→AD Venus→PD Mercury all with end dates. Personal Year = 3 (EXPANSION & CREATIVITY) consistent across all 7+ mentions in the PDF. Architect review: PASS, no Sev-1 blockers; only critical issue (dual PY formula) fixed.
+
+### Phase 5d — Tiers 11-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

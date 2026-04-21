@@ -340,6 +340,57 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         # Must mention driver number + driver planet (dual anchor)
         lambda f, t: _has_num(t, f.get("driver_number"))
                      and _has_word(t, f.get("driver_planet")),
+    # ── Tier 10 — Transits, Sade-Sati & Yearly Forecast ─────────────
+    # Each validator anchors on locked transit signs/houses + verdict
+    # tokens to prevent generic "Saturn troubles you" puff. Ensures AI
+    # actually references the live sky vs natal chart.
+    "tier10.sade_sati":
+        # Quadruple anchor: Saturn token + current Saturn sign + natal Moon
+        # sign + verdict OR phase token (so AI cannot say "Sade-Sati" if
+        # engine returned NO-SADE-SATI, and vice versa).
+        lambda f, t: (_has_word(t, "Saturn") or _has_word(t, "Shani")
+                      or _has_word(t, "शनि"))
+                     and _has_word(t, f.get("saturn_sign"))
+                     and _has_word(t, f.get("natal_moon_sign"))
+                     and (
+                         any(_has_word(t, tok)
+                             for tok in (f.get("verdict") or "").replace("-", " ").split()
+                             if len(tok) >= 3)
+                         or any(_has_word(t, tok)
+                                for tok in (f.get("phase") or "").replace("-", " ").split()
+                                if len(tok) >= 4)
+                     ),
+    "tier10.jupiter_gochar":
+        # Triple anchor: Jupiter token + current Jupiter sign + verdict token
+        lambda f, t: (_has_word(t, "Jupiter") or _has_word(t, "Brihaspati")
+                      or _has_word(t, "बृहस्पति") or _has_word(t, "Guru"))
+                     and _has_word(t, f.get("jupiter_sign"))
+                     and any(
+                         _has_word(t, tok) for tok in
+                         (f.get("verdict") or "").lower().split()
+                         if len(tok) >= 4
+                     ),
+    "tier10.dasha_layers":
+        # Triple anchor: MD lord + AD lord names + MD-house number
+        lambda f, t: _has_word(t, f.get("md_lord"))
+                     and _has_word(t, f.get("ad_lord"))
+                     and (_has_num(t, f.get("md_house")) if f.get("md_house") else True),
+    "tier10.personal_year":
+        # Triple anchor: personal year number + current calendar year +
+        # locked theme token (FRESH START / EXPANSION / etc.)
+        lambda f, t: _has_num(t, f.get("personal_year"))
+                     and _has_num(t, f.get("current_year"))
+                     and any(
+                         _has_word(t, tok)
+                         for tok in (f.get("personal_year_theme") or "").replace("&", " ").split()
+                         if len(tok) >= 4
+                     ),
+    "tier10.year_synthesis":
+        # Triple anchor: MD lord + personal year number + current calendar year
+        # so AI cannot deliver a generic "your year ahead" closing.
+        lambda f, t: _has_word(t, f.get("md_lord"))
+                     and _has_num(t, f.get("personal_year"))
+                     and _has_num(t, f.get("current_year")),
 }
 
 

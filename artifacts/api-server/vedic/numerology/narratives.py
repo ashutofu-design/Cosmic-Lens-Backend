@@ -1197,9 +1197,23 @@ _MONTH_THEMES = {
 
 
 def monthly_forecast_pack(driver: int, conductor: int, year: int = 2026,
-                          lang: str = "hinglish") -> Dict[str, Any]:
-    """Return 12-month forecast for given year — personal year/month + theme + best dates."""
-    personal_year = _reduce(driver + conductor + _reduce(year))
+                          lang: str = "hinglish",
+                          dob: str | None = None) -> Dict[str, Any]:
+    """Return 12-month forecast for given year — personal year/month + theme + best dates.
+
+    Personal-Year formula: canonical numerology = reduce(DOB-month + DOB-day + year).
+    Falls back to (driver+conductor+year) only when dob is not supplied (legacy callers).
+    This keeps a single Personal-Year value across the whole report (matches Tier 10
+    transits.py, career.py, numerology_pdf.py, numerology_pdf_part2.py).
+    """
+    if dob:
+        try:
+            _y, _m, _d = (int(x) for x in dob.split("-"))
+            personal_year = _reduce(_reduce(_m) + _reduce(_d) + _reduce(year))
+        except Exception:
+            personal_year = _reduce(driver + conductor + _reduce(year))
+    else:
+        personal_year = _reduce(driver + conductor + _reduce(year))
 
     def _theme(pm: int, default: str) -> str:
         return _pick_extra(lang, _MONTH_THEMES_EN, _MONTH_THEMES_HI,

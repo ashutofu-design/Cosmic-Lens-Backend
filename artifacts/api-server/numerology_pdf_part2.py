@@ -2422,10 +2422,11 @@ def _day_dress_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 
 
 def _monthly_forecast_section(s, driver: int, conductor: int, year: int = 2026,
-                              lang: str = "hinglish") -> List[Any]:
+                              lang: str = "hinglish",
+                              dob: str | None = None) -> List[Any]:
     """12-month personal forecast — month-by-month theme + best dates."""
     flow: List[Any] = []
-    pack = _nr.monthly_forecast_pack(driver, conductor, year, lang)
+    pack = _nr.monthly_forecast_pack(driver, conductor, year, lang, dob=dob)
 
     title = _T(lang,
         f"🗓️ YOUR {year} — 12-MONTH FORECAST",
@@ -2775,11 +2776,12 @@ def _mantras_section(s, driver: int, lang: str = "hinglish") -> List[Any]:
 
 
 def _business_launch_section(s, driver: int, conductor: int, year: int = 2026,
-                             lang: str = "hinglish") -> List[Any]:
+                             lang: str = "hinglish",
+                             dob: str | None = None) -> List[Any]:
     """Business launch calculator — best months, name, partners, direction."""
     flow: List[Any] = []
     # Recompute with proper conductor
-    forecast = _nr.monthly_forecast_pack(driver, conductor, year, lang)
+    forecast = _nr.monthly_forecast_pack(driver, conductor, year, lang, dob=dob)
     pack = _nr.business_launch_pack(driver, year, lang)
     pack["best_launch_months"] = [
         {"month": m["month"], "verdict": m["verdict"]}
@@ -6250,6 +6252,203 @@ def _tier9_family_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier10_transits_section(s, name: str, dob: str, driver: int,
+                              conductor: int, *, kundli: Dict[str, Any],
+                              lang: str = "hinglish",
+                              ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 10 — Transits, Sade-Sati & Yearly Forecast."""
+    from vedic.numerology.transits import compute_transits_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_transits_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    sade = bundle["sade_sati"]
+    jup = bundle["jupiter_gochar"]
+    rahu = bundle["rahu_ketu_axis"]
+    dl = bundle["dasha_layers"]
+    ny = bundle["numerology_yearly"]
+    out12 = bundle["twelve_month_outlook"]
+    syn = bundle["synthesis_verdict"]
+    asof = bundle.get("as_of_date", "—")
+
+    # ── Title + numerology opener ────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🪐 TIER 10 — TRANSITS, SADE-SATI & YEARLY FORECAST",
+        "🪐 टियर 10 — गोचर, साढ़ेसाती और वार्षिक पूर्वानुमान",
+        "🪐 TIER 10 — TRANSITS, SADE-SATI & YEARLY FORECAST"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "career", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        f"Tier 10 maps your <b>current sky vs your natal chart</b> as of <b>{asof}</b> — "
+        f"Sade-Sati / Saturn-Dhaiya status (the 7.5-year Saturn cycle), Jupiter Gochar "
+        f"(year-ahead favourable/difficult signature), Rahu-Ketu axis transit (1.5-year "
+        f"karmic-axis impact), three-layer Dasha (Mahadasha → Antardasha → Pratyantardasha), "
+        f"your personal-year + personal-month numerology, plus a 12-month theme outlook driven "
+        f"by transiting Sun moving through your natal houses.",
+        f"टियर 10 आपके <b>वर्तमान आकाश बनाम जन्मकुंडली</b> को दिखाता है ({asof} तक) — "
+        f"साढ़ेसाती / शनि-ढैय्या स्थिति, बृहस्पति गोचर (वार्षिक रुझान), राहु-केतु अक्ष गोचर, "
+        f"तीन-स्तरीय दशा (महा-अंतर-प्रत्यंतर), मूलांक का व्यक्तिगत वर्ष व माह, और 12-माह की थीम।",
+        f"Tier 10 aapke <b>current sky vs janma-kundli</b> ka mapping hai ({asof} tak) — "
+        f"Sade-Sati / Shani-Dhaiya status, Brihaspati Gochar (year-ahead trend), "
+        f"Rahu-Ketu axis transit, three-layer dasha (MD/AD/PD), aapka numerology personal-year "
+        f"+ personal-month, aur 12-mahine ki theme outlook.",
+        bg="#EEF2FF", border="#3730A3"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Sade-Sati / Saturn status (AI) ────────────────────────
+    sade_facts = (
+        f"<b>Saturn currently in:</b> {sade.get('saturn_sign_now','—')}<br/>"
+        f"<b>Your natal Moon sign:</b> {sade.get('natal_moon_sign','—')}<br/>"
+        f"<b>Saturn house from natal Moon:</b> {sade.get('saturn_house_from_moon','—')}<br/>"
+        f"<b>Saturn house from your Lagna:</b> {sade.get('saturn_house_from_lagna','—')}<br/>"
+        f"<b>Verdict:</b> {sade.get('verdict','—')}<br/>"
+        f"<b>Phase:</b> {sade.get('phase','—')}<br/>"
+        f"<i>{sade.get('note','—')}</i>"
+    )
+    ai_txt = ai_texts.get("t10.sade_sati", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + sade_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🪐 SADE-SATI / SATURN-DHAIYA STATUS",
+           "1️⃣  🪐 साढ़ेसाती / शनि-ढैय्या स्थिति",
+           "1️⃣  🪐 SADE-SATI / SHANI-DHAIYA STATUS"),
+        body,
+        bg_color=colors.HexColor("#E5E7EB"), border_color=colors.HexColor("#1F2937"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Jupiter Gochar (AI) ───────────────────────────────────
+    jup_facts = (
+        f"<b>Jupiter currently in:</b> {jup.get('jupiter_sign_now','—')}<br/>"
+        f"<b>Jupiter house from natal Moon:</b> {jup.get('jupiter_house_from_moon','—')}<br/>"
+        f"<b>Jupiter house from your Lagna:</b> {jup.get('jupiter_house_from_lagna','—')}<br/>"
+        f"<b>Verdict:</b> {jup.get('verdict','—')}<br/>"
+        f"<i>{jup.get('note','—')}</i><br/>"
+        f"<b>Window valid until ~:</b> {jup.get('year_window_end','—')} "
+        f"(Jupiter changes sign roughly every 12 months)"
+    )
+    ai_txt = ai_texts.get("t10.jupiter_gochar", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + jup_facts
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🪔 JUPITER GOCHAR (Year-Ahead Signature)",
+           "2️⃣  🪔 बृहस्पति गोचर (वार्षिक संकेत)",
+           "2️⃣  🪔 JUPITER GOCHAR — Year-Ahead Signature"),
+        body,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Rahu-Ketu axis (no AI but rich facts) ─────────────────
+    rk_lines = [
+        f"<b>Rahu currently in:</b> {rahu.get('rahu_sign_now','—')} "
+        f"(House {rahu.get('rahu_house_from_lagna','—')} from Lagna)",
+        f"<b>Ketu currently in:</b> {rahu.get('ketu_sign_now','—')} "
+        f"(House {rahu.get('ketu_house_from_lagna','—')} from Lagna)",
+        f"<b>Rahu (where karma is amplified):</b> {rahu.get('rahu_note','—')}",
+        f"<b>Ketu (where to detach / spiritualize):</b> {rahu.get('ketu_note','—')}",
+        f"<i>Rahu-Ketu axis stays in same sign-pair for ~18 months. "
+        f"Themes above will dominate transformation arcs of this period.</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🐉 RAHU-KETU AXIS TRANSIT (18-Month Karmic Window)",
+           "3️⃣  🐉 राहु-केतु अक्ष गोचर (18-माह कर्मिक खिड़की)",
+           "3️⃣  🐉 RAHU-KETU AXIS TRANSIT"),
+        "<br/>".join(rk_lines),
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Three-layer Dasha (AI) ────────────────────────────────
+    dl_facts = (
+        f"<b>Mahadasha (lord):</b> {dl.get('md','—')} "
+        f"(House {dl.get('md_house','—')}, ends {dl.get('md_end','—')})<br/>"
+        f"<b>Antardasha (lord):</b> {dl.get('ad','—')} "
+        f"(House {dl.get('ad_house','—')}, ends {dl.get('ad_end','—')})<br/>"
+        f"<b>Pratyantardasha (lord):</b> {dl.get('pd','—')} "
+        f"(House {dl.get('pd_house','—')}, ends {dl.get('pd_end','—')})<br/>"
+        f"<i>The current life-script = MD (multi-year theme) "
+        f"× AD (months-to-year sub-theme) × PD (weeks-level micro-theme).</i>"
+    )
+    ai_txt = ai_texts.get("t10.dasha_layers", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + dl_facts
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  ⏳ THREE-LAYER DASHA (Maha → Antar → Pratyantar)",
+           "4️⃣  ⏳ तीन-स्तरीय दशा (महा → अंतर → प्रत्यंतर)",
+           "4️⃣  ⏳ THREE-LAYER DASHA — Maha → Antar → Pratyantar"),
+        body,
+        bg_color=colors.HexColor("#E0F2FE"), border_color=colors.HexColor("#0369A1"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Personal Year + Month (AI) ────────────────────────────
+    ny_facts = (
+        f"<b>Current Year:</b> {ny.get('current_year','—')}<br/>"
+        f"<b>Personal Year:</b> {ny.get('personal_year','—')} → "
+        f"theme: <b>{ny.get('personal_year_theme','—')}</b><br/>"
+        f"<b>Personal Month:</b> {ny.get('personal_month','—')} → "
+        f"<i>{ny.get('personal_month_flavor','—')}</i><br/><br/>"
+        f"<b>Do this year:</b> {ny.get('personal_year_do','—')}<br/>"
+        f"<b>Avoid this year:</b> {ny.get('personal_year_avoid','—')}<br/>"
+        f"<b>Lucky months for Driver-{driver}:</b> "
+        f"{', '.join(str(m) for m in ny.get('lucky_months_this_year', []))}"
+    )
+    ai_txt = ai_texts.get("t10.personal_year", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + ny_facts
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  🔢 PERSONAL YEAR + PERSONAL MONTH",
+           "5️⃣  🔢 व्यक्तिगत वर्ष + व्यक्तिगत माह",
+           "5️⃣  🔢 PERSONAL YEAR + PERSONAL MONTH"),
+        body,
+        bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. 12-Month Outlook (no AI, table) ───────────────────────
+    out_lines = ["<b>Sun-transit theme by month (next 12 months):</b><br/>"]
+    for row in out12:
+        out_lines.append(
+            f"&nbsp;&nbsp;▸ <b>{row.get('month_name','—')}</b> — "
+            f"Sun in {row.get('sun_sign','—')} (House {row.get('sun_house','—')}) → "
+            f"{row.get('theme','—')}"
+        )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  📅 12-MONTH SUN-TRANSIT THEME OUTLOOK",
+           "6️⃣  📅 12-माह सूर्य-गोचर थीम पूर्वानुमान",
+           "6️⃣  📅 12-MONTH SUN-TRANSIT THEME OUTLOOK"),
+        "<br/>".join(out_lines),
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Synthesis (AI year-summary) ───────────────────────────
+    ai_txt = ai_texts.get("t10.year_synthesis", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + \
+           f"<b>{syn}</b><br/><br/>" \
+           "<i>Reminder: Transits describe the WEATHER of the current sky; your natal chart " \
+           "remains the CLIMATE. Use favourable Jupiter windows for big launches; conserve " \
+           "during Sade-Sati / Ashtama-Shani / difficult Jupiter periods.</i>"
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  📜 YEAR-AHEAD SYNTHESIS",
+           "7️⃣  📜 वार्षिक निष्कर्ष",
+           "7️⃣  📜 YEAR-AHEAD SYNTHESIS"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "career", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -7185,6 +7384,96 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier9 facts build failed: %s", exc)
 
+    # ── Tier 10 facts (Transits, Sade-Sati & Yearly Forecast) ──
+    if kundli is not None:
+        try:
+            from vedic.numerology.transits import compute_transits_bundle
+            tb = compute_transits_bundle(kundli, dob, driver, conductor)
+            if tb.get("available"):
+                tsade = tb["sade_sati"]
+                tjup = tb["jupiter_gochar"]
+                tdl = tb["dasha_layers"]
+                tny = tb["numerology_yearly"]
+
+                specs.append({
+                    "key": "t10.sade_sati",
+                    "section_key": "tier10.sade_sati",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "saturn_sign": tsade.get("saturn_sign_now"),
+                        "natal_moon_sign": tsade.get("natal_moon_sign"),
+                        "saturn_house_from_moon": tsade.get("saturn_house_from_moon"),
+                        "verdict": tsade.get("verdict"),
+                        "phase": tsade.get("phase"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t10.jupiter_gochar",
+                    "section_key": "tier10.jupiter_gochar",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "jupiter_sign": tjup.get("jupiter_sign_now"),
+                        "jupiter_house_from_moon": tjup.get("jupiter_house_from_moon"),
+                        "verdict": tjup.get("verdict"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t10.dasha_layers",
+                    "section_key": "tier10.dasha_layers",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "md_lord": tdl.get("md"),
+                        "ad_lord": tdl.get("ad"),
+                        "pd_lord": tdl.get("pd"),
+                        "md_house": tdl.get("md_house"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t10.personal_year",
+                    "section_key": "tier10.personal_year",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "personal_year": tny.get("personal_year"),
+                        "personal_year_theme": tny.get("personal_year_theme"),
+                        "personal_month": tny.get("personal_month"),
+                        "current_year": tny.get("current_year"),
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t10.year_synthesis",
+                    "section_key": "tier10.year_synthesis",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "saturn_verdict": tsade.get("verdict"),
+                        "jupiter_verdict": tjup.get("verdict"),
+                        "md_lord": tdl.get("md"),
+                        "personal_year": tny.get("personal_year"),
+                        "current_year": tny.get("current_year"),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier10 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -7353,6 +7642,13 @@ def render_part2_pdf(*,
                                         ai_texts=ai_texts)
         story.append(PageBreak())
 
+    # Pages 107-118 — 🪐 TIER 10 — Transits, Sade-Sati & Yearly Forecast
+    if kundli is not None:
+        story += _tier10_transits_section(s, name, dob, driver, conductor,
+                                           kundli=kundli, lang=lang,
+                                           ai_texts=ai_texts)
+        story.append(PageBreak())
+
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)
     story += _life_essence_section(s, driver, lang=lang)
     story.append(PageBreak())
@@ -7386,7 +7682,7 @@ def render_part2_pdf(*,
     # Page 10 — 🗓️ 12-Month Forecast (current year)
     from datetime import datetime
     _yr = datetime.now().year
-    story += _monthly_forecast_section(s, driver, conductor, year=_yr, lang=lang)
+    story += _monthly_forecast_section(s, driver, conductor, year=_yr, lang=lang, dob=dob)
     story.append(PageBreak())
 
     # Page 11 — 💑 Deep Compatibility (Love/Marriage/Business per number)
@@ -7402,7 +7698,7 @@ def render_part2_pdf(*,
     story.append(PageBreak())
 
     # Page 14 — 🏢 Business Launch Calculator
-    story += _business_launch_section(s, driver, conductor, year=_yr, lang=lang)
+    story += _business_launch_section(s, driver, conductor, year=_yr, lang=lang, dob=dob)
     story.append(PageBreak())
 
     # Page 15 — 🌟 Celebrity Match (famous people same driver)

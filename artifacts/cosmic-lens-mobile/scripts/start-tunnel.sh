@@ -56,12 +56,16 @@ pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
 sleep 1
 LT_METRO_LOG="/tmp/lt-metro.log"
 > "$LT_METRO_LOG"
+
+# Use a RANDOM subdomain (no --subdomain flag) so we never collide with a
+# stale claim on loca.lt's edge (which would cause 503 Tunnel Unavailable
+# even though the local lt client is healthy). Any random subdomain assigned
+# by the loca.lt server is fresh and uncontested.
 (
   while true; do
-    echo "[lt-metro] starting tunnel attempt"
-    lt --port "${METRO_PORT}" --subdomain "${METRO_SUB}" 2>&1 \
-      | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
-    echo "[lt-metro] exited; retrying in 3s" | tee -a "$LT_METRO_LOG"
+    echo "[lt-metro] starting tunnel attempt (random subdomain)"
+    lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+    echo "[lt-metro] exited; retrying in 3s"
     sleep 3
   done
 ) &

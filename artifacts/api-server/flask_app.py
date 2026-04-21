@@ -318,6 +318,75 @@ def face_reading_extract():
     }), 200
 
 
+@app.route("/api/face_reading/analyze", methods=["POST"])
+def face_reading_analyze():
+    """Run all available face-reading engines on the supplied selfies.
+
+    Form-data fields:
+        front : image file (required)
+        left  : optional
+        right : optional
+
+    Engines completed so far:
+        ✓ Engine 1: Anthropometry (32-point measurements + ratios)
+
+    More engines (Symmetry, Phi, fWHR, Vedic, Fusion, AI Narrator) attach
+    in the same response object as they're built.
+    """
+    try:
+        from vedic.face_reading.landmarks import extract_landmarks
+        from vedic.face_reading import anthropometry as eng1
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
+
+    front_file = request.files.get("front")
+    if front_file is None:
+        return jsonify({"ok": False, "error": "missing_front_image"}), 400
+
+    front_bytes = front_file.read()
+    if not front_bytes:
+        return jsonify({"ok": False, "error": "empty_front_image"}), 400
+
+    front_ls = extract_landmarks(front_bytes, angle="front")
+    if not front_ls.quality.face_detected:
+        return jsonify({
+            "ok": False,
+            "error": "no_face_detected_in_front",
+            "issues": front_ls.quality.issues,
+        }), 400
+
+    if front_ls.quality.score < 60:
+        return jsonify({
+            "ok": False,
+            "error": "front_quality_too_low",
+            "score": front_ls.quality.score,
+            "issues": front_ls.quality.issues,
+        }), 400
+
+    # ── Engine 1: Anthropometry ────────────────────────────────────────────
+    eng1_result = eng1.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+    )
+
+    return jsonify({
+        "ok": True,
+        "front_quality": {
+            "score": front_ls.quality.score,
+            "yaw": front_ls.quality.yaw_deg,
+            "roll": front_ls.quality.roll_deg,
+            "brightness": front_ls.quality.brightness,
+            "sharpness": front_ls.quality.sharpness,
+        },
+        "engines": {
+            "anthropometry": eng1_result,
+        },
+        "engines_complete": 1,
+        "engines_total": 20,
+    }), 200
+
+
 @app.route("/api/geocode", methods=["GET"])
 def geocode():
     import urllib.request, urllib.error, json as _json

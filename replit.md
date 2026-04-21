@@ -1534,6 +1534,25 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, hinglish)**: HTTP 200, **100 pages**. All 7 T13 cards rendered correctly. Verdict_token = `DELAYED-DHARMIC-PROGENY` (for this chart with Saturn-influenced 5th-house karma). D7 fallback message rendered cleanly when D7 chart not present in kundli build. Several T13 AI calls succeeded (`t13.putra_bhava`, `t13.putra_karaka` — visible in PDF text), rest fell back to static facts due to OpenAI 30k TPM rate-limit (expected, all structural facts still rendered). Architect review: **PASS** — Putra-yoga classical correctness confirmed (BPHS/Phaladeepika lineage), shapa detection logic sound, synthesis verdict-token decision tree correctly prioritises STRONG-SHAPA > BLESSED > DELAYED > KARMIC, D7 fallback graceful, validator anchors tight enough to block generic puff. Implementation marked **Ready for Production**.
 
-### Phase 5d — Tiers 14-17 — PENDING
+### Phase 5d — Tier 14 (Property, Vehicles & Comforts Deep Audit) ✅ COMPLETE (2026-04-21)
+
+**Tier 14 — 7 cards** (`vedic/numerology/property.py` ~580 lines, NEW):
+1. **Sukha Bhava** — 4th house sign + lord (planet, sign, dignity, house), occupants, 0–100 strength score, property indication by 4th sign (Aries→hill-land, Taurus→fertile farms, Cancer→ancestral home, Pisces→water-front, etc.).
+2. **Bhumi/Vahana Karakas** — Mars (primary land karaka), Venus (vehicles & comforts), Saturn (secondary land/real-estate); each with sign + house + dignity. Vehicle indication picked from Venus's sign.
+3. **D4 Chaturthamsa Picture** — D4 Lagna + D4-4th sign + D4-4th lord + D4 4th-occupants + Mars-in-D4. Graceful fallback when D4 missing (renders explicit "data not available, using D1 only" notice).
+4. **Bhumi-Vahana Yogas Audit** — 7 classical yogas (4L+9L Bhagya-Sukha, Mars in 4th, Venus in 4th, Jupiter aspecting 4th, 4L in Kendra/Trikona, 4L+11L gain combo, Moon-in-4th in own/exalted) + 7 obstructions (Saturn/Rahu/Ketu/Sun/debilitated-Mars in 4th, 4L in Dusthana, debilitated Mars overall). Severity: BLESSED / MODERATE / CHALLENGED / DENSE-KARMA. 0–100 score.
+5. **Acquisition Timing Window** — current MD/AD vs activator set {4L, Mars, Venus, 2L, 11L} + 4th-occupants. Window status: ACTIVE / WARM / TACTICAL / PREP.
+6. **Vastu / Karmic Signatures** — Rahu/Ketu/Saturn/debilitated-Mars in 4th + 4L conjunctions with Rahu/Ketu (title-karma) + Matru-dosha. Verdict: STRONG-VASTU-DOSHA / MODERATE-KARMIC / LIGHT-KARMIC.
+7. **Synthesis + Property Profile + Vehicle + 6-Step Action Plan** — verdict tokens BLESSED-PROPERTY-PATH / DELAYED-DHARMIC-ACQUISITION / KARMIC-PROPERTY-PATH / VASTU-CLEANSING-REQUIRED.
+
+**T14 AI layer** — 6 specs added to `ai_narrator.py` (flagship count 68→74): `t14.sukha_bhava`, `t14.karakas`, `t14.d4_picture`, `t14.yogas_audit`, `t14.acquisition_timing`, `t14.property_synthesis`. Validators use multi-anchor strategy: 4th-sign + 4L-planet + house-num for Sukha Bhava; Mars + Venus + chart-locked sign + chart-locked house-num (quad anchor) for Karakas; D4/Chaturthamsa keyword + D4 4th-sign + D4 4th-lord (with D4-unavailable fallback path that allows narration mentioning "not available"/"fallback"/"D1") for D4 Picture; Bhumi/Vahana/Sukha keyword + severity token + 4L-planet for Yogas Audit; current-MD + current-AD + window-status keyword for Timing; 4th-sign + Mars/Venus + verdict-token for Synthesis.
+
+**Renderer pattern** — Reuses the locked T12/T13 layout-safety pattern (AI prose flowing Paragraph BEFORE facts-only `_premium_card`). Wrapped with numerology opener+closing using `life_area="wealth"` (property = material asset under Option D wealth framing). Wired into `render_part2_pdf` between T13 and identity-story sections.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, hinglish)**: HTTP 200, **96 pages**. All 7 T14 cards rendered (Sukha Bhava, Karakas, D4, Yogas, Timing, Vastu Signatures, Synthesis). T13 still intact in same render. Verdict_token = `BLESSED-PROPERTY-PATH` (this chart shows multiple Bhumi-Vahana yogas active with light Vastu-karmic load). D4 path triggered fallback message cleanly when D4 not in kundli build. Most T14 AI calls hit OpenAI 30k TPM rate-limit and rendered via static fallback — all structural facts (4th sign, 4L, Mars/Venus karakas, dasha window, verdict token) still present in PDF.
+
+**Architect review: PASS (after 3-fix iteration)**. Initial review flagged: (1) obstructions list truncated to 6 (broke "7-obstruction" spec), (2) docstring claimed dasha hard-gate but only asc+9-grahas gated, (3) `t14.karakas` validator too permissive + `t14.d4_picture` validator rejected legitimate fallback narration. All three fixed: obstructions now `[:7]`, docstring corrected to reflect soft-gated dasha + soft-gated D4, `t14.karakas` upgraded to quad anchor (Mars + Venus + sign + house-num), `t14.d4_picture` now branches on `available` flag with explicit fallback-marker validation. Re-smoke after fixes: 96 pages, BLESSED-PROPERTY-PATH verdict, all 7 cards verified. Implementation **Ready for Production**.
+
+### Phase 5d — Tiers 15-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

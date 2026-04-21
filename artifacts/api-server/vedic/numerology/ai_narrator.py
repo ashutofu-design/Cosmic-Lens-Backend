@@ -532,6 +532,70 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
                      and any(_has_word(t, tok) for tok in
                              (f.get("verdict_token") or "").split("-")
                              if len(tok) >= 5),
+    # ── Tier 14 — Property, Vehicles & Comforts Deep Audit ──────────
+    # Multi-anchor: 4th sign / 4L planet / Mars-Venus karakas / severity / verdict.
+    "tier14.sukha_bhava":
+        # Triple anchor: 4th sign + 4th lord planet + lord house number.
+        lambda f, t: _has_word(t, f.get("fourth_sign"))
+                     and _has_word(t, f.get("fourth_lord"))
+                     and (_has_num(t, f.get("lord_house"))
+                          if f.get("lord_house") else True),
+    "tier14.karakas":
+        # Quad anchor: Mars (Bhumi) + Venus (Vahana) + chart-locked sign +
+        # chart-locked house-num (mars_house OR venus_house) so generic prose
+        # without the user's specific placements cannot pass.
+        lambda f, t: (_has_word(t, "Mars") or _has_word(t, "Mangal")
+                      or _has_word(t, "Bhumi") or _has_word(t, "मंगल"))
+                     and (_has_word(t, "Venus") or _has_word(t, "Shukra")
+                          or _has_word(t, "Vahana") or _has_word(t, "शुक्र"))
+                     and (_has_word(t, f.get("mars_sign"))
+                          or _has_word(t, f.get("venus_sign")))
+                     and (_has_num(t, f.get("mars_house"))
+                          or _has_num(t, f.get("venus_house"))),
+    "tier14.d4_picture":
+        # When D4 is available: triple anchor (D4 keyword + D4 4th sign + D4 4th lord).
+        # When D4 is unavailable (available=False): allow narration that
+        # acknowledges the fallback by mentioning D4/Chaturthamsa keyword AND
+        # using a fallback marker ("not available" / "fallback" / "D1").
+        lambda f, t: (
+            ((_has_word(t, "Chaturthamsa") or _has_word(t, "Chaturthamsha")
+              or _has_word(t, "D4") or _has_word(t, "चतुर्थांश"))
+             and _has_word(t, f.get("d4_fourth_sign"))
+             and _has_word(t, f.get("d4_fourth_lord")))
+            if f.get("available")
+            else (
+                (_has_word(t, "Chaturthamsa") or _has_word(t, "D4")
+                 or _has_word(t, "चतुर्थांश"))
+                and (_has_word(t, "not available") or _has_word(t, "unavailable")
+                     or _has_word(t, "fallback") or _has_word(t, "D1")
+                     or _has_word(t, "missing") or _has_word(t, "उपलब्ध नहीं"))
+            )
+        ),
+    "tier14.yogas_audit":
+        # Triple anchor: Bhumi/Vahana/property keyword + severity token +
+        # 4th-lord planet name (chart-locked anchor).
+        lambda f, t: (_has_word(t, "Bhumi") or _has_word(t, "Vahana")
+                      or _has_word(t, "property") or _has_word(t, "Sukha")
+                      or _has_word(t, "भूमि") or _has_word(t, "वाहन"))
+                     and _has_word(t, f.get("severity"))
+                     and _has_word(t, f.get("fourth_lord")),
+    "tier14.acquisition_timing":
+        # Triple anchor: current MD lord + current AD lord + window-status keyword
+        # (ACTIVE / WARM / TACTICAL / PREP — at least one ≥4-char token).
+        lambda f, t: _has_word(t, f.get("current_md"))
+                     and _has_word(t, f.get("current_ad"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("window_status") or "").replace("-", " ").split()
+                             if len(tok) >= 4),
+    "tier14.property_synthesis":
+        # Triple anchor: 4th sign + Mars OR Venus karaka + verdict_token
+        # split on '-' (e.g. BLESSED-PROPERTY-PATH → at least one ≥5-char token).
+        lambda f, t: _has_word(t, f.get("fourth_sign"))
+                     and (_has_word(t, "Mars") or _has_word(t, "Venus")
+                          or _has_word(t, "Bhumi") or _has_word(t, "Vahana"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
 }
 
 

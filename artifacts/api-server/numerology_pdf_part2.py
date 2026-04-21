@@ -7054,6 +7054,214 @@ def _tier13_progeny_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier14_property_section(s, name: str, dob: str, driver: int,
+                               conductor: int, *, kundli: Dict[str, Any],
+                               lang: str = "hinglish",
+                               ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 14 — Property, Vehicles & Comforts Deep Audit."""
+    from vedic.numerology.property import compute_property_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_property_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    def _emit_ai(ai_txt: str) -> None:
+        if not ai_txt:
+            return
+        flow.append(Paragraph(_ai_to_html(ai_txt), ParagraphStyle(
+            "t14_ai", fontName=_F("reg", lang), fontSize=10,
+            textColor=TEXT_DARK, leading=14, spaceAfter=4)))
+        flow.append(Spacer(1, 2 * mm))
+
+    sb = bundle["sukha_bhava"]
+    kk = bundle["karakas"]
+    d4 = bundle["d4_picture"]
+    yog = bundle["yogas_audit"]
+    tim = bundle["timing"]
+    krm = bundle["karmic"]
+    syn = bundle["synthesis"]
+
+    # ── Title + numerology opener ────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🏠 TIER 14 — PROPERTY, VEHICLES & COMFORTS DEEP AUDIT",
+        "🏠 टियर 14 — संपत्ति, वाहन और सुख गहन जाँच",
+        "🏠 TIER 14 — PROPERTY, VEHICLES & COMFORTS DEEP AUDIT"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block as _open14
+    flow.extend(_open14(s, driver, conductor, "wealth", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Your <b>chart-based property & comforts prognosis</b> — Sukha Bhava (4th house "
+        "+ lord), Bhumi karaka Mars + Vahana karaka Venus + secondary land-karaka Saturn, "
+        "the D4 Chaturthamsa property chart, classical Bhumi-prapti / Vahana yogas + "
+        "obstructions, current dasha acquisition-timing window, karmic Vastu-dosha "
+        "signatures, and a synthesis verdict-token + property profile + vehicle "
+        "indication + 6-step action plan.",
+        "आपकी <b>कुंडली-आधारित संपत्ति-सुख भविष्यवाणी</b> — सुख भाव (4वाँ भाव+स्वामी), भूमि-कारक मंगल + "
+        "वाहन-कारक शुक्र + द्वितीय भू-कारक शनि, D4 चतुर्थांश संपत्ति-कुंडली, शास्त्रीय भूमि-प्राप्ति/वाहन योग "
+        "और बाधाएँ, वर्तमान दशा अधिग्रहण-खिड़की, कर्मिक वास्तु-दोष, और निष्कर्ष + संपत्ति-प्रोफ़ाइल + वाहन।",
+        "Aapki <b>chart-based property & comforts prognosis</b> — Sukha Bhava (4th house "
+        "+ lord), Bhumi-karaka Mars + Vahana-karaka Venus + Saturn (secondary), D4 "
+        "Chaturthamsa property chart, classical Bhumi-prapti / Vahana yogas aur "
+        "obstructions, current dasha acquisition-timing window, karmic Vastu-dosha "
+        "signatures, aur ek synthesis verdict-token + property profile + vehicle plan.",
+        bg="#EFF6FF", border="#1D4ED8"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Sukha Bhava (AI) ───────────────────────────────────────
+    sb_facts = (
+        f"<b>4th house sign:</b> {sb['fourth_sign']}<br/>"
+        f"<b>4th lord:</b> {sb['fourth_lord']} in H{sb['lord_house']} "
+        f"({sb['lord_sign']}, {sb['lord_dignity']})<br/>"
+        f"<b>4th occupants:</b> {', '.join(sb['occupants']) or '—'}<br/>"
+        f"<b>Strength score:</b> {sb['strength_score']}/100 — <b>{sb['verdict']}</b><br/><br/>"
+        f"<b>Property indication from {sb['fourth_sign']}:</b> {sb['property_indication']}"
+    )
+    _emit_ai(ai_texts.get("t14.sukha_bhava", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🏠 SUKHA BHAVA — 4th House & Lord (Comfort Foundation)",
+           "1️⃣  🏠 सुख भाव — 4वाँ भाव और स्वामी",
+           "1️⃣  🏠 SUKHA BHAVA — 4th House & Lord"),
+        sb_facts,
+        bg_color=colors.HexColor("#EFF6FF"), border_color=colors.HexColor("#1D4ED8"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Bhumi/Vahana Karakas (AI) ──────────────────────────────
+    kk_facts = (
+        f"<b>Bhumi karaka (land):</b> Mars in {kk['mars_sign']} H{kk['mars_house']} "
+        f"({kk['mars_dignity']})<br/>"
+        f"<b>Vahana karaka (vehicles):</b> Venus in {kk['venus_sign']} H{kk['venus_house']} "
+        f"({kk['venus_dignity']})<br/>"
+        f"<b>Secondary land-karaka:</b> Saturn in {kk['saturn_sign']} H{kk['saturn_house']} "
+        f"({kk['saturn_dignity']})<br/><br/>"
+        f"<b>Vehicle indication from Venus in {kk['venus_sign']}:</b> {kk['vehicle_indication']}<br/><br/>"
+        f"<i>{kk['note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t14.karakas", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🚗 BHUMI & VAHANA KARAKAS — Mars + Venus + Saturn",
+           "2️⃣  🚗 भूमि और वाहन कारक — मंगल + शुक्र + शनि",
+           "2️⃣  🚗 BHUMI & VAHANA KARAKAS — Mars + Venus + Saturn"),
+        kk_facts,
+        bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#991B1B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. D4 Chaturthamsa Picture (AI) ───────────────────────────
+    if d4.get("available"):
+        d4_facts = (
+            f"<b>D4 Ascendant:</b> {d4['d4_ascendant']}<br/>"
+            f"<b>D4 4th sign:</b> {d4['d4_fourth_sign']} (lord {d4['d4_fourth_lord']})<br/>"
+            f"<b>D4 4th occupants:</b> {', '.join(d4['d4_fourth_occupants']) or '—'}<br/>"
+            f"<b>Mars in D4:</b> {d4['mars_d4_sign']}<br/><br/>"
+            f"<i>{d4['note']}</i>"
+        )
+    else:
+        d4_facts = (
+            f"<i>D4 Chaturthamsa chart data not available in this kundli build — "
+            f"falling back to D1 property indicators only. {d4['note']}</i>"
+        )
+    _emit_ai(ai_texts.get("t14.d4_picture", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪞 D4 CHATURTHAMSA — The Property Chart",
+           "3️⃣  🪞 D4 चतुर्थांश — संपत्ति कुंडली",
+           "3️⃣  🪞 D4 CHATURTHAMSA — Property Chart"),
+        d4_facts,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Property Yogas Audit (AI) ──────────────────────────────
+    yog_html = "<br/>".join(f"&nbsp;&nbsp;▸ {y}" for y in yog.get("yogas", [])) or "&nbsp;&nbsp;—"
+    obs_html = "<br/>".join(f"&nbsp;&nbsp;▸ {o}" for o in yog.get("obstructions", [])) or "&nbsp;&nbsp;—"
+    yog_facts = (
+        f"<b>4th occupants:</b> {', '.join(yog['fourth_occupants']) or '—'}<br/>"
+        f"<b>4L house:</b> H{yog['fourth_lord_house']} | "
+        f"<b>Mars house:</b> H{yog['mars_house']} | <b>Venus house:</b> H{yog['venus_house']}<br/><br/>"
+        f"<b>Bhumi-Vahana Yogas active ({yog['yoga_count']}):</b><br/>{yog_html}<br/><br/>"
+        f"<b>Obstructions ({yog['obstruction_count']}):</b><br/>{obs_html}<br/><br/>"
+        f"<b>Score:</b> {yog['score']}/100 — <b>{yog['severity']}</b><br/>"
+        f"<b>Verdict:</b> {yog['verdict']}"
+    )
+    _emit_ai(ai_texts.get("t14.yogas_audit", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🕉️ BHUMI-VAHANA YOGAS — Classical Audit + Obstructions",
+           "4️⃣  🕉️ भूमि-वाहन योग — शास्त्रीय ऑडिट + बाधाएँ",
+           "4️⃣  🕉️ BHUMI-VAHANA YOGAS — Classical Audit + Obstructions"),
+        yog_facts,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Acquisition Timing (AI) ────────────────────────────────
+    tim_facts = (
+        f"<b>Current Mahadasha:</b> {tim['current_md']}<br/>"
+        f"<b>Current Antardasha:</b> {tim['current_ad']}<br/><br/>"
+        f"<b>Acquisition activator planets (your chart):</b> {', '.join(tim['activators'])}<br/>"
+        f"<b>4th lord:</b> {tim['fourth_lord']}<br/>"
+        f"<b>2nd lord (accumulated wealth):</b> {tim['second_lord']}<br/>"
+        f"<b>11th lord (gain):</b> {tim['eleventh_lord']}<br/><br/>"
+        f"<b>Window status:</b> {tim['window_status']}<br/>"
+        f"<i>{tim['window_note']}</i>"
+    )
+    _emit_ai(ai_texts.get("t14.acquisition_timing", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⏰ ACQUISITION TIMING — Current Dasha-Bhukti Window",
+           "5️⃣  ⏰ अधिग्रहण समय — वर्तमान दशा-भुक्ति",
+           "5️⃣  ⏰ ACQUISITION TIMING — Current Dasha-Bhukti"),
+        tim_facts,
+        bg_color=colors.HexColor("#FEF9C3"), border_color=colors.HexColor("#854D0E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Karmic / Vastu Signatures (no AI, rich facts) ──────────
+    flags_html = "<br/>".join(f"&nbsp;&nbsp;▸ {f}" for f in krm.get("flags", [])) or "&nbsp;&nbsp;No Vastu/karmic flags detected"
+    krm_facts = (
+        f"<b>4th-house occupants:</b> {', '.join(krm['fourth_occupants']) or '—'}<br/><br/>"
+        f"<b>Karmic load score:</b> {krm['karmic_score']}/100 — <b>{krm['karmic_verdict']}</b><br/><br/>"
+        f"<b>Vastu / Karmic Signatures:</b><br/>{flags_html}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌑 VASTU-DOSHA SIGNATURES — Rahu/Ketu/Saturn in 4th",
+           "6️⃣  🌑 वास्तु-दोष संकेत — 4वें में राहु/केतु/शनि",
+           "6️⃣  🌑 VASTU-DOSHA SIGNATURES — Rahu/Ketu/Saturn in 4th"),
+        krm_facts,
+        bg_color=colors.HexColor("#1F2937"), border_color=colors.HexColor("#F59E0B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Synthesis + Profile + Vehicle + Action Plan (AI) ───────
+    summary_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+    prof_html = "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["profile_lines"])
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["action_plan"])
+    syn_facts = (
+        f"<b>Verdict token:</b> {syn['verdict_token']}<br/><br/>"
+        f"<b>Synthesis:</b><br/>{summary_html}<br/><br/>"
+        f"<b>Property + Vehicle Profile:</b><br/>{prof_html}<br/><br/>"
+        f"<b>6-Step Action Plan:</b><br/>{plan_html}"
+    )
+    _emit_ai(ai_texts.get("t14.property_synthesis", "").strip())
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 PROPERTY SYNTHESIS + VEHICLE PROFILE + ACTION PLAN",
+           "7️⃣  🌟 संपत्ति निष्कर्ष + वाहन-प्रोफ़ाइल + कार्य योजना",
+           "7️⃣  🌟 PROPERTY SYNTHESIS + VEHICLE PROFILE + ACTION PLAN"),
+        syn_facts,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close14
+    flow.extend(_close14(s, driver, conductor, "wealth", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -8395,6 +8603,123 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier13 facts build failed: %s", exc)
 
+        # ── Tier 14 — Property, Vehicles & Comforts Deep Audit ────────
+        try:
+            from vedic.numerology.property import compute_property_bundle
+            pr_bundle = compute_property_bundle(kundli, dob, driver, conductor)
+            if pr_bundle.get("available"):
+                psb = pr_bundle["sukha_bhava"]
+                pkk = pr_bundle["karakas"]
+                pd4 = pr_bundle["d4_picture"]
+                pyog = pr_bundle["yogas_audit"]
+                ptim = pr_bundle["timing"]
+                psyn = pr_bundle["synthesis"]
+
+                specs.append({
+                    "key": "t14.sukha_bhava",
+                    "section_key": "tier14.sukha_bhava",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "fourth_sign": psb["fourth_sign"],
+                        "fourth_lord": psb["fourth_lord"],
+                        "lord_house": psb["lord_house"],
+                        "lord_dignity": psb["lord_dignity"],
+                        "strength_score": psb["strength_score"],
+                        "property_indication": psb["property_indication"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t14.karakas",
+                    "section_key": "tier14.karakas",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "mars_sign": pkk["mars_sign"],
+                        "mars_house": pkk["mars_house"],
+                        "mars_dignity": pkk["mars_dignity"],
+                        "venus_sign": pkk["venus_sign"],
+                        "venus_house": pkk["venus_house"],
+                        "venus_dignity": pkk["venus_dignity"],
+                        "saturn_sign": pkk["saturn_sign"],
+                        "vehicle_indication": pkk["vehicle_indication"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t14.d4_picture",
+                    "section_key": "tier14.d4_picture",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "d4_ascendant": pd4["d4_ascendant"],
+                        "d4_fourth_sign": pd4["d4_fourth_sign"],
+                        "d4_fourth_lord": pd4["d4_fourth_lord"],
+                        "mars_d4_sign": pd4["mars_d4_sign"],
+                        "available": pd4["available"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t14.yogas_audit",
+                    "section_key": "tier14.yogas_audit",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "fourth_lord": psb["fourth_lord"],
+                        "yoga_count": pyog["yoga_count"],
+                        "obstruction_count": pyog["obstruction_count"],
+                        "score": pyog["score"],
+                        "severity": pyog["severity"],
+                        "verdict": pyog["verdict"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t14.acquisition_timing",
+                    "section_key": "tier14.acquisition_timing",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_md": ptim["current_md"],
+                        "current_ad": ptim["current_ad"],
+                        "window_status": ptim["window_status"],
+                        "fourth_lord": ptim["fourth_lord"],
+                        "second_lord": ptim["second_lord"],
+                        "eleventh_lord": ptim["eleventh_lord"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t14.property_synthesis",
+                    "section_key": "tier14.property_synthesis",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "fourth_sign": psb["fourth_sign"],
+                        "fourth_lord": psb["fourth_lord"],
+                        "mars_sign": pkk["mars_sign"],
+                        "venus_sign": pkk["venus_sign"],
+                        "verdict_token": psyn["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier14 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -8589,6 +8914,13 @@ def render_part2_pdf(*,
         story += _tier13_progeny_section(s, name, dob, driver, conductor,
                                           kundli=kundli, lang=lang,
                                           ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 161-175 — 🏠 TIER 14 — Property, Vehicles & Comforts Deep Audit
+    if kundli is not None:
+        story += _tier14_property_section(s, name, dob, driver, conductor,
+                                           kundli=kundli, lang=lang,
+                                           ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

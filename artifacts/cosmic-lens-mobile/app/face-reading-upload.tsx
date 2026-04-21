@@ -80,6 +80,11 @@ export default function FaceReadingUploadScreen() {
   }
 
   function pickPrompt(slot: Slot) {
+    // Web preview ka Alert multi-button reliably nahi chalta — direct gallery open karo
+    if (Platform.OS === "web") {
+      pick(slot, "library");
+      return;
+    }
     Alert.alert("Add photo", "Camera ya gallery se choose karein", [
       { text: "Camera",  onPress: () => pick(slot, "camera") },
       { text: "Gallery", onPress: () => pick(slot, "library") },

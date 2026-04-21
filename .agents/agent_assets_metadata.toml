@@ -462,3 +462,9 @@ id = "sOm8Vc4LfaBZIXFf60lZg"
 uri = "file://attached_assets/face_reading_report_PREMIUM_v3.pdf"
 type = "pdf"
 title = "Face Reading Premium Report — v3 (Chunk B: Behavior + Love + Career + Life Flow Deep)"
+
+[[outputs]]
+id = "1w9sHFxMrhoH01YnExIrq"
+uri = "file://attached_assets/face_reading_report_PREMIUM_v4.pdf"
+type = "pdf"
+title = "Face Reading Premium Report — v4 (Chunk C: Multi-Lens + Staged Plans + Combos + Score Deep)"

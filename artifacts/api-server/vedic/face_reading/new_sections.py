@@ -51,6 +51,16 @@ def _band_low_high(v: float) -> str:
 # SECTION 1 — POWER SUMMARY (3-4 line opener + 4 stat boxes)
 # ════════════════════════════════════════════════════════════════════════
 def section_1_power_summary(engines: Dict, base_sections: Dict) -> Dict:
+    """Section 1 — DEEP multi-lens summary + classic callouts."""
+    from .improvement_deep import build_section_1_multi_summary
+    base = _section_1_classic(engines, base_sections)
+    deep = build_section_1_multi_summary(engines, base_sections)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_1_classic(engines: Dict, base_sections: Dict) -> Dict:
     arche  = _g(engines, "personality", "archetype", "name") or "Balanced Personality"
     elem   = _g(engines, "samudrika", "element_profile", "dominant_element") or "Balanced"
     snap   = _g(engines, "first_impression", "snap_narrative", "line") or ""
@@ -252,6 +262,16 @@ def _section_14_classic(engines: Dict, base_sections: Dict, age: int = None) -> 
 # SECTION 18 — ACTION PLAN (Behavioural / Confidence / Lifestyle)
 # ════════════════════════════════════════════════════════════════════════
 def section_18_action_plan(engines: Dict, base_sections: Dict) -> Dict:
+    """Section 18 — DEEP staged plans (7d/21d/90d) + classic 3 fixes."""
+    from .improvement_deep import build_section_18_plans
+    base = _section_18_classic(engines, base_sections)
+    deep = build_section_18_plans(engines, base_sections)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_18_classic(engines: Dict, base_sections: Dict) -> Dict:
     o = _ocean(engines)
     O, C, E, A, N = o["O"], o["C"], o["E"], o["A"], o["N"]
     confidence = _num(_g(engines, "first_impression", "first_impression_4", "confidence"), default=60)
@@ -299,6 +319,16 @@ def section_18_action_plan(engines: Dict, base_sections: Dict) -> Dict:
 # SECTION 19 — IMPROVEMENT HACKS (3 quick tips)
 # ════════════════════════════════════════════════════════════════════════
 def section_19_improvement_hacks(engines: Dict) -> Dict:
+    """Section 19 — DEEP cross-combo named insights + classic 3 hacks."""
+    from .improvement_deep import build_section_19_combos
+    base = _section_19_classic(engines)
+    deep = build_section_19_combos(engines)
+    base["intro_para"] = deep["intro_para"]
+    base["blocks"] = deep["blocks"]
+    return base
+
+
+def _section_19_classic(engines: Dict) -> Dict:
     o = _ocean(engines)
     O, C, E, A, N = o["O"], o["C"], o["E"], o["A"], o["N"]
     elem = _g(engines, "samudrika", "element_profile", "dominant_element") or "Balanced"
@@ -451,6 +481,13 @@ def build_new_sections(engines: Dict,
     }
     s21 = section_21_final_truth(engines, base_sections, new_sec_dict)
 
+    # Bonus score deep-dive — enrich the existing bonus block in base_sections
+    from .improvement_deep import build_bonus_score_deep
+    bonus_existing = dict(base_sections.get("bonus_personality_score") or {})
+    bonus_deep = build_bonus_score_deep(engines, base_sections)
+    bonus_existing["intro_para"] = bonus_deep["intro_para"]
+    bonus_existing["blocks"] = bonus_deep["blocks"]
+
     return {
         "section_1_power_summary":         s1,
         "section_8_love_relationship_dna": s8,
@@ -461,4 +498,5 @@ def build_new_sections(engines: Dict,
         "section_19_improvement_hacks":    s19,
         "section_20_compatibility":        s20,
         "section_21_final_truth":          s21,
+        "bonus_personality_score":         bonus_existing,
     }

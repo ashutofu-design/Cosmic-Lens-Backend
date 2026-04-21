@@ -331,7 +331,9 @@ SECTION_SCORE_BARS = {
 # Keys to render BEFORE callouts/bars (the rest go after)
 SECTION_HIDE_KEYS = {
     # keys whose values are already shown in callouts/bars — hide from raw list
-    "section_1_power_summary":      {"biggest_strength","biggest_weakness","one_line_truth","summary_paragraph"},
+    "section_1_power_summary":      {"biggest_strength","biggest_weakness","one_line_truth","summary_paragraph","intro_para","blocks","summary_paragraph_hi","current_life_phase"},
+    "section_18_action_plan":       {"intro_para","blocks","behavioural_fix_hi","confidence_improvement_hi","lifestyle_suggestion_hi"},
+    "section_19_improvement_hacks": {"intro_para","blocks","hacks_hi"},
     "section_4_first_impression":   {"confidence_out_of_10","trust_out_of_10","attraction_out_of_10","authority_out_of_10"},
     "section_3_mask_vs_real":       {"symmetry_score"},
     "section_9_career_money":       {"wealth_score_100"},
@@ -514,10 +516,14 @@ def _render_section_6_deep(sec: Dict, styles) -> List:
 
 
 _DEEP_BLOCK_SECTIONS = {
+    "section_1_power_summary",
     "section_7_personality_synthesis",
     "section_8_love_relationship_dna",
     "section_9_career_money",
     "section_14_life_flow",
+    "section_18_action_plan",
+    "section_19_improvement_hacks",
+    "bonus_personality_score",
 }
 
 

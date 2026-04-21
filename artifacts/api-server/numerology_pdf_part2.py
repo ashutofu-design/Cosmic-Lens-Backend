@@ -6449,6 +6449,202 @@ def _tier10_transits_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier11_spirituality_section(s, name: str, dob: str, driver: int,
+                                  conductor: int, *, kundli: Dict[str, Any],
+                                  lang: str = "hinglish",
+                                  ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 11 — Spirituality, Moksha & Dharma-Path."""
+    from vedic.numerology.spirituality import compute_spirituality_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_spirituality_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    moksha = bundle["moksha_trikona"]
+    karak = bundle["karakamsa"]
+    ishta = bundle["ishta_devata"]
+    kuldev = bundle["kuldevta"]
+    mantra = bundle["mantra_sadhana"]
+    vai = bundle["vairagya"]
+    syn = bundle["synthesis"]
+
+    # ── Title + numerology opener ────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "🕉️ TIER 11 — SPIRITUALITY, MOKSHA & DHARMA-PATH",
+        "🕉️ टियर 11 — आध्यात्मिकता, मोक्ष और धर्म-मार्ग",
+        "🕉️ TIER 11 — SPIRITUALITY, MOKSHA & DHARMA-PATH"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "spiritual", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Tier 11 is the <b>soul-direction layer</b> — Moksha Trikona (4-8-12 audit), "
+        "your <b>Atmakaraka</b> (chief soul-significator) & <b>Karakamsa</b> (D9 sign of AK = "
+        "soul-dharma theme), the <b>classical Ishta Devata</b> (lord of 12th-from-Karakamsa, "
+        "Jaimini method), <b>Kuldevta</b> (lineage deity from 9th house), a Driver-number "
+        "<b>mantra-sadhana</b> protocol, your Saturn-Ketu <b>Vairagya score</b> (detachment "
+        "quotient), and a <b>90-day starter plan</b> integrating it all.",
+        "टियर 11 आत्मा-दिशा परत है — मोक्ष त्रिकोण (4-8-12), आत्मकारक व कारकांश (D9), "
+        "शास्त्रीय इष्ट देवता (कारकांश से 12वें का स्वामी, जैमिनी), कुलदेवता (नवम भाव), "
+        "मूलांक-आधारित मंत्र-साधना, शनि-केतु वैराग्य अंक, और 90-दिन स्टार्टर योजना।",
+        "Tier 11 aapki <b>aatma-direction layer</b> hai — Moksha Trikona (4-8-12 audit), "
+        "Atmakaraka (soul-karaka) + Karakamsa (D9 sign), classical Ishta Devata (Karakamsa-12th-lord, "
+        "Jaimini method), Kuldevta (9th-house lineage deity), Driver-number mantra-sadhana, "
+        "Saturn-Ketu Vairagya score, aur ek 90-day starter plan.",
+        bg="#F5F3FF", border="#5B21B6"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Moksha Trikona (AI) ────────────────────────────────────
+    notes_html = "<br/>".join(f"&nbsp;&nbsp;▸ {n}" for n in moksha.get("notes", []))
+    moksha_facts = (
+        f"<b>4th house:</b> {moksha['fourth']['sign']} (lord {moksha['fourth']['lord']} "
+        f"in H{moksha['fourth']['lord_house']}); occupants: "
+        f"{', '.join(moksha['fourth']['occupants']) or '—'}<br/>"
+        f"<b>8th house:</b> {moksha['eighth']['sign']} (lord {moksha['eighth']['lord']} "
+        f"in H{moksha['eighth']['lord_house']}); occupants: "
+        f"{', '.join(moksha['eighth']['occupants']) or '—'}<br/>"
+        f"<b>12th house:</b> {moksha['twelfth']['sign']} (lord {moksha['twelfth']['lord']} "
+        f"in H{moksha['twelfth']['lord_house']}); occupants: "
+        f"{', '.join(moksha['twelfth']['occupants']) or '—'}<br/><br/>"
+        f"<b>Moksha-Trikona Score:</b> {moksha['score']}/100 — <b>{moksha['verdict']}</b><br/>"
+        f"{notes_html}"
+    )
+    ai_txt = ai_texts.get("t11.moksha_trikona", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + moksha_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🕯️ MOKSHA TRIKONA — 4-8-12 Soul Liberation Axis",
+           "1️⃣  🕯️ मोक्ष त्रिकोण — 4-8-12 मुक्ति अक्ष",
+           "1️⃣  🕯️ MOKSHA TRIKONA — 4-8-12 Mukti Axis"),
+        body,
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#5B21B6"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Atmakaraka + Karakamsa (AI) ────────────────────────────
+    karak_facts = (
+        f"<b>Atmakaraka (chief soul-karaka):</b> {karak['atmakaraka']} "
+        f"(House {karak['atmakaraka_house']}, sign {karak['atmakaraka_sign']})<br/>"
+        f"<b>Karakamsa (D9 sign of AK):</b> {karak['karakamsa_sign']} "
+        f"(lord {karak['karakamsa_lord']})<br/><br/>"
+        f"<b>Soul-dharma theme:</b><br/>{karak['dharma_theme']}"
+    )
+    ai_txt = ai_texts.get("t11.karakamsa_dharma", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + karak_facts
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  ✨ ATMAKARAKA + KARAKAMSA — Soul's Dharmic Mission",
+           "2️⃣  ✨ आत्मकारक + कारकांश — आत्मा का धर्म-मिशन",
+           "2️⃣  ✨ ATMAKARAKA + KARAKAMSA — Soul's Dharma Mission"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Ishta Devata Deep (AI) ─────────────────────────────────
+    ishta_facts = (
+        f"<b>Method:</b> {ishta['method']}<br/>"
+        f"<b>12th from Karakamsa:</b> {ishta['twelfth_from_karakamsa']} "
+        f"(lord = {ishta['ishta_lord']})<br/><br/>"
+        f"<b>Your Ishta Devata:</b><br/>{ishta['deity']}<br/><br/>"
+        f"<i>Driver-{driver} fallback deity (numerology layer): "
+        f"{ishta['fallback_driver_deity']}.</i>"
+    )
+    ai_txt = ai_texts.get("t11.ishta_devata", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + ishta_facts
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🪔 ISHTA DEVATA — Your Personal Liberation Deity",
+           "3️⃣  🪔 इष्ट देवता — आपकी मुक्ति-देवता",
+           "3️⃣  🪔 ISHTA DEVATA — Aapki Personal Mukti-Devata"),
+        body,
+        bg_color=colors.HexColor("#FEF2F2"), border_color=colors.HexColor("#991B1B"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Kuldevta (no AI, rich facts) ───────────────────────────
+    kul_facts = (
+        f"<b>9th house:</b> {kuldev['sign']} (lord {kuldev['lord']} "
+        f"in H{kuldev['lord_house']}, sign {kuldev['lord_sign']})<br/>"
+        f"<b>Method:</b> {kuldev['kuldevta_via']}<br/><br/>"
+        f"<b>Your Kuldevta (lineage deity family):</b><br/>{kuldev['deity']}<br/><br/>"
+        f"<i>{kuldev['guidance']}</i>"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🛕 KULDEVTA / KULDEVI — Lineage Deity",
+           "4️⃣  🛕 कुलदेवता / कुलदेवी — वंश-देवता",
+           "4️⃣  🛕 KULDEVTA / KULDEVI — Vansh-Devata"),
+        kul_facts,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Mantra Sadhana (AI) ────────────────────────────────────
+    mantra_facts = (
+        f"<b>Driver-{driver} planet:</b> {mantra['driver_planet']}<br/>"
+        f"<b>Beej Mantra:</b> {mantra['beej_mantra']}<br/>"
+        f"<b>Japa Target (40-day cycle):</b> {mantra['japa_target']}<br/>"
+        f"<b>Best Time:</b> {mantra['best_time']}<br/>"
+        f"<b>Primary Deity:</b> {mantra['primary_deity']}<br/><br/>"
+        f"<i>{mantra['synergy_note']}</i>"
+    )
+    ai_txt = ai_texts.get("t11.mantra_sadhana", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + mantra_facts
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  📿 MANTRA SADHANA — Your 40-Day Beej Protocol",
+           "5️⃣  📿 मंत्र साधना — 40-दिन बीज प्रोटोकॉल",
+           "5️⃣  📿 MANTRA SADHANA — Aapka 40-Day Beej Protocol"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Vairagya score (no AI, rich) ───────────────────────────
+    vai_notes_html = "<br/>".join(f"&nbsp;&nbsp;▸ {n}" for n in vai.get("notes", []))
+    vai_facts = (
+        f"<b>Saturn house:</b> H{vai['saturn_house']}<br/>"
+        f"<b>Ketu house:</b> H{vai['ketu_house']}<br/>"
+        f"<b>Jupiter house:</b> H{vai['jupiter_house']}<br/>"
+        f"<b>12th-house occupants:</b> "
+        f"{', '.join(vai['twelfth_occupants']) or '—'}<br/><br/>"
+        f"<b>Vairagya Score:</b> {vai['score']}/100 — <b>{vai['verdict']}</b><br/>"
+        f"{vai_notes_html}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🌫️ VAIRAGYA SCORE — Detachment Quotient (Saturn-Ketu-12th)",
+           "6️⃣  🌫️ वैराग्य अंक — विरक्ति गुणांक (शनि-केतु-12)",
+           "6️⃣  🌫️ VAIRAGYA SCORE — Detachment Quotient"),
+        vai_facts,
+        bg_color=colors.HexColor("#EEF2FF"), border_color=colors.HexColor("#3730A3"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Synthesis + 90-day plan (AI) ───────────────────────────
+    plan_html = "<br/>".join(f"&nbsp;&nbsp;▸ {p}" for p in syn["starter_90day"])
+    syn_facts = (
+        "<b>Synthesis:</b><br/>"
+        + "<br/>".join(f"&nbsp;&nbsp;▸ {l}" for l in syn["summary_lines"])
+        + f"<br/><br/><b>90-Day Sadhana Starter Plan:</b><br/>{plan_html}"
+    )
+    ai_txt = ai_texts.get("t11.spiritual_synthesis", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + syn_facts
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🌟 SPIRITUAL SYNTHESIS + 90-DAY SADHANA STARTER",
+           "7️⃣  🌟 आध्यात्मिक निष्कर्ष + 90-दिन साधना योजना",
+           "7️⃣  🌟 SPIRITUAL SYNTHESIS + 90-DAY SADHANA STARTER"),
+        body,
+        bg_color=colors.HexColor("#FFF7ED"), border_color=colors.HexColor("#9A3412"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block as _close11
+    flow.extend(_close11(s, driver, conductor, "spiritual", lang))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -7474,6 +7670,97 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier10 facts build failed: %s", exc)
 
+        # ── Tier 11 — Spirituality, Moksha & Dharma-Path ─────────────
+        try:
+            from vedic.numerology.spirituality import compute_spirituality_bundle
+            sb = compute_spirituality_bundle(kundli, dob, driver, conductor)
+            if sb.get("available"):
+                smk = sb["moksha_trikona"]
+                skk = sb["karakamsa"]
+                sis = sb["ishta_devata"]
+                smn = sb["mantra_sadhana"]
+                ssy = sb["synthesis"]
+
+                specs.append({
+                    "key": "t11.moksha_trikona",
+                    "section_key": "tier11.moksha_trikona",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "fourth_sign": smk["fourth"]["sign"],
+                        "eighth_sign": smk["eighth"]["sign"],
+                        "twelfth_sign": smk["twelfth"]["sign"],
+                        "score": smk["score"],
+                        "verdict": smk["verdict"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t11.karakamsa_dharma",
+                    "section_key": "tier11.karakamsa_dharma",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "atmakaraka": skk["atmakaraka"],
+                        "karakamsa_sign": skk["karakamsa_sign"],
+                        "karakamsa_lord": skk["karakamsa_lord"],
+                        "dharma_theme": skk["dharma_theme"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t11.ishta_devata",
+                    "section_key": "tier11.ishta_devata",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "ishta_lord": sis["ishta_lord"],
+                        "deity": sis["deity"],
+                        "twelfth_from_karakamsa": sis["twelfth_from_karakamsa"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t11.mantra_sadhana",
+                    "section_key": "tier11.mantra_sadhana",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "driver_planet": smn["driver_planet"],
+                        "primary_deity": smn["primary_deity"],
+                        "best_time": smn["best_time"],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t11.spiritual_synthesis",
+                    "section_key": "tier11.spiritual_synthesis",
+                    "lang": lang,
+                    "word_target": 340,
+                    "facts": {
+                        "person_name": name,
+                        "atmakaraka": skk["atmakaraka"],
+                        "karakamsa_sign": skk["karakamsa_sign"],
+                        "moksha_score": smk["score"],
+                        "verdict_token": ssy["verdict_token"],
+                        "driver_number": driver,
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier11 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -7647,6 +7934,13 @@ def render_part2_pdf(*,
         story += _tier10_transits_section(s, name, dob, driver, conductor,
                                            kundli=kundli, lang=lang,
                                            ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 119-130 — 🕉️ TIER 11 — Spirituality, Moksha & Dharma-Path
+    if kundli is not None:
+        story += _tier11_spirituality_section(s, name, dob, driver, conductor,
+                                                kundli=kundli, lang=lang,
+                                                ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

@@ -1483,6 +1483,23 @@ Total validator count: 31 → **36**.
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, today=2026-04-21)**: HTTP 200, **92 pages** (was 84 for T9-only), Tier 10 spans p41-44. Live computed: Saturn=Pisces (H4 from Moon=Sagittarius → Ardha-Ashtama Dhaiya zone), Jupiter=Gemini (H7 from Moon → FAVOURABLE), Rahu=Aquarius/Ketu=Leo, MD Rahu→AD Venus→PD Mercury all with end dates. Personal Year = 3 (EXPANSION & CREATIVITY) consistent across all 7+ mentions in the PDF. Architect review: PASS, no Sev-1 blockers; only critical issue (dual PY formula) fixed.
 
-### Phase 5d — Tiers 11-17 — PENDING
+### Phase 5d — Tier 11 (Spirituality, Moksha & Dharma-Path) ✅ COMPLETE (2026-04-21)
+
+**Tier 11 — 7 cards** (`vedic/numerology/spirituality.py` ~330 lines, NEW):
+1. **Moksha Trikona** (4-8-12 axis audit, 0-100 score + verdict)
+2. **Atmakaraka + Karakamsa** (highest-deg karaka among Sun..Saturn → D9 sign of AK = soul-dharma theme)
+3. **Ishta Devata** (classical Jaimini method: lord of 12th-from-Karakamsa) with Driver-number fallback deity
+4. **Kuldevta / Kuldevi** (lineage deity from 9th-house lord, Parashari method)
+5. **Mantra Sadhana** (DRIVER_BEEJ table — 40-day beej-mantra protocol per Driver number, includes japa target, best time, primary deity)
+6. **Vairagya Score** (detachment quotient from Saturn + Ketu + 12th-house occupants + Jupiter, 0-100 + verdict)
+7. **Spiritual Synthesis + 90-day Sadhana Starter** (integrates AK + Karakamsa + Moksha-Trikona + Vairagya into a verdict_token like STRONG-MOKSHA-PATH / BALANCED-DHARMA-PATH and ships a 90-day actionable plan)
+
+**5 new flagship AI specs** (count 51→56): t11.moksha_trikona, t11.karakamsa_dharma, t11.ishta_devata, t11.mantra_sadhana, t11.spiritual_synthesis. Each validator multi-anchors on chart-locked tokens (sign names, AK planet, deity tokens, score number, verdict-keyword) so AI cannot produce generic "be spiritual" puff. Em-dash + hyphen splitting handled in verdict-keyword anchor.
+
+**Hard data gate**: requires Asc + 9 grahas; falls back silently if D9 calc unavailable.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **94 pages** (was 92 for T10-only), all 7 T11 cards rendered with real chart data: Moksha Score 68/100 MODERATE, Atmakaraka Moon (H6 Sagittarius), Karakamsa Sagittarius (Jupiter), 12th-from-Karakamsa Scorpio (lord Mars), Vairagya 50/100 MODERATE, synthesis verdict BALANCED-DHARMA-PATH. Architect review: **PASS** — Jaimini Ishta Devata calc classically correct, validator anchor strategy strong, no Sev-1 blockers (only LOW: Rahu-as-AK is alt-school, MINOR: Lord/Goddess/Sri exclusion in deity-token check is tight but acceptable).
+
+### Phase 5d — Tiers 12-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

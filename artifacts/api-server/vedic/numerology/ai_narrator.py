@@ -391,6 +391,50 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         lambda f, t: _has_word(t, f.get("md_lord"))
                      and _has_num(t, f.get("personal_year"))
                      and _has_num(t, f.get("current_year")),
+    # ── Tier 11 — Spirituality, Moksha & Dharma-Path ────────────────
+    # Each validator multi-anchors on chart-specific tokens (sign names,
+    # AK lord, deity tokens) so AI cannot produce generic "be spiritual" puff.
+    "tier11.moksha_trikona":
+        # Quadruple anchor: 4th-house sign OR 8th-house sign OR 12th-house sign
+        # (at least 2 of 3 must appear) + score number + verdict-keyword token.
+        lambda f, t: (
+            sum(1 for s in (f.get("fourth_sign"), f.get("eighth_sign"),
+                            f.get("twelfth_sign")) if s and _has_word(t, s)) >= 2
+        ) and _has_num(t, f.get("score"))
+          and any(_has_word(t, tok) for tok in
+                  (f.get("verdict") or "").replace("—", " ").replace("-", " ").split()
+                  if len(tok) >= 5),
+    "tier11.karakamsa_dharma":
+        # Triple anchor: Atmakaraka planet name + Karakamsa D9 sign + AK token.
+        lambda f, t: _has_word(t, f.get("atmakaraka"))
+                     and _has_word(t, f.get("karakamsa_sign"))
+                     and (_has_word(t, "Karakamsa") or _has_word(t, "Atmakaraka")
+                          or _has_word(t, "AK") or _has_word(t, "कारकांश")
+                          or _has_word(t, "आत्मकारक") or _has_word(t, "soul")),
+    "tier11.ishta_devata":
+        # Triple anchor: ishta-lord planet + 12th-from-Karakamsa sign + at least
+        # one deity-name token from the deity string (Shiva/Vishnu/Lakshmi/etc).
+        lambda f, t: _has_word(t, f.get("ishta_lord"))
+                     and _has_word(t, f.get("twelfth_from_karakamsa"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("deity") or "").replace("/", " ").replace("(", " ")
+                              .replace(")", " ").split()
+                             if len(tok) >= 4 and tok not in ("Lord", "Goddess", "Sri")),
+    "tier11.mantra_sadhana":
+        # Triple anchor: driver number + driver-planet name + a deity-name token.
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("driver_planet"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("primary_deity") or "").replace("/", " ").split()
+                             if len(tok) >= 4 and tok not in ("Lord", "Goddess", "Sri")),
+    "tier11.spiritual_synthesis":
+        # Triple anchor: AK lord + Karakamsa sign + verdict_token (locked
+        # synthesis token like STRONG-MOKSHA-PATH / BALANCED-DHARMA-PATH).
+        lambda f, t: _has_word(t, f.get("atmakaraka"))
+                     and _has_word(t, f.get("karakamsa_sign"))
+                     and any(_has_word(t, tok) for tok in
+                             (f.get("verdict_token") or "").split("-")
+                             if len(tok) >= 5),
 }
 
 

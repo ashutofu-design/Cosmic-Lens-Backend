@@ -5187,6 +5187,284 @@ def _tier5_relationships_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier7_wealth_section(s, name: str, dob: str, driver: int,
+                           conductor: int, *, kundli: Dict[str, Any],
+                           lang: str = "hinglish",
+                           ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 7 — Wealth & Money DNA (Sprint 48 financial engine + numerology layer)."""
+    from vedic.numerology.wealth import compute_wealth_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_wealth_bundle(kundli, dob, driver, conductor)
+    if not bundle.get("available"):
+        return flow
+
+    dna = bundle["wealth_dna"]
+    yogas = bundle["dhana_yogas"]
+    houses = bundle["wealth_houses"]
+    daridra = bundle["daridra_audit"]
+    income = bundle["income_source"]
+    debt = bundle["debt_risk"]
+    re_block = bundle["real_estate"]
+    fi_block = bundle["foreign_income"]
+    spec_block = bundle["speculation"]
+    career = bundle["career_income"]
+    strategies = bundle["wealth_strategies"]
+    risk_profile = bundle["risk_profile"]
+    roadmap = bundle["roadmap_15yr"]
+    scorecard = bundle["scorecard"]
+    moneynum = bundle["money_numerology"]
+    dwin = bundle["current_dasha_window"]
+    synthesis = bundle["synthesis_verdict"]
+
+    # ── Title + intro ─────────────────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "💰 TIER 7 — WEALTH & MONEY DNA",
+        "💰 टियर 7 — धन और संपत्ति DNA",
+        "💰 TIER 7 — WEALTH & MONEY DNA"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Tier 7 is your <b>complete wealth blueprint</b> — the 4 Dhana houses (2/5/9/11), every Dhana Yoga "
+        "active in your chart, Daridra (poverty) audit with cancellations, debt-risk tier, ideal income "
+        "sources, real-estate / foreign-income / speculation potential, top 5 wealth strategies tailored to "
+        "YOUR chart, 15-year roadmap, and your numerology money-temperament. This is the most actionable "
+        "money chapter of the entire report.",
+        "टियर 7 आपका <b>संपूर्ण धन-खाका</b> है — 4 धन भाव (2/5/9/11), आपकी कुंडली में सक्रिय हर धन-योग, दरिद्र-योग "
+        "ऑडिट, ऋण-जोखिम स्तर, आदर्श आय-स्रोत, रियल-एस्टेट/विदेशी-आय/सट्टेबाज़ी संभावना, और 15-वर्षीय रोडमैप।",
+        "Tier 7 aapka <b>complete wealth blueprint</b> hai — 4 Dhana houses (2/5/9/11), aapki kundli ke "
+        "saare active Dhana Yogas, Daridra audit (cancellations sahit), debt-risk tier, ideal income "
+        "sources, real-estate / foreign-income / speculation potential, aapki chart ke liye top 5 wealth "
+        "strategies, 15-year roadmap, aur aapki numerology money-temperament. Yeh poori report ka sabse "
+        "actionable money chapter hai.",
+        bg="#FEF3C7", border="#92400E"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Wealth DNA (AI) ────────────────────────────────────────
+    dm = dna.get("driver_money") or {}
+    dna_facts = (
+        f"<b>Numerology money-planet:</b> {dm.get('planet','—')} (driver {driver})<br/>"
+        f"<b>Active Dhana Yogas:</b> {dna['yoga_count']} &nbsp;·&nbsp; "
+        f"<b>Daridra cancelled:</b> {'Yes' if dna.get('daridra_cancelled') else 'No'}<br/>"
+        f"<b>Wealth-house score (avg):</b> {dna['scorecard_avg']:+.2f} &nbsp;·&nbsp; "
+        f"<b>Risk profile:</b> {dna.get('risk_profile','—')}<br/>"
+        f"<b>Synthesis:</b> {synthesis}"
+    )
+    ai_txt = ai_texts.get("t7.wealth_dna", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + dna_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  💎 YOUR WEALTH DNA",
+           "1️⃣  💎 आपका धन-DNA",
+           "1️⃣  💎 YOUR WEALTH DNA"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Dhana Yogas (AI) ───────────────────────────────────────
+    if yogas:
+        y_lines = []
+        for y in yogas:
+            y_lines.append(
+                f"<b>{y.get('tier','')} {y.get('name','')}</b><br/>"
+                f"&nbsp;&nbsp;&nbsp;<i>Factors:</i> {' • '.join(str(f) for f in (y.get('factors') or []))}<br/>"
+                f"&nbsp;&nbsp;&nbsp;<i>Modern:</i> {y.get('modern','')}"
+            )
+        yogas_facts = "<br/><br/>".join(y_lines)
+    else:
+        yogas_facts = "<i>No major Dhana Yoga active in your chart — wealth-building proceeds via disciplined SIP/savings (Saturn approach).</i>"
+    ai_txt = ai_texts.get("t7.dhana_yogas", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + yogas_facts
+    flow.append(_premium_card(s,
+        _T(lang, f"2️⃣  ✨ DHANA YOGAS DETECTED ({len(yogas)})",
+           f"2️⃣  ✨ धन-योग ({len(yogas)})",
+           f"2️⃣  ✨ DHANA YOGAS DETECTED ({len(yogas)})"),
+        body,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Wealth-House Scorecard (table, no AI) ──────────────────
+    if scorecard:
+        rows = [["House", "Purpose", "Sign", "Lord", "Score", "Verdict"]]
+        for h in scorecard:
+            rows.append([
+                f"H{h.get('house')}",
+                str(h.get("purpose", ""))[:24],
+                str(h.get("sign", "")),
+                str(h.get("lord", "")),
+                f"{h.get('score', 0):+d}",
+                str(h.get("verdict", "")),
+            ])
+        tbl = Table(rows, colWidths=[15*mm, 55*mm, 22*mm, 22*mm, 18*mm, 25*mm])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#B45309")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#9CA3AF")),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.HexColor("#FEF3C7"), colors.white]),
+        ]))
+        flow.append(Paragraph(_T(lang,
+            "3️⃣  📊 WEALTH-HOUSE SCORECARD (2/5/9/11)",
+            "3️⃣  📊 धन-भाव स्कोरकार्ड (2/5/9/11)",
+            "3️⃣  📊 WEALTH-HOUSE SCORECARD (2/5/9/11)"), s["page_title"]))
+        flow.append(Spacer(1, 2 * mm))
+        flow.append(tbl)
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Daridra Audit (AI) ─────────────────────────────────────
+    da_lines: List[str] = []
+    da_lines.append(f"<b>Cancelled by bhanga factors:</b> {'Yes ✅' if daridra.get('cancelled') else 'No ⚠️'}")
+    if daridra.get("bhanga_factors"):
+        da_lines.append(f"<b>Bhanga (cancellation) factors:</b> {' • '.join(daridra['bhanga_factors'])}")
+    if daridra.get("yogas"):
+        for y in daridra["yogas"]:
+            da_lines.append(
+                f"<b>{y.get('tier','')} {y.get('name','')}</b> — "
+                f"{y.get('note','')}<br/>"
+                f"&nbsp;&nbsp;&nbsp;<i>Modern:</i> {y.get('modern','')}"
+            )
+    else:
+        da_lines.append("<i>No daridra (poverty) yoga triggered — wealth indicators are favourable.</i>")
+    ai_txt = ai_texts.get("t7.daridra_audit", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(da_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🛡️ DARIDRA (POVERTY) AUDIT",
+           "4️⃣  🛡️ दरिद्र-योग ऑडिट",
+           "4️⃣  🛡️ DARIDRA (POVERTY) AUDIT"),
+        body,
+        bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#B91C1C"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Income Source + Career Income (no AI) ──────────────────
+    inc_lines = [
+        f"<b>10th-house karaka:</b> {income.get('karaka','—')}",
+        f"<b>Classical income field:</b> {income.get('classical_field','—')}",
+        f"<b>Modern career match:</b> {income.get('modern_career','—')}",
+    ]
+    if career:
+        inc_lines.append("<b>10th-house occupants &amp; what they bring:</b>")
+        for x in career:
+            inc_lines.append(f"&nbsp;&nbsp;• <b>{x.get('planet')}</b> → {x.get('field','')} "
+                             f"<i>(modern: {x.get('modern','')})</i>")
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  💼 IDEAL INCOME SOURCE",
+           "5️⃣  💼 आदर्श आय-स्रोत",
+           "5️⃣  💼 IDEAL INCOME SOURCE"),
+        "<br/>".join(inc_lines),
+        bg_color=colors.HexColor("#EFF6FF"), border_color=colors.HexColor("#1D4ED8"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Debt + RE + Foreign + Speculation (compact) ────────────
+    rfx_lines = [
+        f"<b>💳 Debt/Loan risk:</b> {debt.get('risk_tier','—')}<br/>"
+        f"&nbsp;&nbsp;&nbsp;<i>{debt.get('note','')}</i>",
+        f"<b>🏠 Real-estate ability:</b> {re_block.get('tier','—')}<br/>"
+        f"&nbsp;&nbsp;&nbsp;<i>{re_block.get('modern','')}</i>",
+        f"<b>🌍 Foreign-income ability:</b> {fi_block.get('tier','—')}<br/>"
+        f"&nbsp;&nbsp;&nbsp;<i>{fi_block.get('modern','')}</i>",
+        f"<b>📈 Speculation/Trading ability:</b> {spec_block.get('tier','—')}<br/>"
+        f"&nbsp;&nbsp;&nbsp;<i>{spec_block.get('modern','')}</i>"
+        + (f"<br/>&nbsp;&nbsp;&nbsp;⚠ {spec_block.get('warning')}" if spec_block.get("warning") else ""),
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  💳 DEBT • REAL-ESTATE • FOREIGN • SPECULATION",
+           "6️⃣  💳 ऋण • अचल-संपत्ति • विदेश • सट्टा",
+           "6️⃣  💳 DEBT • REAL-ESTATE • FOREIGN • SPECULATION"),
+        "<br/><br/>".join(rfx_lines),
+        bg_color=colors.HexColor("#F3F4F6"), border_color=colors.HexColor("#374151"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Money Numerology (AI) ──────────────────────────────────
+    mn_facts = (
+        f"<b>Money planet (driver {driver}):</b> {moneynum.get('self_planet','—')} &nbsp;·&nbsp; "
+        f"<b>Execution planet (conductor {conductor}):</b> {moneynum.get('conductor_planet','—')}<br/>"
+        f"<b>Mindset:</b> {moneynum.get('mindset','')}<br/>"
+        f"<b>Spending tendency:</b> {moneynum.get('spending_tendency','')}<br/>"
+        f"<b>Savings style:</b> {moneynum.get('savings_style','')}<br/>"
+        f"<b>Ideal income channel:</b> {moneynum.get('ideal_income_channel','')}<br/>"
+        f"<b>Lucky money days:</b> {', '.join(moneynum.get('lucky_money_days', [])) or '—'} &nbsp;·&nbsp; "
+        f"<b>Lucky money numbers:</b> {', '.join(str(x) for x in moneynum.get('lucky_money_numbers', [])) or '—'}<br/>"
+        f"<b>Driver↔Conductor money synergy:</b> {moneynum.get('synergy_verdict','')}"
+    )
+    ai_txt = ai_texts.get("t7.money_numerology", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + mn_facts
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  🔢 MONEY NUMEROLOGY — your money-personality",
+           "7️⃣  🔢 धन अंक-शास्त्र — आपकी धन-प्रकृति",
+           "7️⃣  🔢 MONEY NUMEROLOGY — aapki money-personality"),
+        body,
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. Current Dasha Wealth Window (no AI) ────────────────────
+    if dwin.get("available"):
+        dw_lines = [
+            f"<b>Current Mahadasha lord:</b> {dwin.get('md_lord')} "
+            f"(in House {dwin.get('md_house','—')}; Antar: {dwin.get('antar_lord','—')})",
+            f"<b>Period:</b> {dwin.get('md_start','')} → {dwin.get('md_end','')}",
+            f"<b>Sits in wealth-house (2/5/9/11):</b> {'YES ✅' if dwin.get('md_in_wealth_house') else 'No'}",
+            f"<b>Money nature of {dwin.get('md_lord')}:</b> {dwin.get('nature','')}",
+            f"<b>Verdict:</b> {dwin.get('verdict','')}",
+        ]
+        flow.append(_premium_card(s,
+            _T(lang, "8️⃣  ⏳ CURRENT DASHA WEALTH-WINDOW",
+               "8️⃣  ⏳ वर्तमान दशा धन-खिड़की",
+               "8️⃣  ⏳ CURRENT DASHA WEALTH-WINDOW"),
+            "<br/>".join(dw_lines),
+            bg_color=colors.HexColor("#E0F2FE"), border_color=colors.HexColor("#0369A1"),
+            lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 9. Top Strategies + 15-yr Roadmap (AI) ────────────────────
+    strat_lines: List[str] = []
+    if strategies:
+        strat_lines.append("<b>Top wealth strategies for YOUR chart:</b>")
+        for i, st in enumerate(strategies, 1):
+            strat_lines.append(f"&nbsp;&nbsp;{i}. {st}")
+    strat_lines.append(f"<br/><b>Risk profile:</b> {risk_profile}")
+    if roadmap:
+        strat_lines.append("<br/><b>15-year wealth roadmap:</b>")
+        for line in roadmap:
+            strat_lines.append(f"&nbsp;&nbsp;▸ {line}")
+    ai_txt = ai_texts.get("t7.wealth_strategies", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(strat_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "9️⃣  🎯 TOP WEALTH STRATEGIES + 15-YEAR ROADMAP",
+           "9️⃣  🎯 शीर्ष धन रणनीतियाँ + 15-वर्षीय रोडमैप",
+           "9️⃣  🎯 TOP WEALTH STRATEGIES + 15-YEAR ROADMAP"),
+        body,
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 10. Closing synthesis badge (no AI) ───────────────────────
+    flow.append(_premium_card(s,
+        _T(lang, "🔟  📜 TIER 7 SYNTHESIS",
+           "🔟  📜 टियर 7 निष्कर्ष",
+           "🔟  📜 TIER 7 SYNTHESIS"),
+        f"<b>{synthesis}</b><br/><br/>"
+        f"<i>Disclaimer: All wealth predictions are <b>tendencies</b> — Karma + disciplined action "
+        f"override any single planetary signal. Use these as decision aids, not destiny.</i>",
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str,
                               kundli: Optional[Dict[str, Any]] = None,
@@ -5715,6 +5993,106 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier5 facts build failed: %s", exc)
 
+    # ── Tier 7 facts (Wealth & Money) ─ requires kundli ─────────────
+    if kundli is not None:
+        try:
+            from vedic.numerology.wealth import compute_wealth_bundle
+            wb = compute_wealth_bundle(kundli, dob, driver, conductor)
+            if wb.get("available"):
+                wdna = wb["wealth_dna"]
+                yogas = wb["dhana_yogas"]
+                daridra = wb["daridra_audit"]
+                income = wb["income_source"]
+                strategies = wb["wealth_strategies"]
+                roadmap = wb["roadmap_15yr"]
+                moneynum = wb["money_numerology"]
+                dwin = wb["current_dasha_window"]
+
+                specs.append({
+                    "key": "t7.wealth_dna",
+                    "section_key": "tier7.wealth_dna",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "money_planet": (wdna.get("driver_money") or {}).get("planet"),
+                        "yoga_count": wdna.get("yoga_count"),
+                        "daridra_cancelled": wdna.get("daridra_cancelled"),
+                        "scorecard_avg": wdna.get("scorecard_avg"),
+                        "risk_profile": wdna.get("risk_profile"),
+                        "synthesis_verdict": wb.get("synthesis_verdict"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t7.dhana_yogas",
+                    "section_key": "tier7.dhana_yogas",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "yoga_count": len(yogas),
+                        "yoga_names": [y.get("name") for y in yogas[:5]],
+                        "yoga_tiers": [y.get("tier") for y in yogas[:5]],
+                        "first_yoga_modern": (yogas[0].get("modern") if yogas else ""),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t7.daridra_audit",
+                    "section_key": "tier7.daridra_audit",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "cancelled": bool(daridra.get("cancelled")),
+                        "active_yoga_count": len(daridra.get("yogas") or []),
+                        "active_yoga_names": [y.get("name") for y in (daridra.get("yogas") or [])[:3]],
+                        "bhanga_factors": daridra.get("bhanga_factors") or [],
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t7.wealth_strategies",
+                    "section_key": "tier7.wealth_strategies",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "income_source": income.get("modern_career"),
+                        "top_strategies": strategies[:3],
+                        "risk_profile": wb.get("risk_profile"),
+                        "current_md_lord": dwin.get("md_lord"),
+                        "roadmap_first_line": (roadmap[0] if roadmap else ""),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t7.money_numerology",
+                    "section_key": "tier7.money_numerology",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "conductor_number": conductor,
+                        "money_planet": moneynum.get("self_planet"),
+                        "execution_planet": moneynum.get("conductor_planet"),
+                        "mindset": moneynum.get("mindset"),
+                        "savings_style": moneynum.get("savings_style"),
+                        "lucky_money_days": moneynum.get("lucky_money_days"),
+                        "synergy_verdict": moneynum.get("synergy_verdict"),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier7 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -5781,8 +6159,21 @@ def render_part2_pdf(*,
         try:
             # NOTE: do NOT use the local name `mm` here — it would shadow the
             # reportlab `mm` unit imported at module top, breaking SimpleDocTemplate.
-            _hh, _mn = (tob.split(":") + ["0"])[:2]
-            hr_int = int(_hh) % 24
+            # Accept "HH:MM", "HH:MM AM/PM", "H:MM am" etc.
+            _tob_clean = (tob or "").strip().upper()
+            _ampm_hint = None
+            if _tob_clean.endswith("AM") or _tob_clean.endswith("PM"):
+                _ampm_hint = _tob_clean[-2:]
+                _tob_clean = _tob_clean[:-2].strip()
+            _parts = (_tob_clean.split(":") + ["0"])[:2]
+            _hh = "".join(c for c in _parts[0] if c.isdigit()) or "0"
+            _mn = "".join(c for c in _parts[1] if c.isdigit()) or "0"
+            hr_int = int(_hh)
+            if _ampm_hint == "PM" and hr_int < 12:
+                hr_int += 12
+            elif _ampm_hint == "AM" and hr_int == 12:
+                hr_int = 0
+            hr_int %= 24
             ampm_v = "AM" if hr_int < 12 else "PM"
             hr12 = hr_int if hr_int <= 12 else hr_int - 12
             if hr12 == 0:
@@ -5840,6 +6231,13 @@ def render_part2_pdf(*,
         story += _tier5_relationships_section(s, name, dob, driver, conductor,
                                                kundli=kundli, lang=lang,
                                                ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 59-70 — 💰 TIER 7 — Wealth & Money DNA
+    if kundli is not None:
+        story += _tier7_wealth_section(s, name, dob, driver, conductor,
+                                        kundli=kundli, lang=lang,
+                                        ai_texts=ai_texts)
         story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

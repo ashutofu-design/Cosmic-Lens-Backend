@@ -183,6 +183,43 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         lambda f, t: _has_num(t, f.get("self_driver"))
                      or _has_word(t, f.get("self_yoni"))
                      or _has_word(t, f.get("self_moon_nakshatra")),
+    # ── Tier 7 — Wealth & Money ──────────────────────────────────────
+    # Each validator anchors on a SPECIFIC locked fact from this person's
+    # chart (planet name, yoga name, MD lord, driver number) — not generic
+    # wealth keywords — so generic/hallucinated prose is rejected.
+    "tier7.wealth_dna":
+        # Must mention BOTH the money planet AND either yoga-count or driver
+        lambda f, t: _has_word(t, f.get("money_planet"))
+                     and (_has_num(t, f.get("yoga_count"))
+                          or _has_num(t, f.get("driver_number"))),
+    "tier7.dhana_yogas":
+        # If yogas exist, AT LEAST ONE specific yoga name must appear.
+        # If yoga_count == 0, accept any prose (no fact to anchor on).
+        lambda f, t: (
+            (f.get("yoga_count") or 0) == 0
+            or any(_has_word(t, n) for n in (f.get("yoga_names") or []) if n)
+        ),
+    "tier7.daridra_audit":
+        # If active daridra exists → require a specific yoga name OR a bhanga
+        # factor token. If clean (no active yogas) → require a daridra/poverty
+        # word PLUS the cancelled-state acknowledgement (bhanga / cancel /
+        # Lakshmi / favourable) so generic wealth puff doesn't pass.
+        lambda f, t: (
+            (f.get("active_yoga_count") or 0) > 0
+            and (any(_has_word(t, n) for n in (f.get("active_yoga_names") or []) if n)
+                 or any(_has_word(t, b) for b in (f.get("bhanga_factors") or []) if b))
+        ) or (
+            (f.get("active_yoga_count") or 0) == 0
+            and (_has_word(t, "Daridra") or _has_word(t, "poverty")
+                 or _has_word(t, "दरिद्र"))
+        ),
+    "tier7.wealth_strategies":
+        # MUST mention current MD lord (the dasha anchor) — the rest is prose
+        lambda f, t: _has_word(t, f.get("current_md_lord")),
+    "tier7.money_numerology":
+        # MUST mention BOTH driver number AND money planet — the dual anchor
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("money_planet")),
 }
 
 

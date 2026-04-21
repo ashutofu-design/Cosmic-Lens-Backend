@@ -1370,4 +1370,21 @@ api-server/ai_brain/
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 New Delhi)**: HTTP 200, **64 pages** (was 52), zero AI fact-guard rejections, audit totals coherent (active=2 + mild=4 + clear=3 = 9), Mangal card now correctly carries 3 deep findings, Nadi="Kapha" → ideal=[Vata, Pitta], self-Nakshatra excluded from ideal-partner list.
 
-### Phase 4 — Tiers 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 — PENDING
+### Phase 4 — Tier 7 (Wealth & Money) ✅ COMPLETE (2026-04-21)
+
+**Tier 7 — Wealth & Money DNA (10 cards)**
+- `vedic/numerology/wealth.py`: `compute_wealth_bundle(kundli, dob, driver, conductor)` aggregator wraps the existing Sprint-48 `vedic.financial.financial_engine.run_financial_engine` (returns f1..f13: Dhana houses, Dhana Yogas, Daridra audit with bhanga, Income Source, Debt Risk, Real-Estate, Foreign-Income, Speculation, Career-Income, Top Strategies, Risk Profile, 15-yr Roadmap, Wealth-house Scorecard) and adds two new layers:
+  1. **Money-numerology layer** — driver number → money planet (Sun/Moon/Jupiter/Rahu/Mercury/Venus/Ketu/Saturn/Mars) with mindset, spending tendency, savings style, ideal income channel, lucky money days, lucky money numbers, plus driver↔conductor synergy verdict (FOCUSED / SYNERGY / FRICTION / NEUTRAL).
+  2. **Current-dasha wealth window** — current MD lord's relationship to the 4 Dhana houses (2/5/9/11) → STRONG / FAVOURABLE / BUILDING / MINIMALIST / MIXED verdict.
+- **Synergy table fix**: `(1,8)` was previously in BOTH `same_family` AND `enemies` sets, making the FRICTION branch unreachable. Now enemies are checked FIRST so classical hostile pairs (2↔9, 3↔5, 4↔5, 6↔7, 2↔5, etc.) always resolve correctly.
+- **Adapter for kundli schema**: `kundli_engine.calculate_kundli` exposes the dasha info as `currentDasha={maha,antar,startDate,endDate}`, but `run_financial_engine` reads `vimshottari.current.{mahadasha_lord, ...}`. `_adapt_kundli_for_finance` builds a non-destructive shim so F12 (15-yr roadmap) correctly anchors on the current MD lord.
+- Renderer: `_tier7_wealth_section` in `numerology_pdf_part2.py` — title + Wealth-DNA + Dhana-Yogas + Wealth-house scorecard table + Daridra audit + Ideal income source + Debt/RE/Foreign/Speculation compact card + Money-Numerology + Current-Dasha-Window + Top Strategies+15yr Roadmap + Synthesis badge.
+
+**AI narration**: 5 new flagship specs (`t7.wealth_dna`, `t7.dhana_yogas`, `t7.daridra_audit`, `t7.wealth_strategies`, `t7.money_numerology`) with **strict fact-anchored validators** in `ai_narrator.py` — each requires a specific locked fact (money planet name, exact yoga name, current MD lord name, driver number) rather than generic wealth keywords, so generic/hallucinated prose is rejected. Total flagship AI calls = **31** (was 26).
+
+**Bug-fix nuances**:
+- Tightened `tob` parser at `render_part2_pdf` to accept "HH:MM AM/PM" formats (previously crashed on `int('30 AM')`, silently skipping all kundli-dependent tiers including 4/5/7).
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **66 pages** (was 64), zero AI fact-guard rejections, AI narrations correctly anchor on locked facts (e.g. driver 6, Venus, "2 yogas", scorecard avg 0.75 all appear verbatim in the AI prose). Architect-reviewed: severe issues (permissive validators + synergy collision) fixed.
+
+### Phase 5 — Tiers 6 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 — PENDING

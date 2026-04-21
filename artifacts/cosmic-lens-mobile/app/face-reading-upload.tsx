@@ -146,11 +146,35 @@ export default function FaceReadingUploadScreen() {
       setPhase("rendering");
       setProgress("40-page PDF report ban rahi hai…");
       const pdfUrl = `${API_BASE}/api/face_reading/report.pdf?session_id=${sid}`;
-      const target = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + `face_reading_${sid}.pdf`;
-      const dl = await FileSystem.downloadAsync(pdfUrl, target);
-      if (dl.status !== 200) throw new Error(`PDF download failed (${dl.status})`);
 
-      setPdfUri(dl.uri);
+      if (Platform.OS === "web") {
+        // Web: fetch as blob and trigger anchor download (FileSystem APIs unavailable).
+        try {
+          const r = await fetch(pdfUrl, { headers: { "bypass-tunnel-reminder": "true" } });
+          if (!r.ok) throw new Error(`PDF download failed (${r.status})`);
+          const blob = await r.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = `face_reading_${sid}.pdf`;
+          a.target = "_blank";
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+          setPdfUri(blobUrl);
+        } catch {
+          if (typeof window !== "undefined") window.open(pdfUrl, "_blank", "noopener");
+          setPdfUri(pdfUrl);
+        }
+      } else {
+        const target = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + `face_reading_${sid}.pdf`;
+        const dl = await FileSystem.downloadAsync(pdfUrl, target);
+        if (dl.status !== 200) throw new Error(`PDF download failed (${dl.status})`);
+        setPdfUri(dl.uri);
+      }
+
       setPhase("done");
       setProgress("Report ready!");
     } catch (e: any) {

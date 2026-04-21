@@ -53,6 +53,10 @@ export const API_BASE = resolveApiBase();
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
   "Accept":       "application/json",
+  // Bypass localtunnel's "Click to continue" interstitial that otherwise
+  // returns HTML instead of JSON on the first request from a fresh client IP.
+  "bypass-tunnel-reminder": "true",
+  "User-Agent": "CosmicLensMobile/1.0",
 };
 
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {

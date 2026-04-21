@@ -455,6 +455,32 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setOpening(true);
     try {
+      // ── Web (workspace iframe / browser) — FileSystem APIs unavailable.
+      // Fetch as blob then trigger a download via anchor click. Falls back to
+      // a new-tab open if blob fetch fails (e.g. CORS).
+      if (Platform.OS === "web") {
+        try {
+          const r = await fetch(url, { headers: { "bypass-tunnel-reminder": "true" } });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const blob = await r.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = fileName;
+          a.target = "_blank";
+          a.rel = "noopener";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+        } catch {
+          // Last-resort fallback: open URL in a new tab so the browser handles it.
+          if (typeof window !== "undefined") window.open(url, "_blank", "noopener");
+        }
+        return;
+      }
+
+      // ── Native (iOS / Android) — download then Share sheet.
       const dest = `${FileSystem.cacheDirectory}${fileName}`;
       const res = await FileSystem.downloadAsync(url, dest, {
         headers: { "bypass-tunnel-reminder": "true" },

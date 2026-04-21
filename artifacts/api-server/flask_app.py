@@ -618,6 +618,8 @@ def face_reading_analyze():
         gender=gender,
         ethnicity=ethnicity,
         age=age_val,
+        anthropometry_result=eng1_result,
+        symmetry_result=eng2_result,
     )
 
     return jsonify({

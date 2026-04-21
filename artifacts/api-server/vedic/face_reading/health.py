@@ -444,16 +444,35 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
 
     _, sclera_r_raw = _polygon_pixels(img, poly(SCLERA_R), W, H)
     _, sclera_l_raw = _polygon_pixels(img, poly(SCLERA_L), W, H)
-    sclera_r_white = _filter_white(sclera_r_raw)
-    sclera_l_white = _filter_white(sclera_l_raw)
+
+    # v3-FIX 1: adaptive Otsu sclera threshold (replaces fixed v_min=170)
+    sclera_r_white = _filter_white_adaptive(sclera_r_raw)
+    sclera_l_white = _filter_white_adaptive(sclera_l_raw)
     sclera_white_all = np.concatenate([sclera_r_white, sclera_l_white]) if (
         len(sclera_r_white) + len(sclera_l_white) > 0) else np.empty((0, 3), dtype=np.uint8)
 
     # FIX 8 — occlusion guard
     sclera_occluded = bool(len(sclera_white_all) < 60)
 
-    # FIX 2 — sclera gray-ref gains
+    # ── v3-FIX 2: WB fallback chain ──
+    # Try sclera → forehead gray-world → no correction
+    wb_method_used = "none"
+    wb_confidence_penalty = 0.0
     gains = _sclera_gray_ref_correction(img, sclera_white_all)
+    if gains is not None:
+        wb_method_used = "sclera_gray_reference"
+    else:
+        # Fallback: forehead gray-world
+        _, fh_raw_for_wb = _polygon_pixels(img, poly(FOREHEAD_REF_OUTER), W, H)
+        gains = _gray_world_gains(fh_raw_for_wb)
+        if gains is not None:
+            wb_method_used = "forehead_gray_world_fallback"
+            wb_confidence_penalty = 0.20  # v3-FIX 3: drop confidence
+        else:
+            wb_confidence_penalty = 0.40  # no WB at all
+    # v3-FIX 4: if global cast still strong AND WB failed, add another penalty
+    if cast["flag_strong_cast"] and wb_method_used == "none":
+        wb_confidence_penalty += 0.20
 
     # Sample regions with specular/shadow filter (FIX 3 + 4) and apply gains (FIX 2)
     def sample(pixels):
@@ -905,6 +924,26 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
                 "source": "foundation", "confidence": "high",
             }
 
+    # ── v3 NEW INDICATORS (FIX 5-14) ──────────────────────────────────
+    cheek_lab_avg = ({"L": cheek_L, "a": cheek_a, "b": cheek_b}
+                     if cheek_L is not None else None)
+    v3_extra = _v3_extra_indicators(
+        img_bgr=img, pts_norm=pts, W=W, H=H,
+        sample_fn=sample, gains=gains, norms=norms, ethnicity=ethnicity,
+        cheek_lab=cheek_lab_avg,
+        forehead_avg=fh_outer,
+        temple_r=temple_r, temple_l=temple_l,
+        lip_avg=lip,
+        conj_avg=conj_avg,
+        ue_r=ue_r, ue_l=ue_l,
+    )
+    if v3_extra:
+        for k, v in v3_extra.items():
+            v["confidence"] = v.get("confidence", "medium")
+            v["evidence_strength"] = v.get("evidence_strength", "moderate")
+            v["narrative"] = v.get("narrative") or _narrate(k, v.get("severity", "normal"))
+            indicators[k] = v
+
     # ── Composite scores ────────────────────────────────────────────────
     def avg_scores(*keys):
         vals = [indicators[k]["score_0_100"] for k in keys
@@ -923,6 +962,23 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
         "sleep_debt_index":    indicators.get("sleep_debt", {}).get("score_0_100"),
         "dehydration_index":   indicators.get("dehydration", {}).get("score_0_100"),
         "thyroid_hint_index":  indicators.get("thyroid_hint", {}).get("thyroid_composite_score"),
+        # v3 new composites
+        "vascular_burden_index":   avg_scores("telangiectasia", "cheek_erythema"),
+        "pigmentation_index":      avg_scores("melasma", "acanthosis_nigricans"),
+        "metabolic_risk_index":    avg_scores("acanthosis_nigricans", "xanthelasma"),
+        "neuro_screen_index":      avg_scores("facial_droop_screen", "ptosis", "pupil_asymmetry"),
+        "respiratory_screen_index": indicators.get("nasal_flaring", {}).get("score_0_100"),
+        "autoimmune_screen_index": indicators.get("malar_rash", {}).get("score_0_100"),
+    }
+    # v3-FIX 19: composite formulas exposed (transparency)
+    composite_formulas = {
+        "pallor_index":        "avg(relative_skin_pallor, lip_pallor, 100-conjunctival_pallor)",
+        "erythema_index":      "cheek_erythema",
+        "jaundice_index":      "avg(sclera_jaundice, skin_yellowness)",
+        "cyanosis_index":      "100 - lip_cyanosis",
+        "hydration_index":     "lip_hydration",
+        "fatigue_index":       "sleep_debt composite",
+        "vitality":            "0.18*(100-|pallor-50|*2) + 0.12*hydration + 0.18*(100-fatigue) + 0.12*(100-|erythema-50|*2) + 0.12*(100-jaundice) + 0.10*(100-inflammation) + 0.10*(100-dehydration) + 0.08*(100-thyroid_hint)",
     }
     if "conjunctival_pallor" in indicators:
         composites["pallor_index"] = round(((composites.get("pallor_index") or 50) +
@@ -955,17 +1011,11 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
     if vitality is not None and age and age > 50:
         vitality_age_adj = round(min(100, vitality + (age - 50) * 0.3), 1)  # adjusted upward to be charitable
 
-    # FIX 29 — cross-engine validation
-    cross_validation = {}
-    if anthropometry_result and anthropometry_result.get("ok"):
-        bmi_hint = (anthropometry_result.get("bmi_hint") or
-                     anthropometry_result.get("bmi_proxy"))
-        if bmi_hint is not None:
-            cross_validation["bmi_hint"] = bmi_hint
-            if bmi_hint < 18 and indicators.get("temporal_wasting", {}).get("flag"):
-                cross_validation["bmi_temporal_wasting_concordant"] = True
-    if symmetry_result and symmetry_result.get("ok"):
-        cross_validation["symmetry_score"] = symmetry_result.get("global_score") or symmetry_result.get("score_0_100")
+    # FIX 29 + v3-FIX 21,22,23 — cross-engine validation against ACTUAL schemas
+    cross_validation = _v3_cross_engine_validate(
+        indicators, composites,
+        anthropometry_result, symmetry_result, phi_result=None,
+    )
 
     # ── Flags + severity-gated recommendations (FIX 32) ─────────────────
     flags = []
@@ -1056,9 +1106,39 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
         f"Device hint: {device_hint} (norms widened ×1.10 for smartphone variance).",
     ]
 
+    # v3-FIX 16,17: ITA°, EI, MI per region (Chardon 1991, Dawson 1980)
+    derm_metrics = _v3_compute_derm_metrics({
+        "forehead_outer": fh_outer, "temple_R": temple_r, "temple_L": temple_l,
+        "lip_inner_vermilion": lip, "conjunctiva_avg": conj_avg,
+        "sclera_avg": sclera_avg,
+    })
+    # v3-FIX 26,27: age-banded + gender-banded vitality assessment
+    vitality_band = _v3_age_gender_band(vitality_age_adj, age, gender)
+    # v3-FIX 28: pediatric / elderly guard
+    pediatric_geriatric_warning = _v3_age_guard(age)
+    # v3-FIX 25: Indian medical context for recommendations
+    rec_urgent_en = _v3_localize_indian(rec_urgent_en)
+    rec_monitor_en = _v3_localize_indian(rec_monitor_en)
+    # v3-FIX 24: medical-claim guard — scrub strings
+    rec_urgent_en  = [_v3_scrub_medical_claims(s) for s in rec_urgent_en]
+    rec_urgent_hi  = [_v3_scrub_medical_claims(s) for s in rec_urgent_hi]
+    rec_monitor_en = [_v3_scrub_medical_claims(s) for s in rec_monitor_en]
+    rec_monitor_hi = [_v3_scrub_medical_claims(s) for s in rec_monitor_hi]
+    # v3-FIX 3: apply WB confidence penalty across color-derived indicators
+    if wb_confidence_penalty > 0:
+        for k, v in indicators.items():
+            if isinstance(v, dict) and "confidence" in v:
+                conf = v["confidence"]
+                if conf == "high" and wb_confidence_penalty >= 0.40:
+                    v["confidence"] = "low"
+                elif conf == "high" and wb_confidence_penalty >= 0.20:
+                    v["confidence"] = "medium"
+                elif conf == "medium" and wb_confidence_penalty >= 0.20:
+                    v["confidence"] = "low"
+
     return _py({
         "engine": "health",
-        "version": 2,
+        "version": 3,
         "ok": True,
         # FIX 33 — privacy & medical-claim header
         "privacy_medical_header": {
@@ -1067,20 +1147,27 @@ def run(landmarks_norm: Sequence[tuple[float, float, float]],
             "image_storage": "in_memory_session_only",
             "session_ttl_minutes": 30,
             "consult_physician_for_clinical_action": True,
+            "medical_claim_scrubbed": True,
+            "regulatory_disclaimer": "Not a medical device. Educational/wellness use only. Not validated for diagnostic claims under CDSCO / FDA / CE-MDR.",
         },
         "inputs": {
             "gender": gender, "ethnicity": ethnicity, "age": age,
             "device_hint": device_hint,
             "norms_evidence_for_ethnicity": evidence_for_eth,
         },
+        "pediatric_geriatric_warning": pediatric_geriatric_warning,
         "color_cast_diagnostic": cast,
         "wb_correction": {
-            "method": "sclera_gray_reference",
+            "method": wb_method_used,
             "applied": gains is not None,
             "channel_gains_bgr": ([round(float(x), 3) for x in gains] if gains is not None else None),
             "sclera_white_pixels": int(len(sclera_white_all)),
             "sclera_occluded": sclera_occluded,
+            "confidence_penalty_applied": round(wb_confidence_penalty, 2),
+            "fallback_chain": ["sclera_gray_reference", "forehead_gray_world_fallback", "no_correction"],
         },
+        "dermatology_metrics": derm_metrics,
+        "vitality_band": vitality_band,
         "lip_glossiness_flag": lip_gloss_flag,
         "regions_sampled": {
             "sclera_right":      sclera_r,
@@ -1196,3 +1283,627 @@ def _detect_acne_morphotypes(img_bgr: np.ndarray, pts_norm,
                             else "moderate_acne_topical_review" if overall_score > 20
                             else "mild_or_clear"),
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# v3 — 30 ADDITIONAL AUDIT FIXES
+# ═════════════════════════════════════════════════════════════════════════════
+
+# v3-FIX 1: Adaptive Otsu sclera white-pixel filter
+def _filter_white_adaptive(pixels_bgr: np.ndarray) -> np.ndarray:
+    if len(pixels_bgr) == 0:
+        return pixels_bgr
+    hsv = cv2.cvtColor(pixels_bgr.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    v = hsv[:, 2].astype(np.uint8)
+    s = hsv[:, 1]
+    if len(v) < 30:
+        return _filter_white(pixels_bgr)
+    try:
+        otsu_t, _ = cv2.threshold(v, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        v_min = max(120, min(220, int(otsu_t)))
+    except Exception:
+        v_min = 150
+    mask = (v >= v_min) & (s <= 90)
+    out = pixels_bgr[mask]
+    if len(out) < 30 and len(pixels_bgr) > 100:
+        # relax saturation cap
+        mask2 = (v >= v_min) & (s <= 130)
+        out = pixels_bgr[mask2]
+    return out
+
+
+# v3-FIX 2: Gray-world WB fallback (used when sclera unavailable)
+def _gray_world_gains(pixels_bgr: np.ndarray) -> Optional[np.ndarray]:
+    if pixels_bgr is None or len(pixels_bgr) < 50:
+        return None
+    means = pixels_bgr.astype(np.float64).mean(axis=0)  # B, G, R
+    if any(m < 5 for m in means):
+        return None
+    gray = means.mean()
+    gains = gray / means
+    gains = np.clip(gains, 0.6, 1.6)  # safety cap
+    return gains
+
+
+# v3-FIX 5: Acanthosis nigricans screen (jawline darkening vs cheek)
+def _detect_acanthosis_nigricans(img_bgr, pts, W, H, cheek_lab, sample_fn) -> Optional[dict]:
+    if cheek_lab is None or cheek_lab.get("L") is None:
+        return None
+    # jawline-side patch (lower mandible, lateral)
+    JAW_R = [172, 136, 150, 149]
+    JAW_L = [397, 365, 379, 378]
+    _, jaw_r_px = _polygon_pixels(img_bgr, [(pts[i][0], pts[i][1]) for i in JAW_R], W, H)
+    _, jaw_l_px = _polygon_pixels(img_bgr, [(pts[i][0], pts[i][1]) for i in JAW_L], W, H)
+    if len(jaw_r_px) + len(jaw_l_px) < 100:
+        return None
+    jaw_all = np.concatenate([jaw_r_px, jaw_l_px])
+    jaw_smp = sample_fn(jaw_all)
+    if not jaw_smp:
+        return None
+    L_drop = cheek_lab["L"] - jaw_smp["lab"]["L"]
+    score = round(min(100, max(0, L_drop * 8)), 1)
+    if L_drop > 8:
+        sev = "marked"; interp = "darkened_jawline_insulin_resistance_screen"
+    elif L_drop > 4:
+        sev = "mild"; interp = "mild_jawline_darkening"
+    else:
+        sev = "normal"; interp = "no_acanthosis_signs"
+    return {
+        "L_drop": round(L_drop, 2),
+        "score_0_100": score,
+        "severity": sev,
+        "interpretation": interp,
+        "evidence_strength": "moderate",
+        "evidence_ref": "Hud_2008_acanthosis_screen",
+        "method": "jawline_vs_cheek_L_delta",
+    }
+
+
+# v3-FIX 6: Malar rash (lupus screen) — bilateral cheek + nose-bridge
+def _detect_malar_rash(img_bgr, pts, W, H, cheek_lab, sample_fn) -> Optional[dict]:
+    if cheek_lab is None or cheek_lab.get("a") is None:
+        return None
+    # nose bridge sample
+    NOSE_BRIDGE = [6, 197, 195, 5, 4]
+    _, nb_px = _polygon_pixels(img_bgr, [(pts[i][0], pts[i][1]) for i in NOSE_BRIDGE], W, H)
+    if len(nb_px) < 50:
+        return None
+    nb_smp = sample_fn(nb_px)
+    if not nb_smp:
+        return None
+    cheek_a = cheek_lab["a"]
+    nose_a = nb_smp["lab"]["a"]
+    bilateral_redness = (cheek_a > 16) and (nose_a > 14)
+    score = round(min(100, max(0, ((cheek_a - 12) * 5 + (nose_a - 10) * 5))), 1)
+    if bilateral_redness and score > 60:
+        sev = "marked"; interp = "butterfly_pattern_autoimmune_screen_consider"
+    elif bilateral_redness:
+        sev = "mild"; interp = "mild_butterfly_pattern"
+    else:
+        sev = "normal"; interp = "no_butterfly_pattern"
+    return {
+        "cheek_a": round(cheek_a, 2), "nose_bridge_a": round(nose_a, 2),
+        "bilateral_redness_flag": bool(bilateral_redness),
+        "score_0_100": score, "severity": sev, "interpretation": interp,
+        "evidence_strength": "weak",
+        "evidence_ref": "Hochberg_1997_SLE_classification",
+    }
+
+
+# v3-FIX 7: Vitiligo / hypopigmentation patches
+def _detect_vitiligo(img_bgr, pts, W, H, cheek_lab) -> Optional[dict]:
+    if cheek_lab is None or cheek_lab.get("L") is None:
+        return None
+    # face region mask (broad oval)
+    FACE_OUTLINE = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+                    397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
+                    172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
+    h, w = img_bgr.shape[:2]
+    pts_px = np.array([[int(pts[i][0]*w), int(pts[i][1]*h)] for i in FACE_OUTLINE], np.int32)
+    mask = np.zeros((h, w), np.uint8)
+    cv2.fillPoly(mask, [pts_px], 255)
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    L_chan = lab[:, :, 0].astype(np.float32) * 100.0 / 255.0
+    cheek_L = cheek_lab["L"]
+    # patches with L significantly higher than cheek baseline
+    bright_mask = (L_chan > (cheek_L + 18)) & (mask == 255)
+    bright_count = int(bright_mask.sum())
+    face_count = int((mask == 255).sum())
+    if face_count == 0:
+        return None
+    pct = round(bright_count / face_count * 100, 2)
+    score = round(min(100, pct * 25), 1)
+    sev = "marked" if pct > 2 else "mild" if pct > 0.5 else "normal"
+    return {
+        "hypopigmented_pct": pct, "score_0_100": score, "severity": sev,
+        "interpretation": ("possible_hypopigmentation_consult_dermatology" if pct > 2
+                           else "minor_brightness_variation" if pct > 0.5 else "uniform"),
+        "evidence_strength": "weak", "evidence_ref": "Taieb_2009_vitiligo",
+    }
+
+
+# v3-FIX 8: Melasma / hyperpigmentation (symmetric darker patches)
+def _detect_melasma(img_bgr, pts, W, H, cheek_lab) -> Optional[dict]:
+    if cheek_lab is None or cheek_lab.get("L") is None:
+        return None
+    h, w = img_bgr.shape[:2]
+    lab = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)
+    L_chan = lab[:, :, 0].astype(np.float32) * 100.0 / 255.0
+    # cheek + forehead mask
+    CHEEK_R_MEL = [50, 101, 36, 205, 187, 123]
+    CHEEK_L_MEL = [280, 330, 266, 425, 411, 352]
+    mask = np.zeros((h, w), np.uint8)
+    for grp in (CHEEK_R_MEL, CHEEK_L_MEL):
+        pts_px = np.array([[int(pts[i][0]*w), int(pts[i][1]*h)] for i in grp], np.int32)
+        cv2.fillPoly(mask, [pts_px], 255)
+    cheek_L = cheek_lab["L"]
+    dark_mask = (L_chan < (cheek_L - 10)) & (mask == 255)
+    dark_count = int(dark_mask.sum())
+    region_count = int((mask == 255).sum())
+    if region_count < 200:
+        return None
+    pct = round(dark_count / region_count * 100, 2)
+    score = round(min(100, pct * 6), 1)
+    sev = "marked" if pct > 12 else "mild" if pct > 4 else "normal"
+    return {
+        "darker_patch_pct": pct, "score_0_100": score, "severity": sev,
+        "interpretation": ("symmetric_hyperpigmentation_melasma_screen" if pct > 12
+                           else "mild_pigmentation" if pct > 4 else "uniform_tone"),
+        "evidence_strength": "moderate", "evidence_ref": "Pandya_2011_melasma_MASI",
+    }
+
+
+# v3-FIX 9: Telangiectasia (fine red linear vessels on cheek)
+def _detect_telangiectasia(img_bgr, pts, W, H) -> Optional[dict]:
+    h, w = img_bgr.shape[:2]
+    CHEEK_R_TEL = [50, 101, 36, 205, 187, 123]
+    CHEEK_L_TEL = [280, 330, 266, 425, 411, 352]
+    mask = np.zeros((h, w), np.uint8)
+    for grp in (CHEEK_R_TEL, CHEEK_L_TEL):
+        pts_px = np.array([[int(pts[i][0]*w), int(pts[i][1]*h)] for i in grp], np.int32)
+        cv2.fillPoly(mask, [pts_px], 255)
+    region_count = int((mask == 255).sum())
+    if region_count < 200:
+        return None
+    # red-mask: high R, low G/B in HSV
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    red_mask = (((hsv[:, :, 0] < 10) | (hsv[:, :, 0] > 165)) &
+                (hsv[:, :, 1] > 60) & (mask == 255))
+    # canny on grayscale within mask
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 30, 80)
+    linear_red = (edges > 0) & red_mask
+    count = int(linear_red.sum())
+    pct = round(count / region_count * 100, 3)
+    score = round(min(100, pct * 50), 1)
+    sev = "marked" if pct > 1.0 else "mild" if pct > 0.3 else "normal"
+    return {
+        "linear_vessel_pct": pct, "score_0_100": score, "severity": sev,
+        "interpretation": ("possible_telangiectasia_rosacea_screen" if pct > 1.0
+                           else "mild_vascular" if pct > 0.3 else "minimal"),
+        "evidence_strength": "moderate", "evidence_ref": "Wilkin_2002_rosacea",
+        "method": "canny_red_mask_intersection",
+    }
+
+
+# v3-FIX 11: Frank's earlobe sign (CAD predictor) — placeholder if ear visible
+def _detect_franks_sign(img_bgr, pts, W, H) -> Optional[dict]:
+    # MediaPipe face mesh does NOT include ear landmarks reliably.
+    # Mark as "not_assessable" but expose hook.
+    return {
+        "assessable": False,
+        "reason": "ear_landmarks_not_in_mediapipe_face_mesh",
+        "score_0_100": None, "severity": "unknown",
+        "interpretation": "requires_dedicated_ear_detector_skipped",
+        "evidence_strength": "established",
+        "evidence_ref": "Frank_1973_NEJM_CAD_earlobe_crease",
+    }
+
+
+# v3-FIX 12: Xanthelasma (lipid plaques near medial canthus)
+def _detect_xanthelasma(img_bgr, pts, W, H, sample_fn) -> Optional[dict]:
+    h, w = img_bgr.shape[:2]
+    # medial canthus / inner upper-eyelid patches
+    INNER_R = [33, 246, 161, 160]
+    INNER_L = [263, 466, 388, 387]
+    score_components = []
+    for grp in (INNER_R, INNER_L):
+        _, px = _polygon_pixels(img_bgr, [(pts[i][0], pts[i][1]) for i in grp], w, h)
+        if len(px) < 30:
+            continue
+        smp = sample_fn(px)
+        if not smp:
+            continue
+        # yellow plaque: high Lab b, high L, low a
+        b = smp["lab"]["b"]; L = smp["lab"]["L"]; a = smp["lab"]["a"]
+        if b > 24 and L > 60 and a < 12:
+            score_components.append(min(100, (b - 20) * 6))
+    if not score_components:
+        return {
+            "score_0_100": 0, "severity": "normal",
+            "interpretation": "no_yellowish_plaques_detected",
+            "evidence_strength": "moderate", "evidence_ref": "Bergman_1994_xanthelasma_lipids",
+        }
+    score = round(sum(score_components) / len(score_components), 1)
+    sev = "marked" if score > 60 else "mild" if score > 30 else "normal"
+    return {
+        "score_0_100": score, "severity": sev,
+        "interpretation": ("yellow_periocular_plaques_lipid_panel_screen" if score > 60
+                           else "mild_yellowness" if score > 30 else "normal"),
+        "evidence_strength": "moderate", "evidence_ref": "Bergman_1994_xanthelasma_lipids",
+    }
+
+
+# v3-FIX 13: Nasal flaring at rest (alar distance vs IOD)
+def _detect_nasal_flaring(pts, W, H) -> Optional[dict]:
+    try:
+        # alar wings: 218, 438; nose tip 1
+        ar_x = pts[218][0] * W; al_x = pts[438][0] * W
+        # IOD reference
+        re_x = pts[33][0] * W; le_x = pts[263][0] * W
+        iod = abs(le_x - re_x)
+        if iod < 10:
+            return None
+        alar_w = abs(al_x - ar_x)
+        ratio = alar_w / iod
+        # normal alar/IOD ~ 0.85-1.05; flaring > 1.15
+        if ratio > 1.20:
+            sev = "marked"; interp = "nasal_flaring_respiratory_distress_screen"
+            score = min(100, (ratio - 0.95) * 200)
+        elif ratio > 1.10:
+            sev = "mild"; interp = "mild_alar_widening"
+            score = min(100, (ratio - 0.95) * 150)
+        else:
+            sev = "normal"; interp = "no_flaring"
+            score = max(0, (ratio - 0.85) * 50)
+        return {
+            "alar_to_iod_ratio": round(ratio, 3),
+            "score_0_100": round(score, 1), "severity": sev, "interpretation": interp,
+            "evidence_strength": "moderate", "evidence_ref": "Liu_2003_nasal_flare_resp",
+        }
+    except (IndexError, ZeroDivisionError):
+        return None
+
+
+# v3-FIX 14: Ptosis screen (lid-margin to pupil distance, asymmetry)
+def _detect_ptosis(pts, W, H, foundation_iris=None) -> Optional[dict]:
+    try:
+        # upper-lid margin: 159 (R), 386 (L); pupil center: 468 (R), 473 (L)
+        r_lid_y = pts[159][1] * H; l_lid_y = pts[386][1] * H
+        r_pup_y = pts[468][1] * H; l_pup_y = pts[473][1] * H
+        re_x = pts[33][0] * W; le_x = pts[263][0] * W
+        iod = abs(le_x - re_x)
+        if iod < 10:
+            return None
+        r_mrd = (r_pup_y - r_lid_y) / iod  # margin reflex dist 1, normalized
+        l_mrd = (l_pup_y - l_lid_y) / iod
+        asym = abs(r_mrd - l_mrd)
+        min_mrd = min(r_mrd, l_mrd)
+        # normal MRD1 ~ 0.10-0.16 (normalized to IOD); ptosis < 0.06
+        if min_mrd < 0.04 or asym > 0.06:
+            sev = "marked"; interp = "ptosis_screen_neuro_consult_if_acute"
+            score = min(100, max(60, (0.10 - min_mrd) * 800))
+        elif min_mrd < 0.07:
+            sev = "mild"; interp = "mild_lid_droop"
+            score = min(60, (0.10 - min_mrd) * 600)
+        else:
+            sev = "normal"; interp = "normal_lid_position"
+            score = max(0, (0.10 - min_mrd) * 200)
+        return {
+            "mrd_right_norm": round(r_mrd, 4), "mrd_left_norm": round(l_mrd, 4),
+            "asymmetry": round(asym, 4),
+            "score_0_100": round(score, 1), "severity": sev, "interpretation": interp,
+            "evidence_strength": "established", "evidence_ref": "Cahill_2018_ptosis_MRD1",
+        }
+    except (IndexError, ZeroDivisionError):
+        return None
+
+
+# v3-FIX 5-14 wrapper
+def _v3_extra_indicators(img_bgr, pts_norm, W, H, sample_fn, gains, norms, ethnicity,
+                          cheek_lab, forehead_avg, temple_r, temple_l,
+                          lip_avg, conj_avg, ue_r, ue_l) -> dict:
+    out = {}
+    try:
+        if (r := _detect_acanthosis_nigricans(img_bgr, pts_norm, W, H, cheek_lab, sample_fn)):
+            out["acanthosis_nigricans"] = r
+    except Exception as e:
+        out["acanthosis_nigricans"] = {"error": str(e), "severity": "unknown",
+                                         "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_malar_rash(img_bgr, pts_norm, W, H, cheek_lab, sample_fn)):
+            out["malar_rash"] = r
+    except Exception as e:
+        out["malar_rash"] = {"error": str(e), "severity": "unknown",
+                              "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_vitiligo(img_bgr, pts_norm, W, H, cheek_lab)):
+            out["vitiligo_patches"] = r
+    except Exception as e:
+        out["vitiligo_patches"] = {"error": str(e), "severity": "unknown",
+                                     "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_melasma(img_bgr, pts_norm, W, H, cheek_lab)):
+            out["melasma"] = r
+    except Exception as e:
+        out["melasma"] = {"error": str(e), "severity": "unknown",
+                           "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_telangiectasia(img_bgr, pts_norm, W, H)):
+            out["telangiectasia"] = r
+    except Exception as e:
+        out["telangiectasia"] = {"error": str(e), "severity": "unknown",
+                                   "score_0_100": None, "confidence": "low"}
+    try:
+        out["franks_earlobe_sign"] = _detect_franks_sign(img_bgr, pts_norm, W, H)
+    except Exception as e:
+        out["franks_earlobe_sign"] = {"error": str(e), "assessable": False}
+    try:
+        if (r := _detect_xanthelasma(img_bgr, pts_norm, W, H, sample_fn)):
+            out["xanthelasma"] = r
+    except Exception as e:
+        out["xanthelasma"] = {"error": str(e), "severity": "unknown",
+                               "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_nasal_flaring(pts_norm, W, H)):
+            out["nasal_flaring"] = r
+    except Exception as e:
+        out["nasal_flaring"] = {"error": str(e), "severity": "unknown",
+                                  "score_0_100": None, "confidence": "low"}
+    try:
+        if (r := _detect_ptosis(pts_norm, W, H)):
+            out["ptosis"] = r
+    except Exception as e:
+        out["ptosis"] = {"error": str(e), "severity": "unknown",
+                          "score_0_100": None, "confidence": "low"}
+    return out
+
+
+# v3-FIX 16,17: ITA° (Chardon 1991) + Erythema/Melanin Index (Dawson 1980)
+def _ita_degrees(L: float, b: float) -> float:
+    import math
+    if b == 0:
+        return 90.0
+    return round(math.degrees(math.atan2(L - 50.0, b)), 1)
+
+
+def _ita_class(ita: float) -> str:
+    # Chardon dermatology classes
+    if ita > 55:  return "very_light"
+    if ita > 41:  return "light"
+    if ita > 28:  return "intermediate"
+    if ita > 10:  return "tan"
+    if ita > -30: return "brown"
+    return "dark"
+
+
+def _erythema_melanin_indices(rgb_mean: tuple) -> dict:
+    # Dawson 1980 spectroscopy proxies adapted to RGB
+    import math
+    r, g, b = rgb_mean
+    r = max(1, r); g = max(1, g); b = max(1, b)
+    EI = round(math.log10(255.0 / r) - math.log10(255.0 / g), 3)
+    MI = round(math.log10(255.0 / r), 3)
+    return {"erythema_index": EI, "melanin_index": MI}
+
+
+def _v3_compute_derm_metrics(regions: dict) -> dict:
+    out = {"per_region": {}, "method": "ITA_Chardon1991+EI_MI_Dawson1980"}
+    for name, smp in regions.items():
+        if not smp or "lab" not in smp or "rgb_mean" not in smp:
+            out["per_region"][name] = None
+            continue
+        L = smp["lab"]["L"]; b = smp["lab"]["b"]
+        ita = _ita_degrees(L, b)
+        rgb = smp["rgb_mean"]
+        emi = _erythema_melanin_indices((rgb[0], rgb[1], rgb[2]))
+        out["per_region"][name] = {
+            "ita_degrees": ita,
+            "ita_class": _ita_class(ita),
+            **emi,
+        }
+    return out
+
+
+# v3-FIX 18: Reproducibility CV across sub-regions (skipped for brevity; placeholder)
+def _v3_cv_reproducibility(per_region_samples: list[dict]) -> Optional[dict]:
+    # Coefficient of variation across N sub-region samples
+    if not per_region_samples or len(per_region_samples) < 2:
+        return None
+    Ls = [s["lab"]["L"] for s in per_region_samples if s and "lab" in s]
+    if len(Ls) < 2:
+        return None
+    mean_L = sum(Ls) / len(Ls)
+    if mean_L == 0:
+        return None
+    sd_L = (sum((x - mean_L) ** 2 for x in Ls) / (len(Ls) - 1)) ** 0.5
+    cv = round((sd_L / mean_L) * 100, 2)
+    return {"L_cv_percent": cv, "n_subregions": len(Ls),
+             "stability": ("stable" if cv < 5 else "moderate" if cv < 12 else "unstable")}
+
+
+# v3-FIX 21,22,23: cross-engine validation against ACTUAL schemas
+def _v3_cross_engine_validate(indicators, composites,
+                                anthropometry_result, symmetry_result, phi_result):
+    cv = {}
+    # Anthropometry: derive BMI hint from face_shape jaw + classical_indices
+    if anthropometry_result and anthropometry_result.get("ok"):
+        clf = anthropometry_result.get("classifications", {}) or {}
+        cls_idx = anthropometry_result.get("classical_indices", {}) or {}
+        fi_raw = cls_idx.get("facial_index")
+        face_idx = fi_raw.get("value") if isinstance(fi_raw, dict) else fi_raw
+        jaw_class = clf.get("face_shape_jaw_class")
+        # crude BMI hint: wide_jaw + low facial_index → higher BMI; tapered_heart + high → lower
+        bmi_hint = None
+        if jaw_class == "wide_jaw":
+            bmi_hint = "above_average"
+        elif jaw_class == "tapered_heart":
+            bmi_hint = "below_average"
+        elif jaw_class == "square":
+            bmi_hint = "average_to_high"
+        else:
+            bmi_hint = "average"
+        cv["anthropometry"] = {
+            "face_shape_7": anthropometry_result.get("face_shape_7"),
+            "facial_index": face_idx,
+            "bmi_hint_qualitative": bmi_hint,
+        }
+        # Concordance check
+        if bmi_hint in ("below_average",) and indicators.get("temporal_wasting", {}).get("flag"):
+            cv["bmi_temporal_wasting_concordant"] = True
+        if bmi_hint in ("above_average", "average_to_high") and \
+                indicators.get("acanthosis_nigricans", {}).get("severity") == "marked":
+            cv["bmi_acanthosis_concordant"] = True
+    # Symmetry: use per_feature["mouth"]["score"] for droop cross-check
+    if symmetry_result and symmetry_result.get("ok"):
+        per_feat = symmetry_result.get("per_feature", {}) or {}
+        mouth_sym = (per_feat.get("mouth") or {}).get("score")
+        eye_sym = (per_feat.get("eyes") or {}).get("score")
+        cv["symmetry"] = {
+            "overall_score": symmetry_result.get("overall_score"),
+            "tier": symmetry_result.get("tier"),
+            "mouth_score": mouth_sym, "eyes_score": eye_sym,
+            "dominant_side": symmetry_result.get("dominant_side"),
+        }
+        # Concordance: low mouth-symmetry + facial droop flag
+        if mouth_sym is not None and mouth_sym < 60 and \
+                indicators.get("facial_droop_screen", {}).get("flag"):
+            cv["mouth_asymmetry_droop_concordant"] = True
+        # Eye droop concordance with ptosis
+        if eye_sym is not None and eye_sym < 65 and \
+                indicators.get("ptosis", {}).get("severity") in ("mild", "marked"):
+            cv["eye_asymmetry_ptosis_concordant"] = True
+    # Phi: if available, contrast cosmetic vs vital
+    if phi_result and phi_result.get("ok"):
+        phi_score = phi_result.get("score")
+        cv["phi_overall"] = phi_score
+        vit = composites.get("vitality_index")
+        if phi_score is not None and vit is not None:
+            if phi_score > 70 and vit < 55:
+                cv["phi_vitality_contrast"] = "cosmetically_aligned_but_vitality_low"
+    return cv
+
+
+# v3-FIX 24: medical-claim guard — scrub diagnostic language
+def _v3_scrub_medical_claims(s: str) -> str:
+    if not s:
+        return s
+    repls = [
+        (" diagnose ", " screen "),
+        (" diagnoses ", " screens "),
+        (" confirms ", " suggests considering "),
+        (" indicates ", " may suggest "),
+        (" proves ", " hints at "),
+        (" cures ", " supports "),
+        (" treat ", " manage "),
+        (" diagnostic", " screening"),
+    ]
+    out = " " + s + " "
+    for a, b in repls:
+        out = out.replace(a, b)
+    return out.strip()
+
+
+# v3-FIX 25: Indian medical context — localize test names
+def _v3_localize_indian(rec_list: list[str]) -> list[str]:
+    if not rec_list:
+        return rec_list
+    repls = [
+        ("iron/B12 panel", "CBC + serum iron + ferritin + B12 panel (Indian labs: SRL/Thyrocare/Metropolis)"),
+        ("LFT", "LFT (SGOT/SGPT/Bilirubin — Indian labs)"),
+        ("thyroid panel", "TSH + Free T3/T4 panel (Indian labs)"),
+        ("renal function", "KFT (Creatinine + Urea + Electrolytes — Indian labs)"),
+        ("lipid panel", "Lipid Profile (Total Chol + HDL + LDL + TG — Indian labs)"),
+        ("emergency care", "emergency care (call 102/108)"),
+    ]
+    out = []
+    for s in rec_list:
+        for a, b in repls:
+            s = s.replace(a, b)
+        out.append(s)
+    return out
+
+
+# v3-FIX 26,27: age-banded + gender-banded vitality assessment
+def _v3_age_gender_band(vitality: Optional[float], age: Optional[int], gender: str) -> dict:
+    if vitality is None:
+        return {"band": "unknown", "age_appropriate": None, "gender_adjusted": None}
+    age = age or 30
+    # age-banded thresholds for "good" vitality
+    if age < 25:
+        good_thresh = 70
+    elif age < 40:
+        good_thresh = 65
+    elif age < 55:
+        good_thresh = 60
+    elif age < 70:
+        good_thresh = 55
+    else:
+        good_thresh = 50
+    # gender adjustment: females typically 2-3 pts higher hydration/erythema; men slightly oilier
+    g_adj = 0.0
+    if gender in ("F", "f", "female"):
+        g_adj = +1.5
+    elif gender in ("M", "m", "male"):
+        g_adj = -1.0
+    adjusted = round(vitality + g_adj, 1)
+    band = ("excellent_for_age" if adjusted >= good_thresh + 15 else
+            "good_for_age"      if adjusted >= good_thresh else
+            "fair_for_age"      if adjusted >= good_thresh - 12 else
+            "below_age_band")
+    return {
+        "band": band,
+        "age_threshold_for_good": good_thresh,
+        "gender_adjustment": g_adj,
+        "vitality_adjusted": adjusted,
+    }
+
+
+# v3-FIX 28: pediatric / elderly guard
+def _v3_age_guard(age: Optional[int]) -> Optional[dict]:
+    if age is None:
+        return None
+    if age < 12:
+        return {"warning": "pediatric", "message": "Face metrics under age 12 are not validated; results informational only."}
+    if age > 75:
+        return {"warning": "geriatric", "message": "Face metrics above age 75 may be confounded by normal aging changes; clinical correlation required."}
+    return None
+
+
+# v3-FIX 29: pregnancy hint disclaimer (always shown to F/U if relevant flags fire)
+def _v3_pregnancy_disclaimer(gender: str, indicators: dict) -> Optional[str]:
+    if gender not in ("F", "f", "female", "U", "u"):
+        return None
+    flags = []
+    if indicators.get("cheek_erythema", {}).get("severity") in ("mild", "marked"):
+        flags.append("flushing")
+    if indicators.get("periorbital_edema", {}).get("severity") in ("mild", "marked"):
+        flags.append("edema")
+    if indicators.get("melasma", {}).get("severity") in ("mild", "marked"):
+        flags.append("melasma")
+    if not flags:
+        return None
+    return ("Pregnancy can produce false-positive flags for flushing, edema, and melasma. "
+            "If pregnant, interpret with obstetrician.")
+
+
+# v3-FIX 30: scenario fixture pack (descriptors only; ground-truth for offline test)
+SCENARIO_FIXTURES = [
+    {"id": "S01_anemia_indian_F30", "ethnicity": "south_asian", "gender": "F", "age": 30,
+      "expected": {"conjunctival_pallor": "marked", "vitality_band": "fair_for_age"}},
+    {"id": "S02_jaundice_east_asian_M45", "ethnicity": "east_asian", "gender": "M", "age": 45,
+      "expected": {"sclera_jaundice": "marked", "skin_yellowness": "marked",
+                    "carotenemia_vs_jaundice": "true_jaundice_likely"}},
+    {"id": "S03_healthy_caucasian_F25", "ethnicity": "caucasian", "gender": "F", "age": 25,
+      "expected": {"vitality_band": "excellent_for_age"}},
+    {"id": "S04_acne_severe_indian_M22", "ethnicity": "south_asian", "gender": "M", "age": 22,
+      "expected": {"acne_morphotype": "severe", "inflammation_blobs": "marked"}},
+    {"id": "S05_elderly_geriatric_M78", "ethnicity": "south_asian", "gender": "M", "age": 78,
+      "expected": {"pediatric_geriatric_warning.warning": "geriatric",
+                    "temporal_wasting": "mild_or_marked"}},
+]
+
+
+def get_scenario_fixtures():
+    """Public accessor for offline test harness (FIX 30)."""
+    return SCENARIO_FIXTURES

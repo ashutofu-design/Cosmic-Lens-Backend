@@ -25,6 +25,23 @@ function resolveApiBase(): string {
   const fullUrl   = process.env.EXPO_PUBLIC_API_URL;
   const hostOnly  = process.env.EXPO_PUBLIC_DOMAIN;
 
+  // ── Web platform (workspace preview / EAS web build) ──
+  // localtunnel (.loca.lt) blocks browser fetches with a "click to continue"
+  // interstitial — fine for native fetch (we send `bypass-tunnel-reminder`
+  // header), but the iframe preview can't bypass it. So on web we always
+  // prefer the direct Replit dev domain instead of the lt tunnel.
+  if (typeof window !== "undefined" && typeof document !== "undefined") {
+    if (fullUrl && /\.loca\.lt/i.test(fullUrl)) {
+      // ignore lt tunnel on web — fall through to dev/prod fallback
+    } else if (fullUrl && /^https?:\/\//.test(fullUrl)) {
+      return fullUrl.replace(/\/$/, "");
+    }
+    if (hostOnly) return `https://${hostOnly}`;
+    if (!__DEV__) return PRODUCTION_API_URL;
+    return `https://${DEV_REPLIT_DOMAIN}`;
+  }
+
+  // ── Native (iOS / Android via Expo Go or EAS build) ──
   if (fullUrl && /^https?:\/\//.test(fullUrl)) return fullUrl.replace(/\/$/, "");
   if (hostOnly)                                return `https://${hostOnly}`;
   if (!__DEV__)                                return PRODUCTION_API_URL;

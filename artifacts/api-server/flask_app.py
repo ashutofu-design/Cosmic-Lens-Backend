@@ -488,6 +488,7 @@ def face_reading_analyze():
     session_id = request.values.get("session_id")
 
     front_ls = None
+    cached = None
     # ── Try cached session first (free re-runs) ────────────────────────────
     if session_id:
         cached = session_cache.get(session_id)
@@ -510,11 +511,14 @@ def face_reading_analyze():
                                      mirror=mirror, gender=gender)
         if session_id is None:
             session_id = session_cache.new_session_id()
-        session_cache.put(session_id, {
+        # Build a cached entry with image bytes so health/mole engines work
+        cached = {
             "landmark_sets": {"front": front_ls},
+            "front_image_bytes": front_bytes,
             "mirror": mirror,
             "gender": gender,
-        })
+        }
+        session_cache.put(session_id, cached)
 
     if not front_ls.quality.face_detected:
         return jsonify({

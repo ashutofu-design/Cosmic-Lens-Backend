@@ -412,11 +412,32 @@ def section_7_personality_synthesis(engines: Dict) -> Dict:
             if extra and extra not in strengths:
                 strengths.append(extra)
 
-    # Pad if still short
-    while len(strengths) < 5:
-        strengths.append("Balanced personality — extreme nahi ho.")
-    while len(weaknesses) < 5:
-        weaknesses.append("Sometimes self-doubt creeps in.")
+    # Pad if still short — use distinct fillers based on archetype/element
+    elem_low = (archetype or "").lower()
+    strength_pool = [
+        "Balanced personality — extreme nahi ho, har situation handle kar lete ho.",
+        "Adaptable — naye logon aur naye mahaul me dhal jate ho.",
+        "Reliable — log tumpe count kar sakte hain.",
+        "Practical thinker — emotion aur logic dono use karte ho.",
+        "Self-aware — apni strengths aur limits dono samajhte ho.",
+    ]
+    weakness_pool = [
+        "Sometimes self-doubt creeps in — decision lete waqt second-guess karte ho.",
+        "Overthinking — chhoti baat ko bhi mind me bada bana lete ho.",
+        "Apni opinion khulkar express karne me hesitate karte ho.",
+        "Comfort zone se bahar nikalna mushkil lagta hai.",
+        "Conflict avoid karte ho — kabhi-kabhi apna point chhod dete ho.",
+    ]
+    si = 0
+    while len(strengths) < 5 and si < len(strength_pool):
+        if strength_pool[si] not in strengths:
+            strengths.append(strength_pool[si])
+        si += 1
+    wi = 0
+    while len(weaknesses) < 5 and wi < len(weakness_pool):
+        if weakness_pool[wi] not in weaknesses:
+            weaknesses.append(weakness_pool[wi])
+        wi += 1
 
     # Behaviour pattern paragraph
     dom = p.get("dominant_trait") or "balanced"

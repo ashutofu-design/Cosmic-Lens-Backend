@@ -438,3 +438,9 @@ id = "xriBag6DbNTxTlfunWYHA"
 uri = "file://attached_assets/expo-qr-latest.png"
 type = "image"
 title = "Expo QR — exp://cosmiclens-metro.loca.lt (FIXED, stable URL)"
+
+[[outputs]]
+id = "GqKqQnCL0X3VUENNf7jkt"
+uri = "file://attached_assets/face_reading_report_FINAL.pdf"
+type = "pdf"
+title = "Cosmic Lens — Face Intelligence Report (12 pages)"

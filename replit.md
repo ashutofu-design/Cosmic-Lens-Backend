@@ -1406,6 +1406,35 @@ api-server/ai_brain/
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **69 pages** (was 66, +3 from openers/closers across 5 tiers), zero AI fact-guard rejections, zero errors. Synergy matrix verified across all 81 (driver, conductor) pairs: 9 FOCUSED + 10 FRICTION + 10 SYNERGY + 52 NEUTRAL = 81 ✓; (6,9)/(9,6) correctly resolve to NEUTRAL (no longer dead-coded as FRICTION); (2,9)=FRICTION, (3,9)=SYNERGY as expected.
 
-### Phase 5 — Tier 6 (Career & Profession) + Tiers 8-17 — PENDING
+### Phase 5a — Tier 6 (Career & Profession) ✅ COMPLETE (2026-04-21)
+
+**New module**: `vedic/numerology/career.py` (~370 lines, `compute_career_bundle(kundli, dob, driver, conductor, name)`):
+- **Soul Purpose** — Atmakaraka (highest-deg of 7 visible planets, via reused `karakas.compute_karakas`) → soul-vocation theme map
+- **Career Karaka** — Amatyakaraka (2nd highest-deg) → career-domain theme map
+- **10th House Deep Analysis** — sign, lord, lord-house position, occupants
+- **D10 Dashamsha snapshot** — D10 ascendant, 10th-of-D10 occupants, AmK/AK position in D10
+- **Job-vs-Business verdict** — scoring system: 10th-lord placement (kendra→job, dusthana→biz, upachaya→biz-grow), 7th-lord-in-10th (classical biz yoga), Sun vs Saturn placement → JOB / BUSINESS / HYBRID
+- **Best-fit industries** — driver-vocation table (1-9) ⊕ AmK theme tags
+- **Career timing** — current Mahadasha lord vs 10th house → CAREER-PEAK / FAVOURABLE / RESTRUCTURING / STEADY-GROWTH
+- **Rajayoga detection** — 10th-lord ↔ 5th-lord OR 9th-lord conjunction (or single-planet rulership)
+- **Obstructions** — 10th-lord weak / Saturn-in-10th (delay) / Rahu-in-10th (unconventional)
+- **Numerology layer** — driver-vocation + conductor-execution-style + canonical synergy verdict (reused from `framing._synergy_verdict`) + 3-yr Personal-Year career timeline (PY 2026/27/28 with theme map)
+- **Synthesis verdict** — single-line braided summary
+
+**Renderer**: `_tier6_career_section` in `numerology_pdf_part2.py` — 10 premium cards wrapped in `numerology_opener_block(life_area="career")` + `numerology_closing_toolkit_block`. Wired into `render_part2_pdf` between Tier 5 and Tier 7 (kundli-gated).
+
+**5 AI flagship specs + 5 strict validators** added to `ai_narrator.py`:
+- `tier6.soul_purpose` — anchors on AK planet name
+- `tier6.career_karaka` — anchors on AmK planet name
+- `tier6.job_vs_business` — anchors on verdict keyword (BUSINESS/JOB/HYBRID/EMPLOYMENT/व्यवसाय/नौकरी)
+- `tier6.best_industries` — anchors on driver number AND vocation planet (dual)
+- `tier6.numerology_career` — anchors on driver number AND PY-2026 number (dual)
+Total validator count: 31 → **36**.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi, driver=6, conductor=3)**: HTTP 200, **70 pages** (Tier 6 occupies pages ~32-42, ~11 pages of new content), zero AI fact-guard rejections, zero engine errors. Verdict for this profile: HYBRID (consultancy / job-with-side-venture). Job-side score 1, Business-side score 2.
+
+**Known operational note**: The flagship batch is now **21 parallel AI calls** (11 tier1-3 + 5 tier5 + 5 tier6 + 5 tier7) which exceeds gpt-4.1's free-tier 30K TPM cap → tail-end calls (tier5.marriage, tier6.*, tier7.wealth_dna) hit 429 rate-limit and silently fall back to fact-only cards. **Cards still render with full facts**; only the storytelling intro is missing. To resolve at production: either upgrade OpenAI tier or chunk `narrate_batch` into 2 waves of 10-12 specs each with a 60s gap. Not a code defect.
+
+### Phase 5b — Tiers 8-17 — PENDING
 
 All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

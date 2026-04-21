@@ -183,6 +183,34 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         lambda f, t: _has_num(t, f.get("self_driver"))
                      or _has_word(t, f.get("self_yoni"))
                      or _has_word(t, f.get("self_moon_nakshatra")),
+    # ── Tier 6 — Career & Profession ─────────────────────────────────
+    # Each validator anchors on a SPECIFIC locked fact (Atmakaraka planet,
+    # Amatyakaraka planet, job-vs-biz verdict word, driver number) so generic
+    # career puff is rejected.
+    "tier6.soul_purpose":
+        # Must mention the Atmakaraka planet by name
+        lambda f, t: _has_word(t, f.get("ak_planet")),
+    "tier6.career_karaka":
+        # Must mention the Amatyakaraka planet by name
+        lambda f, t: _has_word(t, f.get("amk_planet")),
+    "tier6.job_vs_business":
+        # Must mention the LOCKED verdict token from facts (BUSINESS / JOB /
+        # HYBRID / EMPLOYMENT) — the engine's call, not generic prose. This
+        # blocks contradictory text (e.g. AI saying "JOB" when chart says "BUSINESS").
+        lambda f, t: any(
+            _has_word(t, tok)
+            for tok in (f.get("verdict") or "").replace("/", " ").replace("(", " ")
+                                              .replace(")", " ").split()
+            if len(tok) >= 3
+        ),
+    "tier6.best_industries":
+        # Must mention BOTH driver number AND vocation planet — the dual anchor
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_word(t, f.get("vocation_planet")),
+    "tier6.numerology_career":
+        # Must mention driver number AND personal-year number for 2026
+        lambda f, t: _has_num(t, f.get("driver_number"))
+                     and _has_num(t, f.get("py_2026")),
     # ── Tier 7 — Wealth & Money ──────────────────────────────────────
     # Each validator anchors on a SPECIFIC locked fact from this person's
     # chart (planet name, yoga name, MD lord, driver number) — not generic

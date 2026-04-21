@@ -5210,6 +5210,263 @@ def _tier5_relationships_section(s, name: str, dob: str, driver: int,
     return flow
 
 
+def _tier6_career_section(s, name: str, dob: str, driver: int,
+                           conductor: int, *, kundli: Dict[str, Any],
+                           lang: str = "hinglish",
+                           ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render Tier 6 — Career & Profession (Atmakaraka + Amatyakaraka + D10 + numerology layer)."""
+    from vedic.numerology.career import compute_career_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_career_bundle(kundli, dob, driver, conductor, name)
+    if not bundle.get("available"):
+        return flow
+
+    soul = bundle["soul_purpose"]
+    karaka = bundle["career_karaka"]
+    tenth = bundle["tenth_house"]
+    d10 = bundle["dashamsha"]
+    jvb = bundle["job_vs_business"]
+    industries = bundle["best_industries"]
+    timing = bundle["career_timing"]
+    rajas = bundle["rajayogas"]
+    obs = bundle["obstructions"]
+    nlayer = bundle["numerology_layer"]
+    synthesis = bundle["synthesis_verdict"]
+
+    # ── Title + numerology opener ─────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "💼 TIER 6 — CAREER & PROFESSION",
+        "💼 टियर 6 — करियर और व्यवसाय",
+        "💼 TIER 6 — CAREER & PROFESSION"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "career", lang))
+    flow.append(_explain_card(s, lang,
+        "📖 What this tier reveals",
+        "📖 यह टियर क्या प्रकट करता है",
+        "📖 Yeh tier kya reveal karta hai",
+        "Tier 6 is your <b>complete career blueprint</b> — Atmakaraka (soul-purpose), Amatyakaraka (career karaka), "
+        "10th-house deep analysis, D10 Dashamsha snapshot, Job-vs-Business verdict from your chart, best-fit "
+        "industries, current Mahadasha career window, Rajayogas detected, plus your numerology execution-style "
+        "and 3-year personal-year career timeline. Every recommendation is anchored to YOUR chart, not generic.",
+        "टियर 6 आपका <b>संपूर्ण करियर खाका</b> है — आत्मकारक (आत्म-उद्देश्य), अमात्यकारक (करियर कारक), 10वें भाव का "
+        "गहन विश्लेषण, D10 दशांश, नौकरी-बनाम-व्यवसाय निर्णय, सर्वोत्तम उद्योग, वर्तमान महादशा करियर खिड़की, राजयोग, "
+        "और आपकी अंक-शास्त्र निष्पादन-शैली के साथ 3-वर्षीय व्यक्तिगत-वर्ष करियर समयरेखा।",
+        "Tier 6 aapka <b>complete career blueprint</b> hai — Atmakaraka (soul-purpose), Amatyakaraka (career "
+        "karaka), 10th-house deep analysis, D10 Dashamsha snapshot, Job-vs-Business verdict aapki chart se, "
+        "best-fit industries, current Mahadasha career window, Rajayogas, plus aapki numerology execution-style "
+        "aur 3-year personal-year career timeline. Har recommendation aapki chart pe anchored hai.",
+        bg="#EEF2FF", border="#3730A3"))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 1. Soul Purpose — Atmakaraka (AI) ─────────────────────────
+    sp_facts = (
+        f"<b>Atmakaraka (soul-indicator):</b> {soul.get('ak_planet','—')} "
+        f"in {soul.get('ak_sign','—')} ({soul.get('ak_deg',0):.1f}°)<br/>"
+        f"<b>Position in D10 (career chart):</b> "
+        f"{'House ' + str(soul.get('ak_in_d10_house')) if soul.get('ak_in_d10_house') else '—'}<br/>"
+        f"<b>Soul direction:</b> {soul.get('ak_theme','')}"
+    )
+    ai_txt = ai_texts.get("t6.soul_purpose", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + sp_facts
+    flow.append(_premium_card(s,
+        _T(lang, "1️⃣  🕉️ YOUR SOUL CAREER PURPOSE (Atmakaraka)",
+           "1️⃣  🕉️ आत्मा का करियर-उद्देश्य (आत्मकारक)",
+           "1️⃣  🕉️ YOUR SOUL CAREER PURPOSE (Atmakaraka)"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Career Karaka — Amatyakaraka (AI) ──────────────────────
+    ck_facts = (
+        f"<b>Amatyakaraka (career-indicator):</b> {karaka.get('amk_planet','—')} "
+        f"in {karaka.get('amk_sign','—')} ({karaka.get('amk_deg',0):.1f}°)<br/>"
+        f"<b>House in D1:</b> {karaka.get('amk_house_d1','—')} &nbsp;·&nbsp; "
+        f"<b>House in D10:</b> {karaka.get('amk_house_d10','—')}<br/>"
+        f"<b>Career-domain pull:</b> {karaka.get('amk_theme','')}"
+    )
+    ai_txt = ai_texts.get("t6.career_karaka", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + ck_facts
+    flow.append(_premium_card(s,
+        _T(lang, "2️⃣  🎯 YOUR CAREER KARAKA (Amatyakaraka)",
+           "2️⃣  🎯 आपका करियर कारक (अमात्यकारक)",
+           "2️⃣  🎯 YOUR CAREER KARAKA (Amatyakaraka)"),
+        body,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. 10th House Deep Analysis (no AI) ───────────────────────
+    th_lines = [
+        f"<b>10th-house sign:</b> {tenth.get('sign','—')}",
+        f"<b>10th-house lord:</b> {tenth.get('lord','—')} "
+        f"(currently sitting in House {tenth.get('lord_house','—')})",
+        f"<b>Occupants in 10th:</b> "
+        f"{', '.join(tenth.get('occupants', [])) if tenth.get('occupants') else '(empty house — read via lord)'}",
+        f"<b>Total occupants:</b> {tenth.get('occupants_count', 0)}",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "3️⃣  🏛️ 10TH HOUSE DEEP ANALYSIS",
+           "3️⃣  🏛️ 10वें भाव का गहन विश्लेषण",
+           "3️⃣  🏛️ 10TH HOUSE DEEP ANALYSIS"),
+        "<br/>".join(th_lines),
+        bg_color=colors.HexColor("#EFF6FF"), border_color=colors.HexColor("#1D4ED8"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Dashamsha (D10) Snapshot (no AI) ───────────────────────
+    d10_lines = [
+        f"<b>D10 Ascendant:</b> {d10.get('ascendant','—')}",
+        f"<b>10th-of-D10 occupants:</b> "
+        f"{', '.join(d10.get('tenth_occupants', [])) if d10.get('tenth_occupants') else '(empty)'}",
+        f"<b>Amatyakaraka in D10 House:</b> {d10.get('amk_in_d10_house','—')}",
+        f"<b>Atmakaraka in D10 House:</b> {d10.get('ak_in_d10_house','—')}",
+        f"<i>D10 (Dashamsha) is the divisional chart that ZOOMS into career-success — "
+        f"any planet sitting in its kendras (1/4/7/10) gains profession-amplifying power.</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  🔭 D10 DASHAMSHA (Career Chart) SNAPSHOT",
+           "4️⃣  🔭 D10 दशांश (करियर कुंडली)",
+           "4️⃣  🔭 D10 DASHAMSHA (Career Chart) SNAPSHOT"),
+        "<br/>".join(d10_lines),
+        bg_color=colors.HexColor("#F5F3FF"), border_color=colors.HexColor("#6D28D9"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Job vs Business Verdict (AI) ───────────────────────────
+    jvb_lines = [
+        f"<b>VERDICT:</b> {jvb.get('verdict','—')}",
+        f"<b>Job-side score:</b> {jvb.get('job_score',0)} &nbsp;·&nbsp; "
+        f"<b>Business-side score:</b> {jvb.get('business_score',0)}",
+        "<b>Reasoning from your chart:</b>",
+    ]
+    for n in jvb.get("notes", []):
+        jvb_lines.append(f"&nbsp;&nbsp;• {n}")
+    ai_txt = ai_texts.get("t6.job_vs_business", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(jvb_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  ⚖️ JOB vs BUSINESS — Your Chart's Verdict",
+           "5️⃣  ⚖️ नौकरी बनाम व्यवसाय — आपकी कुंडली का निर्णय",
+           "5️⃣  ⚖️ JOB vs BUSINESS — Aapki chart ka verdict"),
+        body,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Best-fit Industries (AI) ───────────────────────────────
+    voc = nlayer.get("driver_vocation", {})
+    bi_lines = [
+        f"<b>Driver-{driver} ({voc.get('planet','—')}) vibration:</b> {voc.get('vibration','—')}",
+        f"<b>Best-suited role profile:</b> {voc.get('best_role','—')}",
+        f"<b>Top industry tags (combined: numerology ⊕ Atmakaraka ⊕ Amatyakaraka):</b>",
+    ]
+    for ind in industries:
+        bi_lines.append(f"&nbsp;&nbsp;▸ {ind}")
+    bi_lines.append(f"<br/><i>⚠ Avoid: {voc.get('warning','—')}</i>")
+    ai_txt = ai_texts.get("t6.best_industries", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(bi_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "6️⃣  🏭 BEST-FIT INDUSTRIES & ROLES",
+           "6️⃣  🏭 सर्वोत्तम उद्योग और भूमिकाएँ",
+           "6️⃣  🏭 BEST-FIT INDUSTRIES & ROLES"),
+        body,
+        bg_color=colors.HexColor("#ECFDF5"), border_color=colors.HexColor("#047857"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Career Timing — current Mahadasha (no AI) ──────────────
+    ct_lines = [
+        f"<b>Current Mahadasha lord:</b> {timing.get('current_md_lord','—')} "
+        f"(in House {timing.get('md_lord_house','—')})",
+        f"<b>Current Antardasha lord:</b> {timing.get('current_ad_lord','—')} "
+        f"(ends {timing.get('ad_end_date','—')})",
+        f"<b>Mahadasha ends:</b> {timing.get('md_end_date','—')}",
+        f"<b>Career-window verdict:</b> {timing.get('verdict','—')}",
+        f"<i>{timing.get('note','')}</i>",
+    ]
+    flow.append(_premium_card(s,
+        _T(lang, "7️⃣  ⏳ CAREER TIMING — Current Dasha Window",
+           "7️⃣  ⏳ करियर समय — वर्तमान दशा खिड़की",
+           "7️⃣  ⏳ CAREER TIMING — Current Dasha Window"),
+        "<br/>".join(ct_lines),
+        bg_color=colors.HexColor("#E0F2FE"), border_color=colors.HexColor("#0369A1"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. Rajayogas + Obstructions (no AI) ───────────────────────
+    ro_lines: List[str] = []
+    if rajas:
+        ro_lines.append("<b>👑 Rajayogas detected (career-elevation combos):</b>")
+        for r in rajas:
+            ro_lines.append(f"&nbsp;&nbsp;✨ {r}")
+    else:
+        ro_lines.append("<b>👑 Rajayogas:</b> No textbook Kendra-Trikona Rajayoga detected — "
+                        "career grows via consistent karma, not via celestial shortcut.")
+    ro_lines.append("<br/>")
+    if obs:
+        ro_lines.append("<b>⚠ Obstructions / things to navigate:</b>")
+        for o in obs:
+            ro_lines.append(f"&nbsp;&nbsp;⚠ {o}")
+    else:
+        ro_lines.append("<b>⚠ Obstructions:</b> None major flagged — career path is clean of structural drag.")
+    flow.append(_premium_card(s,
+        _T(lang, "8️⃣  👑 RAJAYOGAS & OBSTRUCTIONS",
+           "8️⃣  👑 राजयोग और बाधाएँ",
+           "8️⃣  👑 RAJAYOGAS & OBSTRUCTIONS"),
+        "<br/>".join(ro_lines),
+        bg_color=colors.HexColor("#FFFBEB"), border_color=colors.HexColor("#A16207"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 9. Numerology Career Layer + 3-yr PY timeline (AI) ────────
+    dv = nlayer.get("driver_vocation", {})
+    cv = nlayer.get("conductor_execution", {})
+    py_tl = nlayer.get("personal_year_timeline", [])
+    nl_lines = [
+        f"<b>Driver-{driver} ({dv.get('planet','—')}):</b> {dv.get('vibration','')} — "
+        f"<i>execution style: {dv.get('execution_style','')}</i>",
+        f"<b>Conductor-{conductor} ({cv.get('planet','—')}):</b> "
+        f"<i>execution layer: {cv.get('execution_style','')}</i>",
+        f"<b>Driver↔Conductor career synergy:</b> {nlayer.get('synergy_verdict','—')}",
+        "<br/><b>📅 3-Year Personal-Year Career Timeline:</b>",
+    ]
+    for row in py_tl:
+        nl_lines.append(
+            f"&nbsp;&nbsp;▸ <b>{row.get('year')}</b> (Personal Year {row.get('py')}) — {row.get('theme','')}"
+        )
+    ai_txt = ai_texts.get("t6.numerology_career", "").strip()
+    body = (_ai_to_html(ai_txt) + "<br/><br/>" if ai_txt else "") + "<br/>".join(nl_lines)
+    flow.append(_premium_card(s,
+        _T(lang, "9️⃣  🔢 NUMEROLOGY CAREER LAYER + 3-YEAR TIMELINE",
+           "9️⃣  🔢 अंक-शास्त्र करियर परत + 3-वर्षीय समयरेखा",
+           "9️⃣  🔢 NUMEROLOGY CAREER LAYER + 3-YEAR TIMELINE"),
+        body,
+        bg_color=colors.HexColor("#FDF4FF"), border_color=colors.HexColor("#86198F"),
+        lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 10. Synthesis closing badge (no AI) ───────────────────────
+    flow.append(_premium_card(s,
+        _T(lang, "🔟  📜 TIER 6 SYNTHESIS",
+           "🔟  📜 टियर 6 निष्कर्ष",
+           "🔟  📜 TIER 6 SYNTHESIS"),
+        f"<b>{synthesis}</b><br/><br/>"
+        f"<i>Disclaimer: Career predictions are <b>tendencies</b> — your effort, skill-building, and "
+        f"timing of action ultimately decide the outcome. Use these as decision aids, not destiny.</i>",
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
+        lang=lang))
+    flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "career", lang))
+
+    return flow
+
+
 def _tier7_wealth_section(s, name: str, dob: str, driver: int,
                            conductor: int, *, kundli: Dict[str, Any],
                            lang: str = "hinglish",
@@ -6021,6 +6278,109 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
         except Exception as exc:
             log.warning("tier5 facts build failed: %s", exc)
 
+    # ── Tier 6 facts (Career & Profession) ─ requires kundli ───────
+    if kundli is not None:
+        try:
+            from vedic.numerology.career import compute_career_bundle
+            cb = compute_career_bundle(kundli, dob, driver, conductor, name)
+            if cb.get("available"):
+                csoul = cb["soul_purpose"]
+                ckar = cb["career_karaka"]
+                cjvb = cb["job_vs_business"]
+                ctim = cb["career_timing"]
+                cnl = cb["numerology_layer"]
+                cdv = cnl.get("driver_vocation", {})
+                cpy = cnl.get("personal_year_timeline", [])
+                cind = cb["best_industries"]
+                py_2026 = (cpy[0].get("py") if cpy else None)
+
+                specs.append({
+                    "key": "t6.soul_purpose",
+                    "section_key": "tier6.soul_purpose",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "ak_planet": csoul.get("ak_planet"),
+                        "ak_sign": csoul.get("ak_sign"),
+                        "ak_in_d10_house": csoul.get("ak_in_d10_house"),
+                        "ak_theme": csoul.get("ak_theme"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t6.career_karaka",
+                    "section_key": "tier6.career_karaka",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "amk_planet": ckar.get("amk_planet"),
+                        "amk_sign": ckar.get("amk_sign"),
+                        "amk_house_d1": ckar.get("amk_house_d1"),
+                        "amk_house_d10": ckar.get("amk_house_d10"),
+                        "amk_theme": ckar.get("amk_theme"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t6.job_vs_business",
+                    "section_key": "tier6.job_vs_business",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "verdict": cjvb.get("verdict"),
+                        "job_score": cjvb.get("job_score"),
+                        "business_score": cjvb.get("business_score"),
+                        "top_reasons": (cjvb.get("notes") or [])[:3],
+                        "current_md_lord": ctim.get("current_md_lord"),
+                        "timing_verdict": ctim.get("verdict"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t6.best_industries",
+                    "section_key": "tier6.best_industries",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "vocation_planet": cdv.get("planet"),
+                        "vibration": cdv.get("vibration"),
+                        "best_role": cdv.get("best_role"),
+                        "top_industries": cind[:6],
+                        "amk_planet": ckar.get("amk_planet"),
+                    },
+                    "fallback": "",
+                })
+
+                specs.append({
+                    "key": "t6.numerology_career",
+                    "section_key": "tier6.numerology_career",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "driver_number": driver,
+                        "conductor_number": conductor,
+                        "vocation_planet": cdv.get("planet"),
+                        "execution_style": cdv.get("execution_style"),
+                        "synergy_verdict": cnl.get("synergy_verdict"),
+                        "py_2026": py_2026,
+                        "py_2026_theme": (cpy[0].get("theme") if cpy else ""),
+                        "py_2027": (cpy[1].get("py") if len(cpy) > 1 else None),
+                        "py_2028": (cpy[2].get("py") if len(cpy) > 2 else None),
+                    },
+                    "fallback": "",
+                })
+        except Exception as exc:
+            log.warning("tier6 facts build failed: %s", exc)
+
     # ── Tier 7 facts (Wealth & Money) ─ requires kundli ─────────────
     if kundli is not None:
         try:
@@ -6261,7 +6621,14 @@ def render_part2_pdf(*,
                                                ai_texts=ai_texts)
         story.append(PageBreak())
 
-    # Pages 59-70 — 💰 TIER 7 — Wealth & Money DNA
+    # Pages 59-70 — 💼 TIER 6 — Career & Profession
+    if kundli is not None:
+        story += _tier6_career_section(s, name, dob, driver, conductor,
+                                        kundli=kundli, lang=lang,
+                                        ai_texts=ai_texts)
+        story.append(PageBreak())
+
+    # Pages 71-82 — 💰 TIER 7 — Wealth & Money DNA
     if kundli is not None:
         story += _tier7_wealth_section(s, name, dob, driver, conductor,
                                         kundli=kundli, lang=lang,

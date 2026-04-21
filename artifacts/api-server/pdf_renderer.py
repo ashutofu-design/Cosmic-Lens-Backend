@@ -2,7 +2,7 @@
 pdf_renderer.py — Phase 4.5
 Render Business Vastu and AstroVastu PRO reports to a PDF binary using
 ReportLab. Bilingual (EN + Hi-Latin) layout, brand-safe footer
-("Powered by Advanced Cosmic Intelligence" — never AI/LLM).
+("Powered by Vedic Engine" — never AI/LLM).
 """
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def _on_page(canvas, doc):
     canvas.setFont("Helvetica", 7)
     canvas.setFillColor(TEXT_SOFT)
     canvas.drawCentredString(w / 2, 12,
-                             "Cosmic Lens  ·  Powered by Advanced Cosmic Intelligence  ·  "
+                             "Cosmic Lens  ·  Powered by Vedic Engine  ·  "
                              f"Page {doc.page}")
     canvas.restoreState()
 
@@ -289,7 +289,7 @@ def _priority_table(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
 
 
 def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[Any]:
-    """Render the optional 'Cosmic Vision Findings' section."""
+    """Render the optional 'Photo Reading Findings' section."""
     out: List[Any] = []
     vfp = report.get("vision_floor_plan") or {}
     vrf = report.get("vision_room_findings") or {}
@@ -297,7 +297,7 @@ def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[
     if not used:
         return out
 
-    out.append(Paragraph("Cosmic Vision Findings", s["h2"]))
+    out.append(Paragraph("Photo Reading Findings", s["h2"]))
     bits: List[str] = []
     if vfp:
         if vfp.get("plot_shape"):
@@ -740,7 +740,7 @@ def render_business_pdf(report: Dict[str, Any], *,
     flow.append(_priority_table(report.get("priority_actions") or [], s))
     flow.append(Spacer(1, 10))
 
-    # ── Cosmic Vision Findings (Phase 6, optional)
+    # ── Photo Reading Findings (Phase 6, optional)
     flow.extend(_vision_block(report, s))
 
     # ── Room-by-room
@@ -769,11 +769,11 @@ def render_business_pdf(report: Dict[str, Any], *,
     # ── Footer
     _ft = report.get("footer")
     if isinstance(_ft, dict):
-        foot = _ft.get("en") or "Powered by Advanced Cosmic Intelligence"
+        foot = _ft.get("en") or "Powered by Vedic Engine"
     elif isinstance(_ft, str) and _ft.strip():
         foot = _ft
     else:
-        foot = "Powered by Advanced Cosmic Intelligence"
+        foot = "Powered by Vedic Engine"
     flow.append(Spacer(1, 14))
     flow.append(Paragraph(_safe(foot), s["footer"]))
 
@@ -848,7 +848,7 @@ def render_pro_pdf(report: Dict[str, Any], *,
     flow.append(_priority_table(report.get("priority_actions") or [], s))
     flow.append(Spacer(1, 10))
 
-    # ── Cosmic Vision Findings (Phase 6, optional)
+    # ── Photo Reading Findings (Phase 6, optional)
     flow.extend(_vision_block(report, s))
 
     rooms = report.get("rooms") or []
@@ -876,11 +876,11 @@ def render_pro_pdf(report: Dict[str, Any], *,
 
     _ft = report.get("footer")
     if isinstance(_ft, dict):
-        foot = _ft.get("en") or "Powered by Advanced Cosmic Intelligence"
+        foot = _ft.get("en") or "Powered by Vedic Engine"
     elif isinstance(_ft, str) and _ft.strip():
         foot = _ft
     else:
-        foot = "Powered by Advanced Cosmic Intelligence"
+        foot = "Powered by Vedic Engine"
     flow.append(Spacer(1, 14))
     flow.append(Paragraph(_safe(foot), s["footer"]))
 

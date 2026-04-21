@@ -9,7 +9,7 @@
  *   4. Photo is converted to a data URL and stored in the parent's state as
  *      { room_type, image_data_url, heading_deg }.
  *
- * Branding: surfaces "Cosmic Vision" — never mentions AI/LLM/GPT.
+ * Branding: surfaces "Photo Engine" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
@@ -192,7 +192,7 @@ export function RoomPhotoCapture({
       </View>
       <Text style={[s.sub, { color: C.textMuted }]}>
         Optional. Tap a room below — a live camera with compass will open. Aim
-        at the wall you want Cosmic Vision to analyse, then tap the shutter.
+        at the wall you want Photo Engine to analyse, then tap the shutter.
       </Text>
 
       {/* Live compass strip (also visible outside camera) */}
@@ -272,7 +272,7 @@ export function RoomPhotoCapture({
                   <Text style={[s.photoMeta, { color: C.textMuted }]}>
                     {dirLbl
                       ? `Compass: ${p.heading_deg?.toFixed(0)}° · ${dirLbl.label} (${dirLbl.code})`
-                      : "Compass: not recorded — Cosmic Vision will infer"}
+                      : "Compass: not recorded — Photo Engine will infer"}
                   </Text>
                 </View>
                 <Pressable onPress={() => removePhoto(i)} hitSlop={8}>

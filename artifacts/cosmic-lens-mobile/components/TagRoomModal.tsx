@@ -3,7 +3,7 @@
  * the room type + direction (disha) for a captured/picked photo,
  * before the photo is added to the AstroVastu PRO scan queue.
  *
- * Branding: surfaces "Cosmic Vision" — never AI/LLM/GPT.
+ * Branding: surfaces "Photo Engine" — never AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";

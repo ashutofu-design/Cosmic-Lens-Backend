@@ -1,5 +1,5 @@
 """
-vision_layer.py — Phase 6 glue between Cosmic Vision Engine and Flask routes.
+vision_layer.py — Phase 6 glue between Photo Reading Engine and Flask routes.
 
 Two responsibilities:
   1) extract_floor_plan_from_upload(payload, business_type, lang)
@@ -33,7 +33,7 @@ _ALLOWED_IMAGE_PREFIXES = ("data:image/jpeg", "data:image/jpg",
                            "data:image/png",  "data:image/webp")
 
 # Brand-safe error message returned to users (never expose AI / OpenAI)
-_BRAND_ERR_DEFAULT = "Cosmic Vision could not read this upload. Please try a clearer image or PDF."
+_BRAND_ERR_DEFAULT = "Photo Engine could not read this upload. Please try a clearer image or PDF."
 
 def _brand_safe_error(_internal_reason: str) -> str:
     """Map any internal vision error to a single brand-safe user message."""
@@ -230,7 +230,7 @@ def annotate_report_with_room_photos(
             vf = analyze_room_visuals(img, rt, heading_deg=h, lang=lang)
         except Exception as exc:
             print(f"[vision_layer] photo[{i}]/{rt} failed: {exc}")
-            summary["errors"].append(f"Photo #{i+1}: Cosmic Vision could not analyze this image.")
+            summary["errors"].append(f"Photo #{i+1}: Photo Engine could not analyze this image.")
             continue
 
         if vf.get("scan_inconclusive"):

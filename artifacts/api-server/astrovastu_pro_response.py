@@ -11,7 +11,7 @@ Sections returned:
   - rooms             : full per-room breakdown (verdict, severity, remedies)
   - priority_actions  : top 5 most urgent items, sorted by severity × dasha
   - classical_summary : deduped citation list from all rooms
-  - footer            : "Powered by Advanced Cosmic Intelligence"
+  - footer            : "Powered by Vedic Engine"
 
 Deterministic (no LLM, no random). Same inputs always produce same output.
 """
@@ -223,7 +223,7 @@ def build_pro_response(
 
     return {
         "meta": {
-            "powered_by":   "Advanced Cosmic Intelligence",
+            "powered_by":   "Vedic Engine",
             "generated_at": datetime.now(_IST).isoformat(timespec="seconds"),
             "tier":         "pro",
             "rooms_count":  scan_result.get("rooms_count", len(rooms)),
@@ -255,5 +255,5 @@ def build_pro_response(
         "topography_findings": topography_findings,
         "dimension_findings":  dimension_findings,
         "classical_score_impact": classical_impact,
-        "footer":            "Powered by Advanced Cosmic Intelligence",
+        "footer":            "Powered by Vedic Engine",
     }

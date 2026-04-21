@@ -1734,7 +1734,7 @@ function DeepScanWizard({
                 <Text style={ds.nextBtnText}>Run Cosmic Deep Scan</Text>
               </Pressable>
               <Text style={[ds.fineprint, { color: C.textMuted }]}>
-                Uses 1 daily quota unit • Powered by Advanced Cosmic Intelligence
+                Uses 1 daily quota unit • Powered by Vedic Engine
               </Text>
             </>
           )}
@@ -2642,7 +2642,7 @@ export default function VastuScreen() {
                       AstroVastu PRO — Pura Ghar Scan
                     </Text>
                     <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2 }}>
-                      Cosmic Vision + your Kundli + Mahadasha layer
+                      Photo Engine + your Kundli + Mahadasha layer
                     </Text>
                   </View>
                 </View>
@@ -2714,7 +2714,7 @@ function ProSection({ C }: { C: any }) {
     {
       icon: "📐",
       title: "Home Blueprint Vastu Scan",
-      desc: "Apne ghar ka photo ya map upload karein — AI direction-wise dosh & remedy report banayega",
+      desc: "Apne ghar ka photo ya map upload karein — direction-wise dosh & remedy report banayega",
       color: "#a78bfa",
     },
     {

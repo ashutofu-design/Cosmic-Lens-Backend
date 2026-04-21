@@ -47,7 +47,7 @@ export default function AboutScreen() {
         <P>
           Cosmic Lens brings the timeless wisdom of <Strong>Vedic Jyotish</Strong>
           to your pocket. We combine classical Parashari principles with modern
-          ephemeris computations and AI-assisted interpretation to give you
+          ephemeris computations and expert Jyotish interpretation to give you
           accurate, accessible, and personal astrological guidance — in your
           language.
         </P>

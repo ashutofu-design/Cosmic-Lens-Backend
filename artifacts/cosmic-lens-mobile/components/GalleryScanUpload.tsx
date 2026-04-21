@@ -8,7 +8,7 @@
  *   { kind: "image"|"pdf", data_url, base64, room_type, direction }
  * The parent wires this into the existing /api/astrovastu-pro POST.
  *
- * Branding: "Cosmic Vision" — never mentions AI/LLM/GPT.
+ * Branding: "Photo Engine" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -361,7 +361,7 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
             </Pressable>
 
             <Text style={[s.fineprint, { color: C.textMid }]}>
-              You picked the direction yourself, so Cosmic Vision will use it as
+              You picked the direction yourself, so Photo Engine will use it as
               ground truth instead of inferring from the {file?.kind === "pdf" ? "PDF" : "photo"}.
             </Text>
           </ScrollView>

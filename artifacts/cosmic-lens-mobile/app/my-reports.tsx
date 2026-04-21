@@ -4,7 +4,7 @@
  * Combined history of paid AstroVastu PRO + Business Vastu deep-scans.
  * Each card lets the user reopen the PDF or share it on WhatsApp.
  *
- * Branding: "Powered by Advanced Cosmic Intelligence" — never reveal AI/LLM.
+ * Branding: "Powered by Vedic Engine" — never reveal AI/LLM.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -122,7 +122,7 @@ export default function MyReportsScreen() {
       `🏠 ${it.property_name}\n` +
       `📊 Score: ${it.score}/100 (Grade ${it.grade})\n\n` +
       `📄 Open report:\n${url}\n\n` +
-      `_Powered by Advanced Cosmic Intelligence_`;
+      `_Powered by Vedic Engine_`;
     const wa = `whatsapp://send?text=${encodeURIComponent(msg)}`;
     try {
       const can = await Linking.canOpenURL(wa);
@@ -274,7 +274,7 @@ export default function MyReportsScreen() {
           }
           ListFooterComponent={
             <Text style={[s.footer, { color: C.textMuted }]}>
-              Powered by Advanced Cosmic Intelligence
+              Powered by Vedic Engine
             </Text>
           }
         />

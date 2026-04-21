@@ -68,7 +68,7 @@ const PLANS = [
     monthlyPrice: 0, yearlyPrice: 0,
     cta: "Current Plan", ctaActive: false,
     icon: "circle" as const,
-    features: ["1 Profile","Basic Kundli Chart","3 AI Questions / day","Demo Insights","Basic Planet View"],
+    features: ["1 Profile","Basic Kundli Chart","3 Jyotish Questions / day","Demo Insights","Basic Planet View"],
     featureOff: ["Full Dasha Timeline","7-Day Forecast","PDF Report","Kundli Milan"],
   },
   {
@@ -78,7 +78,7 @@ const PLANS = [
     monthlyPrice: 149, yearlyPrice: 999, yearlySave: 44,
     cta: "Get Pro", ctaActive: true,
     icon: "zap" as const,
-    features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited AI Chat","7-Day Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
+    features: ["5 Profiles","Full Kundli + Dasha Timeline","Unlimited Jyotish Chat","7-Day Forecast","Planet Positions + Nakshatra","Monthly Category Insights"],
     featureOff: ["PDF Report","Kundli Milan"],
   },
   {

@@ -3540,7 +3540,7 @@ def astrovastu_pro_route():
     data = request.get_json(force=True, silent=True) or {}
     lang = (data.get("lang") or "en").strip().lower()
 
-    # ── Phase 6: Cosmic Vision floor-plan extraction (optional, NEVER blocks) ─
+    # ── Phase 6: Photo Engine floor-plan extraction (optional, NEVER blocks) ─
     vision_data    = None
     vision_warning = None
     fp_upload = data.get("floor_plan_upload")
@@ -3550,7 +3550,7 @@ def astrovastu_pro_route():
             vd, verr = extract_floor_plan_from_upload(fp_upload, business_type=None, lang=lang)
         except Exception as exc:
             print(f"[astrovastu-pro] floor-plan vision crashed (non-fatal): {exc}")
-            vd, verr = {}, "Cosmic Vision is temporarily unavailable. Continuing with your manual layout."
+            vd, verr = {}, "Photo Engine is temporarily unavailable. Continuing with your manual layout."
         if verr:
             vision_warning = verr
         if vd and vd.get("rooms"):
@@ -3561,13 +3561,13 @@ def astrovastu_pro_route():
     # ── Validation ────────────────────────────────────────────────────────
     floor_plan = data.get("floor_plan")
     if not isinstance(floor_plan, list) or not floor_plan:
-        # If user uploaded a floor plan but Cosmic Vision couldn't read it,
+        # If user uploaded a floor plan but Photo Engine couldn't read it,
         # surface a brand-safe, actionable message instead of a generic 400.
         if fp_upload:
             return jsonify({
                 "error":          "vision_inconclusive",
-                "message":        vision_warning or "Cosmic Vision could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
-                "vision_warning": vision_warning or "Cosmic Vision could not detect rooms.",
+                "message":        vision_warning or "Photo Engine could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
+                "vision_warning": vision_warning or "Photo Engine could not detect rooms.",
             }), 422
         return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
     if len(floor_plan) > 12:
@@ -3741,7 +3741,7 @@ def business_vastu_route():
         return jsonify({"error": "invalid_business_type",
                         "message": "business_type must be shop / office / factory."}), 400
 
-    # ── Phase 6: Cosmic Vision floor-plan extraction (optional, NEVER blocks) ─
+    # ── Phase 6: Photo Engine floor-plan extraction (optional, NEVER blocks) ─
     vision_data    = None
     vision_warning = None
     fp_upload = data.get("floor_plan_upload")
@@ -3751,7 +3751,7 @@ def business_vastu_route():
             vd, verr = extract_floor_plan_from_upload(fp_upload, business_type=btype, lang=lang)
         except Exception as exc:
             print(f"[business-vastu] floor-plan vision crashed (non-fatal): {exc}")
-            vd, verr = {}, "Cosmic Vision is temporarily unavailable. Continuing with your manual layout."
+            vd, verr = {}, "Photo Engine is temporarily unavailable. Continuing with your manual layout."
         if verr:
             vision_warning = verr
         if vd and vd.get("rooms"):
@@ -3764,8 +3764,8 @@ def business_vastu_route():
         if fp_upload:
             return jsonify({
                 "error":          "vision_inconclusive",
-                "message":        vision_warning or "Cosmic Vision could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
-                "vision_warning": vision_warning or "Cosmic Vision could not detect rooms.",
+                "message":        vision_warning or "Photo Engine could not detect rooms in this upload. Please try a clearer image, or list rooms manually below.",
+                "vision_warning": vision_warning or "Photo Engine could not detect rooms.",
             }), 422
         return jsonify({"error": "floor_plan must be a non-empty list of rooms"}), 400
     if len(floor_plan) > 15:
@@ -3933,7 +3933,7 @@ def business_vastu_route():
 # the URL. Ownership: log.user_id must match resolved user.id.
 # Canonical brand footer is always enforced at render time.
 # ─────────────────────────────────────────────────────────────────────────────
-PDF_BRAND_FOOTER = "Powered by Advanced Cosmic Intelligence"
+PDF_BRAND_FOOTER = "Powered by Vedic Engine"
 _PDF_TOKEN_TTL_SEC = 600  # 10 minutes
 
 
@@ -4646,7 +4646,7 @@ def astrovastu_dev_grant_route():
 @app.route("/api/ask", methods=["POST"])
 def ask_route():
     """
-    AI Ask engine — rule-based astrology question analysis.
+    Ask engine — rule-based astrology question analysis.
     Body: { question, kundli, lang, replyIdx, user_id }
     Returns: { text, topic, confidence, quota:{used,limit} }
     On limit hit returns 402 with {error, quota, upgrade_required:true}.
@@ -5128,7 +5128,7 @@ def vastu_scan_route():
             "message": "Vastu Drishti seva abhi temporarily band hai — kuch der baad try karein.",
         }), 503
 
-    # ── PRO-tier gate (Cosmic Vision API costs ~₹2-3/scan; PRO+ only) ────────
+    # ── PRO-tier gate (Photo Engine API costs ~₹2-3/scan; PRO+ only) ────────
     if not user_id:
         return jsonify({
             "error":            "login_required",
@@ -5250,7 +5250,7 @@ def vastu_deep_scan_route():
             "message": "Deep Scan seva abhi temporarily band hai — kuch der baad try karein.",
         }), 503
 
-    # ── PRO-tier gate (Cosmic Vision multi-photo deep scan; PRO+ only) ───────
+    # ── PRO-tier gate (Photo Engine multi-photo deep scan; PRO+ only) ───────
     if not user_id:
         return jsonify({
             "error":            "login_required",

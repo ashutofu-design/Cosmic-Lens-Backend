@@ -40,7 +40,7 @@ const PLANS = [
     icon: "star" as const,
     tagline: "__BASIC_TAG__",
     features: [
-      "10 AI Questions / day",
+      "10 Jyotish Questions / day",
       "Marriage Compatibility (Basic)",
       "Love Compatibility (Basic)",
       "Career, Health, Finance — short summary",
@@ -63,7 +63,7 @@ const PLANS = [
     icon: "zap" as const,
     tagline: "Full power Vedic insights",
     features: [
-      "Unlimited AI Questions",
+      "Unlimited Jyotish Questions",
       "Marriage & Love — Full deep analysis",
       "Career, Health, Finance — Detailed",
       "Future Timeline — 6 months full",
@@ -292,7 +292,7 @@ export default function SubscriptionScreen() {
             {t.unlockVedicTitle}
           </Text>
           <Text style={[s.heroSub, { color: C.textMuted }]}>
-            Kundli · Dasha · AI Chat · Forecast
+            Kundli · Dasha · Jyotish Chat · Forecast
           </Text>
 
           <View style={[s.currentChip, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -326,7 +326,7 @@ export default function SubscriptionScreen() {
         <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
           {[
-            { label: "AI Questions", basic: "10/day",         pro: "Unlimited" },
+            { label: "Jyotish Questions", basic: "10/day",         pro: "Unlimited" },
             { label: "Marriage Compat", basic: "Score + summary", pro: "Full breakdown" },
             { label: "Future Timeline", basic: "1 month",     pro: "6 months" },
             { label: "Dasha Analysis",  basic: "Overview",    pro: "MD + AD + PD" },

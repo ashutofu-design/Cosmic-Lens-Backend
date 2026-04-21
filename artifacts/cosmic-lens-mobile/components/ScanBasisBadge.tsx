@@ -6,7 +6,7 @@
  *    us how many room photos were analyzed and whether magnetometer was used.
  *  - rooms (from report): may contain visual_findings + direction_basis.
  *
- * Branding: never mentions AI/LLM/GPT — uses "Cosmic Vision".
+ * Branding: never mentions AI/LLM/GPT — uses "Photo Engine".
  */
 import { Feather } from "@expo/vector-icons";
 import React from "react";
@@ -36,7 +36,7 @@ type Props = {
   /**
    * report.vision_used (top-level flag from backend). When true and no
    * per-room basis says "magnetometer", the badge surfaces "Visual
-   * inference" — the floor-plan was read by Cosmic Vision even if no
+   * inference" — the floor-plan was read by Photo Engine even if no
    * room photos were submitted.
    */
   visionUsed?: boolean;
@@ -84,7 +84,7 @@ export function ScanBasisBadge({
   if (analyzed > 0) {
     meta.push(`${analyzed} room photo${analyzed === 1 ? "" : "s"} analyzed`);
   } else if (visionUsed) {
-    meta.push("Floor plan read by Cosmic Vision");
+    meta.push("Floor plan read by Photo Engine");
   } else {
     meta.push("Default Vastu layout assumed");
   }

@@ -109,7 +109,7 @@ export interface Translations {
   supported:       string;
   comingSoon:      string;
 
-  // ── Ask AI ────────────────────────────────────────────────
+  // ── Ask Jyotish ────────────────────────────────────────────────
   askTitle:        string;
   askPlaceholder:  string;
   askSend:         string;
@@ -251,7 +251,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "Select Language", langSubtitle: "App language will change instantly",
     langSearch: "Search language...", supported: "Supported", comingSoon: "Coming Soon",
 
-    askTitle: "Ask Jyotish AI", askPlaceholder: "Ask anything about your chart...",
+    askTitle: "Ask Jyotish", askPlaceholder: "Ask anything about your chart...",
     askSend: "Send", askSuggestions: "Try asking...",
 
     lifeMapTitle: "Life Map", lifeMapSubtitle: "Your life, mapped by the stars",
@@ -364,7 +364,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "Bhasha chunein", langSubtitle: "App ki bhasha turant badal jaayegi",
     langSearch: "Bhasha search karein...", supported: "Supported", comingSoon: "Jald aa raha hai",
 
-    askTitle: "Jyotish AI se poochein", askPlaceholder: "Apni kundli ke baare mein kuch bhi poochein...",
+    askTitle: "Jyotish se poochein", askPlaceholder: "Apni kundli ke baare mein kuch bhi poochein...",
     askSend: "Bhejein", askSuggestions: "Yeh poochein...",
 
     lifeMapTitle: "Life Map", lifeMapSubtitle: "Sitaaron dwara mapped aapki zindagi",
@@ -477,7 +477,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "भाषा चुनें", langSubtitle: "ऐप की भाषा तुरंत बदल जाएगी",
     langSearch: "भाषा खोजें...", supported: "समर्थित", comingSoon: "जल्द आ रहा है",
 
-    askTitle: "ज्योतिष AI से पूछें", askPlaceholder: "अपनी कुंडली के बारे में कुछ भी पूछें...",
+    askTitle: "ज्योतिष से पूछें", askPlaceholder: "अपनी कुंडली के बारे में कुछ भी पूछें...",
     askSend: "भेजें", askSuggestions: "ये पूछें...",
 
     lifeMapTitle: "लाइफ मैप", lifeMapSubtitle: "सितारों द्वारा मैप किया जीवन",
@@ -589,7 +589,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "भाषा निवडा", langSubtitle: "ऐपची भाषा लगेच बदलेल",
     langSearch: "भाषा शोधा...", supported: "समर्थित", comingSoon: "लवकरच येत आहे",
 
-    askTitle: "ज्योतिष AI ला विचारा", askPlaceholder: "तुमच्या चार्टबद्दल काहीही विचारा...",
+    askTitle: "ज्योतिष ला विचारा", askPlaceholder: "तुमच्या चार्टबद्दल काहीही विचारा...",
     askSend: "पाठवा", askSuggestions: "हे विचारून पाहा...",
 
     lifeMapTitle: "लाइफ मॅप", lifeMapSubtitle: "ताऱ्यांनी मॅप केलेले जीवन",
@@ -701,7 +701,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ভাষা নির্বাচন করুন", langSubtitle: "অ্যাপের ভাষা তাৎক্ষণিকভাবে পরিবর্তন হবে",
     langSearch: "ভাষা খুঁজুন...", supported: "সমর্থিত", comingSoon: "শীঘ্রই আসছে",
 
-    askTitle: "জ্যোতিষ AI কে জিজ্ঞেস করুন", askPlaceholder: "আপনার চার্ট সম্পর্কে যা খুশি জিজ্ঞেস করুন...",
+    askTitle: "জ্যোতিষ কে জিজ্ঞেস করুন", askPlaceholder: "আপনার চার্ট সম্পর্কে যা খুশি জিজ্ঞেস করুন...",
     askSend: "পাঠান", askSuggestions: "এগুলো জিজ্ঞেস করে দেখুন...",
 
     lifeMapTitle: "লাইফ ম্যাপ", lifeMapSubtitle: "তারার দ্বারা ম্যাপ করা জীবন",
@@ -813,7 +813,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "భాష ఎంచుకోండి", langSubtitle: "యాప్ భాష వెంటనే మారుతుంది",
     langSearch: "భాష వెతకండి...", supported: "మద్దతు ఉంది", comingSoon: "త్వరలో వస్తోంది",
 
-    askTitle: "జ్యోతిష్య AI ని అడగండి", askPlaceholder: "మీ చార్ట్ గురించి ఏదైనా అడగండి...",
+    askTitle: "జ్యోతిష్య ని అడగండి", askPlaceholder: "మీ చార్ట్ గురించి ఏదైనా అడగండి...",
     askSend: "పంపండి", askSuggestions: "ఇవి అడిగి చూడండి...",
 
     lifeMapTitle: "లైఫ్ మ్యాప్", lifeMapSubtitle: "నక్షత్రాలతో మ్యాప్ చేయబడిన జీవితం",
@@ -925,7 +925,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "மொழி தேர்ந்தெடுக்கவும்", langSubtitle: "செயலி மொழி உடனடியாக மாறும்",
     langSearch: "மொழி தேடவும்...", supported: "ஆதரிக்கப்படுகிறது", comingSoon: "விரைவில் வருகிறது",
 
-    askTitle: "ஜோதிட AI ஐ கேளுங்கள்", askPlaceholder: "உங்கள் சார்ட் பற்றி எதுவும் கேளுங்கள்...",
+    askTitle: "ஜோதிட ஐ கேளுங்கள்", askPlaceholder: "உங்கள் சார்ட் பற்றி எதுவும் கேளுங்கள்...",
     askSend: "அனுப்பவும்", askSuggestions: "இவற்றை கேளுங்கள்...",
 
     lifeMapTitle: "லைஃப் மேப்", lifeMapSubtitle: "நட்சத்திரங்களால் வரைபடமான வாழ்க்கை",
@@ -1037,7 +1037,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ભાષા પસંદ કરો", langSubtitle: "ઍપ ભાષા તુરંત બદલાશે",
     langSearch: "ભાષા શોધો...", supported: "સમર્થિત", comingSoon: "ટૂંક સમયમાં",
 
-    askTitle: "જ્યોતિષ AI ને પૂછો", askPlaceholder: "તમારા ચાર્ટ વિશે કંઈ પણ પૂછો...",
+    askTitle: "જ્યોતિષ ને પૂછો", askPlaceholder: "તમારા ચાર્ટ વિશે કંઈ પણ પૂછો...",
     askSend: "મોકલો", askSuggestions: "આ પૂછો...",
 
     lifeMapTitle: "લાઇફ મેપ", lifeMapSubtitle: "તારાઓ દ્વારા મેપ કરેલ જીવન",
@@ -1149,7 +1149,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ಭಾಷೆ ಆಯ್ಕೆ ಮಾಡಿ", langSubtitle: "ಅಪ್ಲಿಕೇಶನ್ ಭಾಷೆ ತಕ್ಷಣ ಬದಲಾಗುತ್ತದೆ",
     langSearch: "ಭಾಷೆ ಹುಡುಕಿ...", supported: "ಬೆಂಬಲಿಸಲಾಗಿದೆ", comingSoon: "ಶೀಘ್ರದಲ್ಲಿ",
 
-    askTitle: "ಜ್ಯೋತಿಷ AI ಕೇಳಿ", askPlaceholder: "ನಿಮ್ಮ ಚಾರ್ಟ್ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ...",
+    askTitle: "ಜ್ಯೋತಿಷ ಕೇಳಿ", askPlaceholder: "ನಿಮ್ಮ ಚಾರ್ಟ್ ಬಗ್ಗೆ ಏನಾದರೂ ಕೇಳಿ...",
     askSend: "ಕಳುಹಿಸಿ", askSuggestions: "ಕೇಳಿ ನೋಡಿ...",
 
     lifeMapTitle: "ಲೈಫ್ ಮ್ಯಾಪ್", lifeMapSubtitle: "ನಕ್ಷತ್ರಗಳಿಂದ ಮ್ಯಾಪ್ ಮಾಡಿದ ಜೀವನ",
@@ -1261,7 +1261,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ഭാഷ തിരഞ്ഞെടുക്കൂ", langSubtitle: "ആപ്പ് ഭാഷ ഉടൻ മാറും",
     langSearch: "ഭാഷ തിരയൂ...", supported: "പിന്തുണയ്ക്കുന്നു", comingSoon: "ഉടൻ വരുന്നു",
 
-    askTitle: "ജ്യോതിഷ AI യോട് ചോദിക്കൂ", askPlaceholder: "നിങ്ങളുടെ ചാർട്ടിനെ കുറിച്ച് എന്തും ചോദിക്കൂ...",
+    askTitle: "ജ്യോതിഷ യോട് ചോദിക്കൂ", askPlaceholder: "നിങ്ങളുടെ ചാർട്ടിനെ കുറിച്ച് എന്തും ചോദിക്കൂ...",
     askSend: "അയക്കൂ", askSuggestions: "ഇവ ചോദിക്കൂ...",
 
     lifeMapTitle: "ലൈഫ് മാപ്പ്", lifeMapSubtitle: "നക്ഷത്രങ്ങളാൽ മാപ്പ് ചെയ്ത ജീവിതം",
@@ -1373,7 +1373,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ਭਾਸ਼ਾ ਚੁਣੋ", langSubtitle: "ਐਪ ਭਾਸ਼ਾ ਤੁਰੰਤ ਬਦਲ ਜਾਵੇਗੀ",
     langSearch: "ਭਾਸ਼ਾ ਲੱਭੋ...", supported: "ਸਮਰਥਿਤ", comingSoon: "ਜਲਦੀ ਆ ਰਿਹਾ ਹੈ",
 
-    askTitle: "ਜੋਤਿਸ਼ AI ਤੋਂ ਪੁੱਛੋ", askPlaceholder: "ਆਪਣੇ ਚਾਰਟ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ...",
+    askTitle: "ਜੋਤਿਸ਼ ਤੋਂ ਪੁੱਛੋ", askPlaceholder: "ਆਪਣੇ ਚਾਰਟ ਬਾਰੇ ਕੁਝ ਵੀ ਪੁੱਛੋ...",
     askSend: "ਭੇਜੋ", askSuggestions: "ਇਹ ਪੁੱਛ ਕੇ ਦੇਖੋ...",
 
     lifeMapTitle: "ਲਾਈਫ ਮੈਪ", lifeMapSubtitle: "ਤਾਰਿਆਂ ਦੁਆਰਾ ਮੈਪ ਕੀਤੀ ਜ਼ਿੰਦਗੀ",
@@ -1485,7 +1485,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ଭାଷା ବାଛନ୍ତୁ", langSubtitle: "ଆପ ଭାଷା ତୁରନ୍ତ ବଦଳିବ",
     langSearch: "ଭାଷା ଖୋଜନ୍ତୁ...", supported: "ସମର୍ଥିତ", comingSoon: "ଶୀଘ୍ର ଆସୁଛି",
 
-    askTitle: "ଜ୍ୟୋତିଷ AI କୁ ପଚାରନ୍ତୁ", askPlaceholder: "ଆପଣଙ୍କ ଚାର୍ଟ ବିଷୟରେ ଯାହା ଚାହୁଁଛି ପଚାରନ୍ତୁ...",
+    askTitle: "ଜ୍ୟୋତିଷ କୁ ପଚାରନ୍ତୁ", askPlaceholder: "ଆପଣଙ୍କ ଚାର୍ଟ ବିଷୟରେ ଯାହା ଚାହୁଁଛି ପଚାରନ୍ତୁ...",
     askSend: "ପଠାନ୍ତୁ", askSuggestions: "ଏହା ପଚାରନ୍ତୁ...",
 
     lifeMapTitle: "ଲାଇଫ ମ୍ୟାପ", lifeMapSubtitle: "ତାରାମାନଙ୍କ ଦ୍ୱାରା ମ୍ୟାପ କରାଯାଇଥିବା ଜୀବନ",
@@ -1597,7 +1597,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "ভাষা বাছক", langSubtitle: "এপৰ ভাষা লগে লগে সলনি হ'ব",
     langSearch: "ভাষা বিচাৰক...", supported: "সমৰ্থিত", comingSoon: "সোনকালে আহিছে",
 
-    askTitle: "জ্যোতিষ AI ক সুধক", askPlaceholder: "আপোনাৰ চাৰ্টৰ বিষয়ে যি মন যায় সুধক...",
+    askTitle: "জ্যোতিষ ক সুধক", askPlaceholder: "আপোনাৰ চাৰ্টৰ বিষয়ে যি মন যায় সুধক...",
     askSend: "পঠাওক", askSuggestions: "এইবোৰ সুধক...",
 
     lifeMapTitle: "লাইফ মেপ", lifeMapSubtitle: "তৰাৰ দ্বাৰা মেপ কৰা জীৱন",
@@ -2604,7 +2604,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "Pilih bahasa", langSubtitle: "Bahasa aplikasi akan berubah seketika",
     langSearch: "Cari bahasa...", supported: "Didukung", comingSoon: "Segera hadir",
 
-    askTitle: "Tanya AI Jyotish", askPlaceholder: "Tanyakan apa saja tentang peta Anda...",
+    askTitle: "Tanya Jyotish", askPlaceholder: "Tanyakan apa saja tentang peta Anda...",
     askSend: "Kirim", askSuggestions: "Coba tanyakan...",
 
     lifeMapTitle: "Peta Hidup", lifeMapSubtitle: "Hidupmu, dipetakan oleh bintang",
@@ -2828,7 +2828,7 @@ const T: Record<UILang, Translations> = {
     selectLanguage: "Dil seç", langSubtitle: "Uygulama dili anında değişecek",
     langSearch: "Dil ara...", supported: "Destekleniyor", comingSoon: "Çok yakında",
 
-    askTitle: "Jyotish AI'ya sor", askPlaceholder: "Haritanız hakkında her şeyi sorun...",
+    askTitle: "Jyotish'ya sor", askPlaceholder: "Haritanız hakkında her şeyi sorun...",
     askSend: "Gönder", askSuggestions: "Sormayı deneyin...",
 
     lifeMapTitle: "Yaşam Haritası", lifeMapSubtitle: "Yıldızlar tarafından haritalanan hayatın",

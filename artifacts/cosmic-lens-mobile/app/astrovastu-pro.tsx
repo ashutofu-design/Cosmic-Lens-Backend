@@ -5,11 +5,11 @@
  *   1. User taps "Smart Scan — Open Camera".
  *   2. Live camera with compass overlay opens.
  *   3. Shutter captures a photo + magnetometer heading.
- *   4. We POST the photo as floor_plan_upload; Cosmic Vision detects rooms
+ *   4. We POST the photo as floor_plan_upload; Photo Engine detects rooms
  *      and runs the kundli-aware deep scan.
  *   5. Result + PDF link rendered on the same screen.
  *
- * No AI/LLM branding — surfaces "Cosmic Vision" only.
+ * No AI/LLM branding — surfaces "Photo Engine" only.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -351,11 +351,11 @@ export default function AstroVastuProScreen() {
           <>
             <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                Full Plan — Smart Scan Cosmic Vision
+                Full Plan — Smart Scan Photo Engine
               </Text>
               <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
                 Got the entire floor plan from your architect (PDF or image — bedroom,
-                kitchen, bathroom, all of it)? Upload here. Cosmic Vision will detect
+                kitchen, bathroom, all of it)? Upload here. Photo Engine will detect
                 every room and give you one consolidated direction-wise report,
                 personalised to your kundli.
               </Text>
@@ -485,7 +485,7 @@ export default function AstroVastuProScreen() {
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer || "Powered by Advanced Cosmic Intelligence"}
+                {result.footer || "Powered by Vedic Engine"}
               </Text>
             </View>
           );
@@ -629,7 +629,7 @@ export default function AstroVastuProScreen() {
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
-          ✨ Powered by Advanced Cosmic Intelligence
+          ✨ Powered by Vedic Engine
         </Text>
         <Text style={[styles.brandingFooterSmall, { color: C.textMid }]}>
           Cosmic AstroVastu Drishti — PRO Engine v1.0

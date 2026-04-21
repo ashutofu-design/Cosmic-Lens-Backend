@@ -139,7 +139,7 @@ export interface MoreT {
   willReturnTitle:     string;
   futureOutcomeTitle:  string;
 
-  // ── Ask AI ────────────────────────────────────────────────
+  // ── Ask Jyotish ────────────────────────────────────────────────
   askLimitReached:     string;
   askWithoutKundli:    string;
   askDailyLimitOver:   string;
@@ -161,7 +161,7 @@ export interface MoreT {
   askDemo2:            string;   // Demo turn 2 (user sample question)
   askDemo3:            string;   // Demo turn 3 (assistant)
   askSessionExpired:   string;
-  askPoweredBy:        string;   // "Powered by Advanced Cosmic Intelligence"
+  askPoweredBy:        string;   // "Powered by Vedic Engine"
   askAcharyaName:      string;   // "Acharya Vidyasagar"
 
   // ── Language Picker — Primary indicator ───────────────────
@@ -446,7 +446,7 @@ const EN: MoreT = {
   willReturnTitle:    "Will They Return?",
   futureOutcomeTitle: "Future Outcome",
 
-  // Ask AI
+  // Ask Jyotish
   askLimitReached:    "Daily limit reached",
   askWithoutKundli:   "Without a Kundli I can only give general information. Create your birth chart — then I'll give you a personalized analysis based on your active dasha.",
   askDailyLimitOver:  "Your daily limit is over.",
@@ -468,7 +468,7 @@ const EN: MoreT = {
   askDemo2:           "How will my career be this year?",
   askDemo3:           "Without seeing your kundli I can only give general guidance. Please create your birth chart first — then I can give you a fully personalized analysis based on your active grahas, dasha and yogas.",
   askSessionExpired:  "Session expired — please log out and log in again.",
-  askPoweredBy:       "Powered by Advanced Cosmic Intelligence",
+  askPoweredBy:       "Powered by Vedic Engine",
   askAcharyaName:     "Acharya Vidyasagar",
 
   // Language Picker — Primary indicator
@@ -769,7 +769,7 @@ const HN: Partial<MoreT> = {
   askDemo2:           "Mera career is saal kaisa rahega?",
   askDemo3:           "Beta, bina kundli dekhe mai sirf saamanya baat keh sakta hu. Aap pehle apni janm-kundli banaiye — phir mai aapke graha, dasha aur yog dekh ke ekdum personalized margdarshan dunga.",
   askSessionExpired:  "Session expired — kripya logout karke phir login karein.",
-  askPoweredBy:       "Powered by Advanced Cosmic Intelligence",
+  askPoweredBy:       "Powered by Vedic Engine",
   askAcharyaName:     "Acharya Vidyasagar",
 
   // Language Picker — Primary indicator
@@ -1066,7 +1066,7 @@ const HI: Partial<MoreT> = {
   askDemo2:           "इस वर्ष मेरा करियर कैसा रहेगा?",
   askDemo3:           "बेटा, बिना कुंडली देखे मैं केवल सामान्य बात कह सकता हूँ। आप पहले अपनी जन्म-कुंडली बनाइए — फिर मैं आपके ग्रह, दशा और योग देखकर एकदम व्यक्तिगत मार्गदर्शन दूँगा।",
   askSessionExpired:  "सत्र समाप्त — कृपया लॉगआउट करके पुनः लॉगिन करें।",
-  askPoweredBy:       "Advanced Cosmic Intelligence द्वारा संचालित",
+  askPoweredBy:       "Vedic Engine द्वारा संचालित",
   askAcharyaName:     "आचार्य विद्यासागर",
 
   // Language Picker — Primary indicator

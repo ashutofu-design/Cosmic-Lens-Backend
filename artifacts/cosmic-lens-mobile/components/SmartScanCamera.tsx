@@ -8,7 +8,7 @@
  *   4. User taps the shutter; we capture base64 jpeg + magnetometer heading
  *      at the same instant and hand the result back via `onCapture`.
  *
- * Branding: surfaces "Cosmic Vision" — never mentions AI/LLM/GPT.
+ * Branding: surfaces "Photo Engine" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import { CameraType, CameraView, useCameraPermissions } from "expo-camera";

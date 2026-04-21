@@ -789,7 +789,7 @@ def _render_face_map_page(photo_bytes: bytes, points_norm: list, styles) -> List
     flowables.append(HRFlowable(width="20%", thickness=2, color=C_ACCENT,
                                 spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
     flowables.append(Paragraph(
-        "Yeh tumhari actual photo hai jisko AI ne 468 landmark points pe analyze kiya. "
+        "Yeh tumhari actual photo hai jisko Engine ne 468 landmark points pe analyze kiya. "
         "Har zone (mastak, aankh, naak, gaal, hoṭh, jabdaa, thoddi) se alag-alag insights nikle hain — "
         "is map me dekho ki kis area se kya pada gaya hai.",
         styles["narrative"]))

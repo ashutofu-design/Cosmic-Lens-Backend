@@ -1,11 +1,11 @@
 /**
- * SmartScanUpload — Phase 6 Cosmic Vision UI
+ * SmartScanUpload — Phase 6 Photo Engine UI
  *
  * Lets a user upload a top-down floor plan (image OR PDF). The selected file
  * is converted to base64 client-side and emitted via onChange so the parent
  * screen can include it in the scan POST body as `floor_plan_upload`.
  *
- * Branding: "Cosmic Vision Engine" — never mentions AI/LLM/GPT.
+ * Branding: "Photo Reading Engine" — never mentions AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -130,10 +130,10 @@ export function SmartScanUpload({ value, onChange, disabled }: Props) {
     <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
       <View style={s.headerRow}>
         <Feather name="zap" size={18} color={C.accent} />
-        <Text style={[s.title, { color: C.text }]}>Smart Scan — Cosmic Vision</Text>
+        <Text style={[s.title, { color: C.text }]}>Smart Scan — Photo Engine</Text>
       </View>
       <Text style={[s.sub, { color: C.textMuted }]}>
-        Upload your floor plan (image or PDF). Cosmic Vision will auto-detect rooms and their directions.
+        Upload your floor plan (image or PDF). Photo Engine will auto-detect rooms and their directions.
       </Text>
 
       {value ? (

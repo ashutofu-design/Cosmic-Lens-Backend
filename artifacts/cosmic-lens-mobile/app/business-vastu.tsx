@@ -11,7 +11,7 @@
  *   - Optional muhurat (business start) chart for cycle-alignment note
  *   - Lifetime per-property unlock (no monthly quota)
  *
- * Branding: "Powered by Advanced Cosmic Intelligence" — never reveal AI/LLM.
+ * Branding: "Powered by Vedic Engine" — never reveal AI/LLM.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -384,7 +384,7 @@ export default function BusinessVastuScreen() {
         </Text>
         {scanUpload ? (
           <Text style={{ color: C.textMid, fontSize: 11, marginBottom: 6 }}>
-            Cosmic Vision will detect rooms from your upload. You can also list rooms here to override.
+            Photo Engine will detect rooms from your upload. You can also list rooms here to override.
           </Text>
         ) : null}
 
@@ -565,7 +565,7 @@ export default function BusinessVastuScreen() {
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
+                {result.footer?.en || "Powered by Vedic Engine"}
               </Text>
             </View>
           );
@@ -759,7 +759,7 @@ export default function BusinessVastuScreen() {
 
             {/* Footer */}
             <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-              {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
+              {result.footer?.en || "Powered by Vedic Engine"}
             </Text>
           </View>
           );

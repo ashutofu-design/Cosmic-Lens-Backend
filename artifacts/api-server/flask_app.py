@@ -474,6 +474,7 @@ def face_reading_analyze():
         from vedic.face_reading import samudrika as eng8
         from vedic.face_reading import session_cache
         from vedic.face_reading.report_projector import project_engines_for_report
+        from vedic.face_reading.section_mapper import build_report_sections
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
 
@@ -683,7 +684,7 @@ def face_reading_analyze():
             "brightness": front_ls.quality.brightness,
             "sharpness": front_ls.quality.sharpness,
         },
-        "engines": project_engines_for_report({
+        "engines": (lambda _full: project_engines_for_report({
             "anthropometry": eng1_result,
             "symmetry": eng2_result,
             "phi": eng3_result,
@@ -692,10 +693,26 @@ def face_reading_analyze():
             "personality": eng6_result,
             "first_impression": eng7_result,
             "samudrika": eng8_result,
-        }, full=(request.values.get("full", "false").lower() in ("1", "true", "yes"))),
+        }, full=_full))(request.values.get("full", "false").lower() in ("1", "true", "yes")),
+        "sections": build_report_sections(
+            project_engines_for_report({
+                "anthropometry": eng1_result,
+                "symmetry": eng2_result,
+                "phi": eng3_result,
+                "fwhr": eng4_result,
+                "health": eng5_result,
+                "personality": eng6_result,
+                "first_impression": eng7_result,
+                "samudrika": eng8_result,
+            }),
+            gender=gender,
+            age=int(age_val) if age_val else None,
+        ),
         "engines_complete": 8,
         "engines_total": 9,
         "report_template_version": "21_section_v1",
+        "sections_ready": 13,
+        "sections_total": 21,
     }), 200
 
 

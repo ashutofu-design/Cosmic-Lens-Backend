@@ -480,6 +480,9 @@ def face_reading_analyze():
         cached = session_cache.get(session_id)
         if cached and "front" in cached.get("landmark_sets", {}):
             front_ls = cached["landmark_sets"]["front"]
+            # Inherit cached gender if caller didn't override
+            if (request.values.get("gender") is None) and cached.get("gender"):
+                gender = cached["gender"]
 
     # ── Fall back to uploaded file ─────────────────────────────────────────
     if front_ls is None:
@@ -529,9 +532,9 @@ def face_reading_analyze():
         front_ls.quality.image_height,
     )
 
-    # ── Engine 3: Phi / Golden Ratio ───────────────────────────────────────
-    # Reuse the foundation hairline estimate (mm above mesh top) for true
-    # trichion-based vertical thirds — falls back to mesh top if absent.
+    # ── Engine 3 v2: Phi / Golden Ratio ────────────────────────────────────
+    # Reuse the foundation hairline estimate, iris data, anthropometry result,
+    # gender (from session), and let caller pass ethnicity / age / side photo.
     hairline_offset_mm = None
     try:
         hl = getattr(front_ls, "hairline", None)
@@ -540,11 +543,47 @@ def face_reading_analyze():
     except Exception:
         hairline_offset_mm = None
 
+    iris_dict = None
+    try:
+        iris_obj = getattr(front_ls, "iris", None)
+        if iris_obj is not None:
+            from dataclasses import asdict
+            iris_dict = asdict(iris_obj)
+    except Exception:
+        iris_dict = None
+
+    # Ethnicity & age (optional caller hints)
+    ethnicity = (request.values.get("ethnicity") or "").strip().lower() or None
+    age_raw = request.values.get("age")
+    try:
+        age_val = int(age_raw) if age_raw not in (None, "") else None
+    except Exception:
+        age_val = None
+
+    # Optional side-view photo for profile phi
+    side_ls = None
+    side_file = request.files.get("side")
+    if side_file is not None:
+        try:
+            side_bytes = side_file.read()
+            if side_bytes:
+                side_ls = extract_landmarks(side_bytes, angle="side",
+                                            mirror=mirror, gender=gender)
+        except Exception:
+            side_ls = None
+
     eng3_result = eng3.run(
         front_ls.points_norm,
         front_ls.quality.image_width,
         front_ls.quality.image_height,
         hairline_mm_above_mesh_top=hairline_offset_mm,
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+        anthropometry_result=eng1_result,
+        iris_info=iris_dict,
+        yaw_deg=front_ls.quality.yaw_deg,
+        side_landmarks=side_ls.points_norm if side_ls else None,
     )
 
     return jsonify({

@@ -103,16 +103,27 @@ export default function FaceReadingUploadScreen() {
       setPhase("uploading");
       setProgress("Photos upload kar rahe hain…");
       const fd = new FormData();
-      (["front", "left", "right"] as const).forEach(k => {
-        const uri = photos[k]!;
+      for (const k of ["front", "left", "right"] as const) {
+        const uri  = photos[k]!;
         const name = `${k}.jpg`;
-        // RN FormData accepts {uri,name,type}
-        fd.append(k, { uri, name, type: "image/jpeg" } as any);
-      });
+        if (Platform.OS === "web") {
+          // Browser: convert local URI/dataURL to a real Blob for FormData
+          const blob = await (await fetch(uri)).blob();
+          fd.append(k, blob, name);
+        } else {
+          // React Native: special {uri,name,type} shape
+          fd.append(k, { uri, name, type: "image/jpeg" } as any);
+        }
+      }
       const extractRes = await fetch(`${API_BASE}/api/face_reading/extract`, {
         method: "POST", body: fd,
       });
-      if (!extractRes.ok) throw new Error(`Extract failed (${extractRes.status})`);
+      if (!extractRes.ok) {
+        let detail = "";
+        try { const j = await extractRes.json(); detail = j.error || JSON.stringify(j); }
+        catch { detail = await extractRes.text().catch(() => ""); }
+        throw new Error(`Extract failed (${extractRes.status})${detail ? ": " + detail.slice(0, 200) : ""}`);
+      }
       const extractJson = await extractRes.json();
       const sid = extractJson.session_id;
       if (!sid) throw new Error("Session ID missing from server");

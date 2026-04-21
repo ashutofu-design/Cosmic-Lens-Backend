@@ -464,6 +464,7 @@ def face_reading_analyze():
         from vedic.face_reading import anthropometry as eng1
         from vedic.face_reading import symmetry as eng2
         from vedic.face_reading import phi as eng3
+        from vedic.face_reading import fwhr as eng4
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -586,6 +587,18 @@ def face_reading_analyze():
         side_landmarks=side_ls.points_norm if side_ls else None,
     )
 
+    eng4_result = eng4.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        hairline_mm_above_mesh_top=hairline_offset_mm,
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+        anthropometry_result=eng1_result,
+        yaw_deg=front_ls.quality.yaw_deg,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -599,8 +612,9 @@ def face_reading_analyze():
             "anthropometry": eng1_result,
             "symmetry": eng2_result,
             "phi": eng3_result,
+            "fwhr": eng4_result,
         },
-        "engines_complete": 3,
+        "engines_complete": 4,
         "engines_total": 20,
     }), 200
 

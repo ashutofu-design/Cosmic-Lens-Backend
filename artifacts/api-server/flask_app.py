@@ -463,6 +463,7 @@ def face_reading_analyze():
         from vedic.face_reading.landmarks import extract_landmarks
         from vedic.face_reading import anthropometry as eng1
         from vedic.face_reading import symmetry as eng2
+        from vedic.face_reading import phi as eng3
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -528,6 +529,24 @@ def face_reading_analyze():
         front_ls.quality.image_height,
     )
 
+    # ── Engine 3: Phi / Golden Ratio ───────────────────────────────────────
+    # Reuse the foundation hairline estimate (mm above mesh top) for true
+    # trichion-based vertical thirds — falls back to mesh top if absent.
+    hairline_offset_mm = None
+    try:
+        hl = getattr(front_ls, "hairline", None)
+        if isinstance(hl, dict) and hl.get("found_hairline"):
+            hairline_offset_mm = hl.get("extra_above_mesh_top_mm")
+    except Exception:
+        hairline_offset_mm = None
+
+    eng3_result = eng3.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        hairline_mm_above_mesh_top=hairline_offset_mm,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -540,8 +559,9 @@ def face_reading_analyze():
         "engines": {
             "anthropometry": eng1_result,
             "symmetry": eng2_result,
+            "phi": eng3_result,
         },
-        "engines_complete": 2,
+        "engines_complete": 3,
         "engines_total": 20,
     }), 200
 

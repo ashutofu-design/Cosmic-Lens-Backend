@@ -52,48 +52,35 @@ echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 # that doesn't require any third-party tunnel. This is far more reliable
 # than localtunnel/ngrok which keep failing.
 METRO_PORT="${PORT:-18987}"
+METRO_SUB="cosmiclens-metro"
 
-# Expose Metro via Cloudflare quick tunnel — no interstitial reminder page,
-# no auth required, works on Indian cellular. URL is random per session
-# (e.g. something-random.trycloudflare.com) — we parse it from logs.
-CF_BIN="${HOME}/.local/bin/cloudflared"
-CF_METRO_LOG="/tmp/cf-metro.log"
-pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
+# Expose Metro via localtunnel with stable subdomain — same URL every restart.
+pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
 sleep 1
-> "$CF_METRO_LOG"
+LT_METRO_LOG="/tmp/lt-metro.log"
+> "$LT_METRO_LOG"
 (
   while true; do
-    echo "[cf-metro] starting cloudflared quick tunnel"
-    "$CF_BIN" tunnel --no-autoupdate --protocol http2 --url "http://localhost:${METRO_PORT}" 2>&1 | tee -a "$CF_METRO_LOG" | sed 's/^/[cf-metro] /'
-    echo "[cf-metro] exited; retrying in 3s" | tee -a "$CF_METRO_LOG"
+    echo "[lt-metro] starting tunnel attempt"
+    lt --port "${METRO_PORT}" --subdomain "${METRO_SUB}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+    echo "[lt-metro] exited; retrying in 3s" | tee -a "$LT_METRO_LOG"
     sleep 3
   done
 ) &
 LT_METRO_PID=$!
 
-METRO_PUBLIC_URL=""
-for i in $(seq 1 30); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_METRO_LOG" 2>/dev/null | head -1)
-  if [ -n "$URL" ]; then
-    METRO_PUBLIC_URL="$URL"
-    break
-  fi
-  sleep 1
-done
-
-if [ -z "$METRO_PUBLIC_URL" ]; then
-  echo "[startup] WARNING: cloudflared URL not found, falling back to localhost"
-  METRO_PUBLIC_URL="http://localhost:${METRO_PORT}"
-fi
-METRO_HOST="${METRO_PUBLIC_URL#https://}"
-METRO_HOST="${METRO_HOST#http://}"
+METRO_HOST="${METRO_SUB}.loca.lt"
+METRO_PUBLIC_URL="https://$METRO_HOST"
 
 export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
 export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"
 export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
 
-echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST via localtunnel)..."
-pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
+echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST)..."
+# --offline disables Expo CLI's remote EAS auth checks that fail with
+# "Input is required, non-interactive mode" when no EXPO_TOKEN is set.
+export EXPO_OFFLINE=1
+pnpm exec expo start --port "$METRO_PORT" --clear --offline 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 
 # Wait for Metro to bind locally.

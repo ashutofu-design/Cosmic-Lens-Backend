@@ -52,24 +52,33 @@ echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 # that doesn't require any third-party tunnel. This is far more reliable
 # than localtunnel/ngrok which keep failing.
 METRO_PORT="${PORT:-18987}"
+METRO_SUB="cosmiclens-metro"
 
-if [ -n "$REPLIT_EXPO_DEV_DOMAIN" ]; then
-  METRO_HOST="$REPLIT_EXPO_DEV_DOMAIN"
-elif [ -n "$REPLIT_DEV_DOMAIN" ]; then
-  METRO_HOST="$REPLIT_DEV_DOMAIN"
-else
-  METRO_HOST="localhost:$METRO_PORT"
-fi
+# Expose Metro via localtunnel (same as API) — works on Indian cellular
+# where kirk.replit.dev is blocked, and avoids @expo/tunnel auth issues.
+pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
+sleep 1
+LT_METRO_LOG="/tmp/lt-metro.log"
+> "$LT_METRO_LOG"
+(
+  while true; do
+    echo "[lt-metro] starting tunnel attempt"
+    lt --port "${METRO_PORT}" --subdomain "${METRO_SUB}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+    echo "[lt-metro] exited; retrying in 3s" | tee -a "$LT_METRO_LOG"
+    sleep 3
+  done
+) &
+LT_METRO_PID=$!
+
+METRO_HOST="${METRO_SUB}.loca.lt"
 METRO_PUBLIC_URL="https://$METRO_HOST"
 
 export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
 export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"
 export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
 
-echo "[startup] Starting Metro on port $METRO_PORT with --tunnel (ngrok exp.direct)..."
-# Unset Replit expo proxy envs so ngrok URL is used (not kirk.replit.dev).
-unset EXPO_PACKAGER_PROXY_URL EXPO_MANIFEST_PROXY_URL REACT_NATIVE_PACKAGER_HOSTNAME
-pnpm exec expo start --tunnel --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
+echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST via localtunnel)..."
+pnpm exec expo start --port "$METRO_PORT" --clear 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 
 # Wait for Metro to bind locally.

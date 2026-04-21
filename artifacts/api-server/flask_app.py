@@ -3933,7 +3933,7 @@ def business_vastu_route():
 # the URL. Ownership: log.user_id must match resolved user.id.
 # Canonical brand footer is always enforced at render time.
 # ─────────────────────────────────────────────────────────────────────────────
-PDF_BRAND_FOOTER = "Powered by Vedic Engine"
+PDF_BRAND_FOOTER = "Powered by Advanced Cosmic Intelligence"
 _PDF_TOKEN_TTL_SEC = 600  # 10 minutes
 
 

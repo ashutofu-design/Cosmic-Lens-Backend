@@ -8,7 +8,7 @@
  *   • Open PDF button (in-app browser)
  *   • Share-on-WhatsApp button
  *
- * Branding: surfaces "Photo Engine" / "Vedic Engine" — never AI/LLM/GPT.
+ * Branding: surfaces "Photo Engine" / "Cosmic Intelligence" — never AI/LLM/GPT.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -152,7 +152,7 @@ export default function AstroVastuProResultScreen() {
     ];
     if (summary.en) lines.push("", summary.en);
     if (pdfFull)    lines.push("", `📄 Open report:`, pdfFull);
-    lines.push("", `_Powered by Vedic Engine_`);
+    lines.push("", `_Powered by Advanced Cosmic Intelligence_`);
     const msg = lines.join("\n");
 
     const wa = `whatsapp://send?text=${encodeURIComponent(msg)}`;
@@ -329,7 +329,7 @@ export default function AstroVastuProResultScreen() {
 
         {/* ── Branding footer ──────────────────────────────────── */}
         <Text style={[s.brand, { color: C.textMid }]}>
-          ✨ Powered by Vedic Engine
+          ✨ Powered by Advanced Cosmic Intelligence
         </Text>
       </ScrollView>
     </View>

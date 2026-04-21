@@ -14,7 +14,7 @@ Sections returned:
   - rooms              : full per-room report
   - priority_actions   : top 5 fixes (critical-rooms first)
   - classical_summary  : deduped scriptural references
-  - footer             : "Powered by Vedic Engine"
+  - footer             : "Powered by Advanced Cosmic Intelligence"
 """
 
 from typing import Any, Dict, List
@@ -159,7 +159,7 @@ def build_business_response(scan: Dict[str, Any], plan: str = "free") -> Dict[st
         "kind":   "business_vastu",
         "plan":   plan,
         "meta":   {
-            "powered_by":   "Vedic Engine",
+            "powered_by":   "Cosmic Intelligence",
             "tier":         f"business_{btype}",
             "rooms_count":  len(rooms),
         },
@@ -181,8 +181,8 @@ def build_business_response(scan: Dict[str, Any], plan: str = "free") -> Dict[st
         "classical_summary": _dedupe_refs(rooms),
         "owner_context":    scan.get("owner_context", {}),
         "footer":  {
-            "en": "Powered by Vedic Engine — based on Brihat Samhita, Mayamatam, and personalised Jyotish.",
-            "hi": "Vedic Engine dvara — Brihat Samhita, Mayamatam, aur vyaktigat Jyotish par adharit.",
+            "en": "Powered by Advanced Cosmic Intelligence — based on Brihat Samhita, Mayamatam, and personalised Jyotish.",
+            "hi": "Advanced Cosmic Intelligence dvara — Brihat Samhita, Mayamatam, aur vyaktigat Jyotish par adharit.",
         },
     }
 

@@ -194,7 +194,7 @@ export default function FaceReadingScreen() {
         {/* ───── 19 ENGINES ───── */}
         <Text style={[s.sectionCap, { color: C.textDim }]}>19 ANALYSIS ENGINES</Text>
         <EngineCard
-          icon="🕉️" count="8" group="Vedic Engines"
+          icon="🕉️" count="8" group="Cosmic Intelligences"
           body="Samudrika Shastra · Mukha Lakshana · Lalat Rekha · Netra Vigyan · Ayurvedic Prakriti · Mian Xiang · 100-Year Age Map · Wu Xing 5 Elements"
           color={ACCENT_2} C={C}
         />

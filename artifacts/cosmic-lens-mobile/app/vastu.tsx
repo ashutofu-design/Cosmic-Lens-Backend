@@ -1734,7 +1734,7 @@ function DeepScanWizard({
                 <Text style={ds.nextBtnText}>Run Cosmic Deep Scan</Text>
               </Pressable>
               <Text style={[ds.fineprint, { color: C.textMuted }]}>
-                Uses 1 daily quota unit • Powered by Vedic Engine
+                Uses 1 daily quota unit • Powered by Advanced Cosmic Intelligence
               </Text>
             </>
           )}

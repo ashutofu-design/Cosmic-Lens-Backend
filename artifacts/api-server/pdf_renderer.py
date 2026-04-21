@@ -2,7 +2,7 @@
 pdf_renderer.py — Phase 4.5
 Render Business Vastu and AstroVastu PRO reports to a PDF binary using
 ReportLab. Bilingual (EN + Hi-Latin) layout, brand-safe footer
-("Powered by Vedic Engine" — never AI/LLM).
+("Powered by Advanced Cosmic Intelligence" — never AI/LLM).
 """
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def _on_page(canvas, doc):
     canvas.setFont("Helvetica", 7)
     canvas.setFillColor(TEXT_SOFT)
     canvas.drawCentredString(w / 2, 12,
-                             "Cosmic Lens  ·  Powered by Vedic Engine  ·  "
+                             "Cosmic Lens  ·  Powered by Advanced Cosmic Intelligence  ·  "
                              f"Page {doc.page}")
     canvas.restoreState()
 
@@ -769,11 +769,11 @@ def render_business_pdf(report: Dict[str, Any], *,
     # ── Footer
     _ft = report.get("footer")
     if isinstance(_ft, dict):
-        foot = _ft.get("en") or "Powered by Vedic Engine"
+        foot = _ft.get("en") or "Powered by Advanced Cosmic Intelligence"
     elif isinstance(_ft, str) and _ft.strip():
         foot = _ft
     else:
-        foot = "Powered by Vedic Engine"
+        foot = "Powered by Advanced Cosmic Intelligence"
     flow.append(Spacer(1, 14))
     flow.append(Paragraph(_safe(foot), s["footer"]))
 
@@ -876,11 +876,11 @@ def render_pro_pdf(report: Dict[str, Any], *,
 
     _ft = report.get("footer")
     if isinstance(_ft, dict):
-        foot = _ft.get("en") or "Powered by Vedic Engine"
+        foot = _ft.get("en") or "Powered by Advanced Cosmic Intelligence"
     elif isinstance(_ft, str) and _ft.strip():
         foot = _ft
     else:
-        foot = "Powered by Vedic Engine"
+        foot = "Powered by Advanced Cosmic Intelligence"
     flow.append(Spacer(1, 14))
     flow.append(Paragraph(_safe(foot), s["footer"]))
 

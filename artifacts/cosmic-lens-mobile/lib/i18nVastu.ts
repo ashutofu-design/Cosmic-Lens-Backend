@@ -19,7 +19,7 @@ import type { UILang } from "./i18n";
 
 export interface VastuT {
   // ── Common ────────────────────────────────────────────────
-  vt_appBranding:           string;   // "Powered by Vedic Engine"
+  vt_appBranding:           string;   // "Powered by Advanced Cosmic Intelligence"
   vt_back:                  string;
   vt_close:                 string;
   vt_cancel:                string;
@@ -228,7 +228,7 @@ export interface VastuT {
 // Default English (used as base + as fallback for the 21 non-explicit langs)
 // ─────────────────────────────────────────────────────────────────────────────
 const en: VastuT = {
-  vt_appBranding:           "Powered by Vedic Engine",
+  vt_appBranding:           "Powered by Advanced Cosmic Intelligence",
   vt_back:                  "Back",
   vt_close:                 "Close",
   vt_cancel:                "Cancel",
@@ -503,7 +503,7 @@ const hn: VastuT = {
 // ─────────────────────────────────────────────────────────────────────────────
 const hi: VastuT = {
   ...en,
-  vt_appBranding:           "Powered by Vedic Engine",
+  vt_appBranding:           "Powered by Advanced Cosmic Intelligence",
   vt_back:                  "वापस",
   vt_close:                 "बंद करें",
   vt_cancel:                "रद्द करें",

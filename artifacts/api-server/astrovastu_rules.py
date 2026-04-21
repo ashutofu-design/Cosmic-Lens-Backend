@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Any
 # ── Branding constant — NEVER reveal AI/ChatGPT to user ──────────────────
 ENGINE_NAME    = "Cosmic AstroVastu Drishti Engine"
 ENGINE_VERSION = "v1.0"
-BRANDING_LINE  = "Powered by Vedic Engine"
+BRANDING_LINE  = "Powered by Advanced Cosmic Intelligence"
 
 
 # ── Direction enum (8 cardinal + intercardinal) ──────────────────────────

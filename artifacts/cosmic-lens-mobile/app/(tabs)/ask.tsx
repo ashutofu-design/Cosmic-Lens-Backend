@@ -525,7 +525,7 @@ export default function AskScreen() {
         )}
         <View style={s.headerDot} />
         <Text style={[s.headerTitle, { color: C.text }]}>Acharya Vidyasagar</Text>
-        <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Vedic Engine</Text>
+        <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
       </View>
 
       {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}

@@ -11,7 +11,7 @@
  *   - Optional muhurat (business start) chart for cycle-alignment note
  *   - Lifetime per-property unlock (no monthly quota)
  *
- * Branding: "Powered by Vedic Engine" — never reveal AI/LLM.
+ * Branding: "Powered by Advanced Cosmic Intelligence" — never reveal AI/LLM.
  */
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -565,7 +565,7 @@ export default function BusinessVastuScreen() {
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer?.en || "Powered by Vedic Engine"}
+                {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
               </Text>
             </View>
           );
@@ -759,7 +759,7 @@ export default function BusinessVastuScreen() {
 
             {/* Footer */}
             <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-              {result.footer?.en || "Powered by Vedic Engine"}
+              {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
             </Text>
           </View>
           );

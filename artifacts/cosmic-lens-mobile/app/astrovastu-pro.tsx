@@ -485,7 +485,7 @@ export default function AstroVastuProScreen() {
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer || "Powered by Vedic Engine"}
+                {result.footer || "Powered by Advanced Cosmic Intelligence"}
               </Text>
             </View>
           );
@@ -629,7 +629,7 @@ export default function AstroVastuProScreen() {
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
-          ✨ Powered by Vedic Engine
+          ✨ Powered by Advanced Cosmic Intelligence
         </Text>
         <Text style={[styles.brandingFooterSmall, { color: C.textMid }]}>
           Cosmic AstroVastu Drishti — PRO Engine v1.0

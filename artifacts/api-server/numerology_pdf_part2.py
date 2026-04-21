@@ -4453,10 +4453,346 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
     return flow
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# TIER 3 — PERSONALIZED REMEDIES (Vedic + Numerological)
+# Weakest planet · Current Mahadasha · Sadhe Sati · Karmic Debts/Lessons ·
+# Driver-Conductor harmony · Personal Year · Ishta Sadhana · Weekly dashboard
+# ═══════════════════════════════════════════════════════════════════════════
+def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
+                             driver: int, lang: str = "hinglish",
+                             ai_texts: Optional[Dict[str, str]] = None) -> list:
+    """Render ~8-12 pages of personalized remedies for Life Mastery Report."""
+    from vedic.numerology.remedies import compute_remedies_bundle
+
+    ai_texts = ai_texts or {}
+    flow: List[Any] = []
+
+    bundle = compute_remedies_bundle(name, dob, tob, driver)
+    if not bundle.get("available"):
+        return flow
+
+    # ── Title + intro ─────────────────────────────────────────────
+    flow.append(Paragraph(_T(lang,
+        "💎 TIER 3 — YOUR PERSONALIZED REMEDIES",
+        "💎 टियर 3 — आपके व्यक्तिगत उपाय",
+        "💎 TIER 3 — AAPKE PERSONAL REMEDIES"), s["page_title"]))
+    flow.append(Spacer(1, 2 * mm))
+    flow.append(_explain_card(s, lang,
+        "📖 What changes here: from diagnosis to prescription",
+        "📖 यहाँ क्या बदलता है: निदान से उपचार तक",
+        "📖 Yahan kya badalta hai: diagnosis se prescription tak",
+        "Tiers 1 and 2 told you <b>what is</b> — your numbers, planets, Nakshatra, current Mahadasha, "
+        "Sadhe Sati status. Tier 3 tells you <b>what to do</b>. Every remedy below is hand-picked from "
+        "your engine output — your weakest planet, your current dasha lord, your karmic debts, your "
+        "personal year, your Ishta Devata. Nothing generic. Mantra count, gem, day, time, direction, "
+        "charity — all calibrated to YOU. Pick 2-3 to begin; consistency beats variety.",
+        "टियर 1 और 2 ने आपको बताया <b>क्या है</b> — आपके अंक, ग्रह, नक्षत्र, वर्तमान महादशा, साढ़ेसाती स्थिति। "
+        "टियर 3 बताता है <b>क्या करें</b>। नीचे का हर उपाय आपके इंजन-उत्पादन से चुना गया है — आपका कमज़ोर ग्रह, "
+        "वर्तमान दशा-स्वामी, कर्म-ऋण, व्यक्तिगत वर्ष, इष्ट देवता। कुछ भी सामान्य नहीं। मंत्र-संख्या, रत्न, दिन, "
+        "समय, दिशा, दान — सब आपके लिए calibrated। 2-3 से शुरू करें; निरंतरता विविधता से अधिक शक्तिशाली है।",
+        "Tier 1 aur 2 ne aapko bataya <b>kya hai</b> — aapke numbers, planets, Nakshatra, current "
+        "Mahadasha, Sadhe Sati status. Tier 3 batata hai <b>kya karna hai</b>. Neeche ka har upay aapke "
+        "engine output se hand-picked hai — aapka weakest planet, current dasha lord, karmic debts, "
+        "personal year, Ishta Devata. Kuch bhi generic nahi. Mantra count, gem, day, time, direction, "
+        "charity — sab aapke liye calibrated. 2-3 se shuru karo; consistency variety se zyada kaam karti hai.",
+        bg="#FFFBEB", border="#D97706"))
+    flow.append(Spacer(1, 5 * mm))
+
+    # ── Helper: render a planet remedy "facts row" ────────────────
+    def _planet_facts_html(remedy: Dict[str, Any]) -> str:
+        if not remedy or not remedy.get("mantra"):
+            return ""
+        rows = [
+            ("🕉️ Mantra", remedy.get("short_mantra") or remedy.get("mantra")),
+            ("📅 Day", remedy.get("day")),
+            ("🔢 Daily count", f"{remedy.get('daily_count', 108)}× for {remedy.get('duration_days', 40)} days"),
+            ("💎 Gem", remedy.get("gem")),
+            ("🎨 Color", remedy.get("color")),
+            ("🧭 Direction", remedy.get("direction")),
+            ("⏰ Best time", remedy.get("best_time")),
+            ("🤲 Charity", remedy.get("charity")),
+            ("🚫 Avoid", remedy.get("avoid")),
+        ]
+        return "<br/>".join(f"<b>{k}:</b> {v}" for k, v in rows if v)
+
+    # ── 1. Weakest Planet Remedy ──────────────────────────────────
+    wp = bundle["weakest_planet"]
+    wp_facts = _planet_facts_html(wp)
+    _ai = ai_texts.get("t3.weakest_planet", "").strip()
+    if _ai and wp_facts:
+        body_wp = _ai_to_html(_ai) + "<br/><br/><b>📋 PRESCRIPTION:</b><br/>" + wp_facts
+    else:
+        body_wp = (
+            f"<b>{_T(lang, 'Why this matters', 'यह क्यों महत्वपूर्ण है', 'Yeh kyu zaroori hai')}:</b> "
+            + _T(lang,
+                 f"Among all 9 planets in your Navagraha map, <b>{wp.get('planet')}</b> scored the lowest ({wp.get('score')}/100). A weak planet doesn't sit quietly — it leaks energy across whatever life-area it rules: career, relationships, health, mind. The remedies below strengthen this planet over 40 days.",
+                 f"आपके नवग्रह नक्शे में सभी 9 ग्रहों में, <b>{wp.get('planet')}</b> सबसे कम स्कोर पर है ({wp.get('score')}/100)। एक कमज़ोर ग्रह चुप नहीं बैठता — जिस भी क्षेत्र पर इसका शासन है, वहाँ ऊर्जा रिसती है। नीचे दिए उपाय 40 दिनों में इस ग्रह को मज़बूत करते हैं।",
+                 f"Aapke Navagraha map me 9 grahon me se, <b>{wp.get('planet')}</b> sabse weak hai ({wp.get('score')}/100). Ek weak grah chup nahi baithta — jis bhi life area pe iska raj hai (career, rishte, health, dimaag), wahan se energy leak hoti hai. Neeche ke remedies 40 din me iss grah ko mazboot karte hain.")
+            + "<br/><br/><b>📋 PRESCRIPTION:</b><br/>" + wp_facts
+        )
+    flow.append(_premium_card(s,
+        _T(lang,
+           f"1️⃣  WEAKEST PLANET — {wp.get('planet')} ({wp.get('score')}/100)",
+           f"1️⃣  सबसे कमज़ोर ग्रह — {wp.get('planet')} ({wp.get('score')}/100)",
+           f"1️⃣  WEAKEST PLANET — {wp.get('planet')} ({wp.get('score')}/100)"),
+        body_wp,
+        bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#B45309"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 2. Current Mahadasha Lord Remedy ──────────────────────────
+    cd = bundle["current_dasha_remedy"]
+    if cd.get("lord"):
+        cd_facts = _planet_facts_html(cd)
+        years_left = cd.get("years_left")
+        years_str = f"{years_left:.1f}" if isinstance(years_left, (int, float)) else "—"
+        _ai = ai_texts.get("t3.current_dasha_remedy", "").strip()
+        if _ai and cd_facts:
+            body_cd = _ai_to_html(_ai) + "<br/><br/><b>📋 ALIGNMENT PRACTICES:</b><br/>" + cd_facts
+        else:
+            body_cd = (
+                f"<b>{_T(lang, 'Your active period', 'आपका सक्रिय काल', 'Aapka active period')}:</b> "
+                + _T(lang,
+                     f"Right now you are running the <b>{cd['lord']} Mahadasha</b> (~{years_str} years remaining). The dasha lord IS the central character of this entire chapter of your life. Aligning with this planet — through mantra, charity, color, day-discipline — turns the dasha from a passive timeline into an active ally.",
+                     f"अभी आप <b>{cd['lord']} महादशा</b> चला रहे हैं (~{years_str} वर्ष शेष)। दशा-स्वामी आपके जीवन के इस पूरे अध्याय का केंद्रीय पात्र है। मंत्र, दान, रंग, दिन-अनुशासन के माध्यम से इस ग्रह से जुड़ने पर दशा निष्क्रिय समय-रेखा से सक्रिय सहयोगी बन जाती है।",
+                     f"Abhi aap <b>{cd['lord']} Mahadasha</b> chala rahe ho (~{years_str} saal baaki). Dasha lord aapki life ke iss poore chapter ka main character hai. Iss grah ke saath align hone se — mantra, daan, rang, din-anushasan se — dasha passive timeline se active dost ban jaati hai.")
+                + "<br/><br/><b>📋 ALIGNMENT PRACTICES:</b><br/>" + cd_facts
+            )
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"2️⃣  CURRENT MAHADASHA — {cd['lord']} (~{years_str} yrs left)",
+               f"2️⃣  वर्तमान महादशा — {cd['lord']} (~{years_str} वर्ष शेष)",
+               f"2️⃣  CURRENT MAHADASHA — {cd['lord']} (~{years_str} yrs baaki)"),
+            body_cd,
+            bg_color=colors.HexColor("#EDE9FE"), border_color=colors.HexColor("#6D28D9"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 3. Sadhe Sati / Dhaiya Remedy ─────────────────────────────
+    ss = bundle["sadhe_sati"]
+    ss_status = _T(lang,
+        ("🚨 SADHE SATI ACTIVE" if ss["active"] else
+         "🟡 DHAIYA (Small Panoti) ACTIVE" if ss["small_panoti"] else
+         "✅ SHANI CLEAR — Maintenance Mode"),
+        ("🚨 साढ़ेसाती सक्रिय" if ss["active"] else
+         "🟡 ढैय्या (छोटी पनोती) सक्रिय" if ss["small_panoti"] else
+         "✅ शनि स्पष्ट — रखरखाव मोड"),
+        ("🚨 SADHE SATI ACTIVE" if ss["active"] else
+         "🟡 DHAIYA (Choti Panoti) ACTIVE" if ss["small_panoti"] else
+         "✅ SHANI CLEAR — Maintenance Mode"))
+    body_ss = (
+        f"<b>{_T(lang, 'Status', 'स्थिति', 'Status')}:</b> {ss_status}<br/><br/>"
+        f"<b>{_T(lang, 'Saturn protocol for you', 'आपके लिए शनि-प्रोटोकॉल', 'Aapke liye Shani-protocol')}:</b> "
+        f"{ss['remedy']}"
+    )
+    flow.append(_premium_card(s,
+        _T(lang, f"3️⃣  SHANI ALIGNMENT — {ss['key']}",
+                 f"3️⃣  शनि-संरेखण — {ss['key']}",
+                 f"3️⃣  SHANI ALIGNMENT — {ss['key']}"),
+        body_ss,
+        bg_color=colors.HexColor("#E5E7EB"), border_color=colors.HexColor("#1F2937"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 4. Karmic Debt + Lessons (combined storytelling card) ─────
+    debts = bundle["karmic_debts"]
+    lessons = bundle["karmic_lessons"]
+    _ai = ai_texts.get("t3.karmic_path", "").strip()
+    if _ai:
+        body_karma = _ai_to_html(_ai)
+        if debts:
+            body_karma += "<br/><br/><b>📋 KARMIC DEBT REMEDIES:</b>"
+            for d in debts:
+                body_karma += f"<br/>• <b>Debt {d['debt']}:</b> {d['remedy']} <i>(Mantra: {d['mantra']})</i>"
+        if lessons:
+            body_karma += "<br/><br/><b>📋 KARMIC LESSONS — qualities to develop:</b>"
+            for l in lessons[:4]:
+                body_karma += f"<br/>• <b>Missing {l['missing']}</b> — develop: {l['quality']}. Practice: {l['practice']}"
+    else:
+        if debts:
+            body_karma = (
+                f"<b>{_T(lang, 'Karmic Debts found in your numbers', 'आपके अंकों में मिले कर्म-ऋण', 'Aapke numbers me mile karmic debts')}:</b> "
+                f"{', '.join(str(d['debt']) for d in debts)}<br/><br/>"
+            )
+            for d in debts:
+                body_karma += (f"<b>Debt {d['debt']}:</b> {d['theme']}<br/>"
+                               f"<i>Remedy:</i> {d['remedy']}<br/>"
+                               f"<i>Deity:</i> {d['deity']} · <i>Mantra:</i> {d['mantra']}<br/><br/>")
+        else:
+            body_karma = (
+                f"<b>{_T(lang, 'No active karmic debts', 'कोई सक्रिय कर्म-ऋण नहीं', 'Koi active karmic debt nahi')}:</b> "
+                + _T(lang,
+                     "Your name+DOB are clear of the 13/14/16/19 patterns. Free pass — but use the karmic-lessons section below as conscious development.",
+                     "आपके नाम+जन्म-तिथि में 13/14/16/19 पैटर्न नहीं हैं। मुक्त पास — लेकिन नीचे कर्म-पाठ अनुभाग को सचेत विकास के लिए उपयोग करें।",
+                     "Aapke naam+DOB me 13/14/16/19 patterns nahi hain. Free pass — par neeche ka karmic-lessons section conscious development ke liye use karo.")
+                + "<br/><br/>"
+            )
+        if lessons:
+            body_karma += f"<b>{_T(lang, 'Karmic Lessons (missing letter-values in your name)', 'कर्म-पाठ (आपके नाम में अनुपस्थित अक्षर-मान)', 'Karmic Lessons (aapke naam me missing letter-values)')}:</b><br/>"
+            for l in lessons[:5]:
+                body_karma += (f"• <b>{l['missing']}</b> — {l['quality']}<br/>"
+                               f"   <i>Practice:</i> {l['practice']}<br/>")
+    flow.append(_premium_card(s,
+        _T(lang, "4️⃣  KARMIC PATH — Debts + Lessons",
+                 "4️⃣  कर्म-पथ — ऋण और पाठ",
+                 "4️⃣  KARMIC PATH — Debts + Lessons"),
+        body_karma,
+        bg_color=colors.HexColor("#FEE2E2"), border_color=colors.HexColor("#991B1B"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 5. Driver–Conductor Harmony ───────────────────────────────
+    h = bundle["harmony"]
+    body_h = (
+        f"<b>{_T(lang, 'Your driver+conductor pair', 'आपकी ड्राइवर+कंडक्टर जोड़ी', 'Aapki driver+conductor jodi')}:</b> "
+        f"Driver = <b>{h['driver']}</b>, Conductor = <b>{h['conductor']}</b><br/>"
+        f"<b>{_T(lang, 'Verdict', 'फैसला', 'Verdict')}:</b> <b>{h['verdict'].upper()}</b><br/><br/>"
+        f"{h['note']}<br/><br/>"
+        f"<b>{_T(lang, 'Bridge practice', 'सेतु अभ्यास', 'Bridge practice')}:</b> "
+        + _T(lang,
+             f"Each morning, name one decision where your inner desire (Driver {h['driver']}) and outer life (Conductor {h['conductor']}) want different things. Pick the option that honours BOTH — even if it takes longer.",
+             f"हर सुबह एक ऐसा निर्णय नाम करें जहाँ आपकी आंतरिक इच्छा (Driver {h['driver']}) और बाहरी जीवन (Conductor {h['conductor']}) अलग चीज़ें चाहते हैं। वह विकल्प चुनें जो दोनों का सम्मान करे — भले ही समय अधिक लगे।",
+             f"Har subah ek aisa decision name karo jahan aapki inner desire (Driver {h['driver']}) aur outer life (Conductor {h['conductor']}) alag cheezein chahte hain. Woh option chuno jo dono ka samman kare — bhale time zyada lage.")
+    )
+    flow.append(_premium_card(s,
+        _T(lang, "5️⃣  DRIVER–CONDUCTOR HARMONY",
+                 "5️⃣  ड्राइवर–कंडक्टर सामंजस्य",
+                 "5️⃣  DRIVER–CONDUCTOR HARMONY"),
+        body_h,
+        bg_color=colors.HexColor("#DBEAFE"), border_color=colors.HexColor("#1E40AF"), lang=lang))
+    flow.append(Spacer(1, 4 * mm))
+
+    # ── 6. Personal Year Remedy ───────────────────────────────────
+    py = bundle["personal_year"]
+    if py.get("year_number"):
+        _ai = ai_texts.get("t3.personal_year_remedy", "").strip()
+        if _ai:
+            body_py = _ai_to_html(_ai) + (
+                f"<br/><br/><b>📋 {py.get('current_year')} ACTION GRID:</b><br/>"
+                f"<b>Theme:</b> {py.get('theme')}<br/>"
+                f"<b>DO:</b> {py.get('do')}<br/>"
+                f"<b>AVOID:</b> {py.get('avoid')}"
+            )
+        else:
+            body_py = (
+                f"<b>{_T(lang, 'Your Personal Year', 'आपका व्यक्तिगत वर्ष', 'Aapka Personal Year')}:</b> "
+                f"<b>{py.get('year_number')}</b> for {py.get('current_year')}<br/><br/>"
+                f"<b>{_T(lang, 'Theme', 'विषय', 'Theme')}:</b> {py.get('theme')}<br/><br/>"
+                f"<b>✅ {_T(lang, 'DO this year', 'इस वर्ष यह करें', 'Iss saal yeh karo')}:</b> {py.get('do')}<br/><br/>"
+                f"<b>🚫 {_T(lang, 'AVOID this year', 'इस वर्ष यह न करें', 'Iss saal yeh avoid karo')}:</b> {py.get('avoid')}"
+            )
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"6️⃣  PERSONAL YEAR {py.get('year_number')} — {py.get('current_year')}",
+               f"6️⃣  व्यक्तिगत वर्ष {py.get('year_number')} — {py.get('current_year')}",
+               f"6️⃣  PERSONAL YEAR {py.get('year_number')} — {py.get('current_year')}"),
+            body_py,
+            bg_color=colors.HexColor("#DCFCE7"), border_color=colors.HexColor("#15803D"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 7. Ishta Devata 21-Day Sadhana ────────────────────────────
+    isd = bundle["ishta_sadhana"]
+    if isd.get("deity"):
+        _ai = ai_texts.get("t3.ishta_sadhana", "").strip()
+        sadhana_facts = (
+            f"<b>🕉️ Mantra:</b> {isd.get('mantra')}<br/>"
+            f"<b>🔢 Daily count:</b> {isd.get('daily_count')}× for {isd.get('duration_days')} days<br/>"
+            f"<b>⏰ Best time:</b> {isd.get('best_time')}<br/>"
+            f"<b>🎨 Color of seat/clothes:</b> {isd.get('color')}<br/>"
+            f"<b>🧭 Face:</b> {isd.get('direction')}<br/>"
+            f"<b>🪔 Yantra:</b> {isd.get('yantra')}"
+        )
+        if _ai:
+            body_isd = _ai_to_html(_ai) + "<br/><br/><b>📋 21-DAY SADHANA:</b><br/>" + sadhana_facts
+        else:
+            body_isd = (
+                f"<b>{_T(lang, 'Your Ishta Devata', 'आपके इष्ट देवता', 'Aapke Ishta Devata')}:</b> "
+                f"<b>{isd.get('deity')}</b> (planet: {isd.get('planet')})<br/><br/>"
+                + _T(lang,
+                     "A 21-day sadhana — done with consistency at the same time, same seat, same direction — opens a direct channel to your Ishta. This is the highest-leverage spiritual practice in your entire report.",
+                     "एक 21-दिवसीय साधना — एक ही समय, एक ही आसन, एक ही दिशा में निरंतरता से की गई — आपके इष्ट से सीधा चैनल खोलती है। यह आपकी पूरी रिपोर्ट में सबसे उच्चतम-लाभ आध्यात्मिक अभ्यास है।",
+                     "Ek 21-din ki sadhana — ek hi samay, ek hi aasan, ek hi disha me consistency se ki gayi — aapke Ishta tak direct channel kholti hai. Yeh aapki poori report me sabse zyada leverage wala spiritual practice hai.")
+                + "<br/><br/><b>📋 21-DAY SADHANA:</b><br/>" + sadhana_facts
+            )
+        flow.append(_premium_card(s,
+            _T(lang,
+               f"7️⃣  ISHTA DEVATA SADHANA — 21-Day Channel",
+               f"7️⃣  इष्ट देवता साधना — 21-दिवसीय चैनल",
+               f"7️⃣  ISHTA DEVATA SADHANA — 21-Day Channel"),
+            body_isd,
+            bg_color=colors.HexColor("#FCE7F3"), border_color=colors.HexColor("#9D174D"), lang=lang))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── 8. Weekly Remedies Dashboard (Mon-Sun table) ──────────────
+    weekly = bundle["weekly_dashboard"]
+    if weekly:
+        flow.append(Paragraph(_T(lang,
+            "<b>8️⃣  YOUR WEEKLY REMEDIES DASHBOARD</b>",
+            "<b>8️⃣  आपका साप्ताहिक उपाय डैशबोर्ड</b>",
+            "<b>8️⃣  AAPKA WEEKLY REMEDIES DASHBOARD</b>"),
+            ParagraphStyle("t3wkh", fontName=_F("bold", lang), fontSize=11,
+                           textColor=colors.HexColor("#0F766E"), leading=14, spaceAfter=4)))
+        header = [
+            _T(lang, "Day", "दिन", "Day"),
+            _T(lang, "Planet", "ग्रह", "Planet"),
+            _T(lang, "Mantra", "मंत्र", "Mantra"),
+            _T(lang, "Color", "रंग", "Color"),
+            _T(lang, "Charity", "दान", "Charity"),
+        ]
+        rows = [header]
+        for w in weekly:
+            rows.append([
+                w["day"], w["planet"], w["mantra"], w["color"], w["charity"],
+            ])
+        wk_table = Table(rows, colWidths=[22*mm, 22*mm, 60*mm, 22*mm, 54*mm], repeatRows=1)
+        wk_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F766E")),
+            ("TEXTCOLOR",  (0, 0), (-1, 0), colors.whitesmoke),
+            ("FONTNAME",   (0, 0), (-1, 0), _F("bold", lang)),
+            ("FONTSIZE",   (0, 0), (-1, -1), 8),
+            ("FONTNAME",   (0, 1), (-1, -1), _F("reg", lang)),
+            ("VALIGN",     (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",(0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",(0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 4),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#94A3B8")),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.whitesmoke, colors.HexColor("#F0FDFA")]),
+        ]))
+        flow.append(wk_table)
+        flow.append(Spacer(1, 3 * mm))
+        flow.append(Paragraph(_T(lang,
+            "<i>Pick ONE day's practice and start. Sustained 1 mantra > forgotten 7.</i>",
+            "<i>एक दिन का अभ्यास चुनें और शुरू करें। निरंतर 1 मंत्र > भूले हुए 7।</i>",
+            "<i>Ek din ka practice chuno aur shuru karo. Consistent 1 mantra > forgotten 7.</i>"),
+            ParagraphStyle("t3wkn", fontName=_F("oblique", lang), fontSize=9,
+                           textColor=TEXT_SOFT, leading=12)))
+        flow.append(Spacer(1, 4 * mm))
+
+    # ── Tier 3 closing card ───────────────────────────────────────
+    flow.append(_explain_card(s, lang,
+        "✅ Tier 3 complete — your prescription is in your hands",
+        "✅ टियर 3 पूर्ण — आपका नुस्खा आपके हाथ में है",
+        "✅ Tier 3 complete — aapka prescription aapke haath me hai",
+        "Eight remedies, each tied to a specific planet/number/dasha in YOUR chart — not a generic "
+        "list. Don't try to do all eight from day one. Start with the <b>Weakest Planet</b> remedy "
+        "(40-day commitment) and the <b>Ishta Devata Sadhana</b> (21-day commitment). After those "
+        "land, layer in the Mahadasha lord practice. Six months from now, revisit this page — you'll "
+        "feel the difference in the same situations that used to feel stuck.",
+        "आठ उपाय, हर एक आपकी कुंडली में किसी विशिष्ट ग्रह/अंक/दशा से जुड़ा हुआ — कोई सामान्य सूची नहीं। "
+        "पहले दिन से सभी आठ करने का प्रयास न करें। <b>सबसे कमज़ोर ग्रह</b> उपाय (40-दिवसीय प्रतिबद्धता) "
+        "और <b>इष्ट देवता साधना</b> (21-दिवसीय प्रतिबद्धता) से शुरू करें। फिर महादशा-स्वामी अभ्यास जोड़ें। "
+        "छह महीने बाद इस पृष्ठ पर वापस आएँ — आप उन्हीं स्थितियों में अंतर महसूस करेंगे जो पहले अटकी हुई थीं।",
+        "Aath remedies, har ek aapki kundli me kisi specific grah/number/dasha se juda — koi generic "
+        "list nahi. Pehle din se saare aath karne ki koshish mat karo. <b>Weakest Planet</b> remedy "
+        "(40-day commitment) aur <b>Ishta Devata Sadhana</b> (21-day commitment) se shuru karo. "
+        "Inke baad Mahadasha lord practice add karo. Chhe mahine baad iss page pe wapas aana — "
+        "aap unhi situations me farak feel karoge jo pehle stuck lagti thi.",
+        bg="#F0FDF4", border="#15803D"))
+
+    return flow
+
+
 def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
                               driver: int, lang: str) -> Dict[str, str]:
     """
-    Pre-generate AI narrations for the 11 flagship cards (6 Tier 1 + 5 Tier 2).
+    Pre-generate AI narrations for the 16 flagship cards (6 Tier 1 + 5 Tier 2 + 5 Tier 3).
 
     Runs all 11 OpenAI calls in parallel via narrate_batch.
     Returns {key: text} — empty string for any spec that has no static fallback
@@ -4691,6 +5027,112 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
     except Exception as exc:
         log.warning("tier2 facts build failed: %s", exc)
 
+    # ── Tier 3 facts (engine — remedies bundle) ──────────────────────
+    try:
+        from vedic.numerology.remedies import compute_remedies_bundle
+        from datetime import datetime as _dt
+        rb = compute_remedies_bundle(name, dob, tob, driver)
+        if rb.get("available"):
+            wp = rb["weakest_planet"]
+            cd = rb["current_dasha_remedy"]
+            ss = rb["sadhe_sati"]
+            debts = rb["karmic_debts"]
+            lessons = rb["karmic_lessons"]
+            py = rb["personal_year"]
+            isd = rb["ishta_sadhana"]
+            cur_yr = _dt.now().year
+
+            if wp.get("planet"):
+                specs.append({
+                    "key": "t3.weakest_planet",
+                    "section_key": "tier3.weakest_planet",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "weakest_planet": wp["planet"],
+                        "score_out_of_100": wp.get("score"),
+                        "remedy_mantra": wp.get("short_mantra"),
+                        "remedy_day": wp.get("day"),
+                        "remedy_gem": wp.get("gem"),
+                        "remedy_charity": wp.get("charity"),
+                        "remedy_duration_days": wp.get("duration_days", 40),
+                    },
+                    "fallback": "",
+                })
+
+            if cd.get("lord"):
+                specs.append({
+                    "key": "t3.current_dasha_remedy",
+                    "section_key": "tier3.current_dasha_remedy",
+                    "lang": lang,
+                    "word_target": 300,
+                    "facts": {
+                        "person_name": name,
+                        "current_lord": cd["lord"],
+                        "years_remaining": cd.get("years_left"),
+                        "alignment_mantra": cd.get("short_mantra"),
+                        "alignment_day": cd.get("day"),
+                        "alignment_color": cd.get("color"),
+                        "what_to_avoid": cd.get("avoid"),
+                    },
+                    "fallback": "",
+                })
+
+            # Combined karmic-path storytelling card (debts + lessons)
+            if debts or lessons:
+                specs.append({
+                    "key": "t3.karmic_path",
+                    "section_key": "tier3.karmic_path",
+                    "lang": lang,
+                    "word_target": 320,
+                    "facts": {
+                        "person_name": name,
+                        "karmic_debts": [d["debt"] for d in debts],
+                        "karmic_debt_themes": {str(d["debt"]): d["theme"] for d in debts},
+                        "karmic_lessons_missing": [l["missing"] for l in lessons[:5]],
+                        "karmic_lesson_qualities": {str(l["missing"]): l["quality"] for l in lessons[:5]},
+                        "ssati_status": ss.get("key"),
+                    },
+                    "fallback": "",
+                })
+
+            if py.get("year_number"):
+                specs.append({
+                    "key": "t3.personal_year_remedy",
+                    "section_key": "tier3.personal_year_remedy",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "personal_year_number": py["year_number"],
+                        "current_year": cur_yr,
+                        "year_theme": py.get("theme"),
+                        "do_this_year": py.get("do"),
+                        "avoid_this_year": py.get("avoid"),
+                    },
+                    "fallback": "",
+                })
+
+            if isd.get("deity"):
+                specs.append({
+                    "key": "t3.ishta_sadhana",
+                    "section_key": "tier3.ishta_sadhana",
+                    "lang": lang,
+                    "word_target": 280,
+                    "facts": {
+                        "person_name": name,
+                        "ishta_devata": isd.get("deity"),
+                        "ruling_planet": isd.get("planet"),
+                        "sadhana_mantra": isd.get("mantra"),
+                        "sadhana_duration_days": isd.get("duration_days"),
+                        "sadhana_best_time": isd.get("best_time"),
+                    },
+                    "fallback": "",
+                })
+    except Exception as exc:
+        log.warning("tier3 facts build failed: %s", exc)
+
     if not specs:
         return {}
 
@@ -4760,6 +5202,10 @@ def render_part2_pdf(*,
 
     # Pages 11-22 — 🕉️ TIER 2 — Vedic Classical Core
     story += _tier2_vedic_classical_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
+    story.append(PageBreak())
+
+    # Pages 23-32 — 💎 TIER 3 — Personalized Remedies (Vedic + Numerological)
+    story += _tier3_remedies_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
 
     # Page 11 — 🌟 Aap Kaun Ho (3-paragraph identity story + strengths/challenges)

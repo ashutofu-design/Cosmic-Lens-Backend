@@ -67,10 +67,32 @@ def _has_num(text: str, value) -> bool:
 
 
 def _has_word(text: str, value) -> bool:
-    """Case-insensitive word-ish presence check."""
+    """Case-insensitive presence check.
+
+    For composite values like "Lord Vishnu / Brihaspati", ANY non-trivial
+    fragment is sufficient — splits on '/' and ',' and accepts a hit on
+    any token of length >= 3.
+    """
     if not value:
         return True
-    return str(value).lower() in text.lower()
+    text_lc = text.lower()
+    raw = str(value).lower().strip()
+    if not raw:
+        return True
+    # Whole-string fast path
+    if raw in text_lc:
+        return True
+    # Try fragments split on '/' and ',' — accept any hit of length >= 3
+    import re
+    for frag in re.split(r"[\/,]", raw):
+        frag = frag.strip()
+        # Drop common honorifics/articles to avoid trivial matches
+        for prefix in ("lord ", "goddess ", "shri ", "sri ", "bhagwan "):
+            if frag.startswith(prefix):
+                frag = frag[len(prefix):]
+        if len(frag) >= 3 and frag in text_lc:
+            return True
+    return False
 
 
 _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
@@ -99,6 +121,25 @@ _VALIDATORS: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
         # Just ensure "Saturn/Shani" is mentioned — phase name is optional.
         lambda f, t: _has_word(t, "Shani") or _has_word(t, "Saturn"),
     "tier2.ishta_devata":
+        lambda f, t: _has_word(t, f.get("ishta_devata"))
+                     and _has_word(t, f.get("ruling_planet")),
+    # ── Tier 3 — Personalized Remedies ───────────────────────────────
+    "tier3.weakest_planet":
+        lambda f, t: _has_word(t, f.get("weakest_planet")),
+    "tier3.current_dasha_remedy":
+        lambda f, t: _has_word(t, f.get("current_lord")),
+    "tier3.karmic_path":
+        # Either a debt number or a missing-lesson digit must appear, OR
+        # if both are empty the AI must still be coherent (skip strict check).
+        lambda f, t: (
+            (not f.get("karmic_debts") and not f.get("karmic_lessons_missing"))
+            or any(_has_num(t, d) for d in (f.get("karmic_debts") or []))
+            or any(_has_num(t, l) for l in (f.get("karmic_lessons_missing") or []))
+        ),
+    "tier3.personal_year_remedy":
+        lambda f, t: _has_num(t, f.get("personal_year_number"))
+                     and _has_num(t, f.get("current_year")),
+    "tier3.ishta_sadhana":
         lambda f, t: _has_word(t, f.get("ishta_devata"))
                      and _has_word(t, f.get("ruling_planet")),
 }

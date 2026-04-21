@@ -1336,6 +1336,16 @@ api-server/ai_brain/
 
 **Smoke test**: 42 pages across EN/HI/HG, all Tier 1+2 content rendering correctly. Mahadasha cycle exactly 120 years from birth.
 
-### Phase 2 — Tiers 3+4+8 (Remedies + Audits + Health) — PENDING
+### Phase 2 — Tier 3 (Personalized Remedies) ✅ COMPLETE
+
+**Tier 3 — Personalized Remedies (Vedic + Numerological)**
+- `vedic/numerology/remedies.py`: `compute_remedies_bundle(name, dob, tob, driver)` aggregator + lookup tables — PLANET_REMEDIES (mantra/day/count/gem/charity/color/direction × 9 planets), KARMIC_DEBT_REMEDIES (13/14/16/19), KARMIC_LESSON_REMEDIES (missing letters 1-9), PERSONAL_YEAR_REMEDIES (1-9 + master), SADHE_SATI_REMEDIES (Rising/Peak/Setting/Dhaiya/Clear), driver-conductor harmony lookup. Phase normalization handles engine labels like "First Dhaiya (rising)" / "Peak (2nd Dhaiya)" / "Setting (3rd Dhaiya)".
+- `_tier3_remedies_section` in `numerology_pdf_part2.py`: 8 cards — (1) Weakest Planet remedy, (2) Current Mahadasha alignment, (3) Shani protocol, (4) Karmic Path (debts + lessons combined), (5) Driver-Conductor harmony, (6) Personal Year action grid, (7) Ishta Devata 21-day Sadhana, (8) Weekly Mon-Sun remedies dashboard table. Title page + intro + closing card.
+- AI narration: 5 new flagship specs (`t3.weakest_planet`, `t3.current_dasha_remedy`, `t3.karmic_path`, `t3.personal_year_remedy`, `t3.ishta_sadhana`) added to `_build_flagship_ai_texts`. Total flagship AI calls per report = 16 (was 11).
+- Fact-guard: 5 new validators in `_VALIDATORS` (`ai_narrator.py`). `_has_word` upgraded to handle composite values like "Lord Vishnu / Brihaspati" by splitting on "/" and "," and stripping honorifics.
+
+**Smoke test**: PDF jumped 46→52 pages, full render 20-31s (was 27s for 11 calls), zero fact-guard rejections. Tested with 3 fresh profiles.
+
+### Phase 2 (cont.) — Tiers 4+8 (Audits + Health) — PENDING
 ### Phase 3 — Tiers 5+7+9+11+12 (Relationships, Wealth, Career, Lucky, Timing) — PENDING
 ### Phase 4 — Tiers 10+13+14+15+6+16+17 (Spiritual, Digital, Family, Legacy, Dashboard, Appendix, App-tie-in) — PENDING

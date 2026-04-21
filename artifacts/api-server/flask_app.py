@@ -347,6 +347,8 @@ def face_reading_extract():
             # Profile shots: skip skin/hairline/features (front-only)
             ls = extract_landmarks(data, angle=angle, mirror=mirror, gender=gender)
             cached_landmark_sets[angle] = ls
+            if angle == "front":
+                cached_front_bytes = data
             results[angle] = landmark_set_to_dict(ls, include_points=include_points)
             for iss in ls.quality.issues:
                 overall_issues.append(f"{angle}: {iss}")
@@ -354,11 +356,12 @@ def face_reading_extract():
             results[angle] = {"angle": angle, "error": f"processing_failed: {e}"}
             overall_issues.append(f"{angle}: processing_failed")
 
-    # Cache for downstream engines
+    # Cache for downstream engines (Engine 5+ need raw pixels for color analysis)
     session_cache.put(session_id, {
         "landmark_sets": cached_landmark_sets,
         "mirror": mirror,
         "gender": gender,
+        "front_image_bytes": cached_front_bytes if 'cached_front_bytes' in dir() else None,
     })
 
     # Pass/fail decision
@@ -465,6 +468,7 @@ def face_reading_analyze():
         from vedic.face_reading import symmetry as eng2
         from vedic.face_reading import phi as eng3
         from vedic.face_reading import fwhr as eng4
+        from vedic.face_reading import health as eng5
         from vedic.face_reading import session_cache
     except Exception as e:
         return jsonify({"ok": False, "error": f"engine_unavailable: {e}"}), 500
@@ -599,6 +603,23 @@ def face_reading_analyze():
         yaw_deg=front_ls.quality.yaw_deg,
     )
 
+    # Engine 5 — Health Indicators (needs raw image pixels for sclera/lip/conj)
+    front_image_bytes = (cached or {}).get("front_image_bytes")
+    eng5_result = eng5.run(
+        front_ls.points_norm,
+        front_ls.quality.image_width,
+        front_ls.quality.image_height,
+        image_bytes=front_image_bytes,
+        foundation_skin=front_ls.skin,
+        foundation_dark_circles=front_ls.dark_circles,
+        foundation_oiliness=front_ls.oiliness,
+        foundation_wrinkles=front_ls.wrinkles,
+        foundation_iris=(front_ls.iris.__dict__ if front_ls.iris else None),
+        gender=gender,
+        ethnicity=ethnicity,
+        age=age_val,
+    )
+
     return jsonify({
         "ok": True,
         "front_quality": {
@@ -613,8 +634,9 @@ def face_reading_analyze():
             "symmetry": eng2_result,
             "phi": eng3_result,
             "fwhr": eng4_result,
+            "health": eng5_result,
         },
-        "engines_complete": 4,
+        "engines_complete": 5,
         "engines_total": 20,
     }), 200
 

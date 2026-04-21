@@ -444,3 +444,9 @@ id = "GqKqQnCL0X3VUENNf7jkt"
 uri = "file://attached_assets/face_reading_report_FINAL.pdf"
 type = "pdf"
 title = "Cosmic Lens — Face Intelligence Report (12 pages)"
+
+[[outputs]]
+id = "foF_W7HkhOCOpR6x6ox5_"
+uri = "file://attached_assets/face_reading_report_PREMIUM.pdf"
+type = "pdf"
+title = "Cosmic Lens — Premium Face Intelligence Report (Rs.1499 Edition, 16 pages)"

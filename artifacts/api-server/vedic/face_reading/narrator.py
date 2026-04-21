@@ -57,18 +57,26 @@ def assemble_report(sections: Dict,
         "perceived_age":    (engines.get("first_impression") or {}).get("perceived_age", {}).get("value"),
     }
 
-    # Ordered list of sections with titles + content
+    # Inject rich Hinglish narrative paragraphs per section
+    from .narrative_writer import write_narrative
+    person_for_writer = dict(person)
+
+    # Ordered list of sections with titles + content + narrative
     ordered: List[Dict] = []
     for spec in SECTION_TITLES:
         content = sections.get(spec["key"])
         if content is None:
             continue
+        narrative = ""
+        if isinstance(content, dict):
+            narrative = write_narrative(spec["key"], content, engines, person_for_writer)
         ordered.append({
-            "no":        spec["no"],
-            "key":       spec["key"],
-            "title_hi":  spec["title_hi"],
-            "title_en":  spec["title_en"],
-            "content":   content,
+            "no":         spec["no"],
+            "key":        spec["key"],
+            "title_hi":   spec["title_hi"],
+            "title_en":   spec["title_en"],
+            "narrative":  narrative,
+            "content":    content,
         })
 
     return {

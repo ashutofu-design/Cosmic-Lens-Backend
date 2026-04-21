@@ -1387,4 +1387,25 @@ api-server/ai_brain/
 
 **Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **66 pages** (was 64), zero AI fact-guard rejections, AI narrations correctly anchor on locked facts (e.g. driver 6, Venus, "2 yogas", scorecard avg 0.75 all appear verbatim in the AI prose). Architect-reviewed: severe issues (permissive validators + synergy collision) fixed.
 
-### Phase 5 — Tiers 6 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15 + 16 + 17 — PENDING
+### Phase 4.5 — Option D Numerology Framing System ✅ COMPLETE (2026-04-21)
+
+**Strategic decision**: Branding is "Numerology PDF Pro" but the actual ₹1499 deliverable is a **hybrid Numerology + Vedic Astrology Life Mastery Report** (~30/70 structural mix). Pure numerology cannot fill 130 pages with depth. To satisfy the user's expectation of a numerology-flavored report while preserving Vedic depth, we adopted **Option D**: keep ~30/70 structural data, but wrap every tier with numerology framing so the user FEELS it as ~60/40 numerology.
+
+**New module `vedic/numerology/framing.py`** (~430 lines):
+- `PLANET_BY_DRIVER` (Cheiro): 1=Sun, 2=Moon, 3=Jupiter, 4=Rahu, 5=Mercury, 6=Venus, 7=Ketu, 8=Saturn, 9=Mars + Hindi labels.
+- `LUCKY` table per driver (1-9): lucky single numbers, compound numbers, lucky days, lucky colors, gem, metal, direction, mantra-bija, AVOID-numbers, AVOID-days. Trilingual (en/hi/hg).
+- `LIFE_AREA` framing copy for 16 life-areas (vedic_classical, remedies, audits, relationships, career, wealth, health, education, family, spiritual, karma, travel, yearly, monthly, lucky, synthesis) — each carries a 2-sentence "lens" that bridges the user's Driver+Conductor numerology to the upcoming Vedic-heavy section.
+- `_synergy_verdict(driver, conductor)` — returns FOCUSED / SYNERGY / FRICTION / NEUTRAL. **Canonical pair-classification kept identical to wealth.py `_money_synergy`** so the same user pair never gets contradictory verdicts across tiers. Module-load `assert` fails fast if a future edit re-introduces overlap (architect-flagged: pair (6,9) was previously in BOTH `enemies` and `same_family`, making SYNERGY unreachable for that pair).
+- Two public Flowable-emitting helpers:
+  - `numerology_opener_block(s, driver, conductor, life_area, lang)` — purple/blue card injected RIGHT AFTER each tier's title spacer. Shows: Driver→planet, Conductor→planet, pair-verdict, plus the life-area lens.
+  - `numerology_closing_toolkit_block(s, driver, conductor, life_area, lang)` — purple toolkit table injected RIGHT BEFORE each tier's `return flow`. Rows: lucky single numbers, lucky combo (driver+conductor), lucky days, lucky colors, lucky direction, recommended gem, lucky metal, AVOID numbers, daily mantra, plus a "How to use" footer.
+
+**Retrofit applied to all 5 currently-shipped non-pure-numerology tiers**: Tier 2 (Vedic Classical), Tier 3 (Remedies), Tier 4 (Doshas), Tier 5 (Relationships), Tier 7 (Wealth). Tier 1 already 100% numerology so no framing needed; Tier 6 and 8-17 will use the helpers from day 1.
+
+**Signature changes**: `_tier2_vedic_classical_section`, `_tier3_remedies_section`, `_tier4_audits_section` now accept `conductor: int = 1` (default keeps backward compat). Three call sites in `render_part2_pdf` updated to thread `conductor` through. T5 and T7 already had `conductor` in scope.
+
+**Smoke test (Rahul Sharma 1990-05-15 10:30 AM New Delhi)**: HTTP 200, **69 pages** (was 66, +3 from openers/closers across 5 tiers), zero AI fact-guard rejections, zero errors. Synergy matrix verified across all 81 (driver, conductor) pairs: 9 FOCUSED + 10 FRICTION + 10 SYNERGY + 52 NEUTRAL = 81 ✓; (6,9)/(9,6) correctly resolve to NEUTRAL (no longer dead-coded as FRICTION); (2,9)=FRICTION, (3,9)=SYNERGY as expected.
+
+### Phase 5 — Tier 6 (Career & Profession) + Tiers 8-17 — PENDING
+
+All future tiers will use `numerology_opener_block` + `numerology_closing_toolkit_block` from `framing.py` to maintain the Option D numerology-flavored UX.

@@ -3971,7 +3971,8 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
 # Navagraha, Ishta Devata, Yantra)  — T305
 # ═══════════════════════════════════════════════════════════════════════════
 def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
-                                    driver: int, lang: str = "hinglish",
+                                    driver: int, conductor: int = 1,
+                                    lang: str = "hinglish",
                                     ai_texts: Optional[Dict[str, str]] = None) -> list:
     """Render ~10-14 pages of Vedic classical core for Life Mastery Report."""
     from vedic.numerology.vedic_classical import (
@@ -4020,6 +4021,8 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
         "🕉️ टियर 2 — वैदिक शास्त्रीय आधार",
         "🕉️ TIER 2 — VEDIC CLASSICAL CORE"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "vedic_classical", lang))
     flow.append(_explain_card(s, lang,
         "📖 Why Vedic classical matters alongside numerology",
         "📖 संख्याशास्त्र के साथ वैदिक शास्त्रीय क्यों मायने रखता है",
@@ -4450,6 +4453,9 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
         "karegi, aur relationship chapters Moon-Moon compatibility par depend karenge. Iss page ko bookmark karo.",
         bg="#F0FDF4", border="#15803D"))
 
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "vedic_classical", lang))
+
     return flow
 
 
@@ -4459,7 +4465,8 @@ def _tier2_vedic_classical_section(s, name: str, dob: str, tob: str | None,
 # Driver-Conductor harmony · Personal Year · Ishta Sadhana · Weekly dashboard
 # ═══════════════════════════════════════════════════════════════════════════
 def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
-                             driver: int, lang: str = "hinglish",
+                             driver: int, conductor: int = 1,
+                             lang: str = "hinglish",
                              ai_texts: Optional[Dict[str, str]] = None) -> list:
     """Render ~8-12 pages of personalized remedies for Life Mastery Report."""
     from vedic.numerology.remedies import compute_remedies_bundle
@@ -4477,6 +4484,8 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
         "💎 टियर 3 — आपके व्यक्तिगत उपाय",
         "💎 TIER 3 — AAPKE PERSONAL REMEDIES"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "remedies", lang))
     flow.append(_explain_card(s, lang,
         "📖 What changes here: from diagnosis to prescription",
         "📖 यहाँ क्या बदलता है: निदान से उपचार तक",
@@ -4786,6 +4795,9 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
         "aap unhi situations me farak feel karoge jo pehle stuck lagti thi.",
         bg="#F0FDF4", border="#15803D"))
 
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "remedies", lang))
+
     return flow
 
 
@@ -4793,7 +4805,8 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
 # TIER 4 — PERSONAL AUDITS (Doshas: BPHS-precise, 9 cards + synthesis)
 # ════════════════════════════════════════════════════════════════════════
 def _tier4_audits_section(s, name: str, dob: str, tob: Optional[str],
-                           driver: int, *, kundli: Dict[str, Any],
+                           driver: int, conductor: int = 1, *,
+                           kundli: Dict[str, Any],
                            lang: str = "hinglish",
                            ai_texts: Optional[Dict[str, str]] = None) -> list:
     """Render Tier 4 — Personal Audits (Doshas)."""
@@ -4815,6 +4828,8 @@ def _tier4_audits_section(s, name: str, dob: str, tob: Optional[str],
         "🛡️ टियर 4 — व्यक्तिगत ऑडिट (दोष-स्कैन)",
         "🛡️ TIER 4 — PERSONAL AUDITS (DOSHA SCAN)"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "audits", lang))
     flow.append(_explain_card(s, lang,
         "📖 What is a Dosha — and why we audit",
         "📖 दोष क्या है — और हम audit क्यों करते हैं",
@@ -4995,6 +5010,9 @@ def _tier4_audits_section(s, name: str, dob: str, tob: Optional[str],
         lang=lang))
     flow.append(Spacer(1, 3 * mm))
 
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "audits", lang))
+
     return flow
 
 
@@ -5030,6 +5048,8 @@ def _tier5_relationships_section(s, name: str, dob: str, driver: int,
         "💞 टियर 5 — संबंध और अनुकूलता DNA",
         "💞 TIER 5 — RELATIONSHIPS & COMPATIBILITY DNA"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "relationships", lang))
     flow.append(_explain_card(s, lang,
         "📖 What changes here: from 'me' to 'us'",
         "📖 यहाँ क्या बदलता है: 'मैं' से 'हम' तक",
@@ -5184,6 +5204,9 @@ def _tier5_relationships_section(s, name: str, dob: str, driver: int,
         lang=lang))
     flow.append(Spacer(1, 3 * mm))
 
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "relationships", lang))
+
     return flow
 
 
@@ -5225,6 +5248,8 @@ def _tier7_wealth_section(s, name: str, dob: str, driver: int,
         "💰 टियर 7 — धन और संपत्ति DNA",
         "💰 TIER 7 — WEALTH & MONEY DNA"), s["page_title"]))
     flow.append(Spacer(1, 2 * mm))
+    from vedic.numerology.framing import numerology_opener_block
+    flow.extend(numerology_opener_block(s, driver, conductor, "wealth", lang))
     flow.append(_explain_card(s, lang,
         "📖 What this tier reveals",
         "📖 यह टियर क्या प्रकट करता है",
@@ -5461,6 +5486,9 @@ def _tier7_wealth_section(s, name: str, dob: str, driver: int,
         bg_color=colors.HexColor("#FEF3C7"), border_color=colors.HexColor("#92400E"),
         lang=lang))
     flow.append(Spacer(1, 3 * mm))
+
+    from vedic.numerology.framing import numerology_closing_toolkit_block
+    flow.extend(numerology_closing_toolkit_block(s, driver, conductor, "wealth", lang))
 
     return flow
 
@@ -6213,16 +6241,16 @@ def render_part2_pdf(*,
     story.append(PageBreak())
 
     # Pages 11-22 — 🕉️ TIER 2 — Vedic Classical Core
-    story += _tier2_vedic_classical_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
+    story += _tier2_vedic_classical_section(s, name, dob, tob, driver, conductor, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
 
     # Pages 23-32 — 💎 TIER 3 — Personalized Remedies (Vedic + Numerological)
-    story += _tier3_remedies_section(s, name, dob, tob, driver, lang=lang, ai_texts=ai_texts)
+    story += _tier3_remedies_section(s, name, dob, tob, driver, conductor, lang=lang, ai_texts=ai_texts)
     story.append(PageBreak())
 
     # Pages 33-45 — 🛡️ TIER 4 — Personal Audits (9 doshas, BPHS-precise)
     if kundli is not None:
-        story += _tier4_audits_section(s, name, dob, tob, driver, kundli=kundli,
+        story += _tier4_audits_section(s, name, dob, tob, driver, conductor, kundli=kundli,
                                         lang=lang, ai_texts=ai_texts)
         story.append(PageBreak())
 

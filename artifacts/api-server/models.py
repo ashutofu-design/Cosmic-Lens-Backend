@@ -316,6 +316,36 @@ class AstroVastuProLog(db.Model):
     )
 
 
+class FaceReadingLog(db.Model):
+    """Persistent log for face-reading analyses.
+
+    Used for Level-3 dedup: if the same (user_id, image_sha256) was already
+    analyzed, we re-hydrate the cached payload instead of re-running engines
+    AND (when payment lands) skip charging the user a second time for the
+    same photo.
+    """
+    __tablename__ = "face_reading_logs"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    user_id         = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                                nullable=True, index=True)   # nullable for anon/demo
+    image_sha256    = db.Column(db.String(64), nullable=False, index=True)
+    session_id      = db.Column(db.String(64), nullable=True)   # last live session_id
+    gender          = db.Column(db.String(2),  nullable=True)
+    age             = db.Column(db.Integer,    nullable=True)
+    quality_score   = db.Column(db.Integer,    nullable=True)
+    report_payload  = db.Column(db.Text,       nullable=True)   # JSON: sections + engines + person + front_quality
+    paid            = db.Column(db.Boolean, default=False, nullable=False)
+    pdf_downloads   = db.Column(db.Integer, default=0, nullable=False)
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at      = db.Column(db.DateTime, default=datetime.utcnow,
+                                onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.Index("ix_frl_user_hash", "user_id", "image_sha256"),
+    )
+
+
 def compute_birth_key(birth_data) -> str:
     """
     Deterministic dedup key for a kundli computation. Two birth-data inputs

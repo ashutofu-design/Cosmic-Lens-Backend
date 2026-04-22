@@ -499,6 +499,16 @@ def face_reading_analyze():
                 gender = cached["gender"]
 
     # ── Fall back to uploaded file ─────────────────────────────────────────
+    front_bytes = None
+    image_sha256 = None
+    user_id_for_dedup = None
+    try:
+        _uid_raw = request.values.get("user_id")
+        if _uid_raw:
+            user_id_for_dedup = int(_uid_raw)
+    except (TypeError, ValueError):
+        user_id_for_dedup = None
+
     if front_ls is None:
         front_file = request.files.get("front")
         if front_file is None:
@@ -507,6 +517,76 @@ def face_reading_analyze():
         front_bytes = front_file.read()
         if not front_bytes:
             return jsonify({"ok": False, "error": "empty_front_image"}), 400
+
+        # ── DEDUP CHECK ─────────────────────────────────────────────────
+        # Level 1: in-memory hash → session_id (30 min TTL, instant)
+        # Level 3: DB FaceReadingLog (persistent, survives restart)
+        try:
+            from vedic.face_reading import dedup_index
+            image_sha256 = dedup_index.hash_bytes(front_bytes)
+            cached_sid = dedup_index.lookup(image_sha256, user_id_for_dedup)
+            if cached_sid:
+                cached_entry = session_cache.get(cached_sid)
+                if cached_entry and "report_payload" in cached_entry:
+                    rp = cached_entry["report_payload"]
+                    return jsonify({
+                        "ok": True,
+                        "dedup": True, "dedup_level": 1,
+                        "session_id": cached_sid,
+                        "front_quality": rp.get("front_quality"),
+                        "engines": rp.get("engines_for_response") or rp.get("engines", {}),
+                        "sections": rp.get("sections", {}),
+                        "engines_complete": 9, "engines_total": 9,
+                        "report_template_version": "21_section_v1",
+                        "sections_ready": 22, "sections_total": 22,
+                        "message": "Same image already analyzed in this session — returning cached result.",
+                    }), 200
+        except Exception:
+            image_sha256 = None  # dedup is best-effort; never blocks analyze
+
+        # Level 3: persistent DB lookup
+        if image_sha256:
+            try:
+                from models import FaceReadingLog
+                q = FaceReadingLog.query.filter_by(image_sha256=image_sha256)
+                if user_id_for_dedup is not None:
+                    q = q.filter_by(user_id=user_id_for_dedup)
+                else:
+                    q = q.filter(FaceReadingLog.user_id.is_(None))
+                existing = q.order_by(FaceReadingLog.created_at.desc()).first()
+                if existing and existing.report_payload:
+                    import json as _json
+                    rp = _json.loads(existing.report_payload)
+                    new_sid = session_cache.new_session_id()
+                    front_ls_tmp = extract_landmarks(front_bytes, angle="front",
+                                                    mirror=mirror, gender=gender)
+                    session_cache.put(new_sid, {
+                        "landmark_sets": {"front": front_ls_tmp},
+                        "front_image_bytes": front_bytes,
+                        "mirror": mirror, "gender": gender,
+                        "report_payload": {**rp, "front_image_bytes": front_bytes},
+                    })
+                    dedup_index.remember(image_sha256, new_sid, user_id_for_dedup)
+                    existing.session_id = new_sid
+                    try: db.session.commit()
+                    except Exception: db.session.rollback()
+                    return jsonify({
+                        "ok": True,
+                        "dedup": True, "dedup_level": 3,
+                        "session_id": new_sid,
+                        "front_quality": rp.get("front_quality"),
+                        "engines": rp.get("engines_for_response") or rp.get("engines", {}),
+                        "sections": rp.get("sections", {}),
+                        "engines_complete": 9, "engines_total": 9,
+                        "report_template_version": "21_section_v1",
+                        "sections_ready": 22, "sections_total": 22,
+                        "paid": bool(existing.paid),
+                        "log_id": existing.id,
+                        "message": "Same image already analyzed earlier — returning saved report.",
+                    }), 200
+            except Exception:
+                pass
+
         front_ls = extract_landmarks(front_bytes, angle="front",
                                      mirror=mirror, gender=gender)
         if session_id is None:
@@ -794,6 +874,7 @@ def face_reading_analyze():
             _front_pts   = getattr(_front_ls, "points_norm", None) if _front_ls else None
             _existing["report_payload"] = {
                 "engines": _projected,
+                "engines_for_response": _engines_for_response,
                 "sections": _all_sections,
                 "front_quality": _response["front_quality"],
                 "front_image_bytes": _front_bytes,
@@ -808,6 +889,64 @@ def face_reading_analyze():
             session_cache.put(session_id, _existing)
         except Exception:
             pass
+
+    # ── Persist to DB + dedup index for cross-session re-runs ──────────
+    try:
+        if image_sha256 and front_bytes is not None:
+            from vedic.face_reading import dedup_index as _di
+            from models import FaceReadingLog
+            import json as _json
+
+            # Validate FK: only attach to user_id if that user actually
+            # exists; otherwise persist as anonymous (NULL).
+            _persist_user_id = user_id_for_dedup
+            if _persist_user_id is not None:
+                if not User.query.get(_persist_user_id):
+                    _persist_user_id = None
+
+            _di.remember(image_sha256, session_id, user_id_for_dedup)
+
+            # JSON-safe payload (drop raw image bytes — we keep them in
+            # session_cache only; DB just needs sections/engines/quality
+            # so a future re-upload can fast-return without re-running
+            # the engines).
+            _persist = {
+                "engines":              _projected,
+                "engines_for_response": _engines_for_response,
+                "sections":             _all_sections,
+                "front_quality":        _response["front_quality"],
+                "person": {
+                    "name":   request.values.get("name") or "",
+                    "gender": gender,
+                    "age":    _age_int,
+                },
+            }
+            payload_json = _json.dumps(_persist, default=str, ensure_ascii=False)
+
+            existing = (FaceReadingLog.query
+                        .filter_by(image_sha256=image_sha256, user_id=_persist_user_id)
+                        .first())
+            if existing is None:
+                row = FaceReadingLog(
+                    user_id=_persist_user_id,
+                    image_sha256=image_sha256,
+                    session_id=session_id,
+                    gender=gender, age=_age_int,
+                    quality_score=int(front_ls.quality.score),
+                    report_payload=payload_json,
+                )
+                db.session.add(row)
+            else:
+                existing.session_id    = session_id
+                existing.report_payload = payload_json
+                existing.quality_score = int(front_ls.quality.score)
+                existing.gender = gender
+                existing.age    = _age_int
+            db.session.commit()
+    except Exception as _persist_err:
+        try: db.session.rollback()
+        except Exception: pass
+        app.logger.warning(f"[face_reading] dedup persist failed: {_persist_err}")
 
     return jsonify(_response), 200
 

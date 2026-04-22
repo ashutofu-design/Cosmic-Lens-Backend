@@ -1,7 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
+import {
+  useAudioPlayer, useAudioPlayerStatus, useAudioRecorder,
+  setAudioModeAsync, requestRecordingPermissionsAsync,
+  RecordingPresets,
+} from "expo-audio";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -444,6 +448,65 @@ export default function AskScreen() {
     return null;
   }, [messages]);
 
+  // ── Voice INPUT (mic → /api/stt) ─────────────────────────────────────────
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  // When user used mic, we auto-play the next assistant reply in voice.
+  const [autoSpeakNext, setAutoSpeakNext] = useState(false);
+  const lastSpokenIdRef = useRef<string | null>(null);
+
+  const startRecording = useCallback(async () => {
+    try {
+      if (showDemo) { router.push("/onboarding"); return; }
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) { return; }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRecording(true);
+    } catch {
+      setIsRecording(false);
+    }
+  }, [recorder, showDemo]);
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    try {
+      try { Haptics.selectionAsync(); } catch {}
+      await recorder.stop();
+      setIsRecording(false);
+      const uri = recorder.uri;
+      if (!uri) return;
+
+      setIsTranscribing(true);
+      const form = new FormData();
+      // RN FormData with local file URI
+      form.append("audio", {
+        uri,
+        name: "speech.m4a",
+        type: "audio/m4a",
+      } as any);
+
+      const res = await fetch(`${API_BASE}/api/stt`, {
+        method: "POST",
+        body: form,
+      });
+      setIsTranscribing(false);
+      if (!res.ok) return;
+      const json = await res.json().catch(() => null);
+      const text = (json?.text || "").trim();
+      if (!text) return;
+
+      // Mark next assistant reply for auto-voice playback
+      setAutoSpeakNext(true);
+      send(text);
+    } catch {
+      setIsRecording(false);
+      setIsTranscribing(false);
+    }
+  }, [recorder, send]);
+
   // ── Voice playback (TTS via /api/tts) ────────────────────────────────────
   // One shared player. We swap its source per-message via .replace().
   const ttsPlayer = useAudioPlayer(undefined);
@@ -512,6 +575,20 @@ export default function AskScreen() {
       setVoiceState("idle"); setVoiceMsgId(null);
     }
   }, [voiceMsgId, voiceState, ttsPlayer]);
+
+  // Auto-play voice for the next completed assistant reply when the user
+  // asked via mic. Trigger only once per reply (lastSpokenIdRef guard) and
+  // only after streaming finishes (text non-empty + not loading + not "thinking").
+  useEffect(() => {
+    if (!autoSpeakNext || loading) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || last.id === "thinking" || last.loading) return;
+    if (!last.text?.trim()) return;
+    if (lastSpokenIdRef.current === last.id) return;
+    lastSpokenIdRef.current = last.id;
+    setAutoSpeakNext(false);
+    handleVoicePlay(last);
+  }, [autoSpeakNext, loading, messages, handleVoicePlay]);
 
   const renderMsg = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
@@ -766,22 +843,51 @@ export default function AskScreen() {
         </View>
       )}
 
+      {/* Recording / transcribing banner */}
+      {(isRecording || isTranscribing) && (
+        <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: C.bgCard, borderTopWidth: 1, borderTopColor: C.border, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isRecording ? "#E53935" : C.accent }} />
+          <Text style={{ color: C.text, fontSize: 13, fontWeight: "600" }}>
+            {isRecording ? "Sun raha hoon… dobara mic dabao stop ke liye" : "Samajh raha hoon…"}
+          </Text>
+        </View>
+      )}
+
       {/* Input row */}
       <View style={[s.inputRow, { paddingBottom: botPad + 90, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
           style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}
           onChangeText={setInput}
-          placeholder={t.askPlaceholder}
+          placeholder={isRecording ? "Bol rahe ho…" : t.askPlaceholder}
           placeholderTextColor={C.textMuted}
           multiline
-          editable={!showDemo}
+          editable={!showDemo && !isRecording && !isTranscribing}
           onSubmitEditing={() => send(input)}
           returnKeyType="send"
         />
+        {/* Mic button — tap to record, tap again to stop & transcribe */}
+        <Pressable
+          onPress={() => {
+            if (showDemo) { router.push("/onboarding"); return; }
+            if (isTranscribing || loading) return;
+            if (isRecording) stopRecordingAndTranscribe();
+            else startRecording();
+          }}
+          style={({ pressed }) => [s.sendBtn, { marginRight: 8 }, pressed && { opacity: 0.7 }]}
+        >
+          <View style={[s.sendGrad, { backgroundColor: isRecording ? "#E53935" : C.bgCard, borderWidth: 1, borderColor: isRecording ? "#E53935" : C.border }]}>
+            <Feather
+              name={isRecording ? "square" : "mic"}
+              size={16}
+              color={isRecording ? "#fff" : C.text}
+            />
+          </View>
+        </Pressable>
         <Pressable
           onPress={() => (showDemo ? router.push("/onboarding") : send(input))}
           style={({ pressed }) => [s.sendBtn, pressed && { opacity: 0.7 }]}
+          disabled={isRecording || isTranscribing}
         >
           <LinearGradient
             colors={[C.btnGradStart, C.btnGradEnd]}

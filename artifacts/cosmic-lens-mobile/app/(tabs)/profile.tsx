@@ -754,7 +754,7 @@ const st = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(148,163,184,0.18)",
   },
-  notifLabel: { fontSize: 14, fontFamily: F.semi },
+  notifLabel: { fontSize: 14, fontFamily: F.semibold },
   notifSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
   card: {
     backgroundColor:"#040e20", borderRadius:16,

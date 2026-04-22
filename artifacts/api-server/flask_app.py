@@ -5073,6 +5073,58 @@ def ask_route():
 #                          deterministic engine). Same shape as /api/ask so
 #                          the frontend can branch purely on Content-Type.
 # ─────────────────────────────────────────────────────────────────────────────
+# /api/stt — Speech-to-Text for voice questions in Ask section.
+# Accepts multipart upload (audio file) → returns {text}.
+# Uses OpenAI Whisper (whisper-1) — handles Hindi, Hinglish, English natively.
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/stt", methods=["POST"])
+def stt_route():
+    import os
+    import tempfile
+
+    if "audio" not in request.files:
+        return jsonify({"error": "audio file required"}), 400
+
+    audio_file = request.files["audio"]
+    if not audio_file.filename:
+        return jsonify({"error": "audio file empty"}), 400
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"error": "STT engine not configured"}), 503
+
+    # Save to temp file (Whisper SDK needs file-like with .name)
+    suffix = "." + (audio_file.filename.rsplit(".", 1)[-1] if "." in audio_file.filename else "m4a")
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        audio_file.save(tmp.name)
+        tmp.close()
+
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        with open(tmp.name, "rb") as f:
+            # language hint = hi (Hindi) — Whisper auto-detects Hinglish from this
+            transcription = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                language="hi",
+                response_format="text",
+            )
+        text = (transcription if isinstance(transcription, str) else getattr(transcription, "text", "")).strip()
+        if not text:
+            return jsonify({"error": "could not understand audio"}), 422
+        return jsonify({"text": text})
+    except Exception as exc:
+        app.logger.exception("STT failed: %s", exc)
+        return jsonify({"error": "transcription failed"}), 502
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # /api/tts — Text-to-Speech for AI answers in Ask section.
 # Uses OpenAI TTS (gpt-4o-mini-tts) → returns mp3 bytes.
 # Hinglish/Hindi-friendly voice. No streaming — small files (<1MB typical).

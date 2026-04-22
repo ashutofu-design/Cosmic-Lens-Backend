@@ -1,47 +1,48 @@
 #!/bin/bash
 TUNNEL_URL_FILE="/tmp/expo-tunnel-url"
 LOG_FILE="/tmp/expo-raw.log"
-LT_API_LOG="/tmp/lt-api.log"
+CF_API_LOG="/tmp/cf-api.log"
 
 > "$TUNNEL_URL_FILE"
 > "$LOG_FILE"
-> "$LT_API_LOG"
+> "$CF_API_LOG"
 
-# --- API localtunnel (port 8080) ---
-# The kirk.replit.dev domain is blocked on Indian cellular (Jio/Airtel),
-# so we expose the API via localtunnel for cellular reachability.
+# Cloudflare quick tunnel (free, anonymous, very reliable — replaces flaky
+# localtunnel / loca.lt which kept returning 502 Bad Gateway and rotating
+# subdomains mid-session).
+CFD="${HOME}/.local/bin/cloudflared"
+if [ ! -x "$CFD" ]; then
+  CFD="$(command -v cloudflared || echo cloudflared)"
+fi
+
+# --- API tunnel (port 8080) via Cloudflare quick tunnel ---
 API_PORT=8080
-API_SUB="cosmiclens-api"
-pkill -f "lt --port ${API_PORT}" 2>/dev/null || true
+pkill -f "cloudflared.*localhost:${API_PORT}" 2>/dev/null || true
 sleep 1
 
 (
-  while true; do
-    echo "[lt-api] starting tunnel attempt"
-    lt --port "${API_PORT}" --subdomain "${API_SUB}" 2>&1 | tee -a "$LT_API_LOG" | sed 's/^/[lt-api] /'
-    echo "[lt-api] exited; retrying in 3s" | tee -a "$LT_API_LOG"
-    sleep 3
-  done
+  echo "[cf-api] starting cloudflare tunnel for :${API_PORT}"
+  "$CFD" tunnel --no-autoupdate --protocol http2 --url "http://localhost:${API_PORT}" 2>&1 \
+    | tee -a "$CF_API_LOG" | sed 's/^/[cf-api] /'
+  echo "[cf-api] EXITED — API tunnel dead; restart workflow"
 ) &
-LT_API_PID=$!
+CF_API_PID=$!
 
 PUBLIC_API_URL=""
-for i in $(seq 1 20); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_API_LOG" 2>/dev/null | tail -1)
+for i in $(seq 1 30); do
+  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_API_LOG" 2>/dev/null | tail -1)
   if [ -n "$URL" ]; then
-    if curl -sf -m 3 -H "bypass-tunnel-reminder: true" "$URL/" >/dev/null 2>&1 \
-       || curl -sf -m 3 -H "bypass-tunnel-reminder: true" "$URL/api/health" >/dev/null 2>&1; then
-      PUBLIC_API_URL="$URL"
-      echo "[startup] API tunnel READY: $PUBLIC_API_URL"
-      break
-    fi
+    PUBLIC_API_URL="$URL"
+    echo "[startup] API tunnel READY: $PUBLIC_API_URL"
+    break
   fi
-  sleep 2
+  sleep 1
 done
 
 if [ -z "$PUBLIC_API_URL" ]; then
-  PUBLIC_API_URL="https://${API_SUB}.loca.lt"
-  echo "[startup] API tunnel health-check failed; using default: $PUBLIC_API_URL"
+  echo "[startup] cloudflare API tunnel did not publish a URL; aborting"
+  tail -20 "$CF_API_LOG"
+  exit 1
 fi
 
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
@@ -52,22 +53,19 @@ METRO_PORT="${PORT:-18987}"
 METRO_SUB="cosmiclens-metro"
 
 pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
-pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
 sleep 1
 LT_METRO_LOG="/tmp/lt-metro.log"
 > "$LT_METRO_LOG"
 
-# Use a RANDOM subdomain (no --subdomain flag) so we never collide with a
-# stale claim on loca.lt's edge (which would cause 503 Tunnel Unavailable
-# even though the local lt client is healthy). Any random subdomain assigned
-# by the loca.lt server is fresh and uncontested.
+# IMPORTANT: spawn ONCE (no auto-respawn loop). When the tunnel drops, lt
+# would otherwise reconnect with a NEW random subdomain — but Expo CLI has
+# already pinned the OLD subdomain into the bundle's asset URLs at startup,
+# so subsequent asset fetches go to a dead host ("Unable to download asset").
+# A workflow restart is the right way to recover.
 (
-  while true; do
-    echo "[lt-metro] starting tunnel attempt (random subdomain)"
-    lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
-    echo "[lt-metro] exited; retrying in 3s"
-    sleep 3
-  done
+  echo "[lt-metro] starting tunnel (single attempt, random subdomain)"
+  lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+  echo "[lt-metro] EXITED — Metro tunnel is dead; restart the workflow"
 ) &
 LT_METRO_PID=$!
 

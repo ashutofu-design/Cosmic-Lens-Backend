@@ -504,3 +504,9 @@ id = "FPHgeBYqa-9OOFp8lYeov"
 uri = "file://.local/preview/numerology_pro_t003.pdf"
 type = "pdf"
 title = "Pro Numerology Report — toolkit dedup applied (T003)"
+
+[[outputs]]
+id = "GDa1fs7XQT-Nj8Cg0J-IH"
+uri = "file://.local/preview/numerology_pro_t004.pdf"
+type = "pdf"
+title = "Pro Numerology Report — language consistency (T004)"

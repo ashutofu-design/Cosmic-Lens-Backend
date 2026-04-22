@@ -1817,16 +1817,27 @@ def _name_correction_deep_dive(s, name: str, driver: int, conductor: int,
     return flow
 
 
-def _disclaimer(s) -> List[Any]:
+def _disclaimer(s, lang: str = "hinglish") -> List[Any]:
+    body = _T(lang,
+        "<i>This report is for guidance and self-reflection. Numerology is a "
+        "supportive tool — final decisions on legal name change, mobile-number "
+        "purchase, or property should also consider practical, legal and family "
+        "factors. Please consult a qualified astrologer for personalised remedies. "
+        "Not legal, medical or financial advice.</i>",
+        "<i>यह रिपोर्ट मार्गदर्शन और आत्म-चिंतन के लिए है। अंक-शास्त्र एक सहायक "
+        "साधन है — कानूनी नाम-परिवर्तन, मोबाइल-नंबर खरीद, या संपत्ति के अंतिम "
+        "निर्णय व्यावहारिक, कानूनी और पारिवारिक तथ्यों को भी ध्यान में रखकर लें। "
+        "व्यक्तिगत उपायों के लिए कृपया योग्य ज्योतिषी से परामर्श करें। यह कानूनी, "
+        "चिकित्सकीय या वित्तीय सलाह नहीं है।</i>",
+        "<i>Yeh report guidance aur self-reflection ke liye hai. Numerology ek "
+        "supportive tool hai — legal name change, mobile-number purchase, ya "
+        "property ke final decisions practical, legal aur family factors ko "
+        "bhi dhyaan me rakh ke lein. Personalised remedies ke liye kripya "
+        "qualified astrologer se consult karein. Yeh legal, medical ya "
+        "financial advice nahi hai.</i>")
     return [
         Spacer(1, 8 * mm),
-        Paragraph(
-            "<i>This report is for guidance and self-reflection. Numerology is a "
-            "supportive tool — final decisions on legal name change, mobile-number "
-            "purchase, or property should also consider practical, legal and family "
-            "factors. Please consult a qualified astrologer for personalised remedies. "
-            "Not legal, medical or financial advice.</i>",
-            s["small"]),
+        Paragraph(body, s["small"]),
     ]
 
 
@@ -10091,7 +10102,7 @@ def render_part2_pdf(*,
 
     # Page final — 90-day implementation plan
     story += _timeline_section(s, lang=lang)
-    story += _disclaimer(s)
+    story += _disclaimer(s, lang)
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

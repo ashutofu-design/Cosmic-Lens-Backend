@@ -9244,6 +9244,102 @@ def will_return():
     })
 
 
+# ── Push Notifications (Expo) ──────────────────────────────────────────────────
+
+@app.route("/api/notifications/register", methods=["POST", "OPTIONS"])
+def notifications_register():
+    """
+    Mobile calls this once on app open with the device's ExpoPushToken.
+    Body: { user_id, push_token, enabled? }
+    Header: X-API-Key
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    token   = (data.get("push_token") or "").strip()
+    enabled = bool(data.get("enabled", True))
+
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+
+    if token and not (token.startswith("ExponentPushToken[") or token.startswith("ExpoPushToken[")):
+        return jsonify({"error": "invalid Expo push token format"}), 400
+
+    user.expo_push_token    = token or None
+    user.push_enabled       = enabled
+    user.push_registered_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"ok": True, "registered": bool(token), "enabled": enabled})
+
+
+@app.route("/api/notifications/preferences", methods=["POST", "OPTIONS"])
+def notifications_preferences():
+    """Toggle push on/off without unregistering token."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    enabled = bool(data.get("enabled", True))
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+    user.push_enabled = enabled
+    db.session.commit()
+    return jsonify({"ok": True, "enabled": enabled})
+
+
+@app.route("/api/notifications/test", methods=["POST", "OPTIONS"])
+def notifications_test():
+    """Send a self-test notification to the calling user."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+
+    from notification_helper import send_to_user
+    title = "Cosmic Lens — Aaj ka sandesh ✨"
+    body  = f"Namaste {user.name or 'friend'}! Aapka daily forecast ready hai. Tap karke dekhein."
+    result = send_to_user(user.id, title, body, data={"screen": "/forecast"})
+    return jsonify(result)
+
+
+@app.route("/api/notifications/broadcast", methods=["POST", "OPTIONS"])
+def notifications_broadcast():
+    """Admin-only broadcast to all opted-in users (or by plan)."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    user, err = get_authed_user(int(user_id))
+    if err:
+        return err
+    if not user.is_admin:
+        return jsonify({"error": "admin only"}), 403
+
+    title = (data.get("title") or "").strip()
+    body  = (data.get("body")  or "").strip()
+    plan  = data.get("plan")
+    extra = data.get("data") or {}
+    if not title or not body:
+        return jsonify({"error": "title and body required"}), 400
+
+    from notification_helper import broadcast as do_broadcast
+    return jsonify(do_broadcast(title, body, extra, plan))
+
+
 @app.route("/api/future-6months", methods=["POST", "OPTIONS"])
 def future_six_months():
     """

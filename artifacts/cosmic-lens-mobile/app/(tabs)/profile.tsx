@@ -13,6 +13,12 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT, INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
+import {
+  sendTestNotification,
+  setPushEnabled,
+  setupPushForUser,
+} from "@/lib/notifications";
+import { Alert } from "react-native";
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {
@@ -379,12 +385,57 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { C } = useTheme();
   const {
-    profiles, primaryProfileId,
+    user, profiles, primaryProfileId,
     language, setLanguage,
     logout,
   } = useUser();
 
   const [showLang, setShowLang] = useState(false);
+  const [pushOn, setPushOn]     = useState(true);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  // Auto-register device for push on first profile mount (silent — only asks
+  // permission once; on denial pushOn flips off).
+  React.useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const tok = await setupPushForUser(user.id);
+      if (!cancelled && !tok) setPushOn(false);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  async function handlePushToggle(next: boolean) {
+    if (!user?.id || pushBusy) return;
+    setPushBusy(true);
+    setPushOn(next);
+    try {
+      if (next) {
+        // Re-trigger permission + token register
+        const tok = await setupPushForUser(user.id);
+        if (!tok) {
+          setPushOn(false);
+          Alert.alert("Notifications off",
+            "Permission denied. Phone Settings → Cosmic Lens → Notifications me enable karein.");
+        }
+      } else {
+        await setPushEnabled(user.id, false);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handlePushTest() {
+    if (!user?.id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const r = await sendTestNotification(user.id);
+    const ok = r?.sent > 0;
+    Alert.alert(ok ? "Test bhej diya ✨" : "Bhejne me dikkat",
+      ok ? "Notification 1-2 second me dikhegi."
+         : (r?.skipped || r?.error || "Token register nahi hai. Toggle off→on karein."));
+  }
 
   const t = getT(language);
   const androidSB = StatusBar.currentHeight ?? 24;
@@ -538,6 +589,39 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── NOTIFICATIONS ────────────────────────────────────────────── */}
+        <View>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>
+            NOTIFICATIONS
+          </Text>
+          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={st.notifRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <Feather name="bell" size={18} color={C.text} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.notifLabel, { color: C.text }]}>Daily forecast & alerts</Text>
+                  <Text style={[st.notifSub,   { color: C.textDim }]}>
+                    Aaj ka rashifal, transit shifts, dasha changes
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={pushOn}
+                onValueChange={handlePushToggle}
+                disabled={pushBusy}
+                trackColor={{ false: "#475569", true: "#7C3AED" }}
+                thumbColor={pushOn ? "#fbbf24" : "#cbd5e1"}
+              />
+            </View>
+            <SettingRow
+              icon="send"
+              label="Send test notification"
+              onPress={handlePushTest}
+              last
+            />
+          </View>
+        </View>
+
         {/* ── DANGER ZONE ──────────────────────────────────────────────── */}
         <View>
           <Text style={[s.sectionLabel,{ color: "#ef4444" }]}>{t.sectionDanger}</Text>
@@ -666,6 +750,13 @@ const s = StyleSheet.create({
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
+  notifRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 14, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(148,163,184,0.18)",
+  },
+  notifLabel: { fontSize: 14, fontFamily: F.semi },
+  notifSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
   card: {
     backgroundColor:"#040e20", borderRadius:16,
     borderWidth:1, borderColor:"rgba(255,255,255,0.05)", overflow:"hidden",

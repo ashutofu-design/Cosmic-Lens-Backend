@@ -6,9 +6,11 @@ import {
   useFonts,
 } from "@expo-google-fonts/nunito";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+
+import { attachTapHandler, configureForeground } from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -58,6 +60,13 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // Push notifications: foreground display + tap-to-navigate
+  useEffect(() => {
+    configureForeground();
+    const sub = attachTapHandler((path) => router.push(path as any));
+    return () => sub.remove();
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

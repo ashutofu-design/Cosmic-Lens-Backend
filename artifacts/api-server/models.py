@@ -58,6 +58,11 @@ class User(db.Model):
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # ── Push notifications (Expo) ─────────────────────────────────────────────
+    expo_push_token     = db.Column(db.String(200), nullable=True)
+    push_enabled        = db.Column(db.Boolean, default=True, nullable=False)
+    push_registered_at  = db.Column(db.DateTime, nullable=True)
+
     kundli = db.relationship("Kundli", backref="user", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self):

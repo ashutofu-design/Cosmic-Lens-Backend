@@ -179,32 +179,98 @@ def build_tldr(sections: Dict, engines: Dict) -> Dict:
     traits.sort(key=lambda x: abs(x["score"] - 50), reverse=True)
     top_5_traits = traits[:5]
 
-    # ── Top 3 strengths (from s1, s7 blocks, fused traits) ───────────────
+    # ── Top 3 strengths (from s1, s7 blocks, fused traits, OCEAN highs) ──
     strengths: List[str] = []
     if s1.get("biggest_strength"):
         strengths.append(s1["biggest_strength"].rstrip("."))
-    # fused traits with high intensity
-    for ft in (syn.get("fused_traits") or [])[:3]:
+    # fused traits — full pool, not just first 3
+    for ft in (syn.get("fused_traits") or []):
         if isinstance(ft, dict):
             t = ft.get("trait")
-            if t and t not in strengths:
+            if t and str(t) not in strengths:
                 strengths.append(str(t))
+    # OCEAN high traits as fallback (high score → user-friendly strength)
+    _OCEAN_STRENGTH_LABEL = {
+        "openness":          "Curious learner — naye ideas pe khulkar sochte ho",
+        "conscientiousness": "Disciplined executor — commitments time pe deliver karte ho",
+        "extraversion":      "Social energiser — group me naturally chamak jaate ho",
+        "agreeableness":     "Empathetic collaborator — log tum par easily trust karte hain",
+        "neuroticism":       "Emotionally calm — pressure me steady rehte ho",  # only when LOW
+    }
+    if len(strengths) < 3:
+        for k, v in (ocean.items() if isinstance(ocean, dict) else []):
+            try: vf = float(v)
+            except Exception: continue
+            # Neuroticism flips: low-N is the strength
+            high = (vf <= 40) if k == "neuroticism" else (vf >= 60)
+            if high and _OCEAN_STRENGTH_LABEL.get(k):
+                lbl = _OCEAN_STRENGTH_LABEL[k]
+                if lbl not in strengths:
+                    strengths.append(lbl)
+            if len(strengths) >= 3: break
+    # Balanced-profile fallback: when no trait stands out, the profile itself is the strength
+    _BALANCED_FALLBACKS = [
+        "Versatile adapter — har tarah ke role aur log ke saath fit ho jaate ho",
+        "Emotional steadiness — extreme reactions nahi, calm decision-maker",
+        "No-drama presence — log tumhare paas peace dhundte hain",
+    ]
+    if len(strengths) < 3:
+        for lbl in _BALANCED_FALLBACKS:
+            if lbl not in strengths:
+                strengths.append(lbl)
+            if len(strengths) >= 3: break
     # dedupe + cap
     strengths = list(dict.fromkeys([s for s in strengths if s]))[:3]
 
-    # ── Top 3 weaknesses (from s1, red flags, behaviour pattern) ─────────
+    # ── Top 3 weaknesses (from s1, red flags, OCEAN extremes, behaviour) ─
     weaknesses: List[str] = []
-    if s1.get("biggest_weakness"):
-        weaknesses.append(s1["biggest_weakness"].rstrip("."))
+    brutal_norm = (s21.get("brutal_truth") or "").strip().rstrip(".").lower()
+    mistake_norm = (s21.get("biggest_mistake_hi") or "").strip().rstrip(".").lower()
+
+    def _wadd(text: str):
+        if not text: return
+        t = text.rstrip(".").strip()
+        # Don't echo brutal_truth (it gets its own banner in Final Truth)
+        norm = t.lower()
+        if norm and norm != brutal_norm and norm != mistake_norm and t not in weaknesses:
+            weaknesses.append(t)
+
+    _wadd(s1.get("biggest_weakness"))
     rf = _g(sections, "section_10_red_flags", default={}) or {}
-    for blk in (rf.get("blocks") or [])[:3]:
+    for blk in (rf.get("blocks") or []):
         if isinstance(blk, dict):
-            head = blk.get("heading_en") or blk.get("heading_hi") or ""
-            if head and head not in weaknesses:
-                weaknesses.append(head.rstrip("."))
-    # extra fallback from s21
-    if len(weaknesses) < 3 and s21.get("biggest_mistake_hi"):
-        weaknesses.append(s21["biggest_mistake_hi"].rstrip("."))
+            _wadd(blk.get("heading_en") or blk.get("heading_hi") or "")
+        if len(weaknesses) >= 3: break
+
+    # OCEAN-derived blind spots
+    _OCEAN_WEAK_LABEL = {
+        "openness":          ("Routine-loving — nayi cheezein avoid karne ki tendency", "low"),
+        "conscientiousness": ("Follow-through gap — execution slip-ups occasional", "low"),
+        "extraversion":      ("Networking aur self-promotion avoid karte ho", "low"),
+        "agreeableness":     ("Conflict me thoda blunt — diplomacy effort lagta hai", "low"),
+        "neuroticism":       ("Stress reactivity — chhoti baat pe trigger hote ho", "high"),
+    }
+    if len(weaknesses) < 3:
+        for k, (lbl, dir_) in _OCEAN_WEAK_LABEL.items():
+            try: vf = float(ocean.get(k))
+            except Exception: continue
+            hit = (vf >= 60) if dir_ == "high" else (vf <= 40)
+            if hit:
+                _wadd(lbl)
+            if len(weaknesses) >= 3: break
+
+    # Generic blind-spot fallbacks when nothing else surfaces (used for very
+    # balanced profiles where neither extreme nor red-flag triggers).
+    _BALANCED_BLINDSPOTS = [
+        "Decision lateness — perfect option dhundhte dhundhte timing miss kar dete ho",
+        "Self-marketing gap — kaam strong hai par log ko pata kam chalta hai",
+        "Boundary softness — 'na' bolne me extra effort lagta hai",
+    ]
+    if len(weaknesses) < 3:
+        for lbl in _BALANCED_BLINDSPOTS:
+            _wadd(lbl)
+            if len(weaknesses) >= 3: break
+
     weaknesses = list(dict.fromkeys([w for w in weaknesses if w]))[:3]
 
     # ── Life pattern (one line) ───────────────────────────────────────────
@@ -250,15 +316,23 @@ def build_final_truth_v2(sections: Dict, engines: Dict, tldr: Dict | None = None
     strengths = list(tldr.get("top_3_strengths") or [])[:3]
     risks = list(tldr.get("top_3_weaknesses") or [])[:3]
 
-    # Direction — use must_do or closing one-liner from existing s21
-    direction = (
-        s21.get("must_do")
-        or s21.get("biggest_mistake_hi")
-        or "Apni biggest strength ko har hafte 1 naya audience dikhao — visibility tumhari sabse badi missing piece hai."
+    brutal = s21.get("brutal_truth") or s21.get("closing_truth", "")
+    brutal_norm = (brutal or "").strip().rstrip(".").lower()
+
+    # Dedup: ensure no risk line echoes the brutal_truth banner
+    risks = [r for r in risks if (r or "").strip().rstrip(".").lower() != brutal_norm][:3]
+
+    # Direction — use must_do, fallback to a generic action-line, but NEVER the
+    # brutal-truth or biggest_mistake (those would reprint above).
+    direction_candidates = [s21.get("must_do")]
+    fb_action = "Apni biggest strength ko har hafte 1 naya audience dikhao — visibility tumhari sabse badi missing piece hai."
+    direction = next(
+        (d for d in direction_candidates
+         if isinstance(d, str) and d.strip()
+         and d.strip().rstrip(".").lower() != brutal_norm),
+        fb_action,
     )
     direction = _shorten(str(direction), 220)
-
-    brutal = s21.get("brutal_truth") or s21.get("closing_truth", "")
 
     return {
         "strengths": strengths,

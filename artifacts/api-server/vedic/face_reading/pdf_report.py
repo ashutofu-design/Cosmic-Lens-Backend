@@ -351,6 +351,9 @@ SECTION_HIDE_KEYS = {
     "section_14_life_flow":         {"intro_para","blocks"},
     "section_21_final_truth":       {"brutal_truth","must_do","closing_truth"},
     "bonus_personality_score":      {"leadership_10","money_10","love_10","health_10","intelligence_10"},
+    # Section 20: hide back-compat alias keys so the same partner-line is not printed 2-3 times
+    # (consistency_layer mirrors best_match → ideal_partner / best_match_hi for legacy callers).
+    "section_20_compatibility":     {"best_match_hi","avoid_match_hi","ideal_partner","avoid_partner"},
 }
 
 

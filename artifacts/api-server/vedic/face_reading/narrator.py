@@ -89,6 +89,7 @@ def assemble_report(sections: Dict,
         "engines":           engines,
         "sections_count":    len(ordered),
         "sections":          ordered,
+        "synthesis":         sections.get("synthesis") or {},
         "footer_disclaimer": (
             "Yeh report educational aur self-awareness ke liye hai. "
             "Hiring, medical, ya legal nirnay ke liye use mat karo. "

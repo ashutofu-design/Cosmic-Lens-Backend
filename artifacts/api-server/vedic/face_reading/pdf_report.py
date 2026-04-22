@@ -697,6 +697,189 @@ def _render_section(sec: Dict, styles) -> List:
 
 
 # ── Cover page ────────────────────────────────────────────────────────────
+# ── Synthesis renderer (6-key fusion: fused traits, shock insights,
+#    behavior simulation, reasoning, confidence scores, remedies) ─────────
+def _synth_banner(label_hi: str, label_en: str, styles) -> List:
+    """Banner header for each synthesis sub-section."""
+    out: List = []
+    cell = [[
+        Paragraph(_safe(label_hi), styles["section_title_hi"]),
+        Paragraph(_safe(label_en), styles["section_title_en"]),
+    ]]
+    t = Table(cell, colWidths=[174 * mm], hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), C_CALLOUT_BG),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LINEBEFORE", (0, 0), (0, -1), 3, C_PRIMARY),
+    ]))
+    out.append(t)
+    out.append(Spacer(1, 4 * mm))
+    return out
+
+
+def _render_synthesis_pages(synthesis: Dict, styles) -> List:
+    """Render the 6-key Final Synthesis Layer across multiple pages."""
+    if not synthesis or not isinstance(synthesis, dict):
+        return []
+
+    flowables: List = []
+
+    # ── Title page ─────────────────────────────────────────────────────────
+    flowables.append(Spacer(1, 8 * mm))
+    flowables.append(SectionBanner("22"))
+    flowables.append(Spacer(1, 4 * mm))
+    flowables.append(Paragraph("Antim Sankalan — Cosmic Intelligence Fusion",
+                               styles["section_title_hi"]))
+    flowables.append(Paragraph("Final Synthesis — 6-Key Cross-Engine Fusion",
+                               styles["section_title_en"]))
+    flowables.append(Paragraph(
+        _safe("Yeh section 8 alag-alag engines ke insights ko ek saath cross-reference "
+              "karke wo unique patterns nikaalta hai jo single engine se nahi mil sakte. "
+              "Har conclusion ke peeche reasoning aur confidence score bhi diya hai."),
+        styles["narrative"]))
+    flowables.append(Spacer(1, 6 * mm))
+
+    # ── 1. Fused Traits ────────────────────────────────────────────────────
+    fused = synthesis.get("fused_traits") or []
+    if fused:
+        flowables.extend(_synth_banner(
+            "Mishrit Lakshan (Fused Traits)",
+            "Multi-engine personality patterns", styles))
+        for i, item in enumerate(fused, 1):
+            if not isinstance(item, dict):
+                continue
+            trait = item.get("trait", "")
+            summary = item.get("summary", "")
+            intensity = item.get("intensity")
+            sources = item.get("sources") or []
+            flowables.append(Paragraph(
+                f"<b>{i}. {_safe(trait)}</b>", styles["field_label"]))
+            if summary:
+                flowables.append(Paragraph(_safe(summary), styles["field_value"]))
+            if isinstance(intensity, (int, float)):
+                flowables.append(ScoreBar("Intensity", float(intensity), 100))
+            if sources:
+                flowables.append(Paragraph(
+                    f"<i>Source signals: {_safe(', '.join(map(str, sources)))}</i>",
+                    styles["field_value"]))
+            flowables.append(Spacer(1, 4 * mm))
+
+    # ── 2. Shock Insights ──────────────────────────────────────────────────
+    shocks = synthesis.get("shock_insights") or []
+    if shocks:
+        flowables.append(Spacer(1, 4 * mm))
+        flowables.extend(_synth_banner(
+            "Chonkane Wale Sach (Shock Insights)",
+            "Surprising hidden patterns", styles))
+        for i, item in enumerate(shocks, 1):
+            if not isinstance(item, dict):
+                continue
+            insight = item.get("insight", "")
+            category = item.get("category", "")
+            if insight:
+                flowables.append(_callout(
+                    f"INSIGHT {i}" + (f"  ·  {category}" if category else ""),
+                    insight, styles))
+                flowables.append(Spacer(1, 3 * mm))
+
+    # ── 3. Behavior Simulation ─────────────────────────────────────────────
+    sims = synthesis.get("behavior_simulation") or []
+    if sims:
+        flowables.append(PageBreak())
+        flowables.extend(_synth_banner(
+            "Vyavhar Pradarshan (Behavior Simulation)",
+            "Real-life scenario predictions", styles))
+        for i, item in enumerate(sims, 1):
+            if not isinstance(item, dict):
+                continue
+            scenario = item.get("scenario", "")
+            prediction = item.get("prediction", "")
+            flowables.append(Paragraph(
+                f"<b>Scenario {i}: {_safe(scenario)}</b>", styles["field_label"]))
+            if prediction:
+                flowables.append(Paragraph(_safe(prediction), styles["field_value"]))
+            flowables.append(Spacer(1, 5 * mm))
+
+    # ── 4. Reasoning ───────────────────────────────────────────────────────
+    reasons = synthesis.get("reasoning") or []
+    if reasons:
+        flowables.append(Spacer(1, 4 * mm))
+        flowables.extend(_synth_banner(
+            "Tark (Reasoning Trail)",
+            "Why each conclusion was drawn", styles))
+        for item in reasons:
+            if not isinstance(item, dict):
+                continue
+            target = item.get("for", "")
+            why = item.get("why", "")
+            kind = item.get("kind", "")
+            flowables.append(Paragraph(
+                f"<b>{_safe(target)}</b>" + (f"  <i>({_safe(kind)})</i>" if kind else ""),
+                styles["field_label"]))
+            if why:
+                flowables.append(Paragraph(_safe(why), styles["field_value"]))
+            flowables.append(Spacer(1, 3 * mm))
+
+    # ── 5. Confidence Scores ───────────────────────────────────────────────
+    confs = synthesis.get("confidence_scores") or []
+    if confs:
+        flowables.append(PageBreak())
+        flowables.extend(_synth_banner(
+            "Vishwas Sthar (Confidence Scores)",
+            "How sure we are about each finding", styles))
+        for item in confs:
+            if not isinstance(item, dict):
+                continue
+            label = item.get("label", "")
+            score = item.get("score")
+            kind = item.get("kind", "")
+            label_disp = (label[:60] + "…") if len(str(label)) > 60 else str(label)
+            display = f"{label_disp}" + (f"  ({kind})" if kind else "")
+            if isinstance(score, (int, float)):
+                flowables.append(ScoreBar(display, float(score), 100))
+                flowables.append(Spacer(1, 2 * mm))
+
+    # ── 6. Remedies ────────────────────────────────────────────────────────
+    remedies = synthesis.get("remedies") or []
+    if remedies:
+        flowables.append(PageBreak())
+        flowables.extend(_synth_banner(
+            "Upay (Personalised Remedies)",
+            "Behaviour + habit + environment fixes", styles))
+        for i, item in enumerate(remedies, 1):
+            if not isinstance(item, dict):
+                continue
+            area = item.get("area", "")
+            cur = item.get("current_score")
+            lift = item.get("expected_lift", "")
+            behaviour = item.get("behaviour", "")
+            habit = item.get("habit", "")
+            env = item.get("environment", "")
+
+            head = f"<b>Upay {i}: {_safe(str(area).replace('_', ' ').title())}</b>"
+            if isinstance(cur, (int, float)):
+                head += f"  ·  Abhi: {cur:.0f}/100"
+            flowables.append(Paragraph(head, styles["field_label"]))
+            if behaviour:
+                flowables.append(Paragraph(
+                    f"<b>Behaviour:</b> {_safe(behaviour)}", styles["field_value"]))
+            if habit:
+                flowables.append(Paragraph(
+                    f"<b>Habit:</b> {_safe(habit)}", styles["field_value"]))
+            if env:
+                flowables.append(Paragraph(
+                    f"<b>Environment:</b> {_safe(env)}", styles["field_value"]))
+            if lift:
+                flowables.append(Paragraph(
+                    f"<i>Expected lift: {_safe(lift)}</i>", styles["field_value"]))
+            flowables.append(Spacer(1, 5 * mm))
+
+    return flowables
+
+
 def _render_cover(cover: Dict, styles,
                   photo_bytes: Optional[bytes] = None,
                   points_norm: Optional[list] = None) -> List:
@@ -948,7 +1131,13 @@ def render_pdf(report: Dict) -> bytes:
     for sec in report.get("sections", []):
         story.extend(_render_section(sec, styles))
 
-    # 3b. Celebrity match (after all sections, before disclaimer)
+    # 3b. Final Synthesis Layer — 6-key fusion
+    synthesis = report.get("synthesis") or {}
+    if synthesis:
+        story.append(PageBreak())
+        story.extend(_render_synthesis_pages(synthesis, styles))
+
+    # 3c. Celebrity match (after all sections, before disclaimer)
     if engines:
         story.append(PageBreak())
         story.extend(_render_celebrity_page(engines, styles))

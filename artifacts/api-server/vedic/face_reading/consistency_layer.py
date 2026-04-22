@@ -295,11 +295,45 @@ def validate_consistency(sections: Dict[str, Any], final: Dict[str, Any]) -> Lis
 # ──────────────────────────────────────────────────────────────────────────
 #  Top-level orchestrator
 # ──────────────────────────────────────────────────────────────────────────
+_WUXING_TRAITS_HI = {
+    "Wood":  "Growth-oriented, leader, ambitious, idealistic.",
+    "Fire":  "Energetic, expressive, passionate, social.",
+    "Earth": "Reliable, nurturing, grounded, loyal.",
+    "Metal": "Disciplined, organised, principled, refined.",
+    "Water": "Wise, intuitive, adaptive, deep-thinker.",
+}
+
+
+def _mirror_canonical_into_sections(sections: Dict, final: Dict) -> None:
+    """SSOT enforcement — overwrite per-section element/archetype with the
+    canonical values from final_scores so downstream narrative writers
+    cannot drift. Silent no-op when section keys are missing."""
+    elem = (final.get("element") or "").strip().capitalize()
+    arch = (final.get("archetype") or "").strip()
+
+    if elem:
+        s5 = sections.get("section_5_core_foundation")
+        if isinstance(s5, dict):
+            s5["five_element_profile"] = elem
+            traits = _WUXING_TRAITS_HI.get(elem)
+            if traits:
+                s5["five_element_traits"] = traits
+
+    if arch:
+        s7 = sections.get("section_7_personality_synthesis")
+        if isinstance(s7, dict):
+            s7["archetype"] = arch
+        s13 = sections.get("section_13_archetype")
+        if isinstance(s13, dict):
+            s13["archetype_name"] = arch
+
+
 def apply_consistency_layer(engines: Dict, sections: Dict) -> Dict[str, Any]:
     """One-call wrapper — mutates `sections` in-place AND returns final_scores."""
     final = build_final_scores(engines)
     normalize_section_keys(sections)
     apply_label_cleanup(sections)
+    _mirror_canonical_into_sections(sections, final)
     warnings = validate_consistency(sections, final)
     final["consistency_warnings"] = warnings
     return final

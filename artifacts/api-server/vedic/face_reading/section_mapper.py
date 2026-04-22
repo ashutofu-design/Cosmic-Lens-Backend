@@ -520,7 +520,7 @@ def section_11_attraction_charisma(engines: Dict, gender: Optional[str] = None) 
     # Magnetism boost suggestion (deterministic, based on weakest dim)
     weakest = min(("E", E), ("A", A), ("attraction", attraction), key=lambda x: x[1])
     boost = {
-        "E":          "Logon ke saath energy share karo — hafte me 2 naye log se 5+ min baat. Extraversion-driven charisma 6 weeks me visible badhega.",
+        "E":          "Logon ke saath energy share karo — hafte me 2 naye log se 5+ min baat. Energy-driven charisma 6 weeks me visible badhega.",
         "A":          "Genuine compliments roz 3 logon ko do. Warmth signal 30 din me strong hota hai aur log naturally tumhari taraf khinche aate hain.",
         "attraction": "Posture (chest-up, shoulders-back) + slow speech + 3-sec eye contact — yeh teen cheezein attraction signal me sabse high-leverage hain.",
     }[weakest[0]]

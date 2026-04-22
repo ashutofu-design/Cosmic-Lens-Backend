@@ -498,3 +498,9 @@ id = "FK2TGpZCa9D06FWJSeft7"
 uri = "file://.local/preview/numerology_tldr.pdf"
 type = "pdf"
 title = "Numerology Report — TL;DR Executive Summary added (Page 2)"
+
+[[outputs]]
+id = "FPHgeBYqa-9OOFp8lYeov"
+uri = "file://.local/preview/numerology_pro_t003.pdf"
+type = "pdf"
+title = "Pro Numerology Report — toolkit dedup applied (T003)"

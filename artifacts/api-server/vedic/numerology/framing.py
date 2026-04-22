@@ -439,10 +439,24 @@ def numerology_closing_toolkit_block(s: Dict[str, Any], driver: int, conductor: 
                                      life_area: str, lang: str = "hinglish") -> List[Any]:
     """Return Flowables: a compact numerology toolkit card filtered for this
     life-area. Inject RIGHT BEFORE the closing PageBreak of the tier.
+
+    DEDUPE RULE (T003): The full lucky-toolkit table (numbers, days, colors, gem,
+    metal, mantra) is shown ONLY ONCE per render — on the first call. Subsequent
+    tiers get a SHORT area-specific reminder only (no big table) to avoid the
+    "same toolkit at every tier-end" overload the user flagged.
     """
     from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
     from reportlab.lib.units import mm
+
+    # ── Per-render dedup state (lives on the styles dict, fresh per request) ──
+    shown_areas = s.setdefault("_shown_toolkit_areas", set())
+    full_shown = s.setdefault("_full_toolkit_shown", [False])  # list = mutable flag
+
+    # Skip if THIS exact life-area was already closed in this report
+    if life_area in shown_areas:
+        return []
+    shown_areas.add(life_area)
 
     area = LIFE_AREA.get(life_area, LIFE_AREA["synthesis"])
     lk = LUCKY.get(driver, LUCKY[1])
@@ -515,8 +529,24 @@ def numerology_closing_toolkit_block(s: Dict[str, Any], driver: int, conductor: 
 
     flow: List[Any] = []
     flow.append(Spacer(1, 4 * mm))
-    flow.append(tbl)
-    flow.append(Spacer(1, 3 * mm))
+
+    # First call in this render → show the FULL toolkit table.
+    # Every subsequent call → only show the area-specific reminder
+    # (avoids the same lucky-numbers / days / colors table reappearing
+    # at the end of every tier).
+    if not full_shown[0]:
+        flow.append(tbl)
+        flow.append(Spacer(1, 3 * mm))
+        full_shown[0] = True
+    else:
+        # Compact area-specific header (replaces the full purple table)
+        mini_title = _T(lang,
+            f"🎯 <b>{area['label_en']} — apply the master toolkit</b>",
+            f"🎯 <b>{area['label_hi']} — मास्टर टूलकिट लागू करें</b>",
+            f"🎯 <b>{area['label_hg']} — master toolkit apply karein</b>")
+        flow.append(Paragraph(mini_title, s["body"]))
+        flow.append(Spacer(1, 2 * mm))
+
     flow.append(Paragraph(closer_html, s["body"]))
     flow.append(Spacer(1, 3 * mm))
     return flow

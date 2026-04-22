@@ -1,0 +1,117 @@
+🔍 TASK: Full Environment & Dependency Extraction (VS Code Migration Ready)
+
+I want to migrate this entire project from Replit to VS Code/local environment.
+
+Please generate a COMPLETE and ACCURATE dependency + environment report. Do NOT skip anything.
+
+Return everything in structured format with COPY blocks.
+
+---
+
+🧩 1. Python Environment Details
+
+- Python version used
+- OS info (Replit container)
+- Any runtime-specific configs
+
+---
+
+📦 2. ALL Installed Python Packages
+
+- Run equivalent of pip freeze
+- Include exact versions
+- Separate:
+  - Direct dependencies
+  - Indirect dependencies (if possible)
+
+Output:
+requirements.txt (FULL)
+
+---
+
+🧠 3. Hidden / Auto-installed Packages
+
+- Any packages automatically installed by Replit
+- Any implicit dependencies used in runtime but not in requirements
+- Any packages used by:
+  - mediapipe
+  - opencv
+  - pillow-heif
+  - reportlab
+  - flask stack
+
+---
+
+⚙️ 4. System-Level Dependencies (VERY IMPORTANT)
+
+List all OS-level dependencies required:
+
+- libgl1
+- libglib2.0
+- ffmpeg
+- build-essential
+- etc.
+
+Also provide:
+👉 apt install command
+
+---
+
+🔐 5. Environment Variables (.env)
+
+List ALL required keys:
+
+- OPENAI_API_KEY
+- DATABASE_URL
+- CASHFREE keys
+- any other hidden config
+
+Do NOT expose values — only keys.
+
+---
+
+📁 6. Project Structure Dependencies
+
+- Any relative imports that may break locally
+- Any sys.path hacks
+- Any folder that must be in PYTHONPATH
+
+---
+
+🧪 7. Special Runtime Requirements
+
+- Mediapipe GPU/CPU constraints
+- OpenCV requirements
+- HEIC support setup
+- Any threading / async dependencies
+
+---
+
+🚀 8. Exact Local Setup Steps
+
+Give step-by-step:
+
+1. Create venv
+2. Install dependencies
+3. Install system libs
+4. Setup env
+5. Run server
+
+---
+
+📌 9. Dockerfile (BONUS - REQUIRED)
+
+Generate a working Dockerfile for this project so it can run anywhere without environment issues.
+
+---
+
+⚠️ IMPORTANT RULES:
+
+- Do NOT give explanation — only actionable output
+- Everything should be copy-paste ready
+- Assume NOTHING is pre-installed
+- Make it production-ready
+
+---
+
+Goal: I should be able to run this project in VS Code WITHOUT ANY ERRORS

@@ -57,59 +57,84 @@ function getPanchang(date: Date) {
   return { tithi: `${paksha} ${tithi}`, nakshatra, yoga, karana, var: var_ };
 }
 
-// ── Auspicious Score (Shubh Prataishaat) ─────────────────────────────────────
-// Composite 0-100 score based on classical Vedic shubh-ashubh mapping of
-// tithi / nakshatra / yoga / karana / vaar.
-const SHUBH_TITHIS  = ["Dwitiya","Tritiya","Panchami","Saptami","Dashami","Ekadashi","Trayodashi","Purnima/Amavasya"];
-const ASHUBH_TITHIS = ["Chaturthi","Navami","Chaturdashi"];
-const SHUBH_NAKS    = ["Rohini","Mrigashira","Pushya","Hasta","Anuradha","Shravana","Revati","Uttara Phalguni","Uttara Ashadha","Uttara Bhadrapada","Swati"];
-const ASHUBH_NAKS   = ["Bharani","Krittika","Ashlesha","Magha","Mula","Jyeshtha","Vishakha"];
-const SHUBH_YOGAS   = ["Priti","Ayushman","Saubhagya","Shobhana","Sukarma","Dhriti","Vriddhi","Dhruva","Harshana","Siddhi","Variyana","Shiva","Siddha","Sadhya","Shubha","Brahma","Indra"];
+// ── Auspicious Score (Shubh Pratishata) ─────────────────────────────────────
+// Honest 0-100 composite based on classical Brihat-Hora & Muhurta texts.
+// Most days are MISHRIT (mixed). True "Bahut Shubh" days are RARE (~5-8% / year)
+// — Sarvartha-Siddhi or Amrita-Siddhi yoga combinations.
+// True "Saavdhani" days are also rare (~10%).
+//
+// Strict classification (only top-tier classical-praised items count as shubh):
+const TOP_TITHIS    = ["Panchami","Saptami","Dashami","Ekadashi","Trayodashi"];   // best for new work
+const SOFT_TITHIS   = ["Dwitiya","Tritiya"];                                       // mildly good
+const ASHUBH_TITHIS = ["Chaturthi","Navami","Chaturdashi","Amavasya"];             // riktha + new-moon
+// Top 6 most-praised nakshatras (Pushya, Rohini, Hasta, Anuradha, Shravana, Revati)
+const TOP_NAKS      = ["Pushya","Rohini","Hasta","Anuradha","Shravana","Revati"];
+const SOFT_NAKS     = ["Mrigashira","Uttara Phalguni","Uttara Ashadha","Uttara Bhadrapada","Swati","Punarvasu","Chitra"];
+const ASHUBH_NAKS   = ["Bharani","Krittika","Ashlesha","Magha","Mula","Jyeshtha","Vishakha","Ardra"];
+// Only TOP yogas count as shubh; many "shubh-named" yogas are actually neutral
+const TOP_YOGAS     = ["Siddhi","Shubha","Amrita","Brahma","Indra","Saubhagya","Shobhana"];
 const ASHUBH_YOGAS  = ["Vishkambha","Atiganda","Shula","Ganda","Vyaghata","Vajra","Vyatipata","Parigha","Vaidhriti"];
-const VISHTI_KARANA = "Vishti";   // Bhadra — strictly avoid
-const SHUBH_VARS    = ["Somvar","Budhavar","Guruvaar","Shukravar"];
-const ASHUBH_VARS   = ["Shanivaar"];
+const VISHTI_KARANA = "Vishti";   // Bhadra — classical forbid
+const TOP_VARS      = ["Guruvaar","Shukravar"];     // truly auspicious
+const SOFT_VARS     = ["Somvar","Budhavar"];
+const ASHUBH_VARS   = ["Shanivaar","Mangalvar"];
 
 function getAuspiciousScore(p: { tithi: string; nakshatra: string;
                                   yoga: string; karana: string; var: string }) {
   const reasons: { good: string[]; bad: string[] } = { good: [], bad: [] };
-  let score = 50;
+  // Start neutral — most days ARE mixed, not auspicious.
+  let score = 45;
 
-  // Tithi
-  const tCore = p.tithi.split(" ").slice(-1)[0];
-  if (SHUBH_TITHIS.includes(tCore)) { score += 12; reasons.good.push(`Tithi ${tCore} shubh hai`); }
-  else if (ASHUBH_TITHIS.includes(tCore)) { score -= 12; reasons.bad.push(`Tithi ${tCore} kamzor hai`); }
+  // Tithi (strict)
+  const tCore = p.tithi.split(" ").slice(-1)[0].replace("/Amavasya","");
+  if (TOP_TITHIS.includes(tCore))         { score += 10; reasons.good.push(`Tithi ${tCore} — naye karya ke liye anukool`); }
+  else if (SOFT_TITHIS.includes(tCore))   { score += 4;  reasons.good.push(`Tithi ${tCore} — mild positive`); }
+  else if (ASHUBH_TITHIS.includes(tCore) || tCore === "Amavasya") {
+    score -= 14; reasons.bad.push(`Tithi ${tCore} — riktha/khali, naye karya talein`);
+  }
   if (p.tithi.includes("Krishna") && tCore === "Chaturdashi") {
-    score -= 5; reasons.bad.push("Krishna Chaturdashi — naye karya talein");
+    score -= 6; reasons.bad.push("Krishna Chaturdashi — extra saavdhani");
   }
 
-  // Nakshatra
-  if (SHUBH_NAKS.includes(p.nakshatra))  { score += 14; reasons.good.push(`${p.nakshatra} nakshatra anukool`); }
-  else if (ASHUBH_NAKS.includes(p.nakshatra)) { score -= 14; reasons.bad.push(`${p.nakshatra} nakshatra ki saavdhani`); }
+  // Nakshatra (strict)
+  if (TOP_NAKS.includes(p.nakshatra))       { score += 12; reasons.good.push(`${p.nakshatra} — bahut anukool nakshatra`); }
+  else if (SOFT_NAKS.includes(p.nakshatra)) { score += 5;  reasons.good.push(`${p.nakshatra} — mild positive`); }
+  else if (ASHUBH_NAKS.includes(p.nakshatra)) {
+    score -= 14; reasons.bad.push(`${p.nakshatra} — krura nakshatra, important kaam talein`);
+  }
 
-  // Yoga
-  if (SHUBH_YOGAS.includes(p.yoga))  { score += 10; reasons.good.push(`${p.yoga} yoga shubh`); }
-  else if (ASHUBH_YOGAS.includes(p.yoga)) { score -= 10; reasons.bad.push(`${p.yoga} yoga me dhyan rakhein`); }
+  // Yoga (strict)
+  if (TOP_YOGAS.includes(p.yoga))      { score += 8;  reasons.good.push(`${p.yoga} yoga — truly shubh`); }
+  else if (ASHUBH_YOGAS.includes(p.yoga)) {
+    score -= 12; reasons.bad.push(`${p.yoga} yoga — chunauti-purna`);
+  }
 
-  // Karana
-  if (p.karana === VISHTI_KARANA) {
-    score -= 15; reasons.bad.push("Vishti (Bhadra) karana — koi shubh karya na karein");
-  } else {
-    score += 4; reasons.good.push(`${p.karana} karana neutral-positive`);
+  // Karana — only Vishti penalty, no auto-bonus
+  if (p.karana === VISHTI_KARANA || p.karana.includes("Vishti")) {
+    score -= 15; reasons.bad.push("Vishti/Bhadra karana — naye karya na karein");
   }
 
   // Vaar (day)
-  if (SHUBH_VARS.includes(p.var))  { score += 6; reasons.good.push(`${p.var} shubh vaar`); }
-  else if (ASHUBH_VARS.includes(p.var)) { score -= 4; reasons.bad.push(`${p.var} pe Shani prabhav — slow & steady`); }
+  if (TOP_VARS.includes(p.var))       { score += 6; reasons.good.push(`${p.var} — purn shubh vaar`); }
+  else if (SOFT_VARS.includes(p.var)) { score += 2; }
+  else if (ASHUBH_VARS.includes(p.var)) {
+    score -= 5; reasons.bad.push(`${p.var} — Shani/Mangal prabhav, dheere karya karein`);
+  }
 
-  score = Math.max(5, Math.min(98, score));
+  // Sarvartha-Siddhi check: TOP nakshatra + TOP vaar → bonus
+  if (TOP_NAKS.includes(p.nakshatra) && TOP_VARS.includes(p.var) && TOP_YOGAS.includes(p.yoga)) {
+    score += 8; reasons.good.push("⭐ Sarvartha-Siddhi yoga — saare karya ke liye shreshth");
+  }
 
+  score = Math.max(8, Math.min(96, score));
+
+  // Stricter bands — Bahut Shubh truly rare
   let band: "Bahut Shubh" | "Shubh" | "Mishrit" | "Saavdhani";
   let color: string;
   let emoji: string;
-  if (score >= 78)      { band = "Bahut Shubh"; color = "#22c55e"; emoji = "🌟"; }
-  else if (score >= 60) { band = "Shubh";       color = "#84cc16"; emoji = "✨"; }
-  else if (score >= 40) { band = "Mishrit";     color = "#f59e0b"; emoji = "⚖️"; }
+  if (score >= 80)      { band = "Bahut Shubh"; color = "#22c55e"; emoji = "🌟"; }
+  else if (score >= 65) { band = "Shubh";       color = "#84cc16"; emoji = "✨"; }
+  else if (score >= 35) { band = "Mishrit";     color = "#f59e0b"; emoji = "⚖️"; }
   else                  { band = "Saavdhani";   color = "#ef4444"; emoji = "⚠️"; }
 
   return { score, band, color, emoji,

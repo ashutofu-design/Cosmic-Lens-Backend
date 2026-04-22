@@ -60,7 +60,8 @@ interface Result{
   yoni:KootItem;tara:KootItem;vasya:KootItem;varna:KootItem;
   total:number;manglik:boolean;
 }
-interface PersonData{name:string;nakshatra:string;moonSign:string;manglik:boolean;}
+interface RawBirth{day:number;month:number;year:number;hour:number;minute:number;ampm:string;place:string;}
+interface PersonData{name:string;nakshatra:string;moonSign:string;manglik:boolean;_rawBirth?:RawBirth;}
 
 function compute(p1:PersonData,p2:PersonData):Result{
   const n1=NAKSHATRAS.indexOf(p1.nakshatra),n2=NAKSHATRAS.indexOf(p2.nakshatra);
@@ -169,6 +170,7 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
   const [time,setTime]=useState(""); const [place,setPlace]=useState("");
   const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
   async function submit(){
+    if(!name.trim()){setErr("Naam zaroori hai.");return;}
     if(!dob||!time||!place){setErr("Sab fields zaroori hain.");return;}
     setErr(""); setLoading(true);
     try{
@@ -180,7 +182,13 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
         body:JSON.stringify({name:name||"Person",day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place})});
       const json=await res.json();
       const marsH=(json.planets as any[])?.find((p:any)=>p.name==="Mars")?.house??0;
-      onDone({name:name||"Person",nakshatra:json.nakshatra,moonSign:json.moonSign,manglik:[1,4,7,8,12].includes(marsH)});
+      onDone({
+        name:name||"Person",
+        nakshatra:json.nakshatra,
+        moonSign:json.moonSign,
+        manglik:[1,4,7,8,12].includes(marsH),
+        _rawBirth:{day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place},
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }catch(e:any){setErr(e?.message??"Error. Try again.");}
     finally{setLoading(false);}
@@ -1456,13 +1464,24 @@ export default function KundliMilanScreen(){
     if(!person1||!p2)return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const bd1=p1Profile?.birthData;
-    const bd2=p2Profile?.birthData;
+    // Birth data resolution priority:
+    //   1. Saved profile's birthData (when user picked an existing profile)
+    //   2. _rawBirth attached by AddKundliForm (when user filled inline form)
+    const bd1=p1Profile?.birthData ?? (person1._rawBirth ? {
+      day:person1._rawBirth.day, month:person1._rawBirth.month, year:person1._rawBirth.year,
+      hour:person1._rawBirth.hour, minute:person1._rawBirth.minute, ampm:person1._rawBirth.ampm,
+      place:person1._rawBirth.place,
+    } : undefined);
+    const bd2=p2Profile?.birthData ?? (p2._rawBirth ? {
+      day:p2._rawBirth.day, month:p2._rawBirth.month, year:p2._rawBirth.year,
+      hour:p2._rawBirth.hour, minute:p2._rawBirth.minute, ampm:p2._rawBirth.ampm,
+      place:p2._rawBirth.place,
+    } : undefined);
 
     if(!bd1||!bd2){
       Alert.alert(
         "Birth Data Missing",
-        "Accurate calculation ke liye dono logon ka poora birth data chahiye — date, time, aur place. Profile edit karke update karein.",
+        "Accurate calculation ke liye dono logon ka poora birth data chahiye — date, time, aur place. Profile edit karke update karein ya naya kundli inline form se add karein.",
         [{text:"OK"}]
       );
       return;

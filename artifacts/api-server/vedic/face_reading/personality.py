@@ -975,7 +975,7 @@ def _archetype_from_profile(traits: dict) -> dict:
     O = (traits["O"]["score"] or 50); C = (traits["C"]["score"] or 50)
     E = (traits["E"]["score"] or 50); A = (traits["A"]["score"] or 50)
     N = (traits["N"]["score"] or 50)
-    archetype = "Average"
+    archetype = "Balanced"
     if E > 60 and A > 60 and C > 55 and N < 45:   archetype = "Resilient"
     elif E < 45 and N > 60:                        archetype = "Overcontrolled"
     elif C < 45 and A < 45:                        archetype = "Undercontrolled"

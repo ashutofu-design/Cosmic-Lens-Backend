@@ -428,7 +428,7 @@ def build_bonus_score_deep(engines: Dict, base_sections: Dict) -> Dict:
             f"Dhana score Samudrika face-features se nikla hai (forehead, lips, ears, palm-line proxies). "
             f"+1 point ka matlab: 5-10 saal me tumhari net-worth 30-50% zyada projection kar sakti hai. "
             f"<b>Top action</b>: aaj se 3 cheez fix karo — (1) 20% income auto-invest har mahine, "
-            f"(2) ek skill jo income directly upar leke jaaye (sales, AI, finance, premium specialty), "
+            f"(2) ek skill jo income directly upar leke jaaye (sales, tech-product, finance, premium specialty), "
             f"(3) 1 mentor jo 5x earner ho — unke saath quarterly conversation."
         ),
     })

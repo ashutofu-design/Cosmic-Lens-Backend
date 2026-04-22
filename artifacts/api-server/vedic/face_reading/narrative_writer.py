@@ -457,12 +457,17 @@ def write_s16(content, engines, person):
 # Section 17 — SECRET MARKINGS (moles)
 # ──────────────────────────────────────────────────────────────────────────
 def write_s17(content, engines, person):
-    moles = content.get("moles_detected") or content.get("markings") or []
-    n = len(moles) if isinstance(moles, list) else 0
+    moles = content.get("moles") or content.get("moles_detected") or content.get("markings") or []
+    n = content.get("moles_found")
+    if n is None:
+        n = len(moles) if isinstance(moles, list) else 0
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        n = 0
     return _join_para(
         f"Vedic me moles aur tilak ko 'gupt chinha' kaha jata hai — chhote markings, badi kahaani.",
-        (f"Tumhare chehre par humne {n} prominent markings detect kiye." if n else "Tumhare chehre par koi prominent moles detect nahi hue — yeh bhi ek shubh sanket hai (clean canvas)."),
-        f"Har location ka apna meaning hai — niche structured form me detail hai.",
+        (f"Tumhare chehre par humne {n} prominent markings detect kiye — har ek ka apna meaning hai." if n > 0 else "Tumhare chehre par koi prominent moles detect nahi hue — yeh bhi ek shubh sanket hai (clean canvas)."),
         f"Yaad rakho — moles destiny fix nahi karte, indicators hain. Awareness se aap unka use kar sakte ho ya unke risk ko mitigate kar sakte ho.",
     )
 

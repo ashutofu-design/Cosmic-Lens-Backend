@@ -152,16 +152,19 @@ def get_dominant_element(engines: Dict) -> str:
 
 
 def get_archetype(engines: Dict) -> str:
-    """Canonical archetype name."""
+    """Canonical archetype name. Personality engine emits `label`; older
+    callers/templates may emit `name` or `archetype` — try all."""
     a = _g(engines, "personality", "archetype") or {}
     name = (
-        a.get("name")
-        or a.get("archetype")
+        a.get("label")          # current personality.py contract
+        or a.get("name")        # legacy
+        or a.get("archetype")   # legacy
         or _g(engines, "personality", "archetype_name")
         or "Balanced"
     )
     if isinstance(name, str) and name.strip():
-        return name.strip()
+        n = name.strip()
+        return "Balanced" if n.lower() == "average" else n
     return "Balanced"
 
 
@@ -198,8 +201,16 @@ def build_final_scores(engines: Dict) -> Dict[str, Any]:
             "neuroticism":       round(_num(ocean.get("neuroticism")), 1),
         },
         "vitality":         round(_num(_g(engines, "health", "vitality_score")), 1),
-        "symmetry":         round(_num(_g(engines, "anthropometry", "symmetry_score")), 1),
-        "phi_score":        round(_num(_g(engines, "phi", "overall_phi_score")), 1),
+        # Symmetry: prefer dedicated symmetry engine's overall_score, fall back to
+        # legacy anthropometry.symmetry_score key for older callers.
+        "symmetry":         round(_num(
+                                _g(engines, "symmetry", "overall_score"),
+                                d=_num(_g(engines, "anthropometry", "symmetry_score"))
+                            ), 1),
+        "phi_score":        round(_num(
+                                _g(engines, "phi", "overall_phi_score"),
+                                d=_num(_g(engines, "phi", "phi_score"))
+                            ), 1),
         "version":          "consistency_v1",
     }
 

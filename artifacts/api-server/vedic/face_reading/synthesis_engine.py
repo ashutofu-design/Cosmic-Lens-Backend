@@ -93,12 +93,14 @@ def _extract_signals(engines: Dict[str, Any]) -> Dict[str, float]:
         "A": _num(ocean.get("agreeableness")),
         "N": _num(ocean.get("neuroticism")),
         # First impression
-        "confidence":  _num(fimp.get("self_confidence_score")),
+        "confidence":  _num((fimp.get("first_impression_4") or {}).get("confidence"),
+                            default=_num(fimp.get("self_confidence_score"))),
         "trust":       _num(fimp.get("trust_score")),
         "attraction":  _num(fimp.get("attraction_score")),
         "authority":   _num(fimp.get("authority_score")),
         # Face geometry
-        "symmetry":    _num(sym.get("symmetry_score")),
+        "symmetry":    _num(sym.get("overall_score"),
+                             default=_num(sym.get("symmetry_score"))),
         "fwhr":        _num(fwhr.get("fwhr_value"), default=1.9),
         # Health
         "vitality":    _num(health.get("vitality_score")),

@@ -54,7 +54,12 @@ def assemble_report(sections: Dict,
         "report_title":     "Face Intelligence Report",
         "report_subtitle":  "Tumhare Chehre Mein Likhi Tumhari Kahaani",
         "archetype":        (engines.get("personality") or {}).get("archetype", {}).get("name", "Balanced Soul"),
-        "dominant_element": (engines.get("samudrika") or {}).get("element_profile", {}).get("dominant_element", "Balanced"),
+        "dominant_element": (lambda _e: {
+            "agni": "Fire", "jal": "Water", "vayu": "Air",
+            "akash": "Space", "prithvi": "Earth",
+        }.get(((_e or "")).strip().lower(), (_e or "Balanced").strip().title()))(
+            (engines.get("samudrika") or {}).get("element_profile", {}).get("dominant_element", "Balanced")
+        ),
         "face_shape":       (engines.get("anthropometry") or {}).get("face_shape_7", {}).get("class", "balanced"),
         "complexion":       (engines.get("samudrika") or {}).get("complexion", ""),
         "perceived_age":    (engines.get("first_impression") or {}).get("perceived_age", {}).get("value"),

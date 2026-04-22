@@ -50,7 +50,14 @@ def build_hook(sections: Dict, engines: Dict, person: Dict | None = None) -> Dic
 
     element = (fs.get("element") or _g(samu, "element_profile", "dominant_element")
                or "Balanced")
-    archetype = fs.get("archetype") or _g(pers, "archetype", "name") or "Balanced Soul"
+    archetype = (
+        fs.get("archetype")
+        or _g(pers, "archetype", "label")
+        or _g(pers, "archetype", "name")
+        or "Balanced Soul"
+    )
+    if isinstance(archetype, str) and archetype.strip().lower() == "average":
+        archetype = "Balanced"
     dom_trait = fs.get("dominant_trait") or "Energy"
 
     # Identity line — specific, not generic

@@ -94,7 +94,7 @@ _CELEBS = {
         "akash":   [("Osho", "Provocative, boundary-breaking thinker.", "Disruptive visionary")],
         "prithvi": [("Yuvraj Singh", "Earth + fire mix — unpredictable game-changer.", "Wild card brilliance")],
     },
-    "Average": {
+    "Balanced": {
         "prithvi": [("Mahendra Singh Dhoni (off-field)", "Balanced, no-drama, quietly competent.", "Everyman wisdom")],
         "vayu":    [("Anushka Sharma", "Balanced public persona, multi-faceted.", "Balanced versatility")],
         "agni":    [("Ravi Shastri", "Balanced fire + groundedness.", "Steady commentator")],
@@ -102,6 +102,29 @@ _CELEBS = {
         "akash":   [("Amartya Sen", "Balanced thinker, multi-domain wisdom.", "Quiet polymath")],
     },
 }
+# Backward-compat alias (older callers still pass "Average")
+_CELEBS["Average"] = _CELEBS["Balanced"]
+
+
+# Element key → user-visible English name (single source of truth)
+_ELEMENT_DISPLAY = {
+    "agni":    "Fire",
+    "prithvi": "Earth",
+    "vayu":    "Air",
+    "jal":     "Water",
+    "akash":   "Ether",
+    "fire":    "Fire",
+    "earth":   "Earth",
+    "air":     "Air",
+    "water":   "Water",
+    "ether":   "Ether",
+    "wood":    "Wood",
+    "metal":   "Metal",
+}
+
+
+def _display_element(elem: str) -> str:
+    return _ELEMENT_DISPLAY.get((elem or "").strip().lower(), (elem or "").title() or "Balanced")
 
 
 _ELEMENT_KEYS = ["agni", "prithvi", "vayu", "jal", "akash"]
@@ -111,7 +134,7 @@ def get_celebrity_matches(archetype: str, dominant_element: str,
                           n: int = 3) -> List[Dict]:
     """Return up to n curated celebrity matches for the given archetype × element."""
     elem = (dominant_element or "").lower().strip()
-    arche = archetype if archetype in _CELEBS else "Average"
+    arche = archetype if archetype in _CELEBS else "Balanced"
     bucket = _CELEBS.get(arche, {})
 
     matches: List = []
@@ -125,10 +148,10 @@ def get_celebrity_matches(archetype: str, dominant_element: str,
                 matches.append(entry)
             if len(matches) >= n + 2: break
         if len(matches) >= n + 2: break
-    # Fallback to Average bucket if still empty
+    # Fallback to Balanced bucket if still empty
     if not matches:
         for ek in _ELEMENT_KEYS:
-            for entry in _CELEBS["Average"].get(ek, []):
+            for entry in _CELEBS["Balanced"].get(ek, []):
                 matches.append(entry)
                 if len(matches) >= n: break
             if len(matches) >= n: break
@@ -142,14 +165,17 @@ def get_celebrity_matches(archetype: str, dominant_element: str,
 def build_celebrity_section(personality_engine: Dict,
                              samudrika_engine: Dict) -> Dict:
     """Build celebrity-match section content."""
-    arche = (personality_engine.get("archetype") or {}).get("label") or "Average"
+    arche = (personality_engine.get("archetype") or {}).get("label") or "Balanced"
+    if arche == "Average":
+        arche = "Balanced"
     elem = ((samudrika_engine.get("element_profile") or {}).get("dominant")
             or (samudrika_engine.get("element_profile") or {}).get("dominant_element")
             or "prithvi")
+    elem_display = _display_element(elem)
 
     matches = get_celebrity_matches(arche, elem, n=3)
     intro = (
-        f"Tumhara archetype <b>{arche}</b> aur dominant tatva <b>{elem.title()}</b> "
+        f"Tumhara archetype <b>{arche}</b> aur dominant tatva <b>{elem_display}</b> "
         "ke combination se milte-julte 3 famous personalities. "
         "Yeh inspiration ke liye hai — tumhari personality bhi inhi jaisi structural pattern follow karti hai. "
         "Inn logon ka journey aur public persona study karke tumhe apni potential ki jhalak milegi."

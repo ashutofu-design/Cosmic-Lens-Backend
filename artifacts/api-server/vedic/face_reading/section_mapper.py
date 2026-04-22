@@ -87,11 +87,12 @@ def section_2_psychological_type(engines: Dict) -> Dict:
     else:
         ptype, ptype_hi = "Observer", "Drashta (Observer)"
 
-    # Introversion vs Extroversion
-    e_pct = _num(pct.get("extraversion"), default=E)
-    if e_pct >= 60:
+    # Introversion vs Extroversion — use raw E (0-100) as single source of truth
+    # Earlier this used percentile (e_pct) which gave a different number than every
+    # other section that displays Extraversion → caused 22.6 vs 39 conflict on the report.
+    if E >= 60:
         ie = "Extrovert"
-    elif e_pct <= 40:
+    elif E <= 40:
         ie = "Introvert"
     else:
         ie = "Ambivert"
@@ -118,7 +119,7 @@ def section_2_psychological_type(engines: Dict) -> Dict:
         "personality_type": ptype,
         "personality_type_hi": ptype_hi,
         "introversion_vs_extroversion": ie,
-        "extraversion_score": round(e_pct, 1),
+        "extraversion_score": round(E, 1),
         "decision_style": dstyle,
         "intelligence_type": intel,
     }
@@ -345,7 +346,10 @@ def section_7_personality_synthesis(engines: Dict) -> Dict:
 def _section_7_classic(engines: Dict) -> Dict:
     p = engines.get("personality", {})
     ocean = p.get("ocean_summary_scores") or {}
-    archetype = (p.get("archetype") or {}).get("name") or "Balanced"
+    _arch_obj = (p.get("archetype") or {})
+    archetype = _arch_obj.get("label") or _arch_obj.get("name") or _arch_obj.get("archetype") or "Balanced"
+    if isinstance(archetype, str) and archetype.strip().lower() == "average":
+        archetype = "Balanced"
     fi = engines.get("first_impression", {})
 
     # Rank traits by deviation from 50

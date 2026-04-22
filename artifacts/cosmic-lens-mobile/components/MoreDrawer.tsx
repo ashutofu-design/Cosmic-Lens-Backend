@@ -58,12 +58,6 @@ export default function MoreDrawer({
       ],
     },
     {
-      title: t.catRemedies,
-      items: [
-        { id: "remedies",  icon: "zap",         emoji: "⚡", title: t.mdRemediesTitle,  subtitle: t.mdRemediesSub, route: "/remedies",     accent: "#f59e0b" },
-      ],
-    },
-    {
       title: t.catVastu,
       items: [
         { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/astrovastu",   accent: "#06b6d4" },

@@ -81,8 +81,20 @@ def assemble_report(sections: Dict,
             "content":    content,
         })
 
+    # Build hook + TL;DR + restructured final truth (Phase-1 premium upgrade)
+    try:
+        from .report_intro import build_hook, build_tldr, build_final_truth_v2
+        _hook = build_hook(sections, engines, person)
+        _tldr = build_tldr(sections, engines)
+        _ft2 = build_final_truth_v2(sections, engines, _tldr)
+    except Exception as _e:
+        _hook, _tldr, _ft2 = {}, {}, {}
+
     return {
         "cover":             cover,
+        "hook":              _hook,
+        "tldr":              _tldr,
+        "final_truth_v2":    _ft2,
         "front_quality":     front_quality or {},
         "front_image_bytes": front_image_bytes,
         "front_points_norm": front_points_norm,

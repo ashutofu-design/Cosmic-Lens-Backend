@@ -720,8 +720,9 @@ def _synth_banner(label_hi: str, label_en: str, styles) -> List:
     return out
 
 
-def _render_synthesis_pages(synthesis: Dict, styles) -> List:
-    """Render the 6-key Final Synthesis Layer across multiple pages."""
+def _render_synthesis_pages(synthesis: Dict, styles, skip_shocks: bool = False) -> List:
+    """Render the 6-key Final Synthesis Layer across multiple pages.
+    If skip_shocks=True, omit shock insights (shown earlier in flow)."""
     if not synthesis or not isinstance(synthesis, dict):
         return []
 
@@ -768,7 +769,7 @@ def _render_synthesis_pages(synthesis: Dict, styles) -> List:
             flowables.append(Spacer(1, 4 * mm))
 
     # ── 2. Shock Insights ──────────────────────────────────────────────────
-    shocks = synthesis.get("shock_insights") or []
+    shocks = (synthesis.get("shock_insights") or []) if not skip_shocks else []
     if shocks:
         flowables.append(Spacer(1, 4 * mm))
         flowables.extend(_synth_banner(
@@ -876,6 +877,280 @@ def _render_synthesis_pages(synthesis: Dict, styles) -> List:
                 flowables.append(Paragraph(
                     f"<i>Expected lift: {_safe(lift)}</i>", styles["field_value"]))
             flowables.append(Spacer(1, 5 * mm))
+
+    return flowables
+
+
+# ── Phase-1 premium upgrade: HOOK COVER (page 1) ─────────────────────────
+def _render_hook_cover(hook: Dict, cover: Dict, styles,
+                       photo_bytes: Optional[bytes] = None,
+                       points_norm: Optional[list] = None) -> List:
+    """Premium cover page — identity line + shock + score snapshot.
+    Designed for instant emotional connection in 5 seconds."""
+    flowables: List = []
+
+    flowables.append(Spacer(1, 6 * mm))
+    flowables.append(Paragraph("PREMIUM REPORT  ·  Cosmic Intelligence Edition",
+                               styles["cover_kicker"]))
+    flowables.append(Paragraph(_safe(cover.get("report_title",
+                                               "Face Intelligence Report")),
+                               styles["cover_title"]))
+
+    # Photo (smaller — make room for hook content)
+    if photo_bytes:
+        try:
+            png_bytes = make_cover_photo(photo_bytes, points_norm, out_size=420)
+            if png_bytes:
+                img = RLImage(BytesIO(png_bytes), width=58 * mm, height=58 * mm)
+                img.hAlign = "CENTER"
+                flowables.append(Spacer(1, 2 * mm))
+                flowables.append(img)
+        except Exception:
+            pass
+
+    flowables.append(Spacer(1, 3 * mm))
+    flowables.append(Paragraph(_safe(cover.get("name", "Insan")),
+                               styles["cover_name"]))
+
+    # Identity tag (element + archetype)
+    elt = hook.get("element", "Balanced")
+    arch = hook.get("archetype", "Balanced Soul")
+    flowables.append(Paragraph(
+        f"<b>{_safe(elt)}</b> tatva  ·  <b>{_safe(arch)}</b> archetype",
+        styles["cover_meta"]))
+    flowables.append(Spacer(1, 6 * mm))
+
+    # ── HOOK LINE 1: Identity (deep, specific) ──────────────────────
+    identity = hook.get("identity_line", "")
+    if identity:
+        cell = [[Paragraph(_safe(identity), styles["narrative"])]]
+        t = Table(cell, colWidths=[170 * mm], hAlign="CENTER")
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), C_CALLOUT_BG),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ("LINEBEFORE", (0, 0), (0, -1), 4, C_PRIMARY),
+        ]))
+        flowables.append(t)
+        flowables.append(Spacer(1, 5 * mm))
+
+    # ── HOOK LINE 2: Shock insight ──────────────────────────────────
+    shock = hook.get("shock_line", "")
+    if shock:
+        flowables.append(_callout("ONE SHOCK INSIGHT  ·  shuruaat me hi",
+                                  shock, styles))
+        flowables.append(Spacer(1, 5 * mm))
+
+    # ── HOOK LINE 3: Score snapshot ─────────────────────────────────
+    scores = hook.get("scores") or {}
+    if scores:
+        flowables.append(Paragraph("Tumhare 3 Core Scores",
+                                   styles["field_label"]))
+        flowables.append(Spacer(1, 1 * mm))
+        for label, key in [("Vitality", "vitality"),
+                           ("Charisma", "charisma"),
+                           ("Leadership", "leadership")]:
+            v = scores.get(key)
+            if isinstance(v, (int, float)) and v > 0:
+                flowables.append(ScoreBar(label, float(v), 100))
+                flowables.append(Spacer(1, 1 * mm))
+
+    flowables.append(Spacer(1, 8 * mm))
+    flowables.append(HRFlowable(width="35%", thickness=0.6, color=C_RULE,
+                                spaceBefore=2, spaceAfter=4, hAlign="CENTER"))
+    flowables.append(Paragraph(
+        "<b>22 sections · 9 engines · Vedic Samudrika + Modern Psychology</b><br/>"
+        "Page palto — TL;DR agle page pe.",
+        styles["cover_meta"]))
+    return flowables
+
+
+# ── Phase-1 premium upgrade: TL;DR PAGE (page 2) ──────────────────────────
+def _render_tldr_page(tldr: Dict, styles) -> List:
+    """Value-on-skip page — full essence in one page."""
+    flowables: List = []
+    flowables.append(Spacer(1, 4 * mm))
+    flowables.append(Paragraph("TL;DR — Agar Sirf Yeh Padho",
+                               styles["section_title_hi"]))
+    flowables.append(Paragraph("The 30-Second Read · Skip-Proof Summary",
+                               styles["section_title_en"]))
+    flowables.append(HRFlowable(width="25%", thickness=2, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
+
+    # ── Top 5 personality traits (with bars) ──────────────────────
+    traits = tldr.get("top_5_traits") or []
+    if traits:
+        flowables.append(Paragraph("Top 5 Personality Traits",
+                                   styles["field_label"]))
+        flowables.append(Spacer(1, 2 * mm))
+        for t in traits:
+            if not isinstance(t, dict):
+                continue
+            name = t.get("name", "")
+            score = t.get("score", 0)
+            tag = t.get("tag", "")
+            label = f"{name}  ({tag})"
+            flowables.append(ScoreBar(label, float(score), 100))
+            flowables.append(Spacer(1, 1 * mm))
+        flowables.append(Spacer(1, 4 * mm))
+
+    # ── Top 3 strengths ────────────────────────────────────────────
+    strengths = tldr.get("top_3_strengths") or []
+    if strengths:
+        cell_rows = [[Paragraph(
+            "<font color='#7B1F1F'><b>TOP 3 STRENGTHS</b></font>",
+            styles["callout_label"])]]
+        for i, s in enumerate(strengths, 1):
+            cell_rows.append([Paragraph(f"<b>{i}.</b> {_safe(s)}",
+                                        styles["callout_text"])])
+        t = Table(cell_rows, colWidths=[174 * mm], hAlign="LEFT")
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), HexColor("#F4F0E5")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LINEBEFORE", (0, 0), (0, -1), 3, C_ACCENT),
+        ]))
+        flowables.append(t)
+        flowables.append(Spacer(1, 4 * mm))
+
+    # ── Top 3 weaknesses ───────────────────────────────────────────
+    weaknesses = tldr.get("top_3_weaknesses") or []
+    if weaknesses:
+        cell_rows = [[Paragraph(
+            "<font color='#7B1F1F'><b>TOP 3 WEAKNESSES / BLIND SPOTS</b></font>",
+            styles["callout_label"])]]
+        for i, w in enumerate(weaknesses, 1):
+            cell_rows.append([Paragraph(f"<b>{i}.</b> {_safe(w)}",
+                                        styles["callout_text"])])
+        t = Table(cell_rows, colWidths=[174 * mm], hAlign="LEFT")
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), HexColor("#FBEEE6")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LINEBEFORE", (0, 0), (0, -1), 3, C_PRIMARY),
+        ]))
+        flowables.append(t)
+        flowables.append(Spacer(1, 5 * mm))
+
+    # ── Life pattern (one line) ────────────────────────────────────
+    life = tldr.get("life_pattern", "")
+    if life:
+        flowables.append(_callout("YOUR LIFE PATTERN  ·  ek line me",
+                                  life, styles))
+
+    return flowables
+
+
+# ── Phase-1 premium upgrade: SHOCK INSIGHTS EARLY (page 8-12) ────────────
+def _render_shock_insights_early(synthesis: Dict, styles) -> List:
+    """Shock insights moved early in flow for engagement."""
+    shocks = (synthesis or {}).get("shock_insights") or []
+    if not shocks:
+        return []
+    confs = {c.get("label", "")[:30]: c.get("score", 70)
+             for c in (synthesis.get("confidence_scores") or [])
+             if isinstance(c, dict)}
+
+    flowables: List = []
+    flowables.append(Spacer(1, 6 * mm))
+    flowables.append(Paragraph("Chonkane Wale Sach — Tumhare Bare Me",
+                               styles["section_title_hi"]))
+    flowables.append(Paragraph("Shock Insights · Things You Probably Didn't Know",
+                               styles["section_title_en"]))
+    flowables.append(HRFlowable(width="25%", thickness=2, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
+    flowables.append(Paragraph(
+        _safe("Yeh wo patterns hain jo single feature dekh ke nahi pakde ja sakte — "
+              "multiple engines mile tab nikle. Shuruaat me hi de raha hoon ki tumhe "
+              "report me khinchav ho."),
+        styles["narrative"]))
+    flowables.append(Spacer(1, 4 * mm))
+
+    for i, item in enumerate(shocks, 1):
+        if not isinstance(item, dict):
+            continue
+        insight = item.get("insight", "")
+        category = item.get("category", "")
+        # confidence
+        conf = 70
+        for k, v in confs.items():
+            if k and insight and k in insight:
+                conf = v; break
+        if insight:
+            flowables.append(_callout(
+                f"INSIGHT {i}  ·  {category or 'general'}  ·  "
+                f"Confidence: {conf}%",
+                insight, styles))
+            flowables.append(Spacer(1, 4 * mm))
+    return flowables
+
+
+# ── Phase-1 premium upgrade: FINAL TRUTH v2 (3+3+1 format) ───────────────
+def _render_final_truth_v2(ft2: Dict, styles) -> List:
+    """Restructured Final Truth — 3 strengths + 3 risks + 1 direction."""
+    if not ft2 or not isinstance(ft2, dict):
+        return []
+    flowables: List = []
+    flowables.append(Spacer(1, 4 * mm))
+    flowables.append(SectionBanner("21"))
+    flowables.append(Spacer(1, 4 * mm))
+    flowables.append(Paragraph("Antim Satya — Brutally Honest",
+                               styles["section_title_hi"]))
+    flowables.append(Paragraph("The Final Truth · No Sugar Coating",
+                               styles["section_title_en"]))
+    flowables.append(Spacer(1, 4 * mm))
+
+    # Brutal one-liner at top
+    brutal = ft2.get("brutal_truth", "")
+    if brutal:
+        flowables.append(_callout("BRUTAL TRUTH", brutal, styles))
+        flowables.append(Spacer(1, 5 * mm))
+
+    # 3 STRENGTHS
+    strengths = ft2.get("strengths") or []
+    if strengths:
+        flowables.append(Paragraph(
+            "<font color='#1B5E20'><b>3 STRENGTHS · TUMHARI TAKAT</b></font>",
+            styles["field_label"]))
+        for i, s in enumerate(strengths, 1):
+            flowables.append(Paragraph(
+                f"<b>+{i}.</b> {_safe(s)}", styles["field_value"]))
+        flowables.append(Spacer(1, 4 * mm))
+
+    # 3 RISKS
+    risks = ft2.get("risks") or []
+    if risks:
+        flowables.append(Paragraph(
+            "<font color='#7B1F1F'><b>3 RISKS · KHATRE KI GHANTI</b></font>",
+            styles["field_label"]))
+        for i, r in enumerate(risks, 1):
+            flowables.append(Paragraph(
+                f"<b>−{i}.</b> {_safe(r)}", styles["field_value"]))
+        flowables.append(Spacer(1, 5 * mm))
+
+    # 1 DIRECTION
+    direction = ft2.get("direction", "")
+    if direction:
+        cell = [[Paragraph(
+            "<font color='#7B1F1F'><b>1 LIFE DIRECTION  ·  Aaj Se Yeh Karna Hai</b></font>",
+            styles["callout_label"])],
+            [Paragraph(_safe(direction), styles["callout_text"])]]
+        t = Table(cell, colWidths=[174 * mm], hAlign="LEFT")
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), HexColor("#F4F0E5")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ("LINEBEFORE", (0, 0), (0, -1), 4, C_PRIMARY),
+        ]))
+        flowables.append(t)
 
     return flowables
 
@@ -1106,38 +1381,109 @@ def render_pdf(report: Dict) -> bytes:
     photo_bytes = report.get("front_image_bytes")
     points_norm = report.get("front_points_norm") or []
     engines     = report.get("engines") or {}
-    sections_dict = {s["key"]: s["content"] for s in report.get("sections", [])}
+    sections    = report.get("sections", [])
+    sections_dict = {s["key"]: s for s in sections}
+    synthesis   = report.get("synthesis") or {}
+    hook        = report.get("hook") or {}
+    tldr        = report.get("tldr") or {}
+    ft2         = report.get("final_truth_v2") or {}
 
-    # 1. Cover (with user photo)
-    story.extend(_render_cover(report.get("cover", {}), styles,
-                               photo_bytes=photo_bytes, points_norm=points_norm))
+    def _render_by_key(key: str):
+        sec = sections_dict.get(key)
+        if sec:
+            story.extend(_render_section(sec, styles))
+
+    # ── Page 1 :: HOOK COVER (identity + shock + scores) ─────────────
+    if hook:
+        story.extend(_render_hook_cover(hook, report.get("cover", {}), styles,
+                                        photo_bytes=photo_bytes,
+                                        points_norm=points_norm))
+    else:
+        story.extend(_render_cover(report.get("cover", {}), styles,
+                                   photo_bytes=photo_bytes,
+                                   points_norm=points_norm))
     story.append(PageBreak())
 
-    # 2. Table of Contents
+    # ── Page 2 :: TL;DR (value-on-skip) ──────────────────────────────
+    if tldr:
+        story.extend(_render_tldr_page(tldr, styles))
+        story.append(PageBreak())
+
+    # ── Page 3 :: Table of Contents ──────────────────────────────────
     story.extend(_render_toc(report, styles))
     story.append(PageBreak())
 
-    # 2b. Annotated face map (only if we have photo + landmarks)
+    # ── Page 4 :: Annotated face map ─────────────────────────────────
     if photo_bytes and points_norm and len(points_norm) > 200:
         story.extend(_render_face_map_page(photo_bytes, points_norm, styles))
         story.append(PageBreak())
 
-    # 2c. Visual snapshot (radar + score bars)
+    # ── Page 5 :: Visual snapshot ────────────────────────────────────
     if engines:
         story.extend(_render_visual_snapshot_page(engines, sections_dict, styles))
         story.append(PageBreak())
 
-    # 3. Sections (each may span multiple pages)
-    for sec in report.get("sections", []):
-        story.extend(_render_section(sec, styles))
+    # ── PERSONALITY CORE (sections 1, 2, 7) ──────────────────────────
+    for k in ("section_1_power_summary",
+              "section_2_psychological_type",
+              "section_7_personality_synthesis"):
+        _render_by_key(k)
 
-    # 3b. Final Synthesis Layer — 6-key fusion
-    synthesis = report.get("synthesis") or {}
+    # ── SHOCK INSIGHTS — early engagement (before deep feature dive) ──
+    if synthesis.get("shock_insights"):
+        story.append(PageBreak())
+        story.extend(_render_shock_insights_early(synthesis, styles))
+
+    # ── FEATURE ANALYSIS (section 6) ─────────────────────────────────
+    story.append(PageBreak())
+    _render_by_key("section_6_feature_analysis")
+
+    # ── BEHAVIOR PATTERNS (3, 11, 12, 13) ────────────────────────────
+    for k in ("section_3_mask_vs_real",
+              "section_11_attraction_charisma",
+              "section_12_decision_style",
+              "section_13_archetype",
+              "section_4_first_impression"):
+        _render_by_key(k)
+
+    # ── LIFE IMPACT (career, love, life flow, age map) ───────────────
+    for k in ("section_8_love_relationship_dna",
+              "section_9_career_money",
+              "section_14_life_flow",
+              "section_15_age_wise_map"):
+        _render_by_key(k)
+
+    # ── HEALTH + ENERGY ──────────────────────────────────────────────
+    _render_by_key("section_16_health_scan")
+
+    # ── VEDIC INSIGHTS (foundation + moles) ──────────────────────────
+    for k in ("section_5_core_foundation",
+              "section_17_secret_markings"):
+        _render_by_key(k)
+
+    # ── REMEDIES / ACTION (action plan, hacks, compatibility, red flags) ──
+    for k in ("section_10_red_flags",
+              "section_18_action_plan",
+              "section_19_improvement_hacks",
+              "section_20_compatibility"):
+        _render_by_key(k)
+
+    # ── FINAL SYNTHESIS (climax, shocks already shown earlier) ───────
     if synthesis:
         story.append(PageBreak())
-        story.extend(_render_synthesis_pages(synthesis, styles))
+        story.extend(_render_synthesis_pages(synthesis, styles, skip_shocks=True))
 
-    # 3c. Celebrity match (after all sections, before disclaimer)
+    # ── CLOSING TRUTH v2 (3 strengths + 3 risks + 1 direction) ───────
+    if ft2:
+        story.append(PageBreak())
+        story.extend(_render_final_truth_v2(ft2, styles))
+    else:
+        _render_by_key("section_21_final_truth")
+
+    # ── Bonus personality score ──────────────────────────────────────
+    _render_by_key("bonus_personality_score")
+
+    # ── Celebrity match ──────────────────────────────────────────────
     if engines:
         story.append(PageBreak())
         story.extend(_render_celebrity_page(engines, styles))

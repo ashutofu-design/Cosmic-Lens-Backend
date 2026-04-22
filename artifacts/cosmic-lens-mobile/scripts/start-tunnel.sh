@@ -28,33 +28,69 @@ if [ -z "$CFD" ] || ! [ -x "$CFD" ]; then
   echo "[startup] cloudflared installed: $($CFD --version 2>&1 | head -1)"
 fi
 
-# --- API tunnel (port 8080) via Cloudflare quick tunnel ---
+# --- API tunnel (port 8080) — try Cloudflare first, fall back to localtunnel ---
 API_PORT=8080
+LT_API_LOG="/tmp/lt-api.log"
+> "$LT_API_LOG"
 pkill -f "cloudflared.*localhost:${API_PORT}" 2>/dev/null || true
+pkill -f "lt --port ${API_PORT}" 2>/dev/null || true
 sleep 1
 
 (
   echo "[cf-api] starting cloudflare tunnel for :${API_PORT}"
   "$CFD" tunnel --no-autoupdate --protocol http2 --url "http://localhost:${API_PORT}" 2>&1 \
     | tee -a "$CF_API_LOG" | sed 's/^/[cf-api] /'
-  echo "[cf-api] EXITED — API tunnel dead; restart workflow"
+  echo "[cf-api] EXITED — cloudflare API tunnel dead"
 ) &
 CF_API_PID=$!
 
 PUBLIC_API_URL=""
-for i in $(seq 1 30); do
+# Wait up to 15s for cloudflare to publish a URL AND not have already errored
+for i in $(seq 1 15); do
   URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_API_LOG" 2>/dev/null | tail -1)
   if [ -n "$URL" ]; then
-    PUBLIC_API_URL="$URL"
-    echo "[startup] API tunnel READY: $PUBLIC_API_URL"
-    break
+    # Verify cloudflared hasn't shut down (which means tunnel registration failed)
+    if grep -q "Tunnel server stopped\|Initiating shutdown\|context deadline exceeded\|unknown error registering" "$CF_API_LOG" 2>/dev/null; then
+      echo "[cf-api] tunnel registered URL but connection failed — falling back to localtunnel"
+      URL=""
+    else
+      PUBLIC_API_URL="$URL"
+      echo "[startup] API tunnel READY (cloudflare): $PUBLIC_API_URL"
+      break
+    fi
   fi
   sleep 1
 done
 
+# If cloudflare failed, kill it and fall back to localtunnel
 if [ -z "$PUBLIC_API_URL" ]; then
-  echo "[startup] cloudflare API tunnel did not publish a URL; aborting"
-  tail -20 "$CF_API_LOG"
+  echo "[startup] cloudflare API tunnel failed; falling back to localtunnel for :${API_PORT}"
+  kill "$CF_API_PID" 2>/dev/null || true
+  pkill -f "cloudflared.*localhost:${API_PORT}" 2>/dev/null || true
+  sleep 1
+
+  (
+    echo "[lt-api] starting localtunnel for :${API_PORT}"
+    lt --port "${API_PORT}" 2>&1 | tee -a "$LT_API_LOG" | sed 's/^/[lt-api] /'
+    echo "[lt-api] EXITED — API tunnel dead; restart workflow"
+  ) &
+  LT_API_PID=$!
+
+  for i in $(seq 1 30); do
+    URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_API_LOG" 2>/dev/null | tail -1)
+    if [ -n "$URL" ]; then
+      PUBLIC_API_URL="$URL"
+      echo "[startup] API tunnel READY (localtunnel): $PUBLIC_API_URL"
+      break
+    fi
+    sleep 1
+  done
+fi
+
+if [ -z "$PUBLIC_API_URL" ]; then
+  echo "[startup] BOTH cloudflare AND localtunnel failed for API; aborting"
+  echo "--- cf-api log ---"; tail -20 "$CF_API_LOG"
+  echo "--- lt-api log ---"; tail -20 "$LT_API_LOG"
   exit 1
 fi
 

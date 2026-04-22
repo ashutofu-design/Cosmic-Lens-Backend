@@ -329,6 +329,152 @@ def _cover(s, name: str, dob: str, gender: str | None) -> List[Any]:
     return out
 
 
+def _executive_summary(s, name: str, lang: str,
+                       phase_s: dict, extended: dict, practical: dict) -> List[Any]:
+    """TL;DR page: identity line + 3 strengths + 3 challenges + lucky pillars + final truth.
+    Designed to give the user a 30-second 'this report nails me' moment up front."""
+    out: List[Any] = []
+
+    driver = (practical or {}).get("driver") or 0
+    conductor = (practical or {}).get("conductor") or 0
+    lp = ((extended or {}).get("life_path") or {}).get("life_path", "—")
+    karmic = ((extended or {}).get("karmic_debt") or {})
+    masters = ((extended or {}).get("master_numbers") or {})
+
+    # Pull personality data (driver + conductor)
+    drv_pers = NUMBER_PERSONALITY.get(driver, {}) if driver else {}
+    con_pers = NUMBER_PERSONALITY.get(conductor, {}) if conductor else {}
+    drv_strengths = list(drv_pers.get("strengths") or [])
+    con_strengths = list(con_pers.get("strengths") or [])
+    drv_weak = list(drv_pers.get("weaknesses") or [])
+    con_weak = list(con_pers.get("weaknesses") or [])
+
+    # Lucky pillars (prefer driver lucky)
+    lucky = (practical or {}).get("lucky_for_driver") or (practical or {}).get("lucky_for_conductor") or {}
+    lucky_day = (lucky.get("days") or [None])[0] or "—"
+    lucky_color = (lucky.get("colors") or [None])[0] or "—"
+    lucky_nums = lucky.get("number_dates") or []
+    lucky_num_str = ", ".join(str(n) for n in lucky_nums[:3]) if lucky_nums else "—"
+
+    # ── Title
+    out.append(_section_title(s, _T(lang,
+        "📋 Your Report at a Glance",
+        "📋 आपकी रिपोर्ट एक नज़र में",
+        "📋 Aapki Report Ek Nazar Mein")))
+    out.append(Spacer(1, 3 * mm))
+    out.append(Paragraph(_T(lang,
+        "<i>The 30-second snapshot — full depth begins on the next page.</i>",
+        "<i>30-सेकंड का स्नैपशॉट — पूर्ण विश्लेषण अगले पृष्ठ से शुरू।</i>",
+        "<i>30-second snapshot — poora detail next page se start hota hai.</i>"),
+        s["body_mid"]))
+    out.append(Spacer(1, 5 * mm))
+
+    # ── Identity line
+    identity = _T(lang,
+        f"You are <b>Driver-{driver}</b> · <b>Conductor-{conductor}</b> · "
+        f"<b>Life-Path-{lp}</b>",
+        f"आप हैं <b>Driver-{driver}</b> · <b>Conductor-{conductor}</b> · "
+        f"<b>Life-Path-{lp}</b>",
+        f"Aap ho <b>Driver-{driver}</b> · <b>Conductor-{conductor}</b> · "
+        f"<b>Life-Path-{lp}</b>")
+    if masters.get("has_master"):
+        identity += _T(lang, "  ·  <b>Master Number active</b>",
+                       "  ·  <b>Master Number सक्रिय</b>",
+                       "  ·  <b>Master Number active</b>")
+    out.append(_callout_box(s,
+        _T(lang, "WHO YOU ARE", "आप कौन हैं", "AAP KAUN HO"),
+        identity,
+        bg_color=colors.HexColor("#EDE9FE")))
+    out.append(Spacer(1, 5 * mm))
+
+    # ── 3 Core Strengths
+    seen = set()
+    strengths_pool: list[str] = []
+    for src in (drv_strengths, con_strengths):
+        for item in src:
+            key = (item or "").strip().lower()[:40]
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            strengths_pool.append(item.strip())
+    top_strengths = strengths_pool[:3] or [
+        _T(lang, "Unique signature emerging from your number combination",
+           "आपकी अंक-संरचना से उभरती विशिष्ट पहचान",
+           "Aapki number combination se ubharti unique signature")]
+
+    out.append(Paragraph(_T(lang,
+        "✨ <b>Top 3 Strengths</b>",
+        "✨ <b>शीर्ष 3 शक्तियाँ</b>",
+        "✨ <b>Top 3 Strengths</b>"), s["h3"]))
+    for st in top_strengths:
+        out.append(Paragraph(f"• {st}", s["body"]))
+    out.append(Spacer(1, 4 * mm))
+
+    # ── 3 Core Challenges
+    seen2 = set()
+    weak_pool: list[str] = []
+    for src in (drv_weak, con_weak):
+        for item in src:
+            key = (item or "").strip().lower()[:40]
+            if not key or key in seen2:
+                continue
+            seen2.add(key)
+            weak_pool.append(item.strip())
+    if karmic.get("has_karmic_debt"):
+        for d in (karmic.get("debts") or [])[:1]:
+            note = (d.get("meaning") or "").split(";")[0].strip()
+            if note:
+                weak_pool.insert(0, _T(lang,
+                    f"Karmic Debt {d.get('value')}: {note}",
+                    f"कर्मिक ऋण {d.get('value')}: {note}",
+                    f"Karmic Debt {d.get('value')}: {note}"))
+    top_weak = weak_pool[:3] or [
+        _T(lang, "Watch for over-reliance on default patterns",
+           "डिफ़ॉल्ट पैटर्न पर अति-निर्भरता से सावधान",
+           "Default patterns par over-reliance se savdhaan")]
+
+    out.append(Paragraph(_T(lang,
+        "⚠️ <b>Top 3 Challenges</b>",
+        "⚠️ <b>शीर्ष 3 चुनौतियाँ</b>",
+        "⚠️ <b>Top 3 Challenges</b>"), s["h3"]))
+    for w in top_weak:
+        out.append(Paragraph(f"• {w}", s["body"]))
+    out.append(Spacer(1, 5 * mm))
+
+    # ── Lucky pillars compact table
+    out.append(Paragraph(_T(lang,
+        "🍀 <b>Your Lucky Pillars</b>",
+        "🍀 <b>आपके भाग्य-स्तंभ</b>",
+        "🍀 <b>Aapke Lucky Pillars</b>"), s["h3"]))
+    lp_rows = [
+        [_T(lang, "Lucky Day", "शुभ दिन", "Lucky Day"), str(lucky_day)],
+        [_T(lang, "Lucky Color", "शुभ रंग", "Lucky Color"), str(lucky_color)],
+        [_T(lang, "Lucky Numbers", "शुभ अंक", "Lucky Numbers"), lucky_num_str],
+    ]
+    out.append(_label_value_table(lp_rows, col_widths=[55 * mm, 125 * mm]))
+    out.append(Spacer(1, 5 * mm))
+
+    # ── Final Truth (tied to driver headline)
+    headline = (drv_pers.get("headline") or "").strip()
+    title = (drv_pers.get("title") or "").strip()
+    if headline:
+        truth = _T(lang,
+            f"At your core: <b>{title or 'Your archetype'}</b> — {headline}.",
+            f"मूल में: <b>{title or 'आपका आर्किटाइप'}</b> — {headline}।",
+            f"Core me: <b>{title or 'Aapka archetype'}</b> — {headline}.")
+    else:
+        truth = _T(lang,
+            "Your number combination is your unrepeatable signature — own it.",
+            "आपका अंक-संयोजन आपका अद्वितीय हस्ताक्षर है — इसे अपनाइये।",
+            "Aapki number combination aapka ek-of-a-kind signature hai — apnao.")
+    out.append(_callout_box(s,
+        _T(lang, "✦ THE FINAL TRUTH", "✦ अंतिम सत्य", "✦ FINAL TRUTH"),
+        truth,
+        bg_color=colors.HexColor("#FEF3C7")))
+
+    return out
+
+
 def _core_numbers(s, ps: dict) -> List[Any]:
     s1 = (ps.get("s1_numbers") or {}) if isinstance(ps, dict) else {}
     out: List[Any] = []
@@ -1614,6 +1760,14 @@ def render_numerology_pdf(*,
     story: List[Any] = []
     story += _cover(s, name, dob, gender)
     story.append(PageBreak())
+
+    # ─── Executive Summary (TL;DR — top of report, addresses overwhelm) ───
+    try:
+        story += _executive_summary(s, name, lang, phase_s, extended, practical)
+        story.append(PageBreak())
+    except Exception:
+        # Never let TL;DR failure block the rest of the report
+        pass
 
     # ─── NEW: 6 premium narrative pages (deep consultation feel) ───────
     # Compute driver + conductor locally for narrative engine

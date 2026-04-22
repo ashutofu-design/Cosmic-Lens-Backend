@@ -492,3 +492,9 @@ id = "d60EM6SMRq4Uklu4o2v-0"
 uri = "file://.local/qr/expo.png"
 type = "image"
 title = "Expo QR — curly-ducks-slide"
+
+[[outputs]]
+id = "FK2TGpZCa9D06FWJSeft7"
+uri = "file://.local/preview/numerology_tldr.pdf"
+type = "pdf"
+title = "Numerology Report — TL;DR Executive Summary added (Page 2)"

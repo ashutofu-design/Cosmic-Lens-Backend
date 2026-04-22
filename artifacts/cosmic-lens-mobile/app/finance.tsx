@@ -387,6 +387,56 @@ export default function FinanceScreen() {
                   </Text>
                 </SectionCard>
 
+                {/* DEEP — Wealth tier */}
+                {!!(data.pro as any).wealth_tier && (
+                  <SectionCard icon="award" title={`Wealth Tier — ${(data.pro as any).wealth_tier}`} accent="#fbbf24">
+                    {typeof (data.pro as any).wealth_score === "number" && (
+                      <View style={{ marginBottom: 10 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                          <Text style={{ color: "#94a3b8", fontSize: 12 }}>Wealth karma score</Text>
+                          <Text style={{ color: "#fbbf24", fontSize: 13, fontWeight: "700" }}>{(data.pro as any).wealth_score}/95</Text>
+                        </View>
+                        <View style={{ height: 8, backgroundColor: "#1e293b", borderRadius: 4, overflow: "hidden" }}>
+                          <View style={{ width: `${(data.pro as any).wealth_score}%`, height: "100%", backgroundColor: "#fbbf24" }} />
+                        </View>
+                      </View>
+                    )}
+                    <Text style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 19 }}>
+                      {(data.pro as any).wealth_tier_msg}
+                    </Text>
+                  </SectionCard>
+                )}
+
+                {/* Income sources */}
+                {Array.isArray((data.pro as any).income_sources) && (data.pro as any).income_sources.length > 0 && (
+                  <SectionCard icon="dollar-sign" title="Income Sources (chart-driven strength)" accent="#22c55e">
+                    {(data.pro as any).income_sources.map((s: any, i: number) => (
+                      <View key={i} style={{ marginBottom: 12 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                          <Text style={{ color: "#e2e8f0", fontSize: 13, fontWeight: "600", flex: 1 }}>{s.source}</Text>
+                          <Text style={{ color: "#22c55e", fontSize: 12, fontWeight: "700" }}>{s.strength}%</Text>
+                        </View>
+                        <View style={{ height: 6, backgroundColor: "#1e293b", borderRadius: 3, overflow: "hidden", marginBottom: 3 }}>
+                          <View style={{ width: `${s.strength}%`, height: "100%", backgroundColor: "#22c55e" }} />
+                        </View>
+                        <Text style={{ color: "#94a3b8", fontSize: 11 }}>{s.why}</Text>
+                      </View>
+                    ))}
+                  </SectionCard>
+                )}
+
+                {/* Dhana yogas */}
+                {Array.isArray((data.pro as any).dhana_yogas) && (data.pro as any).dhana_yogas.length > 0 && (
+                  <SectionCard icon="star" title={`Dhana Yogas Detected (${(data.pro as any).yogas_count})`} accent="#a78bfa">
+                    {(data.pro as any).dhana_yogas.map((y: any, i: number) => (
+                      <View key={i} style={{ backgroundColor: "#1e1b4b", padding: 10, borderRadius: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: "#a78bfa" }}>
+                        <Text style={{ color: "#c4b5fd", fontSize: 13, fontWeight: "700", marginBottom: 4 }}>{y.name}</Text>
+                        <Text style={{ color: "#cbd5e1", fontSize: 12, lineHeight: 17 }}>{y.detail}</Text>
+                      </View>
+                    ))}
+                  </SectionCard>
+                )}
+
                 <SectionCard icon="sun" title="Remedies (Practical & Astrological)" accent="#f59e0b">
                   {data.pro.remedies.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>

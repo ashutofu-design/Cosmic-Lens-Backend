@@ -432,6 +432,72 @@ export default function CareerScreen() {
                   {data.pro.risks.map((t, i) => (<Bullet key={`r${i}`} color="#ef4444">{t}</Bullet>))}
                 </SectionCard>
 
+                {/* DEEP — 10th lord analysis */}
+                {(data.pro as any).tenth_lord?.planet && (
+                  <SectionCard icon="award" title="10th Lord Deep Analysis (Karya Bhava)" accent="#22d3ee">
+                    <View style={{ backgroundColor: "#0b1220", padding: 12, borderRadius: 10 }}>
+                      <Text style={{ color: "#e2e8f0", fontSize: 14, marginBottom: 6 }}>
+                        10th sign: <Text style={{ color: "#22d3ee", fontWeight: "700" }}>{(data.pro as any).tenth_lord.sign_10}</Text>{" "}
+                        · Lord: <Text style={{ color: "#22d3ee", fontWeight: "700" }}>{(data.pro as any).tenth_lord.planet}</Text>
+                      </Text>
+                      {(data.pro as any).tenth_lord.current_house && (
+                        <Text style={{ color: "#cbd5e1", fontSize: 13, marginBottom: 4 }}>
+                          Currently in: {(data.pro as any).tenth_lord.current_sign} ({(data.pro as any).tenth_lord.current_house}H) · {(data.pro as any).tenth_lord.status}
+                          {(data.pro as any).tenth_lord.retrograde ? " · retro" : ""}
+                        </Text>
+                      )}
+                      {typeof (data.pro as any).tenth_lord.strength_pct === "number" && (
+                        <View style={{ marginTop: 8, marginBottom: 8 }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                            <Text style={{ color: "#94a3b8", fontSize: 12 }}>Career karma strength</Text>
+                            <Text style={{ color: "#22d3ee", fontSize: 12, fontWeight: "700" }}>{(data.pro as any).tenth_lord.strength_pct}%</Text>
+                          </View>
+                          <View style={{ height: 8, backgroundColor: "#1e293b", borderRadius: 4, overflow: "hidden" }}>
+                            <View style={{ width: `${(data.pro as any).tenth_lord.strength_pct}%`, height: "100%", backgroundColor: "#22d3ee" }} />
+                          </View>
+                        </View>
+                      )}
+                      <Text style={{ color: "#a78bfa", fontSize: 13, marginTop: 6 }}>{(data.pro as any).tenth_lord.verdict}</Text>
+                    </View>
+                  </SectionCard>
+                )}
+
+                {/* Atmakaraka */}
+                {(data.pro as any).atmakaraka?.planet && (
+                  <SectionCard icon="star" title={`Atmakaraka — ${(data.pro as any).atmakaraka.planet} (Soul Planet)`} accent="#fbbf24">
+                    <Text style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 19 }}>
+                      {(data.pro as any).atmakaraka.meaning}
+                    </Text>
+                  </SectionCard>
+                )}
+
+                {/* Suitable career fields */}
+                {Array.isArray((data.pro as any).suitable_fields) && (data.pro as any).suitable_fields.length > 0 && (
+                  <SectionCard icon="briefcase" title="Suitable Career Fields (chart-driven)" accent="#22c55e">
+                    {(data.pro as any).suitable_fields.map((f: any, i: number) => (
+                      <View key={i} style={{ marginBottom: 12 }}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                          <Text style={{ color: "#e2e8f0", fontSize: 13, fontWeight: "600", flex: 1 }}>{i + 1}. {f.field}</Text>
+                          <Text style={{ color: "#22c55e", fontSize: 12, fontWeight: "700" }}>{f.score}%</Text>
+                        </View>
+                        <View style={{ height: 6, backgroundColor: "#1e293b", borderRadius: 3, overflow: "hidden", marginBottom: 3 }}>
+                          <View style={{ width: `${f.score}%`, height: "100%", backgroundColor: "#22c55e" }} />
+                        </View>
+                        <Text style={{ color: "#94a3b8", fontSize: 11 }}>{f.driver}</Text>
+                      </View>
+                    ))}
+                  </SectionCard>
+                )}
+
+                {/* Business vs Job */}
+                {!!(data.pro as any).business_vs_job && (
+                  <SectionCard icon="trending-up" title="Business vs Job — Chart Verdict" accent="#a78bfa">
+                    <Text style={{ color: "#e2e8f0", fontSize: 14, lineHeight: 20 }}>
+                      {(data.pro as any).business_vs_job}
+                    </Text>
+                  </SectionCard>
+                )}
+
                 {/* Reasoning */}
                 {data.pro.reasons.length > 0 && (
                   <SectionCard icon="info" title="Why This Reading" accent="#94a3b8">

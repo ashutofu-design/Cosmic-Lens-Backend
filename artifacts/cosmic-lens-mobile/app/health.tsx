@@ -384,6 +384,70 @@ export default function HealthScreen() {
                   {data.pro.prevent.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
+                {/* DEEP — Issues breakdown */}
+                {Array.isArray((data.pro as any).issues) && (data.pro as any).issues.length > 0 && (
+                  <SectionCard
+                    icon="alert-triangle"
+                    title={`Health Issues Detected (${(data.pro as any).issues_total || (data.pro as any).issues.length})`}
+                    accent="#ef4444"
+                  >
+                    <Text style={{ color: "#94a3b8", fontSize: 12, marginBottom: 10 }}>
+                      Severity: High {((data.pro as any).issues_by_severity?.High) || 0} · Medium {((data.pro as any).issues_by_severity?.Medium) || 0} · Low {((data.pro as any).issues_by_severity?.Low) || 0}
+                    </Text>
+                    {(data.pro as any).issues.map((it: any, i: number) => {
+                      const col = it.risk === "High" ? "#ef4444" : it.risk === "Medium" ? "#f59e0b" : "#22c55e";
+                      return (
+                        <View key={i} style={{
+                          backgroundColor: "#0b1220", borderLeftWidth: 3, borderLeftColor: col,
+                          padding: 10, borderRadius: 8, marginBottom: 8,
+                        }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                            <Text style={{ color: "#e2e8f0", fontWeight: "700", flex: 1 }}>{it.area}</Text>
+                            <Text style={{ color: col, fontSize: 11, fontWeight: "700" }}>{it.risk?.toUpperCase()}</Text>
+                          </View>
+                          {!!it.organs && <Text style={{ color: "#a78bfa", fontSize: 12, marginBottom: 4 }}>Organs: {it.organs}</Text>}
+                          <Text style={{ color: "#cbd5e1", fontSize: 13, marginBottom: 4 }}>{it.reason}</Text>
+                          {!!it.remedy && <Text style={{ color: "#94a3b8", fontSize: 12, fontStyle: "italic" }}>→ {it.remedy}</Text>}
+                        </View>
+                      );
+                    })}
+                  </SectionCard>
+                )}
+
+                {/* Dosha balance */}
+                {(data.pro as any).dosha_balance && Object.keys((data.pro as any).dosha_balance).length > 0 && (
+                  <SectionCard icon="droplet" title={`Dosha Balance — ${(data.pro as any).dominant_dosha || "Mixed"} dominant`} accent="#a78bfa">
+                    {(["vata", "pitta", "kapha"] as const).map(dk => {
+                      const v = (data.pro as any).dosha_balance[dk] || 0;
+                      const col = dk === "vata" ? "#60a5fa" : dk === "pitta" ? "#ef4444" : "#22c55e";
+                      return (
+                        <View key={dk} style={{ marginBottom: 10 }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                            <Text style={{ color: "#e2e8f0", fontSize: 13, textTransform: "capitalize" }}>{dk}</Text>
+                            <Text style={{ color: col, fontSize: 13, fontWeight: "700" }}>{v}%</Text>
+                          </View>
+                          <View style={{ height: 8, backgroundColor: "#1e293b", borderRadius: 4, overflow: "hidden" }}>
+                            <View style={{ width: `${v}%`, height: "100%", backgroundColor: col }} />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </SectionCard>
+                )}
+
+                {/* Vulnerable organs */}
+                {Array.isArray((data.pro as any).vulnerable_organs) && (data.pro as any).vulnerable_organs.length > 0 && (
+                  <SectionCard icon="heart" title="Vulnerable Body Areas (extra care zone)" accent="#f59e0b">
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {(data.pro as any).vulnerable_organs.map((o: string, i: number) => (
+                        <View key={i} style={{ backgroundColor: "#451a1a", borderColor: "#f59e0b", borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+                          <Text style={{ color: "#fbbf24", fontSize: 12 }}>{o}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </SectionCard>
+                )}
+
                 <SectionCard icon="sun" title="Remedies (Mantra & Lifestyle)" accent="#f59e0b">
                   {data.pro.remedies.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>

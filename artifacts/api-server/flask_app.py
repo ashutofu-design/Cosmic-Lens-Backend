@@ -2652,17 +2652,31 @@ def career_analysis():
         if not promotion:
             promotion.append("Promotion ka clear yog abhi nahi hai — current role mein excel karke setup tayyar karein.")
 
+        # ── Deep specifics — 10th lord, atmakaraka, suitable fields, biz-vs-job
+        try:
+            from vedic.life_specifics import compute_career_specifics
+            deep = compute_career_specifics(planets, asc_idx, cd)
+        except Exception:
+            deep = {}
+
         response["pro"] = {
-            "houses":     houses_block,
-            "planets":    planets_block,
-            "dasha":      dasha_block,
-            "transit":    transit_notes or ["No major Saturn/Jupiter transit on career houses currently."],
-            "growth":     growth,
-            "struggles":  struggles,
-            "promotion":  promotion,
-            "job_change": job_change,
-            "risks":      risks,
-            "reasons":    reasons[:8],
+            "houses":             houses_block,
+            "planets":            planets_block,
+            "dasha":              dasha_block,
+            "transit":            transit_notes or ["No major Saturn/Jupiter transit on career houses currently."],
+            "growth":             growth,
+            "struggles":          struggles,
+            "promotion":          promotion,
+            "job_change":         job_change,
+            "risks":              risks,
+            "reasons":            reasons[:8],
+            # NEW structured specifics
+            "tenth_house":        deep.get("tenth_house", {}),
+            "tenth_lord":         deep.get("tenth_lord", {}),
+            "atmakaraka":         deep.get("atmakaraka"),
+            "suitable_fields":    deep.get("suitable_fields", []),
+            "business_vs_job":    deep.get("business_vs_job", ""),
+            "peak_growth_period": deep.get("peak_growth_period", {}),
         }
 
     return jsonify(response)
@@ -2980,16 +2994,30 @@ def health_analysis():
             remedies.append("Daily 'Maha Mrityunjaya Mantra' 11 baar — universal health protector.")
             remedies.append("Tulsi ke 2-3 patte subah — natural immunity booster.")
 
+        # ── Deep specifics — issues list, dosha balance, vulnerable organs
+        try:
+            from vedic.life_specifics import compute_health_specifics
+            deep = compute_health_specifics(planets, asc_idx, cd)
+        except Exception as _exc:
+            deep = {}
+
         response["pro"] = {
-            "houses":        houses_block,
-            "planets":       planets_block,
-            "transit":       transit_notes or ["No major adverse transit on health houses currently — protective phase."],
-            "risk_periods":  risk_periods,
-            "nature":        nature,
-            "recovery":      recovery,
-            "prevent":       prevent,
-            "remedies":      remedies,
-            "reasons":       notes[:8],
+            "houses":             houses_block,
+            "planets":            planets_block,
+            "transit":            transit_notes or ["No major adverse transit on health houses currently — protective phase."],
+            "risk_periods":       risk_periods,
+            "nature":             nature,
+            "recovery":           recovery,
+            "prevent":            prevent,
+            "remedies":           remedies,
+            "reasons":            notes[:8],
+            # NEW structured specifics
+            "issues":             deep.get("issues", []),
+            "issues_total":       deep.get("issues_total", 0),
+            "issues_by_severity": deep.get("issues_by_severity", {}),
+            "dosha_balance":      deep.get("dosha_balance", {}),
+            "dominant_dosha":     deep.get("dominant_dosha", ""),
+            "vulnerable_organs":  deep.get("vulnerable_organs", []),
         }
 
     return jsonify(response)
@@ -3353,17 +3381,32 @@ def finance_analysis():
         remedies.append("Practical: 50-30-20 rule (50% needs, 30% wants, 20% savings) — Lakshmi sthir wahin tikti hai jahan discipline hai.")
         remedies.append("Practical: Har month 10% income emergency fund mein — sudden expense ke time grace milega.")
 
+        # ── Deep specifics — wealth tier, income sources, dhana yogas
+        try:
+            from vedic.life_specifics import compute_finance_specifics
+            deep = compute_finance_specifics(planets, asc_idx, cd)
+        except Exception:
+            deep = {}
+
         response["pro"] = {
-            "houses":     houses_block,
-            "planets":    planets_block,
-            "transit":    transit_notes or ["No major Jupiter/Saturn transit on wealth houses currently."],
-            "inflow":     inflow,
-            "expenses":   expenses,
-            "invest":     invest,
-            "sudden":     sudden,
-            "stability":  stability,
-            "remedies":   remedies,
-            "reasons":    notes[:8],
+            "houses":             houses_block,
+            "planets":            planets_block,
+            "transit":            transit_notes or ["No major Jupiter/Saturn transit on wealth houses currently."],
+            "inflow":             inflow,
+            "expenses":           expenses,
+            "invest":             invest,
+            "sudden":             sudden,
+            "stability":          stability,
+            "remedies":           remedies,
+            "reasons":            notes[:8],
+            # NEW structured specifics
+            "wealth_tier":        deep.get("wealth_tier", ""),
+            "wealth_tier_msg":    deep.get("wealth_tier_msg", ""),
+            "wealth_score":       deep.get("wealth_score", 0),
+            "income_sources":     deep.get("income_sources", []),
+            "dhana_yogas":        deep.get("dhana_yogas", []),
+            "yogas_count":        deep.get("yogas_count", 0),
+            "peak_wealth_period": deep.get("peak_wealth_period", {}),
         }
 
     return jsonify(response)

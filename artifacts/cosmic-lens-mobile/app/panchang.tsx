@@ -79,11 +79,25 @@ const TOP_VARS      = ["Guruvaar","Shukravar"];     // truly auspicious
 const SOFT_VARS     = ["Somvar","Budhavar"];
 const ASHUBH_VARS   = ["Shanivaar","Mangalvar"];
 
+// Look up festival on a given ISO date (YYYY-MM-DD)
+function festivalOn(iso: string): Festival | undefined {
+  const yr = parseInt(iso.slice(0, 4), 10);
+  const list = FESTIVALS_BY_YEAR[yr] || [];
+  return list.find((f) => f.iso === iso);
+}
+
 function getAuspiciousScore(p: { tithi: string; nakshatra: string;
-                                  yoga: string; karana: string; var: string }) {
+                                  yoga: string; karana: string; var: string;
+                                  iso?: string }) {
   const reasons: { good: string[]; bad: string[] } = { good: [], bad: [] };
   // Start neutral — most days ARE mixed, not auspicious.
   let score = 45;
+
+  // ── Festival override (CRITICAL) ───────────────────────────────────────────
+  // Major festivals are inherently auspicious for that deity's worship/puja
+  // even if classical muhurta gives a weak vaar/nakshatra. Cannot be Saavdhani.
+  let festival: Festival | undefined;
+  if (p.iso) festival = festivalOn(p.iso);
 
   // Tithi (strict)
   const tCore = p.tithi.split(" ").slice(-1)[0].replace("/Amavasya","");
@@ -126,7 +140,31 @@ function getAuspiciousScore(p: { tithi: string; nakshatra: string;
     score += 8; reasons.good.push("⭐ Sarvartha-Siddhi yoga — saare karya ke liye shreshth");
   }
 
-  score = Math.max(8, Math.min(96, score));
+  // ── Festival boost — applied AFTER classical calc ────────────────────────
+  // Major festivals: +25, minor festivals: +12, Republic/national: +8
+  // Floor at 50 (Mishrit) for major, 40 for minor — never Saavdhani on a parv.
+  let festivalFloor = 0;
+  if (festival) {
+    if (festival.major) {
+      score += 25;
+      festivalFloor = 50;
+      reasons.good.unshift(`${festival.emoji} ${festival.name} — parv ki shubhata`);
+    } else if (festival.type === "rashtriya") {
+      score += 8;
+      reasons.good.unshift(`${festival.emoji} ${festival.name}`);
+    } else {
+      score += 12;
+      festivalFloor = 40;
+      reasons.good.unshift(`${festival.emoji} ${festival.name} — vrat/parv din`);
+    }
+    // Remove ashubh-vaar/nakshatra reasons on festival days (deity worship overrides)
+    if (festival.major) {
+      const idx = reasons.bad.findIndex(r => r.includes("nakshatra") || r.includes("Shani") || r.includes("Mangal"));
+      if (idx >= 0) reasons.bad.splice(idx, 1);
+    }
+  }
+
+  score = Math.max(festivalFloor || 8, Math.min(98, score));
 
   // Stricter bands — Bahut Shubh truly rare
   let band: "Bahut Shubh" | "Shubh" | "Mishrit" | "Saavdhani";
@@ -137,7 +175,7 @@ function getAuspiciousScore(p: { tithi: string; nakshatra: string;
   else if (score >= 35) { band = "Mishrit";     color = "#f59e0b"; emoji = "⚖️"; }
   else                  { band = "Saavdhani";   color = "#ef4444"; emoji = "⚠️"; }
 
-  return { score, band, color, emoji,
+  return { score, band, color, emoji, festival,
            good: reasons.good.slice(0, 4),
            bad:  reasons.bad.slice(0, 3) };
 }
@@ -216,7 +254,13 @@ export default function PanchangScreen() {
     if (real) return { rahu: real.rahu_kaal, yama: real.yamaghanta, gulika: real.gulika };
     return localKaal;
   }, [real, localKaal]);
-  const auspicious = useMemo(() => getAuspiciousScore(panchang), [panchang]);
+  const isoDate = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, "0");
+    const d = String(selectedDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [selectedDate]);
+  const auspicious = useMemo(() => getAuspiciousScore({ ...panchang, iso: isoDate }), [panchang, isoDate]);
   const [festYear, setFestYear] = useState<number>(today.getFullYear() < 2026 ? 2026 : today.getFullYear());
 
   const dateStr = selectedDate.toLocaleDateString("hi-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -367,6 +411,15 @@ export default function PanchangScreen() {
 
             {/* ── 2) AUSPICIOUS PERCENTAGE — score card ─────────────────── */}
             <View style={[s.auspCard, { backgroundColor: C.bgCard, borderColor: auspicious.color + "55" }]}>
+              {/* Festival ribbon — shown when today is a festival */}
+              {auspicious.festival && (
+                <View style={[s.festRibbon, { backgroundColor: auspicious.festival.major ? "#7c3aed" : "#a855f7" }]}>
+                  <Text style={s.festRibbonText}>
+                    {auspicious.festival.emoji}  {auspicious.festival.name}
+                    {auspicious.festival.major ? "  ·  Mahaparv" : ""}
+                  </Text>
+                </View>
+              )}
               <View style={s.auspHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.auspLabel, { color: C.textMuted }]}>
@@ -642,6 +695,15 @@ const s = StyleSheet.create({
   // Auspicious score card
   auspCard: {
     borderRadius: 16, borderWidth: 1.5, padding: 16,
+  },
+  festRibbon: {
+    marginHorizontal: -16, marginTop: -16, marginBottom: 14,
+    paddingVertical: 10, paddingHorizontal: 16,
+    borderTopLeftRadius: 14, borderTopRightRadius: 14,
+    alignItems: "center",
+  },
+  festRibbonText: {
+    color: "#fff", fontSize: 13, fontFamily: F.bold, letterSpacing: 0.3,
   },
   auspHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   auspLabel:  { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },

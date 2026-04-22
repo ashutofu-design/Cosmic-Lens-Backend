@@ -136,13 +136,16 @@ def write_s3(content, engines, person):
     elif "left" in (side or ""):
         side_hi = "Tumhara left side dominant hai — yaani tumhari emotional/intuitive depth tumhari logical-public side se zyada strong hai."
     
+    # Visual floor: a 0/100 reading looks alarmist to users when the underlying
+    # signal is "asymmetric tier". Floor display at 30 (engine internal stays raw).
+    sym_disp = max(30.0, min(100.0, sym)) if sym is not None else 50.0
     sym_hi = ""
-    if sym < 50:
-        sym_hi = f"Tumhari facial symmetry {sym:.0f}/100 hai — perfect symmetry rare hoti hai, lekin tumhari asymmetry kaafi visible hai. Iska matlab andar aur bahar me real gap hai — yaani jo log dekh rahe hain woh tumhara 100% asli roop nahi."
-    elif sym > 75:
-        sym_hi = f"Tumhari symmetry strong hai ({sym:.0f}/100) — tumhara mask aur asli self kaafi aligned hain. Log tumhe jaisa dekhte hain, tum lagbhag waise hi ho."
+    if sym_disp < 50:
+        sym_hi = f"Tumhari facial symmetry {sym_disp:.0f}/100 hai — perfect symmetry rare hoti hai, lekin tumhari asymmetry kaafi visible hai. Iska matlab andar aur bahar me real gap hai — yaani jo log dekh rahe hain woh tumhara 100% asli roop nahi."
+    elif sym_disp > 75:
+        sym_hi = f"Tumhari symmetry strong hai ({sym_disp:.0f}/100) — tumhara mask aur asli self kaafi aligned hain. Log tumhe jaisa dekhte hain, tum lagbhag waise hi ho."
     else:
-        sym_hi = f"Tumhari symmetry medium ({sym:.0f}/100) hai — thoda gap hai mask aur self me, par alarming nahi."
+        sym_hi = f"Tumhari symmetry medium ({sym_disp:.0f}/100) hai — thoda gap hai mask aur self me, par alarming nahi."
     
     return _join_para(
         f"Public me jab tum chalte ho, log tumhare baare me ek snap impression banate hain — aur woh impression hamesha tumhari reality nahi hota.",

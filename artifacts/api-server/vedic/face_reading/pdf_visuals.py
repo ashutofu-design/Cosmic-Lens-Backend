@@ -126,7 +126,7 @@ _ZONES = [
     ("Aankhein (Eyes)",     "right_eye",   140,  -10, "R"),
     ("Naak (Nose)",         "nose_tip",    150,    0, "R"),
     ("Gaal (Cheeks)",       "cheek_left", -180,    5, "L"),
-    ("Hoṭh (Lips)",         "lips_top",    150,   30, "R"),
+    ("Honth (Lips)",        "lips_top",    150,   30, "R"),
     ("Jabdaa (Jaw)",        "jaw_right",   140,   20, "R"),
     ("Thoddi (Chin)",       "chin",        140,   60, "R"),
 ]

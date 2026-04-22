@@ -157,7 +157,7 @@ def section_3_mask_vs_real(engines: Dict) -> Dict:
         "public_perception": public_perception,
         "real_self": f"Andar se tum {real_self_trait}-dominant ho.",
         "internal_conflict": conflict,
-        "symmetry_score": round(sym_score, 1),
+        "symmetry_score": round(max(30.0, min(100.0, float(sym_score))), 1),
         "dominant_face_side": dominant,
     }
 

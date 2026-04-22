@@ -1251,7 +1251,7 @@ def _render_face_map_page(photo_bytes: bytes, points_norm: list, styles) -> List
                                 spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
     flowables.append(Paragraph(
         "Yeh tumhari actual photo hai jisko Engine ne 468 landmark points pe analyze kiya. "
-        "Har zone (mastak, aankh, naak, gaal, hoṭh, jabdaa, thoddi) se alag-alag insights nikle hain — "
+        "Har zone (mastak, aankh, naak, gaal, honth, jabda, thoddi) se alag-alag insights nikle hain — "
         "is map me dekho ki kis area se kya pada gaya hai.",
         styles["narrative"]))
     flowables.append(Spacer(1, 4*mm))
@@ -1269,7 +1269,7 @@ def _render_face_map_page(photo_bytes: bytes, points_norm: list, styles) -> List
         "Aankhein → emotional depth aur first impression. "
         "Naak → ambition aur risk-style. "
         "Gaal → warmth aur approachability. "
-        "Hoṭh → expression aur extraversion. "
+        "Honth → expression aur extraversion. "
         "Jabdaa → discipline aur leadership. "
         "Thoddi → resolve aur long-term grit.",
         styles["narrative"]))

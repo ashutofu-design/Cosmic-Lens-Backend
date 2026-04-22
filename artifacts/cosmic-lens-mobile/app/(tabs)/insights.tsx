@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -275,6 +276,36 @@ export default function InsightsScreen() {
             </View>
           )}
 
+          {/* 6-Month Future card — month-by-month MD/AD/PD outlook */}
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); router.push("/six-month-future"); }}
+            style={({ pressed }) => [
+              s.sixMoCard,
+              { backgroundColor: C.bgCard, borderColor: C.border, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <LinearGradient
+              colors={["rgba(167,139,250,0.22)", "rgba(99,102,241,0.06)"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={s.sixMoIconWrap}>
+              <Text style={s.sixMoEmoji}>🗓️</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={s.sixMoTitleRow}>
+                <Text style={[s.sixMoTitle, { color: C.text }]}>6-Month Future</Text>
+                <View style={s.sixMoBadge}>
+                  <Text style={s.sixMoBadgeText}>New</Text>
+                </View>
+              </View>
+              <Text style={[s.sixMoSub, { color: C.textDim }]} numberOfLines={2}>
+                Agle 6 mahine — MD/AD/PD ke saath month-by-month outlook
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={C.textDim} />
+          </Pressable>
+
           {/* Category tabs */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll} contentContainerStyle={s.tabs}>
             {CATEGORIES.map(c => {
@@ -439,6 +470,26 @@ const s = StyleSheet.create({
   dashaPlanetDot: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
   dashaPlanetName: { fontSize: 13, fontWeight: "600" },
   dashaDate: { fontSize: 11, textAlign: "center" },
+
+  sixMoCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    borderRadius: 16, borderWidth: 1, padding: 14,
+    overflow: "hidden",
+  },
+  sixMoIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(167,139,250,0.18)",
+    alignItems: "center", justifyContent: "center",
+  },
+  sixMoEmoji: { fontSize: 22 },
+  sixMoTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sixMoTitle: { fontSize: 15, fontWeight: "700" },
+  sixMoBadge: {
+    backgroundColor: "#a78bfa", borderRadius: 10,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  sixMoBadgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+  sixMoSub: { fontSize: 12, marginTop: 3, lineHeight: 16 },
 
   tabsScroll: { flexGrow: 0 },
   tabs:       { gap: 8, paddingRight: 4 },

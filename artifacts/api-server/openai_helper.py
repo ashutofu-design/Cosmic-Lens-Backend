@@ -4892,7 +4892,7 @@ def vastu_scan(
 # ─────────────────────────────────────────────────────────────────────────────
 # COSMIC VISION ENGINE — floor-plan extraction + room visual analysis
 # (Phase 6: powers AstroVastu PRO + Business Vastu paid tiers)
-# All user-facing text is branded as "Cosmic Vision Engine".
+# All user-facing text is branded as "Cosmic Intelligence Engine".
 # Engine remains source of truth for verdicts; vision provides INPUT extraction
 # and environmental observations only.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5032,11 +5032,11 @@ def extract_floor_plan_layout(
     Extract structured room layout from a top-down floor plan image (PNG data URL).
 
     Returns dict per _FLOOR_PLAN_LAYOUT_SCHEMA. Raises RuntimeError on config /
-    OpenAI failure. Branded as Cosmic Vision Engine — never mentions AI/GPT.
+    OpenAI failure. Branded as Cosmic Intelligence Engine — never mentions AI/GPT.
     """
     client = _get_client()
     if client is None:
-        raise RuntimeError(_client_err or "Cosmic Vision Engine not configured")
+        raise RuntimeError(_client_err or "Cosmic Intelligence Engine not configured")
     if not image_data_url or not isinstance(image_data_url, str):
         raise RuntimeError("floor plan image is required")
 
@@ -5052,7 +5052,7 @@ def extract_floor_plan_layout(
         "ABSOLUTE RULES:\n"
         "1. Output ONLY the strict JSON object — no prose.\n"
         "2. NEVER mention 'AI', 'GPT', 'OpenAI', 'language model'. You are "
-        "the Cosmic Vision Engine.\n"
+        "the Cosmic Intelligence Engine.\n"
         f"3. The property type is: {btype}. Identify rooms appropriate to it.\n"
         "4. Direction = the cardinal/intercardinal zone where the room SITS "
         "within the plot, assuming North is at the TOP of the floor plan "
@@ -5087,15 +5087,15 @@ def extract_floor_plan_layout(
             response_format = {"type": "json_schema", "json_schema": _FLOOR_PLAN_LAYOUT_SCHEMA},
         )
     except Exception as exc:
-        raise RuntimeError(f"Cosmic Vision Engine request failed: {exc}") from exc
+        raise RuntimeError(f"Cosmic Intelligence Engine request failed: {exc}") from exc
 
     raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     if not raw:
-        raise RuntimeError("Cosmic Vision Engine returned empty response")
+        raise RuntimeError("Cosmic Intelligence Engine returned empty response")
     try:
         parsed = json.loads(raw)
     except Exception as exc:
-        raise RuntimeError(f"Cosmic Vision Engine returned non-JSON: {exc}") from exc
+        raise RuntimeError(f"Cosmic Intelligence Engine returned non-JSON: {exc}") from exc
 
     parsed["source"] = "cosmic-vision-floor-plan"
     parsed["model"]  = model
@@ -5117,7 +5117,7 @@ def analyze_room_visuals(
     """
     client = _get_client()
     if client is None:
-        raise RuntimeError(_client_err or "Cosmic Vision Engine not configured")
+        raise RuntimeError(_client_err or "Cosmic Intelligence Engine not configured")
     if not image_data_url:
         raise RuntimeError("room photo is required")
 
@@ -5165,7 +5165,7 @@ def analyze_room_visuals(
         "ABSOLUTE RULES:\n"
         "1. Output ONLY the strict JSON object — no prose.\n"
         "2. NEVER mention 'AI', 'GPT', 'OpenAI', 'language model'. You are "
-        "the Cosmic Vision Engine.\n"
+        "the Cosmic Intelligence Engine.\n"
         "3. Do NOT make verdicts on the room layout/direction — that is handled "
         "by the classical engine. Focus on what is VISIBLE in the photo.\n"
         "4. visual_findings: 0-8 specific items (EMPTY if room_identity_match=false). severity = "
@@ -5199,15 +5199,15 @@ def analyze_room_visuals(
             response_format = {"type": "json_schema", "json_schema": _ROOM_VISUAL_SCHEMA},
         )
     except Exception as exc:
-        raise RuntimeError(f"Cosmic Vision Engine request failed: {exc}") from exc
+        raise RuntimeError(f"Cosmic Intelligence Engine request failed: {exc}") from exc
 
     raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     if not raw:
-        raise RuntimeError("Cosmic Vision Engine returned empty response")
+        raise RuntimeError("Cosmic Intelligence Engine returned empty response")
     try:
         parsed = json.loads(raw)
     except Exception as exc:
-        raise RuntimeError(f"Cosmic Vision Engine returned non-JSON: {exc}") from exc
+        raise RuntimeError(f"Cosmic Intelligence Engine returned non-JSON: {exc}") from exc
 
     # Hard-clamp score_delta defensively
     sd = parsed.get("score_delta", 0)

@@ -3634,20 +3634,14 @@ def _tier1_core_numbers_section(s, name: str, dob: str,
         "📖 Why these 13 numbers matter more than anything else",
         "📖 ये 13 अंक सबसे ज़्यादा क्यों मायने रखते हैं",
         "📖 Yeh 13 numbers sabse zyada kyu matter karte hain",
-        "Pythagorean numerology — the system used across 100+ countries for 2,500+ years — "
-        "reduces <b>your name and birth-date</b> to 13 core vibrations. Together they reveal "
-        "your life's <b>mission, gifts, karmic debts, hidden drives, and timing windows</b>. "
-        "Every tier below this one is built on these numbers. Read slowly — this is the "
-        "spine of your entire report.",
-        "पाइथागोरस अंक-शास्त्र — 100+ देशों में 2,500+ वर्षों से प्रयोग होने वाली पद्धति — "
-        "<b>आपके नाम और जन्म-तिथि</b> को 13 मूल कंपनों में सार-रूप देती है। ये मिलकर आपके जीवन "
-        "के <b>मिशन, वरदान, कर्म-ऋण, गुप्त प्रेरणा, और समय-खिड़कियों</b> को प्रकट करते हैं। "
-        "इसके बाद की हर टियर इन्हीं अंकों पर टिकी है। धीरे पढ़िए — यह पूरी रिपोर्ट की रीढ़ है।",
-        "Pythagorean numerology — 100+ countries me 2,500+ saal se use hone waali system — "
-        "<b>aapke naam aur janma-tithi</b> ko 13 core vibrations me reduce karti hai. Yeh "
-        "milkar aapki life ka <b>mission, gifts, karmic debts, hidden drives aur timing "
-        "windows</b> reveal karte hain. Iske baad ka har tier inhi numbers par tika hai. "
-        "Dheere padhiye — yeh poori report ki reedh hai.",
+        "These 13 numbers are the <b>spine of your entire report</b> — your mission, "
+        "gifts, karmic debts, hidden drives, and timing windows. Every tier below builds "
+        "on them. Read slowly.",
+        "ये 13 अंक <b>आपकी पूरी रिपोर्ट की रीढ़</b> हैं — आपका मिशन, वरदान, कर्म-ऋण, "
+        "गुप्त प्रेरणा, और समय-खिड़कियाँ। आगे की हर टियर इन्हीं पर टिकी है। धीरे पढ़िए।",
+        "Yeh 13 numbers <b>aapki poori report ki reedh</b> hain — aapka mission, gifts, "
+        "karmic debts, hidden drives, aur timing windows. Aage ki har tier inhi par tiki "
+        "hai. Dheere padhiye.",
         bg="#FDF4FF", border="#7C3AED"))
     flow.append(Spacer(1, 5 * mm))
 

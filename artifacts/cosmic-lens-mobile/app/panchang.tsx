@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
@@ -8,6 +9,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import {
+  FESTIVALS_BY_YEAR, FESTIVAL_YEARS, daysUntil, type Festival,
+} from "@/data/festivals10y";
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -36,6 +40,66 @@ function getPanchang(date: Date) {
   return { tithi: `${paksha} ${tithi}`, nakshatra, yoga, karana, var: var_ };
 }
 
+// ── Auspicious Score (Shubh Prataishaat) ─────────────────────────────────────
+// Composite 0-100 score based on classical Vedic shubh-ashubh mapping of
+// tithi / nakshatra / yoga / karana / vaar.
+const SHUBH_TITHIS  = ["Dwitiya","Tritiya","Panchami","Saptami","Dashami","Ekadashi","Trayodashi","Purnima/Amavasya"];
+const ASHUBH_TITHIS = ["Chaturthi","Navami","Chaturdashi"];
+const SHUBH_NAKS    = ["Rohini","Mrigashira","Pushya","Hasta","Anuradha","Shravana","Revati","Uttara Phalguni","Uttara Ashadha","Uttara Bhadrapada","Swati"];
+const ASHUBH_NAKS   = ["Bharani","Krittika","Ashlesha","Magha","Mula","Jyeshtha","Vishakha"];
+const SHUBH_YOGAS   = ["Priti","Ayushman","Saubhagya","Shobhana","Sukarma","Dhriti","Vriddhi","Dhruva","Harshana","Siddhi","Variyana","Shiva","Siddha","Sadhya","Shubha","Brahma","Indra"];
+const ASHUBH_YOGAS  = ["Vishkambha","Atiganda","Shula","Ganda","Vyaghata","Vajra","Vyatipata","Parigha","Vaidhriti"];
+const VISHTI_KARANA = "Vishti";   // Bhadra — strictly avoid
+const SHUBH_VARS    = ["Somvar","Budhavar","Guruvaar","Shukravar"];
+const ASHUBH_VARS   = ["Shanivaar"];
+
+function getAuspiciousScore(p: { tithi: string; nakshatra: string;
+                                  yoga: string; karana: string; var: string }) {
+  const reasons: { good: string[]; bad: string[] } = { good: [], bad: [] };
+  let score = 50;
+
+  // Tithi
+  const tCore = p.tithi.split(" ").slice(-1)[0];
+  if (SHUBH_TITHIS.includes(tCore)) { score += 12; reasons.good.push(`Tithi ${tCore} shubh hai`); }
+  else if (ASHUBH_TITHIS.includes(tCore)) { score -= 12; reasons.bad.push(`Tithi ${tCore} kamzor hai`); }
+  if (p.tithi.includes("Krishna") && tCore === "Chaturdashi") {
+    score -= 5; reasons.bad.push("Krishna Chaturdashi — naye karya talein");
+  }
+
+  // Nakshatra
+  if (SHUBH_NAKS.includes(p.nakshatra))  { score += 14; reasons.good.push(`${p.nakshatra} nakshatra anukool`); }
+  else if (ASHUBH_NAKS.includes(p.nakshatra)) { score -= 14; reasons.bad.push(`${p.nakshatra} nakshatra ki saavdhani`); }
+
+  // Yoga
+  if (SHUBH_YOGAS.includes(p.yoga))  { score += 10; reasons.good.push(`${p.yoga} yoga shubh`); }
+  else if (ASHUBH_YOGAS.includes(p.yoga)) { score -= 10; reasons.bad.push(`${p.yoga} yoga me dhyan rakhein`); }
+
+  // Karana
+  if (p.karana === VISHTI_KARANA) {
+    score -= 15; reasons.bad.push("Vishti (Bhadra) karana — koi shubh karya na karein");
+  } else {
+    score += 4; reasons.good.push(`${p.karana} karana neutral-positive`);
+  }
+
+  // Vaar (day)
+  if (SHUBH_VARS.includes(p.var))  { score += 6; reasons.good.push(`${p.var} shubh vaar`); }
+  else if (ASHUBH_VARS.includes(p.var)) { score -= 4; reasons.bad.push(`${p.var} pe Shani prabhav — slow & steady`); }
+
+  score = Math.max(5, Math.min(98, score));
+
+  let band: "Bahut Shubh" | "Shubh" | "Mishrit" | "Saavdhani";
+  let color: string;
+  let emoji: string;
+  if (score >= 78)      { band = "Bahut Shubh"; color = "#22c55e"; emoji = "🌟"; }
+  else if (score >= 60) { band = "Shubh";       color = "#84cc16"; emoji = "✨"; }
+  else if (score >= 40) { band = "Mishrit";     color = "#f59e0b"; emoji = "⚖️"; }
+  else                  { band = "Saavdhani";   color = "#ef4444"; emoji = "⚠️"; }
+
+  return { score, band, color, emoji,
+           good: reasons.good.slice(0, 4),
+           bad:  reasons.bad.slice(0, 3) };
+}
+
 function getRahuKaal(dayIdx: number) {
   const RK = [
     "4:30 PM – 6:00 PM", "7:30 AM – 9:00 AM", "3:00 PM – 4:30 PM",
@@ -52,35 +116,6 @@ function getRahuKaal(dayIdx: number) {
   return { rahu: RK[dayIdx], yama: YAMA[dayIdx], gulika: GULIKA[dayIdx] };
 }
 
-const FESTIVALS_2026 = [
-  { date: "Jan 14", name: "Makar Sankranti", emoji: "🪁", type: "tyohar" },
-  { date: "Jan 23", name: "Basant Panchami", emoji: "🌼", type: "tyohar" },
-  { date: "Feb 26", name: "Mahashivratri", emoji: "🔱", type: "tyohar" },
-  { date: "Mar 3",  name: "Holi", emoji: "🎨", type: "tyohar" },
-  { date: "Mar 2",  name: "Holika Dahan", emoji: "🔥", type: "tyohar" },
-  { date: "Mar 30", name: "Ram Navami", emoji: "🏹", type: "tyohar" },
-  { date: "Apr 2",  name: "Hanuman Jayanti", emoji: "🙏", type: "tyohar" },
-  { date: "Apr 14", name: "Dr. Ambedkar Jayanti", emoji: "📚", type: "rashtriya" },
-  { date: "Apr 15", name: "Baisakhi", emoji: "🌾", type: "tyohar" },
-  { date: "May 12", name: "Buddha Purnima", emoji: "☸️", type: "tyohar" },
-  { date: "Jun 11", name: "Eid ul-Adha", emoji: "🌙", type: "tyohar" },
-  { date: "Jul 9",  name: "Rath Yatra", emoji: "🛕", type: "tyohar" },
-  { date: "Aug 3",  name: "Guru Purnima", emoji: "🌕", type: "tyohar" },
-  { date: "Aug 9",  name: "Nag Panchami", emoji: "🐍", type: "tyohar" },
-  { date: "Aug 19", name: "Raksha Bandhan", emoji: "🪢", type: "tyohar" },
-  { date: "Aug 26", name: "Janmashtami", emoji: "🦚", type: "tyohar" },
-  { date: "Sep 1",  name: "Ganesh Chaturthi", emoji: "🐘", type: "tyohar" },
-  { date: "Oct 2",  name: "Gandhi Jayanti", emoji: "🕊️", type: "rashtriya" },
-  { date: "Oct 2",  name: "Navratri Shuru", emoji: "🪷", type: "tyohar" },
-  { date: "Oct 9",  name: "Dussehra", emoji: "🏹", type: "tyohar" },
-  { date: "Oct 20", name: "Diwali", emoji: "🪔", type: "tyohar" },
-  { date: "Oct 22", name: "Govardhan Puja", emoji: "🐄", type: "tyohar" },
-  { date: "Oct 23", name: "Bhai Dooj", emoji: "👫", type: "tyohar" },
-  { date: "Nov 5",  name: "Chhath Puja", emoji: "☀️", type: "tyohar" },
-  { date: "Nov 27", name: "Guru Nanak Jayanti", emoji: "✨", type: "tyohar" },
-  { date: "Dec 25", name: "Christmas", emoji: "🎄", type: "tyohar" },
-];
-
 export default function PanchangScreen() {
   const C = useC();
   const t = useT();
@@ -93,6 +128,8 @@ export default function PanchangScreen() {
   const today = new Date();
   const panchang = useMemo(() => getPanchang(today), []);
   const kaal = useMemo(() => getRahuKaal(today.getDay()), []);
+  const auspicious = useMemo(() => getAuspiciousScore(panchang), [panchang]);
+  const [festYear, setFestYear] = useState<number>(today.getFullYear() < 2026 ? 2026 : today.getFullYear());
 
   const dateStr = today.toLocaleDateString("hi-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -162,6 +199,71 @@ export default function PanchangScreen() {
               </View>
             </View>
 
+            {/* ── 1) AAJ KI DATE — full date hero ───────────────────────── */}
+            <LinearGradient
+              colors={C.isDark ? ["#1e1b4b", "#0f172a"] : ["#ede9fe", "#ddd6fe"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[s.dateHero, { borderColor: C.border }]}
+            >
+              <Text style={[s.dateHeroDay, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>
+                {today.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase()}
+              </Text>
+              <Text style={[s.dateHeroNum, { color: C.text }]}>
+                {today.getDate()}
+              </Text>
+              <Text style={[s.dateHeroMonth, { color: C.text }]}>
+                {today.toLocaleDateString("en-US", { month: "long" })} {today.getFullYear()}
+              </Text>
+              <Text style={[s.dateHeroHindi, { color: C.textMuted }]}>
+                {dateStr}
+              </Text>
+            </LinearGradient>
+
+            {/* ── 2) AUSPICIOUS PERCENTAGE — score card ─────────────────── */}
+            <View style={[s.auspCard, { backgroundColor: C.bgCard, borderColor: auspicious.color + "55" }]}>
+              <View style={s.auspHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.auspLabel, { color: C.textMuted }]}>
+                    AAJ KI SHUBHATA
+                  </Text>
+                  <Text style={[s.auspBand, { color: auspicious.color }]}>
+                    {auspicious.emoji} {auspicious.band}
+                  </Text>
+                </View>
+                <View style={[s.auspScoreCircle, { borderColor: auspicious.color }]}>
+                  <Text style={[s.auspScoreNum, { color: auspicious.color }]}>
+                    {auspicious.score}
+                  </Text>
+                  <Text style={[s.auspScorePct, { color: auspicious.color }]}>%</Text>
+                </View>
+              </View>
+
+              {/* Progress bar */}
+              <View style={[s.auspBarBg, { backgroundColor: C.isDark ? "#1e293b" : "#e5e7eb" }]}>
+                <View style={[s.auspBarFg, { width: `${auspicious.score}%`, backgroundColor: auspicious.color }]} />
+              </View>
+
+              {/* Reasons */}
+              {auspicious.good.length > 0 && (
+                <View style={{ marginTop: 12 }}>
+                  {auspicious.good.map((r, i) => (
+                    <Text key={`g-${i}`} style={[s.auspReason, { color: C.text }]}>
+                      <Text style={{ color: "#22c55e" }}>✓ </Text>{r}
+                    </Text>
+                  ))}
+                </View>
+              )}
+              {auspicious.bad.length > 0 && (
+                <View style={{ marginTop: 6 }}>
+                  {auspicious.bad.map((r, i) => (
+                    <Text key={`b-${i}`} style={[s.auspReason, { color: C.text }]}>
+                      <Text style={{ color: "#ef4444" }}>⚠ </Text>{r}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </View>
+
             {/* Panchang details */}
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <InfoRow label={t.panVaar}      value={panchang.var}      emoji="📆" />
@@ -219,33 +321,112 @@ export default function PanchangScreen() {
           </>
         )}
 
-        {/* ── FESTIVALS TAB ── */}
+        {/* ── FESTIVALS TAB — 10 SAAL KA CALENDAR ─────────────────────── */}
         {tabIdx === 2 && (
           <>
-            <Text style={[s.yearLabel, { color: C.textMuted }]}>{t.panFestivalsYear}</Text>
-            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              {FESTIVALS_2026.map((f, i) => (
-                <View
-                  key={`${f.date}-${f.name}`}
-                  style={[
-                    s.festRow,
-                    { borderBottomColor: C.border3 },
-                    i === FESTIVALS_2026.length - 1 && { borderBottomWidth: 0 },
-                  ]}
-                >
-                  <Text style={{ fontSize: 22, width: 32 }}>{f.emoji}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.festName, { color: C.text }]}>{f.name}</Text>
-                    <Text style={[s.festDate, { color: C.textMuted }]}>{f.date}, 2026</Text>
+            {/* Year selector — 2026 → 2035 */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                        style={{ flexGrow: 0 }}
+                        contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {FESTIVAL_YEARS.map(y => {
+                const active = y === festYear;
+                return (
+                  <Pressable
+                    key={y}
+                    onPress={() => { Haptics.selectionAsync(); setFestYear(y); }}
+                    style={[
+                      s.yearChip,
+                      { borderColor: C.border },
+                      active && { backgroundColor: "#a78bfa", borderColor: "#a78bfa" },
+                    ]}
+                  >
+                    <Text style={[s.yearChipText,
+                                  { color: active ? "#fff" : C.textMuted }]}>
+                      {y}
+                    </Text>
+                    {y === today.getFullYear() && (
+                      <View style={s.yearChipDot} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[s.yearLabel, { color: C.textMuted, marginTop: 4 }]}>
+              {(FESTIVALS_BY_YEAR[festYear] || []).length} festivals · {festYear}
+            </Text>
+
+            {/* Group festivals by month for current year */}
+            {(() => {
+              const list = FESTIVALS_BY_YEAR[festYear] || [];
+              const sorted = [...list].sort((a, b) => a.iso.localeCompare(b.iso));
+              const byMonth: Record<string, Festival[]> = {};
+              sorted.forEach(f => {
+                const m = new Date(f.iso + "T00:00:00")
+                  .toLocaleString("en-US", { month: "long" });
+                (byMonth[m] = byMonth[m] || []).push(f);
+              });
+              return Object.entries(byMonth).map(([month, items]) => (
+                <View key={month} style={{ marginTop: 6 }}>
+                  <Text style={[s.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>
+                    {month.toUpperCase()}
+                  </Text>
+                  <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                    {items.map((f, i) => {
+                      const dleft = daysUntil(f.iso);
+                      const isPast = dleft < 0;
+                      const isSoon = dleft >= 0 && dleft <= 7;
+                      return (
+                        <View
+                          key={`${f.iso}-${f.name}`}
+                          style={[
+                            s.festRow,
+                            { borderBottomColor: C.border3, opacity: isPast ? 0.5 : 1 },
+                            i === items.length - 1 && { borderBottomWidth: 0 },
+                          ]}
+                        >
+                          <Text style={{ fontSize: 22, width: 32 }}>{f.emoji}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.festName, { color: C.text }]}>
+                              {f.name}{f.major && <Text style={{ color: "#fbbf24" }}> ★</Text>}
+                            </Text>
+                            <Text style={[s.festDate, { color: C.textMuted }]}>
+                              {f.date}, {festYear}
+                              {isSoon && (
+                                <Text style={{ color: "#22c55e", fontFamily: F.bold }}>
+                                  {"  · "}{dleft === 0 ? "Aaj!" : `${dleft} din baaki`}
+                                </Text>
+                              )}
+                            </Text>
+                          </View>
+                          {f.type === "rashtriya" && (
+                            <View style={[s.badge, { backgroundColor: C.isDark ? "#3b82f620" : "#DBEAFE", borderColor: C.isDark ? "#3b82f640" : "#93C5FD" }]}>
+                              <Text style={[s.badgeText, { color: "#60a5fa" }]}>National</Text>
+                            </View>
+                          )}
+                          {f.type === "vrat" && (
+                            <View style={[s.badge, { backgroundColor: C.isDark ? "#a855f720" : "#F3E8FF", borderColor: C.isDark ? "#a855f740" : "#D8B4FE" }]}>
+                              <Text style={[s.badgeText, { color: "#a855f7" }]}>Vrat</Text>
+                            </View>
+                          )}
+                          {f.type === "muhurat" && (
+                            <View style={[s.badge, { backgroundColor: C.isDark ? "#f59e0b20" : "#FEF3C7", borderColor: C.isDark ? "#f59e0b40" : "#FCD34D" }]}>
+                              <Text style={[s.badgeText, { color: "#f59e0b" }]}>Muhurat</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
                   </View>
-                  {f.type === "rashtriya" && (
-                    <View style={[s.badge, { backgroundColor: C.isDark ? "#3b82f620" : "#DBEAFE", borderColor: C.isDark ? "#3b82f640" : "#93C5FD" }]}>
-                      <Text style={[s.badgeText, { color: "#60a5fa" }]}>{t.panBadgeNational}</Text>
-                    </View>
-                  )}
                 </View>
-              ))}
-            </View>
+              ));
+            })()}
+
+            <Text style={{ color: C.textMuted, fontSize: 10, textAlign: "center",
+                           marginTop: 12, fontFamily: F.regular, lineHeight: 15 }}>
+              Dates panchang almanac ke aadhar par hain. Ritual muhurat ke liye
+              current-year panchang verify karein.
+            </Text>
           </>
         )}
       </ScrollView>
@@ -289,6 +470,45 @@ const s = StyleSheet.create({
   rahuTime: { fontSize: 22, fontFamily: F.bold, marginTop: 2 },
   rahuTip: { fontSize: 11, fontFamily: F.regular, marginTop: 3 },
   yearLabel: { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },
+
+  // Date hero (Today section top)
+  dateHero: {
+    borderRadius: 18, borderWidth: 1, padding: 22, alignItems: "center",
+  },
+  dateHeroDay:   { fontSize: 11, fontFamily: F.bold, letterSpacing: 2.5 },
+  dateHeroNum:   { fontSize: 56, fontFamily: F.bold, lineHeight: 62, marginTop: 4 },
+  dateHeroMonth: { fontSize: 16, fontFamily: F.semibold, marginTop: 2 },
+  dateHeroHindi: { fontSize: 11, fontFamily: F.regular, marginTop: 8 },
+
+  // Auspicious score card
+  auspCard: {
+    borderRadius: 16, borderWidth: 1.5, padding: 16,
+  },
+  auspHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  auspLabel:  { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },
+  auspBand:   { fontSize: 18, fontFamily: F.bold, marginTop: 4 },
+  auspScoreCircle: {
+    width: 64, height: 64, borderRadius: 32, borderWidth: 3,
+    alignItems: "center", justifyContent: "center", flexDirection: "row",
+  },
+  auspScoreNum: { fontSize: 22, fontFamily: F.bold, lineHeight: 24 },
+  auspScorePct: { fontSize: 11, fontFamily: F.bold, marginLeft: 1, marginTop: 4 },
+  auspBarBg: { height: 8, borderRadius: 4, overflow: "hidden" },
+  auspBarFg: { height: "100%", borderRadius: 4 },
+  auspReason: { fontSize: 12.5, fontFamily: F.regular, lineHeight: 19, marginTop: 2 },
+
+  // Year selector chips
+  yearChip: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 18, borderWidth: 1,
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
+  yearChipText: { fontSize: 13, fontFamily: F.semibold },
+  yearChipDot:  { width: 5, height: 5, borderRadius: 3, backgroundColor: "#22c55e" },
+  monthHdr: {
+    fontSize: 11, fontFamily: F.bold, letterSpacing: 2,
+    paddingHorizontal: 4, paddingVertical: 8,
+  },
+
   festRow: {
     flexDirection: "row", alignItems: "center", gap: 10,
     paddingVertical: 12, borderBottomWidth: 1,

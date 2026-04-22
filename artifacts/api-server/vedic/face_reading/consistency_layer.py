@@ -8,7 +8,7 @@ Runs ONCE after all sections are assembled. Responsibilities:
                      dominant trait. Every downstream consumer (PDF, mobile,
                      synthesis) should read from here, never re-derive.
   2. clean_internal_labels — strips internal codes that leak into prose,
-                     e.g.  "A-driven", "C-driven", "Cosmic Vision",
+                     e.g.  "A-driven", "C-driven", "Cosmic Intelligence",
                      "AI-powered", and replaces them with friendly labels.
   3. normalize_section_keys — adds backward-compat aliases so narrative
                      writers and PDF templates don't break when producer
@@ -53,7 +53,7 @@ BANNED_PHRASES: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\bAI[- ]powered\b",            re.I), "Cosmic Intelligence-powered"),
     (re.compile(r"\bAI[- ]driven\b",             re.I), "Cosmic Intelligence-driven"),
     (re.compile(r"\bAI\s+analysis\b",            re.I), "Cosmic Intelligence analysis"),
-    (re.compile(r"\bCosmic Vision\b",            re.I), "Cosmic Lens"),
+    (re.compile(r"\bCosmic Intelligence\b",            re.I), "Cosmic Lens"),
     # Bare "AI" as a standalone word (kept last, narrowly scoped).
     (re.compile(r"(?<![A-Za-z])AI(?![A-Za-z])"),       "Cosmic Intelligence"),
 ]

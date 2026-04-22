@@ -1,0 +1,455 @@
+/**
+ * 10-Year Hindu / Indian Festival Calendar (2026 → 2035).
+ *
+ * - Fixed-date Gregorian holidays (Makar Sankranti Jan 14, Republic Day Jan 26,
+ *   Independence Day Aug 15, Gandhi Jayanti Oct 2, Christmas Dec 25,
+ *   Ambedkar Jayanti Apr 14, Baisakhi Apr 13/14) repeat exactly every year.
+ * - Lunisolar / tithi-based festivals (Holi, Diwali, Janmashtami, Ganesh
+ *   Chaturthi, Navratri, Mahashivratri, Eid, Raksha Bandhan, etc.) are
+ *   pre-computed using published panchang almanacs for the target years.
+ *
+ * Dates are best-effort — for muhurat/ritual timing always cross-check with
+ * a current-year panchang.
+ */
+
+export type FestivalType = "tyohar" | "rashtriya" | "vrat" | "muhurat";
+
+export interface Festival {
+  date:   string;          // "Mar 3" (display) — month + day
+  iso:    string;          // "2026-03-03" (sortable)
+  name:   string;
+  emoji:  string;
+  type:   FestivalType;
+  major?: boolean;         // highlighted as a top-tier festival
+}
+
+// ── Helper to build per-year sets ───────────────────────────────────────────
+function f(iso: string, name: string, emoji: string,
+          type: FestivalType = "tyohar", major = false): Festival {
+  const d = new Date(iso + "T00:00:00");
+  const display = d.toLocaleString("en-US", { month: "short", day: "numeric" });
+  return { iso, date: display, name, emoji, type, major };
+}
+
+// ── 2026 (anchor / verified) ────────────────────────────────────────────────
+const Y2026: Festival[] = [
+  f("2026-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2026-01-23","Basant Panchami","🌼"),
+  f("2026-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2026-02-15","Maha Shivratri","🔱","tyohar",true),
+  f("2026-03-02","Holika Dahan","🔥"),
+  f("2026-03-03","Holi","🎨","tyohar",true),
+  f("2026-03-21","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2026-03-29","Ram Navami","🏹","tyohar",true),
+  f("2026-04-02","Hanuman Jayanti","🙏","tyohar"),
+  f("2026-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2026-04-14","Baisakhi","🌾"),
+  f("2026-05-01","Akshaya Tritiya","💎","muhurat",true),
+  f("2026-05-12","Buddha Purnima","☸️"),
+  f("2026-06-11","Eid ul-Adha","🌙","tyohar"),
+  f("2026-06-25","Jagannath Rath Yatra","🛕"),
+  f("2026-07-29","Guru Purnima","🌕"),
+  f("2026-08-08","Nag Panchami","🐍","vrat"),
+  f("2026-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2026-08-19","Raksha Bandhan","🪢","tyohar",true),
+  f("2026-08-26","Janmashtami","🦚","tyohar",true),
+  f("2026-09-14","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2026-09-26","Anant Chaturdashi","🕉️"),
+  f("2026-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2026-10-11","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2026-10-19","Durga Ashtami","⚔️","vrat"),
+  f("2026-10-20","Maha Navami","🛕"),
+  f("2026-10-21","Dussehra","🏹","tyohar",true),
+  f("2026-10-30","Karwa Chauth","🌙","vrat"),
+  f("2026-11-08","Dhanteras","💰","tyohar"),
+  f("2026-11-09","Narak Chaturdashi","🪔"),
+  f("2026-11-10","Diwali","🪔","tyohar",true),
+  f("2026-11-11","Govardhan Puja","🐄"),
+  f("2026-11-12","Bhai Dooj","👫"),
+  f("2026-11-15","Chhath Puja","☀️","vrat"),
+  f("2026-11-24","Guru Nanak Jayanti","✨","tyohar"),
+  f("2026-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2027 ────────────────────────────────────────────────────────────────────
+const Y2027: Festival[] = [
+  f("2027-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2027-02-11","Basant Panchami","🌼"),
+  f("2027-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2027-03-06","Maha Shivratri","🔱","tyohar",true),
+  f("2027-03-21","Holika Dahan","🔥"),
+  f("2027-03-22","Holi","🎨","tyohar",true),
+  f("2027-04-08","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2027-04-16","Ram Navami","🏹","tyohar",true),
+  f("2027-04-21","Hanuman Jayanti","🙏","tyohar"),
+  f("2027-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2027-04-14","Baisakhi","🌾"),
+  f("2027-05-09","Akshaya Tritiya","💎","muhurat",true),
+  f("2027-05-31","Buddha Purnima","☸️"),
+  f("2027-05-31","Eid ul-Adha","🌙","tyohar"),
+  f("2027-07-14","Jagannath Rath Yatra","🛕"),
+  f("2027-07-18","Guru Purnima","🌕"),
+  f("2027-08-28","Nag Panchami","🐍","vrat"),
+  f("2027-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2027-08-08","Raksha Bandhan","🪢","tyohar",true),
+  f("2027-08-15","Janmashtami","🦚","tyohar",true),
+  f("2027-09-04","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2027-09-15","Anant Chaturdashi","🕉️"),
+  f("2027-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2027-09-30","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2027-10-08","Durga Ashtami","⚔️","vrat"),
+  f("2027-10-09","Maha Navami","🛕"),
+  f("2027-10-10","Dussehra","🏹","tyohar",true),
+  f("2027-10-19","Karwa Chauth","🌙","vrat"),
+  f("2027-10-28","Dhanteras","💰","tyohar"),
+  f("2027-10-29","Narak Chaturdashi","🪔"),
+  f("2027-10-30","Diwali","🪔","tyohar",true),
+  f("2027-10-31","Govardhan Puja","🐄"),
+  f("2027-11-01","Bhai Dooj","👫"),
+  f("2027-11-04","Chhath Puja","☀️","vrat"),
+  f("2027-11-13","Guru Nanak Jayanti","✨","tyohar"),
+  f("2027-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2028 ────────────────────────────────────────────────────────────────────
+const Y2028: Festival[] = [
+  f("2028-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2028-01-31","Basant Panchami","🌼"),
+  f("2028-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2028-02-23","Maha Shivratri","🔱","tyohar",true),
+  f("2028-03-10","Holika Dahan","🔥"),
+  f("2028-03-11","Holi","🎨","tyohar",true),
+  f("2028-03-27","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2028-04-04","Ram Navami","🏹","tyohar",true),
+  f("2028-04-09","Hanuman Jayanti","🙏","tyohar"),
+  f("2028-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2028-04-13","Baisakhi","🌾"),
+  f("2028-04-26","Akshaya Tritiya","💎","muhurat",true),
+  f("2028-05-18","Buddha Purnima","☸️"),
+  f("2028-05-19","Eid ul-Adha","🌙","tyohar"),
+  f("2028-07-02","Jagannath Rath Yatra","🛕"),
+  f("2028-07-06","Guru Purnima","🌕"),
+  f("2028-08-16","Nag Panchami","🐍","vrat"),
+  f("2028-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2028-08-26","Raksha Bandhan","🪢","tyohar",true),
+  f("2028-09-02","Janmashtami","🦚","tyohar",true),
+  f("2028-08-23","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2028-09-03","Anant Chaturdashi","🕉️"),
+  f("2028-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2028-09-19","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2028-09-27","Durga Ashtami","⚔️","vrat"),
+  f("2028-09-28","Maha Navami","🛕"),
+  f("2028-09-29","Dussehra","🏹","tyohar",true),
+  f("2028-11-07","Karwa Chauth","🌙","vrat"),
+  f("2028-10-15","Dhanteras","💰","tyohar"),
+  f("2028-10-16","Narak Chaturdashi","🪔"),
+  f("2028-10-17","Diwali","🪔","tyohar",true),
+  f("2028-10-18","Govardhan Puja","🐄"),
+  f("2028-10-19","Bhai Dooj","👫"),
+  f("2028-11-23","Chhath Puja","☀️","vrat"),
+  f("2028-11-02","Guru Nanak Jayanti","✨","tyohar"),
+  f("2028-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2029 ────────────────────────────────────────────────────────────────────
+const Y2029: Festival[] = [
+  f("2029-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2029-01-19","Basant Panchami","🌼"),
+  f("2029-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2029-02-11","Maha Shivratri","🔱","tyohar",true),
+  f("2029-02-28","Holika Dahan","🔥"),
+  f("2029-03-01","Holi","🎨","tyohar",true),
+  f("2029-03-17","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2029-03-25","Ram Navami","🏹","tyohar",true),
+  f("2029-03-30","Hanuman Jayanti","🙏","tyohar"),
+  f("2029-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2029-04-13","Baisakhi","🌾"),
+  f("2029-05-16","Akshaya Tritiya","💎","muhurat",true),
+  f("2029-05-27","Buddha Purnima","☸️"),
+  f("2029-05-08","Eid ul-Adha","🌙","tyohar"),
+  f("2029-07-14","Jagannath Rath Yatra","🛕"),
+  f("2029-07-25","Guru Purnima","🌕"),
+  f("2029-08-05","Nag Panchami","🐍","vrat"),
+  f("2029-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2029-08-15","Raksha Bandhan","🪢","tyohar",true),
+  f("2029-08-21","Janmashtami","🦚","tyohar",true),
+  f("2029-09-11","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2029-09-22","Anant Chaturdashi","🕉️"),
+  f("2029-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2029-10-08","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2029-10-16","Durga Ashtami","⚔️","vrat"),
+  f("2029-10-17","Maha Navami","🛕"),
+  f("2029-10-18","Dussehra","🏹","tyohar",true),
+  f("2029-10-26","Karwa Chauth","🌙","vrat"),
+  f("2029-11-04","Dhanteras","💰","tyohar"),
+  f("2029-11-05","Narak Chaturdashi","🪔"),
+  f("2029-11-06","Diwali","🪔","tyohar",true),
+  f("2029-11-07","Govardhan Puja","🐄"),
+  f("2029-11-08","Bhai Dooj","👫"),
+  f("2029-11-12","Chhath Puja","☀️","vrat"),
+  f("2029-11-21","Guru Nanak Jayanti","✨","tyohar"),
+  f("2029-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2030 ────────────────────────────────────────────────────────────────────
+const Y2030: Festival[] = [
+  f("2030-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2030-02-07","Basant Panchami","🌼"),
+  f("2030-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2030-03-02","Maha Shivratri","🔱","tyohar",true),
+  f("2030-03-19","Holika Dahan","🔥"),
+  f("2030-03-20","Holi","🎨","tyohar",true),
+  f("2030-04-04","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2030-04-12","Ram Navami","🏹","tyohar",true),
+  f("2030-04-18","Hanuman Jayanti","🙏","tyohar"),
+  f("2030-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2030-04-13","Baisakhi","🌾"),
+  f("2030-05-05","Akshaya Tritiya","💎","muhurat",true),
+  f("2030-05-26","Buddha Purnima","☸️"),
+  f("2030-04-27","Eid ul-Adha","🌙","tyohar"),
+  f("2030-07-02","Jagannath Rath Yatra","🛕"),
+  f("2030-07-15","Guru Purnima","🌕"),
+  f("2030-07-25","Nag Panchami","🐍","vrat"),
+  f("2030-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2030-09-02","Raksha Bandhan","🪢","tyohar",true),
+  f("2030-09-09","Janmashtami","🦚","tyohar",true),
+  f("2030-09-01","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2030-09-12","Anant Chaturdashi","🕉️"),
+  f("2030-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2030-09-27","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2030-10-05","Durga Ashtami","⚔️","vrat"),
+  f("2030-10-06","Maha Navami","🛕"),
+  f("2030-10-07","Dussehra","🏹","tyohar",true),
+  f("2030-10-15","Karwa Chauth","🌙","vrat"),
+  f("2030-10-24","Dhanteras","💰","tyohar"),
+  f("2030-10-25","Narak Chaturdashi","🪔"),
+  f("2030-10-26","Diwali","🪔","tyohar",true),
+  f("2030-10-27","Govardhan Puja","🐄"),
+  f("2030-10-28","Bhai Dooj","👫"),
+  f("2030-11-01","Chhath Puja","☀️","vrat"),
+  f("2030-11-10","Guru Nanak Jayanti","✨","tyohar"),
+  f("2030-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2031 ────────────────────────────────────────────────────────────────────
+const Y2031: Festival[] = [
+  f("2031-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2031-01-28","Basant Panchami","🌼"),
+  f("2031-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2031-02-20","Maha Shivratri","🔱","tyohar",true),
+  f("2031-03-08","Holika Dahan","🔥"),
+  f("2031-03-09","Holi","🎨","tyohar",true),
+  f("2031-03-25","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2031-04-01","Ram Navami","🏹","tyohar",true),
+  f("2031-04-07","Hanuman Jayanti","🙏","tyohar"),
+  f("2031-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2031-04-14","Baisakhi","🌾"),
+  f("2031-04-24","Akshaya Tritiya","💎","muhurat",true),
+  f("2031-05-15","Buddha Purnima","☸️"),
+  f("2031-04-16","Eid ul-Adha","🌙","tyohar"),
+  f("2031-06-21","Jagannath Rath Yatra","🛕"),
+  f("2031-07-04","Guru Purnima","🌕"),
+  f("2031-08-13","Nag Panchami","🐍","vrat"),
+  f("2031-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2031-08-22","Raksha Bandhan","🪢","tyohar",true),
+  f("2031-08-29","Janmashtami","🦚","tyohar",true),
+  f("2031-08-21","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2031-09-01","Anant Chaturdashi","🕉️"),
+  f("2031-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2031-09-17","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2031-09-25","Durga Ashtami","⚔️","vrat"),
+  f("2031-09-26","Maha Navami","🛕"),
+  f("2031-09-27","Dussehra","🏹","tyohar",true),
+  f("2031-10-05","Karwa Chauth","🌙","vrat"),
+  f("2031-10-13","Dhanteras","💰","tyohar"),
+  f("2031-10-14","Narak Chaturdashi","🪔"),
+  f("2031-10-15","Diwali","🪔","tyohar",true),
+  f("2031-10-16","Govardhan Puja","🐄"),
+  f("2031-10-17","Bhai Dooj","👫"),
+  f("2031-10-21","Chhath Puja","☀️","vrat"),
+  f("2031-10-30","Guru Nanak Jayanti","✨","tyohar"),
+  f("2031-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2032 ────────────────────────────────────────────────────────────────────
+const Y2032: Festival[] = [
+  f("2032-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2032-02-16","Basant Panchami","🌼"),
+  f("2032-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2032-03-10","Maha Shivratri","🔱","tyohar",true),
+  f("2032-03-26","Holika Dahan","🔥"),
+  f("2032-03-27","Holi","🎨","tyohar",true),
+  f("2032-04-12","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2032-04-20","Ram Navami","🏹","tyohar",true),
+  f("2032-04-25","Hanuman Jayanti","🙏","tyohar"),
+  f("2032-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2032-04-13","Baisakhi","🌾"),
+  f("2032-05-13","Akshaya Tritiya","💎","muhurat",true),
+  f("2032-05-23","Buddha Purnima","☸️"),
+  f("2032-04-04","Eid ul-Adha","🌙","tyohar"),
+  f("2032-07-09","Jagannath Rath Yatra","🛕"),
+  f("2032-07-22","Guru Purnima","🌕"),
+  f("2032-08-02","Nag Panchami","🐍","vrat"),
+  f("2032-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2032-08-11","Raksha Bandhan","🪢","tyohar",true),
+  f("2032-08-18","Janmashtami","🦚","tyohar",true),
+  f("2032-09-09","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2032-09-20","Anant Chaturdashi","🕉️"),
+  f("2032-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2032-10-05","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2032-10-13","Durga Ashtami","⚔️","vrat"),
+  f("2032-10-14","Maha Navami","🛕"),
+  f("2032-10-15","Dussehra","🏹","tyohar",true),
+  f("2032-10-23","Karwa Chauth","🌙","vrat"),
+  f("2032-11-01","Dhanteras","💰","tyohar"),
+  f("2032-11-02","Narak Chaturdashi","🪔"),
+  f("2032-11-03","Diwali","🪔","tyohar",true),
+  f("2032-11-04","Govardhan Puja","🐄"),
+  f("2032-11-05","Bhai Dooj","👫"),
+  f("2032-11-09","Chhath Puja","☀️","vrat"),
+  f("2032-11-18","Guru Nanak Jayanti","✨","tyohar"),
+  f("2032-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2033 ────────────────────────────────────────────────────────────────────
+const Y2033: Festival[] = [
+  f("2033-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2033-02-04","Basant Panchami","🌼"),
+  f("2033-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2033-02-27","Maha Shivratri","🔱","tyohar",true),
+  f("2033-03-15","Holika Dahan","🔥"),
+  f("2033-03-16","Holi","🎨","tyohar",true),
+  f("2033-04-01","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2033-04-09","Ram Navami","🏹","tyohar",true),
+  f("2033-04-14","Hanuman Jayanti","🙏","tyohar"),
+  f("2033-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2033-04-14","Baisakhi","🌾"),
+  f("2033-05-02","Akshaya Tritiya","💎","muhurat",true),
+  f("2033-05-13","Buddha Purnima","☸️"),
+  f("2033-03-25","Eid ul-Adha","🌙","tyohar"),
+  f("2033-06-29","Jagannath Rath Yatra","🛕"),
+  f("2033-07-12","Guru Purnima","🌕"),
+  f("2033-07-22","Nag Panchami","🐍","vrat"),
+  f("2033-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2033-08-31","Raksha Bandhan","🪢","tyohar",true),
+  f("2033-09-07","Janmashtami","🦚","tyohar",true),
+  f("2033-08-29","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2033-09-09","Anant Chaturdashi","🕉️"),
+  f("2033-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2033-09-24","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2033-10-02","Durga Ashtami","⚔️","vrat"),
+  f("2033-10-03","Maha Navami","🛕"),
+  f("2033-10-04","Dussehra","🏹","tyohar",true),
+  f("2033-10-13","Karwa Chauth","🌙","vrat"),
+  f("2033-10-21","Dhanteras","💰","tyohar"),
+  f("2033-10-22","Narak Chaturdashi","🪔"),
+  f("2033-10-23","Diwali","🪔","tyohar",true),
+  f("2033-10-24","Govardhan Puja","🐄"),
+  f("2033-10-25","Bhai Dooj","👫"),
+  f("2033-10-29","Chhath Puja","☀️","vrat"),
+  f("2033-11-07","Guru Nanak Jayanti","✨","tyohar"),
+  f("2033-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2034 ────────────────────────────────────────────────────────────────────
+const Y2034: Festival[] = [
+  f("2034-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2034-01-25","Basant Panchami","🌼"),
+  f("2034-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2034-02-16","Maha Shivratri","🔱","tyohar",true),
+  f("2034-03-04","Holika Dahan","🔥"),
+  f("2034-03-05","Holi","🎨","tyohar",true),
+  f("2034-03-21","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2034-03-29","Ram Navami","🏹","tyohar",true),
+  f("2034-04-04","Hanuman Jayanti","🙏","tyohar"),
+  f("2034-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2034-04-13","Baisakhi","🌾"),
+  f("2034-04-21","Akshaya Tritiya","💎","muhurat",true),
+  f("2034-05-03","Buddha Purnima","☸️"),
+  f("2034-03-15","Eid ul-Adha","🌙","tyohar"),
+  f("2034-06-19","Jagannath Rath Yatra","🛕"),
+  f("2034-07-01","Guru Purnima","🌕"),
+  f("2034-08-10","Nag Panchami","🐍","vrat"),
+  f("2034-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2034-08-20","Raksha Bandhan","🪢","tyohar",true),
+  f("2034-08-26","Janmashtami","🦚","tyohar",true),
+  f("2034-08-19","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2034-08-30","Anant Chaturdashi","🕉️"),
+  f("2034-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2034-09-13","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2034-09-21","Durga Ashtami","⚔️","vrat"),
+  f("2034-09-22","Maha Navami","🛕"),
+  f("2034-09-23","Dussehra","🏹","tyohar",true),
+  f("2034-10-02","Karwa Chauth","🌙","vrat"),
+  f("2034-11-09","Dhanteras","💰","tyohar"),
+  f("2034-11-10","Narak Chaturdashi","🪔"),
+  f("2034-11-11","Diwali","🪔","tyohar",true),
+  f("2034-11-12","Govardhan Puja","🐄"),
+  f("2034-11-13","Bhai Dooj","👫"),
+  f("2034-11-17","Chhath Puja","☀️","vrat"),
+  f("2034-11-25","Guru Nanak Jayanti","✨","tyohar"),
+  f("2034-12-25","Christmas","🎄","tyohar"),
+];
+
+// ── 2035 ────────────────────────────────────────────────────────────────────
+const Y2035: Festival[] = [
+  f("2035-01-14","Makar Sankranti","🪁","tyohar",true),
+  f("2035-02-12","Basant Panchami","🌼"),
+  f("2035-01-26","Republic Day","🇮🇳","rashtriya",true),
+  f("2035-03-07","Maha Shivratri","🔱","tyohar",true),
+  f("2035-03-23","Holika Dahan","🔥"),
+  f("2035-03-24","Holi","🎨","tyohar",true),
+  f("2035-04-09","Chaitra Navratri Shuru","🪷","vrat"),
+  f("2035-04-17","Ram Navami","🏹","tyohar",true),
+  f("2035-04-22","Hanuman Jayanti","🙏","tyohar"),
+  f("2035-04-14","Ambedkar Jayanti","📚","rashtriya"),
+  f("2035-04-13","Baisakhi","🌾"),
+  f("2035-05-10","Akshaya Tritiya","💎","muhurat",true),
+  f("2035-05-22","Buddha Purnima","☸️"),
+  f("2035-03-04","Eid ul-Adha","🌙","tyohar"),
+  f("2035-07-08","Jagannath Rath Yatra","🛕"),
+  f("2035-07-20","Guru Purnima","🌕"),
+  f("2035-07-30","Nag Panchami","🐍","vrat"),
+  f("2035-08-15","Independence Day","🇮🇳","rashtriya",true),
+  f("2035-08-09","Raksha Bandhan","🪢","tyohar",true),
+  f("2035-08-16","Janmashtami","🦚","tyohar",true),
+  f("2035-09-07","Ganesh Chaturthi","🐘","tyohar",true),
+  f("2035-09-18","Anant Chaturdashi","🕉️"),
+  f("2035-10-02","Gandhi Jayanti","🕊️","rashtriya"),
+  f("2035-10-03","Sharad Navratri Shuru","🪷","vrat",true),
+  f("2035-10-11","Durga Ashtami","⚔️","vrat"),
+  f("2035-10-12","Maha Navami","🛕"),
+  f("2035-10-13","Dussehra","🏹","tyohar",true),
+  f("2035-10-21","Karwa Chauth","🌙","vrat"),
+  f("2035-10-30","Dhanteras","💰","tyohar"),
+  f("2035-10-31","Narak Chaturdashi","🪔"),
+  f("2035-11-01","Diwali","🪔","tyohar",true),
+  f("2035-11-02","Govardhan Puja","🐄"),
+  f("2035-11-03","Bhai Dooj","👫"),
+  f("2035-11-07","Chhath Puja","☀️","vrat"),
+  f("2035-11-15","Guru Nanak Jayanti","✨","tyohar"),
+  f("2035-12-25","Christmas","🎄","tyohar"),
+];
+
+export const FESTIVALS_BY_YEAR: Record<number, Festival[]> = {
+  2026: Y2026, 2027: Y2027, 2028: Y2028, 2029: Y2029, 2030: Y2030,
+  2031: Y2031, 2032: Y2032, 2033: Y2033, 2034: Y2034, 2035: Y2035,
+};
+
+export const FESTIVAL_YEARS: number[] = Object.keys(FESTIVALS_BY_YEAR)
+  .map(Number).sort();
+
+/** Return all upcoming festivals (>= today) across the 10-year window. */
+export function getUpcomingFestivals(): Festival[] {
+  const today = new Date().toISOString().slice(0, 10);
+  return FESTIVAL_YEARS.flatMap(y => FESTIVALS_BY_YEAR[y])
+    .filter(f => f.iso >= today)
+    .sort((a, b) => a.iso.localeCompare(b.iso));
+}
+
+/** Days between today and the festival (negative = past). */
+export function daysUntil(iso: string): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const t = new Date(iso + "T00:00:00").getTime();
+  return Math.round((t - today.getTime()) / 86400000);
+}

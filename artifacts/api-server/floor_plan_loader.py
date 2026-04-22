@@ -2,7 +2,7 @@
 floor_plan_loader.py — Cosmic Lens
 
 Normalizes a user-uploaded floor plan into a single PNG data URL suitable for
-the Cosmic Vision Engine (vision model input).
+the Cosmic Intelligence Engine (vision model input).
 
 Accepts payloads of shape:
   {"type": "image", "data_url": "data:image/jpeg;base64,..."}

@@ -822,7 +822,7 @@ def face_reading_analyze():
     # ── Master consistency layer ─────────────────────────────────────────
     # Builds the single-source-of-truth `final_scores` registry, normalizes
     # legacy alias keys (best_match ← best_match_hi etc.), strips internal
-    # codes ("A-driven" → "Warmth-driven", "Cosmic Vision" → "Cosmic Lens"),
+    # codes ("A-driven" → "Warmth-driven", "Cosmic Intelligence" → "Cosmic Lens"),
     # and runs cross-section consistency validation.
     try:
         from vedic.face_reading.consistency_layer import apply_consistency_layer

@@ -34,12 +34,6 @@ export default function MoreDrawer({
 
   const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
     {
-      title: t.catRashifal,
-      items: [
-        { id: "lucky",     icon: "star",       emoji: "🍀", title: t.mdLuckyTitle,     subtitle: t.mdLuckySub,     route: "/lucky",        accent: "#22c55e" },
-      ],
-    },
-    {
       title: t.catPanchang,
       items: [
         { id: "panchang",  icon: "clock",       emoji: "🗓️", title: t.mdPanchangTitle, subtitle: t.mdPanchangSub,  route: "/panchang",     accent: "#a78bfa" },

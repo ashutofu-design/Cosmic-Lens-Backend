@@ -350,8 +350,8 @@ const EN: MoreT = {
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
   mdRemediesTitle:    "Planet Remedies",
   mdRemediesSub:      "Mantra, charity, gemstones",
-  mdVastuTitle:       "Vastu Tips",
-  mdVastuSub:         "Home & direction guide",
+  mdVastuTitle:       "Astrovastu Pro",
+  mdVastuSub:         "Personalized vastu by your kundli",
   badgeNew:           "New",
 
   // Subscription
@@ -656,8 +656,8 @@ const HN: Partial<MoreT> = {
   mdFaceReadingSub:   "Vedic + Science fusion · 80+ pages",
   mdRemediesTitle:    "Graha Upay",
   mdRemediesSub:      "Mantra, daan, ratan",
-  mdVastuTitle:       "Vastu Tips",
-  mdVastuSub:         "Ghar aur disha guide",
+  mdVastuTitle:       "Astrovastu Pro",
+  mdVastuSub:         "Aapki kundli ke hisaab se vastu",
   badgeNew:           "New",
 
   planBasicTagline:   "Roz ke liye basics",
@@ -953,8 +953,8 @@ const HI: Partial<MoreT> = {
   mdFaceReadingSub:   "वैदिक + विज्ञान फ्यूजन · 80+ पेज",
   mdRemediesTitle:    "ग्रह उपाय",
   mdRemediesSub:      "मंत्र, दान, रत्न",
-  mdVastuTitle:       "वास्तु टिप्स",
-  mdVastuSub:         "घर और दिशा गाइड",
+  mdVastuTitle:       "एस्ट्रोवास्तु प्रो",
+  mdVastuSub:         "आपकी कुंडली के अनुसार वास्तु",
   badgeNew:           "नया",
 
   planBasicTagline:   "रोज़मर्रा के लिए बेसिक्स",

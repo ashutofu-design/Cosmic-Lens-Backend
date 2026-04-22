@@ -12,7 +12,20 @@ CF_API_LOG="/tmp/cf-api.log"
 # subdomains mid-session).
 CFD="${HOME}/.local/bin/cloudflared"
 if [ ! -x "$CFD" ]; then
-  CFD="$(command -v cloudflared || echo cloudflared)"
+  CFD="$(command -v cloudflared 2>/dev/null || true)"
+fi
+
+# Auto-install if not found (Replit env wipes ~/.local/bin between sessions).
+if [ -z "$CFD" ] || ! [ -x "$CFD" ]; then
+  echo "[startup] cloudflared not found — installing..."
+  mkdir -p "${HOME}/.local/bin"
+  CFD="${HOME}/.local/bin/cloudflared"
+  curl -sSL --fail \
+    https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    -o "$CFD" && chmod +x "$CFD" || {
+      echo "[startup] FATAL: cloudflared install failed"; exit 1;
+    }
+  echo "[startup] cloudflared installed: $($CFD --version 2>&1 | head -1)"
 fi
 
 # --- API tunnel (port 8080) via Cloudflare quick tunnel ---

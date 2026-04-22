@@ -5072,6 +5072,48 @@ def ask_route():
 #                          (brand_guard, no-chart fail-safe, marriage
 #                          deterministic engine). Same shape as /api/ask so
 #                          the frontend can branch purely on Content-Type.
+# ─────────────────────────────────────────────────────────────────────────────
+# /api/tts — Text-to-Speech for AI answers in Ask section.
+# Uses OpenAI TTS (gpt-4o-mini-tts) → returns mp3 bytes.
+# Hinglish/Hindi-friendly voice. No streaming — small files (<1MB typical).
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/tts", methods=["POST"])
+def tts_route():
+    import os
+    data = request.get_json(force=True, silent=True) or {}
+    text = (data.get("text") or "").strip()
+    voice = data.get("voice") or "nova"   # nova=female warm, alloy=neutral, shimmer=female soft
+
+    if not text:
+        return jsonify({"error": "text required"}), 400
+
+    # Cap length to control cost / latency (~30 sec audio max)
+    if len(text) > 1800:
+        text = text[:1800] + "..."
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"error": "TTS engine not configured"}), 503
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        # gpt-4o-mini-tts handles Hindi/Hinglish naturally
+        response = client.audio.speech.create(
+            model="gpt-4o-mini-tts",
+            voice=voice,
+            input=text,
+            response_format="mp3",
+            speed=1.0,
+        )
+        audio_bytes = response.content
+        return Response(audio_bytes, mimetype="audio/mpeg",
+                        headers={"Cache-Control": "public, max-age=3600"})
+    except Exception as exc:
+        app.logger.exception("TTS failed: %s", exc)
+        return jsonify({"error": "voice generation failed"}), 502
+
+
 @app.route("/api/ask/stream", methods=["POST"])
 def ask_stream_route():
     from subscription_helper import consume_question, effective_plan

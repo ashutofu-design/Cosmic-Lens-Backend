@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -443,9 +444,81 @@ export default function AskScreen() {
     return null;
   }, [messages]);
 
+  // ── Voice playback (TTS via /api/tts) ────────────────────────────────────
+  // One shared player. We swap its source per-message via .replace().
+  const ttsPlayer = useAudioPlayer(undefined);
+  const ttsStatus = useAudioPlayerStatus(ttsPlayer);
+  const [voiceMsgId, setVoiceMsgId] = useState<string | null>(null);
+  // States: idle | loading | playing
+  const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing">("idle");
+
+  // Configure audio mode once (play even in silent mode on iOS)
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch(() => {});
+  }, []);
+
+  // Auto-stop tracking when audio ends
+  useEffect(() => {
+    if (voiceState === "playing" && ttsStatus && ttsStatus.didJustFinish) {
+      setVoiceState("idle");
+      setVoiceMsgId(null);
+    }
+  }, [ttsStatus?.didJustFinish, voiceState]);
+
+  const handleVoicePlay = useCallback(async (msg: Message) => {
+    try {
+      // Tap same playing message → stop
+      if (voiceMsgId === msg.id && voiceState === "playing") {
+        try { ttsPlayer.pause(); } catch {}
+        setVoiceState("idle"); setVoiceMsgId(null);
+        return;
+      }
+      // Strip markdown for cleaner speech
+      const cleanText = (msg.text || "")
+        .replace(/[*_`#>~]/g, "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/\n{2,}/g, ". ")
+        .trim();
+      if (!cleanText) return;
+
+      try { Haptics.selectionAsync(); } catch {}
+      setVoiceMsgId(msg.id);
+      setVoiceState("loading");
+
+      // POST text → server returns mp3 bytes. Convert to data URI for player.
+      const res = await fetch(`${API_BASE}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleanText, voice: "nova" }),
+      });
+      if (!res.ok) {
+        setVoiceState("idle"); setVoiceMsgId(null);
+        return;
+      }
+      const blob = await res.blob();
+      // RN fetch returns Blob; convert to base64 data URI for the player
+      const reader = new FileReader();
+      const dataUri: string = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      try { ttsPlayer.replace({ uri: dataUri }); } catch {}
+      try { ttsPlayer.seekTo(0); } catch {}
+      try { ttsPlayer.play(); } catch {}
+      setVoiceState("playing");
+    } catch {
+      setVoiceState("idle"); setVoiceMsgId(null);
+    }
+  }, [voiceMsgId, voiceState, ttsPlayer]);
+
   const renderMsg = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
     const isLatestAssistant = !isUser && item.id === latestAssistantId;
+    const voiceActive = voiceMsgId === item.id;
+    const voiceLoading = voiceActive && voiceState === "loading";
+    const voicePlaying = voiceActive && voiceState === "playing";
     return (
       <View>
         <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
@@ -471,6 +544,28 @@ export default function AskScreen() {
               <Text style={[s.bubbleText, s.bubbleTextUser, { color: C.text }]}>{item.text}</Text>
             ) : (
               <MarkdownReply text={item.text} />
+            )}
+
+            {/* Voice play button — assistant messages only, after streaming done */}
+            {!isUser && !item.loading && !item.streaming && (item.text || "").trim().length > 0 && (
+              <Pressable
+                onPress={() => handleVoicePlay(item)}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  s.voiceBtn,
+                  { borderColor: `${C.accent}40`, backgroundColor: voicePlaying ? `${C.accent}20` : "transparent" },
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Feather
+                  name={voicePlaying ? "pause" : voiceLoading ? "loader" : "volume-2"}
+                  size={12}
+                  color={C.accent}
+                />
+                <Text style={[s.voiceBtnText, { color: C.accent }]}>
+                  {voiceLoading ? "Ban raha…" : voicePlaying ? "Ruko" : "Sun lo"}
+                </Text>
+              </Pressable>
             )}
           </Pressable>
         </View>
@@ -969,6 +1064,15 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   followUpText: { fontSize: 12, fontWeight: "600" },
+
+  // Voice play button (Sun lo) — sits inside assistant bubble bottom
+  voiceBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 14, borderWidth: 1,
+    alignSelf: "flex-start", marginTop: 10,
+  },
+  voiceBtnText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,

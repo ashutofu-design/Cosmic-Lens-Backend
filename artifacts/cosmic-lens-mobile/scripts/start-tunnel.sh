@@ -47,57 +47,28 @@ fi
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
 echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
-# --- Metro tunnel via localtunnel (fast bind) ---
+# --- Metro tunnel via Expo's built-in ngrok (--tunnel) ---
+# This produces "exp://<hash>-<user>-<port>.exp.direct" URLs that open
+# DIRECTLY in Expo Go — no localtunnel "click to continue" interstitial.
 METRO_PORT="${PORT:-18987}"
-METRO_SUB="cosmiclens-metro"
 
-pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
-pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
-sleep 1
-LT_METRO_LOG="/tmp/lt-metro.log"
-> "$LT_METRO_LOG"
-
-# Use a RANDOM subdomain (no --subdomain flag) so we never collide with a
-# stale claim on loca.lt's edge (which would cause 503 Tunnel Unavailable
-# even though the local lt client is healthy). Any random subdomain assigned
-# by the loca.lt server is fresh and uncontested.
-(
-  while true; do
-    echo "[lt-metro] starting tunnel attempt (random subdomain)"
-    lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
-    echo "[lt-metro] exited; retrying in 3s"
-    sleep 3
-  done
-) &
-LT_METRO_PID=$!
-
-METRO_PUBLIC_URL=""
-for i in $(seq 1 30); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_METRO_LOG" 2>/dev/null | tail -1)
-  if [ -n "$URL" ]; then
-    METRO_PUBLIC_URL="$URL"
-    break
+# Configure ngrok authtoken if provided (some versions require it; older
+# @expo/ngrok bundle works anonymously).
+if [ -n "$NGROK_AUTHTOKEN" ]; then
+  mkdir -p ~/.config/ngrok
+  if [ ! -f ~/.config/ngrok/ngrok.yml ] || ! grep -q "authtoken:" ~/.config/ngrok/ngrok.yml 2>/dev/null; then
+    echo "version: 2" > ~/.config/ngrok/ngrok.yml
+    echo "authtoken: $NGROK_AUTHTOKEN" >> ~/.config/ngrok/ngrok.yml
+    echo "[startup] Wrote ngrok authtoken config"
   fi
-  sleep 1
-done
-
-if [ -z "$METRO_PUBLIC_URL" ]; then
-  echo "[startup] localtunnel did not publish a URL; aborting"
-  exit 1
 fi
 
-METRO_HOST="${METRO_PUBLIC_URL#https://}"
-echo "[startup] Metro tunnel host: $METRO_HOST"
-
-export REACT_NATIVE_PACKAGER_HOSTNAME="$METRO_HOST"
-export EXPO_PACKAGER_PROXY_URL="$METRO_PUBLIC_URL"
-export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
-
-echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST)..."
-export EXPO_OFFLINE=1
-pnpm exec expo start --port "$METRO_PORT" --clear --offline 2>&1 | tee "$LOG_FILE" &
+echo "[startup] Starting Metro on port $METRO_PORT with --tunnel (ngrok / exp.direct)..."
+# NOTE: --tunnel is incompatible with --offline (tunnel needs the manifest server)
+pnpm exec expo start --port "$METRO_PORT" --clear --tunnel 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 
+# Wait for local Metro
 for i in $(seq 1 60); do
   if curl -sf -m 2 "http://localhost:$METRO_PORT/status" >/dev/null 2>&1; then
     echo "[startup] Metro local port up."
@@ -106,16 +77,23 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-for i in $(seq 1 20); do
-  if curl -sf -m 5 "$METRO_PUBLIC_URL/status" 2>/dev/null \
-       | grep -q "packager-status:running"; then
-    echo "[startup] Metro public URL READY: $METRO_PUBLIC_URL"
+# Wait for the tunnel URL to appear in the Expo CLI log
+EXPO_URL=""
+for i in $(seq 1 60); do
+  EXPO_URL=$(grep -oE 'exp://[a-z0-9-]+\.exp\.direct(:[0-9]+)?' "$LOG_FILE" 2>/dev/null | tail -1)
+  if [ -n "$EXPO_URL" ]; then
     break
   fi
   sleep 2
 done
 
-EXPO_URL="exp://$METRO_HOST"
+if [ -z "$EXPO_URL" ]; then
+  echo "[startup] WARNING: --tunnel URL not detected in Expo logs."
+  echo "[startup] Last 30 lines of Expo log:"
+  tail -30 "$LOG_FILE"
+  EXPO_URL="exp://localhost:$METRO_PORT"
+fi
+
 echo "$EXPO_URL" > "$TUNNEL_URL_FILE"
 
 echo ""

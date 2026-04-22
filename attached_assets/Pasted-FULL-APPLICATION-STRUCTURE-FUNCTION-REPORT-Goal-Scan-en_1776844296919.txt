@@ -1,0 +1,151 @@
+FULL APPLICATION STRUCTURE & FUNCTION REPORT
+
+Goal:
+Scan entire application and explain WHAT exists, WHAT each part does, and HOW the system works end-to-end.
+
+This is NOT a bug report — this is a full system understanding report.
+
+---------------------------------------
+
+TASK 1 — APP OVERVIEW
+
+Explain in simple terms:
+
+- What this application does
+- Main purpose of the app
+- Type of product (analysis/report/generator/etc.)
+
+---------------------------------------
+
+TASK 2 — MODULE BREAKDOWN
+
+List ALL modules/files/folders:
+
+For each:
+
+{
+  "module_name": "",
+  "type": "engine | api | utility | ai | pdf | config",
+  "purpose": "",
+  "used_in_flow": true/false,
+  "depends_on": []
+}
+
+---------------------------------------
+
+TASK 3 — ENGINE EXPLANATION
+
+For each engine:
+
+{
+  "engine_name": "",
+  "input": "",
+  "output": "",
+  "logic_summary": "",
+  "where_used": []
+}
+
+---------------------------------------
+
+TASK 4 — API FLOW
+
+List all API endpoints:
+
+{
+  "endpoint": "",
+  "method": "",
+  "what_it_does": "",
+  "calls_engines": [],
+  "calls_openai": true/false,
+  "returns": ""
+}
+
+---------------------------------------
+
+TASK 5 — DATA FLOW (IMPORTANT)
+
+Explain step-by-step:
+
+User Input (name/DOB)
+→ which engines run
+→ what data is created
+→ where OpenAI is used
+→ how final report is built
+→ how PDF is generated
+
+---------------------------------------
+
+TASK 6 — OPENAI ROLE
+
+Explain:
+
+- Where OpenAI is used
+- Why it is used
+- What part is AI vs non-AI
+
+---------------------------------------
+
+TASK 7 — PDF SYSTEM
+
+Explain:
+
+- How PDF is generated
+- What data it uses
+- How sections are mapped
+
+---------------------------------------
+
+TASK 8 — FEATURE LIST
+
+List all features:
+
+- Core features
+- Advanced features
+- Hidden/internal features
+
+---------------------------------------
+
+TASK 9 — COMPLETENESS STATUS
+
+For each major part:
+
+{
+  "part": "engines / api / pdf / ai / frontend",
+  "status": "complete | partial | incomplete",
+  "notes": ""
+}
+
+---------------------------------------
+
+TASK 10 — WHAT IS MISSING
+
+List:
+
+- Missing features
+- Incomplete logic
+- Sections not implemented
+- Things planned but not built
+
+---------------------------------------
+
+TASK 11 — FINAL SYSTEM SUMMARY
+
+Give:
+
+- What the app currently does (real capability)
+- What level it is (basic / intermediate / advanced / production)
+- Biggest strengths
+- Biggest gaps
+
+---------------------------------------
+
+RULES:
+
+- Explain in SIMPLE language
+- Do not assume — read actual code
+- Do not focus only on bugs
+- Focus on understanding the system
+
+---------------------------------------
+
+END PROMPT

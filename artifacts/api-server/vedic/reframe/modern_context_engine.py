@@ -60,7 +60,7 @@ PLANET_HOUSE_REFRAME = {
     ("Venus", 8):    ("Fascinated by deep love + occult beauty + tantric arts",
                        "Sex therapist, cosmetic surgeon, tantra teacher, jewellery dealer, true-crime romance writer"),
     ("Venus", 12):   ("Loves anonymous beauty, foreign luxury, secret romance",
-                       "Foreign-luxury exporter, OnlyFans/influencer, perfume designer, cinematographer, hotel-bedroom designer"),
+                       "Foreign-luxury exporter, top-tier influencer, perfume designer, cinematographer, hotel-bedroom designer"),
 
     # ── SATURN ───────────────────────────────────────────────────────────
     ("Saturn", 1):   ("Mature-faced from youth, taken seriously, long-haul builder",
@@ -170,7 +170,7 @@ AFFLICTED_TO_SUPERPOWER = {
     "Moon":    ("Mood swings in old context",
                 "EMPATH professions: therapy, ASMR, content-creation, music, hospitality"),
     "Venus":   ("Romance scandals in old context",
-                "INFLUENCER economy, OnlyFans, beauty industry, luxury branding, content monetization"),
+                "INFLUENCER economy, beauty industry, luxury branding, premium D2C, content monetization"),
     "Jupiter": ("Religious extremism in old context",
                 "ONLINE TEACHING, course creation, philosophy YouTuber, ethics consulting"),
     "Rahu":    ("Foreign confusion in old context",
@@ -190,7 +190,7 @@ OLD_VS_NEW_TABLE = [
     ("Mars in 8th",         "Old: accidents, surgery",
                             "Today: ER doctor, extreme-sport athlete, crisis manager"),
     ("Venus in 12th",       "Old: scandals, secret affairs",
-                            "Today: cinematographer, perfume designer, OnlyFans creator, foreign-luxury exporter"),
+                            "Today: cinematographer, perfume designer, premium content creator, foreign-luxury exporter"),
     ("Saturn in 7th",       "Old: late/bad marriage",
                             "Today: mature-age dating success, B2B contracts king"),
     ("Ketu in 10th",        "Old: career failure",
@@ -279,7 +279,7 @@ def run_modern_reframe(kundli: dict) -> dict[str, Any]:
     if "Rahu" in p_si:
         r5.append("Internet virality — Rahu's foreign/unusual energy now monetizes via content")
     if "Venus" in afflicted:
-        r5.append("Creator economy — beauty/luxury monetization via OnlyFans, Insta, brand deals")
+        r5.append("Creator economy — beauty/luxury monetization via Insta, YouTube, brand deals")
     if "Mars" in afflicted:
         r5.append("Gaming/extreme-sport economy — Mars's aggression now becomes pro-eSports & MMA")
     if "Ketu" in (h_map.get(10,[])+h_map.get(12,[])):

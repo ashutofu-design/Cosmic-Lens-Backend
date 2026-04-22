@@ -1057,30 +1057,22 @@ def _letter_table_section(s, name: str, lang: str = "hinglish") -> List[Any]:
         "consonants Personality (duniya jo dekhti hai)."), s["body_mid"]))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
-        "📖 Why does each letter carry a number?",
-        "📖 हर अक्षर एक अंक क्यों रखता है?",
-        "📖 Har letter ek number kyun rakhta hai?",
-        "Letters are sound-vibrations. Sanskrit, Hebrew and Greek alphabets all "
-        "assign numerical values to letters because <b>each sound resonates at a "
-        "specific frequency</b>. Pythagoras formalised the modern 1-9 system "
-        "(A=1, J=1, S=1...). Cheiro restored the older Chaldean sound-system "
-        "(1-8 only; 9 is sacred and unwritten). Every name therefore has an "
-        "<b>Expression number</b> (full sum), a <b>Soul Urge</b> (vowels only) "
-        "and a <b>Personality</b> (consonants only). The table below decodes yours.",
-        "अक्षर ध्वनि-कंपन हैं। संस्कृत, हिब्रू और ग्रीक — सभी अंकीय मान देते हैं "
-        "क्योंकि <b>प्रत्येक ध्वनि एक विशिष्ट आवृत्ति पर अनुनादित होती है</b>। "
-        "पाइथागोरस ने आधुनिक 1-9 प्रणाली बनायी (A=1, J=1, S=1...)। चीरो ने प्राचीन "
-        "चाल्डियन ध्वनि-प्रणाली पुनर्जीवित की (केवल 1-8; 9 सम्माननीय और अलिखित)। "
-        "हर नाम का अतः एक <b>Expression अंक</b> (पूर्ण योग), एक <b>Soul Urge</b> "
-        "(केवल स्वर) और एक <b>Personality</b> (केवल व्यंजन) होता है। नीचे की "
-        "तालिका आपके सब डिकोड करती है।",
-        "Letters sound-vibrations hain. Sanskrit, Hebrew aur Greek — sab numerical "
-        "values dete hain kyunki <b>har sound ek specific frequency par resonate "
-        "karta hai</b>. Pythagoras ne modern 1-9 system formalise kiya (A=1, J=1, "
-        "S=1...). Cheiro ne ancient Chaldean sound-system revive kiya (sirf 1-8; "
-        "9 sacred aur unwritten). Har naam ka isliye ek <b>Expression number</b> "
-        "(full sum), ek <b>Soul Urge</b> (sirf vowels) aur ek <b>Personality</b> "
-        "(sirf consonants) hota hai. Neeche table aapke sab decode karta hai.",
+        "📖 What this table tells you",
+        "📖 यह तालिका क्या बताती है",
+        "📖 Yeh table aapko kya batati hai",
+        "Each letter in your name carries a vibration. Vowels reveal your "
+        "<b>Soul Urge</b> — the inner desire that drives you. Consonants form "
+        "your <b>Personality</b> — what the world sees first. Together they "
+        "produce your <b>Expression</b> — the full force of your name.",
+        "आपके नाम का हर अक्षर एक कंपन रखता है। स्वर आपका <b>Soul Urge</b> — "
+        "वह भीतरी इच्छा जो आपको चलाती है — दिखाते हैं। व्यंजन आपकी "
+        "<b>Personality</b> बनाते हैं — जो दुनिया पहले देखती है। दोनों मिलकर "
+        "आपका <b>Expression</b> देते हैं — आपके नाम की पूर्ण शक्ति।",
+        "Aapke naam ka har letter ek vibration carry karta hai. Vowels aapka "
+        "<b>Soul Urge</b> dikhate hain — wo inner desire jo aapko chalati hai. "
+        "Consonants aapki <b>Personality</b> banate hain — jo duniya pehle "
+        "dekhti hai. Dono milke aapka <b>Expression</b> dete hain — aapke naam "
+        "ki poori shakti.",
         bg="#FAF5FF", border="#5B21B6"))
     flow.append(Spacer(1, 4 * mm))
 
@@ -1113,11 +1105,6 @@ def _letter_table_section(s, name: str, lang: str = "hinglish") -> List[Any]:
     t.setStyle(TableStyle(style))
     flow.append(t)
     flow.append(Spacer(1, 4 * mm))
-    flow.append(Paragraph(
-        "<i>Pythagorean (A=1..I=9, J=1..R=9, S=1..Z=8) — modern, used worldwide.<br/>"
-        "Chaldean (sound-based, 1-8 only, 9 sacred and absent) — ancient, used by "
-        "Cheiro for predictions.</i>",
-        s["small"]))
     return flow
 
 
@@ -1291,29 +1278,21 @@ def _name_numerology_section(s, name: str, lang: str = "hinglish") -> List[Any]:
         s["body_mid"]))
     flow.append(Spacer(1, 4 * mm))
     flow.append(_explain_card(s, lang,
-        "📖 Pythagorean vs Chaldean — which one matters more?",
-        "📖 Pythagorean बनाम Chaldean — कौन-सा अधिक मायने रखता है?",
-        "📖 Pythagorean vs Chaldean — kaunsa zyada matter karta hai?",
-        "Both. They answer different questions. <b>Pythagorean</b> (1-9, sequential A-Z) "
-        "is the simpler, modern system — best for <b>personal traits and life path</b>. "
-        "<b>Chaldean</b> (1-8 only, 9 sacred & absent, sound-based) is the ancient "
-        "system Cheiro used — best for <b>business names, brand reputation, and "
-        "public-facing destiny</b>. Big consultations check Chaldean for the brand "
-        "and Pythagorean for the founder's personal vibration. Below you see both, "
-        "side by side.",
-        "दोनों। दोनों अलग-अलग प्रश्नों का उत्तर देते हैं। <b>पाइथागोरियन</b> (1-9, "
-        "क्रमिक A-Z) सरल आधुनिक प्रणाली — <b>व्यक्तिगत लक्षण और जीवन-पथ</b> के लिए "
-        "श्रेष्ठ। <b>चाल्डियन</b> (केवल 1-8, 9 सम्माननीय और अनुपस्थित, ध्वनि-आधारित) "
-        "प्राचीन प्रणाली — चीरो की पसंद — <b>व्यावसायिक नाम, ब्रांड प्रतिष्ठा और "
-        "सार्वजनिक नियति</b> के लिए श्रेष्ठ। बड़े परामर्श ब्रांड के लिए चाल्डियन और "
-        "संस्थापक के लिए पाइथागोरियन देखते हैं। नीचे दोनों side-by-side।",
-        "Dono. Dono alag questions ka jawab dete hain. <b>Pythagorean</b> (1-9, "
-        "sequential A-Z) simple modern system — <b>personal traits aur life path</b> "
-        "ke liye best. <b>Chaldean</b> (sirf 1-8, 9 sacred aur absent, sound-based) "
-        "ancient system jo Cheiro use karta tha — <b>business names, brand "
-        "reputation, public-facing destiny</b> ke liye best. Bade consultations brand "
-        "ke liye Chaldean aur founder ke liye Pythagorean check karte hain. Neeche "
-        "dono side-by-side.",
+        "📖 Why two systems?",
+        "📖 दो प्रणालियाँ क्यों?",
+        "📖 Do systems kyun?",
+        "<b>Pythagorean</b> reads your <b>personal traits and life-path</b>. "
+        "<b>Chaldean</b> reads your <b>brand reputation and public destiny</b>. "
+        "Both are shown side-by-side so you can pick the right name energy for "
+        "the right context — personal vs business.",
+        "<b>पाइथागोरियन</b> आपके <b>व्यक्तिगत गुण और जीवन-पथ</b> पढ़ता है। "
+        "<b>चाल्डियन</b> आपकी <b>ब्रांड प्रतिष्ठा और सार्वजनिक नियति</b> पढ़ता "
+        "है। दोनों side-by-side दिए हैं — व्यक्तिगत बनाम व्यवसायिक संदर्भ "
+        "के लिए सही नाम-ऊर्जा चुनने में मदद हेतु।",
+        "<b>Pythagorean</b> aapke <b>personal traits aur life-path</b> padhta "
+        "hai. <b>Chaldean</b> aapki <b>brand reputation aur public destiny</b> "
+        "padhta hai. Dono side-by-side diye hain taaki sahi context ke liye "
+        "sahi name-energy choose kar sako — personal vs business.",
         bg="#FAF5FF", border="#5B21B6"))
     flow.append(Spacer(1, 4 * mm))
 
@@ -4596,7 +4575,17 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
     if cd.get("lord"):
         cd_facts = _planet_facts_html(cd)
         years_left = cd.get("years_left")
-        years_str = f"{years_left:.1f}" if isinstance(years_left, (int, float)) else "—"
+        if isinstance(years_left, (int, float)) and years_left > 0:
+            years_str = f"{years_left:.1f}"
+            yrs_en = f" (~{years_str} yrs left)"
+            yrs_hi = f" (~{years_str} वर्ष शेष)"
+            yrs_hg = f" (~{years_str} yrs baaki)"
+            inline_en = f" (~{years_str} years remaining)"
+            inline_hi = f" (~{years_str} वर्ष शेष)"
+            inline_hg = f" (~{years_str} saal baaki)"
+        else:
+            yrs_en = yrs_hi = yrs_hg = ""
+            inline_en = inline_hi = inline_hg = ""
         _ai = ai_texts.get("t3.current_dasha_remedy", "").strip()
         if _ai and cd_facts:
             body_cd = _ai_to_html(_ai) + "<br/><br/><b>📋 ALIGNMENT PRACTICES:</b><br/>" + cd_facts
@@ -4604,16 +4593,16 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
             body_cd = (
                 f"<b>{_T(lang, 'Your active period', 'आपका सक्रिय काल', 'Aapka active period')}:</b> "
                 + _T(lang,
-                     f"Right now you are running the <b>{cd['lord']} Mahadasha</b> (~{years_str} years remaining). The dasha lord IS the central character of this entire chapter of your life. Aligning with this planet — through mantra, charity, color, day-discipline — turns the dasha from a passive timeline into an active ally.",
-                     f"अभी आप <b>{cd['lord']} महादशा</b> चला रहे हैं (~{years_str} वर्ष शेष)। दशा-स्वामी आपके जीवन के इस पूरे अध्याय का केंद्रीय पात्र है। मंत्र, दान, रंग, दिन-अनुशासन के माध्यम से इस ग्रह से जुड़ने पर दशा निष्क्रिय समय-रेखा से सक्रिय सहयोगी बन जाती है।",
-                     f"Abhi aap <b>{cd['lord']} Mahadasha</b> chala rahe ho (~{years_str} saal baaki). Dasha lord aapki life ke iss poore chapter ka main character hai. Iss grah ke saath align hone se — mantra, daan, rang, din-anushasan se — dasha passive timeline se active dost ban jaati hai.")
+                     f"Right now you are running the <b>{cd['lord']} Mahadasha</b>{inline_en}. The dasha lord IS the central character of this entire chapter of your life. Aligning with this planet — through mantra, charity, color, day-discipline — turns the dasha from a passive timeline into an active ally.",
+                     f"अभी आप <b>{cd['lord']} महादशा</b>{inline_hi} चला रहे हैं। दशा-स्वामी आपके जीवन के इस पूरे अध्याय का केंद्रीय पात्र है। मंत्र, दान, रंग, दिन-अनुशासन के माध्यम से इस ग्रह से जुड़ने पर दशा निष्क्रिय समय-रेखा से सक्रिय सहयोगी बन जाती है।",
+                     f"Abhi aap <b>{cd['lord']} Mahadasha</b>{inline_hg} chala rahe ho. Dasha lord aapki life ke iss poore chapter ka main character hai. Iss grah ke saath align hone se — mantra, daan, rang, din-anushasan se — dasha passive timeline se active dost ban jaati hai.")
                 + "<br/><br/><b>📋 ALIGNMENT PRACTICES:</b><br/>" + cd_facts
             )
         flow.append(_premium_card(s,
             _T(lang,
-               f"2️⃣  CURRENT MAHADASHA — {cd['lord']} (~{years_str} yrs left)",
-               f"2️⃣  वर्तमान महादशा — {cd['lord']} (~{years_str} वर्ष शेष)",
-               f"2️⃣  CURRENT MAHADASHA — {cd['lord']} (~{years_str} yrs baaki)"),
+               f"2️⃣  CURRENT MAHADASHA — {cd['lord']}{yrs_en}",
+               f"2️⃣  वर्तमान महादशा — {cd['lord']}{yrs_hi}",
+               f"2️⃣  CURRENT MAHADASHA — {cd['lord']}{yrs_hg}"),
             body_cd,
             bg_color=colors.HexColor("#EDE9FE"), border_color=colors.HexColor("#6D28D9"), lang=lang))
         flow.append(Spacer(1, 4 * mm))

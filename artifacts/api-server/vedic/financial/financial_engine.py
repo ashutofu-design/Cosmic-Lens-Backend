@@ -45,7 +45,7 @@ INCOME_SOURCE_MAP = {
     "Jupiter": ("Teaching, law, finance, advisory",
                 "Online-course creator, financial advisor, ed-tech founder, wealth coach"),
     "Venus":   ("Beauty, luxury, arts, entertainment",
-                "Influencer, beauty-brand, fashion designer, luxury-export, OnlyFans"),
+                "Influencer, beauty-brand, fashion designer, luxury exports, premium D2C"),
     "Saturn":  ("Labour, mining, oil, long-term contracts",
                 "Long-haul founder, B2B contracts, EV/solar, anti-aging biotech"),
     "Rahu":    ("Foreign, technology, unconventional",

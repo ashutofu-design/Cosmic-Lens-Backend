@@ -988,7 +988,10 @@ def narrate(section_key: str, facts: Dict[str, Any], lang: str = "hinglish",
         return text
     except Exception as exc:
         # Log but don't crash — caller falls back to static.
-        print(f"[ai_narrator] {section_key} ({lang}) failed: {exc}")
+        _msg = str(exc).lower()
+        _flavor = "OPENAI_FAILED" if any(s in _msg for s in (
+            "429", "insufficient_quota", "rate limit", "timeout", "api key")) else "AI_FAILED"
+        print(f"[ai_narrator] {_flavor} → fallback used :: {section_key} ({lang}) :: {exc}")
         return None
 
 

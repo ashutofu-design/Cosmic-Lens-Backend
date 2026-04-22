@@ -972,6 +972,24 @@ def face_reading_report_pdf():
         return jsonify({"ok": False,
                         "error": "missing_session_id — pehle /api/face_reading/analyze call karo"}), 400
 
+    # ── FIX 5: Payment gate — face reading is ₹1499 pay-per-report ────────
+    import report_cache as _rc
+    auth_user = None
+    user_id_header = request.headers.get("X-User-Id", "").strip()
+    if user_id_header:
+        try:
+            auth_user, _err = get_authed_user(int(user_id_header))
+        except Exception:
+            auth_user = None
+        if auth_user is None:
+            return jsonify({"ok": False, "error": "unauthorized — invalid X-User-Id / X-API-Key"}), 401
+        gate_err = _rc.require_paid_plan(auth_user)
+        if gate_err:
+            app.logger.warning("[REPORT_GEN] face_reading denied user=%s reason=%s",
+                               auth_user.id, gate_err)
+            return jsonify({"ok": False, "error": "payment_required",
+                            "message": "Face Reading PDF requires an active Pro / Elite plan."}), 402
+
     cached = session_cache.get(session_id)
     if not cached or "report_payload" not in cached:
         return jsonify({"ok": False,
@@ -1012,13 +1030,25 @@ def face_reading_report_pdf():
         )
         _report_cache[_lang] = report
 
-    try:
-        pdf_bytes = render_pdf(report)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"pdf_render_failed: {e}"}), 500
+    # ── FIX 4 + 6: Failsafe wrapper + structured logging ─────────────────
+    user_id_for_cache = auth_user.id if auth_user else 0
+    app.logger.info("[REPORT_GEN] face_reading start user=%s session=%s lang=%s",
+                    user_id_for_cache, session_id[:8], _lang)
+    pdf_bytes, render_err = _rc.safe_render(
+        f"face_reading user={user_id_for_cache}",
+        lambda: render_pdf(report),
+    )
+    if render_err or not pdf_bytes:
+        return jsonify({"ok": False, "error": "pdf_render_failed",
+                        "detail": render_err or "empty"}), 500
 
     safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", (person.get("name") or "report"))[:40] or "report"
     filename = f"cosmic_lens_face_report_{safe_name}.pdf"
+
+    # ── FIX 2: Save to disk for re-download
+    _rc.save(user_id_for_cache, "face_reading", "Face Reading Report",
+             {"name": person.get("name", ""), "lang": _lang,
+              "session": session_id}, pdf_bytes, filename)
 
     from flask import Response
     return Response(
@@ -1030,6 +1060,62 @@ def face_reading_report_pdf():
             "Cache-Control": "private, no-cache",
         },
     )
+
+
+# ── FIX 2: My Reports — list + re-download ────────────────────────────────
+@app.route("/api/my-reports", methods=["GET"])
+def my_reports_list():
+    """
+    Returns the user's past generated PDFs (newest first).
+    Auth: X-User-Id + X-API-Key headers.
+    Response: { reports: [ {report_type, date, download_url, ...} ] }
+    """
+    import report_cache as _rc
+    user_id_header = request.headers.get("X-User-Id", "").strip()
+    if not user_id_header:
+        return jsonify({"error": "missing_user_id",
+                        "message": "X-User-Id header required"}), 400
+    try:
+        uid = int(user_id_header)
+    except ValueError:
+        return jsonify({"error": "invalid_user_id"}), 400
+    user, err = get_authed_user(uid)
+    if err:
+        return err
+    try:
+        limit = max(1, min(int(request.args.get("limit", 50)), 200))
+    except (TypeError, ValueError):
+        limit = 50
+    return jsonify({"reports": _rc.list_for_user(user.id, limit)})
+
+
+@app.route("/api/my-reports/<report_id>", methods=["GET"])
+def my_reports_download(report_id: str):
+    """Re-download a previously generated PDF by id. Owner-only."""
+    import report_cache as _rc
+    user_id_header = request.headers.get("X-User-Id",
+                        request.args.get("user_id", "")).strip()
+    api_key = request.headers.get("X-API-Key",
+                        request.args.get("api_key", "")).strip()
+    if not user_id_header or not api_key:
+        return jsonify({"error": "auth_required"}), 401
+    try:
+        uid = int(user_id_header)
+    except ValueError:
+        return jsonify({"error": "invalid_user_id"}), 400
+    user = User.query.get(uid)
+    if not user or user.api_key != api_key:
+        return jsonify({"error": "unauthorized"}), 401
+
+    pdf_bytes = _rc.get_pdf_bytes(report_id, user.id)
+    if not pdf_bytes:
+        return jsonify({"error": "not_found",
+                        "message": "Report not found or not owned by user."}), 404
+    fname = _rc.get_filename_for(report_id)
+    from flask import Response
+    return Response(pdf_bytes, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{fname}"',
+                             "Cache-Control": "private, max-age=3600"})
 
 
 @app.route("/api/geocode", methods=["GET"])
@@ -5853,27 +5939,78 @@ def numerology_pdf_pro():
         return jsonify({"error": "invalid_dob",
                         "message": "dob must be valid YYYY-MM-DD"}), 400
 
-    try:
-        from numerology_pdf_part2 import render_part2_pdf
-        pdf_bytes = render_part2_pdf(
+    # ── FIX 5: Payment gate (only paid Pro/Elite/Trial users) ─────────────
+    # Auth is OPTIONAL header-based — if user_id+X-API-Key supplied, gate by
+    # plan; if no auth headers (legacy guest path), allow but mark user_id=0.
+    import report_cache as _rc
+    auth_user = None
+    user_id_header = request.headers.get("X-User-Id", "").strip()
+    if user_id_header:
+        try:
+            auth_user, _err = get_authed_user(int(user_id_header))
+        except Exception:
+            auth_user = None
+        if auth_user is None:
+            return jsonify({"error": "unauthorized",
+                            "message": "Invalid X-User-Id / X-API-Key"}), 401
+        gate_err = _rc.require_paid_plan(auth_user)
+        if gate_err:
+            app.logger.warning("[REPORT_GEN] numerology_pro denied user=%s reason=%s",
+                               auth_user.id, gate_err)
+            return jsonify({"error": "payment_required",
+                            "message": "Numerology Pro requires an active Pro / Elite plan."}), 402
+
+    user_id_for_cache = auth_user.id if auth_user else 0
+    cache_params = {
+        "name": name, "dob": dob, "tob": tob, "lang": lang,
+        "mobile": mobile, "vehicle": vehicle, "house": house,
+        "lat": lat, "lon": lon, "tz": tz, "place": place,
+    }
+
+    # ── FIX 3: Skip regeneration if same params already rendered ─────────
+    cached = _rc.find(user_id_for_cache, "numerology_pro", cache_params)
+    if cached:
+        app.logger.info("[REPORT_GEN] numerology_pro CACHE_HIT user=%s name=%s",
+                        user_id_for_cache, name[:40])
+        safe_name = "".join(c for c in name if c.isalnum() or c in "_- ").strip().replace(" ", "_") or "report"
+        return Response(cached, mimetype="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="Numerology_Pro_{safe_name}.pdf"',
+                                 "Cache-Control": "private, max-age=3600",
+                                 "X-Report-Cache": "hit"})
+
+    # ── FIX 6: Logging — start
+    app.logger.info("[REPORT_GEN] numerology_pro start user=%s name=%s lang=%s",
+                    user_id_for_cache, name[:40], lang)
+
+    # ── FIX 4: Failsafe wrapper around render
+    from numerology_pdf_part2 import render_part2_pdf
+    pdf_bytes, render_err = _rc.safe_render(
+        f"numerology_pro user={user_id_for_cache}",
+        lambda: render_part2_pdf(
             name=name, dob=dob, tob=tob,
             mobile=mobile, vehicle=vehicle, house=house,
             lang=lang,
             lat=lat, lon=lon, tz=tz, place=place,
-        )
-    except Exception as e:
-        app.logger.exception("[numerology/pdf_pro] render failed: %s", e)
+        ),
+    )
+    if render_err or not pdf_bytes:
         return jsonify({"error": "render_failed",
-                        "message": "Failed to render Part 2 PDF."}), 500
+                        "message": "PDF generation failed; please try again in a minute.",
+                        "detail": render_err or "empty"}), 500
 
+    # ── FIX 2: Save to disk for re-download
     safe_name = "".join(c for c in name if c.isalnum() or c in "_- ").strip().replace(" ", "_") or "report"
     fname = f"Numerology_Pro_{safe_name}.pdf"
+    _rc.save(user_id_for_cache, "numerology_pro", "Numerology Pro",
+             cache_params, pdf_bytes, fname)
+
     return Response(
         pdf_bytes,
         mimetype="application/pdf",
         headers={
             "Content-Disposition": f'inline; filename="{fname}"',
             "Cache-Control": "private, max-age=3600",
+            "X-Report-Cache": "miss",
         },
     )
 

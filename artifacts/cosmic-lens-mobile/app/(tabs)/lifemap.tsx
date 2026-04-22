@@ -97,6 +97,18 @@ const CATEGORIES: Category[] = [
     subtitle: "Ek hi sawaal — instant verdict (KP 1-249 sub-lord)",
     route: "/divya-prashna",
   },
+  {
+    key: "six-month-future",
+    icon: "calendar",
+    emoji: "🗓️",
+    gradient: ["#a78bfa", "#6366f1"],
+    glowOuter: ["rgba(167,139,250,0.22)", "rgba(99,102,241,0.10)"],
+    glowColor: "#a78bfa",
+    badge: "New",
+    badgeIcon: "⚡",
+    subtitle: "Agle 6 mahine — MD/AD/PD ke saath month-by-month outlook",
+    route: "/six-month-future",
+  },
 ];
 
 const STAR_COUNT = 16;

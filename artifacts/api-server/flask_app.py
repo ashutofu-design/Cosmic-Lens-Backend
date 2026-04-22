@@ -9244,6 +9244,53 @@ def will_return():
     })
 
 
+@app.route("/api/future-6months", methods=["POST", "OPTIONS"])
+def future_six_months():
+    """
+    Six-Month Deep Future — for each of next 6 months returns:
+      • Active MD/AD/PD with start-end dates
+      • Each lord's house ownership + planet placement (engine-derived)
+      • Composite month score (0-100)
+      • Life-area outlook (career/finance/health/relationship/spirituality)
+      • Opportunities, cautions, remedy of month
+
+    Body: { "user_id": int, "kundli": {...} }   (kundli optional if user_id given)
+    Headers: X-API-Key
+    """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    kundli  = data.get("kundli") or {}
+
+    # If no kundli in body, try loading from user
+    if not kundli and user_id:
+        try:
+            user, err = get_authed_user(int(user_id))
+            if err:
+                return err
+            if user and getattr(user, "kundli_data", None):
+                kundli = user.kundli_data if isinstance(user.kundli_data, dict) \
+                    else json.loads(user.kundli_data)
+        except Exception:
+            pass
+
+    if not kundli or not kundli.get("planets"):
+        return jsonify({"available": False,
+                        "error": "Kundli not provided. Complete birth chart first."}), 400
+
+    try:
+        from vedic.future_engine import compute_six_month_future
+        result = compute_six_month_future(kundli)
+        if not result.get("available"):
+            return jsonify(result), 200
+        return jsonify(result), 200
+    except Exception as exc:
+        app.logger.warning("[FUTURE_6M] failed user=%s err=%s", user_id, exc)
+        return jsonify({"available": False, "error": str(exc)}), 200
+
+
 @app.route("/api/future-outcome", methods=["POST"])
 def future_outcome():
     """

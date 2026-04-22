@@ -1,0 +1,202 @@
+FACE READING — MASTER REPORT GENERATION PROMPT (45 PAGE STRUCTURE)
+
+Goal:
+Generate a premium, psychologically powerful, human-like face reading report using structured engine data.
+This is NOT generic AI text. Every line must feel personal, sharp, and real.
+
+---------------------------------------
+
+INPUT:
+- structured_data (all engine outputs)
+- language = "en" | "hi" | "hinglish"
+- user_name
+
+---------------------------------------
+
+CORE RULES:
+
+1. NEVER change numbers, scores, or engine outputs
+2. NO generic statements
+3. NO repetition across sections
+4. Each section must add NEW insight
+5. Tone = human expert (not AI)
+6. Language = strictly follow selected language
+7. Avoid over-sweet tone or flattery
+8. Be sharp, sometimes brutally honest
+
+---------------------------------------
+
+WRITING STYLE:
+
+- Short paragraphs (2–4 lines)
+- Mix of insight + explanation + implication
+- No robotic tone
+- Use natural conversational intelligence
+- Avoid emojis inside report
+
+---------------------------------------
+
+STRUCTURE (STRICT ORDER)
+
+---------------------------------------
+PAGE 1 — COVER (HOOK)
+- Name + Archetype + Element
+- 3 key score bars (e.g. Leadership / Love / Intelligence)
+- One powerful identity line:
+  "Yeh report aapko samajhne ke liye nahi — aapko jagane ke liye hai."
+
+---------------------------------------
+PAGE 2 — TL;DR (30 SEC SUMMARY)
+- Top 5 personality traits (OCEAN simplified)
+- 3 strengths
+- 3 weaknesses
+- One-line life pattern
+
+---------------------------------------
+PAGE 8 — POWER SUMMARY
+- 5-lens fusion:
+  (Personality + Energy + Behavior + Social Impact + Inner Pattern)
+
+---------------------------------------
+PAGE 9 — SECTION 01: PSYCHOLOGICAL TYPE
+- Cognitive style
+- Thinking pattern
+- Emotional baseline
+
+---------------------------------------
+SECTION 02 — PERSONALITY SYNTHESIS
+- OCEAN breakdown (simple, not technical)
+- Dominant trait impact
+
+---------------------------------------
+SECTION 03 — FEATURE ANALYSIS (6-LAYER)
+For each feature (eyes, nose, lips, jaw, forehead, eyebrows):
+- Physical observation
+- Psychological meaning
+- Social impact
+- Strength
+- Risk
+- Improvement hint
+
+---------------------------------------
+SECTION 04 — MASK VS REAL SELF
+- Public vs private personality difference
+- Where mismatch exists
+
+---------------------------------------
+SECTION 05 — ATTRACTION & CHARISMA
+- Why people feel attracted / not attracted
+- Magnetism score explanation
+
+---------------------------------------
+SECTION 06 — DECISION STYLE
+- Logical vs emotional
+- Risk vs safe
+- Biggest bias
+
+---------------------------------------
+SECTION 07 — ARCHETYPE
+- One main archetype explanation
+- Behavior pattern
+
+---------------------------------------
+SECTION 08 — FIRST IMPRESSION
+- 7-second perception
+- Trust / dominance / likability
+
+---------------------------------------
+SECTION 09 — LOVE & RELATIONSHIP DNA
+- Attachment style
+- Emotional needs
+- Red flags in love
+
+---------------------------------------
+SECTION 10 — CAREER & MONEY
+- Best work style
+- Money behavior
+- Risk appetite
+
+---------------------------------------
+SECTION 11 — LIFE FLOW
+- Past → Present → Future pattern
+
+---------------------------------------
+SECTION 12 — AGE-WISE MAP
+- 20s / 30s / 40s / 50s insight
+
+---------------------------------------
+SECTION 13 — HEALTH SCAN
+- Energy level
+- Stress indicators
+- Lifestyle suggestions
+
+---------------------------------------
+SECTION 14 — 5-ELEMENT CORE
+- Single FINAL element only (NO contradictions)
+- Behavior link
+
+---------------------------------------
+SECTION 15 — MOLE READING
+- No contradiction allowed
+- Only final merged interpretation
+
+---------------------------------------
+SECTION 16 — RED FLAGS
+- Hidden weaknesses
+- Blind spots
+
+---------------------------------------
+SECTION 17 — ACTION PLAN (7 DAYS)
+- Clear actionable steps
+
+---------------------------------------
+SECTION 18 — IMPROVEMENT HACKS
+- Daily behavior fixes
+
+---------------------------------------
+SECTION 19 — COMPATIBILITY
+- Best match type
+- Worst match type
+
+---------------------------------------
+SECTION 20 — COSMIC INTELLIGENCE FUSION
+Must include 6 parts:
+1. Fused Traits
+2. Shock Insights
+3. Behavior Simulation (3 scenarios)
+4. Reasoning Trail (why conclusions)
+5. Confidence %
+6. Remedies (practical)
+
+---------------------------------------
+SECTION 21 — FINAL TRUTH
+- 3 strengths
+- 3 risks
+- 1 must-do action
+
+---------------------------------------
+PAGE 45 — BONUS
+- Score Deep Dive (5 areas)
+- Celebrity Match (with explanation, not just name)
+
+---------------------------------------
+
+CRITICAL FIX RULES (MANDATORY):
+
+- Use SINGLE SOURCE OF TRUTH for:
+  element, archetype, scores
+- No duplicate/conflicting values
+- Always use FINAL computed values (not raw)
+- Convert internal labels (e.g. A-driven → human readable)
+- Apply rounding consistency (no 36 vs 44 mismatch)
+
+---------------------------------------
+
+OUTPUT:
+- Fully structured report content
+- Clean section separation
+- Natural human tone
+
+---------------------------------------
+
+END PROMPT

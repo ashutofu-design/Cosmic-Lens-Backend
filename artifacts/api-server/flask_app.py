@@ -983,14 +983,34 @@ def face_reading_report_pdf():
     if name_override:
         person["name"] = name_override
 
-    report = assemble_report(
-        sections=payload["sections"],
-        engines=payload["engines"],
-        person=person,
-        front_quality=payload.get("front_quality"),
-        front_image_bytes=payload.get("front_image_bytes"),
-        front_points_norm=payload.get("front_points_norm"),
-    )
+    # Language selection (en / hi / hinglish) — drives translation pass
+    _lang = (request.values.get("language") or "hinglish").strip().lower()
+    if _lang in ("english", "eng"): _lang = "en"
+    elif _lang in ("hindi", "hin"): _lang = "hi"
+    elif _lang in ("hg", "hinglish"): _lang = "hinglish"
+    elif _lang not in ("en", "hi", "hinglish"): _lang = "hinglish"
+
+    # Per-language report cache to avoid repeated OpenAI translation calls
+    _report_cache = cached.setdefault("_report_lang_cache", {})
+    if _lang in _report_cache:
+        report = _report_cache[_lang]
+        # Ensure latest image bytes / points injected (they aren't translated)
+        report["front_image_bytes"] = payload.get("front_image_bytes")
+        report["front_points_norm"] = payload.get("front_points_norm")
+        # Update name if overridden
+        if name_override:
+            report.get("cover", {})["name"] = name_override
+    else:
+        report = assemble_report(
+            sections=payload["sections"],
+            engines=payload["engines"],
+            person=person,
+            front_quality=payload.get("front_quality"),
+            front_image_bytes=payload.get("front_image_bytes"),
+            front_points_norm=payload.get("front_points_norm"),
+            language=_lang,
+        )
+        _report_cache[_lang] = report
 
     try:
         pdf_bytes = render_pdf(report)

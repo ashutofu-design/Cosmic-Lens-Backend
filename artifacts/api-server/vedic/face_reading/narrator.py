@@ -41,7 +41,8 @@ def assemble_report(sections: Dict,
                     person: Dict | None = None,
                     front_quality: Dict | None = None,
                     front_image_bytes: bytes | None = None,
-                    front_points_norm: list | None = None) -> Dict:
+                    front_points_norm: list | None = None,
+                    language: str = "hinglish") -> Dict:
     """Build the final ordered report structure."""
     person = person or {}
 
@@ -90,7 +91,7 @@ def assemble_report(sections: Dict,
     except Exception as _e:
         _hook, _tldr, _ft2 = {}, {}, {}
 
-    return {
+    report = {
         "cover":             cover,
         "hook":              _hook,
         "tldr":              _tldr,
@@ -102,6 +103,7 @@ def assemble_report(sections: Dict,
         "sections_count":    len(ordered),
         "sections":          ordered,
         "synthesis":         sections.get("synthesis") or {},
+        "_language":         (language or "hinglish").lower(),
         "footer_disclaimer": (
             "Yeh report educational aur self-awareness ke liye hai. "
             "Hiring, medical, ya legal nirnay ke liye use mat karo. "
@@ -110,3 +112,11 @@ def assemble_report(sections: Dict,
         ),
         "report_template_version": "21_section_v1",
     }
+
+    # ── Apply language transformation (en / hi) — pass-through for hinglish ──
+    try:
+        from .translator import translate_report
+        translate_report(report, language)
+    except Exception as _e:
+        print(f"[narrator] translation skipped: {_e}")
+    return report

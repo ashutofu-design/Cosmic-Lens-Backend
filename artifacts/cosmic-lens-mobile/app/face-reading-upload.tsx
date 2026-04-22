@@ -48,6 +48,7 @@ export default function FaceReadingUploadScreen() {
   });
   const [age, setAge]       = useState("");
   const [gender, setGender] = useState<"male" | "female" | "">("");
+  const [language, setLanguage] = useState<"hinglish" | "en" | "hi">("hinglish");
   const [phase, setPhase]   = useState<Phase>("idle");
   const [progress, setProgress] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -135,6 +136,7 @@ export default function FaceReadingUploadScreen() {
       params.append("session_id", sid);
       if (age)    params.append("age", age);
       if (gender) params.append("gender", gender);
+      params.append("language", language);
       const analyzeRes = await fetch(`${API_BASE}/api/face_reading/analyze`, {
         method:  "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -145,7 +147,7 @@ export default function FaceReadingUploadScreen() {
       // ── 3. Render PDF ─────────────────────────────────────
       setPhase("rendering");
       setProgress("40-page PDF report ban rahi hai…");
-      const pdfUrl = `${API_BASE}/api/face_reading/report.pdf?session_id=${sid}`;
+      const pdfUrl = `${API_BASE}/api/face_reading/report.pdf?session_id=${sid}&language=${encodeURIComponent(language)}`;
 
       if (Platform.OS === "web") {
         // Web: fetch as blob and trigger anchor download (FileSystem APIs unavailable).
@@ -297,6 +299,33 @@ export default function FaceReadingUploadScreen() {
                   >
                     <Text style={[s.genderText, { color: active ? ACCENT : C.textMuted }]}>
                       {g === "male" ? "Male" : "Female"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={[s.optRow, { marginTop: 10, alignItems: "flex-start" }]}>
+            <Text style={[s.optLabel, { color: C.textMuted, marginTop: 8 }]}>Language</Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+              {([
+                { k: "hinglish" as const, label: "Hinglish" },
+                { k: "en" as const,       label: "English"  },
+                { k: "hi" as const,       label: "हिंदी"     },
+              ]).map(({ k, label }) => {
+                const active = language === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => !busy && setLanguage(k)}
+                    style={[
+                      s.genderChip,
+                      { borderColor: C.border, backgroundColor: C.bgCard2 },
+                      active && { borderColor: ACCENT, backgroundColor: `${ACCENT}18` },
+                    ]}
+                  >
+                    <Text style={[s.genderText, { color: active ? ACCENT : C.textMuted }]}>
+                      {label}
                     </Text>
                   </Pressable>
                 );

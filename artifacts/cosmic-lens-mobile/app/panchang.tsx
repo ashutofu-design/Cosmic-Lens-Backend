@@ -125,13 +125,30 @@ export default function PanchangScreen() {
   const [tabIdx, setTabIdx] = useState(initTab);
   const TABS = [t.panchangTitle, t.rahukaal, t.festivals];
 
-  const today = new Date();
-  const panchang = useMemo(() => getPanchang(today), []);
-  const kaal = useMemo(() => getRahuKaal(today.getDay()), []);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const panchang = useMemo(() => getPanchang(selectedDate), [selectedDate]);
+  const kaal = useMemo(() => getRahuKaal(selectedDate.getDay()), [selectedDate]);
   const auspicious = useMemo(() => getAuspiciousScore(panchang), [panchang]);
   const [festYear, setFestYear] = useState<number>(today.getFullYear() < 2026 ? 2026 : today.getFullYear());
 
-  const dateStr = today.toLocaleDateString("hi-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const dateStr = selectedDate.toLocaleDateString("hi-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const isToday = selectedDate.getTime() === today.getTime();
+  const dayDiff = Math.round((selectedDate.getTime() - today.getTime()) / 86400000);
+  const relLabel = dayDiff === 0 ? "Aaj"
+                  : dayDiff === 1 ? "Kal"
+                  : dayDiff === -1 ? "Kal (beeta)"
+                  : dayDiff === 2 ? "Parso"
+                  : dayDiff === -2 ? "Parso (beeta)"
+                  : dayDiff > 0 ? `${dayDiff} din baad`
+                  : `${Math.abs(dayDiff)} din pehle`;
+  function shiftDate(days: number) {
+    Haptics.selectionAsync();
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + days);
+    d.setHours(0,0,0,0);
+    setSelectedDate(d);
+  }
 
   const SUNRISE = "06:14 AM";
   const SUNSET  = "06:47 PM";
@@ -160,6 +177,30 @@ export default function PanchangScreen() {
           <Text style={[s.sub, { color: C.textMuted }]}>{dateStr}</Text>
         </View>
         <View style={{ width: 36 }} />
+      </View>
+
+      {/* Date navigator — kal/aaj/parso */}
+      <View style={[s.dateNav, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Pressable onPress={() => shiftDate(-1)} style={s.dateNavBtn} hitSlop={8}>
+          <Feather name="chevron-left" size={20} color={C.text} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={[s.dateNavRel, { color: isToday ? "#a78bfa" : C.textMuted }]}>{relLabel}</Text>
+          <Text style={[s.dateNavDate, { color: C.text }]} numberOfLines={1}>
+            {selectedDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+          </Text>
+        </View>
+        <Pressable onPress={() => shiftDate(1)} style={s.dateNavBtn} hitSlop={8}>
+          <Feather name="chevron-right" size={20} color={C.text} />
+        </Pressable>
+        {!isToday && (
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setSelectedDate(today); }}
+            style={[s.todayPill, { backgroundColor: "#a78bfa" }]}
+          >
+            <Text style={s.todayPillText}>Aaj</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Tabs */}
@@ -450,6 +491,17 @@ const s = StyleSheet.create({
   sub: { fontSize: 11, fontFamily: F.regular, marginTop: 1 },
   tab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   tabText: { fontSize: 12, fontFamily: F.semibold },
+
+  dateNav: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginHorizontal: 16, marginBottom: 12,
+    borderRadius: 14, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 8,
+  },
+  dateNavBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18 },
+  dateNavRel: { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.2, textTransform: "uppercase" },
+  dateNavDate: { fontSize: 14, fontFamily: F.bold, marginTop: 1 },
+  todayPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginLeft: 4 },
+  todayPillText: { color: "#fff", fontSize: 11, fontFamily: F.bold, letterSpacing: 0.5 },
   sunRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 16, borderWidth: 1, padding: 16,

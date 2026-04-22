@@ -4580,7 +4580,15 @@ def _tier3_remedies_section(s, name: str, dob: str, tob: str | None,
     if cd.get("lord"):
         cd_facts = _planet_facts_html(cd)
         years_left = cd.get("years_left")
-        if isinstance(years_left, (int, float)) and years_left > 0:
+        # Defensive: reject None / NaN / non-numeric / boolean / tiny values.
+        # Tiny values (<0.1 yr) round to "0.0 yrs left" which looks broken; suppress.
+        _yl_ok = (
+            isinstance(years_left, (int, float))
+            and not isinstance(years_left, bool)
+            and years_left == years_left  # NaN check (NaN != NaN)
+            and years_left >= 0.1
+        )
+        if _yl_ok:
             years_str = f"{years_left:.1f}"
             yrs_en = f" (~{years_str} yrs left)"
             yrs_hi = f" (~{years_str} वर्ष शेष)"

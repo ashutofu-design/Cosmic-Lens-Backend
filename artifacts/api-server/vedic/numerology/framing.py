@@ -478,11 +478,10 @@ def numerology_closing_toolkit_block(s: Dict[str, Any], driver: int, conductor: 
         f"🎯 आपका Driver-{driver} ({d_planet_hi}) टूलकिट — {area['label_hi']}",
         f"🎯 Aapka Driver-{driver} ({d_planet}) Toolkit for {area['label_hg']}")
 
+    # T003: Lucky NUMBERS live ONLY in the dedicated Lucky Catalog page.
+    # Closing toolkit keeps lucky days / colors / direction / gem / metal /
+    # avoid / mantra (operational reminders, not duplicates of the Catalog).
     rows = [
-        [_T(lang, "Lucky Numbers (single)", "शुभ अंक (एकल)", "Lucky Numbers (single)"), nums_str],
-        [_T(lang, "Lucky Numbers (Driver+Conductor combo)",
-                 "शुभ अंक (Driver+Conductor संयोजन)",
-                 "Lucky Numbers (Driver+Conductor combo)"), combo_str],
         [_T(lang, "Lucky Days",   "शुभ दिन",   "Lucky Days"),   days_str],
         [_T(lang, "Lucky Colors", "शुभ रंग",   "Lucky Colors"), colors_str],
         [_T(lang, "Lucky Direction", "शुभ दिशा", "Lucky Direction"), lk["direction"]],

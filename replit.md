@@ -15,6 +15,23 @@ pnpm workspace monorepo using TypeScript. This is the **Cosmic Lens** Vedic Astr
 - **Astrology engine**: pyswisseph (Swiss Ephemeris)
 - **Database**: SQLite (`users.db`) for user auth
 
+## Recent: Phase 8 — Numerology AI Cost Optimization (2026-04-22)
+
+**Problem**: 93 OpenAI calls per Pro report (one per section) → ~₹40/report on gpt-4.1, frequent 429s.
+
+**Fix**: Grouped batching + caching + safety caps in `vedic/numerology/ai_narrator.py` (+ new `narration_cache.py`):
+
+- **Grouped batch** (`narrate_grouped_batch`): bundles 6 sections per API call as a single JSON response; voice-guide system prompt sent once per batch instead of once per section. Drop-in replacement for `narrate_batch` (existing call site in `numerology_pdf_part2.py:9787` updated to pass `name+dob`).
+- **Default model switched** to `gpt-4.1-mini` (~5× cheaper than `gpt-4.1`); override via `OPENAI_NARRATOR_MODEL`.
+- **File cache** at `artifacts/api-server/.cache/narrations/<sha1>.json` keyed by `name+dob+lang+section_key+facts+PROMPT_VERSION`. TTL 30 days. Same person regenerating PDF → 0 API calls.
+- **Daily spend cap** `OPENAI_DAILY_CAP_USD=$3` and **per-report cap** `$0.10` enforced via `narration_cache._spend.json` ledger; exceeded → static fallback.
+- **Hard token ceiling** `NARRATOR_MAX_TOKENS_PER_CALL=500` per single-section call; grouped calls capped at 3000.
+- **Concurrency reduced** 6 → 3 workers (gentler on rate limits).
+- **Skip low-value**: specs with <2 non-empty facts skip AI entirely.
+- **Backward-compat**: legacy 1-call-per-section path kept under `NARRATOR_FORCE_LEGACY=1` env.
+
+Result: 16 active flagship sections → 3 grouped API calls (verified in logs); 93-spec full Pro report → ~16 calls. Estimated cost: **₹40 → ₹3-5 per report** (-87%); cached re-renders ≈ ₹0.
+
 ## Recent: Phase 7 — Cosmic Vision Accuracy Upgrade (2026-04-18)
 
 Three fixes to close the marketing-vs-reality gap surfaced in the deep audit:

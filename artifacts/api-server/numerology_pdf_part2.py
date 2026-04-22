@@ -9779,11 +9779,16 @@ def _build_flagship_ai_texts(name: str, dob: str, tob: Optional[str],
     try:
         import time
         t0 = time.time()
-        results = narrate_batch(specs, concurrency=6)
+        # Grouped batcher (gpt-4.1-mini, ~6 sections per API call, with cache).
+        # Pass name+dob so the cache layer can serve repeat renders for free.
+        results = narrate_batch(specs, concurrency=3,
+                                person_name=name, dob=dob)
         elapsed = time.time() - t0
         ok = sum(1 for v in results.values() if v and v.strip())
-        log.info("ai_narrator batch: %d/%d sections ok in %.1fs (lang=%s)",
-                 ok, len(specs), elapsed, lang)
+        log.info("ai_narrator grouped batch: %d/%d sections ok in %.1fs "
+                 "(lang=%s, ~%d API calls)",
+                 ok, len(specs), elapsed, lang,
+                 max(1, (len(specs) + 5) // 6))
         return results
     except Exception as exc:
         log.warning("narrate_batch failed: %s", exc)

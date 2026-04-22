@@ -894,27 +894,61 @@ def _build_prompt(section_key: str, facts: Dict[str, Any], lang: str,
     return sys_prompt, user_prompt
 
 
+def _default_model() -> str:
+    """Default to gpt-4.1-mini for cost. Override via OPENAI_NARRATOR_MODEL."""
+    return os.environ.get("OPENAI_NARRATOR_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+
+
+# Hard ceiling regardless of word_target (prevents runaway max_tokens).
+MAX_TOKENS_PER_CALL = int(os.environ.get("NARRATOR_MAX_TOKENS_PER_CALL", "500"))
+
+
 def narrate(section_key: str, facts: Dict[str, Any], lang: str = "hinglish",
-            word_target: int = 300, model: Optional[str] = None) -> Optional[str]:
+            word_target: int = 300, model: Optional[str] = None,
+            person_name: str = "", dob: str = "") -> Optional[str]:
     """
-    Generate a storytelling paragraph for a report section.
+    Generate a storytelling paragraph for ONE section (single API call).
+
+    NOTE: This is the legacy path — for cost-optimised generation use
+    `narrate_grouped_batch()` which batches 4-6 sections per API call.
 
     Args:
-        section_key: e.g. "tier1.life_path", "tier2.moon_nakshatra"
-        facts: dict of engine-computed facts the AI may reference
+        section_key: e.g. "tier1.life_path"
+        facts: engine facts the AI may reference
         lang: english | hindi | hinglish
         word_target: target word count (±10% enforced by prompt)
-        model: override model (default from OPENAI_NARRATOR_MODEL env or gpt-4.1)
-
-    Returns:
-        Storytelling text on success; None on failure (caller falls back to static).
+        model: override model (default gpt-4.1-mini)
+        person_name, dob: used for cache key (optional; if empty, no cache)
     """
+    # 1. Cache lookup (if person identifiers given)
+    if person_name and dob:
+        try:
+            from . import narration_cache as _nc
+            cached = _nc.get(person_name, dob, lang, section_key, facts)
+            if cached:
+                return cached
+        except Exception:
+            pass
+
     client = _get_client()
     if client is None:
         return None
 
-    model = model or os.environ.get("OPENAI_NARRATOR_MODEL", "gpt-4.1")
+    # 2. Daily spend cap check
+    try:
+        from . import narration_cache as _nc
+        if _nc.is_daily_capped():
+            print(f"[ai_narrator] daily cap reached "
+                  f"(${_nc.DAILY_LIMIT_USD}); falling back to static.")
+            return None
+    except Exception:
+        _nc = None  # type: ignore
+
+    model = model or _default_model()
     sys_p, user_p = _build_prompt(section_key, facts, lang, word_target)
+
+    # Hinglish ≈ 1.5 tokens/word; cap at MAX_TOKENS_PER_CALL.
+    capped_max = min(MAX_TOKENS_PER_CALL, max(120, int(word_target * 1.7)))
 
     try:
         resp = client.chat.completions.create(
@@ -924,15 +958,33 @@ def narrate(section_key: str, facts: Dict[str, Any], lang: str = "hinglish",
                 {"role": "system", "content": sys_p},
                 {"role": "user", "content": user_p},
             ],
-            max_tokens=int(word_target * 3),  # ~3 tokens per word buffer
+            max_tokens=capped_max,
         )
         text = (resp.choices[0].message.content or "").strip()
+
+        # 3. Record spend
+        if _nc is not None:
+            try:
+                in_t = getattr(resp.usage, "prompt_tokens", 0) or 0
+                out_t = getattr(resp.usage, "completion_tokens", 0) or 0
+                _nc.record_spend(_nc.cost_for(in_t, out_t))
+            except Exception:
+                pass
+
         if not text:
             return None
         if not _validate(section_key, facts, text):
             print(f"[ai_narrator] {section_key} ({lang}) FAILED FACT-GUARD — "
                   f"falling back to static. Facts={list(facts.keys())}")
             return None
+
+        # 4. Cache the result
+        if person_name and dob and _nc is not None:
+            try:
+                _nc.put(person_name, dob, lang, section_key, facts, text)
+            except Exception:
+                pass
+
         return text
     except Exception as exc:
         # Log but don't crash — caller falls back to static.
@@ -948,23 +1000,28 @@ def narrate_with_fallback(section_key: str, facts: Dict[str, Any],
     return ai_text if ai_text else static_text
 
 
-def narrate_batch(specs: list, concurrency: int = 6) -> Dict[str, str]:
+def narrate_batch(specs: list, concurrency: int = 3,
+                  person_name: str = "", dob: str = "") -> Dict[str, str]:
     """
-    Fire N narration requests in parallel, return {key: final_text}.
+    BACKWARD-COMPAT WRAPPER → delegates to narrate_grouped_batch (1 API call
+    per ~6 sections). Drop-in replacement for the old per-section batcher.
 
     Each spec dict must contain:
-      • key          — unique identifier (used as dict key in result)
-      • section_key  — e.g. "tier1.life_path"
-      • facts        — dict of engine facts
-      • lang         — english | hindi | hinglish
-      • word_target  — int
-      • fallback     — static text to use if AI fails
+      • key, section_key, facts, lang, word_target, fallback
 
-    Guarantees:
-      • Never raises — any failure falls back to spec['fallback'].
-      • Order-preserving (dict keys follow spec order).
-      • Returns within ~ceil(N/concurrency) × per-call-time seconds.
+    To force the legacy 1-call-per-section path (e.g. for debugging), set
+    env NARRATOR_FORCE_LEGACY=1.
     """
+    if os.environ.get("NARRATOR_FORCE_LEGACY") == "1":
+        return _narrate_batch_legacy(specs, concurrency,
+                                     person_name=person_name, dob=dob)
+    return narrate_grouped_batch(specs, group_size=6, concurrency=concurrency,
+                                 person_name=person_name, dob=dob)
+
+
+def _narrate_batch_legacy(specs: list, concurrency: int = 3,
+                           person_name: str = "", dob: str = "") -> Dict[str, str]:
+    """Original 1-call-per-section parallel batcher (kept for emergencies)."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results: Dict[str, str] = {}
@@ -977,6 +1034,8 @@ def narrate_batch(specs: list, concurrency: int = 6) -> Dict[str, str]:
                 spec["facts"],
                 lang=spec.get("lang", "hinglish"),
                 word_target=spec.get("word_target", 300),
+                person_name=person_name,
+                dob=dob,
             )
         except Exception as exc:
             print(f"[ai_narrator.batch] {key} raised: {exc}")
@@ -1000,6 +1059,273 @@ def narrate_batch(specs: list, concurrency: int = 6) -> Dict[str, str]:
                 print(f"[ai_narrator.batch] future raised: {exc}")
 
     # Ensure every spec key is present (belt-and-suspenders).
+    for spec in specs:
+        results.setdefault(spec["key"], spec.get("fallback", ""))
+    return results
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# GROUPED BATCH — the cost-optimised path
+# ──────────────────────────────────────────────────────────────────────────
+def _build_group_prompt(group: list, lang: str) -> tuple[str, str]:
+    """
+    Build ONE prompt that asks the model to write N sections in a single
+    JSON response. The system prompt (voice guide) is sent ONCE per group
+    instead of once per section → ~80% input-token savings.
+    """
+    import json as _json
+    lang = lang if lang in _LANG_INSTRUCT else "hinglish"
+    lang_rule = _LANG_INSTRUCT[lang]
+
+    # Build per-section facts blocks
+    sections_payload = []
+    for spec in group:
+        facts = spec.get("facts") or {}
+        facts_lines = [f"  • {k}: {v}" for k, v in facts.items()
+                       if v not in (None, "")]
+        sections_payload.append({
+            "key": spec["key"],
+            "section_key": spec["section_key"],
+            "word_target": int(spec.get("word_target", 280)),
+            "facts": "\n".join(facts_lines) if facts_lines else "(none)",
+        })
+
+    sys_prompt = (
+        _VOICE_GUIDE
+        + f"\n\nLANGUAGE RULE: {lang_rule}\n"
+        + "\nOUTPUT FORMAT: Respond with a single JSON object whose keys are "
+          "EXACTLY the section 'key' values given in the user message, and "
+          "whose values are the storytelling paragraphs. No markdown, no "
+          "extra commentary outside the JSON.\n"
+        + "LENGTH RULE: Honour each section's word_target (±15%). Be tight, "
+          "no padding, no bullet lists.\n"
+    )
+
+    sections_text = "\n\n".join(
+        f"━━━ Section [{s['key']}] ({s['section_key']}, "
+        f"~{s['word_target']} words) ━━━\nFACTS (use ONLY these):\n{s['facts']}"
+        for s in sections_payload
+    )
+
+    keys_list = [s["key"] for s in sections_payload]
+    user_prompt = (
+        f"Write {len(group)} sections in {lang}. Return ONE JSON object "
+        f"with these exact keys: {_json.dumps(keys_list)}.\n\n"
+        f"For EACH section, follow the voice rules: hook → mirror lived "
+        f"experience → weave facts → one practical rule → emotional close.\n\n"
+        f"{sections_text}"
+    )
+    return sys_prompt, user_prompt
+
+
+def _split_sections_safely(text: str, group: list) -> Dict[str, str]:
+    """Last-resort: regex-split if model returned non-JSON prose."""
+    import re
+    out: Dict[str, str] = {}
+    keys = [s["key"] for s in group]
+    # Try to find blocks like "key1: ...\nkey2: ..."
+    for i, k in enumerate(keys):
+        nxt = keys[i + 1] if i + 1 < len(keys) else None
+        pat = rf'"?{re.escape(k)}"?\s*[:=]\s*"?(.*?)"?(?=(?:"?{re.escape(nxt)}"?\s*[:=])|\Z)' \
+              if nxt else rf'"?{re.escape(k)}"?\s*[:=]\s*"?(.*)$'
+        m = re.search(pat, text, re.DOTALL)
+        if m:
+            out[k] = m.group(1).strip().strip('",')
+    return out
+
+
+def _call_grouped(group: list, lang: str, model: str) -> Dict[str, str]:
+    """
+    Make ONE OpenAI call covering all specs in `group`.
+    Returns {key: text} for whatever sections came back valid.
+    Failed/missing keys are simply absent from the result.
+    """
+    import json as _json
+    client = _get_client()
+    if client is None:
+        return {}
+
+    sys_p, user_p = _build_group_prompt(group, lang)
+
+    # Sum word_targets, convert to tokens (1.5×), cap per-call at 3000.
+    total_words = sum(int(s.get("word_target", 280)) for s in group)
+    per_group_max = min(3000, max(400, int(total_words * 1.7)))
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=0.75,
+            messages=[
+                {"role": "system", "content": sys_p},
+                {"role": "user", "content": user_p},
+            ],
+            max_tokens=per_group_max,
+            response_format={"type": "json_object"},
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+
+        # Record spend
+        try:
+            from . import narration_cache as _nc
+            in_t = getattr(resp.usage, "prompt_tokens", 0) or 0
+            out_t = getattr(resp.usage, "completion_tokens", 0) or 0
+            _nc.record_spend(_nc.cost_for(in_t, out_t))
+        except Exception:
+            pass
+
+        # Parse JSON; fallback to regex split if needed.
+        try:
+            parsed = _json.loads(raw)
+            if not isinstance(parsed, dict):
+                raise ValueError("not a dict")
+        except Exception:
+            parsed = _split_sections_safely(raw, group)
+
+        # Validate each section against fact-guard
+        validated: Dict[str, str] = {}
+        for spec in group:
+            k = spec["key"]
+            txt = (parsed.get(k) or "").strip()
+            if not txt:
+                continue
+            sec_key = spec["section_key"]
+            facts = spec.get("facts") or {}
+            if _validate(sec_key, facts, txt):
+                validated[k] = txt
+            else:
+                print(f"[ai_narrator.grouped] {sec_key} ({lang}) "
+                      f"FAILED FACT-GUARD — falling back to static.")
+        return validated
+
+    except Exception as exc:
+        print(f"[ai_narrator.grouped] batch failed ({len(group)} sections): {exc}")
+        return {}
+
+
+def narrate_grouped_batch(specs: list, group_size: int = 6,
+                          concurrency: int = 3,
+                          person_name: str = "",
+                          dob: str = "") -> Dict[str, str]:
+    """
+    THE primary cost-optimised batcher.
+
+    Pipeline per render:
+      1. Cache lookup — every spec where person_name+dob+facts hash hits → free
+      2. Skip empty/duplicate facts (saves API calls)
+      3. Group remaining specs into chunks of `group_size`
+      4. Each group → ONE API call returning JSON {key: text}
+      5. Cache each successful narration to disk
+
+    Concurrency defaults to 3 (gentler on rate limits than the old 6).
+    Model: gpt-4.1-mini (override via OPENAI_NARRATOR_MODEL).
+
+    Returns {key: text} where text = AI output OR spec['fallback'] on miss.
+    Never raises.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results: Dict[str, str] = {}
+    nc = None
+    try:
+        from . import narration_cache as nc_mod
+        nc = nc_mod
+    except Exception:
+        nc = None
+
+    # ── Step 0: Short-circuit if no API key
+    if not is_available():
+        for spec in specs:
+            results[spec["key"]] = spec.get("fallback", "")
+        return results
+
+    # ── Step 1+2: Cache lookup + skip low-value
+    pending: list = []
+    for spec in specs:
+        key = spec["key"]
+        facts = spec.get("facts") or {}
+        lang = spec.get("lang", "hinglish")
+        sec_key = spec["section_key"]
+
+        # Skip: no usable facts at all
+        non_empty = sum(1 for v in facts.values() if v not in (None, ""))
+        if non_empty < 2:
+            results[key] = spec.get("fallback", "")
+            continue
+
+        # Cache hit?
+        if nc and person_name and dob:
+            cached = nc.get(person_name, dob, lang, sec_key, facts)
+            if cached:
+                results[key] = cached
+                continue
+
+        pending.append(spec)
+
+    if not pending:
+        # Everything served from cache or skipped.
+        for spec in specs:
+            results.setdefault(spec["key"], spec.get("fallback", ""))
+        return results
+
+    # ── Step 2.5: Daily spend cap
+    if nc and nc.is_daily_capped():
+        print(f"[ai_narrator] daily cap ${nc.DAILY_LIMIT_USD} reached "
+              f"— {len(pending)} sections will use static fallback.")
+        for spec in pending:
+            results[spec["key"]] = spec.get("fallback", "")
+        return results
+
+    # ── Step 3: Group by language, then chunk into group_size
+    by_lang: Dict[str, list] = {}
+    for spec in pending:
+        by_lang.setdefault(spec.get("lang", "hinglish"), []).append(spec)
+
+    groups: list = []
+    for lang, lang_specs in by_lang.items():
+        for i in range(0, len(lang_specs), group_size):
+            groups.append((lang, lang_specs[i:i + group_size]))
+
+    # Per-report cap: estimate cost; if over PER_REPORT_LIMIT, trim groups
+    # (each grouped call ≈ $0.005-0.010 for ~6×280-word sections on mini).
+    if nc:
+        est_cost = len(groups) * 0.012  # generous upper bound
+        if est_cost > nc.PER_REPORT_LIMIT_USD:
+            max_groups = max(1, int(nc.PER_REPORT_LIMIT_USD / 0.012))
+            print(f"[ai_narrator] per-report cap ${nc.PER_REPORT_LIMIT_USD}: "
+                  f"trimming {len(groups)} → {max_groups} groups; "
+                  f"remainder will use static fallback.")
+            groups = groups[:max_groups]
+
+    model = _default_model()
+
+    # ── Step 4: Fire grouped calls in parallel (concurrency=3)
+    def _run(item):
+        lang, group = item
+        return lang, group, _call_grouped(group, lang, model)
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+        futures = [pool.submit(_run, item) for item in groups]
+        for fut in as_completed(futures):
+            try:
+                lang, group, group_results = fut.result()
+            except Exception as exc:
+                print(f"[ai_narrator.grouped] future raised: {exc}")
+                continue
+            for spec in group:
+                k = spec["key"]
+                txt = group_results.get(k, "")
+                if txt:
+                    results[k] = txt
+                    # Step 5: cache it
+                    if nc and person_name and dob:
+                        try:
+                            nc.put(person_name, dob, lang,
+                                   spec["section_key"], spec.get("facts") or {},
+                                   txt)
+                        except Exception:
+                            pass
+
+    # ── Final pass: anything still missing → fallback
     for spec in specs:
         results.setdefault(spec["key"], spec.get("fallback", ""))
     return results

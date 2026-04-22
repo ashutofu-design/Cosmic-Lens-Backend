@@ -18,7 +18,6 @@ import {
   setPushEnabled,
   setupPushForUser,
 } from "@/lib/notifications";
-import { Alert } from "react-native";
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {

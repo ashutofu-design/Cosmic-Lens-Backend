@@ -510,3 +510,9 @@ id = "GDa1fs7XQT-Nj8Cg0J-IH"
 uri = "file://.local/preview/numerology_pro_t004.pdf"
 type = "pdf"
 title = "Pro Numerology Report — language consistency (T004)"
+
+[[outputs]]
+id = "5gA4Myo24VzPlQjjIOtIp"
+uri = "file://.local/preview/numerology_pro_t006.pdf"
+type = "pdf"
+title = "Pro Numerology Report — emotional tone prompt updated (T006)"

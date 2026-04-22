@@ -1172,6 +1172,154 @@ def geocode():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PANCHANG — Real Vedic panchang via Swiss Ephemeris (Lahiri sidereal).
+# GET /api/panchang?date=YYYY-MM-DD&lat=&lng=&tz=  (tz = hours offset, e.g. 5.5)
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/panchang", methods=["GET"])
+def panchang_real():
+    from datetime import datetime as _dt, timedelta as _td, date as _date
+    from vedic.panchang.phase_r import compute_phase_r  # type: ignore
+
+    # ── Parse query ─────────────────────────────────────────────────────────
+    date_s = (request.args.get("date") or "").strip()
+    try:
+        if date_s:
+            y, m, d = [int(x) for x in date_s.split("-")]
+            target_date = _date(y, m, d)
+        else:
+            target_date = _dt.utcnow().date()
+    except Exception:
+        return jsonify({"error": "bad date; use YYYY-MM-DD"}), 400
+
+    try:
+        lat = float(request.args.get("lat") or "28.6139")     # New Delhi default
+        lng = float(request.args.get("lng") or "77.2090")
+        tz_h = float(request.args.get("tz") or "5.5")          # IST default
+    except Exception:
+        return jsonify({"error": "bad lat/lng/tz"}), 400
+
+    # Compute panchang at solar-noon local → most representative tithi for the day
+    noon_local = _dt(target_date.year, target_date.month, target_date.day, 12, 0, 0)
+    noon_utc = noon_local - _td(hours=tz_h)
+    phase_r = compute_phase_r(noon_utc)
+
+    # ── Sunrise / Sunset via Swiss Ephemeris ───────────────────────────────
+    sunrise_local = sunset_local = None
+    solar_noon_local = None
+    try:
+        import swisseph as swe  # type: ignore
+        # Day-start in UTC = local 00:00
+        day_start_local = _dt(target_date.year, target_date.month, target_date.day, 0, 0, 0)
+        day_start_utc = day_start_local - _td(hours=tz_h)
+        jd_start = swe.julday(day_start_utc.year, day_start_utc.month, day_start_utc.day,
+                              day_start_utc.hour + day_start_utc.minute/60)
+        geopos = (lng, lat, 0.0)
+        # Rise (visible upper-limb)
+        rsmi_rise = swe.CALC_RISE | swe.BIT_DISC_CENTER
+        rsmi_set  = swe.CALC_SET  | swe.BIT_DISC_CENTER
+        try:
+            ret_r, tret_r = swe.rise_trans(jd_start, swe.SUN, rsmi_rise, geopos, 0.0, 0.0)
+            ret_s, tret_s = swe.rise_trans(jd_start, swe.SUN, rsmi_set,  geopos, 0.0, 0.0)
+            jd_rise = tret_r[0] if isinstance(tret_r, (list, tuple)) else tret_r
+            jd_set  = tret_s[0] if isinstance(tret_s, (list, tuple)) else tret_s
+            if jd_rise and jd_set:
+                # Convert JD UTC → local datetime
+                def _jd_to_local(jd):
+                    y, mo, d, h_frac = swe.revjul(jd)
+                    hr = int(h_frac); mn = int((h_frac - hr) * 60)
+                    sec = int(((h_frac - hr) * 60 - mn) * 60)
+                    return _dt(y, mo, d, hr, mn, sec) + _td(hours=tz_h)
+                sunrise_local = _jd_to_local(jd_rise)
+                sunset_local  = _jd_to_local(jd_set)
+                solar_noon_local = sunrise_local + (sunset_local - sunrise_local) / 2
+        except Exception as _e:
+            app.logger.info(f"panchang: rise_trans failed: {_e}")
+    except Exception as _e:
+        app.logger.info(f"panchang: swisseph rise unavailable: {_e}")
+
+    # Fallback (rough) if swe rise failed
+    if sunrise_local is None or sunset_local is None:
+        sunrise_local = _dt(target_date.year, target_date.month, target_date.day, 6, 14)
+        sunset_local  = _dt(target_date.year, target_date.month, target_date.day, 18, 47)
+        solar_noon_local = _dt(target_date.year, target_date.month, target_date.day, 12, 30)
+
+    day_seconds = max(1.0, (sunset_local - sunrise_local).total_seconds())
+    night_seconds = 86400.0 - day_seconds
+
+    def _fmt(dt: _dt) -> str:
+        return dt.strftime("%I:%M %p").lstrip("0")
+
+    def _seg(seg_idx_1to8: int) -> tuple[str, str]:
+        """Return (start, end) HH:MM AM/PM for daytime segment 1..8."""
+        seg_len = day_seconds / 8.0
+        start = sunrise_local + _td(seconds=(seg_idx_1to8 - 1) * seg_len)
+        end   = sunrise_local + _td(seconds=seg_idx_1to8 * seg_len)
+        return _fmt(start), _fmt(end)
+
+    # Standard Rahu/Yama/Gulika weekday segment table
+    # Python weekday(): Mon=0..Sun=6
+    RAHU_SEG   = {0: 2, 1: 7, 2: 5, 3: 6, 4: 4, 5: 3, 6: 8}
+    YAMA_SEG   = {0: 4, 1: 3, 2: 2, 3: 1, 4: 7, 5: 6, 6: 5}
+    GULIKA_SEG = {0: 6, 1: 5, 2: 4, 3: 3, 4: 2, 5: 1, 6: 7}
+
+    wd = target_date.weekday()
+    rs, re_ = _seg(RAHU_SEG[wd])
+    ys, ye  = _seg(YAMA_SEG[wd])
+    gs, ge  = _seg(GULIKA_SEG[wd])
+
+    # Brahma Muhurta = sunrise - 1h36m to sunrise - 48m (last 4 ghatikas of night)
+    brahma_start = sunrise_local - _td(minutes=96)
+    brahma_end   = sunrise_local - _td(minutes=48)
+    # Abhijit = solar noon ± 24m (one muhurta = 48m)
+    abhijit_start = solar_noon_local - _td(minutes=24)
+    abhijit_end   = solar_noon_local + _td(minutes=24)
+
+    out = {
+        "date": target_date.isoformat(),
+        "lat": lat, "lng": lng, "tz": tz_h,
+        "ephemeris": "swisseph_lahiri_sidereal",
+        "sunrise": _fmt(sunrise_local),
+        "sunset":  _fmt(sunset_local),
+        "solar_noon": _fmt(solar_noon_local),
+        "brahma_muhurta": f"{_fmt(brahma_start)} – {_fmt(brahma_end)}",
+        "abhijit_muhurta": f"{_fmt(abhijit_start)} – {_fmt(abhijit_end)}",
+        "rahu_kaal":  f"{rs} – {re_}",
+        "yamaghanta": f"{ys} – {ye}",
+        "gulika":     f"{gs} – {ge}",
+        "phase_r": phase_r,
+    }
+
+    # Convenience flat fields for mobile UI
+    if "r1_tithi" in phase_r:
+        t = phase_r["r1_tithi"]
+        out["tithi"] = f"{t.get('paksha','')} {t.get('name','')}".strip()
+        out["tithi_lord"] = t.get("lord")
+        out["tithi_deity"] = t.get("deity")
+    if "r2_nakshatra" in phase_r:
+        n = phase_r["r2_nakshatra"]
+        out["nakshatra"] = n.get("name")
+        out["nakshatra_pada"] = n.get("pada")
+        out["nakshatra_lord"] = n.get("lord")
+    if "r3_yoga" in phase_r:
+        out["yoga"] = phase_r["r3_yoga"].get("name")
+        out["yoga_lord"] = phase_r["r3_yoga"].get("lord")
+    if "r4_karana" in phase_r:
+        out["karana"] = phase_r["r4_karana"].get("name")
+        out["karana_lord"] = phase_r["r4_karana"].get("lord")
+    if "r5_vaar" in phase_r:
+        out["vaar"] = phase_r["r5_vaar"].get("weekday")
+    if "r6_ritu_ayana_maasa" in phase_r:
+        x = phase_r["r6_ritu_ayana_maasa"]
+        out["ritu"] = x.get("ritu"); out["ayana"] = x.get("ayana"); out["maasa"] = x.get("maasa")
+    if "r7_samvatsara" in phase_r:
+        out["samvatsara"] = phase_r["r7_samvatsara"].get("name")
+    if "r8_eras" in phase_r:
+        out["eras"] = phase_r["r8_eras"]
+
+    return jsonify(out)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # AUTH — Phone OTP via Firebase Phone Authentication.
 # OTP send + confirm happens entirely on the client (Firebase SDK).
 # Backend only verifies the resulting Firebase ID token below.

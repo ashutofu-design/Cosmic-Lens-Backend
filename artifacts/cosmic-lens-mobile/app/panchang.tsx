@@ -2,16 +2,33 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { useUser } from "@/context/UserContext";
+import { fetchRealPanchang, type RealPanchang } from "@/lib/panchangAPI";
 import {
   FESTIVALS_BY_YEAR, FESTIVAL_YEARS, daysUntil, type Festival,
 } from "@/data/festivals10y";
+
+// Normalize backend nakshatra short names ("U.Phalguni") → score-table long names
+const NAK_NORMALIZE: Record<string, string> = {
+  "P.Phalguni": "Purva Phalguni", "U.Phalguni": "Uttara Phalguni",
+  "P.Ashadha": "Purva Ashadha",  "U.Ashadha": "Uttara Ashadha",
+  "P.Bhadrapada": "Purva Bhadrapada", "U.Bhadrapada": "Uttara Bhadrapada",
+  "Dhanishta": "Dhanishtha",
+};
+function normalizeNak(n: string): string { return NAK_NORMALIZE[n] || n; }
+
+// Map backend vaar (Monday/Tuesday/...) → score-table vaar (Somvar/Mangalvar/...)
+const VAAR_MAP: Record<string, string> = {
+  Monday: "Somvar", Tuesday: "Mangalvar", Wednesday: "Budhavar",
+  Thursday: "Guruvaar", Friday: "Shukravar", Saturday: "Shanivaar", Sunday: "Ravivaar",
+};
 
 const F = {
   bold: "Nunito_700Bold", semibold: "Nunito_600SemiBold",
@@ -125,10 +142,55 @@ export default function PanchangScreen() {
   const [tabIdx, setTabIdx] = useState(initTab);
   const TABS = [t.panchangTitle, t.rahukaal, t.festivals];
 
+  const { primaryProfile } = useUser() as any;
+  const bd = primaryProfile?.birthData ?? null;
+  const userLat = bd?.lat ?? 28.6139;   // Delhi default
+  const userLng = bd?.lon ?? 77.2090;
+  const userTz  = bd?.tz  ?? 5.5;
+
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const panchang = useMemo(() => getPanchang(selectedDate), [selectedDate]);
-  const kaal = useMemo(() => getRahuKaal(selectedDate.getDay()), [selectedDate]);
+
+  // ── Real panchang from Swiss Ephemeris (api-server) ─────────────────────
+  const [real, setReal] = useState<RealPanchang | null>(null);
+  const [realLoading, setRealLoading] = useState(false);
+  const [realError, setRealError] = useState<string | null>(null);
+  const fetchSeq = useRef(0);
+  useEffect(() => {
+    const seq = ++fetchSeq.current;
+    const ctrl = new AbortController();
+    setRealLoading(true); setRealError(null);
+    fetchRealPanchang({ date: selectedDate, lat: userLat, lng: userLng, tz: userTz, signal: ctrl.signal })
+      .then(d => { if (seq === fetchSeq.current) { setReal(d); setRealLoading(false); } })
+      .catch(e => {
+        if (seq === fetchSeq.current && e?.name !== "AbortError") {
+          setRealError(String(e?.message || e)); setRealLoading(false);
+        }
+      });
+    return () => ctrl.abort();
+  }, [selectedDate, userLat, userLng, userTz]);
+
+  // Local fallback approximation (used only if API fails)
+  const localPanchang = useMemo(() => getPanchang(selectedDate), [selectedDate]);
+  const localKaal     = useMemo(() => getRahuKaal(selectedDate.getDay()), [selectedDate]);
+
+  // Unified panchang data: prefer real, fall back to local
+  const panchang = useMemo(() => {
+    if (real) {
+      return {
+        tithi: real.tithi || localPanchang.tithi,
+        nakshatra: normalizeNak(real.nakshatra || localPanchang.nakshatra),
+        yoga: real.yoga || localPanchang.yoga,
+        karana: (real.karana || localPanchang.karana).replace(" (Bhadra)", ""),
+        var: (real.vaar && VAAR_MAP[real.vaar]) || localPanchang.var,
+      };
+    }
+    return localPanchang;
+  }, [real, localPanchang]);
+  const kaal = useMemo(() => {
+    if (real) return { rahu: real.rahu_kaal, yama: real.yamaghanta, gulika: real.gulika };
+    return localKaal;
+  }, [real, localKaal]);
   const auspicious = useMemo(() => getAuspiciousScore(panchang), [panchang]);
   const [festYear, setFestYear] = useState<number>(today.getFullYear() < 2026 ? 2026 : today.getFullYear());
 
@@ -150,8 +212,10 @@ export default function PanchangScreen() {
     setSelectedDate(d);
   }
 
-  const SUNRISE = "06:14 AM";
-  const SUNSET  = "06:47 PM";
+  const SUNRISE = real?.sunrise || "06:14 AM";
+  const SUNSET  = real?.sunset  || "06:47 PM";
+  const BRAHMA_MUHURTA = real?.brahma_muhurta || "04:38 AM – 05:26 AM";
+  const ABHIJIT_MUHURTA = real?.abhijit_muhurta || "11:54 AM – 12:46 PM";
 
   function InfoRow({ label, value, emoji }: { label: string; value: string; emoji: string }) {
     return (
@@ -189,6 +253,22 @@ export default function PanchangScreen() {
           <Text style={[s.dateNavDate, { color: C.text }]} numberOfLines={1}>
             {selectedDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
           </Text>
+          {realLoading ? (
+            <View style={s.srcRow}>
+              <ActivityIndicator size="small" color="#a78bfa" />
+              <Text style={[s.srcText, { color: C.textMuted }]}>Computing…</Text>
+            </View>
+          ) : real ? (
+            <View style={s.srcRow}>
+              <Feather name="check-circle" size={10} color="#22c55e" />
+              <Text style={[s.srcText, { color: "#22c55e" }]}>Swiss Ephemeris · Lahiri</Text>
+            </View>
+          ) : realError ? (
+            <View style={s.srcRow}>
+              <Feather name="alert-triangle" size={10} color="#f59e0b" />
+              <Text style={[s.srcText, { color: "#f59e0b" }]}>Offline · approx values</Text>
+            </View>
+          ) : null}
         </View>
         <Pressable onPress={() => shiftDate(1)} style={s.dateNavBtn} hitSlop={8}>
           <Feather name="chevron-right" size={20} color={C.text} />
@@ -317,7 +397,7 @@ export default function PanchangScreen() {
             {/* Subah muhurt note */}
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.panBrahmaMuhurta}</Text>
-              <Text style={[s.cardVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>04:38 AM – 05:26 AM</Text>
+              <Text style={[s.cardVal, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{BRAHMA_MUHURTA}</Text>
               <Text style={[s.cardTip, { color: C.textMuted }]}>{t.panBrahmaTip}</Text>
             </View>
           </>
@@ -356,7 +436,7 @@ export default function PanchangScreen() {
 
             <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, gap: 8 }]}>
               <Text style={[s.cardTitle, { color: C.textMuted }]}>{t.panAbhijitLbl}</Text>
-              <Text style={[s.cardVal, { color: "#22c55e" }]}>11:54 AM – 12:46 PM</Text>
+              <Text style={[s.cardVal, { color: "#22c55e" }]}>{ABHIJIT_MUHURTA}</Text>
               <Text style={[s.cardTip, { color: C.textMuted }]}>{t.panAbhijitTip}</Text>
             </View>
           </>
@@ -502,6 +582,8 @@ const s = StyleSheet.create({
   dateNavDate: { fontSize: 14, fontFamily: F.bold, marginTop: 1 },
   todayPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, marginLeft: 4 },
   todayPillText: { color: "#fff", fontSize: 11, fontFamily: F.bold, letterSpacing: 0.5 },
+  srcRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  srcText: { fontSize: 9, fontFamily: F.semibold, letterSpacing: 0.3 },
   sunRow: {
     flexDirection: "row", alignItems: "center",
     borderRadius: 16, borderWidth: 1, padding: 16,

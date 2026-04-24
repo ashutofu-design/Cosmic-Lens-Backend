@@ -58,8 +58,19 @@ function usePulse(active: boolean) {
 function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   const C = useC();
+  const t = useT();
   const cfg = STATUS_CONFIG[item.status];
   const pulse = usePulse(item.status === "Active");
+  const v = t.vlang;
+  // Status label translation
+  const statusLabel =
+    item.status === "Active" ? (v === "hi" ? "सक्रिय" : v === "hn" ? "Active" : "Active") :
+    item.status === "Mild"   ? (v === "hi" ? "हल्का"  : v === "hn" ? "Mild"   : "Mild")   :
+                               (v === "hi" ? "स्पष्ट" : v === "hn" ? "Clear"  : "Clear");
+  // Primary name = English in en/hn modes, Hindi in hi mode
+  const primaryName = v === "hi" ? (item.name_hindi || item.name) : item.name;
+  const secondaryName = v === "hi" ? item.name : item.name_hindi;
+  const remediesLabel = v === "hi" ? "उपाय" : v === "hn" ? "UPAY (REMEDIES)" : "REMEDIES";
 
   return (
     <Pressable
@@ -73,8 +84,10 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
         </View>
 
         <View style={{ flex: 1, gap: 1 }}>
-          <Text style={[d.doshName, { color: C.text }]}>{item.name}</Text>
-          <Text style={[d.doshHindi, { color: C.textMuted }]}>{item.name_hindi}</Text>
+          <Text style={[d.doshName, { color: C.text }]}>{primaryName}</Text>
+          {secondaryName && primaryName !== secondaryName && (
+            <Text style={[d.doshHindi, { color: C.textMuted }]}>{secondaryName}</Text>
+          )}
         </View>
 
         {/* Status badge */}
@@ -85,7 +98,7 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
           {item.status !== "Active" && (
             <View style={[d.statusDot, { backgroundColor: cfg.dot }]} />
           )}
-          <Text style={[d.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+          <Text style={[d.statusText, { color: cfg.color }]}>{statusLabel}</Text>
         </View>
 
         <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={C.textMuted} style={{ marginLeft: 6 }} />
@@ -99,7 +112,7 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
       {/* Expanded content — only remedies */}
       {open && item.remedies.length > 0 && (
         <View style={d.expanded}>
-          <Text style={[d.remediesTitle, { color: C.textMuted }]}>UPAY (REMEDIES)</Text>
+          <Text style={[d.remediesTitle, { color: C.textMuted }]}>{remediesLabel}</Text>
           {item.remedies.map((r, i) => (
             <View key={i} style={d.remedyRow}>
               <View style={[d.remedyBullet, { backgroundColor: `${cfg.color}20` }]}>
@@ -184,6 +197,56 @@ export default function DoshScreen() {
   const active = showDemo ? 2 : (doshData?.active_count ?? 0);
   const mild   = showDemo ? 2 : (doshData?.mild_count ?? 0);
 
+  // Localized labels
+  const v = t.vlang;
+  const LBL =
+    v === "hi" ? {
+      subtitle:   "नौ दोष विश्लेषण (9 दोष)",
+      demo:       "डेमो",
+      totalDosh:  "कुल दोष",
+      present:    "उपस्थित",
+      notPresent: "अनुपस्थित",
+      scanning:   "जाँच…",
+      analyzing:  "आपकी कुंडली का विश्लेषण…",
+      checking:   "सभी 9 दोषों की जाँच",
+      analysis:   "दोष विश्लेषण",
+      active:     "सक्रिय",
+      mild:       "हल्का",
+      clear:      "स्पष्ट",
+      detected:   `${active + mild} में से 9 दोष पाए गए`,
+      disclaimer: "दोष विश्लेषण शास्त्रीय वैदिक ज्योतिष के सिद्धांतों पर आधारित है। महत्वपूर्ण निर्णयों के लिए योग्य ज्योतिषी से सलाह लें।",
+    } : v === "hn" ? {
+      subtitle:   "Nau Dosh Vishleshan (9 Doshas)",
+      demo:       "Demo",
+      totalDosh:  "Kul Dosh",
+      present:    "Hai",
+      notPresent: "Nahi",
+      scanning:   "Scanning…",
+      analyzing:  "Aapki kundli analyse ho rahi hai…",
+      checking:   "Sabhi 9 dosh check ho rahe hain",
+      analysis:   "Dosh Vishleshan",
+      active:     "Active",
+      mild:       "Mild",
+      clear:      "Clear",
+      detected:   `${active + mild} of 9 doshas detected`,
+      disclaimer: "Dosh analysis classical Vedic astrology par based hai. Important faisle ke liye qualified Jyotishi se consult karein.",
+    } : {
+      subtitle:   "Nine Dosha Analysis (9 Doshas)",
+      demo:       "Demo",
+      totalDosh:  "Total Dosh",
+      present:    "Present",
+      notPresent: "Not Present",
+      scanning:   "Scanning…",
+      analyzing:  "Analysing your kundli…",
+      checking:   "Checking all 9 dosh conditions",
+      analysis:   "Dosh Analysis",
+      active:     "Active",
+      mild:       "Mild",
+      clear:      "Clear",
+      detected:   `${active + mild} of 9 doshas detected`,
+      disclaimer: "Dosh analysis is based on classical Vedic astrology principles. Always consult a qualified Jyotishi for important life decisions.",
+    };
+
   return (
     <ScrollView
       style={[d.root, { backgroundColor: C.bg }]}
@@ -197,13 +260,13 @@ export default function DoshScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[d.title, { color: C.text }]}>{t.doshTitle}</Text>
-          <Text style={[d.subtitle, { color: C.textMuted }]}>नौ दोष विश्लेषण (9 Doshas)</Text>
+          <Text style={[d.subtitle, { color: C.textMuted }]}>{LBL.subtitle}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {doshLoading && <ActivityIndicator size="small" color="#f59e0b" />}
           {showDemo && (
             <View style={[d.demoBadge, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-              <Text style={[d.demoBadgeText, { color: C.textMuted }]}>Demo</Text>
+              <Text style={[d.demoBadgeText, { color: C.textMuted }]}>{LBL.demo}</Text>
             </View>
           )}
         </View>
@@ -213,26 +276,26 @@ export default function DoshScreen() {
       <View style={[d.statsBar, { backgroundColor: C.bgCard, borderBottomColor: C.border }]}>
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: C.text }]}>9</Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Total Dosh</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.totalDosh}</Text>
         </View>
         <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: active + mild > 0 ? "#ef4444" : "#22c55e" }]}>
             {active + mild}
           </Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Present</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.present}</Text>
         </View>
         <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: "#22c55e" }]}>{9 - active - mild}</Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>Not Present</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.notPresent}</Text>
         </View>
         {doshLoading && (
           <>
             <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
             <View style={[d.statTab, { flexDirection: "row", gap: 5 }]}>
               <ActivityIndicator size="small" color="#f59e0b" />
-              <Text style={[d.statTabLabel, { color: "#f59e0b" }]}>Scanning…</Text>
+              <Text style={[d.statTabLabel, { color: "#f59e0b" }]}>{LBL.scanning}</Text>
             </View>
           </>
         )}
@@ -247,10 +310,10 @@ export default function DoshScreen() {
           <View style={[d.loadingCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <ActivityIndicator size="large" color="#f59e0b" />
             <Text style={{ color: C.textMuted, marginTop: 12, fontFamily: "Nunito_500Medium", fontSize: 13 }}>
-              Analysing your kundli...
+              {LBL.analyzing}
             </Text>
             <Text style={{ color: C.textDim, marginTop: 4, fontSize: 11, fontFamily: "Nunito_400Regular" }}>
-              Checking all 9 dosh conditions
+              {LBL.checking}
             </Text>
           </View>
         )}
@@ -271,7 +334,7 @@ export default function DoshScreen() {
         <View style={[d.disclaimer, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
           <Feather name="info" size={11} color={C.textDim} />
           <Text style={{ color: C.textDim, fontSize: 10, fontFamily: "Nunito_400Regular", flex: 1, lineHeight: 14 }}>
-            Dosh analysis is based on classical Vedic astrology principles. Always consult a qualified Jyotishi for important life decisions.
+            {LBL.disclaimer}
           </Text>
         </View>
       </View>

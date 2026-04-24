@@ -184,19 +184,43 @@ const NUM: Record<number, NumInfo> = {
         remedy:"Serve the underprivileged selflessly every week. Light a ghee lamp daily." },
 };
 
-const PY_THEME: Record<number, string> = {
-  1:"New beginnings — a 9-year cycle begins. Plant the seeds of your dreams.",
-  2:"Partnerships and patience. Let relationships deepen and blossom.",
-  3:"Creativity, joy, and expression — let your inner light shine brightly.",
-  4:"Hard work and foundation-building. Discipline is your greatest asset.",
-  5:"Change, freedom, and travel. Embrace the unexpected with open arms.",
-  6:"Family, love, and responsibility. Nurture yourself and those around you.",
-  7:"Reflection, spirituality, and inner work. Seek deeper truth within.",
-  8:"Power, ambition, and finance. Your efforts will finally be rewarded.",
-  9:"Completion and release. Close old chapters; a new cycle approaches.",
-  11:"Spiritual awakening. Divine guidance is speaking — are you listening?",
-  22:"Master year of manifestation. Think big. Build something legendary.",
-  33:"Year of deep love and teaching. Serve humanity with your full heart.",
+const PY_THEME: Record<number, { en: string; hn: string; hi: string }> = {
+  1:  { en:"New beginnings — a 9-year cycle begins. Plant the seeds of your dreams.",
+        hn:"Nayi shuruaat — 9 saal ka cycle shuru. Apne sapnon ke beej boyein.",
+        hi:"नई शुरुआत — 9 वर्ष का चक्र शुरू। अपने सपनों के बीज बोएँ।" },
+  2:  { en:"Partnerships and patience. Let relationships deepen and blossom.",
+        hn:"Saajhedari aur sabr. Rishton ko gehraai aur khilne ka mauka dein.",
+        hi:"साझेदारी और धैर्य। रिश्तों को गहराई से खिलने दें।" },
+  3:  { en:"Creativity, joy, and expression — let your inner light shine brightly.",
+        hn:"Rachnatmakta, khushi, abhivyakti — apni andar ki roshni chamkayein.",
+        hi:"रचनात्मकता, आनंद और अभिव्यक्ति — अपनी आंतरिक ज्योति चमकाएँ।" },
+  4:  { en:"Hard work and foundation-building. Discipline is your greatest asset.",
+        hn:"Mehnat aur neev banane ka samay. Anushashan aapki sabse badi taakat hai.",
+        hi:"परिश्रम और आधार-निर्माण। अनुशासन आपकी सबसे बड़ी संपत्ति है।" },
+  5:  { en:"Change, freedom, and travel. Embrace the unexpected with open arms.",
+        hn:"Badlaav, azaadi, aur safar. Achanak hone wale ko khule dil se apnayein.",
+        hi:"परिवर्तन, स्वतंत्रता और यात्रा। अप्रत्याशित को खुले मन से अपनाएँ।" },
+  6:  { en:"Family, love, and responsibility. Nurture yourself and those around you.",
+        hn:"Parivaar, prem, aur zimmedari. Khud ki aur apno ki dekhbhal karein.",
+        hi:"परिवार, प्रेम और ज़िम्मेदारी। स्वयं की और अपनों की देखभाल करें।" },
+  7:  { en:"Reflection, spirituality, and inner work. Seek deeper truth within.",
+        hn:"Manan, adhyatma, aur antar manthan. Andar ki sachai khojein.",
+        hi:"मनन, आध्यात्म और अंतर्मंथन। भीतर की गहरी सच्चाई खोजें।" },
+  8:  { en:"Power, ambition, and finance. Your efforts will finally be rewarded.",
+        hn:"Shakti, mahatvakaaksha, aur paisa. Aapki mehnat ka phal milega.",
+        hi:"शक्ति, महत्वाकांक्षा और धन। आपकी मेहनत का फल मिलेगा।" },
+  9:  { en:"Completion and release. Close old chapters; a new cycle approaches.",
+        hn:"Samaapti aur mukti. Purane adhyay band karein; naya cycle aa raha hai.",
+        hi:"समापन और मुक्ति। पुराने अध्याय बंद करें; नया चक्र आ रहा है।" },
+  11: { en:"Spiritual awakening. Divine guidance is speaking — are you listening?",
+        hn:"Adhyatmic jaagran. Divya margdarshan bol raha hai — sun rahe ho?",
+        hi:"आध्यात्मिक जागरण। दिव्य मार्गदर्शन बोल रहा है — क्या आप सुन रहे हैं?" },
+  22: { en:"Master year of manifestation. Think big. Build something legendary.",
+        hn:"Manifestation ka master varsh. Bada socho. Kuch legendary banao.",
+        hi:"साक्षात्कार का महावर्ष। बड़ा सोचें। कुछ अद्वितीय बनाएँ।" },
+  33: { en:"Year of deep love and teaching. Serve humanity with your full heart.",
+        hn:"Gehre prem aur shikshan ka varsh. Pure dil se manavata ki seva karein.",
+        hi:"गहरे प्रेम और शिक्षण का वर्ष। पूरे मन से मानवता की सेवा करें।" },
 };
 
 function getInfo(n: number): NumInfo {
@@ -235,8 +259,10 @@ function NumCard({
         <NumberBadge num={num} color={info.color} />
         <View style={{ flex:1 }}>
           <Text style={[nc.tag, { color: C.textDim }]}>{label}</Text>
-          <Text style={[nc.tagHindi, { color: C.textMuted }]}>{labelHindi}</Text>
-          <Text style={[nc.titleTxt, { color: info.color }]}>{info.title}</Text>
+          {labelHindi && labelHindi !== label && (
+            <Text style={[nc.tagHindi, { color: C.textMuted }]}>{labelHindi}</Text>
+          )}
+          <Text style={[nc.titleTxt, { color: info.color }]}>{t.vlang === "hi" ? info.titleHindi : info.title}</Text>
           <View style={nc.planetRow}>
             <Text style={{ fontSize:12 }}>{info.planetEmoji}</Text>
             <Text style={[nc.planetTxt, { color: C.textMuted }]}>{info.planet}</Text>
@@ -247,10 +273,12 @@ function NumCard({
 
       {/* Traits */}
       <View style={nc.traits}>
-        {info.traits.map((t, i) => (
-          <View key={t} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
-            <Text style={[nc.chipTxt, { color:info.color }]}>{t}</Text>
-            <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
+        {info.traits.map((tr, i) => (
+          <View key={tr} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
+            <Text style={[nc.chipTxt, { color:info.color }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
+            {t.vlang !== "hi" && t.vlang !== "en" && info.traitsHindi[i] && (
+              <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
+            )}
           </View>
         ))}
       </View>
@@ -338,12 +366,12 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
         <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
           <Text style={[pyc.bigNum, { color: info.color }]}>{py}</Text>
           <Text style={[pyc.label, { color: C.textMuted }]}>{t.numYearPrefix} {year}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[py] ?? ""}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[py]?.[t.vlang] ?? PY_THEME[py]?.en ?? ""}</Text>
         </View>
         <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
           <Text style={[pyc.bigNum, { color: pmInfo.color }]}>{pm}</Text>
           <Text style={[pyc.label, { color: C.textMuted }]}>{month}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[pm] ?? ""}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[pm]?.[t.vlang] ?? PY_THEME[pm]?.en ?? ""}</Text>
         </View>
       </View>
     </View>

@@ -490,6 +490,8 @@ function useMagnetometerHeading() {
 // ── Premium Vastu Compass ──────────────────────────────────────────────────────
 function VastuCompass() {
   const C = useC();
+  const t = useT();
+  const v = t.vlang;
   const { heading, isLive, rotateStyle } = useMagnetometerHeading();
 
   const currentDir = DIRS.reduce((best, d) => {
@@ -498,18 +500,38 @@ function VastuCompass() {
     return diffCurr < diffBest ? d : best;
   });
 
+  // Localized labels
+  const L = v === "hi" ? {
+    title: "वास्तु दिशासूचक", subtitle: "पवित्र दिशा खोजक",
+    sensorActive: "सेंसर सक्रिय", aligning: "संरेखण…",
+    sensorInactive: "सेंसर निष्क्रिय", moveDevice: "सक्रिय करने के लिए डिवाइस घुमाएँ",
+    idealDir: "आदर्श दिशा", northEast: "उत्तर-पूर्व (ईशान)",
+  } : v === "hn" ? {
+    title: "Vastu Compass", subtitle: "Pavitra Disha Sucha",
+    sensorActive: "SENSOR ACTIVE", aligning: "ALIGNING…",
+    sensorInactive: "Sensor inactive", moveDevice: "Move device to activate",
+    idealDir: "Ideal Direction", northEast: "North-East (Ishaan)",
+  } : {
+    title: "Vastu Compass", subtitle: "Sacred Direction Finder",
+    sensorActive: "SENSOR ACTIVE", aligning: "ALIGNING…",
+    sensorInactive: "Sensor inactive", moveDevice: "Move device to activate",
+    idealDir: "Ideal Direction", northEast: "North-East",
+  };
+  // Show secondary line: hindi text for hi/hn, English meaning for en
+  const dirSecondary = v === "en" ? `${currentDir.deity} · ${currentDir.meaning}` : currentDir.hindi;
+
   return (
     <View style={[cp.outer, { backgroundColor: C.isDark ? "#131c2e" : C.bgCard, borderColor: C.isDark ? "#1e2a44" : C.border }]}>
       {/* ── Header row ── */}
       <View style={cp.headerRow}>
         <View>
-          <Text style={[cp.heading, { color: C.text }]}>Vastu Compass</Text>
-          <Text style={[cp.subhead, { color: C.textMuted }]}>Sacred Direction Finder</Text>
+          <Text style={[cp.heading, { color: C.text }]}>{L.title}</Text>
+          <Text style={[cp.subhead, { color: C.textMuted }]}>{L.subtitle}</Text>
         </View>
         <View style={[cp.badge, { backgroundColor: isLive ? "rgba(249,215,107,0.10)" : "rgba(148,163,184,0.10)", borderWidth: 1, borderColor: isLive ? "rgba(249,215,107,0.4)" : "rgba(148,163,184,0.3)" }]}>
           <View style={[cp.dot, { backgroundColor: isLive ? "#f9d76b" : "#94a3b8" }]} />
           <Text style={[cp.badgeTxt, { color: isLive ? "#f9d76b" : "#94a3b8" }]}>
-            {isLive ? "SENSOR ACTIVE" : "ALIGNING…"}
+            {isLive ? L.sensorActive : L.aligning}
           </Text>
         </View>
       </View>
@@ -521,10 +543,10 @@ function VastuCompass() {
         </Text>
         <View>
           <Text style={[cp.hdgDir, { color: isLive ? currentDir.color : C.textMuted }]}>
-            {isLive ? `${currentDir.short} · ${currentDir.sub}` : "Sensor inactive"}
+            {isLive ? `${currentDir.short} · ${currentDir.sub}` : L.sensorInactive}
           </Text>
           <Text style={[cp.hdgHindi, { color: C.textMuted }]}>
-            {isLive ? currentDir.hindi : "Move device to activate"}
+            {isLive ? dirSecondary : L.moveDevice}
           </Text>
         </View>
       </View>
@@ -553,7 +575,7 @@ function VastuCompass() {
         <View style={cp.pill}>
           <View style={cp.pillGlow} />
           <Text style={cp.pillText}>
-            ✨  Ideal Direction: <Text style={cp.pillAccent}>North-East</Text>
+            ✨  {L.idealDir}: <Text style={cp.pillAccent}>{L.northEast}</Text>
           </Text>
         </View>
       </View>
@@ -897,11 +919,19 @@ function RoomCard({ room }: { room: VastuRoom }) {
   const [open, setOpen] = useState(false);
   const [tab,  setTab]  = useState<"dos"|"donts"|"remedies">("dos");
   const C = useC();
+  const t = useT();
+  const v = t.vlang;
+  // Tab labels per language
+  const tabLabels = v === "hi"
+    ? { dos: "करें ✅", donts: "न करें ❌", remedies: "उपाय 🙏" }
+    : v === "hn"
+      ? { dos: "Karein ✅", donts: "Mat Karein ❌", remedies: "Upay 🙏" }
+      : { dos: "Do ✅", donts: "Don't ❌", remedies: "Remedies 🙏" };
 
   return (
     <Pressable
       style={[c.card, { borderColor: C.isDark ? room.border : `${room.color}30`, backgroundColor: C.isDark ? room.bg : C.bgCard }]}
-      onPress={() => { setOpen(v => !v); Haptics.selectionAsync(); }}
+      onPress={() => { setOpen(o => !o); Haptics.selectionAsync(); }}
     >
       {/* Header */}
       <View style={c.cardHeader}>
@@ -909,8 +939,15 @@ function RoomCard({ room }: { room: VastuRoom }) {
           <Text style={{ fontSize:20 }}>{room.emoji}</Text>
         </View>
         <View style={{ flex:1 }}>
-          <Text style={[c.roomName, { color:room.color }]}>{room.name}</Text>
-          <Text style={[c.roomHindi, { color: C.textMuted }]}>{room.nameHindi}</Text>
+          <Text style={[c.roomName, { color:room.color }]}>
+            {v === "hi" ? room.nameHindi : room.name}
+          </Text>
+          {v !== "en" && v !== "hi" && room.nameHindi !== room.name && (
+            <Text style={[c.roomHindi, { color: C.textMuted }]}>{room.nameHindi}</Text>
+          )}
+          {v === "hi" && room.name !== room.nameHindi && (
+            <Text style={[c.roomHindi, { color: C.textMuted }]}>{room.name}</Text>
+          )}
         </View>
         <View style={[c.elemPill, { backgroundColor:`${room.color}10` }]}>
           <Text style={{ fontSize:10 }}>{room.elementIcon}</Text>
@@ -930,12 +967,12 @@ function RoomCard({ room }: { room: VastuRoom }) {
         <View style={c.expanded}>
           <Text style={[c.importance, { color: C.textMuted }]}>{room.importance}</Text>
           <View style={c.tabRow}>
-            {(["dos","donts","remedies"] as const).map(t => (
-              <Pressable key={t} onPress={() => setTab(t)}
+            {(["dos","donts","remedies"] as const).map(tk => (
+              <Pressable key={tk} onPress={() => setTab(tk)}
                 style={[c.tabBtn, { borderColor: C.border, backgroundColor: C.bgCard2 },
-                  tab===t && { backgroundColor:`${room.color}15`, borderColor:`${room.color}30` }]}>
-                <Text style={[c.tabText, { color: C.textMuted }, tab===t && { color:room.color }]}>
-                  {t==="dos" ? "Do ✅" : t==="donts" ? "Don't ❌" : "Remedies 🙏"}
+                  tab===tk && { backgroundColor:`${room.color}15`, borderColor:`${room.color}30` }]}>
+                <Text style={[c.tabText, { color: C.textMuted }, tab===tk && { color:room.color }]}>
+                  {tabLabels[tk]}
                 </Text>
               </Pressable>
             ))}

@@ -12,6 +12,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
+import { vedicLang, NAKSHATRA, RASHI, RASHI_KEYS, pick, type VLang } from "@/lib/i18nVedic";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
@@ -418,8 +419,10 @@ function computeBAV(kundli: KundliData) {
 
 function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (v2: string) => oa(C.isDark, v2);
   const { BAVS, SAV } = useMemo(() => computeBAV(kundli), [kundli]);
   const [selPlanet, setSelPlanet] = useState("SAV");
   const PLANETS = ["SAV","Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
@@ -431,10 +434,15 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, padding: 0, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>Ashtakavarga kya hai?</Text>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>
+            {v === "hi" ? "अष्टकवर्ग क्या है?" : v === "hn" ? "Ashtakavarga kya hai?" : "What is Ashtakavarga?"}
+          </Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            Har grah 8 sthanon se 12 rashiyon ko benefic/malefic points deta hai.
-            SAV = sabhi 7 grahas ka total. Zyada points = stronger rashi.
+            {v === "hi"
+              ? "हर ग्रह 8 स्थानों से 12 राशियों को शुभ/अशुभ अंक देता है। सर्वाष्टकवर्ग (SAV) = सभी 7 ग्रहों का कुल। अधिक अंक = अधिक मज़बूत राशि।"
+              : v === "hn"
+              ? "Har grah 8 sthanon se 12 rashiyon ko benefic/malefic points deta hai. SAV = sabhi 7 grahas ka total. Zyada points = stronger rashi."
+              : "Each planet awards benefic/malefic points to all 12 signs from 8 houses. SAV = total of all 7 planets. More points = stronger sign."}
           </Text>
         </View>
       </View>
@@ -472,7 +480,8 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {RASHIS_HI.map((rashi,i) => {
+        {RASHI_KEYS.map((rk, i) => {
+          const rashi = pick(v, RASHI[rk]);
           const score = scores[i] ?? 0;
           const pct   = score / maxScore;
           const color = pct >= 0.7 ? "#22c55e" : pct >= 0.5 ? "#fbbf24" : pct >= 0.3 ? "#f97316" : "#ef4444";
@@ -488,7 +497,11 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
               </View>
               <View style={{ backgroundColor: `${color}${o("18")}`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
                 <Text style={{color, fontSize: 9, fontFamily: F.bold}}>
-                  {pct>=0.7?"Uchh":pct>=0.5?"Shubh":pct>=0.3?"Madhyam":"Neech"}
+                  {v === "en"
+                    ? (pct>=0.7?"Strong":pct>=0.5?"Good":pct>=0.3?"Average":"Weak")
+                    : v === "hi"
+                      ? (pct>=0.7?"उच्च":pct>=0.5?"शुभ":pct>=0.3?"मध्यम":"नीच")
+                      : (pct>=0.7?"Uchh":pct>=0.5?"Shubh":pct>=0.3?"Madhyam":"Neech")}
                 </Text>
               </View>
             </View>
@@ -497,7 +510,12 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
-        {[["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]].map(([c,l])=>(
+        {(v === "en"
+          ? [["#22c55e","7-8 (Strong)"],["#fbbf24","5-6 (Good)"],["#f97316","3-4 (Average)"],["#ef4444","0-2 (Weak)"]]
+          : v === "hi"
+            ? [["#22c55e","7-8 (उच्च)"],["#fbbf24","5-6 (शुभ)"],["#f97316","3-4 (मध्यम)"],["#ef4444","0-2 (नीच)"]]
+            : [["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]]
+        ).map(([c,l])=>(
           <View key={l} style={{flexDirection:"row",alignItems:"center",gap:5}}>
             <View style={{width:10,height:10,borderRadius:5,backgroundColor:c as string}}/>
             <Text style={{color:C.textMid,fontSize:11,fontFamily:F.semibold}}>{l}</Text>
@@ -752,8 +770,10 @@ function approxTransit(referenceDate: Date = new Date()): Record<string,number> 
 
 function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (v2: string) => oa(C.isDark, v2);
   const transits = useMemo(() => approxTransit(), []);
   const ascRashi = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
@@ -764,10 +784,16 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
         <View style={{ borderLeftWidth: 3, borderLeftColor: C.warningBorder, padding: 14, gap: 4 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="alert-triangle" size={13} color={C.warningText} />
-            <Text style={{ color: C.warningText, fontSize: 13, fontFamily: F.bold }}>Approximate Transit</Text>
+            <Text style={{ color: C.warningText, fontSize: 13, fontFamily: F.bold }}>
+              {v === "hi" ? "अनुमानित गोचर" : v === "hn" ? "Approximate Transit" : "Approximate Transit"}
+            </Text>
           </View>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful.
+            {v === "hi"
+              ? "ये गोचर औसत कक्षीय गति से गणना किए गए हैं — सामान्य मार्गदर्शन के लिए उपयोगी।"
+              : v === "hn"
+              ? "Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful."
+              : "These transits are computed from mean orbital motion — useful for broad guidance only."}
           </Text>
         </View>
       </View>
@@ -782,9 +808,14 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
               <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>LIVE — CHANDRA TRANSIT</Text>
             </View>
             <Text style={{color:C.text,fontSize:16,fontFamily:F.bold,marginTop:2}}>
-              {moonRashi.name} · Bhav {((moonRashi.index - ascRashi + 12)%12)+1}
+              {typeof moonRashi.index === "number" ? pick(v, RASHI[RASHI_KEYS[moonRashi.index]]) : moonRashi.name} · {v === "en" ? "House" : "Bhav"} {((moonRashi.index - ascRashi + 12)%12)+1}
             </Text>
-            <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.semibold}}>Nakshatra: {moonRashi.nakshatra}</Text>
+            <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.semibold}}>
+              {v === "hi" ? "नक्षत्र" : "Nakshatra"}: {(() => {
+                const idx = NAKSHATRA.findIndex(n => n.en === moonRashi.nakshatra);
+                return idx >= 0 ? pick(v, NAKSHATRA[idx]) : moonRashi.nakshatra;
+              })()}
+            </Text>
           </View>
         </View>
       )}
@@ -796,7 +827,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
           const deg     = (lon % 30).toFixed(1);
           const house   = ((rashi - ascRashi + 12) % 12) + 1;
           const nIdx    = Math.floor(lon / (360/27)) % 27;
-          const nakName = NAKSHATRAS[nIdx];
+          const nakName = pick(v, NAKSHATRA[nIdx]);
           const pHue    = hue(name);
 
           const natal   = kundli.planets.find(p => p.name === name);
@@ -824,7 +855,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
                   )}
                 </View>
                 <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
-                  {RASHIS_HI[rashi]} · Bhav {house} · {nakName}
+                  {pick(v, RASHI[RASHI_KEYS[rashi]])} · {v === "en" ? "House" : "Bhav"} {house} · {nakName}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -839,7 +870,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
   );
 }
 
-function getKPLords(longitude: number): { nakName:string; starLord:string; subLord:string; subSubLord:string } {
+function getKPLords(longitude: number): { nakIdx:number; nakName:string; starLord:string; subLord:string; subSubLord:string } {
   const NAK_SPAN = 360 / 27;
   const nakIdx   = Math.floor(longitude / NAK_SPAN) % 27;
   const nakStart = nakIdx * NAK_SPAN;
@@ -867,13 +898,15 @@ function getKPLords(longitude: number): { nakName:string; starLord:string; subLo
     }
     pos += span;
   }
-  return { nakName:NAKSHATRAS[nakIdx], starLord, subLord, subSubLord };
+  return { nakIdx, nakName:NAKSHATRAS[nakIdx], starLord, subLord, subSubLord };
 }
 
 function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (v2: string) => oa(C.isDark, v2);
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   const ascLon = kundli.ascendantDeg ?? 0;
   const kpData = useMemo(() => {
@@ -919,7 +952,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
                     {isAsc?"Ascendant":pName(name)}
                   </Text>
                   <View style={{ backgroundColor: `${pHue}${o("12")}`, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: `${pHue}${o("18")}` }}>
-                    <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{(lon%30).toFixed(2)}° {kp.nakName}</Text>
+                    <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{(lon%30).toFixed(2)}° {pick(v, NAKSHATRA[kp.nakIdx])}</Text>
                   </View>
                 </View>
                 <View style={{flexDirection:"row",gap:6,flexWrap:"wrap"}}>

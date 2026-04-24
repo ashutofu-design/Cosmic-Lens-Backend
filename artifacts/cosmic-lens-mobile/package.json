@@ -5,7 +5,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "EXPO_PUBLIC_REPL_ID=$REPL_ID bash scripts/start-tunnel.sh",
-    "dev:local": "expo start --port ${PORT:-18987}",
+    "dev:local": "expo start --port 18987",
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

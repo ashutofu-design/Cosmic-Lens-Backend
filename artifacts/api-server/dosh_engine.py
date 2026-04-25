@@ -99,6 +99,49 @@ def _planet_obj(pl: list, name: str) -> dict:
     return next((p for p in pl if p.get("name") == name), {}) or {}
 
 
+# ── Aspect helpers ────────────────────────────────────────────────────────────
+# Nth house from H (counted inclusively, H itself = 1st) = ((H - 1 + N - 1) % 12) + 1
+# Equivalent shorthand: ((H + N - 2) % 12) + 1
+
+def _saturn_aspects_house(sat_h: int, target_h: int) -> bool:
+    """Saturn's classical 3rd / 7th / 10th drishti (special aspects)."""
+    if sat_h < 1 or target_h < 1:
+        return False
+    aspects = {
+        (sat_h + 1) % 12 + 1,   # 3rd
+        (sat_h + 5) % 12 + 1,   # 7th
+        (sat_h + 8) % 12 + 1,   # 10th
+    }
+    return target_h in aspects
+
+
+def _jupiter_aspects_house(jup_h: int, target_h: int) -> bool:
+    """Jupiter's classical 5th / 7th / 9th drishti."""
+    if jup_h < 1 or target_h < 1:
+        return False
+    aspects = {
+        (jup_h + 3) % 12 + 1,   # 5th
+        (jup_h + 5) % 12 + 1,   # 7th
+        (jup_h + 7) % 12 + 1,   # 9th
+    }
+    return target_h in aspects
+
+
+def _is_strong(pl: list, planet: str) -> bool:
+    """A planet is classically 'strong' if in kendra/trikona, exalted, or in own sign."""
+    if not planet:
+        return False
+    KENDRA_TRIKONA = {1, 4, 5, 7, 9, 10}
+    ph = _house(pl, planet)
+    p_obj = _planet_obj(pl, planet)
+    p_sign = _sign_idx(p_obj)
+    return (
+        (ph in KENDRA_TRIKONA)
+        or (p_sign and p_sign == EXALT_SIGN.get(planet))
+        or (p_sign in OWN_SIGNS.get(planet, set()))
+    )
+
+
 # ── 1. Manglik Dosh ────────────────────────────────────────────────────────────
 def _manglik(pl):
     mars_h = _house(pl, "Mars")
@@ -572,53 +615,156 @@ def _angarak(pl):
 
 
 # ── 8. Shrapit Dosh ───────────────────────────────────────────────────────────
+# Classical Shrapit Yog (curse-yog) — Lal Kitab + nadi tradition + BPHS peripheral.
+# Triggers (severity-weighted):
+#   Hard T1: Sat + Rahu same house (conjunction)               score +3
+#   Hard T2: Sat aspects Rahu via 3rd/7th/10th drishti          score +2
+#   Soft T3: Sat + Ketu same house (secondary form)             score +1
+# House amplifiers (apply to the trigger-house, max one per category):
+#   A1: trigger-house in dusthana 6/8/12                        score +1
+#   A2: trigger-house in karmic 1/5/9 (ancestor curse)          score +1
+#   A3: trigger-house in 2/7   (family / marriage curse)        score +1
+# Bhangas (cancellation):
+#   B1: Jupiter 5/7/9 drishti on Saturn OR Rahu                 score -1
+#   B2: Saturn in own sign (Cap/Aqu) OR Rahu in friendly sign   score -1
+#   B3: 9th lord strong + Jupiter strong                        score -1
+# Tier (after no-trigger short-circuit):
+#   ≥2 bhanga → forced None (strong cancellation)
+#   score ≥ 3 → Active ; 1..2 → Mild ; ≤ 0 → None
 def _shrapit(pl):
-    sat_h    = _house(pl, "Saturn")
-    rahu_h   = _house(pl, "Rahu")
-    sat_lon  = _lon(pl, "Saturn")
-    rahu_lon = _lon(pl, "Rahu")
+    sat_h  = _house(pl, "Saturn")
+    rahu_h = _house(pl, "Rahu")
+    ketu_h = _house(pl, "Ketu")
+    jup_h  = _house(pl, "Jupiter")
 
-    if sat_h == rahu_h:
+    triggers = []
+    score = 0
+    trigger_house = 0
+
+    # ── Hard T1: Sat–Rahu conjunction ─────────────────────────────────────────
+    if sat_h and sat_h == rahu_h:
+        triggers.append(f"Sat–Rahu Conjunction in H{sat_h}")
+        trigger_house = sat_h
+        score += 3
+    # ── Hard T2: Sat aspects Rahu (only if no conjunction already) ────────────
+    elif _saturn_aspects_house(sat_h, rahu_h):
+        triggers.append(f"Saturn (H{sat_h}) drishti on Rahu (H{rahu_h})")
+        trigger_house = rahu_h
+        score += 2
+
+    # ── Soft T3: Sat–Ketu conjunction (independent secondary form) ────────────
+    if sat_h and sat_h == ketu_h:
+        triggers.append(f"Sat–Ketu Conjunction in H{sat_h} (secondary)")
+        if not trigger_house:
+            trigger_house = sat_h
+        score += 1
+
+    # No trigger fired → clean result, skip the rest
+    if not triggers:
+        return (
+            "None",
+            "No Shrapit Dosh — Saturn–Rahu/Ketu Separated",
+            "Saturn does not conjunct or aspect Rahu, and is not conjunct Ketu. No Shrapit pattern present.",
+            [],
+            f"Saturn → H{sat_h} | Rahu → H{rahu_h} | Ketu → H{ketu_h}",
+        )
+
+    # ── House amplifiers (only on the primary trigger-house) ──────────────────
+    amplifiers = []
+    if trigger_house in {6, 8, 12}:
+        amplifiers.append(f"Dusthana amplification (H{trigger_house})")
+        score += 1
+    if trigger_house in {1, 5, 9}:
+        amplifiers.append(f"Karmic-house amplification (H{trigger_house}, ancestor curse)")
+        score += 1
+    if trigger_house in {2, 7}:
+        amplifiers.append(f"Family/marriage amplification (H{trigger_house})")
+        score += 1
+
+    # ── Bhanga 1: Jupiter aspects Saturn or Rahu ──────────────────────────────
+    bhangas = []
+    jup_targets = []
+    if jup_h and sat_h and _jupiter_aspects_house(jup_h, sat_h):
+        jup_targets.append(f"Saturn(H{sat_h})")
+    if jup_h and rahu_h and _jupiter_aspects_house(jup_h, rahu_h):
+        jup_targets.append(f"Rahu(H{rahu_h})")
+    if jup_targets:
+        bhangas.append(f"Jupiter (H{jup_h}) drishti on {' & '.join(jup_targets)} (karmic shield)")
+        score -= 1
+
+    # ── Bhanga 2: Saturn in own sign OR Rahu in friendly sign ────────────────
+    sat_obj = _planet_obj(pl, "Saturn")
+    rahu_obj = _planet_obj(pl, "Rahu")
+    sat_sign = _sign_idx(sat_obj)
+    rahu_sign = _sign_idx(rahu_obj)
+    RAHU_FRIENDLY = {2, 3, 6, 7, 11}   # Taurus, Gemini, Virgo, Libra, Aquarius
+    dignity_notes = []
+    if sat_sign in OWN_SIGNS.get("Saturn", set()):
+        dignity_notes.append(f"Saturn own sign ({sat_sign})")
+    if rahu_sign in RAHU_FRIENDLY:
+        dignity_notes.append(f"Rahu friendly sign ({rahu_sign})")
+    if dignity_notes:
+        bhangas.append(f"Dignity bhanga: {' + '.join(dignity_notes)}")
+        score -= 1
+
+    # ── Bhanga 3: 9th lord strong AND Jupiter strong (ancestor blessings) ────
+    asc = _asc_sign(pl)
+    if asc:
+        L9 = _house_lord(asc, 9)
+        if L9 and _is_strong(pl, L9) and _is_strong(pl, "Jupiter"):
+            bhangas.append(f"9th lord ({L9}) strong + Jupiter strong (ancestor blessings)")
+            score -= 1
+
+    # ── Tier decision ────────────────────────────────────────────────────────
+    n_bhng = len(bhangas)
+
+    note_parts = ["Triggers: " + " | ".join(triggers)]
+    if amplifiers:
+        note_parts.append("Amplifiers: " + " | ".join(amplifiers))
+    if bhangas:
+        note_parts.append("Bhanga: " + " | ".join(bhangas))
+    note_parts.append(f"Score={score}")
+    planet_note = " || ".join(note_parts)
+
+    common_remedies = [
+        "Perform Shrapit Dosh Nivaran Pooja at Trimbakeshwar / Kalahasti",
+        "Chant Shani Chalisa every Saturday",
+        "Donate black sesame, black cloth, and mustard oil on Saturdays",
+        "Feed crows black sesame and rice every Saturday",
+        "Recite Navagraha mantra and perform havan on Saturdays",
+    ]
+
+    # ≥2 bhanga forced cancellation
+    if n_bhng >= 2:
+        return (
+            "None",
+            "Shrapit Triggers Cancelled by Bhanga",
+            f"{len(triggers)} Shrapit trigger(s) detected but neutralised by {n_bhng} cancellation factor(s) — Jupiter/dignity/ancestor blessings shield the karmic axis.",
+            [],
+            planet_note,
+        )
+    if score >= 3:
         return (
             "Active",
-            f"Saturn–Rahu Conjunction in House {sat_h} — Shrapit Dosh",
-            "Shrapit Dosh (cursed birth) forms from Saturn–Rahu conjunction. Signifies past-life curses or unfulfilled karmic debts, causing chronic delays, hardships, relationship obstacles, and persistent bad luck.",
-            [
-                "Perform Shrapit Dosh Nivaran Pooja at Trimbakeshwar",
-                "Chant Shani Chalisa every Saturday",
-                "Donate black sesame, black cloth, and mustard oil on Saturdays",
-                "Feed crows black sesame and rice every Saturday",
-                "Recite Navagraha mantra and perform havan on Saturdays",
-            ],
-            f"Saturn → H{sat_h} | Rahu → H{rahu_h}",
+            f"Shrapit Dosh Active (Score {score}) — Karmic Curse Pattern",
+            "Saturn–Rahu (or Saturn–Ketu) creates a strong karmic-curse pattern. Sudden unexplained losses, repeating obstacles, ancestor displeasure, and persistent bad luck — peaks during Saturn / Rahu dasha.",
+            common_remedies,
+            planet_note,
         )
-    # Saturn aspects 3rd, 7th, 10th from its position
-    sat_aspects = [(sat_h + 2) % 12 + 1, (sat_h + 6) % 12 + 1, (sat_h + 9) % 12 + 1]
-    if rahu_h in sat_aspects:
+    if score >= 1:
         return (
             "Mild",
-            f"Saturn Aspects Rahu (H{rahu_h}) — Mild Shrapit Dosh",
-            "Saturn's aspect on Rahu's house creates mild Shrapit effects — delays, karmic lessons, and periodic hardships.",
-            [
-                "Offer black sesame to Shani temple on Saturdays",
-                "Recite Shani Stotra every Saturday",
-            ],
-            f"Saturn → H{sat_h} (aspects H{rahu_h}) | Rahu → H{rahu_h}",
-        )
-    if _orb(sat_lon, rahu_lon) < 30:
-        return (
-            "Mild",
-            "Saturn–Rahu Close Degrees — Mild Shrapit",
-            "Saturn and Rahu are within close degrees across houses, creating mild Shrapit karmic debt.",
-            ["Practice karma yoga and selfless service (seva)"],
-            f"Saturn → H{sat_h} | Rahu → H{rahu_h}",
+            f"Mild Shrapit Dosh (Score {score})",
+            "Partial Shrapit pattern. Periodic karmic obstacles or ancestor-related issues; manageable with consistent Saturn/ancestor remedies.",
+            common_remedies[:2],
+            planet_note,
         )
     return (
         "None",
-        "No Shrapit Dosh — Saturn–Rahu Separated",
-        "Saturn and Rahu are well-separated in the chart. No Shrapit Dosh present.",
+        "Shrapit Triggers Neutralised",
+        "Shrapit triggers present but neutralised by bhanga / lack of amplification.",
         [],
-        f"Saturn → H{sat_h} | Rahu → H{rahu_h}",
+        planet_note,
     )
 
 
@@ -696,8 +842,7 @@ def _vish_yoga(pl):
             ],
             f"Saturn → H{sat_h} | Moon → H{moon_h}",
         )
-    sat_aspects = [(sat_h + 2) % 12 + 1, (sat_h + 6) % 12 + 1, (sat_h + 9) % 12 + 1]
-    if sat_h != 0 and moon_h in sat_aspects:
+    if sat_h != 0 and _saturn_aspects_house(sat_h, moon_h):
         return (
             "Mild",
             f"Saturn Aspects Moon (H{moon_h}) — Mild Vish Yoga",

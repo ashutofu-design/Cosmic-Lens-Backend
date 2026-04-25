@@ -464,6 +464,8 @@ def _kemadruma(pl):
     def _fmt(h, planets):
         return f"H{h}: {', '.join(planets) if planets else 'empty'}"
 
+    # Strict BPHS Bhanga rule: even ONE graha (other than Moon) in 2nd/12th
+    # from Moon, OR conjunct Moon, fully cancels Kemadruma. No Mild tier.
     if not prev_has and not next_has and not moon_companion:
         return (
             "Active",
@@ -478,21 +480,10 @@ def _kemadruma(pl):
             ],
             f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
         )
-    if not prev_has or not next_has:
-        return (
-            "Mild",
-            f"Moon Partially Isolated — Mild Kemadruma Dosh",
-            "One side adjacent to the Moon is empty. Mild Kemadruma effects: occasional emotional isolation and feeling unsupported.",
-            [
-                "Chant Chandra Beej mantra regularly",
-                "Maintain close relationships with loved ones",
-            ],
-            f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
-        )
     return (
         "None",
-        "No Kemadruma Dosh — Moon Well-Supported",
-        "Moon has planetary company on adjacent houses (2nd/12th). Kemadruma Dosh is cancelled per classical Bhanga rules.",
+        "No Kemadruma Dosh — Moon Supported (Bhanga)",
+        "At least one graha sits in 2nd/12th from Moon or conjunct Moon. Per classical Bhanga rule (BPHS Ch.8), Kemadruma Dosh is fully cancelled.",
         [],
         f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
     )

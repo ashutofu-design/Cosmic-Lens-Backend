@@ -4172,6 +4172,15 @@ def astrovastu_pro_route():
         print(f"[astrovastu-pro] log failed: {exc}")
         db.session.rollback()
 
+    # ── Phase 5: 25-lang summary localization ────────────────────────────
+    # Walks the report and adds *_loc fields next to *_en/*_hi pairs,
+    # translated to user's UI language via OpenAI (cached). Non-fatal.
+    try:
+        from i18n_summary import localize_response
+        localize_response(report, lang)
+    except Exception as exc:
+        print(f"[astrovastu-pro] i18n_summary failed (non-fatal): {exc}")
+
     return jsonify(report)
 
 
@@ -4397,6 +4406,15 @@ def business_vastu_route():
     except Exception as exc:
         print(f"[business-vastu] log failed: {exc}")
         db.session.rollback()
+
+    # ── Phase 5: 25-lang summary localization ────────────────────────────
+    # Walks the report and adds *_loc fields next to *_en/*_hi pairs,
+    # translated to user's UI language via OpenAI (cached). Non-fatal.
+    try:
+        from i18n_summary import localize_response
+        localize_response(report, lang)
+    except Exception as exc:
+        print(f"[business-vastu] i18n_summary failed (non-fatal): {exc}")
 
     return jsonify(report)
 

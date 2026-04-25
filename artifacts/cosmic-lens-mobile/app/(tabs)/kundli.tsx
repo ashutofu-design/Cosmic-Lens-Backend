@@ -14,6 +14,7 @@ import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { useT } from "@/hooks/useT";
 import { vedicLang, NAKSHATRA, RASHI, RASHI_KEYS, pick, type VLang } from "@/lib/i18nVedic";
+import { getMonthsShort, getTaraData, getKarakaDefs } from "@/lib/i18nContent";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
@@ -26,6 +27,7 @@ const F = {
   bold:     "Nunito_700Bold",
 };
 
+// Module-level fallback (English short months); per-language months come from getMonthsShort(lang).
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const NAKSHATRAS = [
   "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya",
@@ -118,9 +120,10 @@ function getKundliLabels(t: ReturnType<typeof useT>) {
   };
 }
 
-function formatDate(d: Date | string) {
+function formatDate(d: Date | string, lang?: string) {
   const dt = new Date(d);
-  return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
+  const months = lang ? getMonthsShort(lang) : MONTHS;
+  return `${dt.getDate()} ${months[dt.getMonth()]} ${dt.getFullYear()}`;
 }
 const tsOf = (d: Date | string) => +new Date(d);
 const isNow = (s: Date | string, e: Date | string) => { const n=Date.now(); return tsOf(s)<=n&&n<tsOf(e); };
@@ -217,7 +220,7 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
               <Text style={{ color, fontSize: 20, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
             </View>
             <Text style={{ color: C.text, fontSize: 22, fontFamily: F.bold }}>{pName(planet)}</Text>
-            <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+            <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold }}>{formatDate(startDate, language)} – {formatDate(endDate, language)}</Text>
             {active && (
               <View style={{ backgroundColor: `${color}${o("18")}`, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: `${color}${o("35")}`, marginTop: 2 }}>
                 <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1 }}>{L.activeNow}</Text>
@@ -230,11 +233,11 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
           <View style={{ gap: 5, marginTop: 4 }}>
             <ProgBar pct={pct} color={color} />
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(startDate)}</Text>
+              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(startDate, language)}</Text>
               <View style={{ backgroundColor: `${color}${o("15")}`, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
                 <Text style={{ color, fontSize: 12, fontFamily: F.bold }}>{pct}%</Text>
               </View>
-              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(endDate)}</Text>
+              <Text style={{ color: C.textDim, fontSize: 10, fontFamily: F.semibold }}>{formatDate(endDate, language)}</Text>
             </View>
           </View>
         )}
@@ -282,7 +285,7 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
                   </View>
                 )}
               </View>
-              <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.semibold, marginTop: 2 }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.semibold, marginTop: 2 }}>{formatDate(startDate, language)} – {formatDate(endDate, language)}</Text>
             </View>
           </View>
           <NavArrow dir="right" enabled={hasNext} onPress={onNext} C={C} />
@@ -345,7 +348,7 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
             <Feather name="chevron-right" size={14} color={C.textMuted} />
           </Pressable>
         </View>
-        <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.semibold, textAlign: "center" }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
+        <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.semibold, textAlign: "center" }}>{formatDate(startDate, language)} – {formatDate(endDate, language)}</Text>
         {pct > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <View style={{ flex: 1 }}>
@@ -592,21 +595,28 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   );
 }
 
-const TARA_DATA = [
-  { name:"Janma",       nameHindi:"जन्म",       type:"neutral", color:"#94a3b8", desc:"Karmic identity — the foundation of the birth chart" },
-  { name:"Sampat",      nameHindi:"सम्पत",       type:"good",    color:"#22c55e", desc:"Wealth, prosperity, and happiness" },
-  { name:"Vipat",       nameHindi:"विपत",        type:"bad",     color:"#ef4444", desc:"Obstacles, disruptions, difficulties" },
-  { name:"Kshema",      nameHindi:"क्षेम",       type:"good",    color:"#4ade80", desc:"Health, security, and well-being" },
-  { name:"Pratyak",     nameHindi:"प्रत्यक",     type:"bad",     color:"#f97316", desc:"Opposition, blockages, resistance" },
-  { name:"Sadhana",     nameHindi:"साधना",       type:"good",    color:"#34d399", desc:"Efforts bear fruit, discipline rewarded" },
-  { name:"Naidhana",    nameHindi:"नैधन",        type:"bad",     color:"#dc2626", desc:"Highly harmful — proceed with caution" },
-  { name:"Mitra",       nameHindi:"मित्र",       type:"good",    color:"#60a5fa", desc:"Friendship, cooperation, support received" },
-  { name:"Paramamitra", nameHindi:"परममित्र",    type:"great",   color:"#a78bfa", desc:"Highly auspicious — supreme well-wisher" },
+// Static type+color metadata (language-independent). Names + descriptions come from getTaraData(lang).
+const TARA_TYPES: { type: "neutral"|"good"|"bad"|"great"; color: string }[] = [
+  { type:"neutral", color:"#94a3b8" },
+  { type:"good",    color:"#22c55e" },
+  { type:"bad",     color:"#ef4444" },
+  { type:"good",    color:"#4ade80" },
+  { type:"bad",     color:"#f97316" },
+  { type:"good",    color:"#34d399" },
+  { type:"bad",     color:"#dc2626" },
+  { type:"good",    color:"#60a5fa" },
+  { type:"great",   color:"#a78bfa" },
 ];
 
-function computeNavatara(kundli: KundliData) {
+function makeTaraData(lang: string) {
+  const items = getTaraData(lang);
+  return items.map((it, i) => ({ name: it.name, desc: it.desc, ...TARA_TYPES[i] }));
+}
+
+function computeNavatara(kundli: KundliData, lang: string) {
   const moonNakIdx = NAKSHATRAS.indexOf(kundli.nakshatra ?? "");
   if (moonNakIdx < 0) return [];
+  const taraData = makeTaraData(lang);
   const coreplanets = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   return coreplanets.map(name => {
     const p = kundli.planets.find(pl => pl.name === name);
@@ -614,7 +624,7 @@ function computeNavatara(kundli: KundliData) {
     const pNakIdx = Math.floor(lon / (360/27)) % 27;
     const count   = ((pNakIdx - moonNakIdx + 27) % 27);
     const taraNum = (count % 9);
-    const tara    = TARA_DATA[taraNum];
+    const tara    = taraData[taraNum];
     return { planet: name, nakIdx: pNakIdx, nakName: NAKSHATRAS[pNakIdx], taraNum: taraNum + 1, tara };
   });
 }
@@ -627,7 +637,8 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
   const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (vv: string) => oa(C.isDark, vv);
-  const data = useMemo(() => computeNavatara(kundli), [kundli]);
+  const data = useMemo(() => computeNavatara(kundli, t.lang), [kundli, t.lang]);
+  const taraData = useMemo(() => makeTaraData(t.lang), [t.lang]);
   const moonNak = kundli.nakshatra ?? "?";
 
   return (
@@ -657,7 +668,7 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{flexDirection:"row",gap:6}}>
-          {TARA_DATA.map((t2,i) => (
+          {taraData.map((t2,i) => (
             <View key={i} style={{ borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", gap: 2, borderColor: `${t2.color}${o("35")}`, backgroundColor: `${t2.color}${o("10")}` }}>
               <Text style={{ fontSize: 11, fontFamily: F.bold, color: t2.color }}>{i+1}</Text>
               <Text style={{ fontSize: 10, fontFamily: F.bold, color: t2.color }}>{t2.name.slice(0,6)}</Text>
@@ -698,18 +709,9 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
   );
 }
 
-const KARAKA_DEFS = [
-  { key:"AK",  name:"Atmakaraka",    nameHindi:"आत्मकारक",   desc:"Aatma, soul, jeevana ka uddeshya",    color:"#f59e0b" },
-  { key:"AmK", name:"Amatyakaraka",  nameHindi:"अमात्यकारक", desc:"Career, mind, mantri, authority",     color:"#22c55e" },
-  { key:"BK",  name:"Bhratrukaraka", nameHindi:"भ्रातृकारक", desc:"Bhai-behan, courage, mentors",        color:"#ef4444" },
-  { key:"MK",  name:"Matrakaraka",   nameHindi:"मातृकारक",   desc:"Mata, griha sukh, emotions",          color:"#94a3b8" },
-  { key:"PK",  name:"Putrakaraka",   nameHindi:"पुत्रकारक",  desc:"Santaan, creativity, intelligence",   color:"#ec4899" },
-  { key:"GK",  name:"Gnatikaraka",   nameHindi:"ज्ञातिकारक", desc:"Karyasthali, shatru, competition",    color:"#a78bfa" },
-  { key:"DK",  name:"Darakaraka",    nameHindi:"दारकारक",    desc:"Life partner, vivah, relationships",  color:"#f59e0b" },
-];
-
-function computeChara(kundli: KundliData) {
+function computeChara(kundli: KundliData, lang: string) {
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"];
+  const KARAKA_DEFS = getKarakaDefs(lang);
   const vals = CORE.map(name => {
     const p = kundli.planets.find(pl => pl.name === name);
     if (!p) return { name, deg: 0 };
@@ -729,7 +731,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (vv: string) => oa(C.isDark, vv);
-  const data = useMemo(() => computeChara(kundli), [kundli]);
+  const data = useMemo(() => computeChara(kundli, t.lang), [kundli, t.lang]);
   const ak   = data[0];
 
   return (
@@ -800,7 +802,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
                     <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{deg.toFixed(1)}°</Text>
                   </View>
                 </View>
-                <Text style={{color,fontSize:12,fontFamily:F.bold,marginTop:2}}>{karaka.name} · {karaka.nameHindi}</Text>
+                <Text style={{color,fontSize:12,fontFamily:F.bold,marginTop:2}}>{karaka.name}</Text>
                 <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:2}}>{karaka.desc}</Text>
               </View>
             </View>

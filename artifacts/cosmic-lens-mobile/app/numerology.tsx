@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
+import { getPYTheme } from "@/lib/i18nContent";
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
 const PYTH: Record<string, number> = {
@@ -292,45 +293,6 @@ const NUM: Record<number, NumInfo> = {
         remedyHi:"प्रति सप्ताह वंचितों की निष्काम सेवा करें। प्रतिदिन घी का दीप जलाएँ।" },
 };
 
-const PY_THEME: Record<number, { en: string; hn: string; hi: string }> = {
-  1:  { en:"New beginnings — a 9-year cycle begins. Plant the seeds of your dreams.",
-        hn:"Nayi shuruaat — 9 saal ka cycle shuru. Apne sapnon ke beej boyein.",
-        hi:"नई शुरुआत — 9 वर्ष का चक्र शुरू। अपने सपनों के बीज बोएँ।" },
-  2:  { en:"Partnerships and patience. Let relationships deepen and blossom.",
-        hn:"Saajhedari aur sabr. Rishton ko gehraai aur khilne ka mauka dein.",
-        hi:"साझेदारी और धैर्य। रिश्तों को गहराई से खिलने दें।" },
-  3:  { en:"Creativity, joy, and expression — let your inner light shine brightly.",
-        hn:"Rachnatmakta, khushi, abhivyakti — apni andar ki roshni chamkayein.",
-        hi:"रचनात्मकता, आनंद और अभिव्यक्ति — अपनी आंतरिक ज्योति चमकाएँ।" },
-  4:  { en:"Hard work and foundation-building. Discipline is your greatest asset.",
-        hn:"Mehnat aur neev banane ka samay. Anushashan aapki sabse badi taakat hai.",
-        hi:"परिश्रम और आधार-निर्माण। अनुशासन आपकी सबसे बड़ी संपत्ति है।" },
-  5:  { en:"Change, freedom, and travel. Embrace the unexpected with open arms.",
-        hn:"Badlaav, azaadi, aur safar. Achanak hone wale ko khule dil se apnayein.",
-        hi:"परिवर्तन, स्वतंत्रता और यात्रा। अप्रत्याशित को खुले मन से अपनाएँ।" },
-  6:  { en:"Family, love, and responsibility. Nurture yourself and those around you.",
-        hn:"Parivaar, prem, aur zimmedari. Khud ki aur apno ki dekhbhal karein.",
-        hi:"परिवार, प्रेम और ज़िम्मेदारी। स्वयं की और अपनों की देखभाल करें।" },
-  7:  { en:"Reflection, spirituality, and inner work. Seek deeper truth within.",
-        hn:"Manan, adhyatma, aur antar manthan. Andar ki sachai khojein.",
-        hi:"मनन, आध्यात्म और अंतर्मंथन। भीतर की गहरी सच्चाई खोजें।" },
-  8:  { en:"Power, ambition, and finance. Your efforts will finally be rewarded.",
-        hn:"Shakti, mahatvakaaksha, aur paisa. Aapki mehnat ka phal milega.",
-        hi:"शक्ति, महत्वाकांक्षा और धन। आपकी मेहनत का फल मिलेगा।" },
-  9:  { en:"Completion and release. Close old chapters; a new cycle approaches.",
-        hn:"Samaapti aur mukti. Purane adhyay band karein; naya cycle aa raha hai.",
-        hi:"समापन और मुक्ति। पुराने अध्याय बंद करें; नया चक्र आ रहा है।" },
-  11: { en:"Spiritual awakening. Divine guidance is speaking — are you listening?",
-        hn:"Adhyatmic jaagran. Divya margdarshan bol raha hai — sun rahe ho?",
-        hi:"आध्यात्मिक जागरण। दिव्य मार्गदर्शन बोल रहा है — क्या आप सुन रहे हैं?" },
-  22: { en:"Master year of manifestation. Think big. Build something legendary.",
-        hn:"Manifestation ka master varsh. Bada socho. Kuch legendary banao.",
-        hi:"साक्षात्कार का महावर्ष। बड़ा सोचें। कुछ अद्वितीय बनाएँ।" },
-  33: { en:"Year of deep love and teaching. Serve humanity with your full heart.",
-        hn:"Gehre prem aur shikshan ka varsh. Pure dil se manavata ki seva karein.",
-        hi:"गहरे प्रेम और शिक्षण का वर्ष। पूरे मन से मानवता की सेवा करें।" },
-};
-
 function getInfo(n: number): NumInfo {
   return NUM[n] ?? NUM[9];
 }
@@ -474,12 +436,12 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
         <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
           <Text style={[pyc.bigNum, { color: info.color }]}>{py}</Text>
           <Text style={[pyc.label, { color: C.textMuted }]}>{t.numYearPrefix} {year}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[py]?.[t.vlang] ?? PY_THEME[py]?.en ?? ""}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{getPYTheme(t.lang, py)}</Text>
         </View>
         <View style={[pyc.box, { borderColor:`${pmInfo.color}30`, backgroundColor:`${pmInfo.color}08` }]}>
           <Text style={[pyc.bigNum, { color: pmInfo.color }]}>{pm}</Text>
           <Text style={[pyc.label, { color: C.textMuted }]}>{month}</Text>
-          <Text style={[pyc.theme, { color: C.textMuted }]}>{PY_THEME[pm]?.[t.vlang] ?? PY_THEME[pm]?.en ?? ""}</Text>
+          <Text style={[pyc.theme, { color: C.textMuted }]}>{getPYTheme(t.lang, pm)}</Text>
         </View>
       </View>
     </View>

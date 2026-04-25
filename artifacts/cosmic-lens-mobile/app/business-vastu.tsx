@@ -117,13 +117,13 @@ type RoomReport = {
   room_type: string; direction: string; verdict: string; severity: string;
   severity_label?: string; score: number; is_critical: boolean;
   zone?: { planet?: string; deity?: string; element?: string };
-  mahadasha?: { applies: boolean; kind?: string; reason_en?: string; reason_hi?: string };
-  business_rule?: { applies: boolean; kind?: string; reason_en?: string; reason_hi?: string };
+  mahadasha?: { applies: boolean; kind?: string; reason_en?: string; reason_hi?: string; reason_loc?: string };
+  business_rule?: { applies: boolean; kind?: string; reason_en?: string; reason_hi?: string; reason_loc?: string };
 };
 type PriorityAction = {
   room_type: string; direction: string; verdict: string;
   severity_label: string; is_critical: boolean;
-  why_en: string; why_hi: string;
+  why_en: string; why_hi: string; why_loc?: string;
 };
 type BizResponse = {
   meta:    { powered_by: string; tier: string; rooms_count: number };
@@ -136,10 +136,10 @@ type BizResponse = {
   mahadasha_alert?: {
     active_lord: string; lord_direction: string;
     conflict_rooms: string[]; favourable_rooms: string[];
-    summary_en: string; summary_hi: string;
+    summary_en: string; summary_hi: string; summary_loc?: string;
   } | null;
-  stakeholder?: { partner_count: number; common_favour: string[]; common_conflict: string[]; summary_en: string; summary_hi: string };
-  muhurat?:     { applies: boolean; alignment?: string; summary_en?: string; summary_hi?: string } | null;
+  stakeholder?: { partner_count: number; common_favour: string[]; common_conflict: string[]; summary_en: string; summary_hi: string; summary_loc?: string };
+  muhurat?:     { applies: boolean; alignment?: string; summary_en?: string; summary_hi?: string; summary_loc?: string } | null;
   rooms: RoomReport[];
   priority_actions: PriorityAction[];
   classical_summary: string[];
@@ -646,8 +646,7 @@ export default function BusinessVastuScreen() {
                     {t.bv_lblOwnerMd} · {md.active_lord} ({md.lord_direction})
                   </Text>
                 </View>
-                <Text style={{ color: C.text, fontSize: 12 }}>{md.summary_en}</Text>
-                <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>{md.summary_hi}</Text>
+                <Text style={{ color: C.text, fontSize: 12 }}>{md.summary_loc || md.summary_en}</Text>
               </View>
             )}
 
@@ -660,8 +659,7 @@ export default function BusinessVastuScreen() {
                   <Feather name="users" size={16} color={VERDICT_COLOR.Acceptable.fg} />
                   <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_lblStakeholder}</Text>
                 </View>
-                <Text style={{ color: C.text, fontSize: 12 }}>{stk.summary_en}</Text>
-                <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>{stk.summary_hi}</Text>
+                <Text style={{ color: C.text, fontSize: 12 }}>{stk.summary_loc || stk.summary_en}</Text>
               </View>
             )}
 
@@ -679,8 +677,7 @@ export default function BusinessVastuScreen() {
                     {t.bv_lblMuhuratAlign} · {(mh.alignment || "").toUpperCase()}
                   </Text>
                 </View>
-                <Text style={{ color: C.text, fontSize: 12 }}>{mh.summary_en}</Text>
-                <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>{mh.summary_hi}</Text>
+                <Text style={{ color: C.text, fontSize: 12 }}>{mh.summary_loc || mh.summary_en}</Text>
               </View>
             )}
 
@@ -701,8 +698,7 @@ export default function BusinessVastuScreen() {
                           <Text style={{ color: VERDICT_COLOR.Avoid.fg, fontSize: 10, fontWeight: "800" }}>★ {t.bv_lblCritical}</Text>
                         )}
                       </View>
-                      <Text style={{ color: C.text, fontSize: 12 }}>{p.why_en}</Text>
-                      <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>{p.why_hi}</Text>
+                      <Text style={{ color: C.text, fontSize: 12 }}>{p.why_loc || p.why_en}</Text>
                     </View>
                   );
                 })}

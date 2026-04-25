@@ -21,6 +21,7 @@ import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { vedicLang, type VLang } from "@/lib/i18nVedic";
+import { getDemoLabels } from "@/lib/i18nContent";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
@@ -111,11 +112,6 @@ const F = {
 
 const N = 12;
 const DEMO_PTS    = [12, 18, 25, 30, 28, 35, 42, 38, 50, 55, 48, 38];
-const DEMO_LABELS_BY_LANG: Record<VLang, string[]> = {
-  en: ["10PM","","","1AM","","","4AM","","","7AM","","Now"],
-  hn: ["10PM","","","1AM","","","4AM","","","7AM","","Abhi"],
-  hi: ["रात 10","","","रात 1","","","सुबह 4","","","सुबह 7","","अभी"],
-};
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
@@ -294,7 +290,7 @@ export default function HomeScreen() {
 
   const showDemo    = !kundli;
   const chartPts    = showDemo ? DEMO_PTS    : targetPts;
-  const chartLbls   = showDemo ? DEMO_LABELS_BY_LANG[v] : labels;
+  const chartLbls   = showDemo ? getDemoLabels(language) : labels;
   const chartEnergy = showDemo ? 38          : (todayEnergy ?? 0);
   const insight     = energyInsight(chartEnergy, L);
 

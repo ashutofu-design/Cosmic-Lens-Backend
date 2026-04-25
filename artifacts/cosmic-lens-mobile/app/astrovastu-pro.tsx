@@ -96,7 +96,7 @@ type ProResponse = {
   };
   mahadasha_alert?: {
     active_lord: string; lord_direction: string;
-    summary_en: string; summary_hi: string;
+    summary_en: string; summary_hi: string; summary_loc?: string;
   } | null;
   rooms: RoomReport[];
   priority_actions: PriorityAction[];
@@ -547,8 +547,7 @@ export default function AstroVastuProScreen() {
                     {t.avp_lblMdAlert} · {mdAlert.active_lord} ({mdAlert.lord_direction})
                   </Text>
                 </View>
-                <Text style={{ color: C.text, fontSize: 13 }}>{mdAlert.summary_en}</Text>
-                <Text style={{ color: C.textMid, fontSize: 12, marginTop: 4 }}>{mdAlert.summary_hi}</Text>
+                <Text style={{ color: C.text, fontSize: 13 }}>{mdAlert.summary_loc || mdAlert.summary_en}</Text>
               </View>
             )}
 

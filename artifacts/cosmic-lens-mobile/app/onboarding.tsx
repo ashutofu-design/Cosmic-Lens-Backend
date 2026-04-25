@@ -21,13 +21,9 @@ import PickerModal from "@/components/PickerModal";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { vedicLang, type VLang } from "@/lib/i18nVedic";
+import { getMonthsFull } from "@/lib/i18nContent";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
 
-const MONTHS_BY_LANG: Record<VLang, string[]> = {
-  en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
-  hn: ["January","February","March","April","May","June","July","August","September","October","November","December"],
-  hi: ["जनवरी","फरवरी","मार्च","अप्रैल","मई","जून","जुलाई","अगस्त","सितंबर","अक्टूबर","नवंबर","दिसंबर"],
-};
 
 function getOnboardingLabels(v: VLang) {
   if (v === "hi") return {
@@ -116,7 +112,7 @@ export default function OnboardingScreen() {
   const t = getT(language);
   const v: VLang = vedicLang(language);
   const L = getOnboardingLabels(v);
-  const MONTHS = MONTHS_BY_LANG[v];
+  const MONTHS = getMonthsFull(language);
 
   const [name,    setName]    = useState("");
   const [day,     setDay]     = useState("");

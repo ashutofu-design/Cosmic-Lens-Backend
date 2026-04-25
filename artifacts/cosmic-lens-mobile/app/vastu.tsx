@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser } from "@/context/UserContext";
+import { getRoomLoc } from "@/lib/i18nContent";
 import { API_BASE } from "@/lib/apiConfig";
 
 // ── Compass constants ──────────────────────────────────────────────────────────
@@ -1292,6 +1293,8 @@ function RoomCard({ room }: { room: VastuRoom }) {
   const C = useC();
   const t = useT();
   const v = t.vlang;
+  // Per-room localized content (25 languages via getRoomLoc)
+  const loc = getRoomLoc(t.lang, room.key);
   // Tab labels (full 25-lang via i18n)
   const tabLabels = { dos: t.vu_tabDos, donts: t.vu_tabDonts, remedies: t.vu_tabRemedies };
 
@@ -1326,21 +1329,13 @@ function RoomCard({ room }: { room: VastuRoom }) {
       {/* Direction bar */}
       <View style={c.dirRow}>
         <Feather name="compass" size={11} color={C.textMuted} />
-        <Text style={[c.dirText, { color: C.textMuted }]}>{
-          (v === "hi" && ROOMS_LOC[room.key]?.hi.idealDir) ||
-          (v === "hn" && ROOMS_LOC[room.key]?.hn.idealDir) ||
-          room.idealDir
-        }</Text>
+        <Text style={[c.dirText, { color: C.textMuted }]}>{loc.idealDir || room.idealDir}</Text>
       </View>
 
       {/* Expanded content */}
       {open && (
         <View style={c.expanded}>
-          <Text style={[c.importance, { color: C.textMuted }]}>{
-            (v === "hi" && ROOMS_LOC[room.key]?.hi.importance) ||
-            (v === "hn" && ROOMS_LOC[room.key]?.hn.importance) ||
-            room.importance
-          }</Text>
+          <Text style={[c.importance, { color: C.textMuted }]}>{loc.importance || room.importance}</Text>
           <View style={c.tabRow}>
             {(["dos","donts","remedies"] as const).map(tk => (
               <Pressable key={tk} onPress={() => setTab(tk)}
@@ -1357,11 +1352,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
               {room.dos.map((d,i) => (
                 <View key={i} style={c.tipRow}>
                   <Text style={c.tipIcon}>{d.icon}</Text>
-                  <Text style={[c.tipText, { color: C.textMuted }]}>{
-                    (v === "hi" && ROOMS_LOC[room.key]?.hi.dos[i]) ||
-                    (v === "hn" && ROOMS_LOC[room.key]?.hn.dos[i]) ||
-                    d.text
-                  }</Text>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{loc.dos[i] || d.text}</Text>
                 </View>
               ))}
             </View>
@@ -1371,11 +1362,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
               {room.donts.map((d,i) => (
                 <View key={i} style={c.tipRow}>
                   <Text style={c.tipIcon}>{d.icon}</Text>
-                  <Text style={[c.tipText, { color:"#f87171" }]}>{
-                    (v === "hi" && ROOMS_LOC[room.key]?.hi.donts[i]) ||
-                    (v === "hn" && ROOMS_LOC[room.key]?.hn.donts[i]) ||
-                    d.text
-                  }</Text>
+                  <Text style={[c.tipText, { color:"#f87171" }]}>{loc.donts[i] || d.text}</Text>
                 </View>
               ))}
             </View>
@@ -1387,11 +1374,7 @@ function RoomCard({ room }: { room: VastuRoom }) {
                   <View style={[c.remedyNum, { backgroundColor: C.bgCard2 }]}>
                     <Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text>
                   </View>
-                  <Text style={[c.tipText, { color: C.textMuted }]}>{
-                    (v === "hi" && ROOMS_LOC[room.key]?.hi.remedies[i]) ||
-                    (v === "hn" && ROOMS_LOC[room.key]?.hn.remedies[i]) ||
-                    r
-                  }</Text>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{loc.remedies[i] || r}</Text>
                 </View>
               ))}
             </View>

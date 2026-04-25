@@ -1,5 +1,5 @@
 """
-dosh_engine.py — Complete Vedic Dosh Analysis Engine (17 Doshas)
+dosh_engine.py — Complete Vedic Dosh Analysis Engine (16 Doshas)
 Planets input: list of { name, house, longitude, sign, retrograde }
 """
 
@@ -898,72 +898,6 @@ def _ekadhipatya(pl):
     )
 
 
-# ── 17. Mrityu Bhag (Sensitivity Indicator — NOT a death prediction) ──────────
-def _mrityu_bhag(pl):
-    """Brihat-Parashara classical sensitivity degrees per planet.
-
-    NOTE: Per app brand rules and ethical guidelines, this is framed strictly
-    as a sensitivity / vulnerability marker — NEVER as death prediction.
-    """
-    MRITYU = {
-        "Sun":     (1, 20),    # Aries 20°
-        "Moon":    (2, 9),     # Taurus 9°
-        "Mars":    (4, 19),    # Cancer 19°
-        "Mercury": (3, 12),    # Gemini 12°
-        "Jupiter": (12, 13),   # Pisces 13°
-        "Venus":   (7, 9),     # Libra 9°
-        "Saturn":  (11, 4),    # Aquarius 4°
-    }
-    hits_active, hits_mild = [], []
-    for planet, (m_sign, m_deg) in MRITYU.items():
-        if not _has(pl, planet):
-            continue
-        lon = _lon(pl, planet)
-        sign_idx    = int(lon // 30) + 1
-        deg_in_sign = lon % 30
-        if sign_idx == m_sign:
-            diff = abs(deg_in_sign - m_deg)
-            if diff <= 1.0:
-                hits_active.append((planet, deg_in_sign, m_deg))
-            elif diff <= 3.0:
-                hits_mild.append((planet, deg_in_sign, m_deg))
-
-    if hits_active:
-        names = ", ".join(p for p, _, _ in hits_active)
-        return (
-            "Active",
-            f"{names} at Mrityu Bhag Degree — Sensitivity Indicator",
-            "One or more planets sit within 1° of their classical sensitivity degree. Per Brihat Parashara, this marks the significations of that planet as energetically delicate — health, vitality, or relationships tied to that planet need extra care. NOTE: This is a sensitivity marker only — NOT a prediction of any specific event. Always consult medical professionals and a qualified Jyotishi for personal concerns.",
-            [
-                "Chant Mahamrityunjay mantra 108 times daily for protective energy",
-                "Strengthen the affected planet via its weekday observance",
-                "Maintain regular health check-ups (especially for body parts ruled by the planet)",
-                "Practice daily protective Vedic prayer (e.g., Hanuman Chalisa)",
-                "Consult a qualified Jyotishi for a personalised remedy plan",
-            ],
-            " | ".join(f"{p}: {d:.1f}° (mrityu {m}°)" for p, d, m in hits_active),
-        )
-    if hits_mild:
-        names = ", ".join(p for p, _, _ in hits_mild)
-        return (
-            "Mild",
-            f"{names} Near Mrityu Bhag — Mild Sensitivity",
-            "One or more planets sit within 3° of their classical sensitivity degree. Mild energetic vulnerability — manageable through standard Vedic strengthening practices. NOT a prediction of any specific event.",
-            [
-                "Chant Mahamrityunjay mantra weekly",
-                "Daily protective prayer recommended",
-            ],
-            " | ".join(f"{p}: {d:.1f}° (mrityu {m}°)" for p, d, m in hits_mild),
-        )
-    return (
-        "None",
-        "No Mrityu Bhag Indicators — Planets in Stable Degrees",
-        "No planet is currently at a classical sensitivity degree. All planets are in stable longitude zones.",
-        [],
-        "All planets clear of mrityu bhag degrees",
-    )
-
-
 # ── Master config ──────────────────────────────────────────────────────────────
 DOSH_CONFIGS = [
     ("manglik",        "Manglik Dosh",         "मांगलिक दोष",        "🔴", _manglik),
@@ -982,7 +916,6 @@ DOSH_CONFIGS = [
     ("gandanta",       "Gandanta Dosh",        "गण्डान्त दोष",        "🌊", _gandanta),
     ("punar_phoo",     "Punar Phoo Dosh",      "पुनः फू दोष",         "💔", _punar_phoo),
     ("ekadhipatya",    "Ekadhipatya Dosh",     "एकाधिपत्य दोष",       "👑", _ekadhipatya),
-    ("mrityu_bhag",    "Mrityu Bhag",          "मृत्यु भाग",          "⚠️", _mrityu_bhag),
 ]
 
 

@@ -8,6 +8,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useUser } from "@/context/UserContext";
+import { useT, type T } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 const PLANET_CLR: Record<string, string> = {
@@ -56,15 +57,27 @@ function scoreColor(s: number): string {
   return "#ef4444";
 }
 
+function localizeArea(area: string, t: T): string {
+  switch (area) {
+    case "career":       return t.smf_areaCareer;
+    case "finance":      return t.smf_areaFinance;
+    case "health":       return t.smf_areaHealth;
+    case "relationship": return t.smf_areaRelationship;
+    case "spirituality": return t.smf_areaSpirituality;
+    default:             return area;
+  }
+}
+
 export default function SixMonthFutureScreen() {
   const insets = useSafeAreaInsets();
   const { user, kundli } = useUser();
+  const t = useT();
   const [data, setData] = useState<FutureResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!kundli) {
-      setData({ available: false, reason: "Pehle kundli complete karein." });
+      setData({ available: false, reason: t.smf_kundliFirst });
       setLoading(false);
       return;
     }
@@ -78,6 +91,7 @@ export default function SixMonthFutureScreen() {
       .then((res: FutureResponse) => setData(res))
       .catch(e => setData({ available: false, error: String(e) }))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kundli, user?.id]);
 
   return (
@@ -89,7 +103,7 @@ export default function SixMonthFutureScreen() {
             <Feather name="arrow-left" size={20} color="#e2e8f0" />
           </View>
         </Pressable>
-        <Text style={s.title}>6-Month Deep Future</Text>
+        <Text style={s.title}>{t.smf_title}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -101,7 +115,7 @@ export default function SixMonthFutureScreen() {
           <View style={{ alignItems: "center", marginTop: 60 }}>
             <ActivityIndicator color="#a78bfa" />
             <Text style={{ color: "#94a3b8", marginTop: 12 }}>
-              MD/AD/PD chain compute ho raha hai…
+              {t.smf_loadingMsg}
             </Text>
           </View>
         )}
@@ -110,10 +124,10 @@ export default function SixMonthFutureScreen() {
           <View style={s.errCard}>
             <Feather name="alert-circle" size={28} color="#f59e0b" />
             <Text style={{ color: "#fbbf24", marginTop: 8, fontWeight: "700" }}>
-              Future data unavailable
+              {t.smf_unavailableTtl}
             </Text>
             <Text style={{ color: "#cbd5e1", marginTop: 6, textAlign: "center" }}>
-              {data.reason || data.error || "Try again later."}
+              {data.reason || data.error || t.smf_tryAgain}
             </Text>
           </View>
         )}
@@ -126,11 +140,11 @@ export default function SixMonthFutureScreen() {
                 colors={["#1e1b4b", "#0f172a"]}
                 style={s.headerCard}
               >
-                <Text style={s.headerLabel}>Active Dasha Chain</Text>
+                <Text style={s.headerLabel}>{t.smf_activeChain}</Text>
                 <View style={s.dashaRow}>
                   {(["md", "ad", "pd"] as const).map(k => {
                     const planet = data.current_dasha![k];
-                    const label = k === "md" ? "Maha" : k === "ad" ? "Antar" : "Pratyantar";
+                    const label = k === "md" ? t.smf_lblMaha : k === "ad" ? t.smf_lblAntar : t.smf_lblPratyantar;
                     return (
                       <View key={k} style={s.dashaPill}>
                         <Text style={s.dashaPillLabel}>{label}</Text>
@@ -142,19 +156,19 @@ export default function SixMonthFutureScreen() {
                   })}
                 </View>
                 <Text style={s.adWindow}>
-                  AD window: {data.current_dasha.ad_start} → {data.current_dasha.ad_end}
+                  {t.smf_adWindow}: {data.current_dasha.ad_start} → {data.current_dasha.ad_end}
                 </Text>
               </LinearGradient>
             )}
 
             {/* Month cards */}
             {data.months?.map((m, i) => (
-              <MonthCardView key={i} month={m} />
+              <MonthCardView key={i} month={m} t={t} />
             ))}
 
             <Text style={{ color: "#64748b", textAlign: "center", marginTop: 14, fontSize: 11 }}>
-              Generated: {data.generated_at?.replace("T", " ").slice(0, 16)} UTC
-              {"\n"}Pure Vedic engine — MD/AD/PD + house lords + natal placements.
+              {t.smf_generated}: {data.generated_at?.replace("T", " ").slice(0, 16)} UTC
+              {"\n"}{t.smf_pureEngine}
             </Text>
           </>
         )}
@@ -163,7 +177,7 @@ export default function SixMonthFutureScreen() {
   );
 }
 
-function MonthCardView({ month: m }: { month: MonthCard }) {
+function MonthCardView({ month: m, t }: { month: MonthCard; t: T }) {
   const sc = scoreColor(m.month_score);
 
   return (
@@ -175,7 +189,7 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
             <Text style={s.monthLabel}>{m.month_label}</Text>
             {m.is_pd_change && (
               <View style={s.pdChangeChip}>
-                <Text style={s.pdChangeChipTxt}>PD shift</Text>
+                <Text style={s.pdChangeChipTxt}>{t.smf_pdShift}</Text>
               </View>
             )}
           </View>
@@ -189,8 +203,8 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
 
       {/* MD/AD/PD pills */}
       <View style={s.dashaTrioRow}>
-        {([["MD", m.md, m.md_info], ["AD", m.ad, m.ad_info],
-           ["PD", m.pd, m.pd_info]] as const).map(([lbl, plnt, inf]) => (
+        {([[t.smf_lblMD, m.md, m.md_info], [t.smf_lblAD, m.ad, m.ad_info],
+           [t.smf_lblPD, m.pd, m.pd_info]] as const).map(([lbl, plnt, inf]) => (
           <View key={lbl} style={s.dashaTrio}>
             <Text style={s.dashaTrioLbl}>{lbl}</Text>
             <Text style={[s.dashaTrioPlnt, { color: PLANET_CLR[plnt] || "#e2e8f0" }]}>
@@ -199,12 +213,12 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
             <Text style={s.dashaTrioTag}>{inf?.quality_tag || "—"}</Text>
             {inf?.owns_houses?.length > 0 && (
               <Text style={s.dashaTrioRules}>
-                Rules: {inf.owns_houses.map(h => `${h}H`).join(", ")}
+                {t.smf_rulesPrefix}: {inf.owns_houses.map(h => `${h}H`).join(", ")}
               </Text>
             )}
             {inf?.sits_in_house && (
               <Text style={s.dashaTrioSits}>
-                Sits in {inf.sits_in_house}H
+                {t.smf_sitsIn} {inf.sits_in_house}H
               </Text>
             )}
           </View>
@@ -213,20 +227,20 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
 
       {/* PD window */}
       <Text style={s.pdWindow}>
-        Active PD window: {m.pd_start} → {m.pd_end}
+        {t.smf_pdActiveWindow}: {m.pd_start} → {m.pd_end}
       </Text>
 
       {/* Life-area outlook */}
       {m.outlook?.length > 0 && (
         <View style={{ marginTop: 12 }}>
-          <Text style={s.sectionH}>Life Areas this month</Text>
+          <Text style={s.sectionH}>{t.smf_lifeAreas}</Text>
           {m.outlook.map((o, i) => (
             <View key={i} style={s.outlookRow}>
               <Text style={s.outlookIcon}>{AREA_ICON[o.area] || "•"}</Text>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                   <Text style={[s.outlookLbl, { color: TREND_CLR[o.trend] }]}>
-                    {o.label}
+                    {localizeArea(o.area, t)}
                   </Text>
                   <Text style={[s.outlookTrend, { color: TREND_CLR[o.trend] }]}>
                     {o.trend.toUpperCase()}
@@ -235,7 +249,7 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
                 <Text style={s.outlookSum}>{o.summary}</Text>
                 {o.hits?.length > 0 && (
                   <Text style={s.outlookHits}>
-                    Why: {o.hits.join(" · ")}
+                    {t.smf_whyPrefix}: {o.hits.join(" · ")}
                   </Text>
                 )}
               </View>
@@ -247,7 +261,7 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
       {/* Opportunities */}
       {m.opportunities?.length > 0 && (
         <View style={{ marginTop: 12 }}>
-          <Text style={[s.sectionH, { color: "#22c55e" }]}>Opportunities</Text>
+          <Text style={[s.sectionH, { color: "#22c55e" }]}>{t.smf_opportunities}</Text>
           {m.opportunities.map((o, i) => (
             <Text key={i} style={s.bullet}>• {o}</Text>
           ))}
@@ -257,7 +271,7 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
       {/* Cautions */}
       {m.cautions?.length > 0 && (
         <View style={{ marginTop: 12 }}>
-          <Text style={[s.sectionH, { color: "#ef4444" }]}>Cautions</Text>
+          <Text style={[s.sectionH, { color: "#ef4444" }]}>{t.smf_cautions}</Text>
           {m.cautions.map((c, i) => (
             <Text key={i} style={s.bullet}>• {c}</Text>
           ))}
@@ -268,7 +282,7 @@ function MonthCardView({ month: m }: { month: MonthCard }) {
       {m.remedy_focus?.action && (
         <View style={s.remedyCard}>
           <Text style={s.remedyLbl}>
-            Remedy ({m.remedy_focus.planet}-focused)
+            {t.smf_remedyLabel} ({m.remedy_focus.planet}-{t.smf_remedyFocused})
           </Text>
           <Text style={s.remedyTxt}>{m.remedy_focus.action}</Text>
         </View>

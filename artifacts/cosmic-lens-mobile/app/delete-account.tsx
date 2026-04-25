@@ -15,6 +15,7 @@ import {
 import LegalScreen, { Section, P, Bullet, Strong, Callout } from "@/components/LegalScreen";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 const F = {
@@ -25,6 +26,7 @@ const F = {
 
 export default function DeleteAccountScreen() {
   const C = useC();
+  const t = useT();
   const { user, logout } = useUser();
 
   const [confirmText, setConfirmText] = useState("");
@@ -34,16 +36,16 @@ export default function DeleteAccountScreen() {
 
   async function handleDelete() {
     if (!user?.id || !user?.api_key) {
-      Alert.alert("Not signed in", "Please log in first.");
+      Alert.alert(t.da_alertNotSignedIn, t.da_alertLoginFirst);
       return;
     }
     Alert.alert(
-      "Delete account permanently?",
-      "This action cannot be undone. All your kundlis, profiles, chat history and personal data will be erased within 30 days.",
+      t.da_alertConfirmTtl,
+      t.da_alertConfirmMsg,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t.da_alertCancel, style: "cancel" },
         {
-          text: "Yes, delete forever",
+          text: t.da_alertYesDelete,
           style: "destructive",
           onPress: async () => {
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
@@ -58,18 +60,14 @@ export default function DeleteAccountScreen() {
               if (!r.ok || !data.ok) {
                 throw new Error(data?.error || `Server returned ${r.status}`);
               }
-              // Wipe ALL local AsyncStorage (profiles, kundli, language, etc.)
-              // — not just the user record — so nothing can be re-uploaded
-              // by cloud sync if the device is later signed into another
-              // account.
               logout();
               Alert.alert(
-                "Account Deleted",
-                "Your account has been permanently deleted. Thank you for using Cosmic Lens.",
-                [{ text: "OK", onPress: () => router.replace("/login") }]
+                t.da_alertDeletedTtl,
+                t.da_alertDeletedMsg,
+                [{ text: t.da_alertOk, onPress: () => router.replace("/login") }]
               );
             } catch (e: any) {
-              Alert.alert("Deletion failed", e?.message || "Please try again or contact support.");
+              Alert.alert(t.da_alertFailedTtl, e?.message || t.da_alertFailedMsg);
             } finally {
               setLoading(false);
             }
@@ -81,45 +79,38 @@ export default function DeleteAccountScreen() {
 
   return (
     <LegalScreen
-      title="Delete Account"
-      subtitle="Permanent and irreversible"
+      title={t.da_title}
+      subtitle={t.da_subtitle}
     >
       <Callout tone="danger">
-        <Strong>This action is permanent.</Strong> Once deleted, your data
-        cannot be recovered.
+        <Strong>{t.da_calloutDanger}</Strong>
       </Callout>
 
-      <Section title="What happens when you delete">
-        <Bullet>Your account login (email / mobile / Google) is removed immediately.</Bullet>
-        <Bullet>All saved kundlis, profiles, and chat history are erased within 30 days.</Bullet>
-        <Bullet>Active subscriptions are cancelled — no further charges.</Bullet>
-        <Bullet>Tax invoices for past payments may be retained for 7 years per Indian law (GST records).</Bullet>
-        <Bullet>You will need to create a new account if you wish to use Cosmic Lens again.</Bullet>
+      <Section title={t.da_secWhatHappens}>
+        <Bullet>{t.da_wb1}</Bullet>
+        <Bullet>{t.da_wb2}</Bullet>
+        <Bullet>{t.da_wb3}</Bullet>
+        <Bullet>{t.da_wb4}</Bullet>
+        <Bullet>{t.da_wb5}</Bullet>
       </Section>
 
-      <Section title="Before you delete">
-        <P>
-          Consider these alternatives — they may solve your concern without
-          losing your data:
-        </P>
-        <Bullet><Strong>Cancel subscription only</Strong> — Profile → Subscription → Cancel. Your account stays free.</Bullet>
-        <Bullet><Strong>Disable notifications</Strong> — Profile → Notifications → Off.</Bullet>
-        <Bullet><Strong>Need a refund?</Strong> See our Refund Policy first — we may help.</Bullet>
-        <Bullet><Strong>Privacy concern?</Strong> Email <Strong>support@cosmiclens.app</Strong>.</Bullet>
+      <Section title={t.da_secBefore}>
+        <P>{t.da_pBefore}</P>
+        <Bullet>{t.da_bb1}</Bullet>
+        <Bullet>{t.da_bb2}</Bullet>
+        <Bullet>{t.da_bb3}</Bullet>
+        <Bullet>{t.da_bb4}</Bullet>
       </Section>
 
-      <Section title="Confirm deletion">
-        <P>
-          To proceed, type <Strong>DELETE</Strong> in the box below and tap the
-          delete button.
-        </P>
+      <Section title={t.da_secConfirm}>
+        <P>{t.da_pConfirm}</P>
 
         <View style={[da.inputWrap, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="trash-2" size={15} color="#ef4444" />
           <TextInput
             value={confirmText}
             onChangeText={setConfirmText}
-            placeholder="Type DELETE to confirm"
+            placeholder={t.da_inputPh}
             placeholderTextColor={C.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
@@ -142,7 +133,7 @@ export default function DeleteAccountScreen() {
               ? <ActivityIndicator size="small" color="#fff" />
               : <Feather name="trash-2" size={15} color="#fff" />}
             <Text style={da.deleteBtnText}>
-              {loading ? "Deleting…" : "Delete My Account Permanently"}
+              {loading ? t.da_btnDeleting : t.da_btnDelete}
             </Text>
           </LinearGradient>
         </Pressable>
@@ -154,16 +145,12 @@ export default function DeleteAccountScreen() {
             { borderColor: C.border, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <Text style={[da.cancelText, { color: C.textMid }]}>Cancel and go back</Text>
+          <Text style={[da.cancelText, { color: C.textMid }]}>{t.da_btnCancelBack}</Text>
         </Pressable>
       </Section>
 
-      <Section title="Need help instead?">
-        <P>
-          If you have any concern, we&apos;d love to hear from you before you
-          go. Reach us at <Strong>support@cosmiclens.app</Strong> — most issues
-          are resolved within 24 hours.
-        </P>
+      <Section title={t.da_secNeedHelp}>
+        <P>{t.da_pNeedHelp}</P>
       </Section>
     </LegalScreen>
   );

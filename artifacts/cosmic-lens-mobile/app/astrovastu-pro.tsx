@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
@@ -115,6 +116,8 @@ export default function AstroVastuProScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
+  const t = useT() as any;
+  const avpRoom = (k: string) => t[`avp_room_${k}`] || k;
 
   const [loading, setLoading] = useState(false);
   const [result,  setResult]  = useState<ProResponse | null>(null);
@@ -128,7 +131,7 @@ export default function AstroVastuProScreen() {
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
     if (loading) return;
     if (!user?.id || !user?.api_key) {
-      setError({ error: "auth_required", message: "Please log in to run a Smart Scan." });
+      setError({ error: "auth_required", message: t.avp_errAuthRequired });
       return;
     }
     setError(null); setResult(null); setLoading(true);
@@ -211,7 +214,7 @@ export default function AstroVastuProScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
           <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>AstroVastu PRO</Text>
+        <Text style={[styles.headerTitle, { color: C.text }]}>{t.avp_headerTitle}</Text>
         <View style={{ width: 28 }} />
       </LinearGradient>
 
@@ -224,19 +227,18 @@ export default function AstroVastuProScreen() {
           <View style={[styles.heroIcon, { backgroundColor: C.accentBg }]}>
             <Feather name="zap" size={26} color={C.accent} />
           </View>
-          <Text style={[styles.heroTitle, { color: C.text }]}>Smart Scan</Text>
+          <Text style={[styles.heroTitle, { color: C.text }]}>{t.avp_heroTitle}</Text>
           <Text style={[styles.heroBody, { color: C.textMid }]}>
-            Choose how you want to scan. Each method runs a personalised
-            Vastu × Kundli analysis.
+            {t.avp_heroBody}
           </Text>
         </View>
 
         {/* ── 3-tile sub-menu picker ───────────────────────────────── */}
         <View style={styles.modeRow}>
           {([
-            { key: "camera", icon: "camera",    title: "Smart Scan",     sub: "Open camera"      },
-            { key: "single", icon: "image",     title: "Individual Room", sub: "Photo / PDF"     },
-            { key: "whole",  icon: "layout",    title: "Full Plan",       sub: "Architect PDF"   },
+            { key: "camera", icon: "camera",    title: t.avp_modeCameraTitle,  sub: t.avp_modeCameraSub  },
+            { key: "single", icon: "image",     title: t.avp_modeSingleTitle,  sub: t.avp_modeSingleSub  },
+            { key: "whole",  icon: "layout",    title: t.avp_modeWholeTitle,   sub: t.avp_modeWholeSub   },
           ] as const).map((m) => {
             const sel = mode === m.key;
             return (
@@ -269,18 +271,16 @@ export default function AstroVastuProScreen() {
           <>
             <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                Smart Scan — Live Camera
+                {t.avp_introCameraTitle}
               </Text>
               <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                Step 1 — Tell us which room you're going to photograph.
-                Step 2 — Tap the camera and stand inside that room. The built-in
-                compass will lock the direction at shutter time.
+                {t.avp_introCameraBody}
               </Text>
             </View>
 
             {/* Room picker — required before camera opens */}
             <Text style={[styles.pickerLabel, { color: C.text }]}>
-              Which room is this photo of?
+              {t.avp_pickerLabel}
             </Text>
             <View style={styles.roomGrid}>
               {CAMERA_ROOMS.map((r) => {
@@ -304,7 +304,7 @@ export default function AstroVastuProScreen() {
                       color: sel ? C.accent : C.text,
                       fontSize: 12, fontWeight: "600",
                     }}>
-                      {r.label}
+                      {avpRoom(r.key)}
                     </Text>
                   </Pressable>
                 );
@@ -312,7 +312,7 @@ export default function AstroVastuProScreen() {
             </View>
             {!cameraRoom && (
               <Text style={[styles.pickerHint, { color: C.textMid }]}>
-                Pick a room above to enable the camera.
+                {t.avp_pickerHint}
               </Text>
             )}
 
@@ -322,8 +322,8 @@ export default function AstroVastuProScreen() {
                 loading={loading}
                 disabled={!cameraRoom}
                 hint={cameraRoom
-                  ? `Camera + compass · Photographing ${CAMERA_ROOMS.find(x => x.key === cameraRoom)?.label}`
-                  : "Pick a room first"}
+                  ? `${t.avp_camHintPrefix} ${avpRoom(cameraRoom)}`
+                  : t.avp_camHintNoRoom}
               />
             </View>
           </>
@@ -333,11 +333,10 @@ export default function AstroVastuProScreen() {
           <>
             <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                Individual Room — Photo or PDF
+                {t.avp_introSingleTitle}
               </Text>
               <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                Not at home? Pick a photo or PDF from your gallery and tag the room
-                + direction manually. Best when you want to check one specific room.
+                {t.avp_introSingleBody}
               </Text>
             </View>
             <GalleryScanUpload
@@ -351,13 +350,10 @@ export default function AstroVastuProScreen() {
           <>
             <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                Full Plan — Smart Scan Photo Engine
+                {t.avp_introWholeTitle}
               </Text>
               <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                Got the entire floor plan from your architect (PDF or image — bedroom,
-                kitchen, bathroom, all of it)? Upload here. Photo Engine will detect
-                every room and give you one consolidated direction-wise report,
-                personalised to your kundli.
+                {t.avp_introWholeBody}
               </Text>
             </View>
             <SmartScanUpload
@@ -368,7 +364,7 @@ export default function AstroVastuProScreen() {
 
             {/* Optional: room photos with magnetometer for sensor-confirmed accuracy */}
             <RoomPhotoCapture
-              rooms={CAMERA_ROOMS.map(r => ({ key: r.key, label: r.label }))}
+              rooms={CAMERA_ROOMS.map(r => ({ key: r.key, label: avpRoom(r.key) }))}
               photos={wholeRoomPhotos}
               onChange={setWholeRoomPhotos}
               disabled={loading}
@@ -388,7 +384,7 @@ export default function AstroVastuProScreen() {
             >
               <Feather name="zap" size={16} color={(loading || !wholePlan) ? C.textMid : "#0B0F19"} />
               <Text style={[styles.runScanText, { color: (loading || !wholePlan) ? C.textMid : "#0B0F19" }]}>
-                {loading ? "Analysing…" : "Run Whole-Floor Vastu Scan"}
+                {loading ? t.avp_btnAnalysing : t.avp_btnRunWhole}
               </Text>
             </Pressable>
           </>
@@ -402,26 +398,26 @@ export default function AstroVastuProScreen() {
             <Feather name="alert-triangle" size={18} color={VERDICT_COLOR.Avoid.fg} style={{ marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.errTitle, { color: C.text }]}>
-                {error.error === "monthly_limit_reached" ? "Monthly limit reached" :
-                 error.error === "upgrade_required"      ? "Upgrade required"      :
-                 error.error === "profile_incomplete"    ? "Complete your profile" :
-                 error.error === "vision_no_rooms"       ? "Couldn't read this photo" :
-                 "Smart Scan failed"}
+                {error.error === "monthly_limit_reached" ? t.avp_errMonthlyLimit :
+                 error.error === "upgrade_required"      ? t.avp_errUpgradeReq   :
+                 error.error === "profile_incomplete"    ? t.avp_errProfile      :
+                 error.error === "vision_no_rooms"       ? t.avp_errVisionNoRoom :
+                 t.avp_errScanFailed}
               </Text>
               <Text style={[styles.errBody, { color: C.textMid, marginTop: 4 }]}>
-                {error.message || "Please try a clearer photo of your floor plan or the full room."}
+                {error.message || t.avp_errBodyDefault}
               </Text>
               {error.error === "profile_incomplete" && (
                 <Pressable onPress={() => router.push("/profile-edit")}
                            style={[styles.upgradeBtn, { backgroundColor: C.accent, marginTop: 10 }]}>
-                  <Text style={styles.upgradeText}>Complete Profile</Text>
+                  <Text style={styles.upgradeText}>{t.avp_btnCompleteProfile}</Text>
                 </Pressable>
               )}
               {(error.upgrade_required || error.error === "upgrade_required" ||
                 error.error === "monthly_limit_reached") && (
                 <Pressable onPress={() => router.push("/subscription")}
                            style={[styles.upgradeBtn, { backgroundColor: C.accent, marginTop: 10 }]}>
-                  <Text style={styles.upgradeText}>Upgrade to Pro — Unlimited</Text>
+                  <Text style={styles.upgradeText}>{t.avp_btnUpgradePro}</Text>
                 </Pressable>
               )}
             </View>
@@ -443,7 +439,7 @@ export default function AstroVastuProScreen() {
           return (
             <View style={{ marginTop: 18 }}>
               <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[styles.sectionLabel, { color: C.textMid }]}>OVERALL HOUSE SCORE</Text>
+                <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.avp_overallScore}</Text>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                   <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
                   <Text style={{ color: C.textMid, fontWeight: "600" }}>/100</Text>
@@ -451,7 +447,7 @@ export default function AstroVastuProScreen() {
                     marginLeft: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
                     backgroundColor: GRADE_COLOR[grade] || C.accent,
                   }}>
-                    <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
+                    <Text style={{ color: "#fff", fontWeight: "800" }}>{t.avr_grade} {grade}</Text>
                   </View>
                 </View>
                 {summary.en ? (
@@ -470,22 +466,21 @@ export default function AstroVastuProScreen() {
               <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 12 }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <Feather name="file-text" size={18} color={C.accent} />
-                  <Text style={[styles.cardTitle, { color: C.text }]}>Detailed PDF Report Ready</Text>
+                  <Text style={[styles.cardTitle, { color: C.text }]}>{t.avp_pdfReady}</Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 13, marginBottom: 12 }}>
-                  Aapka full AstroVastu PRO report PDF me ready hai — har room ka deep verdict,
-                  Mahadasha layer, priority actions aur classical references.
+                  {t.avp_pdfBody}
                 </Text>
                 <Pressable onPress={openPdf} style={[styles.submitBtn, { backgroundColor: C.accent }]}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Feather name="download" size={16} color="#fff" />
-                    <Text style={styles.submitText}>Open PDF Report</Text>
+                    <Text style={styles.submitText}>{t.avp_btnOpenPdf}</Text>
                   </View>
                 </Pressable>
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer || "Powered by Advanced Cosmic Intelligence"}
+                {t.avp_footerBrand}
               </Text>
             </View>
           );
@@ -505,7 +500,7 @@ export default function AstroVastuProScreen() {
           return (
           <View style={{ marginTop: 18 }}>
             <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[styles.sectionLabel, { color: C.textMid }]}>OVERALL HOUSE SCORE</Text>
+              <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.avp_overallScore}</Text>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                 <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
                 <Text style={{ color: C.textMid, fontWeight: "600" }}>/100</Text>
@@ -513,7 +508,7 @@ export default function AstroVastuProScreen() {
                   marginLeft: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
                   backgroundColor: GRADE_COLOR[grade] || C.accent,
                 }}>
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>{t.avr_grade} {grade}</Text>
                 </View>
               </View>
               <ScanBasisBadge
@@ -530,10 +525,10 @@ export default function AstroVastuProScreen() {
 
             <View style={styles.countsRow}>
               {([
-                ["Ideal",      counts.ideal,             VERDICT_COLOR.Ideal],
-                ["Acceptable", counts.acceptable,        VERDICT_COLOR.Acceptable],
-                ["Adjust",     counts.adjustment_needed, VERDICT_COLOR["Adjustment Needed"]],
-                ["Avoid",      counts.avoid,             VERDICT_COLOR.Avoid],
+                [t.avp_lblIdeal,      counts.ideal,             VERDICT_COLOR.Ideal],
+                [t.avp_lblAcceptable, counts.acceptable,        VERDICT_COLOR.Acceptable],
+                [t.avp_lblAdjust,     counts.adjustment_needed, VERDICT_COLOR["Adjustment Needed"]],
+                [t.avp_lblAvoid,      counts.avoid,             VERDICT_COLOR.Avoid],
               ] as const).map(([label, count, col]) => (
                 <View key={label} style={[styles.countPill, { backgroundColor: col.bg, borderColor: col.border }]}>
                   <Text style={{ color: col.fg, fontWeight: "800", fontSize: 16 }}>{count}</Text>
@@ -549,7 +544,7 @@ export default function AstroVastuProScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   <Feather name="zap" size={16} color={VERDICT_COLOR["Adjustment Needed"].fg} />
                   <Text style={[styles.cardTitle, { color: C.text }]}>
-                    Mahadasha Alert · {mdAlert.active_lord} ({mdAlert.lord_direction})
+                    {t.avp_lblMdAlert} · {mdAlert.active_lord} ({mdAlert.lord_direction})
                   </Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 13 }}>{mdAlert.summary_en}</Text>
@@ -560,7 +555,7 @@ export default function AstroVastuProScreen() {
             {priorities.length > 0 && (
               <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 14 }]}>
                 <Text style={[styles.sectionLabel, { color: C.textMid, marginBottom: 8 }]}>
-                  PRIORITY ACTIONS
+                  {t.avp_secPriority}
                 </Text>
                 {priorities.map((p, i) => {
                   const col = VERDICT_COLOR[p.verdict] || VERDICT_COLOR.Acceptable;
@@ -587,7 +582,7 @@ export default function AstroVastuProScreen() {
             )}
 
             <Text style={[styles.sectionLabel, { color: C.textMid, marginTop: 16, marginBottom: 6 }]}>
-              ROOM-BY-ROOM BREAKDOWN
+              {t.avp_secRoomByRoom}
             </Text>
             {rooms_.map((r, idx) => {
               const col = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.Acceptable;
@@ -603,7 +598,7 @@ export default function AstroVastuProScreen() {
                   </View>
                   {r.zone?.planet && (
                     <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4 }}>
-                      Zone: {r.zone.planet} · {r.zone.deity}  ·  Score {r.score}/100
+                      {t.bv_lblZone}: {r.zone.planet} · {r.zone.deity}  ·  {r.score}/100
                     </Text>
                   )}
                   {r.mahadasha_layer?.applies && r.mahadasha_layer?.reason_en && (
@@ -620,8 +615,8 @@ export default function AstroVastuProScreen() {
 
             <Text style={{ color: C.textMid, fontSize: 11, textAlign: "center", marginTop: 14 }}>
               {quota.limit === -1
-                ? `Unlimited PRO scans (Pro plan)`
-                : `Scan ${quota.used}/${quota.limit} this month`}
+                ? t.avp_quotaUnlimited
+                : `${t.avp_quotaPrefix} ${quota.used}/${quota.limit} ${t.avp_quotaThisMonth}`}
             </Text>
           </View>
           );
@@ -629,10 +624,10 @@ export default function AstroVastuProScreen() {
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
-          ✨ Powered by Advanced Cosmic Intelligence
+          {t.avp_brandFooter}
         </Text>
         <Text style={[styles.brandingFooterSmall, { color: C.textMid }]}>
-          Cosmic AstroVastu Drishti — PRO Engine v1.0
+          {t.avp_brandFooterSub}
         </Text>
       </ScrollView>
     </View>

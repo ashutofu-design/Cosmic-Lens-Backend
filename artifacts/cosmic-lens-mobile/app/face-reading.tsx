@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const ACCENT = "#ec4899";
 const ACCENT_2 = "#7B1F1F";
@@ -128,6 +129,7 @@ function AuthorityChip({ label, C }: { label: string; C: any }) {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function FaceReadingScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -139,7 +141,7 @@ export default function FaceReadingScreen() {
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={12}>
           <Feather name="chevron-left" size={26} color={C.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>Face Reading Pro</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.fr_headerTitle}</Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -155,13 +157,9 @@ export default function FaceReadingScreen() {
             style={StyleSheet.absoluteFill as any}
           />
           <GlowOrb />
-          <Text style={[s.heroEyebrow, { color: GOLD }]}>WORLD'S FIRST</Text>
-          <Text style={[s.heroTitle, { color: C.text }]}>
-            Vedic + Science{"\n"}Face Reading Fusion
-          </Text>
-          <Text style={[s.heroSub, { color: C.textMuted }]}>
-            40-page premium PDF report combining 19 ancient & modern frameworks — narrated in Hinglish storytelling.
-          </Text>
+          <Text style={[s.heroEyebrow, { color: GOLD }]}>{t.fr_heroEyebrow}</Text>
+          <Text style={[s.heroTitle, { color: C.text }]}>{t.fr_heroTitle}</Text>
+          <Text style={[s.heroSub, { color: C.textMuted }]}>{t.fr_heroSub}</Text>
           <View style={s.heroBadgeRow}>
             <LinearGradient
               colors={[ACCENT, "#a21caf"]}
@@ -169,57 +167,45 @@ export default function FaceReadingScreen() {
               style={s.priceBadge}
             >
               <Text style={s.priceBadgeText}>₹1499</Text>
-              <Text style={s.priceBadgeSub}> · Live Now</Text>
+              <Text style={s.priceBadgeSub}>{t.fr_priceLive}</Text>
             </LinearGradient>
           </View>
         </View>
 
         {/* ───── STAT STRIP ───── */}
         <View style={s.statsRow}>
-          <StatPill value="40" label="pages" C={C} />
-          <StatPill value="22" label="sections" C={C} />
-          <StatPill value="19" label="engines" C={C} />
-          <StatPill value="468" label="landmarks" C={C} />
+          <StatPill value="40"  label={t.fr_statPages}     C={C} />
+          <StatPill value="22"  label={t.fr_statSections}  C={C} />
+          <StatPill value="19"  label={t.fr_statEngines}   C={C} />
+          <StatPill value="468" label={t.fr_statLandmarks} C={C} />
         </View>
 
         {/* ───── INSIDE YOUR REPORT ───── */}
-        <Text style={[s.sectionCap, { color: C.textDim }]}>INSIDE YOUR REPORT</Text>
+        <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capInside}</Text>
         <View style={s.previewGrid}>
-          <PreviewCard icon="📔" title="Branded Cover"  sub="Aapki photo · personalized seal"  color={ACCENT_2} C={C} />
-          <PreviewCard icon="🗺️" title="7-Zone Face Map" sub="Annotated landmarks + callouts"   color="#7c6ed4" C={C} />
-          <PreviewCard icon="📊" title="Visual Snapshot" sub="OCEAN radar + 5-score chart"      color="#10b981" C={C} />
-          <PreviewCard icon="⭐" title="Celeb Match"    sub="Archetype × element library"      color={GOLD}   C={C} />
+          <PreviewCard icon="📔" title={t.fr_pv1Title} sub={t.fr_pv1Sub} color={ACCENT_2} C={C} />
+          <PreviewCard icon="🗺️" title={t.fr_pv2Title} sub={t.fr_pv2Sub} color="#7c6ed4" C={C} />
+          <PreviewCard icon="📊" title={t.fr_pv3Title} sub={t.fr_pv3Sub} color="#10b981" C={C} />
+          <PreviewCard icon="⭐" title={t.fr_pv4Title} sub={t.fr_pv4Sub} color={GOLD}    C={C} />
         </View>
 
         {/* ───── 19 ENGINES ───── */}
-        <Text style={[s.sectionCap, { color: C.textDim }]}>19 ANALYSIS ENGINES</Text>
-        <EngineCard
-          icon="🕉️" count="8" group="Cosmic Intelligences"
-          body="Samudrika Shastra · Mukha Lakshana · Lalat Rekha · Netra Vigyan · Ayurvedic Prakriti · Mian Xiang · 100-Year Age Map · Wu Xing 5 Elements"
-          color={ACCENT_2} C={C}
-        />
-        <EngineCard
-          icon="🧬" count="8" group="Scientific Engines"
-          body="Anthropometry (32 pts) · Symmetry · Golden Ratio (φ) · fWHR · Health Indicators · Big Five OCEAN · First Impression · Phenotype Profile"
-          color="#7c6ed4" C={C}
-        />
-        <EngineCard
-          icon="🔗" count="3" group="Fusion Engines"
-          body="Vedic-Science Cross-Validation · Numerology Combo · Predictive Synthesis (career, marriage, wealth, health)"
-          color="#10b981" C={C}
-        />
+        <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capEngines}</Text>
+        <EngineCard icon="🕉️" count="8" group={t.fr_eng1Group} body={t.fr_eng1Body} color={ACCENT_2} C={C} />
+        <EngineCard icon="🧬" count="8" group={t.fr_eng2Group} body={t.fr_eng2Body} color="#7c6ed4"  C={C} />
+        <EngineCard icon="🔗" count="3" group={t.fr_eng3Group} body={t.fr_eng3Body} color="#10b981"  C={C} />
 
         {/* ───── HOW IT WORKS ───── */}
-        <Text style={[s.sectionCap, { color: C.textDim }]}>HOW IT WORKS</Text>
+        <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capHow}</Text>
         <View style={[s.stepsCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
-          <StepRow n="1" title="Upload 3 selfies"           body="Front + left + right profile (guided capture, lighting & angle check)" color={ACCENT}    C={C} />
-          <StepRow n="2" title="468 landmarks extracted"    body="Google Mediapipe — runs on-device for privacy"                          color="#7c6ed4"  C={C} />
-          <StepRow n="3" title="19 engines analyze parallel" body="~75% real CV measurements · 0% fake or hardcoded data"                  color="#10b981"  C={C} />
-          <StepRow n="4" title="40-page PDF generated"      body="Visual charts, face map, Hinglish narrative · ready in ~45 seconds"     color={GOLD}     last C={C} />
+          <StepRow n="1" title={t.fr_step1Title} body={t.fr_step1Body} color={ACCENT}    C={C} />
+          <StepRow n="2" title={t.fr_step2Title} body={t.fr_step2Body} color="#7c6ed4"   C={C} />
+          <StepRow n="3" title={t.fr_step3Title} body={t.fr_step3Body} color="#10b981"   C={C} />
+          <StepRow n="4" title={t.fr_step4Title} body={t.fr_step4Body} color={GOLD} last C={C} />
         </View>
 
         {/* ───── AUTHORITY STRIP ───── */}
-        <Text style={[s.sectionCap, { color: C.textDim }]}>BUILT ON</Text>
+        <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fr_capBuilt}</Text>
         <View style={s.authRow}>
           <AuthorityChip label="MediaPipe" C={C} />
           <AuthorityChip label="Samudrika Shastra" C={C} />
@@ -233,29 +219,27 @@ export default function FaceReadingScreen() {
         <View style={[s.honestCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <View style={s.honestHead}>
             <Feather name="shield" size={14} color="#10b981" />
-            <Text style={[s.honestTitle, { color: "#10b981" }]}>100% Honest Data</Text>
+            <Text style={[s.honestTitle, { color: "#10b981" }]}>{t.fr_honest100}</Text>
           </View>
           <View style={s.honestRow}>
             <View style={[s.honestBar, { backgroundColor: C.bgCard2 }]}>
               <View style={[s.honestFill, { width: "75%", backgroundColor: "#10b981" }]} />
             </View>
-            <Text style={[s.honestLabel, { color: C.textMuted }]}>75% real CV measurements</Text>
+            <Text style={[s.honestLabel, { color: C.textMuted }]}>{t.fr_honest75}</Text>
           </View>
           <View style={s.honestRow}>
             <View style={[s.honestBar, { backgroundColor: C.bgCard2 }]}>
               <View style={[s.honestFill, { width: "20%", backgroundColor: GOLD }]} />
             </View>
-            <Text style={[s.honestLabel, { color: C.textMuted }]}>20% derived (real numbers + Hinglish prose)</Text>
+            <Text style={[s.honestLabel, { color: C.textMuted }]}>{t.fr_honest20}</Text>
           </View>
           <View style={s.honestRow}>
             <View style={[s.honestBar, { backgroundColor: C.bgCard2 }]}>
               <View style={[s.honestFill, { width: "5%", backgroundColor: "#7c6ed4" }]} />
             </View>
-            <Text style={[s.honestLabel, { color: C.textMuted }]}>5% curated (celeb library, combo titles)</Text>
+            <Text style={[s.honestLabel, { color: C.textMuted }]}>{t.fr_honest5}</Text>
           </View>
-          <Text style={[s.honestFootnote, { color: C.textDim }]}>
-            Zero fake or hardcoded readings — sab kuch aapki actual photo se nikalta hai.
-          </Text>
+          <Text style={[s.honestFootnote, { color: C.textDim }]}>{t.fr_honestFoot}</Text>
         </View>
 
         {/* ───── CTA ───── */}
@@ -266,12 +250,10 @@ export default function FaceReadingScreen() {
             style={s.ctaBtn}
           >
             <Feather name="zap" size={16} color="#fff" />
-            <Text style={s.ctaText}>Start My Face Reading</Text>
+            <Text style={s.ctaText}>{t.fr_ctaText}</Text>
           </LinearGradient>
         </Pressable>
-        <Text style={[s.ctaSub, { color: C.textDim }]}>
-          3 selfies upload karein → 30-60 seconds mein 40-page PDF report aapke device pe.
-        </Text>
+        <Text style={[s.ctaSub, { color: C.textDim }]}>{t.fr_ctaSub}</Text>
       </ScrollView>
     </CosmicBg>
   );
@@ -290,7 +272,6 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: "700" },
   scroll: { paddingHorizontal: 16, gap: 14 },
 
-  // Hero
   heroWrap: {
     borderRadius: 24,
     borderWidth: 1,
@@ -324,7 +305,6 @@ const s = StyleSheet.create({
   priceBadgeText: { color: "#fff", fontWeight: "800", fontSize: 16, letterSpacing: 0.3 },
   priceBadgeSub:  { color: "#fff", fontWeight: "600", fontSize: 12, opacity: 0.92 },
 
-  // Stats
   statsRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   statPill: {
     flex: 1, borderWidth: 1, borderRadius: 14,
@@ -333,13 +313,11 @@ const s = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: "800" },
   statLabel: { fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase" },
 
-  // Section caps
   sectionCap: {
     fontSize: 10, fontWeight: "700", letterSpacing: 2,
     marginTop: 14, marginBottom: 4, paddingLeft: 2,
   },
 
-  // Preview grid
   previewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   previewCard: {
     width: "48.5%",
@@ -353,7 +331,6 @@ const s = StyleSheet.create({
   previewTitle: { fontSize: 13.5, fontWeight: "700", marginBottom: 3 },
   previewSub: { fontSize: 11, lineHeight: 15 },
 
-  // Engine card
   engineCard: {
     flexDirection: "row", gap: 12, alignItems: "center",
     borderRadius: 16, borderWidth: 1, padding: 14,
@@ -368,7 +345,6 @@ const s = StyleSheet.create({
   engineGroup: { fontSize: 14, fontWeight: "700" },
   engineBody:  { fontSize: 11.5, lineHeight: 17 },
 
-  // Steps
   stepsCard: { borderWidth: 1, borderRadius: 18, padding: 16, paddingBottom: 4 },
   stepRow: { flexDirection: "row", gap: 12 },
   stepLeft: { width: 32, alignItems: "center" },
@@ -381,7 +357,6 @@ const s = StyleSheet.create({
   stepTitle: { fontSize: 14, fontWeight: "700", marginBottom: 2 },
   stepBody:  { fontSize: 12, lineHeight: 17 },
 
-  // Authority chips
   authRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   authChip: {
     paddingHorizontal: 11, paddingVertical: 6,
@@ -389,7 +364,6 @@ const s = StyleSheet.create({
   },
   authChipText: { fontSize: 11, fontWeight: "600" },
 
-  // Honesty card
   honestCard: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 10, marginTop: 4 },
   honestHead: { flexDirection: "row", alignItems: "center", gap: 6 },
   honestTitle: { fontSize: 13, fontWeight: "700" },
@@ -399,7 +373,6 @@ const s = StyleSheet.create({
   honestLabel: { fontSize: 11.5 },
   honestFootnote: { fontSize: 11, fontStyle: "italic", marginTop: 2 },
 
-  // CTA
   ctaWrap: { marginTop: 18, borderRadius: 16, overflow: "hidden" },
   ctaBtn: {
     flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center",

@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
 
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { proResultCache } from "@/lib/proResultCache";
@@ -75,6 +76,7 @@ type ProResponse = {
 // ─────────────────────────────────────────────────────────────────────────
 function ScoreGauge({ score, grade }: { score: number; grade: string }) {
   const C = useC();
+  const t = useT() as any;
   const size      = 180;
   const stroke    = 14;
   const r         = (size - stroke) / 2;
@@ -110,13 +112,13 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
         <Text style={{ color: colour, fontSize: 44, fontWeight: "900", lineHeight: 50 }}>
           {Math.round(score)}
         </Text>
-        <Text style={{ color: C.textMid, fontSize: 12, fontWeight: "700" }}>OUT OF 100</Text>
+        <Text style={{ color: C.textMid, fontSize: 12, fontWeight: "700" }}>{t.avr_outOf100}</Text>
         <View style={{
           marginTop: 6, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10,
           backgroundColor: colour,
         }}>
           <Text style={{ color: "#fff", fontSize: 13, fontWeight: "800" }}>
-            Grade {grade}
+            {t.avr_grade} {grade}
           </Text>
         </View>
       </View>
@@ -128,6 +130,7 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
 export default function AstroVastuProResultScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
+  const t = useT() as any;
   const [result] = useState<ProResponse | null>(() => proResultCache.get());
 
   const overall  = result?.overall  || { score: 0, grade: "C" };
@@ -147,12 +150,12 @@ export default function AstroVastuProResultScreen() {
   const shareWhatsApp = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const lines = [
-      `🪔 *AstroVastu PRO Report*`,
-      `📊 Score: ${Math.round(overall.score)}/100  ·  Grade ${overall.grade}`,
+      `🪔 *${t.avr_shareTitle}*`,
+      `📊 ${t.avr_shareScoreLbl}: ${Math.round(overall.score)}/100  ·  ${t.avr_grade} ${overall.grade}`,
     ];
     if (summary.en) lines.push("", summary.en);
-    if (pdfFull)    lines.push("", `📄 Open report:`, pdfFull);
-    lines.push("", `_Powered by Advanced Cosmic Intelligence_`);
+    if (pdfFull)    lines.push("", `📄 ${t.avr_shareOpenLbl}:`, pdfFull);
+    lines.push("", `_${t.avr_shareBrandLbl}_`);
     const msg = lines.join("\n");
 
     const wa = `whatsapp://send?text=${encodeURIComponent(msg)}`;
@@ -161,7 +164,7 @@ export default function AstroVastuProResultScreen() {
       if (can) { await Linking.openURL(wa); return; }
       await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(msg)}`);
     } catch (e: any) {
-      Alert.alert("Couldn't share", String(e?.message || e));
+      Alert.alert(t.avr_alertShareErr, String(e?.message || e));
     }
   };
 
@@ -173,16 +176,16 @@ export default function AstroVastuProResultScreen() {
         <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Feather name="alert-circle" size={28} color={C.textMid} />
           <Text style={{ color: C.text, fontSize: 16, fontWeight: "700", marginTop: 8 }}>
-            No report loaded
+            {t.avr_emptyTitle}
           </Text>
           <Text style={{ color: C.textMid, fontSize: 13, marginTop: 6, textAlign: "center" }}>
-            Please run a Smart Scan first to view the result here.
+            {t.avr_emptyBody}
           </Text>
           <Pressable
             onPress={() => router.replace("/astrovastu-pro")}
             style={[s.cta, { backgroundColor: C.accent, marginTop: 18 }]}
           >
-            <Text style={s.ctaText}>Open AstroVastu PRO</Text>
+            <Text style={s.ctaText}>{t.avr_btnOpenPro}</Text>
           </Pressable>
         </View>
       </View>
@@ -199,7 +202,7 @@ export default function AstroVastuProResultScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
           <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>Your AstroVastu Report</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.avr_headerTitle}</Text>
         <View style={{ width: 28 }} />
       </LinearGradient>
 
@@ -232,12 +235,12 @@ export default function AstroVastuProResultScreen() {
           {pdfFull && (
             <Pressable onPress={openPdf} style={[s.actionBtn, { backgroundColor: C.accent }]}>
               <Feather name="file-text" size={16} color="#fff" />
-              <Text style={s.actionText}>Open PDF</Text>
+              <Text style={s.actionText}>{t.avr_btnOpenPdf}</Text>
             </Pressable>
           )}
           <Pressable onPress={shareWhatsApp} style={[s.actionBtn, { backgroundColor: "#25D366" }]}>
             <Feather name="share-2" size={16} color="#fff" />
-            <Text style={s.actionText}>WhatsApp</Text>
+            <Text style={s.actionText}>{t.avr_btnWhatsApp}</Text>
           </Pressable>
         </View>
 
@@ -245,7 +248,7 @@ export default function AstroVastuProResultScreen() {
         {priors.length > 0 && (
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 16 }]}>
             <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10 }]}>
-              SABSE PEHLE YE 3 CHEEZEIN THEEK KARO
+              {t.avr_secPriorityHi}
             </Text>
             {priors.map((p, i) => {
               const meta = VERDICT_COLOR[p.verdict] || VERDICT_COLOR.Acceptable;
@@ -286,7 +289,7 @@ export default function AstroVastuProResultScreen() {
         {rooms.length > 0 && (
           <View style={{ marginTop: 18 }}>
             <Text style={[s.sectionLabel, { color: C.textMid, marginBottom: 10, marginLeft: 2 }]}>
-              ROOM-BY-ROOM
+              {t.avr_secRoomByRoom}
             </Text>
             <ScrollView
               horizontal
@@ -329,7 +332,7 @@ export default function AstroVastuProResultScreen() {
 
         {/* ── Branding footer ──────────────────────────────────── */}
         <Text style={[s.brand, { color: C.textMid }]}>
-          ✨ Powered by Advanced Cosmic Intelligence
+          {t.avr_brandFooter}
         </Text>
       </ScrollView>
     </View>

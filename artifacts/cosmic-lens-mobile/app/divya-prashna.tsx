@@ -19,35 +19,48 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 
-type Category = {
-  key: string;
-  label_hi: string;
-  emoji: string;
-};
+type CategoryKey =
+  | "stolen_item" | "partner_feelings" | "job" | "marriage"
+  | "health" | "litigation" | "travel" | "general";
 
-const QUICK_CATEGORIES: Category[] = [
-  { key: "stolen_item",      label_hi: "Sona / saaman milega?", emoji: "💰" },
-  { key: "partner_feelings", label_hi: "Partner ke feelings",   emoji: "💔" },
-  { key: "job",              label_hi: "Naukri lagegi?",        emoji: "💼" },
-  { key: "marriage",         label_hi: "Shaadi kab?",           emoji: "💍" },
-  { key: "health",           label_hi: "Bimari theek hogi?",    emoji: "🏥" },
-  { key: "litigation",       label_hi: "Mukadma jeetenge?",     emoji: "⚖️" },
-  { key: "travel",           label_hi: "Yatra hogi?",           emoji: "✈️" },
-  { key: "general",          label_hi: "Aam sawaal",            emoji: "🔮" },
+const QUICK_CATEGORIES: { key: CategoryKey; emoji: string }[] = [
+  { key: "stolen_item",      emoji: "💰" },
+  { key: "partner_feelings", emoji: "💔" },
+  { key: "job",              emoji: "💼" },
+  { key: "marriage",         emoji: "💍" },
+  { key: "health",           emoji: "🏥" },
+  { key: "litigation",       emoji: "⚖️" },
+  { key: "travel",           emoji: "✈️" },
+  { key: "general",          emoji: "🔮" },
 ];
 
-const CATEGORY_PROMPTS: Record<string, string> = {
-  stolen_item:      "Mera sona / paisa chori ho gaya, wapas milega ya nahi?",
-  partner_feelings: "Mera partner mere bare me abhi kya soch raha hai?",
-  job:              "Mujhe yeh job / naya role milega ya nahi?",
-  marriage:         "Meri shaadi kab tak ho jayegi?",
-  health:           "Meri / mere apno ki bimari theek hogi?",
-  litigation:       "Mera mukadma main jeetunga ya nahi?",
-  travel:           "Meri planned yatra sampann hogi?",
-  general:          "",
-};
+function categoryLabel(k: CategoryKey, t: T): string {
+  switch (k) {
+    case "stolen_item":      return t.dp_cat_stolen;
+    case "partner_feelings": return t.dp_cat_partner;
+    case "job":              return t.dp_cat_job;
+    case "marriage":         return t.dp_cat_marriage;
+    case "health":           return t.dp_cat_health;
+    case "litigation":       return t.dp_cat_litigation;
+    case "travel":           return t.dp_cat_travel;
+    case "general":          return t.dp_cat_general;
+  }
+}
+function categoryPrompt(k: CategoryKey, t: T): string {
+  switch (k) {
+    case "stolen_item":      return t.dp_pr_stolen;
+    case "partner_feelings": return t.dp_pr_partner;
+    case "job":              return t.dp_pr_job;
+    case "marriage":         return t.dp_pr_marriage;
+    case "health":           return t.dp_pr_health;
+    case "litigation":       return t.dp_pr_litigation;
+    case "travel":           return t.dp_pr_travel;
+    case "general":          return "";
+  }
+}
 
 type CuspAnalysis = {
   house: number;
@@ -82,9 +95,10 @@ export default function DivyaPrashnaScreen() {
   const c       = useC();
   const insets  = useSafeAreaInsets();
   const { user } = useUser();
+  const t       = useT();
 
   const [question, setQuestion] = useState("");
-  const [category, setCategory] = useState<string | undefined>(undefined);
+  const [category, setCategory] = useState<CategoryKey | undefined>(undefined);
   const [loading,  setLoading]  = useState(false);
   const [result,   setResult]   = useState<PrashnaResult | null>(null);
   const [errMsg,   setErrMsg]   = useState<string | null>(null);
@@ -92,7 +106,7 @@ export default function DivyaPrashnaScreen() {
   const ask = async () => {
     const q = question.trim();
     if (!q) {
-      Alert.alert("Sawaal likhein", "Kya pucchna chahte ho woh likhein.");
+      Alert.alert(t.dp_alertEmptyTtl, t.dp_alertEmptyMsg);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -120,17 +134,17 @@ export default function DivyaPrashnaScreen() {
 
       // Quota / auth / server errors
       if (resp.status === 402 || json.upgrade_required) {
-        setErrMsg(json.message || "Aaj ka prashna limit poora ho gaya. Pro upgrade karein.");
+        setErrMsg(json.message || t.dp_errQuotaPro);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
       }
       if (resp.status === 401) {
-        setErrMsg("Session khatm ho gayi. Punah login karein.");
+        setErrMsg(t.dp_errSession);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
       }
       if (!resp.ok) {
-        setErrMsg(json.message || json.error || "Jawab nahi mil saka. Punah prayaas karein.");
+        setErrMsg(json.message || json.error || t.dp_errFetch);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
@@ -142,17 +156,17 @@ export default function DivyaPrashnaScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
     } catch (e: any) {
-      setErrMsg(e?.message || "Jawab nahi mil saka. Punah prayaas karein.");
+      setErrMsg(e?.message || t.dp_errFetch);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
   };
 
-  const pickCategory = (cat: Category) => {
+  const pickCategory = (catKey: CategoryKey) => {
     Haptics.selectionAsync();
-    setCategory(cat.key);
-    setQuestion(CATEGORY_PROMPTS[cat.key] || "");
+    setCategory(catKey);
+    setQuestion(categoryPrompt(catKey, t));
   };
 
   const verdictColor = (code?: string) => {
@@ -170,9 +184,9 @@ export default function DivyaPrashnaScreen() {
           <Feather name="chevron-left" size={28} color={c.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: c.text }]}>🔮 Divya Prashna</Text>
+          <Text style={[styles.title, { color: c.text }]}>{t.dp_title}</Text>
           <Text style={[styles.subtitle, { color: c.text + "99" }]}>
-            Apna sawaal pucho — turant Vedic jawab
+            {t.dp_subtitle}
           </Text>
         </View>
       </View>
@@ -189,19 +203,19 @@ export default function DivyaPrashnaScreen() {
           <View style={[styles.metaStrip, { backgroundColor: c.text + "10" }]}>
             <Feather name="map-pin" size={14} color={c.text + "99"} />
             <Text style={[styles.metaText, { color: c.text + "cc" }]}>
-              Bhubaneswar, Odisha · Server time
+              {t.dp_metaCity}
             </Text>
           </View>
 
           {/* Quick category chips */}
-          <Text style={[styles.sectionLabel, { color: c.text }]}>Quick sawaal</Text>
+          <Text style={[styles.sectionLabel, { color: c.text }]}>{t.dp_quickQuestion}</Text>
           <View style={styles.chipsRow}>
             {QUICK_CATEGORIES.map((cat) => {
               const active = category === cat.key;
               return (
                 <Pressable
                   key={cat.key}
-                  onPress={() => pickCategory(cat)}
+                  onPress={() => pickCategory(cat.key)}
                   style={[
                     styles.chip,
                     {
@@ -212,7 +226,7 @@ export default function DivyaPrashnaScreen() {
                 >
                   <Text style={styles.chipEmoji}>{cat.emoji}</Text>
                   <Text style={[styles.chipText, { color: c.text }]} numberOfLines={1}>
-                    {cat.label_hi}
+                    {categoryLabel(cat.key, t)}
                   </Text>
                 </Pressable>
               );
@@ -221,12 +235,12 @@ export default function DivyaPrashnaScreen() {
 
           {/* Question input */}
           <Text style={[styles.sectionLabel, { color: c.text, marginTop: 18 }]}>
-            Ya apna sawaal type karo
+            {t.dp_orType}
           </Text>
           <TextInput
             value={question}
             onChangeText={setQuestion}
-            placeholder="Jaise: Mera kho gaya phone milega kya?"
+            placeholder={t.dp_inputPh}
             placeholderTextColor={c.text + "55"}
             multiline
             style={[
@@ -259,7 +273,7 @@ export default function DivyaPrashnaScreen() {
               ) : (
                 <>
                   <Feather name="send" size={18} color="#fff" />
-                  <Text style={styles.submitText}>Jawab Pao</Text>
+                  <Text style={styles.submitText}>{t.dp_btnGetAnswer}</Text>
                 </>
               )}
             </LinearGradient>
@@ -268,14 +282,14 @@ export default function DivyaPrashnaScreen() {
           {/* Error / quota message */}
           {errMsg && (
             <View style={[styles.card, { backgroundColor: "#ef444418", borderColor: "#ef444455" }]}>
-              <Text style={[styles.cardTitle, { color: "#ef4444" }]}>⚠️ Suchana</Text>
+              <Text style={[styles.cardTitle, { color: "#ef4444" }]}>{t.dp_errNoticeTtl}</Text>
               <Text style={[styles.cardBody, { color: c.text }]}>{errMsg}</Text>
               {errMsg.toLowerCase().includes("upgrade") && (
                 <Pressable
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/subscription"); }}
                   style={{ marginTop: 10, alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: "#ef4444" }}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Upgrade dekho →</Text>
+                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{t.dp_btnSeeUpgrade}</Text>
                 </Pressable>
               )}
             </View>
@@ -285,16 +299,16 @@ export default function DivyaPrashnaScreen() {
           {result && !result.ok && result.validity && (
             <View style={[styles.card, { backgroundColor: "#fbbf2418", borderColor: "#fbbf2455" }]}>
               <Text style={[styles.cardTitle, { color: "#f59e0b" }]}>
-                ⚠️ Prashna abhi paripakv nahi
+                {t.dp_immatureTitle}
               </Text>
               <Text style={[styles.cardBody, { color: c.text }]}>
                 {result.validity.reason}
               </Text>
               <Text style={[styles.refText, { color: c.text + "88" }]}>
-                Ref: {result.validity.classical_ref}
+                {t.dp_refPrefix}: {result.validity.classical_ref}
               </Text>
               <Text style={[styles.refText, { color: c.text + "88", marginTop: 4 }]}>
-                Punah prayaas: ~{result.validity.retry_after_min} minute baad
+                {t.dp_retryAfter}: ~{result.validity.retry_after_min} {t.dp_minutesLater}
               </Text>
             </View>
           )}
@@ -312,7 +326,7 @@ export default function DivyaPrashnaScreen() {
                 ]}
               >
                 <Text style={[styles.verdictLabel, { color: verdictColor(result.verdict.code) }]}>
-                  {result.verdict.label_hi}
+                  {t.vlang === "en" ? result.verdict.label_en : result.verdict.label_hi}
                 </Text>
                 <Text style={[styles.verdictMeaning, { color: c.text }]}>
                   {result.verdict.meaning}
@@ -329,21 +343,21 @@ export default function DivyaPrashnaScreen() {
 
               {/* Chart snapshot */}
               <View style={[styles.card, { backgroundColor: c.text + "08", borderColor: c.text + "1a" }]}>
-                <Text style={[styles.cardTitle, { color: c.text }]}>📊 Prashna Chart</Text>
+                <Text style={[styles.cardTitle, { color: c.text }]}>{t.dp_chartTitle}</Text>
                 <View style={styles.chartRow}>
-                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>Lagna</Text>
+                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>{t.dp_chartLagna}</Text>
                   <Text style={[styles.chartValue, { color: c.text }]}>
                     {result.lagna?.sign} · {result.lagna?.degree}
                   </Text>
                 </View>
                 <View style={styles.chartRow}>
-                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>Sthan</Text>
+                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>{t.dp_chartPlace}</Text>
                   <Text style={[styles.chartValue, { color: c.text }]}>
                     {result.place?.name}, {result.place?.state}
                   </Text>
                 </View>
                 <View style={styles.chartRow}>
-                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>Vargi-karan</Text>
+                  <Text style={[styles.chartKey,   { color: c.text + "99" }]}>{t.dp_chartCategory}</Text>
                   <Text style={[styles.chartValue, { color: c.text }]}>
                     {result.category_label}
                   </Text>
@@ -354,18 +368,18 @@ export default function DivyaPrashnaScreen() {
               {result.cusp_analysis && result.cusp_analysis.length > 0 && (
                 <View style={[styles.card, { backgroundColor: c.text + "08", borderColor: c.text + "1a" }]}>
                   <Text style={[styles.cardTitle, { color: c.text }]}>
-                    🪔 Cusp Vishleshan
+                    {t.dp_cuspTitle}
                   </Text>
                   {result.cusp_analysis.map((cv, i) => (
                     <View key={i} style={styles.cuspBlock}>
                       <Text style={[styles.cuspHead, { color: c.text }]}>
-                        {cv.house}th Bhava — {cv.sign} {cv.degree}
+                        {cv.house}{ordinalSuffix(cv.house, t)} {t.dp_houseSuffix} — {cv.sign} {cv.degree}
                       </Text>
                       <Text style={[styles.cuspMeta, { color: c.text + "aa" }]}>
-                        Sub-Lord: {cv.sub_lord} · Star-Lord: {cv.star_lord}
+                        {t.dp_subLord}: {cv.sub_lord} · {t.dp_starLord}: {cv.star_lord}
                       </Text>
                       <Text style={[styles.cuspMeta, { color: c.text + "aa" }]}>
-                        Signifies houses: {cv.signifies.join(", ") || "—"}
+                        {t.dp_signifies}: {cv.signifies.join(", ") || "—"}
                       </Text>
                       <Text style={[styles.cuspVerdict, { color: verdictColor(cv.verdict) }]}>
                         {cv.verdict.replace("_", " ")}
@@ -378,7 +392,7 @@ export default function DivyaPrashnaScreen() {
               {/* Classical refs */}
               {result.classical_refs && (
                 <View style={[styles.card, { backgroundColor: c.text + "06", borderColor: c.text + "12" }]}>
-                  <Text style={[styles.cardTitle, { color: c.text }]}>📖 Aadhar Granth</Text>
+                  <Text style={[styles.cardTitle, { color: c.text }]}>{t.dp_classicalTitle}</Text>
                   {result.classical_refs.map((r, i) => (
                     <Text key={i} style={[styles.refText, { color: c.text + "99" }]}>
                       • {r}
@@ -392,6 +406,15 @@ export default function DivyaPrashnaScreen() {
       </KeyboardAvoidingView>
     </CosmicBg>
   );
+}
+
+function ordinalSuffix(n: number, t: T): string {
+  const r10 = n % 10, r100 = n % 100;
+  if (r100 >= 11 && r100 <= 13) return t.pk_houseTh;
+  if (r10 === 1) return t.pk_houseSt;
+  if (r10 === 2) return t.pk_houseNd;
+  if (r10 === 3) return t.pk_houseRd;
+  return t.pk_houseTh;
 }
 
 const styles = StyleSheet.create({

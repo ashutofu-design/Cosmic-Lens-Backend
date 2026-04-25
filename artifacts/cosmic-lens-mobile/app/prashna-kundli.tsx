@@ -18,20 +18,45 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT, type T } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
-type Category = { key: string; label_hi: string; emoji: string };
+type CategoryKey =
+  | "stolen_item" | "partner_feelings" | "job" | "marriage"
+  | "health" | "litigation" | "travel" | "general";
 
-const QUICK_CATEGORIES: Category[] = [
-  { key: "stolen_item",      label_hi: "Saaman milega?", emoji: "💰" },
-  { key: "partner_feelings", label_hi: "Partner feelings", emoji: "💔" },
-  { key: "job",              label_hi: "Naukri lagegi?",  emoji: "💼" },
-  { key: "marriage",         label_hi: "Shaadi kab?",     emoji: "💍" },
-  { key: "health",           label_hi: "Bimari theek?",   emoji: "🏥" },
-  { key: "litigation",       label_hi: "Mukadma jeet?",   emoji: "⚖️" },
-  { key: "travel",           label_hi: "Yatra hogi?",     emoji: "✈️" },
-  { key: "general",          label_hi: "Aam sawaal",      emoji: "🔮" },
+const QUICK_CATEGORIES: { key: CategoryKey; emoji: string }[] = [
+  { key: "stolen_item",      emoji: "💰" },
+  { key: "partner_feelings", emoji: "💔" },
+  { key: "job",              emoji: "💼" },
+  { key: "marriage",         emoji: "💍" },
+  { key: "health",           emoji: "🏥" },
+  { key: "litigation",       emoji: "⚖️" },
+  { key: "travel",           emoji: "✈️" },
+  { key: "general",          emoji: "🔮" },
 ];
+
+function pkCategoryLabel(k: CategoryKey, t: T): string {
+  switch (k) {
+    case "stolen_item":      return t.pk_cat_stolen;
+    case "partner_feelings": return t.pk_cat_partner;
+    case "job":              return t.pk_cat_job;
+    case "marriage":         return t.pk_cat_marriage;
+    case "health":           return t.pk_cat_health;
+    case "litigation":       return t.pk_cat_litigation;
+    case "travel":           return t.pk_cat_travel;
+    case "general":          return t.pk_cat_general;
+  }
+}
+
+function ordinalSuffix(n: number, t: T): string {
+  const r10 = n % 10, r100 = n % 100;
+  if (r100 >= 11 && r100 <= 13) return t.pk_houseTh;
+  if (r10 === 1) return t.pk_houseSt;
+  if (r10 === 2) return t.pk_houseNd;
+  if (r10 === 3) return t.pk_houseRd;
+  return t.pk_houseTh;
+}
 
 type CuspAnalysis = {
   house: number;
@@ -63,7 +88,7 @@ type Result = {
 
 type Bubble =
   | { id: string; kind: "assistant-text"; text: string }
-  | { id: string; kind: "user-query"; number: number; question?: string; category?: string }
+  | { id: string; kind: "user-query"; number: number; question?: string; category?: CategoryKey }
   | { id: string; kind: "result"; data: Result }
   | { id: string; kind: "thinking" };
 
@@ -77,6 +102,7 @@ const verdictColor = (code?: string) => {
 export default function PrashnaKundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { user } = useUser();
   const androidSB = Platform.OS === "android" ? 24 : 0;
   const topPad = Platform.OS === "ios" ? insets.top : androidSB;
@@ -84,17 +110,22 @@ export default function PrashnaKundliScreen() {
 
   const [numberStr, setNumberStr] = useState("");
   const [question, setQuestion]   = useState("");
-  const [category, setCategory]   = useState<string | null>(null);
+  const [category, setCategory]   = useState<CategoryKey | null>(null);
   const [loading, setLoading]     = useState(false);
   const [bubbles, setBubbles]     = useState<Bubble[]>([
-    {
-      id: "init",
-      kind: "assistant-text",
-      text:
-        "🔢 Pranam! Mann ko shant karke 1 se 249 ke beech jo number sabse pehle aaye, woh neeche likhiye. Apna prashna bhi sath mein likh sakte hain (vaikalpik). Wahi sankhya aapki Prashna Kundli ka lagna banegi.",
-    },
+    { id: "init", kind: "assistant-text", text: t.pk_initMsg },
   ]);
   const listRef = useRef<FlatList<Bubble>>(null);
+
+  // Update init bubble if language changes before user sends
+  useEffect(() => {
+    setBubbles(prev => {
+      if (prev.length === 1 && prev[0].id === "init" && prev[0].kind === "assistant-text") {
+        return [{ id: "init", kind: "assistant-text", text: t.pk_initMsg }];
+      }
+      return prev;
+    });
+  }, [t.pk_initMsg]);
 
   useEffect(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
@@ -107,7 +138,7 @@ export default function PrashnaKundliScreen() {
       setBubbles(prev => [...prev, {
         id: Date.now().toString(),
         kind: "assistant-text",
-        text: "⚠️ Number 1 se 249 ke beech hona chahiye. Ek baar aur sochiye.",
+        text: t.pk_invalidNumber,
       }]);
       return;
     }
@@ -145,7 +176,7 @@ export default function PrashnaKundliScreen() {
         setBubbles(prev => prev.filter(b => b.id !== "thinking").concat({
           id: Date.now().toString(),
           kind: "assistant-text",
-          text: `⛔ ${json?.message || "Aaj ka prashna limit poora ho gaya. Subscription upgrade karein."}`,
+          text: `⛔ ${json?.message || t.pk_qLimit}`,
         }));
         return;
       }
@@ -153,7 +184,7 @@ export default function PrashnaKundliScreen() {
         setBubbles(prev => prev.filter(b => b.id !== "thinking").concat({
           id: Date.now().toString(),
           kind: "assistant-text",
-          text: `⚠️ ${json?.error || json?.message || "Kuch galti hui — phir try karein."}`,
+          text: `⚠️ ${json?.error || json?.message || t.pk_genErr}`,
         }));
         return;
       }
@@ -168,12 +199,12 @@ export default function PrashnaKundliScreen() {
       setBubbles(prev => prev.filter(b => b.id !== "thinking").concat({
         id: Date.now().toString(),
         kind: "assistant-text",
-        text: "📡 Network error — internet check karke phir try karein.",
+        text: t.pk_netErr,
       }));
     } finally {
       setLoading(false);
     }
-  }, [loading, numberStr, question, category, user?.id, user?.api_key]);
+  }, [loading, numberStr, question, category, user?.id, user?.api_key, t.pk_invalidNumber, t.pk_qLimit, t.pk_genErr, t.pk_netErr]);
 
   const renderBubble = ({ item }: { item: Bubble }) => {
     if (item.kind === "thinking") {
@@ -201,11 +232,11 @@ export default function PrashnaKundliScreen() {
       );
     }
     if (item.kind === "user-query") {
-      const catLabel = item.category ? QUICK_CATEGORIES.find(c => c.key === item.category)?.label_hi : null;
+      const catLabel = item.category ? pkCategoryLabel(item.category, t) : null;
       return (
         <View style={[s.bubble, s.bubbleUser]}>
           <View style={[s.bubbleInner, s.bubbleInnerUser, { backgroundColor: C.isDark ? "#0e3a4d" : "#cffafe", borderColor: "#0891b260" }]}>
-            <Text style={[s.bubbleText, { color: C.text, fontWeight: "700" }]}>🔢 Sankhya: {item.number}</Text>
+            <Text style={[s.bubbleText, { color: C.text, fontWeight: "700" }]}>🔢 {t.pk_sankhyaPrefix}: {item.number}</Text>
             {!!item.question && <Text style={[s.bubbleText, { color: C.textMid, marginTop: 4 }]}>{item.question}</Text>}
             {!!catLabel && <Text style={[s.bubbleText, { color: C.textMuted, marginTop: 4, fontSize: 11 }]}>📌 {catLabel}</Text>}
           </View>
@@ -223,13 +254,13 @@ export default function PrashnaKundliScreen() {
           {(r.caution || (r as any).validity) && (
             <View style={[s.invalid, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}>
               <Feather name="alert-triangle" size={16} color={C.warningText} />
-              <Text style={[s.invalidTitle, { color: C.warningText }]}>Prashna kaal — saavdhani</Text>
+              <Text style={[s.invalidTitle, { color: C.warningText }]}>{t.pk_warnTitle}</Text>
               <Text style={{ color: C.warningText, fontSize: 11.5, marginTop: 4, textAlign: "center", lineHeight: 16 }}>
-                {r.caution?.reason || (r as any).validity?.reason || (r as any).validity?.message || "Margdarshan-roop mein lijiye, antim nirnaay nahi."}
+                {r.caution?.reason || (r as any).validity?.reason || (r as any).validity?.message || t.pk_warnDefault}
               </Text>
               {r.caution?.classical_ref && (
                 <Text style={{ color: C.warningText, fontSize: 10, marginTop: 4, opacity: 0.7, fontStyle: "italic" }}>
-                  Aadhar: {r.caution.classical_ref}
+                  {t.pk_warnRef}: {r.caution.classical_ref}
                 </Text>
               )}
             </View>
@@ -241,26 +272,28 @@ export default function PrashnaKundliScreen() {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={[s.verdict, { borderColor: `${verdictColor(r.verdict.code)}60` }]}
             >
-              <Text style={[s.verdictNum, { color: C.textMuted }]}>Sankhya: {r.number}</Text>
-              <Text style={[s.verdictLabel, { color: verdictColor(r.verdict.code) }]}>{r.verdict.label_hi}</Text>
+              <Text style={[s.verdictNum, { color: C.textMuted }]}>{t.pk_sankhyaPrefix}: {r.number}</Text>
+              <Text style={[s.verdictLabel, { color: verdictColor(r.verdict.code) }]}>
+                {t.vlang === "en" ? r.verdict.label_en : r.verdict.label_hi}
+              </Text>
               <Text style={[s.verdictMeaning, { color: C.text }]}>{r.verdict.meaning}</Text>
             </LinearGradient>
           )}
 
           {r.lagna && (
             <View style={[s.box, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.boxTitle, { color: C.text }]}>Forced Lagna</Text>
+              <Text style={[s.boxTitle, { color: C.text }]}>{t.pk_forcedLagna}</Text>
               <Text style={[s.boxLine, { color: C.textMid }]}>
-                Rashi: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.sign}</Text> · {r.lagna.degree}
+                {t.pk_lblRashi}: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.sign}</Text> · {r.lagna.degree}
               </Text>
               {!!r.lagna.nakshatra && (
                 <Text style={[s.boxLine, { color: C.textMid }]}>
-                  Nakshatra: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.nakshatra}</Text>
+                  {t.pk_lblNakshatra}: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.nakshatra}</Text>
                 </Text>
               )}
               {!!r.lagna.sub_lord && (
                 <Text style={[s.boxLine, { color: C.textMid }]}>
-                  Sub-Lord: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.sub_lord}</Text>
+                  {t.pk_subLord}: <Text style={{ color: C.text, fontWeight: "700" }}>{r.lagna.sub_lord}</Text>
                 </Text>
               )}
             </View>
@@ -268,14 +301,14 @@ export default function PrashnaKundliScreen() {
 
           {r.cusp_analysis && r.cusp_analysis.length > 0 && (
             <View style={[s.box, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.boxTitle, { color: C.text }]}>Cusp Analysis (KP Sub-Lord)</Text>
+              <Text style={[s.boxTitle, { color: C.text }]}>{t.pk_cuspKpTitle}</Text>
               {r.cusp_analysis.map((cv, i) => (
                 <View key={i} style={{ marginTop: i === 0 ? 4 : 10 }}>
                   <Text style={[s.boxLine, { color: C.text, fontWeight: "700" }]}>
-                    {cv.house}{cv.house === 1 ? "st" : cv.house === 2 ? "nd" : cv.house === 3 ? "rd" : "th"} House · {cv.sign} {cv.degree}
+                    {cv.house}{ordinalSuffix(cv.house, t)} {t.pk_houseWord} · {cv.sign} {cv.degree}
                   </Text>
                   <Text style={[s.boxLine, { color: C.textMid }]}>
-                    Sub-Lord: <Text style={{ color: C.text, fontWeight: "600" }}>{cv.sub_lord}</Text> → [{cv.signifies.join(", ")}]
+                    {t.pk_subLord}: <Text style={{ color: C.text, fontWeight: "600" }}>{cv.sub_lord}</Text> → [{cv.signifies.join(", ")}]
                   </Text>
                   <Text style={[s.boxLine, { color: C.textMid }]}>
                     +{cv.pos_hits.length ? cv.pos_hits.join(",") : "—"} / -{cv.neg_hits.length ? cv.neg_hits.join(",") : "—"} → <Text style={{ color: verdictColor(cv.verdict), fontWeight: "700" }}>{cv.verdict}</Text>
@@ -287,14 +320,14 @@ export default function PrashnaKundliScreen() {
 
           {!!r.timing && (
             <View style={[s.box, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.boxTitle, { color: C.text }]}>⏳ Samay (Timing)</Text>
+              <Text style={[s.boxTitle, { color: C.text }]}>{t.pk_timingTitle}</Text>
               <Text style={[s.boxLine, { color: C.textMid }]}>{r.timing}</Text>
             </View>
           )}
 
           {r.classical_refs && r.classical_refs.length > 0 && (
             <View style={[s.box, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.boxTitle, { color: C.text }]}>📜 Shastriya Adhar</Text>
+              <Text style={[s.boxTitle, { color: C.text }]}>{t.pk_classicalTitle}</Text>
               {r.classical_refs.map((ref, i) => (
                 <Text key={i} style={[s.boxLine, { color: C.textMid, fontStyle: "italic" }]}>• {ref}</Text>
               ))}
@@ -306,6 +339,7 @@ export default function PrashnaKundliScreen() {
   };
 
   const hasOnlyInit = bubbles.length === 1 && bubbles[0].kind === "assistant-text";
+  const activeCatLabel = category ? pkCategoryLabel(category, t) : null;
 
   return (
     <CosmicBg>
@@ -320,8 +354,8 @@ export default function PrashnaKundliScreen() {
             <Feather name="chevron-left" size={20} color={C.text} />
           </Pressable>
           <View style={s.headerDot} />
-          <Text style={[s.headerTitle, { color: C.text }]}>Prashna Kundli</Text>
-          <Text style={[s.headerSub, { color: C.textMuted }]}>KP Horary 1-249 · Cuspal Interlinks</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.pk_headerTitle}</Text>
+          <Text style={[s.headerSub, { color: C.textMuted }]}>{t.pk_headerSub}</Text>
         </View>
 
         {/* Mode switcher pill */}
@@ -331,11 +365,11 @@ export default function PrashnaKundliScreen() {
             style={({ pressed }) => [s.modeSwitchSeg, pressed && { opacity: 0.7 }]}
           >
             <Feather name="message-circle" size={13} color={C.textMuted} />
-            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>Ask Anything</Text>
+            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>{t.pk_modeAsk}</Text>
           </Pressable>
           <View style={[s.modeSwitchSeg, { backgroundColor: C.accentBg, borderColor: `${C.accent}80` }]}>
             <Feather name="hash" size={13} color={C.accent} />
-            <Text style={[s.modeSwitchText, { color: C.accent }]}>Prashna Kundli</Text>
+            <Text style={[s.modeSwitchText, { color: C.accent }]}>{t.pk_modeNumber}</Text>
           </View>
         </View>
 
@@ -366,14 +400,14 @@ export default function PrashnaKundliScreen() {
               >
                 <Text style={{ fontSize: 12 }}>{c.emoji}</Text>
                 <Text style={{ color: category === c.key ? "#fff" : C.accent, fontSize: 11.5, fontWeight: "600" }}>
-                  {c.label_hi}
+                  {pkCategoryLabel(c.key, t)}
                 </Text>
               </Pressable>
             ))}
           </View>
         )}
 
-        {/* Number entry row (just above question input) */}
+        {/* Number entry row */}
         <View style={[s.numRow, { backgroundColor: C.bg, borderTopColor: C.border }]}>
           <View style={[s.numWrap, { backgroundColor: C.bgCard, borderColor: numberStr ? "#0891b2" : `${C.accent}50` }]}>
             <Feather name="hash" size={14} color={C.accent} />
@@ -381,7 +415,7 @@ export default function PrashnaKundliScreen() {
               style={[s.numInput, { color: C.text }]}
               value={numberStr}
               onChangeText={(v) => setNumberStr(v.replace(/[^0-9]/g, "").slice(0, 3))}
-              placeholder="1 — 249"
+              placeholder={t.pk_numPlaceholder}
               placeholderTextColor={C.textMuted}
               keyboardType="number-pad"
               maxLength={3}
@@ -389,7 +423,7 @@ export default function PrashnaKundliScreen() {
             />
           </View>
           <Text style={[s.numHint, { color: C.textMuted }]}>
-            Sankhya sochiye{category ? ` · ${QUICK_CATEGORIES.find(c => c.key === category)?.label_hi}` : ""}
+            {t.pk_numHint}{activeCatLabel ? ` · ${activeCatLabel}` : ""}
           </Text>
           {category && (
             <Pressable onPress={() => { setCategory(null); Haptics.selectionAsync(); }} hitSlop={8}>
@@ -404,7 +438,7 @@ export default function PrashnaKundliScreen() {
             style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
             value={question}
             onChangeText={setQuestion}
-            placeholder="Apna prashna likhiye (vaikalpik)…"
+            placeholder={t.pk_qInputPh}
             placeholderTextColor={C.textMuted}
             multiline
             editable={!loading}

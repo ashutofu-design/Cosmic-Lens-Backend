@@ -34,6 +34,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { AstroVastuWallet } from "@/components/AstroVastuWallet";
@@ -160,6 +161,10 @@ export default function BusinessVastuScreen() {
   const C = useC();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
+  const t = useT() as any;
+  const bvBiz  = (k: string) => t[`bv_biz_${k}`]   ?? k;
+  const bvRoom = (k: string) => t[`bv_room_${k}`]  ?? k.replace(/_/g, " ");
+  const bvDir  = (k: string) => t[`bv_dir_${k}`]   ?? k;
 
   const [bizType,   setBizType]   = useState<BizType>("shop");
   const [rooms,     setRooms]     = useState<FloorRoom[]>([
@@ -206,17 +211,17 @@ export default function BusinessVastuScreen() {
   const onSubmit = useCallback(async () => {
     if (loading) return;
     if (!user?.id || !user?.api_key) {
-      setError({ error: "auth_required", message: "Please log in to run a Business Vastu scan." });
+      setError({ error: "auth_required", message: t.bv_errAuthRequired });
       return;
     }
     const valid = rooms.filter(r => r.room_type && r.direction);
     if (valid.length === 0 && !scanUpload) {
-      setError({ error: "validation", message: "Add at least one room with a direction, or upload a floor plan." });
+      setError({ error: "validation", message: t.bv_errValidationRooms });
       return;
     }
     if (!propertyName.trim()) {
       setError({ error: "validation",
-                 message: "Naam your premise (e.g. 'Andheri Shop') — needed to match your unlock." });
+                 message: t.bv_errValidationName });
       return;
     }
 
@@ -273,7 +278,7 @@ export default function BusinessVastuScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
           <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>Business Vastu</Text>
+        <Text style={[styles.headerTitle, { color: C.text }]}>{t.bv_headerTitle}</Text>
         <View style={{ width: 28 }} />
       </LinearGradient>
 
@@ -285,21 +290,19 @@ export default function BusinessVastuScreen() {
         <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <Feather name="briefcase" size={18} color={C.accent} />
-            <Text style={[styles.cardTitle, { color: C.text }]}>Premium Business Vastu</Text>
+            <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_cardTitle}</Text>
           </View>
           <Text style={[styles.bodyText, { color: C.textMid }]}>
-            Combine your premise layout with the owner Kundli + active Mahadasha to
-            get a personalised, lifetime priority plan.
+            {t.bv_cardBody}
           </Text>
           <Text style={[styles.bodyTextSmall, { color: C.textMid, marginTop: 6 }]}>
-            Aapke vyapar sthal ko swami ki Kundli aur chal rahi Mahadasha ke saath
-            milakar ek vyaktigat sudhar yojana banayi jaati hai.
+            {t.bv_cardBodySmall}
           </Text>
         </View>
 
         {/* ── Business type selector ─────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
-          Business Type
+          {t.bv_secBizType}
         </Text>
         <View style={styles.bizRow}>
           {BIZ_OPTIONS.map((b) => {
@@ -315,10 +318,7 @@ export default function BusinessVastuScreen() {
               >
                 <Feather name={b.icon} size={22} color={sel ? C.accent : C.textMid} />
                 <Text style={{ color: sel ? C.accent : C.text, fontWeight: "800", marginTop: 4 }}>
-                  {b.en}
-                </Text>
-                <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 11 }}>
-                  {b.hi}
+                  {bvBiz(b.key)}
                 </Text>
                 <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 11, marginTop: 2, fontWeight: "700" }}>
                   ₹{b.price}
@@ -330,17 +330,17 @@ export default function BusinessVastuScreen() {
 
         {/* ── Premise name ───────────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 14 }]}>
-          Premise Name
+          {t.bv_secPremiseName}
         </Text>
         <TextInput
           value={propertyName}
           onChangeText={setPropertyName}
-          placeholder="e.g. Andheri Shop, Powai HQ"
+          placeholder={t.bv_phPremiseName}
           placeholderTextColor={C.textMid}
           style={[styles.input, { color: C.text, borderColor: C.border, backgroundColor: C.bgCard }]}
         />
         <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4 }}>
-          Required — your one-time unlock is matched to this premise name.
+          {t.bv_premiseHint}
         </Text>
 
         {/* ── Wallet (Phase 2 unlocks) ───────────────────────────────── */}
@@ -366,8 +366,7 @@ export default function BusinessVastuScreen() {
                 rooms
                   .filter(r => r.room_type)
                   .map(r => {
-                    const meta = roomOpts.find(o => o.key === r.room_type);
-                    return [r.room_type, { key: r.room_type, label: meta?.en || r.room_type }];
+                    return [r.room_type, { key: r.room_type, label: bvRoom(r.room_type) }];
                   })
               ).values()
             )
@@ -380,11 +379,11 @@ export default function BusinessVastuScreen() {
 
         {/* ── Floor-plan editor ──────────────────────────────────────── */}
         <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
-          {scanUpload ? "Optional: Refine Rooms" : `Premise Layout (${rooms.length}/15)`}
+          {scanUpload ? t.bv_refineRooms : `${t.bv_premiseLayout} (${rooms.length}/15)`}
         </Text>
         {scanUpload ? (
           <Text style={{ color: C.textMid, fontSize: 11, marginBottom: 6 }}>
-            Photo Engine will detect rooms from your upload. You can also list rooms here to override.
+            {t.bv_engineWillDetect}
           </Text>
         ) : null}
 
@@ -409,7 +408,7 @@ export default function BusinessVastuScreen() {
                         <Feather name={opt.icon} size={12} color={sel ? C.accent : (opt.critical ? VERDICT_COLOR.Avoid.fg : C.textMid)} />
                         <Text style={{ color: sel ? C.accent : (opt.critical ? VERDICT_COLOR.Avoid.fg : C.textMid),
                                        fontSize: 11, fontWeight: "600" }}>
-                          {opt.en}{opt.critical ? " ★" : ""}
+                          {bvRoom(opt.key)}{opt.critical ? " ★" : ""}
                         </Text>
                       </Pressable>
                     );
@@ -420,9 +419,9 @@ export default function BusinessVastuScreen() {
                   onPress={() => { Haptics.selectionAsync(); setEditIdx(isEditing ? null : idx); }}
                   style={[styles.dirSummary, { borderColor: C.border }]}
                 >
-                  <Text style={{ color: C.textMid, fontSize: 12 }}>Direction:</Text>
+                  <Text style={{ color: C.textMid, fontSize: 12 }}>{t.bv_lblDirection}</Text>
                   <Text style={{ color: di ? C.text : C.textMid, fontSize: 13, fontWeight: "700" }}>
-                    {di ? `${di.short} · ${di.hi}` : "Select direction"}
+                    {di ? `${di.short} · ${bvDir(di.key)}` : t.bv_selectDirection}
                   </Text>
                   <Feather name={isEditing ? "chevron-up" : "chevron-down"} size={14} color={C.textMid} />
                 </Pressable>
@@ -439,7 +438,7 @@ export default function BusinessVastuScreen() {
                                      backgroundColor: sel ? C.accentBg : "transparent",
                                    }]}>
                           <Text style={{ color: sel ? C.accent : C.text, fontWeight: "800" }}>{d.short}</Text>
-                          <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 10 }}>{d.hi}</Text>
+                          <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 10 }}>{bvDir(d.key)}</Text>
                         </Pressable>
                       );
                     })}
@@ -457,14 +456,14 @@ export default function BusinessVastuScreen() {
         <Pressable onPress={addRoom} disabled={rooms.length >= 15}
                    style={[styles.addBtn, { borderColor: C.border, opacity: rooms.length >= 15 ? 0.5 : 1 }]}>
           <Feather name="plus" size={16} color={C.accent} />
-          <Text style={{ color: C.accent, fontWeight: "700" }}>Add Room (★ = critical)</Text>
+          <Text style={{ color: C.accent, fontWeight: "700" }}>{t.bv_addRoom}</Text>
         </Pressable>
 
         {/* ── Submit ─────────────────────────────────────────────────── */}
         <Pressable onPress={onSubmit} disabled={loading}
                    style={[styles.submitBtn, { backgroundColor: C.accent, opacity: loading ? 0.7 : 1 }]}>
           {loading ? <ActivityIndicator color="#fff" />
-                   : <Text style={styles.submitText}>Run {bizMeta.en} Vastu Scan</Text>}
+                   : <Text style={styles.submitText}>{t.bv_runScanPrefix} {bvBiz(bizType)} {t.bv_runScanSuffix}</Text>}
         </Pressable>
 
         {/* ── Error / 402 paywall card ───────────────────────────────── */}
@@ -475,23 +474,23 @@ export default function BusinessVastuScreen() {
             <Feather name="alert-triangle" size={18} color={VERDICT_COLOR.Avoid.fg} style={{ marginTop: 2 }} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.errTitle, { color: C.text }]}>
-                {error.error === "upgrade_required"   ? "Unlock Required"      :
-                 error.error === "profile_incomplete" ? "Complete your profile" :
-                 error.error === "validation"         ? "Check your inputs"     :
-                 "Scan failed"}
+                {error.error === "upgrade_required"   ? t.bv_errUnlockTitle    :
+                 error.error === "profile_incomplete" ? t.bv_errProfileTitle   :
+                 error.error === "validation"         ? t.bv_errValidTitle     :
+                 t.bv_errScanFailed}
               </Text>
               <Text style={[styles.errBody, { color: C.textMid, marginTop: 4 }]}>
-                {error.message || "Please try again."}
+                {error.message || t.bv_errTryAgain}
               </Text>
               {error.error === "profile_incomplete" && (
                 <Pressable onPress={() => router.push("/profile-edit")}
                            style={[styles.upgradeBtn, { backgroundColor: C.accent, marginTop: 10 }]}>
-                  <Text style={styles.upgradeText}>Complete Profile</Text>
+                  <Text style={styles.upgradeText}>{t.bv_btnCompleteProfile}</Text>
                 </Pressable>
               )}
               {(error.upgrade_required || error.error === "upgrade_required") && (
                 <Text style={{ color: C.textMid, fontSize: 12, marginTop: 8 }}>
-                  Use the wallet above to unlock {bizMeta.en} Vastu (₹{bizMeta.price}, lifetime).
+                  {t.bv_walletHintPrefix} {bvBiz(bizType)} {t.bv_walletHintSuffix.replace("{price}", String(bizMeta.price))}
                 </Text>
               )}
             </View>
@@ -514,7 +513,7 @@ export default function BusinessVastuScreen() {
             <View style={{ marginTop: 18 }}>
               <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.sectionLabel, { color: C.textMid }]}>OVERALL PREMISE SCORE</Text>
+                  <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.bv_overallScore}</Text>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                     <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
                     <Text style={{ color: C.textMid, fontWeight: "600" }}>/100</Text>
@@ -522,7 +521,7 @@ export default function BusinessVastuScreen() {
                       marginLeft: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
                       backgroundColor: GRADE_COLOR[grade] || C.accent,
                     }}>
-                      <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
+                      <Text style={{ color: "#fff", fontWeight: "800" }}>{t.bv_grade} {grade}</Text>
                     </View>
                   </View>
                   {sm.en ? (
@@ -544,14 +543,13 @@ export default function BusinessVastuScreen() {
               }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <Feather name="file-text" size={18} color={C.accent} />
-                  <Text style={[styles.cardTitle, { color: C.text }]}>Detailed PDF Report Ready</Text>
+                  <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_pdfReady}</Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 13, marginBottom: 4 }}>
-                  Aapka full Business Vastu report PDF me ready hai — room-by-room verdict,
-                  Mahadasha alert, stakeholder synergy, priority actions sab kuch.
+                  {t.bv_pdfBodyHi}
                 </Text>
                 <Text style={{ color: C.textMid, fontSize: 12, marginBottom: 12 }}>
-                  Your full Business Vastu report is available as a PDF — open, save, or share it.
+                  {t.bv_pdfBodyEn}
                 </Text>
                 <Pressable
                   onPress={openPdf}
@@ -559,13 +557,13 @@ export default function BusinessVastuScreen() {
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Feather name="download" size={16} color="#fff" />
-                    <Text style={styles.submitText}>Open PDF Report</Text>
+                    <Text style={styles.submitText}>{t.bv_btnOpenPdf}</Text>
                   </View>
                 </Pressable>
               </View>
 
               <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-                {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
+                {t.bv_footerBrand}
               </Text>
             </View>
           );
@@ -590,7 +588,7 @@ export default function BusinessVastuScreen() {
             {/* Overall score */}
             <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.sectionLabel, { color: C.textMid }]}>OVERALL PREMISE SCORE</Text>
+                <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.bv_overallScore}</Text>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                   <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
                   <Text style={{ color: C.textMid, fontWeight: "600" }}>/100</Text>
@@ -598,7 +596,7 @@ export default function BusinessVastuScreen() {
                     marginLeft: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8,
                     backgroundColor: GRADE_COLOR[grade] || C.accent,
                   }}>
-                    <Text style={{ color: "#fff", fontWeight: "800" }}>Grade {grade}</Text>
+                    <Text style={{ color: "#fff", fontWeight: "800" }}>{t.bv_grade} {grade}</Text>
                   </View>
                 </View>
                 <Text style={{ color: C.text, fontSize: 13, marginTop: 6 }}>{sm.en}</Text>
@@ -617,10 +615,10 @@ export default function BusinessVastuScreen() {
             {/* Counts */}
             <View style={styles.countsRow}>
               {([
-                ["Ideal",      cts.ideal,             VERDICT_COLOR.Ideal],
-                ["Acceptable", cts.acceptable,        VERDICT_COLOR.Acceptable],
-                ["Adjust",     cts.adjustment_needed, VERDICT_COLOR["Adjustment Needed"]],
-                ["Avoid",      cts.avoid,             VERDICT_COLOR.Avoid],
+                [t.bv_lblIdeal,      cts.ideal,             VERDICT_COLOR.Ideal],
+                [t.bv_lblAcceptable, cts.acceptable,        VERDICT_COLOR.Acceptable],
+                [t.bv_lblAdjust,     cts.adjustment_needed, VERDICT_COLOR["Adjustment Needed"]],
+                [t.bv_lblAvoid,      cts.avoid,             VERDICT_COLOR.Avoid],
               ] as const).map(([label, count, col]) => (
                 <View key={label} style={[styles.countPill, { backgroundColor: col.bg, borderColor: col.border }]}>
                   <Text style={{ color: col.fg, fontWeight: "800", fontSize: 16 }}>{count}</Text>
@@ -645,7 +643,7 @@ export default function BusinessVastuScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   <Feather name="zap" size={16} color={VERDICT_COLOR["Adjustment Needed"].fg} />
                   <Text style={[styles.cardTitle, { color: C.text }]}>
-                    Owner Mahadasha · {md.active_lord} ({md.lord_direction})
+                    {t.bv_lblOwnerMd} · {md.active_lord} ({md.lord_direction})
                   </Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 12 }}>{md.summary_en}</Text>
@@ -660,7 +658,7 @@ export default function BusinessVastuScreen() {
               }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   <Feather name="users" size={16} color={VERDICT_COLOR.Acceptable.fg} />
-                  <Text style={[styles.cardTitle, { color: C.text }]}>Stakeholder Synergy</Text>
+                  <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_lblStakeholder}</Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 12 }}>{stk.summary_en}</Text>
                 <Text style={{ color: C.textMid, fontSize: 11, marginTop: 2 }}>{stk.summary_hi}</Text>
@@ -678,7 +676,7 @@ export default function BusinessVastuScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                   <Feather name="calendar" size={16} color={C.accent} />
                   <Text style={[styles.cardTitle, { color: C.text }]}>
-                    Muhurat Alignment · {(mh.alignment || "").toUpperCase()}
+                    {t.bv_lblMuhuratAlign} · {(mh.alignment || "").toUpperCase()}
                   </Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 12 }}>{mh.summary_en}</Text>
@@ -689,7 +687,7 @@ export default function BusinessVastuScreen() {
             {/* Priority actions */}
             {prio.length > 0 && (
               <View style={{ marginTop: 14 }}>
-                <Text style={[styles.sectionTitle, { color: C.text }]}>Priority Actions</Text>
+                <Text style={[styles.sectionTitle, { color: C.text }]}>{t.bv_secPriority}</Text>
                 {prio.map((p, i) => {
                   const col = VERDICT_COLOR[p.verdict] || VERDICT_COLOR["Adjustment Needed"];
                   return (
@@ -700,7 +698,7 @@ export default function BusinessVastuScreen() {
                           {p.room_type.replace(/_/g, " ")} · {p.direction}
                         </Text>
                         {p.is_critical && (
-                          <Text style={{ color: VERDICT_COLOR.Avoid.fg, fontSize: 10, fontWeight: "800" }}>★ CRITICAL</Text>
+                          <Text style={{ color: VERDICT_COLOR.Avoid.fg, fontSize: 10, fontWeight: "800" }}>★ {t.bv_lblCritical}</Text>
                         )}
                       </View>
                       <Text style={{ color: C.text, fontSize: 12 }}>{p.why_en}</Text>
@@ -712,7 +710,7 @@ export default function BusinessVastuScreen() {
             )}
 
             {/* Per-room details */}
-            <Text style={[styles.sectionTitle, { color: C.text, marginTop: 14 }]}>Room-by-room</Text>
+            <Text style={[styles.sectionTitle, { color: C.text, marginTop: 14 }]}>{t.bv_secRoomByRoom}</Text>
             {rooms_.map((r, i) => {
               const col = VERDICT_COLOR[r.verdict] || VERDICT_COLOR.Acceptable;
               return (
@@ -730,7 +728,7 @@ export default function BusinessVastuScreen() {
                   </View>
                   {r.zone?.deity && (
                     <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4 }}>
-                      Zone: {r.zone.planet} · {r.zone.deity} · {r.zone.element}
+                      {t.bv_lblZone}: {r.zone.planet} · {r.zone.deity} · {r.zone.element}
                     </Text>
                   )}
                   {r.business_rule?.applies && r.business_rule.reason_en && (
@@ -750,7 +748,7 @@ export default function BusinessVastuScreen() {
             {/* Classical refs */}
             {refs.length > 0 && (
               <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border, marginTop: 12 }]}>
-                <Text style={[styles.sectionLabel, { color: C.textMid, marginBottom: 4 }]}>CLASSICAL REFERENCES</Text>
+                <Text style={[styles.sectionLabel, { color: C.textMid, marginBottom: 4 }]}>{t.bv_secClassicalRefs}</Text>
                 {refs.map((r, i) => (
                   <Text key={i} style={{ color: C.text, fontSize: 11 }}>• {r}</Text>
                 ))}
@@ -759,7 +757,7 @@ export default function BusinessVastuScreen() {
 
             {/* Footer */}
             <Text style={{ color: C.textMid, fontSize: 11, marginTop: 14, textAlign: "center" }}>
-              {result.footer?.en || "Powered by Advanced Cosmic Intelligence"}
+              {t.bv_footerBrand}
             </Text>
           </View>
           );

@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
+import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 
 type Slot = "front" | "left" | "right";
@@ -31,23 +32,29 @@ const ACCENT  = "#ec4899";
 const GOLD    = "#C2A878";
 const ACCENT2 = "#7B1F1F";
 
-const SLOTS: { key: Slot; label: string; hint: string; emoji: string }[] = [
-  { key: "front", label: "Front Selfie",   hint: "Camera ki taraf seedha dekhein",       emoji: "🙂" },
-  { key: "left",  label: "Left Profile",   hint: "Apna left side camera ke saamne",      emoji: "👈" },
-  { key: "right", label: "Right Profile",  hint: "Apna right side camera ke saamne",     emoji: "👉" },
-];
+function buildSlots(t: T): { key: Slot; label: string; hint: string; emoji: string }[] {
+  return [
+    { key: "front", label: t.fu_slotFrontLbl, hint: t.fu_slotFrontHint, emoji: "🙂" },
+    { key: "left",  label: t.fu_slotLeftLbl,  hint: t.fu_slotLeftHint,  emoji: "👈" },
+    { key: "right", label: t.fu_slotRightLbl, hint: t.fu_slotRightHint, emoji: "👉" },
+  ];
+}
 
 export default function FaceReadingUploadScreen() {
   const C = useC();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
+
+  const SLOTS = useMemo(() => buildSlots(t), [t]);
 
   const [photos, setPhotos] = useState<Record<Slot, string | null>>({
     front: null, left: null, right: null,
   });
   const [age, setAge]       = useState("");
   const [gender, setGender] = useState<"male" | "female" | "">("");
+  // PDF generation language — separate from UI language; values are PDF-engine codes
   const [language, setLanguage] = useState<"hinglish" | "en" | "hi">("hinglish");
   const [phase, setPhase]   = useState<Phase>("idle");
   const [progress, setProgress] = useState<string>("");
@@ -59,14 +66,14 @@ export default function FaceReadingUploadScreen() {
       let res;
       if (source === "camera") {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Camera permission needed"); return; }
+        if (!perm.granted) { Alert.alert(t.fu_camPermNeeded); return; }
         res = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.85, allowsEditing: false, cameraType: ImagePicker.CameraType.front,
         });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Gallery permission needed"); return; }
+        if (!perm.granted) { Alert.alert(t.fu_galPermNeeded); return; }
         res = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.85, allowsEditing: false,
@@ -76,43 +83,40 @@ export default function FaceReadingUploadScreen() {
         setPhotos(p => ({ ...p, [slot]: res.assets[0].uri }));
       }
     } catch (e: any) {
-      Alert.alert("Could not pick photo", String(e?.message || e));
+      Alert.alert(t.fu_couldNotPick, String(e?.message || e));
     }
   }
 
   function pickPrompt(slot: Slot) {
-    // Web preview ka Alert multi-button reliably nahi chalta — direct gallery open karo
     if (Platform.OS === "web") {
       pick(slot, "library");
       return;
     }
-    Alert.alert("Add photo", "Camera ya gallery se choose karein", [
-      { text: "Camera",  onPress: () => pick(slot, "camera") },
-      { text: "Gallery", onPress: () => pick(slot, "library") },
-      { text: "Cancel",  style: "cancel" },
+    Alert.alert(t.fu_addPhotoTtl, t.fu_addPhotoMsg, [
+      { text: t.fu_btnCamera,  onPress: () => pick(slot, "camera") },
+      { text: t.fu_btnGallery, onPress: () => pick(slot, "library") },
+      { text: t.fu_btnCancel,  style: "cancel" },
     ]);
   }
 
   const allReady = !!(photos.front && photos.left && photos.right);
 
   async function generate() {
-    if (!allReady) { Alert.alert("Add 3 photos first"); return; }
+    if (!allReady) { Alert.alert(t.fu_addAllFirst); return; }
     setErrorMsg("");
     setPdfUri(null);
     try {
       // ── 1. Upload ─────────────────────────────────────────
       setPhase("uploading");
-      setProgress("Photos upload kar rahe hain…");
+      setProgress(t.fu_progUpload);
       const fd = new FormData();
       for (const k of ["front", "left", "right"] as const) {
         const uri  = photos[k]!;
         const name = `${k}.jpg`;
         if (Platform.OS === "web") {
-          // Browser: convert local URI/dataURL to a real Blob for FormData
           const blob = await (await fetch(uri)).blob();
           fd.append(k, blob, name);
         } else {
-          // React Native: special {uri,name,type} shape
           fd.append(k, { uri, name, type: "image/jpeg" } as any);
         }
       }
@@ -127,11 +131,11 @@ export default function FaceReadingUploadScreen() {
       }
       const extractJson = await extractRes.json();
       const sid = extractJson.session_id;
-      if (!sid) throw new Error("Session ID missing from server");
+      if (!sid) throw new Error(t.fu_sessIdMissing);
 
       // ── 2. Analyze ────────────────────────────────────────
       setPhase("analyzing");
-      setProgress("19 engines analysis chal raha hai…");
+      setProgress(t.fu_progAnalyze);
       const params = new URLSearchParams();
       params.append("session_id", sid);
       if (age)    params.append("age", age);
@@ -146,11 +150,10 @@ export default function FaceReadingUploadScreen() {
 
       // ── 3. Render PDF ─────────────────────────────────────
       setPhase("rendering");
-      setProgress("40-page PDF report ban rahi hai…");
+      setProgress(t.fu_progRender);
       const pdfUrl = `${API_BASE}/api/face_reading/report.pdf?session_id=${sid}&language=${encodeURIComponent(language)}`;
 
       if (Platform.OS === "web") {
-        // Web: fetch as blob and trigger anchor download (FileSystem APIs unavailable).
         try {
           const r = await fetch(pdfUrl, { headers: { "bypass-tunnel-reminder": "true" } });
           if (!r.ok) throw new Error(`PDF download failed (${r.status})`);
@@ -178,7 +181,7 @@ export default function FaceReadingUploadScreen() {
       }
 
       setPhase("done");
-      setProgress("Report ready!");
+      setProgress(t.fu_doneTitle);
     } catch (e: any) {
       setPhase("error");
       setErrorMsg(String(e?.message || e));
@@ -188,7 +191,7 @@ export default function FaceReadingUploadScreen() {
   async function sharePdf() {
     if (!pdfUri) return;
     const ok = await Sharing.isAvailableAsync();
-    if (!ok) { Alert.alert("Sharing not available on this device"); return; }
+    if (!ok) { Alert.alert(t.fu_shareNotAvail); return; }
     await Sharing.shareAsync(pdfUri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
   }
 
@@ -207,7 +210,7 @@ export default function FaceReadingUploadScreen() {
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={12}>
           <Feather name="chevron-left" size={26} color={C.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>Face Reading Pro</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.fr_headerTitle}</Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -223,11 +226,9 @@ export default function FaceReadingUploadScreen() {
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill as any}
           />
-          <Text style={[s.introEyebrow, { color: GOLD }]}>STEP 1 OF 2</Text>
-          <Text style={[s.introTitle, { color: C.text }]}>3 selfies upload karein</Text>
-          <Text style={[s.introSub, { color: C.textMuted }]}>
-            Front + left + right profile. Achi roshni mein lein, chashma utar dein, baal forehead se hata lein.
-          </Text>
+          <Text style={[s.introEyebrow, { color: GOLD }]}>{t.fu_introEyebrow}</Text>
+          <Text style={[s.introTitle, { color: C.text }]}>{t.fu_introTitle}</Text>
+          <Text style={[s.introSub, { color: C.textMuted }]}>{t.fu_introSub}</Text>
         </View>
 
         {/* 3 photo slots */}
@@ -257,7 +258,7 @@ export default function FaceReadingUploadScreen() {
                 {filled && (
                   <View style={s.slotMeta}>
                     <Feather name="check-circle" size={12} color="#10b981" />
-                    <Text style={[s.slotMetaText, { color: "#10b981" }]}>Added · tap to change</Text>
+                    <Text style={[s.slotMetaText, { color: "#10b981" }]}>{t.fu_addedTap}</Text>
                   </View>
                 )}
               </View>
@@ -267,13 +268,13 @@ export default function FaceReadingUploadScreen() {
         })}
 
         {/* Optional details */}
-        <Text style={[s.sectionCap, { color: C.textDim }]}>OPTIONAL — BETTER ACCURACY</Text>
+        <Text style={[s.sectionCap, { color: C.textDim }]}>{t.fu_capOptional}</Text>
         <View style={[s.optCard, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <View style={s.optRow}>
-            <Text style={[s.optLabel, { color: C.textMuted }]}>Age</Text>
+            <Text style={[s.optLabel, { color: C.textMuted }]}>{t.fu_lblAge}</Text>
             <TextInput
               style={[s.optInput, { color: C.text, borderColor: C.border, backgroundColor: C.bgCard2 }]}
-              placeholder="e.g. 28"
+              placeholder={t.fu_phAge}
               placeholderTextColor={C.textDim}
               keyboardType="number-pad"
               value={age}
@@ -283,7 +284,7 @@ export default function FaceReadingUploadScreen() {
             />
           </View>
           <View style={[s.optRow, { marginTop: 10 }]}>
-            <Text style={[s.optLabel, { color: C.textMuted }]}>Gender</Text>
+            <Text style={[s.optLabel, { color: C.textMuted }]}>{t.fu_lblGender}</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               {(["male", "female"] as const).map(g => {
                 const active = gender === g;
@@ -298,7 +299,7 @@ export default function FaceReadingUploadScreen() {
                     ]}
                   >
                     <Text style={[s.genderText, { color: active ? ACCENT : C.textMuted }]}>
-                      {g === "male" ? "Male" : "Female"}
+                      {g === "male" ? t.fu_male : t.fu_female}
                     </Text>
                   </Pressable>
                 );
@@ -306,8 +307,9 @@ export default function FaceReadingUploadScreen() {
             </View>
           </View>
           <View style={[s.optRow, { marginTop: 10, alignItems: "flex-start" }]}>
-            <Text style={[s.optLabel, { color: C.textMuted, marginTop: 8 }]}>Language</Text>
+            <Text style={[s.optLabel, { color: C.textMuted, marginTop: 8 }]}>{t.fu_lblLanguage}</Text>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+              {/* PDF generation language picker — keep raw labels (these select the PDF prose engine, not UI lang) */}
               {([
                 { k: "hinglish" as const, label: "Hinglish" },
                 { k: "en" as const,       label: "English"  },
@@ -340,7 +342,7 @@ export default function FaceReadingUploadScreen() {
             <ActivityIndicator color={ACCENT} />
             <View style={{ flex: 1 }}>
               <Text style={[s.progressTitle, { color: C.text }]}>{progress}</Text>
-              <Text style={[s.progressSub,   { color: C.textDim }]}>Yeh ~30-60 seconds le sakta hai. App ko close mat karein.</Text>
+              <Text style={[s.progressSub,   { color: C.textDim }]}>{t.fu_progSub}</Text>
             </View>
           </View>
         )}
@@ -349,7 +351,7 @@ export default function FaceReadingUploadScreen() {
           <View style={[s.errorCard, { borderColor: "rgba(239,68,68,0.4)", backgroundColor: "rgba(239,68,68,0.08)" }]}>
             <Feather name="alert-octagon" size={16} color="#ef4444" />
             <View style={{ flex: 1 }}>
-              <Text style={[s.errorTitle, { color: "#ef4444" }]}>Something went wrong</Text>
+              <Text style={[s.errorTitle, { color: "#ef4444" }]}>{t.fu_errSomething}</Text>
               <Text style={[s.errorBody,  { color: C.textMuted }]}>{errorMsg}</Text>
             </View>
           </View>
@@ -358,14 +360,14 @@ export default function FaceReadingUploadScreen() {
         {phase === "done" && pdfUri && (
           <View style={[s.doneCard, { borderColor: "rgba(16,185,129,0.4)", backgroundColor: "rgba(16,185,129,0.08)" }]}>
             <Feather name="check-circle" size={20} color="#10b981" />
-            <Text style={[s.doneTitle, { color: "#10b981" }]}>Report ready!</Text>
-            <Text style={[s.doneSub, { color: C.textMuted }]}>40-page Hinglish PDF generate ho gayi.</Text>
+            <Text style={[s.doneTitle, { color: "#10b981" }]}>{t.fu_doneTitle}</Text>
+            <Text style={[s.doneSub, { color: C.textMuted }]}>{t.fu_doneSub}</Text>
             <Pressable onPress={sharePdf} style={[s.doneBtn, { backgroundColor: "#10b981" }]}>
               <Feather name="share-2" size={15} color="#fff" />
-              <Text style={s.doneBtnText}>Open / Share PDF</Text>
+              <Text style={s.doneBtnText}>{t.fu_btnOpenShare}</Text>
             </Pressable>
             <Pressable onPress={reset}>
-              <Text style={[s.doneAgain, { color: C.textMuted }]}>Generate another report</Text>
+              <Text style={[s.doneAgain, { color: C.textMuted }]}>{t.fu_btnAnother}</Text>
             </Pressable>
           </View>
         )}
@@ -386,15 +388,13 @@ export default function FaceReadingUploadScreen() {
                 ? <ActivityIndicator color="#fff" />
                 : <Feather name="zap" size={16} color="#fff" />}
               <Text style={s.ctaText}>
-                {busy ? "Processing…" : phase === "error" ? "Try Again" : "Generate My Report"}
+                {busy ? t.fu_processing : phase === "error" ? t.fu_btnTryAgain : t.fu_btnGenerate}
               </Text>
             </LinearGradient>
           </Pressable>
         )}
 
-        <Text style={[s.legalLine, { color: C.textDim }]}>
-          Aapki photos sirf analysis ke liye use hoti hain · 24 ghante ke baad auto-delete · server pe encrypted
-        </Text>
+        <Text style={[s.legalLine, { color: C.textDim }]}>{t.fu_legalLine}</Text>
       </ScrollView>
     </CosmicBg>
   );

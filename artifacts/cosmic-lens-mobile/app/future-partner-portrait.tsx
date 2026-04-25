@@ -34,6 +34,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 
@@ -54,6 +55,7 @@ const HARD_TIMEOUT_MS  = 90_000;
 
 export default function FuturePartnerPortraitScreen() {
   const C       = useC();
+  const t       = useT();
   const insets  = useSafeAreaInsets();
   const { user, profiles, primaryProfileId } = useUser();
 
@@ -70,7 +72,7 @@ export default function FuturePartnerPortraitScreen() {
 
   const [phase,    setPhase]    = useState<Phase>("idle");
   const [progress, setProgress] = useState(0);
-  const [message,  setMessage]  = useState("Sitaare align ho rahe hain...");
+  const [message,  setMessage]  = useState<string>(t.fpp_msgAlign);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [traits,   setTraits]   = useState<any>(null);
   const [errMsg,   setErrMsg]   = useState<string>("");
@@ -117,7 +119,7 @@ export default function FuturePartnerPortraitScreen() {
     timeoutRef.current = setTimeout(() => {
       stopPolling();
       setPhase("error");
-      setErrMsg("Sitaaron ki gehri jaanch me samay zyada lag gaya. Punah prayaas karein.");
+      setErrMsg(t.fpp_errTimeout);
     }, HARD_TIMEOUT_MS);
 
     pollRef.current = setInterval(async () => {
@@ -127,13 +129,12 @@ export default function FuturePartnerPortraitScreen() {
           if (r.status === 404) {
             stopPolling();
             setPhase("error");
-            setErrMsg("Task expire ho gaya. Punah shuru karein.");
+            setErrMsg(t.fpp_msgTaskExpire);
           }
           return;
         }
         const body = (await r.json()) as StatusBody;
 
-        // Progress should never go backwards
         setProgress(prev => Math.max(prev, body.progress || 0));
         if (body.message) setMessage(body.message);
 
@@ -147,36 +148,32 @@ export default function FuturePartnerPortraitScreen() {
         } else if (body.status === "error") {
           stopPolling();
           setPhase("error");
-          setErrMsg(body.error || "Cosmic Portrait abhi taiyar nahi ho saka.");
+          setErrMsg(body.error || t.fpp_errPortraitFail);
         }
       } catch {
         // ignore transient network blips; next tick will retry
       }
     }, POLL_INTERVAL_MS);
-  }, []);
+  }, [t.fpp_errTimeout, t.fpp_msgTaskExpire, t.fpp_errPortraitFail]);
 
   const onReveal = useCallback(async () => {
     if (!birth) {
-      Alert.alert(
-        "Birth details zaroori hain",
-        "Apni primary profile me birth date/time/place pehle add karein, fir Cosmic Portrait reveal karein.",
-      );
+      Alert.alert(t.fpp_alertBirthTtl, t.fpp_alertBirthMsg);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
     setPhase("loading");
     setProgress(2);
-    setMessage("Aapki kundli sitaaron ke saath align ho rahi hai...");
+    setMessage(t.fpp_msgAlignFull);
     setErrMsg("");
     setImageUrl(null);
     setTraits(null);
 
-    // If kundli not yet computed (user hasn't opened kundli screen), compute it now.
     let kundliToUse = kundli;
     if (!kundliToUse) {
       try {
-        setMessage("Pehle aapki kundli compute kar raha hu...");
+        setMessage(t.fpp_msgComputing);
         const auth = (user?.id && user?.api_key)
           ? { user_id: user.id, api_key: user.api_key }
           : null;
@@ -185,8 +182,8 @@ export default function FuturePartnerPortraitScreen() {
         setPhase("error");
         setErrMsg(
           e?.message?.includes("quota")
-            ? "Aapka kundli quota khatam ho gaya. Subscription upgrade karein."
-            : "Kundli compute nahi ho saki. Network check karke punah prayaas karein."
+            ? t.fpp_msgKundliQuota
+            : t.fpp_msgKundliFail
         );
         return;
       }
@@ -212,34 +209,38 @@ export default function FuturePartnerPortraitScreen() {
       if (!resp.ok) {
         const j = await resp.json().catch(() => ({}));
         setPhase("error");
-        setErrMsg(j?.message || j?.error || `Sitaare abhi vyast hain (${resp.status})`);
+        setErrMsg(j?.message || j?.error || `${t.fpp_msgStarsBusy} (${resp.status})`);
         return;
       }
 
       const data = await resp.json();
       if (!data?.task_id) {
         setPhase("error");
-        setErrMsg("Task ID nahi mila. Punah prayaas karein.");
+        setErrMsg(t.fpp_msgTaskIdMiss);
         return;
       }
       startPolling(data.task_id);
-    } catch (e: any) {
+    } catch {
       setPhase("error");
-      setErrMsg("Network slow hai. Internet check karke punah prayaas karein.");
+      setErrMsg(t.fpp_msgNetSlow);
     }
-  }, [kundli, birth, userGender, user, startPolling]);
+  }, [
+    kundli, birth, userGender, user, startPolling,
+    t.fpp_alertBirthTtl, t.fpp_alertBirthMsg, t.fpp_msgAlignFull,
+    t.fpp_msgComputing, t.fpp_msgKundliQuota, t.fpp_msgKundliFail,
+    t.fpp_msgStarsBusy, t.fpp_msgTaskIdMiss, t.fpp_msgNetSlow,
+  ]);
 
   const onReset = useCallback(() => {
     stopPolling();
     setPhase("idle");
     setProgress(0);
-    setMessage("Sitaare align ho rahe hain...");
+    setMessage(t.fpp_msgAlign);
     setImageUrl(null);
     setTraits(null);
     setErrMsg("");
-  }, []);
+  }, [t.fpp_msgAlign]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle={C.isDark ? "light-content" : "dark-content"} />
@@ -253,7 +254,7 @@ export default function FuturePartnerPortraitScreen() {
         <Pressable hitSlop={12} onPress={() => router.back()}>
           <Feather name="arrow-left" size={22} color={C.text} />
         </Pressable>
-        <Text style={[s.headerTitle, { color: C.text }]}>Cosmic Portrait</Text>
+        <Text style={[s.headerTitle, { color: C.text }]}>{t.fpp_headerTitle}</Text>
         <View style={{ width: 28 }} />
       </LinearGradient>
 
@@ -266,21 +267,16 @@ export default function FuturePartnerPortraitScreen() {
           <>
             <View style={[s.heroCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={{ fontSize: 56, textAlign: "center" }}>🔮</Text>
-              <Text style={[s.heroTitle, { color: C.text }]}>
-                Aapka Future Life Partner
-              </Text>
+              <Text style={[s.heroTitle, { color: C.text }]}>{t.fpp_heroTitle}</Text>
               <Text style={[s.heroSub, { color: C.textMid }]}>
-                Aapki kundli ke 30+ shastriya rules se {userGender === "male" ? "uski" : "uska"}{" "}
-                roop, swabhav aur direction reveal hoga — D1, D9 Navamsa, D3 Drekkana,
-                D30 Trimsamsa, KP 7th cuspal sub-lord, Upapada Lagna, Darakaraka,
-                Arudha A7, Vargottama aur Ashtakavarga ka samuchit vishleshan.
+                {userGender === "male" ? t.fpp_heroSubMale : t.fpp_heroSubFemale}
               </Text>
 
               {primary && (
                 <View style={[s.kundliPill, { backgroundColor: C.bg, borderColor: C.border }]}>
                   <Feather name="user" size={12} color={C.accent} />
                   <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>
-                    Primary kundli: {primary.name || "—"}
+                    {t.fpp_primaryKundli}: {primary.name || "—"}
                   </Text>
                 </View>
               )}
@@ -297,28 +293,17 @@ export default function FuturePartnerPortraitScreen() {
                 ]}
               >
                 <Feather name="eye" size={18} color="#fff" />
-                <Text style={s.ctaBtnText}>Reveal My Future Partner</Text>
+                <Text style={s.ctaBtnText}>{t.fpp_btnReveal}</Text>
               </Pressable>
 
               {!kundli && (
-                <Text style={[s.warnText, { color: C.textMid }]}>
-                  Pehle apni primary kundli banayein. Profile → Add kundli.
-                </Text>
+                <Text style={[s.warnText, { color: C.textMid }]}>{t.fpp_warnNoKundli}</Text>
               )}
             </View>
 
             <View style={[s.infoCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.infoTitle, { color: C.text }]}>
-                💎 Yeh kya batayega
-              </Text>
-              {[
-                "Roop-rang: chehra, complexion, aankhein, baal, sharir",
-                "Swabhav: vibe, gun, stree/purush ke takat",
-                "Vyavsay ki disha (D10 + 7th lord)",
-                "Aapse umar ka antar (chhota / barabar / bada)",
-                "Disha jis or se aayega (East / North / etc.)",
-                "Ashtakavarga 7th bindu — attraction strength",
-              ].map((line, i) => (
+              <Text style={[s.infoTitle, { color: C.text }]}>{t.fpp_infoTitle}</Text>
+              {[t.fpp_b1, t.fpp_b2, t.fpp_b3, t.fpp_b4, t.fpp_b5, t.fpp_b6].map((line, i) => (
                 <View key={i} style={s.bulletRow}>
                   <Text style={{ color: "#9333ea", marginRight: 6 }}>✦</Text>
                   <Text style={{ color: C.textMid, fontSize: 13, flex: 1, lineHeight: 19 }}>
@@ -327,9 +312,7 @@ export default function FuturePartnerPortraitScreen() {
                 </View>
               ))}
               <Text style={[s.disclaimer, { color: C.textMid, borderColor: C.border }]}>
-                * Yeh ek divya jhalak hai — shastriya signature ka kalatmak chitran.
-                Vastavik vyakti se haru-bahu mel zaroori nahi. Vyaktitva, vibe aur
-                disha shastriya rules par adhrit hain.
+                {t.fpp_disclaimer1}
               </Text>
             </View>
           </>
@@ -349,16 +332,12 @@ export default function FuturePartnerPortraitScreen() {
               <Text style={{ fontSize: 72, textAlign: "center" }}>🔮</Text>
             </Animated.View>
 
-            <Text style={[s.loadingTitle, { color: C.text }]}>
-              Cosmic Portrait taiyar ho raha hai
-            </Text>
+            <Text style={[s.loadingTitle, { color: C.text }]}>{t.fpp_loadingTitle}</Text>
 
-            {/* Big animated percentage */}
             <Text style={[s.percentText, { color: "#9333ea" }]}>
               {Math.round(progress)}%
             </Text>
 
-            {/* Progress bar */}
             <View style={[s.progressTrack, { backgroundColor: C.border }]}>
               <Animated.View
                 style={[
@@ -374,22 +353,16 @@ export default function FuturePartnerPortraitScreen() {
               />
             </View>
 
-            {/* Current step message */}
             <View style={s.msgRow}>
               <ActivityIndicator size="small" color="#9333ea" />
-              <Text style={[s.msgText, { color: C.textMid }]}>
-                {message}
-              </Text>
+              <Text style={[s.msgText, { color: C.textMid }]}>{message}</Text>
             </View>
 
-            <Text style={[s.tipText, { color: C.textMid }]}>
-              Pls wait... Sitaare aapke jeevansaathi ki essence padh rahe hain.
-              {"\n"}Lag-bhag 15-25 sec lagenge.
-            </Text>
+            <Text style={[s.tipText, { color: C.textMid }]}>{t.fpp_tipText}</Text>
 
             <Pressable onPress={onReset} style={[s.cancelBtn, { borderColor: C.border }]}>
               <Text style={{ color: C.textMid, fontSize: 12, fontWeight: "700" }}>
-                Cancel
+                {t.fpp_btnCancel}
               </Text>
             </Pressable>
           </View>
@@ -398,102 +371,82 @@ export default function FuturePartnerPortraitScreen() {
         {/* ─────────── DONE ─────────── */}
         {phase === "done" && (
           <>
-            {/* The portrait */}
             <View style={[s.imageCard, { backgroundColor: C.bgCard, borderColor: "#9333ea" }]}>
               {imageUrl ? (
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={s.portraitImg}
-                  resizeMode="cover"
-                />
+                <Image source={{ uri: imageUrl }} style={s.portraitImg} resizeMode="cover" />
               ) : (
                 <View style={[s.portraitImg, { alignItems: "center", justifyContent: "center" }]}>
-                  <Text style={{ color: C.textMid }}>Image taiyar nahi ho saki.</Text>
+                  <Text style={{ color: C.textMid }}>{t.fpp_imgFailed}</Text>
                 </View>
               )}
               <View style={s.imageBadge}>
                 <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>
-                  ✨ COSMIC PORTRAIT — DIVYA JHALAK
+                  {t.fpp_imgBadge}
                 </Text>
               </View>
             </View>
 
-            {/* Trait highlights */}
             {traits?.features && (
               <View style={[s.traitCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.cardTitle, { color: C.text }]}>
-                  🌟 Roop-rang & Swabhav
-                </Text>
-                <TraitRow label="Chehra"      value={traits.features.face_shape}    C={C} />
-                <TraitRow label="Complexion"  value={traits.features.complexion}    C={C} />
-                <TraitRow label="Build"       value={traits.features.build}         C={C} />
-                <TraitRow label="Aankhein"    value={traits.features.eyes}          C={C} />
-                <TraitRow label="Bhauein"     value={traits.features.eyebrows}      C={C} />
-                <TraitRow label="Naak"        value={traits.features.nose}          C={C} />
-                <TraitRow label="Honth"       value={traits.features.lips}          C={C} />
-                <TraitRow label="Baal"        value={traits.features.hair}          C={C} />
-                <TraitRow label="Vibe"        value={traits.features.vibe}          C={C} />
+                <Text style={[s.cardTitle, { color: C.text }]}>{t.fpp_traitTitle}</Text>
+                <TraitRow label={t.fpp_lblFace}       value={traits.features.face_shape} C={C} />
+                <TraitRow label={t.fpp_lblComplexion} value={traits.features.complexion} C={C} />
+                <TraitRow label={t.fpp_lblBuild}      value={traits.features.build}      C={C} />
+                <TraitRow label={t.fpp_lblEyes}       value={traits.features.eyes}       C={C} />
+                <TraitRow label={t.fpp_lblEyebrows}   value={traits.features.eyebrows}   C={C} />
+                <TraitRow label={t.fpp_lblNose}       value={traits.features.nose}       C={C} />
+                <TraitRow label={t.fpp_lblLips}       value={traits.features.lips}       C={C} />
+                <TraitRow label={t.fpp_lblHair}       value={traits.features.hair}       C={C} />
+                <TraitRow label={t.fpp_lblVibe}       value={traits.features.vibe}       C={C} />
                 {traits.features.vargottama_amplified && (
                   <View style={[s.boostPill, { backgroundColor: "#10b98120", borderColor: "#10b981" }]}>
                     <Text style={{ color: "#10b981", fontSize: 11, fontWeight: "800" }}>
-                      ✨ Vargottama amplified — features especially harmonious
+                      {t.fpp_vargottama}
                     </Text>
                   </View>
                 )}
               </View>
             )}
 
-            {/* Context */}
             {traits?.context && (
               <View style={[s.traitCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.cardTitle, { color: C.text }]}>
-                  🧭 Practical Insights
-                </Text>
-                <TraitRow label="Umar"          value={traits.context.approx_age_difference}     C={C} />
-                <TraitRow label="Disha"         value={traits.context.direction_from_birthplace} C={C} />
-                <TraitRow label="Vyavsay hint"  value={traits.context.profession_hint}           C={C} />
-                <TraitRow label="Attraction"    value={traits.context.ashtakavarga_strength}     C={C} />
+                <Text style={[s.cardTitle, { color: C.text }]}>{t.fpp_practTitle}</Text>
+                <TraitRow label={t.fpp_lblAge}        value={traits.context.approx_age_difference}     C={C} />
+                <TraitRow label={t.fpp_lblDirection}  value={traits.context.direction_from_birthplace} C={C} />
+                <TraitRow label={t.fpp_lblProfHint}   value={traits.context.profession_hint}           C={C} />
+                <TraitRow label={t.fpp_lblAttraction} value={traits.context.ashtakavarga_strength}     C={C} />
               </View>
             )}
 
-            {/* Classical refs */}
             {traits?.layers && (
               <View style={[s.traitCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.cardTitle, { color: C.text }]}>
-                  📜 Shastriya Adhar
-                </Text>
-                <RefRow label="D1 7th house"         value={`${traits.layers.d1_7th_sign} (lord ${traits.layers.d1_7th_lord})`} C={C} />
-                <RefRow label="D9 7th (Navamsa)"     value={`${traits.layers.d9_7th_sign} (lord ${traits.layers.d9_7th_lord})`} C={C} />
-                <RefRow label="D3 Lagna (face)"      value={traits.layers.d3_lagna_sign} C={C} />
-                <RefRow label="D30 Lagna (swabhav)"  value={traits.layers.d30_lagna_sign} C={C} />
+                <Text style={[s.cardTitle, { color: C.text }]}>{t.fpp_classicalTtl}</Text>
+                <RefRow label="D1 7th house"        value={`${traits.layers.d1_7th_sign} (lord ${traits.layers.d1_7th_lord})`} C={C} />
+                <RefRow label="D9 7th (Navamsa)"    value={`${traits.layers.d9_7th_sign} (lord ${traits.layers.d9_7th_lord})`} C={C} />
+                <RefRow label="D3 Lagna (face)"     value={traits.layers.d3_lagna_sign} C={C} />
+                <RefRow label="D30 Lagna (swabhav)" value={traits.layers.d30_lagna_sign} C={C} />
                 {traits.layers.kp_7th_sub_lord && (
-                  <RefRow label="KP 7th sub-lord"    value={traits.layers.kp_7th_sub_lord} C={C} />
+                  <RefRow label="KP 7th sub-lord"   value={traits.layers.kp_7th_sub_lord} C={C} />
                 )}
-                <RefRow label="Upapada Lagna"        value={`${traits.layers.upapada_lagna_sign} (lord ${traits.layers.upapada_lagna_lord})`} C={C} />
-                <RefRow label="Darakaraka"           value={traits.layers.darakaraka} C={C} />
-                <RefRow label="A7 (Arudha 7th)"      value={`${traits.layers.a7_sign} (lord ${traits.layers.a7_lord})`} C={C} />
-                <RefRow label="Karaka 7th"           value={`${traits.layers.karaka_planet} → ${traits.layers.karaka_7th_sign}`} C={C} />
-                <RefRow label="7th lord nakshatra"   value={`${traits.layers.seventh_lord_nakshatra} (${traits.layers.seventh_lord_nakshatra_lord})`} C={C} />
-                <RefRow label="Ashtakavarga 7th"     value={`${traits.layers.ashtakavarga_7th_bindus} bindus`} C={C} />
+                <RefRow label="Upapada Lagna"       value={`${traits.layers.upapada_lagna_sign} (lord ${traits.layers.upapada_lagna_lord})`} C={C} />
+                <RefRow label="Darakaraka"          value={traits.layers.darakaraka} C={C} />
+                <RefRow label="A7 (Arudha 7th)"     value={`${traits.layers.a7_sign} (lord ${traits.layers.a7_lord})`} C={C} />
+                <RefRow label="Karaka 7th"          value={`${traits.layers.karaka_planet} → ${traits.layers.karaka_7th_sign}`} C={C} />
+                <RefRow label="7th lord nakshatra"  value={`${traits.layers.seventh_lord_nakshatra} (${traits.layers.seventh_lord_nakshatra_lord})`} C={C} />
+                <RefRow label="Ashtakavarga 7th"    value={`${traits.layers.ashtakavarga_7th_bindus} bindus`} C={C} />
                 {(traits.layers.vargottama_planets || []).length > 0 && (
-                  <RefRow label="Vargottama"         value={(traits.layers.vargottama_planets || []).join(", ")} C={C} />
+                  <RefRow label="Vargottama"        value={(traits.layers.vargottama_planets || []).join(", ")} C={C} />
                 )}
               </View>
             )}
 
             <Text style={[s.disclaimer, { color: C.textMid, borderColor: C.border, marginTop: 12 }]}>
-              * Cosmic Portrait — divya jhalak. Yeh ek kalatmak vishleshan hai
-              jo aapki kundli ke 7th house, D9 Navamsa, KP cusp aur Jaimini ke
-              Upapada/Arudha sutron par adhrit hai. Vastavik chehre se haru-bahu
-              mel ho ya na ho — vyaktitva, vibe aur disha sahi hogi.
+              {t.fpp_disclaimer2}
             </Text>
 
-            <Pressable
-              onPress={onReset}
-              style={[s.againBtn, { backgroundColor: "#9333ea" }]}
-            >
+            <Pressable onPress={onReset} style={[s.againBtn, { backgroundColor: "#9333ea" }]}>
               <Feather name="refresh-cw" size={16} color="#fff" />
-              <Text style={s.ctaBtnText}>Reveal Again</Text>
+              <Text style={s.ctaBtnText}>{t.fpp_btnRevealAgain}</Text>
             </Pressable>
           </>
         )}
@@ -502,15 +455,13 @@ export default function FuturePartnerPortraitScreen() {
         {phase === "error" && (
           <View style={[s.errorCard, { backgroundColor: C.bgCard, borderColor: "#ef4444" }]}>
             <Text style={{ fontSize: 48, textAlign: "center" }}>⚠️</Text>
-            <Text style={[s.errorTitle, { color: "#ef4444" }]}>
-              Cosmic Portrait abhi taiyar nahi
-            </Text>
+            <Text style={[s.errorTitle, { color: "#ef4444" }]}>{t.fpp_errTitle}</Text>
             <Text style={{ color: C.textMid, fontSize: 13, textAlign: "center", marginTop: 8, lineHeight: 19 }}>
-              {errMsg || "Sitaare abhi vyast hain. Kuch der baad punah prayaas karein."}
+              {errMsg || t.fpp_errDefault}
             </Text>
             <Pressable onPress={onReset} style={[s.againBtn, { backgroundColor: "#9333ea" }]}>
               <Feather name="refresh-cw" size={16} color="#fff" />
-              <Text style={s.ctaBtnText}>Punah Prayaas Karein</Text>
+              <Text style={s.ctaBtnText}>{t.fpp_btnTryAgain}</Text>
             </Pressable>
           </View>
         )}
@@ -562,82 +513,69 @@ const s = StyleSheet.create({
   heroSub:     { fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: "center" },
   kundliPill:  {
     flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1, marginTop: 14,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, marginTop: 14,
   },
   ctaBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14,
-    marginTop: 18, alignSelf: "stretch",
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 24, paddingVertical: 14,
+    borderRadius: 12, marginTop: 18,
   },
   ctaBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
-  warnText:   { fontSize: 11, marginTop: 10, textAlign: "center", fontStyle: "italic" },
+  warnText:   { fontSize: 11, marginTop: 10, fontStyle: "italic", textAlign: "center" },
 
   infoCard: { borderRadius: 14, borderWidth: 1, padding: 16, marginTop: 14 },
   infoTitle:{ fontSize: 14, fontWeight: "800", marginBottom: 10 },
-  bulletRow:{ flexDirection: "row", alignItems: "flex-start", marginBottom: 6 },
+  bulletRow:{ flexDirection: "row", alignItems: "flex-start", marginVertical: 3 },
   disclaimer:{
-    fontSize: 11, lineHeight: 16, marginTop: 12,
-    fontStyle: "italic", paddingTop: 10, borderTopWidth: 1,
+    fontSize: 11, lineHeight: 16, fontStyle: "italic",
+    paddingTop: 10, borderTopWidth: 1, marginTop: 12,
   },
 
   loadingCard: {
-    borderRadius: 18, borderWidth: 1, padding: 30, alignItems: "center",
-    marginTop: 20,
+    borderRadius: 18, borderWidth: 1, padding: 26, alignItems: "center",
   },
-  loadingTitle:{ fontSize: 18, fontWeight: "800", marginTop: 14, textAlign: "center" },
-  percentText: { fontSize: 56, fontWeight: "900", marginTop: 8, letterSpacing: -2 },
+  loadingTitle: { fontSize: 16, fontWeight: "800", marginTop: 18, textAlign: "center" },
+  percentText:  { fontSize: 56, fontWeight: "900", marginTop: 14, letterSpacing: -2 },
   progressTrack:{
-    width: "100%", height: 10, borderRadius: 6, marginTop: 4, overflow: "hidden",
+    width: "100%", height: 8, borderRadius: 4,
+    marginTop: 18, overflow: "hidden",
   },
-  progressFill: { height: "100%", borderRadius: 6 },
+  progressFill: { height: "100%", borderRadius: 4 },
   msgRow: {
-    flexDirection: "row", alignItems: "center", gap: 8, marginTop: 18,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    marginTop: 16, paddingHorizontal: 8,
   },
-  msgText: { fontSize: 13, flex: 1, lineHeight: 18, fontWeight: "600" },
-  tipText: {
-    fontSize: 11, marginTop: 16, textAlign: "center", lineHeight: 16,
-    fontStyle: "italic",
-  },
-  cancelBtn: {
-    marginTop: 18, paddingHorizontal: 18, paddingVertical: 8,
-    borderRadius: 8, borderWidth: 1,
+  msgText:  { fontSize: 13, flex: 1, lineHeight: 18 },
+  tipText:  { fontSize: 11, marginTop: 18, textAlign: "center", fontStyle: "italic", lineHeight: 16 },
+  cancelBtn:{
+    paddingHorizontal: 20, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1, marginTop: 18,
   },
 
   imageCard: {
-    borderRadius: 16, borderWidth: 2, overflow: "hidden", position: "relative",
+    borderRadius: 18, borderWidth: 2, overflow: "hidden",
+    marginBottom: 14, position: "relative",
   },
-  portraitImg: { width: "100%", aspectRatio: 1, backgroundColor: "#000" },
+  portraitImg:{ width: "100%", aspectRatio: 1, backgroundColor: "#1a0033" },
   imageBadge: {
     position: "absolute", top: 10, right: 10,
-    backgroundColor: "rgba(147,51,234,0.95)",
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
+    backgroundColor: "#9333ea", paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
   },
-
-  traitCard: {
-    borderRadius: 14, borderWidth: 1, padding: 16, marginTop: 14,
-  },
-  cardTitle: { fontSize: 15, fontWeight: "800", marginBottom: 12 },
-  traitRow:  {
-    flexDirection: "row", paddingVertical: 6, alignItems: "flex-start",
-  },
-  refRow: {
-    flexDirection: "row", paddingVertical: 5, alignItems: "flex-start",
-  },
+  traitCard: { borderRadius: 14, borderWidth: 1, padding: 16, marginTop: 12 },
+  cardTitle: { fontSize: 14, fontWeight: "800", marginBottom: 10 },
+  traitRow:  { flexDirection: "row", alignItems: "flex-start", marginVertical: 4 },
+  refRow:    { flexDirection: "row", alignItems: "flex-start", marginVertical: 3 },
   boostPill: {
-    marginTop: 10, paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 10, borderWidth: 1, alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 8, borderWidth: 1, marginTop: 12,
   },
-
-  errorCard: {
-    borderRadius: 14, borderWidth: 1, padding: 22, marginTop: 30,
-    alignItems: "center",
-  },
-  errorTitle: { fontSize: 16, fontWeight: "800", marginTop: 8, textAlign: "center" },
-
   againBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, marginTop: 18,
-    alignSelf: "stretch",
+    paddingVertical: 14, borderRadius: 12, marginTop: 18,
   },
+
+  errorCard: { borderRadius: 18, borderWidth: 2, padding: 26, alignItems: "center" },
+  errorTitle:{ fontSize: 16, fontWeight: "800", marginTop: 12, textAlign: "center" },
 });

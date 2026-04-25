@@ -4,6 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import LegalScreen, { Section, P, Strong } from "@/components/LegalScreen";
 import { useC } from "@/context/ThemeContext";
+import { useT } from "@/hooks/useT";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -41,62 +42,45 @@ function LinkRow({
 
 export default function AboutScreen() {
   const C = useC();
+  const t = useT();
+  const legalLinks: { label: string; path: string; icon: string }[] = [
+    { label: t.ab_linkPrivacy,    path: "/privacy",        icon: "shield" },
+    { label: t.ab_linkTerms,      path: "/terms",          icon: "file-text" },
+    { label: t.ab_linkRefund,     path: "/refund",         icon: "rotate-ccw" },
+    { label: t.ab_linkDisclaimer, path: "/disclaimer",     icon: "alert-triangle" },
+    { label: t.ab_linkDelete,     path: "/delete-account", icon: "trash-2" },
+  ];
   return (
-    <LegalScreen title="About Cosmic Lens" subtitle="Vedic astrology, modernised">
-      <Section title="Our Mission">
-        <P>
-          Cosmic Lens brings the timeless wisdom of <Strong>Vedic Jyotish</Strong>
-          to your pocket. We combine classical Parashari principles with modern
-          ephemeris computations and expert Jyotish interpretation to give you
-          accurate, accessible, and personal astrological guidance — in your
-          language.
-        </P>
-        <P>
-          Whether you’re curious about your kundli, planning a marriage,
-          exploring career options, or simply seeking daily insight, our
-          mission is to help you navigate life with clarity and intention.
-        </P>
+    <LegalScreen title={t.ab_title} subtitle={t.ab_subtitle}>
+      <Section title={t.ab_secMission}>
+        <P>{t.ab_pMission1}</P>
+        <P>{t.ab_pMission2}</P>
       </Section>
 
-      <Section title="What Makes Us Different">
-        <P>
-          • Calculations use the traditional <Strong>Lahiri ayanamsa</Strong> with
-          high-precision Swiss Ephemeris data.{"\n"}
-          • Available in <Strong>24 languages</Strong> including 13 Indian
-          regional languages and Hinglish.{"\n"}
-          • Honest, transparent pricing — <Strong>no in-app currency</Strong>,
-          no surprise charges.{"\n"}
-          • Privacy-first — we never sell your kundli or chat data.{"\n"}
-          • 7-day free trial so you can experience before paying.
-        </P>
+      <Section title={t.ab_secDifferent}>
+        <P>{t.ab_pDifferent}</P>
       </Section>
 
-      <Section title="Connect With Us">
+      <Section title={t.ab_secConnect}>
         <View style={{ gap: 10, marginTop: 4 }}>
           <LinkRow
             icon="mail"
-            label="Support Email"
+            label={t.ab_lblSupportEmail}
             value={SUPPORT_EMAIL}
             onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
           />
           <LinkRow
             icon="globe"
-            label="Website"
+            label={t.ab_lblWebsite}
             value={WEB_URL.replace("https://", "")}
             onPress={() => Linking.openURL(WEB_URL)}
           />
         </View>
       </Section>
 
-      <Section title="Legal & Policies">
+      <Section title={t.ab_secLegal}>
         <View style={{ gap: 10, marginTop: 4 }}>
-          {[
-            { label: "Privacy Policy",          path: "/privacy",        icon: "shield" },
-            { label: "Terms of Service",        path: "/terms",          icon: "file-text" },
-            { label: "Refund & Cancellation",   path: "/refund",         icon: "rotate-ccw" },
-            { label: "Astrology Disclaimer",    path: "/disclaimer",     icon: "alert-triangle" },
-            { label: "Delete My Account",       path: "/delete-account", icon: "trash-2" },
-          ].map(item => (
+          {legalLinks.map(item => (
             <Pressable
               key={item.path}
               onPress={() => router.push(item.path as any)}
@@ -116,10 +100,10 @@ export default function AboutScreen() {
       </Section>
 
       <View style={[ar.versionCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Text style={[ar.versionLabel, { color: C.textMuted }]}>App Version</Text>
+        <Text style={[ar.versionLabel, { color: C.textMuted }]}>{t.ab_lblAppVersion}</Text>
         <Text style={[ar.versionValue, { color: C.text }]}>v{APP_VERSION}</Text>
         <Text style={[ar.versionFoot, { color: C.textMuted }]}>
-          Made with ♥ in India · © 2026 Cosmic Lens
+          {t.ab_versionFoot}
         </Text>
       </View>
     </LegalScreen>

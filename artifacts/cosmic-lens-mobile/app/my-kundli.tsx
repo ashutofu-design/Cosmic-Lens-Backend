@@ -4,8 +4,14 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert, Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  Alert,
+  I18nManager,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -67,7 +73,7 @@ export default function MyKundliScreen() {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.back(); }}
           style={[s.backBtn, { backgroundColor: C.bgCard, borderColor: C.border }]}
         >
-          <Feather name="arrow-left" size={18} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={18} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.pageTitle, { color: C.text }]}>{t.myKundliTitle}</Text>

@@ -173,7 +173,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        if (lang) _setLanguage(JSON.parse(lang));
+        let resolvedLang: LangCode = "en";
+        if (lang) {
+          try { resolvedLang = JSON.parse(lang) as LangCode; } catch {}
+          _setLanguage(resolvedLang);
+        }
+        // ── RTL boot enforcement (runs once, post-hydration) ──────────────
+        // If the saved language requires a different layout direction than
+        // I18nManager currently reports, silently apply forceRTL + reload.
+        // This mainly fires on the FIRST launch after the user previously
+        // selected Arabic in a session that ended before reload completed.
+        try {
+          const { applyRTLForLang } = await import("@/lib/rtl");
+          await applyRTLForLang(resolvedLang, { silent: true });
+        } catch (err) {
+          console.warn("[UserContext] boot RTL apply failed:", err);
+        }
 
         let loadedProfiles: ProfileEntry[] = [];
         if (ps) {
@@ -364,6 +379,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = useCallback((l: LangCode) => {
     _setLanguage(l);
     AsyncStorage.setItem(KEYS.language, JSON.stringify(l)).catch(() => {});
+    // ── RTL handling: when switching to/from an RTL language (e.g. Arabic),
+    // apply I18nManager.forceRTL and prompt user to restart the app so
+    // layout flips correctly. No-op if direction already matches.
+    import("@/lib/rtl")
+      .then(({ applyRTLForLang }) => applyRTLForLang(l))
+      .catch((err) => console.warn("[UserContext] RTL apply failed:", err));
   }, []);
 
   const setTodayEnergy = useCallback((e: number | null) => { _setTodayEnergy(e); }, []);

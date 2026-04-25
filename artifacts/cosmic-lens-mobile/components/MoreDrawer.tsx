@@ -3,8 +3,16 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
-  Animated, Linking, Modal, Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  Animated,
+  I18nManager,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -231,7 +239,7 @@ export default function MoreDrawer({
                           </View>
                           <Text style={[s.itemSub, { color: "#9aa3c7" }]}>{item.subtitle}</Text>
                         </View>
-                        <Feather name="chevron-right" size={14} color={`${accent}99`} />
+                        <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={14} color={`${accent}99`} />
                       </Pressable>
                     ))}
                   </View>

@@ -4,7 +4,15 @@
 // RIGHT: AstroVastu Pro Premium  → /astrovastu-pro-options (Page 2)
 // ────────────────────────────────────────────────────────────────────────────
 import React from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from "react-native";
+import {
+  I18nManager,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -44,7 +52,7 @@ export default function AstroVastuChooser() {
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.title, { color: C.text }]}>{t.vt_titleAstroVastu}</Text>
@@ -88,7 +96,7 @@ export default function AstroVastuChooser() {
 
           <View style={[s.ctaRow, { backgroundColor: `${C.accent}15` }]}>
             <Text style={[s.ctaText, { color: C.accent }]}>{t.vt_ctaOpenFreeVastu}</Text>
-            <Feather name="arrow-right" size={16} color={C.accent} />
+            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color={C.accent} />
           </View>
         </Pressable>
 
@@ -127,7 +135,7 @@ export default function AstroVastuChooser() {
 
           <View style={[s.ctaRow, { backgroundColor: "#f9d76b22" }]}>
             <Text style={[s.ctaText, { color: "#f9d76b" }]}>{t.vt_ctaViewPremiumOptions}</Text>
-            <Feather name="arrow-right" size={16} color="#f9d76b" />
+            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#f9d76b" />
           </View>
         </Pressable>
 

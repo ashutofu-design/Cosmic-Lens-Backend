@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  I18nManager,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -226,7 +227,7 @@ export default function MyReportsScreen() {
         ]}
       >
         <Pressable onPress={() => router.back()} style={s.back} hitSlop={10}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <Text style={[s.title, { color: C.text }]}>{t.mr_pageTitle}</Text>
         <View style={{ width: 28 }} />

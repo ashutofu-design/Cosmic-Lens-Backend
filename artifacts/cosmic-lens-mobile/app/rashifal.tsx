@@ -3,7 +3,12 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import {
-  Pressable, ScrollView, StyleSheet, Text, View,
+  I18nManager,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -167,7 +172,7 @@ export default function RashifalScreen() {
       <CosmicBg />
       <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.rashifalTitle}</Text>

@@ -4,7 +4,16 @@
 //   • Business Vastu       → /business-vastu (Office / Shop / Factory) — placeholder
 // ────────────────────────────────────────────────────────────────────────────
 import React from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Alert } from "react-native";
+import {
+  Alert,
+  I18nManager,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -49,7 +58,7 @@ export default function AstroVastuProOptions() {
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -100,7 +109,7 @@ export default function AstroVastuProOptions() {
 
           <View style={[s.ctaRow, { backgroundColor: "#a78bfa22" }]}>
             <Text style={[s.ctaText, { color: "#a78bfa" }]}>{t.vt_ctaOpenHomeVastu}</Text>
-            <Feather name="arrow-right" size={16} color="#a78bfa" />
+            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#a78bfa" />
           </View>
         </Pressable>
 
@@ -136,7 +145,7 @@ export default function AstroVastuProOptions() {
 
           <View style={[s.ctaRow, { backgroundColor: "#06b6d422" }]}>
             <Text style={[s.ctaText, { color: "#06b6d4" }]}>{t.vt_ctaOpenBusinessVastu}</Text>
-            <Feather name="arrow-right" size={16} color="#06b6d4" />
+            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#06b6d4" />
           </View>
         </Pressable>
 
@@ -161,7 +170,7 @@ export default function AstroVastuProOptions() {
               {t.vt_reportsSub}
             </Text>
           </View>
-          <Feather name="chevron-right" size={18} color={C.textMuted} />
+          <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
         </Pressable>
 
         {/* Pro discount note */}

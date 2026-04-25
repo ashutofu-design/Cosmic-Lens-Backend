@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -283,7 +284,7 @@ export default function DoshScreen() {
       {/* ── Header ── */}
       <View style={[d.header, { paddingTop: topPad, borderBottomColor: C.border }]}>
         <Pressable style={d.backBtn} onPress={() => router.back()}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[d.title, { color: C.text }]}>{t.doshTitle}</Text>

@@ -4,9 +4,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform,
-  Pressable, ScrollView, StyleSheet, Text,
-  TextInput, View,
+  ActivityIndicator,
+  Animated,
+  I18nManager,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -463,7 +472,7 @@ export default function ProfileEditScreen() {
             hitSlop={10}
             style={[s.backBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#FFFFFF", borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}
           >
-            <Feather name="arrow-left" size={16} color={C.isDark ? C.text : "#1E293B"} />
+            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={16} color={C.isDark ? C.text : "#1E293B"} />
           </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
@@ -536,7 +545,7 @@ export default function ProfileEditScreen() {
                 Restore profiles within 24 hours
               </Text>
             </View>
-            <Feather name="chevron-right" size={18} color={C.textMuted} />
+            <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
           </Pressable>
 
           {!primaryProfile && familyMembers.length === 0 && (

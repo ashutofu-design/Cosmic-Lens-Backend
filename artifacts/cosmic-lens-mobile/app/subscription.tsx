@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -238,7 +239,7 @@ export default function SubscriptionScreen() {
       {/* ── Header ── */}
       <View style={[s.header, { paddingTop: topPad + 6, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={8}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: C.text }]}>{t.subscription}</Text>

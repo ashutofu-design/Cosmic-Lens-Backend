@@ -5,8 +5,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator, Alert, Animated, Easing, KeyboardAvoidingView, Platform,
-  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Easing,
+  I18nManager,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -1569,7 +1580,7 @@ export default function KundliMilanScreen(){
           style={[ms.header,{paddingTop:topPad+4}]}>
           <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
             <Pressable onPress={()=>router.back()} style={ms.backBtn}>
-              <Feather name="arrow-left" size={20} color={C.isDark?"#c4b5fd":C.text}/>
+              <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.isDark?"#c4b5fd":C.text}/>
             </Pressable>
             <View style={{flex:1}}>
               <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>{t.kundliMilanTitle}</Text>
@@ -1660,7 +1671,7 @@ export default function KundliMilanScreen(){
                         Relationship page se partner chunein matching ke liye
                       </Text>
                     </View>
-                    <Feather name="arrow-right" size={16} color={C.isDark?"#f472b6":"#db2777"}/>
+                    <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color={C.isDark?"#f472b6":"#db2777"}/>
                   </View>
                 </Pressable>
               )}
@@ -1755,7 +1766,7 @@ export default function KundliMilanScreen(){
                   <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
                     When Vedic meets Tech
                   </Text>
-                  <Feather name="arrow-right" size={14} color={C.isDark?"#e9d5ff":"#5b21b6"}/>
+                  <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={14} color={C.isDark?"#e9d5ff":"#5b21b6"}/>
                 </LinearGradient>
               </Pressable>
 

@@ -1,5 +1,12 @@
 import React from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  I18nManager,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import LegalScreen, { Section, P, Strong } from "@/components/LegalScreen";
@@ -93,7 +100,7 @@ export default function AboutScreen() {
                 <Feather name={item.icon as any} size={15} color={C.isDark ? "#f59e0b" : "#7c3aed"} />
               </View>
               <Text style={[ar.linkLabel, { color: C.text }]}>{item.label}</Text>
-              <Feather name="chevron-right" size={16} color={C.textMuted} />
+              <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={16} color={C.textMuted} />
             </Pressable>
           ))}
         </View>

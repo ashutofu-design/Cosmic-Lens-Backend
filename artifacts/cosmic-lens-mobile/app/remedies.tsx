@@ -2,7 +2,14 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  I18nManager,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
@@ -426,7 +433,7 @@ export default function RemediesScreen() {
       <CosmicBg />
       <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.remediesTitle}</Text>

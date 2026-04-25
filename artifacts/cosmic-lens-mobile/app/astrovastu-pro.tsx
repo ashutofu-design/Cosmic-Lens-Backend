@@ -20,6 +20,7 @@ import { router, Stack } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   Alert,
+  I18nManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -212,7 +213,7 @@ export default function AstroVastuProScreen() {
         style={[styles.header, { paddingTop: 4 }]}
       >
         <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
-          <Feather name="arrow-left" size={22} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={22} color={C.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: C.text }]}>{t.avp_headerTitle}</Text>
         <View style={{ width: 28 }} />

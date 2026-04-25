@@ -27,7 +27,14 @@
  */
 
 import React from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  I18nManager,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
@@ -177,7 +184,7 @@ export function useFeatureGate(feature: FeatureKey, opts: GateOptions = {}) {
               { borderColor: C.border, opacity: pressed ? 0.6 : 1 },
             ]}
           >
-            <Feather name="arrow-left" size={14} color={C.textMid} />
+            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={14} color={C.textMid} />
             <Text style={[s.cardBackText, { color: C.textMid }]}>Back</Text>
           </Pressable>
 

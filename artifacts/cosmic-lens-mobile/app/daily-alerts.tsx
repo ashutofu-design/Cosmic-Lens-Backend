@@ -4,15 +4,16 @@ import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
-  Animated,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -443,7 +444,7 @@ export default function DailyAlertsScreen() {
       {/* ── Header ── */}
       <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: C.border }]}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.title, { color: C.text }]}>{t.alertsTitle}</Text>

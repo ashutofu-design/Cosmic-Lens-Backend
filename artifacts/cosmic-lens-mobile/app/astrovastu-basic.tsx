@@ -15,6 +15,7 @@ import { router, Stack } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  I18nManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -161,7 +162,7 @@ export default function AstroVastuBasicScreen() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Feather name="chevron-left" size={26} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "chevron-right" : "chevron-left"} size={26} color={C.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: C.text }]}>{t.vt_titleQuickCheck}</Text>
         <View style={{ width: 26 }} />

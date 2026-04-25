@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -206,7 +207,7 @@ export default function CareerScreen() {
           hitSlop={10}
         >
           <View style={s.backCircle}>
-            <Feather name="arrow-left" size={20} color="#fff" />
+            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
           </View>
         </Pressable>
         <Text style={s.topTitle}>{t.cr_pageTitle}</Text>

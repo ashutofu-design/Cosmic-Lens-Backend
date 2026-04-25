@@ -8,6 +8,7 @@ import {
   Alert,
   Animated,
   Easing,
+  I18nManager,
   Modal,
   Platform,
   Pressable,
@@ -366,7 +367,7 @@ function OptionCard({
                     elevation: isHL ? 10 : 6,
                   }]}
                 >
-                  <Feather name="chevron-right" size={isHL ? 22 : 17} color="#fff" />
+                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={isHL ? 22 : 17} color="#fff" />
                 </LinearGradient>
               </Animated.View>
             </View>
@@ -495,7 +496,7 @@ export default function RelationshipScreen() {
             backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
             borderColor: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)",
           }]}>
-            <Feather name="arrow-left" size={20} color={isDark ? "#fff" : "#0F172A"} />
+            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={isDark ? "#fff" : "#0F172A"} />
           </View>
         </Pressable>
       </View>

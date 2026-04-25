@@ -3,7 +3,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import {
+  ActivityIndicator,
+  I18nManager,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
@@ -303,7 +311,7 @@ export default function PanchangScreen() {
       <CosmicBg />
       <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
         <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name="arrow-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View>
           <Text style={[s.title, { color: C.text }]}>{t.panchangTitle}</Text>
@@ -315,7 +323,7 @@ export default function PanchangScreen() {
       {/* Date navigator — kal/aaj/parso */}
       <View style={[s.dateNav, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Pressable onPress={() => shiftDate(-1)} style={s.dateNavBtn} hitSlop={8}>
-          <Feather name="chevron-left" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "chevron-right" : "chevron-left"} size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={[s.dateNavRel, { color: isToday ? "#a78bfa" : C.textMuted }]}>{relLabel}</Text>
@@ -340,7 +348,7 @@ export default function PanchangScreen() {
           ) : null}
         </View>
         <Pressable onPress={() => shiftDate(1)} style={s.dateNavBtn} hitSlop={8}>
-          <Feather name="chevron-right" size={20} color={C.text} />
+          <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={20} color={C.text} />
         </Pressable>
         {!isToday && (
           <Pressable

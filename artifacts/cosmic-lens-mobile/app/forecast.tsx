@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
 import {
+  I18nManager,
   Platform,
   Pressable,
   ScrollView,
@@ -208,7 +209,7 @@ export default function ForecastScreen() {
       {/* Header */}
       <View style={[s.header, { borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={s.back}>
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.textMuted} />
         </Pressable>
         <Text style={[s.headerTitle, { color: C.text }]}>{t.forecastTitle}</Text>
         {showDemo && (
@@ -291,9 +292,9 @@ export default function ForecastScreen() {
                 <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.fc_activeDasha}</Text>
                 <View style={s.dashaRow}>
                   <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.mdPlanet)} MD</Text>
-                  <Feather name="chevron-right" size={10} color={C.textDim} />
+                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={10} color={C.textDim} />
                   <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.adPlanet)} AD</Text>
-                  <Feather name="chevron-right" size={10} color={C.textDim} />
+                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={10} color={C.textDim} />
                   <Text style={[s.dashaItem, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{pName(dasha.pdPlanet)} PD</Text>
                 </View>
               </View>
@@ -305,7 +306,7 @@ export default function ForecastScreen() {
                 style={[s.navBtn, selected === 0 && s.navBtnDisabled]}
                 onPress={() => { if (selected > 0) { setSelected(selected - 1); Haptics.selectionAsync(); } }}
               >
-                <Feather name="chevron-left" size={16} color={selected === 0 ? C.textDim : C.text} />
+                <Feather name={I18nManager.isRTL ? "chevron-right" : "chevron-left"} size={16} color={selected === 0 ? C.textDim : C.text} />
                 <Text style={[s.navLabel, { color: C.text }, selected === 0 && { color: C.textDim }]}>{t.prevDay}</Text>
               </Pressable>
               <View style={s.navDots}>
@@ -320,7 +321,7 @@ export default function ForecastScreen() {
                 onPress={() => { if (selected < days.length-1) { setSelected(selected + 1); Haptics.selectionAsync(); } }}
               >
                 <Text style={[s.navLabel, { color: C.text }, selected === 6 && { color: C.textDim }]}>{t.nextDay}</Text>
-                <Feather name="chevron-right" size={16} color={selected === 6 ? C.textDim : C.text} />
+                <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={16} color={selected === 6 ? C.textDim : C.text} />
               </Pressable>
             </View>
           </>
@@ -334,7 +335,7 @@ export default function ForecastScreen() {
               <Text style={s.unlockTitle}>{t.unlockForecastTitle}</Text>
               <Text style={s.unlockSub}>{t.unlockForecastSub}</Text>
             </View>
-            <Feather name="chevron-right" size={14} color="#fbbf24" />
+            <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={14} color="#fbbf24" />
           </Pressable>
         )}
       </ScrollView>

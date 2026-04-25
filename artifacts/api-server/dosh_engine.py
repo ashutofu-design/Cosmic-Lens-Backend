@@ -863,64 +863,7 @@ def _vish_yoga(pl):
     )
 
 
-# ── 11. Chandra-Mangal Dosh / Yoga ─────────────────────────────────────────────
-def _chandra_mangal(pl):
-    moon_h   = _house(pl, "Moon")
-    mars_h   = _house(pl, "Mars")
-    moon_lon = _lon(pl, "Moon")
-    mars_lon = _lon(pl, "Mars")
-    moon_sign = int(moon_lon // 30) + 1 if _has(pl, "Moon") else 0
-    SIGN_NAMES = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
-
-    if moon_h == mars_h and moon_h != 0:
-        # Cancer (4) or Taurus (2) → classical Lakshmi-yoga side (positive — wealth)
-        if moon_sign in (4, 2):
-            return (
-                "None",
-                f"Moon–Mars Conjunction in House {moon_h} (Lakshmi Yoga side)",
-                "Moon and Mars together in Cancer or Taurus is classically a 'Lakshmi Yoga' — favourable for wealth through trade and bold action. The conflict-side Chandra-Mangal Dosh does not apply here.",
-                [],
-                f"Moon → H{moon_h} ({SIGN_NAMES[moon_sign-1]}) | Mars → H{mars_h}",
-            )
-        tight = _orb(moon_lon, mars_lon) < 10
-        status = "Active" if tight else "Mild"
-        return (
-            status,
-            f"Moon–Mars Conjunction in House {moon_h} — Chandra-Mangal Dosh",
-            "Moon (mind) joined with Mars (anger) outside Cancer/Taurus creates emotional volatility, sudden outbursts, conflicts with mother and spouse, and impulsive decisions during emotional peaks.",
-            [
-                "Recite Hanuman Chalisa daily to channel Mars positively",
-                "Practice 10 minutes of breath-cooling pranayama (Sheetali) before reacting",
-                "Wear silver to balance Moon's reactivity",
-                "Donate red lentils on Tuesdays and white sweets on Mondays",
-                "Avoid alcohol and stimulants on Tuesdays",
-            ],
-            f"Moon → H{moon_h} | Mars → H{mars_h}",
-        )
-    if moon_h != 0 and mars_h != 0:
-        diff = abs(moon_h - mars_h)
-        diff = min(diff, 12 - diff)
-        if diff == 6:
-            return (
-                "Mild",
-                "Moon–Mars in 7th House Aspect — Mild Chandra-Mangal Tension",
-                "Moon and Mars share a 7th-house mutual aspect, creating periodic emotional irritability and conflicts in close relationships during their dasha periods.",
-                [
-                    "Practice mindfulness before reacting in arguments",
-                    "Worship Hanuman ji on Tuesdays",
-                ],
-                f"Moon → H{moon_h} | Mars → H{mars_h}",
-            )
-    return (
-        "None",
-        "No Chandra-Mangal Dosh — Mind and Action Aligned",
-        "Moon and Mars are independent, allowing balanced emotion and assertion.",
-        [],
-        f"Moon → H{moon_h} | Mars → H{mars_h}",
-    )
-
-
-# ── 12. Sakat Yoga ─────────────────────────────────────────────────────────────
+# ── 11. Sakat Yoga ─────────────────────────────────────────────────────────────
 def _sakat_yoga(pl):
     """Classical Shakata Yoga — Moon in 6th, 8th, or 12th from Jupiter (or vice versa).
     Per Brihat Parashara Hora Shastra; matches repo's classical_yogas convention.
@@ -1241,7 +1184,6 @@ DOSH_CONFIGS = [
     ("shrapit",        "Shrapit Dosh",         "श्रापित दोष",         "⛓",  _shrapit),
     ("kemadruma",      "Kemadruma Dosh",       "केमद्रुम दोष",        "🌙", _kemadruma),
     ("vish_yoga",      "Vish Yoga",            "विष योग",             "🦂", _vish_yoga),
-    ("chandra_mangal", "Chandra-Mangal Dosh",  "चन्द्र-मंगल दोष",     "🌗", _chandra_mangal),
     ("sakat_yoga",     "Sakat Yoga",           "शकट योग",             "🛒", _sakat_yoga),
     ("putra",          "Putra Dosh",           "पुत्र दोष",           "👶", _putra),
     ("gandanta",       "Gandanta Dosh",        "गण्डान्त दोष",        "🌊", _gandanta),

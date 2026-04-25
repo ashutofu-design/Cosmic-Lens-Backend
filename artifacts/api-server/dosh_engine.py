@@ -1152,44 +1152,236 @@ def _sakat_yoga(pl):
 
 
 # ── 13. Putra (Santaan) Dosh ───────────────────────────────────────────────────
+# Classical Putra Dosh — affliction to progeny (5th house, 5L, Jupiter as Santan Karaka).
+# BPHS + Phaladeepika + Saravali tradition.
+# Triggers (score-weighted):
+#   T1: ≥2 malefics (Sat/Mars/Rah/Ket) in 5th house        +3 (strongest)
+#   T2: exactly 1 malefic in 5th house                      +1
+#   T3: 5th lord in dusthana 6/8/12                         +2
+#   T4: 5th lord combust OR debilitated                     +1
+#   T5: Jupiter (Putra Karaka) in dusthana 6/8/12           +2
+#   T6: Jupiter combust OR debilitated                      +1
+#   T7: Jupiter conjunct Sat/Mars/Rahu/Ketu                 +2
+#   T8: 5th lord conjunct Rahu OR Ketu                      +2
+#   T9: ≥2 malefics aspecting 5th house                     +2
+#   T10: Sun placed in 5th (ego friction with progeny)      +1
+# Amplifiers (each +1):
+#   A1: BOTH 5L and Jupiter afflicted (double-axis)
+#   A2: 9th house also afflicted (lineage extension)
+#   A3: 5L specifically in 8th (worst dusthana for putra)
+# Bhangas (each -1):
+#   B1: Jupiter classically strong (kendra/trikona / exalted / own)
+#   B2: 5L exalted OR in own sign
+#   B3: 5L in kendra/trikona (1/4/5/7/9/10)
+#   B4: Natural benefic (Jupiter/Venus/Mercury) placed in 5th
+#   B5: 5L conjunct Jupiter (Guru blesses 5L directly)
+# Tier:
+#   No triggers  → None
+#   ≥2 bhanga    → forced None
+#   score ≥ 4    → Active
+#   score 1..3   → Mild
+#   score ≤ 0    → None
 def _putra(pl):
-    malefics = {"Saturn", "Mars", "Rahu", "Ketu"}
-    h5 = _planets_in_house(pl, 5)
-    malefics_in_5th = [p for p in h5 if p in malefics]
-    jup_h = _house(pl, "Jupiter")  # Putra karaka
+    MALEFICS    = {"Saturn", "Mars", "Rahu", "Ketu"}
+    BENEFICS    = {"Jupiter", "Venus", "Mercury"}
+    NODES       = {"Rahu", "Ketu"}
+    KENDRA_TRIK = {1, 4, 5, 7, 9, 10}
 
+    sat_h  = _house(pl, "Saturn")
+    mars_h = _house(pl, "Mars")
+    rahu_h = _house(pl, "Rahu")
+    ketu_h = _house(pl, "Ketu")
+    jup_h  = _house(pl, "Jupiter")
+    sun_h  = _house(pl, "Sun")
+
+    asc = _asc_sign(pl)
+    L5 = _house_lord(asc, 5) if asc else ""
+    L9 = _house_lord(asc, 9) if asc else ""
+    L5_h = _house(pl, L5) if L5 else 0
+
+    h5_planets         = _planets_in_house(pl, 5)
+    malefics_in_5th    = [p for p in h5_planets if p in MALEFICS]
+    benefics_in_5th    = [p for p in h5_planets if p in BENEFICS]
+
+    triggers = []
+    score = 0
+
+    # ── T1 / T2: malefics in 5th ─────────────────────────────────────────────
     if len(malefics_in_5th) >= 2:
+        triggers.append(f"≥2 malefics in 5th: {', '.join(malefics_in_5th)}")
+        score += 3
+    elif len(malefics_in_5th) == 1:
+        triggers.append(f"{malefics_in_5th[0]} in 5th house")
+        score += 1
+
+    # ── T3: 5L in dusthana ───────────────────────────────────────────────────
+    if L5 and L5_h in {6, 8, 12}:
+        triggers.append(f"5th lord ({L5}) in dusthana H{L5_h}")
+        score += 2
+
+    # ── T4: 5L combust or debilitated ────────────────────────────────────────
+    L5_afflicted = False
+    if L5 and (_is_combust(pl, L5) or _is_debilitated(pl, L5)):
+        why = "combust" if _is_combust(pl, L5) else "debilitated"
+        triggers.append(f"5th lord ({L5}) {why}")
+        score += 1
+        L5_afflicted = True
+
+    # ── T5: Jupiter in dusthana ──────────────────────────────────────────────
+    jupiter_afflicted = False
+    if jup_h in {6, 8, 12}:
+        triggers.append(f"Jupiter (Putra Karaka) in dusthana H{jup_h}")
+        score += 2
+        jupiter_afflicted = True
+
+    # ── T6: Jupiter combust or debilitated ───────────────────────────────────
+    if _is_combust(pl, "Jupiter") or _is_debilitated(pl, "Jupiter"):
+        why = "combust" if _is_combust(pl, "Jupiter") else "debilitated"
+        triggers.append(f"Jupiter {why}")
+        score += 1
+        jupiter_afflicted = True
+
+    # ── T7: Jupiter conjunct malefic ─────────────────────────────────────────
+    jup_conjuncts = [m for m in MALEFICS if m != "Jupiter" and _house(pl, m) == jup_h and jup_h]
+    if jup_conjuncts:
+        triggers.append(f"Jupiter conjunct {'/'.join(jup_conjuncts)} in H{jup_h}")
+        score += 2
+        jupiter_afflicted = True
+
+    # ── T8: 5L conjunct node ─────────────────────────────────────────────────
+    if L5 and L5 not in NODES:
+        node_with_L5 = [n for n in NODES if _house(pl, n) == L5_h and L5_h]
+        if node_with_L5:
+            triggers.append(f"5th lord ({L5}) conjunct {'/'.join(node_with_L5)} in H{L5_h}")
+            score += 2
+            L5_afflicted = True
+
+    # ── T9: ≥2 malefics aspecting 5th ────────────────────────────────────────
+    aspect_hits = []
+    for m, h in [("Saturn", sat_h), ("Mars", mars_h)]:
+        if h and h != 5:
+            if m == "Saturn" and _saturn_aspects_house(h, 5):
+                aspect_hits.append("Saturn drishti on 5th")
+            if m == "Mars" and _mars_aspects_house(h, 5):
+                aspect_hits.append("Mars drishti on 5th")
+    if len(aspect_hits) >= 2:
+        triggers.append(f"≥2 malefic drishti on 5th: {', '.join(aspect_hits)}")
+        score += 2
+
+    # ── T10: Sun in 5th ──────────────────────────────────────────────────────
+    if sun_h == 5:
+        triggers.append("Sun in 5th (ego friction with progeny)")
+        score += 1
+
+    # ── No triggers → clean exit ─────────────────────────────────────────────
+    if not triggers:
+        return (
+            "None",
+            "No Putra Dosh — Children House Strong",
+            "5th house, 5th lord, and Jupiter (Putra Karaka) all clear of classical affliction patterns.",
+            [],
+            f"5th House: {', '.join(h5_planets) or 'Empty'} | 5L ({L5 or '?'}) → H{L5_h} | Jupiter → H{jup_h}",
+        )
+
+    # ── Amplifiers ───────────────────────────────────────────────────────────
+    amplifiers = []
+    if L5_afflicted and jupiter_afflicted:
+        amplifiers.append("BOTH 5L and Jupiter afflicted (double-axis)")
+        score += 1
+    # 9th house also afflicted
+    ninth_hits = []
+    h9_planets = _planets_in_house(pl, 9)
+    malefics_in_9th = [p for p in h9_planets if p in MALEFICS]
+    if malefics_in_9th:
+        ninth_hits.append(f"malefics in 9th: {', '.join(malefics_in_9th)}")
+    L9_h = _house(pl, L9) if L9 else 0
+    if L9 and L9_h in {6, 8, 12}:
+        ninth_hits.append(f"9L ({L9}) in dusthana H{L9_h}")
+    if ninth_hits:
+        amplifiers.append(f"9th-axis also weak ({'; '.join(ninth_hits)}) — lineage strain")
+        score += 1
+    # 5L specifically in 8th
+    if L5 and L5_h == 8:
+        amplifiers.append(f"5L ({L5}) in 8th specifically (worst dusthana for putra)")
+        score += 1
+
+    # ── Bhangas ──────────────────────────────────────────────────────────────
+    bhangas = []
+    # B1: Jupiter strong
+    if _is_strong(pl, "Jupiter") and not jupiter_afflicted:
+        bhangas.append(f"Jupiter classically strong in H{jup_h} (Putra Karaka shield)")
+        score -= 1
+    # B2: 5L exalted/own
+    if L5:
+        L5_obj = _planet_obj(pl, L5)
+        L5_sign = _sign_idx(L5_obj)
+        if L5_sign and (L5_sign == EXALT_SIGN.get(L5) or L5_sign in OWN_SIGNS.get(L5, set())):
+            note = "exalted" if L5_sign == EXALT_SIGN.get(L5) else "own sign"
+            bhangas.append(f"5L ({L5}) {note} ({L5_sign}) — progeny axis intrinsically strong")
+            score -= 1
+    # B3: 5L in kendra/trikona
+    if L5 and L5_h in KENDRA_TRIK and L5_h not in {6, 8, 12}:
+        bhangas.append(f"5L ({L5}) in kendra/trikona H{L5_h}")
+        score -= 1
+    # B4: Benefic in 5th
+    if benefics_in_5th:
+        bhangas.append(f"Benefic in 5th: {', '.join(benefics_in_5th)} (sanctifies progeny house)")
+        score -= 1
+    # B5: 5L conjunct Jupiter
+    if L5 and L5 != "Jupiter" and L5_h and L5_h == jup_h:
+        bhangas.append(f"5L ({L5}) conjunct Jupiter in H{jup_h} — Guru blesses progeny lord")
+        score -= 1
+
+    n_bhng = len(bhangas)
+
+    note_parts = ["Triggers: " + " | ".join(triggers)]
+    if amplifiers:
+        note_parts.append("Amplifiers: " + " | ".join(amplifiers))
+    if bhangas:
+        note_parts.append("Bhanga: " + " | ".join(bhangas))
+    note_parts.append(f"Score={score}")
+    planet_note = " || ".join(note_parts)
+
+    common_remedies = [
+        "Recite Santan Gopal mantra 108× daily — 'ॐ देवकी सुत गोविन्द वासुदेव जगत्पते। देहि मे तनयं कृष्ण त्वामहं शरणं गत:।।'",
+        "Worship Lord Krishna with butter + tulsi offering on Janmashtami and every Ashtami",
+        "Strengthen Jupiter — fast on Thursdays, donate yellow items (turmeric, chana dal, banana)",
+        "Perform Putra Prapti Pooja at Krishna temple (Mathura/Vrindavan/Udupi most powerful)",
+        "Donate to children's charity, orphanage, or sponsor a child's education",
+        "Feed cows with jaggery + roti on Thursdays (Jupiter strengthening)",
+        "IMPORTANT: Always consult a medical professional for fertility concerns — these remedies supplement, never substitute, medical advice",
+    ]
+
+    if n_bhng >= 2:
+        return (
+            "None",
+            "Putra Dosh Triggers Cancelled by Bhanga",
+            f"{len(triggers)} progeny-affliction trigger(s) detected but neutralised by {n_bhng} cancellation factor(s) — strong Jupiter / 5L strength / benefic in 5th provide the classical shield.",
+            [],
+            planet_note,
+        )
+    if score >= 4:
         return (
             "Active",
-            f"Multiple Malefics in 5th House ({', '.join(malefics_in_5th)}) — Putra Dosh",
-            "Putra Dosh (afflicting the children house) forms when 2+ malefics occupy the 5th house. May indicate delays in conception, pregnancy complications, or stress around progeny matters. Always consult a medical professional for fertility concerns — these remedies supplement, never substitute, medical advice.",
-            [
-                "Recite Santan Gopal mantra 108 times daily",
-                "Worship Lord Krishna with butter offering on Janmashtami",
-                "Perform Putra Prapti Pooja at a Krishna temple",
-                "Donate to a children's charity or orphanage",
-                "Strengthen Jupiter — fast on Thursdays, donate yellow items",
-            ],
-            f"5th House: {', '.join(malefics_in_5th)} | Jupiter → H{jup_h}",
+            f"Putra Dosh Active (Score {score}) — Children-House Affliction",
+            "Strong classical Putra Dosh — significant affliction on the progeny axis (5th house, 5th lord, Jupiter). May manifest as conception delays, pregnancy complications, recurring health issues in children, or strained parent-child bond. Always pair these remedies with proper medical consultation.",
+            common_remedies,
+            planet_note,
         )
-    if len(malefics_in_5th) == 1 or jup_h in (6, 8, 12):
-        cause = f"5th House: {malefics_in_5th[0]}" if malefics_in_5th else f"Jupiter → H{jup_h} (dusthana)"
+    if score >= 1:
         return (
             "Mild",
-            "Mild Affliction on Children House — Partial Putra Dosh",
-            "Mild affliction in the 5th house or on Jupiter (significator of children). May cause mild delays or tension regarding progeny — not severe. Always consult medical professionals for fertility concerns.",
-            [
-                "Chant Santan Gopal mantra weekly on Wednesdays",
-                "Donate sweets to children on Krishna Janmashtami",
-            ],
-            cause,
+            f"Mild Putra Dosh (Score {score})",
+            "Partial affliction on the children axis. Periodic progeny-related concerns; manageable with consistent Santan-Gopal practice and Jupiter strengthening. Always consult medical professionals for fertility concerns.",
+            common_remedies[:4],
+            planet_note,
         )
     return (
         "None",
-        "No Putra Dosh — Children House Strong",
-        "5th house and Jupiter (Putra karaka) are well-placed. No significant affliction on progeny indicators.",
+        "Putra Dosh Triggers Neutralised",
+        "Triggers present but neutralised by bhanga / lack of amplification.",
         [],
-        f"5th House: {', '.join(_planets_in_house(pl, 5)) or 'Empty'} | Jupiter → H{jup_h}",
+        planet_note,
     )
 
 

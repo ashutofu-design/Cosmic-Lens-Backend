@@ -43,6 +43,62 @@ def _orb(a: float, b: float) -> float:
     return min(d, 360 - d)
 
 
+# ── Sign / lord / dignity helpers (used by lord-based doshas) ────────────────
+SIGN_LORD = {
+    1: "Mars", 2: "Venus", 3: "Mercury", 4: "Moon", 5: "Sun", 6: "Mercury",
+    7: "Venus", 8: "Mars", 9: "Jupiter", 10: "Saturn", 11: "Saturn", 12: "Jupiter",
+}
+SIGN_NAMES_LOWER = {
+    "aries": 1, "taurus": 2, "gemini": 3, "cancer": 4, "leo": 5, "virgo": 6,
+    "libra": 7, "scorpio": 8, "sagittarius": 9, "capricorn": 10, "aquarius": 11, "pisces": 12,
+}
+EXALT_SIGN = {
+    "Sun": 1, "Moon": 2, "Mars": 10, "Mercury": 6,
+    "Jupiter": 4, "Venus": 12, "Saturn": 7,
+}
+OWN_SIGNS = {
+    "Sun": {5}, "Moon": {4}, "Mars": {1, 8}, "Mercury": {3, 6},
+    "Jupiter": {9, 12}, "Venus": {2, 7}, "Saturn": {10, 11},
+}
+
+
+def _sign_idx(p: dict) -> int:
+    """Return 1-12 sign index from longitude (preferred), else from sign field."""
+    if p and "longitude" in p:
+        try:
+            return int(float(p["longitude"]) // 30) + 1
+        except (TypeError, ValueError):
+            pass
+    s = p.get("sign") if p else None
+    if isinstance(s, int) and 1 <= s <= 12:
+        return s
+    if isinstance(s, str):
+        return SIGN_NAMES_LOWER.get(s.strip().lower(), 0)
+    return 0
+
+
+def _asc_sign(pl: list) -> int:
+    """Derive ascendant sign (1-12) from any planet with valid sign+house."""
+    for p in pl:
+        sign_idx = _sign_idx(p)
+        h = p.get("house")
+        if 1 <= sign_idx <= 12 and isinstance(h, int) and 1 <= h <= 12:
+            return ((sign_idx - h) % 12) + 1
+    return 0
+
+
+def _house_lord(asc_sign: int, h: int) -> str:
+    """Return planet ruling house h, given ascendant sign (1-12). Empty string if invalid."""
+    if asc_sign < 1 or h < 1:
+        return ""
+    return SIGN_LORD[((asc_sign - 1 + h - 1) % 12) + 1]
+
+
+def _planet_obj(pl: list, name: str) -> dict:
+    """Find a planet dict by name. Returns empty dict if not found."""
+    return next((p for p in pl if p.get("name") == name), {}) or {}
+
+
 # ── 1. Manglik Dosh ────────────────────────────────────────────────────────────
 def _manglik(pl):
     mars_h = _house(pl, "Mars")
@@ -298,55 +354,176 @@ def _grahan(pl):
 
 # ── 6. Daridra Dosh ───────────────────────────────────────────────────────────
 def _daridra(pl):
-    malefics = {"Saturn", "Mars", "Rahu", "Ketu"}
-    h2 = _planets_in_house(pl, 2)
-    in_2nd = [p for p in h2 if p in malefics]
-    venus_h  = _house(pl, "Venus")
-    sat_h    = _house(pl, "Saturn")
-    rahu_h   = _house(pl, "Rahu")
-    jupiter_h = _house(pl, "Jupiter")
+    """
+    Strict-classical Daridra Yog (Brihat Parashara, Phaladeepika, Saravali).
+    Six classical triggers + four classical bhanga (cancellation) rules.
+    Tier:
+      - None  → 0 triggers, OR triggers ≤ bhanga count and bhanga ≥ 2 (strong cancellation)
+      - Mild  → 1 trigger and 0 bhanga, OR 2+ triggers with 1 bhanga (partial cancel)
+      - Active → 2+ triggers and 0 bhanga
+    """
+    asc = _asc_sign(pl)
+    if not asc:
+        return (
+            "None",
+            "No Daridra Dosh — Ascendant Data Unavailable",
+            "Cannot evaluate Daridra without ascendant sign.",
+            [],
+            "Insufficient sign/house data for lord-based rules.",
+        )
 
-    # Strong: 2+ malefics in 2nd OR Jupiter (natural wealth significator) severely afflicted
-    if len(in_2nd) >= 2 or (jupiter_h in (6, 8, 12) and sat_h in (1, 4, 7)):
-        cause = f"2nd House: {', '.join(in_2nd)}" if len(in_2nd) >= 2 else f"Jupiter → H{jupiter_h} + Saturn → H{sat_h}"
+    DUSTHANA = {6, 8, 12}
+    KENDRA_TRIKONA = {1, 4, 5, 7, 9, 10}
+    MALEFICS = {"Saturn", "Mars", "Rahu"}
+
+    L1  = _house_lord(asc, 1)    # Lagnesh
+    L2  = _house_lord(asc, 2)    # Dhanesh (wealth lord)
+    L11 = _house_lord(asc, 11)   # Labhesh (gains lord)
+
+    L1_h  = _house(pl, L1)  if L1  else 0
+    L2_h  = _house(pl, L2)  if L2  else 0
+    L11_h = _house(pl, L11) if L11 else 0
+
+    moon_h = _house(pl, "Moon")
+    mars_h = _house(pl, "Mars")
+    sat_h  = _house(pl, "Saturn")
+    jup_h  = _house(pl, "Jupiter")
+
+    triggers = []
+
+    # ── Trigger 1: Dhanesh (2L) in 6/8/12 ─────────────────────────────────────
+    if L2_h in DUSTHANA:
+        triggers.append(f"Dhanesh ({L2}) in dusthana H{L2_h}")
+
+    # ── Trigger 2: Labhesh (11L) in 6/8/12 ────────────────────────────────────
+    if L11_h in DUSTHANA:
+        triggers.append(f"Labhesh ({L11}) in dusthana H{L11_h}")
+
+    # ── Trigger 3: Dhanesh OR Labhesh conjunct with malefic (Saturn/Mars/Rahu)
+    if L2_h:
+        afflict_2 = [m for m in MALEFICS if m != L2 and _house(pl, m) == L2_h]
+        if afflict_2:
+            triggers.append(f"Dhanesh ({L2}@H{L2_h}) afflicted by {'/'.join(afflict_2)}")
+    if L11_h:
+        afflict_11 = [m for m in MALEFICS if m != L11 and _house(pl, m) == L11_h]
+        if afflict_11:
+            triggers.append(f"Labhesh ({L11}@H{L11_h}) afflicted by {'/'.join(afflict_11)}")
+
+    # ── Trigger 4: Lagnesh (1L) in 6/8/12 (weak self / weak earning capacity) ──
+    if L1_h in DUSTHANA:
+        triggers.append(f"Lagnesh ({L1}) in dusthana H{L1_h}")
+
+    # ── Trigger 5: Chandra-Mangal Shashtashtak (Moon-Mars in 6/8 from each other)
+    if moon_h and mars_h:
+        mars_from_moon = ((mars_h - moon_h) % 12) + 1   # 1=same house
+        if mars_from_moon in (6, 8):
+            triggers.append(f"Chandra-Mangal Shashtashtak (Moon H{moon_h} ↔ Mars H{mars_h})")
+
+    # ── Trigger 6: Saturn + Moon both in 2nd house (Punarphoo-style dhana drain)
+    if sat_h == 2 and moon_h == 2:
+        triggers.append("Saturn–Moon conjunct in 2nd house (savings drained)")
+
+    # ── Bhanga 1: Dhanesh (2L) exalted or in own sign ────────────────────────
+    bhanga = []
+    L2_obj = _planet_obj(pl, L2)
+    L2_sign = _sign_idx(L2_obj)
+    if L2 and L2_sign:
+        if L2_sign == EXALT_SIGN.get(L2):
+            bhanga.append(f"Dhanesh ({L2}) exalted")
+        elif L2_sign in OWN_SIGNS.get(L2, set()):
+            bhanga.append(f"Dhanesh ({L2}) in own sign")
+
+    # ── Bhanga 2: Jupiter aspects 2nd OR 11th house (5th/7th/9th drishti) ────
+    if jup_h:
+        jup_aspects = {
+            (jup_h + 3) % 12 + 1,   # 5th aspect
+            (jup_h + 5) % 12 + 1,   # 7th aspect
+            (jup_h + 7) % 12 + 1,   # 9th aspect
+        }
+        protected = [str(h) for h in (2, 11) if h in jup_aspects]
+        if protected:
+            bhanga.append(f"Jupiter (H{jup_h}) aspects H{'/H'.join(protected)}")
+
+    # ── Bhanga 3: Dhana Yoga — 2L & 11L conjunct in kendra/trikona, OR parivartan
+    if L2 and L11 and L2_h and L11_h:
+        if L2_h == L11_h and L2_h in KENDRA_TRIKONA:
+            bhanga.append(f"Dhana Yoga: {L2} & {L11} conjunct in H{L2_h}")
+        else:
+            sign_of_2nd  = ((asc - 1 + 1)  % 12) + 1
+            sign_of_11th = ((asc - 1 + 10) % 12) + 1
+            L11_obj = _planet_obj(pl, L11)
+            L11_sign = _sign_idx(L11_obj)
+            if L2_sign == sign_of_11th and L11_sign == sign_of_2nd:
+                bhanga.append(f"Dhana Parivartan ({L2} ↔ {L11} sign exchange)")
+
+    # ── Bhanga 4: Lagnesh strong + Venus strong (Lakshmi-rakshak combo) ──────
+    def _is_strong(planet: str) -> bool:
+        if not planet:
+            return False
+        ph = _house(pl, planet)
+        p_obj = _planet_obj(pl, planet)
+        p_sign = _sign_idx(p_obj)
+        return (
+            (ph in KENDRA_TRIKONA)
+            or (p_sign and p_sign == EXALT_SIGN.get(planet))
+            or (p_sign in OWN_SIGNS.get(planet, set()))
+        )
+    if _is_strong(L1) and _is_strong("Venus"):
+        bhanga.append(f"Lagnesh ({L1}) strong + Venus strong (Lakshmi-rakshak)")
+
+    # ── Tier decision ────────────────────────────────────────────────────────
+    n_trig = len(triggers)
+    n_bhng = len(bhanga)
+
+    common_remedies = [
+        "Recite Shri Suktam daily (Goddess Lakshmi)",
+        "Worship Goddess Lakshmi on Fridays with Kanakdhara Stotra",
+        "Donate yellow / food items on Thursdays",
+        "Light a ghee lamp at home puja every Friday evening",
+        "Keep a Sri Yantra or Kubera Yantra at home",
+    ]
+
+    note_parts = []
+    if triggers:
+        note_parts.append("Triggers: " + " | ".join(triggers))
+    if bhanga:
+        note_parts.append("Bhanga: " + " | ".join(bhanga))
+    if not triggers:
+        note_parts.append(
+            f"Lagnesh={L1}@H{L1_h} | Dhanesh={L2}@H{L2_h} | Labhesh={L11}@H{L11_h}"
+        )
+    planet_note = " || ".join(note_parts)
+
+    if n_trig == 0:
+        return (
+            "None",
+            "No Daridra Dosh — Wealth Indicators Favorable",
+            "No classical Daridra trigger fires. Wealth and gain indicators are clear.",
+            [],
+            planet_note,
+        )
+    if n_bhng >= 2:
+        return (
+            "None",
+            "Daridra Triggers Cancelled by Bhanga",
+            f"{n_trig} Daridra trigger(s) detected but neutralised by {n_bhng} cancellation factor(s) — Lakshmi-yog / Dhana-yog / Jupiter-aspect protect the wealth axis.",
+            [],
+            planet_note,
+        )
+    if n_trig >= 2 and n_bhng == 0:
         return (
             "Active",
-            "Wealth House Severely Afflicted — Daridra Dosh",
-            "Multiple malefics in the 2nd house (wealth) or Jupiter severely afflicted creates Daridra Dosh — financial struggles, instability, and obstacles to prosperity.",
-            [
-                "Recite Shri Suktam daily (linked to Goddess Lakshmi)",
-                "Donate food to the needy on Fridays",
-                "Keep a Kubera Yantra or Sri Yantra at home",
-                "Light a ghee lamp at home puja every Friday evening",
-                "Avoid lending money on Saturdays",
-            ],
-            cause,
-        )
-    if len(in_2nd) == 1:
-        return (
-            "Mild",
-            f"{in_2nd[0]} in 2nd House — Mild Daridra Dosh",
-            f"{in_2nd[0]} in the 2nd house (wealth house) may create periodic financial obstacles and spending instability.",
-            [
-                "Worship Goddess Lakshmi on Fridays",
-                "Recite Kanakdhara Stotra for wealth blessings",
-            ],
-            f"2nd House: {in_2nd[0]}",
-        )
-    if venus_h in (6, 8, 12):
-        return (
-            "Mild",
-            f"Venus in Dusthana (House {venus_h}) — Mild Daridra",
-            "Venus in a dusthana house (6th, 8th, 12th) creates mild financial constraints and luxury deprivation.",
-            ["Keep Ruby or Opal as per Jyotish guidance", "Worship Goddess Lakshmi on Fridays"],
-            f"Venus → House {venus_h}",
+            f"Daridra Dosh Active — {n_trig} Classical Triggers",
+            "Multiple wealth-house afflictions detected. Income may not stabilise; expect financial drain, debt cycles, or savings erosion.",
+            common_remedies,
+            planet_note,
         )
     return (
-        "None",
-        "No Daridra Dosh — Wealth Indicators Favorable",
-        "No significant malefic affliction on wealth indicators. Financial path appears clear and progressive.",
-        [],
-        f"2nd House: {', '.join(_planets_in_house(pl, 2)) or 'Empty'} | Venus → H{venus_h}",
+        "Mild",
+        f"Mild Daridra — {n_trig} Trigger / {n_bhng} Bhanga",
+        "Partial wealth-house affliction detected. Periodic financial obstacles possible but remediable with consistent Lakshmi sadhana.",
+        common_remedies[:2],
+        planet_note,
     )
 
 

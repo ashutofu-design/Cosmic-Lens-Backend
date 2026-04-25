@@ -159,7 +159,7 @@ export default function CareerScreen() {
 
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
-      setErr("Please log in to view your career analysis.");
+      setErr(t.cr_loginRequired);
       setLoading(false);
       return;
     }
@@ -209,7 +209,7 @@ export default function CareerScreen() {
             <Feather name="arrow-left" size={20} color="#fff" />
           </View>
         </Pressable>
-        <Text style={s.topTitle}>Career Analysis</Text>
+        <Text style={s.topTitle}>{t.cr_pageTitle}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -226,7 +226,7 @@ export default function CareerScreen() {
           <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
             <ActivityIndicator size="large" color={accent} />
             <Text style={{ color: "rgba(255,255,255,0.6)", fontFamily: F.semi }}>
-              Reading your chart…
+              {t.cr_loading}
             </Text>
           </View>
         )}
@@ -244,7 +244,7 @@ export default function CareerScreen() {
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                   style={{ paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12 }}>
                   <Text style={{ color: "#fff", fontFamily: F.bold, fontSize: 13 }}>
-                    Add Birth Details
+                    {t.cr_addProfile}
                   </Text>
                 </LinearGradient>
               </Pressable>
@@ -262,7 +262,7 @@ export default function CareerScreen() {
                 style={StyleSheet.absoluteFill}
               />
               <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 16 }}>
-                <Text style={s.heroLabel}>CAREER SCORE</Text>
+                <Text style={s.heroLabel}>{t.cr_scoreLabel}</Text>
                 <View style={{ marginTop: 12 }}>
                   <ScoreRing score={data.basic.score} color={trendColor(data.basic.trend)} />
                 </View>
@@ -273,15 +273,15 @@ export default function CareerScreen() {
                 }]}>
                   <View style={[s.trendDot, { backgroundColor: trendColor(data.basic.trend) }]} />
                   <Text style={[s.trendText, { color: trendColor(data.basic.trend) }]}>
-                    {data.basic.trend === "Good" ? "Strong Phase" :
-                     data.basic.trend === "Risk" ? "Caution Phase" : "Mixed Phase"}
+                    {data.basic.trend === "Good" ? t.cr_strongPhase :
+                     data.basic.trend === "Risk" ? t.cr_cautionPhase : t.cr_mixedPhase}
                   </Text>
                 </View>
               </View>
             </View>
 
             {/* ─── SUMMARY ─── */}
-            <SectionCard icon="message-circle" title="Quick Reading" accent={accent}>
+            <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
               <Text style={[s.summary, { color: "rgba(255,255,255,0.92)" }]}>
                 {data.basic.summary}
               </Text>
@@ -299,7 +299,7 @@ export default function CareerScreen() {
                   <View style={[s.hookIcon, { borderColor: `${accent}66` }]}>
                     <Feather name="zap" size={14} color={accent} />
                   </View>
-                  <Text style={[s.hookHeading, { color: accent }]}>HIDDEN INSIGHT</Text>
+                  <Text style={[s.hookHeading, { color: accent }]}>{t.cr_hiddenInsight}</Text>
                 </View>
 
                 <View style={{ position: "relative", marginTop: 8, minHeight: 56 }}>
@@ -326,7 +326,7 @@ export default function CareerScreen() {
                 </View>
 
                 <Text style={[s.hookCta, { color: "#fff" }]}>
-                  Unlock full career analysis with exact timing, reasons, and future opportunities.
+                  {t.cr_proCta}
                 </Text>
 
                 <Pressable
@@ -342,7 +342,7 @@ export default function CareerScreen() {
                     style={s.upgradeBtn}
                   >
                     <Feather name="zap" size={14} color="#fff" />
-                    <Text style={s.upgradeBtnText}>Upgrade to Pro</Text>
+                    <Text style={s.upgradeBtnText}>{t.cr_upgradeBtn}</Text>
                   </LinearGradient>
                 </Pressable>
               </View>
@@ -352,7 +352,7 @@ export default function CareerScreen() {
             {isProUser && data.pro && (
               <>
                 {/* Houses */}
-                <SectionCard icon="home" title="Career Houses" accent={accent}>
+                <SectionCard icon="home" title={t.cr_houses} accent={accent}>
                   {[data.pro.houses.h10, data.pro.houses.h6, data.pro.houses.h11].map(h => (
                     <View key={h.house} style={s.kvRow}>
                       <View style={s.kvLeft}>
@@ -360,15 +360,15 @@ export default function CareerScreen() {
                         <Text style={s.kvSign}>{h.sign}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={s.kvLabel}>Lord: <Text style={s.kvVal}>{h.lord}</Text></Text>
-                        <Text style={s.kvLabel}>In house: <Text style={s.kvVal}>{h.occupants}</Text></Text>
+                        <Text style={s.kvLabel}>{t.cr_lord} <Text style={s.kvVal}>{h.lord}</Text></Text>
+                        <Text style={s.kvLabel}>{t.cr_inHouse} <Text style={s.kvVal}>{h.occupants}</Text></Text>
                       </View>
                     </View>
                   ))}
                 </SectionCard>
 
                 {/* Planet strengths */}
-                <SectionCard icon="star" title="Career Planets" accent={accent}>
+                <SectionCard icon="star" title={t.cr_planets} accent={accent}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -388,18 +388,18 @@ export default function CareerScreen() {
                 </SectionCard>
 
                 {/* Dasha */}
-                <SectionCard icon="clock" title="Current Dasha Impact" accent={accent}>
+                <SectionCard icon="clock" title={t.cr_dasha} accent={accent}>
                   <View style={s.dashaRow}>
                     <View style={s.dashaCol}>
-                      <Text style={s.dashaLabel}>Mahadasha</Text>
+                      <Text style={s.dashaLabel}>{t.cr_mahadasha}</Text>
                       <Text style={s.dashaVal}>{data.pro.dasha.mahadasha || "—"}</Text>
                     </View>
                     <View style={s.dashaCol}>
-                      <Text style={s.dashaLabel}>Antardasha</Text>
+                      <Text style={s.dashaLabel}>{t.cr_antardasha}</Text>
                       <Text style={s.dashaVal}>{data.pro.dasha.antardasha || "—"}</Text>
                     </View>
                     <View style={s.dashaCol}>
-                      <Text style={s.dashaLabel}>Ends</Text>
+                      <Text style={s.dashaLabel}>{t.cr_ends}</Text>
                       <Text style={s.dashaVal}>{data.pro.dasha.ends || "—"}</Text>
                     </View>
                   </View>
@@ -409,25 +409,25 @@ export default function CareerScreen() {
                 </SectionCard>
 
                 {/* Transit */}
-                <SectionCard icon="globe" title="Live Planetary Transit" accent={accent}>
+                <SectionCard icon="globe" title={t.cr_transit} accent={accent}>
                   {data.pro.transit.map((t, i) => (
                     <Bullet key={i} color={accent}>{t}</Bullet>
                   ))}
                 </SectionCard>
 
                 {/* Growth & Promotion */}
-                <SectionCard icon="trending-up" title="Career Growth Periods" accent="#22c55e">
+                <SectionCard icon="trending-up" title={t.cr_growth} accent="#22c55e">
                   {data.pro.growth.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                   {data.pro.promotion.map((t, i) => (<Bullet key={`p${i}`} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
                 {/* Job change */}
-                <SectionCard icon="shuffle" title="Job Change Timing" accent="#3b82f6">
+                <SectionCard icon="shuffle" title={t.cr_jobChange} accent="#3b82f6">
                   {data.pro.job_change.map((t, i) => (<Bullet key={i} color="#3b82f6">{t}</Bullet>))}
                 </SectionCard>
 
                 {/* Struggles & Risks */}
-                <SectionCard icon="alert-triangle" title="Struggle Phases & Hidden Risks" accent="#ef4444">
+                <SectionCard icon="alert-triangle" title={t.cr_struggle} accent="#ef4444">
                   {data.pro.struggles.map((t, i) => (<Bullet key={i} color="#ef4444">{t}</Bullet>))}
                   {data.pro.risks.map((t, i) => (<Bullet key={`r${i}`} color="#ef4444">{t}</Bullet>))}
                 </SectionCard>
@@ -500,7 +500,7 @@ export default function CareerScreen() {
 
                 {/* Reasoning */}
                 {data.pro.reasons.length > 0 && (
-                  <SectionCard icon="info" title="Why This Reading" accent="#94a3b8">
+                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8">
                     {data.pro.reasons.map((t, i) => (<Bullet key={i} color="#94a3b8">{t}</Bullet>))}
                   </SectionCard>
                 )}

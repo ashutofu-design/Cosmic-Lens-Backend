@@ -457,6 +457,7 @@ const ps = StyleSheet.create({
 // ── PRO Report Panel ──────────────────────────────────────────────────────────
 function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
+  const t = useT();
   const bd = profile.birthData;
 
   // Single product: Life Mastery Report (Part 2) only — Standard removed.
@@ -595,10 +596,10 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                     <Text style={pp.tagTxt}>PRO+ TOOLS</Text>
                   </View>
                   <View style={[pp.tag, { backgroundColor: "rgba(245,158,11,0.18)" }]}>
-                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>PREMIUM</Text>
+                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>{t.nm_premium}</Text>
                   </View>
                 </View>
-                <Text style={[pp.heroTitle, { color: C.text }]}>Life Mastery Report</Text>
+                <Text style={[pp.heroTitle, { color: C.text }]}>{t.nm_lifeMastery}</Text>
                 <Text style={[pp.heroSub, { color: C.textMuted }]}>
                   26-page deep report — Mobile, Vehicle, House + Career, Love, Money blueprint
                 </Text>
@@ -681,7 +682,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
                     opening && { opacity: 0.6 }]}>
             <View style={pp.ctaInner}>
               <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
-              <Text style={pp.ctaTxt}>{opening ? "Opening…" : "Generate Life Mastery Report"}</Text>
+              <Text style={pp.ctaTxt}>{opening ? t.nm_opening : t.nm_generateBtn}</Text>
             </View>
           </Pressable>
         </>

@@ -600,17 +600,17 @@ export default function PanchangScreen() {
                           </View>
                           {f.type === "rashtriya" && (
                             <View style={[s.badge, { backgroundColor: C.isDark ? "#3b82f620" : "#DBEAFE", borderColor: C.isDark ? "#3b82f640" : "#93C5FD" }]}>
-                              <Text style={[s.badgeText, { color: "#60a5fa" }]}>National</Text>
+                              <Text style={[s.badgeText, { color: "#60a5fa" }]}>{t.pn_bNational}</Text>
                             </View>
                           )}
                           {f.type === "vrat" && (
                             <View style={[s.badge, { backgroundColor: C.isDark ? "#a855f720" : "#F3E8FF", borderColor: C.isDark ? "#a855f740" : "#D8B4FE" }]}>
-                              <Text style={[s.badgeText, { color: "#a855f7" }]}>Vrat</Text>
+                              <Text style={[s.badgeText, { color: "#a855f7" }]}>{t.pn_bVrat}</Text>
                             </View>
                           )}
                           {f.type === "muhurat" && (
                             <View style={[s.badge, { backgroundColor: C.isDark ? "#f59e0b20" : "#FEF3C7", borderColor: C.isDark ? "#f59e0b40" : "#FCD34D" }]}>
-                              <Text style={[s.badgeText, { color: "#f59e0b" }]}>Muhurat</Text>
+                              <Text style={[s.badgeText, { color: "#f59e0b" }]}>{t.pn_bMuhurat}</Text>
                             </View>
                           )}
                         </View>

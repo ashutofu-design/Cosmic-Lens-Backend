@@ -56,10 +56,10 @@ function riskColor(risk: string): string {
   if (risk === "High") return "#ef4444";
   return "#f59e0b";
 }
-function riskPhrase(risk: string): string {
-  if (risk === "Low")  return "Healthy Phase";
-  if (risk === "High") return "Care Needed";
-  return "Mixed Phase";
+function riskPhrase(risk: string, t: any): string {
+  if (risk === "Low")  return t.hl_healthyPhase;
+  if (risk === "High") return t.hl_careNeeded;
+  return t.hl_mixedPhase;
 }
 
 function ScoreRing({ score, color }: { score: number; color: string }) {
@@ -146,7 +146,7 @@ export default function HealthScreen() {
 
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
-      setErr("Please log in to view your health analysis."); setLoading(false); return;
+      setErr(t.hl_loginRequired); setLoading(false); return;
     }
     if (!kundli) {
       setErr(t.errKundliRequired);
@@ -192,7 +192,7 @@ export default function HealthScreen() {
             <Feather name="arrow-left" size={20} color="#fff" />
           </View>
         </Pressable>
-        <Text style={s.topTitle}>Health Analysis</Text>
+        <Text style={s.topTitle}>{t.hl_pageTitle}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -243,7 +243,7 @@ export default function HealthScreen() {
                 style={StyleSheet.absoluteFill}
               />
               <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 16 }}>
-                <Text style={s.heroLabel}>HEALTH SCORE</Text>
+                <Text style={s.heroLabel}>{t.hl_scoreLabel}</Text>
                 <View style={{ marginTop: 12 }}>
                   <ScoreRing score={data.basic.score} color={riskColor(data.basic.risk)} />
                 </View>
@@ -254,7 +254,7 @@ export default function HealthScreen() {
                 }]}>
                   <View style={[s.trendDot, { backgroundColor: riskColor(data.basic.risk) }]} />
                   <Text style={[s.trendText, { color: riskColor(data.basic.risk) }]}>
-                    {riskPhrase(data.basic.risk)}  •  Risk: {data.basic.risk}
+                    {riskPhrase(data.basic.risk, t)}  •  {t.hl_riskLabel} {data.basic.risk}
                   </Text>
                 </View>
               </View>
@@ -321,7 +321,7 @@ export default function HealthScreen() {
             {isProUser && data.pro && (
               <>
                 {/* Houses */}
-                <SectionCard icon="home" title="Health Houses" accent={accent}>
+                <SectionCard icon="home" title={t.hl_houses} accent={accent}>
                   {([
                     { num: 1,  info: data.pro.houses.h1  },
                     { num: 6,  info: data.pro.houses.h6  },
@@ -343,7 +343,7 @@ export default function HealthScreen() {
                 </SectionCard>
 
                 {/* Planets */}
-                <SectionCard icon="star" title="Health Planets" accent={accent}>
+                <SectionCard icon="star" title={t.hl_planets} accent={accent}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -366,21 +366,21 @@ export default function HealthScreen() {
                   {data.pro.transit.map((t, i) => (<Bullet key={i} color={accent}>{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="alert-triangle" title="Risk Periods" accent="#f59e0b">
+                <SectionCard icon="alert-triangle" title={t.hl_riskPeriods} accent="#f59e0b">
                   {data.pro.risk_periods.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="activity" title="Nature of Issues" accent="#a78bfa">
+                <SectionCard icon="activity" title={t.hl_nature} accent="#a78bfa">
                   {data.pro.nature.map((t, i) => (<Bullet key={i} color="#a78bfa">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="heart" title="Recovery Strength" accent="#22c55e">
+                <SectionCard icon="heart" title={t.hl_recovery} accent="#22c55e">
                   <Text style={[s.summary, { color: "rgba(255,255,255,0.9)" }]}>
                     {data.pro.recovery}
                   </Text>
                 </SectionCard>
 
-                <SectionCard icon="shield" title="Preventive Guidance" accent="#22c55e">
+                <SectionCard icon="shield" title={t.hl_prevent} accent="#22c55e">
                   {data.pro.prevent.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
@@ -437,7 +437,7 @@ export default function HealthScreen() {
 
                 {/* Vulnerable organs */}
                 {Array.isArray((data.pro as any).vulnerable_organs) && (data.pro as any).vulnerable_organs.length > 0 && (
-                  <SectionCard icon="heart" title="Vulnerable Body Areas (extra care zone)" accent="#f59e0b">
+                  <SectionCard icon="heart" title={t.hl_organs} accent="#f59e0b">
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                       {(data.pro as any).vulnerable_organs.map((o: string, i: number) => (
                         <View key={i} style={{ backgroundColor: "#451a1a", borderColor: "#f59e0b", borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -448,7 +448,7 @@ export default function HealthScreen() {
                   </SectionCard>
                 )}
 
-                <SectionCard icon="sun" title="Remedies (Mantra & Lifestyle)" accent="#f59e0b">
+                <SectionCard icon="sun" title={t.hl_remedies} accent="#f59e0b">
                   {data.pro.remedies.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 

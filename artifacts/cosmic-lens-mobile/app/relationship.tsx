@@ -39,55 +39,57 @@ interface MainOption {
   soloMode?: boolean;     // true = needs only primary kundli (no partner select required)
 }
 
-const OPTIONS: MainOption[] = [
-  {
-    key: "love",
-    title: "Love Reality Check",
-    subtitle: "Reveal the hidden truth about your relationship",
-    emoji: "🔥",
-    gradient: ["#f97316", "#ec4899", "#ef4444"],
-    glowColor: "#ef4444",
-    route: "/love-reality",
-    highlighted: true,
-    badge: "🔥 Most Used",
-    desc: "For current relationships & BF/GF",
-    items: ["Love Compatibility", "Breakup Chances", "Loyalty Check", "Will X Return", "Future Outcome"],
-  },
-  {
-    key: "marriage",
-    title: "Marriage Compatibility",
-    subtitle: "See if this match is truly meant for marriage",
-    emoji: "💍",
-    gradient: ["#6366f1", "#818cf8", "#a78bfa"],
-    glowColor: "#6366f1",
-    route: "/kundli-milan",
-    highlighted: true,
-    badge: "💍 Deep Analysis",
-    desc: "For serious & marriage decisions",
-    items: ["Soul Sync", "Attraction Match", "Destiny Link", "Intimacy Score"],
-    depthLine: "36 Gun Milan + deep compatibility insights",
-  },
-  {
-    key: "future-partner",
-    title: "Future Partner Portrait",
-    subtitle: "Check your future partner — roop, swabhav aur disha",
-    emoji: "🔮",
-    gradient: ["#9333ea", "#c084fc", "#e879f9"],
-    glowColor: "#9333ea",
-    route: "/future-partner-portrait",
-    highlighted: true,
-    badge: "✨ NEW · Cosmic Portrait",
-    desc: "Aapki kundli se jeevansaathi ki divya jhalak",
-    items: [
-      "30+ shastriya rules (D1+D9+D3+D30+KP+UL+DK+A7)",
-      "Roop, complexion, aankhein, vibe",
-      "Disha + umar + vyavsay hint",
-      "Cosmic Portrait — divya jhalak",
-    ],
-    depthLine: "BPHS + Phaladeepika + KP Reader + Jaimini Sutras",
-    soloMode: true,
-  },
-];
+function buildOptions(t: any): MainOption[] {
+  return [
+    {
+      key: "love",
+      title: t.rl_loveTitle,
+      subtitle: t.rl_loveSub,
+      emoji: "🔥",
+      gradient: ["#f97316", "#ec4899", "#ef4444"],
+      glowColor: "#ef4444",
+      route: "/love-reality",
+      highlighted: true,
+      badge: `🔥 ${t.rl_mostUsed}`,
+      desc: t.rl_loveDesc,
+      items: ["Love Compatibility", "Breakup Chances", "Loyalty Check", "Will X Return", "Future Outcome"],
+    },
+    {
+      key: "marriage",
+      title: t.rl_marriageTitle,
+      subtitle: t.rl_marriageSub,
+      emoji: "💍",
+      gradient: ["#6366f1", "#818cf8", "#a78bfa"],
+      glowColor: "#6366f1",
+      route: "/kundli-milan",
+      highlighted: true,
+      badge: `💍 ${t.rl_deepBadge}`,
+      desc: t.rl_marriageSub,
+      items: ["Soul Sync", "Attraction Match", "Destiny Link", "Intimacy Score"],
+      depthLine: "36 Gun Milan + deep compatibility insights",
+    },
+    {
+      key: "future-partner",
+      title: t.rl_partnerTitle,
+      subtitle: t.rl_partnerSub,
+      emoji: "🔮",
+      gradient: ["#9333ea", "#c084fc", "#e879f9"],
+      glowColor: "#9333ea",
+      route: "/future-partner-portrait",
+      highlighted: true,
+      badge: `✨ ${t.rl_newBadge}`,
+      desc: t.rl_partnerDesc,
+      items: [
+        "30+ shastriya rules (D1+D9+D3+D30+KP+UL+DK+A7)",
+        "Roop, complexion, aankhein, vibe",
+        "Disha + umar + vyavsay hint",
+        "Cosmic Portrait — divya jhalak",
+      ],
+      depthLine: "BPHS + Phaladeepika + KP Reader + Jaimini Sutras",
+      soloMode: true,
+    },
+  ];
+}
 
 function OptionCard({
   option,
@@ -551,7 +553,7 @@ export default function RelationshipScreen() {
                 borderWidth:0.5,borderStyle:"dashed" as any,
                 borderColor:"#2d3555"})}>
               <Text style={{fontSize:13}}>👤</Text>
-              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>You</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_selfLabel}</Text>
               <Text style={{color:"#818cf8",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
             </Pressable>
           )}
@@ -576,7 +578,7 @@ export default function RelationshipScreen() {
               <Text style={{color:"#E5E7EB",fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
                 {selectedP2.name}
               </Text>
-              <Text style={{color:"#f472b6",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>Change</Text>
+              <Text style={{color:"#f472b6",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>{t.rl_change}</Text>
             </Pressable>
           ) : otherProfiles.length > 0 ? (
             <Pressable onPress={()=>{
@@ -589,7 +591,7 @@ export default function RelationshipScreen() {
                 borderWidth:0.5,
                 borderColor:"#2d1f3a"})}>
               <Text style={{fontSize:13}}>💑</Text>
-              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Select Partner</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_partnerSelect}</Text>
               <Feather name="chevron-down" size={12} color="#f472b6"/>
             </Pressable>
           ) : (
@@ -617,7 +619,7 @@ export default function RelationshipScreen() {
               <View style={{width:40,height:4,borderRadius:2,backgroundColor:isDark?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.12)",
                 alignSelf:"center",marginBottom:16}}/>
               <Text style={{color:C.text,fontSize:15,fontFamily:"Nunito_800ExtraBold",marginBottom:14}}>
-                Select Partner
+                {t.rl_partnerSelect}
               </Text>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {otherProfiles.map((prof)=>(
@@ -672,7 +674,7 @@ export default function RelationshipScreen() {
         </Modal>
 
         <View style={s.optionsList}>
-          {OPTIONS.map((opt, i) => {
+          {buildOptions(t).map((opt, i) => {
             const canEnter = !!primaryProfile?.kundli && !!selectedP2?.kundli;
             return (
               <OptionCard

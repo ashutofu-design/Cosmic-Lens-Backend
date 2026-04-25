@@ -57,10 +57,10 @@ function trendColor(t: string): string {
   if (t === "Loss")   return "#ef4444";
   return "#3b82f6";
 }
-function trendPhrase(t: string): string {
-  if (t === "Gain")   return "Growth Phase";
-  if (t === "Loss")   return "Caution Phase";
-  return "Stable Phase";
+function trendPhrase(trend: string, t: any): string {
+  if (trend === "Gain")   return t.fn_growthPhase;
+  if (trend === "Loss")   return t.fn_cautionPhase;
+  return t.fn_stablePhase;
 }
 
 function ScoreRing({ score, color }: { score: number; color: string }) {
@@ -147,7 +147,7 @@ export default function FinanceScreen() {
 
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
-      setErr("Please log in to view your finance analysis."); setLoading(false); return;
+      setErr(t.fn_pageTitle + " — login required"); setLoading(false); return;
     }
     if (!kundli) {
       setErr(t.errKundliRequired);
@@ -193,7 +193,7 @@ export default function FinanceScreen() {
             <Feather name="arrow-left" size={20} color="#fff" />
           </View>
         </Pressable>
-        <Text style={s.topTitle}>Finance Analysis</Text>
+        <Text style={s.topTitle}>{t.fn_pageTitle}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -244,7 +244,7 @@ export default function FinanceScreen() {
                 style={StyleSheet.absoluteFill}
               />
               <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 16 }}>
-                <Text style={s.heroLabel}>FINANCE SCORE</Text>
+                <Text style={s.heroLabel}>{t.fn_scoreLabel}</Text>
                 <View style={{ marginTop: 12 }}>
                   <ScoreRing score={data.basic.score} color={trendColor(data.basic.trend)} />
                 </View>
@@ -255,7 +255,7 @@ export default function FinanceScreen() {
                 }]}>
                   <View style={[s.trendDot, { backgroundColor: trendColor(data.basic.trend) }]} />
                   <Text style={[s.trendText, { color: trendColor(data.basic.trend) }]}>
-                    {trendPhrase(data.basic.trend)}  •  {data.basic.trend}
+                    {trendPhrase(data.basic.trend, t)}  •  {data.basic.trend}
                   </Text>
                 </View>
               </View>
@@ -321,7 +321,7 @@ export default function FinanceScreen() {
             {/* PRO sections */}
             {isProUser && data.pro && (
               <>
-                <SectionCard icon="home" title="Wealth Houses" accent={accent}>
+                <SectionCard icon="home" title={t.fn_houses} accent={accent}>
                   {([
                     { num: 2,  info: data.pro.houses.h2  },
                     { num: 11, info: data.pro.houses.h11 },
@@ -342,7 +342,7 @@ export default function FinanceScreen() {
                   ))}
                 </SectionCard>
 
-                <SectionCard icon="star" title="Wealth Planets" accent={accent}>
+                <SectionCard icon="star" title={t.fn_planets} accent={accent}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -365,23 +365,23 @@ export default function FinanceScreen() {
                   {data.pro.transit.map((t, i) => (<Bullet key={i} color={accent}>{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="trending-up" title="Money Inflow Periods" accent="#22c55e">
+                <SectionCard icon="trending-up" title={t.fn_inflow} accent="#22c55e">
                   {data.pro.inflow.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="trending-down" title="Expense / Loss Phases" accent="#f59e0b">
+                <SectionCard icon="trending-down" title={t.fn_expense} accent="#f59e0b">
                   {data.pro.expenses.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="bar-chart-2" title="Investment Opportunities" accent="#a78bfa">
+                <SectionCard icon="bar-chart-2" title={t.fn_invest} accent="#a78bfa">
                   {data.pro.invest.map((t, i) => (<Bullet key={i} color="#a78bfa">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="zap" title="Sudden Gain / Loss Chances" accent="#fbbf24">
+                <SectionCard icon="zap" title={t.fn_sudden} accent="#fbbf24">
                   {data.pro.sudden.map((t, i) => (<Bullet key={i} color="#fbbf24">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="shield" title="Wealth Stability" accent="#22c55e">
+                <SectionCard icon="shield" title={t.fn_stability} accent="#22c55e">
                   <Text style={[s.summary, { color: "rgba(255,255,255,0.9)" }]}>
                     {data.pro.stability}
                   </Text>
@@ -409,7 +409,7 @@ export default function FinanceScreen() {
 
                 {/* Income sources */}
                 {Array.isArray((data.pro as any).income_sources) && (data.pro as any).income_sources.length > 0 && (
-                  <SectionCard icon="dollar-sign" title="Income Sources (chart-driven strength)" accent="#22c55e">
+                  <SectionCard icon="dollar-sign" title={t.fn_income} accent="#22c55e">
                     {(data.pro as any).income_sources.map((s: any, i: number) => (
                       <View key={i} style={{ marginBottom: 12 }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>

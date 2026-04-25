@@ -418,6 +418,132 @@ export interface MoreT {
   pe_recentlyDeleted: string;
   pe_noKundliYet:     string;
   pe_manageProfile:   string;
+
+  // ── panchang (pn_*) ──
+  pn_computing:       string;
+  pn_dataSource:      string;
+  pn_offline:         string;
+  pn_today:           string;
+  pn_parso:           string;
+  pn_auspicious:      string;
+  pn_megaFestival:    string;
+  pn_bNational:       string;
+  pn_bVrat:           string;
+  pn_bMuhurat:        string;
+  pn_bandExcellent:   string;
+  pn_bandGood:        string;
+  pn_bandMixed:       string;
+  pn_bandCaution:     string;
+
+  // ── numerology (nm_*) ──
+  nm_proTools:        string;
+  nm_premium:         string;
+  nm_lifeMastery:     string;
+  nm_yourNumbers:     string;
+  nm_yourNumbersHint: string;
+  nm_whatsInside:     string;
+  nm_opening:         string;
+  nm_generateBtn:     string;
+
+  // ── career (cr_*) ──
+  cr_pageTitle:       string;
+  cr_loading:         string;
+  cr_loginRequired:   string;
+  cr_addProfile:      string;
+  cr_scoreLabel:      string;
+  cr_strongPhase:     string;
+  cr_cautionPhase:    string;
+  cr_mixedPhase:      string;
+  cr_quickReading:    string;
+  cr_hiddenInsight:   string;
+  cr_proCta:          string;
+  cr_upgradeBtn:      string;
+  cr_houses:          string;
+  cr_lord:            string;
+  cr_inHouse:         string;
+  cr_planets:         string;
+  cr_dasha:           string;
+  cr_mahadasha:       string;
+  cr_antardasha:      string;
+  cr_ends:            string;
+  cr_transit:         string;
+  cr_growth:          string;
+  cr_jobChange:       string;
+  cr_struggle:        string;
+  cr_reasoning:       string;
+
+  // ── health (hl_*) ──
+  hl_pageTitle:       string;
+  hl_loginRequired:   string;
+  hl_healthyPhase:    string;
+  hl_careNeeded:      string;
+  hl_mixedPhase:      string;
+  hl_scoreLabel:      string;
+  hl_riskLabel:       string;
+  hl_houses:          string;
+  hl_planets:         string;
+  hl_riskPeriods:     string;
+  hl_nature:          string;
+  hl_recovery:        string;
+  hl_prevent:         string;
+  hl_organs:          string;
+  hl_remedies:        string;
+
+  // ── finance (fn_*) ──
+  fn_pageTitle:       string;
+  fn_growthPhase:     string;
+  fn_cautionPhase:    string;
+  fn_stablePhase:     string;
+  fn_scoreLabel:      string;
+  fn_houses:          string;
+  fn_planets:         string;
+  fn_inflow:          string;
+  fn_expense:         string;
+  fn_invest:          string;
+  fn_sudden:          string;
+  fn_stability:       string;
+  fn_income:          string;
+
+  // ── relationship (rl_*) ──
+  rl_loveTitle:       string;
+  rl_loveSub:         string;
+  rl_mostUsed:        string;
+  rl_loveDesc:        string;
+  rl_marriageTitle:   string;
+  rl_marriageSub:     string;
+  rl_deepBadge:       string;
+  rl_partnerTitle:    string;
+  rl_partnerSub:      string;
+  rl_partnerDesc:     string;
+  rl_newBadge:        string;
+  rl_pageHeader:      string;
+  rl_selfLabel:       string;
+  rl_partnerSelect:   string;
+  rl_change:          string;
+
+  // ── my-reports (mr_*) ──
+  mr_loginRequired:   string;
+  mr_loadError:       string;
+  mr_networkError:    string;
+  mr_waLinkPrefix:    string;
+  mr_waErrorTitle:    string;
+  mr_openPdf:         string;
+  mr_whatsapp:        string;
+  mr_pageTitle:       string;
+  mr_loading:         string;
+  mr_emptyTitle:      string;
+  mr_footer:          string;
+
+  // ── my-kundli (mk_*) ──
+  mk_savedCount:      string;
+  mk_emptyTitle:      string;
+  mk_emptyDesc:       string;
+  mk_addNew:          string;
+  mk_primary:         string;
+  mk_deleteTitle:     string;
+  mk_deleteDesc:      string;
+  mk_cancel:          string;
+  mk_delete:          string;
 }
 
 // English — primary, complete
@@ -831,6 +957,124 @@ const EN: MoreT = {
   pe_recentlyDeleted: "Recently Deleted",
   pe_noKundliYet:     "No Kundli Yet",
   pe_manageProfile:   "Manage your profile & family members",
+
+  pn_computing:       "Computing…",
+  pn_dataSource:      "Swiss Ephemeris · Lahiri",
+  pn_offline:         "Offline · approx values",
+  pn_today:           "Today",
+  pn_parso:           "Day after",
+  pn_auspicious:      "TODAY'S AUSPICIOUSNESS",
+  pn_megaFestival:    "Major Festival",
+  pn_bNational:       "National",
+  pn_bVrat:           "Vrat",
+  pn_bMuhurat:        "Muhurat",
+  pn_bandExcellent:   "Excellent",
+  pn_bandGood:        "Good",
+  pn_bandMixed:       "Mixed",
+  pn_bandCaution:     "Caution",
+
+  nm_proTools:        "PRO+ TOOLS",
+  nm_premium:         "PREMIUM",
+  nm_lifeMastery:     "Life Mastery Report",
+  nm_yourNumbers:     "YOUR NUMBERS",
+  nm_yourNumbersHint: "(at least one)",
+  nm_whatsInside:     "WHAT'S INSIDE",
+  nm_opening:         "Opening…",
+  nm_generateBtn:     "Generate Life Mastery Report",
+
+  cr_pageTitle:       "Career Analysis",
+  cr_loading:         "Reading your chart…",
+  cr_loginRequired:   "Please log in to view your career analysis.",
+  cr_addProfile:      "Add Birth Details",
+  cr_scoreLabel:      "CAREER SCORE",
+  cr_strongPhase:     "Strong Phase",
+  cr_cautionPhase:    "Caution Phase",
+  cr_mixedPhase:      "Mixed Phase",
+  cr_quickReading:    "Quick Reading",
+  cr_hiddenInsight:   "HIDDEN INSIGHT",
+  cr_proCta:          "Unlock full career analysis with Pro",
+  cr_upgradeBtn:      "Upgrade to Pro",
+  cr_houses:          "Career Houses",
+  cr_lord:            "Lord:",
+  cr_inHouse:         "In house:",
+  cr_planets:         "Career Planets",
+  cr_dasha:           "Current Dasha Impact",
+  cr_mahadasha:       "Mahadasha",
+  cr_antardasha:      "Antardasha",
+  cr_ends:            "Ends",
+  cr_transit:         "Live Planetary Transit",
+  cr_growth:          "Career Growth Periods",
+  cr_jobChange:       "Job Change Timing",
+  cr_struggle:        "Struggle Phases & Hidden Risks",
+  cr_reasoning:       "Why This Reading",
+
+  hl_pageTitle:       "Health Analysis",
+  hl_loginRequired:   "Please log in to view your health analysis.",
+  hl_healthyPhase:    "Healthy Phase",
+  hl_careNeeded:      "Care Needed",
+  hl_mixedPhase:      "Mixed Phase",
+  hl_scoreLabel:      "HEALTH SCORE",
+  hl_riskLabel:       "Risk:",
+  hl_houses:          "Health Houses",
+  hl_planets:         "Health Planets",
+  hl_riskPeriods:     "Risk Periods",
+  hl_nature:          "Nature of Issues",
+  hl_recovery:        "Recovery Strength",
+  hl_prevent:         "Preventive Guidance",
+  hl_organs:          "Vulnerable Body Areas",
+  hl_remedies:        "Remedies (Mantra & Lifestyle)",
+
+  fn_pageTitle:       "Finance Analysis",
+  fn_growthPhase:     "Growth Phase",
+  fn_cautionPhase:    "Caution Phase",
+  fn_stablePhase:     "Stable Phase",
+  fn_scoreLabel:      "FINANCE SCORE",
+  fn_houses:          "Wealth Houses",
+  fn_planets:         "Wealth Planets",
+  fn_inflow:          "Money Inflow Periods",
+  fn_expense:         "Expense / Loss Phases",
+  fn_invest:          "Investment Opportunities",
+  fn_sudden:          "Sudden Gain / Loss Chances",
+  fn_stability:       "Wealth Stability",
+  fn_income:          "Income Sources",
+
+  rl_loveTitle:       "Love Reality Check",
+  rl_loveSub:         "Reveal the hidden truth about your relationship",
+  rl_mostUsed:        "Most Used",
+  rl_loveDesc:        "For current relationships & BF/GF",
+  rl_marriageTitle:   "Marriage Compatibility",
+  rl_marriageSub:     "Soul Sync, Attraction Match",
+  rl_deepBadge:       "Deep Analysis",
+  rl_partnerTitle:    "Future Partner Portrait",
+  rl_partnerSub:      "Form, nature & direction",
+  rl_partnerDesc:     "A divine glimpse of your life partner from your kundli",
+  rl_newBadge:        "NEW · Cosmic Portrait",
+  rl_pageHeader:      "Relationship",
+  rl_selfLabel:       "You",
+  rl_partnerSelect:   "Select Partner",
+  rl_change:          "Change",
+
+  mr_loginRequired:   "Login required to view reports.",
+  mr_loadError:       "Could not load your reports.",
+  mr_networkError:    "Network error.",
+  mr_waLinkPrefix:    "Open report:",
+  mr_waErrorTitle:    "WhatsApp not available",
+  mr_openPdf:         "Open PDF",
+  mr_whatsapp:        "WhatsApp",
+  mr_pageTitle:       "My Reports",
+  mr_loading:         "Loading your reports…",
+  mr_emptyTitle:      "No reports yet",
+  mr_footer:          "Powered by Advanced Cosmic Intelligence",
+
+  mk_savedCount:      "kundli saved",
+  mk_emptyTitle:      "No Kundli Yet",
+  mk_emptyDesc:       "Add a profile with birth details to generate kundli",
+  mk_addNew:          "Add New Kundli",
+  mk_primary:         "PRIMARY",
+  mk_deleteTitle:     "Delete Kundli?",
+  mk_deleteDesc:      "Kundli will be permanently deleted. This action cannot be undone.",
+  mk_cancel:          "Cancel",
+  mk_delete:          "Delete",
 };
 
 // Hinglish overrides (only differing keys)
@@ -1141,6 +1385,124 @@ const HN: Partial<MoreT> = {
   pe_recentlyDeleted: "Haal mein Hataye",
   pe_noKundliYet:     "Abhi tak koi Kundli nahi",
   pe_manageProfile:   "Apna profile aur family members manage karein",
+
+  pn_computing:       "Calculate ho raha…",
+  pn_dataSource:      "Swiss Ephemeris · Lahiri",
+  pn_offline:         "Offline · approx values",
+  pn_today:           "Aaj",
+  pn_parso:           "Parso",
+  pn_auspicious:      "AAJ KI SHUBHATA",
+  pn_megaFestival:    "Mahaparv",
+  pn_bNational:       "Rashtriya",
+  pn_bVrat:           "Vrat",
+  pn_bMuhurat:        "Muhurat",
+  pn_bandExcellent:   "Bahut Shubh",
+  pn_bandGood:        "Shubh",
+  pn_bandMixed:       "Mishrit",
+  pn_bandCaution:     "Saavdhani",
+
+  nm_proTools:        "PRO+ TOOLS",
+  nm_premium:         "PREMIUM",
+  nm_lifeMastery:     "Life Mastery Report",
+  nm_yourNumbers:     "AAPKE NUMBERS",
+  nm_yourNumbersHint: "(kam se kam ek)",
+  nm_whatsInside:     "ANDAR KYA HAI",
+  nm_opening:         "Khol raha…",
+  nm_generateBtn:     "Life Mastery Report Generate Karein",
+
+  cr_pageTitle:       "Career Analysis",
+  cr_loading:         "Aapki kundli read ho rahi…",
+  cr_loginRequired:   "Career analysis dekhne ke liye login karein.",
+  cr_addProfile:      "Birth Details Add Karein",
+  cr_scoreLabel:      "CAREER SCORE",
+  cr_strongPhase:     "Mazboot Phase",
+  cr_cautionPhase:    "Saavdhani Phase",
+  cr_mixedPhase:      "Mishrit Phase",
+  cr_quickReading:    "Quick Reading",
+  cr_hiddenInsight:   "CHHUPI HUI INSIGHT",
+  cr_proCta:          "Poori career analysis Pro mein unlock karein",
+  cr_upgradeBtn:      "Pro mein Upgrade karein",
+  cr_houses:          "Career Houses",
+  cr_lord:            "Lord:",
+  cr_inHouse:         "Ghar mein:",
+  cr_planets:         "Career Planets",
+  cr_dasha:           "Current Dasha Effect",
+  cr_mahadasha:       "Mahadasha",
+  cr_antardasha:      "Antardasha",
+  cr_ends:            "Khatm",
+  cr_transit:         "Live Planetary Transit",
+  cr_growth:          "Career Growth ke samay",
+  cr_jobChange:       "Job Change Timing",
+  cr_struggle:        "Sangharsh aur Chhupe Risks",
+  cr_reasoning:       "Yeh Reading Kyun",
+
+  hl_pageTitle:       "Health Analysis",
+  hl_loginRequired:   "Health analysis dekhne ke liye login karein.",
+  hl_healthyPhase:    "Swasth Phase",
+  hl_careNeeded:      "Dhyan ki zaroorat",
+  hl_mixedPhase:      "Mishrit Phase",
+  hl_scoreLabel:      "HEALTH SCORE",
+  hl_riskLabel:       "Risk:",
+  hl_houses:          "Health Houses",
+  hl_planets:         "Health Planets",
+  hl_riskPeriods:     "Risk ke samay",
+  hl_nature:          "Issues ki nature",
+  hl_recovery:        "Recovery Strength",
+  hl_prevent:         "Preventive Guidance",
+  hl_organs:          "Kamzor Body Areas",
+  hl_remedies:        "Upay (Mantra aur Lifestyle)",
+
+  fn_pageTitle:       "Finance Analysis",
+  fn_growthPhase:     "Growth Phase",
+  fn_cautionPhase:    "Saavdhani Phase",
+  fn_stablePhase:     "Sthir Phase",
+  fn_scoreLabel:      "FINANCE SCORE",
+  fn_houses:          "Dhan Houses",
+  fn_planets:         "Dhan Planets",
+  fn_inflow:          "Paisa Aane ke samay",
+  fn_expense:         "Kharch / Nuksaan Phase",
+  fn_invest:          "Investment Opportunities",
+  fn_sudden:          "Achanak Laabh / Haani",
+  fn_stability:       "Dhan Sthirta",
+  fn_income:          "Income Sources",
+
+  rl_loveTitle:       "Love Reality Check",
+  rl_loveSub:         "Aapke rishte ki chhupi sachchai jaaniye",
+  rl_mostUsed:        "Sabse popular",
+  rl_loveDesc:        "Current relationship aur BF/GF ke liye",
+  rl_marriageTitle:   "Shaadi Compatibility",
+  rl_marriageSub:     "Soul Sync, Attraction Match",
+  rl_deepBadge:       "Deep Analysis",
+  rl_partnerTitle:    "Future Partner Portrait",
+  rl_partnerSub:      "roop, swabhav aur disha",
+  rl_partnerDesc:     "Aapki kundli se jeevansaathi ki divya jhalak",
+  rl_newBadge:        "NEW · Cosmic Portrait",
+  rl_pageHeader:      "Relationship",
+  rl_selfLabel:       "Aap",
+  rl_partnerSelect:   "Partner Chuniye",
+  rl_change:          "Badlein",
+
+  mr_loginRequired:   "Reports dekhne ke liye login zaroori.",
+  mr_loadError:       "Aapki reports load nahi hui.",
+  mr_networkError:    "Network error.",
+  mr_waLinkPrefix:    "Report kholiye:",
+  mr_waErrorTitle:    "WhatsApp uplabdh nahi",
+  mr_openPdf:         "PDF Kholiye",
+  mr_whatsapp:        "WhatsApp",
+  mr_pageTitle:       "Meri Reports",
+  mr_loading:         "Reports load ho rahi…",
+  mr_emptyTitle:      "Abhi koi report nahi",
+  mr_footer:          "Powered by Advanced Cosmic Intelligence",
+
+  mk_savedCount:      "kundli saved",
+  mk_emptyTitle:      "Abhi koi Kundli nahi",
+  mk_emptyDesc:       "Birth details ke saath profile add karke kundli generate karein",
+  mk_addNew:          "Nayi Kundli Add karein",
+  mk_primary:         "PRIMARY",
+  mk_deleteTitle:     "Kundli Delete karein?",
+  mk_deleteDesc:      "Kundli permanently delete ho jayegi. Yeh action undo nahi hoga.",
+  mk_cancel:          "Cancel",
+  mk_delete:          "Delete",
 };
 
 // Hindi overrides (Devanagari)
@@ -1544,6 +1906,124 @@ const HI: Partial<MoreT> = {
   pe_recentlyDeleted: "हाल में हटाए गए",
   pe_noKundliYet:     "अभी तक कोई कुंडली नहीं",
   pe_manageProfile:   "अपना प्रोफ़ाइल और परिवार के सदस्य प्रबंधित करें",
+
+  pn_computing:       "गणना हो रही है…",
+  pn_dataSource:      "स्विस एफेमेरिस · लाहिरी",
+  pn_offline:         "ऑफ़लाइन · अनुमानित मान",
+  pn_today:           "आज",
+  pn_parso:           "परसों",
+  pn_auspicious:      "आज की शुभता",
+  pn_megaFestival:    "महापर्व",
+  pn_bNational:       "राष्ट्रीय",
+  pn_bVrat:           "व्रत",
+  pn_bMuhurat:        "मुहूर्त",
+  pn_bandExcellent:   "बहुत शुभ",
+  pn_bandGood:        "शुभ",
+  pn_bandMixed:       "मिश्रित",
+  pn_bandCaution:     "सावधानी",
+
+  nm_proTools:        "प्रो+ टूल्स",
+  nm_premium:         "प्रीमियम",
+  nm_lifeMastery:     "जीवन महारत रिपोर्ट",
+  nm_yourNumbers:     "आपके अंक",
+  nm_yourNumbersHint: "(कम से कम एक)",
+  nm_whatsInside:     "अंदर क्या है",
+  nm_opening:         "खुल रहा…",
+  nm_generateBtn:     "जीवन महारत रिपोर्ट बनाएँ",
+
+  cr_pageTitle:       "करियर विश्लेषण",
+  cr_loading:         "आपकी कुंडली पढ़ी जा रही है…",
+  cr_loginRequired:   "करियर विश्लेषण देखने के लिए लॉगिन करें।",
+  cr_addProfile:      "जन्म विवरण जोड़ें",
+  cr_scoreLabel:      "करियर स्कोर",
+  cr_strongPhase:     "मज़बूत दौर",
+  cr_cautionPhase:    "सावधानी दौर",
+  cr_mixedPhase:      "मिश्रित दौर",
+  cr_quickReading:    "त्वरित पठन",
+  cr_hiddenInsight:   "गुप्त अंतर्दृष्टि",
+  cr_proCta:          "प्रो में पूरा करियर विश्लेषण अनलॉक करें",
+  cr_upgradeBtn:      "प्रो में अपग्रेड करें",
+  cr_houses:          "करियर भाव",
+  cr_lord:            "स्वामी:",
+  cr_inHouse:         "भाव में:",
+  cr_planets:         "करियर ग्रह",
+  cr_dasha:           "वर्तमान दशा प्रभाव",
+  cr_mahadasha:       "महादशा",
+  cr_antardasha:      "अंतर्दशा",
+  cr_ends:            "समाप्ति",
+  cr_transit:         "लाइव ग्रह गोचर",
+  cr_growth:          "करियर वृद्धि के समय",
+  cr_jobChange:       "नौकरी बदलने का समय",
+  cr_struggle:        "संघर्ष और छिपे जोखिम",
+  cr_reasoning:       "यह पठन क्यों",
+
+  hl_pageTitle:       "स्वास्थ्य विश्लेषण",
+  hl_loginRequired:   "स्वास्थ्य विश्लेषण देखने के लिए लॉगिन करें।",
+  hl_healthyPhase:    "स्वस्थ दौर",
+  hl_careNeeded:      "ध्यान की आवश्यकता",
+  hl_mixedPhase:      "मिश्रित दौर",
+  hl_scoreLabel:      "स्वास्थ्य स्कोर",
+  hl_riskLabel:       "जोखिम:",
+  hl_houses:          "स्वास्थ्य भाव",
+  hl_planets:         "स्वास्थ्य ग्रह",
+  hl_riskPeriods:     "जोखिम के समय",
+  hl_nature:          "समस्याओं का स्वरूप",
+  hl_recovery:        "स्वास्थ्य सुधार शक्ति",
+  hl_prevent:         "रोकथाम मार्गदर्शन",
+  hl_organs:          "कमज़ोर शरीर के अंग",
+  hl_remedies:        "उपाय (मंत्र और जीवनशैली)",
+
+  fn_pageTitle:       "धन विश्लेषण",
+  fn_growthPhase:     "वृद्धि दौर",
+  fn_cautionPhase:    "सावधानी दौर",
+  fn_stablePhase:     "स्थिर दौर",
+  fn_scoreLabel:      "धन स्कोर",
+  fn_houses:          "धन भाव",
+  fn_planets:         "धन ग्रह",
+  fn_inflow:          "धन आगमन समय",
+  fn_expense:         "व्यय / हानि दौर",
+  fn_invest:          "निवेश अवसर",
+  fn_sudden:          "अचानक लाभ / हानि",
+  fn_stability:       "धन स्थिरता",
+  fn_income:          "आय स्रोत",
+
+  rl_loveTitle:       "प्रेम वास्तविकता जाँच",
+  rl_loveSub:         "अपने रिश्ते की छुपी सच्चाई जानें",
+  rl_mostUsed:        "सबसे लोकप्रिय",
+  rl_loveDesc:        "मौजूदा रिश्ते और BF/GF के लिए",
+  rl_marriageTitle:   "विवाह अनुकूलता",
+  rl_marriageSub:     "आत्मा सिंक, आकर्षण मेल",
+  rl_deepBadge:       "गहन विश्लेषण",
+  rl_partnerTitle:    "भावी जीवनसाथी चित्रण",
+  rl_partnerSub:      "रूप, स्वभाव और दिशा",
+  rl_partnerDesc:     "आपकी कुंडली से जीवनसाथी की दिव्य झलक",
+  rl_newBadge:        "नया · ब्रह्मांडीय चित्रण",
+  rl_pageHeader:      "रिश्ता",
+  rl_selfLabel:       "आप",
+  rl_partnerSelect:   "साथी चुनें",
+  rl_change:          "बदलें",
+
+  mr_loginRequired:   "रिपोर्ट देखने के लिए लॉगिन ज़रूरी।",
+  mr_loadError:       "आपकी रिपोर्ट लोड नहीं हुईं।",
+  mr_networkError:    "नेटवर्क त्रुटि।",
+  mr_waLinkPrefix:    "रिपोर्ट खोलें:",
+  mr_waErrorTitle:    "व्हाट्सएप उपलब्ध नहीं",
+  mr_openPdf:         "PDF खोलें",
+  mr_whatsapp:        "व्हाट्सएप",
+  mr_pageTitle:       "मेरी रिपोर्ट्स",
+  mr_loading:         "रिपोर्ट्स लोड हो रही…",
+  mr_emptyTitle:      "अभी कोई रिपोर्ट नहीं",
+  mr_footer:          "उन्नत कॉस्मिक इंटेलिजेंस द्वारा संचालित",
+
+  mk_savedCount:      "कुंडली सहेजी गई",
+  mk_emptyTitle:      "अभी कोई कुंडली नहीं",
+  mk_emptyDesc:       "जन्म विवरण के साथ प्रोफ़ाइल जोड़कर कुंडली बनाएँ",
+  mk_addNew:          "नई कुंडली जोड़ें",
+  mk_primary:         "मुख्य",
+  mk_deleteTitle:     "कुंडली हटाएँ?",
+  mk_deleteDesc:      "कुंडली स्थायी रूप से हट जाएगी। यह क्रिया वापस नहीं होगी।",
+  mk_cancel:          "रद्द करें",
+  mk_delete:          "हटाएँ",
 };
 
 /**

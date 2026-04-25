@@ -70,7 +70,7 @@ export default function MyKundliScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={[s.pageTitle, { color: C.text }]}>{t.myKundliTitle}</Text>
-          <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{kundliProfiles.length} kundli saved</Text>
+          <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{kundliProfiles.length} {t.mk_savedCount}</Text>
         </View>
       </View>
 
@@ -81,16 +81,16 @@ export default function MyKundliScreen() {
         {kundliProfiles.length === 0 && (
           <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={{ fontSize: 36 }}>📜</Text>
-            <Text style={{ color: C.text, fontSize: 15, fontFamily: F.semibold, textAlign: "center" }}>No Kundli Yet</Text>
+            <Text style={{ color: C.text, fontSize: 15, fontFamily: F.semibold, textAlign: "center" }}>{t.mk_emptyTitle}</Text>
             <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, textAlign: "center", lineHeight: 18 }}>
-              Add a profile with birth details to generate your first kundli
+              {t.mk_emptyDesc}
             </Text>
             <Pressable
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/profile-edit"); }}
               style={({ pressed }) => [s.addBtnEmpty, { backgroundColor: C.isDark ? "rgba(245,158,11,0.12)" : "rgba(124,58,237,0.08)", borderColor: C.isDark ? "rgba(245,158,11,0.25)" : "rgba(124,58,237,0.2)", opacity: pressed ? 0.8 : 1 }]}
             >
               <Feather name="plus" size={14} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
-              <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>Add New Kundli</Text>
+              <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>{t.mk_addNew}</Text>
             </Pressable>
           </View>
         )}
@@ -126,7 +126,7 @@ export default function MyKundliScreen() {
                     {isPrimary && (
                       <View style={[s.primaryBadge, { backgroundColor: `${ac}15` }]}>
                         <Feather name="star" size={7} color={ac} />
-                        <Text style={{ color: ac, fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>PRIMARY</Text>
+                        <Text style={{ color: ac, fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 }}>{t.mk_primary}</Text>
                       </View>
                     )}
                     {!isPrimary && profile.relation && profile.relation !== "Self" && (
@@ -176,22 +176,22 @@ export default function MyKundliScreen() {
             <View style={s.modalIcon}>
               <Feather name="alert-triangle" size={22} color="#EF4444" />
             </View>
-            <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold, textAlign: "center" }}>Delete Kundli?</Text>
+            <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold, textAlign: "center" }}>{t.mk_deleteTitle}</Text>
             <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, textAlign: "center", lineHeight: 18 }}>
-              {deleteTarget.name} ki kundli permanently delete ho jayegi. Yeh action undo nahi hoga.
+              {deleteTarget.name} — {t.mk_deleteDesc}
             </Text>
             <View style={{ flexDirection: "row", gap: 12, marginTop: 6 }}>
               <Pressable
                 onPress={() => setConfirmDeleteId(null)}
                 style={[s.modalBtn, { backgroundColor: C.bgCard2, borderColor: C.border }]}
               >
-                <Text style={{ color: C.textMuted, fontSize: 13, fontFamily: F.semibold }}>Cancel</Text>
+                <Text style={{ color: C.textMuted, fontSize: 13, fontFamily: F.semibold }}>{t.mk_cancel}</Text>
               </Pressable>
               <Pressable
                 onPress={confirmDel}
                 style={[s.modalBtn, { backgroundColor: "#EF4444", borderColor: "#EF4444" }]}
               >
-                <Text style={{ color: "#fff", fontSize: 13, fontFamily: F.bold }}>Delete</Text>
+                <Text style={{ color: "#fff", fontSize: 13, fontFamily: F.bold }}>{t.mk_delete}</Text>
               </Pressable>
             </View>
           </View>

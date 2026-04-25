@@ -13,6 +13,7 @@ import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
+import { useT } from "@/hooks/useT";
 import {
   ActivityIndicator,
   Alert,
@@ -72,6 +73,7 @@ function kindLabel(it: HistoryItem): string {
 export default function MyReportsScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { user } = useUser();
 
   const [items, setItems]       = useState<HistoryItem[]>([]);
@@ -81,7 +83,7 @@ export default function MyReportsScreen() {
 
   const load = useCallback(async (silent = false) => {
     if (!user?.id || !user?.api_key) {
-      setError("Login required to view reports.");
+      setError(t.mr_loginRequired);
       return;
     }
     if (!silent) setLoading(true);
@@ -91,14 +93,14 @@ export default function MyReportsScreen() {
         headers: { "X-API-Key": user.api_key },
       });
       if (!res.ok) {
-        setError("Could not load your reports. Please try again.");
+        setError(t.mr_loadError);
         setItems([]);
         return;
       }
       const data: HistoryResponse = await res.json();
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch {
-      setError("Network error. Please check your connection.");
+      setError(t.mr_networkError);
     } finally {
       setLoading(false);
       setRefresh(false);
@@ -135,7 +137,7 @@ export default function MyReportsScreen() {
       await Linking.openURL(fallback);
     } catch {
       Alert.alert(
-        "WhatsApp not available",
+        t.mr_waErrorTitle,
         "Please install WhatsApp to share, or copy the report link manually."
       );
     }
@@ -182,7 +184,7 @@ export default function MyReportsScreen() {
             ]}
           >
             <Feather name="file-text" size={16} color={C.text} />
-            <Text style={[s.actionText, { color: C.text }]}>Open PDF</Text>
+            <Text style={[s.actionText, { color: C.text }]}>{t.mr_openPdf}</Text>
           </Pressable>
 
           <Pressable
@@ -197,7 +199,7 @@ export default function MyReportsScreen() {
             ]}
           >
             <Feather name="share-2" size={16} color="#ffffff" />
-            <Text style={[s.actionText, { color: "#ffffff" }]}>WhatsApp</Text>
+            <Text style={[s.actionText, { color: "#ffffff" }]}>{t.mr_whatsapp}</Text>
           </Pressable>
         </View>
       </View>
@@ -226,7 +228,7 @@ export default function MyReportsScreen() {
         <Pressable onPress={() => router.back()} style={s.back} hitSlop={10}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
-        <Text style={[s.title, { color: C.text }]}>My Reports</Text>
+        <Text style={[s.title, { color: C.text }]}>{t.mr_pageTitle}</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -234,7 +236,7 @@ export default function MyReportsScreen() {
         <View style={s.center}>
           <ActivityIndicator size="large" color={C.accent || "#f6c453"} />
           <Text style={[s.muted, { color: C.textMuted, marginTop: 12 }]}>
-            Loading your reports…
+            {t.mr_loading}
           </Text>
         </View>
       ) : error ? (
@@ -253,7 +255,7 @@ export default function MyReportsScreen() {
       ) : items.length === 0 ? (
         <View style={s.center}>
           <Feather name="inbox" size={48} color={C.textMuted} />
-          <Text style={[s.empty, { color: C.text }]}>No reports yet</Text>
+          <Text style={[s.empty, { color: C.text }]}>{t.mr_emptyTitle}</Text>
           <Text style={[s.muted, { color: C.textMuted, textAlign: "center", marginTop: 6 }]}>
             Your AstroVastu PRO and Business Vastu deep-scan reports will appear here.
           </Text>
@@ -274,7 +276,7 @@ export default function MyReportsScreen() {
           }
           ListFooterComponent={
             <Text style={[s.footer, { color: C.textMuted }]}>
-              Powered by Advanced Cosmic Intelligence
+              {t.mr_footer}
             </Text>
           }
         />

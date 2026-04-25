@@ -1,5 +1,5 @@
 """
-dosh_engine.py — Complete Vedic Dosh Analysis Engine (9 Doshas)
+dosh_engine.py — Complete Vedic Dosh Analysis Engine (17 Doshas)
 Planets input: list of { name, house, longitude, sign, retrograde }
 """
 
@@ -27,6 +27,11 @@ def _house(pl: list, name: str) -> int:
 def _lon(pl: list, name: str) -> float:
     p = next((x for x in pl if x.get("name") == name), None)
     return float(p.get("longitude", 0.0)) if p else 0.0
+
+
+def _has(pl: list, name: str) -> bool:
+    """Explicit existence check — never conflate longitude=0.0 (valid 0° Aries) with missing data."""
+    return any(x.get("name") == name and "longitude" in x for x in pl)
 
 
 def _planets_in_house(pl: list, house: int) -> list:
@@ -295,7 +300,7 @@ def _daridra(pl):
     jupiter_h = _house(pl, "Jupiter")
 
     # Strong: 2+ malefics in 2nd OR Jupiter (natural wealth significator) severely afflicted
-    if len(in_2nd) >= 2 or (jupiter_h in (6, 8, 12) and saturn_h in (1, 4, 7)):
+    if len(in_2nd) >= 2 or (jupiter_h in (6, 8, 12) and sat_h in (1, 4, 7)):
         cause = f"2nd House: {', '.join(in_2nd)}" if len(in_2nd) >= 2 else f"Jupiter → H{jupiter_h} + Saturn → H{sat_h}"
         return (
             "Active",
@@ -482,17 +487,502 @@ def _kemadruma(pl):
     )
 
 
+# ── 10. Vish Yoga ──────────────────────────────────────────────────────────────
+def _vish_yoga(pl):
+    sat_h    = _house(pl, "Saturn")
+    moon_h   = _house(pl, "Moon")
+    sat_lon  = _lon(pl, "Saturn")
+    moon_lon = _lon(pl, "Moon")
+
+    if sat_h == moon_h and sat_h != 0:
+        tight = _orb(sat_lon, moon_lon) < 10
+        status = "Active" if tight else "Mild"
+        return (
+            status,
+            f"Saturn–Moon Conjunction in House {sat_h} — Vish Yoga",
+            "Vish Yoga (literally 'poison combination') forms when Saturn conjuncts Moon, infusing the mind with heaviness. Causes chronic worry, depression, mental fatigue, and emotional poison that lingers — especially during Saturn or Moon dasha periods.",
+            [
+                "Chant Mahamrityunjay mantra 108 times daily",
+                "Wear Pearl (Moti) after Jyotish consultation to strengthen Moon",
+                "Worship Lord Shiva on every Monday with milk abhishekam",
+                "Donate white items (rice, sugar, milk) on Mondays",
+                "Practice 10 minutes of breathing meditation daily",
+            ],
+            f"Saturn → H{sat_h} | Moon → H{moon_h}",
+        )
+    sat_aspects = [(sat_h + 2) % 12 + 1, (sat_h + 6) % 12 + 1, (sat_h + 9) % 12 + 1]
+    if sat_h != 0 and moon_h in sat_aspects:
+        return (
+            "Mild",
+            f"Saturn Aspects Moon (H{moon_h}) — Mild Vish Yoga",
+            "Saturn's aspect on Moon creates emotional dampness, periods of low mood, and a tendency toward overthinking. Manageable with consistent practice.",
+            [
+                "Maintain a regular sleep schedule (Moon thrives on routine)",
+                "Avoid heavy decisions during emotionally low phases",
+                "Chant 'Om Namah Shivaya' 108 times before sleep",
+            ],
+            f"Saturn → H{sat_h} (aspects H{moon_h}) | Moon → H{moon_h}",
+        )
+    return (
+        "None",
+        "No Vish Yoga — Mind Free of Saturnine Heaviness",
+        "Saturn and Moon are not in conjunction or aspect. Mental clarity is unobstructed.",
+        [],
+        f"Saturn → H{sat_h} | Moon → H{moon_h}",
+    )
+
+
+# ── 11. Chandra-Mangal Dosh / Yoga ─────────────────────────────────────────────
+def _chandra_mangal(pl):
+    moon_h   = _house(pl, "Moon")
+    mars_h   = _house(pl, "Mars")
+    moon_lon = _lon(pl, "Moon")
+    mars_lon = _lon(pl, "Mars")
+    moon_sign = int(moon_lon // 30) + 1 if _has(pl, "Moon") else 0
+    SIGN_NAMES = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
+
+    if moon_h == mars_h and moon_h != 0:
+        # Cancer (4) or Taurus (2) → classical Lakshmi-yoga side (positive — wealth)
+        if moon_sign in (4, 2):
+            return (
+                "None",
+                f"Moon–Mars Conjunction in House {moon_h} (Lakshmi Yoga side)",
+                "Moon and Mars together in Cancer or Taurus is classically a 'Lakshmi Yoga' — favourable for wealth through trade and bold action. The conflict-side Chandra-Mangal Dosh does not apply here.",
+                [],
+                f"Moon → H{moon_h} ({SIGN_NAMES[moon_sign-1]}) | Mars → H{mars_h}",
+            )
+        tight = _orb(moon_lon, mars_lon) < 10
+        status = "Active" if tight else "Mild"
+        return (
+            status,
+            f"Moon–Mars Conjunction in House {moon_h} — Chandra-Mangal Dosh",
+            "Moon (mind) joined with Mars (anger) outside Cancer/Taurus creates emotional volatility, sudden outbursts, conflicts with mother and spouse, and impulsive decisions during emotional peaks.",
+            [
+                "Recite Hanuman Chalisa daily to channel Mars positively",
+                "Practice 10 minutes of breath-cooling pranayama (Sheetali) before reacting",
+                "Wear silver to balance Moon's reactivity",
+                "Donate red lentils on Tuesdays and white sweets on Mondays",
+                "Avoid alcohol and stimulants on Tuesdays",
+            ],
+            f"Moon → H{moon_h} | Mars → H{mars_h}",
+        )
+    if moon_h != 0 and mars_h != 0:
+        diff = abs(moon_h - mars_h)
+        diff = min(diff, 12 - diff)
+        if diff == 6:
+            return (
+                "Mild",
+                "Moon–Mars in 7th House Aspect — Mild Chandra-Mangal Tension",
+                "Moon and Mars share a 7th-house mutual aspect, creating periodic emotional irritability and conflicts in close relationships during their dasha periods.",
+                [
+                    "Practice mindfulness before reacting in arguments",
+                    "Worship Hanuman ji on Tuesdays",
+                ],
+                f"Moon → H{moon_h} | Mars → H{mars_h}",
+            )
+    return (
+        "None",
+        "No Chandra-Mangal Dosh — Mind and Action Aligned",
+        "Moon and Mars are independent, allowing balanced emotion and assertion.",
+        [],
+        f"Moon → H{moon_h} | Mars → H{mars_h}",
+    )
+
+
+# ── 12. Sakat Yoga ─────────────────────────────────────────────────────────────
+def _sakat_yoga(pl):
+    """Classical Shakata Yoga — Moon in 6th, 8th, or 12th from Jupiter (or vice versa).
+    Per Brihat Parashara Hora Shastra; matches repo's classical_yogas convention.
+    """
+    moon_h = _house(pl, "Moon")
+    jup_h  = _house(pl, "Jupiter")
+    if moon_h == 0 or jup_h == 0:
+        return ("None", "Insufficient data", "", [], "")
+
+    # Vedic count: Moon's nth-position from Jupiter = ((moon_h - jup_h) % 12) + 1
+    # Classical Shakata: Moon in 6th/8th/12th FROM Jupiter (single direction per Brihat Parashara
+    # and repo's classical_yogas.py convention).
+    moon_from_jup = ((moon_h - jup_h) % 12) + 1
+    classical_positions = {6, 8, 12}
+
+    if moon_from_jup in classical_positions:
+        return (
+            "Active",
+            f"Moon (H{moon_h}) is {moon_from_jup}th from Jupiter (H{jup_h}) — Sakat Yoga",
+            "Sakat Yoga ('cart-wheel yoga') forms when the Moon sits in the 6th, 8th, or 12th house from Jupiter. Wealth comes and goes in cycles — repeated rise-and-fall patterns, financial setbacks despite hard work.",
+            [
+                "Worship Lord Ganesh every Wednesday and offer modaks",
+                "Recite Vishnu Sahasranama on Thursdays",
+                "Donate yellow items (turmeric, gram dal, banana) on Thursdays",
+                "Keep finances diversified — do not put all wealth in one venture",
+                "Strengthen Jupiter via gold or yellow sapphire (after Jyotish consultation)",
+            ],
+            f"Moon → H{moon_h} ({moon_from_jup}th from Jupiter at H{jup_h})",
+        )
+    # Mild: Moon adjacent to classical positions (5/7/9/11 from Jupiter) — partial wealth-cycle tendency
+    near_positions = {5, 7, 9, 11}
+    if moon_from_jup in near_positions:
+        return (
+            "Mild",
+            "Moon — Jupiter Near 6/8/12 Axis — Mild Sakat Tendency",
+            "Moon and Jupiter are close to but not exactly in the 6/8/12 position. Mild cycles of gain and loss possible during their dashas.",
+            [
+                "Practice disciplined savings habits",
+                "Recite Vishnu Sahasranama on Thursdays",
+            ],
+            f"Moon → H{moon_h} | Jupiter → H{jup_h}",
+        )
+    return (
+        "None",
+        "No Sakat Yoga — Moon and Jupiter Well Placed",
+        "Moon and Jupiter are not in adverse mutual position. Wealth flow is stable.",
+        [],
+        f"Moon → H{moon_h} | Jupiter → H{jup_h}",
+    )
+
+
+# ── 13. Putra (Santaan) Dosh ───────────────────────────────────────────────────
+def _putra(pl):
+    malefics = {"Saturn", "Mars", "Rahu", "Ketu"}
+    h5 = _planets_in_house(pl, 5)
+    malefics_in_5th = [p for p in h5 if p in malefics]
+    jup_h = _house(pl, "Jupiter")  # Putra karaka
+
+    if len(malefics_in_5th) >= 2:
+        return (
+            "Active",
+            f"Multiple Malefics in 5th House ({', '.join(malefics_in_5th)}) — Putra Dosh",
+            "Putra Dosh (afflicting the children house) forms when 2+ malefics occupy the 5th house. May indicate delays in conception, pregnancy complications, or stress around progeny matters. Always consult a medical professional for fertility concerns — these remedies supplement, never substitute, medical advice.",
+            [
+                "Recite Santan Gopal mantra 108 times daily",
+                "Worship Lord Krishna with butter offering on Janmashtami",
+                "Perform Putra Prapti Pooja at a Krishna temple",
+                "Donate to a children's charity or orphanage",
+                "Strengthen Jupiter — fast on Thursdays, donate yellow items",
+            ],
+            f"5th House: {', '.join(malefics_in_5th)} | Jupiter → H{jup_h}",
+        )
+    if len(malefics_in_5th) == 1 or jup_h in (6, 8, 12):
+        cause = f"5th House: {malefics_in_5th[0]}" if malefics_in_5th else f"Jupiter → H{jup_h} (dusthana)"
+        return (
+            "Mild",
+            "Mild Affliction on Children House — Partial Putra Dosh",
+            "Mild affliction in the 5th house or on Jupiter (significator of children). May cause mild delays or tension regarding progeny — not severe. Always consult medical professionals for fertility concerns.",
+            [
+                "Chant Santan Gopal mantra weekly on Wednesdays",
+                "Donate sweets to children on Krishna Janmashtami",
+            ],
+            cause,
+        )
+    return (
+        "None",
+        "No Putra Dosh — Children House Strong",
+        "5th house and Jupiter (Putra karaka) are well-placed. No significant affliction on progeny indicators.",
+        [],
+        f"5th House: {', '.join(_planets_in_house(pl, 5)) or 'Empty'} | Jupiter → H{jup_h}",
+    )
+
+
+# ── 14. Gandanta Dosh ──────────────────────────────────────────────────────────
+def _gandanta(pl):
+    """Moon at junction of water-fire signs: Pisces→Aries, Cancer→Leo, Scorpio→Sagittarius."""
+    if not _has(pl, "Moon"):
+        return ("None", "Insufficient data", "", [], "")
+    moon_lon = _lon(pl, "Moon")
+    sign_idx    = int(moon_lon // 30) + 1
+    deg_in_sign = moon_lon % 30
+    SIGN_NAMES  = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
+
+    in_water_end  = (sign_idx in (12, 4, 8) and deg_in_sign >= 27)
+    in_fire_start = (sign_idx in (1, 5, 9)  and deg_in_sign <= 3)
+    pos_str = f"Moon → {SIGN_NAMES[sign_idx-1]} {deg_in_sign:.1f}°"
+
+    if in_water_end or in_fire_start:
+        tight = (in_water_end and deg_in_sign >= 29.2) or (in_fire_start and deg_in_sign <= 0.8)
+        status = "Active" if tight else "Mild"
+        return (
+            status,
+            "Moon at Sandhi (Junction) — Gandanta Dosh",
+            "Gandanta Dosh forms when the Moon falls at the junction of water and fire signs. Indicates an extremely sensitive birth — classically associated with vulnerability in early life and a need for protective rituals. Modern interpretation: heightened emotional sensitivity that, when consciously channelled, becomes deep intuition.",
+            [
+                "Perform Gandanta Shanti Pooja (within first year of birth, or now if missed)",
+                "Recite Mahamrityunjay mantra 108 times daily",
+                "Worship Lord Vishnu with tulsi every Thursday",
+                "Donate gold or yellow items to a temple",
+                "Wear protective Vedic talisman after Jyotish consultation",
+            ],
+            pos_str,
+        )
+    return (
+        "None",
+        "No Gandanta Dosh — Moon in Stable Zone",
+        "Moon is not at a sign-junction. No Gandanta sensitivity present.",
+        [],
+        pos_str,
+    )
+
+
+# ── 15. Punar Phoo Dosh ────────────────────────────────────────────────────────
+def _punar_phoo(pl):
+    """Classical Punarphoo Dosh per Brihat Parashara Hora Shastra — primarily formed by
+    Saturn–Moon affliction (conjunction or 7th-house aspect). Saturn–Venus involvement
+    in/aspecting the 7th house extends this to marriage-disruption interpretation in
+    modern Vedic practice. Both pathways are evaluated.
+    """
+    sat_h   = _house(pl, "Saturn")
+    moon_h  = _house(pl, "Moon")
+    venus_h = _house(pl, "Venus")
+    if sat_h == 0 or moon_h == 0:
+        return ("None", "Insufficient data", "", [], "")
+
+    # Saturn casts 3rd, 7th, 10th aspects → houses sat_h+2, sat_h+6, sat_h+9 (mod 12, 1-indexed)
+    sat_aspects = {((sat_h - 1 + 2) % 12) + 1, ((sat_h - 1 + 6) % 12) + 1, ((sat_h - 1 + 9) % 12) + 1}
+
+    # ── Classical primary: Saturn–Moon affliction ──
+    sat_moon_conj   = (sat_h == moon_h)
+    sat_aspects_moon = (moon_h in sat_aspects)
+    moon_in_7th      = (moon_h == 7)
+    sat_in_or_aspects_7th = (sat_h == 7) or (7 in sat_aspects)
+
+    # ── Marriage-extension secondary: Saturn–Venus involving 7th ──
+    sat_venus_conj_in_7th = (venus_h != 0 and sat_h == venus_h == 7)
+    venus_afflicted       = (venus_h in (6, 8, 12))
+
+    # Active: classical Saturn–Moon conjunction in 7th, OR Saturn–Moon conjunction generally,
+    # OR Saturn–Venus conjunction in 7th (modern marriage extension)
+    if sat_moon_conj and moon_in_7th:
+        return (
+            "Active",
+            "Saturn–Moon Conjunction in 7th House — Strong Punar Phoo",
+            "Saturn and Moon together in the 7th house forms classical Punar Phoo Dosh. Repeated obstacles in partnerships, emotional restraint, and a sense of 'starting over' in close relationships. Demands conscious patience and mature commitment.",
+            [
+                "Perform Saturn–Moon Shanti Pooja before marriage",
+                "Recite Mahamrityunjay mantra 108× daily",
+                "Worship Lord Shiva with Parvati every Monday",
+                "Donate white sweets and sesame oil on Saturdays",
+                "Couples counselling alongside spiritual remedies recommended",
+            ],
+            f"Saturn → H{sat_h} | Moon → H{moon_h} (conjunction in 7th)",
+        )
+    if sat_moon_conj or sat_aspects_moon:
+        return (
+            "Active",
+            f"Saturn Afflicts Moon (Saturn H{sat_h}, Moon H{moon_h}) — Punar Phoo",
+            "Saturn's conjunction with or aspect on the Moon forms classical Punar Phoo Dosh. Repeated emotional restraints, delays in mental peace, and recurring obstacle patterns through Saturn–Moon dasha periods.",
+            [
+                "Recite Mahamrityunjay mantra 108× daily",
+                "Worship Lord Shiva every Monday with white flowers",
+                "Donate sesame, mustard oil, and white cloth on Saturdays",
+                "Maintain stable daily routine — Moon thrives on regularity",
+                "Avoid major emotional decisions during Saturn transits over natal Moon",
+            ],
+            f"Saturn → H{sat_h} | Moon → H{moon_h}",
+        )
+    if sat_venus_conj_in_7th:
+        return (
+            "Active",
+            "Saturn–Venus Conjunction in 7th House — Punar Phoo (Marriage Extension)",
+            "Saturn and Venus together in the 7th house, in modern Vedic practice, extends Punar Phoo to marriage matters — separation phases, late marriage, or repeat-marriage indications. Demands extra patience and conscious commitment from both partners.",
+            [
+                "Perform Saturn–Venus Shanti Pooja before marriage",
+                "Donate sugar, white sweets, and silver on Fridays",
+                "Worship Lord Shiva with Parvati every Monday",
+                "Avoid impulsive separation decisions during Saturn dasha",
+                "Couples counselling alongside spiritual remedies recommended",
+            ],
+            f"Saturn → H{sat_h} | Venus → H{venus_h}",
+        )
+
+    # Mild: Saturn influences 7th + Venus afflicted (marriage extension), or Moon in dusthana with Saturn nearby
+    if sat_in_or_aspects_7th and venus_afflicted:
+        return (
+            "Mild",
+            "Saturn Influences 7th + Venus in Dusthana — Mild Punar Phoo",
+            "Saturn's influence on the 7th house combined with Venus in a dusthana (6/8/12) indicates marriage delays and periods of disconnection. Manageable with mature commitment.",
+            [
+                "Recite Shukra Beej mantra on Fridays",
+                "Practice weekly relationship rituals (gratitude, communication night)",
+                "Donate white cloth and sweets on Fridays",
+            ],
+            f"Saturn → H{sat_h} | Venus → H{venus_h}",
+        )
+    if moon_h in (6, 8, 12) and (sat_h in (6, 8, 12) or sat_aspects & {6, 8, 12}):
+        return (
+            "Mild",
+            "Saturn–Moon Both Touch Dusthanas — Mild Punar Phoo",
+            "Both Saturn and Moon influence dusthana houses (6/8/12), creating mild recurring obstacle patterns. Manageable with consistent spiritual practice.",
+            [
+                "Recite Mahamrityunjay mantra weekly",
+                "Donate white items on Mondays",
+            ],
+            f"Saturn → H{sat_h} | Moon → H{moon_h}",
+        )
+    return (
+        "None",
+        "No Punar Phoo Dosh — Saturn and Moon Stable",
+        "Saturn does not afflict the Moon, and the marriage indicators (Venus, 7th house) are clear. No Punar Phoo pattern present.",
+        [],
+        f"Saturn → H{sat_h} | Moon → H{moon_h} | Venus → H{venus_h}",
+    )
+
+
+# ── 16. Ekadhipatya Dosh ───────────────────────────────────────────────────────
+def _ekadhipatya(pl):
+    """Same planet lords two houses (one kendra/trikona, one dusthana) AND sits in its dusthana."""
+    SIGN_LORD = {
+        1: "Mars", 2: "Venus", 3: "Mercury", 4: "Moon", 5: "Sun", 6: "Mercury",
+        7: "Venus", 8: "Mars", 9: "Jupiter", 10: "Saturn", 11: "Saturn", 12: "Jupiter",
+    }
+    SIGN_NAMES_LOWER = {
+        "aries": 1, "taurus": 2, "gemini": 3, "cancer": 4, "leo": 5, "virgo": 6,
+        "libra": 7, "scorpio": 8, "sagittarius": 9, "capricorn": 10, "aquarius": 11, "pisces": 12,
+    }
+    KENDRA_TRIKONA = {1, 4, 5, 7, 9, 10}
+    DUSTHANA = {6, 8, 12}
+
+    def _planet_sign_idx(p):
+        """Return 1-12 sign index from longitude (preferred), else from sign field (int or string)."""
+        if "longitude" in p:
+            try:
+                return int(float(p["longitude"]) // 30) + 1
+            except (TypeError, ValueError):
+                pass
+        s = p.get("sign")
+        if isinstance(s, int) and 1 <= s <= 12:
+            return s
+        if isinstance(s, str):
+            return SIGN_NAMES_LOWER.get(s.strip().lower(), 0)
+        return 0
+
+    # Derive ascendant sign from any planet with usable sign+house data
+    asc_sign = 0
+    for p in pl:
+        sign_idx = _planet_sign_idx(p)
+        h = p.get("house")
+        if 1 <= sign_idx <= 12 and isinstance(h, int) and 1 <= h <= 12:
+            asc_sign = ((sign_idx - h) % 12) + 1
+            break
+    if asc_sign == 0:
+        return ("None", "No Ekadhipatya Dosh — Ascendant data unavailable",
+                "Cannot evaluate Ekadhipatya without ascendant sign.", [], "")
+
+    house_lord = {h: SIGN_LORD[((asc_sign - 1 + h - 1) % 12) + 1] for h in range(1, 13)}
+
+    for planet in ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"):
+        owned = [h for h, lord in house_lord.items() if lord == planet]
+        good_houses = [h for h in owned if h in KENDRA_TRIKONA]
+        bad_houses  = [h for h in owned if h in DUSTHANA]
+        if not good_houses or not bad_houses:
+            continue
+        ph = _house(pl, planet)
+        if ph in DUSTHANA and ph in bad_houses:
+            gh = good_houses[0]
+            return (
+                "Active",
+                f"{planet} Owns H{gh} & H{ph}, Sits in H{ph} — Ekadhipatya Dosh",
+                f"{planet} rules both a strong house (H{gh}) and a difficult house (H{ph}), and is placed in the difficult house. This structurally weakens the affairs of H{gh}. A subtle but persistent dosh whose effects show across the planet's dasha periods.",
+                [
+                    f"Strengthen {planet} via its weekly day rituals (recite its beej mantra)",
+                    f"Wear {planet}'s gemstone after Jyotish consultation to amplify positive expression",
+                    f"Engage in selfless service in the area H{gh} represents",
+                    "Avoid taking up tasks that aggravate the dusthana's nature",
+                ],
+                f"{planet} owns H{gh} (good) + H{ph} (dusthana), placed in H{ph}",
+            )
+    return (
+        "None",
+        "No Ekadhipatya Dosh — House Lordships Balanced",
+        "No planet's dual-rulership creates structural weakening in this chart.",
+        [],
+        f"Lagna sign: {asc_sign}",
+    )
+
+
+# ── 17. Mrityu Bhag (Sensitivity Indicator — NOT a death prediction) ──────────
+def _mrityu_bhag(pl):
+    """Brihat-Parashara classical sensitivity degrees per planet.
+
+    NOTE: Per app brand rules and ethical guidelines, this is framed strictly
+    as a sensitivity / vulnerability marker — NEVER as death prediction.
+    """
+    MRITYU = {
+        "Sun":     (1, 20),    # Aries 20°
+        "Moon":    (2, 9),     # Taurus 9°
+        "Mars":    (4, 19),    # Cancer 19°
+        "Mercury": (3, 12),    # Gemini 12°
+        "Jupiter": (12, 13),   # Pisces 13°
+        "Venus":   (7, 9),     # Libra 9°
+        "Saturn":  (11, 4),    # Aquarius 4°
+    }
+    hits_active, hits_mild = [], []
+    for planet, (m_sign, m_deg) in MRITYU.items():
+        if not _has(pl, planet):
+            continue
+        lon = _lon(pl, planet)
+        sign_idx    = int(lon // 30) + 1
+        deg_in_sign = lon % 30
+        if sign_idx == m_sign:
+            diff = abs(deg_in_sign - m_deg)
+            if diff <= 1.0:
+                hits_active.append((planet, deg_in_sign, m_deg))
+            elif diff <= 3.0:
+                hits_mild.append((planet, deg_in_sign, m_deg))
+
+    if hits_active:
+        names = ", ".join(p for p, _, _ in hits_active)
+        return (
+            "Active",
+            f"{names} at Mrityu Bhag Degree — Sensitivity Indicator",
+            "One or more planets sit within 1° of their classical sensitivity degree. Per Brihat Parashara, this marks the significations of that planet as energetically delicate — health, vitality, or relationships tied to that planet need extra care. NOTE: This is a sensitivity marker only — NOT a prediction of any specific event. Always consult medical professionals and a qualified Jyotishi for personal concerns.",
+            [
+                "Chant Mahamrityunjay mantra 108 times daily for protective energy",
+                "Strengthen the affected planet via its weekday observance",
+                "Maintain regular health check-ups (especially for body parts ruled by the planet)",
+                "Practice daily protective Vedic prayer (e.g., Hanuman Chalisa)",
+                "Consult a qualified Jyotishi for a personalised remedy plan",
+            ],
+            " | ".join(f"{p}: {d:.1f}° (mrityu {m}°)" for p, d, m in hits_active),
+        )
+    if hits_mild:
+        names = ", ".join(p for p, _, _ in hits_mild)
+        return (
+            "Mild",
+            f"{names} Near Mrityu Bhag — Mild Sensitivity",
+            "One or more planets sit within 3° of their classical sensitivity degree. Mild energetic vulnerability — manageable through standard Vedic strengthening practices. NOT a prediction of any specific event.",
+            [
+                "Chant Mahamrityunjay mantra weekly",
+                "Daily protective prayer recommended",
+            ],
+            " | ".join(f"{p}: {d:.1f}° (mrityu {m}°)" for p, d, m in hits_mild),
+        )
+    return (
+        "None",
+        "No Mrityu Bhag Indicators — Planets in Stable Degrees",
+        "No planet is currently at a classical sensitivity degree. All planets are in stable longitude zones.",
+        [],
+        "All planets clear of mrityu bhag degrees",
+    )
+
+
 # ── Master config ──────────────────────────────────────────────────────────────
 DOSH_CONFIGS = [
-    ("manglik",      "Manglik Dosh",      "मांगलिक दोष",     "🔴", _manglik),
-    ("kaal_sarp",    "Kaal Sarp Dosh",    "कालसर्प दोष",     "🐍", _kaal_sarp),
-    ("pitru",        "Pitru Dosh",        "पितृ दोष",         "👣", _pitru),
-    ("guru_chandal", "Guru Chandal Dosh", "गुरु चांडाल दोष",  "🪐", _guru_chandal),
-    ("grahan",       "Grahan Dosh",       "ग्रहण दोष",        "🌑", _grahan),
-    ("daridra",      "Daridra Dosh",      "दरिद्र दोष",       "💰", _daridra),
-    ("angarak",      "Angarak Dosh",      "अंगारक दोष",       "🔥", _angarak),
-    ("shrapit",      "Shrapit Dosh",      "श्रापित दोष",      "⛓", _shrapit),
-    ("kemadruma",    "Kemadruma Dosh",    "केमद्रुम दोष",     "🌙", _kemadruma),
+    ("manglik",        "Manglik Dosh",         "मांगलिक दोष",        "🔴", _manglik),
+    ("kaal_sarp",      "Kaal Sarp Dosh",       "कालसर्प दोष",        "🐍", _kaal_sarp),
+    ("pitru",          "Pitru Dosh",           "पितृ दोष",            "👣", _pitru),
+    ("guru_chandal",   "Guru Chandal Dosh",    "गुरु चांडाल दोष",     "🪐", _guru_chandal),
+    ("grahan",         "Grahan Dosh",          "ग्रहण दोष",           "🌑", _grahan),
+    ("daridra",        "Daridra Dosh",         "दरिद्र दोष",          "💰", _daridra),
+    ("angarak",        "Angarak Dosh",         "अंगारक दोष",          "🔥", _angarak),
+    ("shrapit",        "Shrapit Dosh",         "श्रापित दोष",         "⛓",  _shrapit),
+    ("kemadruma",      "Kemadruma Dosh",       "केमद्रुम दोष",        "🌙", _kemadruma),
+    ("vish_yoga",      "Vish Yoga",            "विष योग",             "🦂", _vish_yoga),
+    ("chandra_mangal", "Chandra-Mangal Dosh",  "चन्द्र-मंगल दोष",     "🌗", _chandra_mangal),
+    ("sakat_yoga",     "Sakat Yoga",           "शकट योग",             "🛒", _sakat_yoga),
+    ("putra",          "Putra Dosh",           "पुत्र दोष",           "👶", _putra),
+    ("gandanta",       "Gandanta Dosh",        "गण्डान्त दोष",        "🌊", _gandanta),
+    ("punar_phoo",     "Punar Phoo Dosh",      "पुनः फू दोष",         "💔", _punar_phoo),
+    ("ekadhipatya",    "Ekadhipatya Dosh",     "एकाधिपत्य दोष",       "👑", _ekadhipatya),
+    ("mrityu_bhag",    "Mrityu Bhag",          "मृत्यु भाग",          "⚠️", _mrityu_bhag),
 ]
 
 

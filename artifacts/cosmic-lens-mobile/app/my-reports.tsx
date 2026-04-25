@@ -61,13 +61,13 @@ function fmtDate(iso: string | null): string {
   } catch { return ""; }
 }
 
-function kindLabel(it: HistoryItem): string {
-  if (it.kind === "pro") return "Home AstroVastu PRO";
-  const t = (it.business_type || "").toLowerCase();
-  if (t === "shop")    return "Business Vastu — Shop";
-  if (t === "office")  return "Business Vastu — Office";
-  if (t === "factory") return "Business Vastu — Factory";
-  return "Business Vastu";
+function kindLabel(it: HistoryItem, t: ReturnType<typeof useT>): string {
+  if (it.kind === "pro") return t.mr_kindHomePro;
+  const bt = (it.business_type || "").toLowerCase();
+  if (bt === "shop")    return t.mr_kindShop;
+  if (bt === "office")  return t.mr_kindOffice;
+  if (bt === "factory") return t.mr_kindFactory;
+  return t.mr_kindBusiness;
 }
 
 export default function MyReportsScreen() {
@@ -120,7 +120,7 @@ export default function MyReportsScreen() {
     const baseUrl = `${API_BASE}${it.pdf_url}?t=${encodeURIComponent(it.pdf_token)}`;
     pickReportPdfLanguage(baseUrl, async (url) => {
     const msg =
-      `🪔 *${kindLabel(it)}*\n` +
+      `🪔 *${kindLabel(it, t)}*\n` +
       `🏠 ${it.property_name}\n` +
       `📊 Score: ${it.score}/100 (Grade ${it.grade})\n\n` +
       `📄 Open report:\n${url}\n\n` +
@@ -160,7 +160,7 @@ export default function MyReportsScreen() {
           </View>
           <View style={s.cardMeta}>
             <Text style={[s.kindLabel, { color: C.textMuted }]} numberOfLines={1}>
-              {kindLabel(it)}
+              {kindLabel(it, t)}
             </Text>
             <Text style={[s.propName, { color: C.text }]} numberOfLines={1}>
               {it.property_name}

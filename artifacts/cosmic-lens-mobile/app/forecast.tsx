@@ -213,7 +213,7 @@ export default function ForecastScreen() {
         <Text style={[s.headerTitle, { color: C.text }]}>{t.forecastTitle}</Text>
         {showDemo && (
           <View style={s.demoPill}>
-            <Text style={s.demoPillText}>Demo</Text>
+            <Text style={s.demoPillText}>{t.fc_demo}</Text>
           </View>
         )}
       </View>
@@ -221,7 +221,7 @@ export default function ForecastScreen() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]} showsVerticalScrollIndicator={false}>
         {/* Week chart */}
         <View style={[s.chartCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.chartLabel, { color: C.textMuted }]}>Daily Energy Score</Text>
+          <Text style={[s.chartLabel, { color: C.textMuted }]}>{t.fc_dailyEnergyScore}</Text>
           {days.length > 0 ? (
             <WeekChart
               days={days}
@@ -268,17 +268,17 @@ export default function ForecastScreen() {
             <View style={s.infoGrid}>
               <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>🌙</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>Moon Rashi</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_moonRashi}</Text>
                 <Text style={[s.infoValue, { color: C.text }]}>{sel.moonSign}</Text>
               </View>
               <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>🔮</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>Paksha</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_paksha}</Text>
                 <Text style={[s.infoValue, { color: C.text }]}>{sel.phase}</Text>
               </View>
               <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={s.infoIcon}>⚡</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>Energy</Text>
+                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_energy}</Text>
                 <Text style={[s.infoValue, { color: scoreColor }]}>
                   {sel.score >= 65 ? "Uchch" : sel.score <= 40 ? "Neech" : "Madhyam"}
                 </Text>
@@ -288,7 +288,7 @@ export default function ForecastScreen() {
             {/* Active dasha */}
             {dasha && (
               <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.dashaLabel, { color: C.textMuted }]}>Active Dasha</Text>
+                <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.fc_activeDasha}</Text>
                 <View style={s.dashaRow}>
                   <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.mdPlanet)} MD</Text>
                   <Feather name="chevron-right" size={10} color={C.textDim} />

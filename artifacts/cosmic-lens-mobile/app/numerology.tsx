@@ -566,18 +566,18 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   };
 
   const toolSections = [
-    { icon: "⭐", title: "Life Blueprint Card",        sub: "Core personality + 2026 focus + biggest strength/challenge" },
-    { icon: "🌟", title: "Aap Kaun Ho — Identity",    sub: "3-paragraph story + 5 hidden strengths + 5 challenges" },
-    { icon: "💼", title: "Career Blueprint",          sub: "Best fields, common mistakes, growth timing, money pattern" },
-    { icon: "💕", title: "Love Pattern — Deep",       sub: "Relationship style, breakup triggers, ideal partner number" },
-    { icon: "🩺", title: "Health & Spiritual Path",   sub: "Body signals + dharma + mantra + donation schedule" },
-    { icon: "⚠️", title: "Risk Alerts + Golden Period", sub: "5 specific risks + when to make biggest moves" },
-    { icon: "📱", title: "Mobile Number — Deep",      sub: "Why · Impact · Action format + Cheiro last-4 + alternatives" },
-    { icon: "🚗", title: "Vehicle Number — Deep",     sub: "Why · Impact · Action + favourable plate suggestions" },
-    { icon: "🏠", title: "House Number — Deep",       sub: "Why · Impact · Action + remedy schedule" },
-    { icon: "🤝", title: "Compatibility Matrix",      sub: "Your Driver vs all 1-9 (friend/enemy/neutral)" },
-    { icon: "🔤", title: "Name Numerology + Letters", sub: "Pythagorean + Chaldean + letter-by-letter breakdown" },
-    { icon: "✍️", title: "Signature & 90-Day Plan",   sub: "Signature design + step-by-step implementation" },
+    { icon: "⭐", title: t.nm_wi1Title,  sub: t.nm_wi1Sub },
+    { icon: "🌟", title: t.nm_wi2Title,  sub: t.nm_wi2Sub },
+    { icon: "💼", title: t.nm_wi3Title,  sub: t.nm_wi3Sub },
+    { icon: "💕", title: t.nm_wi4Title,  sub: t.nm_wi4Sub },
+    { icon: "🩺", title: t.nm_wi5Title,  sub: t.nm_wi5Sub },
+    { icon: "⚠️", title: t.nm_wi6Title,  sub: t.nm_wi6Sub },
+    { icon: "📱", title: t.nm_wi7Title,  sub: t.nm_wi7Sub },
+    { icon: "🚗", title: t.nm_wi8Title,  sub: t.nm_wi8Sub },
+    { icon: "🏠", title: t.nm_wi9Title,  sub: t.nm_wi9Sub },
+    { icon: "🤝", title: t.nm_wi10Title, sub: t.nm_wi10Sub },
+    { icon: "🔤", title: t.nm_wi11Title, sub: t.nm_wi11Sub },
+    { icon: "✍️", title: t.nm_wi12Title, sub: t.nm_wi12Sub },
   ];
 
   return (

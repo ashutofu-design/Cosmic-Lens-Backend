@@ -155,7 +155,7 @@ function PlanCard({
         </View>
         {isCurrent && (
           <View style={[pl.activeBadge, { backgroundColor: `${plan.accent}20`, borderColor: `${plan.accent}40` }]}>
-            <Text style={[pl.activeBadgeText, { color: plan.accent }]}>ACTIVE</Text>
+            <Text style={[pl.activeBadgeText, { color: plan.accent }]}>{t.sub_active}</Text>
           </View>
         )}
       </View>
@@ -206,7 +206,7 @@ function PlanCard({
             style={pl.ctaBtn}
           >
             <Feather name={isPopular ? "zap" : "star"} size={14} color="#fff" />
-            <Text style={pl.ctaBtnText}>{isPopular ? "Upgrade to Pro 🔓" : "Get Basic"}</Text>
+            <Text style={pl.ctaBtnText}>{isPopular ? t.sub_upgradeBtn : t.sub_getBasic}</Text>
           </LinearGradient>
         </Pressable>
       )}
@@ -326,13 +326,13 @@ export default function SubscriptionScreen() {
         <View style={[s.compareCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
           <Text style={[s.compareTitle, { color: C.text }]}>Basic vs Pro — Quick Compare</Text>
           {[
-            { label: "Jyotish Questions", basic: "10/day",         pro: "Unlimited" },
-            { label: "Marriage Compat", basic: "Score + summary", pro: "Full breakdown" },
-            { label: "Future Timeline", basic: "1 month",     pro: "6 months" },
-            { label: "Dasha Analysis",  basic: "Overview",    pro: "MD + AD + PD" },
-            { label: "Karmic Insights", basic: "—",            pro: "✓ Included" },
-            { label: "PDF Report",      basic: "—",            pro: "✓ Download" },
-            { label: "Saved Profiles",  basic: "5",            pro: "Unlimited" },
+            { label: t.sub_cmpJyotishQ, basic: "10/day",         pro: "Unlimited" },
+            { label: t.sub_cmpMarriage, basic: "Score + summary", pro: "Full breakdown" },
+            { label: t.sub_cmpTimeline, basic: "1 month",     pro: "6 months" },
+            { label: t.sub_cmpDasha,    basic: "Overview",    pro: "MD + AD + PD" },
+            { label: t.sub_cmpKarmic,   basic: "—",            pro: "✓ Included" },
+            { label: t.sub_cmpPdf,      basic: "—",            pro: "✓ Download" },
+            { label: t.sub_cmpProfiles, basic: "5",            pro: "Unlimited" },
           ].map((row, i) => (
             <View key={row.label} style={[s.compareRow, i > 0 && { borderTopWidth: 1, borderTopColor: C.border }]}>
               <Text style={[s.compareLabel, { color: C.textMid }]}>{row.label}</Text>
@@ -391,13 +391,14 @@ export default function SubscriptionScreen() {
 // Separate from subscription tiers — these are ONE-TIME purchases per scan/property.
 // All prices are listed transparently so user knows the full Vastu pricing ladder.
 function AstroVastuPricingCard({ C }: { C: any }) {
+  const t = useT();
   const goAstroVastu = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push("/astrovastu" as any);
   };
 
   const tiers = [
-    { emoji: "🧭", name: "AstroVastu Compass + Guide", price: "FREE",      sub: "Always free",                color: "#10b981" },
+    { emoji: "🧭", name: "AstroVastu Compass + Guide", price: t.sub_free,      sub: t.sub_alwaysFree,                color: "#10b981" },
     { emoji: "🔮", name: "1 Room — Quick Check",        price: "₹199",     sub: "One-time",                   color: "#a78bfa" },
     { emoji: "🏠", name: "3 Rooms — Spot Check Bundle", price: "₹499",     sub: "One-time · Save ₹98",        color: "#a78bfa" },
     { emoji: "🌟", name: "Full Home Advanced",          price: "₹2,999",   sub: "Lifetime per property",      color: "#f9d76b", best: true },

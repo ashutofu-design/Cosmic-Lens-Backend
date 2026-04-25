@@ -262,7 +262,7 @@ export default function FinanceScreen() {
             </View>
 
             {/* SUMMARY */}
-            <SectionCard icon="message-circle" title="Quick Reading" accent={accent}>
+            <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
               <Text style={s.summary}>{data.basic.summary}</Text>
             </SectionCard>
 
@@ -312,7 +312,7 @@ export default function FinanceScreen() {
                     style={s.upgradeBtn}
                   >
                     <Feather name="zap" size={14} color="#fff" />
-                    <Text style={s.upgradeBtnText}>Upgrade to Pro</Text>
+                    <Text style={s.upgradeBtnText}>{t.cr_upgradeBtn}</Text>
                   </LinearGradient>
                 </Pressable>
               </View>
@@ -361,7 +361,7 @@ export default function FinanceScreen() {
                   })}
                 </SectionCard>
 
-                <SectionCard icon="globe" title="Live Planetary Transit" accent={accent}>
+                <SectionCard icon="globe" title={t.cr_transit} accent={accent}>
                   {data.pro.transit.map((t, i) => (<Bullet key={i} color={accent}>{t}</Bullet>))}
                 </SectionCard>
 
@@ -442,7 +442,7 @@ export default function FinanceScreen() {
                 </SectionCard>
 
                 {data.pro.reasons.length > 0 && (
-                  <SectionCard icon="info" title="Why This Reading" accent="#94a3b8">
+                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8">
                     {data.pro.reasons.map((t, i) => (<Bullet key={i} color="#94a3b8">{t}</Bullet>))}
                   </SectionCard>
                 )}

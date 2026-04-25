@@ -689,15 +689,15 @@ export default function RelationshipScreen() {
                   const missingPartner = !selectedP2 || !selectedP2.kundli;
                   const msg =
                     missingSelf && missingPartner
-                      ? "Both your kundli and partner's kundli are required. Please create both kundlis from the Kundli screen first."
+                      ? t.rl_kundliReqBoth
                     : missingSelf
-                      ? "Your kundli is not ready. Please generate it from the Kundli screen first."
+                      ? t.rl_kundliReqSelf
                     : !selectedP2
-                      ? "Please select your partner above to proceed."
-                      : `Partner '${selectedP2.name}' does not have a kundli yet. Please create their kundli from the Kundli screen first.`;
-                  Alert.alert("Kundli required", msg, [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Add Kundli", onPress: () => router.push("/profile-edit" as any) },
+                      ? t.rl_kundliReqSelectFirst
+                      : t.rl_kundliReqPartnerMissing;
+                  Alert.alert(t.rl_kundliReqTitle, msg, [
+                    { text: t.rl_kundliReqCancel, style: "cancel" },
+                    { text: t.rl_kundliReqAddBtn, onPress: () => router.push("/profile-edit" as any) },
                   ]);
                 }}
               />

@@ -544,6 +544,58 @@ export interface MoreT {
   mk_deleteDesc:      string;
   mk_cancel:          string;
   mk_delete:          string;
+
+  // ── my-reports kind labels ──
+  mr_kindHomePro:     string;
+  mr_kindShop:        string;
+  mr_kindOffice:      string;
+  mr_kindFactory:     string;
+  mr_kindBusiness:    string;
+
+  // ── relationship Alert ──
+  rl_kundliReqTitle:        string;
+  rl_kundliReqBoth:         string;
+  rl_kundliReqSelf:         string;
+  rl_kundliReqSelectFirst:  string;
+  rl_kundliReqPartnerMissing: string;
+  rl_kundliReqAddBtn:       string;
+  rl_kundliReqCancel:       string;
+
+  // ── numerology What's Inside (12 sections) ──
+  nm_wi1Title: string;  nm_wi1Sub: string;
+  nm_wi2Title: string;  nm_wi2Sub: string;
+  nm_wi3Title: string;  nm_wi3Sub: string;
+  nm_wi4Title: string;  nm_wi4Sub: string;
+  nm_wi5Title: string;  nm_wi5Sub: string;
+  nm_wi6Title: string;  nm_wi6Sub: string;
+  nm_wi7Title: string;  nm_wi7Sub: string;
+  nm_wi8Title: string;  nm_wi8Sub: string;
+  nm_wi9Title: string;  nm_wi9Sub: string;
+  nm_wi10Title: string; nm_wi10Sub: string;
+  nm_wi11Title: string; nm_wi11Sub: string;
+  nm_wi12Title: string; nm_wi12Sub: string;
+
+  // ── forecast widget ──
+  fc_demo:              string;
+  fc_dailyEnergyScore:  string;
+  fc_moonRashi:         string;
+  fc_paksha:            string;
+  fc_energy:            string;
+  fc_activeDasha:       string;
+
+  // ── subscription screen ──
+  sub_active:           string;
+  sub_upgradeBtn:       string;
+  sub_getBasic:         string;
+  sub_free:             string;
+  sub_alwaysFree:       string;
+  sub_cmpJyotishQ:      string;
+  sub_cmpMarriage:      string;
+  sub_cmpTimeline:      string;
+  sub_cmpDasha:         string;
+  sub_cmpKarmic:        string;
+  sub_cmpPdf:           string;
+  sub_cmpProfiles:      string;
 }
 
 // English — primary, complete
@@ -1075,6 +1127,53 @@ const EN: MoreT = {
   mk_deleteDesc:      "Kundli will be permanently deleted. This action cannot be undone.",
   mk_cancel:          "Cancel",
   mk_delete:          "Delete",
+
+  mr_kindHomePro:     "Home AstroVastu PRO",
+  mr_kindShop:        "Business Vastu — Shop",
+  mr_kindOffice:      "Business Vastu — Office",
+  mr_kindFactory:     "Business Vastu — Factory",
+  mr_kindBusiness:    "Business Vastu",
+
+  rl_kundliReqTitle:        "Kundli required",
+  rl_kundliReqBoth:         "Both your kundli and partner's kundli are required. Please create both kundlis from the Kundli screen first.",
+  rl_kundliReqSelf:         "Your kundli is not ready. Please generate it from the Kundli screen first.",
+  rl_kundliReqSelectFirst:  "Please select your partner above to proceed.",
+  rl_kundliReqPartnerMissing: "Partner does not have a kundli yet. Please create their kundli from the Kundli screen first.",
+  rl_kundliReqAddBtn:       "Add Kundli",
+  rl_kundliReqCancel:       "Cancel",
+
+  nm_wi1Title:  "Life Blueprint Card",       nm_wi1Sub:  "Core personality + 2026 focus + biggest strength/challenge",
+  nm_wi2Title:  "Who You Are — Identity",    nm_wi2Sub:  "3-paragraph story + 5 hidden strengths + 5 challenges",
+  nm_wi3Title:  "Career Blueprint",          nm_wi3Sub:  "Best fields, common mistakes, growth timing, money pattern",
+  nm_wi4Title:  "Love Pattern — Deep",       nm_wi4Sub:  "Relationship style, breakup triggers, ideal partner number",
+  nm_wi5Title:  "Health & Spiritual Path",   nm_wi5Sub:  "Body signals + dharma + mantra + donation schedule",
+  nm_wi6Title:  "Risk Alerts + Golden Period", nm_wi6Sub: "5 specific risks + when to make biggest moves",
+  nm_wi7Title:  "Mobile Number — Deep",      nm_wi7Sub:  "Why · Impact · Action format + Cheiro last-4 + alternatives",
+  nm_wi8Title:  "Vehicle Number — Deep",     nm_wi8Sub:  "Why · Impact · Action + favourable plate suggestions",
+  nm_wi9Title:  "House Number — Deep",       nm_wi9Sub:  "Why · Impact · Action + remedy schedule",
+  nm_wi10Title: "Compatibility Matrix",      nm_wi10Sub: "Your Driver vs all 1-9 (friend/enemy/neutral)",
+  nm_wi11Title: "Name Numerology + Letters", nm_wi11Sub: "Pythagorean + Chaldean + letter-by-letter breakdown",
+  nm_wi12Title: "Signature & 90-Day Plan",   nm_wi12Sub: "Signature design + step-by-step implementation",
+
+  fc_demo:              "Demo",
+  fc_dailyEnergyScore:  "Daily Energy Score",
+  fc_moonRashi:         "Moon Rashi",
+  fc_paksha:            "Paksha",
+  fc_energy:            "Energy",
+  fc_activeDasha:       "Active Dasha",
+
+  sub_active:           "ACTIVE",
+  sub_upgradeBtn:       "Upgrade to Pro 🔓",
+  sub_getBasic:         "Get Basic",
+  sub_free:             "FREE",
+  sub_alwaysFree:       "Always free",
+  sub_cmpJyotishQ:      "Jyotish Questions",
+  sub_cmpMarriage:      "Marriage Compat",
+  sub_cmpTimeline:      "Future Timeline",
+  sub_cmpDasha:         "Dasha Analysis",
+  sub_cmpKarmic:        "Karmic Insights",
+  sub_cmpPdf:           "PDF Report",
+  sub_cmpProfiles:      "Saved Profiles",
 };
 
 // Hinglish overrides (only differing keys)
@@ -1503,6 +1602,53 @@ const HN: Partial<MoreT> = {
   mk_deleteDesc:      "Kundli permanently delete ho jayegi. Yeh action undo nahi hoga.",
   mk_cancel:          "Cancel",
   mk_delete:          "Delete",
+
+  mr_kindHomePro:     "Home AstroVastu PRO",
+  mr_kindShop:        "Business Vastu — Dukaan",
+  mr_kindOffice:      "Business Vastu — Office",
+  mr_kindFactory:     "Business Vastu — Factory",
+  mr_kindBusiness:    "Business Vastu",
+
+  rl_kundliReqTitle:        "Kundli zaruri hai",
+  rl_kundliReqBoth:         "Aapki aur partner ki dono kundli chahiye. Pehle Kundli screen se dono banayein.",
+  rl_kundliReqSelf:         "Aapki kundli ready nahi hai. Pehle Kundli screen se generate karein.",
+  rl_kundliReqSelectFirst:  "Aage badhne ke liye upar se apna partner chuniye.",
+  rl_kundliReqPartnerMissing: "Partner ki kundli abhi tak nahi bani. Pehle Kundli screen se unki kundli banayein.",
+  rl_kundliReqAddBtn:        "Kundli Banayein",
+  rl_kundliReqCancel:        "Cancel",
+
+  nm_wi1Title:  "Life Blueprint Card",          nm_wi1Sub:  "Core personality + 2026 focus + sabse badi strength/challenge",
+  nm_wi2Title:  "Aap Kaun Ho — Identity",       nm_wi2Sub:  "3-paragraph kahani + 5 chhupi strengths + 5 challenges",
+  nm_wi3Title:  "Career Blueprint",             nm_wi3Sub:  "Best fields, common galtiyan, growth timing, money pattern",
+  nm_wi4Title:  "Love Pattern — Deep",          nm_wi4Sub:  "Rishtey ka style, breakup triggers, ideal partner number",
+  nm_wi5Title:  "Health & Spiritual Path",      nm_wi5Sub:  "Body signals + dharma + mantra + daan schedule",
+  nm_wi6Title:  "Risk Alerts + Golden Period",  nm_wi6Sub:  "5 specific risks + sabse bade moves kab karein",
+  nm_wi7Title:  "Mobile Number — Deep",         nm_wi7Sub:  "Why · Impact · Action format + Cheiro last-4 + alternatives",
+  nm_wi8Title:  "Vehicle Number — Deep",        nm_wi8Sub:  "Why · Impact · Action + favourable plate suggestions",
+  nm_wi9Title:  "House Number — Deep",          nm_wi9Sub:  "Why · Impact · Action + remedy schedule",
+  nm_wi10Title: "Compatibility Matrix",         nm_wi10Sub: "Aapka Driver vs sabhi 1-9 (mitra/shatru/neutral)",
+  nm_wi11Title: "Name Numerology + Letters",    nm_wi11Sub: "Pythagorean + Chaldean + letter-by-letter breakdown",
+  nm_wi12Title: "Signature & 90-Day Plan",      nm_wi12Sub: "Signature design + step-by-step implementation",
+
+  fc_demo:              "Demo",
+  fc_dailyEnergyScore:  "Daily Energy Score",
+  fc_moonRashi:         "Moon Rashi",
+  fc_paksha:            "Paksha",
+  fc_energy:            "Urja",
+  fc_activeDasha:       "Active Dasha",
+
+  sub_active:           "ACTIVE",
+  sub_upgradeBtn:       "Pro me Upgrade karein 🔓",
+  sub_getBasic:         "Basic Lein",
+  sub_free:             "FREE",
+  sub_alwaysFree:       "Hamesha free",
+  sub_cmpJyotishQ:      "Jyotish Sawal",
+  sub_cmpMarriage:      "Vivah Milan",
+  sub_cmpTimeline:      "Bhavishya Timeline",
+  sub_cmpDasha:         "Dasha Vishleshan",
+  sub_cmpKarmic:        "Karmic Insights",
+  sub_cmpPdf:           "PDF Report",
+  sub_cmpProfiles:      "Save Profiles",
 };
 
 // Hindi overrides (Devanagari)
@@ -2024,6 +2170,53 @@ const HI: Partial<MoreT> = {
   mk_deleteDesc:      "कुंडली स्थायी रूप से हट जाएगी। यह क्रिया वापस नहीं होगी।",
   mk_cancel:          "रद्द करें",
   mk_delete:          "हटाएँ",
+
+  mr_kindHomePro:     "गृह वास्तु प्रो",
+  mr_kindShop:        "व्यवसाय वास्तु — दुकान",
+  mr_kindOffice:      "व्यवसाय वास्तु — कार्यालय",
+  mr_kindFactory:     "व्यवसाय वास्तु — कारख़ाना",
+  mr_kindBusiness:    "व्यवसाय वास्तु",
+
+  rl_kundliReqTitle:        "कुंडली आवश्यक",
+  rl_kundliReqBoth:         "आपकी और साथी की दोनों कुंडली चाहिए। पहले कुंडली स्क्रीन से दोनों बनाएँ।",
+  rl_kundliReqSelf:         "आपकी कुंडली तैयार नहीं है। पहले कुंडली स्क्रीन से जनरेट करें।",
+  rl_kundliReqSelectFirst:  "आगे बढ़ने के लिए ऊपर से अपना साथी चुनें।",
+  rl_kundliReqPartnerMissing: "साथी की कुंडली अभी तक नहीं बनी है। पहले कुंडली स्क्रीन से उनकी कुंडली बनाएँ।",
+  rl_kundliReqAddBtn:        "कुंडली जोड़ें",
+  rl_kundliReqCancel:        "रद्द करें",
+
+  nm_wi1Title:  "जीवन ब्लूप्रिंट कार्ड",        nm_wi1Sub:  "मूल व्यक्तित्व + 2026 फोकस + सबसे बड़ी शक्ति/चुनौती",
+  nm_wi2Title:  "आप कौन हैं — पहचान",          nm_wi2Sub:  "3-पैराग्राफ कहानी + 5 छुपी शक्तियाँ + 5 चुनौतियाँ",
+  nm_wi3Title:  "करियर ब्लूप्रिंट",              nm_wi3Sub:  "बेहतरीन क्षेत्र, सामान्य ग़लतियाँ, ग्रोथ टाइमिंग, धन पैटर्न",
+  nm_wi4Title:  "प्रेम पैटर्न — गहन",            nm_wi4Sub:  "रिश्ते की शैली, ब्रेकअप ट्रिगर्स, आदर्श साथी संख्या",
+  nm_wi5Title:  "स्वास्थ्य और आध्यात्मिक मार्ग", nm_wi5Sub:  "शरीर के संकेत + धर्म + मंत्र + दान कार्यक्रम",
+  nm_wi6Title:  "जोखिम चेतावनी + स्वर्णिम काल",  nm_wi6Sub:  "5 विशिष्ट जोखिम + बड़े निर्णय कब लें",
+  nm_wi7Title:  "मोबाइल नंबर — गहन",            nm_wi7Sub:  "क्यों · प्रभाव · कार्य + चीरो अंतिम-4 + विकल्प",
+  nm_wi8Title:  "वाहन नंबर — गहन",              nm_wi8Sub:  "क्यों · प्रभाव · कार्य + अनुकूल प्लेट सुझाव",
+  nm_wi9Title:  "घर नंबर — गहन",                nm_wi9Sub:  "क्यों · प्रभाव · कार्य + उपाय कार्यक्रम",
+  nm_wi10Title: "अनुकूलता मैट्रिक्स",            nm_wi10Sub: "आपका ड्राइवर बनाम सभी 1-9 (मित्र/शत्रु/तटस्थ)",
+  nm_wi11Title: "नाम अंकशास्त्र + अक्षर",         nm_wi11Sub: "पाइथागोरियन + चाल्डियन + अक्षर-दर-अक्षर विश्लेषण",
+  nm_wi12Title: "हस्ताक्षर और 90-दिन योजना",     nm_wi12Sub: "हस्ताक्षर डिज़ाइन + चरण-दर-चरण कार्यान्वयन",
+
+  fc_demo:              "डेमो",
+  fc_dailyEnergyScore:  "दैनिक ऊर्जा स्कोर",
+  fc_moonRashi:         "चंद्र राशि",
+  fc_paksha:            "पक्ष",
+  fc_energy:            "ऊर्जा",
+  fc_activeDasha:       "सक्रिय दशा",
+
+  sub_active:           "सक्रिय",
+  sub_upgradeBtn:       "प्रो में अपग्रेड करें 🔓",
+  sub_getBasic:         "बेसिक लें",
+  sub_free:             "निःशुल्क",
+  sub_alwaysFree:       "हमेशा निःशुल्क",
+  sub_cmpJyotishQ:      "ज्योतिष प्रश्न",
+  sub_cmpMarriage:      "विवाह मिलान",
+  sub_cmpTimeline:      "भविष्य टाइमलाइन",
+  sub_cmpDasha:         "दशा विश्लेषण",
+  sub_cmpKarmic:        "कार्मिक अंतर्दृष्टि",
+  sub_cmpPdf:           "पीडीएफ रिपोर्ट",
+  sub_cmpProfiles:      "सहेजी गई प्रोफ़ाइल",
 };
 
 /**

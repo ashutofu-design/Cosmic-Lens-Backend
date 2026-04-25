@@ -398,6 +398,19 @@ export interface MoreT {
   vu_whatIsVastu:     string;
   vu_unlockPro:       string;
   vu_roomGuide:       string;
+  vu_tapAnyCard:      string;
+  vu_proHeader:       string;
+  vu_proSubheader:    string;
+  vu_proDesc:         string;
+  vu_oneTime:         string;
+  vu_genTipsTitle:    string;
+  vu_genTip1:         string;
+  vu_genTip2:         string;
+  vu_genTip3:         string;
+  vu_genTip4:         string;
+  vu_genTip5:         string;
+  vu_genTip6:         string;
+  vu_disclaimer:      string;
   vu_astroVastuPro:   string;
   vu_personalizedSub: string;
   vu_cancelAnytime:   string;
@@ -414,6 +427,141 @@ export interface MoreT {
   km_lblDob:          string;
   km_lblTime:         string;
   km_lblPlace:        string;
+
+  // ── kundli-milan (round 3 – sections, cards, badges, grades, bars) ──
+  km_birthDetailsReq:  string;
+  km_partnerBirth:     string;
+  km_phName:           string;
+  km_phDob:            string;
+  km_phTime:           string;
+  km_phPlace:          string;
+  km_birthMissing:     string;
+  km_calcFailed:       string;
+  km_okBtn:            string;
+  km_aap:              string;
+
+  km_secTopInsights:   string;
+  km_secDeepInsights:  string;
+  km_secAdvAnalysis:   string;
+  km_secFutInsights:   string;
+  km_secHidPremium:    string;
+
+  km_coreCompTitle:    string;
+  km_coreCompDesc:     string;
+  km_riskScanTitle:    string;
+  km_riskScanDesc:     string;
+  km_personMatchTitle: string;
+  km_personMatchDesc:  string;
+  km_soulKarmaTitle:   string;
+  km_soulKarmaDesc:    string;
+  km_intimacyTitle:    string;
+  km_intimacyDesc:     string;
+  km_doshaEngTitle:    string;
+  km_doshaEngDesc:     string;
+  km_negEnergyTitle:   string;
+  km_negEnergyDesc:    string;
+  km_strChalTitle:     string;
+  km_strChalDesc:      string;
+  km_remAdvTitle:      string;
+  km_remAdvDesc:       string;
+
+  km_marriageTime:     string;
+  km_childPlan:        string;
+  km_finCompat:        string;
+  km_lifeStab:         string;
+  km_finHarmony:       string;
+  km_familyAccept:     string;
+
+  km_karmRelTitle:     string;
+  km_karmRelDesc:      string;
+  km_pastLifeTitle:    string;
+  km_pastLifeDesc:     string;
+  km_divorceTitle:     string;
+  km_divorceDesc:      string;
+  km_loyaltyTitle:     string;
+  km_loyaltyDesc:      string;
+
+  km_badgeMostImp:     string;
+  km_badgeCritCheck:   string;
+  km_badgeDecCard:     string;
+  km_badgeSecret:      string;
+
+  km_gradeExcellent:   string;
+  km_gradeVeryGood:    string;
+  km_gradeAverage:     string;
+  km_gradeBelowAvg:    string;
+  km_gradeLowMatch:    string;
+
+  km_kutaSahi:         string;
+  km_kutaAnmatch:      string;
+  km_kutaDono:         string;
+
+  km_emotionalBond:    string;
+  km_mentalConn:       string;
+  km_intimacyHarm:     string;
+  km_communication:    string;
+  km_natureTemp:       string;
+  km_socialAlign:      string;
+  km_lifestyleHarm:    string;
+  km_physicalHarm:     string;
+  km_energeticAttr:    string;
+
+  km_compMismatch:     string;
+  km_doshaConflict:    string;
+  km_longTermStab:     string;
+  km_nadiDosh:         string;
+  km_bhakootDosh:      string;
+  km_ganaDosh:         string;
+  km_grahaMaitri:      string;
+
+  km_onePartMang:      string;
+  km_noMangConf:       string;
+
+  km_natTimingExp:     string;
+  km_slightPatience:   string;
+  km_medConsAdv:       string;
+  km_strongFinAlign:   string;
+  km_modBudgetHelp:    string;
+  km_highlyLikely:     string;
+  km_mayNeedTime:      string;
+  km_marrAusp:         string;
+  km_marrModerate:     string;
+  km_marrDelay:        string;
+
+  km_riskLow:          string;
+  km_riskModerate:     string;
+  km_riskHigh:         string;
+
+  km_deepKarmTie:      string;
+  km_growConn:         string;
+  km_posPastLife:      string;
+  km_neutralKarma:     string;
+
+  km_planFriendStrong: string;
+  km_sharedEnergies:   string;
+  km_taraFav:          string;
+  km_modTaraDest:      string;
+  km_bhakSubh:         string;
+  km_rashiAlign:       string;
+
+  km_nadiHealth:       string;
+  km_minorTempDiff:    string;
+  km_ganaClash:        string;
+  km_commPracNeeded:   string;
+  km_bhakTimeCaut:     string;
+  km_patienceConfl:    string;
+  km_yoniMismatch:     string;
+  km_qualityTimeNeeded:string;
+
+  km_pastLifeScore:    string;
+  km_ancestKarma:      string;
+  km_nakDream:         string;
+  km_advDoshaRev:      string;
+
+  km_unlockComplete:   string;
+  km_realTimeAnalysis: string;
+  km_secFutTimeline:   string;
+  km_secSoulKarma:     string;
   pe_otherProfiles:   string;
   pe_recentlyDeleted: string;
   pe_noKundliYet:     string;
@@ -642,6 +790,79 @@ export interface MoreT {
   vu_tabBasic:   string;
   vu_tabPro:     string;
   vu_introBody:  string;
+
+  // ── kundli-milan additional (km2_*) ──
+  km2_secRiskScan:        string;
+  km2_secPersMatch:       string;
+  km2_secIntimacyComp:    string;
+  km2_secNegEnergy:       string;
+  km2_chipClear:          string;
+  km2_chipMild:           string;
+  km2_chipPresent:        string;
+  km2_strengthsHdr:       string;
+  km2_challengesHdr:      string;
+  km2_persExcellent:      string;
+  km2_persModerate:       string;
+  km2_persChallenging:    string;
+  km2_yoniExceptional:    string;
+  km2_yoniComplementary:  string;
+  km2_yoniDifferent:      string;
+  km2_concernSing:        string;
+  km2_concernPlural:      string;
+  km2_concernsFound:      string;
+  km2_negPatExcell:       string;
+  km2_negPatMinor:        string;
+  km2_negPatMulti:        string;
+  km2_doshDetect:         string;
+  km2_nadiAuspProgeny:    string;
+  km2_nadiDeepEmpathy:    string;
+  km2_remKumbhVivah:      string;
+  km2_remEkadashi:        string;
+  km2_remChandraMantra:   string;
+  km2_remRudrabhishek:    string;
+  km2_remGemstones:       string;
+  km2_remSunderkand:      string;
+  km2_fvExceptional:      string;
+  km2_fvVeryPositive:     string;
+  km2_fvModerate:         string;
+  km2_fvChallenging:      string;
+  km2_ashtakootScoreLbl:  string;
+  km2_concernDetSuffix:   string;
+  km2_addBothFirst:       string;
+  km2_unlockFullAnal:     string;
+  km2_youPlaceholder:     string;
+  km2_birthMissingBody:   string;
+  km2_calcFailedBody:     string;
+  km2_matchingWith:       string;
+  km3_yourPersAnalysis:   string;
+  km3_insEmotional:       string;
+  km3_insMarriage:        string;
+  km3_insRisks:           string;
+  km3_insKarmic:          string;
+  km3_insStrength:        string;
+  km3_insTriggers:        string;
+  km3_insStability:       string;
+  km3_insFinal:           string;
+  km3_unlEmotional:       string;
+  km3_unlMarriage:        string;
+  km3_unlRisks:           string;
+  km3_unlKarmic:          string;
+  km3_unlStrength:        string;
+  km3_unlTriggers:        string;
+  km3_unlStability:       string;
+  km3_unlFinal:           string;
+  km3_nadiAlag:           string;
+  km3_nadiSama:           string;
+  km3_personFallback:     string;
+  km3_errTryAgain:        string;
+  km3_proTrailMore:       string;
+  km3_kundliBased:        string;
+  km3_truthsBelow:        string;
+  km3_unlockToSee:        string;
+  km3_whatYouUnlock:      string;
+  km3_lockedPreview:      string;
+  km3_addBothToUnlock:    string;
+  km3_addBothSubtext:     string;
 }
 
 // English — primary, complete
@@ -1036,6 +1257,19 @@ const EN: MoreT = {
   vu_whatIsVastu:     "What is Vastu Shastra?",
   vu_unlockPro:       "Unlock PRO",
   vu_roomGuide:       "ROOM-WISE VASTU GUIDE",
+  vu_tapAnyCard:      "Tap any card to see dos, don'ts, and remedies",
+  vu_proHeader:       "AstroVastu PRO — Whole Home Scan",
+  vu_proSubheader:    "Photo Engine + your Kundli + Mahadasha layer",
+  vu_proDesc:         "Floor-plan upload, room photos with compass, deterministic Vastu Shastra rules cited from Brihat Samhita / Mayamatam, personalised priority actions for your chart.",
+  vu_oneTime:         "one-time",
+  vu_genTipsTitle:    "⚡ General Vastu Tips",
+  vu_genTip1:         "Keep the home free of clutter — blocked spaces block energy flow",
+  vu_genTip2:         "Ensure your home is well-lit — darkness invites negativity",
+  vu_genTip3:         "Fix squeaky or broken doors promptly",
+  vu_genTip4:         "Keep indoor plants — they bring life energy into the home",
+  vu_genTip5:         "Remove broken or damaged items immediately",
+  vu_genTip6:         "A running water feature (fountain or aquarium) in the North is auspicious",
+  vu_disclaimer:      "This is a general Vastu guide. For your home specifically, always consult a qualified Vastu expert for personalized advice.",
   vu_astroVastuPro:   "AstroVastu Pro",
   vu_personalizedSub: "Personalized premium Vastu analysis",
   vu_cancelAnytime:   "Cancel anytime",
@@ -1051,6 +1285,140 @@ const EN: MoreT = {
   km_lblDob:          "DATE OF BIRTH",
   km_lblTime:         "TIME OF BIRTH",
   km_lblPlace:        "BIRTH PLACE",
+
+  km_birthDetailsReq:  "Birth details required",
+  km_partnerBirth:     "Partner's birth details",
+  km_phName:           "Full name",
+  km_phDob:            "DD/MM/YYYY",
+  km_phTime:           "HH:MM  AM / PM",
+  km_phPlace:          "E.g. Delhi, India",
+  km_birthMissing:     "Birth Data Missing",
+  km_calcFailed:       "Calculation Failed",
+  km_okBtn:            "OK",
+  km_aap:              "You",
+
+  km_secTopInsights:   "TOP INSIGHTS",
+  km_secDeepInsights:  "DEEP INSIGHTS",
+  km_secAdvAnalysis:   "ADVANCED ANALYSIS",
+  km_secFutInsights:   "FUTURE INSIGHTS",
+  km_secHidPremium:    "HIDDEN PREMIUM",
+
+  km_coreCompTitle:    "Core Compatibility",
+  km_coreCompDesc:     "Are your hearts, minds & souls truly aligned for a lifetime together?",
+  km_riskScanTitle:    "Risk Scan",
+  km_riskScanDesc:     "This insight may change your decision — hidden risks revealed",
+  km_personMatchTitle: "Personality Match",
+  km_personMatchDesc:  "This insight may change your decision — see if you truly understand each other",
+  km_soulKarmaTitle:   "Soul & Karma",
+  km_soulKarmaDesc:    "Are you destined? Or is this just timing? Real-time analysis based on your birth chart",
+  km_intimacyTitle:    "Intimacy Score",
+  km_intimacyDesc:     "Physical & emotional bonding — the truth most couples never discover",
+  km_doshaEngTitle:    "Dosha Engine",
+  km_doshaEngDesc:     "Mangal, Nadi & Bhakoot — conflicts that silently destroy marriages",
+  km_negEnergyTitle:   "Negative Energy",
+  km_negEnergyDesc:    "Hidden doshas even your astrologer may have missed — don't ignore this",
+  km_strChalTitle:     "Strengths & Challenges",
+  km_strChalDesc:      "What will keep you together — and what may quietly pull you apart",
+  km_remAdvTitle:      "Remedies & Advice",
+  km_remAdvDesc:       "Exact pujas, stones & mantras to remove obstacles before they grow",
+
+  km_marriageTime:     "Marriage Timing",
+  km_childPlan:        "Child Planning",
+  km_finCompat:        "Financial Compat",
+  km_lifeStab:         "Life Stability",
+  km_finHarmony:       "Financial Harmony",
+  km_familyAccept:     "Family Acceptance",
+
+  km_karmRelTitle:     "Karmic Relationship Check",
+  km_karmRelDesc:      "Are you meant to meet in this lifetime?",
+  km_pastLifeTitle:    "Past Life Connection",
+  km_pastLifeDesc:     "Spiritual bond from a previous birth",
+  km_divorceTitle:     "Divorce / Separation Risk",
+  km_divorceDesc:      "Probability based on planetary conflict",
+  km_loyaltyTitle:     "Loyalty & Trust Index",
+  km_loyaltyDesc:      "Chances of betrayal or long-term loyalty",
+
+  km_badgeMostImp:     "MOST IMPORTANT",
+  km_badgeCritCheck:   "CRITICAL CHECK",
+  km_badgeDecCard:     "DECISION CARD",
+  km_badgeSecret:      "SECRET",
+
+  km_gradeExcellent:   "Excellent",
+  km_gradeVeryGood:    "Very Good",
+  km_gradeAverage:     "Average",
+  km_gradeBelowAvg:    "Below Avg",
+  km_gradeLowMatch:    "Low Match",
+
+  km_kutaSahi:         "Match",
+  km_kutaAnmatch:      "Mismatch",
+  km_kutaDono:         "Both",
+
+  km_emotionalBond:    "Emotional Bond",
+  km_mentalConn:       "Mental Connection",
+  km_intimacyHarm:     "Intimacy Harmony",
+  km_communication:    "Communication",
+  km_natureTemp:       "Nature & Temperament",
+  km_socialAlign:      "Social Alignment",
+  km_lifestyleHarm:    "Lifestyle Harmony",
+  km_physicalHarm:     "Physical Harmony",
+  km_energeticAttr:    "Energetic Attraction",
+
+  km_compMismatch:     "Compatibility Mismatch",
+  km_doshaConflict:    "Dosha Conflict",
+  km_longTermStab:     "Long-term Stability",
+  km_nadiDosh:         "Nadi Dosh",
+  km_bhakootDosh:      "Bhakoot Dosh",
+  km_ganaDosh:         "Gana Dosh",
+  km_grahaMaitri:      "Graha Maitri",
+
+  km_onePartMang:      "One partner is Manglik",
+  km_noMangConf:       "No Manglik conflict",
+
+  km_natTimingExp:     "Natural timing expected",
+  km_slightPatience:   "Slight patience recommended",
+  km_medConsAdv:       "Medical/expert consultation advised",
+  km_strongFinAlign:   "Strong financial alignment",
+  km_modBudgetHelp:    "Moderate — budget planning helps",
+  km_highlyLikely:     "Highly likely",
+  km_mayNeedTime:      "May need time and effort",
+  km_marrAusp:         "2025–2026 auspicious",
+  km_marrModerate:     "2026–2027 moderate",
+  km_marrDelay:        "Delay advised — seek guidance",
+
+  km_riskLow:          "Low",
+  km_riskModerate:     "Moderate",
+  km_riskHigh:         "High",
+
+  km_deepKarmTie:      "Deep karmic tie",
+  km_growConn:         "Growing connection",
+  km_posPastLife:      "Positive past life",
+  km_neutralKarma:     "Neutral karma",
+
+  km_planFriendStrong: "Planetary friendship is strong",
+  km_sharedEnergies:   "Shared planetary energies",
+  km_taraFav:          "Tara nakshatra is favourable",
+  km_modTaraDest:      "Moderate tara destiny",
+  km_bhakSubh:         "Bhakoot shubh — no rashi conflict",
+  km_rashiAlign:       "Rashi energies align",
+
+  km_nadiHealth:       "Nadi dosh — health awareness needed",
+  km_minorTempDiff:    "Minor temperament differences",
+  km_ganaClash:        "Gana clash — nature divergence",
+  km_commPracNeeded:   "Communication practice needed",
+  km_bhakTimeCaut:     "Bhakoot dosh — timing caution",
+  km_patienceConfl:    "Some patience during conflicts",
+  km_yoniMismatch:     "Yoni mismatch — energy adjustment",
+  km_qualityTimeNeeded:"Regular quality time needed",
+
+  km_pastLifeScore:    "Past Life Connection Score",
+  km_ancestKarma:      "Ancestral Karma Patterns",
+  km_nakDream:         "Nakshatra Dream Compatibility",
+  km_advDoshaRev:      "Advanced Dosha Reversal Plan",
+
+  km_unlockComplete:   "Unlock Complete Report",
+  km_realTimeAnalysis: "Real-time analysis based on your birth chart",
+  km_secFutTimeline:   "FUTURE TIMELINE",
+  km_secSoulKarma:     "SOUL & KARMA ANALYSIS",
   pe_otherProfiles:   "OTHER PROFILES",
   pe_recentlyDeleted: "Recently Deleted",
   pe_noKundliYet:     "No Kundli Yet",
@@ -1273,6 +1641,79 @@ const EN: MoreT = {
   vu_tabBasic:   "Basic",
   vu_tabPro:     "Pro",
   vu_introBody:  "Vastu Shastra is an ancient Indian science of architecture. Correct directions bring positive energy, happiness, health, and prosperity to your home.",
+
+  // ── kundli-milan additional (km2_*) ──
+  km2_secRiskScan:        "RELATIONSHIP RISK SCAN",
+  km2_secPersMatch:       "PERSONALITY MATCH",
+  km2_secIntimacyComp:    "INTIMACY COMPATIBILITY",
+  km2_secNegEnergy:       "NEGATIVE ENERGY CHECK",
+  km2_chipClear:          "Clear",
+  km2_chipMild:           "Mild",
+  km2_chipPresent:        "Present",
+  km2_strengthsHdr:       "STRENGTHS 💚",
+  km2_challengesHdr:      "CHALLENGES ⚡",
+  km2_persExcellent:      "Excellent — both share similar life approach and values.",
+  km2_persModerate:       "Moderate — differences exist but can be harmonised with effort.",
+  km2_persChallenging:    "Challenging — temperament differences need active work.",
+  km2_yoniExceptional:    "Same Yoni — exceptional physical and energetic alignment.",
+  km2_yoniComplementary:  "Complementary energies — good compatibility with some adjustments.",
+  km2_yoniDifferent:      "Different energies — patience and understanding will strengthen this bond.",
+  km2_concernSing:        "Concern",
+  km2_concernPlural:      "Concerns",
+  km2_concernsFound:      "Found",
+  km2_negPatExcell:       "Excellent — no major negative patterns.",
+  km2_negPatMinor:        "Minor concerns — manageable with awareness.",
+  km2_negPatMulti:        "Multiple concerns — remedies strongly advised.",
+  km2_doshDetect:         "Dosh Detected",
+  km2_nadiAuspProgeny:    "Nadi alag — auspicious progeny",
+  km2_nadiDeepEmpathy:    "Nadi matched — deep empathy",
+  km2_remKumbhVivah:      "Kumbh Vivah or Mangal puja recommended before marriage.",
+  km2_remEkadashi:        "Fast on Ekadashi — avoid Nadi imbalance with Shiva puja.",
+  km2_remChandraMantra:   "Chant Chandra mantra — Om Chandraya Namah 108 times.",
+  km2_remRudrabhishek:    "Perform Rudrabhishek together before marriage.",
+  km2_remGemstones:       "Both should wear compatible gemstones — consult a Jyotishi.",
+  km2_remSunderkand:      "Joint puja and regular reading of Sunderkand will strengthen bond.",
+  km2_fvExceptional:      "Exceptional match. Stars align strongly in your favour. A joyful and fulfilling union is indicated.",
+  km2_fvVeryPositive:     "Very positive match. With mutual respect and love, this relationship has great potential.",
+  km2_fvModerate:         "Moderate match. Awareness, effort, and expert guidance will help this bond flourish.",
+  km2_fvChallenging:      "Challenging match. Remedies, patience, and consulting a Jyotishi are strongly advised before proceeding.",
+  km2_ashtakootScoreLbl:  "Ashtakoot Score",
+  km2_concernDetSuffix:   "detected",
+  km2_addBothFirst:       "Add Both Kundlis First",
+  km2_unlockFullAnal:     "Unlock Full Analysis",
+  km2_youPlaceholder:     "You",
+  km2_birthMissingBody:   "Both partners need complete birth data (date, time, place) for accurate matching.",
+  km2_calcFailedBody:     "Could not calculate match. Please try again.",
+  km2_matchingWith:       "MATCHING WITH",
+  km3_yourPersAnalysis:   "Your Personalised Analysis",
+  km3_insEmotional:       "Emotional Compatibility",
+  km3_insMarriage:        "Marriage Future",
+  km3_insRisks:           "Hidden Risks",
+  km3_insKarmic:          "Karmic Bond",
+  km3_insStrength:        "Strength Factors",
+  km3_insTriggers:        "Conflict Triggers",
+  km3_insStability:       "Long-term Stability",
+  km3_insFinal:           "Final Outcome",
+  km3_unlEmotional:       "Emotional Compatibility — what truly connects or disconnects you",
+  km3_unlMarriage:        "Marriage Future — real direction of this relationship",
+  km3_unlRisks:           "Hidden Risks — patterns creating problems",
+  km3_unlKarmic:          "Karmic Bond — deeper purpose of this connection",
+  km3_unlStrength:        "Strength Factors — what holds this together",
+  km3_unlTriggers:        "Conflict Triggers — what causes repeated issues",
+  km3_unlStability:       "Long-term Stability — will it last or break",
+  km3_unlFinal:           "Final Outcome — actual future direction",
+  km3_nadiAlag:           "Different nadi — auspicious for healthy progeny and long life together.",
+  km3_nadiSama:           "Same nadi — strong emotional mirroring, some health caution advised.",
+  km3_personFallback:     "Person",
+  km3_errTryAgain:        "Error. Please try again.",
+  km3_proTrailMore:       "Full detail and remedy will appear in the Pro report.",
+  km3_kundliBased:        "This analysis is based on your real kundli and reveals patterns that directly affect your relationship.",
+  km3_truthsBelow:        "The most important truths of this connection are hidden below.",
+  km3_unlockToSee:        "Unlock to see the full picture.",
+  km3_whatYouUnlock:      "WHAT YOU WILL UNLOCK",
+  km3_lockedPreview:      "🔒 LOCKED PREVIEW",
+  km3_addBothToUnlock:    "Add Both Kundlis to Unlock Preview",
+  km3_addBothSubtext:     "Add birth details for both — your personal hooks will then be generated",
 };
 
 // Hinglish overrides (only differing keys)
@@ -1579,6 +2020,140 @@ const HN: Partial<MoreT> = {
   km_lblDob:          "JANAM TAREEKH",
   km_lblTime:         "JANAM SAMAY",
   km_lblPlace:        "JANAM STHAAN",
+
+  km_birthDetailsReq:  "Janam vivran zaroori",
+  km_partnerBirth:     "Saathi ke janam vivran",
+  km_phName:           "Poora naam",
+  km_phDob:            "DD/MM/YYYY",
+  km_phTime:           "HH:MM  AM / PM",
+  km_phPlace:          "Jaise: Delhi, India",
+  km_birthMissing:     "Janam Data Maujood Nahi",
+  km_calcFailed:       "Calculation Vifal",
+  km_okBtn:            "OK",
+  km_aap:              "Aap",
+
+  km_secTopInsights:   "MUKHYA INSIGHTS",
+  km_secDeepInsights:  "GEHRE INSIGHTS",
+  km_secAdvAnalysis:   "ADVANCED VISHLESHAN",
+  km_secFutInsights:   "BHAVISHYA INSIGHTS",
+  km_secHidPremium:    "CHHUPE PREMIUM",
+
+  km_coreCompTitle:    "Mukhya Compatibility",
+  km_coreCompDesc:     "Kya aapke dil, mann aur aatma jeevan bhar ke liye sach me jude hain?",
+  km_riskScanTitle:    "Risk Scan",
+  km_riskScanDesc:     "Yeh insight aapka faisla badal sakti hai — chhupe risks samne aayenge",
+  km_personMatchTitle: "Personality Match",
+  km_personMatchDesc:  "Yeh insight aapka faisla badal sakti hai — dekho kya aap ek doosre ko sach me samajhte ho",
+  km_soulKarmaTitle:   "Aatma & Karma",
+  km_soulKarmaDesc:    "Kya aap niyati ke saathi ho? Ya bas timing? Aapki janam patrika par real-time vishleshan",
+  km_intimacyTitle:    "Intimacy Score",
+  km_intimacyDesc:     "Sharirik aur bhavnatmak bandhan — woh sach jo zyadatar joday kabhi nahi jaante",
+  km_doshaEngTitle:    "Dosha Engine",
+  km_doshaEngDesc:     "Mangal, Nadi aur Bhakoot — woh tanav jo chup-chap shaadiyon ko todte hain",
+  km_negEnergyTitle:   "Negative Urja",
+  km_negEnergyDesc:    "Chhupe dosh jo aapke pandit bhi miss kar sakte hain — ignore mat karna",
+  km_strChalTitle:     "Shaktiyaan & Chunautiyaan",
+  km_strChalDesc:      "Kya aapko jod ke rakhega — aur kya chup-chap door kar sakta hai",
+  km_remAdvTitle:      "Upay & Salaah",
+  km_remAdvDesc:       "Sahi puja, ratna aur mantra — badhne se pehle hi rukawatein hatayein",
+
+  km_marriageTime:     "Vivah Samay",
+  km_childPlan:        "Santaan Yojna",
+  km_finCompat:        "Aarthik Mel",
+  km_lifeStab:         "Jeevan Sthirta",
+  km_finHarmony:       "Aarthik Samanvay",
+  km_familyAccept:     "Parivar Sweekarya",
+
+  km_karmRelTitle:     "Karmic Rishta Janch",
+  km_karmRelDesc:      "Kya is janam me milne ka yog tha?",
+  km_pastLifeTitle:    "Pichle Janam ka Sambandh",
+  km_pastLifeDesc:     "Pichle janam se aatmik bandhan",
+  km_divorceTitle:     "Talaq / Vichhed Risk",
+  km_divorceDesc:      "Grah-tanav par adharit sambhavna",
+  km_loyaltyTitle:     "Wafadari & Vishwas Index",
+  km_loyaltyDesc:      "Vishwasghaat ya lambe samay tak wafadari ki sambhavna",
+
+  km_badgeMostImp:     "SABSE ZAROORI",
+  km_badgeCritCheck:   "GAMBHEER JANCH",
+  km_badgeDecCard:     "FAISLA CARD",
+  km_badgeSecret:      "GUPT",
+
+  km_gradeExcellent:   "Behtareen",
+  km_gradeVeryGood:    "Bahut Achha",
+  km_gradeAverage:     "Saamanya",
+  km_gradeBelowAvg:    "Kam",
+  km_gradeLowMatch:    "Bahut Kam",
+
+  km_kutaSahi:         "Sahi",
+  km_kutaAnmatch:      "Anmel",
+  km_kutaDono:         "Dono",
+
+  km_emotionalBond:    "Bhavnatmak Bandhan",
+  km_mentalConn:       "Maansik Sambandh",
+  km_intimacyHarm:     "Intimacy Samanvay",
+  km_communication:    "Sanvad",
+  km_natureTemp:       "Swabhav & Mizaaj",
+  km_socialAlign:      "Saamajik Mel",
+  km_lifestyleHarm:    "Lifestyle Samanvay",
+  km_physicalHarm:     "Sharirik Samanvay",
+  km_energeticAttr:    "Urja Aakarshan",
+
+  km_compMismatch:     "Compatibility Anmel",
+  km_doshaConflict:    "Dosha Tanav",
+  km_longTermStab:     "Lambi-Avadhi Sthirta",
+  km_nadiDosh:         "Nadi Dosh",
+  km_bhakootDosh:      "Bhakoot Dosh",
+  km_ganaDosh:         "Gana Dosh",
+  km_grahaMaitri:      "Graha Maitri",
+
+  km_onePartMang:      "Ek saathi Manglik hai",
+  km_noMangConf:       "Manglik tanav nahi",
+
+  km_natTimingExp:     "Natural samay sambhav",
+  km_slightPatience:   "Thoda sabr karein",
+  km_medConsAdv:       "Medical/expert salaah lein",
+  km_strongFinAlign:   "Mazbut aarthik mel",
+  km_modBudgetHelp:    "Saamanya — budget planning faayademan",
+  km_highlyLikely:     "Bahut sambhav",
+  km_mayNeedTime:      "Samay aur mehnat lag sakti hai",
+  km_marrAusp:         "2025–2026 shubh",
+  km_marrModerate:     "2026–2027 saamanya",
+  km_marrDelay:        "Der karein — margdarshan lein",
+
+  km_riskLow:          "Kam",
+  km_riskModerate:     "Saamanya",
+  km_riskHigh:         "Adhik",
+
+  km_deepKarmTie:      "Gehra karmic bandhan",
+  km_growConn:         "Badhta sambandh",
+  km_posPastLife:      "Shubh purva-janam",
+  km_neutralKarma:     "Tatasth karma",
+
+  km_planFriendStrong: "Grah maitri mazbut hai",
+  km_sharedEnergies:   "Saanjhi grah urja",
+  km_taraFav:          "Tara nakshatra shubh hai",
+  km_modTaraDest:      "Saamanya tara bhagya",
+  km_bhakSubh:         "Bhakoot shubh — koi rashi tanav nahi",
+  km_rashiAlign:       "Rashi urja milti hai",
+
+  km_nadiHealth:       "Nadi dosh — swasthya jagrukta zaroori",
+  km_minorTempDiff:    "Halki swabhav antar",
+  km_ganaClash:        "Gana tanav — prakriti antar",
+  km_commPracNeeded:   "Sanvad ka abhyas zaroori",
+  km_bhakTimeCaut:     "Bhakoot dosh — samay savdhani",
+  km_patienceConfl:    "Conflict me thoda sabr",
+  km_yoniMismatch:     "Yoni anmel — urja samayojan",
+  km_qualityTimeNeeded:"Niyamit quality time zaroori",
+
+  km_pastLifeScore:    "Pichle Janam Sambandh Score",
+  km_ancestKarma:      "Vanshik Karma Pattern",
+  km_nakDream:         "Nakshatra Sapna Compatibility",
+  km_advDoshaRev:      "Advanced Dosha Reversal Plan",
+
+  km_unlockComplete:   "Poori Report Unlock Karein",
+  km_realTimeAnalysis: "Aapki janam patrika par real-time vishleshan",
+  km_secFutTimeline:   "BHAVISHYA TIMELINE",
+  km_secSoulKarma:     "AATMA & KARMA VISHLESHAN",
   pe_otherProfiles:   "ANYA PROFILES",
   pe_recentlyDeleted: "Haal mein Hataye",
   pe_noKundliYet:     "Abhi tak koi Kundli nahi",
@@ -1801,6 +2376,92 @@ const HN: Partial<MoreT> = {
   vu_tabBasic:   "Basic",
   vu_tabPro:     "Pro",
   vu_introBody:  "Vastu Shastra ek prachin Bhartiya vastu-vigyan hai. Sahi dishaayein ghar mein positive urja, khushiyan, swasthya aur samriddhi laati hain.",
+
+  // ── kundli-milan additional (km2_*) ──
+  km2_secRiskScan:        "RISHTE KA RISK SCAN",
+  km2_secPersMatch:       "PERSONALITY MATCH",
+  km2_secIntimacyComp:    "INTIMACY COMPATIBILITY",
+  km2_secNegEnergy:       "NEGATIVE ENERGY CHECK",
+  km2_chipClear:          "Saaf",
+  km2_chipMild:           "Halka",
+  km2_chipPresent:        "Maujood",
+  km2_strengthsHdr:       "MAZBOOTI 💚",
+  km2_challengesHdr:      "CHUNAUTIYAN ⚡",
+  km2_persExcellent:      "Behtareen — dono ka jeevan ke prati nazariya aur values ek jaisi hain.",
+  km2_persModerate:       "Saamanya — kuch farak hain par mehnat se sambhal sakte hain.",
+  km2_persChallenging:    "Mushkil — swabhav ke farak par kaam karna padega.",
+  km2_yoniExceptional:    "Same Yoni — shaaririk aur urja ka behtareen taalmel.",
+  km2_yoniComplementary:  "Ek doosre ki purak urja — thoda adjustment ke saath achhi compatibility.",
+  km2_yoniDifferent:      "Alag urja — sabar aur samajh se yeh bond mazboot hoga.",
+  km2_concernSing:        "Chinta",
+  km2_concernPlural:      "Chintayein",
+  km2_concernsFound:      "Mili",
+  km2_negPatExcell:       "Behtareen — koi badi negative pattern nahi.",
+  km2_negPatMinor:        "Choti chintayein — jagrukta se sambhal sakti hain.",
+  km2_negPatMulti:        "Kai chintayein — upay zaruri hain.",
+  km2_doshDetect:         "Dosh Mila",
+  km2_nadiAuspProgeny:    "Nadi alag — santaan ke liye shubh",
+  km2_nadiDeepEmpathy:    "Nadi mili — gehri samajh",
+  km2_remKumbhVivah:      "Vivah se pehle Kumbh Vivah ya Mangal puja karein.",
+  km2_remEkadashi:        "Ekadashi ka vrat rakhein — Shiv puja se Nadi imbalance se bachein.",
+  km2_remChandraMantra:   "Chandra mantra japein — Om Chandraya Namah 108 baar.",
+  km2_remRudrabhishek:    "Vivah se pehle saath mein Rudrabhishek karein.",
+  km2_remGemstones:       "Dono ko compatible ratan pehnein — Jyotishi se salah lein.",
+  km2_remSunderkand:      "Saath mein puja aur Sunderkand padhne se bond mazboot hoga.",
+  km2_fvExceptional:      "Behtareen match. Sitare aapke favour mein hain. Khushhaal aur safal vivah ka sanket hai.",
+  km2_fvVeryPositive:     "Bahut positive match. Aapsi izzat aur pyaar se yeh rishta bahut achha hoga.",
+  km2_fvModerate:         "Saamanya match. Jagrukta, mehnat aur expert salah se yeh bond achha banega.",
+  km2_fvChallenging:      "Mushkil match. Aage badhne se pehle upay, sabar aur Jyotishi se salah lena zaruri hai.",
+  km2_ashtakootScoreLbl:  "Ashtakoot Score",
+  km2_concernDetSuffix:   "mili",
+  km2_addBothFirst:       "Pehle Dono Kundli Add Karein",
+  km2_unlockFullAnal:     "Poori Analysis Khole",
+  km2_youPlaceholder:     "Aap",
+  km2_birthMissingBody:   "Sahi milan ke liye dono partners ka complete birth data (date, samay, jagah) chahiye.",
+  km2_calcFailedBody:     "Match calculate nahi ho saka. Dobara try karein.",
+  km2_matchingWith:       "MATCH HO RAHA HAI",
+  km3_yourPersAnalysis:   "Aapka Personalised Analysis",
+  km3_insEmotional:       "Emotional Compatibility",
+  km3_insMarriage:        "Shaadi Ka Future",
+  km3_insRisks:           "Chhupe Risks",
+  km3_insKarmic:          "Karmic Bond",
+  km3_insStrength:        "Strength Factors",
+  km3_insTriggers:        "Conflict Triggers",
+  km3_insStability:       "Long-term Stability",
+  km3_insFinal:           "Final Outcome",
+  km3_unlEmotional:       "Emotional Compatibility — kya sach me ek doosre se judte ho ya nahi",
+  km3_unlMarriage:        "Shaadi Ka Future — is rishte ki asli direction",
+  km3_unlRisks:           "Chhupe Risks — woh patterns jo problems la rahe hain",
+  km3_unlKarmic:          "Karmic Bond — is connection ka deeper purpose",
+  km3_unlStrength:        "Strength Factors — kya cheez is rishte ko jodi rakhti hai",
+  km3_unlTriggers:        "Conflict Triggers — kya cheez baar baar issues paida karti hai",
+  km3_unlStability:       "Long-term Stability — chalega ya tootega",
+  km3_unlFinal:           "Final Outcome — actual future direction",
+  km3_nadiAlag:           "Alag nadi — auspicious for healthy progeny and long life together.",
+  km3_nadiSama:           "Sama nadi — strong emotional mirroring, some health caution advised.",
+  km3_personFallback:     "Person",
+  km3_errTryAgain:        "Error. Dobara try karein.",
+  km3_proTrailMore:       "Poori detail aur remedy Pro report me dikhegi.",
+  km3_kundliBased:        "Yeh analysis aapki asli kundli par based hai aur un patterns ko reveal karta hai jo seedha aapke rishte par asar dalte hain.",
+  km3_truthsBelow:        "Is connection ke sabse important sach neeche chhupe hain.",
+  km3_unlockToSee:        "Unlock karke poori picture dekhein.",
+  km3_whatYouUnlock:      "WHAT YOU WILL UNLOCK",
+  km3_lockedPreview:      "🔒 LOCKED PREVIEW",
+  km3_addBothToUnlock:    "Add Both Kundlis to Unlock Preview",
+  km3_addBothSubtext:     "Dono ki birth details add karein — phir aapki personal hooks generate hongi",
+  vu_tapAnyCard:      "Dos, don'ts aur remedies dekhne ke liye kisi bhi card par tap karein",
+  vu_proHeader:       "AstroVastu PRO — Pura Ghar Scan",
+  vu_proSubheader:    "Photo Engine + aapki Kundli + Mahadasha layer",
+  vu_proDesc:         "Floor-plan upload, compass ke saath room photos, Brihat Samhita / Mayamatam se cited deterministic Vastu Shastra rules, aapki chart ke liye personalised priority actions.",
+  vu_oneTime:         "one-time",
+  vu_genTipsTitle:    "⚡ General Vastu Tips",
+  vu_genTip1:         "Ghar ko clutter-free rakhein — blocked spaces energy flow rokte hain",
+  vu_genTip2:         "Ghar hamesha well-lit ho — andhera negativity ko invite karta hai",
+  vu_genTip3:         "Chee-chee karte ya toote darwaze turant theek karein",
+  vu_genTip4:         "Indoor plants rakhein — ye ghar me jeevan-urja late hain",
+  vu_genTip5:         "Toot-foot wali cheezein turant hatayein",
+  vu_genTip6:         "North me running water (fountain ya aquarium) shubh hai",
+  vu_disclaimer:      "Yeh ek general Vastu guide hai. Apne ghar ke liye specifically, hamesha ek qualified Vastu expert se personalised advice lein.",
 };
 
 // Hindi overrides (Devanagari)
@@ -2185,6 +2846,19 @@ const HI: Partial<MoreT> = {
   vu_whatIsVastu:     "वास्तु शास्त्र क्या है?",
   vu_unlockPro:       "PRO अनलॉक करें",
   vu_roomGuide:       "कमरा-वार वास्तु गाइड",
+  vu_tapAnyCard:      "करने योग्य, न करने योग्य और उपाय देखने हेतु किसी भी कार्ड पर टैप करें",
+  vu_proHeader:       "AstroVastu PRO — पूरे घर का स्कैन",
+  vu_proSubheader:    "फ़ोटो इंजन + आपकी कुंडली + महादशा परत",
+  vu_proDesc:         "फ्लोर-प्लान अपलोड, कम्पास सहित कमरे की तस्वीरें, बृहत् संहिता / मयमतम् से उद्धृत निश्चित वास्तु शास्त्र नियम, आपकी कुंडली हेतु व्यक्तिगत प्राथमिकता-कार्य।",
+  vu_oneTime:         "एक-बार",
+  vu_genTipsTitle:    "⚡ सामान्य वास्तु सुझाव",
+  vu_genTip1:         "घर को अव्यवस्था-मुक्त रखें — अवरुद्ध स्थान ऊर्जा-प्रवाह रोकते हैं",
+  vu_genTip2:         "घर अच्छी तरह प्रकाशित हो — अंधेरा नकारात्मकता को आमंत्रित करता है",
+  vu_genTip3:         "चरमराते या टूटे दरवाज़े तुरंत ठीक करें",
+  vu_genTip4:         "इनडोर पौधे रखें — वे घर में जीवन-ऊर्जा लाते हैं",
+  vu_genTip5:         "टूटी या क्षतिग्रस्त वस्तुएँ तुरंत हटाएँ",
+  vu_genTip6:         "उत्तर में जल-धारा (फव्वारा या एक्वेरियम) शुभ है",
+  vu_disclaimer:      "यह सामान्य वास्तु मार्गदर्शिका है। अपने घर के लिए विशेष रूप से, सदैव योग्य वास्तु विशेषज्ञ से व्यक्तिगत सलाह लें।",
   vu_astroVastuPro:   "एस्ट्रोवास्तु प्रो",
   vu_personalizedSub: "व्यक्तिगत प्रीमियम वास्तु विश्लेषण",
   vu_cancelAnytime:   "कभी भी रद्द करें",
@@ -2200,6 +2874,140 @@ const HI: Partial<MoreT> = {
   km_lblDob:          "जन्म तिथि",
   km_lblTime:         "जन्म समय",
   km_lblPlace:        "जन्म स्थान",
+
+  km_birthDetailsReq:  "जन्म विवरण आवश्यक",
+  km_partnerBirth:     "साथी के जन्म विवरण",
+  km_phName:           "पूरा नाम",
+  km_phDob:            "DD/MM/YYYY",
+  km_phTime:           "HH:MM  AM / PM",
+  km_phPlace:          "जैसे: दिल्ली, भारत",
+  km_birthMissing:     "जन्म डेटा नहीं मिला",
+  km_calcFailed:       "गणना विफल",
+  km_okBtn:            "ठीक है",
+  km_aap:              "आप",
+
+  km_secTopInsights:   "मुख्य अंतर्दृष्टि",
+  km_secDeepInsights:  "गहरी अंतर्दृष्टि",
+  km_secAdvAnalysis:   "उन्नत विश्लेषण",
+  km_secFutInsights:   "भविष्य अंतर्दृष्टि",
+  km_secHidPremium:    "छुपे प्रीमियम",
+
+  km_coreCompTitle:    "मुख्य अनुकूलता",
+  km_coreCompDesc:     "क्या आपके दिल, मन और आत्मा जीवन भर के लिए सच में जुड़े हैं?",
+  km_riskScanTitle:    "जोखिम स्कैन",
+  km_riskScanDesc:     "यह अंतर्दृष्टि आपका निर्णय बदल सकती है — छुपे जोखिम सामने आएँगे",
+  km_personMatchTitle: "व्यक्तित्व मेल",
+  km_personMatchDesc:  "यह अंतर्दृष्टि आपका निर्णय बदल सकती है — देखें क्या आप एक-दूसरे को सच में समझते हैं",
+  km_soulKarmaTitle:   "आत्मा एवं कर्म",
+  km_soulKarmaDesc:    "क्या आप नियति के साथी हैं? या केवल समय? आपकी जन्म पत्रिका पर रीयल-टाइम विश्लेषण",
+  km_intimacyTitle:    "अंतरंगता स्कोर",
+  km_intimacyDesc:     "शारीरिक एवं भावनात्मक बंधन — वह सत्य जो अधिकांश जोड़े कभी नहीं जान पाते",
+  km_doshaEngTitle:    "दोष इंजन",
+  km_doshaEngDesc:     "मंगल, नाड़ी और भकूट — वे संघर्ष जो चुपचाप विवाह तोड़ देते हैं",
+  km_negEnergyTitle:   "नकारात्मक ऊर्जा",
+  km_negEnergyDesc:    "छुपे दोष जो आपके पंडित भी चूक सकते हैं — इन्हें अनदेखा न करें",
+  km_strChalTitle:     "शक्तियाँ एवं चुनौतियाँ",
+  km_strChalDesc:      "क्या आपको जोड़े रखेगा — और क्या चुपचाप दूर कर सकता है",
+  km_remAdvTitle:      "उपाय एवं सलाह",
+  km_remAdvDesc:       "सही पूजा, रत्न और मंत्र — रुकावटें बढ़ने से पहले ही हटाएँ",
+
+  km_marriageTime:     "विवाह समय",
+  km_childPlan:        "संतान योजना",
+  km_finCompat:        "आर्थिक मेल",
+  km_lifeStab:         "जीवन स्थिरता",
+  km_finHarmony:       "आर्थिक सामंजस्य",
+  km_familyAccept:     "परिवार स्वीकार्यता",
+
+  km_karmRelTitle:     "कार्मिक रिश्ता जाँच",
+  km_karmRelDesc:      "क्या इस जन्म में मिलने का योग था?",
+  km_pastLifeTitle:    "पूर्व जन्म संबंध",
+  km_pastLifeDesc:     "पिछले जन्म से आत्मिक बंधन",
+  km_divorceTitle:     "तलाक / वियोग जोखिम",
+  km_divorceDesc:      "ग्रह-संघर्ष पर आधारित संभावना",
+  km_loyaltyTitle:     "वफ़ादारी एवं विश्वास सूचकांक",
+  km_loyaltyDesc:      "विश्वासघात या लंबे समय की वफ़ादारी की संभावना",
+
+  km_badgeMostImp:     "सबसे महत्वपूर्ण",
+  km_badgeCritCheck:   "गंभीर जाँच",
+  km_badgeDecCard:     "निर्णय कार्ड",
+  km_badgeSecret:      "गुप्त",
+
+  km_gradeExcellent:   "उत्कृष्ट",
+  km_gradeVeryGood:    "बहुत अच्छा",
+  km_gradeAverage:     "सामान्य",
+  km_gradeBelowAvg:    "कम",
+  km_gradeLowMatch:    "बहुत कम",
+
+  km_kutaSahi:         "सही",
+  km_kutaAnmatch:      "अनमेल",
+  km_kutaDono:         "दोनों",
+
+  km_emotionalBond:    "भावनात्मक बंधन",
+  km_mentalConn:       "मानसिक संबंध",
+  km_intimacyHarm:     "अंतरंगता सामंजस्य",
+  km_communication:    "संवाद",
+  km_natureTemp:       "स्वभाव एवं मिज़ाज",
+  km_socialAlign:      "सामाजिक मेल",
+  km_lifestyleHarm:    "जीवनशैली सामंजस्य",
+  km_physicalHarm:     "शारीरिक सामंजस्य",
+  km_energeticAttr:    "ऊर्जा आकर्षण",
+
+  km_compMismatch:     "अनुकूलता बेमेल",
+  km_doshaConflict:    "दोष संघर्ष",
+  km_longTermStab:     "दीर्घकालिक स्थिरता",
+  km_nadiDosh:         "नाड़ी दोष",
+  km_bhakootDosh:      "भकूट दोष",
+  km_ganaDosh:         "गण दोष",
+  km_grahaMaitri:      "ग्रह मैत्री",
+
+  km_onePartMang:      "एक साथी मांगलिक है",
+  km_noMangConf:       "मांगलिक संघर्ष नहीं",
+
+  km_natTimingExp:     "प्राकृतिक समय संभव",
+  km_slightPatience:   "थोड़ा धैर्य रखें",
+  km_medConsAdv:       "चिकित्सा/विशेषज्ञ सलाह लें",
+  km_strongFinAlign:   "मज़बूत आर्थिक मेल",
+  km_modBudgetHelp:    "सामान्य — बजट योजना लाभदायक",
+  km_highlyLikely:     "बहुत संभव",
+  km_mayNeedTime:      "समय और प्रयास लग सकता है",
+  km_marrAusp:         "2025–2026 शुभ",
+  km_marrModerate:     "2026–2027 सामान्य",
+  km_marrDelay:        "देर करें — मार्गदर्शन लें",
+
+  km_riskLow:          "कम",
+  km_riskModerate:     "सामान्य",
+  km_riskHigh:         "अधिक",
+
+  km_deepKarmTie:      "गहरा कार्मिक बंधन",
+  km_growConn:         "बढ़ता संबंध",
+  km_posPastLife:      "शुभ पूर्व-जन्म",
+  km_neutralKarma:     "तटस्थ कर्म",
+
+  km_planFriendStrong: "ग्रह मैत्री मज़बूत है",
+  km_sharedEnergies:   "साझी ग्रह ऊर्जा",
+  km_taraFav:          "तारा नक्षत्र शुभ है",
+  km_modTaraDest:      "सामान्य तारा भाग्य",
+  km_bhakSubh:         "भकूट शुभ — कोई राशि संघर्ष नहीं",
+  km_rashiAlign:       "राशि ऊर्जा मिलती है",
+
+  km_nadiHealth:       "नाड़ी दोष — स्वास्थ्य जागरूकता आवश्यक",
+  km_minorTempDiff:    "हल्के स्वभाव अंतर",
+  km_ganaClash:        "गण संघर्ष — प्रकृति अंतर",
+  km_commPracNeeded:   "संवाद का अभ्यास आवश्यक",
+  km_bhakTimeCaut:     "भकूट दोष — समय सावधानी",
+  km_patienceConfl:    "संघर्ष में थोड़ा धैर्य",
+  km_yoniMismatch:     "योनि बेमेल — ऊर्जा समायोजन",
+  km_qualityTimeNeeded:"नियमित गुणवत्ता समय आवश्यक",
+
+  km_pastLifeScore:    "पूर्व जन्म संबंध स्कोर",
+  km_ancestKarma:      "वंशानुगत कर्म पैटर्न",
+  km_nakDream:         "नक्षत्र स्वप्न अनुकूलता",
+  km_advDoshaRev:      "उन्नत दोष निवारण योजना",
+
+  km_unlockComplete:   "पूरी रिपोर्ट अनलॉक करें",
+  km_realTimeAnalysis: "आपकी जन्म पत्रिका पर रीयल-टाइम विश्लेषण",
+  km_secFutTimeline:   "भविष्य समयरेखा",
+  km_secSoulKarma:     "आत्मा एवं कर्म विश्लेषण",
   pe_otherProfiles:   "अन्य प्रोफ़ाइल",
   pe_recentlyDeleted: "हाल में हटाए गए",
   pe_noKundliYet:     "अभी तक कोई कुंडली नहीं",
@@ -2422,6 +3230,79 @@ const HI: Partial<MoreT> = {
   vu_tabBasic:   "बेसिक",
   vu_tabPro:     "प्रो",
   vu_introBody:  "वास्तु शास्त्र वास्तुकला का एक प्राचीन भारतीय विज्ञान है। सही दिशाएँ घर में सकारात्मक ऊर्जा, सुख, स्वास्थ्य और समृद्धि लाती हैं।",
+
+  // ── kundli-milan additional (km2_*) ──
+  km2_secRiskScan:        "रिश्ते का जोखिम स्कैन",
+  km2_secPersMatch:       "व्यक्तित्व मेल",
+  km2_secIntimacyComp:    "अंतरंगता अनुकूलता",
+  km2_secNegEnergy:       "नकारात्मक ऊर्जा जाँच",
+  km2_chipClear:          "साफ़",
+  km2_chipMild:           "हल्का",
+  km2_chipPresent:        "मौजूद",
+  km2_strengthsHdr:       "शक्तियाँ 💚",
+  km2_challengesHdr:      "चुनौतियाँ ⚡",
+  km2_persExcellent:      "उत्कृष्ट — दोनों का जीवन के प्रति दृष्टिकोण और मूल्य समान हैं।",
+  km2_persModerate:       "मध्यम — कुछ अंतर हैं पर प्रयास से सामंजस्य बन सकता है।",
+  km2_persChallenging:    "चुनौतीपूर्ण — स्वभाव के अंतर पर सक्रिय रूप से कार्य करना होगा।",
+  km2_yoniExceptional:    "समान योनि — असाधारण शारीरिक और ऊर्जा का तालमेल।",
+  km2_yoniComplementary:  "पूरक ऊर्जाएँ — कुछ समायोजन के साथ अच्छी अनुकूलता।",
+  km2_yoniDifferent:      "अलग ऊर्जाएँ — धैर्य और समझ से यह बंधन मज़बूत होगा।",
+  km2_concernSing:        "चिंता",
+  km2_concernPlural:      "चिंताएँ",
+  km2_concernsFound:      "मिलीं",
+  km2_negPatExcell:       "उत्कृष्ट — कोई बड़ा नकारात्मक पैटर्न नहीं।",
+  km2_negPatMinor:        "छोटी चिंताएँ — जागरूकता से संभाली जा सकती हैं।",
+  km2_negPatMulti:        "कई चिंताएँ — उपाय अत्यधिक अनुशंसित हैं।",
+  km2_doshDetect:         "दोष मिला",
+  km2_nadiAuspProgeny:    "नाड़ी अलग — संतान के लिए शुभ",
+  km2_nadiDeepEmpathy:    "नाड़ी मिली — गहरी समझ",
+  km2_remKumbhVivah:      "विवाह से पूर्व कुम्भ विवाह या मंगल पूजा करें।",
+  km2_remEkadashi:        "एकादशी का व्रत रखें — शिव पूजा से नाड़ी असंतुलन से बचें।",
+  km2_remChandraMantra:   "चंद्र मंत्र जपें — ॐ चंद्राय नमः 108 बार।",
+  km2_remRudrabhishek:    "विवाह से पूर्व साथ में रुद्राभिषेक करें।",
+  km2_remGemstones:       "दोनों को अनुकूल रत्न पहनने चाहिए — ज्योतिषी से सलाह लें।",
+  km2_remSunderkand:      "साथ में पूजा और सुंदरकांड का नियमित पाठ बंधन को मज़बूत करेगा।",
+  km2_fvExceptional:      "असाधारण मिलान। तारे आपके पक्ष में हैं। आनंदमय और सफल विवाह का संकेत है।",
+  km2_fvVeryPositive:     "बहुत सकारात्मक मिलान। आपसी सम्मान और प्रेम से यह रिश्ता बहुत अच्छा होगा।",
+  km2_fvModerate:         "मध्यम मिलान। जागरूकता, प्रयास और विशेषज्ञ मार्गदर्शन से यह बंधन फले-फूलेगा।",
+  km2_fvChallenging:      "चुनौतीपूर्ण मिलान। आगे बढ़ने से पूर्व उपाय, धैर्य और ज्योतिषी से सलाह अनिवार्य है।",
+  km2_ashtakootScoreLbl:  "अष्टकूट स्कोर",
+  km2_concernDetSuffix:   "मिलीं",
+  km2_addBothFirst:       "पहले दोनों कुंडली जोड़ें",
+  km2_unlockFullAnal:     "पूरा विश्लेषण खोलें",
+  km2_youPlaceholder:     "आप",
+  km2_birthMissingBody:   "सही मिलान के लिए दोनों साथियों का पूर्ण जन्म डेटा (तारीख़, समय, स्थान) चाहिए।",
+  km2_calcFailedBody:     "मिलान गणना नहीं हो सकी। कृपया पुनः प्रयास करें।",
+  km2_matchingWith:       "मिलान",
+  km3_yourPersAnalysis:   "आपका व्यक्तिगत विश्लेषण",
+  km3_insEmotional:       "भावनात्मक अनुकूलता",
+  km3_insMarriage:        "विवाह का भविष्य",
+  km3_insRisks:           "छुपे जोखिम",
+  km3_insKarmic:          "कर्मिक बंधन",
+  km3_insStrength:        "शक्ति कारक",
+  km3_insTriggers:        "विवाद के कारण",
+  km3_insStability:       "दीर्घकालीन स्थिरता",
+  km3_insFinal:           "अंतिम परिणाम",
+  km3_unlEmotional:       "भावनात्मक अनुकूलता — क्या वास्तव में जुड़ते हो या नहीं",
+  km3_unlMarriage:        "विवाह का भविष्य — इस रिश्ते की वास्तविक दिशा",
+  km3_unlRisks:           "छुपे जोखिम — वे पैटर्न जो समस्याएँ ला रहे हैं",
+  km3_unlKarmic:          "कर्मिक बंधन — इस संबंध का गहरा उद्देश्य",
+  km3_unlStrength:        "शक्ति कारक — क्या इस रिश्ते को जोड़े रखता है",
+  km3_unlTriggers:        "विवाद के कारण — क्या बार-बार समस्याएँ पैदा करता है",
+  km3_unlStability:       "दीर्घकालीन स्थिरता — टिकेगा या टूटेगा",
+  km3_unlFinal:           "अंतिम परिणाम — वास्तविक भविष्य की दिशा",
+  km3_nadiAlag:           "अलग नाड़ी — स्वस्थ संतान और दीर्घ जीवन के लिए शुभ।",
+  km3_nadiSama:           "सम नाड़ी — गहरा भावनात्मक मेल, स्वास्थ्य के प्रति सावधानी सलाह।",
+  km3_personFallback:     "व्यक्ति",
+  km3_errTryAgain:        "त्रुटि। कृपया पुनः प्रयास करें।",
+  km3_proTrailMore:       "पूरी जानकारी और उपाय Pro रिपोर्ट में दिखेंगे।",
+  km3_kundliBased:        "यह विश्लेषण आपकी असली कुंडली पर आधारित है और उन पैटर्न्स को उजागर करता है जो सीधे आपके रिश्ते को प्रभावित करते हैं।",
+  km3_truthsBelow:        "इस संबंध के सबसे महत्वपूर्ण सत्य नीचे छुपे हुए हैं।",
+  km3_unlockToSee:        "अनलॉक करके पूरी तस्वीर देखें।",
+  km3_whatYouUnlock:      "आप क्या अनलॉक करेंगे",
+  km3_lockedPreview:      "🔒 लॉक्ड प्रीव्यू",
+  km3_addBothToUnlock:    "प्रीव्यू अनलॉक करने के लिए दोनों कुंडलियाँ जोड़ें",
+  km3_addBothSubtext:     "दोनों की जन्म-विवरण जोड़ें — फिर आपके व्यक्तिगत हुक्स बनेंगे",
 };
 
 /**

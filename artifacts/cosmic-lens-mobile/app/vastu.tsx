@@ -914,6 +914,383 @@ const ROOMS: VastuRoom[] = [
   },
 ];
 
+// ── Room localization map (HN = Hinglish, HI = pure Hindi) ───────────────────
+type RoomLocale = { idealDir: string; importance: string; dos: string[]; donts: string[]; remedies: string[] };
+const ROOMS_LOC: Record<string, { hn: RoomLocale; hi: RoomLocale }> = {
+  "main-door": {
+    hn: {
+      idealDir: "North, East, ya North-East (NE) — Sabse Best Disha",
+      importance: "Mukhya dwar positive energy aur samriddhi ka pravesh dwar hai. Iski disha ghar ke liye sabse important Vastu factor hai.",
+      dos: [
+        "North-East (NE) ya North disha mukhya dwar ke liye sabse best hai",
+        "Solid, bhaari lakdi ka darwaza istemaal karein",
+        "Entrance ke upar Swastik ya Om symbol lagayein",
+        "Darwaza andar ki taraf khulna chahiye",
+        "Nameplate saaf aur clearly visible rakhein",
+        "Entrance hamesha well-lit rakhein",
+      ],
+      donts: [
+        "Mukhya dwar ke saamne column ya pillar na ho",
+        "South (S) ya South-West (SW) me mukhya dwar na rakhein",
+        "Mukhya dwar ke bahar joote-chappal ka dher na lagayein",
+        "Darwaza chee-chee ya toota na chhodein — turant theek karein",
+        "Bathroom direct mukhya entrance ke saamne na ho",
+      ],
+      remedies: [
+        "Aashirvaad ke liye darwaze par 'Shri' ya Ganpati symbol lagayein",
+        "Roz subah entrance par rangoli ya taaze phool rakhein",
+        "Ghar me pravesh karte samay 'Om Namah Shivaya' jaap karein",
+      ],
+    },
+    hi: {
+      idealDir: "उत्तर, पूर्व या उत्तर-पूर्व (ईशान) — सर्वोत्तम दिशा",
+      importance: "मुख्य द्वार सकारात्मक ऊर्जा और समृद्धि का प्रवेश द्वार है। इसकी दिशा पूरे घर के लिए सबसे महत्वपूर्ण वास्तु कारक है।",
+      dos: [
+        "मुख्य द्वार के लिए उत्तर-पूर्व (ईशान) या उत्तर दिशा सर्वश्रेष्ठ है",
+        "ठोस, भारी लकड़ी का दरवाज़ा प्रयोग करें",
+        "प्रवेश द्वार के ऊपर स्वस्तिक या ॐ का चिह्न लगाएँ",
+        "दरवाज़ा अंदर की ओर खुलना चाहिए",
+        "नेमप्लेट साफ़ और स्पष्ट रूप से दिखाई दे",
+        "प्रवेश द्वार सदैव अच्छी रोशनी में रहे",
+      ],
+      donts: [
+        "मुख्य द्वार के सामने कोई स्तंभ या खंभा न हो",
+        "दक्षिण या दक्षिण-पश्चिम में मुख्य द्वार न रखें",
+        "मुख्य द्वार के बाहर जूते-चप्पल का ढेर न लगाएँ",
+        "दरवाज़ा चरमराता या टूटा न रहे — तुरंत ठीक करें",
+        "स्नानघर मुख्य द्वार के सामने न हो",
+      ],
+      remedies: [
+        "आशीर्वाद हेतु द्वार पर 'श्री' या गणपति चिह्न लगाएँ",
+        "रोज़ सुबह प्रवेश पर रंगोली या ताज़े फूल रखें",
+        "घर में प्रवेश करते समय 'ॐ नमः शिवाय' का जाप करें",
+      ],
+    },
+  },
+  "living": {
+    hn: {
+      idealDir: "Ghar ka North ya East wing",
+      importance: "Living room ghar ki social energy ka kendra hai. Mehmaan yahan welcome hote hain aur parivaar yahan ikattha hota hai.",
+      dos: [
+        "Sofa aur furniture NW ya SW corner me rakhein",
+        "TV ya entertainment unit East ya North wall ki taraf face kare",
+        "East-facing windows beneficial morning sunlight aane dein",
+        "Light colors istemaal karein — white, cream, ya light yellow",
+        "North ya East wall par clock lagayein",
+      ],
+      donts: [
+        "Sofa direct mukhya dwar ke saamne na rakhein",
+        "Black ya dark red jaise dark colors avoid karein",
+        "Toota ya damaged furniture turant hatayein",
+        "Darwaze ke paas corner me mirror na rakhein",
+      ],
+      remedies: [
+        "Positivity badhane ke liye North-East corner me crystal ball rakhein",
+        "Dhan ke liye North wall par Laughing Buddha rakhein",
+        "NE ya East corner me taaze phool ya plants rakhein",
+      ],
+    },
+    hi: {
+      idealDir: "घर का उत्तर या पूर्व भाग",
+      importance: "बैठक घर की सामाजिक ऊर्जा का केंद्र है। अतिथियों का यहाँ स्वागत होता है और परिवार यहाँ एकत्रित होता है।",
+      dos: [
+        "सोफ़ा और फर्नीचर उत्तर-पश्चिम या दक्षिण-पश्चिम कोने में रखें",
+        "टीवी या मनोरंजन इकाई पूर्व या उत्तर दीवार की ओर हो",
+        "पूर्व-मुखी खिड़कियाँ लाभकारी प्रातः सूर्य प्रकाश आने दें",
+        "हल्के रंगों का प्रयोग करें — सफ़ेद, क्रीम, या हल्का पीला",
+        "उत्तर या पूर्व दीवार पर घड़ी लगाएँ",
+      ],
+      donts: [
+        "सोफ़ा सीधे मुख्य द्वार के सामने न रखें",
+        "काले या गहरे लाल जैसे गहरे रंगों से बचें",
+        "टूटा या क्षतिग्रस्त फर्नीचर तुरंत हटाएँ",
+        "दरवाज़े के पास कोने में दर्पण न रखें",
+      ],
+      remedies: [
+        "सकारात्मकता बढ़ाने हेतु उत्तर-पूर्व कोने में स्फटिक गोला रखें",
+        "धन के लिए उत्तर दीवार पर लाफिंग बुद्धा रखें",
+        "उत्तर-पूर्व या पूर्व कोने में ताज़े फूल या पौधे रखें",
+      ],
+    },
+  },
+  "kitchen": {
+    hn: {
+      idealDir: "South-East (SE) — Agni (Fire) Zone",
+      importance: "Rasoi agni tatva ko represent karti hai. Sahi placement parivaar ki health aur samriddhi badhati hai.",
+      dos: [
+        "Stove/gas burner SE corner me rakhein — Fire zone",
+        "Khana banate samay East ki taraf face karein",
+        "Sink NE ya North wall ke paas rakhein",
+        "Rasoi me yellow, orange, ya cream colors istemaal karein",
+        "SE ya East direction me windows ideal hain",
+      ],
+      donts: [
+        "Rasoi direct bathroom ke saamne ya upar na ho",
+        "Stove kabhi NE corner me na rakhein",
+        "Rasoi me black ya dark blue colors avoid karein",
+        "Stove aur sink ek dusre ke paas na rakhein",
+      ],
+      remedies: [
+        "Subah pehla khana banane se pehle ek deepak jalayein",
+        "SE corner me thoda sa sea salt rakhein",
+        "Rasoi hamesha saaf aur clutter-free rakhein",
+      ],
+    },
+    hi: {
+      idealDir: "दक्षिण-पूर्व (आग्नेय) — अग्नि क्षेत्र",
+      importance: "रसोई अग्नि तत्व का प्रतिनिधित्व करती है। सही स्थान पर रखी रसोई पूरे परिवार के स्वास्थ्य और समृद्धि को बढ़ाती है।",
+      dos: [
+        "चूल्हा/गैस बर्नर दक्षिण-पूर्व कोने (आग्नेय) में रखें",
+        "खाना पकाते समय पूर्व की ओर मुख करें",
+        "सिंक उत्तर-पूर्व या उत्तर दीवार के पास रखें",
+        "रसोई में पीला, नारंगी या क्रीम रंग प्रयोग करें",
+        "दक्षिण-पूर्व या पूर्व दिशा में खिड़कियाँ आदर्श हैं",
+      ],
+      donts: [
+        "रसोई सीधे स्नानघर के सामने या ऊपर न हो",
+        "चूल्हे को कभी उत्तर-पूर्व कोने में न रखें",
+        "रसोई में काले या गहरे नीले रंग से बचें",
+        "चूल्हा और सिंक पास-पास न रखें",
+      ],
+      remedies: [
+        "सुबह पहला भोजन बनाने से पहले एक दीपक जलाएँ",
+        "दक्षिण-पूर्व कोने में थोड़ा समुद्री नमक रखें",
+        "रसोई सदैव साफ़ और अव्यवस्था से मुक्त रखें",
+      ],
+    },
+  },
+  "master-bedroom": {
+    hn: {
+      idealDir: "South-West (SW) — Ghar ke mukhiya ke liye sabse best",
+      importance: "Ghar ka mukhiya master bedroom me sota hai. South-West disha sthirta, shakti aur samriddhi deti hai.",
+      dos: [
+        "Bed SW ya South wall ke paas rakhein",
+        "Sar South ya East ki taraf rakh kar soyein",
+        "Wardrobes aur heavy furniture South ya West wall par rakhein",
+        "Light pink, beige, ya lavender room colors istemaal karein",
+        "Raat me bedroom ke mirrors ko cover karein",
+      ],
+      donts: [
+        "Sar North ki taraf rakh kar na soyein — health issues hote hain",
+        "Bed direct beam ke neeche na rakhein",
+        "Bedroom me TV avoid karein; ho to cover karein",
+        "Master bedroom NE corner me na banayein",
+        "Pair darwaze ki taraf karke na soyein",
+      ],
+      remedies: [
+        "Bedroom me rose quartz ya amethyst crystals rakhein",
+        "Negative energy absorb karne ke liye bed ke neeche sea salt ka bowl rakhein",
+        "Harmony ke liye South wall par couple ki photo lagayein",
+      ],
+    },
+    hi: {
+      idealDir: "दक्षिण-पश्चिम (नैऋत्य) — गृह स्वामी हेतु सर्वश्रेष्ठ",
+      importance: "घर का मुखिया मुख्य शयनकक्ष में सोता है। दक्षिण-पश्चिम दिशा स्थिरता, शक्ति और समृद्धि प्रदान करती है।",
+      dos: [
+        "बिस्तर दक्षिण-पश्चिम या दक्षिण दीवार के पास रखें",
+        "सिर दक्षिण या पूर्व की ओर रखकर सोएँ",
+        "अलमारियाँ और भारी फर्नीचर दक्षिण या पश्चिम दीवार पर रखें",
+        "हल्का गुलाबी, बेज, या लैवेंडर रंग प्रयोग करें",
+        "रात में शयनकक्ष के दर्पण ढक दें",
+      ],
+      donts: [
+        "सिर उत्तर की ओर करके न सोएँ — स्वास्थ्य समस्याएँ होती हैं",
+        "बिस्तर सीधे बीम के नीचे न रखें",
+        "शयनकक्ष में टीवी से बचें; हो तो ढककर रखें",
+        "मुख्य शयनकक्ष उत्तर-पूर्व कोने में न बनाएँ",
+        "पैर दरवाज़े की ओर करके न सोएँ",
+      ],
+      remedies: [
+        "शयनकक्ष में गुलाब क्वार्ट्ज़ या एमेथिस्ट क्रिस्टल रखें",
+        "नकारात्मक ऊर्जा सोखने हेतु बिस्तर के नीचे समुद्री नमक का कटोरा रखें",
+        "सौहार्द्र हेतु दक्षिण दीवार पर दंपति की तस्वीर लगाएँ",
+      ],
+    },
+  },
+  "children": {
+    hn: {
+      idealDir: "West ya North-West (NW)",
+      importance: "Bachon ke kamre ki disha unki padhai, creativity aur overall health par asar daalti hai.",
+      dos: [
+        "Padhai ki desk East ya North ki taraf face karein focus ke liye",
+        "Bed West ya NW wall ke paas rakhein achi neend ke liye",
+        "Books East ya North wall par rakhein",
+        "Green, yellow, ya light blue colors istemaal karein",
+        "Kamre me Saraswati ji ki photo ya Vidya Yantra rakhein",
+      ],
+      donts: [
+        "Study chair SE corner (Fire zone) me na rakhein",
+        "Bachon ke kamre me TV bilkul avoid karein",
+        "Bache ke sar ke paas heavy wardrobe na rakhein",
+      ],
+      remedies: [
+        "Concentration badhane ke liye study table par Saraswati Yantra rakhein",
+        "Creativity aur fresh energy ke liye kamre me green plants rakhein",
+        "Exam se pehle subah Saraswati Chalisa padhein",
+      ],
+    },
+    hi: {
+      idealDir: "पश्चिम या उत्तर-पश्चिम (वायव्य)",
+      importance: "बच्चों के कमरे की दिशा उनकी पढ़ाई, रचनात्मकता और समग्र स्वास्थ्य को प्रभावित करती है।",
+      dos: [
+        "ध्यान केंद्रित करने हेतु अध्ययन डेस्क पूर्व या उत्तर की ओर रखें",
+        "अच्छी नींद के लिए बिस्तर पश्चिम या उत्तर-पश्चिम दीवार के पास रखें",
+        "किताबें पूर्व या उत्तर दीवार पर रखें",
+        "हरा, पीला या हल्का नीला रंग प्रयोग करें",
+        "कमरे में सरस्वती जी का चित्र या विद्या यंत्र रखें",
+      ],
+      donts: [
+        "अध्ययन कुर्सी दक्षिण-पूर्व कोने (अग्नि क्षेत्र) में न रखें",
+        "बच्चों के कमरे में टीवी पूर्णतः वर्जित करें",
+        "बच्चे के सिर के पास भारी अलमारी न रखें",
+      ],
+      remedies: [
+        "एकाग्रता बढ़ाने हेतु अध्ययन मेज़ पर सरस्वती यंत्र रखें",
+        "रचनात्मकता और नई ऊर्जा हेतु कमरे में हरे पौधे रखें",
+        "परीक्षा से पूर्व प्रातः सरस्वती चालीसा का पाठ करें",
+      ],
+    },
+  },
+  "pooja": {
+    hn: {
+      idealDir: "North-East (NE) — Ishaan Zone (Sabse Pavitra)",
+      importance: "Pooja ghar ghar ka sabse pavitra sthaan hai. North-East (Ishaan) corner divine ka nivas maana jaata hai.",
+      dos: [
+        "Mandir/altar hamesha NE ya East direction me rakhein",
+        "Pooja karte samay East ya North ki taraf face karein",
+        "Devi-devta ki murti aankhon ke level par ya upar rakhein",
+        "Pooja sthal hamesha saaf aur well-lit rakhein",
+        "White, yellow, ya orange is kamre ke liye sabse best colors hain",
+      ],
+      donts: [
+        "Mandir bedroom ke andar na rakhein",
+        "Pooja ghar ke upar ya neeche toilet kabhi na ho",
+        "Toot-foot wali murti na rakhein",
+        "Mandir South direction me na lagayein",
+      ],
+      remedies: [
+        "Roz subah mandir me ghee ka deepak jalayein",
+        "Divine energy badhane ke liye pooja ghar me kapoor jalayein",
+        "Aashirvaad ke liye har Shukravar genda phool chadhayein",
+      ],
+    },
+    hi: {
+      idealDir: "उत्तर-पूर्व (ईशान) — सर्वाधिक पवित्र क्षेत्र",
+      importance: "पूजा घर घर का सबसे पवित्र स्थान है। उत्तर-पूर्व (ईशान) कोना दिव्य शक्ति का निवास माना जाता है।",
+      dos: [
+        "मंदिर/वेदी सदैव उत्तर-पूर्व या पूर्व दिशा में रखें",
+        "पूजा करते समय पूर्व या उत्तर की ओर मुख करें",
+        "देव-देवियों की मूर्तियाँ नेत्र-स्तर पर या ऊपर रखें",
+        "पूजा स्थल सदैव स्वच्छ और प्रकाशित रखें",
+        "इस कक्ष हेतु श्वेत, पीला या नारंगी रंग सर्वोत्तम है",
+      ],
+      donts: [
+        "मंदिर शयनकक्ष के अंदर न रखें",
+        "पूजा घर के ऊपर या नीचे शौचालय कभी न हो",
+        "खंडित मूर्तियाँ न रखें",
+        "मंदिर दक्षिण दिशा में न लगाएँ",
+      ],
+      remedies: [
+        "रोज़ प्रातः मंदिर में घी का दीपक जलाएँ",
+        "दिव्य ऊर्जा बढ़ाने हेतु पूजा घर में कपूर जलाएँ",
+        "आशीर्वाद हेतु प्रत्येक शुक्रवार गेंदे के फूल अर्पित करें",
+      ],
+    },
+  },
+  "bathroom": {
+    hn: {
+      idealDir: "North-West (NW) ya West — Ideal Placement",
+      importance: "Galat jagah par bathroom negativity, health issues aur financial problems la sakta hai.",
+      dos: [
+        "NW ya West bathroom ke liye sabse best location hai",
+        "Geyser ya water heater SE corner me rakhein",
+        "Exhaust fan ya window East ya North me ho",
+        "Toilet seat South ya West wall ki taraf face kare",
+        "Bathroom hamesha saaf aur sookha rakhein",
+      ],
+      donts: [
+        "Bathroom kabhi NE (Ishaan) corner me na ho",
+        "Pooja ghar ke baaju me bathroom na rakhein",
+        "Bathroom ka darwaza hamesha band rakhein",
+        "Tapakte taps turant theek karein — wealth energy nikal jaati hai",
+      ],
+      remedies: [
+        "Negativity absorb karne ke liye bathroom ke bahar sea salt ya nimbu rakhein",
+        "Bathroom paani me neem ya eucalyptus oil ki kuch boondein daalein",
+        "Agar bathroom NE me ho to darwaze par Om sticker lagayein",
+      ],
+    },
+    hi: {
+      idealDir: "उत्तर-पश्चिम (वायव्य) या पश्चिम — आदर्श स्थान",
+      importance: "ग़लत स्थान पर बना स्नानघर नकारात्मकता, स्वास्थ्य समस्याएँ और आर्थिक कठिनाइयाँ ला सकता है।",
+      dos: [
+        "स्नानघर के लिए उत्तर-पश्चिम या पश्चिम सर्वोत्तम स्थान है",
+        "गीज़र या वॉटर हीटर दक्षिण-पूर्व कोने में रखें",
+        "एग्ज़ॉस्ट पंखा या खिड़की पूर्व या उत्तर में हो",
+        "शौचालय सीट दक्षिण या पश्चिम दीवार की ओर हो",
+        "स्नानघर सदैव स्वच्छ और सूखा रखें",
+      ],
+      donts: [
+        "स्नानघर कभी उत्तर-पूर्व (ईशान) कोने में न हो",
+        "पूजा घर के बगल में स्नानघर न रखें",
+        "स्नानघर का दरवाज़ा सदैव बंद रखें",
+        "टपकते नल तुरंत ठीक करें — वे धन-ऊर्जा बहाते हैं",
+      ],
+      remedies: [
+        "नकारात्मकता सोखने हेतु स्नानघर के बाहर समुद्री नमक या नींबू रखें",
+        "स्नानघर के पानी में नीम या यूकेलिप्टस तेल की कुछ बूँदें डालें",
+        "यदि स्नानघर उत्तर-पूर्व में हो तो दरवाज़े पर ॐ स्टिकर लगाएँ",
+      ],
+    },
+  },
+  "study": {
+    hn: {
+      idealDir: "North — Wealth aur Career Growth ke liye",
+      importance: "Home office ya study North me hone se career growth, wealth aur focus badhta hai.",
+      dos: [
+        "Desk window ya door ki taraf face kare positive energy flow ke liye",
+        "Kaam karte samay North ya East ki taraf face karein",
+        "Financial security ke liye SW corner me safe ya locker rakhein",
+        "Strong support ke liye apne peeche solid wall rakhein",
+        "Office ke liye green ya blue auspicious colors hain",
+      ],
+      donts: [
+        "Desk corner me na rakhein — energy flow block hota hai",
+        "Kaam karte samay door ki taraf back karke na baithein",
+        "Office ka darwaza direct wall ki taraf na khule",
+        "Office me clutter ya garbage na rakhein",
+      ],
+      remedies: [
+        "Wealth aur career growth ke liye North wall par Kuber Yantra rakhein",
+        "North corner me green lucky bamboo plant rakhein",
+        "Roz kaam shuru karne se pehle 'Om Ganeshaya Namah' jaap karein",
+      ],
+    },
+    hi: {
+      idealDir: "उत्तर — धन और करियर वृद्धि हेतु",
+      importance: "घर का कार्यालय या अध्ययन कक्ष उत्तर में होने से करियर वृद्धि, धन और एकाग्रता बढ़ती है।",
+      dos: [
+        "सकारात्मक ऊर्जा प्रवाह हेतु डेस्क खिड़की या द्वार की ओर हो",
+        "कार्य करते समय उत्तर या पूर्व की ओर मुख करें",
+        "आर्थिक सुरक्षा हेतु दक्षिण-पश्चिम कोने में तिजोरी या लॉकर रखें",
+        "मज़बूत सहायता हेतु अपने पीछे ठोस दीवार रखें",
+        "कार्यालय हेतु हरा या नीला शुभ रंग है",
+      ],
+      donts: [
+        "डेस्क कोने में न रखें — ऊर्जा प्रवाह अवरुद्ध होता है",
+        "कार्य करते समय द्वार की ओर पीठ करके न बैठें",
+        "कार्यालय का दरवाज़ा सीधे दीवार की ओर न खुले",
+        "कार्यालय में अव्यवस्था या कूड़ा न रखें",
+      ],
+      remedies: [
+        "धन और करियर वृद्धि हेतु उत्तर दीवार पर कुबेर यंत्र रखें",
+        "उत्तर कोने में हरा सौभाग्य बाँस का पौधा रखें",
+        "रोज़ कार्य आरंभ करने से पूर्व 'ॐ गणेशाय नमः' का जाप करें",
+      ],
+    },
+  },
+};
+
 // ── Room Card ─────────────────────────────────────────────────────────────────
 function RoomCard({ room }: { room: VastuRoom }) {
   const [open, setOpen] = useState(false);
@@ -959,13 +1336,21 @@ function RoomCard({ room }: { room: VastuRoom }) {
       {/* Direction bar */}
       <View style={c.dirRow}>
         <Feather name="compass" size={11} color={C.textMuted} />
-        <Text style={[c.dirText, { color: C.textMuted }]}>{room.idealDir}</Text>
+        <Text style={[c.dirText, { color: C.textMuted }]}>{
+          (v === "hi" && ROOMS_LOC[room.key]?.hi.idealDir) ||
+          (v === "hn" && ROOMS_LOC[room.key]?.hn.idealDir) ||
+          room.idealDir
+        }</Text>
       </View>
 
       {/* Expanded content */}
       {open && (
         <View style={c.expanded}>
-          <Text style={[c.importance, { color: C.textMuted }]}>{room.importance}</Text>
+          <Text style={[c.importance, { color: C.textMuted }]}>{
+            (v === "hi" && ROOMS_LOC[room.key]?.hi.importance) ||
+            (v === "hn" && ROOMS_LOC[room.key]?.hn.importance) ||
+            room.importance
+          }</Text>
           <View style={c.tabRow}>
             {(["dos","donts","remedies"] as const).map(tk => (
               <Pressable key={tk} onPress={() => setTab(tk)}
@@ -982,7 +1367,11 @@ function RoomCard({ room }: { room: VastuRoom }) {
               {room.dos.map((d,i) => (
                 <View key={i} style={c.tipRow}>
                   <Text style={c.tipIcon}>{d.icon}</Text>
-                  <Text style={[c.tipText, { color: C.textMuted }]}>{d.text}</Text>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{
+                    (v === "hi" && ROOMS_LOC[room.key]?.hi.dos[i]) ||
+                    (v === "hn" && ROOMS_LOC[room.key]?.hn.dos[i]) ||
+                    d.text
+                  }</Text>
                 </View>
               ))}
             </View>
@@ -992,7 +1381,11 @@ function RoomCard({ room }: { room: VastuRoom }) {
               {room.donts.map((d,i) => (
                 <View key={i} style={c.tipRow}>
                   <Text style={c.tipIcon}>{d.icon}</Text>
-                  <Text style={[c.tipText, { color:"#f87171" }]}>{d.text}</Text>
+                  <Text style={[c.tipText, { color:"#f87171" }]}>{
+                    (v === "hi" && ROOMS_LOC[room.key]?.hi.donts[i]) ||
+                    (v === "hn" && ROOMS_LOC[room.key]?.hn.donts[i]) ||
+                    d.text
+                  }</Text>
                 </View>
               ))}
             </View>
@@ -1004,7 +1397,11 @@ function RoomCard({ room }: { room: VastuRoom }) {
                   <View style={[c.remedyNum, { backgroundColor: C.bgCard2 }]}>
                     <Text style={{ color:room.color, fontSize:10, fontWeight:"700" }}>{i+1}</Text>
                   </View>
-                  <Text style={[c.tipText, { color: C.textMuted }]}>{r}</Text>
+                  <Text style={[c.tipText, { color: C.textMuted }]}>{
+                    (v === "hi" && ROOMS_LOC[room.key]?.hi.remedies[i]) ||
+                    (v === "hn" && ROOMS_LOC[room.key]?.hn.remedies[i]) ||
+                    r
+                  }</Text>
                 </View>
               ))}
             </View>
@@ -2683,21 +3080,20 @@ export default function VastuScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: "#fff", fontSize: 16, fontWeight: "800" }}>
-                      AstroVastu PRO — Pura Ghar Scan
+                      {t.vu_proHeader}
                     </Text>
                     <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 2 }}>
-                      Photo Engine + your Kundli + Mahadasha layer
+                      {t.vu_proSubheader}
                     </Text>
                   </View>
                 </View>
                 <Text style={{ color: "rgba(255,255,255,0.95)", fontSize: 12, lineHeight: 17, marginBottom: 10 }}>
-                  Floor-plan upload, room photos with compass, deterministic Vastu Shastra rules
-                  cited from Brihat Samhita / Mayamatam, personalised priority actions for your chart.
+                  {t.vu_proDesc}
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
                     <Text style={{ color: "#fff", fontSize: 22, fontWeight: "900" }}>₹199</Text>
-                    <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>one-time</Text>
+                    <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>{t.vu_oneTime}</Text>
                   </View>
                   <View style={{
                     backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
@@ -2712,21 +3108,21 @@ export default function VastuScreen() {
 
             {/* Section label */}
             <Text style={[s.sectionLabel, { color: C.accent }]}>{t.vu_roomGuide}</Text>
-            <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
+            <Text style={[s.sectionSub, { color: C.textMuted }]}>{t.vu_tapAnyCard}</Text>
 
             {/* Room cards */}
             {ROOMS.map(room => <RoomCard key={room.key} room={room} />)}
 
             {/* General tips */}
             <View style={[s.genCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.genTitle, { color: C.text }]}>⚡ General Vastu Tips</Text>
+              <Text style={[s.genTitle, { color: C.text }]}>{t.vu_genTipsTitle}</Text>
               {[
-                "Keep the home free of clutter — blocked spaces block energy flow",
-                "Ensure your home is well-lit — darkness invites negativity",
-                "Fix squeaky or broken doors promptly",
-                "Keep indoor plants — they bring life energy into the home",
-                "Remove broken or damaged items immediately",
-                "A running water feature (fountain or aquarium) in the North is auspicious",
+                t.vu_genTip1,
+                t.vu_genTip2,
+                t.vu_genTip3,
+                t.vu_genTip4,
+                t.vu_genTip5,
+                t.vu_genTip6,
               ].map((tip,i) => (
                 <View key={i} style={s.genRow}>
                   <View style={[s.genDot, { backgroundColor: C.textDim }]} />
@@ -2739,8 +3135,7 @@ export default function VastuScreen() {
             <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Feather name="info" size={12} color={C.textMuted} />
               <Text style={[s.disclaimerText, { color: C.textMuted }]}>
-                This is a general Vastu guide. For your home specifically, always consult a qualified
-                Vastu expert for personalized advice.
+                {t.vu_disclaimer}
               </Text>
             </View>
           </>

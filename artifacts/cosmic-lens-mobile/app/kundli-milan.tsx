@@ -157,7 +157,7 @@ function KundliSlot({who,locked,filled,isPro,onAdd,onClear}:SlotProps){
           <Feather name="plus" size={16} color={accent}/>
         </View>
         <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_600SemiBold"}}>{isSelf?t.km_addYourKundli:t.km_addPartnerKundli}</Text>
-        <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{isSelf?"Birth details required":"Partner's birth details"}</Text>
+        <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{isSelf?t.km_birthDetailsReq:t.km_partnerBirth}</Text>
       </View>
     </Pressable>
   );
@@ -181,25 +181,25 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
       const[h,m]=(hm??"").split(":").map(Number);
       if(!day||!month||!year||!h)throw new Error("Format: DD/MM/YYYY & HH:MM AM");
       const res=await apiFetch(`${API_BASE}/api/kundli`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name:name||"Person",day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place})});
+        body:JSON.stringify({name:name||t.km3_personFallback,day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place})});
       const json=await res.json();
       const marsH=(json.planets as any[])?.find((p:any)=>p.name==="Mars")?.house??0;
       onDone({
-        name:name||"Person",
+        name:name||t.km3_personFallback,
         nakshatra:json.nakshatra,
         moonSign:json.moonSign,
         manglik:[1,4,7,8,12].includes(marsH),
         _rawBirth:{day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place},
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }catch(e:any){setErr(e?.message??"Error. Try again.");}
+    }catch(e:any){setErr(e?.message??t.km3_errTryAgain);}
     finally{setLoading(false);}
   }
   const fields=[
-    {label:"Name", value:name, set:setName, ph:"Full name",           kb:"default"},
-    {label:"Date", value:dob,  set:setDob,  ph:"DD/MM/YYYY",          kb:"numeric"},
-    {label:"Time", value:time, set:setTime, ph:"HH:MM  AM / PM",      kb:"default"},
-    {label:"Place",value:place,set:setPlace,ph:"E.g. Delhi, India",    kb:"default"},
+    {label:t.km_lblName, value:name, set:setName, ph:t.km_phName, kb:"default"},
+    {label:t.km_lblDob,  value:dob,  set:setDob,  ph:t.km_phDob,  kb:"numeric"},
+    {label:t.km_lblTime, value:time, set:setTime, ph:t.km_phTime, kb:"default"},
+    {label:t.km_lblPlace,value:place,set:setPlace,ph:t.km_phPlace,kb:"default"},
   ];
   return(
     <View style={[fm.wrap,{backgroundColor:C.bgCard,borderColor:C.border}]}>
@@ -275,14 +275,15 @@ function MiniArc({pct,col,size=56}:{pct:number;col:string;size?:number}){
 // ── Pro Insights Panel + Shared sub-components ───────────────────────────────
 function PipBadge({type}:{type:"most"|"critical"|"premium"|"secret"|"decision"|null|undefined}){
   const C=useC();
+  const t=useT();
   if(!type)return null;
   type BadgeSpec={bg:string;bdr:string;txtD:string;txtL:string;lbl:string};
   const M:{[k:string]:BadgeSpec}={
-    most:    {bg:"rgba(244,63,94,0.15)",  bdr:"rgba(244,63,94,0.45)",   txtD:"#fb7185",txtL:"#be123c",lbl:"MOST IMPORTANT"},
-    critical:{bg:"rgba(239,68,68,0.13)",  bdr:"rgba(239,68,68,0.40)",   txtD:"#f87171",txtL:"#dc2626",lbl:"CRITICAL CHECK"},
-    decision:{bg:"rgba(249,115,22,0.13)", bdr:"rgba(249,115,22,0.40)",  txtD:"#fb923c",txtL:"#ea580c",lbl:"DECISION CARD"},
+    most:    {bg:"rgba(244,63,94,0.15)",  bdr:"rgba(244,63,94,0.45)",   txtD:"#fb7185",txtL:"#be123c",lbl:t.km_badgeMostImp},
+    critical:{bg:"rgba(239,68,68,0.13)",  bdr:"rgba(239,68,68,0.40)",   txtD:"#f87171",txtL:"#dc2626",lbl:t.km_badgeCritCheck},
+    decision:{bg:"rgba(249,115,22,0.13)", bdr:"rgba(249,115,22,0.40)",  txtD:"#fb923c",txtL:"#ea580c",lbl:t.km_badgeDecCard},
     premium: {bg:"rgba(109,93,246,0.12)", bdr:"rgba(109,93,246,0.38)",  txtD:"#c4b5fd",txtL:"#6D5DF6",lbl:"PREMIUM"},
-    secret:  {bg:"rgba(147,51,234,0.12)", bdr:"rgba(147,51,234,0.38)",  txtD:"#e879f9",txtL:"#9333ea",lbl:"SECRET"},
+    secret:  {bg:"rgba(147,51,234,0.12)", bdr:"rgba(147,51,234,0.38)",  txtD:"#e879f9",txtL:"#9333ea",lbl:t.km_badgeSecret},
   };
   const b=M[type]; if(!b)return null;
   return(
@@ -519,15 +520,15 @@ function ProInsightsPanel(){
       </Animated.View>
 
       {/* ══ 1 ══ SECTION: TOP INSIGHTS ════════════════════════════════════════ */}
-      <Animated.View style={av(1)}><SectionHead label="TOP INSIGHTS" icon="🔥"/></Animated.View>
+      <Animated.View style={av(1)}><SectionHead label={t.km_secTopInsights} icon="🔥"/></Animated.View>
 
       {/* ══ 2-4 ══ THREE BIG CARDS ════════════════════════════════════════════ */}
       <BigCard idx={2} icon="❤️" col="#f43f5e" badge="most"
-        title="Core Compatibility"
-        desc="Are your hearts, minds & souls truly aligned for a lifetime together?"/>
+        title={t.km_coreCompTitle}
+        desc={t.km_coreCompDesc}/>
       <BigCard idx={3} icon="⚠️" col="#ef4444" badge="critical"
-        title="Risk Scan"
-        desc="This insight may change your decision — hidden risks revealed"/>
+        title={t.km_riskScanTitle}
+        desc={t.km_riskScanDesc}/>
 
       {/* ══ 4 ══ MARRIAGE DECISION CARD (replaces Final Verdict) ══════════════ */}
       <Animated.View style={av(4)}>
@@ -576,39 +577,39 @@ function ProInsightsPanel(){
 
 
       {/* ══ 6 ══ SECTION: DEEP INSIGHTS ══════════════════════════════════════ */}
-      <Animated.View style={av(6)}><SectionHead label="DEEP INSIGHTS" icon="🧠"/></Animated.View>
+      <Animated.View style={av(6)}><SectionHead label={t.km_secDeepInsights} icon="🧠"/></Animated.View>
       <SmallCard idx={7}  icon="🧠" col="#34d399" badge="premium"
-        title="Personality Match"
-        desc="This insight may change your decision — see if you truly understand each other"/>
+        title={t.km_personMatchTitle}
+        desc={t.km_personMatchDesc}/>
       <SmallCard idx={8}  icon="🌙" col="#a78bfa" locked
-        title="Soul & Karma"
-        desc="Are you destined? Or is this just timing? Real-time analysis based on your birth chart"/>
+        title={t.km_soulKarmaTitle}
+        desc={t.km_soulKarmaDesc}/>
       <SmallCard idx={9}  icon="🔥" col="#f97316" badge="premium"
-        title="Intimacy Score"
-        desc="Physical & emotional bonding — the truth most couples never discover"/>
+        title={t.km_intimacyTitle}
+        desc={t.km_intimacyDesc}/>
 
       {/* ══ 10 ══ SECTION: ADVANCED ANALYSIS ════════════════════════════════ */}
-      <Animated.View style={av(10)}><SectionHead label="ADVANCED ANALYSIS" icon="🔯"/></Animated.View>
+      <Animated.View style={av(10)}><SectionHead label={t.km_secAdvAnalysis} icon="🔯"/></Animated.View>
       <SmallCard idx={11} icon="🔯" col="#fbbf24" badge="critical"
-        title="Dosha Engine"
-        desc="Mangal, Nadi & Bhakoot — conflicts that silently destroy marriages"/>
+        title={t.km_doshaEngTitle}
+        desc={t.km_doshaEngDesc}/>
       <SmallCard idx={12} icon="🌑" col="#6366f1" locked
-        title="Negative Energy"
-        desc="Hidden doshas even your astrologer may have missed — don't ignore this"/>
+        title={t.km_negEnergyTitle}
+        desc={t.km_negEnergyDesc}/>
       <SmallCard idx={13} icon="⚖️" col="#22c55e" badge="premium"
-        title="Strengths & Challenges"
-        desc="What will keep you together — and what may quietly pull you apart"/>
+        title={t.km_strChalTitle}
+        desc={t.km_strChalDesc}/>
       <SmallCard idx={14} icon="🌿" col="#10b981" badge="premium"
-        title="Remedies & Advice"
-        desc="Exact pujas, stones & mantras to remove obstacles before they grow"/>
+        title={t.km_remAdvTitle}
+        desc={t.km_remAdvDesc}/>
 
       {/* ══ 15 ══ SECTION: FUTURE INSIGHTS ══════════════════════════════════ */}
-      <Animated.View style={av(15)}><SectionHead label="FUTURE INSIGHTS" icon="📅"/></Animated.View>
+      <Animated.View style={av(15)}><SectionHead label={t.km_secFutInsights} icon="📅"/></Animated.View>
       <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-        <FutureCard idx={16} icon="💍" label="Marriage Timing"     col="#a78bfa"/>
-        <FutureCard idx={16} icon="👶" label="Child Planning"      col="#34d399"/>
-        <FutureCard idx={16} icon="💰" label="Financial Compat"    col="#fbbf24"/>
-        <FutureCard idx={16} icon="🏠" label="Life Stability"      col="#818cf8"/>
+        <FutureCard idx={16} icon="💍" label={t.km_marriageTime}  col="#a78bfa"/>
+        <FutureCard idx={16} icon="👶" label={t.km_childPlan}     col="#34d399"/>
+        <FutureCard idx={16} icon="💰" label={t.km_finCompat}     col="#fbbf24"/>
+        <FutureCard idx={16} icon="🏠" label={t.km_lifeStab}      col="#818cf8"/>
       </View>
 
       {/* ══ 17 ══ SECTION: HIDDEN PREMIUM ════════════════════════════════════ */}
@@ -620,20 +621,20 @@ function ProInsightsPanel(){
           <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
             <Text style={{fontSize:18}}>⚠️</Text>
             <Text style={{color:C.isDark?"#f0abfc":"#4C1D95",fontSize:12,fontFamily:"Nunito_700Bold",flex:1}}>
-              Rare insights even astrologers don't reveal
+              {t.km_secHidPremium}
             </Text>
             <PipBadge type="secret"/>
           </View>
           <Text style={{color:C.isDark?C.textMuted:"#5B21B6",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:15}}>
-            These 4 insights are hidden from most — unlocked only in Pro with your birth data
+            {t.km_realTimeAnalysis}
           </Text>
         </LinearGradient>
       </Animated.View>
       <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-        <HiddenCard idx={18} icon="🔮" title="Karmic Relationship Check" desc="Are you meant to meet in this lifetime?"/>
-        <HiddenCard idx={19} icon="🌀" title="Past Life Connection"       desc="Spiritual bond from a previous birth"/>
-        <HiddenCard idx={20} icon="💔" title="Divorce / Separation Risk"  desc="Probability based on planetary conflict"/>
-        <HiddenCard idx={21} icon="🤝" title="Loyalty & Trust Index"      desc="Chances of betrayal or long-term loyalty"/>
+        <HiddenCard idx={18} icon="🔮" title={t.km_karmRelTitle}  desc={t.km_karmRelDesc}/>
+        <HiddenCard idx={19} icon="🌀" title={t.km_pastLifeTitle} desc={t.km_pastLifeDesc}/>
+        <HiddenCard idx={20} icon="💔" title={t.km_divorceTitle}  desc={t.km_divorceDesc}/>
+        <HiddenCard idx={21} icon="🤝" title={t.km_loyaltyTitle}  desc={t.km_loyaltyDesc}/>
       </View>
 
 
@@ -654,7 +655,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
   const karmaLink  = pct(result.tara.score,3);
   const personality= pct(result.gana.score,6);
   const badCount   = [result.nadi,result.gana,result.bhakut,result.maitri,result.yoni,result.tara,result.varna].filter(k=>k.bad).length;
-  const riskLevel  = result.total>=27?"Low":result.total>=21?"Moderate":"High";
+  const riskLevel  = result.total>=27?t.km_riskLow:result.total>=21?t.km_riskModerate:t.km_riskHigh;
   const riskCol    = result.total>=27?"#22c55e":result.total>=21?"#fbbf24":"#ef4444";
 
   // Staggered fade-in (12 sections) — must not call hook inside map
@@ -701,7 +702,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
     return(
       <View style={{backgroundColor:`${col}18`,borderRadius:10,borderWidth:1,borderColor:`${col}35`,
         paddingHorizontal:10,paddingVertical:4}}>
-        <Text style={{color:col,fontSize:10,fontFamily:"Nunito_700Bold"}}>{ok?"✓ Clear":warn?"~ Mild":"✗ Present"}</Text>
+        <Text style={{color:col,fontSize:10,fontFamily:"Nunito_700Bold"}}>{ok?`✓ ${t.km2_chipClear}`:warn?`~ ${t.km2_chipMild}`:`✗ ${t.km2_chipPresent}`}</Text>
       </View>
     );
   }
@@ -712,7 +713,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 1. Relationship Risk Scan ── */}
       <Animated.View style={s[0]}>
         <GlowCard accent={riskCol} C={C} style={{padding:14}}>
-          <SectionLabel text="1 · RELATIONSHIP RISK SCAN" col={riskCol}/>
+          <SectionLabel text={`1 · ${t.km2_secRiskScan}`} col={riskCol}/>
           <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
             <View>
               <Text style={{color:C.text,fontSize:22,fontFamily:"Nunito_700Bold"}}>{t.km_riskLevel}</Text>
@@ -724,9 +725,9 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             </View>
           </View>
           {[
-            {label:"Compatibility Mismatch",ok:result.total>=21,warn:result.total>=18},
-            {label:"Dosha Conflict",        ok:!result.manglik&&result.nadi.score>0&&result.bhakut.score>0,warn:result.manglik},
-            {label:"Long-term Stability",   ok:result.total>=27,warn:result.total>=21},
+            {label:t.km_compMismatch,    ok:result.total>=21,warn:result.total>=18},
+            {label:t.km_doshaConflict,   ok:!result.manglik&&result.nadi.score>0&&result.bhakut.score>0,warn:result.manglik},
+            {label:t.km_longTermStab,    ok:result.total>=27,warn:result.total>=21},
           ].map(({label,ok,warn})=>(
             <View key={label} style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
               paddingVertical:8,borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
@@ -740,24 +741,24 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 2. Core Compatibility ── */}
       <Animated.View style={s[1]}>
         <GlowCard accent="#f43f5e" C={C} style={{padding:14}}>
-          <SectionLabel text="2 · CORE COMPATIBILITY" col="#f9a8d4"/>
-          <BarRow label="Emotional Bond"    pct={emotional}  col="#f43f5e" icon="❤️"/>
-          <BarRow label="Mental Connection" pct={mental}     col="#818cf8" icon="🧠"/>
-          <BarRow label="Intimacy Harmony"  pct={intimacy}   col="#f97316" icon="🔥"/>
-          <BarRow label="Communication"     pct={comm}       col="#34d399" icon="💬"/>
+          <SectionLabel text={`2 · ${t.km_coreCompTitle.toUpperCase()}`} col="#f9a8d4"/>
+          <BarRow label={t.km_emotionalBond} pct={emotional}  col="#f43f5e" icon="❤️"/>
+          <BarRow label={t.km_mentalConn}    pct={mental}     col="#818cf8" icon="🧠"/>
+          <BarRow label={t.km_intimacyHarm}  pct={intimacy}   col="#f97316" icon="🔥"/>
+          <BarRow label={t.km_communication} pct={comm}       col="#34d399" icon="💬"/>
         </GlowCard>
       </Animated.View>
 
       {/* ── 3. Dosha Engine ── */}
       <Animated.View style={s[2]}>
         <GlowCard accent="#fbbf24" C={C} style={{padding:14}}>
-          <SectionLabel text="3 · DOSHA ENGINE" col="#fde68a"/>
+          <SectionLabel text={`3 · ${t.km_doshaEngTitle.toUpperCase()}`} col="#fde68a"/>
           {[
-            {icon:"♂️", label:"Manglik Dosh",   ok:!result.manglik,         warn:result.manglik,    desc:result.manglik?"One partner is Manglik":"No Manglik conflict"},
-            {icon:"🌊", label:"Nadi Dosh",       ok:!result.nadi.bad,        warn:false,             desc:result.nadi.detail},
-            {icon:"🌙", label:"Bhakoot Dosh",    ok:!result.bhakut.bad,      warn:false,             desc:result.bhakut.detail},
-            {icon:"☯️", label:"Gana Dosh",       ok:!result.gana.bad,        warn:result.gana.score===1,desc:result.gana.detail},
-            {icon:"✨", label:"Graha Maitri",    ok:result.maitri.score>=3,  warn:result.maitri.score===3,desc:result.maitri.detail},
+            {icon:"♂️", label:t.km_manglikDosh, ok:!result.manglik,         warn:result.manglik,    desc:result.manglik?t.km_onePartMang:t.km_noMangConf},
+            {icon:"🌊", label:t.km_nadiDosh,    ok:!result.nadi.bad,        warn:false,             desc:result.nadi.detail},
+            {icon:"🌙", label:t.km_bhakootDosh, ok:!result.bhakut.bad,      warn:false,             desc:result.bhakut.detail},
+            {icon:"☯️", label:t.km_ganaDosh,    ok:!result.gana.bad,        warn:result.gana.score===1,desc:result.gana.detail},
+            {icon:"✨", label:t.km_grahaMaitri, ok:result.maitri.score>=3,  warn:result.maitri.score===3,desc:result.maitri.detail},
           ].map(({icon,label,ok,warn,desc})=>(
             <View key={label} style={{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:9,
               borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
@@ -775,19 +776,19 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 4. Future Timeline ── */}
       <Animated.View style={s[3]}>
         <GlowCard accent="#818cf8" C={C} style={{padding:14}}>
-          <SectionLabel text="4 · FUTURE TIMELINE" col="#c7d2fe"/>
+          <SectionLabel text={`4 · ${t.km_secFutTimeline}`} col="#c7d2fe"/>
           {[
-            {icon:"💍",label:"Marriage Timing",
-             val:result.bhakut.score===7&&result.total>=24?"2025–2026 auspicious":result.total>=21?"2026–2027 moderate":"Delay advised — seek guidance",
+            {icon:"💍",label:t.km_marriageTime,
+             val:result.bhakut.score===7&&result.total>=24?t.km_marrAusp:result.total>=21?t.km_marrModerate:t.km_marrDelay,
              col:result.bhakut.score===7?"#22c55e":"#fbbf24"},
-            {icon:"👶",label:"Child Planning",
-             val:result.yoni.score===4?"Natural timing expected":result.yoni.score>0?"Slight patience recommended":"Medical/expert consultation advised",
+            {icon:"👶",label:t.km_childPlan,
+             val:result.yoni.score===4?t.km_natTimingExp:result.yoni.score>0?t.km_slightPatience:t.km_medConsAdv,
              col:result.yoni.score===4?"#22c55e":result.yoni.score>0?"#fbbf24":"#f97316"},
-            {icon:"💰",label:"Financial Harmony",
-             val:result.vasya.score===2?"Strong financial alignment":"Moderate — budget planning helps",
+            {icon:"💰",label:t.km_finHarmony,
+             val:result.vasya.score===2?t.km_strongFinAlign:t.km_modBudgetHelp,
              col:result.vasya.score===2?"#22c55e":"#fbbf24"},
-            {icon:"🏡",label:"Family Acceptance",
-             val:result.gana.score>=4?"Highly likely":"May need time and effort",
+            {icon:"🏡",label:t.km_familyAccept,
+             val:result.gana.score>=4?t.km_highlyLikely:t.km_mayNeedTime,
              col:result.gana.score>=4?"#22c55e":"#fbbf24"},
           ].map(({icon,label,val,col})=>(
             <View key={label} style={{flexDirection:"row",gap:12,paddingVertical:9,alignItems:"flex-start",
@@ -808,13 +809,13 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 5. Soul & Karma Analysis ── */}
       <Animated.View style={s[4]}>
         <GlowCard accent="#a78bfa" C={C} style={{padding:14}}>
-          <SectionLabel text="5 · SOUL & KARMA ANALYSIS" col="#c4b5fd"/>
+          <SectionLabel text={`5 · ${t.km_secSoulKarma}`} col="#c4b5fd"/>
           <View style={{flexDirection:"row",justifyContent:"space-around",marginBottom:14}}>
             <View style={{alignItems:"center",gap:6}}>
               <MiniArc pct={soulBond/100} col="#a78bfa" size={64}/>
               <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_soulBond}</Text>
               <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
-                {soulBond>=75?"Deep karmic tie":"Growing connection"}
+                {soulBond>=75?t.km_deepKarmTie:t.km_growConn}
               </Text>
             </View>
             <View style={{width:1,backgroundColor:"rgba(255,255,255,0.07)"}}/>
@@ -822,16 +823,14 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
               <MiniArc pct={karmaLink/100} col="#34d399" size={64}/>
               <Text style={{color:"#34d399",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_karmaLink}</Text>
               <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
-                {karmaLink>=75?"Positive past life":"Neutral karma"}
+                {karmaLink>=75?t.km_posPastLife:t.km_neutralKarma}
               </Text>
             </View>
           </View>
           <View style={{backgroundColor:"rgba(167,139,250,0.08)",borderRadius:10,padding:10,gap:4}}>
             <Text style={{color:"#c4b5fd",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_nadiNakBond}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:16}}>
-              {result.nadi.score===8
-                ?"Alag nadi — auspicious for healthy progeny and long life together."
-                :"Sama nadi — strong emotional mirroring, some health caution advised."}
+              {result.nadi.score===8 ? t.km3_nadiAlag : t.km3_nadiSama}
             </Text>
           </View>
         </GlowCard>
@@ -840,16 +839,16 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 6. Personality Match ── */}
       <Animated.View style={s[5]}>
         <GlowCard accent="#34d399" C={C} style={{padding:14}}>
-          <SectionLabel text="6 · PERSONALITY MATCH" col="#6ee7b7"/>
-          <BarRow label="Nature & Temperament" pct={personality} col="#34d399" icon="☯️"/>
-          <BarRow label="Social Alignment"      pct={pct(result.vasya.score,2)} col="#a78bfa" icon="🤝"/>
-          <BarRow label="Lifestyle Harmony"     pct={pct(result.varna.score,1)*100>0?80:45} col="#fbbf24" icon="🌿"/>
+          <SectionLabel text={`6 · ${t.km2_secPersMatch}`} col="#6ee7b7"/>
+          <BarRow label={t.km_natureTemp}    pct={personality} col="#34d399" icon="☯️"/>
+          <BarRow label={t.km_socialAlign}   pct={pct(result.vasya.score,2)} col="#a78bfa" icon="🤝"/>
+          <BarRow label={t.km_lifestyleHarm} pct={pct(result.varna.score,1)*100>0?80:45} col="#fbbf24" icon="🌿"/>
           <View style={{backgroundColor:"rgba(52,211,153,0.08)",borderRadius:10,padding:10,marginTop:4}}>
             <Text style={{color:"#6ee7b7",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_ganaCompat}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
-              {result.gana.score===6?"Excellent — both share similar life approach and values."
-               :result.gana.score>0?"Moderate — differences exist but can be harmonised with effort."
-               :"Challenging — temperament differences need active work."}
+              {result.gana.score===6?t.km2_persExcellent
+               :result.gana.score>0?t.km2_persModerate
+               :t.km2_persChallenging}
             </Text>
           </View>
         </GlowCard>
@@ -858,15 +857,15 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 7. Intimacy Compatibility ── */}
       <Animated.View style={s[6]}>
         <GlowCard accent="#f97316" C={C} style={{padding:14}}>
-          <SectionLabel text="7 · INTIMACY COMPATIBILITY" col="#fdba74"/>
-          <BarRow label="Physical Harmony"     pct={pct(result.yoni.score,4)} col="#f97316" icon="🌺"/>
-          <BarRow label="Energetic Attraction" pct={pct(result.maitri.score,5)} col="#f43f5e" icon="⚡"/>
+          <SectionLabel text={`7 · ${t.km2_secIntimacyComp}`} col="#fdba74"/>
+          <BarRow label={t.km_physicalHarm} pct={pct(result.yoni.score,4)}   col="#f97316" icon="🌺"/>
+          <BarRow label={t.km_energeticAttr} pct={pct(result.maitri.score,5)} col="#f43f5e" icon="⚡"/>
           <View style={{backgroundColor:"rgba(249,115,22,0.08)",borderRadius:10,padding:10,marginTop:4}}>
             <Text style={{color:"#fdba74",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_yoniAnalysis}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
-              {result.yoni.score===4?"Same Yoni — exceptional physical and energetic alignment."
-               :result.yoni.score>0?"Complementary energies — good compatibility with some adjustments."
-               :"Different energies — patience and understanding will strengthen this bond."}
+              {result.yoni.score===4?t.km2_yoniExceptional
+               :result.yoni.score>0?t.km2_yoniComplementary
+               :t.km2_yoniDifferent}
             </Text>
           </View>
         </GlowCard>
@@ -875,7 +874,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 8. Negative Energy Check ── */}
       <Animated.View style={s[7]}>
         <GlowCard accent={badCount>=3?"#ef4444":"#fbbf24"} C={C} style={{padding:14}}>
-          <SectionLabel text="8 · NEGATIVE ENERGY CHECK" col={badCount>=3?"#fca5a5":"#fde68a"}/>
+          <SectionLabel text={`8 · ${t.km2_secNegEnergy}`} col={badCount>=3?"#fca5a5":"#fde68a"}/>
           <View style={{flexDirection:"row",alignItems:"center",gap:14,marginBottom:12}}>
             <View style={{width:52,height:52,borderRadius:26,
               backgroundColor:badCount===0?"rgba(34,197,94,0.15)":badCount<=2?"rgba(251,191,36,0.15)":"rgba(239,68,68,0.15)",
@@ -884,11 +883,11 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
               <Text style={{fontSize:22}}>{badCount===0?"🌟":badCount<=2?"⚡":"🔴"}</Text>
             </View>
             <View>
-              <Text style={{color:C.text,fontSize:15,fontFamily:"Nunito_700Bold"}}>{badCount} Concern{badCount!==1?"s":""} Found</Text>
+              <Text style={{color:C.text,fontSize:15,fontFamily:"Nunito_700Bold"}}>{badCount} {badCount!==1?t.km2_concernPlural:t.km2_concernSing} {t.km2_concernsFound}</Text>
               <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",marginTop:2}}>
-                {badCount===0?"Excellent — no major negative patterns."
-                 :badCount<=2?"Minor concerns — manageable with awareness."
-                 :"Multiple concerns — remedies strongly advised."}
+                {badCount===0?t.km2_negPatExcell
+                 :badCount<=2?t.km2_negPatMinor
+                 :t.km2_negPatMulti}
               </Text>
             </View>
           </View>
@@ -896,7 +895,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             <View key={k.label} style={{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:7,
               borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.05)"}}>
               <Text style={{fontSize:14}}>⚠️</Text>
-              <Text style={{color:"#fca5a5",fontSize:12,fontFamily:"Nunito_600SemiBold",flex:1}}>{k.label} Dosh Detected</Text>
+              <Text style={{color:"#fca5a5",fontSize:12,fontFamily:"Nunito_600SemiBold",flex:1}}>{k.label} {t.km2_doshDetect}</Text>
               <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{k.detail}</Text>
             </View>
           ))}
@@ -913,12 +912,12 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 9. Strengths & Challenges ── */}
       <Animated.View style={[{flexDirection:"row",gap:10},s[8]]}>
         <GlowCard accent="#22c55e" C={C} style={{flex:1,padding:12}}>
-          <Text style={{color:"#86efac",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>STRENGTHS 💚</Text>
+          <Text style={{color:"#86efac",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>{t.km2_strengthsHdr}</Text>
           {[
-            result.nadi.score===8?"Nadi alag — auspicious progeny":"Nadi matched — deep empathy",
-            result.maitri.score>=4?"Planetary friendship is strong":"Shared planetary energies",
-            result.tara.score>0?"Tara nakshatra is favourable":"Moderate tara destiny",
-            result.bhakut.score===7?"Bhakoot shubh — no rashi conflict":"Rashi energies align",
+            result.nadi.score===8?t.km2_nadiAuspProgeny:t.km2_nadiDeepEmpathy,
+            result.maitri.score>=4?t.km_planFriendStrong:t.km_sharedEnergies,
+            result.tara.score>0?t.km_taraFav:t.km_modTaraDest,
+            result.bhakut.score===7?t.km_bhakSubh:t.km_rashiAlign,
           ].slice(0,result.total>=27?4:2).map((s,i)=>(
             <View key={i} style={{flexDirection:"row",gap:5,marginBottom:5}}>
               <Text style={{color:"#22c55e",fontSize:11,marginTop:1}}>•</Text>
@@ -927,12 +926,12 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
           ))}
         </GlowCard>
         <GlowCard accent="#f97316" C={C} style={{flex:1,padding:12}}>
-          <Text style={{color:"#fdba74",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>CHALLENGES ⚡</Text>
+          <Text style={{color:"#fdba74",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.2,marginBottom:8}}>{t.km2_challengesHdr}</Text>
           {[
-            result.nadi.bad?"Nadi dosh — health awareness needed":"Minor temperament differences",
-            result.gana.bad?"Gana clash — nature divergence":"Communication practice needed",
-            result.bhakut.bad?"Bhakoot dosh — timing caution":"Some patience during conflicts",
-            result.yoni.bad?"Yoni mismatch — energy adjustment":"Regular quality time needed",
+            result.nadi.bad?t.km_nadiHealth:t.km_minorTempDiff,
+            result.gana.bad?t.km_ganaClash:t.km_commPracNeeded,
+            result.bhakut.bad?t.km_bhakTimeCaut:t.km_patienceConfl,
+            result.yoni.bad?t.km_yoniMismatch:t.km_qualityTimeNeeded,
           ].slice(0,badCount>=2?4:2).map((s,i)=>(
             <View key={i} style={{flexDirection:"row",gap:5,marginBottom:5}}>
               <Text style={{color:"#f97316",fontSize:11,marginTop:1}}>•</Text>
@@ -945,14 +944,14 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* ── 10. Remedies & Advice ── */}
       <Animated.View style={s[9]}>
         <GlowCard accent="#a78bfa" C={C} style={{padding:14}}>
-          <SectionLabel text="10 · REMEDIES & ADVICE" col="#c4b5fd"/>
+          <SectionLabel text={`10 · ${t.km_remAdvTitle.toUpperCase()}`} col="#c4b5fd"/>
           {[
-            ...(result.manglik?[{icon:"🔴",text:"Kumbh Vivah or Mangal puja recommended before marriage."}]:[]),
-            ...(result.nadi.bad?[{icon:"🌊",text:"Fast on Ekadashi — avoid Nadi imbalance with Shiva puja."}]:[]),
-            ...(result.bhakut.bad?[{icon:"🌙",text:"Chant Chandra mantra — Om Chandraya Namah 108 times."}]:[]),
-            ...(result.gana.bad?[{icon:"☯️",text:"Perform Rudrabhishek together before marriage."}]:[]),
-            {icon:"💎",text:"Both should wear compatible gemstones — consult a Jyotishi."},
-            {icon:"🙏",text:"Joint puja and regular reading of Sunderkand will strengthen bond."},
+            ...(result.manglik?[{icon:"🔴",text:t.km2_remKumbhVivah}]:[]),
+            ...(result.nadi.bad?[{icon:"🌊",text:t.km2_remEkadashi}]:[]),
+            ...(result.bhakut.bad?[{icon:"🌙",text:t.km2_remChandraMantra}]:[]),
+            ...(result.gana.bad?[{icon:"☯️",text:t.km2_remRudrabhishek}]:[]),
+            {icon:"💎",text:t.km2_remGemstones},
+            {icon:"🙏",text:t.km2_remSunderkand},
           ].slice(0,5).map(({icon,text},i)=>(
             <View key={i} style={{flexDirection:"row",gap:10,paddingVertical:9,
               borderBottomWidth:1,borderBottomColor:"rgba(255,255,255,0.05)"}}>
@@ -981,13 +980,13 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
               <Text style={{color:"#fff",fontSize:18,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{g.label}</Text>
             </View>
             <Text style={{color:"rgba(255,255,255,0.75)",fontSize:12,fontFamily:"Nunito_400Regular",textAlign:"center",lineHeight:19,maxWidth:260}}>
-              {result.total>=32?"Exceptional match. Stars align strongly in your favour. A joyful and fulfilling union is indicated."
-               :result.total>=27?"Very positive match. With mutual respect and love, this relationship has great potential."
-               :result.total>=21?"Moderate match. Awareness, effort, and expert guidance will help this bond flourish."
-               :"Challenging match. Remedies, patience, and consulting a Jyotishi are strongly advised before proceeding."}
+              {result.total>=32?t.km2_fvExceptional
+               :result.total>=27?t.km2_fvVeryPositive
+               :result.total>=21?t.km2_fvModerate
+               :t.km2_fvChallenging}
             </Text>
             <Text style={{color:"rgba(255,255,255,0.5)",fontSize:10,fontFamily:"Nunito_400Regular",textAlign:"center"}}>
-              Ashtakoot Score: {result.total}/36 · {badCount} concern{badCount!==1?"s":""} detected
+              {t.km2_ashtakootScoreLbl}: {result.total}/36 · {badCount} {badCount!==1?t.km2_concernPlural:t.km2_concernSing} {t.km2_concernDetSuffix}
             </Text>
           </View>
         </LinearGradient>
@@ -1000,13 +999,13 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             borderWidth:1,borderColor:"rgba(139,92,246,0.25)",padding:14,gap:8}}>
             <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:4}}>
               <View style={{width:4,height:4,borderRadius:2,backgroundColor:"#a78bfa"}}/>
-              <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>12 · HIDDEN INSIGHTS</Text>
+              <Text style={{color:"#a78bfa",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.5}}>12 · {t.km_secHidPremium}</Text>
             </View>
             {[
-              ["🔮","Past Life Connection Score"],
-              ["🧬","Ancestral Karma Patterns"],
-              ["🌌","Nakshatra Dream Compatibility"],
-              ["💠","Advanced Dosha Reversal Plan"],
+              ["🔮",t.km_pastLifeScore],
+              ["🧬",t.km_ancestKarma],
+              ["🌌",t.km_nakDream],
+              ["💠",t.km_advDoshaRev],
             ].map(([ic,lb],i)=>(
               <View key={i} style={{flexDirection:"row",gap:10,alignItems:"center",
                 opacity:0.7-i*0.15,paddingVertical:5}}>
@@ -1024,7 +1023,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
                 borderWidth:1,borderColor:"rgba(139,92,246,0.4)",alignItems:"center",justifyContent:"center"}}>
                 <Feather name="lock" size={18} color="#a78bfa"/>
               </View>
-              <Text style={{color:"#c4b5fd",fontSize:13,fontFamily:"Nunito_700Bold"}}>+ 12 Hidden Deep Insights</Text>
+              <Text style={{color:"#c4b5fd",fontSize:13,fontFamily:"Nunito_700Bold"}}>+ 12 {t.km_secHidPremium}</Text>
               <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{t.km_tapUnlock}</Text>
             </View>
           </LinearGradient>
@@ -1034,7 +1033,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
       {/* Unlock CTA */}
       <ShineButton colors={["#6366F1","#8B5CF6","#a855f7"]}
         disabled={false} loading={false}
-        text="Unlock Complete Report"
+        text={t.km_unlockComplete}
         onPress={()=>Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)}/>
 
     </View>
@@ -1109,7 +1108,7 @@ function buildSignals(p1: PersonData, p2: PersonData): ProSignals {
 function pickHook<T>(arr:T[], seed:number):T { return arr[seed % arr.length]!; }
 
 interface HookItem { key:string; emoji:string; title:string; text:string; }
-function buildProHooks(s: ProSignals): HookItem[] {
+function buildProHooks(s: ProSignals, t: any): HookItem[] {
   const seed = (s.total * 17 + s.nameA.length * 31 + s.nameB.length * 13) >>> 0;
   const A = s.nameA, B = s.nameB;
 
@@ -1249,14 +1248,14 @@ function buildProHooks(s: ProSignals): HookItem[] {
       ], seed+26);
 
   return [
-    { key:"emotional",  emoji:"❤️",  title:"Emotional Compatibility", text:emotional },
-    { key:"marriage",   emoji:"💍", title:"Marriage Future",          text:marriageFuture },
-    { key:"risks",      emoji:"⚠️",  title:"Hidden Risks",             text:risks },
-    { key:"karmic",     emoji:"🕉️", title:"Karmic Bond",              text:karmicBond },
-    { key:"strengths",  emoji:"✨", title:"Strength Factors",          text:strengths },
-    { key:"triggers",   emoji:"⚡", title:"Conflict Triggers",         text:conflictTriggers },
-    { key:"stability",  emoji:"🛡️", title:"Long-term Stability",      text:stability },
-    { key:"final",      emoji:"🔮", title:"Final Outcome",             text:finalOutcome },
+    { key:"emotional",  emoji:"❤️",  title:t.km3_insEmotional, text:emotional },
+    { key:"marriage",   emoji:"💍", title:t.km3_insMarriage,  text:marriageFuture },
+    { key:"risks",      emoji:"⚠️",  title:t.km3_insRisks,     text:risks },
+    { key:"karmic",     emoji:"🕉️", title:t.km3_insKarmic,    text:karmicBond },
+    { key:"strengths",  emoji:"✨", title:t.km3_insStrength,  text:strengths },
+    { key:"triggers",   emoji:"⚡", title:t.km3_insTriggers,  text:conflictTriggers },
+    { key:"stability",  emoji:"🛡️", title:t.km3_insStability, text:stability },
+    { key:"final",      emoji:"🔮", title:t.km3_insFinal,     text:finalOutcome },
   ];
 }
 
@@ -1304,19 +1303,19 @@ function LockedHook({ item, isDark }:{ item:HookItem; isDark:boolean }) {
   );
 }
 
-function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData|null; isDark:boolean }) {
+function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonData|null; isDark:boolean; t:any }) {
   const canBuild = !!p1 && !!p2;
-  const hooks: HookItem[] = canBuild ? buildProHooks(buildSignals(p1!, p2!)) : [];
+  const hooks: HookItem[] = canBuild ? buildProHooks(buildSignals(p1!, p2!), t) : [];
 
   const unlockList = [
-    "Emotional Compatibility — what truly connects or disconnects you",
-    "Marriage Future — real direction of this relationship",
-    "Hidden Risks — patterns creating problems",
-    "Karmic Bond — deeper purpose of this connection",
-    "Strength Factors — what holds this together",
-    "Conflict Triggers — what causes repeated issues",
-    "Long-term Stability — will it last or break",
-    "Final Outcome — actual future direction",
+    t.km3_unlEmotional,
+    t.km3_unlMarriage,
+    t.km3_unlRisks,
+    t.km3_unlKarmic,
+    t.km3_unlStrength,
+    t.km3_unlTriggers,
+    t.km3_unlStability,
+    t.km3_unlFinal,
   ];
 
   return (
@@ -1330,13 +1329,13 @@ function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData
         <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
           <Text style={{fontSize:16}}>🪔</Text>
           <Text style={{color:isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.2}}>
-            Your Personalised Analysis
+            {t.km3_yourPersAnalysis}
           </Text>
         </View>
         <Text style={{color:isDark?"rgba(226,232,240,0.85)":"#334155",fontSize:12.5,fontFamily:"Nunito_400Regular",lineHeight:19}}>
-          Yeh analysis aapki asli kundli par based hai aur un patterns ko reveal karta hai jo seedha aapke rishte par asar dalte hain.
-          {"\n\n"}Is connection ke sabse important sach neeche chhupe hain.
-          {"\n"}Unlock karke poori picture dekhein.
+          {t.km3_kundliBased}
+          {"\n\n"}{t.km3_truthsBelow}
+          {"\n"}{t.km3_unlockToSee}
         </Text>
       </View>
 
@@ -1349,7 +1348,7 @@ function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData
         <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
           <Feather name="unlock" size={14} color={isDark?"#f59e0b":"#7C3AED"}/>
           <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:12,fontFamily:"Nunito_800ExtraBold",letterSpacing:1.5}}>
-            WHAT YOU WILL UNLOCK
+            {t.km3_whatYouUnlock}
           </Text>
         </View>
         <View style={{gap:6}}>
@@ -1370,7 +1369,7 @@ function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData
           <View style={{flexDirection:"row",alignItems:"center",gap:10,marginTop:2}}>
             <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
             <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:10,fontFamily:"Nunito_800ExtraBold",letterSpacing:1.8}}>
-              🔒 LOCKED PREVIEW
+              {t.km3_lockedPreview}
             </Text>
             <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
           </View>
@@ -1385,10 +1384,10 @@ function ProKundliSection({ p1, p2, isDark }:{ p1:PersonData|null; p2:PersonData
         }}>
           <Text style={{fontSize:22}}>💑</Text>
           <Text style={{color:isDark?"#fcd34d":"#6d28d9",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
-            Add Both Kundlis to Unlock Preview
+            {t.km3_addBothToUnlock}
           </Text>
           <Text style={{color:isDark?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.55)",fontSize:11,fontFamily:"Nunito_500Medium",textAlign:"center"}}>
-            Dono ki birth details add karein — phir aapki personal hooks generate hongi
+            {t.km3_addBothSubtext}
           </Text>
         </View>
       )}
@@ -1450,7 +1449,7 @@ export default function KundliMilanScreen(){
   },[plan]);
 
   const autoP1:PersonData|null=primaryKundli?{
-    name:p1Profile?.name??"Aap",
+    name:p1Profile?.name??t.km_aap,
     nakshatra:primaryKundli.nakshatra ?? "",
     moonSign:primaryKundli.moonSign ?? "",
     manglik:[1,4,7,8,12].includes(primaryKundli.planets.find(p=>p.name==="Mars")?.house??0),
@@ -1484,9 +1483,9 @@ export default function KundliMilanScreen(){
 
     if(!bd1||!bd2){
       Alert.alert(
-        "Birth Data Missing",
-        "Accurate calculation ke liye dono logon ka poora birth data chahiye — date, time, aur place. Profile edit karke update karein ya naya kundli inline form se add karein.",
-        [{text:"OK"}]
+        t.km_birthMissing,
+        t.km2_birthMissingBody,
+        [{text:t.km_okBtn}]
       );
       return;
     }
@@ -1539,9 +1538,9 @@ export default function KundliMilanScreen(){
       }
     }catch(e:any){
       const msg=e?.name==="AbortError"
-        ?"Request timed out. Internet connection check karein aur dobara try karein."
-        :(e?.message??"Backend se connect nahi ho pa raha. Dobara try karein.");
-      Alert.alert("Calculation Failed",msg,[{text:"OK"}]);
+        ?t.km2_calcFailedBody
+        :(e?.message??t.km2_calcFailedBody);
+      Alert.alert(t.km_calcFailed,msg,[{text:t.km_okBtn}]);
     }finally{
       setCalcLoading(false);
     }
@@ -1625,10 +1624,10 @@ export default function KundliMilanScreen(){
                   <View style={{flex:1}}>
                     <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.5)",
                       fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:0.8,textTransform:"uppercase"}}>
-                      Matching with
+                      {t.km2_matchingWith}
                     </Text>
                     <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
-                      {p1Profile?.name||"You"}  ✦  {p2.name}
+                      {p1Profile?.name||t.km2_youPlaceholder}  ✦  {p2.name}
                     </Text>
                   </View>
                   <Pressable onPress={()=>router.back()}
@@ -1766,7 +1765,7 @@ export default function KundliMilanScreen(){
 
           {/* ── PRO SECTION: 4-Layer Personalized Hooks ── */}
           {isPro&&!result&&(
-            <ProKundliSection p1={p1} p2={p2} isDark={C.isDark}/>
+            <ProKundliSection p1={p1} p2={p2} isDark={C.isDark} t={t}/>
           )}
 
           {/* ── PRO CTA Buttons ── */}
@@ -1774,7 +1773,7 @@ export default function KundliMilanScreen(){
             <ShineButton
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate} loading={calcLoading}
-              text={canCalculate?"Unlock Full Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?t.km_addYourKundli:t.km_addPartnerKundli}
+              text={canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli}
               onPress={handleCalculate}/>
           )}
 

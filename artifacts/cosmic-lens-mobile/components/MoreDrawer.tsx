@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
+  Alert,
   Animated,
   I18nManager,
   Linking,
@@ -17,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
+import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 
 const DRAWER_W = 320;
@@ -39,6 +41,7 @@ export default function MoreDrawer({
 }: { visible: boolean; onClose: () => void }) {
   const C = useC();
   const t = useT();
+  const { logout } = useUser();
 
   const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
     {
@@ -94,6 +97,25 @@ export default function MoreDrawer({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
     setTimeout(() => router.push(route as any), 200);
+  }
+
+  function performLogout() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    logout();
+    onClose();
+    setTimeout(() => router.replace("/login"), 200);
+  }
+
+  function handleLogoutPress() {
+    if (Platform.OS === "web") {
+      const ok = typeof window !== "undefined" && window.confirm(t.logoutConfirm);
+      if (ok) performLogout();
+    } else {
+      Alert.alert(t.logoutTitle, t.logoutConfirm, [
+        { text: t.cancel ?? "Cancel", style: "cancel" },
+        { text: t.logoutCta, style: "destructive", onPress: performLogout },
+      ]);
+    }
   }
 
   async function openFounderWhatsApp() {
@@ -246,6 +268,21 @@ export default function MoreDrawer({
                 </View>
               );
             })}
+
+            {/* ── Logout ───────────────────────────────────────────────── */}
+            <Pressable
+              onPress={handleLogoutPress}
+              style={({ pressed }) => [
+                s.logoutCard,
+                { borderColor: "#f8717155", backgroundColor: C.bgCard },
+                pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <View style={[s.logoutIconWrap, { backgroundColor: "#f8717120", borderColor: "#f8717155" }]}>
+                <Feather name="log-out" size={18} color="#f87171" />
+              </View>
+              <Text style={[s.logoutText, { color: "#f87171" }]}>{t.logOut}</Text>
+            </Pressable>
           </ScrollView>
         </Animated.View>
       </View>
@@ -337,5 +374,27 @@ const s = StyleSheet.create({
   founderArrow: {
     width: 30, height: 30, borderRadius: 15,
     alignItems: "center", justifyContent: "center",
+  },
+
+  logoutCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  logoutIconWrap: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
+  logoutText: {
+    fontSize: 14,
+    fontFamily: "Nunito_700Bold",
+    letterSpacing: 0.3,
   },
 });

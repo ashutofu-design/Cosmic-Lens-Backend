@@ -179,11 +179,18 @@ def _guru_chandal(pl):
     rahu_h = _house(pl, "Rahu")
     ketu_h = _house(pl, "Ketu")
 
+    # Strict-classical (per user): only Jupiter–Rahu counts. Ketu fully excluded.
+    # Binary Active/None. Two valid triggers:
+    #   (a) Same house  → conjunction
+    #   (b) Rahu in 7th house from Jupiter → mutual aspect via Jupiter's 7th drishti
+    # No 5th/9th nodal aspects, no Jupiter–Ketu pairing.
+    opp_of_jup = (jup_h + 5) % 12 + 1   # 7th house from Jupiter
+
     if jup_h == rahu_h:
         return (
             "Active",
             f"Jupiter–Rahu Conjunction in House {jup_h} — Guru Chandal Dosh",
-            "Guru Chandal Dosh forms when Jupiter (Guru) conjuncts Rahu (Chandal). Pollutes wisdom, attracts deceitful teachers, and causes ethical confusion in important decisions.",
+            "Guru Chandal Dosh forms when Jupiter (Guru) conjuncts Rahu (Chandal) in the same house. Pollutes wisdom, attracts misleading teachers, and causes ethical confusion in major decisions.",
             [
                 "Recite Guru Beej mantra: Om Gram Greem Graum Sah Gurave Namah 108×",
                 "Donate yellow cloth and chana dal on Thursdays",
@@ -191,33 +198,26 @@ def _guru_chandal(pl):
                 "Feed cows with jaggery on Thursdays",
                 "Avoid making major decisions during Jupiter–Rahu periods",
             ],
-            f"Jupiter → House {jup_h} | Rahu → House {rahu_h}",
+            f"Jupiter → House {jup_h} | Rahu → House {rahu_h} (same house)",
         )
-    if jup_h == ketu_h:
+    if rahu_h == opp_of_jup:
         return (
-            "Mild",
-            f"Jupiter–Ketu Conjunction in House {jup_h} — Mild Guru Chandal",
-            "Jupiter with Ketu creates spiritual confusion and detachment from traditional wisdom and dharmic path.",
+            "Active",
+            f"Rahu Opposite Jupiter (H{jup_h} ↔ H{rahu_h}) — Guru Chandal Dosh",
+            "Jupiter and Rahu sit exactly opposite (7th from each other). Jupiter's 7th aspect on Rahu creates a mutual affliction, polluting wisdom and dharmic clarity.",
             [
-                "Worship Lord Ganesh on Wednesdays",
-                "Donate green cloth or moong dal on Thursdays",
+                "Recite Guru Beej mantra: Om Gram Greem Graum Sah Gurave Namah 108×",
+                "Donate yellow cloth and chana dal on Thursdays",
+                "Perform Jupiter Shanti Pooja at a Vishnu temple",
+                "Feed cows with jaggery on Thursdays",
+                "Avoid making major decisions during Jupiter–Rahu periods",
             ],
-            f"Jupiter → House {jup_h} | Ketu → House {ketu_h}",
-        )
-    # Rahu aspects 5th, 7th, 9th from its house
-    rahu_aspects = [(rahu_h + 4) % 12 + 1, (rahu_h + 6) % 12 + 1, (rahu_h + 8) % 12 + 1]
-    if jup_h in rahu_aspects:
-        return (
-            "Mild",
-            f"Rahu Aspects Jupiter — Partial Guru Chandal",
-            "Rahu's special aspect on Jupiter weakens wisdom and may attract misleading guidance.",
-            ["Chant Vishnu Sahasranama regularly"],
-            f"Jupiter → House {jup_h} | Rahu → House {rahu_h} (aspects H{jup_h})",
+            f"Jupiter → House {jup_h} | Rahu → House {rahu_h} (7th from Jupiter)",
         )
     return (
         "None",
         "No Guru Chandal Dosh — Jupiter Unafflicted",
-        "Jupiter is free from Rahu/Ketu influence. Wisdom and dharma are clear and unobstructed.",
+        "Jupiter is neither conjunct nor opposite Rahu. Wisdom and dharma are clear and unobstructed.",
         [],
         f"Jupiter → House {jup_h} | Rahu → House {rahu_h}",
     )

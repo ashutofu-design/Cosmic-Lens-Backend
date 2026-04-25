@@ -37,6 +37,7 @@ const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padSta
 const C_SUCCESS = "#16A34A";
 
 const RELATIONS = [
+  { key: "Self",      emoji: "🧘" },
   { key: "Husband",   emoji: "👨" },
   { key: "Wife",      emoji: "👩" },
   { key: "Son",       emoji: "👦" },
@@ -289,10 +290,11 @@ export default function ProfileEditScreen() {
     setFmForm(prev => ({ ...prev, [key]: val }));
 
   function openFmAdd() {
+    const isFirstEver = profiles.length === 0;
     setFmEditId(null);
-    setFmIsPrimary(false);
+    setFmIsPrimary(isFirstEver);
     setFmForm(blank());
-    setFmRelation("Father");
+    setFmRelation(isFirstEver ? "Self" : "Father");
     setFmPlaceQuery("");
     setFmGeoResults([]);
     setFmError("");
@@ -390,6 +392,13 @@ export default function ProfileEditScreen() {
         syncKundliToCloud(birthData, kundli).catch(() => {});
       } else if (fmEditId) {
         updateProfile(fmEditId, { name: fmForm.name.trim(), gender: fmForm.gender, relation: fmRelation, birthData, kundli });
+      } else if (fmIsPrimary) {
+        // First-ever profile on a new account → save as primary (Self)
+        const newEntry = addProfile({ name: fmForm.name.trim(), gender: fmForm.gender, relation: "Self", birthData, kundli });
+        setPrimaryProfile(newEntry.id);
+        setBirthData(birthData);
+        setKundli(kundli);
+        syncKundliToCloud(birthData, kundli).catch(() => {});
       } else {
         addProfile({ name: fmForm.name.trim(), gender: fmForm.gender, relation: fmRelation, birthData, kundli });
       }

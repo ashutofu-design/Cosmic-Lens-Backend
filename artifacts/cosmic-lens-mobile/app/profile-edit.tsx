@@ -111,6 +111,7 @@ function HeroCard({ profile, onView, onEdit }: {
   profile: ProfileEntry; onView: () => void; onEdit: () => void;
 }) {
   const C = useC();
+  const t = useT();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const k = profile.kundli;
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
@@ -138,7 +139,7 @@ function HeroCard({ profile, onView, onEdit }: {
                 <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
                 <View style={[card.badge, { backgroundColor: `${ac}15` }]}>
                   <Feather name="star" size={7} color={ac} />
-                  <Text style={[card.badgeTxt, { color: ac }]}>PRIMARY</Text>
+                  <Text style={[card.badgeTxt, { color: ac }]}>{t.pe_primary}</Text>
                 </View>
               </View>
               <Text style={[card.astro, { color: C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED" }]} numberOfLines={1}>{astroLine}</Text>
@@ -160,12 +161,12 @@ function HeroCard({ profile, onView, onEdit }: {
             }]}>
               <Pressable onPress={() => { setMenuOpen(false); onView(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="eye" size={13} color={C.isDark ? "#38bdf8" : "#7C3AED"} />
-                <Text style={[card.menuTxt, { color: C.text }]}>View Kundli</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_viewKundli}</Text>
               </Pressable>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
               <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="edit-3" size={13} color={ac} />
-                <Text style={[card.menuTxt, { color: C.text }]}>Edit Profile</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_editProfile}</Text>
               </Pressable>
             </View>
           )}
@@ -180,6 +181,7 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
   onDelete: () => void; onMakePrimary: () => void;
 }) {
   const C = useC();
+  const t = useT();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const k = profile.kundli;
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
@@ -228,17 +230,17 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
             }]}>
               <Pressable onPress={() => { setMenuOpen(false); onMakePrimary(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="star" size={13} color="#f59e0b" />
-                <Text style={[card.menuTxt, { color: C.text }]}>Set as Primary</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_setAsPrimary}</Text>
               </Pressable>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
               <Pressable onPress={() => { setMenuOpen(false); onEdit(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="edit-3" size={13} color={ac} />
-                <Text style={[card.menuTxt, { color: C.text }]}>Edit Profile</Text>
+                <Text style={[card.menuTxt, { color: C.text }]}>{t.pe_editProfile}</Text>
               </Pressable>
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }} />
               <Pressable onPress={() => { setMenuOpen(false); onDelete(); }} style={({ pressed }) => [card.menuItem, pressed && { opacity: 0.6 }]}>
                 <Feather name="trash-2" size={13} color="#f87171" />
-                <Text style={[card.menuTxt, { color: "#f87171" }]}>Delete</Text>
+                <Text style={[card.menuTxt, { color: "#f87171" }]}>{t.pe_delete}</Text>
               </Pressable>
             </View>
           )}
@@ -438,7 +440,7 @@ export default function ProfileEditScreen() {
               </Text>
             </View>
             <Text style={[s.headerSub, { color: C.isDark ? C.textDim : "#94A3B8" }]}>
-              Manage your profile & family members
+              {t.pe_manageProfile}
             </Text>
           </View>
         </View>
@@ -458,7 +460,7 @@ export default function ProfileEditScreen() {
 
           {familyMembers.length > 0 && (
             <View style={{ gap: 6, marginTop: 4 }}>
-              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 0 }}>OTHER PROFILES</Text>
+              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 0 }}>{t.pe_otherProfiles}</Text>
               {familyMembers.map((p) => (
                 <SecondaryCard
                   key={p.id}
@@ -496,7 +498,7 @@ export default function ProfileEditScreen() {
               <Feather name="trash-2" size={16} color={ac} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>Recently Deleted</Text>
+              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>{t.pe_recentlyDeleted}</Text>
               <Text style={{ color: C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }}>
                 Restore profiles within 24 hours
               </Text>
@@ -509,7 +511,7 @@ export default function ProfileEditScreen() {
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="star" size={28} color={ac} />
               </View>
-              <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }}>No Kundli Yet</Text>
+              <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }}>{t.pe_noKundliYet}</Text>
               <Text style={{ color: C.textMuted, fontSize: 12.5, fontFamily: F.medium, textAlign: "center", lineHeight: 19 }}>
                 Add your birth details to generate{"\n"}your first kundli chart
               </Text>
@@ -528,7 +530,7 @@ export default function ProfileEditScreen() {
               style={fab.btn}
             >
               <Feather name="plus" size={18} color="#fff" />
-              <Text style={fab.txt}>Add New Kundli</Text>
+              <Text style={fab.txt}>{t.pe_addNewKundli}</Text>
             </LinearGradient>
           </Pressable>
         </View>
@@ -550,7 +552,7 @@ export default function ProfileEditScreen() {
             <View style={[bs.handle, { backgroundColor: C.isDark ? C.border2 : "#D4D4D8" }]} />
 
             <Text style={[bs.title, { color: C.text }]}>
-              {fmIsPrimary ? "Edit Profile" : fmEditId ? "Edit Family Member" : "Add Family Member"}
+              {fmIsPrimary ? t.pe_editProfile : fmEditId ? t.pe_editFamily : t.pe_addFamily}
             </Text>
 
             <ScrollView
@@ -560,7 +562,7 @@ export default function ProfileEditScreen() {
             >
               <View style={{ gap: 12 }}>
                 <View style={s.fieldWrap}>
-                  <Lbl text="NAME" />
+                  <Lbl text={t.pe_lblName} />
                   <View style={[
                     s.inputRow,
                     { backgroundColor: C.inputBg, borderColor: fmNameFocused ? C.inputFocusBorder : C.inputBorder },
@@ -570,7 +572,7 @@ export default function ProfileEditScreen() {
                       style={[s.inputTxt, { color: C.text }]}
                       value={fmForm.name}
                       onChangeText={v => { fmSet("name")(v); setFmError(""); }}
-                      placeholder="Full name"
+                      placeholder={t.pe_phName}
                       placeholderTextColor={C.textDim}
                       autoCapitalize="words"
                       returnKeyType="done"
@@ -583,12 +585,16 @@ export default function ProfileEditScreen() {
                 <View style={s.fieldWrap}>
                   <Lbl text="GENDER (OPTIONAL)" />
                   <View style={{ flexDirection: "row", gap: 6 }}>
-                    {["Male", "Female", "Other"].map(g => {
-                      const active = fmForm.gender === g;
+                    {[
+                      { val: "Male", lbl: t.pe_male },
+                      { val: "Female", lbl: t.pe_female },
+                      { val: "Other", lbl: t.pe_other },
+                    ].map(({ val, lbl }) => {
+                      const active = fmForm.gender === val;
                       return (
                         <Pressable
-                          key={g}
-                          onPress={() => { setFmForm(prev => ({ ...prev, gender: g })); Haptics.selectionAsync(); }}
+                          key={val}
+                          onPress={() => { setFmForm(prev => ({ ...prev, gender: val })); Haptics.selectionAsync(); }}
                           style={[
                             s.chip,
                             active
@@ -596,7 +602,7 @@ export default function ProfileEditScreen() {
                               : { borderColor: C.border, backgroundColor: "transparent" },
                           ]}
                         >
-                          <Text style={[s.chipTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{g}</Text>
+                          <Text style={[s.chipTxt, { color: active ? C.toggleSelText : C.textMuted }]}>{lbl}</Text>
                         </Pressable>
                       );
                     })}
@@ -605,34 +611,34 @@ export default function ProfileEditScreen() {
 
                 {!fmIsPrimary && (
                   <View style={s.fieldWrap}>
-                    <Lbl text="RELATION" />
-                    <PickerBtn value={fmRelation} placeholder="Select" onPress={() => setFmRelOpen(true)} />
+                    <Lbl text={t.pe_lblRelation} />
+                    <PickerBtn value={fmRelation} placeholder={t.pe_phSelect} onPress={() => setFmRelOpen(true)} />
                   </View>
                 )}
 
                 <View style={s.fieldWrap}>
-                  <Lbl text="DATE OF BIRTH" />
+                  <Lbl text={t.pe_lblDOB} />
                   <View style={{ flexDirection: "row", gap: 6 }}>
                     <View style={{ flex: 22 }}>
-                      <PickerBtn value={fmForm.day ? String(fmForm.day).padStart(2,"0") : ""} placeholder="DD" onPress={() => setFmDayOpen(true)} />
+                      <PickerBtn value={fmForm.day ? String(fmForm.day).padStart(2,"0") : ""} placeholder={t.pe_phDD} onPress={() => setFmDayOpen(true)} />
                     </View>
                     <View style={{ flex: 36 }}>
-                      <PickerBtn value={fmForm.month ? MONTHS[Number(fmForm.month)-1] : ""} placeholder="Month" onPress={() => setFmMonthOpen(true)} />
+                      <PickerBtn value={fmForm.month ? MONTHS[Number(fmForm.month)-1] : ""} placeholder={t.pe_phMonth} onPress={() => setFmMonthOpen(true)} />
                     </View>
                     <View style={{ flex: 42 }}>
-                      <PickerBtn value={fmForm.year} placeholder="Year" onPress={() => setFmYearOpen(true)} />
+                      <PickerBtn value={fmForm.year} placeholder={t.pe_phYear} onPress={() => setFmYearOpen(true)} />
                     </View>
                   </View>
                 </View>
 
                 <View style={s.fieldWrap}>
-                  <Lbl text="TIME OF BIRTH" />
+                  <Lbl text={t.pe_lblTOB} />
                   <View style={{ flexDirection: "row", gap: 6 }}>
                     <View style={{ flex: 28 }}>
-                      <PickerBtn value={fmForm.hour ? String(fmForm.hour).padStart(2,"0") : ""} placeholder="HH" onPress={() => setFmHourOpen(true)} />
+                      <PickerBtn value={fmForm.hour ? String(fmForm.hour).padStart(2,"0") : ""} placeholder={t.pe_phHH} onPress={() => setFmHourOpen(true)} />
                     </View>
                     <View style={{ flex: 28 }}>
-                      <PickerBtn value={fmForm.minute !== "" ? String(fmForm.minute).padStart(2,"0") : ""} placeholder="MM" onPress={() => setFmMinOpen(true)} />
+                      <PickerBtn value={fmForm.minute !== "" ? String(fmForm.minute).padStart(2,"0") : ""} placeholder={t.pe_phMM} onPress={() => setFmMinOpen(true)} />
                     </View>
                     <View style={{ flex: 44 }}>
                       <View style={{ flexDirection: "row", gap: 4 }}>
@@ -659,7 +665,7 @@ export default function ProfileEditScreen() {
                 </View>
 
                 <View style={s.fieldWrap}>
-                  <Lbl text="BIRTH PLACE" />
+                  <Lbl text={t.pe_lblBirthPlace} />
                   <View style={[
                     s.inputRow,
                     { backgroundColor: C.inputBg, borderColor: fmPlaceFocused ? C.inputFocusBorder : C.inputBorder, gap: 6 },
@@ -670,7 +676,7 @@ export default function ProfileEditScreen() {
                       value={fmPlaceQuery}
                       onChangeText={setFmPlaceQuery}
                       onSubmitEditing={handleFmPlaceSearch}
-                      placeholder="City, Country"
+                      placeholder={t.pe_phCity}
                       placeholderTextColor={C.textDim}
                       returnKeyType="search"
                       onFocus={() => setFmPlaceFocused(true)}
@@ -679,7 +685,7 @@ export default function ProfileEditScreen() {
                     <Pressable onPress={handleFmPlaceSearch} style={[s.searchBtn, { borderColor: ac }]}>
                       {fmSearching
                         ? <ActivityIndicator size="small" color={ac} />
-                        : <Text style={[s.searchBtnTxt, { color: ac }]}>Search</Text>
+                        : <Text style={[s.searchBtnTxt, { color: ac }]}>{t.pe_search}</Text>
                       }
                     </Pressable>
                   </View>
@@ -723,7 +729,7 @@ export default function ProfileEditScreen() {
                 disabled={fmSaving}
                 style={[bs.cancelBtn, { borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}
               >
-                <Text style={[bs.cancelTxt, { color: C.textMuted }]}>Cancel</Text>
+                <Text style={[bs.cancelTxt, { color: C.textMuted }]}>{t.cancel}</Text>
               </Pressable>
               <Pressable
                 onPress={handleFmSave}
@@ -747,12 +753,12 @@ export default function ProfileEditScreen() {
         </KeyboardAvoidingView>
 
         {/* FM picker modals — MUST be inside the sheet Modal so they present on top on iOS */}
-        <PickerModal visible={fmDayOpen}   title="Select Day"        items={DAYS_L}        selected={fmForm.day}    onSelect={v => { fmSet("day")(v);    setFmDayOpen(false);   }} onClose={() => setFmDayOpen(false)}   />
-        <PickerModal visible={fmMonthOpen} title="Select Month"      items={MONTHS_L}      selected={fmForm.month}  onSelect={v => { fmSet("month")(v);  setFmMonthOpen(false); }} onClose={() => setFmMonthOpen(false)} />
-        <PickerModal visible={fmYearOpen}  title="Select Birth Year" items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
-        <PickerModal visible={fmHourOpen}  title="Select Hour"       items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
-        <PickerModal visible={fmMinOpen}   title="Select Minute"     items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
-        <PickerModal visible={fmRelOpen}   title="Select Relation"   items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
+        <PickerModal visible={fmDayOpen}   title={t.pe_pickDay}      items={DAYS_L}        selected={fmForm.day}    onSelect={v => { fmSet("day")(v);    setFmDayOpen(false);   }} onClose={() => setFmDayOpen(false)}   />
+        <PickerModal visible={fmMonthOpen} title={t.pe_pickMonth}    items={MONTHS_L}      selected={fmForm.month}  onSelect={v => { fmSet("month")(v);  setFmMonthOpen(false); }} onClose={() => setFmMonthOpen(false)} />
+        <PickerModal visible={fmYearOpen}  title={t.pe_pickYear}     items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
+        <PickerModal visible={fmHourOpen}  title={t.pe_pickHour}     items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
+        <PickerModal visible={fmMinOpen}   title={t.pe_pickMinute}   items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
+        <PickerModal visible={fmRelOpen}   title={t.pe_pickRelation} items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
       </Modal>
 
       {/* Delete Confirm */}
@@ -763,7 +769,7 @@ export default function ProfileEditScreen() {
               <View style={del.iconWrap}>
                 <Feather name="trash-2" size={20} color="#f87171" />
               </View>
-              <Text style={[del.title, { color: C.text }]}>Delete Member?</Text>
+              <Text style={[del.title, { color: C.text }]}>{t.pe_deleteMember}</Text>
               <Text style={[del.body, { color: C.textMuted }]}>
                 <Text style={{ color: C.textMid, fontFamily: F.semibold }}>{deleteTarget.name}</Text>
                 {" "}ka chart data permanently delete ho jayega.

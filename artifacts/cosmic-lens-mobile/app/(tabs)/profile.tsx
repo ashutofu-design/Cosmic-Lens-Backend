@@ -27,6 +27,29 @@ const F = {
   bold:     "Nunito_700Bold",
 };
 
+// ── Vedic-bucket labels (en/hn/hi) for hardcoded UI strings ───────────────────
+type VLang = "en" | "hn" | "hi";
+function vLangFromCode(code: string): VLang {
+  if (code === "en") return "en";
+  if (code === "hn") return "hn";
+  return "hi";
+}
+function getProfileLabels(v: VLang) {
+  const en = v === "en", hn = v === "hn";
+  return {
+    tabIndia:    en ? "India"     : hn ? "India"     : "भारत",
+    tabGlobal:   en ? "Global"    : hn ? "Global"    : "विश्व",
+    active:      en ? "ACTIVE"    : hn ? "ACTIVE"    : "सक्रिय",
+    free:        en ? "FREE"      : hn ? "FREE"      : "निःशुल्क",
+    freePlan:    en ? "FREE PLAN" : hn ? "FREE PLAN" : "निःशुल्क प्लान",
+    myData:      en ? "MY DATA"   : hn ? "MY DATA"   : "मेरा डेटा",
+    myKundli:    en ? "My Kundli" : hn ? "My Kundli" : "मेरी कुंडली",
+    saved:       en ? "saved"     : hn ? "saved"     : "सहेजे गए",
+    perYear:     en ? "year"      : hn ? "year"      : "वर्ष",
+    perMonth:    en ? "month"     : hn ? "month"     : "माह",
+  };
+}
+
 // ── Languages ─────────────────────────────────────────────────────────────────
 type LangItem = { code: string; native: string; name: string };
 
@@ -125,6 +148,8 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   const insets = useSafeAreaInsets();
   const C = useC();
   const { language, isIndia } = useUser();
+  const v: VLang = vLangFromCode(language);
+  const L = getProfileLabels(v);
   const t = getT(language);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"india" | "global">(isIndia ? "india" : "global");
@@ -176,7 +201,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             onPress={() => switchTab("india")}
           >
             <Text style={lm.tabFlag}>🇮🇳</Text>
-            <Text style={[lm.tabLabel, { color: tab === "india" ? "#f59e0b" : C.textMuted }]}>India</Text>
+            <Text style={[lm.tabLabel, { color: tab === "india" ? "#f59e0b" : C.textMuted }]}>{L.tabIndia}</Text>
           </Pressable>
           <Pressable
             style={[lm.tabBtn, {
@@ -186,7 +211,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
             onPress={() => switchTab("global")}
           >
             <Text style={lm.tabFlag}>🌍</Text>
-            <Text style={[lm.tabLabel, { color: tab === "global" ? "#6366f1" : C.textMuted }]}>Global</Text>
+            <Text style={[lm.tabLabel, { color: tab === "global" ? "#6366f1" : C.textMuted }]}>{L.tabGlobal}</Text>
           </Pressable>
         </View>
 
@@ -253,6 +278,9 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
   isCurrent: boolean; onPress: ()=>void;
 }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vLangFromCode(language);
+  const L = getProfileLabels(v);
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isFree = plan.key === "free";
 
@@ -271,7 +299,7 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
           <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
           {isCurrent && (
             <View style={[pl.badge, { backgroundColor:`${plan.accent}20`, borderColor:`${plan.accent}40` }]}>
-              <Text style={[pl.badgeText, { color: plan.accent }]}>ACTIVE</Text>
+              <Text style={[pl.badgeText, { color: plan.accent }]}>{L.active}</Text>
             </View>
           )}
         </View>
@@ -285,12 +313,12 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
       {/* Price */}
       <View style={{ flexDirection:"row", alignItems:"flex-end", gap:3, marginBottom:6 }}>
         {isFree ? (
-          <Text style={[pl.price, { color: plan.accent }]}>FREE</Text>
+          <Text style={[pl.price, { color: plan.accent }]}>{L.free}</Text>
         ) : (
           <>
             <Text style={[pl.priceCurrency, { color: plan.accent }]}>₹</Text>
             <Text style={[pl.price, { color: plan.accent }]}>{price.toLocaleString("en-IN")}</Text>
-            <Text style={[pl.pricePer, { color: C.textMuted }]}>/{cycle === "yearly" ? "year" : "month"}</Text>
+            <Text style={[pl.pricePer, { color: C.textMuted }]}>/{cycle === "yearly" ? L.perYear : L.perMonth}</Text>
           </>
         )}
       </View>
@@ -388,6 +416,8 @@ export default function ProfileScreen() {
     language, setLanguage,
     logout,
   } = useUser();
+  const v: VLang = vLangFromCode(language);
+  const L = getProfileLabels(v);
 
   const [showLang, setShowLang] = useState(false);
   const [pushOn, setPushOn]     = useState(true);
@@ -494,7 +524,7 @@ export default function ProfileScreen() {
 
           <View style={[s.planBadge,{ backgroundColor: C.bgCard2, borderColor: C.border }]}>
             <Feather name="circle" size={9} color={C.textMuted} />
-            <Text style={{ color: C.textMuted, fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1 }}>FREE PLAN</Text>
+            <Text style={{ color: C.textMuted, fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1 }}>{L.freePlan}</Text>
           </View>
         </LinearGradient>
 
@@ -636,15 +666,15 @@ export default function ProfileScreen() {
 
         {/* ── MY DATA ──────────────────────────────────────────────────── */}
         <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>MY DATA</Text>
+          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{L.myData}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
               icon="book-open"
-              label="My Kundli"
+              label={L.myKundli}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-kundli"); }}
               right={
                 <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{profiles.filter(p => p.kundli).length} saved</Text>
+                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{profiles.filter(p => p.kundli).length} {L.saved}</Text>
                   <Feather name="chevron-right" size={14} color={C.textDim} />
                 </View>
               }

@@ -311,6 +311,113 @@ export interface MoreT {
   numCtaTitle:        string;
   numCtaSub:          string;
   numFooterNote:      string;
+
+  // ── profile-edit.tsx ──────────────────────────────────────
+  pe_primary:         string;
+  pe_viewKundli:      string;
+  pe_editProfile:     string;
+  pe_setAsPrimary:    string;
+  pe_delete:          string;
+  pe_addNewKundli:    string;
+  pe_editFamily:      string;
+  pe_addFamily:       string;
+  pe_lblName:         string;
+  pe_phName:          string;
+  pe_male:            string;
+  pe_female:          string;
+  pe_other:           string;
+  pe_lblRelation:     string;
+  pe_phSelect:        string;
+  pe_lblDOB:          string;
+  pe_phDD:            string;
+  pe_phMonth:         string;
+  pe_phYear:          string;
+  pe_lblTOB:          string;
+  pe_phHH:            string;
+  pe_phMM:            string;
+  pe_lblBirthPlace:   string;
+  pe_phCity:          string;
+  pe_search:          string;
+  pe_pickDay:         string;
+  pe_pickMonth:       string;
+  pe_pickYear:        string;
+  pe_pickHour:        string;
+  pe_pickMinute:      string;
+  pe_pickRelation:    string;
+  pe_deleteMember:    string;
+  pe_husband:         string;
+  pe_wife:            string;
+  pe_son:             string;
+  pe_daughter:        string;
+  pe_father:          string;
+  pe_mother:          string;
+  pe_brother:         string;
+  pe_sister:          string;
+  pe_friend:          string;
+
+  // ── kundli-milan.tsx ──────────────────────────────────────
+  km_unlockReveal:    string;
+  km_onCalculate:     string;
+  km_riskLevel:       string;
+  km_soulBond:        string;
+  km_karmaLink:       string;
+  km_nadiNakBond:     string;
+  km_ganaCompat:      string;
+  km_yoniAnalysis:    string;
+  km_noNegPatterns:   string;
+  km_finalVerdict:    string;
+  km_tapUnlock:       string;
+  km_basic:           string;
+  km_manglikDosh:     string;
+  km_recalc:          string;
+
+  // ── vastu.tsx (residual hardcoded strings) ────────────────
+  vu_camera:          string;
+  vu_gallery:         string;
+  vu_takePhotoNow:    string;
+  vu_chooseSavedPhoto:string;
+  vu_initiateScan:    string;
+  vu_chooseRoomType:  string;
+  vu_liveCompass:     string;
+  vu_deepScanTitle:   string;
+  vu_fromGallery:     string;
+  vu_noFloorPlan:     string;
+  vu_remove:          string;
+  vu_runDeepScan:     string;
+  vu_deepScanBadge:   string;
+  vu_startDeepScan:   string;
+  vu_wallByWall:      string;
+  vu_spatialEnergy:   string;
+  vu_scanInconclusive:string;
+  vu_imageClarity:    string;
+  vu_recapture:       string;
+  vu_drishtiName:     string;
+  vu_scanOk:          string;
+  vu_compliance:      string;
+  vu_runNewScan:      string;
+  vu_whatIsVastu:     string;
+  vu_unlockPro:       string;
+  vu_roomGuide:       string;
+  vu_astroVastuPro:   string;
+  vu_personalizedSub: string;
+  vu_cancelAnytime:   string;
+  vu_talkExpert:      string;
+  vu_new:             string;
+  vu_cosmicDrishti:   string;
+
+  // ── kundli-milan + profile-edit (round 2) ────────────────
+  km_addYourKundli:   string;
+  km_addPartnerKundli:string;
+  km_errName:         string;
+  km_errAllFields:    string;
+  km_lblName:         string;
+  km_lblDob:          string;
+  km_lblTime:         string;
+  km_lblPlace:        string;
+  pe_otherProfiles:   string;
+  pe_recentlyDeleted: string;
+  pe_noKundliYet:     string;
+  pe_manageProfile:   string;
 }
 
 // English — primary, complete
@@ -618,6 +725,112 @@ const EN: MoreT = {
   numCtaTitle:        "Unlock Full Numerology Report",
   numCtaSub:          "Get Personality, Maturity, Love, Career & Remedies",
   numFooterNote:      "Calculations use the Pythagorean Numerology system. Life Path, Destiny, and Soul Urge numbers are derived from your Kundli profile data — no re-entry needed.",
+
+  // profile-edit.tsx
+  pe_primary:         "PRIMARY",
+  pe_viewKundli:      "View Kundli",
+  pe_editProfile:     "Edit Profile",
+  pe_setAsPrimary:    "Set as Primary",
+  pe_delete:          "Delete",
+  pe_addNewKundli:    "Add New Kundli",
+  pe_editFamily:      "Edit Family Member",
+  pe_addFamily:       "Add Family Member",
+  pe_lblName:         "NAME",
+  pe_phName:          "Full name",
+  pe_male:            "Male",
+  pe_female:          "Female",
+  pe_other:           "Other",
+  pe_lblRelation:     "RELATION",
+  pe_phSelect:        "Select",
+  pe_lblDOB:          "DATE OF BIRTH",
+  pe_phDD:            "DD",
+  pe_phMonth:         "Month",
+  pe_phYear:          "Year",
+  pe_lblTOB:          "TIME OF BIRTH",
+  pe_phHH:            "HH",
+  pe_phMM:            "MM",
+  pe_lblBirthPlace:   "BIRTH PLACE",
+  pe_phCity:          "City, Country",
+  pe_search:          "Search",
+  pe_pickDay:         "Select Day",
+  pe_pickMonth:       "Select Month",
+  pe_pickYear:        "Select Birth Year",
+  pe_pickHour:        "Select Hour",
+  pe_pickMinute:      "Select Minute",
+  pe_pickRelation:    "Select Relation",
+  pe_deleteMember:    "Delete Member?",
+  pe_husband:         "Husband",
+  pe_wife:            "Wife",
+  pe_son:             "Son",
+  pe_daughter:        "Daughter",
+  pe_father:          "Father",
+  pe_mother:          "Mother",
+  pe_brother:         "Brother",
+  pe_sister:          "Sister",
+  pe_friend:          "Friend",
+
+  // kundli-milan.tsx
+  km_unlockReveal:    "Unlock to reveal hidden truths",
+  km_onCalculate:     "ON CALCULATE",
+  km_riskLevel:       "Risk Level",
+  km_soulBond:        "Soul Bond",
+  km_karmaLink:       "Karma Link",
+  km_nadiNakBond:     "Nadi Nakshatra Bond",
+  km_ganaCompat:      "Gana Compatibility",
+  km_yoniAnalysis:    "Yoni Analysis",
+  km_noNegPatterns:   "No major negative patterns found",
+  km_finalVerdict:    "Final Verdict",
+  km_tapUnlock:       "Tap below to unlock everything",
+  km_basic:           "Basic",
+  km_manglikDosh:     "Manglik Dosh",
+  km_recalc:          "Recalculate / Change Details",
+
+  // vastu.tsx
+  vu_camera:          "Camera",
+  vu_gallery:         "Gallery",
+  vu_takePhotoNow:    "Take a photo now",
+  vu_chooseSavedPhoto:"Choose a saved photo",
+  vu_initiateScan:    "Initiate Vastu Drishti Scan",
+  vu_chooseRoomType:  "Choose room type",
+  vu_liveCompass:     "LIVE COMPASS",
+  vu_deepScanTitle:   "Cosmic Vastu Deep Scan",
+  vu_fromGallery:     "From Gallery",
+  vu_noFloorPlan:     "No floor plan added",
+  vu_remove:          "Remove",
+  vu_runDeepScan:     "Run Cosmic Deep Scan",
+  vu_deepScanBadge:   "DEEP SCAN",
+  vu_startDeepScan:   "Start Deep Scan",
+  vu_wallByWall:      "WALL-BY-WALL ANALYSIS",
+  vu_spatialEnergy:   "SPATIAL ENERGY MAP",
+  vu_scanInconclusive:"SCAN INCONCLUSIVE",
+  vu_imageClarity:    "Image clarity insufficient",
+  vu_recapture:       "Recapture and scan again",
+  vu_drishtiName:     "COSMIC VASTU DRISHTI",
+  vu_scanOk:          "SCAN OK",
+  vu_compliance:      "VASTU COMPLIANCE",
+  vu_runNewScan:      "Run new scan",
+  vu_whatIsVastu:     "What is Vastu Shastra?",
+  vu_unlockPro:       "Unlock PRO",
+  vu_roomGuide:       "ROOM-WISE VASTU GUIDE",
+  vu_astroVastuPro:   "AstroVastu Pro",
+  vu_personalizedSub: "Personalized premium Vastu analysis",
+  vu_cancelAnytime:   "Cancel anytime",
+  vu_talkExpert:      "Talk to Vastu Expert on WhatsApp",
+  vu_new:             "NEW",
+  vu_cosmicDrishti:   "COSMIC VASTU DRISHTI",
+
+  km_addYourKundli:   "Add Your Kundli",
+  km_addPartnerKundli:"Add Partner Kundli",
+  km_errName:         "Name is required.",
+  km_errAllFields:    "All fields are required.",
+  km_lblName:         "NAME",
+  km_lblDob:          "DATE OF BIRTH",
+  km_lblTime:         "TIME OF BIRTH",
+  km_lblPlace:        "BIRTH PLACE",
+  pe_otherProfiles:   "OTHER PROFILES",
+  pe_recentlyDeleted: "Recently Deleted",
+  pe_noKundliYet:     "No Kundli Yet",
+  pe_manageProfile:   "Manage your profile & family members",
 };
 
 // Hinglish overrides (only differing keys)
@@ -915,6 +1128,19 @@ const HN: Partial<MoreT> = {
   numCtaTitle:        "Poori Numerology Report Unlock Karein",
   numCtaSub:          "Personality, Maturity, Love, Career aur Upay paayein",
   numFooterNote:      "Calculations Pythagorean Numerology system pe based hain. Life Path, Destiny aur Soul Urge numbers aapki Kundli profile se aate hain — re-entry ki zaroorat nahi.",
+
+  km_addYourKundli:   "Apni Kundli Add karein",
+  km_addPartnerKundli:"Saathi ki Kundli Add karein",
+  km_errName:         "Naam zaroori hai.",
+  km_errAllFields:    "Sab fields zaroori hain.",
+  km_lblName:         "NAAM",
+  km_lblDob:          "JANAM TAREEKH",
+  km_lblTime:         "JANAM SAMAY",
+  km_lblPlace:        "JANAM STHAAN",
+  pe_otherProfiles:   "ANYA PROFILES",
+  pe_recentlyDeleted: "Haal mein Hataye",
+  pe_noKundliYet:     "Abhi tak koi Kundli nahi",
+  pe_manageProfile:   "Apna profile aur family members manage karein",
 };
 
 // Hindi overrides (Devanagari)
@@ -1212,6 +1438,112 @@ const HI: Partial<MoreT> = {
   numCtaTitle:        "पूरी अंकज्योतिष रिपोर्ट अनलॉक करें",
   numCtaSub:          "व्यक्तित्व, परिपक्वता, प्रेम, करियर और उपाय पाएं",
   numFooterNote:      "गणनाएं पाइथागोरस अंकज्योतिष प्रणाली पर आधारित हैं। जीवन पथ, भाग्य और आत्मा की इच्छा संख्याएं आपकी कुंडली प्रोफ़ाइल से ली जाती हैं — दोबारा दर्ज करने की आवश्यकता नहीं।",
+
+  // profile-edit.tsx
+  pe_primary:         "मुख्य",
+  pe_viewKundli:      "कुंडली देखें",
+  pe_editProfile:     "प्रोफ़ाइल संपादित करें",
+  pe_setAsPrimary:    "मुख्य बनाएं",
+  pe_delete:          "हटाएं",
+  pe_addNewKundli:    "नई कुंडली जोड़ें",
+  pe_editFamily:      "परिवार सदस्य संपादित करें",
+  pe_addFamily:       "परिवार सदस्य जोड़ें",
+  pe_lblName:         "नाम",
+  pe_phName:          "पूरा नाम",
+  pe_male:            "पुरुष",
+  pe_female:          "स्त्री",
+  pe_other:           "अन्य",
+  pe_lblRelation:     "रिश्ता",
+  pe_phSelect:        "चुनें",
+  pe_lblDOB:          "जन्म तिथि",
+  pe_phDD:            "दिन",
+  pe_phMonth:         "माह",
+  pe_phYear:          "वर्ष",
+  pe_lblTOB:          "जन्म समय",
+  pe_phHH:            "घं",
+  pe_phMM:            "मि",
+  pe_lblBirthPlace:   "जन्म स्थान",
+  pe_phCity:          "शहर, देश",
+  pe_search:          "खोजें",
+  pe_pickDay:         "दिन चुनें",
+  pe_pickMonth:       "माह चुनें",
+  pe_pickYear:        "जन्म वर्ष चुनें",
+  pe_pickHour:        "घंटा चुनें",
+  pe_pickMinute:      "मिनट चुनें",
+  pe_pickRelation:    "रिश्ता चुनें",
+  pe_deleteMember:    "सदस्य हटाएं?",
+  pe_husband:         "पति",
+  pe_wife:            "पत्नी",
+  pe_son:             "पुत्र",
+  pe_daughter:        "पुत्री",
+  pe_father:          "पिता",
+  pe_mother:          "माता",
+  pe_brother:         "भाई",
+  pe_sister:          "बहन",
+  pe_friend:          "मित्र",
+
+  // kundli-milan.tsx
+  km_unlockReveal:    "छिपी सच्चाई जानने के लिए अनलॉक करें",
+  km_onCalculate:     "गणना पर",
+  km_riskLevel:       "जोखिम स्तर",
+  km_soulBond:        "आत्मा बंधन",
+  km_karmaLink:       "कर्म संबंध",
+  km_nadiNakBond:     "नाड़ी नक्षत्र बंधन",
+  km_ganaCompat:      "गण मेल",
+  km_yoniAnalysis:    "योनि विश्लेषण",
+  km_noNegPatterns:   "कोई बड़ा नकारात्मक पैटर्न नहीं मिला",
+  km_finalVerdict:    "अंतिम निर्णय",
+  km_tapUnlock:       "सब अनलॉक करने के लिए नीचे टैप करें",
+  km_basic:           "बेसिक",
+  km_manglikDosh:     "मांगलिक दोष",
+  km_recalc:          "पुनर्गणना / विवरण बदलें",
+
+  // vastu.tsx
+  vu_camera:          "कैमरा",
+  vu_gallery:         "गैलरी",
+  vu_takePhotoNow:    "अभी फोटो लें",
+  vu_chooseSavedPhoto:"सहेजी फोटो चुनें",
+  vu_initiateScan:    "वास्तु दृष्टि स्कैन शुरू करें",
+  vu_chooseRoomType:  "कमरे का प्रकार चुनें",
+  vu_liveCompass:     "लाइव कम्पास",
+  vu_deepScanTitle:   "कॉस्मिक वास्तु डीप स्कैन",
+  vu_fromGallery:     "गैलरी से",
+  vu_noFloorPlan:     "कोई फ्लोर प्लान नहीं जोड़ा",
+  vu_remove:          "हटाएं",
+  vu_runDeepScan:     "कॉस्मिक डीप स्कैन चलाएं",
+  vu_deepScanBadge:   "डीप स्कैन",
+  vu_startDeepScan:   "डीप स्कैन शुरू करें",
+  vu_wallByWall:      "दीवार-दर-दीवार विश्लेषण",
+  vu_spatialEnergy:   "स्थानिक ऊर्जा मानचित्र",
+  vu_scanInconclusive:"स्कैन अस्पष्ट",
+  vu_imageClarity:    "छवि स्पष्टता अपर्याप्त",
+  vu_recapture:       "पुनः कैप्चर करें और स्कैन करें",
+  vu_drishtiName:     "कॉस्मिक वास्तु दृष्टि",
+  vu_scanOk:          "स्कैन सफल",
+  vu_compliance:      "वास्तु अनुपालन",
+  vu_runNewScan:      "नया स्कैन चलाएं",
+  vu_whatIsVastu:     "वास्तु शास्त्र क्या है?",
+  vu_unlockPro:       "PRO अनलॉक करें",
+  vu_roomGuide:       "कमरा-वार वास्तु गाइड",
+  vu_astroVastuPro:   "एस्ट्रोवास्तु प्रो",
+  vu_personalizedSub: "व्यक्तिगत प्रीमियम वास्तु विश्लेषण",
+  vu_cancelAnytime:   "कभी भी रद्द करें",
+  vu_talkExpert:      "वास्तु विशेषज्ञ से व्हाट्सएप पर बात करें",
+  vu_new:             "नया",
+  vu_cosmicDrishti:   "कॉस्मिक वास्तु दृष्टि",
+
+  km_addYourKundli:   "अपनी कुंडली जोड़ें",
+  km_addPartnerKundli:"साथी की कुंडली जोड़ें",
+  km_errName:         "नाम ज़रूरी है।",
+  km_errAllFields:    "सभी फ़ील्ड ज़रूरी हैं।",
+  km_lblName:         "नाम",
+  km_lblDob:          "जन्म तिथि",
+  km_lblTime:         "जन्म समय",
+  km_lblPlace:        "जन्म स्थान",
+  pe_otherProfiles:   "अन्य प्रोफ़ाइल",
+  pe_recentlyDeleted: "हाल में हटाए गए",
+  pe_noKundliYet:     "अभी तक कोई कुंडली नहीं",
+  pe_manageProfile:   "अपना प्रोफ़ाइल और परिवार के सदस्य प्रबंधित करें",
 };
 
 /**

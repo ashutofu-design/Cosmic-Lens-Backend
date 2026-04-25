@@ -1096,6 +1096,7 @@ function useScanHeading() {
 }
 
 function VastuScanCard({ C }: { C: any }) {
+  const t = useT();
   const { user, language } = useUser();
   const [imageUri, setImageUri]   = useState<string | null>(null);
   const [imageB64, setImageB64]   = useState<string | null>(null);
@@ -1233,9 +1234,9 @@ function VastuScanCard({ C }: { C: any }) {
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={[vs.title, { color: C.text }]}>Vastu Drishti Scanner</Text>
+            <Text style={[vs.title, { color: C.text }]}>{t.vu_drishtiName}</Text>
             <View style={vs.newBadge}>
-              <Text style={vs.newBadgeText}>NEW</Text>
+              <Text style={vs.newBadgeText}>{t.vu_new}</Text>
             </View>
           </View>
           <Text style={[vs.sub, { color: C.textMuted }]}>
@@ -1272,7 +1273,7 @@ function VastuScanCard({ C }: { C: any }) {
             style={[vs.pickBtn, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55", opacity: picking ? 0.5 : 1 }]}
           >
             <Feather name="camera" size={20} color="#a78bfa" />
-            <Text style={[vs.pickBtnText, { color: C.text }]}>Camera</Text>
+            <Text style={[vs.pickBtnText, { color: C.text }]}>{t.vu_camera}</Text>
             <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Turant photo lein</Text>
           </Pressable>
           <Pressable
@@ -1281,7 +1282,7 @@ function VastuScanCard({ C }: { C: any }) {
             style={[vs.pickBtn, { backgroundColor: C.bgCard2, borderColor: "#a78bfa55", opacity: picking ? 0.5 : 1 }]}
           >
             <Feather name="image" size={20} color="#a78bfa" />
-            <Text style={[vs.pickBtnText, { color: C.text }]}>Gallery</Text>
+            <Text style={[vs.pickBtnText, { color: C.text }]}>{t.vu_gallery}</Text>
             <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Saved photo chuniye</Text>
           </Pressable>
         </View>
@@ -1303,7 +1304,7 @@ function VastuScanCard({ C }: { C: any }) {
             ) : (
               <>
                 <Feather name="zap" size={16} color="#fff" />
-                <Text style={vs.scanBtnText}>Initiate Vastu Drishti Scan</Text>
+                <Text style={vs.scanBtnText}>{t.vu_initiateScan}</Text>
               </>
             )}
           </LinearGradient>
@@ -1421,6 +1422,7 @@ type CapturedPhoto = {
 
 // ── Compact alignment indicator (north-up arc with target marker) ─────────
 function AlignmentDial({ current, target }: { current: number | null; target: number }) {
+  const t = useT();
   const size = 220;
   const cx = size / 2;
   const cy = size / 2;
@@ -1463,7 +1465,7 @@ function AlignmentDial({ current, target }: { current: number | null; target: nu
       </Svg>
       {/* Big live degree readout — pinpoint single-decimal precision */}
       <View style={{ position: "absolute", alignItems: "center" }}>
-        <Text style={{ fontSize: 9, color: "#94a3b8", letterSpacing: 1.5, fontWeight: "800" }}>LIVE COMPASS</Text>
+        <Text style={{ fontSize: 9, color: "#94a3b8", letterSpacing: 1.5, fontWeight: "800" }}>{t.vu_liveCompass}</Text>
         <Text style={{
           fontSize: 32, fontWeight: "900", color: ringColor,
           fontVariant: ["tabular-nums"],
@@ -1496,6 +1498,7 @@ function DeepScanWizard({
   onClose:    () => void;
   onComplete: (photos: CapturedPhoto[], floorPlan: { uri: string; base64: string } | null) => void;
 }) {
+  const t = useT();
   const heading = useLiveHeading(visible);
   const [stepIndex, setStepIndex] = useState(0); // 0..3 = walls, 4 = floor plan, 5 = review
   const [captured, setCaptured]   = useState<(CapturedPhoto | null)[]>([null, null, null, null]);
@@ -1612,7 +1615,7 @@ function DeepScanWizard({
             <Feather name="chevron-left" size={22} color={C.text} />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={[ds.headerTitle, { color: C.text }]}>Cosmic Vastu Deep Scan</Text>
+            <Text style={[ds.headerTitle, { color: C.text }]}>{t.vu_deepScanTitle}</Text>
             <Text style={[ds.headerSub,   { color: C.textMuted }]}>Step {stepHuman} of {totalSteps}</Text>
           </View>
           <Pressable onPress={onClose} hitSlop={10} style={ds.headerBtn}>
@@ -1681,7 +1684,7 @@ function DeepScanWizard({
                   style={[ds.smallBtn, { borderColor: C.border }]}
                 >
                   <Feather name="image" size={14} color={C.textMuted} />
-                  <Text style={[ds.smallBtnText, { color: C.textMuted }]}>From Gallery</Text>
+                  <Text style={[ds.smallBtnText, { color: C.textMuted }]}>{t.vu_fromGallery}</Text>
                 </Pressable>
               </View>
 
@@ -1709,7 +1712,7 @@ function DeepScanWizard({
                 ) : (
                   <>
                     <Feather name="map" size={36} color={C.textDim} />
-                    <Text style={[ds.uploadHint, { color: C.textMuted }]}>No floor plan added</Text>
+                    <Text style={[ds.uploadHint, { color: C.textMuted }]}>{t.vu_noFloorPlan}</Text>
                   </>
                 )}
               </View>
@@ -1722,7 +1725,7 @@ function DeepScanWizard({
                 {floorPlan && (
                   <Pressable onPress={() => setFloorPlan(null)} style={[ds.smallBtn, { borderColor: C.border }]}>
                     <Feather name="x" size={14} color={C.textMuted} />
-                    <Text style={[ds.smallBtnText, { color: C.textMuted }]}>Remove</Text>
+                    <Text style={[ds.smallBtnText, { color: C.textMuted }]}>{t.vu_remove}</Text>
                   </Pressable>
                 )}
               </View>
@@ -1768,7 +1771,7 @@ function DeepScanWizard({
 
               <Pressable onPress={submitAll} style={[ds.nextBtn, { backgroundColor: "#10b981", marginTop: 18 }]}>
                 <Feather name="zap" size={16} color="#fff" />
-                <Text style={ds.nextBtnText}>Run Cosmic Deep Scan</Text>
+                <Text style={ds.nextBtnText}>{t.vu_runDeepScan}</Text>
               </Pressable>
               <Text style={[ds.fineprint, { color: C.textMuted }]}>
                 Uses 1 daily quota unit • Powered by Advanced Cosmic Intelligence
@@ -1810,6 +1813,7 @@ type VastuDeepScanResponse = VastuScanResponse & {
 };
 
 function VastuDeepScanCard({ C }: { C: any }) {
+  const t = useT();
   const { user, language } = useUser();
   const [room, setRoom]               = useState<string>("bedroom");
   const [showRoomPicker, setShowPick] = useState(false);
@@ -1872,7 +1876,7 @@ function VastuDeepScanCard({ C }: { C: any }) {
       <View style={vds.header}>
         <View style={vds.badge}>
           <Feather name="zap" size={10} color="#fff" />
-          <Text style={vds.badgeText}>DEEP SCAN</Text>
+          <Text style={vds.badgeText}>{t.vu_deepScanBadge}</Text>
         </View>
         <Text style={[vds.title, { color: C.text }]}>4-Wall Cosmic Drishti</Text>
         <Text style={[vds.sub,   { color: C.textMuted }]}>
@@ -1905,7 +1909,7 @@ function VastuDeepScanCard({ C }: { C: any }) {
               style={vds.startBtnInner}
             >
               <Feather name="zap" size={16} color="#fff" />
-              <Text style={vds.startBtnText}>Start Deep Scan</Text>
+              <Text style={vds.startBtnText}>{t.vu_startDeepScan}</Text>
             </LinearGradient>
           </Pressable>
 
@@ -1978,10 +1982,11 @@ function DeepFeature({ icon, text }: { icon: any; text: string }) {
 
 // ── Wall analyses + spatial map blocks (rendered inside VastuScanReport) ──
 function WallAnalysisBlock({ C, walls }: { C: any; walls: NonNullable<VastuDeepScanResponse["wall_analyses"]> }) {
+  const t = useT();
   if (!walls?.length) return null;
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>WALL-BY-WALL ANALYSIS</Text>
+      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>{t.vu_wallByWall}</Text>
       {walls.map((w, i) => {
         const sev = w.wall_status === "auspicious" ? SEV_OBS.positive
                   : w.wall_status === "neutral"    ? SEV_OBS.neutral
@@ -2017,6 +2022,7 @@ function WallAnalysisBlock({ C, walls }: { C: any; walls: NonNullable<VastuDeepS
 }
 
 function SpatialMapBlock({ C, map }: { C: any; map: NonNullable<VastuDeepScanResponse["spatial_map"]> }) {
+  const t = useT();
   const rows: { k: string; label: string; emoji: string }[] = [
     { k: "bed_or_seating", label: "Bed / Seating",     emoji: "🛏️" },
     { k: "main_door",      label: "Main Door",         emoji: "🚪" },
@@ -2028,7 +2034,7 @@ function SpatialMapBlock({ C, map }: { C: any; map: NonNullable<VastuDeepScanRes
   ];
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>SPATIAL ENERGY MAP</Text>
+      <Text style={{ color: C.accent, fontWeight: "900", fontSize: 11, letterSpacing: 1.2 }}>{t.vu_spatialEnergy}</Text>
       <View style={{ borderRadius: 10, borderWidth: 1, borderColor: C.border, backgroundColor: "#ffffff05", padding: 10, gap: 8 }}>
         {rows.map(r => {
           const v = (map as any)[r.k] || "";
@@ -2111,6 +2117,7 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
     floor_plan?:    boolean;
   };
 }) {
+  const t = useT();
   // Defensive normalization — protect render against malformed/partial JSON.
   const data: VastuScanResponse = {
     scan_inconclusive:       Boolean(raw?.scan_inconclusive),
@@ -2139,8 +2146,8 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
             <Feather name="alert-triangle" size={14} color="#f59e0b" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[vs.resultName, { color: C.text }]}>SCAN INCONCLUSIVE</Text>
-            <Text style={[vs.resultSub, { color: C.textMuted }]}>Image clarity insufficient</Text>
+            <Text style={[vs.resultName, { color: C.text }]}>{t.vu_scanInconclusive}</Text>
+            <Text style={[vs.resultSub, { color: C.textMuted }]}>{t.vu_imageClarity}</Text>
           </View>
         </View>
         <View style={vs.divider} />
@@ -2149,7 +2156,7 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
         </Text>
         <Pressable onPress={onReset} style={[vs.againBtn, { borderColor: "#f59e0b55" }]}>
           <Feather name="refresh-ccw" size={13} color="#f59e0b" />
-          <Text style={[vs.againText, { color: "#f59e0b" }]}>Recapture and scan again</Text>
+          <Text style={[vs.againText, { color: "#f59e0b" }]}>{t.vu_recapture}</Text>
         </Pressable>
       </View>
     );
@@ -2165,14 +2172,14 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
           <Feather name="zap" size={14} color="#a78bfa" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[vs.resultName, { color: C.text }]}>COSMIC VASTU DRISHTI</Text>
+          <Text style={[vs.resultName, { color: C.text }]}>{t.vu_cosmicDrishti}</Text>
           <Text style={[vs.resultSub, { color: C.textMuted }]}>
             v3.0 · {data.room_detected || "room"} · confidence {data.confidence}%
           </Text>
         </View>
         <View style={vs.statusDot}>
           <View style={vs.statusDotInner} />
-          <Text style={vs.statusText}>SCAN OK</Text>
+          <Text style={vs.statusText}>{t.vu_scanOk}</Text>
         </View>
       </View>
 
@@ -2182,7 +2189,7 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
       <View style={vs.scoreRow}>
         <ScoreGauge score={data.compliance_score} />
         <View style={{ flex: 1, gap: 6 }}>
-          <Text style={[vs.scoreLabel, { color: C.textMuted }]}>VASTU COMPLIANCE</Text>
+          <Text style={[vs.scoreLabel, { color: C.textMuted }]}>{t.vu_compliance}</Text>
           <Text style={[vs.scoreStatus, { color: C.text }]}>{data.energy_status}</Text>
           <View style={[vs.dirChip, { borderColor: isReal ? "#10b98166" : "#94a3b866", backgroundColor: isReal ? "#10b98115" : "#94a3b815" }]}>
             <Feather name="compass" size={11} color={isReal ? "#10b981" : "#94a3b8"} />
@@ -2289,7 +2296,7 @@ function VastuScanReport({ C, data: raw, onReset, extras }: {
 
       <Pressable onPress={onReset} style={[vs.againBtn, { borderColor: "#a78bfa55" }]}>
         <Feather name="refresh-ccw" size={13} color="#a78bfa" />
-        <Text style={[vs.againText, { color: "#a78bfa" }]}>Run new scan</Text>
+        <Text style={[vs.againText, { color: "#a78bfa" }]}>{t.vu_runNewScan}</Text>
       </Pressable>
     </View>
   );
@@ -2570,6 +2577,7 @@ const ds = StyleSheet.create({
 export default function VastuScreen() {
   const insets = useSafeAreaInsets();
   const C      = useC();
+  const t      = useT();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -2636,7 +2644,7 @@ export default function VastuScreen() {
             <View style={[s.introCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={{ fontSize:24 }}>🏠</Text>
               <View style={{ flex:1 }}>
-                <Text style={[s.introTitle, { color: C.text }]}>What is Vastu Shastra?</Text>
+                <Text style={[s.introTitle, { color: C.text }]}>{t.vu_whatIsVastu}</Text>
                 <Text style={[s.introBody, { color: C.textMuted }]}>
                   Vastu Shastra is an ancient Indian science of architecture. Correct directions bring
                   positive energy, happiness, health, and prosperity to your home.
@@ -2696,7 +2704,7 @@ export default function VastuScreen() {
                     backgroundColor: "#fff", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
                     flexDirection: "row", alignItems: "center", gap: 6,
                   }}>
-                    <Text style={{ color: "#7c3aed", fontWeight: "800", fontSize: 13 }}>Unlock PRO</Text>
+                    <Text style={{ color: "#7c3aed", fontWeight: "800", fontSize: 13 }}>{t.vu_unlockPro}</Text>
                     <Feather name="arrow-right" size={14} color="#7c3aed" />
                   </View>
                 </View>
@@ -2704,7 +2712,7 @@ export default function VastuScreen() {
             </Pressable>
 
             {/* Section label */}
-            <Text style={[s.sectionLabel, { color: C.accent }]}>ROOM-WISE VASTU GUIDE</Text>
+            <Text style={[s.sectionLabel, { color: C.accent }]}>{t.vu_roomGuide}</Text>
             <Text style={[s.sectionSub, { color: C.textMuted }]}>Tap any card to see dos, don'ts, and remedies</Text>
 
             {/* Room cards */}
@@ -2747,6 +2755,7 @@ export default function VastuScreen() {
 
 // ── Pro Section ──────────────────────────────────────────────────────────────
 function ProSection({ C }: { C: any }) {
+  const t = useT();
   const PRO_FEATURES = [
     {
       icon: "📐",
@@ -2816,14 +2825,14 @@ function ProSection({ C }: { C: any }) {
         <View style={s.proCrown}>
           <Text style={{ fontSize: 34 }}>👑</Text>
         </View>
-        <Text style={s.proHeroTitle}>AstroVastu Pro</Text>
-        <Text style={s.proHeroSub}>Personalized premium Vastu analysis</Text>
+        <Text style={s.proHeroTitle}>{t.vu_astroVastuPro}</Text>
+        <Text style={s.proHeroSub}>{t.vu_personalizedSub}</Text>
         <View style={s.proHeroBadgeRow}>
           <View style={s.proHeroBadge}>
             <Text style={s.proHeroBadgeText}>₹499/mo</Text>
           </View>
           <View style={[s.proHeroBadge, { backgroundColor: "#fff2b820", borderColor: "#fff2b855" }]}>
-            <Text style={[s.proHeroBadgeText, { color: "#fff2b8" }]}>Cancel anytime</Text>
+            <Text style={[s.proHeroBadgeText, { color: "#fff2b8" }]}>{t.vu_cancelAnytime}</Text>
           </View>
         </View>
       </View>
@@ -2870,7 +2879,7 @@ function ProSection({ C }: { C: any }) {
 
       <Pressable onPress={openWhatsApp} style={[s.ctaSecondary, { borderColor: C.border, backgroundColor: C.bgCard }]}>
         <Feather name="message-circle" size={15} color="#25D366" />
-        <Text style={[s.ctaSecondaryText, { color: C.text }]}>Talk to Vastu Expert on WhatsApp</Text>
+        <Text style={[s.ctaSecondaryText, { color: C.text }]}>{t.vu_talkExpert}</Text>
       </Pressable>
 
       <View style={[s.disclaimer, { backgroundColor: C.bgCard, borderColor: C.border }]}>

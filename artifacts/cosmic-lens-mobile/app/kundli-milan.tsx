@@ -119,6 +119,7 @@ function ScoreRing({total,col}:{total:number;col:string}){
 // ── Kundli Slot ───────────────────────────────────────────────────────────────
 interface SlotProps{who:"self"|"partner";locked?:boolean;filled?:PersonData|null;isPro:boolean;onAdd():void;onClear?():void;}
 function KundliSlot({who,locked,filled,isPro,onAdd,onClear}:SlotProps){
+  const t=useT();
   const C=useC();
   const isSelf=who==="self";
   const accent=isSelf?"#a78bfa":"#f9a8d4";
@@ -155,7 +156,7 @@ function KundliSlot({who,locked,filled,isPro,onAdd,onClear}:SlotProps){
         <View style={[sl.addIcon,{backgroundColor:`${accent}12`,borderColor:`${accent}30`}]}>
           <Feather name="plus" size={16} color={accent}/>
         </View>
-        <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_600SemiBold"}}>{isSelf?"Add Your Kundli":"Add Partner Kundli"}</Text>
+        <Text style={{color:C.text,fontSize:14,fontFamily:"Nunito_600SemiBold"}}>{isSelf?t.km_addYourKundli:t.km_addPartnerKundli}</Text>
         <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular"}}>{isSelf?"Birth details required":"Partner's birth details"}</Text>
       </View>
     </Pressable>
@@ -166,12 +167,13 @@ function KundliSlot({who,locked,filled,isPro,onAdd,onClear}:SlotProps){
 interface FormProps{title:string;onDone(d:PersonData):void;onCancel():void;}
 function AddKundliForm({title,onDone,onCancel}:FormProps){
   const C=useC();
+  const t=useT();
   const [name,setName]=useState(""); const [dob,setDob]=useState("");
   const [time,setTime]=useState(""); const [place,setPlace]=useState("");
   const [err,setErr]=useState(""); const [loading,setLoading]=useState(false);
   async function submit(){
-    if(!name.trim()){setErr("Naam zaroori hai.");return;}
-    if(!dob||!time||!place){setErr("Sab fields zaroori hain.");return;}
+    if(!name.trim()){setErr(t.km_errName);return;}
+    if(!dob||!time||!place){setErr(t.km_errAllFields);return;}
     setErr(""); setLoading(true);
     try{
       const[day,month,year]=dob.split("/").map(Number);
@@ -216,7 +218,7 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
       {!!err&&<View style={fm.errRow}><Feather name="alert-circle" size={11} color="#ef4444"/><Text style={fm.errText}>{err}</Text></View>}
       <View style={fm.btns}>
         <Pressable onPress={onCancel} style={[fm.cancelBtn,{borderColor:C.border}]}>
-          <Text style={{color:C.textMuted,fontSize:13,fontFamily:"Nunito_600SemiBold"}}>Cancel</Text>
+          <Text style={{color:C.textMuted,fontSize:13,fontFamily:"Nunito_600SemiBold"}}>{t.cancel}</Text>
         </Pressable>
         <Pressable onPress={submit} disabled={loading} style={({pressed})=>({opacity:pressed?0.7:1,flex:1})}>
           <LinearGradient colors={["#6d28d9","#a855f7"]} start={{x:0,y:0}} end={{x:1,y:0}} style={fm.addBtn}>
@@ -293,6 +295,7 @@ function PipBadge({type}:{type:"most"|"critical"|"premium"|"secret"|"decision"|n
 
 function ProInsightsPanel(){
   const C=useC();
+  const t=useT();
 
   // ── Stagger: 23 total animated elements ──
   const TOTAL=23;
@@ -373,7 +376,7 @@ function ProInsightsPanel(){
                   fontFamily:"Nunito_700Bold"}}>{title}</Text>
                 <View style={{flexDirection:"row",alignItems:"center",gap:4}}>
                   <Feather name="lock" size={9} color={C.isDark?"#a78bfa":"#5B21B6"}/>
-                  <Text style={{color:C.isDark?"#a78bfa":"#5B21B6",fontSize:9,fontFamily:"Nunito_700Bold"}}>Unlock to reveal hidden truths</Text>
+                  <Text style={{color:C.isDark?"#a78bfa":"#5B21B6",fontSize:9,fontFamily:"Nunito_700Bold"}}>{t.km_unlockReveal}</Text>
                 </View>
               </View>
             </View>
@@ -428,7 +431,7 @@ function ProInsightsPanel(){
           <View style={{backgroundColor:C.isDark?`${col}18`:`${col}30`,borderRadius:8,
             paddingHorizontal:8,paddingVertical:3,
             borderWidth:1,borderColor:C.isDark?`${col}30`:`${col}70`}}>
-            <Text style={{color:C.isDark?col:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>ON CALCULATE</Text>
+            <Text style={{color:C.isDark?col:col,fontSize:8,fontFamily:"Nunito_700Bold"}}>{t.km_onCalculate}</Text>
           </View>
         </View>
       </Animated.View>
@@ -640,6 +643,7 @@ function ProInsightsPanel(){
 
 // ── Pro Result Report — 12 sections ──────────────────────────────────────────
 function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;grad:readonly [string,string]};C:any}){
+  const t=useT();
   // Derived metrics (0-100)
   const pct=(n:number,d:number)=>Math.round(Math.min((n/d)*100,100));
   const emotional  = Math.round((pct(result.nadi.score,8)*0.45+pct(result.tara.score,3)*0.3+pct(result.maitri.score,5)*0.25));
@@ -711,7 +715,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
           <SectionLabel text="1 · RELATIONSHIP RISK SCAN" col={riskCol}/>
           <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
             <View>
-              <Text style={{color:C.text,fontSize:22,fontFamily:"Nunito_700Bold"}}>Risk Level</Text>
+              <Text style={{color:C.text,fontSize:22,fontFamily:"Nunito_700Bold"}}>{t.km_riskLevel}</Text>
               <Text style={{color:riskCol,fontSize:16,fontFamily:"Nunito_700Bold",marginTop:2}}>{riskLevel}</Text>
             </View>
             <View style={{width:64,height:64,borderRadius:32,borderWidth:2,borderColor:riskCol,
@@ -808,7 +812,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
           <View style={{flexDirection:"row",justifyContent:"space-around",marginBottom:14}}>
             <View style={{alignItems:"center",gap:6}}>
               <MiniArc pct={soulBond/100} col="#a78bfa" size={64}/>
-              <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Soul Bond</Text>
+              <Text style={{color:"#a78bfa",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_soulBond}</Text>
               <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
                 {soulBond>=75?"Deep karmic tie":"Growing connection"}
               </Text>
@@ -816,14 +820,14 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             <View style={{width:1,backgroundColor:"rgba(255,255,255,0.07)"}}/>
             <View style={{alignItems:"center",gap:6}}>
               <MiniArc pct={karmaLink/100} col="#34d399" size={64}/>
-              <Text style={{color:"#34d399",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Karma Link</Text>
+              <Text style={{color:"#34d399",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_karmaLink}</Text>
               <Text style={{color:C.textMuted,fontSize:9,fontFamily:"Nunito_400Regular",textAlign:"center",maxWidth:70}}>
                 {karmaLink>=75?"Positive past life":"Neutral karma"}
               </Text>
             </View>
           </View>
           <View style={{backgroundColor:"rgba(167,139,250,0.08)",borderRadius:10,padding:10,gap:4}}>
-            <Text style={{color:"#c4b5fd",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Nadi Nakshatra Bond</Text>
+            <Text style={{color:"#c4b5fd",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_nadiNakBond}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",lineHeight:16}}>
               {result.nadi.score===8
                 ?"Alag nadi — auspicious for healthy progeny and long life together."
@@ -841,7 +845,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
           <BarRow label="Social Alignment"      pct={pct(result.vasya.score,2)} col="#a78bfa" icon="🤝"/>
           <BarRow label="Lifestyle Harmony"     pct={pct(result.varna.score,1)*100>0?80:45} col="#fbbf24" icon="🌿"/>
           <View style={{backgroundColor:"rgba(52,211,153,0.08)",borderRadius:10,padding:10,marginTop:4}}>
-            <Text style={{color:"#6ee7b7",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Gana Compatibility</Text>
+            <Text style={{color:"#6ee7b7",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_ganaCompat}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
               {result.gana.score===6?"Excellent — both share similar life approach and values."
                :result.gana.score>0?"Moderate — differences exist but can be harmonised with effort."
@@ -858,7 +862,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
           <BarRow label="Physical Harmony"     pct={pct(result.yoni.score,4)} col="#f97316" icon="🌺"/>
           <BarRow label="Energetic Attraction" pct={pct(result.maitri.score,5)} col="#f43f5e" icon="⚡"/>
           <View style={{backgroundColor:"rgba(249,115,22,0.08)",borderRadius:10,padding:10,marginTop:4}}>
-            <Text style={{color:"#fdba74",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Yoni Analysis</Text>
+            <Text style={{color:"#fdba74",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_yoniAnalysis}</Text>
             <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular",marginTop:3,lineHeight:16}}>
               {result.yoni.score===4?"Same Yoni — exceptional physical and energetic alignment."
                :result.yoni.score>0?"Complementary energies — good compatibility with some adjustments."
@@ -900,7 +904,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             <View style={{flexDirection:"row",alignItems:"center",gap:8,paddingVertical:7,
               borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.05)"}}>
               <Text style={{fontSize:14}}>✅</Text>
-              <Text style={{color:"#22c55e",fontSize:12,fontFamily:"Nunito_600SemiBold"}}>No major negative patterns found</Text>
+              <Text style={{color:"#22c55e",fontSize:12,fontFamily:"Nunito_600SemiBold"}}>{t.km_noNegPatterns}</Text>
             </View>
           )}
         </GlowCard>
@@ -972,7 +976,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
             <Text style={{fontSize:32}}>
               {result.total>=32?"🌟":result.total>=27?"💚":result.total>=21?"💛":"❤️‍🩹"}
             </Text>
-            <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_700Bold",textAlign:"center"}}>Final Verdict</Text>
+            <Text style={{color:"#fff",fontSize:16,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{t.km_finalVerdict}</Text>
             <View style={{backgroundColor:"rgba(255,255,255,0.12)",borderRadius:12,paddingHorizontal:20,paddingVertical:8,borderWidth:1,borderColor:"rgba(255,255,255,0.2)"}}>
               <Text style={{color:"#fff",fontSize:18,fontFamily:"Nunito_700Bold",textAlign:"center"}}>{g.label}</Text>
             </View>
@@ -1021,7 +1025,7 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
                 <Feather name="lock" size={18} color="#a78bfa"/>
               </View>
               <Text style={{color:"#c4b5fd",fontSize:13,fontFamily:"Nunito_700Bold"}}>+ 12 Hidden Deep Insights</Text>
-              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>Tap below to unlock everything</Text>
+              <Text style={{color:C.textMuted,fontSize:10,fontFamily:"Nunito_400Regular"}}>{t.km_tapUnlock}</Text>
             </View>
           </LinearGradient>
         </View>
@@ -1582,7 +1586,7 @@ export default function KundliMilanScreen(){
                 style={[ms.segBtn,
                   plan==="basic"&&{backgroundColor:C.isDark?"#1e2744":"#4f46e5"}
                 ]}>
-                <Text style={[ms.segTxt,{color:plan==="basic"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>Basic</Text>
+                <Text style={[ms.segTxt,{color:plan==="basic"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>{t.km_basic}</Text>
               </Pressable>
               <Pressable
                 onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
@@ -1770,7 +1774,7 @@ export default function KundliMilanScreen(){
             <ShineButton
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate} loading={calcLoading}
-              text={canCalculate?"Unlock Full Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?"Add Your Kundli":"Add Partner Kundli"}
+              text={canCalculate?"Unlock Full Analysis":!person1&&!p2?"Add Both Kundlis First":!person1?t.km_addYourKundli:t.km_addPartnerKundli}
               onPress={handleCalculate}/>
           )}
 
@@ -1794,7 +1798,7 @@ export default function KundliMilanScreen(){
                   {result.manglik&&(
                     <View style={ms.mangChip}>
                       <View style={ms.mangDot}/>
-                      <Text style={{color:"#ef4444",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>Manglik Dosh</Text>
+                      <Text style={{color:"#ef4444",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_manglikDosh}</Text>
                     </View>
                   )}
                 </View>
@@ -1812,7 +1816,7 @@ export default function KundliMilanScreen(){
               <Pressable onPress={()=>{setResult(null);Haptics.selectionAsync();}}
                 style={[ms.recalcBtn,{borderColor:C.border,backgroundColor:C.bgCard}]}>
                 <Feather name="refresh-cw" size={13} color={C.textMuted}/>
-                <Text style={{color:C.textMuted,fontSize:12,fontFamily:"Nunito_500Medium"}}>Recalculate / Change Details</Text>
+                <Text style={{color:C.textMuted,fontSize:12,fontFamily:"Nunito_500Medium"}}>{t.km_recalc}</Text>
               </Pressable>
 
               {!isPro&&(

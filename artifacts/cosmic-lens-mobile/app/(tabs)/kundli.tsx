@@ -56,6 +56,53 @@ const oa = (isDark: boolean, hexAlpha: string): string => {
   const n = parseInt(hexAlpha, 16);
   return Math.min(255, Math.round(n * 2.2)).toString(16).padStart(2, '0');
 };
+
+// ── i18n labels ───────────────────────────────────────────────────────────────
+function getKundliLabels(v: VLang) {
+  const en = v === "en";
+  const hn = v === "hn";
+  return {
+    mahadasha:        en ? "MAHADASHA"        : hn ? "MAHADASHA"        : "महादशा",
+    antardasha:       en ? "ANTARDASHA"       : hn ? "ANTARDASHA"       : "अंतर्दशा",
+    pratyantardasha:  en ? "PRATYANTARDASHA"  : hn ? "PRATYANTARDASHA"  : "प्रत्यंतर्दशा",
+    mahaTimeline:     en ? "MAHADASHA TIMELINE" : hn ? "MAHADASHA TIMELINE" : "महादशा टाइमलाइन",
+    activeNow:        en ? "● ACTIVE NOW"     : hn ? "● ACTIVE NOW"     : "● अभी सक्रिय",
+    active:           en ? "ACTIVE"           : hn ? "ACTIVE"           : "सक्रिय",
+    yearsSuffix:      en ? "years"            : hn ? "saal"             : "साल",
+    whatNavatara:     en ? "What is Navatara?": hn ? "Navatara kya hai?": "नवतारा क्या है?",
+    navataraDesc:     en
+      ? "Starting from the Moon's nakshatra, 27 nakshatras are grouped into 9-star cycles called Tara."
+      : hn
+      ? "Chandra ke nakshatra se shuru karke 27 nakshatra 9-star Tara cycles mein bante hain."
+      : "चंद्र के नक्षत्र से शुरू करके 27 नक्षत्रों को 9-तारा चक्रों में विभाजित किया जाता है, जिन्हें तारा कहते हैं।",
+    chandraNakBase:   en ? "CHANDRA NAKSHATRA (BASE)" : hn ? "CHANDRA NAKSHATRA (BASE)" : "चंद्र नक्षत्र (आधार)",
+    whatJaimini:      en ? "What are Jaimini Chara Karakas?" : hn ? "Jaimini Chara Karakas kya hain?" : "जैमिनी चर कारक क्या हैं?",
+    jaiminiDesc:      en
+      ? "In Jaimini Jyotish, 7 planets get karaka roles based on their rashi-degrees. The planet with the highest degree becomes Atmakaraka."
+      : hn
+      ? "Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain. Sabse zyada degree wala graha Atmakaraka hota hai."
+      : "जैमिनी ज्योतिष में 7 ग्रहों को उनकी राशि-डिग्री के अनुसार कारक भूमिकाएँ मिलती हैं। सबसे ज़्यादा डिग्री वाला ग्रह आत्मकारक होता है।",
+    atmakaraka:       en ? "ATMAKARAKA"       : hn ? "ATMAKARAKA"       : "आत्मकारक",
+    jaiminiLagna:     en ? "Jaimini Lagna"    : hn ? "Jaimini Lagna"    : "जैमिनी लग्न",
+    jaiminiLagnaDesc: en
+      ? "Atmakaraka's rashi forms a special Jaimini Lagna. AK's navamsha position shows the soul's spiritual path. For full analysis, consult an astrologer."
+      : hn
+      ? "Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein."
+      : "आत्मकारक की राशि से विशेष जैमिनी लग्न बनता है। आत्मकारक की नवांश स्थिति जीव का आध्यात्मिक मार्ग दिखाती है। पूर्ण विश्लेषण के लिए ज्योतिषी से मिलें।",
+    liveChandraTransit: en ? "LIVE — CHANDRA TRANSIT" : hn ? "LIVE — CHANDRA TRANSIT" : "लाइव — चंद्र गोचर",
+    natalConj:        en ? "NATAL CONJ"       : hn ? "NATAL CONJ"       : "जन्म युति",
+    whatKP:           en ? "What is KP Paddhati?" : hn ? "KP Paddhati kya hai?" : "केपी पद्धति क्या है?",
+    kpSignificators:  en ? "KP Significators" : hn ? "KP Significators" : "केपी सूचक",
+    birthChartSnap:   en ? "BIRTH CHART SNAPSHOT" : hn ? "BIRTH CHART SNAPSHOT" : "जन्म कुंडली स्नैपशॉट",
+    planetPosition:   en ? "Planet Position"  : hn ? "Planet Position"  : "ग्रह स्थिति",
+    planetPositionSub: en ? "Live planetary degrees and rashi" : hn ? "Live graha degrees aur rashi" : "लाइव ग्रह डिग्री और राशि",
+    dailyAlerts:      en ? "Daily Alerts"     : hn ? "Daily Alerts"     : "दैनिक संकेत",
+    dailyAlertsSub:   en ? "4-day planetary guidance" : hn ? "4-day planetary guidance · Aaj ka sanket" : "4-दिन की ग्रह दिशा · आज का संकेत",
+    house:            en ? "House"            : hn ? "Bhav"             : "भाव",
+    nakshatraLabel:   en ? "Nakshatra"        : hn ? "Nakshatra"        : "नक्षत्र",
+  };
+}
+
 function formatDate(d: Date | string) {
   const dt = new Date(d);
   return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`;
@@ -125,10 +172,13 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
   onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
 }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
   const yrs = ((tsOf(endDate) - tsOf(startDate)) / (365.25 * 86400 * 1000)).toFixed(0);
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (vv: string) => oa(C.isDark, vv);
   return (
     <View style={{
       borderRadius: 18, borderWidth: 1.5, overflow: "hidden",
@@ -139,9 +189,9 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
       <View style={{ backgroundColor: `${color}${o("12")}`, paddingVertical: 9, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: `${color}${o("18")}` }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Feather name="sun" size={13} color={color} />
-          <Text style={{ color, fontSize: 11, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA</Text>
+          <Text style={{ color, fontSize: 11, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.mahadasha}</Text>
         </View>
-        <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.bold }}>{yrs} years</Text>
+        <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.bold }}>{yrs} {L.yearsSuffix}</Text>
       </View>
       <View style={{ borderLeftWidth: 4, borderLeftColor: color, padding: 18, gap: 10 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -154,7 +204,7 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
             <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold }}>{formatDate(startDate)} – {formatDate(endDate)}</Text>
             {active && (
               <View style={{ backgroundColor: `${color}${o("18")}`, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: `${color}${o("35")}`, marginTop: 2 }}>
-                <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1 }}>● ACTIVE NOW</Text>
+                <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1 }}>{L.activeNow}</Text>
               </View>
             )}
           </View>
@@ -182,9 +232,12 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
 }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (vv: string) => oa(C.isDark, vv);
   return (
     <View style={{
       borderRadius: 14, borderWidth: 1, overflow: "hidden",
@@ -195,7 +248,7 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
       <View style={{ borderLeftWidth: 3, borderLeftColor: color, padding: 14, gap: 8 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
           <Feather name="moon" size={11} color={color} />
-          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.2 }}>ANTARDASHA</Text>
+          <Text style={{ color, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.2 }}>{L.antardasha}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <NavArrow dir="left" enabled={hasPrev} onPress={onPrev} C={C} />
@@ -208,7 +261,7 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
                 <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold }}>{pName(planet)}</Text>
                 {active && (
                   <View style={{ backgroundColor: `${color}${o("18")}`, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 10 }}>
-                    <Text style={{ color, fontSize: 9, fontFamily: F.bold }}>ACTIVE</Text>
+                    <Text style={{ color, fontSize: 9, fontFamily: F.bold }}>{L.active}</Text>
                   </View>
                 )}
               </View>
@@ -237,9 +290,12 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   onPrev:()=>void; onNext:()=>void; hasPrev:boolean; hasNext:boolean;
 }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (vv: string) => oa(C.isDark, vv);
   return (
     <View style={{
       borderRadius: 12, borderWidth: 1, overflow: "hidden",
@@ -250,7 +306,7 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
       <View style={{ borderLeftWidth: 2, borderLeftColor: color, paddingVertical: 10, paddingHorizontal: 12, gap: 6 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 1 }}>
           <Feather name="star" size={10} color={color} />
-          <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>PRATYANTARDASHA</Text>
+          <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>{L.pratyantardasha}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Pressable
@@ -287,9 +343,12 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
 
 function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:number;onSelect:(i:number)=>void }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>MAHADASHA TIMELINE</Text>
+      <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.mahaTimeline}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
           {dashas.map((d,i) => {
@@ -555,8 +614,11 @@ function computeNavatara(kundli: KundliData) {
 
 function NavataraTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (vv: string) => oa(C.isDark, vv);
   const data = useMemo(() => computeNavatara(kundli), [kundli]);
   const moonNak = kundli.nakshatra ?? "?";
 
@@ -564,9 +626,9 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>What is Navatara?</Text>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.whatNavatara}</Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            Starting from the Moon's nakshatra, 27 nakshatras are grouped into 9-star cycles called Tara.
+            {L.navataraDesc}
           </Text>
         </View>
       </View>
@@ -580,7 +642,7 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
           <Text style={{ fontSize: 20 }}>🌙</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>CHANDRA NAKSHATRA (BASE)</Text>
+          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.chandraNakBase}</Text>
           <Text style={{ color: C.text, fontSize: 16, fontFamily: F.bold, marginTop: 2 }}>{moonNak}</Text>
         </View>
       </View>
@@ -653,8 +715,11 @@ function computeChara(kundli: KundliData) {
 
 function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const { language } = useUser();
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
-  const o = (v: string) => oa(C.isDark, v);
+  const o = (vv: string) => oa(C.isDark, vv);
   const data = useMemo(() => computeChara(kundli), [kundli]);
   const ak   = data[0];
 
@@ -662,10 +727,9 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>Jaimini Chara Karakas kya hain?</Text>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.whatJaimini}</Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain.
-            Sabse zyada degree wala graha Atmakaraka hota hai.
+            {L.jaiminiDesc}
           </Text>
         </View>
       </View>
@@ -688,7 +752,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Feather name="award" size={13} color={hue(ak.name)} />
-                  <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>ATMAKARAKA</Text>
+                  <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.atmakaraka}</Text>
                 </View>
                 <Text style={{ color: C.text, fontSize: 20, fontFamily: F.bold, marginTop: 2 }}>{pName(ak.name)}</Text>
                 <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold, marginTop: 3 }}>{ak.karaka?.desc}</Text>
@@ -737,10 +801,9 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
 
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.isDark ? "rgba(167,139,250,0.2)" : "rgba(167,139,250,0.35)", backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
-          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>Jaimini Lagna</Text>
+          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>{L.jaiminiLagna}</Text>
           <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
-            Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position
-            jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein.
+            {L.jaiminiLagnaDesc}
           </Text>
         </View>
       </View>
@@ -772,6 +835,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v2: string) => oa(C.isDark, v2);
   const transits = useMemo(() => approxTransit(), []);
@@ -805,13 +869,13 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
           <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e" }} />
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>LIVE — CHANDRA TRANSIT</Text>
+              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.liveChandraTransit}</Text>
             </View>
             <Text style={{color:C.text,fontSize:16,fontFamily:F.bold,marginTop:2}}>
-              {typeof moonRashi.index === "number" ? pick(v, RASHI[RASHI_KEYS[moonRashi.index]]) : moonRashi.name} · {v === "en" ? "House" : "Bhav"} {((moonRashi.index - ascRashi + 12)%12)+1}
+              {typeof moonRashi.index === "number" ? pick(v, RASHI[RASHI_KEYS[moonRashi.index]]) : moonRashi.name} · {L.house} {((moonRashi.index - ascRashi + 12)%12)+1}
             </Text>
             <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.semibold}}>
-              {v === "hi" ? "नक्षत्र" : "Nakshatra"}: {(() => {
+              {L.nakshatraLabel}: {(() => {
                 const idx = NAKSHATRA.findIndex(n => n.en === moonRashi.nakshatra);
                 return idx >= 0 ? pick(v, NAKSHATRA[idx]) : moonRashi.nakshatra;
               })()}
@@ -850,7 +914,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
                   <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(name)}</Text>
                   {isConj && (
                     <View style={{backgroundColor:`${pHue}${o("20")}`,borderRadius:6,paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:`${pHue}${o("35")}`}}>
-                      <Text style={{color:pHue,fontSize:9,fontFamily:F.bold}}>NATAL CONJ</Text>
+                      <Text style={{color:pHue,fontSize:9,fontFamily:F.bold}}>{L.natalConj}</Text>
                     </View>
                   )}
                 </View>
@@ -905,6 +969,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v2: string) => oa(C.isDark, v2);
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
@@ -923,7 +988,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
     <View style={{gap:16}}>
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>What is KP Paddhati?</Text>
+          <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.whatKP}</Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
             Krishnamurti Paddhati uses proportional sub-divisions of Vimshottari dasha for precision timing of events.
           </Text>
@@ -968,7 +1033,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.isDark ? "rgba(167,139,250,0.2)" : "rgba(167,139,250,0.35)", backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
-          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>KP Significators</Text>
+          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>{L.kpSignificators}</Text>
           <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
             Kisi bhi ghatna ke liye dekhen: Star-lord aur Sub-lord ka relationship.
             Agar 3 lord agree karein → event pakka.
@@ -1010,6 +1075,8 @@ export default function KundliScreen() {
   const { kundli, language, profiles, primaryProfileId } = useUser();
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const tI18n = getT(language);
+  const v: VLang = vedicLang(language);
+  const L = getKundliLabels(v);
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -1153,7 +1220,7 @@ export default function KundliScreen() {
           flexDirection: "row", alignItems: "center", gap: 8,
         }}>
           <Feather name="book-open" size={13} color={ac} />
-          <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>BIRTH CHART SNAPSHOT</Text>
+          <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>{L.birthChartSnap}</Text>
         </View>
         <View style={{ padding: 2 }}>
           {snapshotRows.map(({ label, value, icon }, idx) => (
@@ -1185,8 +1252,8 @@ export default function KundliScreen() {
               <Feather name="target" size={16} color={C.textMid} />
             </View>
             <View>
-              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>Planet Position</Text>
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>Live graha degrees aur rashi</Text>
+              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>{L.planetPosition}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>{L.planetPositionSub}</Text>
             </View>
           </View>
           <Feather name="chevron-right" size={16} color={C.textMuted} />
@@ -1205,8 +1272,8 @@ export default function KundliScreen() {
               <Feather name="bell" size={16} color={ac} />
             </View>
             <View>
-              <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>Daily Alerts</Text>
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>4-day planetary guidance · आज का संकेत</Text>
+              <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.dailyAlerts}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>{L.dailyAlertsSub}</Text>
             </View>
           </View>
           <Feather name="chevron-right" size={16} color={ac} style={{ opacity: 0.7 }} />

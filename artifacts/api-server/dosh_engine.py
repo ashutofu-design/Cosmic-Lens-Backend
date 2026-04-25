@@ -444,20 +444,31 @@ def _kemadruma(pl):
     prev_h = (moon_h - 2) % 12 + 1   # 12th from Moon
     next_h = moon_h % 12 + 1          # 2nd from Moon
 
-    # Rahu, Ketu, Sun (upagraha) don't break Kemadruma in classical texts
-    benefics = {"Mercury", "Venus", "Jupiter", "Mars", "Saturn"}
+    # BPHS Ch.8 V.51-52 (literal): ANY graha except Moon itself in 2nd/12th
+    # from Moon (or with Moon) cancels Kemadruma. Modern standard (KN Rao,
+    # BV Raman, Hart de Fouw) includes Sun + Rahu + Ketu as cancellers.
+    cancellers = {"Sun", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Rahu", "Ketu"}
 
-    prev_has = any(p.get("name") in benefics and int(p.get("house", 0)) == prev_h for p in pl)
-    next_has = any(p.get("name") in benefics and int(p.get("house", 0)) == next_h for p in pl)
-    moon_companion = any(
-        p.get("name") in benefics and int(p.get("house", 0)) == moon_h for p in pl
-    )
+    def _planets_in(h):
+        return [p.get("name") for p in pl
+                if p.get("name") in cancellers and int(p.get("house", 0)) == h]
+
+    prev_planets = _planets_in(prev_h)
+    next_planets = _planets_in(next_h)
+    moon_companions = _planets_in(moon_h)
+
+    prev_has = bool(prev_planets)
+    next_has = bool(next_planets)
+    moon_companion = bool(moon_companions)
+
+    def _fmt(h, planets):
+        return f"H{h}: {', '.join(planets) if planets else 'empty'}"
 
     if not prev_has and not next_has and not moon_companion:
         return (
             "Active",
             f"Moon Isolated in House {moon_h} — Kemadruma Dosh",
-            "Kemadruma Dosh forms when no planets occupy houses adjacent to Moon (2nd and 12th). Creates profound emotional isolation, mental vulnerability, and a lifelong feeling of being unsupported.",
+            "Kemadruma Dosh forms when no planets occupy houses adjacent to Moon (2nd and 12th) and no planet sits with Moon. Creates emotional isolation, mental vulnerability, and a feeling of being unsupported.",
             [
                 "Worship Lord Shiva on every Monday",
                 "Wear Pearl (Moti) after Jyotish consultation",
@@ -465,7 +476,7 @@ def _kemadruma(pl):
                 "Keep white flowers or jasmine at home to strengthen Moon",
                 "Maintain close, nurturing relationships with family",
             ],
-            f"Moon → H{moon_h} | H{prev_h} (12th): empty | H{next_h} (2nd): empty",
+            f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
         )
     if not prev_has or not next_has:
         return (
@@ -476,14 +487,14 @@ def _kemadruma(pl):
                 "Chant Chandra Beej mantra regularly",
                 "Maintain close relationships with loved ones",
             ],
-            f"Moon → H{moon_h} | H{prev_h}: {'occupied' if prev_has else 'empty'} | H{next_h}: {'occupied' if next_has else 'empty'}",
+            f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
         )
     return (
         "None",
         "No Kemadruma Dosh — Moon Well-Supported",
-        "Moon has planetary company on both adjacent sides. Emotional and mental support is strong. No Kemadruma Dosh.",
+        "Moon has planetary company on adjacent houses (2nd/12th). Kemadruma Dosh is cancelled per classical Bhanga rules.",
         [],
-        f"Moon → H{moon_h} | Adjacent houses occupied",
+        f"Moon → H{moon_h} | {_fmt(prev_h, prev_planets)} (12th) | {_fmt(next_h, next_planets)} (2nd)",
     )
 
 

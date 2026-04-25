@@ -12,7 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { getT, INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
+import { INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
+import { useT } from "@/hooks/useT";
 import {
   sendTestNotification,
   setPushEnabled,
@@ -150,7 +151,7 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   const { language, isIndia } = useUser();
   const v: VLang = vLangFromCode(language);
   const L = getProfileLabels(v);
-  const t = getT(language);
+  const t = useT();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"india" | "global">(isIndia ? "india" : "global");
 
@@ -445,8 +446,7 @@ export default function ProfileScreen() {
         const tok = await setupPushForUser(user.id);
         if (!tok) {
           setPushOn(false);
-          Alert.alert("Notifications off",
-            "Permission denied. Phone Settings → Cosmic Lens → Notifications me enable karein.");
+          Alert.alert(t.prof_alNotifOff, t.prof_alNotifOffMsg);
         }
       } else {
         await setPushEnabled(user.id, false);
@@ -461,12 +461,12 @@ export default function ProfileScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const r = await sendTestNotification(user.id);
     const ok = r?.sent > 0;
-    Alert.alert(ok ? "Test bhej diya ✨" : "Bhejne me dikkat",
-      ok ? "Notification 1-2 second me dikhegi."
-         : (r?.skipped || r?.error || "Token register nahi hai. Toggle off→on karein."));
+    Alert.alert(ok ? t.prof_alTestSent : t.prof_alSendFail,
+      ok ? t.prof_alTestSentMsg
+         : (r?.skipped || r?.error || t.prof_alTokenMissing));
   }
 
-  const t = getT(language);
+  const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -685,7 +685,7 @@ export default function ProfileScreen() {
 
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
         <View style={s.bottomSection}>
-          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>Cosmic Lens v1.0.0 · Made with ♥ in India</Text>
+          <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>{t.prof_madeWith}</Text>
 
           <Pressable
             onPress={() => {

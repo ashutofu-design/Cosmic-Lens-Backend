@@ -449,7 +449,7 @@ export default function CareerScreen() {
                       {typeof (data.pro as any).tenth_lord.strength_pct === "number" && (
                         <View style={{ marginTop: 8, marginBottom: 8 }}>
                           <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                            <Text style={{ color: "#94a3b8", fontSize: 12 }}>Career karma strength</Text>
+                            <Text style={{ color: "#94a3b8", fontSize: 12 }}>{t.car_karmaStrength}</Text>
                             <Text style={{ color: "#22d3ee", fontSize: 12, fontWeight: "700" }}>{(data.pro as any).tenth_lord.strength_pct}%</Text>
                           </View>
                           <View style={{ height: 8, backgroundColor: "#1e293b", borderRadius: 4, overflow: "hidden" }}>

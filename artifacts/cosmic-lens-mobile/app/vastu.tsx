@@ -1509,7 +1509,7 @@ function VastuScanCard({ C }: { C: any }) {
       setPicking(true);
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permission needed", "Photo gallery access dijiye taaki Vastu Drishti aapka room dekh sake.");
+        Alert.alert(t.vu_alPermNeeded, t.vu_alGalleryMsg);
         return;
       }
       const r = await ImagePicker.launchImageLibraryAsync({
@@ -1526,7 +1526,7 @@ function VastuScanCard({ C }: { C: any }) {
         Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Photo nahi le payi.");
+      Alert.alert(t.vu_alError, e?.message ?? t.vu_alPhotoFailed);
     } finally {
       setPicking(false);
     }
@@ -1537,7 +1537,7 @@ function VastuScanCard({ C }: { C: any }) {
       setPicking(true);
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permission needed", "Camera access dijiye taaki turant photo le sakein.");
+        Alert.alert(t.vu_alPermNeeded, t.vu_alCameraMsg);
         return;
       }
       const r = await ImagePicker.launchCameraAsync({
@@ -1553,7 +1553,7 @@ function VastuScanCard({ C }: { C: any }) {
         Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Camera khol nahi payi.");
+      Alert.alert(t.vu_alError, e?.message ?? t.vu_alCamFailed);
     } finally {
       setPicking(false);
     }
@@ -1561,7 +1561,7 @@ function VastuScanCard({ C }: { C: any }) {
 
   const runScan = async () => {
     if (!imageB64) {
-      Alert.alert("Photo missing", "Pehle ek room ka photo lijiye ya gallery se chuniye.");
+      Alert.alert(t.vu_alPhotoMissing, t.vu_alPhotoMissingMsg);
       return;
     }
     setScanning(true);
@@ -1590,19 +1590,16 @@ function VastuScanCard({ C }: { C: any }) {
       const d = await resp.json();
       if (!resp.ok) {
         if (resp.status === 402) {
-          Alert.alert(
-            "Daily limit poora",
-            d?.message ?? "Aaj ka free limit poora ho gaya — kal phir try karein ya Pro le lijiye."
-          );
+          Alert.alert(t.vu_alDailyLimit, d?.message ?? t.vu_alDailyLimitMsg);
         } else {
-          Alert.alert("Scan failed", d?.message ?? "Photo analyze nahi ho payi. Acchi roshni mein dobara try karein.");
+          Alert.alert(t.vu_alScanFailed, d?.message ?? t.vu_alScanFailedMsg);
         }
         return;
       }
       setResult(d as VastuScanResponse);
       Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert("Network error", e?.message ?? "Internet connection check kijiye.");
+      Alert.alert(t.vu_alNetError, e?.message ?? t.vu_alNetErrorMsg);
     } finally {
       setScanning(false);
     }
@@ -1733,7 +1730,7 @@ function VastuScanCard({ C }: { C: any }) {
       <Modal visible={showRoomPicker} transparent animationType="fade" onRequestClose={() => setShowRoomPicker(false)}>
         <Pressable style={vs.modalBackdrop} onPress={() => setShowRoomPicker(false)}>
           <Pressable style={[vs.modalCard, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={[vs.modalTitle, { color: C.text }]}>Room type chuniye</Text>
+            <Text style={[vs.modalTitle, { color: C.text }]}>{t.vu_roomPicker}</Text>
             <ScrollView style={{ maxHeight: 360 }}>
               {ROOM_TYPES.map(rt => (
                 <Pressable
@@ -1919,11 +1916,11 @@ function DeepScanWizard({
   const captureCurrentWall = async (useCamera: boolean) => {
     if (!wallStep) return;
     if (heading == null) {
-      Alert.alert("Compass calibrating", "Phone ko hawa mein ek '∞' shape mein ghoomayein, fir compass ready ho jayega.");
+      Alert.alert(t.vu_alCompassCalib, t.vu_alCompassCalibMsg);
       return;
     }
     if (useCamera && !aligned) {
-      Alert.alert("Phone ko sahi direction mein karein", `${wallStep.label} (${Math.round(wallStep.target_deg)}°) ki taraf face karein. Tolerance ±${ALIGN_TOLERANCE_DEG}° hai.`);
+      Alert.alert(t.vu_alWallDirection, `${wallStep.label} (${Math.round(wallStep.target_deg)}°) — ±${ALIGN_TOLERANCE_DEG}°`);
       return;
     }
     setBusy(true);
@@ -1931,16 +1928,16 @@ function DeepScanWizard({
       let r;
       if (useCamera) {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Camera permission needed"); return; }
+        if (!perm.granted) { Alert.alert(t.vu_alCamPermNeeded); return; }
         r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) { Alert.alert("Gallery permission needed"); return; }
+        if (!perm.granted) { Alert.alert(t.vu_alGalPermNeeded); return; }
         r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
       }
       if (r.canceled || !r.assets?.[0]) return;
       const a = r.assets[0];
-      if (!a.base64) { Alert.alert("Photo nahi padh sake"); return; }
+      if (!a.base64) { Alert.alert(t.vu_alPhotoUnreadable); return; }
       // Capture heading at the moment of taking photo (camera) or current heading (library override).
       const headingAtCapture = heading; // already validated above
       const next = [...captured];
@@ -1948,7 +1945,7 @@ function DeepScanWizard({
       setCaptured(next);
       Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Photo capture nahi ho payi.");
+      Alert.alert(t.vu_alError, e?.message ?? t.vu_alPhotoFailed);
     } finally {
       setBusy(false);
     }
@@ -1958,7 +1955,7 @@ function DeepScanWizard({
     setBusy(true);
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Gallery permission needed"); return; }
+      if (!perm.granted) { Alert.alert(t.vu_alGalPermNeeded); return; }
       const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7, base64: true });
       if (r.canceled || !r.assets?.[0]) return;
       const a = r.assets[0];
@@ -1966,7 +1963,7 @@ function DeepScanWizard({
       setFloorPlan({ uri: a.uri, base64: a.base64 });
       Haptics.impactAsync?.(Haptics.ImpactFeedbackStyle.Light);
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Floor plan upload nahi ho paya.");
+      Alert.alert(t.vu_alError, e?.message ?? t.vu_alFloorUploadFail);
     } finally {
       setBusy(false);
     }
@@ -1974,7 +1971,7 @@ function DeepScanWizard({
 
   const goNext = () => {
     if (isWallStep && !captured[stepIndex]) {
-      Alert.alert("Pehle is wall ki photo lijiye");
+      Alert.alert(t.vu_alWallPhotoFirst);
       return;
     }
     Haptics.selectionAsync?.();
@@ -1986,7 +1983,7 @@ function DeepScanWizard({
   };
   const submitAll = () => {
     const photos = captured.filter(Boolean) as CapturedPhoto[];
-    if (photos.length < 2) { Alert.alert("Kam se kam 2 walls capture karein"); return; }
+    if (photos.length < 2) { Alert.alert(t.vu_alMin2Walls); return; }
     onComplete(photos, floorPlan);
   };
 
@@ -2220,7 +2217,7 @@ function VastuDeepScanCard({ C }: { C: any }) {
 
   const startWizard = () => {
     if (!user?.id) {
-      Alert.alert("Login required", "Deep Scan ke liye login zaroori hai — yeh advanced multi-photo analysis hai.");
+      Alert.alert(t.vu_alLoginReq, t.vu_alLoginReqMsg);
       return;
     }
     setResult(null);
@@ -2253,13 +2250,13 @@ function VastuDeepScanCard({ C }: { C: any }) {
       });
       const j = await r.json();
       if (!r.ok) {
-        Alert.alert(j.error === "daily_limit_reached" ? "Daily limit poora" : "Deep scan failed", j.message ?? "Try again.");
+        Alert.alert(j.error === "daily_limit_reached" ? t.vu_alDailyLimit : t.vu_alDeepScanFail, j.message ?? t.vu_alTryAgain);
         return;
       }
       setResult(j as VastuDeepScanResponse);
       Haptics.notificationAsync?.(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert("Network error", e?.message ?? "Server se baat nahi ho payi.");
+      Alert.alert(t.vu_alNetError, e?.message ?? t.vu_alServerNoTalk);
     } finally {
       setScanning(false);
     }
@@ -2347,7 +2344,7 @@ function VastuDeepScanCard({ C }: { C: any }) {
       <Modal visible={showRoomPicker} transparent animationType="fade" onRequestClose={() => setShowPick(false)}>
         <Pressable style={vs.modalBackdrop} onPress={() => setShowPick(false)}>
           <Pressable style={[vs.modalCard, { backgroundColor: C.bgCard, borderColor: C.border }]} onPress={(e) => e.stopPropagation?.()}>
-            <Text style={[vs.modalTitle, { color: C.text }]}>Room type chuniye</Text>
+            <Text style={[vs.modalTitle, { color: C.text }]}>{t.vu_roomPicker}</Text>
             <ScrollView style={{ maxHeight: 360 }}>
               {ROOM_TYPES.map(rt => (
                 <Pressable

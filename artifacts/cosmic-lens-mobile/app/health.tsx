@@ -277,7 +277,7 @@ export default function HealthScreen() {
                   <View style={[s.hookIcon, { borderColor: `${accent}66` }]}>
                     <Feather name="zap" size={14} color={accent} />
                   </View>
-                  <Text style={[s.hookHeading, { color: accent }]}>HIDDEN INSIGHT</Text>
+                  <Text style={[s.hookHeading, { color: accent }]}>{t.hl_hidden}</Text>
                 </View>
 
                 <View style={{ position: "relative", marginTop: 8, minHeight: 56 }}>

@@ -278,7 +278,7 @@ export default function FinanceScreen() {
                   <View style={[s.hookIcon, { borderColor: `${accent}66` }]}>
                     <Feather name="zap" size={14} color={accent} />
                   </View>
-                  <Text style={[s.hookHeading, { color: accent }]}>HIDDEN INSIGHT</Text>
+                  <Text style={[s.hookHeading, { color: accent }]}>{t.fn_hidden}</Text>
                 </View>
 
                 <View style={{ position: "relative", marginTop: 8, minHeight: 56 }}>
@@ -393,7 +393,7 @@ export default function FinanceScreen() {
                     {typeof (data.pro as any).wealth_score === "number" && (
                       <View style={{ marginBottom: 10 }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                          <Text style={{ color: "#94a3b8", fontSize: 12 }}>Wealth karma score</Text>
+                          <Text style={{ color: "#94a3b8", fontSize: 12 }}>{t.fn_wealthKarma}</Text>
                           <Text style={{ color: "#fbbf24", fontSize: 13, fontWeight: "700" }}>{(data.pro as any).wealth_score}/95</Text>
                         </View>
                         <View style={{ height: 8, backgroundColor: "#1e293b", borderRadius: 4, overflow: "hidden" }}>

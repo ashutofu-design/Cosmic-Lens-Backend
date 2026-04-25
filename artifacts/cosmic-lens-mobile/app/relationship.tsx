@@ -667,7 +667,7 @@ export default function RelationshipScreen() {
                   borderWidth:0.5,borderStyle:"dashed" as any,
                   borderColor:isDark?"rgba(236,72,153,0.2)":"rgba(236,72,153,0.12)"})}>
                 <Feather name="plus" size={13} color="#ec4899"/>
-                <Text style={{color:"#ec4899",fontSize:12,fontFamily:"Nunito_700Bold"}}>Add New Partner</Text>
+                <Text style={{color:"#ec4899",fontSize:12,fontFamily:"Nunito_700Bold"}}>{t.rl_addPartner}</Text>
               </Pressable>
             </Pressable>
           </Pressable>

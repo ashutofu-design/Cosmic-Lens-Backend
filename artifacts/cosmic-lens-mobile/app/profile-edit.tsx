@@ -805,14 +805,14 @@ export default function ProfileEditScreen() {
               <Text style={[del.title, { color: C.text }]}>{t.pe_deleteMember}</Text>
               <Text style={[del.body, { color: C.textMuted }]}>
                 <Text style={{ color: C.textMid, fontFamily: F.semibold }}>{deleteTarget.name}</Text>
-                {" "}ka chart data permanently delete ho jayega.
+                {" "}{t.pe2_deleteSuffix}
               </Text>
               <View style={del.btnRow}>
                 <Pressable onPress={() => setConfirmDeleteId(null)} style={[del.cancelBtn, { borderColor: C.isDark ? C.border : "rgba(0,0,0,0.08)" }]}>
-                  <Text style={{ color: C.textMuted, fontSize: 14, fontFamily: F.medium }}>Cancel</Text>
+                  <Text style={{ color: C.textMuted, fontSize: 14, fontFamily: F.medium }}>{t.pe2_cancel}</Text>
                 </Pressable>
                 <Pressable onPress={confirmDelete} style={del.deleteBtn}>
-                  <Text style={{ color: "#fff", fontSize: 14, fontFamily: F.bold }}>Delete</Text>
+                  <Text style={{ color: "#fff", fontSize: 14, fontFamily: F.bold }}>{t.pe2_delete}</Text>
                 </Pressable>
               </View>
             </View>

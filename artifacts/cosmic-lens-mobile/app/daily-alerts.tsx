@@ -132,6 +132,7 @@ function DayCard({
   isToday: boolean;
 }) {
   const C = useC();
+  const t = useT();
   const [expanded, setExpanded] = useState(isToday);
 
   const borderColor = isToday ? item.energy_color + "88" : C.border;
@@ -199,14 +200,14 @@ function DayCard({
           {/* Lucky */}
           <View style={dc.luckyRow}>
             <View style={[dc.luckyItem, { backgroundColor: C.bgCard3, borderColor: C.border3 }]}>
-              <Text style={[dc.luckyLabel, { color: C.textMuted }]}>Lucky Color</Text>
+              <Text style={[dc.luckyLabel, { color: C.textMuted }]}>{t.dl_luckyColor}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.lucky_color_hex }} />
                 <Text style={[dc.luckyVal, { color: C.text }]}>{item.lucky_color_name}</Text>
               </View>
             </View>
             <View style={[dc.luckyItem, { backgroundColor: C.bgCard3, borderColor: C.border3 }]}>
-              <Text style={[dc.luckyLabel, { color: C.textMuted }]}>Lucky Numbers</Text>
+              <Text style={[dc.luckyLabel, { color: C.textMuted }]}>{t.dl_luckyNumbers}</Text>
               <Text style={[dc.luckyVal, { color: C.text }]}>{item.lucky_numbers.join(" · ")}</Text>
             </View>
           </View>
@@ -333,10 +334,11 @@ const pp = StyleSheet.create({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 function EmptyState({ C }: { C: ReturnType<typeof useC> }) {
+  const t = useT();
   return (
     <View style={[es.wrap, { backgroundColor: C.bgCard, borderColor: C.border }]}>
       <Text style={{ fontSize: 36, marginBottom: 12 }}>🔔</Text>
-      <Text style={[es.title, { color: C.text }]}>No Kundli Profile Found</Text>
+      <Text style={[es.title, { color: C.text }]}>{t.noKundli}</Text>
       <Text style={[es.sub, { color: C.textMuted }]}>
         Please create a Kundli profile first. Daily Alerts reads directly from your birth details.
       </Text>

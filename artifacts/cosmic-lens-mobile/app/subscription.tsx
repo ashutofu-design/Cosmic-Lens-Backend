@@ -395,13 +395,13 @@ function AstroVastuPricingCard({ C }: { C: any }) {
       >
         <View style={av.titleRow}>
           <Feather name="award" size={16} color="#f9d76b" />
-          <Text style={[av.title, { color: C.text }]}>AstroVastu Pricing</Text>
+          <Text style={[av.title, { color: C.text }]}>{t.sub_avPricing}</Text>
           <View style={av.premBadge}>
             <Text style={av.premBadgeText}>PREMIUM</Text>
           </View>
         </View>
         <Text style={[av.subtitle, { color: C.textMuted }]}>
-          Vastu products — sab one-time, koi monthly nahi (kyunki Vastu ek baar set hota hai)
+          {t.sub_avSubtitle}
         </Text>
       </LinearGradient>
 
@@ -437,15 +437,15 @@ function AstroVastuPricingCard({ C }: { C: any }) {
       <View style={[av.noteRow, { borderTopColor: C.border, backgroundColor: C.isDark ? "#0a0604" : "#fff8e1" }]}>
         <Feather name="zap" size={13} color="#f59e0b" />
         <Text style={[av.noteText, { color: C.textMuted }]}>
-          <Text style={{ fontWeight: "800", color: "#f59e0b" }}>Pro subscribers</Text> get{" "}
-          <Text style={{ fontWeight: "800", color: C.text }}>20% off</Text> on all AstroVastu purchases above.
+          <Text style={{ fontWeight: "800", color: "#f59e0b" }}>{t.sub_proSubsLabel}</Text> {t.sub_proGetSuffix}{" "}
+          <Text style={{ fontWeight: "800", color: C.text }}>20%</Text> {t.sub_offSuffix}
         </Text>
       </View>
 
       {/* CTA */}
       <Pressable onPress={goAstroVastu} style={av.cta}>
         <Feather name="external-link" size={14} color="#3a2404" />
-        <Text style={av.ctaText}>Open AstroVastu</Text>
+        <Text style={av.ctaText}>{t.sub_openAv}</Text>
       </Pressable>
     </View>
   );

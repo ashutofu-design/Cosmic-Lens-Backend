@@ -19,15 +19,18 @@ import "@/lib/unhandledRejectionLogger";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ZodiacBridge } from "@/components/ZodiacBridge";
 import { ThemeProvider } from "@/context/ThemeContext";
-import { UserProvider } from "@/context/UserContext";
+import { UserProvider, useUser } from "@/context/UserContext";
+import { getT } from "@/lib/i18n";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const { language } = useUser();
+  const t = getT(language);
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerBackTitle: t.back }}>
       <Stack.Screen name="login"            options={{ headerShown: false }} />
       <Stack.Screen name="onboarding"       options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"           options={{ headerShown: false }} />

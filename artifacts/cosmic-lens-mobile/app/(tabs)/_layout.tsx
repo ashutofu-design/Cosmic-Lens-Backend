@@ -7,30 +7,32 @@ import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 
 import CustomTabBar from "@/components/CustomTabBar";
+import { useT } from "@/hooks/useT";
 
 // ── iOS 26 Native Tab Layout (Liquid Glass) ──────────────────────────────────
 function NativeTabLayout() {
+  const t = useT();
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
+        <Label>{t.tabHome}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="lifemap">
         <Icon sf={{ default: "map", selected: "map.fill" }} />
-        <Label>Life Map</Label>
+        <Label>{t.tabLifeMap}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="ask">
         <Icon sf={{ default: "message", selected: "message.fill" }} />
-        <Label>Ask</Label>
+        <Label>{t.tabAsk}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="insights">
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
-        <Label>Future</Label>
+        <Label>{t.tabFuture}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>Profile</Label>
+        <Label>{t.tabProfile}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -38,6 +40,7 @@ function NativeTabLayout() {
 
 // ── Classic Tab Layout (Android / older iOS / Web) ───────────────────────────
 function ClassicTabLayout() {
+  const t = useT();
   const isIOS = Platform.OS === "ios";
 
   return (
@@ -47,13 +50,13 @@ function ClassicTabLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="index"    options={{ title: "Home" }} />
-      <Tabs.Screen name="kundli"   options={{ title: "Kundli", href: null }} />
-      <Tabs.Screen name="lifemap"  options={{ title: "Life Map" }} />
-      <Tabs.Screen name="ask"      options={{ title: "Ask" }} />
-      <Tabs.Screen name="insights" options={{ title: "Future" }} />
-      <Tabs.Screen name="notice"   options={{ title: "Notice", href: null }} />
-      <Tabs.Screen name="profile"  options={{ title: "Profile" }} />
+      <Tabs.Screen name="index"    options={{ title: t.tabHome }} />
+      <Tabs.Screen name="kundli"   options={{ title: t.tabKundli, href: null }} />
+      <Tabs.Screen name="lifemap"  options={{ title: t.tabLifeMap }} />
+      <Tabs.Screen name="ask"      options={{ title: t.tabAsk }} />
+      <Tabs.Screen name="insights" options={{ title: t.tabFuture }} />
+      <Tabs.Screen name="notice"   options={{ title: t.tabNotice, href: null }} />
+      <Tabs.Screen name="profile"  options={{ title: t.tabProfile }} />
     </Tabs>
   );
 }

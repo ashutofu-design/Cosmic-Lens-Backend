@@ -17,6 +17,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import type { DoshItem } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
+import type { VLang } from "@/lib/i18nVedic";
 import Svg, { Circle } from "react-native-svg";
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -27,17 +28,41 @@ const STATUS_CONFIG = {
 };
 
 // ── Demo data (9 doshas) shown when no kundli ─────────────────────────────────
-const DEMO_DOSH_LIST: DoshItem[] = [
-  { key:"manglik",      name:"Manglik Dosh",      name_hindi:"मांगलिक दोष",     icon:"🔴", status:"Active", headline:"Mars in 4th House — Strong Manglik Dosh",                    description:"Mars in houses 1, 4, 7, 8, or 12 creates Manglik Dosh, strongly affecting marriage and relationships.",                        remedies:["Perform Kumbh Vivah before marriage","Offer sindoor to Hanuman ji on Tuesdays","Wear or keep a Mangal Yantra at home"],         planet_note:"Mars → House 4" },
-  { key:"kaal_sarp",    name:"Kaal Sarp Dosh",    name_hindi:"कालसर्प दोष",     icon:"🐍", status:"Mild",   headline:"Partial Kaal Sarp — Some Planets Outside Arc",               description:"Some planets lie outside the Rahu–Ketu arc. Partial effects like occasional obstacles and delays.",                             remedies:["Perform Kaal Sarp Pooja at Trimbakeshwar","Chant Mahamrityunjay mantra 108 times daily"],                                         planet_note:"Rahu → House 11 | Ketu → House 5" },
-  { key:"pitru",        name:"Pitru Dosh",        name_hindi:"पितृ दोष",         icon:"👣", status:"None",   headline:"No Pitru Dosh — Ancestors at Peace",                         description:"Sun is free from Rahu/Ketu conjunction. No Pitru Dosh detected.",                                                              remedies:[],                                                                                                                                 planet_note:"Sun → House 11" },
-  { key:"guru_chandal", name:"Guru Chandal Dosh", name_hindi:"गुरु चांडाल दोष", icon:"🪐", status:"None",   headline:"No Guru Chandal Dosh — Jupiter Unafflicted",                 description:"Jupiter is free from Rahu/Ketu influence. Wisdom and dharma are clear.",                                                       remedies:[],                                                                                                                                 planet_note:"Jupiter → House 10" },
-  { key:"grahan",       name:"Grahan Dosh",       name_hindi:"ग्रहण दोष",        icon:"🌑", status:"None",   headline:"No Grahan Dosh — Luminaries Clear",                          description:"Sun and Moon are free from Rahu/Ketu nodal affliction. No Grahan Dosh.",                                                       remedies:[],                                                                                                                                 planet_note:"Sun → House 11 | Moon → House 11" },
-  { key:"daridra",      name:"Daridra Dosh",      name_hindi:"दरिद्र दोष",       icon:"💰", status:"Mild",   headline:"Venus in Dusthana (House 12) — Mild Daridra",                description:"Venus in the 12th house (dusthana) creates mild financial constraints and luxury deprivation.",                                  remedies:["Worship Goddess Lakshmi on Fridays","Recite Kanakdhara Stotra"],                                                                  planet_note:"Venus → House 12" },
-  { key:"angarak",      name:"Angarak Dosh",      name_hindi:"अंगारक दोष",       icon:"🔥", status:"None",   headline:"No Angarak Dosh — Mars–Rahu Well Separated",                 description:"Mars and Rahu are in separate positions. No Angarak Dosh.",                                                                    remedies:[],                                                                                                                                 planet_note:"Mars → House 4 | Rahu → House 11" },
-  { key:"shrapit",      name:"Shrapit Dosh",      name_hindi:"श्रापित दोष",      icon:"⛓",  status:"None",   headline:"No Shrapit Dosh — Saturn–Rahu Separated",                    description:"Saturn and Rahu are well-separated in the chart. No Shrapit Dosh.",                                                             remedies:[],                                                                                                                                 planet_note:"Saturn → House 7 | Rahu → House 11" },
-  { key:"kemadruma",    name:"Kemadruma Dosh",    name_hindi:"केमद्रुम दोष",     icon:"🌙", status:"Active", headline:"Moon Isolated in House 11 — Kemadruma Dosh",                  description:"No planets occupy houses adjacent to Moon (2nd and 12th). Creates emotional isolation and feeling unsupported.",               remedies:["Worship Lord Shiva on Mondays","Chant Chandra mantra 108×","Keep white flowers at home"],                                         planet_note:"Moon → House 11 | H10: empty | H12: empty" },
-];
+function getDemoDoshList(v: VLang): DoshItem[] {
+  if (v === "hi") return [
+    { key:"manglik",      name:"Manglik Dosh",      name_hindi:"मांगलिक दोष",     icon:"🔴", status:"Active", headline:"मंगल चौथे भाव में — प्रबल मांगलिक दोष",                description:"मंगल यदि 1, 4, 7, 8 या 12 भाव में हो तो मांगलिक दोष बनता है, जो विवाह व रिश्तों पर प्रभाव डालता है।",  remedies:["विवाह से पूर्व कुम्भ विवाह करें","मंगलवार को हनुमान जी को सिंदूर अर्पित करें","घर में मंगल यंत्र रखें"], planet_note:"मंगल → भाव 4" },
+    { key:"kaal_sarp",    name:"Kaal Sarp Dosh",    name_hindi:"कालसर्प दोष",     icon:"🐍", status:"Mild",   headline:"आंशिक कालसर्प — कुछ ग्रह राहु–केतु अक्ष से बाहर",       description:"कुछ ग्रह राहु–केतु के मध्य के बाहर हैं। आंशिक प्रभाव: समय-समय पर बाधाएँ व विलंब।",                       remedies:["त्र्यंबकेश्वर में कालसर्प पूजा करें","प्रतिदिन महामृत्युंजय मंत्र 108 बार जपें"], planet_note:"राहु → भाव 11 | केतु → भाव 5" },
+    { key:"pitru",        name:"Pitru Dosh",        name_hindi:"पितृ दोष",         icon:"👣", status:"None",   headline:"पितृ दोष नहीं — पूर्वज शांत",                              description:"सूर्य राहु/केतु से युत नहीं है। पितृ दोष नहीं मिला।",                                                            remedies:[], planet_note:"सूर्य → भाव 11" },
+    { key:"guru_chandal", name:"Guru Chandal Dosh", name_hindi:"गुरु चांडाल दोष", icon:"🪐", status:"None",   headline:"गुरु चांडाल दोष नहीं — बृहस्पति निर्दोष",                 description:"बृहस्पति राहु/केतु के प्रभाव से मुक्त है। ज्ञान व धर्म स्पष्ट।",                                                  remedies:[], planet_note:"बृहस्पति → भाव 10" },
+    { key:"grahan",       name:"Grahan Dosh",       name_hindi:"ग्रहण दोष",        icon:"🌑", status:"None",   headline:"ग्रहण दोष नहीं — सूर्य–चंद्र शुद्ध",                       description:"सूर्य और चंद्र राहु/केतु से पीड़ित नहीं हैं। ग्रहण दोष नहीं।",                                                    remedies:[], planet_note:"सूर्य → भाव 11 | चंद्र → भाव 11" },
+    { key:"daridra",      name:"Daridra Dosh",      name_hindi:"दरिद्र दोष",       icon:"💰", status:"Mild",   headline:"शुक्र दु:स्थान (भाव 12) में — हल्का दरिद्र",               description:"शुक्र 12वें भाव (दु:स्थान) में होने से हल्की आर्थिक तंगी व विलासिता में कमी।",                                  remedies:["शुक्रवार को माँ लक्ष्मी की उपासना","कनकधारा स्तोत्र का पाठ"], planet_note:"शुक्र → भाव 12" },
+    { key:"angarak",      name:"Angarak Dosh",      name_hindi:"अंगारक दोष",       icon:"🔥", status:"None",   headline:"अंगारक दोष नहीं — मंगल–राहु अलग",                          description:"मंगल और राहु अलग-अलग स्थानों पर हैं। अंगारक दोष नहीं।",                                                          remedies:[], planet_note:"मंगल → भाव 4 | राहु → भाव 11" },
+    { key:"shrapit",      name:"Shrapit Dosh",      name_hindi:"श्रापित दोष",      icon:"⛓",  status:"None",   headline:"श्रापित दोष नहीं — शनि–राहु अलग",                          description:"शनि और राहु कुंडली में अलग-अलग स्थित हैं। श्रापित दोष नहीं।",                                                    remedies:[], planet_note:"शनि → भाव 7 | राहु → भाव 11" },
+    { key:"kemadruma",    name:"Kemadruma Dosh",    name_hindi:"केमद्रुम दोष",     icon:"🌙", status:"Active", headline:"चंद्र भाव 11 में अकेला — केमद्रुम दोष",                     description:"चंद्र के दोनों ओर (2 व 12 भाव) कोई ग्रह नहीं है। भावनात्मक अकेलापन व असहाय अनुभव।",                          remedies:["सोमवार को शिव जी की पूजा","चंद्र मंत्र का 108 बार जप","घर में सफेद फूल रखें"], planet_note:"चंद्र → भाव 11 | भाव 10: रिक्त | भाव 12: रिक्त" },
+  ];
+  if (v === "hn") return [
+    { key:"manglik",      name:"Manglik Dosh",      name_hindi:"मांगलिक दोष",     icon:"🔴", status:"Active", headline:"Mars 4th house mein — Strong Manglik Dosh",              description:"Mars agar 1, 4, 7, 8 ya 12 house mein ho to Manglik Dosh banta hai, jo shaadi aur rishton par strong asar daalta hai.", remedies:["Shaadi se pehle Kumbh Vivah karwayein","Mangalwar ko Hanuman ji ko sindoor chadhayein","Ghar mein Mangal Yantra rakhein"], planet_note:"Mars → House 4" },
+    { key:"kaal_sarp",    name:"Kaal Sarp Dosh",    name_hindi:"कालसर्प दोष",     icon:"🐍", status:"Mild",   headline:"Partial Kaal Sarp — kuch grah Rahu–Ketu ke bahar",        description:"Kuch grah Rahu–Ketu ke arc ke bahar hain. Partial asar — kabhi-kabhi rukawatein aur delay.",                                  remedies:["Trimbakeshwar mein Kaal Sarp Pooja","Daily Mahamrityunjay mantra 108 baar jaap"], planet_note:"Rahu → House 11 | Ketu → House 5" },
+    { key:"pitru",        name:"Pitru Dosh",        name_hindi:"पितृ दोष",         icon:"👣", status:"None",   headline:"Pitru Dosh nahi — Purvaj shaant",                          description:"Sun par Rahu/Ketu ka asar nahi. Pitru Dosh detect nahi hua.",                                                                  remedies:[], planet_note:"Sun → House 11" },
+    { key:"guru_chandal", name:"Guru Chandal Dosh", name_hindi:"गुरु चांडाल दोष", icon:"🪐", status:"None",   headline:"Guru Chandal Dosh nahi — Jupiter clear",                   description:"Jupiter par Rahu/Ketu ka koi influence nahi. Gyaan aur dharm clear.",                                                          remedies:[], planet_note:"Jupiter → House 10" },
+    { key:"grahan",       name:"Grahan Dosh",       name_hindi:"ग्रहण दोष",        icon:"🌑", status:"None",   headline:"Grahan Dosh nahi — Sun–Moon clear",                        description:"Sun aur Moon Rahu/Ketu se affected nahi hain. Grahan Dosh nahi.",                                                              remedies:[], planet_note:"Sun → House 11 | Moon → House 11" },
+    { key:"daridra",      name:"Daridra Dosh",      name_hindi:"दरिद्र दोष",       icon:"💰", status:"Mild",   headline:"Venus 12th house (Dusthana) mein — Halka Daridra",         description:"Venus 12th house (dusthana) mein hone se halki financial tightness aur luxury kam hoti hai.",                                 remedies:["Shukravar ko Maa Lakshmi ki pooja","Kanakdhara Stotra ka paath"], planet_note:"Venus → House 12" },
+    { key:"angarak",      name:"Angarak Dosh",      name_hindi:"अंगारक दोष",       icon:"🔥", status:"None",   headline:"Angarak Dosh nahi — Mars–Rahu alag",                       description:"Mars aur Rahu alag-alag positions par hain. Angarak Dosh nahi.",                                                               remedies:[], planet_note:"Mars → House 4 | Rahu → House 11" },
+    { key:"shrapit",      name:"Shrapit Dosh",      name_hindi:"श्रापित दोष",      icon:"⛓",  status:"None",   headline:"Shrapit Dosh nahi — Saturn–Rahu alag",                     description:"Saturn aur Rahu kundli mein alag-alag rakhe hain. Shrapit Dosh nahi.",                                                         remedies:[], planet_note:"Saturn → House 7 | Rahu → House 11" },
+    { key:"kemadruma",    name:"Kemadruma Dosh",    name_hindi:"केमद्रुम दोष",     icon:"🌙", status:"Active", headline:"Moon House 11 mein akela — Kemadruma Dosh",                description:"Moon ke dono taraf (2nd aur 12th house) koi grah nahi. Emotional akelapan aur unsupported feeling.",                          remedies:["Somwar ko Lord Shiva ki pooja","Chandra mantra 108× jaap","Ghar mein safed phool rakhein"], planet_note:"Moon → House 11 | H10: empty | H12: empty" },
+  ];
+  return [
+    { key:"manglik",      name:"Manglik Dosh",      name_hindi:"मांगलिक दोष",     icon:"🔴", status:"Active", headline:"Mars in 4th House — Strong Manglik Dosh",                    description:"Mars in houses 1, 4, 7, 8, or 12 creates Manglik Dosh, strongly affecting marriage and relationships.",                        remedies:["Perform Kumbh Vivah before marriage","Offer sindoor to Hanuman ji on Tuesdays","Wear or keep a Mangal Yantra at home"],         planet_note:"Mars → House 4" },
+    { key:"kaal_sarp",    name:"Kaal Sarp Dosh",    name_hindi:"कालसर्प दोष",     icon:"🐍", status:"Mild",   headline:"Partial Kaal Sarp — Some Planets Outside Arc",               description:"Some planets lie outside the Rahu–Ketu arc. Partial effects like occasional obstacles and delays.",                             remedies:["Perform Kaal Sarp Pooja at Trimbakeshwar","Chant Mahamrityunjay mantra 108 times daily"],                                         planet_note:"Rahu → House 11 | Ketu → House 5" },
+    { key:"pitru",        name:"Pitru Dosh",        name_hindi:"पितृ दोष",         icon:"👣", status:"None",   headline:"No Pitru Dosh — Ancestors at Peace",                         description:"Sun is free from Rahu/Ketu conjunction. No Pitru Dosh detected.",                                                              remedies:[],                                                                                                                                 planet_note:"Sun → House 11" },
+    { key:"guru_chandal", name:"Guru Chandal Dosh", name_hindi:"गुरु चांडाल दोष", icon:"🪐", status:"None",   headline:"No Guru Chandal Dosh — Jupiter Unafflicted",                 description:"Jupiter is free from Rahu/Ketu influence. Wisdom and dharma are clear.",                                                       remedies:[],                                                                                                                                 planet_note:"Jupiter → House 10" },
+    { key:"grahan",       name:"Grahan Dosh",       name_hindi:"ग्रहण दोष",        icon:"🌑", status:"None",   headline:"No Grahan Dosh — Luminaries Clear",                          description:"Sun and Moon are free from Rahu/Ketu nodal affliction. No Grahan Dosh.",                                                       remedies:[],                                                                                                                                 planet_note:"Sun → House 11 | Moon → House 11" },
+    { key:"daridra",      name:"Daridra Dosh",      name_hindi:"दरिद्र दोष",       icon:"💰", status:"Mild",   headline:"Venus in Dusthana (House 12) — Mild Daridra",                description:"Venus in the 12th house (dusthana) creates mild financial constraints and luxury deprivation.",                                  remedies:["Worship Goddess Lakshmi on Fridays","Recite Kanakdhara Stotra"],                                                                  planet_note:"Venus → House 12" },
+    { key:"angarak",      name:"Angarak Dosh",      name_hindi:"अंगारक दोष",       icon:"🔥", status:"None",   headline:"No Angarak Dosh — Mars–Rahu Well Separated",                 description:"Mars and Rahu are in separate positions. No Angarak Dosh.",                                                                    remedies:[],                                                                                                                                 planet_note:"Mars → House 4 | Rahu → House 11" },
+    { key:"shrapit",      name:"Shrapit Dosh",      name_hindi:"श्रापित दोष",      icon:"⛓",  status:"None",   headline:"No Shrapit Dosh — Saturn–Rahu Separated",                    description:"Saturn and Rahu are well-separated in the chart. No Shrapit Dosh.",                                                             remedies:[],                                                                                                                                 planet_note:"Saturn → House 7 | Rahu → House 11" },
+    { key:"kemadruma",    name:"Kemadruma Dosh",    name_hindi:"केमद्रुम दोष",     icon:"🌙", status:"Active", headline:"Moon Isolated in House 11 — Kemadruma Dosh",                  description:"No planets occupy houses adjacent to Moon (2nd and 12th). Creates emotional isolation and feeling unsupported.",               remedies:["Worship Lord Shiva on Mondays","Chant Chandra mantra 108×","Keep white flowers at home"],                                         planet_note:"Moon → House 11 | H10: empty | H12: empty" },
+  ];
+}
 
 // ── Pulse animation ───────────────────────────────────────────────────────────
 function usePulse(active: boolean) {
@@ -67,9 +92,10 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
     item.status === "Active" ? (v === "hi" ? "सक्रिय" : v === "hn" ? "Active" : "Active") :
     item.status === "Mild"   ? (v === "hi" ? "हल्का"  : v === "hn" ? "Mild"   : "Mild")   :
                                (v === "hi" ? "स्पष्ट" : v === "hn" ? "Clear"  : "Clear");
-  // Primary name = English in en/hn modes, Hindi in hi mode
+  // Primary name = English in en/hn modes, Devanagari in hi mode
+  // Secondary name only shown in hi mode (Roman as reference) — en/hn never show Devanagari
   const primaryName = v === "hi" ? (item.name_hindi || item.name) : item.name;
-  const secondaryName = v === "hi" ? item.name : item.name_hindi;
+  const secondaryName = v === "hi" ? item.name : null;
   const remediesLabel = v === "hi" ? "उपाय" : v === "hn" ? "UPAY (REMEDIES)" : "REMEDIES";
 
   return (
@@ -128,7 +154,7 @@ function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean
 }
 
 // ── Summary Ring ──────────────────────────────────────────────────────────────
-function SummaryRing({ active, mild, total }: { active: number; mild: number; total: number }) {
+function SummaryRing({ active, mild, total, labels }: { active: number; mild: number; total: number; labels: { analysis: string; active: string; mild: string; clear: string; detected: string } }) {
   const C = useC();
   const pct = Math.round(((9 - active - mild) / 9) * 100);
   const R = 40, circ = 2 * Math.PI * R;
@@ -155,25 +181,25 @@ function SummaryRing({ active, mild, total }: { active: number; mild: number; to
 
       {/* Stats */}
       <View style={{ flex: 1, gap: 8 }}>
-        <Text style={[d.summaryTitle, { color: C.text }]}>Dosh Analysis</Text>
+        <Text style={[d.summaryTitle, { color: C.text }]}>{labels.analysis}</Text>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <View style={d.statItem}>
             <Text style={[d.statNum, { color: "#ef4444" }]}>{active}</Text>
-            <Text style={[d.statLabel, { color: C.textMuted }]}>Active</Text>
+            <Text style={[d.statLabel, { color: C.textMuted }]}>{labels.active}</Text>
           </View>
           <View style={[d.statDivider, { backgroundColor: C.border }]} />
           <View style={d.statItem}>
             <Text style={[d.statNum, { color: "#f97316" }]}>{mild}</Text>
-            <Text style={[d.statLabel, { color: C.textMuted }]}>Mild</Text>
+            <Text style={[d.statLabel, { color: C.textMuted }]}>{labels.mild}</Text>
           </View>
           <View style={[d.statDivider, { backgroundColor: C.border }]} />
           <View style={d.statItem}>
             <Text style={[d.statNum, { color: "#22c55e" }]}>{9 - active - mild}</Text>
-            <Text style={[d.statLabel, { color: C.textMuted }]}>Clear</Text>
+            <Text style={[d.statLabel, { color: C.textMuted }]}>{labels.clear}</Text>
           </View>
         </View>
         <Text style={{ fontSize: 10, color: C.textDim, fontFamily: "Nunito_400Regular" }}>
-          {active + mild} of 9 doshas detected
+          {labels.detected}
         </Text>
       </View>
     </View>
@@ -190,15 +216,16 @@ export default function DoshScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const showDemo = !kundli;
+  const v = t.vlang;
+  const demoList = React.useMemo(() => getDemoDoshList(v), [v]);
   const list: DoshItem[] = showDemo
-    ? DEMO_DOSH_LIST
-    : (doshData?.dosh_list ?? DEMO_DOSH_LIST);
+    ? demoList
+    : (doshData?.dosh_list ?? demoList);
 
   const active = showDemo ? 2 : (doshData?.active_count ?? 0);
   const mild   = showDemo ? 2 : (doshData?.mild_count ?? 0);
 
   // Localized labels
-  const v = t.vlang;
   const LBL =
     v === "hi" ? {
       subtitle:   "नौ दोष विश्लेषण (9 दोष)",
@@ -303,7 +330,7 @@ export default function DoshScreen() {
 
       <View style={d.content}>
         {/* ── Summary ring ── */}
-        <SummaryRing active={active} mild={mild} total={9} />
+        <SummaryRing active={active} mild={mild} total={9} labels={{ analysis: LBL.analysis, active: LBL.active, mild: LBL.mild, clear: LBL.clear, detected: LBL.detected }} />
 
         {/* ── Loading skeleton or cards ── */}
         {!showDemo && doshLoading && !doshData && (

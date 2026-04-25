@@ -20,12 +20,86 @@ import { CosmicBg } from "@/components/CosmicBg";
 import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
+import { vedicLang, type VLang } from "@/lib/i18nVedic";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
 import { fetchTodayEnergy } from "@/lib/energyAPI";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
+
+// ── Localized labels (vlang-bucketed: en/hn/hi) ───────────────────────────────
+function getHomeLabels(v: VLang) {
+  if (v === "hi") return {
+    namaste:        "नमस्ते 🙏",
+    hello:          "नमस्ते",
+    forecastPill:   "7 दिन का ऊर्जा पूर्वानुमान",
+    todaysEnergy:   "आज की ऊर्जा",
+    demo:           "डेमो",
+    forecast7day:   "7 दिन का पूर्वानुमान",
+    now:            "अभी",
+    doshTitle:      "दोष विश्लेषण",
+    doshSub:        "कुंडली में 3 दोष पाए गए",
+    live:           "लाइव",
+    riskTitle:      "जोखिम चेतावनी",
+    riskSubAhead:   "आगे 2 जोखिम काल",
+    riskDashaActive:(md: string, ad: string) => `${md}–${ad} दशा सक्रिय`,
+    alert:          "अलर्ट",
+    milanTitle:     "कुंडली मिलान",
+    milanSub:       "36 गुण मिलान · विवाह संगति",
+    pro:            "प्रो",
+    insightStrong:  "आज प्रबल सकारात्मक ऊर्जा",
+    insightModerate:"मध्यम ऊर्जा, ध्यान केंद्रित रखें",
+    insightUnstable:"आज ऊर्जा अस्थिर है",
+    insightLow:     "कम ऊर्जा — विश्राम व आत्मचिंतन",
+  };
+  if (v === "hn") return {
+    namaste:        "Namaste 🙏",
+    hello:          "Hello",
+    forecastPill:   "7 Din Energy Forecast",
+    todaysEnergy:   "AAJ KI ENERGY",
+    demo:           "DEMO",
+    forecast7day:   "7-din forecast",
+    now:            "Abhi",
+    doshTitle:      "Dosh Analysis",
+    doshSub:        "Kundli mein 3 dosh mile",
+    live:           "LIVE",
+    riskTitle:      "Risk Alert",
+    riskSubAhead:   "2 risk periods aage",
+    riskDashaActive:(md: string, ad: string) => `${md}–${ad} Dasha active`,
+    alert:          "ALERT",
+    milanTitle:     "Kundli Milan",
+    milanSub:       "36 guna match · Vivah compatibility",
+    pro:            "PRO",
+    insightStrong:  "Aaj strong positive energy",
+    insightModerate:"Moderate energy, focus rakhein",
+    insightUnstable:"Aaj energy unstable hai",
+    insightLow:     "Kam energy — aaram aur introspect",
+  };
+  return {
+    namaste:        "Namaste 🙏",
+    hello:          "Hello",
+    forecastPill:   "7 Day Energy Forecast",
+    todaysEnergy:   "TODAY'S ENERGY",
+    demo:           "DEMO",
+    forecast7day:   "7-day forecast",
+    now:            "Now",
+    doshTitle:      "Dosh Analysis",
+    doshSub:        "3 doshas detected in chart",
+    live:           "LIVE",
+    riskTitle:      "Risk Alert",
+    riskSubAhead:   "2 risk periods ahead",
+    riskDashaActive:(md: string, ad: string) => `${md}–${ad} Dasha active`,
+    alert:          "ALERT",
+    milanTitle:     "Kundli Milan",
+    milanSub:       "36 guna match · Vivah compatibility",
+    pro:            "PRO",
+    insightStrong:  "Strong positive energy today",
+    insightModerate:"Moderate energy, stay focused",
+    insightUnstable:"Energy unstable today",
+    insightLow:     "Low energy — rest & introspect",
+  };
+}
 
 // ── Font aliases ──────────────────────────────────────────────────────────────
 const F = {
@@ -37,15 +111,19 @@ const F = {
 
 const N = 12;
 const DEMO_PTS    = [12, 18, 25, 30, 28, 35, 42, 38, 50, 55, 48, 38];
-const DEMO_LABELS = ["10PM","","","1AM","","","4AM","","","7AM","","Now"];
+const DEMO_LABELS_BY_LANG: Record<VLang, string[]> = {
+  en: ["10PM","","","1AM","","","4AM","","","7AM","","Now"],
+  hn: ["10PM","","","1AM","","","4AM","","","7AM","","Abhi"],
+  hi: ["रात 10","","","रात 1","","","सुबह 4","","","सुबह 7","","अभी"],
+};
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
-function energyInsight(energy: number): { icon: string; text: string; color: string } {
-  if (energy >= 75) return { icon: "🔥", text: "Strong positive energy today",  color: "#22c55e" };
-  if (energy >= 55) return { icon: "✨", text: "Moderate energy, stay focused",  color: "#f59e0b" };
-  if (energy >= 35) return { icon: "⚠️", text: "Energy unstable today",          color: "#f97316" };
-  return             { icon: "🌑", text: "Low energy — rest & introspect",    color: "#ef4444" };
+function energyInsight(energy: number, L: ReturnType<typeof getHomeLabels>): { icon: string; text: string; color: string } {
+  if (energy >= 75) return { icon: "🔥", text: L.insightStrong,    color: "#22c55e" };
+  if (energy >= 55) return { icon: "✨", text: L.insightModerate,  color: "#f59e0b" };
+  if (energy >= 35) return { icon: "⚠️", text: L.insightUnstable,  color: "#f97316" };
+  return             { icon: "🌑", text: L.insightLow,           color: "#ef4444" };
 }
 
 // ── Animation hooks ───────────────────────────────────────────────────────────
@@ -144,6 +222,8 @@ export default function HomeScreen() {
   const { toggle: toggleTheme } = useTheme();
   const { kundli, todayEnergy, setTodayEnergy, setMoonData, moonData, user, isLoading, language } = useUser();
   const t = getT(language);
+  const v: VLang = vedicLang(language);
+  const L = getHomeLabels(v);
 
   const [targetPts, setTargetPts] = useState<number[]>([]);
   const [labels,    setLabels]    = useState<string[]>([]);
@@ -189,7 +269,7 @@ export default function HomeScreen() {
         });
 
         const lbls = moonHist.points.map((pt, idx) =>
-          idx === lastIdx ? "Now" : pt.label
+          idx === lastIdx ? L.now : pt.label
         );
         setTargetPts(values); setLabels(lbls); setLoading(false);
         setTimeout(() => { if (!cancelRef.current) setSettled(true); }, 1400);
@@ -214,9 +294,9 @@ export default function HomeScreen() {
 
   const showDemo    = !kundli;
   const chartPts    = showDemo ? DEMO_PTS    : targetPts;
-  const chartLbls   = showDemo ? DEMO_LABELS : labels;
+  const chartLbls   = showDemo ? DEMO_LABELS_BY_LANG[v] : labels;
   const chartEnergy = showDemo ? 38          : (todayEnergy ?? 0);
-  const insight     = energyInsight(chartEnergy);
+  const insight     = energyInsight(chartEnergy, L);
 
   const activeDasha: ActiveDashaResult | null =
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
@@ -228,7 +308,7 @@ export default function HomeScreen() {
       <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
           <Text style={[styles.greetSub, { color: colors.mutedForeground }]}>
-            {kundli ? "Namaste 🙏" : "Hello"}
+            {kundli ? L.namaste : L.hello}
           </Text>
           <Text style={[styles.greetTitle, { color: colors.foreground }]}>
             {kundli ? kundli.name : t.todayEnergy}
@@ -240,7 +320,7 @@ export default function HomeScreen() {
             style={[styles.forecastPill, { backgroundColor: colors.C.warningBg, borderColor: colors.C.warningBorder }]}
           >
             <Feather name="calendar" size={11} color={colors.C.warningText} />
-            <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>7 Day Energy Forecast</Text>
+            <Text style={[styles.forecastPillText, { color: colors.C.warningText }]}>{L.forecastPill}</Text>
           </Pressable>
           <Pressable
             onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}
@@ -264,6 +344,7 @@ export default function HomeScreen() {
             insight={insight}
             showDemo={showDemo}
             loading={!showDemo && loading && targetPts.length === 0}
+            L={L}
           />
         </Pressable>
       </Animated.View>
@@ -272,15 +353,15 @@ export default function HomeScreen() {
       <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
         <Animated.View style={card1Anim}>
-          <DoshMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
+          <DoshMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
         </Animated.View>
 
         <Animated.View style={card2Anim}>
-          <BadTimeMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+          <BadTimeMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
         </Animated.View>
 
         <Animated.View style={card3Anim}>
-          <MilanMini onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
+          <MilanMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
         </Animated.View>
 
       </View>
@@ -289,10 +370,11 @@ export default function HomeScreen() {
   );
 }
 
-function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading }: {
+function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading, L }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
+  L: ReturnType<typeof getHomeLabels>;
 }) {
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
@@ -302,11 +384,11 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
       {/* ── Centered score — single hero value ── */}
       <View style={hero.topRow}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={[hero.label, { color: "rgba(255,255,255,0.45)" }]}>TODAY'S ENERGY</Text>
+          <Text style={[hero.label, { color: "rgba(255,255,255,0.45)" }]}>{L.todaysEnergy}</Text>
           {showDemo && (
             <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
               <Feather name="lock" size={8} color={Ctheme.textDim} />
-              <Text style={[hero.demoBadgeText, { color: Ctheme.textDim }]}>DEMO</Text>
+              <Text style={[hero.demoBadgeText, { color: Ctheme.textDim }]}>{L.demo}</Text>
             </View>
           )}
         </View>
@@ -334,7 +416,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-          <Text style={{ fontSize: 9.5, fontFamily: F.medium, color: `${insight.color}70` }}>7-day forecast</Text>
+          <Text style={{ fontSize: 9.5, fontFamily: F.medium, color: `${insight.color}70` }}>{L.forecast7day}</Text>
           <Feather name="chevron-right" size={10} color={`${insight.color}60`} />
         </View>
       </View>
@@ -343,7 +425,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
 }
 
 // ── Dosh Mini — full-width horizontal row ─────────────────────────────────────
-function DoshMini({ onPress }: { onPress: () => void }) {
+function DoshMini({ onPress, L }: { onPress: () => void; L: ReturnType<typeof getHomeLabels> }) {
   const blinkDot = useBlink(400, 400, 1400);
   const shimmerX = useShimmer(360);
   const { C } = useColors();
@@ -364,14 +446,14 @@ function DoshMini({ onPress }: { onPress: () => void }) {
         </View>
 
         <View style={mini.textBlock}>
-          <Text style={[mini.rowTitle, { color: titleClr }]}>Dosh Analysis</Text>
-          <Text style={[mini.rowSub, { color: subClr }]}>3 doshas detected in chart</Text>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>{L.doshTitle}</Text>
+          <Text style={[mini.rowSub, { color: subClr }]}>{L.doshSub}</Text>
         </View>
 
         <View style={mini.rightBlock}>
           <View style={[mini.badge, { backgroundColor:"rgba(255,34,68,0.18)", borderColor:"rgba(255,34,68,0.4)" }]}>
             <Animated.View style={[mini.badgeDot, { backgroundColor:"#ff2244", opacity: blinkDot }]} />
-            <Text style={[mini.badgeTxt, { color:"#ff6b6b" }]}>LIVE</Text>
+            <Text style={[mini.badgeTxt, { color:"#ff6b6b" }]}>{L.live}</Text>
           </View>
           <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(255,107,107,0.5)" : "rgba(190,18,60,0.5)"} />
         </View>
@@ -381,7 +463,7 @@ function DoshMini({ onPress }: { onPress: () => void }) {
 }
 
 // ── Bad Time Mini — full-width horizontal row ─────────────────────────────────
-function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDasha: ActiveDashaResult | null }) {
+function BadTimeMini({ onPress, activeDasha, L }: { onPress: () => void; activeDasha: ActiveDashaResult | null; L: ReturnType<typeof getHomeLabels> }) {
   const blinkDot = useBlink(350, 350, 1200);
   const shimmerX = useShimmer(360);
   const { C } = useColors();
@@ -402,16 +484,16 @@ function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDash
         </View>
 
         <View style={mini.textBlock}>
-          <Text style={[mini.rowTitle, { color: titleClr }]}>Risk Alert</Text>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>{L.riskTitle}</Text>
           <Text style={[mini.rowSub, { color: subClr }]}>
-            {activeDasha ? `${activeDasha.mdPlanet}–${activeDasha.adPlanet} Dasha active` : "2 risk periods ahead"}
+            {activeDasha ? L.riskDashaActive(activeDasha.mdPlanet, activeDasha.adPlanet) : L.riskSubAhead}
           </Text>
         </View>
 
         <View style={mini.rightBlock}>
           <View style={[mini.badge, { backgroundColor:"rgba(249,115,22,0.18)", borderColor:"rgba(249,115,22,0.4)" }]}>
             <Animated.View style={[mini.badgeDot, { backgroundColor:"#f97316", opacity: blinkDot }]} />
-            <Text style={[mini.badgeTxt, { color:"#fb923c" }]}>ALERT</Text>
+            <Text style={[mini.badgeTxt, { color:"#fb923c" }]}>{L.alert}</Text>
           </View>
           <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(251,146,60,0.5)" : "rgba(194,65,12,0.5)"} />
         </View>
@@ -421,7 +503,7 @@ function BadTimeMini({ onPress, activeDasha }: { onPress: () => void; activeDash
 }
 
 // ── Kundli Milan Mini — full-width horizontal row ─────────────────────────────
-function MilanMini({ onPress }: { onPress: () => void }) {
+function MilanMini({ onPress, L }: { onPress: () => void; L: ReturnType<typeof getHomeLabels> }) {
   const shimmerX = useShimmer(360);
   const { C } = useColors();
   const grad = C.isDark
@@ -441,14 +523,14 @@ function MilanMini({ onPress }: { onPress: () => void }) {
         </View>
 
         <View style={mini.textBlock}>
-          <Text style={[mini.rowTitle, { color: titleClr }]}>Kundli Milan</Text>
-          <Text style={[mini.rowSub, { color: subClr }]}>36 guna match · Vivah compatibility</Text>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>{L.milanTitle}</Text>
+          <Text style={[mini.rowSub, { color: subClr }]}>{L.milanSub}</Text>
         </View>
 
         <View style={mini.rightBlock}>
           <View style={[mini.badge, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.4)" }]}>
             <Feather name="lock" size={8} color="#c084fc" />
-            <Text style={[mini.badgeTxt, { color:"#c084fc" }]}>PRO</Text>
+            <Text style={[mini.badgeTxt, { color:"#c084fc" }]}>{L.pro}</Text>
           </View>
           <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(192,132,252,0.5)" : "rgba(109,40,217,0.5)"} />
         </View>

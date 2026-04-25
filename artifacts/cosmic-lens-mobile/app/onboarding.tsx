@@ -20,12 +20,86 @@ import PickerModal from "@/components/PickerModal";
 
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
+import { vedicLang, type VLang } from "@/lib/i18nVedic";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
 
-const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
+const MONTHS_BY_LANG: Record<VLang, string[]> = {
+  en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+  hn: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+  hi: ["जनवरी","फरवरी","मार्च","अप्रैल","मई","जून","जुलाई","अगस्त","सितंबर","अक्टूबर","नवंबर","दिसंबर"],
+};
+
+function getOnboardingLabels(v: VLang) {
+  if (v === "hi") return {
+    enterFullName:    "पूरा नाम दर्ज करें",
+    selectDay:        "दिन चुनें",
+    selectMonth:      "महीना चुनें",
+    selectYear:       "जन्म वर्ष चुनें",
+    selectHour:       "घंटा चुनें (1–12)",
+    selectMinute:     "मिनट चुनें (0–59)",
+    selectAmPm:       "AM या PM?",
+    amOption:         "AM — सुबह  (मध्यरात्रि से दोपहर)",
+    pmOption:         "PM — शाम  (दोपहर से मध्यरात्रि)",
+    placeholderSelect:"चुनें",
+    nameRequired:     "नाम आवश्यक है।",
+    dobIncomplete:    "कृपया पूरी जन्म तिथि दर्ज करें।",
+    timeIncomplete:   "कृपया जन्म समय दर्ज करें।",
+    placeRequired:    "कृपया जन्म स्थान खोजें और चुनें।",
+    chartFailed:      "गणना विफल। कृपया पुनः प्रयास करें।",
+    noPlaceFound:     "कोई स्थान नहीं मिला। दूसरी वर्तनी या पास का शहर आज़माएँ।",
+    searchTimeout:    "खोज समय समाप्त। इंटरनेट जाँचें और पुनः प्रयास करें।",
+    searchFailed:     "खोज विफल। कृपया पुनः प्रयास करें।",
+    quotaUsed:        "उपयोग किया गया",
+    trustText:        "आपका डेटा एन्क्रिप्टेड और निजी है। किसी के साथ साझा नहीं किया जाता।",
+    amPmLabel:        "AM / PM",
+  };
+  if (v === "hn") return {
+    enterFullName:    "Pura naam daalein",
+    selectDay:        "Din chunein",
+    selectMonth:      "Mahina chunein",
+    selectYear:       "Janam saal chunein",
+    selectHour:       "Ghanta chunein (1–12)",
+    selectMinute:     "Minute chunein (0–59)",
+    selectAmPm:       "AM ya PM?",
+    amOption:         "AM — Subah  (Aadhi raat se Dopahar)",
+    pmOption:         "PM — Shaam  (Dopahar se Aadhi raat)",
+    placeholderSelect:"Chunein",
+    nameRequired:     "Naam zaroori hai.",
+    dobIncomplete:    "Poori janam tareekh daalein.",
+    timeIncomplete:   "Janam ka time daalein.",
+    placeRequired:    "Janam sthan search karke chunein.",
+    chartFailed:      "Calculation fail. Dobara try karein.",
+    noPlaceFound:     "Koi place nahi mila. Doosri spelling ya paas ka sheher try karein.",
+    searchTimeout:    "Search timeout. Internet check karke dobara try karein.",
+    searchFailed:     "Search fail. Dobara try karein.",
+    quotaUsed:        "use kiye",
+    trustText:        "Aapka data encrypted aur private hai. Kisi ke saath share nahi hota.",
+    amPmLabel:        "AM / PM",
+  };
+  return {
+    enterFullName:    "Enter full name",
+    selectDay:        "Select Day",
+    selectMonth:      "Select Month",
+    selectYear:       "Select Birth Year",
+    selectHour:       "Select Hour (1–12)",
+    selectMinute:     "Select Minute (0–59)",
+    selectAmPm:       "AM or PM?",
+    amOption:         "AM — Morning  (Midnight to Noon)",
+    pmOption:         "PM — Evening  (Noon to Midnight)",
+    placeholderSelect:"Select",
+    nameRequired:     "Name is required.",
+    dobIncomplete:    "Please enter your complete date of birth.",
+    timeIncomplete:   "Please enter your birth time.",
+    placeRequired:    "Please search and select your birth place.",
+    chartFailed:      "Chart calculation failed. Please try again.",
+    noPlaceFound:     "No matching place found. Try a different spelling or a nearby city.",
+    searchTimeout:    "Search timed out. Check your internet and try again.",
+    searchFailed:     "Search failed. Please try again.",
+    quotaUsed:        "used today",
+    trustText:        "Your data is encrypted and private. Never shared with anyone.",
+    amPmLabel:        "AM / PM",
+  };
+}
 
 const currentYear = new Date().getFullYear();
 const DAYS   = Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1).padStart(2,"0"), value: String(i + 1) }));
@@ -40,6 +114,9 @@ export default function OnboardingScreen() {
   const C = useC();
   const { setBirthData, setKundli, syncKundliToCloud, language, user } = useUser();
   const t = getT(language);
+  const v: VLang = vedicLang(language);
+  const L = getOnboardingLabels(v);
+  const MONTHS = MONTHS_BY_LANG[v];
 
   const [name,    setName]    = useState("");
   const [day,     setDay]     = useState("");
@@ -77,12 +154,12 @@ export default function OnboardingScreen() {
       const results = await searchPlaces(placeQuery.trim());
       setSuggestions(results);
       if (results.length === 0) {
-        setError("No matching place found. Try a different spelling or a nearby city.");
+        setError(L.noPlaceFound);
       }
     } catch (e: any) {
       const msg = e?.name === "AbortError"
-        ? "Search timed out. Check your internet and try again."
-        : "Search failed. Please try again.";
+        ? L.searchTimeout
+        : L.searchFailed;
       setError(msg);
     } finally {
       setSearching(false);
@@ -101,10 +178,10 @@ export default function OnboardingScreen() {
   }
 
   async function handleSubmit() {
-    if (!name.trim())            { setError("Name is required."); return; }
-    if (!day || !month || !year) { setError("Please enter your complete date of birth."); return; }
-    if (!hour || !minute)        { setError("Please enter your birth time."); return; }
-    if (!selectedLat)            { setError("Please search and select your birth place."); return; }
+    if (!name.trim())            { setError(L.nameRequired); return; }
+    if (!day || !month || !year) { setError(L.dobIncomplete); return; }
+    if (!hour || !minute)        { setError(L.timeIncomplete); return; }
+    if (!selectedLat)            { setError(L.placeRequired); return; }
 
     setError(""); setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -134,9 +211,9 @@ export default function OnboardingScreen() {
       const { KundliQuotaError } = await import("@/lib/kundliAPI");
       if (e instanceof KundliQuotaError) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        setError(`${e.message} (${e.used}/${e.limit} used today)`);
+        setError(`${e.message} (${e.used}/${e.limit} ${L.quotaUsed})`);
       } else {
-        setError(e instanceof Error ? e.message : "Chart calculation failed. Please try again.");
+        setError(L.chartFailed);
       }
     } finally {
       setLoading(false);
@@ -193,7 +270,7 @@ export default function OnboardingScreen() {
             </View>
             <TextInput
               style={[s.input, { backgroundColor: C.inputBg, borderColor: C.inputBorder, color: C.text }]}
-              placeholder="Enter full name"
+              placeholder={L.enterFullName}
               placeholderTextColor={C.textDim}
               value={name}
               onChangeText={setName}
@@ -219,7 +296,7 @@ export default function OnboardingScreen() {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setDayPickerOpen(true); }}
                 >
                   <Text style={[s.datePickerText, { color: day ? C.text : C.textDim }]}>
-                    {day ? String(day).padStart(2,"0") : "DD"}
+                    {day ? String(day).padStart(2,"0") : "—"}
                   </Text>
                   <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
@@ -233,7 +310,7 @@ export default function OnboardingScreen() {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMonthPickerOpen(true); }}
                 >
                   <Text style={[s.datePickerText, { color: month ? C.text : C.textDim }]}>
-                    {month ? MONTHS[parseInt(month) - 1] : "Select"}
+                    {month ? MONTHS[parseInt(month) - 1] : L.placeholderSelect}
                   </Text>
                   <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
@@ -247,7 +324,7 @@ export default function OnboardingScreen() {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setYearPickerOpen(true); }}
                 >
                   <Text style={[s.datePickerText, { color: year ? C.text : C.textDim }]}>
-                    {year || "YYYY"}
+                    {year || "————"}
                   </Text>
                   <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
@@ -272,13 +349,13 @@ export default function OnboardingScreen() {
 
             <View style={s.dateRow}>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={[s.dateLabel, { color: C.textDim }]}>Hour</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{t.hour}</Text>
                 <Pressable
                   style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHourPickerOpen(true); }}
                 >
                   <Text style={[s.datePickerText, { color: hour ? C.text : C.textDim }]}>
-                    {hour ? String(hour).padStart(2,"0") : "HH"}
+                    {hour ? String(hour).padStart(2,"0") : "—"}
                   </Text>
                   <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
@@ -290,13 +367,13 @@ export default function OnboardingScreen() {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMinPickerOpen(true); }}
                 >
                   <Text style={[s.datePickerText, { color: minute ? C.text : C.textDim }]}>
-                    {minute !== "" ? String(minute).padStart(2,"0") : "MM"}
+                    {minute !== "" ? String(minute).padStart(2,"0") : "—"}
                   </Text>
                   <Feather name="chevron-down" size={13} color={C.textDim} />
                 </Pressable>
               </View>
               <View style={[s.dateCell, { flex: 1 }]}>
-                <Text style={[s.dateLabel, { color: C.textDim }]}>AM / PM</Text>
+                <Text style={[s.dateLabel, { color: C.textDim }]}>{L.amPmLabel}</Text>
                 <Pressable
                   style={[s.datePickerBtn, { backgroundColor: C.inputBg, borderColor: C.inputBorder }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setAmpmPickerOpen(true); }}
@@ -409,7 +486,7 @@ export default function OnboardingScreen() {
           <View style={s.trustRow}>
             <Feather name="lock" size={11} color={C.textDim} />
             <Text style={[s.trustText, { color: C.textDim }]}>
-              Your data is encrypted and private. Never shared with anyone.
+              {L.trustText}
             </Text>
           </View>
 
@@ -419,7 +496,7 @@ export default function OnboardingScreen() {
       {/* ── Day Picker ────────────────────────────────────────────────── */}
       <PickerModal
         visible={dayPickerOpen}
-        title="Select Day"
+        title={L.selectDay}
         items={DAYS}
         selected={day}
         onSelect={v => { setDay(v); setDayPickerOpen(false); }}
@@ -429,7 +506,7 @@ export default function OnboardingScreen() {
       {/* ── Month Picker Modal ─────────────────────────────────────────── */}
       <PickerModal
         visible={monthPickerOpen}
-        title="Select Month"
+        title={L.selectMonth}
         items={MONTHS.map((m, i) => ({ label: m, value: String(i + 1) }))}
         selected={month}
         onSelect={v => { setMonth(v); setMonthPickerOpen(false); }}
@@ -439,7 +516,7 @@ export default function OnboardingScreen() {
       {/* ── Year Picker ───────────────────────────────────────────────── */}
       <PickerModal
         visible={yearPickerOpen}
-        title="Select Birth Year"
+        title={L.selectYear}
         items={YEARS}
         selected={year}
         onSelect={v => { setYear(v); setYearPickerOpen(false); }}
@@ -449,7 +526,7 @@ export default function OnboardingScreen() {
       {/* ── Hour Picker ───────────────────────────────────────────────── */}
       <PickerModal
         visible={hourPickerOpen}
-        title="Select Hour (1–12)"
+        title={L.selectHour}
         items={HOURS}
         selected={hour}
         onSelect={v => { setHour(v); setHourPickerOpen(false); }}
@@ -459,7 +536,7 @@ export default function OnboardingScreen() {
       {/* ── Minute Picker ─────────────────────────────────────────────── */}
       <PickerModal
         visible={minPickerOpen}
-        title="Select Minute (0–59)"
+        title={L.selectMinute}
         items={MINS}
         selected={minute}
         onSelect={v => { setMinute(v); setMinPickerOpen(false); }}
@@ -469,10 +546,10 @@ export default function OnboardingScreen() {
       {/* ── AM/PM Picker Modal ────────────────────────────────────────── */}
       <PickerModal
         visible={ampmPickerOpen}
-        title="AM or PM?"
+        title={L.selectAmPm}
         items={[
-          { label: "AM — Morning  (Midnight to Noon)", value: "AM" },
-          { label: "PM — Evening  (Noon to Midnight)", value: "PM" },
+          { label: L.amOption, value: "AM" },
+          { label: L.pmOption, value: "PM" },
         ]}
         selected={ampm}
         onSelect={v => { setAmpm(v as "AM"|"PM"); setAmpmPickerOpen(false); }}

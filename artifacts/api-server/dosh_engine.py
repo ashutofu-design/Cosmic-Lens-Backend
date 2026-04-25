@@ -81,6 +81,23 @@ def _manglik(pl):
 
 
 # ── 2. Kaal Sarp Dosh ─────────────────────────────────────────────────────────
+# 12 classical Kaal Sarp variants — keyed by Rahu's house (1..12)
+_KAAL_SARP_VARIANTS = {
+    1:  "Anant",        # Rahu H1  → Ketu H7
+    2:  "Kulik",        # Rahu H2  → Ketu H8
+    3:  "Vasuki",       # Rahu H3  → Ketu H9
+    4:  "Shankhpal",    # Rahu H4  → Ketu H10
+    5:  "Padma",        # Rahu H5  → Ketu H11
+    6:  "Mahapadma",    # Rahu H6  → Ketu H12
+    7:  "Takshak",      # Rahu H7  → Ketu H1
+    8:  "Karkotak",     # Rahu H8  → Ketu H2
+    9:  "Shankhachuda", # Rahu H9  → Ketu H3
+    10: "Ghatak",       # Rahu H10 → Ketu H4
+    11: "Vishdhar",     # Rahu H11 → Ketu H5
+    12: "Sheshnag",     # Rahu H12 → Ketu H6
+}
+
+
 def _kaal_sarp(pl):
     rahu_lon = _lon(pl, "Rahu")
     rahu_h   = _house(pl, "Rahu")
@@ -89,15 +106,16 @@ def _kaal_sarp(pl):
     if not core:
         return ("None", "Insufficient data", "", [], "")
 
+    # All 7 core planets must lie within the Rahu→Ketu 180° arc for full Kaal Sarp
     in_arc = [(_lon(pl, p["name"]) - rahu_lon) % 360 < 180 for p in core]
     all_in = all(in_arc)
-    any_in = any(in_arc)
 
     if all_in:
+        variant = _KAAL_SARP_VARIANTS.get(rahu_h, "Unknown")
         return (
             "Active",
-            "Full Kaal Sarp Dosh — All Planets in Rahu–Ketu Arc",
-            "All planets fall between Rahu and Ketu. This strongest form creates severe obstacles, delays, vivid dreams, sudden reversals, and a feeling of life being restrained.",
+            f"Kaal Sarp Dosh ({variant}) — All Planets in Rahu–Ketu Arc",
+            f"All seven core planets fall within the Rahu–Ketu axis (Rahu in House {rahu_h} → {variant} variant). Creates obstacles, delays, vivid dreams, sudden reversals, and a feeling of life being restrained.",
             [
                 "Perform Kaal Sarp Pooja at Trimbakeshwar, Ujjain, or Nashik",
                 "Offer milk to a serpent idol on Nagpanchami",
@@ -105,23 +123,12 @@ def _kaal_sarp(pl):
                 "Offer sesame oil at a Navagraha temple for Rahu",
                 "Donate black items (sesame, cloth) on Saturdays for Ketu",
             ],
-            f"Rahu → House {rahu_h} | Ketu → House {ketu_h}",
-        )
-    elif any_in:
-        return (
-            "Mild",
-            "Partial Kaal Sarp — Some Planets Outside Arc",
-            "Some planets lie outside the Rahu–Ketu arc. Partial Kaal Sarp creates occasional obstacles, mild delays, and periods of uncertainty.",
-            [
-                "Chant Rahu Beej mantra: Om Bhram Bhreem Bhraum Sah Rahave Namah",
-                "Wear Hessonite (Gomed) after consulting a Jyotishi",
-            ],
-            f"Rahu → House {rahu_h} | Ketu → House {ketu_h}",
+            f"Rahu → House {rahu_h} | Ketu → House {ketu_h} | Variant: {variant}",
         )
     return (
         "None",
         "No Kaal Sarp Dosh — Planets Spread Freely",
-        "Planets are distributed on both sides of the Rahu–Ketu axis. No Kaal Sarp Dosh present.",
+        "Not all planets fall within the Rahu–Ketu arc. Per classical rule, full Kaal Sarp requires all seven core planets enclosed between the nodes — so no Kaal Sarp Dosh is present.",
         [],
         f"Rahu → House {rahu_h} | Ketu → House {ketu_h}",
     )

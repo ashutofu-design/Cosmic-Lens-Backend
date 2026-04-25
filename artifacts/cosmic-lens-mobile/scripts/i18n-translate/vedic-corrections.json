@@ -1,0 +1,30 @@
+{
+  "ml": {
+    "rashi.vrishabh": "ഇടവം"
+  },
+  "kn": {
+    "rashi.dhanu": "ಧನು",
+    "direction.E": "ಪೂರ್ವ",
+    "direction.W": "ಪಶ್ಚಿಮ"
+  },
+  "te": {
+    "rashi.meen": "మీనం",
+    "direction.E": "తూర్పు",
+    "direction.NE": "ఈశాన్యం",
+    "direction.SE": "ఆగ్నేయం",
+    "direction.SW": "నైరుతి",
+    "direction.NW": "వాయవ్యం"
+  },
+  "as": {
+    "day.sun": "দেওবাৰ"
+  },
+  "mr": {
+    "direction.NE": "ईशान्य",
+    "direction.SE": "आग्नेय",
+    "direction.SW": "नैऋत्य",
+    "direction.NW": "वायव्य"
+  },
+  "ta": {
+    "direction.SW": "தென்மேற்கு"
+  }
+}

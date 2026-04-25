@@ -397,7 +397,7 @@ function AstroVastuPricingCard({ C }: { C: any }) {
           <Feather name="award" size={16} color="#f9d76b" />
           <Text style={[av.title, { color: C.text }]}>{t.sub_avPricing}</Text>
           <View style={av.premBadge}>
-            <Text style={av.premBadgeText}>PREMIUM</Text>
+            <Text style={av.premBadgeText}>{t.sub_premiumBadge}</Text>
           </View>
         </View>
         <Text style={[av.subtitle, { color: C.textMuted }]}>
@@ -407,28 +407,28 @@ function AstroVastuPricingCard({ C }: { C: any }) {
 
       {/* Tier rows */}
       <View style={av.tiers}>
-        {tiers.map((t, i) => (
+        {tiers.map((tier, i) => (
           <View
-            key={t.name}
+            key={tier.name}
             style={[
               av.tierRow,
               i > 0 && { borderTopWidth: 1, borderTopColor: C.border },
-              t.best && { backgroundColor: "#f9d76b0d" },
+              tier.best && { backgroundColor: "#f9d76b0d" },
             ]}
           >
-            <Text style={av.tierEmoji}>{t.emoji}</Text>
+            <Text style={av.tierEmoji}>{tier.emoji}</Text>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={[av.tierName, { color: C.text }]}>{t.name}</Text>
-                {t.best && (
+                <Text style={[av.tierName, { color: C.text }]}>{tier.name}</Text>
+                {tier.best && (
                   <View style={av.bestBadge}>
-                    <Text style={av.bestBadgeText}>BEST VALUE</Text>
+                    <Text style={av.bestBadgeText}>{t.sub_bestValueBadge}</Text>
                   </View>
                 )}
               </View>
-              <Text style={[av.tierSub, { color: C.textMuted }]}>{t.sub}</Text>
+              <Text style={[av.tierSub, { color: C.textMuted }]}>{tier.sub}</Text>
             </View>
-            <Text style={[av.tierPrice, { color: t.color }]}>{t.price}</Text>
+            <Text style={[av.tierPrice, { color: tier.color }]}>{tier.price}</Text>
           </View>
         ))}
       </View>

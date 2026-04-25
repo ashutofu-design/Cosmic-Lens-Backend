@@ -28,26 +28,25 @@ const F = {
   bold:     "Nunito_700Bold",
 };
 
-// ── Vedic-bucket labels (en/hn/hi) for hardcoded UI strings ───────────────────
+// ── Profile labels (full 25-lang via i18n) ────────────────────────────────────
 type VLang = "en" | "hn" | "hi";
 function vLangFromCode(code: string): VLang {
   if (code === "en") return "en";
   if (code === "hn") return "hn";
   return "hi";
 }
-function getProfileLabels(v: VLang) {
-  const en = v === "en", hn = v === "hn";
+function getProfileLabels(t: ReturnType<typeof import('@/hooks/useT').useT>) {
   return {
-    tabIndia:    en ? "India"     : hn ? "India"     : "भारत",
-    tabGlobal:   en ? "Global"    : hn ? "Global"    : "विश्व",
-    active:      en ? "ACTIVE"    : hn ? "ACTIVE"    : "सक्रिय",
-    free:        en ? "FREE"      : hn ? "FREE"      : "निःशुल्क",
-    freePlan:    en ? "FREE PLAN" : hn ? "FREE PLAN" : "निःशुल्क प्लान",
-    myData:      en ? "MY DATA"   : hn ? "MY DATA"   : "मेरा डेटा",
-    myKundli:    en ? "My Kundli" : hn ? "My Kundli" : "मेरी कुंडली",
-    saved:       en ? "saved"     : hn ? "saved"     : "सहेजे गए",
-    perYear:     en ? "year"      : hn ? "year"      : "वर्ष",
-    perMonth:    en ? "month"     : hn ? "month"     : "माह",
+    tabIndia:    t.pr_tabIndia,
+    tabGlobal:   t.pr_tabGlobal,
+    active:      t.pr_active,
+    free:        t.pr_free,
+    freePlan:    t.pr_freePlan,
+    myData:      t.pr_myData,
+    myKundli:    t.pr_myKundli,
+    saved:       t.pr_saved,
+    perYear:     t.pr_perYear,
+    perMonth:    t.pr_perMonth,
   };
 }
 
@@ -150,8 +149,8 @@ function LangSheet({ visible, current, onSelect, onClose }: {
   const C = useC();
   const { language, isIndia } = useUser();
   const v: VLang = vLangFromCode(language);
-  const L = getProfileLabels(v);
   const t = useT();
+  const L = getProfileLabels(t);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"india" | "global">(isIndia ? "india" : "global");
 
@@ -281,7 +280,8 @@ function PlanCard({ plan, cycle, isCurrent, onPress }: {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vLangFromCode(language);
-  const L = getProfileLabels(v);
+  const t = useT();
+  const L = getProfileLabels(t);
   const price = cycle === "yearly" ? plan.yearlyPrice : plan.monthlyPrice;
   const isFree = plan.key === "free";
 
@@ -418,7 +418,8 @@ export default function ProfileScreen() {
     logout,
   } = useUser();
   const v: VLang = vLangFromCode(language);
-  const L = getProfileLabels(v);
+  const t = useT();
+  const L = getProfileLabels(t);
 
   const [showLang, setShowLang] = useState(false);
   const [pushOn, setPushOn]     = useState(true);
@@ -466,7 +467,6 @@ export default function ProfileScreen() {
          : (r?.skipped || r?.error || t.prof_alTokenMissing));
   }
 
-  const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;

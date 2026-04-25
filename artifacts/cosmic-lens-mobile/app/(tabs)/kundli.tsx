@@ -12,6 +12,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
+import { useT } from "@/hooks/useT";
 import { vedicLang, NAKSHATRA, RASHI, RASHI_KEYS, pick, type VLang } from "@/lib/i18nVedic";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
@@ -57,49 +58,63 @@ const oa = (isDark: boolean, hexAlpha: string): string => {
   return Math.min(255, Math.round(n * 2.2)).toString(16).padStart(2, '0');
 };
 
-// ── i18n labels ───────────────────────────────────────────────────────────────
-function getKundliLabels(v: VLang) {
-  const en = v === "en";
-  const hn = v === "hn";
+// ── i18n labels (full 25-lang via i18n) ─────────────────────────────────────────
+function getKundliLabels(t: ReturnType<typeof useT>) {
   return {
-    mahadasha:        en ? "MAHADASHA"        : hn ? "MAHADASHA"        : "महादशा",
-    antardasha:       en ? "ANTARDASHA"       : hn ? "ANTARDASHA"       : "अंतर्दशा",
-    pratyantardasha:  en ? "PRATYANTARDASHA"  : hn ? "PRATYANTARDASHA"  : "प्रत्यंतर्दशा",
-    mahaTimeline:     en ? "MAHADASHA TIMELINE" : hn ? "MAHADASHA TIMELINE" : "महादशा टाइमलाइन",
-    activeNow:        en ? "● ACTIVE NOW"     : hn ? "● ACTIVE NOW"     : "● अभी सक्रिय",
-    active:           en ? "ACTIVE"           : hn ? "ACTIVE"           : "सक्रिय",
-    yearsSuffix:      en ? "years"            : hn ? "saal"             : "साल",
-    whatNavatara:     en ? "What is Navatara?": hn ? "Navatara kya hai?": "नवतारा क्या है?",
-    navataraDesc:     en
-      ? "Starting from the Moon's nakshatra, 27 nakshatras are grouped into 9-star cycles called Tara."
-      : hn
-      ? "Chandra ke nakshatra se shuru karke 27 nakshatra 9-star Tara cycles mein bante hain."
-      : "चंद्र के नक्षत्र से शुरू करके 27 नक्षत्रों को 9-तारा चक्रों में विभाजित किया जाता है, जिन्हें तारा कहते हैं।",
-    chandraNakBase:   en ? "CHANDRA NAKSHATRA (BASE)" : hn ? "CHANDRA NAKSHATRA (BASE)" : "चंद्र नक्षत्र (आधार)",
-    whatJaimini:      en ? "What are Jaimini Chara Karakas?" : hn ? "Jaimini Chara Karakas kya hain?" : "जैमिनी चर कारक क्या हैं?",
-    jaiminiDesc:      en
-      ? "In Jaimini Jyotish, 7 planets get karaka roles based on their rashi-degrees. The planet with the highest degree becomes Atmakaraka."
-      : hn
-      ? "Jaimini Jyotish mein 7 grahas ko unke rashi-degree ke anusaar karak roles milte hain. Sabse zyada degree wala graha Atmakaraka hota hai."
-      : "जैमिनी ज्योतिष में 7 ग्रहों को उनकी राशि-डिग्री के अनुसार कारक भूमिकाएँ मिलती हैं। सबसे ज़्यादा डिग्री वाला ग्रह आत्मकारक होता है।",
-    atmakaraka:       en ? "ATMAKARAKA"       : hn ? "ATMAKARAKA"       : "आत्मकारक",
-    jaiminiLagna:     en ? "Jaimini Lagna"    : hn ? "Jaimini Lagna"    : "जैमिनी लग्न",
-    jaiminiLagnaDesc: en
-      ? "Atmakaraka's rashi forms a special Jaimini Lagna. AK's navamsha position shows the soul's spiritual path. For full analysis, consult an astrologer."
-      : hn
-      ? "Atmakaraka ki rashi se special Jaimini Lagna banta hai. AK ki navamsha position jeeva ka spiritual path dikhati hai. Full analysis ke liye jyotishi se milein."
-      : "आत्मकारक की राशि से विशेष जैमिनी लग्न बनता है। आत्मकारक की नवांश स्थिति जीव का आध्यात्मिक मार्ग दिखाती है। पूर्ण विश्लेषण के लिए ज्योतिषी से मिलें।",
-    liveChandraTransit: en ? "LIVE — CHANDRA TRANSIT" : hn ? "LIVE — CHANDRA TRANSIT" : "लाइव — चंद्र गोचर",
-    natalConj:        en ? "NATAL CONJ"       : hn ? "NATAL CONJ"       : "जन्म युति",
-    whatKP:           en ? "What is KP Paddhati?" : hn ? "KP Paddhati kya hai?" : "केपी पद्धति क्या है?",
-    kpSignificators:  en ? "KP Significators" : hn ? "KP Significators" : "केपी सूचक",
-    birthChartSnap:   en ? "BIRTH CHART SNAPSHOT" : hn ? "BIRTH CHART SNAPSHOT" : "जन्म कुंडली स्नैपशॉट",
-    planetPosition:   en ? "Planet Position"  : hn ? "Planet Position"  : "ग्रह स्थिति",
-    planetPositionSub: en ? "Live planetary degrees and rashi" : hn ? "Live graha degrees aur rashi" : "लाइव ग्रह डिग्री और राशि",
-    dailyAlerts:      en ? "Daily Alerts"     : hn ? "Daily Alerts"     : "दैनिक संकेत",
-    dailyAlertsSub:   en ? "4-day planetary guidance" : hn ? "4-day planetary guidance · Aaj ka sanket" : "4-दिन की ग्रह दिशा · आज का संकेत",
-    house:            en ? "House"            : hn ? "Bhav"             : "भाव",
-    nakshatraLabel:   en ? "Nakshatra"        : hn ? "Nakshatra"        : "नक्षत्र",
+    mahadasha:        t.ku_mahadasha,
+    antardasha:       t.ku_antardasha,
+    pratyantardasha:  t.ku_pratyantardasha,
+    mahaTimeline:     t.ku_mahaTimeline,
+    activeNow:        t.ku_activeNow,
+    active:           t.ku_active,
+    yearsSuffix:      t.ku_yearsSuffix,
+    whatNavatara:     t.ku_whatNavatara,
+    navataraDesc:     t.ku_navataraDesc,
+    chandraNakBase:   t.ku_chandraNakBase,
+    whatJaimini:      t.ku_whatJaimini,
+    jaiminiDesc:      t.ku_jaiminiDesc,
+    atmakaraka:       t.ku_atmakaraka,
+    jaiminiLagna:     t.ku_jaiminiLagna,
+    jaiminiLagnaDesc: t.ku_jaiminiLagnaDesc,
+    liveChandraTransit: t.ku_liveChandraTransit,
+    natalConj:        t.ku_natalConj,
+    whatKP:           t.ku_whatKP,
+    kpSignificators:  t.ku_kpSignificators,
+    birthChartSnap:   t.ku_birthChartSnap,
+    planetPosition:   t.ku_planetPosition,
+    planetPositionSub: t.ku_planetPositionSub,
+    dailyAlerts:      t.ku_dailyAlertsLink,
+    dailyAlertsSub:   t.ku_dailyAlertsLinkSub,
+    house:            t.ku_house,
+    nakshatraLabel:   t.ku_nakshatraLabel,
+    btnKundli:        t.ku_btnKundli,
+    btnAshtak:        t.ku_btnAshtak,
+    btnNavatara:      t.ku_btnNavatara,
+    btnJaimini:       t.ku_btnJaimini,
+    btnTransit:       t.ku_btnTransit,
+    btnKP:            t.ku_btnKP,
+    secDashaTimeline:    t.ku_secDashaTimeline,
+    secAshtakavarga:     t.ku_secAshtakavarga,
+    secNavatara9Tara:    t.ku_secNavatara9Tara,
+    secJaiminiKarakas:   t.ku_secJaiminiKarakas,
+    secGrahaTransit:     t.ku_secGrahaTransit,
+    secKpPaddhati:       t.ku_secKpPaddhati,
+    snapAscendant:       t.ku_snapAscendant,
+    snapMoonSign:        t.ku_snapMoonSign,
+    snapNakshatra:       t.ku_snapNakshatra,
+    snapNakshatraLord:   t.ku_snapNakshatraLord,
+    snapDashaBalance:    t.ku_snapDashaBalance,
+    snapLiveMoonTransit: t.ku_snapLiveMoonTransit,
+    padaLabel:           t.ku_padaLabel,
+    jaiminiDegPre:       t.ku_jaiminiDegPre,
+    jaiminiDegSuf:       t.ku_jaiminiDegSuf,
+    kpDesc:              t.ku_kpDesc,
+    kpFooter:            t.ku_kpFooter,
+    kpStar:              t.ku_kpStar,
+    kpSub:               t.ku_kpSub,
+    kpSubSub:            t.ku_kpSubSub,
+    kpAsc:               t.ku_kpAsc,
+    savHeading:          t.ku_savHeading,
   };
 }
 
@@ -174,7 +189,8 @@ function MahadashaCard({ planet, startDate, endDate, active, onPrev, onNext, has
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
   const yrs = ((tsOf(endDate) - tsOf(startDate)) / (365.25 * 86400 * 1000)).toFixed(0);
@@ -234,7 +250,8 @@ function AntardashaCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
   const o = (vv: string) => oa(C.isDark, vv);
@@ -292,7 +309,8 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const color = hue(planet);
   const pct = progress(startDate, endDate);
   const o = (vv: string) => oa(C.isDark, vv);
@@ -345,7 +363,8 @@ function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:n
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   return (
     <View style={{ gap: 8 }}>
       <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.mahaTimeline}</Text>
@@ -478,6 +497,7 @@ function computeBAV(kundli: KundliData) {
 
 function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
+  const t = useT();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
@@ -494,14 +514,10 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, padding: 0, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
           <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>
-            {v === "hi" ? "अष्टकवर्ग क्या है?" : v === "hn" ? "Ashtakavarga kya hai?" : "What is Ashtakavarga?"}
+            {t.ku_ashtakWhat}
           </Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            {v === "hi"
-              ? "हर ग्रह 8 स्थानों से 12 राशियों को शुभ/अशुभ अंक देता है। सर्वाष्टकवर्ग (SAV) = सभी 7 ग्रहों का कुल। अधिक अंक = अधिक मज़बूत राशि।"
-              : v === "hn"
-              ? "Har grah 8 sthanon se 12 rashiyon ko benefic/malefic points deta hai. SAV = sabhi 7 grahas ka total. Zyada points = stronger rashi."
-              : "Each planet awards benefic/malefic points to all 12 signs from 8 houses. SAV = total of all 7 planets. More points = stronger sign."}
+            {t.ku_ashtakWhatBody}
           </Text>
         </View>
       </View>
@@ -531,7 +547,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
         borderWidth: 1, borderColor: `${ac}${o("20")}`,
       }}>
         <Text style={{color:C.text,fontSize:16,fontFamily:F.bold}}>
-          {selPlanet === "SAV" ? "Sarvashtakavarga" : `${selPlanet} BAV`}
+          {selPlanet === "SAV" ? t.ku_savHeading : `${selPlanet} BAV`}
         </Text>
         <View style={{ backgroundColor: `${ac}${o("18")}`, paddingVertical: 4, paddingHorizontal: 12, borderRadius: 8 }}>
           <Text style={{color:ac,fontSize:13,fontFamily:F.bold}}>{total}/{selPlanet==="SAV"?336:56}</Text>
@@ -556,11 +572,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
               </View>
               <View style={{ backgroundColor: `${color}${o("18")}`, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
                 <Text style={{color, fontSize: 9, fontFamily: F.bold}}>
-                  {v === "en"
-                    ? (pct>=0.7?"Strong":pct>=0.5?"Good":pct>=0.3?"Average":"Weak")
-                    : v === "hi"
-                      ? (pct>=0.7?"उच्च":pct>=0.5?"शुभ":pct>=0.3?"मध्यम":"नीच")
-                      : (pct>=0.7?"Uchh":pct>=0.5?"Shubh":pct>=0.3?"Madhyam":"Neech")}
+                  {pct>=0.7?t.ku_bavStrong:pct>=0.5?t.ku_bavGood:pct>=0.3?t.ku_bavAverage:t.ku_bavWeak}
                 </Text>
               </View>
             </View>
@@ -569,12 +581,7 @@ function AshtakavargaTab({ kundli }: { kundli: KundliData }) {
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
-        {(v === "en"
-          ? [["#22c55e","7-8 (Strong)"],["#fbbf24","5-6 (Good)"],["#f97316","3-4 (Average)"],["#ef4444","0-2 (Weak)"]]
-          : v === "hi"
-            ? [["#22c55e","7-8 (उच्च)"],["#fbbf24","5-6 (शुभ)"],["#f97316","3-4 (मध्यम)"],["#ef4444","0-2 (नीच)"]]
-            : [["#22c55e","7-8 (Uchh)"],["#fbbf24","5-6 (Shubh)"],["#f97316","3-4 (Madhyam)"],["#ef4444","0-2 (Neech)"]]
-        ).map(([c,l])=>(
+        {([["#22c55e",t.ku_bavLegStrong],["#fbbf24",t.ku_bavLegGood],["#f97316",t.ku_bavLegAverage],["#ef4444",t.ku_bavLegWeak]] as const).map(([c,l])=>(
           <View key={l} style={{flexDirection:"row",alignItems:"center",gap:5}}>
             <View style={{width:10,height:10,borderRadius:5,backgroundColor:c as string}}/>
             <Text style={{color:C.textMid,fontSize:11,fontFamily:F.semibold}}>{l}</Text>
@@ -616,7 +623,8 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (vv: string) => oa(C.isDark, vv);
   const data = useMemo(() => computeNavatara(kundli), [kundli]);
@@ -676,7 +684,7 @@ function NavataraTab({ kundli }: { kundli: KundliData }) {
                 </View>
               </View>
               <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
-                Nakshatra: {nakName}
+                {L.nakshatraLabel}: {nakName}
               </Text>
               <Text style={{color:tara.color,fontSize:11,fontFamily:F.semibold,marginTop:2}}>{tara.desc}</Text>
             </View>
@@ -717,7 +725,8 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (vv: string) => oa(C.isDark, vv);
   const data = useMemo(() => computeChara(kundli), [kundli]);
@@ -760,7 +769,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
             </View>
             <View style={{ backgroundColor: `${hue(ak.name)}${o("10")}`, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: `${hue(ak.name)}${o("18")}` }}>
               <Text style={{ color: C.textMid, fontSize: 12, fontFamily: F.semibold }}>
-                Degree within sign: <Text style={{ color: hue(ak.name), fontFamily: F.bold }}>{ak.deg.toFixed(2)}°</Text> — highest in chart
+                {L.jaiminiDegPre} <Text style={{ color: hue(ak.name), fontFamily: F.bold }}>{ak.deg.toFixed(2)}°</Text> — {L.jaiminiDegSuf}
               </Text>
             </View>
           </View>
@@ -833,9 +842,10 @@ function approxTransit(referenceDate: Date = new Date()): Record<string,number> 
 
 function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
   const C = useC();
+  const t = useT();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v2: string) => oa(C.isDark, v2);
   const transits = useMemo(() => approxTransit(), []);
@@ -849,15 +859,11 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Feather name="alert-triangle" size={13} color={C.warningText} />
             <Text style={{ color: C.warningText, fontSize: 13, fontFamily: F.bold }}>
-              {v === "hi" ? "अनुमानित गोचर" : v === "hn" ? "Approximate Transit" : "Approximate Transit"}
+              {t.ku_approxTransit}
             </Text>
           </View>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            {v === "hi"
-              ? "ये गोचर औसत कक्षीय गति से गणना किए गए हैं — सामान्य मार्गदर्शन के लिए उपयोगी।"
-              : v === "hn"
-              ? "Yeh transits mean orbital motion se computed hain — broad guidance ke liye useful."
-              : "These transits are computed from mean orbital motion — useful for broad guidance only."}
+            {t.ku_transitDisclaimer}
           </Text>
         </View>
       </View>
@@ -919,7 +925,7 @@ function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any 
                   )}
                 </View>
                 <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
-                  {pick(v, RASHI[RASHI_KEYS[rashi]])} · {v === "en" ? "House" : "Bhav"} {house} · {nakName}
+                  {pick(v, RASHI[RASHI_KEYS[rashi]])} · {t.ku_houseLabel} {house} · {nakName}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -969,7 +975,8 @@ function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v2: string) => oa(C.isDark, v2);
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
@@ -990,7 +997,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
           <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.whatKP}</Text>
           <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            Krishnamurti Paddhati uses proportional sub-divisions of Vimshottari dasha for precision timing of events.
+            {L.kpDesc}
           </Text>
         </View>
       </View>
@@ -1008,22 +1015,22 @@ function KPTab({ kundli }: { kundli: KundliData }) {
               <View style={{ borderLeftWidth: 3, borderLeftColor: pHue, position: "absolute", left: 0, top: 0, bottom: 0 }} />
               <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Text style={{color:pHue,fontSize:12,fontFamily:F.bold}}>
-                  {isAsc?"Asc":name.slice(0,2)}
+                  {isAsc?L.kpAsc:name.slice(0,2)}
                 </Text>
               </View>
               <View style={{flex:1,gap:6}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                   <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>
-                    {isAsc?"Ascendant":pName(name)}
+                    {isAsc?L.snapAscendant:pName(name)}
                   </Text>
                   <View style={{ backgroundColor: `${pHue}${o("12")}`, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 1, borderColor: `${pHue}${o("18")}` }}>
                     <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{(lon%30).toFixed(2)}° {pick(v, NAKSHATRA[kp.nakIdx])}</Text>
                   </View>
                 </View>
                 <View style={{flexDirection:"row",gap:6,flexWrap:"wrap"}}>
-                  <KPLordChip label="Star" lord={kp.starLord}/>
-                  <KPLordChip label="Sub" lord={kp.subLord}/>
-                  <KPLordChip label="Sub-Sub" lord={kp.subSubLord}/>
+                  <KPLordChip label={L.kpStar} lord={kp.starLord}/>
+                  <KPLordChip label={L.kpSub} lord={kp.subLord}/>
+                  <KPLordChip label={L.kpSubSub} lord={kp.subSubLord}/>
                 </View>
               </View>
             </View>
@@ -1035,8 +1042,7 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
           <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>{L.kpSignificators}</Text>
           <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
-            Kisi bhi ghatna ke liye dekhen: Star-lord aur Sub-lord ka relationship.
-            Agar 3 lord agree karein → event pakka.
+            {L.kpFooter}
           </Text>
         </View>
       </View>
@@ -1061,13 +1067,37 @@ function KPLordChip({ label, lord }: { label:string; lord:string }) {
 }
 
 const CHART_BTNS = [
-  { label:"Kundli",       tab:"Kundli",       icon:"star" },
-  { label:"Ashtakavarga", tab:"Ashtakavarga", icon:"grid" },
-  { label:"Navatara",     tab:"Navatara",     icon:"compass" },
-  { label:"Jaimini",      tab:"Jaimini",      icon:"award" },
-  { label:"Transit",      tab:"Transit",      icon:"navigation" },
-  { label:"KP",           tab:"KP",           icon:"crosshair" },
-];
+  { tab:"Kundli",       icon:"star" },
+  { tab:"Ashtakavarga", icon:"grid" },
+  { tab:"Navatara",     icon:"compass" },
+  { tab:"Jaimini",      icon:"award" },
+  { tab:"Transit",      icon:"navigation" },
+  { tab:"KP",           icon:"crosshair" },
+] as const;
+
+function chartBtnLabel(tab: string, L: ReturnType<typeof getKundliLabels>): string {
+  switch (tab) {
+    case "Kundli":       return L.btnKundli;
+    case "Ashtakavarga": return L.btnAshtak;
+    case "Navatara":     return L.btnNavatara;
+    case "Jaimini":      return L.btnJaimini;
+    case "Transit":      return L.btnTransit;
+    case "KP":           return L.btnKP;
+    default:             return tab;
+  }
+}
+
+function sectionTitleFor(tab: string, L: ReturnType<typeof getKundliLabels>): string {
+  switch (tab) {
+    case "Kundli":       return L.secDashaTimeline;
+    case "Ashtakavarga": return L.secAshtakavarga;
+    case "Navatara":     return L.secNavatara9Tara;
+    case "Jaimini":      return L.secJaiminiKarakas;
+    case "Transit":      return L.secGrahaTransit;
+    case "KP":           return L.secKpPaddhati;
+    default:             return tab;
+  }
+}
 
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
@@ -1076,7 +1106,8 @@ export default function KundliScreen() {
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const tI18n = getT(language);
   const v: VLang = vedicLang(language);
-  const L = getKundliLabels(v);
+  const t = useT();
+  const L = getKundliLabels(t);
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -1148,12 +1179,12 @@ export default function KundliScreen() {
     ? (() => { const h=((moonRashi.index-lagnaSign+12)%12)+1; return `${moonRashi.name} · H${h} · ${moonRashi.nakshatra}`; })()
     : null;
   const snapshotRows = [
-    { label:"ASCENDANT (LAGNA)",  value:kundli.ascendant,  icon:"sunrise" },
-    { label:"MOON SIGN (RASHI)",  value:kundli.moonSign,   icon:"moon" },
-    ...(kundli.nakshatra?[{ label:"NAKSHATRA", value:`${kundli.nakshatra} (Pada ${kundli.nakshatraPada??"?"})`, icon:"star" }]:[]),
-    ...(kundli.nakshatraRuler?[{ label:"NAKSHATRA LORD", value:kundli.nakshatraRuler, icon:"shield" }]:[]),
-    ...(dbText?[{ label:"DASHA BALANCE", value:dbText, icon:"clock" }]:[]),
-    ...(moonTransitText?[{ label:"LIVE MOON TRANSIT", value:moonTransitText, icon:"radio" }]:[]),
+    { label:L.snapAscendant,  value:kundli.ascendant,  icon:"sunrise" },
+    { label:L.snapMoonSign,   value:kundli.moonSign,   icon:"moon" },
+    ...(kundli.nakshatra?[{ label:L.snapNakshatra, value:`${kundli.nakshatra} (${L.padaLabel} ${kundli.nakshatraPada??"?"})`, icon:"star" }]:[]),
+    ...(kundli.nakshatraRuler?[{ label:L.snapNakshatraLord, value:kundli.nakshatraRuler, icon:"shield" }]:[]),
+    ...(dbText?[{ label:L.snapDashaBalance, value:dbText, icon:"clock" }]:[]),
+    ...(moonTransitText?[{ label:L.snapLiveMoonTransit, value:moonTransitText, icon:"radio" }]:[]),
   ];
 
   return (
@@ -1175,7 +1206,7 @@ export default function KundliScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }} numberOfLines={1}>
-            {primaryProfile?.name ?? "Kundli"}
+            {primaryProfile?.name ?? t.tabKundli}
           </Text>
           {primaryProfile?.birthData && (
             <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium }}>
@@ -1187,7 +1218,7 @@ export default function KundliScreen() {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:2}}>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {CHART_BTNS.map(({ label, tab, icon }) => {
+          {CHART_BTNS.map(({ tab, icon }) => {
             const active = activeTab === tab;
             return (
               <Pressable key={tab}
@@ -1201,7 +1232,7 @@ export default function KundliScreen() {
                 }}>
                 <Feather name={icon as any} size={12} color={active ? ac : C.textMid} />
                 <Text style={{ color: active ? ac : C.textMid, fontSize: 12, fontFamily: F.bold }}>
-                  {label}
+                  {chartBtnLabel(tab, L)}
                 </Text>
               </Pressable>
             );
@@ -1281,12 +1312,7 @@ export default function KundliScreen() {
       </View>
 
       <SectionHeader
-        title={activeTab==="Kundli"?"DASHA TIMELINE"
-          :activeTab==="Ashtakavarga"?"ASHTAKAVARGA"
-          :activeTab==="Navatara"?"NAVATARA — 9 TARA"
-          :activeTab==="Jaimini"?"JAIMINI KARAKAS"
-          :activeTab==="Transit"?"GRAHA TRANSIT"
-          :"KP PADDHATI"}
+        title={sectionTitleFor(activeTab, L)}
         icon={CHART_BTNS.find(b=>b.tab===activeTab)?.icon}
         C={C}
       />

@@ -877,6 +877,96 @@ export interface MoreT {
   vu_alScanFailedMsg: string;
   vu_alDailyLimitMsg: string;
   vu_alStepHint: string;
+  ku_ashtakWhat: string;
+  ku_ashtakWhatBody: string;
+  ku_approxTransit: string;
+  ku_houseLabel: string;
+  ku_bavStrong: string;
+  ku_bavGood: string;
+  ku_bavAverage: string;
+  ku_bavWeak: string;
+  ku_bavLegStrong: string;
+  ku_bavLegGood: string;
+  ku_bavLegAverage: string;
+  ku_bavLegWeak: string;
+  ku_transitDisclaimer: string;
+  pr_tabIndia: string;
+  pr_tabGlobal: string;
+  pr_active: string;
+  pr_free: string;
+  pr_freePlan: string;
+  pr_myData: string;
+  pr_myKundli: string;
+  pr_saved: string;
+  pr_perYear: string;
+  pr_perMonth: string;
+  sub_premiumBadge: string;
+  sub_bestValueBadge: string;
+  vu_compassTitle: string;
+  vu_compassSubtitle: string;
+  vu_sensorActive: string;
+  vu_aligning: string;
+  vu_sensorInactive: string;
+  vu_moveDevice: string;
+  vu_idealDirLbl: string;
+  vu_northEast: string;
+  vu_tabDos: string;
+  vu_tabDonts: string;
+  vu_tabRemedies: string;
+  ku_mahadasha: string;
+  ku_antardasha: string;
+  ku_pratyantardasha: string;
+  ku_mahaTimeline: string;
+  ku_activeNow: string;
+  ku_active: string;
+  ku_yearsSuffix: string;
+  ku_whatNavatara: string;
+  ku_navataraDesc: string;
+  ku_chandraNakBase: string;
+  ku_whatJaimini: string;
+  ku_jaiminiDesc: string;
+  ku_atmakaraka: string;
+  ku_jaiminiLagna: string;
+  ku_jaiminiLagnaDesc: string;
+  ku_liveChandraTransit: string;
+  ku_natalConj: string;
+  ku_whatKP: string;
+  ku_kpSignificators: string;
+  ku_birthChartSnap: string;
+  ku_planetPosition: string;
+  ku_planetPositionSub: string;
+  ku_dailyAlertsLink: string;
+  ku_dailyAlertsLinkSub: string;
+  ku_house: string;
+  ku_nakshatraLabel: string;
+  ku_btnKundli: string;
+  ku_btnAshtak: string;
+  ku_btnNavatara: string;
+  ku_btnJaimini: string;
+  ku_btnTransit: string;
+  ku_btnKP: string;
+  ku_secDashaTimeline: string;
+  ku_secAshtakavarga: string;
+  ku_secNavatara9Tara: string;
+  ku_secJaiminiKarakas: string;
+  ku_secGrahaTransit: string;
+  ku_secKpPaddhati: string;
+  ku_snapAscendant: string;
+  ku_snapMoonSign: string;
+  ku_snapNakshatra: string;
+  ku_snapNakshatraLord: string;
+  ku_snapDashaBalance: string;
+  ku_snapLiveMoonTransit: string;
+  ku_padaLabel: string;
+  ku_jaiminiDegPre: string;
+  ku_jaiminiDegSuf: string;
+  ku_kpDesc: string;
+  ku_kpFooter: string;
+  ku_kpStar: string;
+  ku_kpSub: string;
+  ku_kpSubSub: string;
+  ku_kpAsc: string;
+  ku_savHeading: string;
   vu_alNetError: string;
   vu_alNetErrorMsg: string;
   vu_alCompassCalib: string;
@@ -1783,6 +1873,96 @@ const EN: MoreT = {
   vu_alScanFailedMsg: "Could not analyze photo. Please retry in good lighting.",
   vu_alDailyLimitMsg: "Today's free limit is over — try again tomorrow or get Pro.",
   vu_alStepHint: "Move ahead step by step.",
+  ku_ashtakWhat: "What is Ashtakavarga?",
+  ku_ashtakWhatBody: "Each planet awards benefic/malefic points to all 12 signs from 8 houses. SAV = total of all 7 planets. More points = stronger sign.",
+  ku_approxTransit: "Approximate Transit",
+  ku_houseLabel: "House",
+  ku_bavStrong: "Strong",
+  ku_bavGood: "Good",
+  ku_bavAverage: "Average",
+  ku_bavWeak: "Weak",
+  ku_bavLegStrong: "7-8 (Strong)",
+  ku_bavLegGood: "5-6 (Good)",
+  ku_bavLegAverage: "3-4 (Average)",
+  ku_bavLegWeak: "0-2 (Weak)",
+  ku_transitDisclaimer: "These transits are computed from mean orbital motion — useful for broad guidance only.",
+  ku_btnKundli: "Kundli",
+  ku_btnAshtak: "Ashtakavarga",
+  ku_btnNavatara: "Navatara",
+  ku_btnJaimini: "Jaimini",
+  ku_btnTransit: "Transit",
+  ku_btnKP: "KP",
+  ku_secDashaTimeline: "DASHA TIMELINE",
+  ku_secAshtakavarga: "ASHTAKAVARGA",
+  ku_secNavatara9Tara: "NAVATARA — 9 TARA",
+  ku_secJaiminiKarakas: "JAIMINI KARAKAS",
+  ku_secGrahaTransit: "GRAHA TRANSIT",
+  ku_secKpPaddhati: "KP PADDHATI",
+  ku_snapAscendant: "ASCENDANT (LAGNA)",
+  ku_snapMoonSign: "MOON SIGN (RASHI)",
+  ku_snapNakshatra: "NAKSHATRA",
+  ku_snapNakshatraLord: "NAKSHATRA LORD",
+  ku_snapDashaBalance: "DASHA BALANCE",
+  ku_snapLiveMoonTransit: "LIVE MOON TRANSIT",
+  ku_padaLabel: "Pada",
+  ku_jaiminiDegPre: "Degree within sign:",
+  ku_jaiminiDegSuf: "highest in chart",
+  ku_kpDesc: "Krishnamurti Paddhati uses proportional sub-divisions of Vimshottari dasha for precision timing of events.",
+  ku_kpFooter: "For any event, check: relationship of Star-lord and Sub-lord. If 3 lords agree → event is confirmed.",
+  ku_kpStar: "Star",
+  ku_kpSub: "Sub",
+  ku_kpSubSub: "Sub-Sub",
+  ku_kpAsc: "Asc",
+  ku_savHeading: "Sarvashtakavarga",
+  pr_tabIndia: "India",
+  pr_tabGlobal: "Global",
+  pr_active: "ACTIVE",
+  pr_free: "FREE",
+  pr_freePlan: "FREE PLAN",
+  pr_myData: "MY DATA",
+  pr_myKundli: "My Kundli",
+  pr_saved: "saved",
+  pr_perYear: "year",
+  pr_perMonth: "month",
+  sub_premiumBadge: "PREMIUM",
+  sub_bestValueBadge: "BEST VALUE",
+  vu_compassTitle: "Vastu Compass",
+  vu_compassSubtitle: "Sacred Direction Finder",
+  vu_sensorActive: "SENSOR ACTIVE",
+  vu_aligning: "ALIGNING…",
+  vu_sensorInactive: "Sensor inactive",
+  vu_moveDevice: "Move device to activate",
+  vu_idealDirLbl: "Ideal Direction",
+  vu_northEast: "North-East",
+  vu_tabDos: "Do ✅",
+  vu_tabDonts: "Don't ❌",
+  vu_tabRemedies: "Remedies 🙏",
+  ku_mahadasha: "MAHADASHA",
+  ku_antardasha: "ANTARDASHA",
+  ku_pratyantardasha: "PRATYANTARDASHA",
+  ku_mahaTimeline: "MAHADASHA TIMELINE",
+  ku_activeNow: "● ACTIVE NOW",
+  ku_active: "ACTIVE",
+  ku_yearsSuffix: "years",
+  ku_whatNavatara: "What is Navatara?",
+  ku_navataraDesc: "Starting from the Moon's nakshatra, 27 nakshatras are grouped into 9-star cycles called Tara.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (BASE)",
+  ku_whatJaimini: "What are Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "In Jaimini Jyotish, 7 planets get karaka roles based on their rashi-degrees. The planet with the highest degree becomes Atmakaraka.",
+  ku_atmakaraka: "ATMAKARAKA",
+  ku_jaiminiLagna: "Jaimini Lagna",
+  ku_jaiminiLagnaDesc: "Atmakaraka's rashi forms a special Jaimini Lagna. AK's navamsha position shows the soul's spiritual path. For full analysis, consult an astrologer.",
+  ku_liveChandraTransit: "LIVE — CHANDRA TRANSIT",
+  ku_natalConj: "NATAL CONJ",
+  ku_whatKP: "What is KP Paddhati?",
+  ku_kpSignificators: "KP Significators",
+  ku_birthChartSnap: "BIRTH CHART SNAPSHOT",
+  ku_planetPosition: "Planet Position",
+  ku_planetPositionSub: "Live planetary degrees and rashi",
+  ku_dailyAlertsLink: "Daily Alerts",
+  ku_dailyAlertsLinkSub: "4-day planetary guidance",
+  ku_house: "House",
+  ku_nakshatraLabel: "Nakshatra",
   vu_alNetError: "Network error",
   vu_alNetErrorMsg: "Please check your internet connection.",
   vu_alCompassCalib: "Compass calibrating",
@@ -2572,6 +2752,34 @@ const HN: Partial<MoreT> = {
   vu_genTip5:         "Toot-foot wali cheezein turant hatayein",
   vu_genTip6:         "North me running water (fountain ya aquarium) shubh hai",
   vu_disclaimer:      "Yeh ek general Vastu guide hai. Apne ghar ke liye specifically, hamesha ek qualified Vastu expert se personalised advice lein.",
+  ku_btnKundli:           "Kundli",
+  ku_btnAshtak:           "Ashtakavarga",
+  ku_btnNavatara:         "Navatara",
+  ku_btnJaimini:          "Jaimini",
+  ku_btnTransit:          "Transit",
+  ku_btnKP:               "KP",
+  ku_secDashaTimeline:    "DASHA TIMELINE",
+  ku_secAshtakavarga:     "ASHTAKAVARGA",
+  ku_secNavatara9Tara:    "NAVATARA — 9 TARA",
+  ku_secJaiminiKarakas:   "JAIMINI KARAKAS",
+  ku_secGrahaTransit:     "GRAHA TRANSIT",
+  ku_secKpPaddhati:       "KP PADDHATI",
+  ku_snapAscendant:       "ASCENDANT (LAGNA)",
+  ku_snapMoonSign:        "MOON SIGN (RASHI)",
+  ku_snapNakshatra:       "NAKSHATRA",
+  ku_snapNakshatraLord:   "NAKSHATRA SWAMI",
+  ku_snapDashaBalance:    "DASHA BALANCE",
+  ku_snapLiveMoonTransit: "CHANDRA TRANSIT — LIVE",
+  ku_padaLabel:           "Pada",
+  ku_jaiminiDegPre:       "Sign ke andar degree:",
+  ku_jaiminiDegSuf:       "chart me sabse zyada",
+  ku_kpDesc:              "Krishnamurti Paddhati Vimshottari dasha ke proportional sub-divisions ka use karke events ki precise timing batati hai.",
+  ku_kpFooter:            "Kisi bhi event ke liye dekhein: Star-lord aur Sub-lord ka relationship. 3 lord agree → event pakka.",
+  ku_kpStar:              "Star",
+  ku_kpSub:               "Sub",
+  ku_kpSubSub:            "Sub-Sub",
+  ku_kpAsc:               "Asc",
+  ku_savHeading:          "Sarvashtakavarga",
 };
 
 // Hindi overrides (Devanagari)
@@ -3413,7 +3621,150 @@ const HI: Partial<MoreT> = {
   km3_lockedPreview:      "🔒 लॉक्ड प्रीव्यू",
   km3_addBothToUnlock:    "प्रीव्यू अनलॉक करने के लिए दोनों कुंडलियाँ जोड़ें",
   km3_addBothSubtext:     "दोनों की जन्म-विवरण जोड़ें — फिर आपके व्यक्तिगत हुक्स बनेंगे",
+  ku_btnKundli:           "कुंडली",
+  ku_btnAshtak:           "अष्टकवर्ग",
+  ku_btnNavatara:         "नवतारा",
+  ku_btnJaimini:          "जैमिनी",
+  ku_btnTransit:          "गोचर",
+  ku_btnKP:               "KP",
+  ku_secDashaTimeline:    "दशा टाइमलाइन",
+  ku_secAshtakavarga:     "अष्टकवर्ग",
+  ku_secNavatara9Tara:    "नवतारा — 9 तारा",
+  ku_secJaiminiKarakas:   "जैमिनी कारक",
+  ku_secGrahaTransit:     "ग्रह गोचर",
+  ku_secKpPaddhati:       "KP पद्धति",
+  ku_snapAscendant:       "लग्न (आरोही)",
+  ku_snapMoonSign:        "चंद्र राशि",
+  ku_snapNakshatra:       "नक्षत्र",
+  ku_snapNakshatraLord:   "नक्षत्र स्वामी",
+  ku_snapDashaBalance:    "दशा शेष",
+  ku_snapLiveMoonTransit: "चंद्र गोचर — लाइव",
+  ku_padaLabel:           "पाद",
+  ku_jaiminiDegPre:       "राशि के अंदर अंश:",
+  ku_jaiminiDegSuf:       "चार्ट में सर्वाधिक",
+  ku_kpDesc:              "कृष्णमूर्ति पद्धति विमशोत्तरी दशा के आनुपातिक उप-विभाजनों का उपयोग करके घटनाओं की सटीक समय-गणना करती है।",
+  ku_kpFooter:            "किसी भी घटना के लिए देखें: स्टार-स्वामी और सब-स्वामी का संबंध। यदि 3 स्वामी सहमत हों → घटना निश्चित।",
+  ku_kpStar:              "तारा",
+  ku_kpSub:               "उप",
+  ku_kpSubSub:            "उप-उप",
+  ku_kpAsc:               "लग्न",
+  ku_savHeading:          "सर्वाष्टकवर्ग",
 };
+
+
+// ── Auto-generated translations (21 langs) ──────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ── Auto-generated translations (21 langs) ──────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ── Auto-generated translations (21 langs) ──────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ── Auto-generated translations (21 langs) ──────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ── Auto-generated translations (21 langs) ──────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // ── Auto-generated translations (21 langs) ──────────────────────
@@ -4236,6 +4587,29 @@ const BN: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "প্রথমে একটি ঘরের ছবি নিন বা গ্যালারি থেকে বেছে নিন।",
   vu_alScanFailed: "স্ক্যান ব্যর্থ হয়েছে",
   vu_alScanFailedMsg: "ছবি বিশ্লেষণ করা যায়নি। অনুগ্রহ করে ভাল আলোতে পুনরায় চেষ্টা করুন।",
+  vu_alDailyLimitMsg: "আজকের FREE সীমা শেষ হয়েছে — কাল আবার চেষ্টা করুন বা PRO নিন।",
+  vu_alStepHint: "ধাপে ধাপে এগিয়ে যান।",
+  ku_ashtakWhat: "Ashtakavarga কী?",
+  ku_ashtakWhatBody: "প্রতিটি গ্রহ ৮টি ঘর থেকে ১২টি রাশিকে শুভ/অশুভ পয়েন্ট প্রদান করে। SAV = মোট ৭টি গ্রহের যোগফল। বেশি পয়েন্ট = রাশির শক্তি বেশি।",
+  ku_approxTransit: "প্রায় transit",
+  ku_bavStrong: "শক্তিশালী",
+  ku_bavGood: "ভালো",
+  ku_bavAverage: "মাঝারি",
+  ku_bavWeak: "দুর্বল",
+  ku_transitDisclaimer: "এই ট্রানজিটগুলি গড় কক্ষীয় গতিবেগ থেকে গণনা করা হয়েছে — কেবল বিস্তৃত নির্দেশনার জন্য উপযুক্ত।",
+  ku_btnTransit: "ট্রানজিট",
+  ku_padaLabel: "পদ",
+  ku_jaiminiDegPre: "রাশির মধ্যে ডিগ্রী:",
+  ku_jaiminiDegSuf: "চার্টের সর্বোচ্চ",
+  ku_kpDesc: "Krishnamurti Paddhati Vimshottari dasha-র অনুপাতভিত্তিক উপ-বিভাজন ব্যবহার করে ঘটনার সময়নির্ণয়ে সূক্ষ্মতা আনার জন্য।",
+  ku_kpFooter: "যেকোনো ঘটনার জন্য পরীক্ষা করুন: Star-lord এবং Sub-lord-র সম্পর্ক। যদি 3 জন লর্ড একমত → ঘটনা নিশ্চিত।",
+  ku_yearsSuffix: "বছর",
+  ku_whatNavatara: "Navatara কী?",
+  ku_navataraDesc: "চন্দ্রের nakshatra থেকে শুরু করে, 27টি nakshatra 9-তারকা চক্রে গ্রুপ করা হয় যাকে Tara বলা হয়।",
+  ku_whatJaimini: "Jaimini Chara Karakas কী?",
+  ku_jaiminiDesc: "Jaimini Jyotish-এ, 7টি গ্রহকে তাদের rashi-degree অনুযায়ী karaka ভূমিকা দেওয়া হয়। সর্বোচ্চ degree থাকার গ্রহটি Atmakaraka হয়।",
+  ku_jaiminiLagnaDesc: "Atmakaraka-র rashi একটি বিশেষ Jaimini Lagna গঠন করে। AK-র navamsha অবস্থান আত্মার আধ্যাত্মিক পথ দেখায়। পূর্ণ বিশ্লেষণের জন্য একজন জ্যোতিষীর পরামর্শ নিন।",
+  ku_whatKP: "KP Paddhati কী?",
   vu_alNetError: "নেটওয়ার্ক ত্রুটি",
   vu_alNetErrorMsg: "অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন।",
   vu_alCompassCalib: "কম্পাস ক্যালিব্রেট হচ্ছে",
@@ -4274,8 +4648,6 @@ const BN: Partial<MoreT> = {
   pe2_cancel: "বাতিল",
   pe2_delete: "মুছুন",
   pe2_deleteSuffix: "চার্ট ডেটা স্থায়িভাবে মুছে ফেলা হবে।",
-  vu_alDailyLimitMsg: "আজকের FREE সীমা শেষ হয়েছে — কাল আবার চেষ্টা করুন বা PRO নিন।",
-  vu_alStepHint: "ধাপে ধাপে এগিয়ে যান।",
 };
 
 const MR: Partial<MoreT> = {
@@ -5055,6 +5427,30 @@ const MR: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "कृपया प्रथम खोलीचा फोटो घ्या किंवा गॅलरीतून निवडा.",
   vu_alScanFailed: "स्कॅन अयशस्वी",
   vu_alScanFailedMsg: "फोटोचे विश्लेषण करू शकत नाही. चांगल्या प्रकाशात पुन्हा प्रयत्न करा.",
+  vu_alDailyLimitMsg: "आजचा विनामूल्य मर्यादा संपली आहे — कृपया उद्या पुन्हा प्रयत्न करा किंवा PRO मिळवा.",
+  vu_alStepHint: "पाऊल-पाऊल पुढे जा.",
+  ku_ashtakWhat: "Ashtakavarga काय आहे?",
+  ku_ashtakWhatBody: "प्रत्येक ग्रह 8 भावांमधून सर्व 12 राशींना लाभदायक/अनिष्ट गुण देतो. SAV = सर्व 7 ग्रहांचे एकूण गुण. जास्त गुण = शक्तिशाली राशि.",
+  ku_approxTransit: "अंदाजे ट्रान्झिट",
+  ku_bavStrong: "बलवान",
+  ku_bavGood: "चांगले",
+  ku_bavAverage: "मध्यम",
+  ku_bavWeak: "कमकुवत",
+  ku_transitDisclaimer: "हे ट्रांझिट्स सरासरी कक्षीय गतीवरून गणना केलेले आहेत — व्यापक मार्गदर्शनासाठी उपयुक्त आहे.",
+  ku_jaiminiDegPre: "राशीतील अंशः",
+  ku_jaiminiDegSuf: "चार्टमधील सर्वाधिक",
+  ku_kpDesc: "Krishnamurti Paddhati हे घटनांचे अचूक कालनिर्धारण करण्यासाठी Vimshottari dasha चे आनुपातिक उप-विभाजन वापरते.",
+  ku_kpFooter: "कोणत्याही घटनेसाठी तपासा: Star-lord आणि Sub-lord यांचे नाते. जर 3 lार्ड एकमत झाले → घटना निश्चित.",
+  pr_myData: "माझे डेटा",
+  pr_saved: "जतन केले",
+  vu_moveDevice: "डिव्हाइस हलवा सक्रिय करण्यासाठी",
+  ku_yearsSuffix: "वर्षे",
+  ku_whatNavatara: "Navatara म्हणजे काय?",
+  ku_navataraDesc: "Chandra च्या nakshatra पासून सुरुवात करून, 27 nakshatra 9-तारांकाच्या चक्रात गटबद्ध केल्या जातात ज्याला Tara म्हणतात.",
+  ku_whatJaimini: "Jaimini Chara Karakas म्हणजे काय?",
+  ku_jaiminiDesc: "Jaimini Jyotish मध्ये, 7 ग्रहांना त्यांच्या rashi-डिग्रीनुसार karaka भूमिका मिळतात. सर्वात जास्त डिग्री असलेला ग्रह Atmakaraka बनतो.",
+  ku_jaiminiLagnaDesc: "Atmakaraka चा rashi एक विशेष Jaimini Lagna तयार करतो. AK चा navamsha स्थिती आत्म्याचा आध्यात्मिक मार्ग दर्शवते. सविस्तर विश्लेषणासाठी, एखाद्या ज्योतिषाशी सल्ला घ्या.",
+  ku_whatKP: "KP Paddhati म्हणजे काय?",
   vu_alNetError: "नेटवर्क त्रुटी",
   vu_alNetErrorMsg: "कृपया तुमचे इंटरनेट कनेक्शन तपासा.",
   vu_alCompassCalib: "कम्पास कॅलिब्रेट करीत आहे",
@@ -5091,8 +5487,6 @@ const MR: Partial<MoreT> = {
   pe2_cancel: "रद्द करा",
   pe2_delete: "हटवा",
   pe2_deleteSuffix: "chart data कायमचे हटवला जाईल.",
-  vu_alDailyLimitMsg: "आजचा विनामूल्य मर्यादा संपली आहे — कृपया उद्या पुन्हा प्रयत्न करा किंवा PRO मिळवा.",
-  vu_alStepHint: "पाऊल-पाऊल पुढे जा.",
 };
 
 const TA: Partial<MoreT> = {
@@ -5866,6 +6260,34 @@ const TA: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "முதலில் ஒரு அறை புகைப்படம் எடுக்கவும் அல்லது கேலரியிலிருந்து தேர்வு செய்யவும்.",
   vu_alScanFailed: "ஸ்கேன் தோல்வி",
   vu_alScanFailedMsg: "புகைப்படத்தைப் பகுப்பாய்வு செய்ய முடியவில்லை. நல்ல விளக்கில் மீண்டும் முயற்சிக்கவும்.",
+  vu_alDailyLimitMsg: "இன்றைய இலவச வரம்பு முடிந்துவிட்டது — நாளை மீண்டும் முயற்சிக்கவும் அல்லது PRO பெறவும்.",
+  vu_alStepHint: "படியாக முன்னேறு.",
+  ku_ashtakWhat: "Ashtakavarga என்றால் என்ன?",
+  ku_ashtakWhatBody: "ஒவ்வொரு கிரகமும் 8 வீடுகளிலிருந்து 12 Rashi-kளுக்கு பக்கவாத/தீவிரத்திலான புள்ளிகள் அளிக்குது. SAV = அனைத்து 7 கிரகங்களின் மொத்தம். அதிக புள்ளிகள் = வலிமையான Rashi.",
+  ku_approxTransit: "ம груப்பான Transit",
+  ku_bavStrong: "வடிவில் உறியது",
+  ku_bavGood: "சரிகானது",
+  ku_bavAverage: "சராசரி",
+  ku_bavWeak: "பலியற்றது",
+  ku_transitDisclaimer: "இந்த transit-கள் mean orbital motion-இலிருந்து கணிக்கப்படுகின்றன — பொதுவான வழிகாட்டலுக்கே பயனாகும்.",
+  ku_btnTransit: "பரிகிரகம்",
+  ku_padaLabel: "படை",
+  ku_jaiminiDegPre: "ராசிப் பிரிவின் உள்ளடக்கம்:",
+  ku_jaiminiDegSuf: "ஆண்ட_chart இல் மிகுதி",
+  ku_kpDesc: "Krishnamurti Paddhati என்பது நிகழ்வுகளுக்கு நேரத் தேர்வில் துல்லியத்திற்காக Vimshottari dasha இன் விகிதப் பிரிவு தன்மைகளை பயன்படுத்துகிறது.",
+  ku_kpFooter: "எந்த நிகழ்விற்கும், சரிபார்க்க: Star-lord மற்றும் Sub-lord உடன் தொடர்பு. 3 lords ஒத்து வந்தால் → நிகழ்வு உறுதி செய்யப்படும்.",
+  ku_activeNow: "● இயல்பில் உள்ளது",
+  ku_active: "இயங்குகிறது",
+  ku_yearsSuffix: "வயது",
+  ku_whatNavatara: "Navatara என்றால் என்ன?",
+  ku_navataraDesc: "சந்திரனுடைய Nakshatra-இல் இருந்து தொடங்கி, 27 Nakshatra-கள் 9-நட்சத்திர சுழற்சிகளாக குழுவாக்கப்படுகின்றன, அவை Tara என்று அழைக்கப்படுகின்றன.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (அடித்தளம்)",
+  ku_whatJaimini: "Jaimini Chara Karakas என்றால் என்ன?",
+  ku_jaiminiDesc: "Jaimini Jyotish இல், 7 கிரகங்களுக்கு rashi-அளவுகளின் அடிப்படையில் karaka பங்களிகள் அளிக்கப்படுகின்றன. மிக உயர்ந்த அளவு உள்ள கிரகம் Atmakaraka ஆகிறதே.",
+  ku_jaiminiLagnaDesc: "Atmakaraka-வின் rashi ஒரு சிறப்பான Jaimini Lagna உருவாக்குகிறது. AK-இன் navamsha நிலை ஆன்மாவின் ஆன்மீக பாதையை காட்டுகிறது. முழுமையான பகுப்பாய்வுக்கு, ஒரு ஜோதிடரை அணுகவும்.",
+  ku_whatKP: "KP Paddhati என்றால் என்ன?",
+  ku_planetPositionSub: "Live planetary degrees மற்றும் rashi",
+  ku_dailyAlertsLinkSub: "4-நாள் planetary வழிகாட்டுதல்",
   vu_alNetError: "நெட் வேறு பிழை",
   vu_alNetErrorMsg: "தயவுசெய்து உங்கள் இணைய இணைப்பை சரிபார்க்கவும்.",
   vu_alCompassCalib: "கோடகோலம் கலிப்ரேட் ஆகிறது",
@@ -5905,8 +6327,6 @@ const TA: Partial<MoreT> = {
   pe2_cancel: "ரத்து செய்",
   pe2_delete: "உெறி Delete",
   pe2_deleteSuffix: "chart தரவு நிரந்தரமாக நீக்கப்படும்.",
-  vu_alDailyLimitMsg: "இன்றைய இலவச வரம்பு முடிந்துவிட்டது — நாளை மீண்டும் முயற்சிக்கவும் அல்லது PRO பெறவும்.",
-  vu_alStepHint: "படியாக முன்னேறு.",
 };
 
 const TE: Partial<MoreT> = {
@@ -6679,6 +7099,36 @@ const TE: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "ముందుగా గది ఫొటో తీసుకోకపోతే గ్యాలరీలోంచి ఎంచుకోండి.",
   vu_alScanFailed: "స్కాన్ విఫలమైంది",
   vu_alScanFailedMsg: "ఫొటో విశ్లేషించలేకపోయాం. మంచి వెలుతురు వద్ద మళ్లీ ప్రయత్నించండి.",
+  vu_alDailyLimitMsg: "నేడు ఫ్రీ పరిమితి పూర్తయ్యింది — రేపు మళ్లీ ప్రయత్నించండి లేదా PRO పొందండి.",
+  vu_alStepHint: "దశల వారీగా ముందుకు కదిలండి.",
+  ku_ashtakWhat: "అష్టకవర్గం ఏమిటి?",
+  ku_ashtakWhatBody: "ప్రతి గ్రహం 8 ఇళ్ల నుండి 12 రాశులకు లాభకారి/అనుకూలత గొలుసులను ఇస్తుంది. SAV = మొత్తం 7 గ్రహాల పాయింట్ల మొత్తము. ఎక్కువ పాయింట్లు = రాశి బలవంతం.",
+  ku_approxTransit: "సుమారువారీ ట్రాన్సిట్",
+  ku_houseLabel: "ఇల్లు",
+  ku_bavStrong: "శక్తివంతం",
+  ku_bavGood: "మంచిది",
+  ku_bavAverage: "సగటు",
+  ku_bavWeak: "బలహీనంగా",
+  ku_transitDisclaimer: "ఈ ట్రాన్సిట్‌లు mean orbital motion నుండి లెక్కించబడ్డాయి — సాధారణ మార్గదర్శకత్వానికి మాత్రమే ఉపయోగకరం.",
+  ku_btnTransit: "ట్రాన్సిట్",
+  ku_padaLabel: "పద",
+  ku_jaiminiDegPre: "రాశిలో డిగ్రీ:",
+  ku_jaiminiDegSuf: "చార్ట్లో అత్యధికం",
+  ku_kpDesc: "Krishnamurti Paddhati Vimshottari dasha యొక్క అనుపాత ఉపవిభాగాలను ఉపయోగించి సంఘటనల సమయనిశ్చయానికి ఖచ్చితత్వం ఇస్తుంది.",
+  ku_kpFooter: "ఏ సంఘటనకైనా తనిఖీ చేయండి: Star-lord మరియు Sub-lord సంబంధం. 3 lords అంగీకరిస్తే → సంఘటన నిర్ధారించబడుతుంది.",
+  ku_activeNow: "● ప్రస్తుతం యాక్టివ్",
+  ku_active: "యాక్టివ్",
+  ku_yearsSuffix: "సంవత్సరాలు",
+  ku_whatNavatara: "Navatara ఏమిటి?",
+  ku_navataraDesc: "చంద్రుని nakshatra నుంచి ప్రారంభించి, 27 nakshatraలను 9-నక్షత్రపు చక్రాలుగా (Tara) సమూహీకరిస్తారు.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (బేస్)",
+  ku_whatJaimini: "Jaimini Chara Karakas ఏమిటి?",
+  ku_jaiminiDesc: "Jaimini Jyotishలో, 7 గ్రహాలకు వారి rashi-అంగుళాల మేరకు karaka పాత్రలుంటాయి. అత్యధిక అంగుళం కలిగిన గ్రహం Atmakaraka అవుతుంది.",
+  ku_jaiminiLagnaDesc: "Atmakaraka యొక్క rashi ప్రత్యేక Jaimini Lagnaను ఏర్పరుస్తుంది. AK యొక్క navamsha స్థానం ఆత్మ యొక్క ఆధ్యాత్మిక మార్గాన్ని చూపుతుంది. పూర్తి విశ్లేషణ కోసం，占星్తో 상담ించండి.",
+  ku_whatKP: "KP Paddhati ఏమిటి?",
+  ku_planetPosition: "గ్రహ స్థానం",
+  ku_planetPositionSub: "లైవ్ గ్రహ అంగుళాలు మరియు rashi",
+  ku_dailyAlertsLinkSub: "4-రోజుల గ్రహ మార్గదర్శనం",
   vu_alNetError: "నెట్వర్క్ లోపం",
   vu_alNetErrorMsg: "దయచేసి మీ ఇంటర్నెట్ కనెక్షన్‌ను తనిఖీ చేయండి.",
   vu_alCompassCalib: "కాంపాస్ క్యాలిబ్రేట్ అవుతోంది",
@@ -6718,8 +7168,6 @@ const TE: Partial<MoreT> = {
   pe2_cancel: "రద్దు చేయి",
   pe2_delete: "తొలగించు",
   pe2_deleteSuffix: "చార్టు డేటా శాశ్వతంగా తొలగించబడుతుంది.",
-  vu_alDailyLimitMsg: "నేడు ఫ్రీ పరిమితి పూర్తయ్యింది — రేపు మళ్లీ ప్రయత్నించండి లేదా PRO పొందండి.",
-  vu_alStepHint: "దశల వారీగా ముందుకు కదిలండి.",
 };
 
 const GU: Partial<MoreT> = {
@@ -7499,6 +7947,28 @@ const GU: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "કૃપા કરીને પહેલા રૂમનો ફોટો લો અથવા ગેલેરીમાંથી પસંદ કરો.",
   vu_alScanFailed: "સ્કાન નિષ્ફળ થયું",
   vu_alScanFailedMsg: "ફોટોની વિશ્લેષણ કરી શકાયું નથી. કૃપા કરીને સારી લાઇટમાં ફરી પ્રયાસ કરો.",
+  vu_alDailyLimitMsg: "આજનો મફત મર્યાદા પૂરું થઈ ગઈ છે — ફરી અજમાવો કાલે અથવા Pro મેળવાવો.",
+  vu_alStepHint: "પગલું પગલું આગળ વધો.",
+  ku_ashtakWhat: "Ashtakavarga શું છે?",
+  ku_ashtakWhatBody: "હર એક ગ્રહ 8 ઘરોમાંથી તમામ 12 રાશિઓને સુભાઈ/અશુભાઈ ગુણ આપે છે. SAV = તમામ 7 ગ્રહોના ગુણોથી બનેલું કુલ. વધુ ગુણ = રાશિ વધુ મજબૂત.",
+  ku_approxTransit: "આંદાજિત ટ્રાંઝિટ",
+  ku_bavStrong: "મજબૂત",
+  ku_bavGood: "સારો",
+  ku_bavAverage: "સરેરાશ",
+  ku_bavWeak: "આલ્પ",
+  ku_transitDisclaimer: "આ ટ્રાંઝિટ્સ સરેરાશ કક્ષિય ગતિ પરથી ગણાય છે — ફક્ત વ્યાપક માર્ગદર્શન માટે ઉપયોગી.",
+  ku_jaiminiDegPre: "નિશાનાં અંદરના ડિગ્રી:",
+  ku_jaiminiDegSuf: "પ્ર چار્ટમાં સૌથી ઊંચું",
+  ku_kpDesc: "Krishnamurti Paddhati વિમસોટ્ટરી દશાના અનુપાતીય ઉપભાજનોનો ઉપયોગ ઇવેન્ટ્સના ચોક્કસ સમય માટે કરે છે.",
+  ku_kpFooter: "કોઈ પણ ઇવેન્ટ માટે તપાસો: Star-lord અને Sub-lord નો સંબંધ. જો 3 lords એમ થાય → ઇવેન્ટ પુષ્ટિ થાય છે.",
+  pr_myData: "મારું ડેટા",
+  ku_yearsSuffix: "વર્ષો",
+  ku_whatNavatara: "Navatara શું છે?",
+  ku_navataraDesc: "ચંદ્રની Nakshatra થી શરૂ કરીને, 27 Nakshatra ને 9-તારા ચક્રો તરીકે ગ્રુપ કરવામાં આવે છે જેને Tara કહેવાય છે.",
+  ku_whatJaimini: "Jaimini Chara Karakas શું છે?",
+  ku_jaiminiDesc: "Jaimini Jyotish માં, 7 ગ્રહો rashi-ડિગ્રીના આધાર પર karaka ભૂમિકાઓ મેળવે છે. સૌથી વધુ ડિગ્રી ધરાવતો ગ્રહ Atmakaraka બને છે.",
+  ku_jaiminiLagnaDesc: "Atmakarakaની rashi ખાસ Jaimini Lagna બનાવે છે. AKની navamsha સ્થિતિ આત્માના આધ્યાત્મિક માર્ગને બતાવે છે. સંપૂર્ણ વિશ્લેષણ માટે, એક જ્યોતિષને પરામર્શ કરો.",
+  ku_whatKP: "KP Paddhati શું છે?",
   vu_alNetError: "નેટવર્ક ત્રુટિ",
   vu_alNetErrorMsg: "કૃપા કરીને તમારી ઇન્ટરનેટ કનેક્શન ચકાસો.",
   vu_alCompassCalib: "કંપાસ કૅલીબ્રેટ થઈ રહ્યું છે",
@@ -7526,8 +7996,6 @@ const GU: Partial<MoreT> = {
   sub_offSuffix: "માથાં ઉપરના તમામ AstroVastu ખરીદી પર થાક છે.",
   pe2_cancel: "રદ કરો",
   pe2_delete: "મિટાવો",
-  vu_alDailyLimitMsg: "આજનો મફત મર્યાદા પૂરું થઈ ગઈ છે — ફરી અજમાવો કાલે અથવા Pro મેળવાવો.",
-  vu_alStepHint: "પગલું પગલું આગળ વધો.",
 };
 
 const KN: Partial<MoreT> = {
@@ -8312,6 +8780,54 @@ const KN: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "ಕೃಪಯಾ ಮೊದಲಿಗೆ ಕೊಠಡಿ ಫೋಟೊ ತೆಗೆದುಕೊಳ್ಳಿ ಅಥವಾ ಗ್ಯಾಲರಿ ತಪ್ಪಿಸಿಕೊಂಡು алы.",
   vu_alScanFailed: "ಸ್ಕ್ಯಾನ್ ವಿಫಲವಾಗಿದೆ",
   vu_alScanFailedMsg: "ಫೋಟೊ ವಿಶ್ಲೇಷಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಉತ್ತಮ ಬೆಳಕಿನಲ್ಲಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  vu_alDailyLimitMsg: "ಇToday's free limit is over — try again tomorrow or get Pro.",
+  ku_ashtakWhat: "Ashtakavarga ಎಂದರೇನು?",
+  ku_ashtakWhatBody: "ಪ್ರತಿ ಗ್ರಹವು 8 ಮನೆಗಳಿಂದ 12 ರಾಶಿಗಳಿಗೆ ಲಾಭಕಾರಿ/ಹಾನಿಕರ ಅಂಕಗಳನ್ನು ನೀಡುತ್ತದೆ. SAV = ಎಲ್ಲಾ 7 ಗ್ರಹಗಳ ಒಟ್ಟು. ಹೆಚ್ಚಿನ ಅಂಕಗಳು = ಬಲವಾದ ರಾಶಿ.",
+  ku_approxTransit: "ಸಂದರ್ಭಿಕTransit",
+  ku_houseLabel: "ಮನೆ",
+  ku_bavStrong: "ಬಲವಂತ",
+  ku_bavGood: "ಚೆನ್ನಾಗಿದೆ",
+  ku_bavAverage: "ಸರಾಸರಿ",
+  ku_bavWeak: "ಬಲಹೀನ",
+  ku_transitDisclaimer: "ಈ ಪಥಾಚಲನಗಳನ್ನು ಸರಾಸರಿ ಗಂಗೋಪಚಾರ ಚಲನೆಯಿಂದ ಗಣನೆ ಮಾಡಲಾಗಿದೆ — ಸಾಮಾನ್ಯ ಮಾರ್ಗದರ್ಶನಕ್ಕಾಗಿ ಮಾತ್ರ ಉಪಯುಕ್ತ.",
+  ku_btnKundli: "ಕುಂಡ್ಲಿ",
+  ku_btnAshtak: "ಅಷ್ಟಾಕವರ್ಗ",
+  ku_btnNavatara: "ನವತಾರ",
+  ku_btnJaimini: "ಜೈಮಿನಿ",
+  ku_btnTransit: "ಟ್ರಾನ್ಸಿಟ್",
+  ku_snapAscendant: "ಅಸೆನ್ಡಂಟ್ (LAGNA)",
+  ku_snapMoonSign: "ಚಂದ್ರ ಚಿಹ್ನೆ (RASHI)",
+  ku_snapNakshatra: "ನಕ್ಷತ್ರ (NAKSHATRA)",
+  ku_snapNakshatraLord: "ನಕ್ಷತ್ರ ನಾಯಕ್ (NAKSHATRA LORD)",
+  ku_snapDashaBalance: "ದಶಾ ಬ್ಯಾಲೆನ್ಸ್",
+  ku_padaLabel: "ಪದ",
+  ku_jaiminiDegPre: "ರಾಶಿಯೊಳಗಿನ ಡಿಗ್ರೀ:",
+  ku_jaiminiDegSuf: "ಚಾರ್ಟ್‌ನಲ್ಲಿ ಅತ್ಯಧಿಕ",
+  ku_kpDesc: "Krishnamurti Paddhati ಇವು Vimshottari dasha ಯ ಅನುಪಾತದ ಉಪ ವಿಭಾಗಗಳನ್ನು ಬಳಸಿ ಘಟನೆಗಳ ನಿರ್ಧಾರಾತ್ಮಕ ಕಾಲನಿರ್ದೇಶನಕ್ಕೆ 精確ತೆ ಒದಗಿಸುತ್ತದೆ.",
+  ku_kpFooter: "ಯಾವುದೇ ಘಟನೆಗಾಗಿ ಪರಿಶೀಲಿಸಿ: Star-lord ಮತ್ತು Sub-lord ನಡುವಿನ ಸಂಬಂಧ. 3 lords ಒಪ್ಪಿಕೊಂಡರೆ → ಘಟನೆ ದೃಢಗೊಳ್ಳುತ್ತದೆ.",
+  pr_active: "ಸಕ್ರಿಯ",
+  pr_myData: "ನನ್ನ ಡೇಟಾ",
+  pr_saved: "ಸೇವ್ ಮಾಡಿದವು",
+  pr_perYear: "ವರ್ಷ",
+  pr_perMonth: "ತಿಂಗಳು",
+  vu_sensorInactive: "ಸೆನ್ಸರ್ ನಿಷ್ಕ್ರಿಯ",
+  vu_moveDevice: "ಚಾಲನೆಯು ಪ್ರೇರೇಪಿಸಲು ಸಾಧನವನ್ನು ಸರಿಸಿ",
+  vu_tabDos: "करಬೆಕ್ ✅",
+  vu_tabDonts: "ಮಾಡಬಾರದು ❌",
+  ku_activeNow: "● ಈಗ ಸಕ್ರಿಯ",
+  ku_active: "ಸಕ್ರಿಯ",
+  ku_yearsSuffix: "ವರ್ಷಗಳು",
+  ku_whatNavatara: "Navatara ಎಂದರೆ ಏನು?",
+  ku_navataraDesc: "ಚಂದ್ರನ ನಕ್ಷತ್ರದಿಂದ ಪ್ರಾರಂಭಿಸಿ, 27 ನಕ್ಷತ್ರಗಳನ್ನು 9-ನಕ್ಷತ್ರ ಚಕ್ರಗಳಾಗಿ ಗುಂಪುಮಾಡುತ್ತಾರೆ — ಅವನ್ನು Tara ಎಂದು ಕರೆಯುತ್ತಾರೆ.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (ಬೆ이스್)",
+  ku_whatJaimini: "Jaimini Chara Karakas ಎಂದರೆ ಏನು?",
+  ku_jaiminiDesc: "Jaimini Jyotish ನಲ್ಲಿ, 7 ಗ್ರಹಗಳಿಗೆ ಅವರ ರಾಶಿ-ಡಿಗ್ರಿಗಳ ಆಧಾರದ ಮೇಲೆ karaka ಪಾತ್ರಗಳನ್ನು ನೀಡಲಾಗುತ್ತದೆ. ಅತಿ ಹೆಚ್ಚಿನ ಡಿಗ್ರಿ ಹೊಂದಿರುವ ಗ್ರಹವೇ Atmakaraka ಆಗುತ್ತದೆ.",
+  ku_jaiminiLagnaDesc: "Atmakaraka ರಾಶಿ ವಿಶೇಷ Jaimini Lagna ರಚಿಸುತ್ತದೆ. AK ಅವರಿ ನವಂಶ ಸ್ಥಾನಾತ್ಮೀಕ ಮಾರ್ಗವನ್ನು ತೋರಿಸುತ್ತದೆ. ಸಂಪೂರ್ಣ ವಿಶ್ಲೇಷಣೆಗೆ, ಜ್ಯೋತಿಷ್ಯನನ್ನು ಸಂಪರ್ಕಿಸಿ.",
+  ku_whatKP: "KP Paddhati ಎಂದರೆ ಏನು?",
+  ku_planetPosition: "ಗ್ರಹ ಸ್ಥಿತಿ",
+  ku_planetPositionSub: "ಲೈವ್ ಗ್ರಹೀಯ ಡಿಗ್ರಿ ಮತ್ತು ರಾಶಿ",
+  ku_dailyAlertsLink: " ದೈನಂದಿನ ಸೂಚನೆಗಳು",
+  ku_dailyAlertsLinkSub: "4-ದಿನಗಳ ಗ್ರಹೀಯ ಮಾರ್ಗದರ್ಶನ",
   vu_alNetError: "ನೇಟ್ವರ್ಕ್ ದೋಷ",
   vu_alNetErrorMsg: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇಂಟರ್ನೆಟ್ ಸಂಪರ್ಕವನ್ನು ಪರಿಶೀಲಿಸಿ.",
   vu_alCompassCalib: "ಕಂಪಾಸ್ ಕ್ಯಾಸಿಬ್ರೇಟಿಂಗ್",
@@ -8350,7 +8866,6 @@ const KN: Partial<MoreT> = {
   pe2_cancel: "ರದ್ದುಗೊಳಿಸು",
   pe2_delete: "ಅಳಿಸಿ",
   pe2_deleteSuffix: "ಚಾರ್ಟ್ ಡೇಟಾ ಶಾಶ್ವತವಾಗಿ ಅಳಿಸಿಬಿಡಲಾಗುತ್ತದೆ.",
-  vu_alDailyLimitMsg: "ಇToday's free limit is over — try again tomorrow or get Pro.",
 };
 
 const ML: Partial<MoreT> = {
@@ -9119,6 +9634,44 @@ const ML: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "ആദ്യം മുറിയുടെ ഫോട്ടോ എടുത്തോ ഗാലറിയിൽ നിന്ന് തിരഞ്ഞെടുക്കോ ചെയ്യുക.",
   vu_alScanFailed: "സ്കാൻ പരാജയപ്പെട്ടു",
   vu_alScanFailedMsg: "ഫോട്ടോ വിശകലനം ചെയ്യാൻ കഴിക്കില്ല. നല്ല പ്രകാശത്തിൽ വീണ്ടും ശ്രമിക്കുക.",
+  vu_alDailyLimitMsg: "ഇന്നത്തെ സൗജന്യ പരിധി പര്യാപ്തമായി — നാളെ വീണ്ടും ശ്രമിക്കുക അല്ലെങ്കിൽ PRO നേടുക.",
+  vu_alStepHint: "വെള്ളമാത്രം ഒന്നാരംഭിച്ച് മുന്നോട്ട് നീങ്ങുക.",
+  ku_ashtakWhat: "Ashtakavarga എന്താണ്?",
+  ku_ashtakWhatBody: "ഓരോ ഗ്രഹവും 8 ഭവങ്ങളിൽ നിന്നുള്ള 12 രാശികളിലേയ്ക്ക് ഗുണകര/ദുഷ്ടബിന്ദുക്കൾ നൽകുന്നു. SAV = ഏഴ് ഗ്രഹങ്ങളുടെ മൊത്തം. കൂടുതൽ ബിന്ദുക്കുകൾ = ശക്തമായ രാശി.",
+  ku_approxTransit: "അനുമാനപ്പെട്ട ട്രാന്‍സിറ്റ്",
+  ku_houseLabel: "ഭവം",
+  ku_bavStrong: "ശക്തം",
+  ku_bavGood: "നല്ലത്",
+  ku_bavAverage: "മധ്യൻ",
+  ku_bavWeak: "ദുർബലം",
+  ku_transitDisclaimer: "ഈ ട്രാൻസിറ്റുകൾ ശരാശരി ഗതി അനുസരിച്ച് കണക്കാക്കപ്പെട്ടതാണ് — പൊതുഡ്‌ദേശങ്ങൾക്ക് മാത്രമേ അത് ഉപയോഗപ്രദമായിരിക്കൂ.",
+  ku_btnKundli: "കുങ്ദ്‌ലി",
+  ku_btnAshtak: "അഷ്ടാകവർഗ",
+  ku_btnNavatara: "നവതാര",
+  ku_btnJaimini: "ജൈമിനി",
+  ku_btnTransit: "ട്രാന്‍സിറ്റ്",
+  ku_secKpPaddhati: "KP PADD്ഹതി",
+  ku_padaLabel: "പദ",
+  ku_jaiminiDegPre: "രാശിയിലെ ഡിഗ്രി:",
+  ku_jaiminiDegSuf: "ചാർട്ടിലെ ഉയർത്തിയത്",
+  ku_kpDesc: "Krishnamurti Paddhati Vimshottari dasha യുടെ അനുപാതഭേദങ്ങളായ ഉപവിഭജ്യങ്ങൾ PRECISION നിർണ്ണയത്തിനായി ഉപയോഗിക്കുന്നു.",
+  ku_kpFooter: "ഏതെങ്കിലും സംഭവത്തിനായി പരിശോധിക്കുക: Star-lord and Sub-lord ന്റെ ബന്ധം. 3 lords ഒക്കെ സമ്മതിക്കുന്നാൽ → സംഭവം സ്ഥിരീകരിക്കപ്പെടുന്നു.",
+  pr_myData: "എന്റെ ഡാറ്റ",
+  pr_myKundli: "എന്റെ Kundli",
+  pr_saved: "Հേമദരുത്ത്",
+  vu_moveDevice: "ഉറപ്പിക്കാൻ ഉപകരണം നീക്കുക",
+  ku_activeNow: "● നിലവില്‍ സജീവം",
+  ku_active: "സജീവം",
+  ku_yearsSuffix: "വയസ്സുകൾ",
+  ku_whatNavatara: "Navatara എന്നത് 무엇?",
+  ku_navataraDesc: "ചന്ദ്രന്റെ Nakshatra നു നിന്ന് തുടങ്ങിയിട്ട്, 27 Nakshatraകൾ 9-താര ചക്രങ്ങളായ Tara ആയി ഗണന ചെയ്യപ്പെടുന്നു.",
+  ku_whatJaimini: "Jaimini Chara Karakas എന്താണ്?",
+  ku_jaiminiDesc: "Jaimini Jyotish ൽ, 7 ഗ്രഹങ്ങൾ അവരുടെ rashi-ഡിഗ്രിമുന്തലായി karaka സ്ഥാനങ്ങൾ കൈക്കൊള്ളുന്നു. ഏറ്റവും ഉയർന്ന ഡിഗ്രി ഉള്ള ഗ്രഹം Atmakaraka ആകും.",
+  ku_jaiminiLagnaDesc: "Atmakaraka യുടെ rashi ഒരു പ്രത്യേക Jaimini Lagna രൂപീകരിക്കുന്നു. AK ന്റെ navamsha സ്ഥാനം ആത്മാവിന്റെ ആത്മിക മാർഗ്ഗം കാണിക്കുന്നു. സമ്ബൂർണ്ണ ವಿಶകലനത്തിന് ഒരു ജ്യോതിഷനെ സമീപിക്കുക.",
+  ku_whatKP: "KP Paddhati എന്താണ്?",
+  ku_planetPosition: "ഗ്രഹ സ്ഥാനം",
+  ku_planetPositionSub: "ലൈവ് ഗ്രഹ ഡിഗ്രികളും rashi",
+  ku_dailyAlertsLinkSub: "4-ദിവസ ഗ്രഹ മാർഗ്ഗനിര്‍ദ്ദേശം",
   vu_alNetError: "നെറ്റ്‌വർക്കിന്റെ പിശക്",
   vu_alNetErrorMsg: "ദയവായി നിങ്ങളുടെ ഇന്റർനെറ്റ് പരിച്ചൊക്കി നോക്കുക.",
   vu_alCompassCalib: "കമ്പസ് കലിബ്രേറ്റിംഗ്",
@@ -9156,8 +9709,6 @@ const ML: Partial<MoreT> = {
   pe2_cancel: "റദ്ദാക്കുക",
   pe2_delete: "നശിപ്പിക്കുക",
   pe2_deleteSuffix: "chart ഡാറ്റ സ്ഥിരമായി മായ്ച്ചുകളയപ്പെടും.",
-  vu_alDailyLimitMsg: "ഇന്നത്തെ സൗജന്യ പരിധി പര്യാപ്തമായി — നാളെ വീണ്ടും ശ്രമിക്കുക അല്ലെങ്കിൽ PRO നേടുക.",
-  vu_alStepHint: "വെള്ളമാത്രം ഒന്നാരംഭിച്ച് മുന്നോട്ട് നീങ്ങുക.",
 };
 
 const PA: Partial<MoreT> = {
@@ -9937,6 +10488,42 @@ const PA: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਕਿਸੇ ਕਮਰੇ ਦੀ ਫੋਟੋ ਖਿੱਚੋ ਜਾਂ ਗੈਲਰੀ ਤੋਂ ਚੁਣੋ।",
   vu_alScanFailed: "ਸਕੈਨ ਅਸਫਲ",
   vu_alScanFailedMsg: "ਫੋਟੋ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਚੰਗੀ ਰੌਸ਼ਨੀ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  vu_alDailyLimitMsg: "ਅੱਜ ਦੀ ਮੁਫ਼ਤ ਸੀਮਾ ਖਤਮ ਹੋ ਗਈ ਹੈ — ਕੱਲ੍ਹ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਜਾਂ PRO ਪ੍ਰਾਪਤ ਕਰੋ।",
+  vu_alStepHint: "ਕਦਮ-ਦਰ-ਕਦਮ ਅੱਗੇ ਵਧੋ।",
+  ku_ashtakWhat: "Ashtakavarga ਕੀ ਹੈ?",
+  ku_ashtakWhatBody: "ਹਰ ਗ੍ਰਹਿ 8 ਘਰਾਂ ਤੋਂ 12 ਰਾਸ਼ੀਆਂ ਨੂੰ ਲਾਭ/ਹਾਨਿਕਾਰਕ ਅੰਕ ਦਿੰਦਾ ਹੈ। SAV = ਸਾਰੇ 7 ਗ੍ਰਹਿਆਂ ਦੇ ਕੁੱਲ ਅੰਕ। ਜ਼ਿਆਦਾ ਅੰਕ = ਮਜ਼ਬੂਤ ਰਾਸ਼ੀ।",
+  ku_approxTransit: "ਲਗਭਗ ਗ੍ਰਹਿ ਸਥਿਤੀ",
+  ku_houseLabel: "ਘਰ",
+  ku_bavStrong: "ਮਜ਼ਬੂਤ",
+  ku_bavGood: "ਵਧੀਆ",
+  ku_bavAverage: "ਔਸਤ",
+  ku_bavWeak: "ਕਮਜ਼ੋਰ",
+  ku_transitDisclaimer: "ਇਹ ਟ੍ਰਾਂਜ਼ਿਟਸ ਮੀਨ ਕਤੀਬੱਦੀ ਗਤੀ ਤੋਂ ਹਿਸਾਬ ਕੀਤੇ ਗਏ ਹਨ — ਸਿਰਫ਼ ਵਿਸ਼ਤ੍ਰਿਤ ਮਾਰਗਦਰਸ਼ਨ ਲਈ ਉਪਯੋਗੀ।",
+  ku_btnTransit: "ਟ੍ਰਾਂਜ਼ਿਟ",
+  ku_secDashaTimeline: "DASHA ਟਾਈਮਲਾਈਨ",
+  ku_secGrahaTransit: "GRAHA ਟ੍ਰਾਂਜ਼ਿਟ",
+  ku_snapDashaBalance: "DASHA ਬੈਲੈਂਸ",
+  ku_snapLiveMoonTransit: "LIVE MOON ਟ੍ਰਾਂਜ਼ਿਟ",
+  ku_padaLabel: "ਪਦਾ",
+  ku_jaiminiDegPre: "ਰਾਸਿ ਵਿੱਚ ਡਿਗਰੀ:",
+  ku_jaiminiDegSuf: "ਚਾਰਟ ਵਿੱਚ ਸਭ ਤੋਂ ਵੱਧ",
+  ku_kpDesc: "Krishnamurti Paddhati ਘਟਨਾਂ ਦੇ ਸਮੇਂ ਲਈ Vimshottari dasha ਦੀਆਂ ਅਨੁਪਾਤੀ ਉਪ-ਵੰਡਾਂ ਦੀ ਵਰਤੋਂ ਕਰਦੀ ਹੈ।",
+  ku_kpFooter: "ਕਿਸੇ ਵੀ ਘਟਨਾ ਲਈ ਜਾਂਚ ਕਰੋ: Star-lord ਅਤੇ Sub-lord ਦਾ ਸਬੰਧ। ਜੇ 3 lords ਸਹਿਮਤ ਹੋਣ → ਘਟਨਾ ਪੁਸ਼ਟੀਤ ਹੈ।",
+  ku_mahaTimeline: "MAHADASHA ਟਾਈਮਲਾਈਨ",
+  ku_activeNow: "● ਹੁਣ ਸਰਗਰਮ",
+  ku_active: "ਸਰਗਰਮ",
+  ku_yearsSuffix: "ਸਾਲ",
+  ku_whatNavatara: "Navatara ਕੀ ਹੈ?",
+  ku_navataraDesc: "ਚੰਦਰਮਾ ਦੀ ਨਕਸ਼ਤ੍ਰ ਤੋਂ ਸ਼ੁਰੂ ਕਰਕੇ, 27 ਨਕਸ਼ਤ੍ਰਾਂ ਨੂੰ 9-ਤਾਰਾਂ ਦੇ ਚੱਕਰਾਂ ਵਿੱਖੇ ਸਮੂਹਬੱਧ ਕੀਤਾ ਗਿਆ ਹੈ ਜਿਸਨੂੰ Tara ਕਹਿੰਦੇ ਹਨ।",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (ਬੇਸ)",
+  ku_whatJaimini: "Jaimini Chara Karakas ਕੀ ਹਨ?",
+  ku_jaiminiDesc: "Jaimini Jyotish ਵਿੱਚ, 7 ਗ੍ਰਹਿ ਆਪਣੀਆਂ ਰਾਸ਼ੀ-ਡਿਗਰੀਆਂ ਦੇ ਆਧਾਰ 'ਤੇ karaka ਭੂਮਿਕਾਵਾਂ ਪ੍ਰਾਪਤ ਕਰਦੇ ਹਨ। ਸਭ ਤੋਂ ਵੱਧ ਡਿਗਰੀ ਵਾਲਾ ਗ੍ਰਹਿ Atmakaraka ਬਣਦਾ ਹੈ।",
+  ku_jaiminiLagnaDesc: "Atmakaraka ਦੀ ਰਾਸ਼ੀ ਇੱਕ ਵਿਸ਼ੇਸ਼ Jaimini Lagna ਬਣਾਉਂਦੀ ਹੈ। AK ਦੀ ਨਵੰશਾ ਸਥਿਤੀ ਆਤਮਾ ਦਾ ਆਤਮਿਕ ਰਸਤਾ ਦਿਖਾਂਦੀ ਹੈ। ਪੂਰੇ ਵਿਸ਼ਲੇਸ਼ਣ ਲਈ ਕਿਸੇ ਜੋਤਿਸ਼ੀ ਨਾਲ ਸਲਾਹ ਕਰੋ।",
+  ku_whatKP: "KP Paddhati ਕੀ ਹੈ?",
+  ku_planetPosition: "ਗ੍ਰਹਿ ਦੀ ਸਥਿਤੀ",
+  ku_planetPositionSub: "ਲਾਈਵ ਗ੍ਰਹਿਕ ਡਿਗਰੀਆਂ ਅਤੇ ਰਾਸ਼ੀ",
+  ku_dailyAlertsLink: "ਦੈਨਿਕ ਸੂਚਨਾਵਾਂ",
+  ku_dailyAlertsLinkSub: "4-ਦਿਨਾਂ ਦਾ ਗ੍ਰਹਿ ਰਾਹਦਰੀ",
   vu_alNetError: "ਨੈੱਟਵਰਕ ਗਲਤੀ",
   vu_alNetErrorMsg: "ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀ ਇੰਟਰਨੈੱਟ ਕਨੈਕਸ਼ਨ ਚੈੱਕ ਕਰੋ।",
   vu_alCompassCalib: "ਕੰਪਾਸ ਕੈਲੀਬਰੇਟ ਹੋ ਰਿਹਾ ਹੈ",
@@ -9976,8 +10563,6 @@ const PA: Partial<MoreT> = {
   pe2_cancel: "ਰੱਦ ਕਰੋ",
   pe2_delete: "ਹਟਾਓ",
   pe2_deleteSuffix: "ਚਾਰਟ ਡੇਟਾ ਸਥਾਹੀ ਤੌਰ 'ਤੇ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।",
-  vu_alDailyLimitMsg: "ਅੱਜ ਦੀ ਮੁਫ਼ਤ ਸੀਮਾ ਖਤਮ ਹੋ ਗਈ ਹੈ — ਕੱਲ੍ਹ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ ਜਾਂ PRO ਪ੍ਰਾਪਤ ਕਰੋ।",
-  vu_alStepHint: "ਕਦਮ-ਦਰ-ਕਦਮ ਅੱਗੇ ਵਧੋ।",
 };
 
 const OR: Partial<MoreT> = {
@@ -10748,6 +11333,31 @@ const OR: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "ଦୟାକରି ପ୍ରଥମେ ଏକ କୋଠା ଫଟୋ ତୁଳନ୍ତୁ କିମ୍ବା ଗ୍ୟାଲେରୀରୁ ଚୟନ କରନ୍ତୁ।",
   vu_alScanFailed: "ସ୍କ୍ୟାନ ଅସଫଳ ହେଲା",
   vu_alScanFailedMsg: "ଫଟୋ ବିଶ୍ଲେଷଣ କରିପାରିଲା ନାହିଁ। ଦୟାକରି ଭଲ ଆଲୋକରେ ପୁନରାୟ ଚେଷ୍ଟା କରନ୍ତୁ।",
+  vu_alDailyLimitMsg: "ଆଜିର ମୁକ୍ତ ସୀମା ପାର ହେଲା — ଆଗାମୀକାଲି ପୁନଃଚେଷ୍ଟା କରନ୍ତୁ କିମ୍ବା PRO ପାଇଁ ଅପ୍ଗ୍ରେଡ୍ କରନ୍ତୁ.",
+  vu_alStepHint: "ପଦକ୍ରମ ଅନୁସାରେ ଆଗକୁ ବଢ଼ନ୍ତୁ.",
+  ku_ashtakWhat: "Ashtakavarga କ’ଣ?",
+  ku_ashtakWhatBody: "ପ୍ରତ୍ୟେକ ଗ୍ରହ 8 ଘରରୁ ସମସ୍ତ 12 ରାଶିକୁ ଉପକାରକ/କ୍ଷତିକାରକ ପଏଣ୍ଟ ଦିଏ। SAV = ସମସ୍ତ 7 ଗ୍ରହର ମୋଟ। ଅଧିକ ପଏଣ୍ଟ = ଶକ୍ତିଶାଳୀ ରାଶି।",
+  ku_approxTransit: "ପ୍ରାୟ ଟ୍ରାନଜିଟ",
+  ku_houseLabel: "ଘର",
+  ku_bavStrong: "ଶକ୍ତିଶାଳୀ",
+  ku_bavGood: "ଭଲ",
+  ku_bavAverage: "ସାଧାରଣ",
+  ku_bavWeak: "ଦୁର୍ବଳ",
+  ku_transitDisclaimer: "ଏହି transit ମାନ ମିନ୍ ଅର୍ବିଟାଲ ଗତି ଉପରେ ଆଧାରିତ — କେବଳ ସାଧାରଣ ମାର୍ଗଦର୍ଶନ ପାଇଁ ଉପଯୋଗୀ।",
+  ku_btnTransit: "ଟ୍ରାନ୍ଜିଟ୍",
+  ku_padaLabel: "ପଦ",
+  ku_jaiminiDegPre: "ରାଶିଭିତ୍ତିକ ଡିଗ୍ରୀ:",
+  ku_jaiminiDegSuf: "ଚାର୍ଟରେ ସର୍ବୋଚ୍ଚ",
+  ku_kpDesc: "Krishnamurti Paddhati Vimshottari dashaର ଅନୁପାତିକ ଉପବିଭାଜନଗୁଡ଼ିକୁ ବ୍ୟବହାର କରି କାର୍ଯ୍ୟର ସଠିକ ସମୟ ନିର୍ଣ୍ଣୟ କରେ।",
+  ku_kpFooter: "ଯେକୋଣସି ଘଟଣା ପାଇଁ ପରୀକ୍ଷା କରନ୍ତୁ: Star-lord ଓ Sub-lord ର ସମ୍ପର୍କ। ଯଦି 3 ଲର୍ଡ ସମ୍ମତ → ଘଟଣା ନିଶ୍ଚିତ।",
+  pr_myData: "ମୋର ତଥ୍ୟ",
+  ku_yearsSuffix: "ବର୍ଷ",
+  ku_whatNavatara: "Navatara କ’ଣ?",
+  ku_navataraDesc: "Chandra ଙ୍କର nakshatra ରୁ ଆରମ୍ଭ କରି, 27 nakshatra କୁ 9-ତାରକା ଚକ୍ର (Tara) ଭାଗରେ ଗଠିତ କରାଯାଇଥାଏ।",
+  ku_whatJaimini: "Jaimini Chara Karakas କ’ଣ?",
+  ku_jaiminiDesc: "Jaimini Jyotishରେ, 7 ଗ୍ରହ ତାଙ୍କର rashi-degree ଆଧାରରେ karaka ଭୂମିକା ପାଉଛନ୍ତି। ସବୁଠାରୁ ଉଚ୍ଚତମ degree ଥିବା ଗ୍ରହ ହେଉଛି Atmakaraka।",
+  ku_jaiminiLagnaDesc: "Atmakaraka ଙ୍କର rashi ଏକ ବିଶେଷ Jaimini Lagna ଗଠନ କରେ। AK ଙ୍କର navamsha ସ୍ଥିତି ଆତ୍ମାର ଆଧ୍ୟାତ୍ମିକ ପଥକୁ ଦର୍ଶାଏ। ସମ୍ପୂର୍ଣ୍ଣ ବିଶ୍ଳେଷଣ ପାଇଁ ଜ୍ଞାତା ଜ୍ୟୋତିଷୀ ଙ୍କ ସହ ପରାମର୍ଶ କରନ୍ତୁ।",
+  ku_whatKP: "KP Paddhati କ’ଣ?",
   vu_alNetError: "ନେଟୱାର୍କ ତ୍ରୁଟି",
   vu_alNetErrorMsg: "ଦୟାକରି ତୁମର ଇଣ୍ଟରନେଟ ସଂଯୋଗ ଯାଞ୍ଚ କରନ୍ତୁ।",
   vu_alCompassCalib: " କମ୍ପାସ୍ କ୍ୟାଲିବ୍ରେଟିଂ",
@@ -10780,8 +11390,6 @@ const OR: Partial<MoreT> = {
   pe2_cancel: "ବାତିଲ୍",
   pe2_delete: "ବିଲୋପ କରନ୍ତୁ",
   pe2_deleteSuffix: "ଚାର୍ଟ ଡାଟା ସ୍ଥାୟୀଭାବେ ବିଲୋପ ହେବ।",
-  vu_alDailyLimitMsg: "ଆଜିର ମୁକ୍ତ ସୀମା ପାର ହେଲା — ଆଗାମୀକାଲି ପୁନଃଚେଷ୍ଟା କରନ୍ତୁ କିମ୍ବା PRO ପାଇଁ ଅପ୍ଗ୍ରେଡ୍ କରନ୍ତୁ.",
-  vu_alStepHint: "ପଦକ୍ରମ ଅନୁସାରେ ଆଗକୁ ବଢ଼ନ୍ତୁ.",
 };
 
 const AS: Partial<MoreT> = {
@@ -11551,6 +12159,28 @@ const AS: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "অনুগ্ৰহ কৰি প্ৰথমে কোঠাৰ ফটো তুলি লোৱা বা গ্যালাৰীৰ পৰা বাছনি কৰক।",
   vu_alScanFailed: "স্কেন ব্যৰ্থ",
   vu_alScanFailedMsg: "ফটো বিশ্লেষণ কৰিব পৰা নগ'ল। দয়া কৰি ভাল পোহৰত পুনৰ চেষ্টা কৰক।",
+  vu_alDailyLimitMsg: "আজিৰ FREE সীমা পাৰ হৈ গৈছে — কাইলৈ আকৌ চেষ্টা কৰক বা Cosmic Lens PRO লওক.",
+  vu_alStepHint: "ধাপে ধাপে আগবাঢ়ক।",
+  ku_ashtakWhat: "Ashtakavarga কি?",
+  ku_ashtakWhatBody: "প্ৰতিটো গ্ৰহ ৮টা ভৱনৰ পৰা সকলো ১২টা Rashi-লৈ শুভ/অশুভ পইণ্ট প্ৰদান কৰে। SAV = সকল ৭টা গ্ৰহৰ মোট পইণ্ট। বেছি পইণ্ট = শক্তিশালী Rashi।",
+  ku_approxTransit: "আনুমানিক Transit",
+  ku_bavStrong: "শক্তিশালী",
+  ku_bavGood: "ভাল",
+  ku_bavAverage: "মধ্যম",
+  ku_bavWeak: "দুৰ্বল",
+  ku_transitDisclaimer: "এই ট্রান্সিটসমূহ গড় কক্ষপথগত গতিৰ পৰা গণনা কৰা হৈছে — কেৱল বিস্তৃত পথপ্ৰদৰ্শনৰ বাবে উপযোগী।",
+  ku_jaiminiDegPre: "ৰাশিৰ ভিতৰত ডিগ্ৰী:",
+  ku_jaiminiDegSuf: "চিত্ৰৰ সৰ্বোচ্চ",
+  ku_kpDesc: "Krishnamurti Paddhati-এ Vimshottari dasha-ৰ অনুপাতে উপ-বিভাজন ব্যৱহাৰ কৰে ঘটনাৰ নিৰ্ধাৰণৰ সময় নিৰ্ণয় কৰিবলৈ।",
+  ku_kpFooter: "যিকোনো ঘটনাৰ বাবেঃ Star-lord আৰু Sub-lord ৰ সম্পৰ্ক পৰীক্ষা কৰক। যদি 3 জন সদ্যমান → ঘটনা নিশ্চিত।",
+  ku_pratyantardasha: "PRATARDASH A",
+  ku_yearsSuffix: "বছৰ",
+  ku_whatNavatara: "Navatara কি?",
+  ku_navataraDesc: "চন্দ্ৰৰ Nakshatraৰ পৰা আৰম্ভ কৰি, 27 টা nakshatraক 9-তৰা চক্ৰৰ ভিতৰত গৰাকী কৰা হয় যাক Tara বুলি কোৱা হয়।",
+  ku_whatJaimini: "Jaimini Chara Karakas কি?",
+  ku_jaiminiDesc: "Jaimini Jyotishত, 7 টা গ্ৰহক তেওঁলোকৰ rashi-degreeৰ আধাৰত karaka ভূমিকা দিয়া হয়। আটাইতকৈ ডাঙৰ degree থকা গ্ৰহটোৱেই Atmakaraka হয়।",
+  ku_jaiminiLagnaDesc: "Atmakarakaৰ rashi এটা বিশেষ Jaimini Lagna গঠন কৰে। AKৰ navamsha অৱস্থান আত্মাৰ আধ্যাত্মিক পথ দেখুৱায়। সম্পূৰ্ণ বিশ্লেষণৰ বাবে এজন জ্যোতিষীকে পৰামৰ্শ লওক।",
+  ku_whatKP: "KP Paddhati কি?",
   vu_alNetError: "নেটৱৰ্কৰ সমস্যা",
   vu_alNetErrorMsg: "অনুগ্ৰহ কৰি আপোনাৰ ইণ্টাৰনেট সংযোগ পৰীক্ষা কৰক।",
   vu_alCompassCalib: "কম্পাছ কেলিব্ৰেটিং",
@@ -11589,8 +12219,6 @@ const AS: Partial<MoreT> = {
   pe2_cancel: "বাতিল",
   pe2_delete: "মচি পেলাব",
   pe2_deleteSuffix: "chart data স্থায়ীভাৱে মচি পেলোৱা হ'ব।",
-  vu_alDailyLimitMsg: "আজিৰ FREE সীমা পাৰ হৈ গৈছে — কাইলৈ আকৌ চেষ্টা কৰক বা Cosmic Lens PRO লওক.",
-  vu_alStepHint: "ধাপে ধাপে আগবাঢ়ক।",
 };
 
 const ZH: Partial<MoreT> = {
@@ -12362,6 +12990,60 @@ const ZH: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "请先拍摄房间照片或从相册中选择。",
   vu_alScanFailed: "扫描失败",
   vu_alScanFailedMsg: "无法分析照片。请在光线良好的情况下重试。",
+  vu_alDailyLimitMsg: "今天的免费次数已用完 — 明天再试或升级到 PRO。",
+  vu_alStepHint: "一步一步前进。",
+  ku_ashtakWhat: "什么是 Ashtakavarga？",
+  ku_ashtakWhatBody: "每颗行星根据来自 8 个宫位向所有 12 个星座赋予吉/凶 点数。SAV = 7 颗行星的总和。点数越多 = 星座越强。",
+  ku_approxTransit: "大致过境",
+  ku_houseLabel: "宫位",
+  ku_bavStrong: "强",
+  ku_bavGood: "良好",
+  ku_bavAverage: "中等",
+  ku_bavWeak: "弱",
+  ku_transitDisclaimer: "这些行星过境基于平均轨道运动计算 — 仅供总体参考。",
+  ku_btnTransit: "星体过境",
+  ku_secDashaTimeline: "DASHA 时间线",
+  ku_secGrahaTransit: "GRAHA 过境",
+  ku_secKpPaddhati: "KP 方法",
+  ku_snapAscendant: "上升点 (LAGNA)",
+  ku_snapMoonSign: "月亮星座 (RASHI)",
+  ku_snapNakshatraLord: "NAKSHATRA 主",
+  ku_snapDashaBalance: "DASHA 余额",
+  ku_snapLiveMoonTransit: "实时月亮过境",
+  ku_jaiminiDegPre: "星座内度数:",
+  ku_jaiminiDegSuf: "全盘最高",
+  ku_kpDesc: "Krishnamurti Paddhati 使用 Vimshottari dasha 的比例细分来精确时机事件。",
+  ku_kpFooter: "对于任何事件，请检查：Star-lord 与 Sub-lord 的关系。如果 3 位主宰一致 → 事件被确认。",
+  pr_myData: "我的数据",
+  pr_saved: "已保存",
+  pr_perYear: "年",
+  pr_perMonth: "月",
+  vu_sensorInactive: "传感器未激活",
+  vu_moveDevice: "移动设备以激活",
+  vu_idealDirLbl: "理想方向",
+  vu_northEast: "东北",
+  vu_tabDos: "做 ✅",
+  vu_tabDonts: "别做 ❌",
+  ku_mahaTimeline: "MAHADASHA 时间线",
+  ku_activeNow: "● 当前活跃",
+  ku_active: "活跃",
+  ku_yearsSuffix: "年",
+  ku_whatNavatara: "什么是 Navatara？",
+  ku_navataraDesc: "从月亮的 Nakshatra 开始，27 个 Nakshatra 被分成称为 Tara 的 9 星周期。",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA（基点）",
+  ku_whatJaimini: "什么是 Jaimini Chara Karakas？",
+  ku_jaiminiDesc: "在 Jaimini Jyotish 中，7 颗行星根据其 rashi 度数获得 karaka 角色。度数最高的行星成为 Atmakaraka。",
+  ku_jaiminiLagnaDesc: "Atmakaraka 的 rashi 形成一个特殊的 Jaimini Lagna。AK 在 navamsha 的位置显示灵魂的精神路径。要获得完整分析，请咨询占星师。",
+  ku_liveChandraTransit: "实时 — CHANDRA 过境",
+  ku_natalConj: "本命合相",
+  ku_whatKP: "什么是 KP Paddhati？",
+  ku_kpSignificators: "KP 指示星",
+  ku_birthChartSnap: "出生图 快照",
+  ku_planetPosition: "行星位置",
+  ku_planetPositionSub: "实时行星度数和 rashi",
+  ku_dailyAlertsLink: "每日提醒",
+  ku_dailyAlertsLinkSub: "4 天行星指引",
+  ku_house: "宫位",
   vu_alNetError: "网络错误",
   vu_alNetErrorMsg: "请检查您的网络连接。",
   vu_alCompassCalib: "指南针校准中",
@@ -12401,8 +13083,6 @@ const ZH: Partial<MoreT> = {
   pe2_cancel: "取消",
   pe2_delete: "删除",
   pe2_deleteSuffix: "图表数据将被永久删除。",
-  vu_alDailyLimitMsg: "今天的免费次数已用完 — 明天再试或升级到 PRO。",
-  vu_alStepHint: "一步一步前进。",
 };
 
 const ES: Partial<MoreT> = {
@@ -13146,6 +13826,55 @@ const ES: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Primero toma una foto de la habitación o elige de la galería.",
   vu_alScanFailed: "Escaneo fallido",
   vu_alScanFailedMsg: "No se pudo analizar la foto. Intenta de nuevo con buena iluminación.",
+  vu_alDailyLimitMsg: "El límite gratuito de hoy se ha agotado: inténtalo mañana o consigue PRO.",
+  vu_alStepHint: "Avanza paso a paso.",
+  ku_ashtakWhat: "¿Qué es Ashtakavarga?",
+  ku_ashtakWhatBody: "Cada planeta otorga puntos benéficos/maleficos a las 12 Rashi desde 8 casas. SAV = total de los 7 planetas. Más puntos = Rashi más fuerte.",
+  ku_approxTransit: "Tránsito aproximado",
+  ku_houseLabel: "Casa",
+  ku_bavStrong: "Fuerte",
+  ku_bavGood: "Bueno",
+  ku_bavAverage: "Promedio",
+  ku_bavWeak: "Débil",
+  ku_transitDisclaimer: "Estos tránsitos se calculan según el movimiento orbital medio — útil solo para orientación general.",
+  ku_btnTransit: "Tránsito",
+  ku_secDashaTimeline: "LÍNEA DE TIEMPO DE DASHA",
+  ku_secGrahaTransit: "TRÁNSITO DE GRAHA",
+  ku_snapAscendant: "ASCENDENTE (LAGNA)",
+  ku_snapMoonSign: "SIGNO LUNAR (RASHI)",
+  ku_snapNakshatraLord: "SEÑOR DEL NAKSHATRA",
+  ku_snapDashaBalance: "SALDO DE DASHA",
+  ku_snapLiveMoonTransit: "TRÁNSITO LUNAR EN VIVO",
+  ku_jaiminiDegPre: "Grado dentro del signo:",
+  ku_jaiminiDegSuf: "el más alto en la carta",
+  ku_kpDesc: "Krishnamurti Paddhati utiliza subdivisiones proporcionales del dasha Vimshottari para una sincronización más precisa de los eventos.",
+  ku_kpFooter: "Para cualquier evento, comprueba: relación entre el señor de la Estrella y el Sub-señor. Si 3 señores están de acuerdo → el evento está confirmado.",
+  ku_kpStar: "Estrella",
+  pr_myData: "MIS DATOS",
+  pr_saved: "guardado",
+  pr_perYear: "año",
+  pr_perMonth: "mes",
+  vu_idealDirLbl: "Dirección Ideal",
+  vu_northEast: "Noreste",
+  ku_mahaTimeline: "LINEA DE TIEMPO DE MAHADASHA",
+  ku_activeNow: "● ACTIVO AHORA",
+  ku_active: "ACTIVO",
+  ku_yearsSuffix: "años",
+  ku_whatNavatara: "¿Qué es Navatara?",
+  ku_navataraDesc: "Comenzando desde la nakshatra de la Luna, 27 nakshatras se agrupan en ciclos de 9 estrellas llamados Tara.",
+  ku_whatJaimini: "¿Qué son los Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "En Jaimini Jyotish, 7 planetas obtienen roles de karaka basados en sus grados de rashi. El planeta con el grado más alto se convierte en Atmakaraka.",
+  ku_jaiminiLagnaDesc: "El rashi del Atmakaraka forma un Jaimini Lagna especial. La posición en navamsha del AK muestra el camino espiritual del alma. Para un análisis completo, consulta a un astrólogo.",
+  ku_liveChandraTransit: "EN VIVO — TRÁNSITO DE CHANDRA",
+  ku_natalConj: "CONJ NATAL",
+  ku_whatKP: "¿Qué es KP Paddhati?",
+  ku_kpSignificators: "Significadores KP",
+  ku_birthChartSnap: "INSTANTÁNEA DE LA CARTA NATAL",
+  ku_planetPosition: "Posición del planeta",
+  ku_planetPositionSub: "Grados planetarios en vivo y rashi",
+  ku_dailyAlertsLink: "Alertas Diarias",
+  ku_dailyAlertsLinkSub: "Orientación planetaria de 4 días",
+  ku_house: "Casa",
   vu_alNetError: "Error de red",
   vu_alNetErrorMsg: "Por favor verifica tu conexión a Internet.",
   vu_alCompassCalib: "Calibrando la brújula",
@@ -13185,8 +13914,6 @@ const ES: Partial<MoreT> = {
   pe2_cancel: "Cancelar",
   pe2_delete: "Eliminar",
   pe2_deleteSuffix: "los datos de la carta serán eliminados permanentemente.",
-  vu_alDailyLimitMsg: "El límite gratuito de hoy se ha agotado: inténtalo mañana o consigue PRO.",
-  vu_alStepHint: "Avanza paso a paso.",
 };
 
 const AR: Partial<MoreT> = {
@@ -13963,6 +14690,34 @@ const AR: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "يرجى أولاً التقاط صورة للغرفة أو اختيارها من المعرض.",
   vu_alScanFailed: "فشل المسح",
   vu_alScanFailedMsg: "تعذر تحليل الصورة. يرجى المحاولة مرة أخرى في إضاءة جيدة.",
+  vu_alDailyLimitMsg: "الحد المجاني لليوم انتهى — حاول مرة أخرى غدًا أو احصل على PRO.",
+  vu_alStepHint: "تقدَّم خطوة بخطوة.",
+  ku_ashtakWhat: "ما هو Ashtakavarga؟",
+  ku_ashtakWhatBody: "كل كوكب يمنح نقاط نافعة/ضارة لجميع الأبراج الـ12 من 8 بيوت. SAV = مجموع جميع الكواكب السبعة. المزيد من النقاط = برج أقوى.",
+  ku_approxTransit: "عبور تقريبي",
+  ku_houseLabel: "بيت",
+  ku_bavStrong: "قوي",
+  ku_bavGood: "جيد",
+  ku_bavAverage: "متوسط",
+  ku_bavWeak: "ضعيف",
+  ku_transitDisclaimer: "يتم حساب هذه الانتقالات من الحركة المدارية المتوسطة — مفيدة للإرشاد العام فقط.",
+  ku_btnTransit: "العبور",
+  ku_jaiminiDegPre: "الدرجة داخل البرج:",
+  ku_jaiminiDegSuf: "الأعلى في الخريطة",
+  ku_kpDesc: "Krishnamurti Paddhati تستخدم تقسيمات نسبية فرعية من Vimshottari dasha لتوقيت الأحداث بدقة.",
+  ku_kpFooter: "لأي حدث، تحقق من: علاقة Star-lord و Sub-lord. إذا اتفقت 3 أسياد → يتم تأكيد الحدث.",
+  vu_idealDirLbl: "الاتجاه المثالي",
+  vu_northEast: "شمال-شرق",
+  vu_tabDos: "افعل ✅",
+  vu_tabDonts: "لا تفعل ❌",
+  vu_tabRemedies: "علاجات 🙏",
+  ku_whatNavatara: "ما هو Navatara؟",
+  ku_navataraDesc: "بدءًا من nakshatra القمر، تُجمع 27 nakshatra في دورات مكونة من 9 نجوم تُسمى Tara.",
+  ku_whatJaimini: "ما هي Jaimini Chara Karakas؟",
+  ku_jaiminiDesc: "في Jaimini Jyotish، تحصل 7 كواكب على أدوار karaka بناءً على درجاتها في rashi. يصبح الكوكب ذي أعلى درجة هو Atmakaraka.",
+  ku_jaiminiLagnaDesc: "يشكل rashi الخاص بـ Atmakaraka Lagna خاصًا في Jaimini. موقع AK في navamsha يظهر المسار الروحي للروح. للتحليل الكامل، استشر فلكيًا.",
+  ku_whatKP: "ما هي KP Paddhati؟",
+  ku_planetPositionSub: "درجة الكواكب الحية وrashi",
   vu_alNetError: "خطأ في الشبكة",
   vu_alNetErrorMsg: "يرجى التحقق من اتصالك بالإنترنت.",
   vu_alCompassCalib: "المِرشَح البوصلة جارٍ",
@@ -14003,8 +14758,6 @@ const AR: Partial<MoreT> = {
   pe2_cancel: "إلغاء",
   pe2_delete: "حذف",
   pe2_deleteSuffix: "سيتم حذف بيانات المخطط نهائياً.",
-  vu_alDailyLimitMsg: "الحد المجاني لليوم انتهى — حاول مرة أخرى غدًا أو احصل على PRO.",
-  vu_alStepHint: "تقدَّم خطوة بخطوة.",
 };
 
 const FR: Partial<MoreT> = {
@@ -14744,6 +15497,60 @@ const FR: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Veuillez d’abord prendre une photo de la pièce ou en choisir une dans la galerie.",
   vu_alScanFailed: "Échec de l’analyse",
   vu_alScanFailedMsg: "Impossible d’analyser la photo. Veuillez réessayer avec un bon éclairage.",
+  vu_alDailyLimitMsg: "La limite gratuite d'aujourd'hui est atteinte — réessayez demain ou passez à Pro.",
+  vu_alStepHint: "Avancez étape par étape.",
+  ku_ashtakWhat: "Qu'est-ce que l'Ashtakavarga ?",
+  ku_ashtakWhatBody: "Chaque planète attribue des points bénéfiques/nuisibles aux 12 signes depuis 8 maisons. SAV = total des 7 planètes. Plus de points = signe plus fort.",
+  ku_approxTransit: "Transit approximatif",
+  ku_houseLabel: "Maison",
+  ku_bavStrong: "Fort",
+  ku_bavGood: "Bon",
+  ku_bavAverage: "Moyen",
+  ku_bavWeak: "Faible",
+  ku_bavLegStrong: "7-8 (Fort)",
+  ku_bavLegGood: "5-6 (Bon)",
+  ku_bavLegAverage: "3-4 (Moyen)",
+  ku_bavLegWeak: "0-2 (Faible)",
+  ku_transitDisclaimer: "Ces transits sont calculés à partir du mouvement orbital moyen — utiles uniquement comme indication générale.",
+  ku_secDashaTimeline: "CHRONOLOGIE DÉSHA",
+  ku_secGrahaTransit: "TRANSIT DE GRAHA",
+  ku_snapMoonSign: "SIGNE LUNAIRE (RASHI)",
+  ku_snapNakshatraLord: "SEIGNEUR DE NAKSHATRA",
+  ku_snapDashaBalance: "SOLDE DE DASHA",
+  ku_snapLiveMoonTransit: "TRANSIT LUNAIRE EN DIRECT",
+  ku_jaiminiDegPre: "Degré dans le signe :",
+  ku_jaiminiDegSuf: "le plus élevé du thème",
+  ku_kpDesc: "Krishnamurti Paddhati utilise des subdivisions proportionnelles du dasha Vimshottari pour un timing précis des événements.",
+  ku_kpFooter: "Pour tout événement, vérifiez : relation entre le Star-lord et le Sub-lord. Si 3 lords s’accordent → l’événement est confirmé.",
+  pr_active: "ACTIF",
+  pr_myData: "MES DONNÉES",
+  pr_saved: "enregistré",
+  pr_perYear: "an",
+  pr_perMonth: "mois",
+  vu_aligning: "ALIGNEMENT…",
+  vu_sensorInactive: "Capteur inactif",
+  vu_moveDevice: "Déplacez l'appareil pour activer",
+  vu_idealDirLbl: "Direction idéale",
+  vu_northEast: "Nord-Est",
+  ku_mahaTimeline: "CHRONOLOGIE MAHADASHA",
+  ku_activeNow: "● ACTIF MAINTENANT",
+  ku_active: "ACTIF",
+  ku_yearsSuffix: "ans",
+  ku_whatNavatara: "Qu'est-ce que Navatara?",
+  ku_navataraDesc: "En partant du nakshatra lunaire, 27 nakshatras sont regroupés en cycles de 9 étoiles appelés Tara.",
+  ku_whatJaimini: "Que sont les Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "En Jaimini Jyotish, 7 planètes reçoivent des rôles de karaka basés sur leurs degrés de rashi. La planète au degré le plus élevé devient Atmakaraka.",
+  ku_jaiminiLagnaDesc: "Le rashi de l'Atmakaraka forme un Jaimini Lagna spécial. La position en navamsha de l'AK montre le chemin spirituel de l'âme. Pour une analyse complète, consultez un astrologue.",
+  ku_liveChandraTransit: "EN DIRECT — TRANSIT CHANDRA",
+  ku_natalConj: "CONJ NATALE",
+  ku_whatKP: "Qu'est-ce que KP Paddhati?",
+  ku_kpSignificators: "Significateurs KP",
+  ku_birthChartSnap: "APERÇU DU THÈME NATAL",
+  ku_planetPosition: "Position de la planète",
+  ku_planetPositionSub: "Degrés planétaires en direct et rashi",
+  ku_dailyAlertsLink: "Alertes quotidiennes",
+  ku_dailyAlertsLinkSub: "Conseils planétaires sur 4 jours",
+  ku_house: "Maison",
   vu_alNetError: "Erreur réseau",
   vu_alNetErrorMsg: "Veuillez vérifier votre connexion Internet.",
   vu_alCompassCalib: "Calibrage de la boussole",
@@ -14783,8 +15590,6 @@ const FR: Partial<MoreT> = {
   pe2_cancel: "Annuler",
   pe2_delete: "Supprimer",
   pe2_deleteSuffix: "les données du thème seront définitivement supprimées.",
-  vu_alDailyLimitMsg: "La limite gratuite d'aujourd'hui est atteinte — réessayez demain ou passez à Pro.",
-  vu_alStepHint: "Avancez étape par étape.",
 };
 
 const PT: Partial<MoreT> = {
@@ -15529,6 +16334,63 @@ const PT: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Por favor, primeiro tire uma foto do cômodo ou escolha da galeria.",
   vu_alScanFailed: "Falha na análise",
   vu_alScanFailedMsg: "Não foi possível analisar a foto. Por favor, tente novamente com boa iluminação.",
+  vu_alDailyLimitMsg: "O limite grátis de hoje foi atingido — tente novamente amanhã ou adquira o PRO.",
+  vu_alStepHint: "Avance passo a passo.",
+  ku_ashtakWhat: "O que é Ashtakavarga?",
+  ku_ashtakWhatBody: "Cada planeta concede pontos benéficos/maléficos aos 12 signos por meio de 8 casas. SAV = total dos 7 planetas. Mais pontos = signo mais forte.",
+  ku_approxTransit: "Trânsitos aproximados",
+  ku_houseLabel: "Casa",
+  ku_bavStrong: "Forte",
+  ku_bavGood: "Bom",
+  ku_bavAverage: "Médio",
+  ku_bavWeak: "Fraco",
+  ku_bavLegStrong: "7-8 (Forte)",
+  ku_bavLegGood: "5-6 (Bom)",
+  ku_bavLegAverage: "3-4 (Médio)",
+  ku_bavLegWeak: "0-2 (Fraco)",
+  ku_transitDisclaimer: "Esses trânsitos são calculados a partir do movimento orbital médio — úteis apenas para orientação geral.",
+  ku_btnTransit: "Trânsito",
+  ku_secDashaTimeline: "LINHA DO TEMPO DE DASHA",
+  ku_secGrahaTransit: "TRÂNSITO DE GRAHA",
+  ku_snapAscendant: "ASCENDENTE (LAGNA)",
+  ku_snapMoonSign: "SIGNO DA LUA (RASHI)",
+  ku_snapNakshatraLord: "SENHOR DO NAKSHATRA",
+  ku_snapDashaBalance: "SALDO DE DASHA",
+  ku_snapLiveMoonTransit: "TRÂNSITO AO VIVO DA LUA",
+  ku_jaiminiDegPre: "Grau dentro do signo:",
+  ku_jaiminiDegSuf: "maior no mapa",
+  ku_kpDesc: "Krishnamurti Paddhati usa subdivisões proporcionais do Vimshottari dasha para timing preciso de eventos.",
+  ku_kpFooter: "Para qualquer evento, verifique: relação entre o Star-lord e o Sub-lord. Se 3 lords concordarem → evento confirmado.",
+  pr_active: "ATIVO",
+  pr_myData: "MEUS DADOS",
+  pr_saved: "salvo",
+  pr_perYear: "ano",
+  pr_perMonth: "mês",
+  vu_sensorActive: "SENSOR ATIVO",
+  vu_aligning: "ALINHANDO…",
+  vu_sensorInactive: "Sensor inativo",
+  vu_moveDevice: "Mova o dispositivo para ativar",
+  vu_idealDirLbl: "Direção Ideal",
+  vu_northEast: "Nordeste",
+  ku_mahaTimeline: "LINHA DO TEMPO MAHADASHA",
+  ku_activeNow: "● ATIVO AGORA",
+  ku_active: "ATIVO",
+  ku_yearsSuffix: "anos",
+  ku_whatNavatara: "O que é Navatara?",
+  ku_navataraDesc: "Começando a partir da nakshatra da Lua, 27 nakshatras são agrupadas em ciclos de 9 estrelas chamados Tara.",
+  ku_whatJaimini: "O que são Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "Em Jaimini Jyotish, 7 planetas recebem papéis de karaka com base nos seus graus no rashi. O planeta com o grau mais alto torna-se Atmakaraka.",
+  ku_jaiminiLagnaDesc: "O rashi do Atmakaraka forma um Jaimini Lagna especial. A posição do AK no navamsha mostra o caminho espiritual da alma. Para análise completa, consulte um astrólogo.",
+  ku_liveChandraTransit: "AO VIVO — TRÂNSITO DE CHANDRA",
+  ku_natalConj: "CONJ NATAL",
+  ku_whatKP: "O que é KP Paddhati?",
+  ku_kpSignificators: "Significadores KP",
+  ku_birthChartSnap: "VISÃO RÁPIDA DO MAPA NATAL",
+  ku_planetPosition: "Posição do planeta",
+  ku_planetPositionSub: "Graus planetários ao vivo e rashi",
+  ku_dailyAlertsLink: "Alertas Diários",
+  ku_dailyAlertsLinkSub: "Orientação planetária de 4 dias",
+  ku_house: "Casa",
   vu_alNetError: "Erro de rede",
   vu_alNetErrorMsg: "Por favor, verifique sua conexão com a internet.",
   vu_alCompassCalib: "Bússola calibrando",
@@ -15569,8 +16431,6 @@ const PT: Partial<MoreT> = {
   pe2_cancel: "Cancelar",
   pe2_delete: "Excluir",
   pe2_deleteSuffix: "os dados do mapa serão permanentemente excluídos.",
-  vu_alDailyLimitMsg: "O limite grátis de hoje foi atingido — tente novamente amanhã ou adquira o PRO.",
-  vu_alStepHint: "Avance passo a passo.",
 };
 
 const DE: Partial<MoreT> = {
@@ -16303,6 +17163,62 @@ const DE: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Bitte mache zuerst ein Zimmerfoto oder wähle eines aus der Galerie.",
   vu_alScanFailed: "Scan fehlgeschlagen",
   vu_alScanFailedMsg: "Foto konnte nicht analysiert werden. Bitte versuche es erneut bei guter Beleuchtung.",
+  vu_alDailyLimitMsg: "Das heutige kostenlose Limit ist aufgebraucht — versuche es morgen nochmal oder hol dir PRO.",
+  vu_alStepHint: "Schritt für Schritt vorgehen.",
+  ku_ashtakWhat: "Was ist Ashtakavarga?",
+  ku_ashtakWhatBody: "Jeder Planet vergibt benefische/malefizische Punkte an alle 12 Rashi aus 8 Häusern. SAV = Summe aller 7 Planeten. Mehr Punkte = stärkeres Zeichen.",
+  ku_approxTransit: "Ungefähre Transitzeit",
+  ku_houseLabel: "Haus",
+  ku_bavStrong: "Stark",
+  ku_bavGood: "Gut",
+  ku_bavAverage: "Durchschnittlich",
+  ku_bavWeak: "Schwach",
+  ku_bavLegStrong: "7-8 (Stark)",
+  ku_bavLegGood: "5-6 (Gut)",
+  ku_bavLegAverage: "3-4 (Durchschnittlich)",
+  ku_bavLegWeak: "0-2 (Schwach)",
+  ku_transitDisclaimer: "Diese Transite werden aus der mittleren Bahngeschwindigkeit berechnet — nur für allgemeine Orientierung geeignet.",
+  ku_secDashaTimeline: "DASHA-ZEITLEISTE",
+  ku_secGrahaTransit: "GRAHA-TRANSIT",
+  ku_secKpPaddhati: "KP-PADDHATI",
+  ku_snapMoonSign: "MONDZEICHEN (RASHI)",
+  ku_snapNakshatraLord: "NAKSHATRA-LORD",
+  ku_snapDashaBalance: "DASHA-GUTHABEN",
+  ku_snapLiveMoonTransit: "LIVE-MOND-TRANSIT",
+  ku_jaiminiDegPre: "Grad innerhalb des Zeichens:",
+  ku_jaiminiDegSuf: "höchster im Chart",
+  ku_kpDesc: "Krishnamurti Paddhati verwendet proportionale Unterteilungen des Vimshottari Dasha für präzise Zeitbestimmung von Ereignissen.",
+  ku_kpFooter: "Für jedes Ereignis prüfen: Verhältnis von Star-lord und Sub-lord. Stimmen 3 Lords überein → Ereignis bestätigt.",
+  pr_active: "AKTIV",
+  pr_myData: "MEINE DATEN",
+  pr_saved: "gespeichert",
+  pr_perYear: "Jahr",
+  pr_perMonth: "Monat",
+  vu_sensorActive: "SENSOR AKTIV",
+  vu_aligning: "AUSRICHTEN…",
+  vu_sensorInactive: "Sensor inaktiv",
+  vu_moveDevice: "Bewege das Gerät, um zu aktivieren",
+  vu_idealDirLbl: "Ideale Richtung",
+  vu_northEast: "Nord-Ost",
+  ku_mahaTimeline: "MAHADASHA ZEITACHSE",
+  ku_activeNow: "● AKTIV JETZT",
+  ku_active: "AKTIV",
+  ku_yearsSuffix: "Jahre",
+  ku_whatNavatara: "Was ist Navatara?",
+  ku_navataraDesc: "Ausgehend von der Mond-Nakshatra werden 27 Nakshatras in 9-Sterne-Zyklen namens Tara gruppiert.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (BASIS)",
+  ku_whatJaimini: "Was sind Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "In Jaimini Jyotish erhalten 7 Planeten Karaka-Rollen basierend auf ihren Rashi-Grad. Der Planet mit dem höchsten Grad wird Atmakaraka.",
+  ku_jaiminiLagnaDesc: "Das Rashi des Atmakaraka bildet ein spezielles Jaimini Lagna. Die Navamsha-Position des AK zeigt den spirituellen Weg der Seele. Für eine vollständige Analyse konsultieren Sie einen Astrologen.",
+  ku_natalConj: "NATAL KONJ",
+  ku_whatKP: "Was ist KP Paddhati?",
+  ku_kpSignificators: "KP Signifikatoren",
+  ku_birthChartSnap: "GEBURTSCHART-SNAPSHOT",
+  ku_planetPosition: "Planetenposition",
+  ku_planetPositionSub: "Live-Planeten-Grade und Rashi",
+  ku_dailyAlertsLink: "Tägliche Hinweise",
+  ku_dailyAlertsLinkSub: "4-Tage-Planetenguidance",
+  ku_house: "Haus",
   vu_alNetError: "Netzwerkfehler",
   vu_alNetErrorMsg: "Bitte überprüfe deine Internetverbindung.",
   vu_alCompassCalib: "Kompass kalibrieren",
@@ -16342,8 +17258,6 @@ const DE: Partial<MoreT> = {
   pe2_cancel: "Abbrechen",
   pe2_delete: "Löschen",
   pe2_deleteSuffix: "Chart-Daten werden dauerhaft gelöscht.",
-  vu_alDailyLimitMsg: "Das heutige kostenlose Limit ist aufgebraucht — versuche es morgen nochmal oder hol dir PRO.",
-  vu_alStepHint: "Schritt für Schritt vorgehen.",
 };
 
 const RU: Partial<MoreT> = {
@@ -17123,6 +18037,48 @@ const RU: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Сначала сделайте фото комнаты или выберите из галереи.",
   vu_alScanFailed: "Сканирование не удалось",
   vu_alScanFailedMsg: "Не удалось проанализировать фото. Повторите попытку при хорошем освещении.",
+  vu_alDailyLimitMsg: "Сегодня бесплатный лимит исчерпан — попробуйте завтра или получите PRO.",
+  vu_alStepHint: "Двигайтесь шаг за шагом.",
+  ku_ashtakWhat: "Что такое Ashtakavarga?",
+  ku_ashtakWhatBody: "Каждая планета присваивает благоприятные/неблагоприятные очки всем 12 знакам из 8 домов. SAV = сумма всех 7 планет. Больше очков = сильнее знак.",
+  ku_approxTransit: "Приблизительный транзит",
+  ku_houseLabel: "Дом",
+  ku_bavStrong: "Сильный",
+  ku_bavGood: "Хороший",
+  ku_bavAverage: "Средний",
+  ku_bavWeak: "Слабый",
+  ku_transitDisclaimer: "Эти транзиты вычислены по средней орбитальной скорости — полезны лишь для общей ориентировки.",
+  ku_btnTransit: "Транзит",
+  ku_secDashaTimeline: "ХРОНОЛОГИЯ DASHA",
+  ku_secGrahaTransit: "GRAHA ТРАНЗИТ",
+  ku_snapDashaBalance: "ОСТАТОК DASHA",
+  ku_jaiminiDegPre: "Градус в знаке:",
+  ku_jaiminiDegSuf: "максимальный в карте",
+  ku_kpDesc: "Krishnamurti Paddhati использует пропорциональные подразделения Vimshottari dasha для точного определения времени событий.",
+  ku_kpFooter: "Для любого события проверьте: отношение Star-lord и Sub-lord. Если 3 lорда совпадают → событие подтверждается.",
+  pr_myData: "МОИ ДАННЫЕ",
+  pr_saved: "сохранено",
+  pr_perYear: "год",
+  pr_perMonth: "месяц",
+  vu_moveDevice: "Переместите устройство, чтобы активировать",
+  vu_idealDirLbl: "Идеальное направление",
+  ku_mahaTimeline: "ТАЙМЛАЙН MAHADASHA",
+  ku_activeNow: "● АКТИВНО СЕЙЧАС",
+  ku_active: "АКТИВНО",
+  ku_yearsSuffix: "лет",
+  ku_whatNavatara: "Что такое Navatara?",
+  ku_navataraDesc: "Начиная с nakshatra Луны, 27 nakshatra сгруппированы в 9-звёздные циклы, называемые Tara.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (ОСНОВА)",
+  ku_whatJaimini: "Что такое Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "В Jaimini Jyotish 7 планет получают роли karaka на основе градусов их rashi. Планета с наивысшим градусом становится Atmakaraka.",
+  ku_jaiminiLagnaDesc: "Rashi Atmakaraka формирует особый Jaimini Lagna. Позиция AK в navamsha показывает духовный путь души. Для полного анализа обратитесь к астрологу.",
+  ku_liveChandraTransit: "ВПРЯМОМ ЭФИРЕ — CHANDRA TRANSIT",
+  ku_whatKP: "Что такое KP Paddhati?",
+  ku_birthChartSnap: "SNAPSHOT BIRTH CHART",
+  ku_planetPosition: "Позиция планеты",
+  ku_planetPositionSub: "Текущие градусы планет и rashi",
+  ku_dailyAlertsLink: "Ежедневные оповещения",
+  ku_dailyAlertsLinkSub: "4-дневные указания по планетам",
   vu_alNetError: "Ошибка сети",
   vu_alNetErrorMsg: "Проверьте подключение к интернету.",
   vu_alCompassCalib: "Калибровка компаса",
@@ -17162,8 +18118,6 @@ const RU: Partial<MoreT> = {
   pe2_cancel: "Отмена",
   pe2_delete: "Удалить",
   pe2_deleteSuffix: "данные чарта будут безвозвратно удалены.",
-  vu_alDailyLimitMsg: "Сегодня бесплатный лимит исчерпан — попробуйте завтра или получите PRO.",
-  vu_alStepHint: "Двигайтесь шаг за шагом.",
 };
 
 const JA: Partial<MoreT> = {
@@ -17925,6 +18879,53 @@ const JA: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "まず部屋の写真を撮るかギャラリーから選んでください。",
   vu_alScanFailed: "スキャンに失敗しました",
   vu_alScanFailedMsg: "写真を解析できませんでした。明るい場所で再試行してください。",
+  vu_alDailyLimitMsg: "本日の無料利用制限を超えました — 明日もう一度お試しいただくか、PRO をご利用ください。",
+  vu_alStepHint: "一歩ずつ進めてください。",
+  ku_ashtakWhat: "Ashtakavargaとは？",
+  ku_ashtakWhatBody: "各惑星が8つのハウスから12のラシすべてに吉凶ポイントを与えます。SAVは7つの惑星すべての合計です。ポイントが多いほどラシが強くなります。",
+  ku_approxTransit: "おおよそのトランジット",
+  ku_houseLabel: "ハウス",
+  ku_bavStrong: "強い",
+  ku_bavGood: "良い",
+  ku_bavAverage: "平均",
+  ku_bavWeak: "弱い",
+  ku_bavLegStrong: "7-8 (強い)",
+  ku_bavLegGood: "5-6 (良い)",
+  ku_bavLegAverage: "3-4 (平均)",
+  ku_bavLegWeak: "0-2 (弱い)",
+  ku_transitDisclaimer: "これらのトランジットは平均軌道運動から算出されています — 大まかな指針としてのみ有用です。",
+  ku_btnTransit: "トランジット",
+  ku_snapAscendant: "アセンダント (LAGNA)",
+  ku_snapMoonSign: "ムーンサイン (RASHI)",
+  ku_snapLiveMoonTransit: "ライブムーントランジット",
+  ku_jaiminiDegPre: "星座内の度数:",
+  ku_jaiminiDegSuf: "チャート内で最大",
+  ku_kpDesc: "Krishnamurti Paddhati は出来事の精密な時期決定のために Vimshottari dasha の比例的な細分を使用します。",
+  ku_kpFooter: "任意の出来事については、Star-lord と Sub-lord の関係を確認してください。3 人のロードが一致すれば → 出来事が確定します。",
+  pr_saved: "保存済み",
+  pr_perYear: "年",
+  pr_perMonth: "月",
+  vu_aligning: "整列中…",
+  vu_moveDevice: "デバイスを移動して有効化してください",
+  vu_idealDirLbl: "理想の方向",
+  vu_northEast: "北東",
+  ku_mahaTimeline: "MAHADASHA タイムライン",
+  ku_activeNow: "● 現在アクティブ",
+  ku_active: "アクティブ",
+  ku_yearsSuffix: "年",
+  ku_whatNavatara: "Navataraとは？",
+  ku_navataraDesc: "月のNakshatraから始めて、27のNakshatraを9星サイクルのTaraに分けます。",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA（基準）",
+  ku_whatJaimini: "Jaimini Chara Karakasとは？",
+  ku_jaiminiDesc: "Jaimini Jyotishでは、7つの惑星がrashi度数に基づいてkarakaの役割を得ます。最も度数が高い惑星がAtmakarakaになります。",
+  ku_jaiminiLagnaDesc: "Atmakarakaのrashiが特別なJaimini Lagnaを形成します。AKのnavamshaの位置は魂の霊的な道を示します。完全な分析は占星術師に相談してください。",
+  ku_whatKP: "KP Paddhatiとは？",
+  ku_kpSignificators: "KPのシニフィケーター",
+  ku_birthChartSnap: "BIRTH CHART スナップショット",
+  ku_planetPosition: "惑星の位置",
+  ku_planetPositionSub: "現在の惑星度数とrashi",
+  ku_dailyAlertsLink: "デイリーアラート",
+  ku_dailyAlertsLinkSub: "4日間の惑星ガイダンス",
   vu_alNetError: "ネットワークエラー",
   vu_alNetErrorMsg: "インターネット接続を確認してください。",
   vu_alCompassCalib: "コンパスを校正しています",
@@ -17964,8 +18965,6 @@ const JA: Partial<MoreT> = {
   pe2_cancel: "キャンセル",
   pe2_delete: "削除",
   pe2_deleteSuffix: "チャートデータは完全に削除されます。",
-  vu_alDailyLimitMsg: "本日の無料利用制限を超えました — 明日もう一度お試しいただくか、PRO をご利用ください。",
-  vu_alStepHint: "一歩ずつ進めてください。",
 };
 
 const ID: Partial<MoreT> = {
@@ -18704,6 +19703,68 @@ const ID: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Silakan ambil foto ruangan terlebih dahulu atau pilih dari galeri.",
   vu_alScanFailed: "Pemindaian gagal",
   vu_alScanFailedMsg: "Gagal menganalisis foto. Silakan coba lagi dengan pencahayaan yang baik.",
+  vu_alDailyLimitMsg: "Batas gratis hari ini telah habis — coba lagi besok atau dapatkan PRO.",
+  vu_alStepHint: "Majulah langkah demi langkah.",
+  ku_ashtakWhat: "Apa itu Ashtakavarga?",
+  ku_ashtakWhatBody: "Setiap planet memberikan poin benefik/malefik ke semua 12 Rashi dari 8 rumah. SAV = total dari semua 7 planet. Semakin banyak poin = Rashi semakin kuat.",
+  ku_approxTransit: "Transit Perkiraan",
+  ku_houseLabel: "Rumah",
+  ku_bavStrong: "Kuat",
+  ku_bavGood: "Baik",
+  ku_bavAverage: "Rata-rata",
+  ku_bavWeak: "Lemah",
+  ku_bavLegStrong: "7-8 (Kuat)",
+  ku_bavLegGood: "5-6 (Baik)",
+  ku_bavLegAverage: "3-4 (Rata-rata)",
+  ku_bavLegWeak: "0-2 (Lemah)",
+  ku_transitDisclaimer: "Transit ini dihitung dari gerakan orbital rata‑rata — berguna untuk panduan umum saja.",
+  ku_secDashaTimeline: "Garis Waktu Dasha",
+  ku_secAshtakavarga: "Ashtakavarga",
+  ku_secNavatara9Tara: "Navatara — 9 TARA",
+  ku_secJaiminiKarakas: "Jaimini Karakas",
+  ku_secGrahaTransit: "Graha Transit",
+  ku_secKpPaddhati: "KP Paddhati",
+  ku_snapAscendant: "Ascendant (Lagna)",
+  ku_snapMoonSign: "Moon Sign (Rashi)",
+  ku_snapNakshatra: "Nakshatra",
+  ku_snapNakshatraLord: "Nakshatra Lord",
+  ku_snapDashaBalance: "Saldo Dasha",
+  ku_snapLiveMoonTransit: "Transit Bulan Langsung",
+  ku_jaiminiDegPre: "Derajat dalam rashi:",
+  ku_jaiminiDegSuf: "tertinggi dalam bagan",
+  ku_kpDesc: "Krishnamurti Paddhati menggunakan subdivisi proporsional dari Vimshottari dasha untuk penentuan waktu peristiwa dengan presisi.",
+  ku_kpFooter: "Untuk setiap peristiwa, periksa: hubungan antara Star-lord dan Sub-lord. Jika 3 lord setuju → peristiwa dikonfirmasi.",
+  pr_active: "AKTIF",
+  pr_myData: "DATA SAYA",
+  pr_saved: "tersimpan",
+  pr_perYear: "tahun",
+  pr_perMonth: "bulan",
+  vu_sensorActive: "SENSOR AKTIF",
+  vu_aligning: "MENYERASIKAN…",
+  vu_sensorInactive: "Sensor tidak aktif",
+  vu_moveDevice: "Gerakkan perangkat untuk mengaktifkan",
+  vu_idealDirLbl: "Arah Ideal",
+  vu_northEast: "Timur Laut",
+  vu_tabDos: "Lakukan ✅",
+  vu_tabDonts: "Jangan ❌",
+  vu_tabRemedies: "Remedi 🙏",
+  ku_pratyantardasha: "PRATYANTASDASHA",
+  ku_mahaTimeline: "Garis Waktu MAHADASHA",
+  ku_activeNow: "● AKTIF SEKARANG",
+  ku_active: "AKTIF",
+  ku_yearsSuffix: "tahun",
+  ku_whatNavatara: "Apa itu Navatara?",
+  ku_navataraDesc: "Dimulai dari nakshatra Bulan, 27 nakshatra dikelompokkan menjadi siklus 9-bintang yang disebut Tara.",
+  ku_whatJaimini: "Apa itu Jaimini Chara Karakas?",
+  ku_jaiminiDesc: "Dalam Jaimini Jyotish, 7 planet mendapat peran karaka berdasarkan derajat rashi mereka. Planet dengan derajat tertinggi menjadi Atmakaraka.",
+  ku_jaiminiLagnaDesc: "Rashi Atmakaraka membentuk Jaimini Lagna khusus. Posisi navamsha AK menunjukkan jalan spiritual jiwa. Untuk analisis lengkap, konsultasikan dengan astrolog.",
+  ku_whatKP: "Apa itu KP Paddhati?",
+  ku_kpSignificators: "Penunjuk KP",
+  ku_birthChartSnap: "SNAPSHOT BIRTH CHART",
+  ku_planetPosition: "Posisi Planet",
+  ku_planetPositionSub: "Derajat planet dan rashi terkini",
+  ku_dailyAlertsLink: "Peringatan Harian",
+  ku_dailyAlertsLinkSub: "Panduan planet 4-hari",
   vu_alNetError: "Kesalahan jaringan",
   vu_alNetErrorMsg: "Periksa koneksi internet Anda.",
   vu_alCompassCalib: "Kalibrasi kompas",
@@ -18743,8 +19804,6 @@ const ID: Partial<MoreT> = {
   pe2_cancel: "Batal",
   pe2_delete: "Hapus",
   pe2_deleteSuffix: "data bagan akan dihapus secara permanen.",
-  vu_alDailyLimitMsg: "Batas gratis hari ini telah habis — coba lagi besok atau dapatkan PRO.",
-  vu_alStepHint: "Majulah langkah demi langkah.",
 };
 
 const KO: Partial<MoreT> = {
@@ -19522,6 +20581,57 @@ const KO: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "먼저 방 사진을 찍거나 갤러리에서 선택하세요.",
   vu_alScanFailed: "스캔 실패",
   vu_alScanFailedMsg: "사진을 분석할 수 없습니다. 밝은 조명에서 다시 시도하세요.",
+  vu_alDailyLimitMsg: "오늘 무료 한도를 초과했습니다 — 내일 다시 시도하거나 PRO로 업그레이드하세요.",
+  vu_alStepHint: "단계별로 앞으로 나아가세요.",
+  ku_ashtakWhat: "Ashtakavarga란 무엇인가요?",
+  ku_ashtakWhatBody: "각 행성은 8개 하우스에서 12개의 Rashi에 복/악 점수를 부여합니다. SAV는 7개 행성의 총합입니다. 점수가 많을수록 해당 Rashi가 더 강합니다.",
+  ku_approxTransit: "대략적인 트랜짓",
+  ku_houseLabel: "하우스",
+  ku_bavStrong: "강함",
+  ku_bavGood: "좋음",
+  ku_bavAverage: "보통",
+  ku_bavWeak: "약함",
+  ku_bavLegStrong: "7-8 (강함)",
+  ku_bavLegGood: "5-6 (좋음)",
+  ku_bavLegAverage: "3-4 (보통)",
+  ku_bavLegWeak: "0-2 (약함)",
+  ku_transitDisclaimer: "이 천체 이동은 평균 공전 운동을 기반으로 계산됩니다 — 일반적인 안내에만 유용합니다.",
+  ku_btnTransit: "천체이동",
+  ku_secDashaTimeline: "DASHA 타임라인",
+  ku_secGrahaTransit: "GRAHA 천체이동",
+  ku_snapDashaBalance: "DASHA 잔여",
+  ku_snapLiveMoonTransit: "실시간 달 천체이동",
+  ku_jaiminiDegPre: "별자리 내도(도):",
+  ku_jaiminiDegSuf: "차트에서 최고값",
+  ku_kpDesc: "Krishnamurti Paddhati는 사건의 정밀한 시기 판단을 위해 Vimshottari dasha의 비례적 세분화를 사용합니다.",
+  ku_kpFooter: "어떤 사건에 대해서도 확인할 것: Star-lord와 Sub-lord의 관계. 3명의 lord가 일치하면 → 사건이 확정됩니다.",
+  pr_myData: "내 데이터",
+  pr_saved: "저장됨",
+  pr_perYear: "년",
+  pr_perMonth: "월",
+  vu_aligning: "정렬 중…",
+  vu_moveDevice: "기기를 이동하여 활성화하세요",
+  vu_idealDirLbl: "이상 방향",
+  vu_northEast: "북동",
+  vu_tabDos: "할 것 ✅",
+  vu_tabDonts: "하지 말 것 ❌",
+  ku_mahaTimeline: "MAHADASHA 타임라인",
+  ku_activeNow: "● 지금 활성",
+  ku_active: "활성",
+  ku_yearsSuffix: "년",
+  ku_whatNavatara: "Navatara란?",
+  ku_navataraDesc: "달의 Nakshatra에서 시작하여 27 Nakshatra가 9성 주기인 Tara로 그룹화됩니다.",
+  ku_chandraNakBase: "CHANDRA NAKSHATRA (기준)",
+  ku_whatJaimini: "Jaimini Chara Karakas란?",
+  ku_jaiminiDesc: "Jaimini Jyotish에서는 7개의 행성이 rashi-도수에 따라 karaka 역할을 얻습니다. 가장 높은 도수를 가진 행성이 Atmakaraka가 됩니다.",
+  ku_jaiminiLagnaDesc: "Atmakaraka의 rashi가 특별한 Jaimini Lagna를 형성합니다. AK의 navamsha 위치는 영혼의 영적 경로를 보여줍니다. 전체 분석은 점성가에게 상담하세요.",
+  ku_liveChandraTransit: "실시간 — CHANDRA 이동",
+  ku_whatKP: "KP Paddhati란?",
+  ku_birthChartSnap: "BIRTH CHART 스냅샷",
+  ku_planetPosition: "행성 위치",
+  ku_planetPositionSub: "실시간 행성 도수 및 rashi",
+  ku_dailyAlertsLink: "데일리 알림",
+  ku_dailyAlertsLinkSub: "4일간의 행성 가이드",
   vu_alNetError: "네트워크 오류",
   vu_alNetErrorMsg: "인터넷 연결을 확인하세요.",
   vu_alCompassCalib: "나침반 보정 중",
@@ -19559,8 +20669,6 @@ const KO: Partial<MoreT> = {
   pe2_cancel: "취소",
   pe2_delete: "삭제",
   pe2_deleteSuffix: "차트 데이터가 영구 삭제됩니다.",
-  vu_alDailyLimitMsg: "오늘 무료 한도를 초과했습니다 — 내일 다시 시도하거나 PRO로 업그레이드하세요.",
-  vu_alStepHint: "단계별로 앞으로 나아가세요.",
 };
 
 const TR: Partial<MoreT> = {
@@ -20311,6 +21419,61 @@ const TR: Partial<MoreT> = {
   vu_alPhotoMissingMsg: "Lütfen önce bir oda fotoğrafı çekin veya galeriden seçin.",
   vu_alScanFailed: "Tarama başarısız",
   vu_alScanFailedMsg: "Fotoğraf analiz edilemedi. Lütfen iyi aydınlatmada tekrar deneyin.",
+  vu_alDailyLimitMsg: "Bugün ücretsiz limit doldu — yarın tekrar deneyin veya Pro edinin.",
+  vu_alStepHint: "Adım adım ilerleyin.",
+  ku_ashtakWhat: "Ashtakavarga nedir?",
+  ku_ashtakWhatBody: "Her gezegen 8 evden 12 burca faydalı/zararlı puanlar verir. SAV = tüm 7 gezegenin toplamı. Daha fazla puan = daha güçlü burç.",
+  ku_approxTransit: "Yaklaşık Transit",
+  ku_houseLabel: "Ev",
+  ku_bavStrong: "Güçlü",
+  ku_bavGood: "İyi",
+  ku_bavAverage: "Ortalama",
+  ku_bavWeak: "Zayıf",
+  ku_bavLegStrong: "7-8 (Güçlü)",
+  ku_bavLegGood: "5-6 (İyi)",
+  ku_bavLegAverage: "3-4 (Ortalama)",
+  ku_bavLegWeak: "0-2 (Zayıf)",
+  ku_transitDisclaimer: "Bu geçişler ortalama yörünge hareketinden hesaplanmıştır — yalnızca genel rehberlik içindir.",
+  ku_secDashaTimeline: "DASHA ZAMAN ÇİZELGESİ",
+  ku_snapDashaBalance: "DASHA BAKİYESİ",
+  ku_snapLiveMoonTransit: "CANLI AY TRANSİTİ",
+  ku_jaiminiDegPre: "Burç içindeki derece:",
+  ku_jaiminiDegSuf: "tablodaki en yüksek",
+  ku_kpDesc: "Krishnamurti Paddhati, olayların zamanlamasında kesinlik için Vimshottari dasha'nın orantılı alt bölümlerini kullanır.",
+  ku_kpFooter: "Herhangi bir olay için kontrol edin: Star-lord ve Sub-lord ilişkisi. Eğer 3 lord aynıysa → olay doğrulanır.",
+  pr_active: "AKTİF",
+  pr_myData: "VERİLERİM",
+  pr_saved: "kaydedildi",
+  pr_perYear: "yıl",
+  pr_perMonth: "ay",
+  vu_sensorActive: "SENSÖR AKTİF",
+  vu_aligning: "HİZALANIYOR…",
+  vu_sensorInactive: "Sensör devre dışı",
+  vu_moveDevice: "Etkinleştirmek için cihazı hareket ettirin",
+  vu_idealDirLbl: "İdeal Yön",
+  vu_northEast: "Kuzey-Doğu",
+  vu_tabDos: "Yap ✅",
+  vu_tabDonts: "Yapma ❌",
+  vu_tabRemedies: "Remediler 🙏",
+  ku_mahaTimeline: "MAHADASHA ZAMAN ÇİZELGESİ",
+  ku_activeNow: "● AKTİF ŞİMDİ",
+  ku_active: "AKTİF",
+  ku_yearsSuffix: "yıl",
+  ku_whatNavatara: "Navatara nedir?",
+  ku_navataraDesc: "Ay'ın nakshatrasından başlayarak, 27 nakshatra 9-yıldızlı döngüler halinde gruplanır ve bunlara Tara denir.",
+  ku_whatJaimini: "Jaimini Chara Karaka nedir?",
+  ku_jaiminiDesc: "Jaimini Jyotish'te, 7 gezegene rashi-derecelerine göre karaka rolleri verilir. En yüksek dereceye sahip gezegen Atmakaraka olur.",
+  ku_jaiminiLagnaDesc: "Atmakaraka'nın rashi'si özel bir Jaimini Lagna oluşturur. AK'nın navamsha pozisyonu ruhun manevi yolunu gösterir. Tam analiz için bir astrolog ile görüşün.",
+  ku_liveChandraTransit: "CANLI — CHANDRA TRANSIT",
+  ku_natalConj: "DOĞUM KONJ",
+  ku_whatKP: "KP Paddhati nedir?",
+  ku_kpSignificators: "KP Göstericileri",
+  ku_birthChartSnap: "DOĞUM HARİTASI ÖZETİ",
+  ku_planetPosition: "Gezegen Konumu",
+  ku_planetPositionSub: "Canlı gezegensel dereceler ve rashi",
+  ku_dailyAlertsLink: "Günlük Bildirimler",
+  ku_dailyAlertsLinkSub: "4 günlük gezegensel rehberlik",
+  ku_house: "Ev",
   vu_alNetError: "Ağ hatası",
   vu_alNetErrorMsg: "Lütfen internet bağlantınızı kontrol edin.",
   vu_alCompassCalib: "Pusula kalibre ediliyor",
@@ -20351,8 +21514,6 @@ const TR: Partial<MoreT> = {
   pe2_cancel: "İptal",
   pe2_delete: "Sil",
   pe2_deleteSuffix: "çizelge verileri kalıcı olarak silinecek.",
-  vu_alDailyLimitMsg: "Bugün ücretsiz limit doldu — yarın tekrar deneyin veya Pro edinin.",
-  vu_alStepHint: "Adım adım ilerleyin.",
 };
 
 /**

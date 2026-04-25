@@ -500,22 +500,16 @@ function VastuCompass() {
     return diffCurr < diffBest ? d : best;
   });
 
-  // Localized labels
-  const L = v === "hi" ? {
-    title: "वास्तु दिशासूचक", subtitle: "पवित्र दिशा खोजक",
-    sensorActive: "सेंसर सक्रिय", aligning: "संरेखण…",
-    sensorInactive: "सेंसर निष्क्रिय", moveDevice: "सक्रिय करने के लिए डिवाइस घुमाएँ",
-    idealDir: "आदर्श दिशा", northEast: "उत्तर-पूर्व (ईशान)",
-  } : v === "hn" ? {
-    title: "Vastu Compass", subtitle: "Pavitra Disha Sucha",
-    sensorActive: "SENSOR ACTIVE", aligning: "ALIGNING…",
-    sensorInactive: "Sensor inactive", moveDevice: "Move device to activate",
-    idealDir: "Ideal Direction", northEast: "North-East (Ishaan)",
-  } : {
-    title: "Vastu Compass", subtitle: "Sacred Direction Finder",
-    sensorActive: "SENSOR ACTIVE", aligning: "ALIGNING…",
-    sensorInactive: "Sensor inactive", moveDevice: "Move device to activate",
-    idealDir: "Ideal Direction", northEast: "North-East",
+  // Localized labels (full 25-lang via i18n)
+  const L = {
+    title: t.vu_compassTitle,
+    subtitle: t.vu_compassSubtitle,
+    sensorActive: t.vu_sensorActive,
+    aligning: t.vu_aligning,
+    sensorInactive: t.vu_sensorInactive,
+    moveDevice: t.vu_moveDevice,
+    idealDir: t.vu_idealDirLbl,
+    northEast: t.vu_northEast,
   };
   // Show secondary line: hindi text for hi/hn, English meaning for en
   const dirSecondary = v === "en" ? `${currentDir.deity} · ${currentDir.meaning}` : currentDir.hindi;
@@ -1298,12 +1292,8 @@ function RoomCard({ room }: { room: VastuRoom }) {
   const C = useC();
   const t = useT();
   const v = t.vlang;
-  // Tab labels per language
-  const tabLabels = v === "hi"
-    ? { dos: "करें ✅", donts: "न करें ❌", remedies: "उपाय 🙏" }
-    : v === "hn"
-      ? { dos: "Karein ✅", donts: "Mat Karein ❌", remedies: "Upay 🙏" }
-      : { dos: "Do ✅", donts: "Don't ❌", remedies: "Remedies 🙏" };
+  // Tab labels (full 25-lang via i18n)
+  const tabLabels = { dos: t.vu_tabDos, donts: t.vu_tabDonts, remedies: t.vu_tabRemedies };
 
   return (
     <Pressable

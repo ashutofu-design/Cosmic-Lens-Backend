@@ -142,6 +142,43 @@ def _is_strong(pl: list, planet: str) -> bool:
     )
 
 
+def _mars_aspects_house(mars_h: int, target_h: int) -> bool:
+    """Mars's classical 4th / 7th / 8th drishti."""
+    if mars_h < 1 or target_h < 1:
+        return False
+    aspects = {
+        (mars_h + 2) % 12 + 1,   # 4th
+        (mars_h + 5) % 12 + 1,   # 7th
+        (mars_h + 6) % 12 + 1,   # 8th
+    }
+    return target_h in aspects
+
+
+# Debilitation sign for each graha (sign index 1-12)
+DEBIL_SIGN = {
+    "Sun": 7, "Moon": 8, "Mars": 4, "Mercury": 12,
+    "Jupiter": 10, "Venus": 6, "Saturn": 1,
+    "Rahu": 8, "Ketu": 2,
+}
+
+
+def _is_combust(pl: list, planet: str, orb: float = 8.0) -> bool:
+    """Planet is combust if within `orb` degrees of the Sun (excluding Sun itself)."""
+    if planet == "Sun":
+        return False
+    sun_lon = _lon(pl, "Sun")
+    p_lon = _lon(pl, planet)
+    if not _has(pl, "Sun") or not _has(pl, planet):
+        return False
+    return _orb(sun_lon, p_lon) < orb
+
+
+def _is_debilitated(pl: list, planet: str) -> bool:
+    p_obj = _planet_obj(pl, planet)
+    p_sign = _sign_idx(p_obj)
+    return p_sign and p_sign == DEBIL_SIGN.get(planet)
+
+
 # ── 1. Manglik Dosh ────────────────────────────────────────────────────────────
 def _manglik(pl):
     mars_h = _house(pl, "Mars")
@@ -234,41 +271,240 @@ def _kaal_sarp(pl):
 
 
 # ── 3. Pitru Dosh ─────────────────────────────────────────────────────────────
+# Classical Pitra Dosh (ancestor curse) — BPHS + Lal Kitab + Nadi tradition.
+# Triggers (score-weighted):
+#   T1: Sun + Rahu conjunction                                 +3 (strongest)
+#   T2: Sun + Ketu conjunction                                 +2
+#   T3: Sun + Saturn conjunction in 9th house                  +3 (father-dharma break)
+#   T4: 9th lord in 6/8/12 (dusthana)                          +2
+#   T5: Rahu OR Ketu placed in 9th house                       +2
+#   T6: Sun in 6/8/12 (dusthana)                               +1
+#   T7: Saturn aspects Sun via 3rd/7th/10th drishti            +2
+#   T8: 9th lord combust (within 8° of Sun) OR debilitated     +1
+#   T9: ≥2 malefics (Sat/Mars/Rah/Ket) in OR aspecting 9th     +2
+# Amplifiers (each +1):
+#   A1: primary trigger sits in 9th house itself
+#   A2: primary trigger in dusthana 6/8/12
+#   A3: 5th house also afflicted (malefic in 5th OR 5L in dusthana) — curse passes to progeny
+# Bhangas (each -1):
+#   B1: Jupiter 5/7/9 drishti on 9th house OR 9th lord (Guru blessings)
+#   B2: 9th lord exalted OR in own sign
+#   B3: Sun in own sign (Leo) OR exalted (Aries)
+#   B4: 5th lord strong + Jupiter strong (progeny + dharma intact)
+#   B5: 9th lord in kendra/trikona (1/4/5/7/9/10)
+# Tier:
+#   No triggers              → None
+#   ≥2 bhanga                → forced None (curse cancelled)
+#   score ≥ 4                → Active
+#   score 1..3               → Mild
+#   score ≤ 0                → None
 def _pitru(pl):
     sun_h  = _house(pl, "Sun")
     rahu_h = _house(pl, "Rahu")
     ketu_h = _house(pl, "Ketu")
+    sat_h  = _house(pl, "Saturn")
+    mars_h = _house(pl, "Mars")
+    jup_h  = _house(pl, "Jupiter")
 
-    if sun_h == rahu_h or sun_h == ketu_h:
-        node = "Rahu" if sun_h == rahu_h else "Ketu"
+    triggers = []
+    score = 0
+    trigger_house = 0
+
+    # ── T1: Sun-Rahu conjunction ───────────────────────────────────────────────
+    if sun_h and sun_h == rahu_h:
+        triggers.append(f"Sun-Rahu Conjunction in H{sun_h}")
+        trigger_house = sun_h
+        score += 3
+    # ── T2: Sun-Ketu conjunction ───────────────────────────────────────────────
+    if sun_h and sun_h == ketu_h:
+        triggers.append(f"Sun-Ketu Conjunction in H{sun_h}")
+        if not trigger_house:
+            trigger_house = sun_h
+        score += 2
+    # ── T3: Sun-Saturn conjunction in 9th house specifically ───────────────────
+    if sun_h and sun_h == sat_h and sun_h == 9:
+        triggers.append("Sun-Saturn Conjunction in 9th (father-dharma break)")
+        if not trigger_house:
+            trigger_house = 9
+        score += 3
+
+    # ── 9th lord lookups (need ascendant) ──────────────────────────────────────
+    asc = _asc_sign(pl)
+    L9 = _house_lord(asc, 9) if asc else ""
+    L5 = _house_lord(asc, 5) if asc else ""
+    L9_h = _house(pl, L9) if L9 else 0
+
+    # ── T4: 9L in 6/8/12 ──────────────────────────────────────────────────────
+    if L9 and L9_h in {6, 8, 12}:
+        triggers.append(f"9th lord ({L9}) in dusthana H{L9_h}")
+        if not trigger_house:
+            trigger_house = L9_h
+        score += 2
+
+    # ── T5: Rahu or Ketu in 9th ───────────────────────────────────────────────
+    nodes_in_9 = [n for n, h in [("Rahu", rahu_h), ("Ketu", ketu_h)] if h == 9]
+    if nodes_in_9:
+        triggers.append(f"{'/'.join(nodes_in_9)} in 9th house (Pitra Bhava direct affliction)")
+        if not trigger_house:
+            trigger_house = 9
+        score += 2
+
+    # ── T6: Sun in 6/8/12 ─────────────────────────────────────────────────────
+    if sun_h in {6, 8, 12}:
+        triggers.append(f"Sun in dusthana H{sun_h}")
+        if not trigger_house:
+            trigger_house = sun_h
+        score += 1
+
+    # ── T7: Saturn aspects Sun via 3/7/10 drishti ─────────────────────────────
+    if sat_h and sun_h and sat_h != sun_h and _saturn_aspects_house(sat_h, sun_h):
+        triggers.append(f"Saturn (H{sat_h}) drishti on Sun (H{sun_h})")
+        if not trigger_house:
+            trigger_house = sun_h
+        score += 2
+
+    # ── T8: 9L combust OR debilitated ────────────────────────────────────────
+    if L9 and (_is_combust(pl, L9) or _is_debilitated(pl, L9)):
+        why = "combust" if _is_combust(pl, L9) else "debilitated"
+        triggers.append(f"9th lord ({L9}) {why}")
+        if not trigger_house:
+            trigger_house = L9_h or 9
+        score += 1
+
+    # ── T9: ≥2 malefics in or aspecting 9th ──────────────────────────────────
+    malefic_hits = []
+    # Placement in 9th
+    for m, h in [("Saturn", sat_h), ("Mars", mars_h), ("Rahu", rahu_h), ("Ketu", ketu_h)]:
+        if h == 9:
+            malefic_hits.append(f"{m} in 9th")
+    # Saturn aspects 9th
+    if sat_h and sat_h != 9 and _saturn_aspects_house(sat_h, 9):
+        malefic_hits.append(f"Saturn drishti on 9th")
+    # Mars aspects 9th
+    if mars_h and mars_h != 9 and _mars_aspects_house(mars_h, 9):
+        malefic_hits.append(f"Mars drishti on 9th")
+    if len(malefic_hits) >= 2:
+        triggers.append(f"≥2 malefics on 9th: {', '.join(malefic_hits)}")
+        if not trigger_house:
+            trigger_house = 9
+        score += 2
+
+    # ── No triggers → clean exit ─────────────────────────────────────────────
+    if not triggers:
+        return (
+            "None",
+            "No Pitru Dosh — Ancestors at Peace",
+            "Sun, 9th house, and 9th lord all clear of classical Pitra Dosh patterns.",
+            [],
+            f"Sun → H{sun_h} | 9L ({L9 or '?'}) → H{L9_h} | Rahu → H{rahu_h} | Ketu → H{ketu_h}",
+        )
+
+    # ── Amplifiers ───────────────────────────────────────────────────────────
+    amplifiers = []
+    if trigger_house == 9:
+        amplifiers.append(f"Trigger in 9th house (Pitra Bhava itself)")
+        score += 1
+    if trigger_house in {6, 8, 12}:
+        amplifiers.append(f"Trigger in dusthana H{trigger_house}")
+        score += 1
+    # 5th-house affliction extension
+    fifth_afflicted = []
+    for m, h in [("Saturn", sat_h), ("Mars", mars_h), ("Rahu", rahu_h), ("Ketu", ketu_h)]:
+        if h == 5:
+            fifth_afflicted.append(f"{m} in 5th")
+    L5_h = _house(pl, L5) if L5 else 0
+    if L5 and L5_h in {6, 8, 12}:
+        fifth_afflicted.append(f"5L ({L5}) in dusthana H{L5_h}")
+    if fifth_afflicted:
+        amplifiers.append(f"5th house afflicted ({', '.join(fifth_afflicted)}) — curse extends to progeny")
+        score += 1
+
+    # ── Bhangas ──────────────────────────────────────────────────────────────
+    bhangas = []
+    # B1: Jupiter aspects 9th OR 9L's house
+    jup_targets = []
+    if jup_h and _jupiter_aspects_house(jup_h, 9):
+        jup_targets.append("9th house")
+    if jup_h and L9_h and _jupiter_aspects_house(jup_h, L9_h):
+        jup_targets.append(f"9L ({L9}, H{L9_h})")
+    if jup_targets:
+        bhangas.append(f"Jupiter (H{jup_h}) drishti on {' & '.join(jup_targets)} (Guru shield)")
+        score -= 1
+    # B2: 9L exalted or own
+    if L9:
+        L9_obj = _planet_obj(pl, L9)
+        L9_sign = _sign_idx(L9_obj)
+        if L9_sign and (L9_sign == EXALT_SIGN.get(L9) or L9_sign in OWN_SIGNS.get(L9, set())):
+            note = "exalted" if L9_sign == EXALT_SIGN.get(L9) else "own sign"
+            bhangas.append(f"9L ({L9}) {note} ({L9_sign}) — paternal dharma intrinsically strong")
+            score -= 1
+    # B3: Sun own (Leo=5) or exalted (Aries=1)
+    sun_obj = _planet_obj(pl, "Sun")
+    sun_sign = _sign_idx(sun_obj)
+    if sun_sign == 5 or sun_sign == 1:
+        note = "exalted (Aries)" if sun_sign == 1 else "own (Leo)"
+        bhangas.append(f"Sun {note} — father karaka strong")
+        score -= 1
+    # B4: 5L strong + Jupiter strong
+    if L5 and _is_strong(pl, L5) and _is_strong(pl, "Jupiter"):
+        bhangas.append(f"5L ({L5}) strong + Jupiter strong (progeny + dharma intact)")
+        score -= 1
+    # B5: 9L in kendra/trikona
+    KENDRA_TRIKONA = {1, 4, 5, 7, 9, 10}
+    if L9 and L9_h in KENDRA_TRIKONA:
+        bhangas.append(f"9L ({L9}) in kendra/trikona H{L9_h} — ancestor blessings active")
+        score -= 1
+
+    n_bhng = len(bhangas)
+
+    note_parts = ["Triggers: " + " | ".join(triggers)]
+    if amplifiers:
+        note_parts.append("Amplifiers: " + " | ".join(amplifiers))
+    if bhangas:
+        note_parts.append("Bhanga: " + " | ".join(bhangas))
+    note_parts.append(f"Score={score}")
+    planet_note = " || ".join(note_parts)
+
+    common_remedies = [
+        "Perform Pitru Tarpan on every Amavasya (new moon)",
+        "Observe Pitru Paksha (16-day Mahalaya period) — Shraddh ceremony at Gaya/Trimbakeshwar/Haridwar",
+        "Feed crows (पितृ-दूत) on every Amavasya with rice + curd + ghee",
+        "Donate food and clothing to brahmins on Amavasya",
+        "Chant Sun mantra at sunrise: 'Om Ghrini Suryaya Namah' 108×",
+        "Offer water to Peepal tree every Saturday morning",
+        "Recite Vishnu Sahasranama and Garuda Puran during Pitru Paksha",
+    ]
+
+    if n_bhng >= 2:
+        return (
+            "None",
+            "Pitru Dosh Triggers Cancelled by Bhanga",
+            f"{len(triggers)} Pitru trigger(s) detected but neutralised by {n_bhng} cancellation factor(s) — Jupiter blessings / 9L strength / strong father karaka shield the lineage axis.",
+            [],
+            planet_note,
+        )
+    if score >= 4:
         return (
             "Active",
-            f"Sun–{node} Conjunction — Pitru Dosh Present",
-            "Pitru Dosh forms when the Sun (significator of father and ancestors) conjuncts Rahu or Ketu. Indicates unresolved ancestral karma that needs healing.",
-            [
-                "Perform Pitru Tarpan on every Amavasya (new moon)",
-                "Donate food and clothing to brahmins on Pitru Paksha",
-                "Recite Pitru Stotra daily (108 times)",
-                "Feed crows and brahmins on new moon days",
-                "Plant a Peepal tree and water it on Saturdays",
-            ],
-            f"Sun → House {sun_h} | {node} → House {rahu_h if node == 'Rahu' else ketu_h}",
+            f"Pitru Dosh Active (Score {score}) — Ancestral Karma Pattern",
+            "Strong classical Pitra Dosh — paternal lineage karma demanding attention. May manifest as childbirth obstacles, father-relationship friction, recurring family disharmony, or sudden financial reversals during Sun/Rahu/Ketu/9L dasha.",
+            common_remedies,
+            planet_note,
         )
-    # Mild: Rahu aspects 9th lord (Sun in 9th or Rahu aspects 9th)
-    if sun_h == 9 and rahu_h in (1, 3, 5, 9):
+    if score >= 1:
         return (
             "Mild",
-            "Sun in 9th House with Rahu Influence — Partial Pitru Dosh",
-            "Rahu's influence on the 9th house Sun creates partial ancestral karma requiring attention.",
-            ["Perform Pitra Tarpan on important ancestral dates"],
-            f"Sun → House {sun_h} | Rahu → House {rahu_h}",
+            f"Mild Pitru Dosh (Score {score})",
+            "Partial Pitra Dosh pattern. Periodic ancestor-related issues; manageable with consistent Pitra remedies.",
+            common_remedies[:3],
+            planet_note,
         )
     return (
         "None",
-        "No Pitru Dosh — Ancestors at Peace",
-        "Sun is free from Rahu/Ketu conjunction. No Pitru Dosh detected in this chart.",
+        "Pitru Dosh Triggers Neutralised",
+        "Pitru triggers present but neutralised by bhanga / lack of amplification.",
         [],
-        f"Sun → House {sun_h} | Rahu → House {rahu_h} | Ketu → House {ketu_h}",
+        planet_note,
     )
 
 

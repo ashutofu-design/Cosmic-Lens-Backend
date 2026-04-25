@@ -596,6 +596,52 @@ export interface MoreT {
   sub_cmpKarmic:        string;
   sub_cmpPdf:           string;
   sub_cmpProfiles:      string;
+
+  // ── daily-alerts energy legend ──
+  da_energyLevels:      string;
+  da_energyGood:        string;
+  da_energyNeutral:     string;
+  da_energyChallenging: string;
+
+  // ── profile-edit relation labels ──
+  pe_relSelf:      string;
+  pe_relHusband:   string;
+  pe_relWife:      string;
+  pe_relSon:       string;
+  pe_relDaughter:  string;
+  pe_relFather:    string;
+  pe_relMother:    string;
+  pe_relBrother:   string;
+  pe_relSister:    string;
+  pe_relFriend:    string;
+  pe_relOther:     string;
+
+  // ── subscription plan names + tagline ──
+  sub_planBasicName:    string;
+  sub_planProName:      string;
+  sub_planBasicTag:     string;
+  sub_planProTag:       string;
+
+  // ── subscription Basic plan features (6) ──
+  sub_bF1: string; sub_bF2: string; sub_bF3: string;
+  sub_bF4: string; sub_bF5: string; sub_bF6: string;
+
+  // ── subscription Basic plan locked items (4) ──
+  sub_bL1: string; sub_bL2: string; sub_bL3: string; sub_bL4: string;
+
+  // ── subscription Pro plan features (9) ──
+  sub_pF1: string; sub_pF2: string; sub_pF3: string; sub_pF4: string; sub_pF5: string;
+  sub_pF6: string; sub_pF7: string; sub_pF8: string; sub_pF9: string;
+
+  // ── vastu UI strings ──
+  vu_camSub:     string;
+  vu_galSub:     string;
+  vu_roomPicker: string;
+  vu_review:     string;
+  vu_reviewSub:  string;
+  vu_tabBasic:   string;
+  vu_tabPro:     string;
+  vu_introBody:  string;
 }
 
 // English — primary, complete
@@ -1174,6 +1220,59 @@ const EN: MoreT = {
   sub_cmpKarmic:        "Karmic Insights",
   sub_cmpPdf:           "PDF Report",
   sub_cmpProfiles:      "Saved Profiles",
+
+  da_energyLevels:      "Energy Levels",
+  da_energyGood:        "Good",
+  da_energyNeutral:     "Neutral",
+  da_energyChallenging: "Challenging",
+
+  pe_relSelf:      "Self",
+  pe_relHusband:   "Husband",
+  pe_relWife:      "Wife",
+  pe_relSon:       "Son",
+  pe_relDaughter:  "Daughter",
+  pe_relFather:    "Father",
+  pe_relMother:    "Mother",
+  pe_relBrother:   "Brother",
+  pe_relSister:    "Sister",
+  pe_relFriend:    "Friend",
+  pe_relOther:     "Other",
+
+  sub_planBasicName:    "Basic",
+  sub_planProName:      "Pro",
+  sub_planBasicTag:     "Essential Vedic guidance",
+  sub_planProTag:       "Full power Vedic insights",
+
+  sub_bF1: "10 Jyotish Questions / day",
+  sub_bF2: "Marriage Compatibility (Basic)",
+  sub_bF3: "Love Compatibility (Basic)",
+  sub_bF4: "Career, Health, Finance — short summary",
+  sub_bF5: "Future Timeline — 1 month",
+  sub_bF6: "5 saved profiles",
+
+  sub_bL1: "Unlimited Questions",
+  sub_bL2: "Deep analysis with reasoning",
+  sub_bL3: "Full 6-month timeline",
+  sub_bL4: "Karmic insights & PDF report",
+
+  sub_pF1: "Unlimited Jyotish Questions",
+  sub_pF2: "Marriage & Love — Full deep analysis",
+  sub_pF3: "Career, Health, Finance — Detailed",
+  sub_pF4: "Future Timeline — 6 months full",
+  sub_pF5: "D1 + D9 chart analysis",
+  sub_pF6: "Dasha (MD + AD + PD) full breakdown",
+  sub_pF7: "Karmic patterns & hidden insights",
+  sub_pF8: "PDF report download",
+  sub_pF9: "Unlimited saved profiles",
+
+  vu_camSub:     "Take photo instantly",
+  vu_galSub:     "Choose a saved photo",
+  vu_roomPicker: "Choose room type",
+  vu_review:     "Review & Submit",
+  vu_reviewSub:  "Confirm your captures, then run Deep Scan.",
+  vu_tabBasic:   "Basic",
+  vu_tabPro:     "Pro",
+  vu_introBody:  "Vastu Shastra is an ancient Indian science of architecture. Correct directions bring positive energy, happiness, health, and prosperity to your home.",
 };
 
 // Hinglish overrides (only differing keys)
@@ -1649,6 +1748,59 @@ const HN: Partial<MoreT> = {
   sub_cmpKarmic:        "Karmic Insights",
   sub_cmpPdf:           "PDF Report",
   sub_cmpProfiles:      "Save Profiles",
+
+  da_energyLevels:      "Urja Star",
+  da_energyGood:        "Achha",
+  da_energyNeutral:     "Sama",
+  da_energyChallenging: "Mushkil",
+
+  pe_relSelf:      "Swayam",
+  pe_relHusband:   "Pati",
+  pe_relWife:      "Patni",
+  pe_relSon:       "Beta",
+  pe_relDaughter:  "Beti",
+  pe_relFather:    "Pita",
+  pe_relMother:    "Mata",
+  pe_relBrother:   "Bhai",
+  pe_relSister:    "Behen",
+  pe_relFriend:    "Dost",
+  pe_relOther:     "Anya",
+
+  sub_planBasicName:    "Basic",
+  sub_planProName:      "Pro",
+  sub_planBasicTag:     "Zaruri Vedic margdarshan",
+  sub_planProTag:       "Pura Vedic gyaan",
+
+  sub_bF1: "10 Jyotish Sawal / din",
+  sub_bF2: "Vivah Milan (Basic)",
+  sub_bF3: "Prem Milan (Basic)",
+  sub_bF4: "Career, Health, Finance — chhota saaransh",
+  sub_bF5: "Bhavishya Timeline — 1 mahina",
+  sub_bF6: "5 save profiles",
+
+  sub_bL1: "Unlimited Sawal",
+  sub_bL2: "Gehri vishleshan reasoning ke saath",
+  sub_bL3: "Pura 6-mahine ka timeline",
+  sub_bL4: "Karmic insights & PDF report",
+
+  sub_pF1: "Unlimited Jyotish Sawal",
+  sub_pF2: "Vivah & Prem — Pura gehra vishleshan",
+  sub_pF3: "Career, Health, Finance — Vistrit",
+  sub_pF4: "Bhavishya Timeline — 6 mahine pura",
+  sub_pF5: "D1 + D9 chart vishleshan",
+  sub_pF6: "Dasha (MD + AD + PD) pura breakdown",
+  sub_pF7: "Karmic patterns & chhupi jankari",
+  sub_pF8: "PDF report download",
+  sub_pF9: "Unlimited save profiles",
+
+  vu_camSub:     "Turant photo lein",
+  vu_galSub:     "Saved photo chuniye",
+  vu_roomPicker: "Room type chuniye",
+  vu_review:     "Review aur Submit",
+  vu_reviewSub:  "Apni photos confirm karein, phir Deep Scan chalayein.",
+  vu_tabBasic:   "Basic",
+  vu_tabPro:     "Pro",
+  vu_introBody:  "Vastu Shastra ek prachin Bhartiya vastu-vigyan hai. Sahi dishaayein ghar mein positive urja, khushiyan, swasthya aur samriddhi laati hain.",
 };
 
 // Hindi overrides (Devanagari)
@@ -2217,6 +2369,59 @@ const HI: Partial<MoreT> = {
   sub_cmpKarmic:        "कार्मिक अंतर्दृष्टि",
   sub_cmpPdf:           "पीडीएफ रिपोर्ट",
   sub_cmpProfiles:      "सहेजी गई प्रोफ़ाइल",
+
+  da_energyLevels:      "ऊर्जा स्तर",
+  da_energyGood:        "अच्छा",
+  da_energyNeutral:     "सामान्य",
+  da_energyChallenging: "कठिन",
+
+  pe_relSelf:      "स्वयं",
+  pe_relHusband:   "पति",
+  pe_relWife:      "पत्नी",
+  pe_relSon:       "पुत्र",
+  pe_relDaughter:  "पुत्री",
+  pe_relFather:    "पिता",
+  pe_relMother:    "माता",
+  pe_relBrother:   "भाई",
+  pe_relSister:    "बहन",
+  pe_relFriend:    "मित्र",
+  pe_relOther:     "अन्य",
+
+  sub_planBasicName:    "बेसिक",
+  sub_planProName:      "प्रो",
+  sub_planBasicTag:     "आवश्यक वैदिक मार्गदर्शन",
+  sub_planProTag:       "संपूर्ण वैदिक ज्ञान",
+
+  sub_bF1: "10 ज्योतिष प्रश्न / दिन",
+  sub_bF2: "विवाह मिलान (बेसिक)",
+  sub_bF3: "प्रेम मिलान (बेसिक)",
+  sub_bF4: "करियर, स्वास्थ्य, धन — संक्षिप्त सारांश",
+  sub_bF5: "भविष्य टाइमलाइन — 1 माह",
+  sub_bF6: "5 सहेजी गई प्रोफ़ाइल",
+
+  sub_bL1: "असीमित प्रश्न",
+  sub_bL2: "तर्क के साथ गहन विश्लेषण",
+  sub_bL3: "पूर्ण 6-माह की टाइमलाइन",
+  sub_bL4: "कार्मिक अंतर्दृष्टि और पीडीएफ रिपोर्ट",
+
+  sub_pF1: "असीमित ज्योतिष प्रश्न",
+  sub_pF2: "विवाह और प्रेम — पूर्ण गहन विश्लेषण",
+  sub_pF3: "करियर, स्वास्थ्य, धन — विस्तृत",
+  sub_pF4: "भविष्य टाइमलाइन — 6 माह पूर्ण",
+  sub_pF5: "डी1 + डी9 कुंडली विश्लेषण",
+  sub_pF6: "दशा (एमडी + एडी + पीडी) पूर्ण विवरण",
+  sub_pF7: "कार्मिक पैटर्न और छिपी अंतर्दृष्टि",
+  sub_pF8: "पीडीएफ रिपोर्ट डाउनलोड",
+  sub_pF9: "असीमित सहेजी गई प्रोफ़ाइल",
+
+  vu_camSub:     "तुरंत फ़ोटो लें",
+  vu_galSub:     "सहेजी गई फ़ोटो चुनें",
+  vu_roomPicker: "कमरा चुनें",
+  vu_review:     "समीक्षा करें और भेजें",
+  vu_reviewSub:  "अपनी फ़ोटो की पुष्टि करें, फिर डीप स्कैन चलाएँ।",
+  vu_tabBasic:   "बेसिक",
+  vu_tabPro:     "प्रो",
+  vu_introBody:  "वास्तु शास्त्र वास्तुकला का एक प्राचीन भारतीय विज्ञान है। सही दिशाएँ घर में सकारात्मक ऊर्जा, सुख, स्वास्थ्य और समृद्धि लाती हैं।",
 };
 
 /**

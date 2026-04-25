@@ -1274,7 +1274,7 @@ function VastuScanCard({ C }: { C: any }) {
           >
             <Feather name="camera" size={20} color="#a78bfa" />
             <Text style={[vs.pickBtnText, { color: C.text }]}>{t.vu_camera}</Text>
-            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Turant photo lein</Text>
+            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>{t.vu_camSub}</Text>
           </Pressable>
           <Pressable
             onPress={pickFromLibrary}
@@ -1283,7 +1283,7 @@ function VastuScanCard({ C }: { C: any }) {
           >
             <Feather name="image" size={20} color="#a78bfa" />
             <Text style={[vs.pickBtnText, { color: C.text }]}>{t.vu_gallery}</Text>
-            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>Saved photo chuniye</Text>
+            <Text style={[vs.pickBtnSub, { color: C.textMuted }]}>{t.vu_galSub}</Text>
           </Pressable>
         </View>
       )}
@@ -1739,8 +1739,8 @@ function DeepScanWizard({
 
           {stepIndex === 5 && (
             <>
-              <Text style={[ds.stepTitle, { color: C.text }]}>Review & Submit</Text>
-              <Text style={[ds.stepSub, { color: C.textMuted }]}>Confirm your captures, then run Deep Scan.</Text>
+              <Text style={[ds.stepTitle, { color: C.text }]}>{t.vu_review}</Text>
+              <Text style={[ds.stepSub, { color: C.textMuted }]}>{t.vu_reviewSub}</Text>
 
               <View style={ds.reviewGrid}>
                 {WALL_STEPS.map((w, i) => {
@@ -2618,9 +2618,9 @@ export default function VastuScreen() {
         >
           <Feather name="home" size={13} color={section === "basic" ? C.accent : C.textMuted} />
           <Text style={[s.tabPillText, { color: section === "basic" ? C.accent : C.textMuted, fontWeight: section === "basic" ? "800" : "600" }]}>
-            Basic
+            {t.vu_tabBasic}
           </Text>
-          <Text style={[s.tabPillSub, { color: section === "basic" ? C.accent : C.textDim }]}>BASIC</Text>
+          <Text style={[s.tabPillSub, { color: section === "basic" ? C.accent : C.textDim }]}>{t.vu_tabBasic.toUpperCase()}</Text>
         </Pressable>
         <Pressable
           onPress={() => { Haptics.selectionAsync?.(); setSection("pro"); }}
@@ -2628,7 +2628,7 @@ export default function VastuScreen() {
         >
           <Feather name="award" size={13} color={section === "pro" ? "#f9d76b" : C.textMuted} />
           <Text style={[s.tabPillText, { color: section === "pro" ? "#f9d76b" : C.textMuted, fontWeight: section === "pro" ? "800" : "600" }]}>
-            Pro
+            {t.vu_tabPro}
           </Text>
           <Text style={[s.tabPillSub, { color: section === "pro" ? "#f9d76b" : C.textDim }]}>🔒</Text>
         </Pressable>
@@ -2646,8 +2646,7 @@ export default function VastuScreen() {
               <View style={{ flex:1 }}>
                 <Text style={[s.introTitle, { color: C.text }]}>{t.vu_whatIsVastu}</Text>
                 <Text style={[s.introBody, { color: C.textMuted }]}>
-                  Vastu Shastra is an ancient Indian science of architecture. Correct directions bring
-                  positive energy, happiness, health, and prosperity to your home.
+                  {t.vu_introBody}
                 </Text>
               </View>
             </View>

@@ -33,47 +33,25 @@ const F = {
 const PLANS = [
   {
     key: "basic" as const,
-    name: "Basic",
+    nameKey: "sub_planBasicName",
     accent: "#a78bfa",
     badge: null as string | null,
     monthlyPrice: PRICES.basic_monthly,
     icon: "star" as const,
-    tagline: "__BASIC_TAG__",
-    features: [
-      "10 Jyotish Questions / day",
-      "Marriage Compatibility (Basic)",
-      "Love Compatibility (Basic)",
-      "Career, Health, Finance — short summary",
-      "Future Timeline — 1 month",
-      "5 saved profiles",
-    ],
-    locked: [
-      "Unlimited Questions",
-      "Deep analysis with reasoning",
-      "Full 6-month timeline",
-      "Karmic insights & PDF report",
-    ],
+    taglineKey: "planBasicTagline",
+    features: ["sub_bF1", "sub_bF2", "sub_bF3", "sub_bF4", "sub_bF5", "sub_bF6"],
+    locked:   ["sub_bL1", "sub_bL2", "sub_bL3", "sub_bL4"],
   },
   {
     key: "pro" as const,
-    name: "Pro",
+    nameKey: "sub_planProName",
     accent: "#f59e0b",
     badge: "🔥 MOST POPULAR",
     monthlyPrice: PRICES.pro_monthly,
     icon: "zap" as const,
-    tagline: "Full power Vedic insights",
-    features: [
-      "Unlimited Jyotish Questions",
-      "Marriage & Love — Full deep analysis",
-      "Career, Health, Finance — Detailed",
-      "Future Timeline — 6 months full",
-      "D1 + D9 chart analysis",
-      "Dasha (MD + AD + PD) full breakdown",
-      "Karmic patterns & hidden insights",
-      "PDF report download",
-      "Unlimited saved profiles",
-    ],
-    locked: [],
+    taglineKey: "planProTagline",
+    features: ["sub_pF1", "sub_pF2", "sub_pF3", "sub_pF4", "sub_pF5", "sub_pF6", "sub_pF7", "sub_pF8", "sub_pF9"],
+    locked: [] as string[],
   },
 ];
 
@@ -145,11 +123,11 @@ function PlanCard({
             <Feather name={plan.icon} size={16} color={plan.accent} />
           </View>
           <View>
-            <Text style={[pl.planName, { color: plan.accent }]}>{plan.name}</Text>
+            <Text style={[pl.planName, { color: plan.accent }]}>{(t as unknown as Record<string, string>)[plan.nameKey] ?? plan.key}</Text>
             <Text style={[pl.planTagline, { color: C.textMuted }]}>
-              {plan.tagline === "__BASIC_TAG__" ? t.planBasicTagline
-                : plan.tagline === "Full power Vedic insights" ? t.planProTagline
-                : plan.tagline}
+              {plan.taglineKey === "planBasicTagline" ? t.planBasicTagline
+                : plan.taglineKey === "planProTagline" ? t.planProTagline
+                : ""}
             </Text>
           </View>
         </View>
@@ -176,7 +154,7 @@ function PlanCard({
             <View style={[pl.featureDot, { backgroundColor: `${plan.accent}22` }]}>
               <Feather name="check" size={10} color={plan.accent} />
             </View>
-            <Text style={[pl.featureText, { color: C.text }]}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.text }]}>{(t as unknown as Record<string, string>)[f] ?? f}</Text>
           </View>
         ))}
         {plan.locked.map(f => (
@@ -184,7 +162,7 @@ function PlanCard({
             <View style={[pl.featureDot, { backgroundColor: C.bgCard2 }]}>
               <Feather name="x" size={10} color={C.textMuted} />
             </View>
-            <Text style={[pl.featureText, { color: C.textMuted, textDecorationLine: "line-through" }]}>{f}</Text>
+            <Text style={[pl.featureText, { color: C.textMuted, textDecorationLine: "line-through" }]}>{(t as unknown as Record<string, string>)[f] ?? f}</Text>
           </View>
         ))}
       </View>
@@ -193,7 +171,7 @@ function PlanCard({
       {isCurrent ? (
         <View style={[pl.ctaActive, { borderColor: `${plan.accent}40`, backgroundColor: `${plan.accent}10` }]}>
           <Feather name="check-circle" size={14} color={plan.accent} />
-          <Text style={[pl.ctaActiveText, { color: plan.accent }]}>Current Plan</Text>
+          <Text style={[pl.ctaActiveText, { color: plan.accent }]}>{t.currentPlan}</Text>
         </View>
       ) : (
         <Pressable

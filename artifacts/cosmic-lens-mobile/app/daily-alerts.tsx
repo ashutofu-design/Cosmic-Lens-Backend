@@ -559,12 +559,12 @@ export default function DailyAlertsScreen() {
             {/* ── Legend ── */}
             {days.length > 0 && (
               <View style={[s.legend, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.legendTitle, { color: C.textMid }]}>Energy Levels</Text>
+                <Text style={[s.legendTitle, { color: C.textMid }]}>{t.da_energyLevels}</Text>
                 <View style={s.legendRow}>
                   {[
-                    { color: "#22c55e", label: "Good" },
-                    { color: "#f59e0b", label: "Neutral" },
-                    { color: "#ef4444", label: "Challenging" },
+                    { color: "#22c55e", label: t.da_energyGood },
+                    { color: "#f59e0b", label: t.da_energyNeutral },
+                    { color: "#ef4444", label: t.da_energyChallenging },
                   ].map(({ color, label }) => (
                     <View key={label} style={s.legendItem}>
                       <View style={[s.legendDot, { backgroundColor: color }]} />

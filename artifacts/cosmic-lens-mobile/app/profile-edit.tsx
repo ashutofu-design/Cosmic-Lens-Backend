@@ -49,7 +49,31 @@ const RELATIONS = [
   { key: "Friend",    emoji: "🤝" },
   { key: "Other",     emoji: "👥" },
 ];
-const RELATION_ITEMS = RELATIONS.map(r => ({ label: `${r.emoji}  ${r.key}`, value: r.key }));
+
+// Map a stored relation key (English, used as DB value) → localized display label
+export function relationLabel(rel: string | null | undefined, t: ReturnType<typeof useT>): string {
+  switch (rel) {
+    case "Self":     return t.pe_relSelf;
+    case "Husband":  return t.pe_relHusband;
+    case "Wife":     return t.pe_relWife;
+    case "Son":      return t.pe_relSon;
+    case "Daughter": return t.pe_relDaughter;
+    case "Father":   return t.pe_relFather;
+    case "Mother":   return t.pe_relMother;
+    case "Brother":  return t.pe_relBrother;
+    case "Sister":   return t.pe_relSister;
+    case "Friend":   return t.pe_relFriend;
+    case "Other":    return t.pe_relOther;
+    default:         return rel || "";
+  }
+}
+
+function buildRelationItems(t: ReturnType<typeof useT>) {
+  return RELATIONS.map(r => ({
+    label: `${r.emoji}  ${relationLabel(r.key, t)}`,
+    value: r.key,
+  }));
+}
 
 interface GeoResult { label: string; lat: number; lon: number; tz: number; }
 
@@ -209,7 +233,7 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
                 {profile.relation && profile.relation !== "Self" && (
-                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>{profile.relation}</Text>
+                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>{relationLabel(profile.relation, t)}</Text>
                 )}
               </View>
               <Text style={[card.astro, { color: C.textMuted }]} numberOfLines={1}>{astroLine}</Text>
@@ -767,7 +791,7 @@ export default function ProfileEditScreen() {
         <PickerModal visible={fmYearOpen}  title={t.pe_pickYear}     items={YEARS_L}       selected={fmForm.year}   onSelect={v => { fmSet("year")(v);   setFmYearOpen(false);  }} onClose={() => setFmYearOpen(false)}  />
         <PickerModal visible={fmHourOpen}  title={t.pe_pickHour}     items={HOURS_L}       selected={fmForm.hour}   onSelect={v => { fmSet("hour")(v);   setFmHourOpen(false);  }} onClose={() => setFmHourOpen(false)}  />
         <PickerModal visible={fmMinOpen}   title={t.pe_pickMinute}   items={MINS_L}        selected={fmForm.minute} onSelect={v => { fmSet("minute")(v); setFmMinOpen(false);   }} onClose={() => setFmMinOpen(false)}   />
-        <PickerModal visible={fmRelOpen}   title={t.pe_pickRelation} items={RELATION_ITEMS} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
+        <PickerModal visible={fmRelOpen}   title={t.pe_pickRelation} items={buildRelationItems(t)} selected={fmRelation} onSelect={v => { setFmRelation(v); setFmRelOpen(false); }} onClose={() => setFmRelOpen(false)} />
       </Modal>
 
       {/* Delete Confirm */}

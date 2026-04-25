@@ -13,6 +13,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { relationLabel } from "./profile-edit";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -130,7 +131,7 @@ export default function MyKundliScreen() {
                       </View>
                     )}
                     {!isPrimary && profile.relation && profile.relation !== "Self" && (
-                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, borderWidth: 0.75, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>{profile.relation}</Text>
+                      <Text style={{ color: C.textDim, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, borderWidth: 0.75, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>{relationLabel(profile.relation, t)}</Text>
                     )}
                   </View>
                   <Text style={{ color: isPrimary ? (C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED") : C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }} numberOfLines={1}>{astroLine}</Text>
@@ -165,7 +166,7 @@ export default function MyKundliScreen() {
             <View style={[s.addCircle, { backgroundColor: C.isDark ? "rgba(245,158,11,0.08)" : "rgba(124,58,237,0.06)", borderColor: C.isDark ? "rgba(245,158,11,0.2)" : "rgba(124,58,237,0.15)" }]}>
               <Feather name="plus" size={16} color={C.isDark ? "#f59e0b" : "#7C3AED"} />
             </View>
-            <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>Add New Kundli</Text>
+            <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize: 13, fontFamily: F.semibold }}>{t.mk_addNew}</Text>
           </Pressable>
         )}
       </ScrollView>

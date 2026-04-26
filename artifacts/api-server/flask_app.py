@@ -2201,6 +2201,84 @@ def energy_today():
     return jsonify(result)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Daily Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang"
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/lucky/today", methods=["GET", "POST"])
+def lucky_today():
+    """
+    Personalised daily lucky number + colour using the user's mool ank
+    (from birth date) + janma nakshatra (from saved kundli) cross-referenced
+    with today's nakshatra friendship (Tara), tithi and weekday.
+
+    Auth: requires user_id (query/body) + X-API-Key header.  No stateless
+    fallback — this feature is auth-gated by design (no fake values).
+
+    Optional ?date=YYYY-MM-DD for back-dated runs.
+    """
+    import json as _json
+    import swisseph as swe
+    from datetime import datetime as _dt
+    from lucky_engine import compute_daily_lucky
+
+    body = request.get_json(silent=True) or {}
+    date_str = (request.args.get("date") or body.get("date") or "").strip()
+
+    try:
+        if date_str:
+            day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
+        else:
+            day = _dt.utcnow()
+    except ValueError:
+        return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+    date_iso = day.strftime("%Y-%m-%d")
+
+    uid_raw = request.args.get("user_id") or body.get("user_id")
+    if not uid_raw:
+        return jsonify({"error": "user_id required (with X-API-Key)"}), 400
+    try:
+        user_id = int(uid_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "user_id must be an integer"}), 400
+
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+    if not user.kundli or not user.kundli.chart_data:
+        return jsonify({"error": "no_kundli",
+                        "message": "Pehle apni kundli banayein."}), 404
+
+    try:
+        kundli_dict = _json.loads(user.kundli.chart_data)
+    except Exception:
+        return jsonify({"error": "Saved kundli is corrupted"}), 500
+
+    # Pull birth_data from primary profile (for mool ank's birth-day source)
+    birth_data: Dict[str, Any] = {}
+    try:
+        prim = (Profile.query
+                .filter(Profile.user_id == user.id,
+                        Profile.is_primary.is_(True))
+                .first())
+        if prim and prim.birth_data:
+            birth_data = _json.loads(prim.birth_data) or {}
+    except Exception:
+        pass
+
+    # ── Compute today's Moon + Sun longitudes (sidereal) ─────────────────
+    jd = swe.julday(day.year, day.month, day.day,
+                    day.hour + day.minute / 60.0)
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    moon_lon = swe.calc_ut(jd, swe.MOON, flags)[0][0] % 360.0
+    sun_lon  = swe.calc_ut(jd, swe.SUN,  flags)[0][0] % 360.0
+
+    out = compute_daily_lucky(birth_data, kundli_dict, date_iso, moon_lon, sun_lon)
+    if not out.get("ok"):
+        # 422 when input is structurally OK but data is missing
+        return jsonify(out), 422
+    return jsonify(out)
+
+
 @app.route("/api/risk-radar", methods=["GET", "POST"])
 def risk_radar():
     """

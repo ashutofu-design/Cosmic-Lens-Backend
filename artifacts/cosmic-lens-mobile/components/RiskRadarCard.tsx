@@ -5,6 +5,8 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
 import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
+import { useUser } from "@/context/UserContext";
+import { fetchDailyLucky, type DailyLucky } from "@/lib/luckyAPI";
 
 export const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
@@ -247,6 +249,38 @@ export function RiskRadarCard({
   days: DayForecast[]; selected: number; onSelect: (i: number) => void; fullAccess: boolean;
 }) {
   const C = useC();
+  const { user, kundli } = useUser();
+
+  // ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ────────────
+  // Fetched from /api/lucky/today using the user's mool ank + janma
+  // nakshatra. NEVER falls back to fake values — when missing the hero tile
+  // shows a friendly Hinglish prompt.
+  const [dailyLucky, setDailyLucky] = useState<DailyLucky | null>(null);
+  const [luckyError, setLuckyError] = useState<string | null>(null);
+  const [luckyLoading, setLuckyLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || !user?.api_key || !kundli) {
+      setDailyLucky(null);
+      setLuckyError(null);
+      return;
+    }
+    let cancelled = false;
+    setLuckyLoading(true);
+    fetchDailyLucky(user.id, user.api_key)
+      .then(res => {
+        if (cancelled) return;
+        if (res.ok) {
+          setDailyLucky(res);
+          setLuckyError(null);
+        } else {
+          setDailyLucky(null);
+          setLuckyError(res.message);
+        }
+      })
+      .finally(() => { if (!cancelled) setLuckyLoading(false); });
+    return () => { cancelled = true; };
+  }, [user?.id, user?.api_key, kundli]);
 
   const [streak, setStreak] = useState(0);
   useEffect(() => {
@@ -433,29 +467,77 @@ export function RiskRadarCard({
             </View>
           </View>
 
-          {/* Lucky grid */}
-          <View style={s.luckyGrid}>
-            <View style={[s.luckyTile, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.luckyTileLabel, { color: C.textMuted }]}>🍀 LUCKY NUMBERS</Text>
-              <View style={s.luckyNumRow}>
-                {sel.luckyNumbers.map((n) => (
-                  <View key={n} style={[s.luckyNumPill, { borderColor: C.border }]}>
-                    <Text style={[s.luckyNumText, { color: C.text }]}>{n}</Text>
+          {/* ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ───── */}
+          {selected === 0 && dailyLucky ? (
+            <View style={[s.shubhCard, {
+              backgroundColor: `${dailyLucky.shubh_rang_hex}14`,
+              borderColor: `${dailyLucky.shubh_rang_hex}55`,
+            }]}>
+              <View style={s.shubhRow}>
+                <View style={s.shubhAnkBox}>
+                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>AAJ KA SHUBH ANK</Text>
+                  <View style={[s.shubhAnkBadge, {
+                    borderColor: dailyLucky.shubh_rang_hex,
+                    backgroundColor: `${dailyLucky.shubh_rang_hex}22`,
+                  }]}>
+                    <Text style={[s.shubhAnkText, { color: C.text }]}>{dailyLucky.shubh_ank}</Text>
                   </View>
-                ))}
+                </View>
+                <View style={s.shubhDivider} />
+                <View style={s.shubhRangBox}>
+                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>AAJ KA SHUBH RANG</Text>
+                  <View style={s.shubhRangRow}>
+                    <View style={[s.shubhSwatch, {
+                      backgroundColor: dailyLucky.shubh_rang_hex,
+                      borderColor: dailyLucky.shubh_rang_hex === "#f3f4f6"
+                        ? "rgba(255,255,255,0.3)" : "transparent",
+                    }]} />
+                    <Text style={[s.shubhRangName, { color: C.text }]}>{dailyLucky.shubh_rang_name}</Text>
+                  </View>
+                </View>
               </View>
+              <Text style={[s.shubhReason, { color: C.textMuted }]}>
+                {dailyLucky.reasoning_hinglish}
+              </Text>
+              <Text style={[s.shubhFooter, { color: C.textDim }]}>
+                Powered by Advanced Cosmic Intelligence
+              </Text>
             </View>
-            <View style={[s.luckyTile, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.luckyTileLabel, { color: C.textMuted }]}>🎨 LUCKY COLOR</Text>
-              <View style={s.luckyColorRow}>
-                <View style={[s.luckyColorSwatch, {
-                  backgroundColor: sel.luckyColor.hex,
-                  borderColor: sel.luckyColor.hex === "#f3f4f6" ? "rgba(255,255,255,0.3)" : "transparent",
-                }]} />
-                <Text style={[s.luckyColorName, { color: C.text }]}>{sel.luckyColor.name}</Text>
-              </View>
+          ) : selected === 0 && luckyLoading ? (
+            <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.shubhReason, { color: C.textMuted, textAlign: "center" }]}>
+                Aapka shubh ank aur rang calculate ho raha hai…
+              </Text>
             </View>
-          </View>
+          ) : selected === 0 && (luckyError || !user || !kundli) ? (
+            <Pressable
+              onPress={() => router.push("/onboarding")}
+              style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
+            >
+              <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 6 }]}>
+                AAJ KA SHUBH ANK + RANG
+              </Text>
+              <Text style={[s.shubhReason, { color: C.text }]}>
+                {!user || !kundli
+                  ? "Apni kundli banayein — aapke janm ke nakshatra se aaj ka personal shubh ank aur rang dekhein."
+                  : luckyError ?? "Lucky details abhi available nahi hain."}
+              </Text>
+              {(!user || !kundli) && (
+                <Text style={[s.shubhFooter, { color: "#fbbf24", marginTop: 6 }]}>
+                  KUNDLI BANAYEIN →
+                </Text>
+              )}
+            </Pressable>
+          ) : (
+            <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 4 }]}>
+                AAJ KA SHUBH ANK + RANG
+              </Text>
+              <Text style={[s.shubhReason, { color: C.textMuted }]}>
+                Personalised shubh ank aur rang sirf "Aaj" ke liye dikhte hain — Day 1 par tap karein.
+              </Text>
+            </View>
+          )}
 
           <View style={s.luckyGrid}>
             <View style={[s.luckyTile, { backgroundColor: "rgba(74,222,128,0.08)", borderColor: "rgba(74,222,128,0.25)" }]}>
@@ -553,6 +635,28 @@ const s = StyleSheet.create({
   luckyColorSwatch: { width: 20, height: 20, borderRadius: 10, borderWidth: 1 },
   luckyColorName:   { fontSize: 13, fontWeight: "700" },
   luckyTimeText:    { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+
+  // ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" hero card ──
+  shubhCard: {
+    borderRadius: 12, borderWidth: 1, padding: 12, gap: 10,
+  },
+  shubhRow: {
+    flexDirection: "row", alignItems: "stretch",
+  },
+  shubhAnkBox:  { flex: 1, alignItems: "flex-start", gap: 6 },
+  shubhRangBox: { flex: 1, alignItems: "flex-start", gap: 6, paddingLeft: 12 },
+  shubhDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.10)" },
+  shubhMicro:   { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+  shubhAnkBadge: {
+    width: 56, height: 56, borderRadius: 28, borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
+  shubhAnkText: { fontSize: 26, fontWeight: "900", letterSpacing: 0.5 },
+  shubhRangRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 6 },
+  shubhSwatch:  { width: 36, height: 36, borderRadius: 18, borderWidth: 1 },
+  shubhRangName:{ fontSize: 16, fontWeight: "800" },
+  shubhReason:  { fontSize: 12, fontWeight: "500", lineHeight: 17 },
+  shubhFooter:  { fontSize: 9, fontWeight: "700", letterSpacing: 1.2, textAlign: "right" },
 
   lockedCard:     { borderRadius: 10, borderWidth: 1, padding: 12, gap: 8 },
   lockedTop:      { flexDirection: "row", alignItems: "center", gap: 8 },

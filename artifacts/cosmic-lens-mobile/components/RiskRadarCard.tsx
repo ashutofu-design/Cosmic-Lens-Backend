@@ -3,11 +3,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
+import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { fetchRiskRadar, isRiskRadarOk, type RiskRadarResponse } from "@/lib/riskTextAPI";
 
 export const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
@@ -244,65 +243,16 @@ export function RiskRadarCard({
 
   // The Shubh Ank/Rang state + /api/lucky/today fetch that used to live
   // here has moved to the Forecast screen along with the lucky panel.
-  // This card now only owns the per-day RISK text/Choghadiya enrichment.
-
-  // Stable fingerprints to avoid re-fetching when object references change
-  // but the underlying values do not.
-  const kundliFp = kundli ? `${kundli.nakshatra ?? ""}|${kundli.moonLongitude ?? ""}` : "";
-  const birthFp  = birthData
-    ? `${birthData.year ?? ""}-${birthData.month ?? ""}-${birthData.day ?? ""}`
-    : "";
-
-  // ── Personalised Risk text + Choghadiya BEST/AVOID time ──────────────
-  // Fetched from /api/risk-radar — server enriches the existing energy-engine
-  // signals (Chandrashtama, Tara Bal, Sade Sati, Mars affliction, PD weakness,
-  // Tithi, Rahukal, Volatile day) with 5-field personalised KYA RISK / DHYAN /
-  // AVOID / KARNA / UPAY text + Choghadiya-derived best/avoid windows.
-  // Powered by Advanced Cosmic Intelligence.
   //
-  // ALL 7 DAYS use real engine data via response.per_day[0..6] — Day 1 from
-  // today's exact transit, Days 2-7 from projected Moon/Sun + persistent
-  // Saturn/Mars/PD signals. NO template fallback for any day in the window.
-  const [riskApi, setRiskApi]         = useState<RiskRadarResponse | null>(null);
-  const [riskApiError, setRiskApiErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!kundli) {
-      setRiskApi(null);
-      setRiskApiErr(null);
-      return;
-    }
-    // Clear the previous payload immediately so the user does NOT see stale
-    // text in the OLD language for ~8s while the new language fetch is in
-    // flight. The card will fall back to its built-in skeleton/template view
-    // until the fresh response lands.
-    setRiskApi(null);
-    setRiskApiErr(null);
-    let cancelled = false;
-    fetchRiskRadar({
-      userId:    user?.id,
-      apiKey:    user?.api_key,
-      kundli:    kundli as unknown as Record<string, unknown>,
-      birthData: birthData as unknown as Record<string, unknown> | null,
-      // Forward the active UI language so the AI-generated 5-field text
-      // (top_risk + per_day kya_risk_hai/kya_avoid_karna_hai/kya_karna_hai/upay)
-      // comes back in the same language the rest of the app is rendering in.
-      // Listed in the dep array below so toggling the global language picker
-      // triggers a fresh fetch instead of leaving stale Hinglish text on screen.
-      lang:      t.lang,
-    })
-      .then(res => {
-        if (cancelled) return;
-        if (isRiskRadarOk(res)) {
-          setRiskApi(res);
-          setRiskApiErr(null);
-        } else {
-          setRiskApi(null);
-          setRiskApiErr(res.message);
-        }
-      });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.api_key, kundliFp, birthFp, t.lang]);
+  // The /api/risk-radar fetch that used to enrich this card with the
+  // server's 8-signal Vedic engine (Chandrashtama, Tara Bal, Sade Sati,
+  // Mars affliction, PD weakness, Tithi, Rahukal, Volatile day) was
+  // removed too: the user reported jarring contradictions like Energy 71
+  // (green) sitting next to Risk 7/10 (red) on the same day, because the
+  // two engines share no inputs. The Daily Energy Score (computed on
+  // Forecast from /api/transits) is now the SINGLE source of truth, and
+  // the local computeRisk()/scoreToRiskScore() inverse formula derives
+  // every risk field from it deterministically.
 
   const [streak, setStreak] = useState(0);
   useEffect(() => {
@@ -327,87 +277,15 @@ export function RiskRadarCard({
   const sel = days[selected];
   if (!sel) return null;
 
-  // ── Day-offset → per_day index ───────────────────────────────────────
-  // Backend's per_day[0..6] is anchored to TODAY. Each day in `days[]`
-  // carries a real Date; compute its offset from today in calendar days
-  // (local time) so the home Risk Radar (today+6) and the Forecast page
-  // (tomorrow+6) both look up the right per_day entry without any extra
-  // wiring at the call site.
-  const startOfDay = (dt: Date) =>
-    new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
-  const todayMs    = startOfDay(new Date());
-  const selOffset  = Math.round((startOfDay(sel.date) - todayMs) / 86400000);
-
-  // STRICT no-template-fallback rule: only override when the real engine
-  // fields are present for THIS specific day. Backend may return base
-  // radar without enrichment on partial failure; we must never silently
-  // fall back to the hardcoded RISK_BY_LEVEL template and present it as
-  // real signals.
-  const perDay = (riskApi?.per_day && selOffset >= 0 && selOffset < riskApi.per_day.length)
-    ? riskApi.per_day[selOffset]
-    : null;
-
-  const apiOk: boolean = !!(
-    riskApi &&
-    riskApi.enriched !== false &&
-    perDay &&
-    perDay.best_time?.window &&
-    perDay.avoid_time?.window
-  );
-
-  // Unavailable state: only triggered for days the backend SHOULD cover
-  // (offset 0..6 — both today and the 7-day forecast window). For days
-  // outside that range we keep the existing local computeRisk() template
-  // (already deterministic — never random) and just don't show the
-  // "Powered by" badge.
-  const dayCoveredByApi = selOffset >= 0 && selOffset <= 6;
-  const dayUnavailable  = dayCoveredByApi && !apiOk;
-  const dayLoading      = dayUnavailable && !riskApiError && riskApi == null;
-
-  // Localized so a user who picked Odia/Tamil/etc. sees the loading + error
-  // text in their own script — otherwise the cold ~15s LLM wait reads as a
-  // dead card. `t.loading` and `t.fetchFailed` are both translated for every
-  // supported UI language (i18n.ts + i18nMore.ts).
-  const unavailMsg = dayLoading
-    ? t.loading
-    : t.fetchFailed;
-
-  // Override with real backend per-day engine output when present.
-  // API computes from active transit/dasha + Choghadiya per day — the
-  // source of truth for ALL 7 days, not just today.
-  const selData: DayForecast = (apiOk && perDay)
-    ? {
-        ...sel,
-        riskLevel:    perDay.risk_level,
-        riskScore:    perDay.risk_score,
-        riskShort:    perDay.summary || sel.riskShort,
-        riskCategory: perDay.category,
-        riskDetail:   perDay.kya_risk_hai,
-        riskAvoid:    perDay.kya_avoid_karna_hai,
-        riskKarna:    perDay.kya_karna_hai,
-        riskRemedy:   perDay.upay,
-        // Prefer the lang-localized Choghadiya label (e.g. "ଅମୃତ" in Odia).
-        // Backend attaches `label_local` when the request lang is in the
-        // Choghadiya catalog; fall back to the canonical Hinglish `label`
-        // for langs we haven't translated yet (still readable).
-        bestTime:     `${perDay.best_time.window} (${perDay.best_time.label_local || perDay.best_time.label})`,
-        avoidTime:    `${perDay.avoid_time.window} (${perDay.avoid_time.label_local || perDay.avoid_time.label})`,
-      }
-    : dayUnavailable
-      ? {
-          ...sel,
-          riskShort:    unavailMsg,
-          // Reuse the same localized string for the small category badge so
-          // the entire card stays in the user's chosen script during the wait.
-          riskCategory: dayLoading ? t.loading : t.fetchFailed,
-          riskDetail:   "—",
-          riskAvoid:    "—",
-          riskKarna:    "—",
-          riskRemedy:   "—",
-          bestTime:     "—",
-          avoidTime:    "—",
-        }
-      : sel;
+  // ── Energy Score is the SINGLE source of truth ──────────────────────
+  // Every risk field (score, level, badge, short line, kya-risk/avoid/
+  // karna/upay) is already populated on `sel` by the parent screen via
+  // computeRisk(score, …), which inverts the per-day Energy Score from
+  // /api/transits using scoreToRiskScore(). No server override happens
+  // anymore — see the comment block at the top of the component for why.
+  // Time tiles (bestTime/avoidTime) live on the Forecast lucky panel
+  // now, so this card needs nothing beyond `sel` itself.
+  const selData: DayForecast = sel;
 
   // (The "Aaj Ka Shubh Ank + Rang" resolver that used to live here moved
   // to the Forecast screen along with the lucky panel. This card now
@@ -520,13 +398,12 @@ export function RiskRadarCard({
             <Text style={[s.gaugeScaleText, { color: C.textDim }]}>{t.rrLevelHigh}</Text>
           </View>
 
-          {/* Generic warning — shows a spinner when the per-day enrichment
-              is still in flight (cold language calls can take ~15s on the
-              first request) so the card never reads as "nothing is loading". */}
+          {/* Generic warning line — risk content (short, detail, avoid, karna,
+              upay) is fully derived from the per-day Energy Score by the local
+              deterministic computeRisk(), so it's immediately ready and never
+              needs a spinner. */}
           <View style={[s.shortRow, { borderColor: C.border }]}>
-            {dayLoading
-              ? <ActivityIndicator size="small" color="#fbbf24" style={{ marginRight: 2 }} />
-              : <Text style={s.shortIcon}>💬</Text>}
+            <Text style={s.shortIcon}>💬</Text>
             <Text style={[s.shortText, { color: C.text }]}>{selData.riskShort}</Text>
           </View>
 

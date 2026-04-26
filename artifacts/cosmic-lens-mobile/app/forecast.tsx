@@ -600,6 +600,20 @@ export default function ForecastScreen() {
                       </View>
                     </View>
                   </View>
+
+                  {/* Reason line — short factual sentence that ties together the
+                      two real engine-derived values shown above (date, lucky
+                      number, lucky colour). NOT a templated guess about the
+                      user's nakshatra friendship — that data isn't available
+                      for future days. Strict no-fake-data: every value here
+                      comes from the same DayForecast object rendered above. */}
+                  <Text style={[s.luckyReason, { color: C.textMuted }]}>
+                    {`On ${sel.date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} — lucky number ${sel.luckyNumbers[0]} and ${sel.luckyColor.name} colour align with the day's cosmic energy.`}
+                  </Text>
+
+                  <Text style={[s.luckyInnerPoweredBy, { color: C.textDim }]}>
+                    ✨ Powered by Advanced Cosmic Intelligence
+                  </Text>
                 </View>
 
                 {/* Best Time + Avoid Time tile pair */}
@@ -740,6 +754,14 @@ const s = StyleSheet.create({
   },
   luckyColourName: {
     fontSize: 16, fontWeight: "700",
+  },
+  luckyReason: {
+    fontSize: 12, fontWeight: "500", lineHeight: 17,
+    marginTop: 12, textAlign: "center",
+  },
+  luckyInnerPoweredBy: {
+    fontSize: 9, fontWeight: "600", letterSpacing: 0.6,
+    textAlign: "center", marginTop: 8, opacity: 0.8,
   },
 
   luckyTimeGrid: {

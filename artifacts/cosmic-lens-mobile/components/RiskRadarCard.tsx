@@ -7,7 +7,6 @@ import { ActivityIndicator, I18nManager, Pressable, StyleSheet, Text, View } fro
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { fetchDailyLucky, type DailyLucky } from "@/lib/luckyAPI";
 import { fetchRiskRadar, isRiskRadarOk, type RiskRadarResponse } from "@/lib/riskTextAPI";
 
 export const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -243,17 +242,9 @@ export function RiskRadarCard({
   const t = useT();
   const { user, kundli, birthData } = useUser();
 
-  // ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ────────────
-  // Fetched from /api/lucky/today using the user's mool ank + janma
-  // nakshatra. NEVER falls back to fake values — when missing the hero tile
-  // shows a friendly Hinglish prompt.
-  //
-  // We also forward the LOCAL kundli + birthData so the server can compute
-  // even when the kundli hasn't been synced to the DB yet (demo flow,
-  // local-only profiles).
-  const [dailyLucky, setDailyLucky] = useState<DailyLucky | null>(null);
-  const [luckyError, setLuckyError] = useState<string | null>(null);
-  const [luckyLoading, setLuckyLoading] = useState(false);
+  // The Shubh Ank/Rang state + /api/lucky/today fetch that used to live
+  // here has moved to the Forecast screen along with the lucky panel.
+  // This card now only owns the per-day RISK text/Choghadiya enrichment.
 
   // Stable fingerprints to avoid re-fetching when object references change
   // but the underlying values do not.
@@ -261,51 +252,6 @@ export function RiskRadarCard({
   const birthFp  = birthData
     ? `${birthData.year ?? ""}-${birthData.month ?? ""}-${birthData.day ?? ""}`
     : "";
-
-  useEffect(() => {
-    if (!user?.id || !user?.api_key || !kundli) {
-      setDailyLucky(null);
-      setLuckyError(null);
-      setLuckyLoading(false);
-      return;
-    }
-    // ── Strict lang-aware refresh ────────────────────────────────────────
-    // Capture the lang at the moment the fetch is fired and clear any
-    // previously-cached payload immediately so the user never sees stale
-    // text in the OLD language overlaid with NEW-language labels (e.g.
-    // EN headers + Hinglish reasoning). The card falls back to the
-    // skeleton state until the fresh response — stamped with the current
-    // lang — arrives. We additionally guard the `setDailyLucky` call by
-    // comparing the captured lang with the resolved `reasoning_lang`
-    // echoed by the server to drop any out-of-order responses.
-    const fetchLang = t.lang;
-    setDailyLucky(null);
-    setLuckyError(null);
-    let cancelled = false;
-    setLuckyLoading(true);
-    fetchDailyLucky(user.id, user.api_key, {
-      kundli: kundli as unknown as Record<string, unknown>,
-      birthData: birthData as unknown as Record<string, unknown> | null,
-      lang: fetchLang,
-    })
-      .then(res => {
-        if (cancelled) return;
-        if (res.ok) {
-          setDailyLucky(res);
-          setLuckyError(null);
-        } else {
-          setDailyLucky(null);
-          setLuckyError(res.message);
-        }
-      })
-      .finally(() => { if (!cancelled) setLuckyLoading(false); });
-    return () => { cancelled = true; };
-    // `t.lang` is included so the lucky payload is refetched with the new
-    // locale when the user switches UI language at runtime — server returns
-    // lang-aware `shubh_rang_name_local` / `reasoning_text` and we re-render
-    // the card in the freshly selected script (no stale prior-lang text).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.api_key, kundliFp, birthFp, t.lang]);
 
   // ── Personalised Risk text + Choghadiya BEST/AVOID time ──────────────
   // Fetched from /api/risk-radar — server enriches the existing energy-engine
@@ -463,58 +409,9 @@ export function RiskRadarCard({
         }
       : sel;
 
-  // ── Resolve "Aaj Ka Shubh Ank + Rang" for the SELECTED day ───────────
-  // - Day 0 (today): use the existing /api/lucky/today response (richer —
-  //   includes a Hinglish reasoning line).
-  // - Day 1-6 (future days): use the per-day lucky fields the backend now
-  //   computes inside the radar response (same engine, projected positions).
-  // - Returns null when lucky is unavailable so the UI shows an explicit
-  //   fallback (NEVER fake values).
-  const selLucky: {
-    ank: number; name: string; hex: string; reason: string | null;
-  } | null = (() => {
-    // Use the calendar offset (selOffset === 0 ⇒ TRUE today), NOT the
-    // chip index `selected`. The component is general enough that a caller
-    // could anchor `days[]` to a non-today date — in that case `selected===0`
-    // would point at days[0] (NOT today) and using dailyLucky there would
-    // mis-attribute today's lucky to a different date.
-    if (selOffset === 0) {
-      return dailyLucky
-        ? {
-            ank:    dailyLucky.shubh_ank,
-            // Prefer the lang-aware display name (e.g. "ଧଳା" for Odia) when
-            // present; fall back to the canonical Hinglish name for backwards
-            // compatibility with older API responses.
-            name:   dailyLucky.shubh_rang_name_local
-                      || dailyLucky.shubh_rang_name,
-            hex:    dailyLucky.shubh_rang_hex,
-            // Same: prefer the new lang-aware reasoning sentence; legacy
-            // `reasoning_hinglish` stays as the fallback.
-            reason: dailyLucky.reasoning_text
-                      || dailyLucky.reasoning_hinglish
-                      || null,
-          }
-        : null;
-    }
-    if (perDay
-        && typeof perDay.shubh_ank === "number"
-        && perDay.shubh_rang_name
-        && perDay.shubh_rang_hex) {
-      // per_day enrichment from /api/risk-radar — server-side adds the
-      // matching local fields when a UI lang is plumbed through.
-      const pd = perDay as typeof perDay & {
-        shubh_rang_name_local?: string;
-        shubh_reasoning_text?: string;
-      };
-      return {
-        ank:    perDay.shubh_ank,
-        name:   pd.shubh_rang_name_local || perDay.shubh_rang_name,
-        hex:    perDay.shubh_rang_hex,
-        reason: pd.shubh_reasoning_text || null,
-      };
-    }
-    return null;
-  })();
+  // (The "Aaj Ka Shubh Ank + Rang" resolver that used to live here moved
+  // to the Forecast screen along with the lucky panel. This card now
+  // renders only the per-day risk readout.)
 
   let safestIdx = 0, riskiestIdx = 0;
   days.forEach((d, i) => {
@@ -685,107 +582,11 @@ export function RiskRadarCard({
             </View>
           </View>
 
-          {/* ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ─────
-               Day 0 uses /api/lucky/today (richer — includes Hinglish reason).
-               Day 1-6 uses the per-day lucky fields from /api/risk-radar
-               (same engine, projected Moon/Sun for that future date). */}
-          {selLucky ? (
-            <View style={[s.shubhCard, {
-              backgroundColor: `${selLucky.hex}14`,
-              borderColor: `${selLucky.hex}55`,
-            }]}>
-              <View style={s.shubhRow}>
-                <View style={s.shubhAnkBox}>
-                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>
-                    {selOffset === 0 ? t.rrLuckyAajShubhAnk : t.rrLuckyShubhAnk}
-                  </Text>
-                  <View style={[s.shubhAnkBadge, {
-                    borderColor: selLucky.hex,
-                    backgroundColor: `${selLucky.hex}22`,
-                  }]}>
-                    <Text style={[s.shubhAnkText, { color: C.text }]}>{selLucky.ank}</Text>
-                  </View>
-                </View>
-                <View style={s.shubhDivider} />
-                <View style={s.shubhRangBox}>
-                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>
-                    {selOffset === 0 ? t.rrLuckyAajShubhRang : t.rrLuckyShubhRang}
-                  </Text>
-                  <View style={s.shubhRangRow}>
-                    <View style={[s.shubhSwatch, {
-                      backgroundColor: selLucky.hex,
-                      borderColor: selLucky.hex === "#f3f4f6"
-                        ? "rgba(255,255,255,0.3)" : "transparent",
-                    }]} />
-                    <Text style={[s.shubhRangName, { color: C.text }]}>{selLucky.name}</Text>
-                  </View>
-                </View>
-              </View>
-              {selLucky.reason ? (
-                <Text style={[s.shubhReason, { color: C.textMuted }]}>
-                  {selLucky.reason}
-                </Text>
-              ) : null}
-              <Text style={[s.shubhFooter, { color: C.textDim }]}>
-                {t.rrLuckyPoweredBy}
-              </Text>
-            </View>
-          ) : selOffset === 0 && luckyLoading ? (
-            <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.shubhReason, { color: C.textMuted, textAlign: "center" }]}>
-                {t.rrLuckyCalculating}
-              </Text>
-            </View>
-          ) : selOffset === 0 && (luckyError || !user || !kundli) ? (
-            <Pressable
-              onPress={() => router.push("/onboarding")}
-              style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
-            >
-              <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 6 }]}>
-                {t.rrLuckyHeaderToday}
-              </Text>
-              <Text style={[s.shubhReason, { color: C.text }]}>
-                {!user || !kundli
-                  ? t.rrLuckyCreateKundliPrompt
-                  : luckyError ?? t.rrLuckyDetailsUnavail}
-              </Text>
-              {(!user || !kundli) && (
-                <Text style={[s.shubhFooter, { color: "#fbbf24", marginTop: 6 }]}>
-                  {t.rrLuckyCreateKundliCta}
-                </Text>
-              )}
-            </Pressable>
-          ) : (
-            <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 4 }]}>
-                {t.rrLuckyHeaderOther}
-              </Text>
-              <Text style={[s.shubhReason, { color: C.textMuted }]}>
-                {t.rrLuckyDayUnavail}
-              </Text>
-            </View>
-          )}
-
-          <View style={s.luckyGrid}>
-            <View style={[s.luckyTile, { backgroundColor: "rgba(74,222,128,0.08)", borderColor: "rgba(74,222,128,0.25)" }]}>
-              <Text style={[s.luckyTileLabel, { color: "#4ade80" }]}>{t.rrLuckyBestTime}</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.bestTime}</Text>
-            </View>
-            <View style={[s.luckyTile, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }]}>
-              <Text style={[s.luckyTileLabel, { color: "#ef4444" }]}>{t.rrLuckyAvoidTime}</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.avoidTime}</Text>
-            </View>
-          </View>
-
-          {/* Brand-voice attribution — shown for ANY day with live engine
-              data (per_day backed by real natal+transit signals). Strict
-              apiOk gate prevents the badge from appearing during loading
-              or when enrichment is missing (would otherwise mislead users). */}
-          {apiOk ? (
-            <Text style={[s.poweredBy, { color: C.textMuted }]}>
-              {t.rrLuckyPoweredBy}
-            </Text>
-          ) : null}
+          {/* The Shubh Ank/Rang + Best Time/Avoid Time + brand footer panel
+              that used to live here has been moved to the Forecast screen
+              (app/forecast.tsx) so this card stays focused on the day's
+              risk readout (kya risk hai / kya avoid karna / kya karna /
+              upay) — and the Lucky panel has a single canonical home. */}
         </>
       )}
     </View>

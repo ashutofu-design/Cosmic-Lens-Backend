@@ -1069,7 +1069,61 @@ def enrich_risk_radar(radar:         Dict[str, Any],
         birth_data=birth_data, today_date_iso=today_date_iso,
     )
 
-    # ── 4. Brand-voice attribution (NEVER reveal AI/LLM) ────────────────────
+    # ── 4. Weekly anchor remedy ─────────────────────────────────────────────
+    # Vedic saadhana convention is to commit to ONE remedy for a sankalp
+    # window (typically 7-21 days), not switch remedies daily. To honour
+    # that — and because users told us a different upay every day is
+    # impractical — we pick the highest-severity day in the 7-day window
+    # as the weekly "anchor" and surface its remedy as the single upay
+    # for the entire week. Tied days resolve to the earliest day so the
+    # current week's strongest event is what the user prepares for.
+    #
+    # Behavioural contract:
+    #   - top_risk.upay         → overridden to weekly anchor upay
+    #   - per_day[i].upay       → overridden to weekly anchor upay (all i)
+    #   - radar.weekly_upay     → new top-level dict the client can render
+    #                             as a dedicated "Iss hafte ka upay" card
+    #                             without re-deriving from per_day.
+    #
+    # Other per-day fields (kya_risk_hai, kya_dhyan, kya_avoid, kya_karna,
+    # category) STILL vary day-to-day — only the actionable remedy is
+    # week-locked.
+    per_day_items = radar.get("per_day") or []
+    if per_day_items:
+        anchor = max(
+            per_day_items,
+            key=lambda d: (d.get("severity") or 0, -d.get("day_idx", 0)),
+        )
+        anchor_trigger = anchor.get("trigger") or "stable_day"
+        anchor_severity = anchor.get("severity") or 0
+        anchor_band = _severity_band(anchor_severity)
+        # variant_idx=0 → deterministic anchor wording (not day-rotated).
+        anchor_text = _resolve_text(
+            anchor_trigger, day_idx=0, severity_band=anchor_band,
+        )
+        weekly_upay_text = anchor_text["upay"]
+
+        # Lock every per-day card to the same remedy.
+        for d in per_day_items:
+            d["upay"] = weekly_upay_text
+
+        # Lock top_risk to the same remedy too — user opens the app today
+        # and the headline card matches the weekly anchor, so the message
+        # is consistent.
+        top = radar.get("top_risk")
+        if isinstance(top, dict):
+            top["upay"] = weekly_upay_text
+
+        radar["weekly_upay"] = {
+            "trigger":   anchor_trigger,
+            "severity":  anchor_severity,
+            "band":      anchor_band,
+            "category":  anchor_text["category"],
+            "upay":      weekly_upay_text,
+            "day_idx":   anchor.get("day_idx", 0),
+        }
+
+    # ── 5. Brand-voice attribution (NEVER reveal AI/LLM) ────────────────────
     radar.setdefault("powered_by", "Advanced Cosmic Intelligence")
 
     return radar

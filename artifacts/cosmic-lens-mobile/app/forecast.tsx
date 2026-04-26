@@ -22,6 +22,14 @@ import { API_BASE, apiFetch } from "@/lib/apiConfig";
 const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
 
+// ── Risk Radar types ─────────────────────────────────────────────────────────
+//   Each day carries its own risk profile derived from its energy score.
+//   `riskShort` is the FREE 1-line generic warning (every user sees it).
+//   `riskCategory` + `riskDetail` + `riskRemedy` are the PAID payload — the
+//   forecast page locks them behind a paywall for days 3-7 to drive return
+//   visits + premium conversion.
+type RiskLevel = "low" | "med" | "high";
+
 interface DayForecast {
   date: Date;
   score: number;
@@ -29,6 +37,87 @@ interface DayForecast {
   moonSign: string;
   phase: string;
   summary: string;
+  // Risk Radar fields (computed per-day from score + day index)
+  riskLevel:    RiskLevel;
+  riskScore:    number;   // 0-10 gauge value
+  riskShort:    string;   // free, generic 1-liner
+  riskCategory: string;   // free, e.g. "Communication", "Money"
+  riskDetail:   string;   // PAID — specific Hinglish guidance
+  riskRemedy:   string;   // PAID — actionable upay
+}
+
+// ── Risk content library ─────────────────────────────────────────────────────
+//   Curated Hinglish content. Generic enough to feel personalised without
+//   making any specific astrology claim (no planet/dasha names exposed,
+//   per the project's "Powered by Advanced Cosmic Intelligence" rule).
+const RISK_BY_LEVEL: Record<RiskLevel, {
+  shorts:  string[];
+  details: { cat: string; detail: string; remedy: string }[];
+}> = {
+  low: {
+    shorts: [
+      "Stable din — apne kaam pe focus karo",
+      "Cosmic energies aapke favor mein hain",
+      "Smooth flow ka din hai",
+    ],
+    details: [
+      { cat: "Career",  detail: "Naye projects ya pitches start karne ka safe din. Boss/team se important conversations productive rahengi.", remedy: "Subah 5 minute Surya Namaskar — energy boost ke liye." },
+      { cat: "Money",   detail: "Investments + savings ke liye accha din. Long-term financial decisions safely le sakte hain.", remedy: "Peeli ya golden kapde pehnna shubh rahega." },
+      { cat: "Health",  detail: "Vitality high rahegi. Workout, meditation, ya naye healthy habits build karne ka perfect time.", remedy: "Subah tulsi-paani — overall wellness ke liye." },
+    ],
+  },
+  med: {
+    shorts: [
+      "Mixed signals — soch samajh ke decisions lo",
+      "Communication mein clarity rakhe",
+      "Patience aaj ka mantra hai",
+    ],
+    details: [
+      { cat: "Communication", detail: "Misunderstandings ka risk hai. Important messages double-check karein, written confirmation lein.", remedy: "Important call/meeting se pehle 5 deep breaths." },
+      { cat: "Decisions",     detail: "Bade decisions postpone karein. Routine kaam continue, naye commitments aaj avoid kare.", remedy: "Decision se pehle paani peeke 2 min ruk jaayein." },
+      { cat: "Relations",     detail: "Family/partner se patience se baat kare. Choti baatein bade misunderstanding ban sakti hain.", remedy: "Shaam ko ghar mein diya jalaayein — peace ke liye." },
+    ],
+  },
+  high: {
+    shorts: [
+      "Saavdhan rahe — important decisions postpone karo",
+      "Conflicts avoid karne ki koshish kare",
+      "Energy low — apna khayal rakhe",
+    ],
+    details: [
+      { cat: "Conflict", detail: "Arguments + disputes ka risk high hai. Confrontations avoid kare — silence is power aaj.", remedy: "Hanuman Chalisa ya Maha Mrityunjaya 11 baar." },
+      { cat: "Money",    detail: "Financial decisions strictly avoid. Naye loans, investments, big purchases postpone karein.", remedy: "Daan karein — chhota hi sahi, doosron ki madad." },
+      { cat: "Health",   detail: "Energy + immunity low rahegi. Heavy workouts skip karein, rest + hydration priority de.", remedy: "Adrak-haldi paani din mein 2 baar." },
+    ],
+  },
+};
+
+function scoreToRiskScore(score: number): number {
+  // Inverse, slightly sharpened so the demo range produces variety:
+  //   score 100 → 0, 65 → 5, 50 → 7, 35 → 9, 0 → 10
+  return Math.round(Math.max(0, Math.min(10, (100 - score) / 7)));
+}
+
+function scoreToRiskLevel(rs: number): RiskLevel {
+  if (rs <= 3) return "low";
+  if (rs <= 6) return "med";
+  return "high";
+}
+
+function computeRisk(score: number, dayIdx: number) {
+  const riskScore = scoreToRiskScore(score);
+  const level     = scoreToRiskLevel(riskScore);
+  const bucket    = RISK_BY_LEVEL[level];
+  const shortLine = bucket.shorts[dayIdx % bucket.shorts.length];
+  const det       = bucket.details[dayIdx % bucket.details.length];
+  return {
+    riskLevel: level,
+    riskScore,
+    riskShort:    shortLine,
+    riskCategory: det.cat,
+    riskDetail:   det.detail,
+    riskRemedy:   det.remedy,
+  };
 }
 
 const SIGNS = [
@@ -365,6 +454,158 @@ function WeekChart({
   );
 }
 
+// ── Cosmic Risk Radar ────────────────────────────────────────────────────────
+//   A focused per-day risk module. Three free ingredients are always visible:
+//   the gauge, the level, and a 1-line generic warning. The PAID payload
+//   (specific Hinglish detail + remedy) is locked for days 3-7 — the user has
+//   to either upgrade or come back daily as each day rolls into the home
+//   screen's "today" view. Two chips at the top (Safest / Riskiest day of the
+//   week) double as quick-jump buttons that re-select that day.
+const FREE_DAYS = 2;  // first 2 days are fully free
+function RiskRadar({
+  days, selected, onSelect,
+}: {
+  days: DayForecast[]; selected: number; onSelect: (i: number) => void;
+}) {
+  const C = useC();
+  if (days.length === 0) return null;
+  const sel = days[selected];
+  if (!sel) return null;
+
+  // Find the safest (lowest risk) and riskiest (highest risk) days of the week.
+  // Used both as visual anchors and as one-tap shortcuts.
+  let safestIdx = 0, riskiestIdx = 0;
+  days.forEach((d, i) => {
+    if (d.riskScore < days[safestIdx].riskScore)   safestIdx   = i;
+    if (d.riskScore > days[riskiestIdx].riskScore) riskiestIdx = i;
+  });
+
+  const isLocked = selected >= FREE_DAYS;
+  const levelColor =
+    sel.riskLevel === "low" ? "#4ade80" :
+    sel.riskLevel === "med" ? "#fbbf24" : "#ef4444";
+  const levelLabel =
+    sel.riskLevel === "low" ? "LOW" :
+    sel.riskLevel === "med" ? "MEDIUM" : "HIGH";
+
+  // Marker x-position on the gauge: 0/10 → 0%, 10/10 → 100%.
+  // RN's `left` accepts a template-literal percent type, so cast accordingly.
+  const markerPct = `${(sel.riskScore / 10) * 100}%` as `${number}%`;
+
+  return (
+    <View style={[s.riskCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+      {/* Header */}
+      <View style={s.riskHeader}>
+        <View style={s.riskTitleRow}>
+          <Feather name="alert-triangle" size={13} color="#fbbf24" />
+          <Text style={[s.riskTitle, { color: C.text }]}>Cosmic Risk Radar</Text>
+        </View>
+        <Text style={[s.riskHeaderHint, { color: C.textDim }]}>Day {selected + 1} of 7</Text>
+      </View>
+
+      {/* Safest / Riskiest day chips — also act as one-tap navigation */}
+      <View style={s.riskChipsRow}>
+        <Pressable
+          onPress={() => { onSelect(safestIdx); Haptics.selectionAsync(); }}
+          style={[s.riskChip, {
+            backgroundColor: "rgba(74,222,128,0.10)",
+            borderColor: "rgba(74,222,128,0.30)",
+          }]}
+        >
+          <Text style={[s.riskChipLabel, { color: "#4ade80" }]}>SAFEST</Text>
+          <Text style={[s.riskChipDay,   { color: C.text }]}>{fmtDate(days[safestIdx].date)}</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { onSelect(riskiestIdx); Haptics.selectionAsync(); }}
+          style={[s.riskChip, {
+            backgroundColor: "rgba(239,68,68,0.10)",
+            borderColor: "rgba(239,68,68,0.30)",
+          }]}
+        >
+          <Text style={[s.riskChipLabel, { color: "#ef4444" }]}>RISKIEST</Text>
+          <Text style={[s.riskChipDay,   { color: C.text }]}>{fmtDate(days[riskiestIdx].date)}</Text>
+        </Pressable>
+      </View>
+
+      {/* Gauge row — level label + numeric value */}
+      <View style={s.gaugeHeaderRow}>
+        <Text style={[s.gaugeMicroLabel, { color: C.textMuted }]}>RISK LEVEL</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={[s.gaugeLevelText,  { color: levelColor }]}>{levelLabel}</Text>
+          <Text style={[s.gaugeValueText,  { color: C.textMuted }]}>{sel.riskScore}/10</Text>
+        </View>
+      </View>
+
+      {/* Horizontal gauge bar — 3 colored segments + glowing marker dot */}
+      <View style={s.gaugeTrack}>
+        <View style={[s.gaugeSeg, { backgroundColor: "rgba(74,222,128,0.22)",  borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }]} />
+        <View style={[s.gaugeSeg, { backgroundColor: "rgba(251,191,36,0.22)" }]} />
+        <View style={[s.gaugeSeg, { backgroundColor: "rgba(239,68,68,0.22)",   borderTopRightRadius: 4, borderBottomRightRadius: 4 }]} />
+        <View style={[s.gaugeMarker, {
+          left: markerPct,
+          backgroundColor: levelColor,
+          shadowColor: levelColor,
+        }]} />
+      </View>
+      <View style={s.gaugeScaleRow}>
+        <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Low</Text>
+        <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Med</Text>
+        <Text style={[s.gaugeScaleText, { color: C.textDim }]}>High</Text>
+      </View>
+
+      {/* Free 1-line generic warning — always shown to every user */}
+      <View style={[s.riskShortRow, { borderColor: C.border }]}>
+        <Text style={s.riskShortIcon}>💬</Text>
+        <Text style={[s.riskShortText, { color: C.text }]}>{sel.riskShort}</Text>
+      </View>
+
+      {/* PAID payload — detail + remedy. Free for days 1-2, locked for 3-7. */}
+      {!isLocked ? (
+        <>
+          <View style={[s.riskDetailCard, {
+            backgroundColor: `${levelColor}10`,
+            borderColor:     `${levelColor}30`,
+          }]}>
+            <View style={[s.riskCatChip, { backgroundColor: `${levelColor}22` }]}>
+              <Text style={[s.riskCatText, { color: levelColor }]}>
+                {sel.riskCategory.toUpperCase()}
+              </Text>
+            </View>
+            <Text style={[s.riskDetailText, { color: C.text }]}>{sel.riskDetail}</Text>
+          </View>
+          <View style={[s.riskRemedyRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Text style={s.riskRemedyIcon}>🪔</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.riskRemedyLabel, { color: C.textMuted }]}>UPAY</Text>
+              <Text style={[s.riskRemedyText,  { color: C.text }]}>{sel.riskRemedy}</Text>
+            </View>
+          </View>
+        </>
+      ) : (
+        <Pressable
+          style={[s.riskLockedCard, {
+            backgroundColor: "rgba(251,191,36,0.06)",
+            borderColor:     "rgba(251,191,36,0.30)",
+          }]}
+          onPress={() => router.push("/onboarding")}
+        >
+          <View style={s.riskLockedTop}>
+            <Feather name="lock" size={14} color="#fbbf24" />
+            <Text style={s.riskLockedTitle}>Detailed risk + upay locked</Text>
+          </View>
+          <Text style={s.riskLockedSub}>
+            Day {selected + 1} ke specific cosmic insights aur upay unlock karne ke liye apni kundli add kare
+          </Text>
+          <View style={s.riskLockedCta}>
+            <Text style={s.riskLockedCtaText}>UNLOCK</Text>
+            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={11} color="#fbbf24" />
+          </View>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
   const C = useC();
@@ -404,6 +645,7 @@ export default function ForecastScreen() {
           moonSign: moonSign(demoMoons[i]),
           phase: moonPhase(dt),
           summary: SCORE_SUMMARIES[scoreToTrend(demoScores[i])],
+          ...computeRisk(demoScores[i], i),
         };
       }));
       return;
@@ -437,6 +679,7 @@ export default function ForecastScreen() {
             moonSign: moonSign(transitMoon),
             phase:    moonPhase(dt),
             summary:  SCORE_SUMMARIES[scoreToTrend(score)],
+            ...computeRisk(score, i),
           };
         });
         setDays(built);
@@ -538,6 +781,11 @@ export default function ForecastScreen() {
         {/* Selected day detail */}
         {sel && (
           <>
+            {/* Cosmic Risk Radar — focused per-day risk module with freemium gate.
+                Sits between the hero chart and the supporting info so it's the
+                first thing the user reads after seeing the day's score. */}
+            <RiskRadar days={days} selected={selected} onSelect={setSelected} />
+
             {/* Moon info */}
             <View style={s.infoGrid}>
               <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -689,4 +937,82 @@ const s = StyleSheet.create({
   },
   unlockTitle: { color: "#fbbf24", fontSize: 13, fontWeight: "600" },
   unlockSub:   { color: "#92704e", fontSize: 11 },
+
+  // ── Cosmic Risk Radar ────────────────────────────────────────────────────
+  riskCard: {
+    borderRadius: 16, borderWidth: 1,
+    padding: 14, gap: 10,
+  },
+  riskHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  riskTitleRow:    { flexDirection: "row", alignItems: "center", gap: 6 },
+  riskTitle:       { fontSize: 13, fontWeight: "700", letterSpacing: 0.4 },
+  riskHeaderHint:  { fontSize: 10, fontWeight: "600", letterSpacing: 1 },
+
+  // Safest / Riskiest day chips
+  riskChipsRow:    { flexDirection: "row", gap: 8 },
+  riskChip: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
+  },
+  riskChipLabel:   { fontSize: 9,  fontWeight: "800", letterSpacing: 1 },
+  riskChipDay:     { fontSize: 11, fontWeight: "600" },
+
+  // Gauge bar
+  gaugeHeaderRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
+  gaugeMicroLabel: { fontSize: 9,  fontWeight: "700", letterSpacing: 1.4 },
+  gaugeLevelText:  { fontSize: 13, fontWeight: "800", letterSpacing: 0.6 },
+  gaugeValueText:  { fontSize: 11, fontWeight: "600" },
+  gaugeTrack: {
+    flexDirection: "row", height: 8, borderRadius: 4, overflow: "visible", position: "relative",
+  },
+  gaugeSeg:        { flex: 1, height: 8 },
+  gaugeMarker: {
+    position: "absolute", top: -3, width: 14, height: 14, borderRadius: 7,
+    transform: [{ translateX: -7 }],
+    borderWidth: 2, borderColor: "#0f0a24",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7, shadowRadius: 6, elevation: 4,
+  },
+  gaugeScaleRow:   { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
+  gaugeScaleText:  { fontSize: 9, fontWeight: "600", letterSpacing: 0.5 },
+
+  // Free 1-line warning
+  riskShortRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
+    marginTop: 2,
+  },
+  riskShortIcon:   { fontSize: 13 },
+  riskShortText:   { flex: 1, fontSize: 12, fontWeight: "600", lineHeight: 16 },
+
+  // Paid detail card
+  riskDetailCard: {
+    borderRadius: 10, borderWidth: 1, padding: 10, gap: 8,
+  },
+  riskCatChip: {
+    alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5,
+  },
+  riskCatText:     { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
+  riskDetailText:  { fontSize: 12, fontWeight: "500", lineHeight: 17 },
+
+  // Paid remedy row
+  riskRemedyRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 10, borderRadius: 10, borderWidth: 1,
+  },
+  riskRemedyIcon:  { fontSize: 18 },
+  riskRemedyLabel: { fontSize: 9,  fontWeight: "800", letterSpacing: 1.4, marginBottom: 2 },
+  riskRemedyText:  { fontSize: 12, fontWeight: "600", lineHeight: 16 },
+
+  // Locked card (paywall)
+  riskLockedCard: {
+    borderRadius: 10, borderWidth: 1, padding: 12, gap: 6,
+  },
+  riskLockedTop:    { flexDirection: "row", alignItems: "center", gap: 8 },
+  riskLockedTitle:  { color: "#fbbf24", fontSize: 12, fontWeight: "700", flex: 1 },
+  riskLockedSub:    { color: "#92704e", fontSize: 11, lineHeight: 15 },
+  riskLockedCta:    { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, alignSelf: "flex-start" },
+  riskLockedCtaText:{ color: "#fbbf24", fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
 });

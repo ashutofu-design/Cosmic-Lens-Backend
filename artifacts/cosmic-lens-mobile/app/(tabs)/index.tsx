@@ -454,23 +454,6 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         />
       </View>
 
-      {/* ── 3-bucket strip (Physical / Mental / Luck) — backend v3 only ── */}
-      {buckets && (
-        <View style={hero.bucketRow}>
-          {(["physical","mental","luck"] as const).map(k => {
-            const b = buckets[k];
-            const m = BUCKET_META[k];
-            return (
-              <View key={k} style={[hero.bucketChip, { borderColor: `${m.color}30`, backgroundColor: `${m.color}10` }]}>
-                <Text style={hero.bucketIcon}>{m.icon}</Text>
-                <Text style={[hero.bucketShort, { color: `${m.color}` }]}>{m.short}</Text>
-                <Text style={[hero.bucketScore, { color: "rgba(255,255,255,0.85)" }]}>{b.score}</Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
       {/* ── Bottom: insight (or top flag) ── */}
       <View style={{ flexDirection: "row", alignItems: "center" }}>
         {topFlag ? (

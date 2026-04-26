@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   I18nManager,
@@ -12,6 +12,23 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
+import Svg, {
+  Circle,
+  Defs,
+  G,
+  Line,
+  Path,
+  RadialGradient,
+  Stop,
+  Text as SvgText,
+} from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
@@ -35,16 +52,8 @@ interface Risk24h {
   timing?: string;
 }
 
-interface Risk7dBlock {
-  range:  string;
-  level:  RiskLevel;
-  label:  string;
-  advice: string;
-}
-
 interface RiskRadarData {
   risk_radar_24h: Risk24h[];
-  risk_radar_7d:  Risk7dBlock[];
   summary:        string;
   date?:          string;
   score?:         number;
@@ -72,19 +81,201 @@ function levelIcon(l: RiskLevel): string {
   return "✅";
 }
 
+// ── Radar geometry helpers ────────────────────────────────────────────────────
+const RADAR_SIZE = 280;
+const RADAR_R    = RADAR_SIZE / 2 - 6;
+const RADAR_C    = RADAR_SIZE / 2;
+
+function polar(angleDeg: number, radius: number) {
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  return {
+    x: RADAR_C + Math.cos(rad) * radius,
+    y: RADAR_C + Math.sin(rad) * radius,
+  };
+}
+
+function severityRadius(level: RiskLevel): number {
+  if (level === "high")   return RADAR_R * 0.35;
+  if (level === "medium") return RADAR_R * 0.62;
+  return RADAR_R * 0.85;
+}
+
+function buildWedgePath(startAngle: number, endAngle: number): string {
+  const start = polar(startAngle, RADAR_R);
+  const end   = polar(endAngle,   RADAR_R);
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${RADAR_C} ${RADAR_C} L ${start.x} ${start.y} A ${RADAR_R} ${RADAR_R} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+}
+
+const SWEEP_PATH = buildWedgePath(-55, 0); // 55° trailing wedge
+
+// ── Radar visualization ───────────────────────────────────────────────────────
+function RadarView({ risks }: { risks: Risk24h[] }) {
+  const sweep = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    sweep.value = withRepeat(
+      withTiming(360, { duration: 4500, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [sweep, pulse]);
+
+  const sweepStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${sweep.value}deg` }],
+  }));
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: 0.35 + pulse.value * 0.55,
+  }));
+
+  // Stable angles per risk: golden angle so they spread nicely
+  const dots = useMemo(() => {
+    return risks.map((r, i) => {
+      const angle  = (i * 137.5 + 30) % 360;
+      const radius = severityRadius(r.level);
+      const p      = polar(angle, radius);
+      return {
+        ...p,
+        color: levelColor(r.level),
+        level: r.level,
+        idx:   i + 1,
+      };
+    });
+  }, [risks]);
+
+  return (
+    <View style={radarS.wrap}>
+      {/* Static base layer */}
+      <Svg
+        width={RADAR_SIZE}
+        height={RADAR_SIZE}
+        style={StyleSheet.absoluteFill}
+      >
+        <Defs>
+          <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
+            <Stop offset="0%"   stopColor="#0a1830" stopOpacity="1" />
+            <Stop offset="100%" stopColor="#020817" stopOpacity="1" />
+          </RadialGradient>
+        </Defs>
+        {/* Background disc */}
+        <Circle
+          cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
+          fill="url(#bg)"
+          stroke="rgba(34,211,238,0.35)" strokeWidth={1.5}
+        />
+        {/* Concentric rings */}
+        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.85}
+          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
+        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.62}
+          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
+        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.35}
+          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
+        {/* Crosshairs */}
+        <Line
+          x1={RADAR_C} y1={6} x2={RADAR_C} y2={RADAR_SIZE - 6}
+          stroke="rgba(34,211,238,0.18)" strokeWidth={1}
+        />
+        <Line
+          x1={6} y1={RADAR_C} x2={RADAR_SIZE - 6} y2={RADAR_C}
+          stroke="rgba(34,211,238,0.18)" strokeWidth={1}
+        />
+        {/* Compass labels */}
+        <SvgText x={RADAR_C} y={16} fill="rgba(34,211,238,0.55)"
+          fontSize="10" fontWeight="700" textAnchor="middle">N</SvgText>
+        <SvgText x={RADAR_SIZE - 6} y={RADAR_C + 4} fill="rgba(34,211,238,0.55)"
+          fontSize="10" fontWeight="700" textAnchor="end">E</SvgText>
+        <SvgText x={RADAR_C} y={RADAR_SIZE - 6} fill="rgba(34,211,238,0.55)"
+          fontSize="10" fontWeight="700" textAnchor="middle">S</SvgText>
+        <SvgText x={6} y={RADAR_C + 4} fill="rgba(34,211,238,0.55)"
+          fontSize="10" fontWeight="700" textAnchor="start">W</SvgText>
+        {/* Center dot */}
+        <Circle cx={RADAR_C} cy={RADAR_C} r={3} fill="#22d3ee" />
+      </Svg>
+
+      {/* Animated sweep beam (rotating wedge) */}
+      <Animated.View style={[StyleSheet.absoluteFill, sweepStyle]}>
+        <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
+          <Defs>
+            <RadialGradient id="sweep" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.55" />
+              <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Path d={SWEEP_PATH} fill="url(#sweep)" />
+          {/* Leading edge line */}
+          <Line
+            x1={RADAR_C} y1={RADAR_C}
+            x2={RADAR_C} y2={RADAR_C - RADAR_R}
+            stroke="#67e8f9" strokeWidth={1.5} strokeOpacity={0.95}
+          />
+        </Svg>
+      </Animated.View>
+
+      {/* Risk dots (with pulse halo) */}
+      {dots.map((d, i) => (
+        <View
+          key={`dot-${i}`}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: d.x - 14,
+            top:  d.y - 14,
+            width: 28, height: 28,
+            alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Animated.View
+            style={[
+              {
+                position: "absolute",
+                width: 28, height: 28, borderRadius: 14,
+                backgroundColor: d.color,
+              },
+              pulseStyle,
+            ]}
+          />
+          <View
+            style={{
+              width: 14, height: 14, borderRadius: 7,
+              backgroundColor: d.color,
+              borderWidth: 1.5, borderColor: "#fff",
+              alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <Text style={radarS.dotIdx}>{d.idx}</Text>
+          </View>
+        </View>
+      ))}
+
+      {/* Empty-dots note when no risks */}
+      {risks.length === 0 && (
+        <View style={radarS.emptyOverlay} pointerEvents="none">
+          <Text style={radarS.emptyTxt}>All Clear</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────────
 export default function DashaRiskScreen() {
   const C        = useC();
   const insets   = useSafeAreaInsets();
   const { user, kundli, birthData } = useUser();
 
-  const [data, setData]         = useState<RiskRadarData | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [data, setData]             = useState<RiskRadarData | null>(null);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
 
   const loadRadar = useCallback(async (silent = false) => {
-    // Prefer stateless POST with primary kundli (works for non-logged-in
-    // users too). Fall back to user_id+API key if local kundli not ready.
     if (!silent) setLoading(true);
     setError(null);
 
@@ -146,9 +337,14 @@ export default function DashaRiskScreen() {
     else router.replace("/(tabs)");
   };
 
+  // Filter out the "Stable Day" baseline so radar shows clean when no risks
+  const realRisks = (data?.risk_radar_24h ?? []).filter(
+    r => !(r.level === "low" && r.title === "Stable Day"),
+  );
+
   const summaryColor = (() => {
     if (!data) return C.textMid;
-    const high = data.risk_radar_24h.filter(r => r.level === "high").length;
+    const high = realRisks.filter(r => r.level === "high").length;
     if (high >= 2) return levelColor("high");
     if (high === 1) return levelColor("medium");
     return levelColor("low");
@@ -174,7 +370,7 @@ export default function DashaRiskScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[s.h1, { color: C.text }]}>Risk Radar</Text>
           <Text style={[s.h1Sub, { color: C.textMuted }]}>
-            Aaj aur agle 7 din ke important signals
+            Aaj ke 24 ghante ke important signals
           </Text>
         </View>
       </View>
@@ -205,7 +401,7 @@ export default function DashaRiskScreen() {
             </Text>
             <Text style={[s.emptyBody, { color: C.textMuted }]}>
               Risk Radar aapke janma kundli ke signals pe based hai. Kundli
-              banane ke baad aapko aaj aur agle 7 din ke important signals
+              banane ke baad aapko aaj ke 24 ghante ke important signals
               dikhenge.
             </Text>
             <Pressable
@@ -213,22 +409,6 @@ export default function DashaRiskScreen() {
               style={[s.retryBtn, { backgroundColor: C.accent }]}
             >
               <Text style={s.retryTxt}>Kundli banayein</Text>
-            </Pressable>
-          </View>
-        ) : error === "LOGIN_REQUIRED" ? (
-          <View style={[s.card, s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={s.emptyIcon}>🔐</Text>
-            <Text style={[s.emptyTitle, { color: C.text }]}>
-              Pehle login karein
-            </Text>
-            <Text style={[s.emptyBody, { color: C.textMuted }]}>
-              Risk Radar dekhne ke liye apne account mein login karein.
-            </Text>
-            <Pressable
-              onPress={() => router.push("/login")}
-              style={[s.retryBtn, { backgroundColor: C.accent }]}
-            >
-              <Text style={s.retryTxt}>Login</Text>
             </Pressable>
           </View>
         ) : error ? (
@@ -246,6 +426,25 @@ export default function DashaRiskScreen() {
           </View>
         ) : data ? (
           <>
+            {/* Radar visualization (hero) */}
+            <RadarView risks={realRisks} />
+
+            {/* Radar legend */}
+            <View style={s.legendRow}>
+              <View style={s.legendItem}>
+                <View style={[s.legendDot, { backgroundColor: levelColor("high") }]} />
+                <Text style={[s.legendTxt, { color: C.textMuted }]}>High</Text>
+              </View>
+              <View style={s.legendItem}>
+                <View style={[s.legendDot, { backgroundColor: levelColor("medium") }]} />
+                <Text style={[s.legendTxt, { color: C.textMuted }]}>Medium</Text>
+              </View>
+              <View style={s.legendItem}>
+                <View style={[s.legendDot, { backgroundColor: levelColor("low") }]} />
+                <Text style={[s.legendTxt, { color: C.textMuted }]}>Low</Text>
+              </View>
+            </View>
+
             {/* Summary card */}
             <LinearGradient
               colors={[C.bgCard, C.bgCard2]}
@@ -277,14 +476,16 @@ export default function DashaRiskScreen() {
             {/* 24h section */}
             <View style={s.sectionHead}>
               <Text style={[s.sectionTitle, { color: C.text }]}>
-                Next 24 Hours
+                Active Signals
               </Text>
               <Text style={[s.sectionSub, { color: C.textMuted }]}>
-                Aaj ke top {data.risk_radar_24h.length} signal
+                {realRisks.length > 0
+                  ? `Aaj ke top ${realRisks.length} signal`
+                  : "Aaj koi major signal nahi"}
               </Text>
             </View>
 
-            {data.risk_radar_24h.map((risk, i) => (
+            {(realRisks.length > 0 ? realRisks : data.risk_radar_24h).map((risk, i) => (
               <View
                 key={`r24-${i}`}
                 style={[
@@ -298,7 +499,18 @@ export default function DashaRiskScreen() {
                 ]}
               >
                 <View style={s.riskHead}>
-                  <Text style={s.riskIcon}>{levelIcon(risk.level)}</Text>
+                  {realRisks.length > 0 ? (
+                    <View
+                      style={[
+                        s.numBadge,
+                        { backgroundColor: levelColor(risk.level) },
+                      ]}
+                    >
+                      <Text style={s.numBadgeTxt}>{i + 1}</Text>
+                    </View>
+                  ) : (
+                    <Text style={s.riskIcon}>{levelIcon(risk.level)}</Text>
+                  )}
                   <Text style={[s.riskTitle, { color: C.text }]}>
                     {risk.title}
                   </Text>
@@ -345,64 +557,6 @@ export default function DashaRiskScreen() {
               </View>
             ))}
 
-            {/* 7d section */}
-            <View style={[s.sectionHead, { marginTop: 12 }]}>
-              <Text style={[s.sectionTitle, { color: C.text }]}>
-                Next 7 Days
-              </Text>
-              <Text style={[s.sectionSub, { color: C.textMuted }]}>
-                3 phases ka outlook
-              </Text>
-            </View>
-
-            {data.risk_radar_7d.map((block, i) => (
-              <View
-                key={`r7-${i}`}
-                style={[
-                  s.card,
-                  s.blockCard,
-                  {
-                    backgroundColor: C.bgCard,
-                    borderColor: C.border,
-                  },
-                ]}
-              >
-                <View style={s.blockHead}>
-                  <View
-                    style={[
-                      s.blockRangePill,
-                      { backgroundColor: C.bgCard2, borderColor: C.border3 },
-                    ]}
-                  >
-                    <Text style={[s.blockRangeTxt, { color: C.text }]}>
-                      {block.range}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      s.levelPill,
-                      { backgroundColor: levelBg(block.level) },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        s.levelPillTxt,
-                        { color: levelColor(block.level) },
-                      ]}
-                    >
-                      {levelLabel(block.level)}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[s.blockLabel, { color: C.text }]}>
-                  {levelIcon(block.level)}  {block.label}
-                </Text>
-                <Text style={[s.blockAdvice, { color: C.textMid }]}>
-                  {block.advice}
-                </Text>
-              </View>
-            ))}
-
             {/* Honest accuracy note */}
             <View
               style={[
@@ -414,9 +568,9 @@ export default function DashaRiskScreen() {
                 Note
               </Text>
               <Text style={[s.noteBody, { color: C.textMuted }]}>
-                Yeh radar aapke janma kundli + aaj ke gochar (planetary transits) ke
-                signals pe based hai. Yeh probability hai, certainty nahi — aap
-                apne best judgement ke saath isko use karein.
+                Yeh radar aapke janma kundli + aaj ke gochar ke signals pe
+                based hai. Yeh probability hai, certainty nahi — aap apne
+                best judgement ke saath isko use karein.
               </Text>
               <Text style={[s.noteFooter, { color: C.textDim }]}>
                 Powered by Advanced Cosmic Intelligence
@@ -429,6 +583,34 @@ export default function DashaRiskScreen() {
   );
 }
 
+// ── Radar styles ──────────────────────────────────────────────────────────────
+const radarS = StyleSheet.create({
+  wrap: {
+    width:  RADAR_SIZE,
+    height: RADAR_SIZE,
+    alignSelf: "center",
+    marginVertical: 8,
+  },
+  dotIdx: {
+    color: "#fff",
+    fontSize: 8,
+    fontFamily: F.extra,
+    lineHeight: 10,
+  },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTxt: {
+    color: "#22c55e",
+    fontFamily: F.extra,
+    fontSize: 18,
+    letterSpacing: 1,
+  },
+});
+
+// ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: { flex: 1 },
 
@@ -454,6 +636,19 @@ const s = StyleSheet.create({
   card: {
     borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12,
   },
+
+  legendRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  legendItem: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+  },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendTxt: { fontSize: 11, fontFamily: F.semi },
 
   summaryCard: { paddingVertical: 18 },
   summaryHead: {
@@ -486,6 +681,13 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8,
   },
   riskIcon:  { fontSize: 18 },
+  numBadge: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: "center", justifyContent: "center",
+  },
+  numBadgeTxt: {
+    color: "#fff", fontSize: 12, fontFamily: F.extra,
+  },
   riskTitle: { fontSize: 15, fontFamily: F.bold, flex: 1 },
   riskReason:{ fontSize: 13, fontFamily: F.regular, lineHeight: 19, marginBottom: 10 },
 
@@ -510,18 +712,6 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8,
   },
   timingTxt: { fontSize: 11, fontFamily: F.semi },
-
-  blockCard: { gap: 8 },
-  blockHead: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-  },
-  blockRangePill: {
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 999, borderWidth: 1,
-  },
-  blockRangeTxt: { fontSize: 11, fontFamily: F.bold },
-  blockLabel:    { fontSize: 14, fontFamily: F.bold, marginTop: 4 },
-  blockAdvice:   { fontSize: 13, fontFamily: F.regular, lineHeight: 19 },
 
   noteCard: {
     borderRadius: 14, borderWidth: 1, padding: 14, marginTop: 8,

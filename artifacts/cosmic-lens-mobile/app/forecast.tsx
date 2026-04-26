@@ -11,18 +11,16 @@ import {
   Text,
   View,
 } from "react-native";
-import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Defs, G, Line, LinearGradient as SvgGrad, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
-import { fetchTodayEnergy } from "@/lib/energyAPI";
 
-const DAY_NAMES = ["Aaditya (Sun)", "Soma (Mon)", "Mangal (Tue)", "Budh (Wed)", "Guru (Thu)", "Shukra (Fri)", "Shani (Sat)"];
-const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
 
 interface DayForecast {
   date: Date;
@@ -64,58 +62,148 @@ function scoreToTrend(s: number): "UP"|"MIXED"|"DOWN" {
   return s >= 65 ? "UP" : s <= 40 ? "DOWN" : "MIXED";
 }
 
-// ── Small chart ───────────────────────────────────────────────────────────────
+// ── Week chart — same visual language as home EnergyChart ───────────────────
+//   Gradient line (red→orange→amber→green), faint area fill, y-grid + axis
+//   labels, dot markers + halos, dates ("27 Apr") under x-axis. Tap a dot to
+//   select that day.
 function WeekChart({
-  days, scores, selected, onSelect, color,
+  days, scores, selected, onSelect,
 }: {
   days: DayForecast[]; scores: number[]; selected: number;
-  onSelect: (i: number) => void; color: string;
+  onSelect: (i: number) => void;
 }) {
   const C = useC();
-  const W = 320, H = 90, PAD = 16;
-  const chartW = W - PAD * 2;
-  const pts = scores.map((s, i) => ({
-    x: PAD + (i / (scores.length - 1)) * chartW,
-    y: 12 + (1 - s / 100) * (H - 30),
-    s,
-  }));
-  let path = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 1; i < pts.length; i++) {
-    const cpx = (pts[i-1].x + pts[i].x) / 2;
-    path += ` C ${cpx} ${pts[i-1].y} ${cpx} ${pts[i].y} ${pts[i].x} ${pts[i].y}`;
-  }
-  const area = path + ` L ${pts[pts.length-1].x} ${H-18} L ${pts[0].x} ${H-18} Z`;
+  const VW  = 340;
+  const VH  = 200;
+  const PL  = 30;
+  const PR  = 14;
+  const PT  = 16;
+  const GW  = VW - PL - PR;
+  const GH  = 140;
+  const BOT = PT + GH;
+
+  const N    = scores.length;
+  const px   = (i: number) => PL + (N <= 1 ? GW / 2 : (i / (N - 1)) * GW);
+  const py   = (v: number) => PT + (1 - v / 100) * GH;
+
+  // Smooth bezier curve through the points.
+  const buildLinePath = () => {
+    if (scores.length < 2) return "";
+    let d = `M ${px(0).toFixed(1)},${py(scores[0]).toFixed(1)}`;
+    for (let i = 1; i < N; i++) {
+      const x0 = px(i - 1), y0 = py(scores[i - 1]);
+      const x1 = px(i),     y1 = py(scores[i]);
+      const cpx = (x0 + x1) / 2;
+      d += ` C ${cpx.toFixed(1)},${y0.toFixed(1)} ${cpx.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
+    }
+    return d;
+  };
+
+  const linePath = buildLinePath();
+  const areaPath = `${linePath} L ${px(N-1).toFixed(1)},${BOT} L ${px(0).toFixed(1)},${BOT} Z`;
+
+  const YGRID = [
+    { v: 100, y: PT },
+    { v:  75, y: PT + GH * 0.25 },
+    { v:  50, y: PT + GH * 0.50 },
+    { v:  25, y: PT + GH * 0.75 },
+    { v:   0, y: BOT },
+  ];
+
+  const gridLine   = C.isDark ? "rgba(255,255,255,0.05)" : "rgba(140,100,200,0.08)";
+  const gridStrong = C.isDark ? "rgba(255,255,255,0.07)" : "rgba(140,100,200,0.12)";
+  const axisLabel  = C.isDark ? "rgba(255,255,255,0.30)" : "rgba(140,100,200,0.5)";
 
   return (
-    <Pressable onPress={() => {}}>
-      <Svg width={W} height={H}>
-        <Defs>
-          <SvgGrad id="wg" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={color} stopOpacity={0.3} />
-            <Stop offset="1" stopColor={color} stopOpacity={0.0} />
-          </SvgGrad>
-        </Defs>
-        <Path d={area} fill="url(#wg)" />
-        <Path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
-        {pts.map((p, i) => (
-          <React.Fragment key={i}>
+    <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display: "flex" }}>
+      <Defs>
+        <SvgGrad id="wg-line" x1={PL} y1="0" x2={PL + GW} y2="0" gradientUnits="userSpaceOnUse">
+          <Stop offset="0%"   stopColor="#ff3b3b" />
+          <Stop offset="20%"  stopColor="#ff8c00" />
+          <Stop offset="40%"  stopColor="#ffd700" />
+          <Stop offset="60%"  stopColor="#f59e0b" />
+          <Stop offset="100%" stopColor="#00ff99" />
+        </SvgGrad>
+        <SvgGrad id="wg-area" x1="0" y1={PT} x2="0" y2={BOT} gradientUnits="userSpaceOnUse">
+          <Stop offset="0%"   stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0.18} />
+          <Stop offset="50%"  stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0.06} />
+          <Stop offset="100%" stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0} />
+        </SvgGrad>
+      </Defs>
+
+      {/* y-axis grid */}
+      {YGRID.map(({ v, y: gy }) => (
+        <G key={v}>
+          <Line
+            x1={PL} y1={gy} x2={PL + GW} y2={gy}
+            stroke={v === 0 || v === 100 ? gridStrong : gridLine}
+            strokeWidth={v === 0 || v === 100 ? 0.8 : 0.5}
+            strokeDasharray={v === 0 || v === 100 ? undefined : "3,8"}
+          />
+          <SvgText x={PL - 6} y={gy + 3} textAnchor="end" fill={axisLabel} fontSize={7}>
+            {v}
+          </SvgText>
+        </G>
+      ))}
+
+      {/* area fill */}
+      {scores.length > 1 && <Path d={areaPath} fill="url(#wg-area)" />}
+
+      {/* glow stroke under main line */}
+      {scores.length > 1 && (
+        <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={14} opacity={0.06} strokeLinecap="round" strokeLinejoin="round" />
+      )}
+
+      {/* main gradient line */}
+      {scores.length > 1 && (
+        <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
+      )}
+
+      {/* dot markers + selected halo (tappable) */}
+      {scores.map((s, i) => {
+        const x = px(i), y = py(s);
+        const t = N <= 1 ? 0 : i / (N - 1);
+        // Match the home gradient palette per-stop so each dot color reflects its position.
+        const dotClr = t < 0.2 ? "#ff3b3b"
+          : t < 0.4 ? "#ff8c00"
+          : t < 0.6 ? "#ffd700"
+          : t < 0.8 ? "#f59e0b"
+          : "#00ff99";
+        const isSel = i === selected;
+        return (
+          <G key={i}>
+            {isSel && (
+              <>
+                <Circle cx={x} cy={y} r={11} fill={dotClr} opacity={0.10} />
+                <Circle cx={x} cy={y} r={7}  fill={dotClr} opacity={0.20} />
+              </>
+            )}
+            <Circle cx={x} cy={y} r={isSel ? 5 : 3.5} fill={dotClr} />
+            {isSel && <Circle cx={x} cy={y} r={1.8} fill="white" opacity={0.95} />}
+            {/* Larger invisible tap target so dots are easy to hit */}
             <Circle
-              cx={p.x} cy={p.y} r={i === selected ? 7 : 4}
-              fill={i === selected ? color : C.bgCard}
-              stroke={color} strokeWidth={i === selected ? 2 : 1.5}
+              cx={x} cy={y} r={16} fill="transparent"
               onPress={() => { onSelect(i); Haptics.selectionAsync(); }}
             />
-            <SvgText
-              x={p.x} y={H - 4} fontSize={9}
-              fill={i === selected ? color : C.textMuted}
-              textAnchor="middle" fontWeight={i === selected ? "bold" : "normal"}
-            >
-              {SHORT_DAYS[days[i].date.getDay()]}
-            </SvgText>
-          </React.Fragment>
-        ))}
-      </Svg>
-    </Pressable>
+          </G>
+        );
+      })}
+
+      {/* date labels on x-axis */}
+      {days.map((d, i) => {
+        const isSel = i === selected;
+        return (
+          <SvgText key={i}
+            x={px(i)} y={BOT + 16}
+            textAnchor="middle"
+            fill={isSel ? "#fbbf24" : axisLabel}
+            fontSize={isSel ? 9 : 8}
+            fontWeight={isSel ? "700" : "500"}>
+            {fmtDate(d.date)}
+          </SvgText>
+        );
+      })}
+    </Svg>
   );
 }
 
@@ -128,25 +216,24 @@ export default function ForecastScreen() {
   const botPad   = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 
-  const { todayEnergy } = useUser();
   const [days, setDays]       = useState<DayForecast[]>([]);
   const [selected, setSelected] = useState(0);
   const [loading, setLoading]   = useState(false);
 
-  // Build 7 dates starting today
+  // Build 7 dates starting from TOMORROW (today is shown on the home screen,
+  // so the forecast page exclusively shows the next 7 days for planning).
   useEffect(() => {
     const dates: string[] = [];
     const today = new Date();
-    for (let i = 0; i < 7; i++) {
+    for (let i = 1; i <= 7; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
     }
 
     if (showDemo) {
-      // Day 0 score MUST match the home demo (38) so users see one consistent number.
-      const demoScores = [38, 58, 81, 45, 70, 65, 77];
-      const demoMoons  = [120, 133, 147, 162, 177, 192, 207];
+      const demoScores = [58, 81, 45, 70, 65, 77, 62];
+      const demoMoons  = [133, 147, 162, 177, 192, 207, 222];
       setDays(dates.map((ds, i) => {
         const dt = new Date(ds);
         return {
@@ -162,31 +249,25 @@ export default function ForecastScreen() {
     }
 
     setLoading(true);
-    // Fire both requests in parallel — /api/transits for days 1-6 (transit-based),
-    // /api/energy/today for day 0 (the SAME authoritative score the home screen shows).
-    Promise.all([
-      apiFetch(`${API_BASE}/api/transits`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates }),
-      }).then(r => r.json()) as Promise<{ date: string; positions: Record<string,number> }[]>,
-      kundli ? fetchTodayEnergy(kundli) : Promise.resolve(null),
-    ])
-      .then(([data, todayResult]) => {
+    apiFetch(`${API_BASE}/api/transits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dates }),
+    })
+      .then(r => r.json())
+      .then((data: { date: string; positions: Record<string,number> }[]) => {
         const moonLon = moonData?.longitude ?? 0;
-        const dasha   = kundli ? computeActiveDasha(kundli, moonLon) : null;
-        const baseScore = dasha?.careerScore ?? 60;
+        // Use a stable mid-range baseline so projected scores aren't pinned to today's
+        // specific value (this page is forward-looking trends, not today's reading).
+        const baseScore = 60;
 
         const built = data.map((item, i) => {
-          const transitMoon = item.positions?.Moon ?? (moonLon + i * 13.2);
-          const variation   = Math.sin(i * 1.3) * 12 + (item.positions?.Jupiter ? 5 : 0)
+          // Forecast index: i=0 → tomorrow, i=6 → today + 7. Offset by +1 day for moon estimate.
+          const dayOffset   = i + 1;
+          const transitMoon = item.positions?.Moon ?? (moonLon + dayOffset * 13.2);
+          const variation   = Math.sin(dayOffset * 1.3) * 12 + (item.positions?.Jupiter ? 5 : 0)
             - (item.positions?.Saturn ? 6 : 0);
-          let score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
-          // Day 0 → override with authoritative /api/energy/today score so it matches home screen.
-          if (i === 0) {
-            const home = todayResult?.energy_score ?? todayEnergy ?? null;
-            if (typeof home === "number") score = Math.round(home);
-          }
+          const score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
           const dt    = new Date(item.date + "T00:00:00");
           return {
             date:     dt,
@@ -205,14 +286,12 @@ export default function ForecastScreen() {
         setDays([]);
       })
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo, todayEnergy]);
+  }, [kundli, moonData, showDemo]);
 
   const sel = days[selected];
   const scoreColor = sel
     ? (sel.score >= 65 ? "#4ade80" : sel.score <= 40 ? "#ef4444" : "#fbbf24")
     : "#f59e0b";
-
-  const dasha = kundli ? computeActiveDasha(kundli, moonData?.longitude ?? 0) : null;
 
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
@@ -239,7 +318,6 @@ export default function ForecastScreen() {
               scores={days.map(d => d.score)}
               selected={selected}
               onSelect={setSelected}
-              color="#f59e0b"
             />
           ) : (
             <View style={s.chartPlaceholder}>
@@ -296,29 +374,15 @@ export default function ForecastScreen() {
               </View>
             </View>
 
-            {/* Active dasha — TODAY ONLY (future days unlock when the day arrives) */}
-            {selected === 0 && dasha && (
-              <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.fc_activeDasha}</Text>
-                <View style={s.dashaRow}>
-                  <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.mdPlanet)} MD</Text>
-                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={10} color={C.textDim} />
-                  <Text style={[s.dashaItem, { color: C.textMuted }]}>{pName(dasha.adPlanet)} AD</Text>
-                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={10} color={C.textDim} />
-                  <Text style={[s.dashaItem, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{pName(dasha.pdPlanet)} PD</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Future-day lock hint — drives daily return visits */}
-            {selected > 0 && (
-              <View style={[s.lockHint, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Feather name="lock" size={12} color="#fbbf24" />
-                <Text style={[s.lockHintText, { color: C.textMuted }]}>
-                  Aaj ke din yeh full reading + remedies open hongi
-                </Text>
-              </View>
-            )}
+            {/* Lock hint — every day on this page is a future day, full personal
+                reading + remedies unlock on the home screen on that day itself.
+                This is the daily-return hook the product depends on. */}
+            <View style={[s.lockHint, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Feather name="lock" size={12} color="#fbbf24" />
+              <Text style={[s.lockHintText, { color: C.textMuted }]}>
+                Us din ki full reading + remedies us din ke arrival pe home screen pe khulengi
+              </Text>
+            </View>
 
             {/* Day navigation row */}
             <View style={s.navRow}>

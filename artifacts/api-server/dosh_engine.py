@@ -1528,9 +1528,22 @@ def _punar_phoo(pl):
     )
 
 
-# ── 16. Ekadhipatya Dosh ───────────────────────────────────────────────────────
-def _ekadhipatya(pl):
-    """Same planet lords two houses (one kendra/trikona, one dusthana) AND sits in its dusthana."""
+# ── 16. Kendradhipati Dosh ─────────────────────────────────────────────────────
+def _kendradhipati(pl):
+    """Kendradhipati Dosh — Natural benefic owns a Kendra house (1/4/7/10).
+
+    Classical Parashara rule (BPHS Ch. 34):
+      • When a NATURAL BENEFIC (Jupiter / Venus / Mercury / Moon) becomes lord
+        of a Kendra (1, 4, 7, 10), it LOSES its natural auspiciousness and
+        behaves neutrally — or mildly malefically — during its dasha periods.
+      • Reverse rule: when a NATURAL MALEFIC (Sun / Mars / Saturn) is lord of
+        a Kendra, it GAINS auspiciousness (yoga-karaka tendency).
+      • IMPORTANT: only the lordship pattern matters; the planet's actual
+        placement in the chart is irrelevant for this dosh.
+
+    Severity ranking used here (most-to-least afflicted):
+      Jupiter > Venus > Moon > Mercury  (Mercury alone → status "Mild")
+    """
     SIGN_LORD = {
         1: "Mars", 2: "Venus", 3: "Mercury", 4: "Moon", 5: "Sun", 6: "Mercury",
         7: "Venus", 8: "Mars", 9: "Jupiter", 10: "Saturn", 11: "Saturn", 12: "Jupiter",
@@ -1539,8 +1552,15 @@ def _ekadhipatya(pl):
         "aries": 1, "taurus": 2, "gemini": 3, "cancer": 4, "leo": 5, "virgo": 6,
         "libra": 7, "scorpio": 8, "sagittarius": 9, "capricorn": 10, "aquarius": 11, "pisces": 12,
     }
-    KENDRA_TRIKONA = {1, 4, 5, 7, 9, 10}
-    DUSTHANA = {6, 8, 12}
+    SIGN_NAMES_EN = {
+        1: "Aries",  2: "Taurus", 3: "Gemini",  4: "Cancer", 5: "Leo",      6: "Virgo",
+        7: "Libra",  8: "Scorpio",9: "Sagittarius",10:"Capricorn",11:"Aquarius",12:"Pisces",
+    }
+    KENDRAS          = (1, 4, 7, 10)
+    NATURAL_BENEFICS = {"Jupiter", "Venus", "Mercury", "Moon"}
+    NATURAL_MALEFICS = {"Sun", "Mars", "Saturn"}
+    # Per BPHS — bigger natural benefic ⇒ greater Kendradhipati loss.
+    SEVERITY_RANK    = {"Jupiter": 4, "Venus": 3, "Moon": 2, "Mercury": 1}
 
     def _planet_sign_idx(p):
         """Return 1-12 sign index from longitude (preferred), else from sign field (int or string)."""
@@ -1556,7 +1576,7 @@ def _ekadhipatya(pl):
             return SIGN_NAMES_LOWER.get(s.strip().lower(), 0)
         return 0
 
-    # Derive ascendant sign from any planet with usable sign+house data
+    # Derive ascendant sign from any planet with usable sign+house data.
     asc_sign = 0
     for p in pl:
         sign_idx = _planet_sign_idx(p)
@@ -1565,39 +1585,117 @@ def _ekadhipatya(pl):
             asc_sign = ((sign_idx - h) % 12) + 1
             break
     if asc_sign == 0:
-        return ("None", "No Ekadhipatya Dosh — Ascendant data unavailable",
-                "Cannot evaluate Ekadhipatya without ascendant sign.", [], "")
+        return ("None", "No Kendradhipati Dosh — Ascendant data unavailable",
+                "Cannot evaluate Kendradhipati Dosh without ascendant sign.", [], "")
 
-    house_lord = {h: SIGN_LORD[((asc_sign - 1 + h - 1) % 12) + 1] for h in range(1, 13)}
+    # Map each Kendra house to its sign and lord for this lagna.
+    kendra_sign = {h: ((asc_sign - 1 + h - 1) % 12) + 1 for h in KENDRAS}
+    kendra_lord = {h: SIGN_LORD[kendra_sign[h]] for h in KENDRAS}
 
-    for planet in ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"):
-        owned = [h for h, lord in house_lord.items() if lord == planet]
-        good_houses = [h for h in owned if h in KENDRA_TRIKONA]
-        bad_houses  = [h for h in owned if h in DUSTHANA]
-        if not good_houses or not bad_houses:
-            continue
-        ph = _house(pl, planet)
-        if ph in DUSTHANA and ph in bad_houses:
-            gh = good_houses[0]
-            return (
-                "Active",
-                f"{planet} Owns H{gh} & H{ph}, Sits in H{ph} — Ekadhipatya Dosh",
-                f"{planet} rules both a strong house (H{gh}) and a difficult house (H{ph}), and is placed in the difficult house. This structurally weakens the affairs of H{gh}. A subtle but persistent dosh whose effects show across the planet's dasha periods.",
-                [
-                    f"Strengthen {planet} via its weekly day rituals (recite its beej mantra)",
-                    f"Wear {planet}'s gemstone after Jyotish consultation to amplify positive expression",
-                    f"Engage in selfless service in the area H{gh} represents",
-                    "Avoid taking up tasks that aggravate the dusthana's nature",
-                ],
-                f"{planet} owns H{gh} (good) + H{ph} (dusthana), placed in H{ph}",
-            )
-    return (
-        "None",
-        "No Ekadhipatya Dosh — House Lordships Balanced",
-        "No planet's dual-rulership creates structural weakening in this chart.",
-        [],
-        f"Lagna sign: {asc_sign}",
+    # Group lords → houses they own among the four Kendras.
+    lord_kendras: dict = {}
+    for h in KENDRAS:
+        lord_kendras.setdefault(kendra_lord[h], []).append(h)
+
+    afflicted = sorted(
+        [(p, sorted(hs)) for p, hs in lord_kendras.items() if p in NATURAL_BENEFICS],
+        key=lambda x: (-SEVERITY_RANK.get(x[0], 0), x[0]),
     )
+    yogakarakas = sorted(
+        [(p, sorted(hs)) for p, hs in lord_kendras.items() if p in NATURAL_MALEFICS],
+        key=lambda x: x[0],
+    )
+
+    asc_name = SIGN_NAMES_EN[asc_sign]
+    note = " | ".join(
+        [f"Lagna: {asc_name}"]
+        + [f"H{h}={SIGN_NAMES_EN[kendra_sign[h]]}({kendra_lord[h]})" for h in KENDRAS]
+    )
+
+    # ── No benefic owns any Kendra → no dosh ─────────────────────────────────
+    if not afflicted:
+        msg = ("No natural benefic (Jupiter / Venus / Mercury / Moon) owns a "
+               "Kendra house (1, 4, 7, 10). All benefics retain their full "
+               "auspicious nature in this chart.")
+        if yogakarakas:
+            ylist = ", ".join(
+                f"{p} (H{','.join(map(str, hs))})" for p, hs in yogakarakas
+            )
+            msg += (f" Counter-positive: {ylist} — natural malefic ruling a "
+                    "Kendra gains auspiciousness here (reverse rule).")
+        return ("None",
+                "No Kendradhipati Dosh — Benefics' Auspiciousness Intact",
+                msg, [], note)
+
+    # ── Build headline ───────────────────────────────────────────────────────
+    primary_p, primary_h = afflicted[0]
+    primary_h_str = " & ".join(f"H{h}" for h in primary_h)
+    if len(afflicted) == 1 and len(primary_h) == 1:
+        headline = f"{primary_p} Owns {primary_h_str} (Kendra) — Kendradhipati Dosh"
+    elif len(afflicted) == 1:
+        headline = f"{primary_p} Owns {primary_h_str} (Two Kendras) — Strong Kendradhipati Dosh"
+    else:
+        per = ", ".join(
+            f"{p} ({'&'.join(f'H{h}' for h in hs)})" for p, hs in afflicted
+        )
+        headline = f"Multiple Benefics as Kendra Lords — Kendradhipati Dosh: {per}"
+
+    # ── Build description ────────────────────────────────────────────────────
+    parts = [
+        f"For {asc_name} Lagna, the natural benefic(s) listed below are Kendra "
+        "house lord(s). Per Parashara (BPHS Ch. 34), a benefic ruling a Kendra "
+        "(1/4/7/10) loses its natural auspiciousness and behaves neutrally — "
+        "or mildly malefically — during its dasha / antardasha. The planet's "
+        "actual placement in the chart does NOT change this; only the "
+        "lordship pattern matters."
+    ]
+    for p, hs in afflicted:
+        parts.append(f"• {p} → owns " + " & ".join(f"H{h}" for h in hs))
+    if yogakarakas:
+        parts.append(
+            "Counter-balance: "
+            + ", ".join(
+                f"{p} (" + " & ".join(f"H{h}" for h in hs) + ")"
+                for p, hs in yogakarakas
+            )
+            + " — natural malefic owning a Kendra actually gains auspiciousness "
+              "here (reverse rule), softening overall impact."
+        )
+    description = " ".join(parts)
+
+    # ── Remedies (strengthen the afflicted benefic so its native shubhatva
+    #    is restored as much as possible) ───────────────────────────────────
+    REMEDY = {
+        "Jupiter": [
+            "Recite Guru Beej mantra (Om Gram Greem Graum Sah Gurave Namah) 108× on Thursdays",
+            "Donate yellow items (chana dal, turmeric, banana) to a learned brahmin on Thursdays",
+            "Wear yellow on Thursdays; respect teachers, elders and gurus",
+        ],
+        "Venus": [
+            "Recite Shukra Beej mantra (Om Dram Dreem Draum Sah Shukraya Namah) 108× on Fridays",
+            "Donate white sweets / curd / camphor to a married woman on Fridays",
+            "Cultivate harmony in relationships; avoid harsh speech and indulgence",
+        ],
+        "Mercury": [
+            "Recite Budh Beej mantra (Om Bram Breem Braum Sah Budhaya Namah) 108× on Wednesdays",
+            "Donate green moong dal or feed cows fresh green grass on Wednesdays",
+            "Practise honesty in communication and accounts",
+        ],
+        "Moon": [
+            "Recite Chandra Beej mantra (Om Shram Shreem Shraum Sah Chandraya Namah) 108× on Mondays",
+            "Offer milk and white flowers to Lord Shiva on Mondays",
+            "Care for mother; donate rice or silver as your means allow",
+        ],
+    }
+    remedies = []
+    for p, _ in afflicted:
+        remedies.extend(REMEDY.get(p, []))
+
+    # ── Status: Mild only when ONLY Mercury (weakest dosh) is afflicted ─────
+    only_mercury = (len(afflicted) == 1 and afflicted[0][0] == "Mercury")
+    status = "Mild" if only_mercury else "Active"
+
+    return (status, headline, description, remedies, note)
 
 
 # ── Master config ──────────────────────────────────────────────────────────────
@@ -1616,7 +1714,7 @@ DOSH_CONFIGS = [
     ("putra",          "Putra Dosh",           "पुत्र दोष",           "👶", _putra),
     ("gandanta",       "Gandanta Dosh",        "गण्डान्त दोष",        "🌊", _gandanta),
     ("punar_phoo",     "Punar Phoo Dosh",      "पुनः फू दोष",         "💔", _punar_phoo),
-    ("ekadhipatya",    "Ekadhipatya Dosh",     "एकाधिपत्य दोष",       "👑", _ekadhipatya),
+    ("kendradhipati",  "Kendradhipati Dosh",   "केन्द्राधिपति दोष",     "👑", _kendradhipati),
 ]
 
 

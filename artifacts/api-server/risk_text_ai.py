@@ -36,8 +36,20 @@ from typing import Any, Dict, List, Optional
 
 log = logging.getLogger("risk_text_ai")
 
-# Module-level cache. Key = trigger string. Value = dict with 6 fields.
-_AI_CACHE: Dict[str, Dict[str, str]] = {}
+# ── Severity bands + per-day variants ───────────────────────────────────
+# Each trigger is generated in TWO tone bands so the same cosmic signal
+# reads differently when it's a mild vs. a strong day:
+#   - "mid"  : softer, calmer language for moderate days
+#   - "high" : direct, stronger language for genuinely heightened windows
+# Within each (trigger, band) we cache N=3 phrasing VARIANTS so consecutive
+# days with the same dominant trigger don't show identical text — caller
+# rotates by `day_idx % N`. (Low-severity days don't use AI at all — they
+# render the engineering neutral bank in risk_text_engine.)
+_BANDS = ("mid", "high")
+_VARIANTS_PER_BAND = 3
+
+# Module-level cache. Key = trigger string. Value = {band -> [variant_dict_1..N]}
+_AI_CACHE: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
 _CACHE_LOCK = threading.Lock()
 
 # In-flight dedup: per-trigger Event so concurrent first-hit + prewarm don't
@@ -225,6 +237,30 @@ _TRIGGER_BRIEFS: Dict[str, Dict[str, str]] = {
         ),
     },
 }
+
+# ── Tone hints per severity band — injected into the user prompt to shape
+# language strength. The brand-voice rules in _SYSTEM_PROMPT still apply
+# unchanged on top of this.
+_BAND_TONE_HINTS: Dict[str, str] = {
+    "mid": (
+        "TONE = MILD-TO-MODERATE day. Keep language calm, gentle, "
+        "reassuring. AVOID alarming words like 'intense', 'serious', "
+        "'badi baatein ho sakti hain', 'sambhal kar', 'risk hai'. USE "
+        "softer phrases: 'thodi sensitivity', 'gentle awareness', "
+        "'mild cosmic window', 'normal flow', 'ek subtle background "
+        "shift', 'koi major baat nahi par dhyan rakhein'. Reassure that "
+        "most people won't even notice this if they manage routine well."
+    ),
+    "high": (
+        "TONE = STRONG cosmic alert day. Be direct and clear about the "
+        "heightened sensitivity, but stay supportive — never use fear, "
+        "destiny, or 'kismat' language. USE phrases like 'aaj specially "
+        "dhyan rakhein', 'cosmic energy strong hai is window mein', "
+        "'mood aur decisions pe extra alertness rakhein', 'aaj wala din "
+        "kaafi heavy hai energy ke level pe'."
+    ),
+}
+
 
 _SYSTEM_PROMPT = """You are Cosmic Lens, a friendly Vedic astrology guide for Indian audiences.
 
@@ -417,8 +453,25 @@ def _validate(payload: Any) -> Optional[Dict[str, str]]:
     return out
 
 
-def _generate_one(trigger: str) -> Optional[Dict[str, str]]:
-    """Single OpenAI call for one trigger. Returns validated dict or None."""
+def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
+    """Single AI call → all variants for a trigger.
+
+    Asks the model to produce, in one structured response, ``N`` distinct
+    phrasing variants for EACH severity band (currently {"mid", "high"}).
+    Returned shape::
+
+        {
+          "mid":  [variant1, variant2, variant3],
+          "high": [variant1, variant2, variant3],
+        }
+
+    Each variant is the same 6-field dict the legacy single-shot generator
+    returned. Every variant is run through ``_validate`` (length caps +
+    brand-voice forbidden-token scan) — if ANY variant fails validation
+    the entire bundle is rejected and ``None`` is returned, so the
+    engineering ``_TEXT_MAP`` fallback in ``risk_text_engine`` kicks in.
+    NEVER returns a partially-valid bundle (no fakes).
+    """
     cli = _client()
     if cli is None:
         return None
@@ -427,20 +480,41 @@ def _generate_one(trigger: str) -> Optional[Dict[str, str]]:
         log.warning("risk_text_ai: unknown trigger %r", trigger)
         return None
 
+    n = _VARIANTS_PER_BAND
+    band_specs_block = "\n\n".join(
+        f"=== BAND \"{band}\" ===\n{_BAND_TONE_HINTS[band]}\n"
+        f"Generate exactly {n} DIFFERENT phrasing variants for this band."
+        for band in _BANDS
+    )
+
     user_msg = (
-        "Generate the Cosmic Lens daily guidance for this trigger.\n\n"
+        "Generate the Cosmic Lens daily guidance for this trigger, in TWO "
+        "tone bands and multiple phrasing variants per band.\n\n"
         f"Trigger key: {trigger}\n"
         f"Internal meaning (do NOT mention this directly in output): "
         f"{spec['brief']}\n\n"
         f"Canonical upay direction (use one of these — do NOT invent a "
         f"different deity / mantra / daan): {spec['upay_hint']}\n\n"
-        "Return strict JSON with EXACTLY these 6 keys: "
-        "category, kya_risk_hai, kya_dhyan_rakhna_hai, kya_avoid_karna_hai, "
-        "kya_karna_hai, upay. Follow all brand voice rules. Hinglish only."
+        f"{band_specs_block}\n\n"
+        "Each variant within a band MUST:\n"
+        "  - cover the same underlying signal (same category direction)\n"
+        "  - use DIFFERENT word choices, sentence structures, and angles "
+        "from the other variants in the same band (so consecutive days "
+        "with the same trigger don't read identically)\n"
+        "  - stay short and within the brand voice rules\n"
+        "  - keep the upay aligned to the canonical direction above\n\n"
+        "Return strict JSON in EXACTLY this shape:\n"
+        "{\n"
+        f"  \"mid\":  [ v1, v2, v3 ],\n"
+        f"  \"high\": [ v1, v2, v3 ]\n"
+        "}\n"
+        "Each vN must have keys: category, kya_risk_hai, "
+        "kya_dhyan_rakhna_hai, kya_avoid_karna_hai, kya_karna_hai, upay. "
+        "Hinglish only."
     )
 
     model = os.environ.get("COSMIC_RISK_TEXT_MODEL", "gpt-4o-mini")
-    timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "20"))
+    timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "30"))
 
     try:
         resp = cli.chat.completions.create(
@@ -450,8 +524,8 @@ def _generate_one(trigger: str) -> Optional[Dict[str, str]]:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.7,
-            max_tokens=600,
+            temperature=0.85,
+            max_tokens=2400,
             timeout=timeout,
         )
         content = (resp.choices[0].message.content or "").strip()
@@ -463,39 +537,85 @@ def _generate_one(trigger: str) -> Optional[Dict[str, str]]:
         except json.JSONDecodeError as exc:
             log.warning("risk_text_ai: bad JSON for %s: %s", trigger, exc)
             return None
-        validated = _validate(payload)
-        if validated is None:
-            log.warning("risk_text_ai: validation failed for %s", trigger)
+        if not isinstance(payload, dict):
+            log.warning("risk_text_ai: top-level not a dict for %s", trigger)
             return None
-        return validated
+
+        bundle: Dict[str, List[Dict[str, str]]] = {}
+        for band in _BANDS:
+            arr = payload.get(band)
+            if not isinstance(arr, list) or len(arr) < n:
+                log.warning(
+                    "risk_text_ai: missing/short '%s' band for %s (got %r)",
+                    band, trigger, type(arr).__name__,
+                )
+                return None
+            band_variants: List[Dict[str, str]] = []
+            for idx, raw in enumerate(arr[:n]):
+                validated = _validate(raw)
+                if validated is None:
+                    log.warning(
+                        "risk_text_ai: variant %d of band %s failed validation for %s",
+                        idx, band, trigger,
+                    )
+                    return None
+                band_variants.append(validated)
+            bundle[band] = band_variants
+        return bundle
     except Exception as exc:
         log.warning("risk_text_ai: generation failed for %s: %s", trigger, exc)
         return None
 
 
-def get_text(trigger: str) -> Optional[Dict[str, str]]:
-    """Returns AI-generated text dict for the trigger, or None on failure.
+def get_text(
+    trigger: str,
+    band: str = "mid",
+    variant_idx: int = 0,
+) -> Optional[Dict[str, str]]:
+    """Returns one AI-generated text variant for the trigger × band, or None.
 
-    Cached per-trigger (process-wide). Same trigger reuses the same text
-    forever, so first hit per trigger is ~1-3s, subsequent hits are O(1).
+    Caching model:
+      - One AI call per trigger (process-wide) generates the FULL bundle of
+        all band × variant combinations.
+      - Subsequent calls are O(1): pick `bundle[band][variant_idx % N]`.
+      - Same trigger across consecutive days rotates through N=3 variants
+        (caller passes ``variant_idx=day_idx``) so the per-day card text
+        actually CHANGES day-to-day even when the dominant cosmic signal
+        is unchanged.
 
     In-flight dedup: when two callers request the same trigger concurrently
-    (e.g. first user request + background prewarm worker), only one OpenAI
+    (e.g. first user request + background prewarm worker), only one AI
     call is made. The second caller waits on a per-trigger Event and reads
     the result from cache once the first caller finishes.
+
+    Falls back gracefully:
+      - Unknown band → coerced to "mid".
+      - Trigger not in cache and AI unavailable → ``None`` (caller uses
+        engineering ``_TEXT_MAP``).
     """
-    # Fast path: cached.
+    if band not in _BANDS:
+        band = "mid"
+
+    # Fast path: cached bundle present.
     with _CACHE_LOCK:
-        if trigger in _AI_CACHE:
-            return _AI_CACHE[trigger]
+        bundle = _AI_CACHE.get(trigger)
+    if bundle is not None:
+        variants = bundle.get(band) or bundle.get("mid")
+        if variants:
+            return variants[variant_idx % len(variants)]
+        return None
 
     # Decide: are we the writer (no in-flight gen yet) or a waiter
     # (someone else is already generating)?
     own_event: Optional[threading.Event] = None
     wait_event: Optional[threading.Event] = None
     with _CACHE_LOCK:
-        if trigger in _AI_CACHE:
-            return _AI_CACHE[trigger]
+        bundle = _AI_CACHE.get(trigger)
+        if bundle is not None:
+            variants = bundle.get(band) or bundle.get("mid")
+            if variants:
+                return variants[variant_idx % len(variants)]
+            return None
         existing = _INFLIGHT.get(trigger)
         if existing is not None:
             wait_event = existing
@@ -505,23 +625,27 @@ def get_text(trigger: str) -> Optional[Dict[str, str]]:
 
     # Waiter path: block until the writer signals, then read from cache.
     if wait_event is not None:
-        timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "20"))
-        # Add a small buffer over the OpenAI timeout so the waiter doesn't
-        # bail before a slow-but-successful writer finishes.
+        timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "30"))
         wait_event.wait(timeout=timeout + 5.0)
         with _CACHE_LOCK:
-            return _AI_CACHE.get(trigger)
+            bundle = _AI_CACHE.get(trigger)
+        if bundle is None:
+            return None
+        variants = bundle.get(band) or bundle.get("mid")
+        if not variants:
+            return None
+        return variants[variant_idx % len(variants)]
 
-    # Writer path: generate, store, signal waiters, clean up the in-flight
-    # entry. Errors are swallowed by _generate_one (returns None) but the
-    # try/finally guarantees waiters are released even on unexpected
-    # exceptions.
+    # Writer path: generate the full bundle, store, signal waiters.
     try:
-        result = _generate_one(trigger)
+        result = _generate_bundle(trigger)
         if result is not None:
             with _CACHE_LOCK:
                 _AI_CACHE[trigger] = result
-        return result
+            variants = result.get(band) or result.get("mid")
+            if variants:
+                return variants[variant_idx % len(variants)]
+        return None
     finally:
         with _CACHE_LOCK:
             _INFLIGHT.pop(trigger, None)
@@ -530,26 +654,40 @@ def get_text(trigger: str) -> Optional[Dict[str, str]]:
 
 
 def cache_status() -> Dict[str, Any]:
-    """Diagnostic: which triggers are currently cached."""
+    """Diagnostic: which triggers are currently cached, plus per-band variant counts."""
     with _CACHE_LOCK:
+        per_trigger = {
+            trig: {band: len(variants) for band, variants in bundle.items()}
+            for trig, bundle in _AI_CACHE.items()
+        }
         return {
             "cached_triggers": sorted(_AI_CACHE.keys()),
             "cache_size": len(_AI_CACHE),
             "total_known": len(_TRIGGER_BRIEFS),
+            "bands": list(_BANDS),
+            "variants_per_band": _VARIANTS_PER_BAND,
+            "per_trigger_variants": per_trigger,
         }
 
 
 def _prewarm_worker(triggers: List[str]) -> None:
-    """Background worker: generate text for all triggers serially."""
+    """Background worker: generate full bundle for all triggers serially.
+
+    One AI call per trigger generates all bands × variants. ``get_text`` does
+    the actual cache write, so calling it once with default args is enough
+    to populate the bundle for every (band, variant_idx) combination.
+    """
     for trig in triggers:
         try:
             get_text(trig)
         except Exception as exc:
             log.warning("risk_text_ai: prewarm failed for %s: %s", trig, exc)
     log.info(
-        "risk_text_ai: prewarm done, cached %d/%d triggers",
+        "risk_text_ai: prewarm done, cached %d/%d triggers (bands=%s, variants=%d)",
         len(_AI_CACHE),
         len(_TRIGGER_BRIEFS),
+        list(_BANDS),
+        _VARIANTS_PER_BAND,
     )
 
 

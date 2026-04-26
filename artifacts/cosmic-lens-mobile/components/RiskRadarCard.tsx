@@ -601,16 +601,6 @@ export function RiskRadarCard({
             </View>
           </View>
 
-          <View style={[s.bdRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={[s.bdIconBox, { backgroundColor: "rgba(96,165,250,0.18)" }]}>
-              <Feather name="eye" size={14} color="#60a5fa" />
-            </View>
-            <View style={s.bdText}>
-              <Text style={[s.bdLabel, { color: "#60a5fa" }]}>KYA DHYAN RAKHNA HAI</Text>
-              <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskDhyan}</Text>
-            </View>
-          </View>
-
           <View style={[s.bdRow, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }]}>
             <View style={[s.bdIconBox, { backgroundColor: "rgba(239,68,68,0.22)" }]}>
               <Feather name="x-circle" size={14} color="#ef4444" />

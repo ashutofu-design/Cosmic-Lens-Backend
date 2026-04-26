@@ -2278,7 +2278,11 @@ def lucky_today():
     moon_lon = swe.calc_ut(jd, swe.MOON, flags)[0][0] % 360.0
     sun_lon  = swe.calc_ut(jd, swe.SUN,  flags)[0][0] % 360.0
 
-    out = compute_daily_lucky(birth_data, kundli_dict, date_iso, moon_lon, sun_lon)
+    # Optional UI language for lang-aware reasoning + colour name + tara label.
+    lang = (request.args.get("lang") or body.get("lang") or "").strip().lower() or None
+
+    out = compute_daily_lucky(birth_data, kundli_dict, date_iso,
+                              moon_lon, sun_lon, lang=lang)
     if not out.get("ok"):
         # 422 when input is structurally OK but data is missing
         return jsonify(out), 422

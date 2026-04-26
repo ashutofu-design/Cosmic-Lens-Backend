@@ -11,9 +11,14 @@ export interface RiskTextTopRisk {
 }
 
 export interface RiskTextWindow {
-  window: string;   // "10:42 AM — 12:18 PM"
-  label:  string;   // "Amrit" / "Rahukaal" / "Rog" ...
-  period: "day" | "night" | "";
+  window:       string;   // "10:42 AM — 12:18 PM"
+  label:        string;   // "Amrit" / "Rahukaal" / "Rog" ...   (canonical EN/Hinglish)
+  // Lang-aware Choghadiya label (e.g. "ଅମୃତ" for Odia). Backend attaches
+  // this when the request carries a `lang` and the label is in the catalog.
+  // Optional for backwards compatibility — the client must fall back to
+  // `label` when missing.
+  label_local?: string;
+  period:       "day" | "night" | "";
 }
 
 export interface RiskTextSegment {

@@ -5,11 +5,15 @@ export interface DailyLucky {
   date: string;
   shubh_ank: number;          // 1..9
   shubh_rang_name: string;    // Hinglish (Suneheri, Lal, Pila, ...)
+  shubh_rang_name_local?: string; // Lang-aware display name (NEW)
   shubh_rang_hex: string;     // hex code for swatch
   shubh_rang_intent: "amplify" | "protect";
   mool_ank: number;           // permanent (Mulank)
-  reasoning_hinglish: string; // 1-line user-facing explanation
+  reasoning_hinglish: string; // 1-line user-facing explanation (legacy)
+  reasoning_text?: string;    // Lang-aware reasoning sentence (NEW)
+  reasoning_lang?: string;    // Echo of resolved lang code (NEW)
   tara: string;               // Hinglish tara name
+  tara_local?: string;        // Lang-aware tara name (NEW)
   tara_idx: number;
   today_nakshatra: string;
   today_nak_idx: number;
@@ -29,6 +33,10 @@ export interface FetchDailyLuckyOpts {
   date?: string;
   kundli?: Record<string, unknown> | null;
   birthData?: Record<string, unknown> | null;
+  /** UI language code (e.g. "or", "hi", "en"). Defaults to "hn" server-side
+   *  for backward compat. When set, the server returns lang-aware reasoning,
+   *  colour name and tara label so the entire card renders in-script. */
+  lang?: string;
 }
 
 /**
@@ -47,7 +55,7 @@ export async function fetchDailyLucky(
   apiKey: string,
   opts: FetchDailyLuckyOpts = {},
 ): Promise<LuckyResult> {
-  const { date, kundli, birthData } = opts;
+  const { date, kundli, birthData, lang } = opts;
   try {
     const res = await apiFetch(`${API_BASE}/api/lucky/today`, {
       method: "POST",
@@ -60,6 +68,7 @@ export async function fetchDailyLucky(
         ...(date ? { date } : {}),
         ...(kundli ? { kundli } : {}),
         ...(birthData ? { birthData } : {}),
+        ...(lang ? { lang } : {}),
       }),
     });
     const json = await res.json().catch(() => ({}));

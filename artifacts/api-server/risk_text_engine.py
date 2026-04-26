@@ -188,6 +188,78 @@ _LOW_NEUTRAL_BANK: List[Dict[str, str]] = [
 _DEFAULT_UI_LANG = "hn"
 
 
+# ─── Choghadiya / Rahukaal label translations ──────────────────────────────
+# The 7 Choghadiya names ("Amrit", "Shubh", "Labh", "Char", "Udveg", "Rog",
+# "Kaal") plus the special "Rahukaal" label are appended to user-facing
+# best/avoid time strings (e.g. "10:42 AM — 12:18 PM (Labh)"). When a non-
+# Hinglish UI language is active we surface a `label_local` field so the
+# client can render the entire window in-script. Languages without a row
+# fall back to the canonical Hinglish label.
+_LANG_CHOGHADIYA: Dict[str, Dict[str, str]] = {
+    "hn": {  # default — Hinglish (matches engine output)
+        "Amrit": "Amrit", "Shubh": "Shubh", "Labh": "Labh", "Char": "Char",
+        "Udveg": "Udveg", "Rog": "Rog", "Kaal": "Kaal", "Rahukaal": "Rahukaal",
+    },
+    "en": {
+        "Amrit": "Amrit", "Shubh": "Auspicious", "Labh": "Gain", "Char": "Movable",
+        "Udveg": "Anxiety", "Rog": "Disease", "Kaal": "Inauspicious", "Rahukaal": "Rahu Kaal",
+    },
+    "hi": {
+        "Amrit": "अमृत", "Shubh": "शुभ", "Labh": "लाभ", "Char": "चर",
+        "Udveg": "उद्वेग", "Rog": "रोग", "Kaal": "काल", "Rahukaal": "राहु काल",
+    },
+    "or": {
+        "Amrit": "ଅମୃତ", "Shubh": "ଶୁଭ", "Labh": "ଲାଭ", "Char": "ଚର",
+        "Udveg": "ଉଦ୍ୱେଗ", "Rog": "ରୋଗ", "Kaal": "କାଳ", "Rahukaal": "ରାହୁ କାଳ",
+    },
+    "mr": {
+        "Amrit": "अमृत", "Shubh": "शुभ", "Labh": "लाभ", "Char": "चर",
+        "Udveg": "उद्वेग", "Rog": "रोग", "Kaal": "काल", "Rahukaal": "राहु काळ",
+    },
+    "bn": {
+        "Amrit": "অমৃত", "Shubh": "শুভ", "Labh": "লাভ", "Char": "চর",
+        "Udveg": "উদ্বেগ", "Rog": "রোগ", "Kaal": "কাল", "Rahukaal": "রাহু কাল",
+    },
+    "ta": {
+        "Amrit": "அமிர்த", "Shubh": "சுப", "Labh": "லாப", "Char": "சர",
+        "Udveg": "உத்வேக", "Rog": "ரோக", "Kaal": "கால", "Rahukaal": "ராகு காலம்",
+    },
+    "te": {
+        "Amrit": "అమృత", "Shubh": "శుభ", "Labh": "లాభ", "Char": "చర",
+        "Udveg": "ఉద్వేగ", "Rog": "రోగ", "Kaal": "కాల", "Rahukaal": "రాహు కాలం",
+    },
+    "gu": {
+        "Amrit": "અમૃત", "Shubh": "શુભ", "Labh": "લાભ", "Char": "ચર",
+        "Udveg": "ઉદ્વેગ", "Rog": "રોગ", "Kaal": "કાલ", "Rahukaal": "રાહુ કાલ",
+    },
+    "kn": {
+        "Amrit": "ಅಮೃತ", "Shubh": "ಶುಭ", "Labh": "ಲಾಭ", "Char": "ಚರ",
+        "Udveg": "ಉದ್ವೇಗ", "Rog": "ರೋಗ", "Kaal": "ಕಾಲ", "Rahukaal": "ರಾಹು ಕಾಲ",
+    },
+    "ml": {
+        "Amrit": "അമൃത", "Shubh": "ശുഭ", "Labh": "ലാഭ", "Char": "ചര",
+        "Udveg": "ഉദ്വേഗ", "Rog": "രോഗ", "Kaal": "കാല", "Rahukaal": "രാഹു കാലം",
+    },
+    "pa": {
+        "Amrit": "ਅੰਮ੍ਰਿਤ", "Shubh": "ਸ਼ੁਭ", "Labh": "ਲਾਭ", "Char": "ਚਰ",
+        "Udveg": "ਉਦਵੇਗ", "Rog": "ਰੋਗ", "Kaal": "ਕਾਲ", "Rahukaal": "ਰਾਹੂ ਕਾਲ",
+    },
+    "as": {
+        "Amrit": "অমৃত", "Shubh": "শুভ", "Labh": "লাভ", "Char": "চৰ",
+        "Udveg": "উদ্বেগ", "Rog": "ৰোগ", "Kaal": "কাল", "Rahukaal": "ৰাহু কাল",
+    },
+}
+
+
+def _localize_choghadiya_label(label: Optional[str], lang: str) -> Optional[str]:
+    """Look up a Hinglish Choghadiya label in the active UI language. Falls
+    back to the original label when the lang or label isn't mapped."""
+    if not isinstance(label, str) or not label:
+        return label
+    pack = _LANG_CHOGHADIYA.get(lang) or _LANG_CHOGHADIYA[_DEFAULT_UI_LANG]
+    return pack.get(label, label)
+
+
 def _resolve_text(
     trigger: str,
     day_idx: int = 0,
@@ -981,7 +1053,9 @@ def compute_per_day_enrichment(
         # "unavailable" state instead of a placeholder.
         shubh_ank: Optional[int] = None
         shubh_rang_name: Optional[str] = None
+        shubh_rang_name_local: Optional[str] = None
         shubh_rang_hex: Optional[str] = None
+        shubh_reasoning_text: Optional[str] = None
         if (_compute_lucky is not None and _base_date is not None
                 and proj_moon is not None and proj_sun is not None
                 and birth_data and birth_chart):
@@ -989,14 +1063,33 @@ def compute_per_day_enrichment(
                 proj_date_iso = (_base_date + _td_cls(days=i)).strftime("%Y-%m-%d")
                 lucky = _compute_lucky(
                     birth_data, birth_chart, proj_date_iso,
-                    proj_moon, proj_sun,
+                    proj_moon, proj_sun, lang=lang,
                 )
                 if isinstance(lucky, dict) and lucky.get("ok"):
-                    shubh_ank       = lucky.get("shubh_ank")
-                    shubh_rang_name = lucky.get("shubh_rang_name")
-                    shubh_rang_hex  = lucky.get("shubh_rang_hex")
+                    shubh_ank             = lucky.get("shubh_ank")
+                    shubh_rang_name       = lucky.get("shubh_rang_name")
+                    shubh_rang_name_local = lucky.get("shubh_rang_name_local") \
+                                              or lucky.get("shubh_rang_name")
+                    shubh_rang_hex        = lucky.get("shubh_rang_hex")
+                    shubh_reasoning_text  = lucky.get("reasoning_text") \
+                                              or lucky.get("reasoning_hinglish")
             except Exception as _exc:
                 log.debug("per_day: lucky calc failed for day %d: %s", i, _exc)
+
+        # Translate Choghadiya / Rahukaal labels for the user's UI lang so
+        # the Best/Avoid time chips render in-script. We add a `label_local`
+        # field (non-destructive) — the legacy `label` field stays Hinglish
+        # for any consumer that depends on the canonical name.
+        def _attach_local_label(window: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+            if not isinstance(window, dict):
+                return window
+            local = _localize_choghadiya_label(window.get("label"), lang)
+            if local is not None:
+                window = {**window, "label_local": local}
+            return window
+
+        best_t  = _attach_local_label(best_t)
+        avoid_t = _attach_local_label(avoid_t)
 
         out.append({
             "day_idx":              i,
@@ -1014,9 +1107,11 @@ def compute_per_day_enrichment(
             "avoid_time":           avoid_t,
             "tara_idx":             tara_idx,
             "weekday":              proj_weekday,
-            "shubh_ank":            shubh_ank,
-            "shubh_rang_name":      shubh_rang_name,
-            "shubh_rang_hex":       shubh_rang_hex,
+            "shubh_ank":             shubh_ank,
+            "shubh_rang_name":       shubh_rang_name,
+            "shubh_rang_name_local": shubh_rang_name_local,
+            "shubh_rang_hex":        shubh_rang_hex,
+            "shubh_reasoning_text":  shubh_reasoning_text,
         })
     return out
 

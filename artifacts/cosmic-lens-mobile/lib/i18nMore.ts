@@ -1625,6 +1625,24 @@ export interface MoreT {
   avr_shareOpenLbl: string;
   avr_shareBrandLbl: string;
   avr_alertShareErr: string;
+
+  // ── Risk Radar — Lucky / Best-Avoid Time card ─────────────────────────────
+  // Headline labels for the "Aaj Ka Shubh Ank + Rang" panel + Best/Avoid
+  // chips + the loading/empty/CTA states inside the card.
+  rrLuckyAajShubhAnk:        string;  // "AAJ KA SHUBH ANK"
+  rrLuckyAajShubhRang:       string;  // "AAJ KA SHUBH RANG"
+  rrLuckyShubhAnk:           string;  // "SHUBH ANK" (for non-today days)
+  rrLuckyShubhRang:          string;  // "SHUBH RANG" (for non-today days)
+  rrLuckyBestTime:           string;  // "⏰ BEST TIME"
+  rrLuckyAvoidTime:          string;  // "🚫 AVOID TIME"
+  rrLuckyPoweredBy:          string;  // "✨ Powered by Advanced Cosmic Intelligence"
+  rrLuckyHeaderToday:        string;  // "AAJ KA SHUBH ANK + RANG" (header for empty state)
+  rrLuckyHeaderOther:        string;  // "SHUBH ANK + RANG" (header for other days)
+  rrLuckyCalculating:        string;  // "Aapka shubh ank aur rang calculate ho raha hai…"
+  rrLuckyCreateKundliPrompt: string;  // "Apni kundli banayein — aapke janm ke nakshatra se aaj ka personal shubh ank aur rang dekhein."
+  rrLuckyCreateKundliCta:    string;  // "KUNDLI BANAYEIN →"
+  rrLuckyDetailsUnavail:     string;  // "Lucky details abhi available nahi hain."
+  rrLuckyDayUnavail:         string;  // "Is din ke liye shubh ank aur rang abhi available nahi hain."
 }
 
 // English — primary, complete
@@ -3238,6 +3256,22 @@ const EN: MoreT = {
   avr_shareOpenLbl: "📄 Open report:",
   avr_shareBrandLbl: "_Powered by Advanced Cosmic Intelligence_",
   avr_alertShareErr: "Couldn't share",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:        "TODAY'S LUCKY NUMBER",
+  rrLuckyAajShubhRang:       "TODAY'S LUCKY COLOUR",
+  rrLuckyShubhAnk:           "LUCKY NUMBER",
+  rrLuckyShubhRang:          "LUCKY COLOUR",
+  rrLuckyBestTime:           "⏰ BEST TIME",
+  rrLuckyAvoidTime:          "🚫 AVOID TIME",
+  rrLuckyPoweredBy:          "✨ Powered by Advanced Cosmic Intelligence",
+  rrLuckyHeaderToday:        "TODAY'S LUCKY NUMBER + COLOUR",
+  rrLuckyHeaderOther:        "LUCKY NUMBER + COLOUR",
+  rrLuckyCalculating:        "Calculating your lucky number and colour…",
+  rrLuckyCreateKundliPrompt: "Create your kundli — see your personal lucky number and colour for today, based on your birth nakshatra.",
+  rrLuckyCreateKundliCta:    "CREATE KUNDLI →",
+  rrLuckyDetailsUnavail:     "Lucky details aren't available right now.",
+  rrLuckyDayUnavail:         "Lucky number and colour aren't available for this day yet.",
 };
 
 // Hinglish overrides (only differing keys)
@@ -4628,6 +4662,22 @@ const HN: Partial<MoreT> = {
   avr_shareOpenLbl: "📄 Report kholein:",
   avr_shareBrandLbl: "_Powered by Advanced Cosmic Intelligence_",
   avr_alertShareErr: "Share nahi ho saka",
+
+  // Risk Radar — Lucky / Best-Avoid Time card (Hinglish — original brand voice)
+  rrLuckyAajShubhAnk:        "AAJ KA SHUBH ANK",
+  rrLuckyAajShubhRang:       "AAJ KA SHUBH RANG",
+  rrLuckyShubhAnk:           "SHUBH ANK",
+  rrLuckyShubhRang:          "SHUBH RANG",
+  rrLuckyBestTime:           "⏰ BEST TIME",
+  rrLuckyAvoidTime:          "🚫 AVOID TIME",
+  rrLuckyPoweredBy:          "✨ Powered by Advanced Cosmic Intelligence",
+  rrLuckyHeaderToday:        "AAJ KA SHUBH ANK + RANG",
+  rrLuckyHeaderOther:        "SHUBH ANK + RANG",
+  rrLuckyCalculating:        "Aapka shubh ank aur rang calculate ho raha hai…",
+  rrLuckyCreateKundliPrompt: "Apni kundli banayein — aapke janm ke nakshatra se aaj ka personal shubh ank aur rang dekhein.",
+  rrLuckyCreateKundliCta:    "KUNDLI BANAYEIN →",
+  rrLuckyDetailsUnavail:     "Lucky details abhi available nahi hain.",
+  rrLuckyDayUnavail:         "Is din ke liye shubh ank aur rang abhi available nahi hain.",
 };
 
 // Hindi overrides (Devanagari)
@@ -6111,6 +6161,22 @@ const HI: Partial<MoreT> = {
   avr_shareOpenLbl: "📄 रिपोर्ट खोलें:",
   avr_shareBrandLbl: "_Advanced Cosmic Intelligence द्वारा संचालित_",
   avr_alertShareErr: "साझा नहीं हो सका",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:        "आज का शुभ अंक",
+  rrLuckyAajShubhRang:       "आज का शुभ रंग",
+  rrLuckyShubhAnk:           "शुभ अंक",
+  rrLuckyShubhRang:          "शुभ रंग",
+  rrLuckyBestTime:           "⏰ शुभ समय",
+  rrLuckyAvoidTime:          "🚫 अशुभ समय",
+  rrLuckyPoweredBy:          "✨ Advanced Cosmic Intelligence द्वारा संचालित",
+  rrLuckyHeaderToday:        "आज का शुभ अंक + रंग",
+  rrLuckyHeaderOther:        "शुभ अंक + रंग",
+  rrLuckyCalculating:        "आपका शुभ अंक और रंग गणना हो रही है…",
+  rrLuckyCreateKundliPrompt: "अपनी कुंडली बनाएँ — जन्म नक्षत्र से आज का व्यक्तिगत शुभ अंक और रंग देखें।",
+  rrLuckyCreateKundliCta:    "कुंडली बनाएँ →",
+  rrLuckyDetailsUnavail:     "शुभ विवरण अभी उपलब्ध नहीं हैं।",
+  rrLuckyDayUnavail:         "इस दिन के लिए शुभ अंक और रंग अभी उपलब्ध नहीं हैं।",
 };
 
 
@@ -7531,6 +7597,22 @@ const BN: Partial<MoreT> = {
   avr_shareScoreLbl: "📊 স্কোর:",
   avr_shareOpenLbl: "📄 রিপোর্ট খুলুন:",
   avr_alertShareErr: "শেয়ার করা যায়নি",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "আজকের শুভ অঙ্ক",
+  rrLuckyAajShubhRang:        "আজকের শুভ রঙ",
+  rrLuckyShubhAnk:            "শুভ অঙ্ক",
+  rrLuckyShubhRang:           "শুভ রঙ",
+  rrLuckyBestTime:            "⏰ শুভ সময়",
+  rrLuckyAvoidTime:           "🚫 অশুভ সময়",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence দ্বারা পরিচালিত",
+  rrLuckyHeaderToday:         "আজকের শুভ অঙ্ক + রঙ",
+  rrLuckyHeaderOther:         "শুভ অঙ্ক + রঙ",
+  rrLuckyCalculating:         "আপনার শুভ অঙ্ক ও রঙ গণনা করা হচ্ছে…",
+  rrLuckyCreateKundliPrompt:  "আপনার কুণ্ডলী তৈরি করুন — জন্ম নক্ষত্র অনুসারে আজকের ব্যক্তিগত শুভ অঙ্ক ও রঙ দেখুন।",
+  rrLuckyCreateKundliCta:     "কুণ্ডলী তৈরি করুন →",
+  rrLuckyDetailsUnavail:      "শুভ বিবরণ এই মুহূর্তে উপলব্ধ নেই।",
+  rrLuckyDayUnavail:          "এই দিনের জন্য শুভ অঙ্ক ও রঙ এখনো উপলব্ধ নেই।",
 };
 
 const MR: Partial<MoreT> = {
@@ -8797,6 +8879,22 @@ const MR: Partial<MoreT> = {
   avr_shareOpenLbl: "📄 अहवाल उघडा:",
   avr_shareBrandLbl: "_Advanced Cosmic Intelligence ने समर्थित_",
   avr_alertShareErr: "शेअर करता आले नाही",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "आजचा शुभ अंक",
+  rrLuckyAajShubhRang:        "आजचा शुभ रंग",
+  rrLuckyShubhAnk:            "शुभ अंक",
+  rrLuckyShubhRang:           "शुभ रंग",
+  rrLuckyBestTime:            "⏰ शुभ वेळ",
+  rrLuckyAvoidTime:           "🚫 अशुभ वेळ",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence द्वारे चालित",
+  rrLuckyHeaderToday:         "आजचा शुभ अंक + रंग",
+  rrLuckyHeaderOther:         "शुभ अंक + रंग",
+  rrLuckyCalculating:         "तुमचा शुभ अंक आणि रंग मोजला जात आहे…",
+  rrLuckyCreateKundliPrompt:  "तुमची कुंडली तयार करा — जन्म नक्षत्रानुसार आजचा वैयक्तिक शुभ अंक आणि रंग पहा.",
+  rrLuckyCreateKundliCta:     "कुंडली तयार करा →",
+  rrLuckyDetailsUnavail:      "शुभ तपशील सध्या उपलब्ध नाहीत.",
+  rrLuckyDayUnavail:          "या दिवसासाठी शुभ अंक आणि रंग अद्याप उपलब्ध नाहीत.",
 };
 
 const TA: Partial<MoreT> = {
@@ -10046,6 +10144,22 @@ const TA: Partial<MoreT> = {
   avr_shareOpenLbl: "📄 அறிக்கையை திறக்கவும்:",
   avr_shareBrandLbl: "_Advanced Cosmic Intelligence மூலம் இயக்கப்படுகிறது_",
   avr_alertShareErr: "பகிர முடியவில்லை",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "இன்றைய அதிர்ஷ்ட எண்",
+  rrLuckyAajShubhRang:        "இன்றைய அதிர்ஷ்ட நிறம்",
+  rrLuckyShubhAnk:            "அதிர்ஷ்ட எண்",
+  rrLuckyShubhRang:           "அதிர்ஷ்ட நிறம்",
+  rrLuckyBestTime:            "⏰ சிறந்த நேரம்",
+  rrLuckyAvoidTime:           "🚫 தவிர்க்க வேண்டிய நேரம்",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence-ஆல் இயக்கப்படுகிறது",
+  rrLuckyHeaderToday:         "இன்றைய அதிர்ஷ்ட எண் + நிறம்",
+  rrLuckyHeaderOther:         "அதிர்ஷ்ட எண் + நிறம்",
+  rrLuckyCalculating:         "உங்கள் அதிர்ஷ்ட எண் மற்றும் நிறம் கணக்கிடப்படுகிறது…",
+  rrLuckyCreateKundliPrompt:  "உங்கள் ஜாதகத்தை உருவாக்கவும் — பிறந்த நட்சத்திரத்தின் அடிப்படையில் இன்றைய தனிப்பட்ட அதிர்ஷ்ட எண் மற்றும் நிறத்தைப் பாருங்கள்.",
+  rrLuckyCreateKundliCta:     "ஜாதகத்தை உருவாக்கு →",
+  rrLuckyDetailsUnavail:      "அதிர்ஷ்ட விவரங்கள் தற்போது கிடைக்கவில்லை.",
+  rrLuckyDayUnavail:          "இந்த நாளுக்கான அதிர்ஷ்ட எண் மற்றும் நிறம் இன்னும் கிடைக்கவில்லை.",
 };
 
 const TE: Partial<MoreT> = {
@@ -11301,6 +11415,22 @@ const TE: Partial<MoreT> = {
   avp_btnCompleteProfile: "ప్రొఫైల్ పూర్తి చేయండి",
   avr_emptyTitle: "రిపోర్ట్ లోడ్ కాలేదు",
   avr_emptyBody: "దయచేసి ఫలితం ఇక్కడ చూడటానికి ముందుగా Smart Scan నడిపించండి.",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "నేటి శుభ సంఖ్య",
+  rrLuckyAajShubhRang:        "నేటి శుభ రంగు",
+  rrLuckyShubhAnk:            "శుభ సంఖ్య",
+  rrLuckyShubhRang:           "శుభ రంగు",
+  rrLuckyBestTime:            "⏰ శుభ సమయం",
+  rrLuckyAvoidTime:           "🚫 అశుభ సమయం",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence ద్వారా శక్తి",
+  rrLuckyHeaderToday:         "నేటి శుభ సంఖ్య + రంగు",
+  rrLuckyHeaderOther:         "శుభ సంఖ్య + రంగు",
+  rrLuckyCalculating:         "మీ శుభ సంఖ్య మరియు రంగు లెక్కించబడుతోంది…",
+  rrLuckyCreateKundliPrompt:  "మీ కుండలి సృష్టించండి — జన్మ నక్షత్రం ఆధారంగా నేటి వ్యక్తిగత శుభ సంఖ్య మరియు రంగును చూడండి.",
+  rrLuckyCreateKundliCta:     "కుండలి సృష్టించండి →",
+  rrLuckyDetailsUnavail:      "శుభ వివరాలు ప్రస్తుతం అందుబాటులో లేవు.",
+  rrLuckyDayUnavail:          "ఈ రోజు కోసం శుభ సంఖ్య మరియు రంగు ఇంకా అందుబాటులో లేవు.",
 };
 
 const GU: Partial<MoreT> = {
@@ -12541,6 +12671,22 @@ const GU: Partial<MoreT> = {
   avr_shareScoreLbl: "📊 સ્કોર:",
   avr_shareOpenLbl: "📄 રીપોર્ટ ખોલો:",
   avr_alertShareErr: "શેર કરી શકાતી નથી",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "આજનો શુભ અંક",
+  rrLuckyAajShubhRang:        "આજનો શુભ રંગ",
+  rrLuckyShubhAnk:            "શુભ અંક",
+  rrLuckyShubhRang:           "શુભ રંગ",
+  rrLuckyBestTime:            "⏰ શુભ સમય",
+  rrLuckyAvoidTime:           "🚫 અશુભ સમય",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence દ્વારા સંચાલિત",
+  rrLuckyHeaderToday:         "આજનો શુભ અંક + રંગ",
+  rrLuckyHeaderOther:         "શુભ અંક + રંગ",
+  rrLuckyCalculating:         "તમારો શુભ અંક અને રંગ ગણાઈ રહ્યો છે…",
+  rrLuckyCreateKundliPrompt:  "તમારી કુંડળી બનાવો — જન્મ નક્ષત્ર પ્રમાણે આજનો વ્યક્તિગત શુભ અંક અને રંગ જુઓ.",
+  rrLuckyCreateKundliCta:     "કુંડળી બનાવો →",
+  rrLuckyDetailsUnavail:      "શુભ વિગતો અત્યારે ઉપલબ્ધ નથી.",
+  rrLuckyDayUnavail:          "આ દિવસ માટે શુભ અંક અને રંગ હજી ઉપલબ્ધ નથી.",
 };
 
 const KN: Partial<MoreT> = {
@@ -13874,6 +14020,22 @@ const KN: Partial<MoreT> = {
   avr_shareScoreLbl: "📊 ಅಂಕ:",
   avr_shareOpenLbl: "📄 ವರದಿ ತೆರೆ:",
   avr_alertShareErr: "ಹಂಚಿಕೊಳ್ಳಲು ಸಾಧ್ಯವಿರಲಿಲ್ಲ",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "ಇಂದಿನ ಶುಭ ಸಂಖ್ಯೆ",
+  rrLuckyAajShubhRang:        "ಇಂದಿನ ಶುಭ ಬಣ್ಣ",
+  rrLuckyShubhAnk:            "ಶುಭ ಸಂಖ್ಯೆ",
+  rrLuckyShubhRang:           "ಶುಭ ಬಣ್ಣ",
+  rrLuckyBestTime:            "⏰ ಶುಭ ಸಮಯ",
+  rrLuckyAvoidTime:           "🚫 ಅಶುಭ ಸಮಯ",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence ಮೂಲಕ ಚಾಲಿತ",
+  rrLuckyHeaderToday:         "ಇಂದಿನ ಶುಭ ಸಂಖ್ಯೆ + ಬಣ್ಣ",
+  rrLuckyHeaderOther:         "ಶುಭ ಸಂಖ್ಯೆ + ಬಣ್ಣ",
+  rrLuckyCalculating:         "ನಿಮ್ಮ ಶುಭ ಸಂಖ್ಯೆ ಮತ್ತು ಬಣ್ಣ ಲೆಕ್ಕ ಹಾಕಲಾಗುತ್ತಿದೆ…",
+  rrLuckyCreateKundliPrompt:  "ನಿಮ್ಮ ಕುಂಡಲಿ ರಚಿಸಿ — ಜನ್ಮ ನಕ್ಷತ್ರದ ಆಧಾರದ ಮೇಲೆ ಇಂದಿನ ವೈಯಕ್ತಿಕ ಶುಭ ಸಂಖ್ಯೆ ಮತ್ತು ಬಣ್ಣವನ್ನು ನೋಡಿ.",
+  rrLuckyCreateKundliCta:     "ಕುಂಡಲಿ ರಚಿಸಿ →",
+  rrLuckyDetailsUnavail:      "ಶುಭ ವಿವರಗಳು ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ.",
+  rrLuckyDayUnavail:          "ಈ ದಿನಕ್ಕೆ ಶುಭ ಸಂಖ್ಯೆ ಮತ್ತು ಬಣ್ಣ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ.",
 };
 
 const ML: Partial<MoreT> = {
@@ -15106,6 +15268,22 @@ const ML: Partial<MoreT> = {
   avr_shareScoreLbl: "📊 സ്കോര്\t:",
   avr_shareOpenLbl: "📄 റിപ്പോര്‍ട്ട് തുറക്കുക:",
   avr_alertShareErr: "പരസ്പരം പങ്കുവെയ്ക്കാനായില്ല",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "ഇന്നത്തെ ശുഭ സംഖ്യ",
+  rrLuckyAajShubhRang:        "ഇന്നത്തെ ശുഭ നിറം",
+  rrLuckyShubhAnk:            "ശുഭ സംഖ്യ",
+  rrLuckyShubhRang:           "ശുഭ നിറം",
+  rrLuckyBestTime:            "⏰ ശുഭ സമയം",
+  rrLuckyAvoidTime:           "🚫 അശുഭ സമയം",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence ഉപയോഗിച്ച് പ്രവർത്തിക്കുന്നു",
+  rrLuckyHeaderToday:         "ഇന്നത്തെ ശുഭ സംഖ്യ + നിറം",
+  rrLuckyHeaderOther:         "ശുഭ സംഖ്യ + നിറം",
+  rrLuckyCalculating:         "നിങ്ങളുടെ ശുഭ സംഖ്യയും നിറവും കണക്കാക്കുന്നു…",
+  rrLuckyCreateKundliPrompt:  "നിങ്ങളുടെ കുണ്ഡലി സൃഷ്ടിക്കൂ — ജന്മ നക്ഷത്രം അനുസരിച്ച് ഇന്നത്തെ വ്യക്തിഗത ശുഭ സംഖ്യയും നിറവും കാണുക.",
+  rrLuckyCreateKundliCta:     "കുണ്ഡലി സൃഷ്ടിക്കൂ →",
+  rrLuckyDetailsUnavail:      "ശുഭ വിശദാംശങ്ങൾ ഇപ്പോൾ ലഭ്യമല്ല.",
+  rrLuckyDayUnavail:          "ഈ ദിവസത്തിന് ശുഭ സംഖ്യയും നിറവും ഇതുവരെ ലഭ്യമല്ല.",
 };
 
 const PA: Partial<MoreT> = {
@@ -16392,6 +16570,22 @@ const PA: Partial<MoreT> = {
   avr_btnOpenPdf: "PDF ਖੋਲੋ",
   avr_shareScoreLbl: "📊 ਸਕੋਰ:",
   avr_shareOpenLbl: "📄 ਰਿਪੋਰਟ ਖੋਲੋ:",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "ਅੱਜ ਦਾ ਸ਼ੁਭ ਅੰਕ",
+  rrLuckyAajShubhRang:        "ਅੱਜ ਦਾ ਸ਼ੁਭ ਰੰਗ",
+  rrLuckyShubhAnk:            "ਸ਼ੁਭ ਅੰਕ",
+  rrLuckyShubhRang:           "ਸ਼ੁਭ ਰੰਗ",
+  rrLuckyBestTime:            "⏰ ਸ਼ੁਭ ਸਮਾਂ",
+  rrLuckyAvoidTime:           "🚫 ਅਸ਼ੁਭ ਸਮਾਂ",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence ਦੁਆਰਾ ਸੰਚਾਲਿਤ",
+  rrLuckyHeaderToday:         "ਅੱਜ ਦਾ ਸ਼ੁਭ ਅੰਕ + ਰੰਗ",
+  rrLuckyHeaderOther:         "ਸ਼ੁਭ ਅੰਕ + ਰੰਗ",
+  rrLuckyCalculating:         "ਤੁਹਾਡਾ ਸ਼ੁਭ ਅੰਕ ਅਤੇ ਰੰਗ ਗਿਣਿਆ ਜਾ ਰਿਹਾ ਹੈ…",
+  rrLuckyCreateKundliPrompt:  "ਆਪਣੀ ਕੁੰਡਲੀ ਬਣਾਓ — ਜਨਮ ਨਛੱਤਰ ਦੇ ਆਧਾਰ 'ਤੇ ਅੱਜ ਦਾ ਨਿੱਜੀ ਸ਼ੁਭ ਅੰਕ ਅਤੇ ਰੰਗ ਵੇਖੋ।",
+  rrLuckyCreateKundliCta:     "ਕੁੰਡਲੀ ਬਣਾਓ →",
+  rrLuckyDetailsUnavail:      "ਸ਼ੁਭ ਵੇਰਵੇ ਇਸ ਵੇਲੇ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।",
+  rrLuckyDayUnavail:          "ਇਸ ਦਿਨ ਲਈ ਸ਼ੁਭ ਅੰਕ ਅਤੇ ਰੰਗ ਅਜੇ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।",
 };
 
 const OR: Partial<MoreT> = {
@@ -17619,6 +17813,22 @@ const OR: Partial<MoreT> = {
   avr_shareOpenLbl: "📄 ରିପୋର୍ଟ ଖୋଲନ୍ତୁ:",
   avr_shareBrandLbl: "_Advanced Cosmic Intelligence ଦ୍ୱାରା ସଚଳ_",
   avr_alertShareErr: "ସେୟାର୍ କରିବାକୁ ସମସ୍ୟା ହେଲା",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:        "ଆଜିର ଶୁଭ ଅଙ୍କ",
+  rrLuckyAajShubhRang:       "ଆଜିର ଶୁଭ ରଙ୍ଗ",
+  rrLuckyShubhAnk:           "ଶୁଭ ଅଙ୍କ",
+  rrLuckyShubhRang:          "ଶୁଭ ରଙ୍ଗ",
+  rrLuckyBestTime:           "⏰ ଶୁଭ ସମୟ",
+  rrLuckyAvoidTime:          "🚫 ଅଶୁଭ ସମୟ",
+  rrLuckyPoweredBy:          "✨ Advanced Cosmic Intelligence ଦ୍ୱାରା ଚାଳିତ",
+  rrLuckyHeaderToday:        "ଆଜିର ଶୁଭ ଅଙ୍କ + ରଙ୍ଗ",
+  rrLuckyHeaderOther:        "ଶୁଭ ଅଙ୍କ + ରଙ୍ଗ",
+  rrLuckyCalculating:        "ଆପଣଙ୍କ ଶୁଭ ଅଙ୍କ ଓ ରଙ୍ଗ ଗଣନା ହେଉଛି…",
+  rrLuckyCreateKundliPrompt: "ନିଜର କୁଣ୍ଡଳୀ ତିଆରି କରନ୍ତୁ — ଜନ୍ମ ନକ୍ଷତ୍ର ଆଧାରରେ ଆଜିର ବ୍ୟକ୍ତିଗତ ଶୁଭ ଅଙ୍କ ଓ ରଙ୍ଗ ଦେଖନ୍ତୁ।",
+  rrLuckyCreateKundliCta:    "କୁଣ୍ଡଳୀ ତିଆରି କରନ୍ତୁ →",
+  rrLuckyDetailsUnavail:     "ଶୁଭ ବିବରଣୀ ବର୍ତ୍ତମାନ ଉପଲବ୍ଧ ନାହିଁ।",
+  rrLuckyDayUnavail:         "ଏହି ଦିନ ପାଇଁ ଶୁଭ ଅଙ୍କ ଓ ରଙ୍ଗ ଏଯାଏଁ ଉପଲବ୍ଧ ନାହିଁ।",
 };
 
 const AS: Partial<MoreT> = {
@@ -18764,6 +18974,22 @@ const AS: Partial<MoreT> = {
   avp_btnCompleteProfile: "প্রোফাইল সম্পূৰ্ণ কৰক",
   avr_emptyTitle: "কোনো প্ৰতিবেদন লোড হোৱা নাই",
   avr_emptyBody: "অনুগ্ৰহ কৰি ফলাফল দেখা বাবে প্ৰথমে এটা Smart Scan চলাও।",
+
+  // Risk Radar — Lucky / Best-Avoid Time card
+  rrLuckyAajShubhAnk:         "আজিৰ শুভ অংক",
+  rrLuckyAajShubhRang:        "আজিৰ শুভ ৰং",
+  rrLuckyShubhAnk:            "শুভ অংক",
+  rrLuckyShubhRang:           "শুভ ৰং",
+  rrLuckyBestTime:            "⏰ শুভ সময়",
+  rrLuckyAvoidTime:           "🚫 অশুভ সময়",
+  rrLuckyPoweredBy:           "✨ Advanced Cosmic Intelligence দ্বাৰা চালিত",
+  rrLuckyHeaderToday:         "আজিৰ শুভ অংক + ৰং",
+  rrLuckyHeaderOther:         "শুভ অংক + ৰং",
+  rrLuckyCalculating:         "আপোনাৰ শুভ অংক আৰু ৰং গণনা কৰা হৈছে…",
+  rrLuckyCreateKundliPrompt:  "নিজৰ কুণ্ডলী তৈয়াৰ কৰক — জন্ম নক্ষত্ৰ অনুসৰি আজিৰ ব্যক্তিগত শুভ অংক আৰু ৰং চাওক।",
+  rrLuckyCreateKundliCta:     "কুণ্ডলী তৈয়াৰ কৰক →",
+  rrLuckyDetailsUnavail:      "শুভ বিৱৰণ এই মুহূৰ্তত উপলব্ধ নহয়।",
+  rrLuckyDayUnavail:          "এই দিনৰ বাবে শুভ অংক আৰু ৰং এতিয়ালৈ উপলব্ধ নহয়।",
 };
 
 const ZH: Partial<MoreT> = {

@@ -274,6 +274,7 @@ export function RiskRadarCard({
     fetchDailyLucky(user.id, user.api_key, {
       kundli: kundli as unknown as Record<string, unknown>,
       birthData: birthData as unknown as Record<string, unknown> | null,
+      lang: t.lang,
     })
       .then(res => {
         if (cancelled) return;
@@ -287,8 +288,12 @@ export function RiskRadarCard({
       })
       .finally(() => { if (!cancelled) setLuckyLoading(false); });
     return () => { cancelled = true; };
+    // `t.lang` is included so the lucky payload is refetched with the new
+    // locale when the user switches UI language at runtime — server returns
+    // lang-aware `shubh_rang_name_local` / `reasoning_text` and we re-render
+    // the card in the freshly selected script (no stale prior-lang text).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.api_key, kundliFp, birthFp]);
+  }, [user?.id, user?.api_key, kundliFp, birthFp, t.lang]);
 
   // ── Personalised Risk text + Choghadiya BEST/AVOID time ──────────────
   // Fetched from /api/risk-radar — server enriches the existing energy-engine
@@ -423,8 +428,12 @@ export function RiskRadarCard({
         riskAvoid:    perDay.kya_avoid_karna_hai,
         riskKarna:    perDay.kya_karna_hai,
         riskRemedy:   perDay.upay,
-        bestTime:     `${perDay.best_time.window} (${perDay.best_time.label})`,
-        avoidTime:    `${perDay.avoid_time.window} (${perDay.avoid_time.label})`,
+        // Prefer the lang-localized Choghadiya label (e.g. "ଅମୃତ" in Odia).
+        // Backend attaches `label_local` when the request lang is in the
+        // Choghadiya catalog; fall back to the canonical Hinglish `label`
+        // for langs we haven't translated yet (still readable).
+        bestTime:     `${perDay.best_time.window} (${perDay.best_time.label_local || perDay.best_time.label})`,
+        avoidTime:    `${perDay.avoid_time.window} (${perDay.avoid_time.label_local || perDay.avoid_time.label})`,
       }
     : dayUnavailable
       ? {
@@ -461,9 +470,17 @@ export function RiskRadarCard({
       return dailyLucky
         ? {
             ank:    dailyLucky.shubh_ank,
-            name:   dailyLucky.shubh_rang_name,
+            // Prefer the lang-aware display name (e.g. "ଧଳା" for Odia) when
+            // present; fall back to the canonical Hinglish name for backwards
+            // compatibility with older API responses.
+            name:   dailyLucky.shubh_rang_name_local
+                      || dailyLucky.shubh_rang_name,
             hex:    dailyLucky.shubh_rang_hex,
-            reason: dailyLucky.reasoning_hinglish ?? null,
+            // Same: prefer the new lang-aware reasoning sentence; legacy
+            // `reasoning_hinglish` stays as the fallback.
+            reason: dailyLucky.reasoning_text
+                      || dailyLucky.reasoning_hinglish
+                      || null,
           }
         : null;
     }
@@ -471,11 +488,17 @@ export function RiskRadarCard({
         && typeof perDay.shubh_ank === "number"
         && perDay.shubh_rang_name
         && perDay.shubh_rang_hex) {
+      // per_day enrichment from /api/risk-radar — server-side adds the
+      // matching local fields when a UI lang is plumbed through.
+      const pd = perDay as typeof perDay & {
+        shubh_rang_name_local?: string;
+        shubh_reasoning_text?: string;
+      };
       return {
         ank:    perDay.shubh_ank,
-        name:   perDay.shubh_rang_name,
+        name:   pd.shubh_rang_name_local || perDay.shubh_rang_name,
         hex:    perDay.shubh_rang_hex,
-        reason: null,
+        reason: pd.shubh_reasoning_text || null,
       };
     }
     return null;
@@ -653,7 +676,7 @@ export function RiskRadarCard({
               <View style={s.shubhRow}>
                 <View style={s.shubhAnkBox}>
                   <Text style={[s.shubhMicro, { color: C.textMuted }]}>
-                    {selOffset === 0 ? "AAJ KA SHUBH ANK" : "SHUBH ANK"}
+                    {selOffset === 0 ? t.rrLuckyAajShubhAnk : t.rrLuckyShubhAnk}
                   </Text>
                   <View style={[s.shubhAnkBadge, {
                     borderColor: selLucky.hex,
@@ -665,7 +688,7 @@ export function RiskRadarCard({
                 <View style={s.shubhDivider} />
                 <View style={s.shubhRangBox}>
                   <Text style={[s.shubhMicro, { color: C.textMuted }]}>
-                    {selOffset === 0 ? "AAJ KA SHUBH RANG" : "SHUBH RANG"}
+                    {selOffset === 0 ? t.rrLuckyAajShubhRang : t.rrLuckyShubhRang}
                   </Text>
                   <View style={s.shubhRangRow}>
                     <View style={[s.shubhSwatch, {
@@ -683,13 +706,13 @@ export function RiskRadarCard({
                 </Text>
               ) : null}
               <Text style={[s.shubhFooter, { color: C.textDim }]}>
-                Powered by Advanced Cosmic Intelligence
+                {t.rrLuckyPoweredBy}
               </Text>
             </View>
           ) : selOffset === 0 && luckyLoading ? (
             <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.shubhReason, { color: C.textMuted, textAlign: "center" }]}>
-                Aapka shubh ank aur rang calculate ho raha hai…
+                {t.rrLuckyCalculating}
               </Text>
             </View>
           ) : selOffset === 0 && (luckyError || !user || !kundli) ? (
@@ -698,37 +721,37 @@ export function RiskRadarCard({
               style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
             >
               <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 6 }]}>
-                AAJ KA SHUBH ANK + RANG
+                {t.rrLuckyHeaderToday}
               </Text>
               <Text style={[s.shubhReason, { color: C.text }]}>
                 {!user || !kundli
-                  ? "Apni kundli banayein — aapke janm ke nakshatra se aaj ka personal shubh ank aur rang dekhein."
-                  : luckyError ?? "Lucky details abhi available nahi hain."}
+                  ? t.rrLuckyCreateKundliPrompt
+                  : luckyError ?? t.rrLuckyDetailsUnavail}
               </Text>
               {(!user || !kundli) && (
                 <Text style={[s.shubhFooter, { color: "#fbbf24", marginTop: 6 }]}>
-                  KUNDLI BANAYEIN →
+                  {t.rrLuckyCreateKundliCta}
                 </Text>
               )}
             </Pressable>
           ) : (
             <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 4 }]}>
-                SHUBH ANK + RANG
+                {t.rrLuckyHeaderOther}
               </Text>
               <Text style={[s.shubhReason, { color: C.textMuted }]}>
-                Is din ke liye shubh ank aur rang abhi available nahi hain.
+                {t.rrLuckyDayUnavail}
               </Text>
             </View>
           )}
 
           <View style={s.luckyGrid}>
             <View style={[s.luckyTile, { backgroundColor: "rgba(74,222,128,0.08)", borderColor: "rgba(74,222,128,0.25)" }]}>
-              <Text style={[s.luckyTileLabel, { color: "#4ade80" }]}>⏰ BEST TIME</Text>
+              <Text style={[s.luckyTileLabel, { color: "#4ade80" }]}>{t.rrLuckyBestTime}</Text>
               <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.bestTime}</Text>
             </View>
             <View style={[s.luckyTile, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }]}>
-              <Text style={[s.luckyTileLabel, { color: "#ef4444" }]}>🚫 AVOID TIME</Text>
+              <Text style={[s.luckyTileLabel, { color: "#ef4444" }]}>{t.rrLuckyAvoidTime}</Text>
               <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.avoidTime}</Text>
             </View>
           </View>
@@ -739,7 +762,7 @@ export function RiskRadarCard({
               or when enrichment is missing (would otherwise mislead users). */}
           {apiOk ? (
             <Text style={[s.poweredBy, { color: C.textMuted }]}>
-              ✨ Powered by Advanced Cosmic Intelligence
+              {t.rrLuckyPoweredBy}
             </Text>
           ) : null}
         </>

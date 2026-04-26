@@ -61,3 +61,9 @@ The project is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9.
 - **Payment Gateway**: Cashfree (planned).
 - **SMS Gateway**: MSG91 (planned).
 - **Image Processing**: Pillow.
+## Localization — Risk Radar Lucky Card (2026-04)
+- `lucky_engine.py` provides 13-lang dicts (`_LANG_TARA`, `_LANG_COLOR_NAMES`, `_LANG_REASONING`); `compute_daily_lucky` returns `shubh_rang_name_local`, `reasoning_text`, `reasoning_lang`, `tara_local` alongside legacy fields.
+- `risk_text_engine.py` localizes Choghadiya labels and per-day shubh rang/reasoning when a `lang` param is plumbed through.
+- `/api/lucky/today` and `/api/risk-radar` accept `lang` (query/body); RiskRadarCard sends `t.lang` and refetches on UI language change.
+- 14 `rrLucky*` keys in `lib/i18nMore.ts` cover all 13 supported langs (EN/HN/HI/OR/BN/MR/TA/TE/GU/KN/ML/PA/AS) for the lucky card section headers, BEST/AVOID tile labels, loading/empty/error states, and the "Powered by Advanced Cosmic Intelligence" footer.
+- Strict no-fake-fallback: client prefers `_local` fields, falls back to canonical Hinglish (still readable), and renders explicit unavailable state when data is missing.

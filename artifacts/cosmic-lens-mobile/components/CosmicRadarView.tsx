@@ -365,9 +365,9 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
       {/* Status bar */}
       <View style={radarS.statusRow}>
         <Animated.View
-          style={[radarS.statusDot, statusDotStyle, { backgroundColor: "#22d3ee" }]}
+          style={[radarS.statusDot, statusDotStyle, { backgroundColor: "#ef4444" }]}
         />
-        <Text style={radarS.statusTxt}>SCANNING • LIVE</Text>
+        <Text style={radarS.statusTxt}>THREAT SCAN ACTIVE</Text>
         <View style={radarS.statusSpacer} />
         <Text style={radarS.statusMeta}>
           {risks.length} {risks.length === 1 ? "SIGNAL" : "SIGNALS"}
@@ -438,15 +438,11 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
               strokeDasharray={i === 1 ? "3 5" : undefined} />
           ))}
 
-          {/* Sri Yantra Shatkona (sacred hexagram, faint, behind everything) */}
-          <Path d={HEX_UP}   stroke="#FFD700" strokeWidth={0.7}
-            strokeOpacity={0.32} fill="none" />
-          <Path d={HEX_DOWN} stroke="#a78bfa" strokeWidth={0.7}
-            strokeOpacity={0.30} fill="none" />
-          <Path d={HEX_UP_INNER}   stroke="#FFD700" strokeWidth={0.6}
-            strokeOpacity={0.40} fill="none" />
-          <Path d={HEX_DOWN_INNER} stroke="#67e8f9" strokeWidth={0.6}
-            strokeOpacity={0.40} fill="none" />
+          {/* Sri Yantra Shatkona — faded to a whisper so it doesn't compete with red dots */}
+          <Path d={HEX_UP}   stroke="#7f1d1d" strokeWidth={0.5}
+            strokeOpacity={0.10} fill="none" />
+          <Path d={HEX_DOWN} stroke="#7f1d1d" strokeWidth={0.5}
+            strokeOpacity={0.08} fill="none" />
 
           {/* Spokes — 4 cardinal + 4 diagonal */}
           {[0, 45, 90, 135].map((angle, i) => {
@@ -462,93 +458,34 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
             );
           })}
 
-          {/* 27 Nakshatra micro-markers on outer rim (every 9th highlighted = navatara) */}
+          {/* 27 Nakshatra rim markers — faded to dim red dust */}
           {NAKSHATRA_DOTS.map((n, i) => (
             <Circle key={`nak-${i}`}
               cx={n.x} cy={n.y}
-              r={n.isMajor ? 1.6 : 0.9}
-              fill={n.isMajor ? "#FFD700" : "#67e8f9"}
-              fillOpacity={n.isMajor ? 0.95 : 0.55} />
+              r={n.isMajor ? 1.2 : 0.7}
+              fill={n.isMajor ? "#dc2626" : "#7f1d1d"}
+              fillOpacity={n.isMajor ? 0.45 : 0.20} />
           ))}
 
-          {/* 12 Vedic house markers in Devanagari (gold) */}
-          {HOUSE_GLYPHS.map((g, i) => (
-            <SvgText key={`house-${i}`}
-              x={g.x} y={g.y}
-              fill="#FFD700"
-              fillOpacity={0.78}
-              fontSize="9"
-              fontWeight="700"
-              fontFamily="System"
-              textAnchor="middle">{g.label}</SvgText>
-          ))}
+          {/* Compass labels — single accent at North only, dim red */}
+          <SvgText x={RADAR_C} y={20} fill="#dc2626"
+            fillOpacity={0.55}
+            fontSize="11" fontWeight="800" textAnchor="middle">N</SvgText>
 
-          {/* Compass labels (gold accent) */}
-          <SvgText x={RADAR_C} y={20} fill="#FFD700"
-            fontSize="12" fontWeight="800" textAnchor="middle">N</SvgText>
-          <SvgText x={RADAR_SIZE - 8} y={RADAR_C + 4} fill="#FFD700"
-            fontSize="12" fontWeight="800" textAnchor="end">E</SvgText>
-          <SvgText x={RADAR_C} y={RADAR_SIZE - 8} fill="#FFD700"
-            fontSize="12" fontWeight="800" textAnchor="middle">S</SvgText>
-          <SvgText x={8} y={RADAR_C + 4} fill="#FFD700"
-            fontSize="12" fontWeight="800" textAnchor="start">W</SvgText>
-
-          {/* Sonar pings */}
+          {/* Threat pings — RED, expanding outward */}
           <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
-            stroke="#22d3ee" fill="none" animatedProps={ping1Props} />
+            stroke="#ef4444" fill="none" animatedProps={ping1Props} />
           <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
-            stroke="#67e8f9" fill="none" animatedProps={ping2Props} />
+            stroke="#dc2626" fill="none" animatedProps={ping2Props} />
 
-          {/* Premium center — ॐ on a jewel hub */}
-          <Circle cx={RADAR_C} cy={RADAR_C} r={14}
-            fill="#FFD700" fillOpacity={0.10} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={10}
-            fill="#FFD700" fillOpacity={0.22} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={7}
-            fill="#1f2a55" stroke="#FFD700" strokeWidth={1} strokeOpacity={0.85} />
-          <SvgText x={RADAR_C} y={RADAR_C + 4}
-            fill="#FFD700" fillOpacity={0.95}
-            fontSize="11" fontWeight="800"
-            fontFamily="System"
-            textAnchor="middle">ॐ</SvgText>
+          {/* Center hub — small dark red core, no ॐ jewel */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={6}
+            fill="#7f1d1d" fillOpacity={0.55} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={3}
+            fill="#ef4444" />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={1.2}
+            fill="#fff" />
         </Svg>
-
-        {/* Holographic shimmer bezel (slowly rotating) */}
-        <Animated.View
-          style={[
-            {
-              position: "absolute",
-              left:   HALO_PAD,
-              top:    HALO_PAD,
-              width:  RADAR_SIZE,
-              height: RADAR_SIZE,
-            },
-            shimmerStyle,
-          ]}
-          pointerEvents="none"
-        >
-          <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
-            <Defs>
-              <SvgLinearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0%"   stopColor="#FFD700" stopOpacity="0.95" />
-                <Stop offset="25%"  stopColor="#22d3ee" stopOpacity="0.95" />
-                <Stop offset="50%"  stopColor="#a78bfa" stopOpacity="0.85" />
-                <Stop offset="75%"  stopColor="#67e8f9" stopOpacity="0.95" />
-                <Stop offset="100%" stopColor="#ff9933" stopOpacity="0.7" />
-              </SvgLinearGradient>
-            </Defs>
-            {/* Gold filigree outer ring (dashed) */}
-            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 8}
-              stroke="#FFD700" strokeWidth={1} fill="none"
-              strokeOpacity={0.55} strokeDasharray="2 4" />
-            {/* Outer holographic bezel (gold → cyan → violet → saffron) */}
-            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
-              stroke="url(#bezelGrad)" strokeWidth={2.5} fill="none" />
-            {/* Inner soft accent ring */}
-            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R}
-              stroke="url(#bezelGrad)" strokeWidth={1} fill="none" strokeOpacity={0.55} />
-          </Svg>
-        </Animated.View>
 
         {/* Animated sweep beam (rotating wedge) */}
         <Animated.View
@@ -567,150 +504,96 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
           <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
             <Defs>
               <RadialGradient id="sweep" cx="50%" cy="50%" r="50%">
-                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.7" />
-                <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+                <Stop offset="0%"   stopColor="#dc2626" stopOpacity="0.55" />
+                <Stop offset="100%" stopColor="#7f1d1d" stopOpacity="0" />
               </RadialGradient>
             </Defs>
             <Path d={SWEEP_PATH} fill="url(#sweep)" />
-            {/* Leading edge — 4-line glow stack */}
+            {/* Leading edge — RED warning blade */}
             <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#22d3ee" strokeWidth={6} strokeOpacity={0.22}
+              stroke="#7f1d1d" strokeWidth={6} strokeOpacity={0.30}
               strokeLinecap="round" />
             <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#67e8f9" strokeWidth={4} strokeOpacity={0.50}
+              stroke="#dc2626" strokeWidth={3} strokeOpacity={0.85}
               strokeLinecap="round" />
             <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#a5f3fc" strokeWidth={2} strokeOpacity={0.95}
+              stroke="#fca5a5" strokeWidth={1} strokeOpacity={0.90}
               strokeLinecap="round" />
-            <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#fff" strokeWidth={0.8} strokeOpacity={0.85}
-              strokeLinecap="round" />
-            {/* Tip glow stack */}
-            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={10}
-              fill="#FFD700" fillOpacity={0.18} />
-            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={8}
-              fill="#22d3ee" fillOpacity={0.30} />
-            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={5}
-              fill="#a5f3fc" fillOpacity={0.90} />
-            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={2.5}
-              fill="#fff" />
-            {/* 8-spoke lens flare on the tip — alternating long/short rays */}
-            {FLARE_SPOKES.map((s, i) => {
-              const tipY = RADAR_C - RADAR_R + 6;
-              return (
-                <Line key={`flare-${i}`}
-                  x1={RADAR_C} y1={tipY}
-                  x2={RADAR_C + s.dx} y2={tipY + s.dy}
-                  stroke={i % 2 === 0 ? "#FFD700" : "#a5f3fc"}
-                  strokeWidth={i % 2 === 0 ? 1 : 0.7}
-                  strokeOpacity={i % 2 === 0 ? 0.85 : 0.65}
-                  strokeLinecap="round" />
-              );
-            })}
+            {/* Tip — small red bead, no flare */}
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={6}
+              fill="#dc2626" fillOpacity={0.35} />
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={3}
+              fill="#ef4444" />
           </Svg>
         </Animated.View>
 
-        {/* Orbital particles (outside bezel) */}
-        {ORBITS.map((orb, i) => {
-          const startPos = polar(0, orb.radius); // top of radar
+        {/* THREAT BLIPS — angry red, large pulsing glow, demands attention */}
+        {dots.map((d, i) => {
+          const RED = "#ef4444";
           return (
-            <Animated.View
-              key={`orbit-${i}`}
+            <View
+              key={`dot-${i}`}
               pointerEvents="none"
-              style={[
-                {
-                  position: "absolute",
-                  left:   HALO_PAD,
-                  top:    HALO_PAD,
-                  width:  RADAR_SIZE,
-                  height: RADAR_SIZE,
-                },
-                orbitStyles[i],
-              ]}
+              style={{
+                position: "absolute",
+                left: HALO_PAD + d.x - 28,
+                top:  HALO_PAD + d.y - 28,
+                width: 56, height: 56,
+                alignItems: "center", justifyContent: "center",
+              }}
             >
+              {/* Outer pulsing ripple — wider, blood-red */}
+              <Animated.View
+                style={[
+                  {
+                    position: "absolute",
+                    width: 56, height: 56, borderRadius: 28,
+                    borderWidth: 2, borderColor: RED,
+                  },
+                  dotPulseStyle,
+                ]}
+              />
+              {/* Mid glow halo — saturated red */}
               <View
                 style={{
                   position: "absolute",
-                  left: startPos.x - orb.size,
-                  top:  startPos.y - orb.size,
-                  width:  orb.size * 2,
-                  height: orb.size * 2,
-                  borderRadius: orb.size,
-                  backgroundColor: orb.color,
-                  shadowColor: orb.color,
-                  shadowOpacity: 0.7,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 0 },
-                  elevation: 3,
+                  width: 42, height: 42, borderRadius: 21,
+                  backgroundColor: RED, opacity: 0.32,
                 }}
               />
-            </Animated.View>
+              {/* Inner glow */}
+              <View
+                style={{
+                  position: "absolute",
+                  width: 30, height: 30, borderRadius: 15,
+                  backgroundColor: RED, opacity: 0.55,
+                  shadowColor: RED,
+                  shadowOpacity: 1,
+                  shadowRadius: 14,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 12,
+                }}
+              />
+              {/* Solid red core blip */}
+              <View
+                style={{
+                  position: "absolute",
+                  width: 18, height: 18, borderRadius: 9,
+                  backgroundColor: "#dc2626",
+                  borderWidth: 1.5, borderColor: "#fef2f2",
+                  alignItems: "center", justifyContent: "center",
+                  shadowColor: RED,
+                  shadowOpacity: 1,
+                  shadowRadius: 8,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 10,
+                }}
+              >
+                <Text style={radarS.dotIdx}>{d.idx}</Text>
+              </View>
+            </View>
           );
         })}
-
-        {/* Risk dots (with ripple halos) */}
-        {dots.map((d, i) => (
-          <View
-            key={`dot-${i}`}
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              left: HALO_PAD + d.x - 20,
-              top:  HALO_PAD + d.y - 20,
-              width: 40, height: 40,
-              alignItems: "center", justifyContent: "center",
-            }}
-          >
-            {/* Outer ripple ring */}
-            <Animated.View
-              style={[
-                {
-                  position: "absolute",
-                  width: 40, height: 40, borderRadius: 20,
-                  borderWidth: 1.5, borderColor: d.color,
-                },
-                dotPulseStyle,
-              ]}
-            />
-            {/* Soft outer halo */}
-            <View
-              style={{
-                position: "absolute",
-                width: 32, height: 32, borderRadius: 16,
-                backgroundColor: d.color, opacity: 0.22,
-              }}
-            />
-            {/* Starburst gemstone (8-point) with golden rim */}
-            <Svg width={28} height={28} style={{ position: "absolute" }}>
-              <Defs>
-                <RadialGradient id={`dotGrad-${i}`} cx="50%" cy="50%" r="50%">
-                  <Stop offset="0%"  stopColor="#fff"   stopOpacity="1" />
-                  <Stop offset="45%" stopColor={d.color} stopOpacity="1" />
-                  <Stop offset="100%" stopColor={d.color} stopOpacity="0.65" />
-                </RadialGradient>
-              </Defs>
-              <Path d={RISK_STAR_PATH}
-                fill={`url(#dotGrad-${i})`}
-                stroke="#FFD700" strokeWidth={1} strokeOpacity={0.9} />
-            </Svg>
-            {/* Number badge (white, on top of gemstone) */}
-            <View
-              style={{
-                width: 14, height: 14, borderRadius: 7,
-                backgroundColor: "rgba(15, 23, 42, 0.85)",
-                borderWidth: 1, borderColor: "#FFD700",
-                alignItems: "center", justifyContent: "center",
-                shadowColor: d.color,
-                shadowOpacity: 0.9,
-                shadowRadius: 5,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 4,
-              }}
-            >
-              <Text style={radarS.dotIdx}>{d.idx}</Text>
-            </View>
-          </View>
-        ))}
 
         {/* All Clear overlay */}
         {risks.length === 0 && (
@@ -742,21 +625,21 @@ const radarS = StyleSheet.create({
   },
   statusDot: {
     width: 8, height: 8, borderRadius: 4,
-    shadowColor: "#22d3ee",
+    shadowColor: "#ef4444",
     shadowOpacity: 1,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 0 },
     elevation: 4,
   },
   statusTxt: {
-    color: "#67e8f9",
+    color: "#ef4444",
     fontSize: 10,
     fontFamily: F.extra,
     letterSpacing: 2,
   },
   statusSpacer: { flex: 1 },
   statusMeta: {
-    color: "rgba(167, 243, 252, 0.7)",
+    color: "rgba(252, 165, 165, 0.75)",
     fontSize: 10,
     fontFamily: F.bold,
     letterSpacing: 1.5,

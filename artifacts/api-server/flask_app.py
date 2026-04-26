@@ -2201,6 +2201,139 @@ def energy_today():
     return jsonify(result)
 
 
+@app.route("/api/risk-radar", methods=["GET", "POST"])
+def risk_radar():
+    """
+    Risk Radar — predictive 24h + 7-day risk surface for the user.
+    Reuses the v3.2 energy engine signals; NO new astrology compute.
+    Auth same as /api/energy/today (user_id+API key OR stateless kundli body).
+    Optional ?date=YYYY-MM-DD for back-dated runs.
+    """
+    import json as _json
+    import swisseph as swe
+    from datetime import datetime as _dt, timedelta as _td
+    from energy_engine import calculate_energy, compute_risk_radar
+
+    body = request.get_json(force=True, silent=True) or {}
+    date_str = (request.args.get("date") or body.get("date") or "").strip()
+
+    try:
+        if date_str:
+            day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
+        else:
+            day = _dt.utcnow()
+    except ValueError:
+        return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+    date_iso = day.strftime("%Y-%m-%d")
+
+    # ── Resolve kundli + birth_data (mirrors energy_today) ───────────────
+    kundli_dict = body.get("kundli") or body.get("chart_data")
+    birth_data: Dict[str, Any] = body.get("birthData") or body.get("birth_data") or {}
+    if not kundli_dict:
+        uid_raw = request.args.get("user_id") or body.get("user_id")
+        if not uid_raw:
+            return jsonify({"error": "Provide user_id (with X-API-Key) or kundli body"}), 400
+        try:
+            user_id = int(uid_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "user_id must be an integer"}), 400
+        user, err = get_authed_user(user_id)
+        if err:
+            return err
+        if not user.kundli or not user.kundli.chart_data:
+            return jsonify({"error": "No kundli saved for this user"}), 404
+        try:
+            kundli_dict = _json.loads(user.kundli.chart_data)
+        except Exception:
+            return jsonify({"error": "Saved kundli is corrupted"}), 500
+        if not birth_data:
+            try:
+                prim = (Profile.query
+                        .filter(Profile.user_id == user.id,
+                                Profile.is_primary.is_(True))
+                        .first())
+                if prim and prim.birth_data:
+                    birth_data = _json.loads(prim.birth_data) or {}
+            except Exception:
+                pass
+
+    def _coerce_float(v):
+        try:
+            return float(v) if v is not None and v != "" else None
+        except (TypeError, ValueError):
+            return None
+    birth_lat = (_coerce_float(birth_data.get("latitude"))
+                 or _coerce_float(birth_data.get("lat"))
+                 or _coerce_float((kundli_dict or {}).get("latitude")))
+    birth_lon = (_coerce_float(birth_data.get("longitude"))
+                 or _coerce_float(birth_data.get("lon"))
+                 or _coerce_float((kundli_dict or {}).get("longitude")))
+    birth_tz  = (_coerce_float(birth_data.get("tzOffset"))
+                 or _coerce_float(birth_data.get("tz"))
+                 or _coerce_float((kundli_dict or {}).get("tzOffset"))
+                 or 5.5)
+
+    # ── Compute today transit positions ──────────────────────────────────
+    jd = swe.julday(day.year, day.month, day.day,
+                    day.hour + day.minute / 60.0)
+    flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    _PLANET_SWE = {
+        "Sun": swe.SUN, "Moon": swe.MOON, "Mars": swe.MARS,
+        "Mercury": swe.MERCURY, "Jupiter": swe.JUPITER,
+        "Venus": swe.VENUS, "Saturn": swe.SATURN,
+    }
+    today_planets: Dict[str, Dict[str, Any]] = {}
+    for pname, pcode in _PLANET_SWE.items():
+        plon = swe.calc_ut(jd, pcode, flags)[0][0] % 360.0
+        today_planets[pname] = {
+            "longitude":  round(plon, 4),
+            "rashiIndex": int(plon / 30) % 12,
+        }
+    try:
+        rahu_lon = swe.calc_ut(jd, swe.MEAN_NODE, flags)[0][0] % 360.0
+        today_planets["Rahu"] = {"longitude": round(rahu_lon, 4),
+                                 "rashiIndex": int(rahu_lon / 30) % 12}
+        ketu_lon = (rahu_lon + 180.0) % 360.0
+        today_planets["Ketu"] = {"longitude": round(ketu_lon, 4),
+                                 "rashiIndex": int(ketu_lon / 30) % 12}
+    except Exception:
+        pass
+
+    moon_lon = today_planets["Moon"]["longitude"]
+    today_moon = {
+        "longitude":      moon_lon,
+        "rashiIndex":     today_planets["Moon"]["rashiIndex"],
+        "nakshatraIndex": int(moon_lon / (360 / 27)) % 27,
+    }
+    today_sun    = today_planets["Sun"]
+    today_saturn = today_planets["Saturn"]
+
+    if date_str:
+        now_local = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12, minute=0)
+    else:
+        now_local = _dt.utcnow() + _td(hours=5, minutes=30)
+
+    # ── Run engine + map to Risk Radar ────────────────────────────────────
+    energy_result = calculate_energy(
+        kundli_dict, today_moon,
+        date_iso=date_iso,
+        today_sun=today_sun,
+        today_saturn=today_saturn,
+        today_planets=today_planets,
+        now_local=now_local,
+        birth_lat=birth_lat,
+        birth_lon=birth_lon,
+        tz_offset=birth_tz,
+    )
+    if "error" in energy_result:
+        return jsonify(energy_result), 400
+
+    radar = compute_risk_radar(energy_result, kundli_dict, today_planets)
+    radar["date"] = date_iso
+    radar["score"] = energy_result.get("energy_score") or energy_result.get("score")
+    return jsonify(radar)
+
+
 @app.route("/api/moon_transit", methods=["GET"])
 def moon_transit():
     import swisseph as swe

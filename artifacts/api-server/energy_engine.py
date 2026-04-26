@@ -1593,6 +1593,282 @@ def _summary_and_advice(score: float,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# RISK RADAR — predictive, user-friendly risk surfacing layer (v1.0)
+# Pure signal-mapping over existing engine output. NO new astrology compute.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_risk_radar(energy_result: Dict[str, Any],
+                       birth_chart: Dict[str, Any],
+                       today_planets: Optional[Dict[str, Dict[str, Any]]] = None
+                       ) -> Dict[str, Any]:
+    """
+    Build a user-friendly Risk Radar (24h + 7d blocks) from existing
+    engine signals. NO new astrology computation — pure signal mapping.
+
+    Output schema (Hinglish, no astrology jargon):
+      {
+        "risk_radar_24h": [{level, title, reason, advice, timing?}],
+        "risk_radar_7d":  [{range, level, label, advice}],
+        "summary": "..."
+      }
+
+    Rules:
+      - max 3 risks in 24h radar (severity-ranked)
+      - never exposes MD/AD/PD/planet names
+      - never uses "danger" / "bad future" language
+      - always actionable advice
+    """
+    components = energy_result.get("components", {}) or {}
+    overlays   = energy_result.get("overlays", {}) or {}
+    flags      = energy_result.get("active_flags", []) or []
+
+    moon_d     = components.get("moon_transit", {}) or {}
+    tara_d     = components.get("tara_bal", {}) or {}
+    saturn_d   = overlays.get("saturn", {}) or {}
+    tithi_d    = overlays.get("tithi", {}) or {}
+    pd_d       = overlays.get("pd_transit", {}) or {}
+    jup_mars_d = overlays.get("jupiter_mars", {}) or {}
+    time_q_d   = overlays.get("time_quality", {}) or {}
+
+    volatile = bool(overlays.get("volatile_day", False))
+
+    # ── 24h: collect candidate risks with severity scores ────────────────
+    candidates: List[Dict[str, Any]] = []
+
+    # Signal: Chandrashtama (Moon in 8th from natal Moon)
+    if moon_d.get("chandrashtama"):
+        candidates.append({
+            "severity": 9, "level": "high",
+            "title": "Emotional Instability",
+            "reason": "Aaj mann thoda asthir aur sensitive feel ho sakta hai",
+            "advice": "Emotional decisions postpone karein, calm rahein",
+        })
+
+    # Signal: Tara Bal (Vipat=2, Pratyak=4, Vadha/Naidhana=6)
+    tara_idx = tara_d.get("tara_idx", -1)
+    if tara_idx == 6:  # worst
+        candidates.append({
+            "severity": 8, "level": "high",
+            "title": "Sensitive Day",
+            "reason": "Mood thoda dheere aur reflective hoga aaj",
+            "advice": "Important conversations kal ya parso ke liye rakhein",
+        })
+    elif tara_idx in (2, 4):
+        candidates.append({
+            "severity": 6, "level": "medium",
+            "title": "Mental Drain",
+            "reason": "Thakaan aur overthinking zyada ho sakti hai",
+            "advice": "Aaj rest aur self-care prioritize karein",
+        })
+
+    # Signal: Saturn (Sade Sati / Ashtam / Kantaka)
+    saturn_phase = saturn_d.get("phase", "") if saturn_d.get("active") else ""
+    if "Madhya" in saturn_phase or "Ashtam" in saturn_phase:
+        candidates.append({
+            "severity": 8, "level": "high",
+            "title": "Pressure Phase",
+            "reason": "Andar se thoda heavy aur slow feel ho raha hai",
+            "advice": "Patience rakhein, jaldbaazi mat karein — slow chalein",
+        })
+    elif ("Phase 1" in saturn_phase or "Phase 3" in saturn_phase
+          or "Kantaka" in saturn_phase):
+        candidates.append({
+            "severity": 5, "level": "medium",
+            "title": "Pressure Phase",
+            "reason": "Background mein thoda burden chal raha hai",
+            "advice": "Steady rahein, shortcuts avoid karein",
+        })
+
+    # Signal: Mars affliction (negative jupiter_mars overlay)
+    jup_mars_delta = jup_mars_d.get("delta", 0) or 0
+    mars_house = (jup_mars_d.get("mars_house")
+                  or jup_mars_d.get("mars_house_lagna"))
+    if jup_mars_delta < -3 or mars_house in (1, 4, 7, 8, 12):
+        candidates.append({
+            "severity": 7, "level": "medium",
+            "title": "Conflict Risk",
+            "reason": "Aaj jaldbaazi aur frustration zyada ho sakta hai",
+            "advice": "Arguments aur impulsive reactions se bachein",
+        })
+
+    # Signal: PD weak (Pratyantar dasha lord struggling)
+    pd_delta = pd_d.get("delta", 0) or 0
+    if pd_delta <= -4:
+        candidates.append({
+            "severity": 6, "level": "medium",
+            "title": "Delay Risk",
+            "reason": "Kaam mein dheere progress hogi aaj",
+            "advice": "Important deadlines mein flexibility rakhein",
+        })
+
+    # Signal: Tithi drain (Rikta) or Amavasya
+    if tithi_d.get("type") == "Rikta (drain)":
+        candidates.append({
+            "severity": 5, "level": "medium",
+            "title": "Low Energy Day",
+            "reason": "Body aur mind dono mein energy thodi kam hogi",
+            "advice": "Heavy commitments avoid karein, rest pe dhyan dein",
+        })
+    elif tithi_d.get("tithi_idx") == 30:  # Amavasya
+        candidates.append({
+            "severity": 6, "level": "medium",
+            "title": "Low Energy Day",
+            "reason": "Aaj din thoda heavy aur introspective rahega",
+            "advice": "Naye kaam shuru mat karein, peace prioritize karein",
+        })
+
+    # Signal: Time-quality (Rahukal active or choghadiya inauspicious)
+    rahukal_active = bool(time_q_d.get("rahukal")) or "rahukal" in flags
+    if rahukal_active:
+        candidates.append({
+            "severity": 4, "level": "low",
+            "title": "Sensitive Time Window",
+            "reason": "Din mein kuch ghante thode kam shubh hain",
+            "advice": "Rahukal ke samay nayi shuruwat ya important calls avoid karein",
+            "timing": "Rahukal active",
+        })
+
+    # Signal: Volatile day flag (multiple negative signals stacked)
+    if volatile:
+        candidates.append({
+            "severity": 10, "level": "high",
+            "title": "Volatile Day",
+            "reason": "Aaj kaafi mixed energy hai — ups aur downs honge",
+            "advice": "Sambhal ke chalein, react kam karein, observe zyada",
+        })
+
+    # Sort by severity, take top 3
+    candidates.sort(key=lambda r: r.get("severity", 0), reverse=True)
+    risks_24h = candidates[:3]
+    for r in risks_24h:
+        r.pop("severity", None)
+
+    # If no risks → positive baseline
+    if not risks_24h:
+        risks_24h.append({
+            "level": "low",
+            "title": "Stable Day",
+            "reason": "Koi major risk nahi mil raha aaj",
+            "advice": "Apne planned kaam smoothly aage badhayein",
+        })
+
+    # ── 7-day blocks: Moon nakshatra + Tara projection ────────────────────
+    radar_7d = _compute_7d_blocks(birth_chart, today_planets,
+                                  saturn_d, jup_mars_d, volatile)
+
+    # Top-line summary (1 line)
+    high_count = sum(1 for r in risks_24h if r["level"] == "high")
+    if high_count >= 2:
+        summary = "Aaj sambhal ke chalein — multiple sensitive signals active hain"
+    elif high_count == 1:
+        summary = "Aaj ek important area mein extra dhyan zaroori hai"
+    elif risks_24h[0].get("level") == "low" and risks_24h[0].get("title") == "Stable Day":
+        summary = "Aaj koi major risk nahi — aaram se kaam karein"
+    else:
+        summary = "Aaj kuch mixed signals hain — important kaam mein savdhaan rahein"
+
+    return {
+        "risk_radar_24h": risks_24h,
+        "risk_radar_7d":  radar_7d,
+        "summary":        summary,
+    }
+
+
+def _compute_7d_blocks(birth_chart: Dict[str, Any],
+                       today_planets: Optional[Dict[str, Dict[str, Any]]],
+                       saturn_d: Dict[str, Any],
+                       jup_mars_d: Dict[str, Any],
+                       volatile_today: bool) -> List[Dict[str, Any]]:
+    """
+    Project Moon position forward 7 days (~13.176°/day) and compute
+    Tara nakshatra index per day. Aggregate into 3 blocks (1-2, 3-5, 6-7).
+    Persistent malefic transits (Sade Sati, Mars affliction) carry forward
+    as baseline pressure.
+    """
+    # Persistent baseline pressure (whole 7-day window)
+    saturn_phase = saturn_d.get("phase", "") if saturn_d.get("active") else ""
+    saturn_heavy = ("Madhya" in saturn_phase or "Ashtam" in saturn_phase)
+    saturn_mild  = (bool(saturn_phase) and not saturn_heavy)
+
+    jup_mars_delta = jup_mars_d.get("delta", 0) or 0
+    mars_house = (jup_mars_d.get("mars_house")
+                  or jup_mars_d.get("mars_house_lagna"))
+    mars_active = (jup_mars_delta < -3 or mars_house in (1, 4, 7, 8, 12))
+
+    # Birth nakshatra index
+    birth_nak = -1
+    if birth_chart and isinstance(birth_chart.get("nakshatra"), str):
+        try:
+            birth_nak = NAKSHATRAS.index(birth_chart["nakshatra"])
+        except ValueError:
+            birth_nak = -1
+    if birth_nak < 0:
+        # Try from planets[Moon]
+        for p in (birth_chart.get("planets") or []):
+            if p.get("name") == "Moon" and isinstance(p.get("longitude"), (int, float)):
+                birth_nak = int(p["longitude"] / (360.0 / 27.0)) % 27
+                break
+
+    # Today's Moon longitude
+    today_moon_lon = None
+    if today_planets and isinstance(today_planets.get("Moon"), dict):
+        today_moon_lon = today_planets["Moon"].get("longitude")
+
+    # Compute per-day Tara score
+    daily_scores: List[float] = []
+    if today_moon_lon is not None and birth_nak >= 0:
+        for i in range(7):
+            proj_lon = (today_moon_lon + i * 13.176) % 360.0
+            today_nak = int(proj_lon / (360.0 / 27.0)) % 27
+            tara = (today_nak - birth_nak + 27) % 27 % 9
+            daily_scores.append(float(TARA_SCORES[tara]))
+    else:
+        # No data → neutral
+        daily_scores = [60.0] * 7
+
+    # Apply persistent pressure to all days
+    for i in range(7):
+        if saturn_heavy:
+            daily_scores[i] -= 12
+        elif saturn_mild:
+            daily_scores[i] -= 6
+        if mars_active:
+            daily_scores[i] -= 8
+        if i == 0 and volatile_today:
+            daily_scores[i] -= 10
+
+    # Block aggregator
+    def _block_label(scores: List[float]) -> Dict[str, Any]:
+        avg = sum(scores) / max(len(scores), 1)
+        weak_days = sum(1 for s in scores if s < 40)
+        if avg < 35 or weak_days >= 2:
+            return {"level": "high",
+                    "label": "Sensitive Window",
+                    "advice": "Important decisions postpone karein, rest pe focus"}
+        if avg < 50 or weak_days >= 1:
+            return {"level": "medium",
+                    "label": "Mixed Phase",
+                    "advice": "Patience rakhein, react kam karein"}
+        if avg >= 70:
+            return {"level": "low",
+                    "label": "Smooth Phase",
+                    "advice": "Naye kaam shuru karne ke liye accha samay"}
+        return {"level": "low",
+                "label": "Stable Phase",
+                "advice": "Normal kaam smoothly chalega"}
+
+    block1 = _block_label(daily_scores[0:2])
+    block2 = _block_label(daily_scores[2:5])
+    block3 = _block_label(daily_scores[5:7])
+
+    return [
+        {"range": "Day 1-2", **block1},
+        {"range": "Day 3-5", **block2},
+        {"range": "Day 6-7", **block3},
+    ]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC API
 # ──────────────────────────────────────────────────────────────────────────────
 

@@ -1587,6 +1587,10 @@ def analyze_doshas(planets: list, nakshatra: str = "") -> dict:
         elif status == "Mild":
             mild_cnt += 1
 
+        # Cap remedies to a maximum of 2 per dosh (product rule — keep
+        # the most essential one or two from each function's classical list).
+        capped_remedies = list(remedies)[:2] if remedies else []
+
         dosh_list.append({
             "key":         dkey,
             "name":        name,
@@ -1595,7 +1599,7 @@ def analyze_doshas(planets: list, nakshatra: str = "") -> dict:
             "status":      status,
             "headline":    headline,
             "description": description,
-            "remedies":    remedies,
+            "remedies":    capped_remedies,
             "planet_note": planet_note,
         })
 

@@ -7,6 +7,7 @@ import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { fetchDailyLucky, type DailyLucky } from "@/lib/luckyAPI";
+import { fetchRiskRadar, isRiskRadarOk, type RiskRadarResponse } from "@/lib/riskTextAPI";
 
 export const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
@@ -298,6 +299,42 @@ export function RiskRadarCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, user?.api_key, kundliFp, birthFp]);
 
+  // ── Personalised Risk text + Choghadiya BEST/AVOID time ──────────────
+  // Fetched from /api/risk-radar — server enriches the existing energy-engine
+  // signals (Chandrashtama, Tara Bal, Sade Sati, Mars affliction, PD weakness,
+  // Tithi, Rahukal, Volatile day) with 5-field personalised KYA RISK / DHYAN /
+  // AVOID / KARNA / UPAY text + Choghadiya-derived best/avoid windows.
+  // Powered by Advanced Cosmic Intelligence. Day-1 only (today's transit).
+  // Days 2-7 keep the deterministic template (no fake real-time claim).
+  const [riskApi, setRiskApi]         = useState<RiskRadarResponse | null>(null);
+  const [riskApiError, setRiskApiErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (!kundli) {
+      setRiskApi(null);
+      setRiskApiErr(null);
+      return;
+    }
+    let cancelled = false;
+    fetchRiskRadar({
+      userId:    user?.id,
+      apiKey:    user?.api_key,
+      kundli:    kundli as unknown as Record<string, unknown>,
+      birthData: birthData as unknown as Record<string, unknown> | null,
+    })
+      .then(res => {
+        if (cancelled) return;
+        if (isRiskRadarOk(res)) {
+          setRiskApi(res);
+          setRiskApiErr(null);
+        } else {
+          setRiskApi(null);
+          setRiskApiErr(res.message);
+        }
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.api_key, kundliFp, birthFp]);
+
   const [streak, setStreak] = useState(0);
   useEffect(() => {
     (async () => {
@@ -320,6 +357,60 @@ export function RiskRadarCard({
   if (days.length === 0) return null;
   const sel = days[selected];
   if (!sel) return null;
+
+  // STRICT no-template-fallback rule for Day 1: only override when ALL real
+  // engine fields are present. Backend may return base radar without
+  // enrichment on partial failure; we must never silently fall back to the
+  // hardcoded RISK_BY_LEVEL template and present it as real signals.
+  const apiOk: boolean = !!(
+    riskApi &&
+    riskApi.enriched !== false &&
+    riskApi.top_risk &&
+    riskApi.best_time?.window &&
+    riskApi.avoid_time?.window
+  );
+
+  // Day-1 unavailable state: API failed OR enrichment incomplete OR still
+  // loading. We replace body with explicit "details unavailable" messaging
+  // (in user's voice, Hinglish) instead of leaking template text.
+  const day1Unavailable = selected === 0 && !apiOk;
+  const day1Loading     = day1Unavailable && !riskApiError && riskApi == null;
+
+  const unavailMsg = day1Loading
+    ? "Cosmic signals load ho rahe hain…"
+    : "Cosmic signals abhi fetch nahi ho paaye — thodi der baad refresh karein.";
+
+  // Override Day 1 (today) with the real backend engine output when present.
+  // API computes from active transit/dasha + Choghadiya — the source of truth.
+  // For Days 2-7, keep the deterministic template (clearly labelled as
+  // forecast trend, not real-time).
+  const selData: DayForecast = (selected === 0 && apiOk && riskApi)
+    ? {
+        ...sel,
+        riskShort:    riskApi.summary             || sel.riskShort,
+        riskCategory: riskApi.top_risk!.category,
+        riskDetail:   riskApi.top_risk!.kya_risk_hai,
+        riskDhyan:    riskApi.top_risk!.kya_dhyan_rakhna_hai,
+        riskAvoid:    riskApi.top_risk!.kya_avoid_karna_hai,
+        riskKarna:    riskApi.top_risk!.kya_karna_hai,
+        riskRemedy:   riskApi.top_risk!.upay,
+        bestTime:     `${riskApi.best_time!.window} (${riskApi.best_time!.label})`,
+        avoidTime:    `${riskApi.avoid_time!.window} (${riskApi.avoid_time!.label})`,
+      }
+    : day1Unavailable
+      ? {
+          ...sel,
+          riskShort:    unavailMsg,
+          riskCategory: day1Loading ? "Loading…" : "Unavailable",
+          riskDetail:   "—",
+          riskDhyan:    "—",
+          riskAvoid:    "—",
+          riskKarna:    "—",
+          riskRemedy:   "—",
+          bestTime:     "—",
+          avoidTime:    "—",
+        }
+      : sel;
 
   let safestIdx = 0, riskiestIdx = 0;
   days.forEach((d, i) => {
@@ -423,7 +514,7 @@ export function RiskRadarCard({
           {/* Generic warning */}
           <View style={[s.shortRow, { borderColor: C.border }]}>
             <Text style={s.shortIcon}>💬</Text>
-            <Text style={[s.shortText, { color: C.text }]}>{sel.riskShort}</Text>
+            <Text style={[s.shortText, { color: C.text }]}>{selData.riskShort}</Text>
           </View>
 
           {/* 24-hour breakdown */}
@@ -440,7 +531,7 @@ export function RiskRadarCard({
             </View>
             <View style={s.bdText}>
               <Text style={[s.bdLabel, { color: levelColor }]}>KYA RISK HAI</Text>
-              <Text style={[s.bdBody,  { color: C.text     }]}>{sel.riskDetail}</Text>
+              <Text style={[s.bdBody,  { color: C.text     }]}>{selData.riskDetail}</Text>
             </View>
           </View>
 
@@ -450,7 +541,7 @@ export function RiskRadarCard({
             </View>
             <View style={s.bdText}>
               <Text style={[s.bdLabel, { color: "#60a5fa" }]}>KYA DHYAN RAKHNA HAI</Text>
-              <Text style={[s.bdBody,  { color: C.text    }]}>{sel.riskDhyan}</Text>
+              <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskDhyan}</Text>
             </View>
           </View>
 
@@ -460,7 +551,7 @@ export function RiskRadarCard({
             </View>
             <View style={s.bdText}>
               <Text style={[s.bdLabel, { color: "#ef4444" }]}>KYA AVOID KARNA HAI</Text>
-              <Text style={[s.bdBody,  { color: C.text    }]}>{sel.riskAvoid}</Text>
+              <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskAvoid}</Text>
             </View>
           </View>
 
@@ -470,7 +561,7 @@ export function RiskRadarCard({
             </View>
             <View style={s.bdText}>
               <Text style={[s.bdLabel, { color: "#4ade80" }]}>KYA KARNA HAI</Text>
-              <Text style={[s.bdBody,  { color: C.text    }]}>{sel.riskKarna}</Text>
+              <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskKarna}</Text>
             </View>
           </View>
 
@@ -479,7 +570,7 @@ export function RiskRadarCard({
             <Text style={s.remedyIcon}>🪔</Text>
             <View style={{ flex: 1 }}>
               <Text style={[s.remedyLabel, { color: C.textMuted }]}>UPAY</Text>
-              <Text style={[s.remedyText,  { color: C.text      }]}>{sel.riskRemedy}</Text>
+              <Text style={[s.remedyText,  { color: C.text      }]}>{selData.riskRemedy}</Text>
             </View>
           </View>
 
@@ -558,13 +649,22 @@ export function RiskRadarCard({
           <View style={s.luckyGrid}>
             <View style={[s.luckyTile, { backgroundColor: "rgba(74,222,128,0.08)", borderColor: "rgba(74,222,128,0.25)" }]}>
               <Text style={[s.luckyTileLabel, { color: "#4ade80" }]}>⏰ BEST TIME</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{sel.bestTime}</Text>
+              <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.bestTime}</Text>
             </View>
             <View style={[s.luckyTile, { backgroundColor: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)" }]}>
               <Text style={[s.luckyTileLabel, { color: "#ef4444" }]}>🚫 AVOID TIME</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{sel.avoidTime}</Text>
+              <Text style={[s.luckyTimeText, { color: C.text }]}>{selData.avoidTime}</Text>
             </View>
           </View>
+
+          {/* Brand-voice attribution — shown only when real engine data is live.
+              Strict apiOk gate prevents the badge from appearing during loading
+              or when enrichment is missing (would otherwise mislead users). */}
+          {selected === 0 && apiOk ? (
+            <Text style={[s.poweredBy, { color: C.textMuted }]}>
+              ✨ Powered by Advanced Cosmic Intelligence
+            </Text>
+          ) : null}
         </>
       )}
     </View>
@@ -573,6 +673,8 @@ export function RiskRadarCard({
 
 const s = StyleSheet.create({
   card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 12 },
+  poweredBy: { fontSize: 10, fontWeight: "600", letterSpacing: 0.6,
+                textAlign: "center", marginTop: 2, opacity: 0.8 },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title:    { fontSize: 14, fontWeight: "800", letterSpacing: 0.3 },

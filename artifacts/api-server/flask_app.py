@@ -2296,7 +2296,9 @@ def risk_radar():
     import json as _json
     import swisseph as swe
     from datetime import datetime as _dt, timedelta as _td
-    from energy_engine import calculate_energy, compute_risk_radar
+    from energy_engine import (calculate_energy, compute_risk_radar,
+                               _astronomical_sun_times, _seasonal_sun_times)
+    from risk_text_engine import enrich_risk_radar
 
     body = request.get_json(force=True, silent=True) or {}
     date_str = (request.args.get("date") or body.get("date") or "").strip()
@@ -2415,6 +2417,43 @@ def risk_radar():
     radar = compute_risk_radar(energy_result, kundli_dict, today_planets)
     radar["date"] = date_iso
     radar["score"] = energy_result.get("energy_score") or energy_result.get("score")
+
+    # ── Enrich with personalised text + Choghadiya/Rahukaal timing ────────
+    # Sunrise/sunset for choghadiya schedule. Falls back to seasonal table
+    # if lat/lon missing — never invents data.
+    # Always emits `enriched` flag so client can detect partial failures and
+    # show an explicit unavailable state instead of falling back to templates.
+    try:
+        if birth_lat is not None and birth_lon is not None:
+            sunrise_h, sunset_h = _astronomical_sun_times(
+                now_local, birth_lat, birth_lon, birth_tz)
+        else:
+            sunrise_h, sunset_h = _seasonal_sun_times(now_local.month)
+        weekday = now_local.weekday()  # 0=Mon..6=Sun
+        # current_h: only "future-only" filter when running for today;
+        # for past/future date_str runs, start from sunrise so user sees
+        # the day's first best/avoid window.
+        if date_str:
+            current_h = sunrise_h
+        else:
+            current_h = (_dt.utcnow() + _td(hours=birth_tz or 5.5)).hour \
+                        + (_dt.utcnow() + _td(hours=birth_tz or 5.5)).minute / 60.0
+        radar = enrich_risk_radar(radar, energy_result, weekday,
+                                  sunrise_h, sunset_h, current_h)
+        # Verify all expected enrichment keys are present before claiming success
+        radar["enriched"] = bool(
+            radar.get("top_risk") and
+            radar.get("best_time") and
+            radar.get("avoid_time")
+        )
+    except Exception as _e:
+        # Enrichment is additive — never break the base response, but be
+        # explicit about the partial state so the client doesn't show
+        # template fallback as if it were real engine output.
+        app.logger.warning("risk_text_engine enrich failed: %s", _e)
+        radar["enriched"] = False
+        radar["enrich_error"] = str(_e)
+
     return jsonify(radar)
 
 

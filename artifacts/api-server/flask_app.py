@@ -15,7 +15,7 @@ import sys
 import json
 import secrets
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone as _UTC_TZ
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1187,7 +1187,7 @@ def panchang_real():
             y, m, d = [int(x) for x in date_s.split("-")]
             target_date = _date(y, m, d)
         else:
-            target_date = _dt.utcnow().date()
+            target_date = _dt.now(_UTC_TZ.utc).replace(tzinfo=None).date()
     except Exception:
         return jsonify({"error": "bad date; use YYYY-MM-DD"}), 400
 
@@ -2066,7 +2066,7 @@ def energy_today():
         if date_str:
             day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
         else:
-            day = _dt.utcnow()
+            day = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
     except ValueError:
         return jsonify({"error": "date must be YYYY-MM-DD"}), 400
 
@@ -2176,7 +2176,7 @@ def energy_today():
     if date_str:
         now_local = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12, minute=0)
     else:
-        now_local = _dt.utcnow() + _td(hours=5, minutes=30)
+        now_local = _dt.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(hours=5, minutes=30)
 
     # ── Run engine (5-step v3.1) ─────────────────────────────────────────
     result = calculate_energy(
@@ -2228,7 +2228,7 @@ def lucky_today():
         if date_str:
             day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
         else:
-            day = _dt.utcnow()
+            day = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
     except ValueError:
         return jsonify({"error": "date must be YYYY-MM-DD"}), 400
     date_iso = day.strftime("%Y-%m-%d")
@@ -2307,7 +2307,7 @@ def risk_radar():
         if date_str:
             day = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12)
         else:
-            day = _dt.utcnow()
+            day = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
     except ValueError:
         return jsonify({"error": "date must be YYYY-MM-DD"}), 400
     date_iso = day.strftime("%Y-%m-%d")
@@ -2397,7 +2397,7 @@ def risk_radar():
     if date_str:
         now_local = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12, minute=0)
     else:
-        now_local = _dt.utcnow() + _td(hours=5, minutes=30)
+        now_local = _dt.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(hours=5, minutes=30)
 
     # ── Run engine + map to Risk Radar ────────────────────────────────────
     energy_result = calculate_energy(
@@ -2436,8 +2436,8 @@ def risk_radar():
         if date_str:
             current_h = sunrise_h
         else:
-            current_h = (_dt.utcnow() + _td(hours=birth_tz or 5.5)).hour \
-                        + (_dt.utcnow() + _td(hours=birth_tz or 5.5)).minute / 60.0
+            current_h = (_dt.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(hours=birth_tz or 5.5)).hour \
+                        + (_dt.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(hours=birth_tz or 5.5)).minute / 60.0
         radar = enrich_risk_radar(radar, energy_result, weekday,
                                   sunrise_h, sunset_h, current_h,
                                   birth_chart=kundli_dict,
@@ -5476,7 +5476,7 @@ def astrovastu_dev_grant_route():
 
     from datetime import datetime as _dt
     purchase.status  = "paid"
-    purchase.paid_at = _dt.utcnow()
+    purchase.paid_at = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
     db.session.commit()
 
     result = grant_purchase_idempotent(purchase)
@@ -8239,7 +8239,7 @@ def love_compatibility():
     def score_transit():
         base = 55
         swe.set_sid_mode(swe.SIDM_LAHIRI)
-        now = _dt.utcnow()
+        now = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
         jd  = swe.julday(now.year, now.month, now.day, now.hour + now.minute/60.0)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
         transits = {}
@@ -8694,7 +8694,7 @@ def breakup_chances():
     def score_transit():
         points = 0
         swe.set_sid_mode(swe.SIDM_LAHIRI)
-        now = _dt.utcnow()
+        now = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
         jd  = swe.julday(now.year, now.month, now.day, now.hour + now.minute / 60.0)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
         transits = {}
@@ -9536,7 +9536,7 @@ def will_return():
     def score_transit():
         pts = 0
         swe.set_sid_mode(swe.SIDM_LAHIRI)
-        now = _dt.utcnow()
+        now = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
         jd  = swe.julday(now.year, now.month, now.day, now.hour + now.minute / 60.0)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
         transits = {}
@@ -10078,7 +10078,7 @@ def future_outcome():
 
     # ── LIVE TRANSITS ────────────────────────────────────────────────────────
     swe.set_sid_mode(swe.SIDM_LAHIRI)
-    now = _dt.utcnow()
+    now = _dt.now(_UTC_TZ.utc).replace(tzinfo=None)
     jd_now = swe.julday(now.year, now.month, now.day, now.hour + now.minute/60.0)
     flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
 

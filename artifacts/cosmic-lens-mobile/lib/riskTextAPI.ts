@@ -5,7 +5,6 @@ export interface RiskTextTopRisk {
   trigger:                string;          // signal id (e.g. "saturn_heavy")
   category:               string;          // user-facing category label
   kya_risk_hai:           string;
-  kya_dhyan_rakhna_hai:   string;
   kya_avoid_karna_hai:    string;
   kya_karna_hai:          string;
   upay:                   string;
@@ -37,7 +36,6 @@ export interface PerDayRisk {
   risk_level:           "low" | "med" | "high";
   summary:              string;
   kya_risk_hai:         string;
-  kya_dhyan_rakhna_hai: string;
   kya_avoid_karna_hai:  string;
   kya_karna_hai:        string;
   upay:                 string;

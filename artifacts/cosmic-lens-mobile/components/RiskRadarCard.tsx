@@ -27,7 +27,6 @@ export interface DayForecast {
   riskShort:    string;
   riskCategory: string;
   riskDetail:   string;
-  riskDhyan:    string;
   riskAvoid:    string;
   riskKarna:    string;
   riskRemedy:   string;
@@ -39,7 +38,7 @@ export interface DayForecast {
 
 const RISK_BY_LEVEL: Record<RiskLevel, {
   shorts:  string[];
-  details: { cat: string; detail: string; dhyan: string; avoid: string; karna: string; remedy: string; }[];
+  details: { cat: string; detail: string; avoid: string; karna: string; remedy: string; }[];
 }> = {
   low: {
     shorts: [
@@ -51,7 +50,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Career",
         detail: "Naye projects ya pitches start karne ka safe din. Important conversations productive rahengi.",
-        dhyan:  "Opportunities ko khule mann se accept karein, momentum banaye rakhein.",
         avoid:  "Negative logon ki advice, pessimistic news, ya self-doubt.",
         karna:  "Meetings, presentations, networking, naye ideas pitch karein.",
         remedy: "Subah 5 minute Surya Namaskar — energy boost ke liye.",
@@ -59,7 +57,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Money",
         detail: "Investments aur savings ke liye accha din. Long-term financial decisions safely le sakte hain.",
-        dhyan:  "Long-term planning par focus rakhein, short-term shor ko ignore karein.",
         avoid:  "Bekar ke kharch, impulse purchases, gambling.",
         karna:  "SIP, bachat schemes, ya bills clear karein. Budget review karein.",
         remedy: "Peeli ya golden kapde pehnna shubh rahega.",
@@ -67,7 +64,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Health",
         detail: "Vitality high rahegi. Workout, meditation ya naye healthy habits build karne ka perfect time.",
-        dhyan:  "Routine maintain karein, sleep schedule consistent rakhein.",
         avoid:  "Junk food, late-night screen time, alcohol.",
         karna:  "Yoga, walk, healthy meal plan, hydration badhayein.",
         remedy: "Subah tulsi-paani — overall wellness ke liye.",
@@ -84,7 +80,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Communication",
         detail: "Aaj misunderstandings hone ke chances zyada hain. Important messages double-check karein, clarity rakhein.",
-        dhyan:  "Har message aur email padh ke samajh ke bhejein.",
         avoid:  "Voice calls bina prep ke, important texts jaldi mein, gossip.",
         karna:  "Written confirmation lein, points note karein, listen pehle.",
         remedy: "Important call ya meeting se pehle 5 deep breaths.",
@@ -92,7 +87,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Decisions",
         detail: "Bade decisions postpone karein. Routine kaam continue, naye commitments aaj avoid karein.",
-        dhyan:  "Choti baatein bhi soch samajh ke karein, jaldbaazi nahi.",
         avoid:  "Bade purchases, contracts sign karna, naye commitments.",
         karna:  "Documents review karein, planning karein, pros-cons list banayein.",
         remedy: "Decision se pehle paani peeke 2 min ruk jaayein.",
@@ -100,7 +94,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Relations",
         detail: "Family ya partner se patience se baat karein. Choti baatein bade misunderstanding ban sakti hain.",
-        dhyan:  "Doosron ke mood aur tone ka khayal rakhein.",
         avoid:  "Sensitive topics, criticism, gussa, blame game.",
         karna:  "Sunne ka time dein, gratitude express karein, quality time spend karein.",
         remedy: "Shaam ko ghar mein diya jalaayein — peace ke liye.",
@@ -117,7 +110,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Conflict",
         detail: "Aaj arguments aur disputes hone ke chances bahut zyada hain. Confrontations avoid karein — silence is power aaj.",
-        dhyan:  "Apna gussa aur reactions control mein rakhein.",
         avoid:  "Arguments, blame game, sharp words, social media debates.",
         karna:  "Solo time lein, meditation karein, breathing exercises.",
         remedy: "Hanuman Chalisa ya Maha Mrityunjaya 11 baar.",
@@ -125,7 +117,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Money",
         detail: "Financial decisions strictly avoid. Naye loans, investments aur big purchases postpone karein.",
-        dhyan:  "Existing savings safely rakhein, panic se decisions na lein.",
         avoid:  "Loans, investments, bade purchases, kisi ko paisa udhaar dena.",
         karna:  "Budget review karein, expenses track karein, savings safe karein.",
         remedy: "Daan karein — chhota hi sahi, doosron ki madad.",
@@ -133,7 +124,6 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
       {
         cat: "Health",
         detail: "Energy aur immunity low rahegi. Heavy workouts skip karein, rest aur hydration priority dein.",
-        dhyan:  "Body ke signals sune — thakaan ho toh rest karein.",
         avoid:  "Heavy workouts, late nights, junk food, alcohol.",
         karna:  "Hydration, neend, light meals, gentle stretches.",
         remedy: "Adrak-haldi paani din mein 2 baar.",
@@ -222,7 +212,6 @@ export function computeRisk(score: number, _dayIdx: number, date: Date) {
     riskShort:    shortLine,
     riskCategory: det.cat,
     riskDetail:   det.detail,
-    riskDhyan:    det.dhyan,
     riskAvoid:    det.avoid,
     riskKarna:    det.karna,
     riskRemedy:   det.remedy,
@@ -413,7 +402,6 @@ export function RiskRadarCard({
         riskShort:    perDay.summary || sel.riskShort,
         riskCategory: perDay.category,
         riskDetail:   perDay.kya_risk_hai,
-        riskDhyan:    perDay.kya_dhyan_rakhna_hai,
         riskAvoid:    perDay.kya_avoid_karna_hai,
         riskKarna:    perDay.kya_karna_hai,
         riskRemedy:   perDay.upay,
@@ -426,7 +414,6 @@ export function RiskRadarCard({
           riskShort:    unavailMsg,
           riskCategory: dayLoading ? "Loading…" : "Unavailable",
           riskDetail:   "—",
-          riskDhyan:    "—",
           riskAvoid:    "—",
           riskKarna:    "—",
           riskRemedy:   "—",

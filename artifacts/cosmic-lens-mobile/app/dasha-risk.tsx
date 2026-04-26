@@ -148,14 +148,14 @@ export default function DashaRiskScreen() {
     if (lvl === "high") {
       return [
         { level: "high",   title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
-        { level: "medium", title: "Secondary", reason: day.riskCategory, advice: day.riskDhyan },
+        { level: "medium", title: "Secondary", reason: day.riskCategory, advice: day.riskAvoid },
         { level: "low",    title: "Watch",     reason: "Routine check",  advice: day.riskRemedy },
       ];
     }
     if (lvl === "med") {
       return [
         { level: "medium", title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
-        { level: "low",    title: "Secondary", reason: day.riskCategory, advice: day.riskDhyan },
+        { level: "low",    title: "Secondary", reason: day.riskCategory, advice: day.riskAvoid },
       ];
     }
     return [

@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState } from "react";
-import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -401,9 +401,13 @@ export function RiskRadarCard({
   const dayUnavailable  = dayCoveredByApi && !apiOk;
   const dayLoading      = dayUnavailable && !riskApiError && riskApi == null;
 
+  // Localized so a user who picked Odia/Tamil/etc. sees the loading + error
+  // text in their own script — otherwise the cold ~15s LLM wait reads as a
+  // dead card. `t.loading` and `t.fetchFailed` are both translated for every
+  // supported UI language (i18n.ts + i18nMore.ts).
   const unavailMsg = dayLoading
-    ? "Cosmic signals load ho rahe hain…"
-    : "Cosmic signals abhi fetch nahi ho paaye — thodi der baad refresh karein.";
+    ? t.loading
+    : t.fetchFailed;
 
   // Override with real backend per-day engine output when present.
   // API computes from active transit/dasha + Choghadiya per day — the
@@ -426,7 +430,9 @@ export function RiskRadarCard({
       ? {
           ...sel,
           riskShort:    unavailMsg,
-          riskCategory: dayLoading ? "Loading…" : "Unavailable",
+          // Reuse the same localized string for the small category badge so
+          // the entire card stays in the user's chosen script during the wait.
+          riskCategory: dayLoading ? t.loading : t.fetchFailed,
           riskDetail:   "—",
           riskAvoid:    "—",
           riskKarna:    "—",
@@ -578,9 +584,13 @@ export function RiskRadarCard({
             <Text style={[s.gaugeScaleText, { color: C.textDim }]}>High</Text>
           </View>
 
-          {/* Generic warning */}
+          {/* Generic warning — shows a spinner when the per-day enrichment
+              is still in flight (cold language calls can take ~15s on the
+              first request) so the card never reads as "nothing is loading". */}
           <View style={[s.shortRow, { borderColor: C.border }]}>
-            <Text style={s.shortIcon}>💬</Text>
+            {dayLoading
+              ? <ActivityIndicator size="small" color="#fbbf24" style={{ marginRight: 2 }} />
+              : <Text style={s.shortIcon}>💬</Text>}
             <Text style={[s.shortText, { color: C.text }]}>{selData.riskShort}</Text>
           </View>
 

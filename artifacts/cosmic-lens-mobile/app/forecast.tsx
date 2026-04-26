@@ -461,11 +461,15 @@ function WeekChart({
 //   to either upgrade or come back daily as each day rolls into the home
 //   screen's "today" view. Two chips at the top (Safest / Riskiest day of the
 //   week) double as quick-jump buttons that re-select that day.
-const FREE_DAYS = 2;  // first 2 days are fully free
+const FREE_DAYS = 2;  // first 2 days are fully free for users WITHOUT a kundli
 function RiskRadar({
-  days, selected, onSelect,
+  days, selected, onSelect, fullAccess,
 }: {
   days: DayForecast[]; selected: number; onSelect: (i: number) => void;
+  // True when the user has already set their primary kundli — they should
+  // see the detailed risk + upay for ALL 7 days, no paywall. False = demo
+  // mode where days 3-7 stay locked behind the "add kundli to unlock" CTA.
+  fullAccess: boolean;
 }) {
   const C = useC();
   if (days.length === 0) return null;
@@ -480,7 +484,9 @@ function RiskRadar({
     if (d.riskScore > days[riskiestIdx].riskScore) riskiestIdx = i;
   });
 
-  const isLocked = selected >= FREE_DAYS;
+  // Lock only kicks in for users who have NOT yet set their primary kundli.
+  // Once kundli is set, every day is fully unlocked.
+  const isLocked = !fullAccess && selected >= FREE_DAYS;
   const levelColor =
     sel.riskLevel === "low" ? "#4ade80" :
     sel.riskLevel === "med" ? "#fbbf24" : "#ef4444";
@@ -784,7 +790,12 @@ export default function ForecastScreen() {
             {/* Cosmic Risk Radar — focused per-day risk module with freemium gate.
                 Sits between the hero chart and the supporting info so it's the
                 first thing the user reads after seeing the day's score. */}
-            <RiskRadar days={days} selected={selected} onSelect={setSelected} />
+            <RiskRadar
+              days={days}
+              selected={selected}
+              onSelect={setSelected}
+              fullAccess={!showDemo}
+            />
 
             {/* Moon info */}
             <View style={s.infoGrid}>

@@ -25,6 +25,7 @@ import Svg, {
   Circle,
   Defs,
   Line,
+  LinearGradient as SvgLinearGradient,
   Path,
   RadialGradient,
   Stop,
@@ -115,7 +116,7 @@ const HALO_PAD  = 22;
 const WRAP_SIZE = RADAR_SIZE + HALO_PAD * 2;
 
 // Pre-computed background "stars" inside the radar (stable, deterministic)
-const BG_STARS = Array.from({ length: 26 }, (_, i) => {
+const BG_STARS = Array.from({ length: 32 }, (_, i) => {
   const angle  = (i * 53.7) % 360;
   const radius = ((i * 17 + 11) % (RADAR_R - 24)) + 14;
   const p      = polar(angle, radius);
@@ -124,6 +125,21 @@ const BG_STARS = Array.from({ length: 26 }, (_, i) => {
     y: p.y,
     r: 0.5 + ((i * 3) % 4) * 0.3,
     op: 0.25 + ((i * 11) % 6) / 14,
+  };
+});
+
+// 6 of those stars get a twinkle phase offset (animated)
+const TWINKLE_INDICES = new Set(
+  Array.from({ length: 6 }, (_, i) => (i * 5 + 1) % 32),
+);
+const TWINKLE_STARS = Array.from({ length: 6 }, (_, i) => {
+  const baseIdx = i * 5 + 1;
+  const star    = BG_STARS[baseIdx % BG_STARS.length];
+  return {
+    x:     star.x,
+    y:     star.y,
+    r:     star.r + 0.4,
+    phase: i / 6, // 0..1 stagger
   };
 });
 
@@ -138,6 +154,27 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
   return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, isCardinal };
 });
 
+// Degree labels every 30° (subtle technical readout)
+const DEGREE_LABELS = Array.from({ length: 12 }, (_, i) => {
+  const angle = i * 30;
+  const r     = RADAR_R - 24;
+  const p     = polar(angle, r);
+  return {
+    x: p.x,
+    y: p.y + 3,
+    label: angle.toString().padStart(3, "0"),
+    isCardinal: angle % 90 === 0,
+  };
+});
+
+// Orbital particles outside the bezel (different radii + speeds)
+const ORBITS = [
+  { radius: RADAR_R + 14, duration: 9000,  size: 3,   color: "#22d3ee" },
+  { radius: RADAR_R + 18, duration: 13000, size: 2.5, color: "#a78bfa" },
+  { radius: RADAR_R + 12, duration: 7000,  size: 2,   color: "#67e8f9" },
+  { radius: RADAR_R + 20, duration: 16000, size: 2,   color: "#fde68a" },
+];
+
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ── Radar visualization ───────────────────────────────────────────────────────
@@ -147,6 +184,12 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
   const dotPulse = useSharedValue(0);
   const ping1    = useSharedValue(0);
   const ping2    = useSharedValue(0);
+  const twinkle  = useSharedValue(0);
+  const orbit0   = useSharedValue(0);
+  const orbit1   = useSharedValue(0);
+  const orbit2   = useSharedValue(0);
+  const orbit3   = useSharedValue(0);
+  const shimmer  = useSharedValue(0);
 
   useEffect(() => {
     sweep.value = withRepeat(
@@ -177,7 +220,38 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
         false,
       ),
     );
-  }, [sweep, halo, dotPulse, ping1, ping2]);
+    twinkle.value = withRepeat(
+      withTiming(1, { duration: 2200, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    shimmer.value = withRepeat(
+      withTiming(360, { duration: 22000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    // Orbital particles — each independently rotating
+    orbit0.value = withRepeat(
+      withTiming(360, { duration: ORBITS[0].duration, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    orbit1.value = withDelay(800, withRepeat(
+      withTiming(-360, { duration: ORBITS[1].duration, easing: Easing.linear }),
+      -1,
+      false,
+    ));
+    orbit2.value = withDelay(1600, withRepeat(
+      withTiming(360, { duration: ORBITS[2].duration, easing: Easing.linear }),
+      -1,
+      false,
+    ));
+    orbit3.value = withDelay(400, withRepeat(
+      withTiming(-360, { duration: ORBITS[3].duration, easing: Easing.linear }),
+      -1,
+      false,
+    ));
+  }, [sweep, halo, dotPulse, ping1, ping2, twinkle, shimmer, orbit0, orbit1, orbit2, orbit3]);
 
   const sweepStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${sweep.value}deg` }],
@@ -211,6 +285,56 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
     opacity: 0.45 * (1 - ping2.value),
     strokeWidth: 1.5 - ping2.value * 0.8,
   }));
+
+  // Holographic bezel rotates very slowly
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${shimmer.value}deg` }],
+  }));
+
+  // Orbital particle transforms (full-radar-sized rotating wrappers)
+  const orbit0Style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${orbit0.value}deg` }],
+  }));
+  const orbit1Style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${orbit1.value}deg` }],
+  }));
+  const orbit2Style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${orbit2.value}deg` }],
+  }));
+  const orbit3Style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${orbit3.value}deg` }],
+  }));
+  const orbitStyles = [orbit0Style, orbit1Style, orbit2Style, orbit3Style];
+
+  // Twinkle stars — each star phases through opacity
+  const twinkleProps0 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[0].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleProps1 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[1].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleProps2 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[2].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleProps3 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[3].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleProps4 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[4].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleProps5 = useAnimatedProps(() => {
+    const t = (twinkle.value + TWINKLE_STARS[5].phase) % 1;
+    return { opacity: 0.2 + Math.abs(0.5 - t) * 1.6 };
+  });
+  const twinkleAll = [
+    twinkleProps0, twinkleProps1, twinkleProps2,
+    twinkleProps3, twinkleProps4, twinkleProps5,
+  ];
 
   // Stable angles per risk: golden angle so they spread nicely
   const dots = useMemo(() => {
@@ -254,20 +378,21 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
         >
           <Defs>
             <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%"   stopColor="#1a2545" stopOpacity="1" />
+              <Stop offset="0%"   stopColor="#1f2a55" stopOpacity="1" />
               <Stop offset="55%"  stopColor="#0a1430" stopOpacity="1" />
               <Stop offset="100%" stopColor="#02060f" stopOpacity="1" />
+            </RadialGradient>
+            <RadialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%"   stopColor="#a5f3fc" stopOpacity="0.6" />
+              <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
             </RadialGradient>
           </Defs>
 
           {/* Background disc */}
           <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4} fill="url(#bg)" />
-
-          {/* Bezel chrome (double ring) */}
-          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
-            stroke="#22d3ee" strokeWidth={2} strokeOpacity={0.6} fill="none" />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R}
-            stroke="#67e8f9" strokeWidth={1} strokeOpacity={0.3} fill="none" />
+          {/* Soft center glow (radial) */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.45}
+            fill="url(#centerGlow)" />
 
           {/* Tick marks */}
           {TICKS.map((t, i) => (
@@ -275,21 +400,32 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
               x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
               stroke="#67e8f9"
               strokeWidth={t.isCardinal ? 1.8 : 1}
-              strokeOpacity={t.isCardinal ? 0.75 : 0.32} />
+              strokeOpacity={t.isCardinal ? 0.85 : 0.38} />
           ))}
 
-          {/* Cosmic background stars */}
-          {BG_STARS.map((s, i) => (
-            <Circle key={`star-${i}`}
+          {/* Cosmic background stars (excluding twinkle positions) */}
+          {BG_STARS.map((s, i) => {
+            if (TWINKLE_INDICES.has(i)) return null;
+            return (
+              <Circle key={`star-${i}`}
+                cx={s.x} cy={s.y} r={s.r}
+                fill="#fff" fillOpacity={s.op} />
+            );
+          })}
+
+          {/* Twinkling stars (animated) */}
+          {TWINKLE_STARS.map((s, i) => (
+            <AnimatedCircle key={`tw-${i}`}
               cx={s.x} cy={s.y} r={s.r}
-              fill="#fff" fillOpacity={s.op} />
+              fill="#a5f3fc"
+              animatedProps={twinkleAll[i]} />
           ))}
 
           {/* Concentric rings (severity zones) */}
           {[0.85, 0.62, 0.4].map((p, i) => (
             <Circle key={`ring-${i}`}
               cx={RADAR_C} cy={RADAR_C} r={RADAR_R * p}
-              stroke="rgba(34,211,238,0.22)" strokeWidth={1} fill="none"
+              stroke="rgba(34,211,238,0.25)" strokeWidth={1} fill="none"
               strokeDasharray={i === 1 ? "3 5" : undefined} />
           ))}
 
@@ -303,7 +439,21 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
                 x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
                 stroke="#22d3ee"
                 strokeWidth={isCardinal ? 1 : 0.6}
-                strokeOpacity={isCardinal ? 0.18 : 0.10} />
+                strokeOpacity={isCardinal ? 0.20 : 0.12} />
+            );
+          })}
+
+          {/* Degree labels (subtle, technical readout) */}
+          {DEGREE_LABELS.map((d, i) => {
+            if (d.isCardinal) return null;
+            return (
+              <SvgText key={`deg-${i}`}
+                x={d.x} y={d.y}
+                fill="#67e8f9"
+                fillOpacity={0.45}
+                fontSize="7"
+                fontWeight="700"
+                textAnchor="middle">{d.label}</SvgText>
             );
           })}
 
@@ -323,11 +473,45 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
           <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
             stroke="#67e8f9" fill="none" animatedProps={ping2Props} />
 
-          {/* Center hub */}
-          <Circle cx={RADAR_C} cy={RADAR_C} r={6} fill="#22d3ee" fillOpacity={0.3} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={3.5} fill="#22d3ee" />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={1.5} fill="#fff" />
+          {/* Premium center hub (5-layer glow stack) */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={11} fill="#22d3ee" fillOpacity={0.12} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={7}  fill="#22d3ee" fillOpacity={0.30} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={4.5} fill="#67e8f9" />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={2.5} fill="#fff" fillOpacity={0.95} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={1}   fill="#fff" />
         </Svg>
+
+        {/* Holographic shimmer bezel (slowly rotating) */}
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              left:   HALO_PAD,
+              top:    HALO_PAD,
+              width:  RADAR_SIZE,
+              height: RADAR_SIZE,
+            },
+            shimmerStyle,
+          ]}
+          pointerEvents="none"
+        >
+          <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
+            <Defs>
+              <SvgLinearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.95" />
+                <Stop offset="33%"  stopColor="#a78bfa" stopOpacity="0.75" />
+                <Stop offset="66%"  stopColor="#67e8f9" stopOpacity="0.95" />
+                <Stop offset="100%" stopColor="#fde68a" stopOpacity="0.6" />
+              </SvgLinearGradient>
+            </Defs>
+            {/* Outer holographic bezel */}
+            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
+              stroke="url(#bezelGrad)" strokeWidth={2.5} fill="none" />
+            {/* Inner soft accent ring */}
+            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R}
+              stroke="url(#bezelGrad)" strokeWidth={1} fill="none" strokeOpacity={0.55} />
+          </Svg>
+        </Animated.View>
 
         {/* Animated sweep beam (rotating wedge) */}
         <Animated.View
@@ -341,35 +525,76 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
             },
             sweepStyle,
           ]}
+          pointerEvents="none"
         >
           <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
             <Defs>
               <RadialGradient id="sweep" cx="50%" cy="50%" r="50%">
-                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.65" />
+                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.7" />
                 <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
               </RadialGradient>
             </Defs>
             <Path d={SWEEP_PATH} fill="url(#sweep)" />
-            {/* Glowing leading edge */}
-            <Line
-              x1={RADAR_C} y1={RADAR_C}
-              x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#a5f3fc" strokeWidth={2.5} strokeOpacity={0.95}
-              strokeLinecap="round"
-            />
-            <Line
-              x1={RADAR_C} y1={RADAR_C}
-              x2={RADAR_C} y2={RADAR_C - RADAR_R}
-              stroke="#fff" strokeWidth={1} strokeOpacity={0.7}
-              strokeLinecap="round"
-            />
-            {/* Tip glow */}
+            {/* Leading edge — 4-line glow stack */}
+            <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#22d3ee" strokeWidth={6} strokeOpacity={0.22}
+              strokeLinecap="round" />
+            <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#67e8f9" strokeWidth={4} strokeOpacity={0.50}
+              strokeLinecap="round" />
+            <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#a5f3fc" strokeWidth={2} strokeOpacity={0.95}
+              strokeLinecap="round" />
+            <Line x1={RADAR_C} y1={RADAR_C} x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#fff" strokeWidth={0.8} strokeOpacity={0.85}
+              strokeLinecap="round" />
+            {/* Tip glow stack */}
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={8}
+              fill="#22d3ee" fillOpacity={0.25} />
             <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={5}
               fill="#a5f3fc" fillOpacity={0.85} />
             <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={2.5}
               fill="#fff" />
           </Svg>
         </Animated.View>
+
+        {/* Orbital particles (outside bezel) */}
+        {ORBITS.map((orb, i) => {
+          const startPos = polar(0, orb.radius); // top of radar
+          return (
+            <Animated.View
+              key={`orbit-${i}`}
+              pointerEvents="none"
+              style={[
+                {
+                  position: "absolute",
+                  left:   HALO_PAD,
+                  top:    HALO_PAD,
+                  width:  RADAR_SIZE,
+                  height: RADAR_SIZE,
+                },
+                orbitStyles[i],
+              ]}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  left: startPos.x - orb.size,
+                  top:  startPos.y - orb.size,
+                  width:  orb.size * 2,
+                  height: orb.size * 2,
+                  borderRadius: orb.size,
+                  backgroundColor: orb.color,
+                  shadowColor: orb.color,
+                  shadowOpacity: 0.7,
+                  shadowRadius: 4,
+                  shadowOffset: { width: 0, height: 0 },
+                  elevation: 3,
+                }}
+              />
+            </Animated.View>
+          );
+        })}
 
         {/* Risk dots (with ripple halos) */}
         {dots.map((d, i) => (

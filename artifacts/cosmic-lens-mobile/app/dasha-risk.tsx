@@ -14,15 +14,16 @@ import {
 } from "react-native";
 import Animated, {
   Easing,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import Svg, {
   Circle,
   Defs,
-  G,
   Line,
   Path,
   RadialGradient,
@@ -107,32 +108,108 @@ function buildWedgePath(startAngle: number, endAngle: number): string {
   return `M ${RADAR_C} ${RADAR_C} L ${start.x} ${start.y} A ${RADAR_R} ${RADAR_R} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
 }
 
-const SWEEP_PATH = buildWedgePath(-55, 0); // 55° trailing wedge
+const SWEEP_PATH = buildWedgePath(-70, 0); // 70° trailing wedge — wider, more dramatic
+
+// Halo padding around the radar so the outer glow can bleed
+const HALO_PAD  = 22;
+const WRAP_SIZE = RADAR_SIZE + HALO_PAD * 2;
+
+// Pre-computed background "stars" inside the radar (stable, deterministic)
+const BG_STARS = Array.from({ length: 26 }, (_, i) => {
+  const angle  = (i * 53.7) % 360;
+  const radius = ((i * 17 + 11) % (RADAR_R - 24)) + 14;
+  const p      = polar(angle, radius);
+  return {
+    x: p.x,
+    y: p.y,
+    r: 0.5 + ((i * 3) % 4) * 0.3,
+    op: 0.25 + ((i * 11) % 6) / 14,
+  };
+});
+
+// Tick marks around the outer ring (every 15°, longer at cardinals)
+const TICKS = Array.from({ length: 24 }, (_, i) => {
+  const angle      = i * 15;
+  const isCardinal = i % 6 === 0;
+  const innerR     = RADAR_R - (isCardinal ? 14 : 7);
+  const outerR     = RADAR_R - 2;
+  const p1         = polar(angle, innerR);
+  const p2         = polar(angle, outerR);
+  return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, isCardinal };
+});
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ── Radar visualization ───────────────────────────────────────────────────────
 function RadarView({ risks }: { risks: Risk24h[] }) {
-  const sweep = useSharedValue(0);
-  const pulse = useSharedValue(0);
+  const sweep    = useSharedValue(0);
+  const halo     = useSharedValue(0);
+  const dotPulse = useSharedValue(0);
+  const ping1    = useSharedValue(0);
+  const ping2    = useSharedValue(0);
 
   useEffect(() => {
     sweep.value = withRepeat(
-      withTiming(360, { duration: 4500, easing: Easing.linear }),
+      withTiming(360, { duration: 5000, easing: Easing.linear }),
       -1,
       false,
     );
-    pulse.value = withRepeat(
+    halo.value = withRepeat(
+      withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    dotPulse.value = withRepeat(
       withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-  }, [sweep, pulse]);
+    ping1.value = withRepeat(
+      withTiming(1, { duration: 3500, easing: Easing.out(Easing.cubic) }),
+      -1,
+      false,
+    );
+    ping2.value = withDelay(
+      1750,
+      withRepeat(
+        withTiming(1, { duration: 3500, easing: Easing.out(Easing.cubic) }),
+        -1,
+        false,
+      ),
+    );
+  }, [sweep, halo, dotPulse, ping1, ping2]);
 
   const sweepStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${sweep.value}deg` }],
   }));
 
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: 0.35 + pulse.value * 0.55,
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: 0.30 + halo.value * 0.40,
+    transform: [{ scale: 0.96 + halo.value * 0.06 }],
+  }));
+
+  const haloInnerStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 + (1 - halo.value) * 0.4,
+  }));
+
+  const dotPulseStyle = useAnimatedStyle(() => ({
+    opacity: 0.20 + dotPulse.value * 0.55,
+    transform: [{ scale: 0.8 + dotPulse.value * 0.55 }],
+  }));
+
+  const statusDotStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 + dotPulse.value * 0.5,
+  }));
+
+  const ping1Props = useAnimatedProps(() => ({
+    r: 6 + ping1.value * (RADAR_R - 8),
+    opacity: 0.55 * (1 - ping1.value),
+    strokeWidth: 1.5 - ping1.value * 0.8,
+  }));
+  const ping2Props = useAnimatedProps(() => ({
+    r: 6 + ping2.value * (RADAR_R - 8),
+    opacity: 0.45 * (1 - ping2.value),
+    strokeWidth: 1.5 - ping2.value * 0.8,
   }));
 
   // Stable angles per risk: golden angle so they spread nicely
@@ -151,115 +228,208 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
   }, [risks]);
 
   return (
-    <View style={radarS.wrap}>
-      {/* Static base layer */}
-      <Svg
-        width={RADAR_SIZE}
-        height={RADAR_SIZE}
-        style={StyleSheet.absoluteFill}
-      >
-        <Defs>
-          <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%"   stopColor="#0a1830" stopOpacity="1" />
-            <Stop offset="100%" stopColor="#020817" stopOpacity="1" />
-          </RadialGradient>
-        </Defs>
-        {/* Background disc */}
-        <Circle
-          cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
-          fill="url(#bg)"
-          stroke="rgba(34,211,238,0.35)" strokeWidth={1.5}
+    <View style={radarS.outerWrap}>
+      {/* Status bar */}
+      <View style={radarS.statusRow}>
+        <Animated.View
+          style={[radarS.statusDot, statusDotStyle, { backgroundColor: "#22d3ee" }]}
         />
-        {/* Concentric rings */}
-        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.85}
-          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
-        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.62}
-          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
-        <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R * 0.35}
-          stroke="rgba(34,211,238,0.18)" strokeWidth={1} fill="none" />
-        {/* Crosshairs */}
-        <Line
-          x1={RADAR_C} y1={6} x2={RADAR_C} y2={RADAR_SIZE - 6}
-          stroke="rgba(34,211,238,0.18)" strokeWidth={1}
-        />
-        <Line
-          x1={6} y1={RADAR_C} x2={RADAR_SIZE - 6} y2={RADAR_C}
-          stroke="rgba(34,211,238,0.18)" strokeWidth={1}
-        />
-        {/* Compass labels */}
-        <SvgText x={RADAR_C} y={16} fill="rgba(34,211,238,0.55)"
-          fontSize="10" fontWeight="700" textAnchor="middle">N</SvgText>
-        <SvgText x={RADAR_SIZE - 6} y={RADAR_C + 4} fill="rgba(34,211,238,0.55)"
-          fontSize="10" fontWeight="700" textAnchor="end">E</SvgText>
-        <SvgText x={RADAR_C} y={RADAR_SIZE - 6} fill="rgba(34,211,238,0.55)"
-          fontSize="10" fontWeight="700" textAnchor="middle">S</SvgText>
-        <SvgText x={6} y={RADAR_C + 4} fill="rgba(34,211,238,0.55)"
-          fontSize="10" fontWeight="700" textAnchor="start">W</SvgText>
-        {/* Center dot */}
-        <Circle cx={RADAR_C} cy={RADAR_C} r={3} fill="#22d3ee" />
-      </Svg>
+        <Text style={radarS.statusTxt}>SCANNING • LIVE</Text>
+        <View style={radarS.statusSpacer} />
+        <Text style={radarS.statusMeta}>
+          {risks.length} {risks.length === 1 ? "SIGNAL" : "SIGNALS"}
+        </Text>
+      </View>
 
-      {/* Animated sweep beam (rotating wedge) */}
-      <Animated.View style={[StyleSheet.absoluteFill, sweepStyle]}>
-        <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
+      <View style={radarS.wrap}>
+        {/* Outer pulsing halo */}
+        <Animated.View style={[radarS.haloOuter, haloStyle]} />
+        <Animated.View style={[radarS.haloInner, haloInnerStyle]} />
+
+        {/* Static base layer */}
+        <Svg
+          width={RADAR_SIZE}
+          height={RADAR_SIZE}
+          style={{ position: "absolute", left: HALO_PAD, top: HALO_PAD }}
+        >
           <Defs>
-            <RadialGradient id="sweep" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.55" />
-              <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+            <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%"   stopColor="#1a2545" stopOpacity="1" />
+              <Stop offset="55%"  stopColor="#0a1430" stopOpacity="1" />
+              <Stop offset="100%" stopColor="#02060f" stopOpacity="1" />
             </RadialGradient>
           </Defs>
-          <Path d={SWEEP_PATH} fill="url(#sweep)" />
-          {/* Leading edge line */}
-          <Line
-            x1={RADAR_C} y1={RADAR_C}
-            x2={RADAR_C} y2={RADAR_C - RADAR_R}
-            stroke="#67e8f9" strokeWidth={1.5} strokeOpacity={0.95}
-          />
-        </Svg>
-      </Animated.View>
 
-      {/* Risk dots (with pulse halo) */}
-      {dots.map((d, i) => (
-        <View
-          key={`dot-${i}`}
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: d.x - 14,
-            top:  d.y - 14,
-            width: 28, height: 28,
-            alignItems: "center", justifyContent: "center",
-          }}
+          {/* Background disc */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4} fill="url(#bg)" />
+
+          {/* Bezel chrome (double ring) */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
+            stroke="#22d3ee" strokeWidth={2} strokeOpacity={0.6} fill="none" />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R}
+            stroke="#67e8f9" strokeWidth={1} strokeOpacity={0.3} fill="none" />
+
+          {/* Tick marks */}
+          {TICKS.map((t, i) => (
+            <Line key={`tick-${i}`}
+              x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+              stroke="#67e8f9"
+              strokeWidth={t.isCardinal ? 1.8 : 1}
+              strokeOpacity={t.isCardinal ? 0.75 : 0.32} />
+          ))}
+
+          {/* Cosmic background stars */}
+          {BG_STARS.map((s, i) => (
+            <Circle key={`star-${i}`}
+              cx={s.x} cy={s.y} r={s.r}
+              fill="#fff" fillOpacity={s.op} />
+          ))}
+
+          {/* Concentric rings (severity zones) */}
+          {[0.85, 0.62, 0.4].map((p, i) => (
+            <Circle key={`ring-${i}`}
+              cx={RADAR_C} cy={RADAR_C} r={RADAR_R * p}
+              stroke="rgba(34,211,238,0.22)" strokeWidth={1} fill="none"
+              strokeDasharray={i === 1 ? "3 5" : undefined} />
+          ))}
+
+          {/* Spokes — 4 cardinal + 4 diagonal */}
+          {[0, 45, 90, 135].map((angle, i) => {
+            const p1 = polar(angle, RADAR_R - 4);
+            const p2 = polar(angle + 180, RADAR_R - 4);
+            const isCardinal = angle % 90 === 0;
+            return (
+              <Line key={`spoke-${i}`}
+                x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                stroke="#22d3ee"
+                strokeWidth={isCardinal ? 1 : 0.6}
+                strokeOpacity={isCardinal ? 0.18 : 0.10} />
+            );
+          })}
+
+          {/* Compass labels */}
+          <SvgText x={RADAR_C} y={20} fill="#67e8f9"
+            fontSize="11" fontWeight="800" textAnchor="middle">N</SvgText>
+          <SvgText x={RADAR_SIZE - 8} y={RADAR_C + 4} fill="#67e8f9"
+            fontSize="11" fontWeight="800" textAnchor="end">E</SvgText>
+          <SvgText x={RADAR_C} y={RADAR_SIZE - 8} fill="#67e8f9"
+            fontSize="11" fontWeight="800" textAnchor="middle">S</SvgText>
+          <SvgText x={8} y={RADAR_C + 4} fill="#67e8f9"
+            fontSize="11" fontWeight="800" textAnchor="start">W</SvgText>
+
+          {/* Sonar pings */}
+          <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
+            stroke="#22d3ee" fill="none" animatedProps={ping1Props} />
+          <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
+            stroke="#67e8f9" fill="none" animatedProps={ping2Props} />
+
+          {/* Center hub */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={6} fill="#22d3ee" fillOpacity={0.3} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={3.5} fill="#22d3ee" />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={1.5} fill="#fff" />
+        </Svg>
+
+        {/* Animated sweep beam (rotating wedge) */}
+        <Animated.View
+          style={[
+            {
+              position: "absolute",
+              left:   HALO_PAD,
+              top:    HALO_PAD,
+              width:  RADAR_SIZE,
+              height: RADAR_SIZE,
+            },
+            sweepStyle,
+          ]}
         >
-          <Animated.View
-            style={[
-              {
-                position: "absolute",
-                width: 28, height: 28, borderRadius: 14,
-                backgroundColor: d.color,
-              },
-              pulseStyle,
-            ]}
-          />
+          <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
+            <Defs>
+              <RadialGradient id="sweep" cx="50%" cy="50%" r="50%">
+                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.65" />
+                <Stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            <Path d={SWEEP_PATH} fill="url(#sweep)" />
+            {/* Glowing leading edge */}
+            <Line
+              x1={RADAR_C} y1={RADAR_C}
+              x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#a5f3fc" strokeWidth={2.5} strokeOpacity={0.95}
+              strokeLinecap="round"
+            />
+            <Line
+              x1={RADAR_C} y1={RADAR_C}
+              x2={RADAR_C} y2={RADAR_C - RADAR_R}
+              stroke="#fff" strokeWidth={1} strokeOpacity={0.7}
+              strokeLinecap="round"
+            />
+            {/* Tip glow */}
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={5}
+              fill="#a5f3fc" fillOpacity={0.85} />
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={2.5}
+              fill="#fff" />
+          </Svg>
+        </Animated.View>
+
+        {/* Risk dots (with ripple halos) */}
+        {dots.map((d, i) => (
           <View
+            key={`dot-${i}`}
+            pointerEvents="none"
             style={{
-              width: 14, height: 14, borderRadius: 7,
-              backgroundColor: d.color,
-              borderWidth: 1.5, borderColor: "#fff",
+              position: "absolute",
+              left: HALO_PAD + d.x - 20,
+              top:  HALO_PAD + d.y - 20,
+              width: 40, height: 40,
               alignItems: "center", justifyContent: "center",
             }}
           >
-            <Text style={radarS.dotIdx}>{d.idx}</Text>
+            {/* Outer ripple ring */}
+            <Animated.View
+              style={[
+                {
+                  position: "absolute",
+                  width: 40, height: 40, borderRadius: 20,
+                  borderWidth: 1.5, borderColor: d.color,
+                },
+                dotPulseStyle,
+              ]}
+            />
+            {/* Inner soft glow */}
+            <View
+              style={{
+                position: "absolute",
+                width: 28, height: 28, borderRadius: 14,
+                backgroundColor: d.color, opacity: 0.30,
+              }}
+            />
+            {/* Solid dot with number badge */}
+            <View
+              style={{
+                width: 20, height: 20, borderRadius: 10,
+                backgroundColor: d.color,
+                borderWidth: 2, borderColor: "#fff",
+                alignItems: "center", justifyContent: "center",
+                shadowColor: d.color,
+                shadowOpacity: 0.9,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 6,
+              }}
+            >
+              <Text style={radarS.dotIdx}>{d.idx}</Text>
+            </View>
           </View>
-        </View>
-      ))}
+        ))}
 
-      {/* Empty-dots note when no risks */}
-      {risks.length === 0 && (
-        <View style={radarS.emptyOverlay} pointerEvents="none">
-          <Text style={radarS.emptyTxt}>All Clear</Text>
-        </View>
-      )}
+        {/* All Clear overlay */}
+        {risks.length === 0 && (
+          <View style={radarS.emptyOverlay} pointerEvents="none">
+            <Text style={radarS.emptyTxt}>ALL CLEAR</Text>
+            <Text style={radarS.emptySub}>Aaj koi major signal nahi</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -570,18 +740,76 @@ export default function DashaRiskScreen() {
 
 // ── Radar styles ──────────────────────────────────────────────────────────────
 const radarS = StyleSheet.create({
-  wrap: {
-    width:  RADAR_SIZE,
-    height: RADAR_SIZE,
+  outerWrap: {
     alignSelf: "center",
-    marginVertical: 8,
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 12,
   },
+
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: WRAP_SIZE - 16,
+    paddingHorizontal: 4,
+    marginBottom: 6,
+    gap: 8,
+  },
+  statusDot: {
+    width: 8, height: 8, borderRadius: 4,
+    shadowColor: "#22d3ee",
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  statusTxt: {
+    color: "#67e8f9",
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 2,
+  },
+  statusSpacer: { flex: 1 },
+  statusMeta: {
+    color: "rgba(167, 243, 252, 0.7)",
+    fontSize: 10,
+    fontFamily: F.bold,
+    letterSpacing: 1.5,
+  },
+
+  wrap: {
+    width:  WRAP_SIZE,
+    height: WRAP_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Outer pulsing halo (soft ring outside the bezel)
+  haloOuter: {
+    position: "absolute",
+    width: WRAP_SIZE - 4,
+    height: WRAP_SIZE - 4,
+    borderRadius: (WRAP_SIZE - 4) / 2,
+    borderWidth: 16,
+    borderColor: "rgba(34, 211, 238, 0.18)",
+  },
+  // Inner sharper halo glow against the bezel
+  haloInner: {
+    position: "absolute",
+    width: RADAR_SIZE + 14,
+    height: RADAR_SIZE + 14,
+    borderRadius: (RADAR_SIZE + 14) / 2,
+    borderWidth: 2,
+    borderColor: "rgba(103, 232, 249, 0.45)",
+  },
+
   dotIdx: {
     color: "#fff",
-    fontSize: 8,
+    fontSize: 10,
     fontFamily: F.extra,
-    lineHeight: 10,
+    lineHeight: 12,
   },
+
   emptyOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -590,8 +818,18 @@ const radarS = StyleSheet.create({
   emptyTxt: {
     color: "#22c55e",
     fontFamily: F.extra,
-    fontSize: 18,
-    letterSpacing: 1,
+    fontSize: 22,
+    letterSpacing: 3,
+    textShadowColor: "rgba(34, 197, 94, 0.55)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  emptySub: {
+    color: "rgba(255,255,255,0.65)",
+    fontFamily: F.semi,
+    fontSize: 11,
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
 });
 

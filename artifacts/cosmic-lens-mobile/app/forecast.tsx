@@ -62,10 +62,11 @@ function scoreToTrend(s: number): "UP"|"MIXED"|"DOWN" {
   return s >= 65 ? "UP" : s <= 40 ? "DOWN" : "MIXED";
 }
 
-// ── Week chart — same visual language as home EnergyChart ───────────────────
-//   Gradient line (red→orange→amber→green), faint area fill, y-grid + axis
-//   labels, dot markers + halos, dates ("27 Apr") under x-axis. Tap a dot to
-//   select that day.
+// ── Week chart — pixel-aligned with home EnergyChart ────────────────────────
+//   Identical viewBox, padding, gradient defs, grid lines, area fill,
+//   stroke widths, dot halos, callout box and footer text. Only differences
+//   from the home chart: 7 points (vs 12), date x-axis labels (vs day names),
+//   and the "selected" dot replaces home's "final/Now" dot for callouts.
 function WeekChart({
   days, scores, selected, onSelect,
 }: {
@@ -73,20 +74,20 @@ function WeekChart({
   onSelect: (i: number) => void;
 }) {
   const C = useC();
+  // Match home EnergyChart exactly.
   const VW  = 340;
-  const VH  = 200;
+  const VH  = 260;
   const PL  = 30;
   const PR  = 14;
   const PT  = 16;
   const GW  = VW - PL - PR;
-  const GH  = 140;
+  const GH  = 190;
   const BOT = PT + GH;
 
   const N    = scores.length;
   const px   = (i: number) => PL + (N <= 1 ? GW / 2 : (i / (N - 1)) * GW);
   const py   = (v: number) => PT + (1 - v / 100) * GH;
 
-  // Smooth bezier curve through the points.
   const buildLinePath = () => {
     if (scores.length < 2) return "";
     let d = `M ${px(0).toFixed(1)},${py(scores[0]).toFixed(1)}`;
@@ -112,11 +113,25 @@ function WeekChart({
 
   const gridLine   = C.isDark ? "rgba(255,255,255,0.05)" : "rgba(140,100,200,0.08)";
   const gridStrong = C.isDark ? "rgba(255,255,255,0.07)" : "rgba(140,100,200,0.12)";
-  const axisLabel  = C.isDark ? "rgba(255,255,255,0.30)" : "rgba(140,100,200,0.5)";
+  const axisLabel  = C.isDark ? "rgba(255,255,255,0.18)" : "rgba(140,100,200,0.4)";
+  const footerText = C.isDark ? "rgba(255,255,255,0.10)" : "rgba(140,100,200,0.35)";
+  const calloutBg  = C.isDark ? "rgba(0,20,10,0.85)" : "rgba(255,255,255,0.92)";
+
+  // Color of the selected dot (and its callout border) on the gradient.
+  const tSel = N <= 1 ? 1 : selected / (N - 1);
+  const selClr = tSel < 0.2 ? "#ff3b3b"
+    : tSel < 0.4 ? "#ff8c00"
+    : tSel < 0.6 ? "#ffd700"
+    : tSel < 0.8 ? "#f59e0b"
+    : "#00ff99";
+
+  const sx = px(selected);
+  const sy = py(scores[selected] ?? 0);
 
   return (
     <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display: "flex" }}>
       <Defs>
+        {/* Identical gradient ids/stops to home EnergyChart. */}
         <SvgGrad id="wg-line" x1={PL} y1="0" x2={PL + GW} y2="0" gradientUnits="userSpaceOnUse">
           <Stop offset="0%"   stopColor="#ff3b3b" />
           <Stop offset="20%"  stopColor="#ff8c00" />
@@ -131,7 +146,7 @@ function WeekChart({
         </SvgGrad>
       </Defs>
 
-      {/* y-axis grid */}
+      {/* y-axis grid (same dash + opacity as home) */}
       {YGRID.map(({ v, y: gy }) => (
         <G key={v}>
           <Line
@@ -146,63 +161,101 @@ function WeekChart({
         </G>
       ))}
 
-      {/* area fill */}
       {scores.length > 1 && <Path d={areaPath} fill="url(#wg-area)" />}
 
-      {/* glow stroke under main line */}
       {scores.length > 1 && (
         <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={14} opacity={0.06} strokeLinecap="round" strokeLinejoin="round" />
       )}
 
-      {/* main gradient line */}
       {scores.length > 1 && (
         <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
       )}
 
-      {/* dot markers + selected halo (tappable) */}
+      {/* Non-selected dot markers — same r=4 halo + r=2 dot as home */}
       {scores.map((s, i) => {
-        const x = px(i), y = py(s);
+        if (i === selected) return null;
         const t = N <= 1 ? 0 : i / (N - 1);
-        // Match the home gradient palette per-stop so each dot color reflects its position.
-        const dotClr = t < 0.2 ? "#ff3b3b"
+        const color = t < 0.2 ? "#ff3b3b"
           : t < 0.4 ? "#ff8c00"
           : t < 0.6 ? "#ffd700"
           : t < 0.8 ? "#f59e0b"
           : "#00ff99";
-        const isSel = i === selected;
+        const x = px(i), y = py(s);
         return (
           <G key={i}>
-            {isSel && (
-              <>
-                <Circle cx={x} cy={y} r={11} fill={dotClr} opacity={0.10} />
-                <Circle cx={x} cy={y} r={7}  fill={dotClr} opacity={0.20} />
-              </>
-            )}
-            <Circle cx={x} cy={y} r={isSel ? 5 : 3.5} fill={dotClr} />
-            {isSel && <Circle cx={x} cy={y} r={1.8} fill="white" opacity={0.95} />}
-            {/* Larger invisible tap target so dots are easy to hit */}
-            <Circle
-              cx={x} cy={y} r={16} fill="transparent"
-              onPress={() => { onSelect(i); Haptics.selectionAsync(); }}
-            />
+            <Circle cx={x} cy={y} r={4} fill={color} opacity={0.10} />
+            <Circle cx={x} cy={y} r={2} fill={color} />
           </G>
         );
       })}
 
-      {/* date labels on x-axis */}
+      {/* Selected dot — pulse-style halo nest matching home's "final dot" */}
+      {scores.length > 0 && (
+        <G>
+          <Circle cx={sx} cy={sy} r={12}  fill={selClr} opacity={0.07} />
+          <Circle cx={sx} cy={sy} r={7}   fill={selClr} opacity={0.14} />
+          <Circle cx={sx} cy={sy} r={4.5} fill={selClr} opacity={0.9} />
+          <Circle cx={sx} cy={sy} r={1.8} fill="white"  opacity={0.95} />
+        </G>
+      )}
+
+      {/* Selected score callout box — same rect/stroke/font as home's final callout.
+          Edge-aware placement: home's chart always selects the rightmost ("Now") dot
+          so it can hard-code "left of dot". Here the user can pick any of 7 days, so
+          we flip the callout to the right of the dot when the left side would clip,
+          and clamp to the chart's horizontal bounds either way. */}
+      {scores.length > 0 && (() => {
+        const W = 38, H = 21, GAP = 14;
+        const minX = PL - 4;
+        const maxX = PL + GW + 4 - W;
+        // Prefer the LEFT side of the dot (matches home). If that would clip past
+        // the left axis labels, flip to the RIGHT side of the dot.
+        let cx = sx - W - GAP;
+        if (cx < minX) cx = sx + GAP;
+        cx = Math.max(minX, Math.min(maxX, cx));
+        const tx = cx + W / 2;
+        return (
+          <G>
+            <Rect x={cx} y={sy - 14} width={W} height={H} rx={7}
+              fill={calloutBg} stroke={selClr} strokeOpacity={0.5} strokeWidth={0.8} />
+            <SvgText x={tx} y={sy + 2.5} textAnchor="middle" fill={selClr} fontSize={11} fontWeight="800">
+              {scores[selected]}
+            </SvgText>
+          </G>
+        );
+      })()}
+
+      {/* Invisible tap targets — placed AFTER markers so they catch presses */}
+      {scores.map((s, i) => {
+        const x = px(i), y = py(s);
+        return (
+          <Circle
+            key={`tap-${i}`}
+            cx={x} cy={y} r={16} fill="transparent"
+            onPress={() => { onSelect(i); Haptics.selectionAsync(); }}
+          />
+        );
+      })}
+
+      {/* Date labels on x-axis (replaces home's "Now" + sparse weekday labels) */}
       {days.map((d, i) => {
         const isSel = i === selected;
         return (
           <SvgText key={i}
             x={px(i)} y={BOT + 16}
             textAnchor="middle"
-            fill={isSel ? "#fbbf24" : axisLabel}
-            fontSize={isSel ? 9 : 8}
-            fontWeight={isSel ? "700" : "500"}>
+            fill={isSel ? selClr : axisLabel}
+            fontSize={isSel ? 8 : 7}
+            fontWeight={isSel ? "700" : "400"}>
             {fmtDate(d.date)}
           </SvgText>
         );
       })}
+
+      {/* Footer signature — same exact line as home */}
+      <SvgText x={VW / 2} y={VH - 4} textAnchor="middle" fill={footerText} fontSize={5.5} letterSpacing={2.5}>
+        NAVATARA  ·  MOON TRANSIT  ·  ASHTAKAVARGA
+      </SvgText>
     </Svg>
   );
 }

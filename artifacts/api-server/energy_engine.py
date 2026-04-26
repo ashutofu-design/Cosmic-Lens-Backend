@@ -445,6 +445,7 @@ def compute_transit_natal_aspects(
     jupiter_today_sign: Optional[int],
     birth_moon_sign:   Optional[int],
     birth_sun_sign:    Optional[int],
+    skip_saturn:       bool = False,
 ) -> Tuple[float, Dict[str, Any]]:
     """
     Step 1: Basic transit interactions with natal Moon & Sun.
@@ -452,6 +453,10 @@ def compute_transit_natal_aspects(
     Sign-based conjunction (1st = same sign) or opposition (7th from natal).
     Saturn-Moon conjunction is intentionally SKIPPED here because Sade Sati
     Madhya overlay already handles that case (would be double-counted).
+
+    FIX 1 (v3.1.1): when caller indicates Sade Sati / Dhaiyya is already
+    active (any Saturn-from-Moon overlay firing), skip the Saturn aspect
+    entirely to prevent double penalty. Mars + Jupiter aspects still apply.
 
     - Transit Saturn  → natal Moon  (opposition only): -12
     - Transit Mars    → natal Moon  (conj or opp):     -8
@@ -463,7 +468,10 @@ def compute_transit_natal_aspects(
     aspects: List[str] = []
 
     # Saturn → natal Moon (opposition only; conjunction handled by Sade Sati)
-    if saturn_today_sign is not None and birth_moon_sign is not None:
+    # FIX 1: skip entirely if Sade Sati / Dhaiyya already active.
+    if (not skip_saturn
+        and saturn_today_sign is not None
+        and birth_moon_sign is not None):
         from_natal = ((saturn_today_sign - birth_moon_sign) % 12) + 1
         if from_natal == 7:
             delta -= 12
@@ -583,39 +591,59 @@ _WEEKDAY_LORDS = {
 _CHALDEAN = ["Saturn", "Jupiter", "Mars", "Sun", "Venus", "Mercury", "Moon"]
 
 # Rahukal segment (1-8) by weekday. Day divided into 8 equal parts from
-# sunrise (assumed 06:00 local) to sunset (assumed 18:00 local) → 1.5 hr each.
+# sunrise to sunset. Per FIX 3 sunrise/sunset are now seasonal (see below).
 _RAHUKAL_SEGMENT = {
-    0: 2,  # Mon  : 07:30-09:00
-    1: 7,  # Tue  : 15:00-16:30
-    2: 5,  # Wed  : 12:00-13:30
-    3: 6,  # Thu  : 13:30-15:00
-    4: 4,  # Fri  : 10:30-12:00
-    5: 3,  # Sat  : 09:00-10:30
-    6: 8,  # Sun  : 16:30-18:00
+    0: 2,  # Mon
+    1: 7,  # Tue
+    2: 5,  # Wed
+    3: 6,  # Thu
+    4: 4,  # Fri
+    5: 3,  # Sat
+    6: 8,  # Sun
 }
 
 
-def _current_hora_lord(weekday: int, hour: int) -> str:
+def _seasonal_sun_times(month: int) -> Tuple[float, float]:
+    """
+    FIX 3 (v3.1.1): lightweight month-based sunrise/sunset approximation
+    (north-Indian latitudes). No external API needed.
+
+    Returns (sunrise_hour, sunset_hour) as decimal local hours.
+    """
+    if month in {11, 12, 1}:        # Winter
+        return 6.5, 17.5            # 06:30 / 17:30
+    if month in {4, 5, 6}:          # Summer
+        return 5.5, 18.75           # 05:30 / 18:45
+    return 6.0, 18.0                # Spring/Monsoon/Autumn default
+
+
+def _current_hora_lord(weekday: int, hour: int, minute: int = 0,
+                       sunrise: float = 6.0) -> str:
     """
     Returns the planetary lord of the current hora.
 
-    First hora of the day (starting at assumed sunrise 06:00) is ruled by the
-    weekday's lord. Subsequent horas cycle through the Chaldean order.
+    First hora of the day (starting at sunrise) is ruled by the weekday's
+    lord. Subsequent horas cycle through the Chaldean order — each hora is
+    1 hour long for simplicity (classical version uses day/8 + night/8).
     """
     day_lord = _WEEKDAY_LORDS[weekday]
     start_idx = _CHALDEAN.index(day_lord)
-    hours_since_sunrise = (hour - 6) % 24
+    current = hour + minute / 60.0
+    hours_since_sunrise = int((current - sunrise) % 24)
     return _CHALDEAN[(start_idx + hours_since_sunrise) % 7]
 
 
-def _is_rahukal(weekday: int, hour: int, minute: int = 0) -> bool:
+def _is_rahukal(weekday: int, hour: int, minute: int = 0,
+                sunrise: float = 6.0, sunset: float = 18.0) -> bool:
     """True if local time falls inside today's Rahukal window."""
     seg = _RAHUKAL_SEGMENT.get(weekday)
     if seg is None:
         return False
-    seg_start = 6 + (seg - 1) * 1.5
-    seg_end   = seg_start + 1.5
-    current   = hour + minute / 60.0
+    day_length = max(0.1, sunset - sunrise)
+    seg_len    = day_length / 8.0
+    seg_start  = sunrise + (seg - 1) * seg_len
+    seg_end    = seg_start + seg_len
+    current    = hour + minute / 60.0
     return seg_start <= current < seg_end
 
 
@@ -638,15 +666,18 @@ def compute_choghadiya_hora_overlay(
     hour    = now_local.hour
     minute  = now_local.minute
 
+    # FIX 3: seasonal sunrise/sunset for accurate Rahukal + Hora windows.
+    sunrise, sunset = _seasonal_sun_times(now_local.month)
+
     delta = 0.0
     flags: List[str] = []
 
-    rahukal = _is_rahukal(weekday, hour, minute)
+    rahukal = _is_rahukal(weekday, hour, minute, sunrise, sunset)
     if rahukal:
         delta -= 6
         flags.append("rahukal")
 
-    hora_lord = _current_hora_lord(weekday, hour)
+    hora_lord = _current_hora_lord(weekday, hour, minute, sunrise)
     hora_kind: Optional[str] = None
     if hora_lord in {"Saturn", "Mars"}:
         delta -= 3
@@ -1374,9 +1405,12 @@ def calculate_energy(user_data: Dict[str, Any],
     md_sandhi_delta = -5.0 if md_sandhi else 0.0
 
     # ── STEP 1: Transit-to-natal aspects ─────────────────────────────────
+    # FIX 1: when Sade Sati / Dhaiyya already firing (saturn_d.active),
+    # skip the Saturn aspect inside Step 1 to prevent double penalty.
     aspect_delta, transit_aspects_d = compute_transit_natal_aspects(
         saturn_sign, mars_sign, jupiter_sign,
         birth_moon_sign, birth_sun_sign,
+        skip_saturn=bool(saturn_d.get("active")),
     )
 
     # ── STEP 2: Jupiter & Mars current-transit overlay ───────────────────
@@ -1393,10 +1427,51 @@ def calculate_energy(user_data: Dict[str, Any],
         pd_planet_for_transit, transit_signs, lagna_sign,
     )
 
+    # ── FIX 2: Global negative-stack cap (-35) ───────────────────────────
+    # Multiple penalties (Saturn + Mars + Tithi + Rahukal + ...) can crush
+    # the score to unrealistic 10-20 range. Sum negative-only deltas; if
+    # they exceed -35, scale them proportionally so total negative = -35.
+    # Positives are NOT clamped — only the penalty side is bounded.
+    overlay_deltas = {
+        "saturn":         saturn_delta,
+        "tithi":          tithi_delta,
+        "md_sandhi":      md_sandhi_delta,
+        "aspects":        aspect_delta,
+        "jupiter_mars":   jup_mars_delta,
+        "time_quality":   time_quality_delta,
+        "pd_transit":     pd_transit_delta,
+    }
+    neg_sum = sum(v for v in overlay_deltas.values() if v < 0)
+    pos_sum = sum(v for v in overlay_deltas.values() if v > 0)
+    neg_cap_active = False
+    if neg_sum < -35.0:
+        scale = -35.0 / neg_sum  # neg_sum is negative → scale ∈ (0, 1)
+        for k, v in overlay_deltas.items():
+            if v < 0:
+                overlay_deltas[k] = v * scale
+        neg_cap_active = True
+        # Re-extract scaled values back to named locals so downstream blocks
+        # (response payload, flags) see the post-cap deltas.
+        saturn_delta_scaled       = overlay_deltas["saturn"]
+        tithi_delta_scaled        = overlay_deltas["tithi"]
+        md_sandhi_delta_scaled    = overlay_deltas["md_sandhi"]
+        aspect_delta_scaled       = overlay_deltas["aspects"]
+        jup_mars_delta_scaled     = overlay_deltas["jupiter_mars"]
+        time_quality_delta_scaled = overlay_deltas["time_quality"]
+        pd_transit_delta_scaled   = overlay_deltas["pd_transit"]
+    else:
+        saturn_delta_scaled       = saturn_delta
+        tithi_delta_scaled        = tithi_delta
+        md_sandhi_delta_scaled    = md_sandhi_delta
+        aspect_delta_scaled       = aspect_delta
+        jup_mars_delta_scaled     = jup_mars_delta
+        time_quality_delta_scaled = time_quality_delta
+        pd_transit_delta_scaled   = pd_transit_delta
+
     raw_energy = (base_energy
-                  + saturn_delta + tithi_delta + md_sandhi_delta
-                  + aspect_delta + jup_mars_delta
-                  + time_quality_delta + pd_transit_delta)
+                  + saturn_delta_scaled + tithi_delta_scaled + md_sandhi_delta_scaled
+                  + aspect_delta_scaled + jup_mars_delta_scaled
+                  + time_quality_delta_scaled + pd_transit_delta_scaled)
 
     # ── Compression curve (pulls high end down) ──────────────────────────
     compressed = _compress_high_end(raw_energy)
@@ -1408,6 +1483,9 @@ def calculate_energy(user_data: Dict[str, Any],
     # Cap at 59 (NOT 60) so _category() returns "Moderate" not "Good"
     # (boundary is score < 60 → Moderate). 60 itself would still display
     # as "Good" while summary says "heavy", a trust-contradiction.
+    # Note: uses ORIGINAL saturn_delta (pre-FIX-2 scaling) so the cap still
+    # triggers correctly even when neg-stack scaling diluted the saturn
+    # contribution to keep the total above -35.
     sade_sati_madhya = (saturn_d.get("active")
                         and saturn_delta <= -20)
     if sade_sati_madhya:
@@ -1431,6 +1509,8 @@ def calculate_energy(user_data: Dict[str, Any],
                            "hai — results thode delayed mil sakte, patience rakho.")
 
     # ── Buckets, confidence, flags ───────────────────────────────────────
+    # Buckets use ORIGINAL deltas (not Fix-2 scaled) so each bucket reflects
+    # true overlay strength even when global cap diluted total raw_energy.
     buckets = _compute_buckets(moon_sc, tara_sc, dasha_sc, av_sc,
                                 saturn_delta, tithi_delta,
                                 tithi_mental_extra)   # STEP 4: mental-only
@@ -1442,6 +1522,47 @@ def calculate_energy(user_data: Dict[str, Any],
         time_quality_d=time_quality_d,
         pd_transit_d=pd_transit_d,
     )
+
+    # ── FIX 4: Volatile day detection ────────────────────────────────────
+    # Count how many distinct major-negative signals are firing today. If
+    # 3 or more stack simultaneously, the day is "unstable" — emit a flag
+    # and append a Hinglish stability nudge to the advice.
+    neg_signals = []
+    if saturn_d.get("active") and saturn_delta <= -10:
+        neg_signals.append("saturn_phase")
+    if "saturn_opposition_natal_moon" in (transit_aspects_d.get("aspects") or []):
+        neg_signals.append("saturn_aspect")
+    if "mars_hit_natal_moon" in (transit_aspects_d.get("aspects") or []):
+        neg_signals.append("mars_hit_moon")
+    if moon_d.get("chandrashtama"):
+        neg_signals.append("chandrashtama")
+    if (tithi_d.get("type") or "").startswith("Rikta"):
+        neg_signals.append("rikta_tithi")
+    if tithi_d.get("special") == "amavasya":
+        neg_signals.append("amavasya")
+    tara_name = (tara_d.get("tara") or "")
+    if tara_name in {"Vipat", "Pratyari", "Naidhana"}:
+        neg_signals.append(f"tara_{tara_name.lower()}")
+    if time_quality_d.get("rahukal"):
+        neg_signals.append("rahukal")
+    if jup_mars_d.get("mars_aspect_moon") or (
+        jup_mars_d.get("mars_house") in {6, 8, 12}
+    ):
+        neg_signals.append("mars_house_or_aspect")
+    if pd_transit_d.get("kind") == "dusthana":
+        neg_signals.append("pd_dusthana")
+    if md_sandhi:
+        neg_signals.append("md_sandhi")
+
+    volatile_day = len(neg_signals) >= 3
+    if volatile_day:
+        active_flags.append({
+            "type":     "volatile_day",
+            "severity": "medium",
+            "signals":  neg_signals,
+        })
+        advice = (advice + " Aaj energy unstable ho sakti hai — "
+                           "consistency maintain karna important hai.")
 
     return {
         "energy_score":     score,
@@ -1474,6 +1595,15 @@ def calculate_energy(user_data: Dict[str, Any],
             "time_quality":      {"delta": time_quality_delta, **time_quality_d},
             # STEP 5 — PD lord transiting house from lagna
             "pd_transit":        {"delta": pd_transit_delta, **pd_transit_d},
+            # FIX 2 — global negative-stack cap meta
+            "negative_cap": {
+                "active":          neg_cap_active,
+                "cap":             -35.0,
+                "raw_negative":    round(neg_sum, 2),
+                "raw_positive":    round(pos_sum, 2),
+            },
+            # FIX 4 — volatile-day flag mirrored into overlays for clients
+            "volatile_day":      bool(volatile_day),
             "base_score":        round(base_energy, 1),
             "after_overlays":    round(raw_energy, 1),
             "after_compression": round(compressed, 1),

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   I18nManager,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { CosmicRadarView, Risk24h } from "@/components/CosmicRadarView";
 import {
   computeRisk,
   DayForecast,
@@ -137,6 +138,31 @@ export default function DashaRiskScreen() {
     return fmtDate(d);
   };
 
+  // Synthesize 1-3 risk dots for the cosmic radar from the selected day's data.
+  // The radar visualization is decorative + indicative — actionable detail lives
+  // in the consolidated card below.
+  const radarRisks = useMemo<Risk24h[]>(() => {
+    const day = days[selected];
+    if (!day) return [];
+    const lvl = day.riskLevel; // "low" | "med" | "high"
+    if (lvl === "high") {
+      return [
+        { level: "high",   title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
+        { level: "medium", title: "Secondary", reason: day.riskCategory, advice: day.riskDhyan },
+        { level: "low",    title: "Watch",     reason: "Routine check",  advice: day.riskRemedy },
+      ];
+    }
+    if (lvl === "med") {
+      return [
+        { level: "medium", title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
+        { level: "low",    title: "Secondary", reason: day.riskCategory, advice: day.riskDhyan },
+      ];
+    }
+    return [
+      { level: "low", title: "Stable", reason: day.riskShort, advice: day.riskKarna },
+    ];
+  }, [days, selected]);
+
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
       <CosmicBg />
@@ -226,6 +252,9 @@ export default function DashaRiskScreen() {
                 })}
               </ScrollView>
             </View>
+
+            {/* Sci-fi cosmic radar visualization (separate section, above the card) */}
+            <CosmicRadarView risks={radarRisks} />
 
             {/* The consolidated 8-section card */}
             <RiskRadarCard

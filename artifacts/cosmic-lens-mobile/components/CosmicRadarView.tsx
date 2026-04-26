@@ -45,7 +45,6 @@ function levelColor(l: RiskLevel): string {
   return "#22c55e";
 }
 
-}
 
 // ── Radar geometry helpers ────────────────────────────────────────────────────
 const RADAR_SIZE = 280;
@@ -723,6 +722,7 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
       </View>
     </View>
   );
+}
 
 const radarS = StyleSheet.create({
   outerWrap: {

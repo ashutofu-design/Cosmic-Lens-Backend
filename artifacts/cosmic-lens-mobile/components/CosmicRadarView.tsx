@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View, StyleSheet } from "react-native";
 import Animated, {
   Easing,
+  runOnJS,
   useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -345,20 +347,117 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
     twinkleProps3, twinkleProps4, twinkleProps5,
   ];
 
-  // Stable angles per risk: golden angle so they spread nicely
-  const dots = useMemo(() => {
-    return risks.map((r, i) => {
-      const angle  = (i * 137.5 + 30) % 360;
-      const radius = severityRadius(r.level);
-      const p      = polar(angle, radius);
-      return {
-        ...p,
-        color: levelColor(r.level),
-        level: r.level,
-        idx:   i + 1,
-      };
+  // ── Wandering threat blips ──────────────────────────────────────────────
+  // Each slot has a pool of candidate positions. The dot fades in, glows,
+  // fades out, then jumps to a different position in its pool — so it never
+  // sits in one place. Each slot has its own rhythm so they don't sync.
+  const POOL_SIZE = 6;
+  const MAX_DOTS  = 3;
+
+  const dotPools = useMemo(() => {
+    return Array.from({ length: MAX_DOTS }, (_, slotIdx) => {
+      const risk      = risks[slotIdx];
+      const baseR     = severityRadius(risk?.level ?? "medium");
+      const baseAngle = (slotIdx * 137.5 + 30) % 360;
+      return Array.from({ length: POOL_SIZE }, (_, k) => {
+        // Spread positions evenly around the circle but anchored at slot's
+        // base angle — and add deterministic jitter so they don't look gridded.
+        const offset    = (k * 360) / POOL_SIZE;
+        const angJitter = ((slotIdx * 7 + k * 13) % 19) - 9;     // ±9°
+        const radJitter = ((slotIdx * 11 + k * 17) % 21) - 10;   // ±10px
+        const angle     = (baseAngle + offset + angJitter + 360) % 360;
+        const radius    = Math.max(28, Math.min(RADAR_R - 18, baseR + radJitter));
+        return polar(angle, radius);
+      });
     });
   }, [risks]);
+
+  // Per-slot lifecycle phases (0 → 1 cycle: fade in, glow, fade out, gap)
+  const phase0 = useSharedValue(0);
+  const phase1 = useSharedValue(0);
+  const phase2 = useSharedValue(0);
+
+  // Per-slot current position index (advances on each cycle)
+  const [posIdx0, setPosIdx0] = useState(0);
+  const [posIdx1, setPosIdx1] = useState(2);
+  const [posIdx2, setPosIdx2] = useState(4);
+
+  // Per-slot zero-arg JS handlers — never pass setters through runOnJS args
+  // (Reanimated argument marshalling is only safe for serializable values).
+  const advance0 = useCallback(() => {
+    setPosIdx0(prev => (prev + 1 + Math.floor(Math.random() * (POOL_SIZE - 1))) % POOL_SIZE);
+  }, []);
+  const advance1 = useCallback(() => {
+    setPosIdx1(prev => (prev + 1 + Math.floor(Math.random() * (POOL_SIZE - 1))) % POOL_SIZE);
+  }, []);
+  const advance2 = useCallback(() => {
+    setPosIdx2(prev => (prev + 1 + Math.floor(Math.random() * (POOL_SIZE - 1))) % POOL_SIZE);
+  }, []);
+
+  useEffect(() => {
+    phase0.value = withRepeat(
+      withTiming(1, { duration: 4200, easing: Easing.linear }), -1, false,
+    );
+    phase1.value = withDelay(1400, withRepeat(
+      withTiming(1, { duration: 4900, easing: Easing.linear }), -1, false,
+    ));
+    phase2.value = withDelay(2800, withRepeat(
+      withTiming(1, { duration: 5400, easing: Easing.linear }), -1, false,
+    ));
+  }, [phase0, phase1, phase2]);
+
+  // Detect cycle wrap (high → low) → jump to a new pool position
+  useAnimatedReaction(
+    () => phase0.value,
+    (curr, prev) => {
+      if (prev !== null && prev > 0.85 && curr < 0.15) runOnJS(advance0)();
+    },
+  );
+  useAnimatedReaction(
+    () => phase1.value,
+    (curr, prev) => {
+      if (prev !== null && prev > 0.85 && curr < 0.15) runOnJS(advance1)();
+    },
+  );
+  useAnimatedReaction(
+    () => phase2.value,
+    (curr, prev) => {
+      if (prev !== null && prev > 0.85 && curr < 0.15) runOnJS(advance2)();
+    },
+  );
+
+  // Lifecycle opacity curve:
+  //   0.00–0.15 fade in │ 0.15–0.55 visible │ 0.55–0.75 fade out │ 0.75–1.00 invisible
+  const lifecycleStyle0 = useAnimatedStyle(() => {
+    const p = phase0.value;
+    let opacity = 0;
+    if (p < 0.15)      opacity = p / 0.15;
+    else if (p < 0.55) opacity = 1;
+    else if (p < 0.75) opacity = 1 - (p - 0.55) / 0.20;
+    return { opacity };
+  });
+  const lifecycleStyle1 = useAnimatedStyle(() => {
+    const p = phase1.value;
+    let opacity = 0;
+    if (p < 0.15)      opacity = p / 0.15;
+    else if (p < 0.55) opacity = 1;
+    else if (p < 0.75) opacity = 1 - (p - 0.55) / 0.20;
+    return { opacity };
+  });
+  const lifecycleStyle2 = useAnimatedStyle(() => {
+    const p = phase2.value;
+    let opacity = 0;
+    if (p < 0.15)      opacity = p / 0.15;
+    else if (p < 0.55) opacity = 1;
+    else if (p < 0.75) opacity = 1 - (p - 0.55) / 0.20;
+    return { opacity };
+  });
+
+  const slots = [
+    { pos: dotPools[0][posIdx0], lifecycle: lifecycleStyle0, present: risks.length >= 1, idx: 1 },
+    { pos: dotPools[1][posIdx1], lifecycle: lifecycleStyle1, present: risks.length >= 2, idx: 2 },
+    { pos: dotPools[2][posIdx2], lifecycle: lifecycleStyle2, present: risks.length >= 3, idx: 3 },
+  ];
 
   return (
     <View style={radarS.outerWrap}>
@@ -527,20 +626,24 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
           </Svg>
         </Animated.View>
 
-        {/* THREAT BLIPS — angry red, large pulsing glow, demands attention */}
-        {dots.map((d, i) => {
+        {/* THREAT BLIPS — wandering: appear, glow, fade, jump elsewhere */}
+        {slots.map((s, i) => {
+          if (!s.present) return null;
           const RED = "#ef4444";
           return (
-            <View
+            <Animated.View
               key={`dot-${i}`}
               pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: HALO_PAD + d.x - 28,
-                top:  HALO_PAD + d.y - 28,
-                width: 56, height: 56,
-                alignItems: "center", justifyContent: "center",
-              }}
+              style={[
+                {
+                  position: "absolute",
+                  left: HALO_PAD + s.pos.x - 28,
+                  top:  HALO_PAD + s.pos.y - 28,
+                  width: 56, height: 56,
+                  alignItems: "center", justifyContent: "center",
+                },
+                s.lifecycle,
+              ]}
             >
               {/* Outer pulsing ripple — wider, blood-red */}
               <Animated.View
@@ -589,9 +692,9 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
                   elevation: 10,
                 }}
               >
-                <Text style={radarS.dotIdx}>{d.idx}</Text>
+                <Text style={radarS.dotIdx}>{s.idx}</Text>
               </View>
-            </View>
+            </Animated.View>
           );
         })}
 

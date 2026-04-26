@@ -556,6 +556,79 @@ export default function ForecastScreen() {
                 <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={16} color={selected === 6 ? C.textDim : C.text} />
               </Pressable>
             </View>
+
+            {/* Selected day's Lucky highlights — same compact card pattern used
+                on the Risk Radar screen (RiskRadarCard.tsx ~688–788), reusing the
+                exact engine fields already attached to every DayForecast by
+                computeRisk(): luckyNumbers, luckyColor, bestTime, avoidTime.
+                Date-deterministic so the same date always renders the same
+                values across screens. Labels are English by design to match the
+                project's English-default policy and the supplied design ref. */}
+            {sel.luckyNumbers?.length > 0 && sel.luckyColor?.hex && sel.bestTime && sel.avoidTime && (
+              <>
+                {/* Lucky Number + Lucky Colour card */}
+                <View style={[s.luckyCard, {
+                  backgroundColor: `${sel.luckyColor.hex}14`,
+                  borderColor:     `${sel.luckyColor.hex}55`,
+                }]}>
+                  <View style={s.luckyTopRow}>
+                    <View style={s.luckyHalf}>
+                      <Text style={[s.luckyMicro, { color: C.textMuted }]}>LUCKY NUMBER</Text>
+                      <View style={[s.luckyNumberBadge, {
+                        borderColor: sel.luckyColor.hex,
+                        backgroundColor: `${sel.luckyColor.hex}22`,
+                      }]}>
+                        <Text style={[s.luckyNumberText, { color: C.text }]}>
+                          {sel.luckyNumbers[0]}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={[s.luckyDivider, { backgroundColor: C.border }]} />
+
+                    <View style={s.luckyHalf}>
+                      <Text style={[s.luckyMicro, { color: C.textMuted }]}>LUCKY COLOUR</Text>
+                      <View style={s.luckyColourRow}>
+                        <View style={[s.luckySwatch, {
+                          backgroundColor: sel.luckyColor.hex,
+                          borderColor: sel.luckyColor.hex === "#f3f4f6"
+                            ? "rgba(255,255,255,0.3)" : "transparent",
+                        }]} />
+                        <Text style={[s.luckyColourName, { color: C.text }]} numberOfLines={1}>
+                          {sel.luckyColor.name}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Best Time + Avoid Time tile pair */}
+                <View style={s.luckyTimeGrid}>
+                  <View style={[s.luckyTimeTile, {
+                    backgroundColor: "rgba(74,222,128,0.08)",
+                    borderColor:     "rgba(74,222,128,0.25)",
+                  }]}>
+                    <Text style={[s.luckyTimeLabel, { color: "#4ade80" }]}>BEST TIME</Text>
+                    <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
+                      {sel.bestTime}
+                    </Text>
+                  </View>
+                  <View style={[s.luckyTimeTile, {
+                    backgroundColor: "rgba(239,68,68,0.08)",
+                    borderColor:     "rgba(239,68,68,0.25)",
+                  }]}>
+                    <Text style={[s.luckyTimeLabel, { color: "#ef4444" }]}>AVOID TIME</Text>
+                    <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
+                      {sel.avoidTime}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={[s.luckyPoweredBy, { color: C.textMuted }]}>
+                  ✨ Powered by Advanced Cosmic Intelligence
+                </Text>
+              </>
+            )}
           </>
         )}
 
@@ -639,4 +712,52 @@ const s = StyleSheet.create({
   },
   unlockTitle: { color: "#fbbf24", fontSize: 13, fontWeight: "600" },
   unlockSub:   { color: "#92704e", fontSize: 11 },
+
+  // ── Lucky Highlights (mirrors Risk Radar's compact lucky panel) ───────────
+  luckyCard: {
+    borderRadius: 14, borderWidth: 1, padding: 14,
+  },
+  luckyTopRow: {
+    flexDirection: "row", alignItems: "center",
+  },
+  luckyHalf: { flex: 1, alignItems: "center", gap: 8 },
+  luckyMicro: {
+    fontSize: 9, fontWeight: "800", letterSpacing: 1.4,
+  },
+  luckyDivider: { width: 1, height: 56, marginHorizontal: 8, opacity: 0.6 },
+  luckyNumberBadge: {
+    width: 52, height: 52, borderRadius: 26, borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
+  luckyNumberText: {
+    fontSize: 22, fontWeight: "800",
+  },
+  luckyColourRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+  },
+  luckySwatch: {
+    width: 22, height: 22, borderRadius: 11, borderWidth: 1,
+  },
+  luckyColourName: {
+    fontSize: 16, fontWeight: "700",
+  },
+
+  luckyTimeGrid: {
+    flexDirection: "row", gap: 10,
+  },
+  luckyTimeTile: {
+    flex: 1, borderRadius: 12, borderWidth: 1,
+    paddingVertical: 12, paddingHorizontal: 12, gap: 4,
+  },
+  luckyTimeLabel: {
+    fontSize: 10, fontWeight: "800", letterSpacing: 1.2,
+  },
+  luckyTimeText: {
+    fontSize: 13, fontWeight: "700", lineHeight: 17,
+  },
+
+  luckyPoweredBy: {
+    fontSize: 10, fontWeight: "600", letterSpacing: 0.6,
+    textAlign: "center", marginTop: 2, opacity: 0.85,
+  },
 });

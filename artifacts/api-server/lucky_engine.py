@@ -269,11 +269,24 @@ _LANG_REASONING: Dict[str, Dict[str, str]] = {
 
 
 def _resolve_lang(lang: Optional[str]) -> str:
-    """Coerce arbitrary lang code to a supported one. Falls back to 'hn'."""
+    """Coerce arbitrary lang code to a supported one.
+
+    Supported set: 13 Indian UI langs (hn, en, hi, or, mr, bn, ta, te, gu,
+    kn, ml, pa, as). For unsupported global UI langs (zh, es, ar, fr, pt,
+    de, ru, ja, id, ko, tr) we fall back to **English**, NOT Hinglish —
+    this keeps the lucky tile consistent with the frontend i18n which also
+    falls back to English labels for those global langs (no
+    "English headers + Hinglish body" mismatch).
+
+    `None` / blank is treated as "no preference" → defaults to 'hn' for
+    backward compatibility with old callers that don't plumb a lang code.
+    """
     if not lang:
         return "hn"
     code = str(lang).strip().lower()
-    return code if code in _LANG_REASONING else "hn"
+    if code in _LANG_REASONING:
+        return code
+    return "en"
 
 
 def _tithi_idx(moon_lon: float, sun_lon: float) -> int:

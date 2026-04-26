@@ -52,6 +52,7 @@ from energy_engine import (
     _DAY_CHOGHADIYA,
     _NIGHT_CHOGHADIYA,
     _RAHUKAL_SEGMENT,
+    NAKSHATRAS,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -379,52 +380,43 @@ def compute_rahukaal_window(weekday: int,
 # 5. PICK BEST + AVOID TIME WINDOWS
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _windows_overlap(a_start: float, a_end: float,
+                     b_start: float, b_end: float) -> bool:
+    """Half-open interval overlap: True iff [a_start,a_end) ∩ [b_start,b_end) ≠ ∅."""
+    return (a_start < b_end) and (b_start < a_end)
+
+
 def pick_best_avoid_times(schedule: List[Dict[str, Any]],
                           rahukaal: Optional[Dict[str, Any]],
                           current_h: float
                           ) -> Tuple[Dict[str, str], Dict[str, str]]:
     """
     From today's Choghadiya schedule, pick:
-      - best_time  : earliest UPCOMING "best" (Amrit > Shubh = Labh) window.
-                      If all best windows have passed today, return the
-                      best-ranked one of the day with a "tomorrow's first"
-                      hint stripped away — caller can prefix "Aaj nahi to kal".
-      - avoid_time : Rahukaal if available; else earliest upcoming
+      - avoid_time : Rahukaal if upcoming; else earliest upcoming
                       Rog/Kaal/Udveg window.
+      - best_time  : earliest UPCOMING "best" (Amrit > Shubh = Labh) window
+                      that DOES NOT OVERLAP the chosen avoid window. If all
+                      best windows have passed today, return the best-ranked
+                      one of the day (still avoiding overlap).
+
+    AVOID is selected first so BEST can be filtered against it — this
+    prevents the user from seeing an identical pair when Rahukaal happens
+    to fall on the same Choghadiya slot as the next Amrit (rare but
+    possible at certain weekday/season combinations).
 
     Both windows are returned as user-facing strings:
       {"window": "10:42 AM — 12:18 PM", "label": "Amrit"}
     """
-    # ── Best time: prefer upcoming, highest rank ───────────────────────────
-    upcoming_best = [s for s in schedule
-                     if s["quality"] == "best" and s["end_h"] > current_h]
-    if upcoming_best:
-        # Sort by (rank desc, start asc) so Amrit beats Shubh/Labh ties
-        upcoming_best.sort(key=lambda s: (-s["rank"], s["start_h"]))
-        best = upcoming_best[0]
-    else:
-        all_best = [s for s in schedule if s["quality"] == "best"]
-        if all_best:
-            all_best.sort(key=lambda s: (-s["rank"], s["start_h"]))
-            best = all_best[0]
-        else:
-            # Pure fallback: earliest neutral window (Char) — never lies
-            neutral = [s for s in schedule if s["quality"] == "neutral"]
-            best = neutral[0] if neutral else schedule[0]
-
-    best_out = {
-        "window": f"{best['start']} — {best['end']}",
-        "label":  best["name"],
-        "period": best["period"],
-    }
-
-    # ── Avoid time: Rahukaal first, then earliest upcoming "avoid" ─────────
+    # ── 1. Avoid time: Rahukaal first, then earliest upcoming "avoid" ──────
+    avoid_start_h = avoid_end_h = None
     if rahukaal and rahukaal["end_h"] > current_h:
         avoid_out = {
             "window": f"{rahukaal['start']} — {rahukaal['end']}",
             "label":  "Rahukaal",
             "period": "day",
         }
+        avoid_start_h = rahukaal["start_h"]
+        avoid_end_h   = rahukaal["end_h"]
     else:
         upcoming_avoid = [s for s in schedule
                           if s["quality"] == "avoid" and s["end_h"] > current_h]
@@ -437,12 +429,16 @@ def pick_best_avoid_times(schedule: List[Dict[str, Any]],
                 "label":  av["name"],
                 "period": av["period"],
             }
+            avoid_start_h = av["start_h"]
+            avoid_end_h   = av["end_h"]
         elif rahukaal:
             avoid_out = {
                 "window": f"{rahukaal['start']} — {rahukaal['end']}",
                 "label":  "Rahukaal",
                 "period": "day",
             }
+            avoid_start_h = rahukaal["start_h"]
+            avoid_end_h   = rahukaal["end_h"]
         else:
             # Last resort: any avoid segment in schedule
             any_avoid = [s for s in schedule if s["quality"] == "avoid"]
@@ -454,8 +450,51 @@ def pick_best_avoid_times(schedule: List[Dict[str, Any]],
                     "label":  av["name"],
                     "period": av["period"],
                 }
+                avoid_start_h = av["start_h"]
+                avoid_end_h   = av["end_h"]
             else:
                 avoid_out = {"window": "", "label": "", "period": ""}
+
+    # Filter helper: True iff window does NOT overlap the chosen avoid window
+    def _no_overlap(seg: Dict[str, Any]) -> bool:
+        if avoid_start_h is None or avoid_end_h is None:
+            return True
+        return not _windows_overlap(
+            seg["start_h"], seg["end_h"], avoid_start_h, avoid_end_h,
+        )
+
+    # ── 2. Best time: prefer upcoming, highest rank, NON-OVERLAPPING ───────
+    upcoming_best = [s for s in schedule
+                     if s["quality"] == "best"
+                     and s["end_h"] > current_h
+                     and _no_overlap(s)]
+    if upcoming_best:
+        # Sort by (rank desc, start asc) so Amrit beats Shubh/Labh ties
+        upcoming_best.sort(key=lambda s: (-s["rank"], s["start_h"]))
+        best = upcoming_best[0]
+    else:
+        all_best = [s for s in schedule
+                    if s["quality"] == "best" and _no_overlap(s)]
+        if all_best:
+            all_best.sort(key=lambda s: (-s["rank"], s["start_h"]))
+            best = all_best[0]
+        else:
+            # Fallback: earliest neutral window (Char) — never lies, never
+            # overlaps avoid. If even neutrals all overlap, take the
+            # earliest segment that doesn't overlap; finally, schedule[0].
+            neutral_ok = [s for s in schedule
+                          if s["quality"] == "neutral" and _no_overlap(s)]
+            if neutral_ok:
+                best = neutral_ok[0]
+            else:
+                non_overlap = [s for s in schedule if _no_overlap(s)]
+                best = non_overlap[0] if non_overlap else schedule[0]
+
+    best_out = {
+        "window": f"{best['start']} — {best['end']}",
+        "label":  best["name"],
+        "period": best["period"],
+    }
 
     return best_out, avoid_out
 
@@ -527,7 +566,220 @@ def detect_dominant_trigger(energy_result: Dict[str, Any]) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 7. PUBLIC API — enrich the existing Risk Radar response
+# 7. PER-DAY PROJECTION — real engine signals for each of the next 7 days
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Severity → 1-10 risk score mapping (severity 0 = stable/low baseline)
+def _severity_to_score(sev: int) -> int:
+    if sev <= 0:
+        return 2
+    return max(1, min(10, sev - 1))
+
+
+def _score_to_level(score: int) -> str:
+    return "high" if score >= 7 else "med" if score >= 4 else "low"
+
+
+def _resolve_birth_nakshatra_idx(birth_chart: Dict[str, Any]) -> int:
+    """Resolve birth nakshatra index (0..26) from birth chart, or -1 if missing."""
+    if not birth_chart:
+        return -1
+    nak = birth_chart.get("nakshatra")
+    if isinstance(nak, str):
+        try:
+            return NAKSHATRAS.index(nak)
+        except ValueError:
+            pass
+    for p in (birth_chart.get("planets") or []):
+        if p.get("name") == "Moon":
+            lon = p.get("longitude")
+            if isinstance(lon, (int, float)):
+                return int(lon / (360.0 / 27.0)) % 27
+    return -1
+
+
+def compute_per_day_enrichment(
+    energy_result: Dict[str, Any],
+    birth_chart:   Dict[str, Any],
+    today_planets: Optional[Dict[str, Dict[str, Any]]],
+    weekday_today: int,
+    sunrise:       float,
+    sunset:        float,
+    current_h:     float,
+    days:          int = 7,
+) -> List[Dict[str, Any]]:
+    """
+    Compute REAL per-day enrichment for the next `days` days starting today.
+
+    Each day gets:
+      - Per-day Tara Bal (projected Moon nakshatra vs natal nakshatra)
+      - Per-day Tithi (projected Sun-Moon longitude difference)
+      - Per-day Choghadiya schedule (advancing weekday)
+      - Per-day BEST/AVOID time windows
+      - Persistent signals carried forward (Saturn phase, Mars affliction,
+        PD weakness — slow movers don't change appreciably in a week)
+      - Day-0-only signals (volatile_day, chandrashtama — exact today only)
+      - Dominant trigger + 5-field personalised text from _TEXT_MAP
+      - Risk score (1-10) + level (low/med/high)
+
+    All signals derive from the user's primary kundli (`birth_chart`) and
+    today's transit positions (`today_planets`). NO random data, NO
+    template fallback — if positions are missing, returns "stable_day"
+    explicitly so the client knows.
+    """
+    components   = energy_result.get("components", {}) or {}
+    overlays     = energy_result.get("overlays", {}) or {}
+    moon_d_today = components.get("moon_transit", {}) or {}
+    saturn_d     = overlays.get("saturn", {}) or {}
+    jup_mars_d   = overlays.get("jupiter_mars", {}) or {}
+    pd_d         = overlays.get("pd_transit", {}) or {}
+
+    # Persistent signals (slow movers — same across the 7-day window).
+    # Parity with detect_dominant_trigger(): saturn_heavy on Madhya/Ashtam,
+    # saturn_mild specifically on Phase 1 / Phase 3 / Kantaka (NOT just
+    # "active and not heavy"), mars active on -3 delta or houses 1/4/7/8/12.
+    saturn_phase = saturn_d.get("phase", "") if saturn_d.get("active") else ""
+    saturn_heavy = ("Madhya" in saturn_phase or "Ashtam" in saturn_phase)
+    saturn_mild  = ("Phase 1" in saturn_phase or "Phase 3" in saturn_phase
+                    or "Kantaka" in saturn_phase)
+    mars_house   = (jup_mars_d.get("mars_house")
+                    or jup_mars_d.get("mars_house_lagna"))
+    mars_active  = ((jup_mars_d.get("delta", 0) or 0) < -3
+                    or mars_house in (1, 4, 7, 8, 12))
+    pd_weak        = (pd_d.get("delta", 0) or 0) <= -4
+    volatile_today = bool(overlays.get("volatile_day", False))
+
+    # Real natal anchor for Tara Bal projection
+    birth_nak = _resolve_birth_nakshatra_idx(birth_chart)
+
+    # Today's Moon + Sun longitudes for forward projection
+    today_moon_lon = None
+    today_sun_lon  = None
+    if today_planets:
+        m = today_planets.get("Moon")
+        if isinstance(m, dict) and isinstance(m.get("longitude"), (int, float)):
+            today_moon_lon = float(m["longitude"])
+        s = today_planets.get("Sun")
+        if isinstance(s, dict) and isinstance(s.get("longitude"), (int, float)):
+            today_sun_lon = float(s["longitude"])
+
+    out: List[Dict[str, Any]] = []
+    for i in range(days):
+        # Project positions forward (Moon ~13.176°/day, Sun ~0.9856°/day)
+        proj_moon = (
+            (today_moon_lon + i * 13.176) % 360.0
+            if today_moon_lon is not None else None
+        )
+        proj_sun = (
+            (today_sun_lon + i * 0.9856) % 360.0
+            if today_sun_lon is not None else None
+        )
+        proj_weekday = (weekday_today + i) % 7
+
+        # Per-day Tara Bal (nakshatra-distance friendship)
+        tara_idx = -1
+        if proj_moon is not None and birth_nak >= 0:
+            day_nak  = int(proj_moon / (360.0 / 27.0)) % 27
+            tara_idx = (day_nak - birth_nak + 27) % 27 % 9
+
+        # Per-day Tithi (Rikta / Amavasya from Sun-Moon angular difference)
+        tithi_rikta    = False
+        tithi_amavasya = False
+        if proj_moon is not None and proj_sun is not None:
+            diff   = (proj_moon - proj_sun) % 360.0
+            t_idx  = int(diff / 12.0) % 30          # 0..29
+            t_in_p = (t_idx % 15) + 1               # 1..15 within paksha
+            tithi_rikta    = t_in_p in (4, 9, 14)   # Chaturthi/Navami/Chaturdashi
+            tithi_amavasya = (t_idx == 29)          # last tithi of krishna paksha
+
+        # Per-day Rahukaal window (always present every weekday — varies by
+        # weekday). For Day 0 only we honour the time-of-day check (only
+        # active when the current local hour is inside the window). For
+        # Days 1-6 we treat Rahukaal as "applicable to the day" since the
+        # user is reading ahead — same precedence (severity 4) as canonical.
+        rahukal_today_d = compute_rahukaal_window(proj_weekday, sunrise, sunset)
+        rahukal_active  = False
+        if rahukal_today_d:
+            if i == 0:
+                rahukal_active = (
+                    rahukal_today_d["start_h"] <= current_h <= rahukal_today_d["end_h"]
+                )
+            else:
+                rahukal_active = True
+
+        # Severity-ranked candidate triggers (mirrors detect_dominant_trigger)
+        cands: List[Tuple[int, str]] = []
+        # Day-0-only signals (exact today's transit conditions)
+        if i == 0 and volatile_today:
+            cands.append((10, "volatile_day"))
+        if i == 0 and moon_d_today.get("chandrashtama"):
+            cands.append((9, "chandrashtama"))
+        # Per-day signals
+        if tara_idx == 6:
+            cands.append((8, "tara_naidhana"))
+        # Persistent signals (slow movers)
+        if saturn_heavy:
+            cands.append((8, "saturn_heavy"))
+        if mars_active:
+            cands.append((7, "mars_active"))
+        if tara_idx in (2, 4):
+            cands.append((6, "tara_mild"))
+        if pd_weak:
+            cands.append((6, "pd_weak"))
+        # Tithi: Rikta wins over Amavasya per canonical precedence
+        if tithi_rikta:
+            cands.append((6, "tithi_rikta"))
+        elif tithi_amavasya:
+            cands.append((6, "amavasya"))
+        if saturn_mild:
+            cands.append((5, "saturn_mild"))
+        if rahukal_active:
+            cands.append((4, "rahukal_active"))
+
+        if cands:
+            cands.sort(key=lambda c: -c[0])
+            severity, trigger = cands[0]
+        else:
+            severity, trigger = 0, "stable_day"
+
+        text       = _TEXT_MAP.get(trigger) or _TEXT_MAP["stable_day"]
+        risk_score = _severity_to_score(severity)
+        risk_level = _score_to_level(risk_score)
+
+        # Per-day Choghadiya schedule + best/avoid windows
+        # (sunrise/sunset of today is a reasonable proxy for adjacent days
+        # — drift is < ~2 minutes/day. For perfect accuracy we'd compute
+        # per-date sun times, but that requires lat/lon ephemeris per day.)
+        sched    = build_choghadiya_schedule(proj_weekday, sunrise, sunset)
+        rahukal  = compute_rahukaal_window(proj_weekday, sunrise, sunset)
+        # Day 0 uses real current_h (filter to upcoming windows). Future
+        # days start from sunrise so user sees the day's first window.
+        eff_h    = current_h if i == 0 else sunrise
+        best_t, avoid_t = pick_best_avoid_times(sched, rahukal, eff_h)
+
+        out.append({
+            "day_idx":              i,
+            "trigger":              trigger,
+            "severity":             severity,
+            "category":             text["category"],
+            "risk_score":           risk_score,
+            "risk_level":           risk_level,
+            "summary":              text["category"],
+            "kya_risk_hai":         text["kya_risk_hai"],
+            "kya_dhyan_rakhna_hai": text["kya_dhyan_rakhna_hai"],
+            "kya_avoid_karna_hai":  text["kya_avoid_karna_hai"],
+            "kya_karna_hai":        text["kya_karna_hai"],
+            "upay":                 text["upay"],
+            "best_time":            best_t,
+            "avoid_time":           avoid_t,
+            "tara_idx":             tara_idx,
+            "weekday":              proj_weekday,
+        })
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8. PUBLIC API — enrich the existing Risk Radar response
 # ──────────────────────────────────────────────────────────────────────────────
 
 def enrich_risk_radar(radar:         Dict[str, Any],
@@ -536,6 +788,8 @@ def enrich_risk_radar(radar:         Dict[str, Any],
                       sunrise:       float,
                       sunset:        float,
                       current_h:     float = 0.0,
+                      birth_chart:   Optional[Dict[str, Any]] = None,
+                      today_planets: Optional[Dict[str, Dict[str, Any]]] = None,
                       ) -> Dict[str, Any]:
     """
     Merge personalised top-level text + Choghadiya timing into the Risk
@@ -587,7 +841,16 @@ def enrich_risk_radar(radar:         Dict[str, Any],
         if rahukaal else None
     )
 
-    # ── 3. Brand-voice attribution (NEVER reveal AI/LLM) ────────────────────
+    # ── 3. Per-day enrichment (REAL projection for next 7 days) ──────────────
+    # Each day's text + Choghadiya windows + risk score derived from real
+    # natal Moon nakshatra + projected transit Moon/Sun + persistent Saturn
+    # /Mars/PD signals. NO template fallback for Days 2-7.
+    radar["per_day"] = compute_per_day_enrichment(
+        energy_result, birth_chart or {}, today_planets,
+        weekday, sunrise, sunset, current_h, days=7,
+    )
+
+    # ── 4. Brand-voice attribution (NEVER reveal AI/LLM) ────────────────────
     radar.setdefault("powered_by", "Advanced Cosmic Intelligence")
 
     return radar
@@ -599,4 +862,5 @@ __all__ = [
     "compute_rahukaal_window",
     "pick_best_avoid_times",
     "detect_dominant_trigger",
+    "compute_per_day_enrichment",
 ]

@@ -304,8 +304,11 @@ export function RiskRadarCard({
   // signals (Chandrashtama, Tara Bal, Sade Sati, Mars affliction, PD weakness,
   // Tithi, Rahukal, Volatile day) with 5-field personalised KYA RISK / DHYAN /
   // AVOID / KARNA / UPAY text + Choghadiya-derived best/avoid windows.
-  // Powered by Advanced Cosmic Intelligence. Day-1 only (today's transit).
-  // Days 2-7 keep the deterministic template (no fake real-time claim).
+  // Powered by Advanced Cosmic Intelligence.
+  //
+  // ALL 7 DAYS use real engine data via response.per_day[0..6] — Day 1 from
+  // today's exact transit, Days 2-7 from projected Moon/Sun + persistent
+  // Saturn/Mars/PD signals. NO template fallback for any day in the window.
   const [riskApi, setRiskApi]         = useState<RiskRadarResponse | null>(null);
   const [riskApiError, setRiskApiErr] = useState<string | null>(null);
   useEffect(() => {
@@ -358,50 +361,70 @@ export function RiskRadarCard({
   const sel = days[selected];
   if (!sel) return null;
 
-  // STRICT no-template-fallback rule for Day 1: only override when ALL real
-  // engine fields are present. Backend may return base radar without
-  // enrichment on partial failure; we must never silently fall back to the
-  // hardcoded RISK_BY_LEVEL template and present it as real signals.
+  // ── Day-offset → per_day index ───────────────────────────────────────
+  // Backend's per_day[0..6] is anchored to TODAY. Each day in `days[]`
+  // carries a real Date; compute its offset from today in calendar days
+  // (local time) so the home Risk Radar (today+6) and the Forecast page
+  // (tomorrow+6) both look up the right per_day entry without any extra
+  // wiring at the call site.
+  const startOfDay = (dt: Date) =>
+    new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+  const todayMs    = startOfDay(new Date());
+  const selOffset  = Math.round((startOfDay(sel.date) - todayMs) / 86400000);
+
+  // STRICT no-template-fallback rule: only override when the real engine
+  // fields are present for THIS specific day. Backend may return base
+  // radar without enrichment on partial failure; we must never silently
+  // fall back to the hardcoded RISK_BY_LEVEL template and present it as
+  // real signals.
+  const perDay = (riskApi?.per_day && selOffset >= 0 && selOffset < riskApi.per_day.length)
+    ? riskApi.per_day[selOffset]
+    : null;
+
   const apiOk: boolean = !!(
     riskApi &&
     riskApi.enriched !== false &&
-    riskApi.top_risk &&
-    riskApi.best_time?.window &&
-    riskApi.avoid_time?.window
+    perDay &&
+    perDay.best_time?.window &&
+    perDay.avoid_time?.window
   );
 
-  // Day-1 unavailable state: API failed OR enrichment incomplete OR still
-  // loading. We replace body with explicit "details unavailable" messaging
-  // (in user's voice, Hinglish) instead of leaking template text.
-  const day1Unavailable = selected === 0 && !apiOk;
-  const day1Loading     = day1Unavailable && !riskApiError && riskApi == null;
+  // Unavailable state: only triggered for days the backend SHOULD cover
+  // (offset 0..6 — both today and the 7-day forecast window). For days
+  // outside that range we keep the existing local computeRisk() template
+  // (already deterministic — never random) and just don't show the
+  // "Powered by" badge.
+  const dayCoveredByApi = selOffset >= 0 && selOffset <= 6;
+  const dayUnavailable  = dayCoveredByApi && !apiOk;
+  const dayLoading      = dayUnavailable && !riskApiError && riskApi == null;
 
-  const unavailMsg = day1Loading
+  const unavailMsg = dayLoading
     ? "Cosmic signals load ho rahe hain…"
     : "Cosmic signals abhi fetch nahi ho paaye — thodi der baad refresh karein.";
 
-  // Override Day 1 (today) with the real backend engine output when present.
-  // API computes from active transit/dasha + Choghadiya — the source of truth.
-  // For Days 2-7, keep the deterministic template (clearly labelled as
-  // forecast trend, not real-time).
-  const selData: DayForecast = (selected === 0 && apiOk && riskApi)
+  // Override with real backend per-day engine output when present.
+  // API computes from active transit/dasha + Choghadiya per day — the
+  // source of truth for ALL 7 days, not just today.
+  const selData: DayForecast = (apiOk && perDay)
     ? {
         ...sel,
-        riskShort:    riskApi.summary             || sel.riskShort,
-        riskCategory: riskApi.top_risk!.category,
-        riskDetail:   riskApi.top_risk!.kya_risk_hai,
-        riskDhyan:    riskApi.top_risk!.kya_dhyan_rakhna_hai,
-        riskAvoid:    riskApi.top_risk!.kya_avoid_karna_hai,
-        riskKarna:    riskApi.top_risk!.kya_karna_hai,
-        riskRemedy:   riskApi.top_risk!.upay,
-        bestTime:     `${riskApi.best_time!.window} (${riskApi.best_time!.label})`,
-        avoidTime:    `${riskApi.avoid_time!.window} (${riskApi.avoid_time!.label})`,
+        riskLevel:    perDay.risk_level,
+        riskScore:    perDay.risk_score,
+        riskShort:    perDay.summary || sel.riskShort,
+        riskCategory: perDay.category,
+        riskDetail:   perDay.kya_risk_hai,
+        riskDhyan:    perDay.kya_dhyan_rakhna_hai,
+        riskAvoid:    perDay.kya_avoid_karna_hai,
+        riskKarna:    perDay.kya_karna_hai,
+        riskRemedy:   perDay.upay,
+        bestTime:     `${perDay.best_time.window} (${perDay.best_time.label})`,
+        avoidTime:    `${perDay.avoid_time.window} (${perDay.avoid_time.label})`,
       }
-    : day1Unavailable
+    : dayUnavailable
       ? {
           ...sel,
           riskShort:    unavailMsg,
-          riskCategory: day1Loading ? "Loading…" : "Unavailable",
+          riskCategory: dayLoading ? "Loading…" : "Unavailable",
           riskDetail:   "—",
           riskDhyan:    "—",
           riskAvoid:    "—",
@@ -419,13 +442,17 @@ export function RiskRadarCard({
   });
 
   const isLocked   = !fullAccess && selected >= FREE_DAYS;
+  // Gauge reflects the SELECTED day's real risk (per_day score when API is
+  // live — otherwise local template). Color + label + marker all derive
+  // from selData so Days 2-7 also show the engine-driven score, not the
+  // stale local one.
   const levelColor =
-    sel.riskLevel === "low" ? "#4ade80" :
-    sel.riskLevel === "med" ? "#fbbf24" : "#ef4444";
+    selData.riskLevel === "low" ? "#4ade80" :
+    selData.riskLevel === "med" ? "#fbbf24" : "#ef4444";
   const levelLabel =
-    sel.riskLevel === "low" ? "LOW" :
-    sel.riskLevel === "med" ? "MEDIUM" : "HIGH";
-  const markerPct  = `${(sel.riskScore / 10) * 100}%` as `${number}%`;
+    selData.riskLevel === "low" ? "LOW" :
+    selData.riskLevel === "med" ? "MEDIUM" : "HIGH";
+  const markerPct  = `${(selData.riskScore / 10) * 100}%` as `${number}%`;
 
   return (
     <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -496,7 +523,7 @@ export function RiskRadarCard({
             <Text style={[s.gaugeMicro, { color: C.textMuted }]}>RISK LEVEL</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={[s.gaugeLevel, { color: levelColor   }]}>{levelLabel}</Text>
-              <Text style={[s.gaugeValue, { color: C.textMuted  }]}>{sel.riskScore}/10</Text>
+              <Text style={[s.gaugeValue, { color: C.textMuted  }]}>{selData.riskScore}/10</Text>
             </View>
           </View>
           <View style={s.gaugeTrack}>
@@ -657,10 +684,11 @@ export function RiskRadarCard({
             </View>
           </View>
 
-          {/* Brand-voice attribution — shown only when real engine data is live.
-              Strict apiOk gate prevents the badge from appearing during loading
+          {/* Brand-voice attribution — shown for ANY day with live engine
+              data (per_day backed by real natal+transit signals). Strict
+              apiOk gate prevents the badge from appearing during loading
               or when enrichment is missing (would otherwise mislead users). */}
-          {selected === 0 && apiOk ? (
+          {apiOk ? (
             <Text style={[s.poweredBy, { color: C.textMuted }]}>
               ✨ Powered by Advanced Cosmic Intelligence
             </Text>

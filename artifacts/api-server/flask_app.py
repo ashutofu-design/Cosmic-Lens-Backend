@@ -2439,7 +2439,9 @@ def risk_radar():
             current_h = (_dt.utcnow() + _td(hours=birth_tz or 5.5)).hour \
                         + (_dt.utcnow() + _td(hours=birth_tz or 5.5)).minute / 60.0
         radar = enrich_risk_radar(radar, energy_result, weekday,
-                                  sunrise_h, sunset_h, current_h)
+                                  sunrise_h, sunset_h, current_h,
+                                  birth_chart=kundli_dict,
+                                  today_planets=today_planets)
         # Verify all expected enrichment keys are present before claiming success
         radar["enriched"] = bool(
             radar.get("top_risk") and

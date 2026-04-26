@@ -25,6 +25,28 @@ export interface RiskTextSegment {
   quality: "best" | "neutral" | "avoid";
 }
 
+// Per-day enrichment from backend — one entry per next 7 days (today = idx 0).
+// All fields are derived from the user's primary kundli + projected transit
+// signals (Tara Bal, Tithi, Choghadiya per weekday). NO template fallback.
+export interface PerDayRisk {
+  day_idx:              number;          // 0..6 (0 = today)
+  trigger:              string;          // signal id
+  severity:             number;          // 0..10 raw severity
+  category:             string;
+  risk_score:           number;          // 1..10 user-facing
+  risk_level:           "low" | "med" | "high";
+  summary:              string;
+  kya_risk_hai:         string;
+  kya_dhyan_rakhna_hai: string;
+  kya_avoid_karna_hai:  string;
+  kya_karna_hai:        string;
+  upay:                 string;
+  best_time:            RiskTextWindow;
+  avoid_time:           RiskTextWindow;
+  tara_idx:             number;          // -1 if natal nakshatra missing
+  weekday:              number;          // 0..6 (Mon..Sun)
+}
+
 export interface RiskRadarLegacyItem {
   level:   "low" | "medium" | "high";
   title:   string;
@@ -47,6 +69,7 @@ export interface RiskRadarResponse {
   avoid_time?:        RiskTextWindow;
   rahukaal_today?:    { start: string; end: string; label: "Rahukaal" } | null;
   choghadiya_today?:  RiskTextSegment[];
+  per_day?:           PerDayRisk[];      // 7 entries (today=0 .. today+6)
   risk_radar_24h:     RiskRadarLegacyItem[];
   risk_radar_7d:      Array<{ range: string; level: string; label: string; advice: string }>;
   powered_by?:        "Advanced Cosmic Intelligence";

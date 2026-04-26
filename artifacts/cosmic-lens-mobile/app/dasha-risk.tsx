@@ -192,6 +192,23 @@ export default function DashaRiskScreen() {
         )}
       </View>
 
+      {/* Top tabs — Risk Radar (active) | 7 Day Forecast */}
+      <View style={[s.tabsRow, { borderBottomColor: C.border, backgroundColor: C.bg }]}>
+        <View style={[s.tabPill, s.tabPillActive, { backgroundColor: "rgba(251,191,36,0.12)", borderColor: "#fbbf24" }]}>
+          <Feather name="radio" size={12} color="#fbbf24" />
+          <Text style={[s.tabPillTxt, { color: "#fbbf24" }]}>Risk Radar</Text>
+        </View>
+        <Pressable
+          onPress={() => { Haptics.selectionAsync(); router.push("/forecast"); }}
+          style={[s.tabPill, { backgroundColor: C.bgCard, borderColor: C.border }]}
+          hitSlop={6}
+        >
+          <Feather name="calendar" size={12} color={C.textMuted} />
+          <Text style={[s.tabPillTxt, { color: C.textMuted }]}>7 Day Forecast</Text>
+          <Feather name="chevron-right" size={12} color={C.textDim} style={{ marginLeft: 2 }} />
+        </Pressable>
+      </View>
+
       <ScrollView
         contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]}
         showsVerticalScrollIndicator={false}
@@ -334,6 +351,30 @@ const s = StyleSheet.create({
     borderRadius: 8, borderWidth: 1,
   },
   demoPillText: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+
+  // Top tabs row (Risk Radar | 7 Day Forecast)
+  tabsRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  tabPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  tabPillActive: {},
+  tabPillTxt: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
 
   content: { padding: 16, gap: 14 },
 

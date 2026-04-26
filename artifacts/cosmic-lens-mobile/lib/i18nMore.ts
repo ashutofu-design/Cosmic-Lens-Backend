@@ -1643,6 +1643,18 @@ export interface MoreT {
   rrLuckyCreateKundliCta:    string;  // "KUNDLI BANAYEIN →"
   rrLuckyDetailsUnavail:     string;  // "Lucky details abhi available nahi hain."
   rrLuckyDayUnavail:         string;  // "Is din ke liye shubh ank aur rang abhi available nahi hain."
+
+  // Risk Radar — 24-hour breakdown / level badges
+  rrSection24hToday:          string;
+  rrSection24hWithDate:       string;
+  rrLabelKyaRisk:             string;
+  rrLabelKyaAvoid:            string;
+  rrLabelKyaKarna:            string;
+  rrLabelUpay:                string;
+  rrLevelLow:                 string;
+  rrLevelMed:                 string;
+  rrLevelHigh:                string;
+  rrLabelRiskLevel:           string;
 }
 
 // English — primary, complete
@@ -3272,6 +3284,18 @@ const EN: MoreT = {
   rrLuckyCreateKundliCta:    "CREATE KUNDLI →",
   rrLuckyDetailsUnavail:     "Lucky details aren't available right now.",
   rrLuckyDayUnavail:         "Lucky number and colour aren't available for this day yet.",
+
+  // Risk Radar — 24-hour breakdown labels (EN)
+  rrSection24hToday:          "NEXT 24 HOURS",
+  rrSection24hWithDate:       "{date} — 24 HOURS",
+  rrLabelKyaRisk:             "WHAT'S THE RISK",
+  rrLabelKyaAvoid:            "WHAT TO AVOID",
+  rrLabelKyaKarna:            "WHAT TO DO",
+  rrLabelUpay:                "REMEDY",
+  rrLevelLow:                 "Low",
+  rrLevelMed:                 "Med",
+  rrLevelHigh:                "High",
+  rrLabelRiskLevel:           "RISK LEVEL",
 };
 
 // Hinglish overrides (only differing keys)
@@ -4678,6 +4702,18 @@ const HN: Partial<MoreT> = {
   rrLuckyCreateKundliCta:    "KUNDLI BANAYEIN →",
   rrLuckyDetailsUnavail:     "Lucky details abhi available nahi hain.",
   rrLuckyDayUnavail:         "Is din ke liye shubh ank aur rang abhi available nahi hain.",
+
+  // Risk Radar — 24-hour breakdown labels (HN)
+  rrSection24hToday:          "AAJ KE 24 GHANTE",
+  rrSection24hWithDate:       "{date} KE 24 GHANTE",
+  rrLabelKyaRisk:             "KYA RISK HAI",
+  rrLabelKyaAvoid:            "KYA AVOID KARNA HAI",
+  rrLabelKyaKarna:            "KYA KARNA HAI",
+  rrLabelUpay:                "UPAY",
+  rrLevelLow:                 "Low",
+  rrLevelMed:                 "Med",
+  rrLevelHigh:                "High",
+  rrLabelRiskLevel:           "RISK LEVEL",
 };
 
 // Hindi overrides (Devanagari)
@@ -6177,6 +6213,18 @@ const HI: Partial<MoreT> = {
   rrLuckyCreateKundliCta:    "कुंडली बनाएँ →",
   rrLuckyDetailsUnavail:     "शुभ विवरण अभी उपलब्ध नहीं हैं।",
   rrLuckyDayUnavail:         "इस दिन के लिए शुभ अंक और रंग अभी उपलब्ध नहीं हैं।",
+
+  // Risk Radar — 24-hour breakdown labels (HI)
+  rrSection24hToday:          "आज के 24 घंटे",
+  rrSection24hWithDate:       "{date} के 24 घंटे",
+  rrLabelKyaRisk:             "क्या जोखिम है",
+  rrLabelKyaAvoid:            "क्या टालना है",
+  rrLabelKyaKarna:            "क्या करना है",
+  rrLabelUpay:                "उपाय",
+  rrLevelLow:                 "कम",
+  rrLevelMed:                 "मध्यम",
+  rrLevelHigh:                "उच्च",
+  rrLabelRiskLevel:           "जोखिम स्तर",
 };
 
 
@@ -7613,6 +7661,18 @@ const BN: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "কুণ্ডলী তৈরি করুন →",
   rrLuckyDetailsUnavail:      "শুভ বিবরণ এই মুহূর্তে উপলব্ধ নেই।",
   rrLuckyDayUnavail:          "এই দিনের জন্য শুভ অঙ্ক ও রঙ এখনো উপলব্ধ নেই।",
+
+  // Risk Radar — 24-hour breakdown labels (BN)
+  rrSection24hToday:          "আজকের ২৪ ঘণ্টা",
+  rrSection24hWithDate:       "{date} এর ২৪ ঘণ্টা",
+  rrLabelKyaRisk:             "কী ঝুঁকি আছে",
+  rrLabelKyaAvoid:            "কী এড়াতে হবে",
+  rrLabelKyaKarna:            "কী করতে হবে",
+  rrLabelUpay:                "প্রতিকার",
+  rrLevelLow:                 "কম",
+  rrLevelMed:                 "মাঝারি",
+  rrLevelHigh:                "বেশি",
+  rrLabelRiskLevel:           "ঝুঁকি স্তর",
 };
 
 const MR: Partial<MoreT> = {
@@ -8895,6 +8955,18 @@ const MR: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "कुंडली तयार करा →",
   rrLuckyDetailsUnavail:      "शुभ तपशील सध्या उपलब्ध नाहीत.",
   rrLuckyDayUnavail:          "या दिवसासाठी शुभ अंक आणि रंग अद्याप उपलब्ध नाहीत.",
+
+  // Risk Radar — 24-hour breakdown labels (MR)
+  rrSection24hToday:          "आजचे २४ तास",
+  rrSection24hWithDate:       "{date} चे २४ तास",
+  rrLabelKyaRisk:             "धोका काय आहे",
+  rrLabelKyaAvoid:            "काय टाळायचे",
+  rrLabelKyaKarna:            "काय करायचे",
+  rrLabelUpay:                "उपाय",
+  rrLevelLow:                 "कमी",
+  rrLevelMed:                 "मध्यम",
+  rrLevelHigh:                "जास्त",
+  rrLabelRiskLevel:           "धोका पातळी",
 };
 
 const TA: Partial<MoreT> = {
@@ -10160,6 +10232,18 @@ const TA: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "ஜாதகத்தை உருவாக்கு →",
   rrLuckyDetailsUnavail:      "அதிர்ஷ்ட விவரங்கள் தற்போது கிடைக்கவில்லை.",
   rrLuckyDayUnavail:          "இந்த நாளுக்கான அதிர்ஷ்ட எண் மற்றும் நிறம் இன்னும் கிடைக்கவில்லை.",
+
+  // Risk Radar — 24-hour breakdown labels (TA)
+  rrSection24hToday:          "இன்றைய 24 மணி நேரம்",
+  rrSection24hWithDate:       "{date} - 24 மணி நேரம்",
+  rrLabelKyaRisk:             "என்ன ஆபத்து உள்ளது",
+  rrLabelKyaAvoid:            "எதைத் தவிர்க்க வேண்டும்",
+  rrLabelKyaKarna:            "என்ன செய்ய வேண்டும்",
+  rrLabelUpay:                "பரிகாரம்",
+  rrLevelLow:                 "குறைவு",
+  rrLevelMed:                 "நடுத்தர",
+  rrLevelHigh:                "அதிகம்",
+  rrLabelRiskLevel:           "ஆபத்து நிலை",
 };
 
 const TE: Partial<MoreT> = {
@@ -11431,6 +11515,18 @@ const TE: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "కుండలి సృష్టించండి →",
   rrLuckyDetailsUnavail:      "శుభ వివరాలు ప్రస్తుతం అందుబాటులో లేవు.",
   rrLuckyDayUnavail:          "ఈ రోజు కోసం శుభ సంఖ్య మరియు రంగు ఇంకా అందుబాటులో లేవు.",
+
+  // Risk Radar — 24-hour breakdown labels (TE)
+  rrSection24hToday:          "నేటి 24 గంటలు",
+  rrSection24hWithDate:       "{date} యొక్క 24 గంటలు",
+  rrLabelKyaRisk:             "ఏ రిస్క్ ఉంది",
+  rrLabelKyaAvoid:            "ఏది తప్పించాలి",
+  rrLabelKyaKarna:            "ఏమి చేయాలి",
+  rrLabelUpay:                "పరిహారం",
+  rrLevelLow:                 "తక్కువ",
+  rrLevelMed:                 "మధ్యమం",
+  rrLevelHigh:                "ఎక్కువ",
+  rrLabelRiskLevel:           "రిస్క్ స్థాయి",
 };
 
 const GU: Partial<MoreT> = {
@@ -12687,6 +12783,18 @@ const GU: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "કુંડળી બનાવો →",
   rrLuckyDetailsUnavail:      "શુભ વિગતો અત્યારે ઉપલબ્ધ નથી.",
   rrLuckyDayUnavail:          "આ દિવસ માટે શુભ અંક અને રંગ હજી ઉપલબ્ધ નથી.",
+
+  // Risk Radar — 24-hour breakdown labels (GU)
+  rrSection24hToday:          "આજના 24 કલાક",
+  rrSection24hWithDate:       "{date}ના 24 કલાક",
+  rrLabelKyaRisk:             "જોખમ શું છે",
+  rrLabelKyaAvoid:            "શું ટાળવું",
+  rrLabelKyaKarna:            "શું કરવું",
+  rrLabelUpay:                "ઉપાય",
+  rrLevelLow:                 "ઓછું",
+  rrLevelMed:                 "મધ્યમ",
+  rrLevelHigh:                "વધારે",
+  rrLabelRiskLevel:           "જોખમ સ્તર",
 };
 
 const KN: Partial<MoreT> = {
@@ -14036,6 +14144,18 @@ const KN: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "ಕುಂಡಲಿ ರಚಿಸಿ →",
   rrLuckyDetailsUnavail:      "ಶುಭ ವಿವರಗಳು ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ.",
   rrLuckyDayUnavail:          "ಈ ದಿನಕ್ಕೆ ಶುಭ ಸಂಖ್ಯೆ ಮತ್ತು ಬಣ್ಣ ಇನ್ನೂ ಲಭ್ಯವಿಲ್ಲ.",
+
+  // Risk Radar — 24-hour breakdown labels (KN)
+  rrSection24hToday:          "ಇಂದಿನ 24 ಗಂಟೆಗಳು",
+  rrSection24hWithDate:       "{date} ರ 24 ಗಂಟೆಗಳು",
+  rrLabelKyaRisk:             "ಯಾವ ಅಪಾಯವಿದೆ",
+  rrLabelKyaAvoid:            "ಏನನ್ನು ತಪ್ಪಿಸಬೇಕು",
+  rrLabelKyaKarna:            "ಏನು ಮಾಡಬೇಕು",
+  rrLabelUpay:                "ಪರಿಹಾರ",
+  rrLevelLow:                 "ಕಡಿಮೆ",
+  rrLevelMed:                 "ಮಧ್ಯಮ",
+  rrLevelHigh:                "ಹೆಚ್ಚು",
+  rrLabelRiskLevel:           "ಅಪಾಯ ಮಟ್ಟ",
 };
 
 const ML: Partial<MoreT> = {
@@ -15284,6 +15404,18 @@ const ML: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "കുണ്ഡലി സൃഷ്ടിക്കൂ →",
   rrLuckyDetailsUnavail:      "ശുഭ വിശദാംശങ്ങൾ ഇപ്പോൾ ലഭ്യമല്ല.",
   rrLuckyDayUnavail:          "ഈ ദിവസത്തിന് ശുഭ സംഖ്യയും നിറവും ഇതുവരെ ലഭ്യമല്ല.",
+
+  // Risk Radar — 24-hour breakdown labels (ML)
+  rrSection24hToday:          "ഇന്നത്തെ 24 മണിക്കൂർ",
+  rrSection24hWithDate:       "{date}ലെ 24 മണിക്കൂർ",
+  rrLabelKyaRisk:             "എന്ത് അപകടമുണ്ട്",
+  rrLabelKyaAvoid:            "എന്ത് ഒഴിവാക്കണം",
+  rrLabelKyaKarna:            "എന്ത് ചെയ്യണം",
+  rrLabelUpay:                "പരിഹാരം",
+  rrLevelLow:                 "കുറവ്",
+  rrLevelMed:                 "ഇടത്തരം",
+  rrLevelHigh:                "ഉയർന്ന",
+  rrLabelRiskLevel:           "അപകട നില",
 };
 
 const PA: Partial<MoreT> = {
@@ -16586,6 +16718,18 @@ const PA: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "ਕੁੰਡਲੀ ਬਣਾਓ →",
   rrLuckyDetailsUnavail:      "ਸ਼ੁਭ ਵੇਰਵੇ ਇਸ ਵੇਲੇ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।",
   rrLuckyDayUnavail:          "ਇਸ ਦਿਨ ਲਈ ਸ਼ੁਭ ਅੰਕ ਅਤੇ ਰੰਗ ਅਜੇ ਉਪਲਬਧ ਨਹੀਂ ਹਨ।",
+
+  // Risk Radar — 24-hour breakdown labels (PA)
+  rrSection24hToday:          "ਅੱਜ ਦੇ 24 ਘੰਟੇ",
+  rrSection24hWithDate:       "{date} ਦੇ 24 ਘੰਟੇ",
+  rrLabelKyaRisk:             "ਕੀ ਖਤਰਾ ਹੈ",
+  rrLabelKyaAvoid:            "ਕੀ ਟਾਲਣਾ ਹੈ",
+  rrLabelKyaKarna:            "ਕੀ ਕਰਨਾ ਹੈ",
+  rrLabelUpay:                "ਉਪਾਅ",
+  rrLevelLow:                 "ਘੱਟ",
+  rrLevelMed:                 "ਦਰਮਿਆਨਾ",
+  rrLevelHigh:                "ਜ਼ਿਆਦਾ",
+  rrLabelRiskLevel:           "ਖਤਰੇ ਦਾ ਪੱਧਰ",
 };
 
 const OR: Partial<MoreT> = {
@@ -17829,6 +17973,18 @@ const OR: Partial<MoreT> = {
   rrLuckyCreateKundliCta:    "କୁଣ୍ଡଳୀ ତିଆରି କରନ୍ତୁ →",
   rrLuckyDetailsUnavail:     "ଶୁଭ ବିବରଣୀ ବର୍ତ୍ତମାନ ଉପଲବ୍ଧ ନାହିଁ।",
   rrLuckyDayUnavail:         "ଏହି ଦିନ ପାଇଁ ଶୁଭ ଅଙ୍କ ଓ ରଙ୍ଗ ଏଯାଏଁ ଉପଲବ୍ଧ ନାହିଁ।",
+
+  // Risk Radar — 24-hour breakdown labels (OR)
+  rrSection24hToday:          "ଆଜିର 24 ଘଣ୍ଟା",
+  rrSection24hWithDate:       "{date}ର 24 ଘଣ୍ଟା",
+  rrLabelKyaRisk:             "କଣ ଝୁଁକ ଅଛି",
+  rrLabelKyaAvoid:            "କଣ ଏଡାଇବେ",
+  rrLabelKyaKarna:            "କଣ କରିବେ",
+  rrLabelUpay:                "ଉପାୟ",
+  rrLevelLow:                 "କମ୍",
+  rrLevelMed:                 "ମଧ୍ୟମ",
+  rrLevelHigh:                "ଉଚ୍ଚ",
+  rrLabelRiskLevel:           "ଝୁଁକି ସ୍ତର",
 };
 
 const AS: Partial<MoreT> = {
@@ -18990,6 +19146,18 @@ const AS: Partial<MoreT> = {
   rrLuckyCreateKundliCta:     "কুণ্ডলী তৈয়াৰ কৰক →",
   rrLuckyDetailsUnavail:      "শুভ বিৱৰণ এই মুহূৰ্তত উপলব্ধ নহয়।",
   rrLuckyDayUnavail:          "এই দিনৰ বাবে শুভ অংক আৰু ৰং এতিয়ালৈ উপলব্ধ নহয়।",
+
+  // Risk Radar — 24-hour breakdown labels (AS)
+  rrSection24hToday:          "আজিৰ ২৪ ঘণ্টা",
+  rrSection24hWithDate:       "{date}ৰ ২৪ ঘণ্টা",
+  rrLabelKyaRisk:             "কি ঝুঁকি আছে",
+  rrLabelKyaAvoid:            "কি এৰাব লাগে",
+  rrLabelKyaKarna:            "কি কৰিব লাগে",
+  rrLabelUpay:                "প্ৰতিকাৰ",
+  rrLevelLow:                 "কম",
+  rrLevelMed:                 "মধ্যম",
+  rrLevelHigh:                "বেছি",
+  rrLabelRiskLevel:           "ঝুঁকি স্তৰ",
 };
 
 const ZH: Partial<MoreT> = {

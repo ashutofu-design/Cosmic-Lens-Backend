@@ -518,9 +518,13 @@ export function RiskRadarCard({
   const levelColor =
     selData.riskLevel === "low" ? "#4ade80" :
     selData.riskLevel === "med" ? "#fbbf24" : "#ef4444";
-  const levelLabel =
-    selData.riskLevel === "low" ? "LOW" :
-    selData.riskLevel === "med" ? "MEDIUM" : "HIGH";
+  // Localized level badge label. Indic scripts have no case so .toUpperCase()
+  // is a safe no-op for them; for Latin scripts (EN/HN) it yields LOW/MED/HIGH
+  // matching the original visual treatment.
+  const levelLabel = (
+    selData.riskLevel === "low"  ? t.rrLevelLow  :
+    selData.riskLevel === "med"  ? t.rrLevelMed  : t.rrLevelHigh
+  ).toUpperCase();
   const markerPct  = `${(selData.riskScore / 10) * 100}%` as `${number}%`;
 
   return (
@@ -589,7 +593,7 @@ export function RiskRadarCard({
         <>
           {/* Gauge */}
           <View style={s.gaugeHead}>
-            <Text style={[s.gaugeMicro, { color: C.textMuted }]}>RISK LEVEL</Text>
+            <Text style={[s.gaugeMicro, { color: C.textMuted }]}>{t.rrLabelRiskLevel.toUpperCase()}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={[s.gaugeLevel, { color: levelColor   }]}>{levelLabel}</Text>
               <Text style={[s.gaugeValue, { color: C.textMuted  }]}>{selData.riskScore}/10</Text>
@@ -602,9 +606,9 @@ export function RiskRadarCard({
             <View style={[s.gaugeMarker, { left: markerPct, backgroundColor: levelColor, shadowColor: levelColor }]} />
           </View>
           <View style={s.gaugeScale}>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Low</Text>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Med</Text>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>High</Text>
+            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>{t.rrLevelLow}</Text>
+            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>{t.rrLevelMed}</Text>
+            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>{t.rrLevelHigh}</Text>
           </View>
 
           {/* Generic warning — shows a spinner when the per-day enrichment
@@ -621,7 +625,12 @@ export function RiskRadarCard({
           <View style={s.bdHead}>
             <Feather name="clock" size={11} color={C.textMuted} />
             <Text style={[s.bdHeadText, { color: C.textMuted }]}>
-              {selected === 0 ? "AAJ KE 24 GHANTE" : `${fmtDate(sel.date).toUpperCase()} KE 24 GHANTE`}
+              {selected === 0
+                ? t.rrSection24hToday
+                : t.rrSection24hWithDate.replace(
+                    "{date}",
+                    fmtDate(sel.date).toUpperCase(),
+                  )}
             </Text>
           </View>
 
@@ -630,7 +639,7 @@ export function RiskRadarCard({
               <Feather name="alert-triangle" size={14} color={levelColor} />
             </View>
             <View style={s.bdText}>
-              <Text style={[s.bdLabel, { color: levelColor }]}>KYA RISK HAI</Text>
+              <Text style={[s.bdLabel, { color: levelColor }]}>{t.rrLabelKyaRisk.toUpperCase()}</Text>
               <Text style={[s.bdBody,  { color: C.text     }]}>{selData.riskDetail}</Text>
             </View>
           </View>
@@ -640,7 +649,7 @@ export function RiskRadarCard({
               <Feather name="x-circle" size={14} color="#ef4444" />
             </View>
             <View style={s.bdText}>
-              <Text style={[s.bdLabel, { color: "#ef4444" }]}>KYA AVOID KARNA HAI</Text>
+              <Text style={[s.bdLabel, { color: "#ef4444" }]}>{t.rrLabelKyaAvoid.toUpperCase()}</Text>
               <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskAvoid}</Text>
             </View>
           </View>
@@ -650,7 +659,7 @@ export function RiskRadarCard({
               <Feather name="check-circle" size={14} color="#4ade80" />
             </View>
             <View style={s.bdText}>
-              <Text style={[s.bdLabel, { color: "#4ade80" }]}>KYA KARNA HAI</Text>
+              <Text style={[s.bdLabel, { color: "#4ade80" }]}>{t.rrLabelKyaKarna.toUpperCase()}</Text>
               <Text style={[s.bdBody,  { color: C.text    }]}>{selData.riskKarna}</Text>
             </View>
           </View>
@@ -659,7 +668,7 @@ export function RiskRadarCard({
           <View style={[s.remedyRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={s.remedyIcon}>🪔</Text>
             <View style={{ flex: 1 }}>
-              <Text style={[s.remedyLabel, { color: C.textMuted }]}>UPAY</Text>
+              <Text style={[s.remedyLabel, { color: C.textMuted }]}>{t.rrLabelUpay.toUpperCase()}</Text>
               <Text style={[s.remedyText,  { color: C.text      }]}>{selData.riskRemedy}</Text>
             </View>
           </View>

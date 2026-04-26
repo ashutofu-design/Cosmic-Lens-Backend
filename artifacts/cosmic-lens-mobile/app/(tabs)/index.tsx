@@ -25,7 +25,7 @@ import { getDemoLabels } from "@/lib/i18nContent";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
-import { fetchTodayEnergy } from "@/lib/energyAPI";
+import { fetchTodayEnergy, type EnergyResult, type EnergyFlag } from "@/lib/energyAPI";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import type { MoonHistoryPoint } from "@/types";
 
@@ -227,10 +227,13 @@ export default function HomeScreen() {
   const [settled,   setSettled]   = useState(false);
   const cancelRef = useRef(false);
 
+  const [backendEnergy, setBackendEnergy] = useState<EnergyResult | null>(null);
+
   useEffect(() => {
     if (!kundli) return;
     cancelRef.current = false;
     setLoading(true); setTargetPts([]); setLabels([]); setSettled(false);
+    setBackendEnergy(null);
 
     // Parallel fetch: moon history (for chart line) + accurate backend energy.
     // Chart line uses the lightweight local calc (visual only), but the hero
@@ -244,6 +247,9 @@ export default function HomeScreen() {
     Promise.all([moonHistPromise, backendEnergyPromise])
       .then(([moonHist, backend]) => {
         if (cancelRef.current) return;
+
+        // Stash full backend result for v3 UI surface (buckets/confidence/flags).
+        if (backend) setBackendEnergy(backend);
 
         if (!moonHist?.points?.length) {
           setLoading(false);
@@ -341,6 +347,7 @@ export default function HomeScreen() {
             showDemo={showDemo}
             loading={!showDemo && loading && targetPts.length === 0}
             L={L}
+            backend={showDemo ? null : backendEnergy}
           />
         </Pressable>
       </Animated.View>
@@ -366,14 +373,57 @@ export default function HomeScreen() {
   );
 }
 
-function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading, L }: {
+// ── v3 helpers — confidence + flag → display + bucket meta ────────────────────
+function confidenceMeta(c?: string): { color: string; label: string } | null {
+  if (c === "high")   return { color: "#10b981", label: "high" };
+  if (c === "medium") return { color: "#f59e0b", label: "med" };
+  if (c === "low")    return { color: "#ef4444", label: "low" };
+  return null;
+}
+
+function flagToDisplay(flag: EnergyFlag): { icon: string; text: string; color: string } {
+  // Defensive fallbacks for every optional field — never render literal "undefined".
+  switch (flag.type) {
+    case "saturn":
+      return { icon: "♄", text: String(flag.phase ?? "Saturn active"), color: "#a78bfa" };
+    case "chandrashtama":
+      return { icon: "🌑", text: "Chandrashtama — mind unsettled", color: "#ef4444" };
+    case "tithi_rikta":
+      return { icon: "📉", text: `${flag.tithi ?? "Rikta"} — energy drain`, color: "#f59e0b" };
+    case "tithi_purna":
+      return { icon: "✨", text: `${flag.tithi ?? "Purna"} — boost`, color: "#10b981" };
+    case "tara":
+      return { icon: "⭐", text: `${flag.name ?? "Tara"} Tara`, color: "#ef4444" };
+    case "md_sandhi":
+      return { icon: "🔄", text: "Mahadasha sandhi", color: "#f59e0b" };
+    case "pd_retrograde":
+      return { icon: "↺", text: `${flag.planet ?? "PD lord"} vakri`, color: "#8b5cf6" };
+  }
+  return { icon: "•", text: "Active flag", color: "#888" };
+}
+
+const BUCKET_META = {
+  physical: { icon: "💪", short: "Phy", color: "#ef4444" },
+  mental:   { icon: "🧘", short: "Mnd", color: "#3b82f6" },
+  luck:     { icon: "🍀", short: "Luk", color: "#10b981" },
+} as const;
+
+function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading, L, backend }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
   L: ReturnType<typeof getHomeLabels>;
+  backend: EnergyResult | null;
 }) {
   const { C: Ctheme } = useColors();
   const displayScore = useCountUp(chartEnergy, 350);
+
+  const conf       = !showDemo ? confidenceMeta(backend?.confidence) : null;
+  const buckets    = !showDemo ? backend?.buckets : null;
+  const topFlag    = !showDemo && backend?.active_flags?.length
+    ? flagToDisplay(backend.active_flags[0])
+    : null;
+
   return (
     <View style={[hero.card, { flex: 1, backgroundColor: "#0f0a24", borderColor: `${insight.color}40`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 0 } } as any]}>
 
@@ -385,6 +435,12 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
             <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
               <Feather name="lock" size={8} color={Ctheme.textDim} />
               <Text style={[hero.demoBadgeText, { color: Ctheme.textDim }]}>{L.demo}</Text>
+            </View>
+          )}
+          {conf && (
+            <View style={[hero.confChip, { borderColor: `${conf.color}55`, backgroundColor: `${conf.color}12` }]}>
+              <View style={[hero.confDot, { backgroundColor: conf.color }]} />
+              <Text style={[hero.confTxt, { color: conf.color }]}>{conf.label}</Text>
             </View>
           )}
         </View>
@@ -405,12 +461,36 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         />
       </View>
 
-      {/* ── Bottom: insight + tap hint ── */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <View style={[hero.insightPill, { backgroundColor: `${insight.color}10`, borderColor: `${insight.color}20` }]}>
-          <Text style={hero.insightIcon}>{insight.icon}</Text>
-          <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
+      {/* ── 3-bucket strip (Physical / Mental / Luck) — backend v3 only ── */}
+      {buckets && (
+        <View style={hero.bucketRow}>
+          {(["physical","mental","luck"] as const).map(k => {
+            const b = buckets[k];
+            const m = BUCKET_META[k];
+            return (
+              <View key={k} style={[hero.bucketChip, { borderColor: `${m.color}30`, backgroundColor: `${m.color}10` }]}>
+                <Text style={hero.bucketIcon}>{m.icon}</Text>
+                <Text style={[hero.bucketShort, { color: `${m.color}` }]}>{m.short}</Text>
+                <Text style={[hero.bucketScore, { color: "rgba(255,255,255,0.85)" }]}>{b.score}</Text>
+              </View>
+            );
+          })}
         </View>
+      )}
+
+      {/* ── Bottom: insight (or top flag) + tap hint ── */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {topFlag ? (
+          <View style={[hero.insightPill, { backgroundColor: `${topFlag.color}10`, borderColor: `${topFlag.color}30` }]}>
+            <Text style={hero.insightIcon}>{topFlag.icon}</Text>
+            <Text style={[hero.insightText, { color: topFlag.color }]} numberOfLines={1}>{topFlag.text}</Text>
+          </View>
+        ) : (
+          <View style={[hero.insightPill, { backgroundColor: `${insight.color}10`, borderColor: `${insight.color}20` }]}>
+            <Text style={hero.insightIcon}>{insight.icon}</Text>
+            <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
+          </View>
+        )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
           <Text style={{ fontSize: 9.5, fontFamily: F.medium, color: `${insight.color}70` }}>{L.forecast7day}</Text>
           <Feather name="chevron-right" size={10} color={`${insight.color}60`} />
@@ -591,9 +671,29 @@ const hero = StyleSheet.create({
   insightPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
     borderWidth: 1, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8,
+    flexShrink: 1, maxWidth: "70%",
   },
   insightIcon: { fontSize: 11 },
-  insightText: { fontSize: 9.5, fontFamily: F.semibold, maxWidth: 140 },
+  insightText: { fontSize: 9.5, fontFamily: F.semibold, maxWidth: 160 },
+  // v3 — confidence chip next to score label
+  confChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderWidth: 1, borderRadius: 6, paddingVertical: 1.5, paddingHorizontal: 5,
+  },
+  confDot: { width: 5, height: 5, borderRadius: 2.5 },
+  confTxt: { fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.5, textTransform: "uppercase" },
+  // v3 — 3-bucket strip below chart
+  bucketRow: {
+    flexDirection: "row", gap: 6, paddingVertical: 2,
+  },
+  bucketChip: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 4, borderWidth: 1, borderRadius: 8,
+    paddingVertical: 4, paddingHorizontal: 6,
+  },
+  bucketIcon:  { fontSize: 11 },
+  bucketShort: { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 0.6 },
+  bucketScore: { fontSize: 11, fontFamily: F.bold, letterSpacing: -0.3 },
 });
 
 // ── Mini cards — full-width horizontal rows ────────────────────────────────────

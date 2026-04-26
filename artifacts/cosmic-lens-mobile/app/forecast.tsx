@@ -62,6 +62,31 @@ function scoreToTrend(s: number): "UP"|"MIXED"|"DOWN" {
   return s >= 65 ? "UP" : s <= 40 ? "DOWN" : "MIXED";
 }
 
+// ── shapeJourney — same exact transform the home EnergyChart uses ────────────
+//   Turns raw scores into an always-rising visual sweep that ENDS at the real
+//   final value. Mid-points carry a small wiggle proportional to their actual
+//   score so the line still has personality, but the overall arc is the same
+//   "journey upward" shape the home chart shows.
+function shapeJourney(rawPts: number[]): number[] {
+  if (rawPts.length === 0) return [];
+  const final = rawPts[rawPts.length - 1];
+  const len   = rawPts.length;
+  const shaped: number[] = [];
+  for (let i = 0; i < len; i++) {
+    const t           = len <= 1 ? 1 : i / (len - 1);
+    const envelope    = Math.pow(t, 1.4);
+    const rawNorm     = rawPts[i] / 100;
+    const wiggle      = (rawNorm - 0.5) * 0.35;
+    const base        = final * envelope;
+    const startOffset = (1 - t) * 8;
+    let val           = base + wiggle * final - startOffset;
+    val = Math.max(2, Math.min(98, val));
+    if (i === len - 1) val = final;
+    shaped.push(Math.round(val));
+  }
+  return shaped;
+}
+
 // ── Week chart — pixel-aligned with home EnergyChart ────────────────────────
 //   Identical viewBox, padding, gradient defs, grid lines, area fill,
 //   stroke widths, dot halos, callout box and footer text. Only differences
@@ -88,12 +113,16 @@ function WeekChart({
   const px   = (i: number) => PL + (N <= 1 ? GW / 2 : (i / (N - 1)) * GW);
   const py   = (v: number) => PT + (1 - v / 100) * GH;
 
+  // VISUAL y-positions = always-rising journey (matches home).
+  // Real scores still drive the callout text + the per-day cards below.
+  const journeyPts = shapeJourney(scores);
+
   const buildLinePath = () => {
-    if (scores.length < 2) return "";
-    let d = `M ${px(0).toFixed(1)},${py(scores[0]).toFixed(1)}`;
+    if (journeyPts.length < 2) return "";
+    let d = `M ${px(0).toFixed(1)},${py(journeyPts[0]).toFixed(1)}`;
     for (let i = 1; i < N; i++) {
-      const x0 = px(i - 1), y0 = py(scores[i - 1]);
-      const x1 = px(i),     y1 = py(scores[i]);
+      const x0 = px(i - 1), y0 = py(journeyPts[i - 1]);
+      const x1 = px(i),     y1 = py(journeyPts[i]);
       const cpx = (x0 + x1) / 2;
       d += ` C ${cpx.toFixed(1)},${y0.toFixed(1)} ${cpx.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
     }
@@ -126,7 +155,8 @@ function WeekChart({
     : "#00ff99";
 
   const sx = px(selected);
-  const sy = py(scores[selected] ?? 0);
+  const sy = py(journeyPts[selected] ?? 0);   // visual position rides the journey curve
+  const realScore = scores[selected] ?? 0;     // actual score shown inside the callout
 
   return (
     <Svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" style={{ display: "flex" }}>
@@ -171,8 +201,9 @@ function WeekChart({
         <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
       )}
 
-      {/* Non-selected dot markers — same r=4 halo + r=2 dot as home */}
-      {scores.map((s, i) => {
+      {/* Non-selected dot markers — same r=4 halo + r=2 dot as home.
+          y is shaped (journeyPts[i]) so all dots ride the rising sweep. */}
+      {scores.map((_, i) => {
         if (i === selected) return null;
         const t = N <= 1 ? 0 : i / (N - 1);
         const color = t < 0.2 ? "#ff3b3b"
@@ -180,7 +211,7 @@ function WeekChart({
           : t < 0.6 ? "#ffd700"
           : t < 0.8 ? "#f59e0b"
           : "#00ff99";
-        const x = px(i), y = py(s);
+        const x = px(i), y = py(journeyPts[i]);
         return (
           <G key={i}>
             <Circle cx={x} cy={y} r={4} fill={color} opacity={0.10} />
@@ -199,17 +230,12 @@ function WeekChart({
         </G>
       )}
 
-      {/* Selected score callout box — same rect/stroke/font as home's final callout.
-          Edge-aware placement: home's chart always selects the rightmost ("Now") dot
-          so it can hard-code "left of dot". Here the user can pick any of 7 days, so
-          we flip the callout to the right of the dot when the left side would clip,
-          and clamp to the chart's horizontal bounds either way. */}
+      {/* Selected score callout — same rect/stroke/font as home's final callout.
+          Edge-aware placement (left of dot by default; flips right if clipped). */}
       {scores.length > 0 && (() => {
         const W = 38, H = 21, GAP = 14;
         const minX = PL - 4;
         const maxX = PL + GW + 4 - W;
-        // Prefer the LEFT side of the dot (matches home). If that would clip past
-        // the left axis labels, flip to the RIGHT side of the dot.
         let cx = sx - W - GAP;
         if (cx < minX) cx = sx + GAP;
         cx = Math.max(minX, Math.min(maxX, cx));
@@ -219,15 +245,16 @@ function WeekChart({
             <Rect x={cx} y={sy - 14} width={W} height={H} rx={7}
               fill={calloutBg} stroke={selClr} strokeOpacity={0.5} strokeWidth={0.8} />
             <SvgText x={tx} y={sy + 2.5} textAnchor="middle" fill={selClr} fontSize={11} fontWeight="800">
-              {scores[selected]}
+              {realScore}
             </SvgText>
           </G>
         );
       })()}
 
-      {/* Invisible tap targets — placed AFTER markers so they catch presses */}
-      {scores.map((s, i) => {
-        const x = px(i), y = py(s);
+      {/* Invisible tap targets — placed AFTER markers so they catch presses.
+          Use journey y-positions so taps line up with the visible dots. */}
+      {scores.map((_, i) => {
+        const x = px(i), y = py(journeyPts[i]);
         return (
           <Circle
             key={`tap-${i}`}
@@ -270,7 +297,10 @@ export default function ForecastScreen() {
   const showDemo = !kundli;
 
   const [days, setDays]       = useState<DayForecast[]>([]);
-  const [selected, setSelected] = useState(0);
+  // Default to the LAST day so the score callout sits on the rightmost (green
+  // gradient end) — exactly like home's "Now" dot. User can tap any other day
+  // to move the highlight; the curve always rises toward whichever day is selected.
+  const [selected, setSelected] = useState(6);
   const [loading, setLoading]   = useState(false);
 
   // Build 7 dates starting from TOMORROW (today is shown on the home screen,

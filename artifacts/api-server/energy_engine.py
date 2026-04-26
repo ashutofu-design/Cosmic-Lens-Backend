@@ -3,13 +3,18 @@ Daily Energy Score Engine for Cosmic Lens
 ==========================================
 
 Computes a Vedic-astrology-based "Today's Energy Score" (0-100) using the
-following weighted formula:
+following weighted formula (recalibrated 2026-04-25 for realism):
 
-    Energy =  Dasha          * 30%
-            + Moon Transit   * 25%
+    Energy =  Moon Transit   * 35%   (raised from 25%)
+            + Dasha          * 25%   (lowered from 30%)
             + Ashtakavarga   * 20%
             + Tara Bal       * 15%
-            + Aspect/Strength* 10%
+            + Aspect/Strength* 5%    (lowered from 10%)
+
+Then OVERLAYS are applied (these can move the final score significantly):
+    - Saturn overlay  : Sade Sati (-10/-20/-10) or Dhaiyya (-10/-15)
+    - Tithi overlay   : Rikta (-5) / Purna (+5)
+    - Compression curve: pulls high end down so 75-85 isn't an everyday occurrence
 
 Each sub-score is independently 0-100 and explained in its own helper.
 The engine is pure Python (no DB / network) so it can be unit-tested and
@@ -76,8 +81,10 @@ COMBUST_ORB = {
     "Jupiter": 11.0, "Venus": 10.0, "Saturn": 15.0,
 }
 
-# Tara Bal mapping (0-8 → score)
-TARA_SCORES = [60, 85, 35, 80, 45, 88, 30, 75, 95]
+# Tara Bal mapping (0-8 → score) — recalibrated 2026-04-25:
+# Wider spread so Naidhana truly hurts and Ati Mitra is a rare gift.
+# Old: [60, 85, 35, 80, 45, 88, 30, 75, 95]
+TARA_SCORES = [50, 78, 25, 72, 40, 82, 18, 70, 92]
 TARA_NAMES  = ["Janma", "Sampat", "Vipat", "Kshema", "Pratyak",
                "Sadhana", "Naidhana", "Mitra", "Ati Mitra"]
 
@@ -292,11 +299,13 @@ def compute_moon_transit_score(moon_today_sign: int,
     very inauspicious; overrides the placement score.
     """
     house = ((moon_today_sign - lagna_sign) % 12) + 1
-    if house in {1, 5, 9, 10}:    score = 85
-    elif house in {4}:            score = 70   # kendra but less
-    elif house in {2, 3, 7, 11}:  score = 68
-    elif house in {6}:            score = 50
-    else:                         score = 40   # 8, 12
+    # Recalibrated 2026-04-25: compressed upper end + harsher dusthana
+    # Old: 85/70/68/50/40 → New: 78/65/60/42/32
+    if house in {1, 5, 9, 10}:    score = 78
+    elif house in {4}:            score = 65
+    elif house in {2, 3, 7, 11}:  score = 60
+    elif house in {6}:            score = 42
+    else:                         score = 32   # 8, 12
 
     detail: Dict[str, Any] = {"house": house, "moon_sign": moon_today_sign,
                               "chandrashtama": False}
@@ -305,12 +314,121 @@ def compute_moon_transit_score(moon_today_sign: int,
         from_natal = ((moon_today_sign - birth_moon_sign) % 12) + 1
         detail["from_natal_moon"] = from_natal
         if from_natal == 8:
-            score = min(score, 25)
+            score = min(score, 20)   # was 25 — tightened
             detail["chandrashtama"] = True
         elif from_natal in {1, 3, 6, 7, 10, 11}:
-            score += 5   # auspicious placements from janma rashi
+            score += 4   # was +5 — slight reduction
 
     return float(max(0, min(100, score))), detail
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6. SATURN OVERLAY — Sade Sati / Dhaiyya (Kantaka + Ashtam Sani)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_saturn_overlay(saturn_today_sign: Optional[int],
+                           birth_moon_sign: Optional[int]
+                           ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Apply Saturn-transit overlay relative to natal Moon.
+    Returns (delta_to_apply_after_weighted_sum, detail).
+    Delta is NEGATIVE (penalty) — added to final energy.
+
+    Sade Sati  = Saturn transits 12th, 1st, or 2nd from natal Moon (~7.5 yrs)
+        Phase 1 (12th): -10  (Aarambh — beginning, restlessness)
+        Phase 2 (1st):  -20  (Madhya — peak intensity)
+        Phase 3 (2nd):  -10  (Antya — closing, financial squeeze)
+
+    Dhaiyya = Saturn transits 4th or 8th from natal Moon (~2.5 yrs each)
+        4th (Kantaka Sani): -10  (home/peace disturbance)
+        8th (Ashtam Sani):  -15  (health/transformation strain)
+    """
+    if saturn_today_sign is None or birth_moon_sign is None:
+        return 0.0, {"active": False, "reason": "saturn_or_moon_missing"}
+
+    from_natal = ((saturn_today_sign - birth_moon_sign) % 12) + 1
+    detail: Dict[str, Any] = {
+        "active":         False,
+        "phase":          None,
+        "saturn_sign":    saturn_today_sign,
+        "from_natal_moon": from_natal,
+    }
+
+    if from_natal == 12:
+        return -10.0, {**detail, "active": True, "phase": "Sade Sati Phase 1 (Aarambh — 12th from Moon)"}
+    if from_natal == 1:
+        return -20.0, {**detail, "active": True, "phase": "Sade Sati Phase 2 (Madhya — Janma Rashi)"}
+    if from_natal == 2:
+        return -10.0, {**detail, "active": True, "phase": "Sade Sati Phase 3 (Antya — 2nd from Moon)"}
+    if from_natal == 4:
+        return -10.0, {**detail, "active": True, "phase": "Kantaka Sani (Saturn in 4th from Moon)"}
+    if from_natal == 8:
+        return -15.0, {**detail, "active": True, "phase": "Ashtam Sani (Saturn in 8th from Moon)"}
+
+    return 0.0, detail
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 7. TITHI OVERLAY — Rikta (-5) / Purna (+5)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_tithi_overlay(sun_lon: Optional[float],
+                          moon_lon: Optional[float]
+                          ) -> Tuple[float, Dict[str, Any]]:
+    """
+    Compute today's tithi from Sun-Moon angular distance.
+    Tithi index 1-30 (1-15 = Shukla Paksha, 16-30 = Krishna Paksha).
+    Within either paksha, position 1-15 determines quality.
+
+    Rikta (4, 9, 14): -5    (drains energy, avoid important launches)
+    Purna (5, 10, 15): +5   (peak/full days, momentum)
+    """
+    if sun_lon is None or moon_lon is None:
+        return 0.0, {"reason": "sun_or_moon_lon_missing"}
+
+    diff = (moon_lon - sun_lon) % 360.0
+    tithi_idx = int(diff / 12.0) + 1                       # 1..30
+    paksha_pos = ((tithi_idx - 1) % 15) + 1                # 1..15
+    paksha_name = "Shukla" if tithi_idx <= 15 else "Krishna"
+
+    TITHI_NAMES = ["Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami",
+                   "Shashthi", "Saptami", "Ashtami", "Navami", "Dashami",
+                   "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi",
+                   "Purnima/Amavasya"]
+    tithi_name = TITHI_NAMES[paksha_pos - 1]
+
+    detail = {
+        "tithi_idx":   tithi_idx,
+        "paksha":      paksha_name,
+        "paksha_pos":  paksha_pos,
+        "tithi_name":  f"{paksha_name} {tithi_name}",
+    }
+
+    if paksha_pos in {4, 9, 14}:
+        return -5.0, {**detail, "type": "Rikta (drain)"}
+    if paksha_pos in {5, 10, 15}:
+        return 5.0, {**detail, "type": "Purna (peak)"}
+    return 0.0, {**detail, "type": "Neutral"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8. COMPRESSION CURVE — pull high scores down so 75-85 isn't every day
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _compress_high_end(score: float) -> float:
+    """
+    Compress upper range so genuinely strong days are rare.
+        Score 50 → 50    (untouched)
+        Score 60 → 60    (untouched)
+        Score 70 → 68    (-2)
+        Score 80 → 76    (-4)
+        Score 90 → 84    (-6)
+        Score 100 → 92   (-8)
+    Lower scores untouched — bad days stay bad.
+    """
+    if score <= 60:
+        return score
+    return score - (score - 60) * 0.20
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -506,7 +624,9 @@ def _summary_and_advice(parts: Dict[str, float],
 
 def calculate_energy(user_data: Dict[str, Any],
                      today_moon: Dict[str, Any],
-                     date_iso: Optional[str] = None) -> Dict[str, Any]:
+                     date_iso: Optional[str] = None,
+                     today_sun: Optional[Dict[str, Any]] = None,
+                     today_saturn: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Compute today's energy score for one user.
 
@@ -564,6 +684,13 @@ def calculate_energy(user_data: Dict[str, Any],
     if "Moon" in _lon_map and "Sun" in _lon_map:
         moon_sun_angle = (_lon_map["Moon"] - _lon_map["Sun"]) % 360.0
 
+    # ── Resolve transit longitudes for overlays ──────────────────────────
+    sun_today_lon: Optional[float] = (today_sun or {}).get("longitude") if isinstance(today_sun, dict) else None
+    sat_today_lon: Optional[float] = (today_saturn or {}).get("longitude") if isinstance(today_saturn, dict) else None
+    saturn_sign: Optional[int] = (today_saturn or {}).get("rashiIndex") if isinstance(today_saturn, dict) else None
+    if saturn_sign is None and isinstance(sat_today_lon, (int, float)):
+        saturn_sign = int(sat_today_lon / 30) % 12
+
     # ── Components ───────────────────────────────────────────────────────
     dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
     moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign, birth_moon_sign)
@@ -571,10 +698,22 @@ def calculate_energy(user_data: Dict[str, Any],
     tara_sc,   tara_d   = compute_tara_score(moon_nak, birth_nak_idx)
     asp_sc,    asp_d    = compute_aspect_strength_score(planets, lagna_sign, moon_sun_angle)
 
-    # ── Weighted aggregate ───────────────────────────────────────────────
-    energy = (dasha_sc * 0.30 + moon_sc * 0.25 + av_sc * 0.20
-              + tara_sc * 0.15 + asp_sc * 0.10)
-    energy = max(0.0, min(100.0, energy))
+    # ── Weighted aggregate (REBALANCED 2026-04-25) ───────────────────────
+    # Moon transit promoted to dominant factor (35% — drives daily mood)
+    # Dasha demoted slightly (25% — long-term cycle, less day-by-day swing)
+    # Aspect/Shadbala demoted (5% — birth-chart strength is static, doesn't change daily)
+    base_energy = (moon_sc * 0.35 + dasha_sc * 0.25 + av_sc * 0.20
+                   + tara_sc * 0.15 + asp_sc * 0.05)
+
+    # ── Overlays ─────────────────────────────────────────────────────────
+    saturn_delta, saturn_d = compute_saturn_overlay(saturn_sign, birth_moon_sign)
+    tithi_delta,  tithi_d  = compute_tithi_overlay(sun_today_lon, moon_lon)
+
+    raw_energy = base_energy + saturn_delta + tithi_delta
+
+    # ── Compression curve (pulls high end down) ──────────────────────────
+    compressed = _compress_high_end(raw_energy)
+    energy = max(0.0, min(100.0, compressed))
     score  = int(round(energy))
     cat, color = _category(energy)
 
@@ -582,8 +721,13 @@ def calculate_energy(user_data: Dict[str, Any],
                "tara": tara_sc,  "asp": asp_sc}
     details = {"dasha_detail": dasha_d, "moon_detail": moon_d,
                "av_detail": av_d, "tara_detail": tara_d,
-               "asp_detail": asp_d}
+               "asp_detail": asp_d,
+               "saturn_overlay": saturn_d, "tithi_overlay": tithi_d}
     summary, advice = _summary_and_advice(parts, details)
+
+    # If Saturn overlay is active, prepend a clear flag to summary
+    if saturn_d.get("active"):
+        summary = f"⚠️ {saturn_d['phase']} chal raha hai — {summary}"
 
     return {
         "energy_score": score,
@@ -593,10 +737,17 @@ def calculate_energy(user_data: Dict[str, Any],
         "advice":       advice,
         "date":         today,
         "components": {
-            "dasha":          {"score": round(dasha_sc, 1), "weight": 0.30, **dasha_d},
-            "moon_transit":   {"score": round(moon_sc, 1),  "weight": 0.25, **moon_d},
+            "moon_transit":   {"score": round(moon_sc, 1),  "weight": 0.35, **moon_d},
+            "dasha":          {"score": round(dasha_sc, 1), "weight": 0.25, **dasha_d},
             "ashtakavarga":   {"score": round(av_sc, 1),    "weight": 0.20, **av_d},
             "tara_bal":       {"score": round(tara_sc, 1),  "weight": 0.15, **tara_d},
-            "aspect_strength":{"score": round(asp_sc, 1),   "weight": 0.10, **asp_d},
+            "aspect_strength":{"score": round(asp_sc, 1),   "weight": 0.05, **asp_d},
+        },
+        "overlays": {
+            "saturn":     {"delta": saturn_delta, **saturn_d},
+            "tithi":      {"delta": tithi_delta,  **tithi_d},
+            "base_score": round(base_energy, 1),
+            "after_overlays": round(raw_energy, 1),
+            "after_compression": round(compressed, 1),
         },
     }

@@ -2093,24 +2093,41 @@ def energy_today():
         except Exception:
             return jsonify({"error": "Saved kundli is corrupted"}), 500
 
-    # ── Compute today's moon (sidereal) ──────────────────────────────────
+    # ── Compute today's Moon, Sun, Saturn (sidereal) ─────────────────────
     jd = swe.julday(day.year, day.month, day.day,
                     day.hour + day.minute / 60.0)
     flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-    moon_lon = swe.calc_ut(jd, swe.MOON, flags)[0][0] % 360.0
+    moon_lon   = swe.calc_ut(jd, swe.MOON,   flags)[0][0] % 360.0
+    sun_lon    = swe.calc_ut(jd, swe.SUN,    flags)[0][0] % 360.0
+    saturn_lon = swe.calc_ut(jd, swe.SATURN, flags)[0][0] % 360.0
 
     today_moon = {
         "longitude":      round(moon_lon, 4),
         "rashiIndex":     int(moon_lon / 30) % 12,
         "nakshatraIndex": int(moon_lon / (360 / 27)) % 27,
     }
+    today_sun = {
+        "longitude":  round(sun_lon, 4),
+        "rashiIndex": int(sun_lon / 30) % 12,
+    }
+    today_saturn = {
+        "longitude":  round(saturn_lon, 4),
+        "rashiIndex": int(saturn_lon / 30) % 12,
+    }
 
-    # ── Run engine ───────────────────────────────────────────────────────
-    result = calculate_energy(kundli_dict, today_moon, date_iso=date_iso)
+    # ── Run engine (with Saturn + Tithi overlays) ────────────────────────
+    result = calculate_energy(
+        kundli_dict, today_moon,
+        date_iso=date_iso,
+        today_sun=today_sun,
+        today_saturn=today_saturn,
+    )
     if "error" in result:
         return jsonify(result), 400
 
-    result["today_moon"] = today_moon
+    result["today_moon"]   = today_moon
+    result["today_sun"]    = today_sun
+    result["today_saturn"] = today_saturn
     return jsonify(result)
 
 

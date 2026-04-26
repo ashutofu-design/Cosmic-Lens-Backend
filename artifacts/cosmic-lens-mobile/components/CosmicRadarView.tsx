@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View, StyleSheet } from "react-native";
+import { useT } from "@/hooks/useT";
 import Animated, {
   Easing,
   runOnJS,
@@ -190,6 +191,7 @@ const ORBITS = [
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
+  const t = useT();
   const sweep    = useSharedValue(0);
   const halo     = useSharedValue(0);
   const dotPulse = useSharedValue(0);
@@ -466,10 +468,10 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
         <Animated.View
           style={[radarS.statusDot, statusDotStyle, { backgroundColor: "#ef4444" }]}
         />
-        <Text style={radarS.statusTxt}>THREAT SCAN ACTIVE</Text>
+        <Text style={radarS.statusTxt}>{t.radarStatusActive}</Text>
         <View style={radarS.statusSpacer} />
         <Text style={radarS.statusMeta}>
-          {risks.length} {risks.length === 1 ? "SIGNAL" : "SIGNALS"}
+          {risks.length} {risks.length === 1 ? t.radarSignalSingular : t.radarSignalPlural}
         </Text>
       </View>
 
@@ -701,8 +703,8 @@ export function CosmicRadarView({ risks }: { risks: Risk24h[] }) {
         {/* All Clear overlay */}
         {risks.length === 0 && (
           <View style={radarS.emptyOverlay} pointerEvents="none">
-            <Text style={radarS.emptyTxt}>ALL CLEAR</Text>
-            <Text style={radarS.emptySub}>Aaj koi major signal nahi</Text>
+            <Text style={radarS.emptyTxt}>{t.radarAllClear}</Text>
+            <Text style={radarS.emptySub}>{t.radarAllClearSub}</Text>
           </View>
         )}
       </View>

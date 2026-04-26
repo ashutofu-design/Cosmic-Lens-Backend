@@ -1655,6 +1655,24 @@ export interface MoreT {
   rrLevelMed:                 string;
   rrLevelHigh:                string;
   rrLabelRiskLevel:           string;
+  radarHeaderSub:             string;
+  radarLoadingTxt:            string;
+  radarEmptyTitle:            string;
+  radarEmptyBody:             string;
+  radarPickerLabel:           string;
+  radarDayToday:              string;
+  radarDayTomorrow:           string;
+  radarTotalLabel:            string;
+  radarBadgeHigh:             string;
+  radarBadgeMed:              string;
+  radarBadgeLow:              string;
+  radarSubToday:              string;
+  radarSubOther:              string;
+  radarStatusActive:          string;
+  radarSignalSingular:        string;
+  radarSignalPlural:          string;
+  radarAllClear:              string;
+  radarAllClearSub:           string;
 }
 
 // English — primary, complete
@@ -3296,6 +3314,24 @@ const EN: MoreT = {
   rrLevelMed:                 "Med",
   rrLevelHigh:                "High",
   rrLabelRiskLevel:           "RISK LEVEL",
+  radarHeaderSub:             "Cosmic radar for the next 7 days",
+  radarLoadingTxt:            "Preparing your radar…",
+  radarEmptyTitle:            "Couldn't load radar",
+  radarEmptyBody:             "Check your internet or try again in a moment.",
+  radarPickerLabel:           "CHOOSE YOUR DAY",
+  radarDayToday:              "Today",
+  radarDayTomorrow:           "Tomorrow",
+  radarTotalLabel:            "TOTAL RISK SIGNALS",
+  radarBadgeHigh:             "HIGH ALERT",
+  radarBadgeMed:              "ELEVATED",
+  radarBadgeLow:              "STABLE",
+  radarSubToday:              "Active threat signals in the next 24 hours",
+  radarSubOther:              "Active signals in the 24 hours of {date}",
+  radarStatusActive:          "THREAT SCAN ACTIVE",
+  radarSignalSingular:        "SIGNAL",
+  radarSignalPlural:          "SIGNALS",
+  radarAllClear:              "ALL CLEAR",
+  radarAllClearSub:           "No major signals today",
 };
 
 // Hinglish overrides (only differing keys)
@@ -4714,6 +4750,24 @@ const HN: Partial<MoreT> = {
   rrLevelMed:                 "Med",
   rrLevelHigh:                "High",
   rrLabelRiskLevel:           "RISK LEVEL",
+  radarHeaderSub:             "Aane wale 7 dino ka cosmic radar",
+  radarLoadingTxt:            "Aapka radar tayyar kar rahe hain…",
+  radarEmptyTitle:            "Radar load nahi ho saka",
+  radarEmptyBody:             "Internet check karein ya thodi der baad phir try karein.",
+  radarPickerLabel:           "APNA DIN CHUNEIN",
+  radarDayToday:              "Aaj",
+  radarDayTomorrow:           "Kal",
+  radarTotalLabel:            "TOTAL RISK SIGNALS",
+  radarBadgeHigh:             "HIGH ALERT",
+  radarBadgeMed:              "ELEVATED",
+  radarBadgeLow:              "STABLE",
+  radarSubToday:              "Aaj 24 ghante mein active threat signals",
+  radarSubOther:              "{date} ke 24 ghante mein active signals",
+  radarStatusActive:          "THREAT SCAN ACTIVE",
+  radarSignalSingular:        "SIGNAL",
+  radarSignalPlural:          "SIGNALS",
+  radarAllClear:              "ALL CLEAR",
+  radarAllClearSub:           "Aaj koi major signal nahi",
 };
 
 // Hindi overrides (Devanagari)
@@ -6225,6 +6279,24 @@ const HI: Partial<MoreT> = {
   rrLevelMed:                 "मध्यम",
   rrLevelHigh:                "उच्च",
   rrLabelRiskLevel:           "जोखिम स्तर",
+  radarHeaderSub:             "अगले 7 दिनों का कॉस्मिक रडार",
+  radarLoadingTxt:            "आपका रडार तैयार हो रहा है…",
+  radarEmptyTitle:            "रडार लोड नहीं हो सका",
+  radarEmptyBody:             "इंटरनेट जाँचें या थोड़ी देर बाद फिर से कोशिश करें।",
+  radarPickerLabel:           "अपना दिन चुनें",
+  radarDayToday:              "आज",
+  radarDayTomorrow:           "कल",
+  radarTotalLabel:            "कुल जोखिम संकेत",
+  radarBadgeHigh:             "उच्च चेतावनी",
+  radarBadgeMed:              "उन्नत",
+  radarBadgeLow:              "स्थिर",
+  radarSubToday:              "अगले 24 घंटों में सक्रिय खतरा संकेत",
+  radarSubOther:              "{date} के 24 घंटों में सक्रिय संकेत",
+  radarStatusActive:          "खतरा स्कैन सक्रिय",
+  radarSignalSingular:        "संकेत",
+  radarSignalPlural:          "संकेत",
+  radarAllClear:              "सब सुरक्षित",
+  radarAllClearSub:           "आज कोई बड़ा संकेत नहीं",
 };
 
 
@@ -7673,6 +7745,24 @@ const BN: Partial<MoreT> = {
   rrLevelMed:                 "মাঝারি",
   rrLevelHigh:                "বেশি",
   rrLabelRiskLevel:           "ঝুঁকি স্তর",
+  radarHeaderSub:             "আগামী 7 দিনের কসমিক রাডার",
+  radarLoadingTxt:            "আপনার রাডার প্রস্তুত হচ্ছে…",
+  radarEmptyTitle:            "রাডার লোড করা যায়নি",
+  radarEmptyBody:             "ইন্টারনেট চেক করুন বা কিছুক্ষণ পর আবার চেষ্টা করুন।",
+  radarPickerLabel:           "আপনার দিন বেছে নিন",
+  radarDayToday:              "আজ",
+  radarDayTomorrow:           "কাল",
+  radarTotalLabel:            "মোট ঝুঁকি সংকেত",
+  radarBadgeHigh:             "উচ্চ সতর্কতা",
+  radarBadgeMed:              "উন্নত",
+  radarBadgeLow:              "স্থিতিশীল",
+  radarSubToday:              "পরবর্তী 24 ঘন্টায় সক্রিয় হুমকি সংকেত",
+  radarSubOther:              "{date} এর 24 ঘন্টায় সক্রিয় সংকেত",
+  radarStatusActive:          "হুমকি স্ক্যান সক্রিয়",
+  radarSignalSingular:        "সংকেত",
+  radarSignalPlural:          "সংকেত",
+  radarAllClear:              "সব নিরাপদ",
+  radarAllClearSub:           "আজ কোনো বড় সংকেত নেই",
 };
 
 const MR: Partial<MoreT> = {
@@ -8967,6 +9057,24 @@ const MR: Partial<MoreT> = {
   rrLevelMed:                 "मध्यम",
   rrLevelHigh:                "जास्त",
   rrLabelRiskLevel:           "धोका पातळी",
+  radarHeaderSub:             "पुढील 7 दिवसांचा कॉस्मिक रडार",
+  radarLoadingTxt:            "आपला रडार तयार होत आहे…",
+  radarEmptyTitle:            "रडार लोड होऊ शकले नाही",
+  radarEmptyBody:             "इंटरनेट तपासा किंवा थोड्या वेळाने पुन्हा प्रयत्न करा.",
+  radarPickerLabel:           "आपला दिवस निवडा",
+  radarDayToday:              "आज",
+  radarDayTomorrow:           "उद्या",
+  radarTotalLabel:            "एकूण धोका सिग्नल",
+  radarBadgeHigh:             "उच्च सतर्कता",
+  radarBadgeMed:              "उन्नत",
+  radarBadgeLow:              "स्थिर",
+  radarSubToday:              "पुढील 24 तासांत सक्रिय धोका सिग्नल",
+  radarSubOther:              "{date} च्या 24 तासांत सक्रिय सिग्नल",
+  radarStatusActive:          "धोका स्कॅन सक्रिय",
+  radarSignalSingular:        "सिग्नल",
+  radarSignalPlural:          "सिग्नल",
+  radarAllClear:              "सर्व सुरक्षित",
+  radarAllClearSub:           "आज कोणताही मोठा सिग्नल नाही",
 };
 
 const TA: Partial<MoreT> = {
@@ -10244,6 +10352,24 @@ const TA: Partial<MoreT> = {
   rrLevelMed:                 "நடுத்தர",
   rrLevelHigh:                "அதிகம்",
   rrLabelRiskLevel:           "ஆபத்து நிலை",
+  radarHeaderSub:             "அடுத்த 7 நாட்களின் காஸ்மிக் ரேடார்",
+  radarLoadingTxt:            "உங்கள் ரேடார் தயாராகிறது…",
+  radarEmptyTitle:            "ரேடாரை ஏற்ற முடியவில்லை",
+  radarEmptyBody:             "இணையத்தைச் சரிபார்க்கவும் அல்லது சிறிது நேரத்தில் மீண்டும் முயற்சிக்கவும்.",
+  radarPickerLabel:           "உங்கள் நாளைத் தேர்ந்தெடுக்கவும்",
+  radarDayToday:              "இன்று",
+  radarDayTomorrow:           "நாளை",
+  radarTotalLabel:            "மொத்த ஆபத்து சமிக்ஞைகள்",
+  radarBadgeHigh:             "உயர் எச்சரிக்கை",
+  radarBadgeMed:              "உயர்த்தப்பட்டது",
+  radarBadgeLow:              "நிலையானது",
+  radarSubToday:              "அடுத்த 24 மணி நேரத்தில் செயலில் உள்ள அச்சுறுத்தல் சமிக்ஞைகள்",
+  radarSubOther:              "{date} இன் 24 மணி நேரத்தில் செயலில் உள்ள சமிக்ஞைகள்",
+  radarStatusActive:          "அச்சுறுத்தல் ஸ்கேன் செயலில்",
+  radarSignalSingular:        "சமிக்ஞை",
+  radarSignalPlural:          "சமிக்ஞைகள்",
+  radarAllClear:              "அனைத்தும் பாதுகாப்பானது",
+  radarAllClearSub:           "இன்று பெரிய சமிக்ஞை எதுவுமில்லை",
 };
 
 const TE: Partial<MoreT> = {
@@ -11527,6 +11653,24 @@ const TE: Partial<MoreT> = {
   rrLevelMed:                 "మధ్యమం",
   rrLevelHigh:                "ఎక్కువ",
   rrLabelRiskLevel:           "రిస్క్ స్థాయి",
+  radarHeaderSub:             "రాబోయే 7 రోజుల కాస్మిక్ రాడార్",
+  radarLoadingTxt:            "మీ రాడార్ సిద్ధమవుతోంది…",
+  radarEmptyTitle:            "రాడార్‌ను లోడ్ చేయలేకపోయాము",
+  radarEmptyBody:             "ఇంటర్నెట్‌ను తనిఖీ చేయండి లేదా కాస్త తర్వాత మళ్లీ ప్రయత్నించండి.",
+  radarPickerLabel:           "మీ రోజును ఎంచుకోండి",
+  radarDayToday:              "నేడు",
+  radarDayTomorrow:           "రేపు",
+  radarTotalLabel:            "మొత్తం రిస్క్ సిగ్నల్స్",
+  radarBadgeHigh:             "అధిక హెచ్చరిక",
+  radarBadgeMed:              "ఎలివేటెడ్",
+  radarBadgeLow:              "స్థిరం",
+  radarSubToday:              "రాబోయే 24 గంటలలో క్రియాశీల ముప్పు సిగ్నల్స్",
+  radarSubOther:              "{date} యొక్క 24 గంటలలో క్రియాశీల సిగ్నల్స్",
+  radarStatusActive:          "థ్రెట్ స్కాన్ యాక్టివ్",
+  radarSignalSingular:        "సిగ్నల్",
+  radarSignalPlural:          "సిగ్నల్స్",
+  radarAllClear:              "అన్నీ సురక్షితం",
+  radarAllClearSub:           "నేడు పెద్ద సిగ్నల్ ఏదీ లేదు",
 };
 
 const GU: Partial<MoreT> = {
@@ -12795,6 +12939,24 @@ const GU: Partial<MoreT> = {
   rrLevelMed:                 "મધ્યમ",
   rrLevelHigh:                "વધારે",
   rrLabelRiskLevel:           "જોખમ સ્તર",
+  radarHeaderSub:             "આગામી 7 દિવસનો કોસ્મિક રડાર",
+  radarLoadingTxt:            "આપનો રડાર તૈયાર થઈ રહ્યો છે…",
+  radarEmptyTitle:            "રડાર લોડ થઈ શક્યો નથી",
+  radarEmptyBody:             "ઇન્ટરનેટ તપાસો અથવા થોડી વાર પછી ફરી પ્રયાસ કરો.",
+  radarPickerLabel:           "આપનો દિવસ પસંદ કરો",
+  radarDayToday:              "આજે",
+  radarDayTomorrow:           "આવતી કાલે",
+  radarTotalLabel:            "કુલ જોખમ સંકેતો",
+  radarBadgeHigh:             "ઉચ્ચ ચેતવણી",
+  radarBadgeMed:              "ઊંચું",
+  radarBadgeLow:              "સ્થિર",
+  radarSubToday:              "આગામી 24 કલાકમાં સક્રિય ધમકી સંકેતો",
+  radarSubOther:              "{date} ના 24 કલાકમાં સક્રિય સંકેતો",
+  radarStatusActive:          "ધમકી સ્કેન સક્રિય",
+  radarSignalSingular:        "સંકેત",
+  radarSignalPlural:          "સંકેતો",
+  radarAllClear:              "બધું સુરક્ષિત",
+  radarAllClearSub:           "આજે કોઈ મોટો સંકેત નથી",
 };
 
 const KN: Partial<MoreT> = {
@@ -14156,6 +14318,24 @@ const KN: Partial<MoreT> = {
   rrLevelMed:                 "ಮಧ್ಯಮ",
   rrLevelHigh:                "ಹೆಚ್ಚು",
   rrLabelRiskLevel:           "ಅಪಾಯ ಮಟ್ಟ",
+  radarHeaderSub:             "ಮುಂದಿನ 7 ದಿನಗಳ ಕಾಸ್ಮಿಕ್ ರಾಡಾರ್",
+  radarLoadingTxt:            "ನಿಮ್ಮ ರಾಡಾರ್ ಸಿದ್ಧವಾಗುತ್ತಿದೆ…",
+  radarEmptyTitle:            "ರಾಡಾರ್ ಲೋಡ್ ಆಗಲಿಲ್ಲ",
+  radarEmptyBody:             "ಇಂಟರ್ನೆಟ್ ಪರಿಶೀಲಿಸಿ ಅಥವಾ ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  radarPickerLabel:           "ನಿಮ್ಮ ದಿನವನ್ನು ಆಯ್ಕೆಮಾಡಿ",
+  radarDayToday:              "ಇಂದು",
+  radarDayTomorrow:           "ನಾಳೆ",
+  radarTotalLabel:            "ಒಟ್ಟು ಅಪಾಯ ಸಂಕೇತಗಳು",
+  radarBadgeHigh:             "ಹೆಚ್ಚಿನ ಎಚ್ಚರಿಕೆ",
+  radarBadgeMed:              "ಉನ್ನತ",
+  radarBadgeLow:              "ಸ್ಥಿರ",
+  radarSubToday:              "ಮುಂದಿನ 24 ಗಂಟೆಗಳಲ್ಲಿ ಸಕ್ರಿಯ ಬೆದರಿಕೆ ಸಂಕೇತಗಳು",
+  radarSubOther:              "{date} ರ 24 ಗಂಟೆಗಳಲ್ಲಿ ಸಕ್ರಿಯ ಸಂಕೇತಗಳು",
+  radarStatusActive:          "ಬೆದರಿಕೆ ಸ್ಕ್ಯಾನ್ ಸಕ್ರಿಯ",
+  radarSignalSingular:        "ಸಂಕೇತ",
+  radarSignalPlural:          "ಸಂಕೇತಗಳು",
+  radarAllClear:              "ಎಲ್ಲವೂ ಸುರಕ್ಷಿತ",
+  radarAllClearSub:           "ಇಂದು ಯಾವುದೇ ದೊಡ್ಡ ಸಂಕೇತವಿಲ್ಲ",
 };
 
 const ML: Partial<MoreT> = {
@@ -15416,6 +15596,24 @@ const ML: Partial<MoreT> = {
   rrLevelMed:                 "ഇടത്തരം",
   rrLevelHigh:                "ഉയർന്ന",
   rrLabelRiskLevel:           "അപകട നില",
+  radarHeaderSub:             "അടുത്ത 7 ദിവസത്തെ കോസ്മിക് റഡാർ",
+  radarLoadingTxt:            "നിങ്ങളുടെ റഡാർ തയ്യാറാകുന്നു…",
+  radarEmptyTitle:            "റഡാർ ലോഡ് ചെയ്യാൻ കഴിഞ്ഞില്ല",
+  radarEmptyBody:             "ഇന്റർനെറ്റ് പരിശോധിക്കുക അല്ലെങ്കിൽ കുറച്ച് സമയത്തിന് ശേഷം വീണ്ടും ശ്രമിക്കുക.",
+  radarPickerLabel:           "നിങ്ങളുടെ ദിവസം തിരഞ്ഞെടുക്കുക",
+  radarDayToday:              "ഇന്ന്",
+  radarDayTomorrow:           "നാളെ",
+  radarTotalLabel:            "ആകെ അപകട സൂചനകൾ",
+  radarBadgeHigh:             "ഉയർന്ന മുന്നറിയിപ്പ്",
+  radarBadgeMed:              "ഉയർന്നത്",
+  radarBadgeLow:              "സ്ഥിരം",
+  radarSubToday:              "അടുത്ത 24 മണിക്കൂറിൽ സജീവ ഭീഷണി സൂചനകൾ",
+  radarSubOther:              "{date}-ന്റെ 24 മണിക്കൂറിൽ സജീവ സൂചനകൾ",
+  radarStatusActive:          "ഭീഷണി സ്കാൻ സജീവം",
+  radarSignalSingular:        "സൂചന",
+  radarSignalPlural:          "സൂചനകൾ",
+  radarAllClear:              "എല്ലാം സുരക്ഷിതം",
+  radarAllClearSub:           "ഇന്ന് വലിയ സൂചനകളൊന്നുമില്ല",
 };
 
 const PA: Partial<MoreT> = {
@@ -16730,6 +16928,24 @@ const PA: Partial<MoreT> = {
   rrLevelMed:                 "ਦਰਮਿਆਨਾ",
   rrLevelHigh:                "ਜ਼ਿਆਦਾ",
   rrLabelRiskLevel:           "ਖਤਰੇ ਦਾ ਪੱਧਰ",
+  radarHeaderSub:             "ਅਗਲੇ 7 ਦਿਨਾਂ ਦਾ ਕਾਸਮਿਕ ਰਡਾਰ",
+  radarLoadingTxt:            "ਤੁਹਾਡਾ ਰਡਾਰ ਤਿਆਰ ਹੋ ਰਿਹਾ ਹੈ…",
+  radarEmptyTitle:            "ਰਡਾਰ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕਿਆ",
+  radarEmptyBody:             "ਇੰਟਰਨੈੱਟ ਚੈੱਕ ਕਰੋ ਜਾਂ ਥੋੜ੍ਹੀ ਦੇਰ ਬਾਅਦ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।",
+  radarPickerLabel:           "ਆਪਣਾ ਦਿਨ ਚੁਣੋ",
+  radarDayToday:              "ਅੱਜ",
+  radarDayTomorrow:           "ਕੱਲ੍ਹ",
+  radarTotalLabel:            "ਕੁੱਲ ਜੋਖਮ ਸੰਕੇਤ",
+  radarBadgeHigh:             "ਉੱਚ ਚੇਤਾਵਨੀ",
+  radarBadgeMed:              "ਉੱਚਾ",
+  radarBadgeLow:              "ਸਥਿਰ",
+  radarSubToday:              "ਅਗਲੇ 24 ਘੰਟਿਆਂ ਵਿੱਚ ਸਰਗਰਮ ਖਤਰਾ ਸੰਕੇਤ",
+  radarSubOther:              "{date} ਦੇ 24 ਘੰਟਿਆਂ ਵਿੱਚ ਸਰਗਰਮ ਸੰਕੇਤ",
+  radarStatusActive:          "ਖਤਰਾ ਸਕੈਨ ਸਰਗਰਮ",
+  radarSignalSingular:        "ਸੰਕੇਤ",
+  radarSignalPlural:          "ਸੰਕੇਤ",
+  radarAllClear:              "ਸਭ ਸੁਰੱਖਿਅਤ",
+  radarAllClearSub:           "ਅੱਜ ਕੋਈ ਵੱਡਾ ਸੰਕੇਤ ਨਹੀਂ",
 };
 
 const OR: Partial<MoreT> = {
@@ -17985,6 +18201,24 @@ const OR: Partial<MoreT> = {
   rrLevelMed:                 "ମଧ୍ୟମ",
   rrLevelHigh:                "ଉଚ୍ଚ",
   rrLabelRiskLevel:           "ଝୁଁକି ସ୍ତର",
+  radarHeaderSub:             "ଆଗାମୀ 7 ଦିନର କସ୍ମିକ ରାଡାର",
+  radarLoadingTxt:            "ଆପଣଙ୍କର ରାଡାର ପ୍ରସ୍ତୁତ ହେଉଛି…",
+  radarEmptyTitle:            "ରାଡାର ଲୋଡ୍ ହୋଇପାରିଲା ନାହିଁ",
+  radarEmptyBody:             "ଇଣ୍ଟରନେଟ୍ ଯାଞ୍ଚ କରନ୍ତୁ କିମ୍ବା କିଛି ସମୟ ପରେ ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ।",
+  radarPickerLabel:           "ଆପଣଙ୍କର ଦିନ ବାଛନ୍ତୁ",
+  radarDayToday:              "ଆଜି",
+  radarDayTomorrow:           "କାଲି",
+  radarTotalLabel:            "ମୋଟ ଝୁଁକି ସିଗ୍ନାଲ୍",
+  radarBadgeHigh:             "ଉଚ୍ଚ ସତର୍କତା",
+  radarBadgeMed:              "ଉନ୍ନତ",
+  radarBadgeLow:              "ସ୍ଥିର",
+  radarSubToday:              "ଆଗାମୀ 24 ଘଣ୍ଟାରେ ସକ୍ରିୟ ଧମକୀ ସିଗ୍ନାଲ୍",
+  radarSubOther:              "{date} ର 24 ଘଣ୍ଟାରେ ସକ୍ରିୟ ସିଗ୍ନାଲ୍",
+  radarStatusActive:          "ଧମକୀ ସ୍କାନ୍ ସକ୍ରିୟ",
+  radarSignalSingular:        "ସିଗ୍ନାଲ୍",
+  radarSignalPlural:          "ସିଗ୍ନାଲ୍",
+  radarAllClear:              "ସବୁ ସୁରକ୍ଷିତ",
+  radarAllClearSub:           "ଆଜି କୌଣସି ବଡ଼ ସିଗ୍ନାଲ୍ ନାହିଁ",
 };
 
 const AS: Partial<MoreT> = {
@@ -19158,6 +19392,24 @@ const AS: Partial<MoreT> = {
   rrLevelMed:                 "মধ্যম",
   rrLevelHigh:                "বেছি",
   rrLabelRiskLevel:           "ঝুঁকি স্তৰ",
+  radarHeaderSub:             "অহা 7 দিনৰ কছমিক ৰাডাৰ",
+  radarLoadingTxt:            "আপোনাৰ ৰাডাৰ প্ৰস্তুত হৈ আছে…",
+  radarEmptyTitle:            "ৰাডাৰ লোড হোৱা নাই",
+  radarEmptyBody:             "ইণ্টাৰনেট পৰীক্ষা কৰক বা কিছু সময়ৰ পিছত পুনৰ চেষ্টা কৰক।",
+  radarPickerLabel:           "আপোনাৰ দিন বাছনি কৰক",
+  radarDayToday:              "আজি",
+  radarDayTomorrow:           "কাইলৈ",
+  radarTotalLabel:            "মুঠ ঝুঁকি সংকেত",
+  radarBadgeHigh:             "উচ্চ সতৰ্কতা",
+  radarBadgeMed:              "উন্নত",
+  radarBadgeLow:              "স্থিৰ",
+  radarSubToday:              "অহা 24 ঘণ্টাত সক্ৰিয় ভাবুকিৰ সংকেত",
+  radarSubOther:              "{date}ৰ 24 ঘণ্টাত সক্ৰিয় সংকেত",
+  radarStatusActive:          "ভাবুকি স্কেন সক্ৰিয়",
+  radarSignalSingular:        "সংকেত",
+  radarSignalPlural:          "সংকেত",
+  radarAllClear:              "সকলো সুৰক্ষিত",
+  radarAllClearSub:           "আজি কোনো ডাঙৰ সংকেত নাই",
 };
 
 const ZH: Partial<MoreT> = {

@@ -23,6 +23,7 @@ import {
 } from "@/components/RiskRadarCard";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
 const SIGNS = [
@@ -56,6 +57,7 @@ function scoreToTrend(s: number): "UP" | "MIXED" | "DOWN" {
 export default function DashaRiskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { kundli, moonData } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -133,8 +135,8 @@ export default function DashaRiskScreen() {
   };
 
   const dayLabel = (d: Date, i: number) => {
-    if (i === 0) return "Aaj";
-    if (i === 1) return "Kal";
+    if (i === 0) return t.radarDayToday;
+    if (i === 1) return t.radarDayTomorrow;
     return fmtDate(d);
   };
 
@@ -179,7 +181,7 @@ export default function DashaRiskScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, { color: C.text }]}>Risk Radar</Text>
           <Text style={[s.headerSub,   { color: C.textMuted }]}>
-            Aane wale 7 dino ka cosmic radar
+            {t.radarHeaderSub}
           </Text>
         </View>
         {showDemo && (
@@ -198,17 +200,17 @@ export default function DashaRiskScreen() {
           <View style={s.loadingBox}>
             <ActivityIndicator size="large" color="#fbbf24" />
             <Text style={[s.loadingTxt, { color: C.textMuted }]}>
-              Aapka radar tayyar kar rahe hain…
+              {t.radarLoadingTxt}
             </Text>
           </View>
         ) : days.length === 0 ? (
           <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <Text style={s.emptyIcon}>🪐</Text>
             <Text style={[s.emptyTitle, { color: C.text }]}>
-              Radar load nahi ho saka
+              {t.radarEmptyTitle}
             </Text>
             <Text style={[s.emptyBody, { color: C.textMuted }]}>
-              Internet check karein ya thodi der baad phir try karein.
+              {t.radarEmptyBody}
             </Text>
           </View>
         ) : (
@@ -216,7 +218,7 @@ export default function DashaRiskScreen() {
             {/* Day picker — horizontal scroll of 7 day chips */}
             <View>
               <Text style={[s.pickerLabel, { color: C.textMuted }]}>
-                APNA DIN CHUNEIN
+                {t.radarPickerLabel}
               </Text>
               <ScrollView
                 horizontal
@@ -264,13 +266,13 @@ export default function DashaRiskScreen() {
                 total === 2 ? "#f59e0b" :
                 "#4ade80";
               const label =
-                total >= 3 ? "HIGH ALERT" :
-                total === 2 ? "ELEVATED"   :
-                "STABLE";
+                total >= 3 ? t.radarBadgeHigh :
+                total === 2 ? t.radarBadgeMed :
+                t.radarBadgeLow;
               const sub =
                 selected === 0
-                  ? "Aaj 24 ghante mein active threat signals"
-                  : `${dayLabel(days[selected].date, selected)} ke 24 ghante mein active signals`;
+                  ? t.radarSubToday
+                  : t.radarSubOther.replace("{date}", dayLabel(days[selected].date, selected));
               return (
                 <View
                   style={[
@@ -283,7 +285,7 @@ export default function DashaRiskScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.totalLabel, { color: tone }]}>
-                      TOTAL RISK SIGNALS
+                      {t.radarTotalLabel}
                     </Text>
                     <Text style={[s.totalSub, { color: C.textMuted }]}>{sub}</Text>
                   </View>

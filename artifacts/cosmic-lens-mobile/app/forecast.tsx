@@ -367,10 +367,10 @@ export default function ForecastScreen() {
   const showDemo = !kundli;
 
   const [days, setDays]       = useState<DayForecast[]>([]);
-  // Default to the LAST day so the score callout sits on the rightmost (green
-  // gradient end) — exactly like home's "Now" dot. User can tap any other day
-  // to move the highlight; the curve always rises toward whichever day is selected.
-  const [selected, setSelected] = useState(6);
+  // Default to the FIRST day in the list — i.e. TOMORROW (the "next day"), then
+  // user can step forward through the rest of the week. Today's reading lives
+  // on the home screen, so the forecast page leads with the next day.
+  const [selected, setSelected] = useState(0);
   const [loading, setLoading]   = useState(false);
 
   // Build 7 dates starting from TOMORROW (today is shown on the home screen,
@@ -532,40 +532,6 @@ export default function ForecastScreen() {
         {/* Selected day detail */}
         {sel && (
           <>
-            {/* Cosmic Risk Radar — focused per-day risk module with freemium gate.
-                Sits between the hero chart and the supporting info so it's the
-                first thing the user reads after seeing the day's score. */}
-            {/* Cosmic Risk Radar — full per-day card lives on the dedicated
-                Risk Radar screen. From here we just summarise + send the user
-                across, so the Forecast page stays focused on the chart. */}
-            <Pressable
-              onPress={() => { router.push("/dasha-risk"); Haptics.selectionAsync(); }}
-              style={[s.radarCta, {
-                backgroundColor: C.bgCard,
-                borderColor: C.border,
-              }]}
-            >
-              <View style={s.radarCtaLeft}>
-                <View style={s.radarCtaIconBox}>
-                  <Feather name="alert-triangle" size={16} color="#fbbf24" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.radarCtaTitle, { color: C.text }]}>
-                    Cosmic Risk Radar khole
-                  </Text>
-                  <Text style={[s.radarCtaSub, { color: C.textMuted }]} numberOfLines={2}>
-                    {fmtDate(sel.date)} ke 24 ghante — kya karna, kya avoid karna,
-                    lucky numbers aur upay
-                  </Text>
-                </View>
-              </View>
-              <Feather
-                name={I18nManager.isRTL ? "chevron-left" : "chevron-right"}
-                size={18}
-                color={C.textMuted}
-              />
-            </Pressable>
-
             {/* Day navigation row */}
             <View style={s.navRow}>
               <Pressable
@@ -673,21 +639,4 @@ const s = StyleSheet.create({
   },
   unlockTitle: { color: "#fbbf24", fontSize: 13, fontWeight: "600" },
   unlockSub:   { color: "#92704e", fontSize: 11 },
-
-
-  // ── Risk Radar CTA card (replaces the in-page consolidated card) ──────────
-  radarCta: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    padding: 14, borderRadius: 14, borderWidth: 1, gap: 10,
-  },
-  radarCtaLeft:    { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
-  radarCtaIconBox: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(251,191,36,0.12)",
-    borderWidth: 1, borderColor: "rgba(251,191,36,0.30)",
-  },
-  radarCtaTitle: { fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
-  radarCtaSub:   { fontSize: 11, fontWeight: "500", lineHeight: 15, marginTop: 2 },
-
 });

@@ -19,8 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
-import { getT } from "@/lib/i18n";
-import { vedicLang, type VLang } from "@/lib/i18nVedic";
+import { getT, type UILang } from "@/lib/i18n";
 import { getDemoLabels } from "@/lib/i18nContent";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
@@ -30,31 +29,65 @@ import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngi
 import type { MoonHistoryPoint } from "@/types";
 
 // ── Localized labels (vlang-bucketed: en/hn/hi) ───────────────────────────────
-function getHomeLabels(v: VLang) {
-  if (v === "hi") return {
-    namaste:        "नमस्ते 🙏",
-    hello:          "नमस्ते",
-    forecastPill:   "7 दिन का ऊर्जा पूर्वानुमान",
-    todaysEnergy:   "आज की ऊर्जा",
-    demo:           "डेमो",
-    forecast7day:   "7 दिन का पूर्वानुमान",
-    now:            "अभी",
-    doshTitle:      "दोष विश्लेषण",
-    doshSub:        "कुंडली में 3 दोष पाए गए",
-    live:           "लाइव",
-    riskTitle:      "जोखिम रडार",
-    riskSubAhead:   "अगले 24 घंटे + 7 दिन के संकेत",
-    riskDashaActive:(_md: string, _ad: string) => "अगले 24 घंटे + 7 दिन के संकेत",
-    alert:          "अलर्ट",
-    milanTitle:     "कुंडली मिलान",
-    milanSub:       "36 गुण मिलान · विवाह संगति",
-    pro:            "प्रो",
-    insightStrong:  "आज प्रबल सकारात्मक ऊर्जा",
-    insightModerate:"मध्यम ऊर्जा, ध्यान केंद्रित रखें",
-    insightUnstable:"आज ऊर्जा अस्थिर है",
-    insightLow:     "कम ऊर्जा — विश्राम व आत्मचिंतन",
-  };
-  if (v === "hn") return {
+// ── Home-tab labels ──────────────────────────────────────────────────────────
+// Switches on the FULL UILang code (not the 3-bucket VLang) so each Indian
+// language renders in its OWN script. Previously every Indian language other
+// than Hindi (Bangla, Marathi, Tamil, Telugu, Gujarati, Kannada, Malayalam,
+// Punjabi, ODIA, Assamese) silently bucketed to Hindi via vedicLang() — Odia
+// users saw Hindi text on the home tab. Global langs (zh/es/ar/fr/...) keep
+// English fallback (matches the Vastu policy of "no Hinglish leak abroad").
+type HomeLabels = {
+  namaste:         string;
+  hello:           string;
+  forecastPill:    string;
+  todaysEnergy:    string;
+  demo:            string;
+  forecast7day:    string;
+  now:             string;
+  doshTitle:       string;
+  doshSub:         string;
+  live:            string;
+  riskTitle:       string;
+  riskSubAhead:    string;
+  riskDashaActive: (md: string, ad: string) => string;
+  alert:           string;
+  milanTitle:      string;
+  milanSub:        string;
+  pro:             string;
+  insightStrong:   string;
+  insightModerate: string;
+  insightUnstable: string;
+  insightLow:      string;
+};
+
+const HOME_EN: HomeLabels = {
+  namaste:        "Namaste 🙏",
+  hello:          "Hello",
+  forecastPill:   "7 Day Energy Forecast",
+  todaysEnergy:   "TODAY'S ENERGY",
+  demo:           "DEMO",
+  forecast7day:   "7-day forecast",
+  now:            "Now",
+  doshTitle:      "Dosh Analysis",
+  doshSub:        "3 doshas detected in chart",
+  live:           "LIVE",
+  riskTitle:      "Risk Radar",
+  riskSubAhead:   "Next 24h + 7-day signals",
+  riskDashaActive:(_md, _ad) => "Next 24h + 7-day signals",
+  alert:          "ALERT",
+  milanTitle:     "Kundli Milan",
+  milanSub:       "36 guna match · Vivah compatibility",
+  pro:            "PRO",
+  insightStrong:  "Strong positive energy today",
+  insightModerate:"Moderate energy, stay focused",
+  insightUnstable:"Energy unstable today",
+  insightLow:     "Low energy — rest & introspect",
+};
+
+const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
+  en: HOME_EN,
+
+  hn: {
     namaste:        "Namaste 🙏",
     hello:          "Hello",
     forecastPill:   "7 Din Energy Forecast",
@@ -67,7 +100,7 @@ function getHomeLabels(v: VLang) {
     live:           "LIVE",
     riskTitle:      "Risk Radar",
     riskSubAhead:   "Next 24h + 7-day signals",
-    riskDashaActive:(_md: string, _ad: string) => "Next 24h + 7-day signals",
+    riskDashaActive:(_md, _ad) => "Next 24h + 7-day signals",
     alert:          "ALERT",
     milanTitle:     "Kundli Milan",
     milanSub:       "36 guna match · Vivah compatibility",
@@ -76,30 +109,275 @@ function getHomeLabels(v: VLang) {
     insightModerate:"Moderate energy, focus rakhein",
     insightUnstable:"Aaj energy unstable hai",
     insightLow:     "Kam energy — aaram aur introspect",
-  };
-  return {
-    namaste:        "Namaste 🙏",
-    hello:          "Hello",
-    forecastPill:   "7 Day Energy Forecast",
-    todaysEnergy:   "TODAY'S ENERGY",
-    demo:           "DEMO",
-    forecast7day:   "7-day forecast",
-    now:            "Now",
-    doshTitle:      "Dosh Analysis",
-    doshSub:        "3 doshas detected in chart",
-    live:           "LIVE",
-    riskTitle:      "Risk Radar",
-    riskSubAhead:   "Next 24h + 7-day signals",
-    riskDashaActive:(_md: string, _ad: string) => "Next 24h + 7-day signals",
-    alert:          "ALERT",
-    milanTitle:     "Kundli Milan",
-    milanSub:       "36 guna match · Vivah compatibility",
-    pro:            "PRO",
-    insightStrong:  "Strong positive energy today",
-    insightModerate:"Moderate energy, stay focused",
-    insightUnstable:"Energy unstable today",
-    insightLow:     "Low energy — rest & introspect",
-  };
+  },
+
+  hi: {
+    namaste:        "नमस्ते 🙏",
+    hello:          "नमस्ते",
+    forecastPill:   "7 दिन का ऊर्जा पूर्वानुमान",
+    todaysEnergy:   "आज की ऊर्जा",
+    demo:           "डेमो",
+    forecast7day:   "7 दिन का पूर्वानुमान",
+    now:            "अभी",
+    doshTitle:      "दोष विश्लेषण",
+    doshSub:        "कुंडली में 3 दोष पाए गए",
+    live:           "लाइव",
+    riskTitle:      "जोखिम रडार",
+    riskSubAhead:   "अगले 24 घंटे + 7 दिन के संकेत",
+    riskDashaActive:(_md, _ad) => "अगले 24 घंटे + 7 दिन के संकेत",
+    alert:          "अलर्ट",
+    milanTitle:     "कुंडली मिलान",
+    milanSub:       "36 गुण मिलान · विवाह संगति",
+    pro:            "प्रो",
+    insightStrong:  "आज प्रबल सकारात्मक ऊर्जा",
+    insightModerate:"मध्यम ऊर्जा, ध्यान केंद्रित रखें",
+    insightUnstable:"आज ऊर्जा अस्थिर है",
+    insightLow:     "कम ऊर्जा — विश्राम व आत्मचिंतन",
+  },
+
+  bn: {
+    namaste:        "নমস্কার 🙏",
+    hello:          "নমস্কার",
+    forecastPill:   "৭ দিনের শক্তি পূর্বাভাস",
+    todaysEnergy:   "আজকের শক্তি",
+    demo:           "ডেমো",
+    forecast7day:   "৭ দিনের পূর্বাভাস",
+    now:            "এখন",
+    doshTitle:      "দোষ বিশ্লেষণ",
+    doshSub:        "কুণ্ডলীতে ৩টি দোষ পাওয়া গেছে",
+    live:           "লাইভ",
+    riskTitle:      "ঝুঁকি রাডার",
+    riskSubAhead:   "পরবর্তী ২৪ ঘন্টা + ৭ দিনের সংকেত",
+    riskDashaActive:(_md, _ad) => "পরবর্তী ২৪ ঘন্টা + ৭ দিনের সংকেত",
+    alert:          "সতর্কতা",
+    milanTitle:     "কুণ্ডলী মিলন",
+    milanSub:       "৩৬ গুণ মিল · বিবাহ সামঞ্জস্য",
+    pro:            "প্রো",
+    insightStrong:  "আজ প্রবল ইতিবাচক শক্তি",
+    insightModerate:"মাঝারি শক্তি, মনোনিবেশ রাখুন",
+    insightUnstable:"আজ শক্তি অস্থির",
+    insightLow:     "কম শক্তি — বিশ্রাম ও আত্মচিন্তন",
+  },
+
+  mr: {
+    namaste:        "नमस्कार 🙏",
+    hello:          "नमस्कार",
+    forecastPill:   "७ दिवसांचा ऊर्जा अंदाज",
+    todaysEnergy:   "आजची ऊर्जा",
+    demo:           "डेमो",
+    forecast7day:   "७ दिवसांचा अंदाज",
+    now:            "आता",
+    doshTitle:      "दोष विश्लेषण",
+    doshSub:        "कुंडलीत ३ दोष आढळले",
+    live:           "थेट",
+    riskTitle:      "जोखीम रडार",
+    riskSubAhead:   "पुढील २४ तास + ७ दिवसांचे संकेत",
+    riskDashaActive:(_md, _ad) => "पुढील २४ तास + ७ दिवसांचे संकेत",
+    alert:          "सूचना",
+    milanTitle:     "कुंडली मिलन",
+    milanSub:       "३६ गुण मिलन · विवाह सुसंगती",
+    pro:            "प्रो",
+    insightStrong:  "आज प्रबळ सकारात्मक ऊर्जा",
+    insightModerate:"मध्यम ऊर्जा, लक्ष केंद्रित ठेवा",
+    insightUnstable:"आज ऊर्जा अस्थिर आहे",
+    insightLow:     "कमी ऊर्जा — विश्रांती व आत्मचिंतन",
+  },
+
+  ta: {
+    namaste:        "வணக்கம் 🙏",
+    hello:          "வணக்கம்",
+    forecastPill:   "7 நாள் ஆற்றல் முன்னறிவிப்பு",
+    todaysEnergy:   "இன்றைய ஆற்றல்",
+    demo:           "டெமோ",
+    forecast7day:   "7 நாள் முன்னறிவிப்பு",
+    now:            "இப்போது",
+    doshTitle:      "தோஷ பகுப்பாய்வு",
+    doshSub:        "ஜாதகத்தில் 3 தோஷங்கள் கண்டறியப்பட்டன",
+    live:           "நேரடி",
+    riskTitle:      "ஆபத்து ரேடார்",
+    riskSubAhead:   "அடுத்த 24 மணி + 7 நாள் சமிக்ஞைகள்",
+    riskDashaActive:(_md, _ad) => "அடுத்த 24 மணி + 7 நாள் சமிக்ஞைகள்",
+    alert:          "எச்சரிக்கை",
+    milanTitle:     "ஜாதக பொருத்தம்",
+    milanSub:       "36 குணம் பொருத்தம் · திருமண இணக்கம்",
+    pro:            "ப்ரோ",
+    insightStrong:  "இன்று வலுவான நேர்மறை ஆற்றல்",
+    insightModerate:"மிதமான ஆற்றல், கவனம் செலுத்துங்கள்",
+    insightUnstable:"இன்று ஆற்றல் நிலையற்றது",
+    insightLow:     "குறைந்த ஆற்றல் — ஓய்வு மற்றும் சிந்தனை",
+  },
+
+  te: {
+    namaste:        "నమస్తే 🙏",
+    hello:          "నమస్తే",
+    forecastPill:   "7 రోజుల శక్తి సూచన",
+    todaysEnergy:   "నేటి శక్తి",
+    demo:           "డెమో",
+    forecast7day:   "7 రోజుల సూచన",
+    now:            "ఇప్పుడు",
+    doshTitle:      "దోష విశ్లేషణ",
+    doshSub:        "జాతకంలో 3 దోషాలు కనుగొనబడ్డాయి",
+    live:           "లైవ్",
+    riskTitle:      "రిస్క్ రాడార్",
+    riskSubAhead:   "తదుపరి 24 గం + 7 రోజుల సంకేతాలు",
+    riskDashaActive:(_md, _ad) => "తదుపరి 24 గం + 7 రోజుల సంకేతాలు",
+    alert:          "హెచ్చరిక",
+    milanTitle:     "జాతక మిలన్",
+    milanSub:       "36 గుణాల పొంతన · వివాహ అనుకూలత",
+    pro:            "ప్రో",
+    insightStrong:  "నేడు బలమైన సానుకూల శక్తి",
+    insightModerate:"మధ్యస్థ శక్తి, దృష్టి కేంద్రీకరించండి",
+    insightUnstable:"నేడు శక్తి అస్థిరం",
+    insightLow:     "తక్కువ శక్తి — విశ్రాంతి, ఆత్మచింతన",
+  },
+
+  gu: {
+    namaste:        "નમસ્તે 🙏",
+    hello:          "નમસ્તે",
+    forecastPill:   "7 દિવસનું ઊર્જા પૂર્વાનુમાન",
+    todaysEnergy:   "આજની ઊર્જા",
+    demo:           "ડેમો",
+    forecast7day:   "7 દિવસનું પૂર્વાનુમાન",
+    now:            "હવે",
+    doshTitle:      "દોષ વિશ્લેષણ",
+    doshSub:        "કુંડળીમાં 3 દોષ મળ્યા",
+    live:           "લાઇવ",
+    riskTitle:      "જોખમ રડાર",
+    riskSubAhead:   "આગામી 24 કલાક + 7 દિવસના સંકેત",
+    riskDashaActive:(_md, _ad) => "આગામી 24 કલાક + 7 દિવસના સંકેત",
+    alert:          "ચેતવણી",
+    milanTitle:     "કુંડળી મિલન",
+    milanSub:       "36 ગુણ મિલન · વિવાહ સુસંગતતા",
+    pro:            "પ્રો",
+    insightStrong:  "આજે પ્રબળ સકારાત્મક ઊર્જા",
+    insightModerate:"મધ્યમ ઊર્જા, ધ્યાન કેન્દ્રિત રાખો",
+    insightUnstable:"આજે ઊર્જા અસ્થિર છે",
+    insightLow:     "ઓછી ઊર્જા — આરામ અને આત્મચિંતન",
+  },
+
+  kn: {
+    namaste:        "ನಮಸ್ಕಾರ 🙏",
+    hello:          "ನಮಸ್ಕಾರ",
+    forecastPill:   "7 ದಿನಗಳ ಶಕ್ತಿ ಮುನ್ಸೂಚನೆ",
+    todaysEnergy:   "ಇಂದಿನ ಶಕ್ತಿ",
+    demo:           "ಡೆಮೋ",
+    forecast7day:   "7-ದಿನಗಳ ಮುನ್ಸೂಚನೆ",
+    now:            "ಈಗ",
+    doshTitle:      "ದೋಷ ವಿಶ್ಲೇಷಣೆ",
+    doshSub:        "ಜಾತಕದಲ್ಲಿ 3 ದೋಷಗಳು ಪತ್ತೆಯಾಗಿವೆ",
+    live:           "ಲೈವ್",
+    riskTitle:      "ಅಪಾಯ ರಾಡಾರ್",
+    riskSubAhead:   "ಮುಂದಿನ 24 ಗಂ + 7 ದಿನಗಳ ಸಂಕೇತಗಳು",
+    riskDashaActive:(_md, _ad) => "ಮುಂದಿನ 24 ಗಂ + 7 ದಿನಗಳ ಸಂಕೇತಗಳು",
+    alert:          "ಎಚ್ಚರಿಕೆ",
+    milanTitle:     "ಕುಂಡಲಿ ಮಿಲನ",
+    milanSub:       "36 ಗುಣ ಹೊಂದಾಣಿಕೆ · ವಿವಾಹ ಹೊಂದಾಣಿಕೆ",
+    pro:            "ಪ್ರೋ",
+    insightStrong:  "ಇಂದು ಪ್ರಬಲ ಸಕಾರಾತ್ಮಕ ಶಕ್ತಿ",
+    insightModerate:"ಮಧ್ಯಮ ಶಕ್ತಿ, ಗಮನ ಕೇಂದ್ರೀಕರಿಸಿ",
+    insightUnstable:"ಇಂದು ಶಕ್ತಿ ಅಸ್ಥಿರ",
+    insightLow:     "ಕಡಿಮೆ ಶಕ್ತಿ — ವಿಶ್ರಾಂತಿ ಮತ್ತು ಆತ್ಮಚಿಂತನೆ",
+  },
+
+  ml: {
+    namaste:        "നമസ്കാരം 🙏",
+    hello:          "നമസ്കാരം",
+    forecastPill:   "7 ദിവസത്തെ ഊർജ്ജ പ്രവചനം",
+    todaysEnergy:   "ഇന്നത്തെ ഊർജ്ജം",
+    demo:           "ഡെമോ",
+    forecast7day:   "7 ദിവസത്തെ പ്രവചനം",
+    now:            "ഇപ്പോൾ",
+    doshTitle:      "ദോഷ വിശകലനം",
+    doshSub:        "കുണ്ഡലിയിൽ 3 ദോഷങ്ങൾ കണ്ടെത്തി",
+    live:           "ലൈവ്",
+    riskTitle:      "റിസ്ക് റഡാർ",
+    riskSubAhead:   "അടുത്ത 24 മ + 7 ദിവസത്തെ സൂചനകൾ",
+    riskDashaActive:(_md, _ad) => "അടുത്ത 24 മ + 7 ദിവസത്തെ സൂചനകൾ",
+    alert:          "മുന്നറിയിപ്പ്",
+    milanTitle:     "കുണ്ഡലി മിലൻ",
+    milanSub:       "36 ഗുണ പൊരുത്തം · വിവാഹ പൊരുത്തം",
+    pro:            "പ്രോ",
+    insightStrong:  "ഇന്ന് ശക്തമായ പോസിറ്റീവ് ഊർജ്ജം",
+    insightModerate:"മിതമായ ഊർജ്ജം, ശ്രദ്ധ കേന്ദ്രീകരിക്കുക",
+    insightUnstable:"ഇന്ന് ഊർജ്ജം അസ്ഥിരം",
+    insightLow:     "കുറഞ്ഞ ഊർജ്ജം — വിശ്രമവും ആത്മചിന്തനവും",
+  },
+
+  pa: {
+    namaste:        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ 🙏",
+    hello:          "ਸਤ ਸ੍ਰੀ ਅਕਾਲ",
+    forecastPill:   "7 ਦਿਨ ਦਾ ਊਰਜਾ ਅਨੁਮਾਨ",
+    todaysEnergy:   "ਅੱਜ ਦੀ ਊਰਜਾ",
+    demo:           "ਡੈਮੋ",
+    forecast7day:   "7-ਦਿਨ ਦਾ ਅਨੁਮਾਨ",
+    now:            "ਹੁਣ",
+    doshTitle:      "ਦੋਸ਼ ਵਿਸ਼ਲੇਸ਼ਣ",
+    doshSub:        "ਕੁੰਡਲੀ ਵਿੱਚ 3 ਦੋਸ਼ ਮਿਲੇ",
+    live:           "ਲਾਈਵ",
+    riskTitle:      "ਜੋਖਮ ਰਡਾਰ",
+    riskSubAhead:   "ਅਗਲੇ 24 ਘੰਟੇ + 7 ਦਿਨਾਂ ਦੇ ਸੰਕੇਤ",
+    riskDashaActive:(_md, _ad) => "ਅਗਲੇ 24 ਘੰਟੇ + 7 ਦਿਨਾਂ ਦੇ ਸੰਕੇਤ",
+    alert:          "ਚੇਤਾਵਨੀ",
+    milanTitle:     "ਕੁੰਡਲੀ ਮਿਲਾਨ",
+    milanSub:       "36 ਗੁਣ ਮਿਲਾਨ · ਵਿਆਹ ਅਨੁਕੂਲਤਾ",
+    pro:            "ਪ੍ਰੋ",
+    insightStrong:  "ਅੱਜ ਮਜ਼ਬੂਤ ਸਕਾਰਾਤਮਕ ਊਰਜਾ",
+    insightModerate:"ਦਰਮਿਆਨੀ ਊਰਜਾ, ਧਿਆਨ ਕੇਂਦਰਿਤ ਰੱਖੋ",
+    insightUnstable:"ਅੱਜ ਊਰਜਾ ਅਸਥਿਰ ਹੈ",
+    insightLow:     "ਘੱਟ ਊਰਜਾ — ਆਰਾਮ ਅਤੇ ਆਤਮ-ਚਿੰਤਨ",
+  },
+
+  or: {
+    namaste:        "ନମସ୍କାର 🙏",
+    hello:          "ନମସ୍କାର",
+    forecastPill:   "୭ ଦିନର ଶକ୍ତି ପୂର୍ବାନୁମାନ",
+    todaysEnergy:   "ଆଜିର ଶକ୍ତି",
+    demo:           "ଡେମୋ",
+    forecast7day:   "୭-ଦିନର ପୂର୍ବାନୁମାନ",
+    now:            "ଏବେ",
+    doshTitle:      "ଦୋଷ ବିଶ୍ଳେଷଣ",
+    doshSub:        "କୁଣ୍ଡଳୀରେ ୩ଟି ଦୋଷ ମିଳିଲା",
+    live:           "ଲାଇଭ",
+    riskTitle:      "ଝୁଁକି ରାଡାର",
+    riskSubAhead:   "ପରବର୍ତ୍ତୀ ୨୪ ଘଣ୍ଟା + ୭ ଦିନର ସଙ୍କେତ",
+    riskDashaActive:(_md, _ad) => "ପରବର୍ତ୍ତୀ ୨୪ ଘଣ୍ଟା + ୭ ଦିନର ସଙ୍କେତ",
+    alert:          "ସତର୍କତା",
+    milanTitle:     "କୁଣ୍ଡଳୀ ମିଳନ",
+    milanSub:       "୩୬ ଗୁଣ ମିଳନ · ବିବାହ ସୁସଙ୍ଗତତା",
+    pro:            "ପ୍ରୋ",
+    insightStrong:  "ଆଜି ଶକ୍ତିଶାଳୀ ସକାରାତ୍ମକ ଶକ୍ତି",
+    insightModerate:"ମଧ୍ୟମ ଶକ୍ତି, ଧ୍ୟାନ କେନ୍ଦ୍ରୀଭୂତ ରଖନ୍ତୁ",
+    insightUnstable:"ଆଜି ଶକ୍ତି ଅସ୍ଥିର",
+    insightLow:     "କମ ଶକ୍ତି — ବିଶ୍ରାମ ଓ ଆତ୍ମଚିନ୍ତନ",
+  },
+
+  as: {
+    namaste:        "নমস্কাৰ 🙏",
+    hello:          "নমস্কাৰ",
+    forecastPill:   "৭ দিনৰ শক্তি পূৰ্বানুমান",
+    todaysEnergy:   "আজিৰ শক্তি",
+    demo:           "ডেমো",
+    forecast7day:   "৭-দিনৰ পূৰ্বানুমান",
+    now:            "এতিয়া",
+    doshTitle:      "দোষ বিশ্লেষণ",
+    doshSub:        "কুণ্ডলীত ৩টা দোষ পোৱা গ'ল",
+    live:           "লাইভ",
+    riskTitle:      "বিপদ ৰাডাৰ",
+    riskSubAhead:   "পৰৱৰ্তী ২৪ ঘণ্টা + ৭ দিনৰ সংকেত",
+    riskDashaActive:(_md, _ad) => "পৰৱৰ্তী ২৪ ঘণ্টা + ৭ দিনৰ সংকেত",
+    alert:          "সতৰ্কবাণী",
+    milanTitle:     "কুণ্ডলী মিলন",
+    milanSub:       "৩৬ গুণ মিল · বিবাহ সংগতি",
+    pro:            "প্ৰো",
+    insightStrong:  "আজি প্ৰবল ইতিবাচক শক্তি",
+    insightModerate:"মধ্যমীয়া শক্তি, মনোনিৱেশ ৰাখক",
+    insightUnstable:"আজি শক্তি অস্থিৰ",
+    insightLow:     "কম শক্তি — বিশ্ৰাম আৰু আত্মচিন্তন",
+  },
+};
+
+function getHomeLabels(lang: UILang): HomeLabels {
+  return HOME_LABELS[lang] ?? HOME_EN;
 }
 
 // ── Font aliases ──────────────────────────────────────────────────────────────
@@ -218,8 +496,10 @@ export default function HomeScreen() {
   const { toggle: toggleTheme } = useTheme();
   const { kundli, todayEnergy, setTodayEnergy, setMoonData, moonData, user, isLoading, language } = useUser();
   const t = getT(language);
-  const v: VLang = vedicLang(language);
-  const L = getHomeLabels(v);
+  // L (home-tab labels) uses the FULL UILang so Odia / Bangla / Marathi /
+  // Tamil / Telugu / Gujarati / Kannada / Malayalam / Punjabi / Assamese
+  // each render in their own script instead of silently bucketing to Hindi.
+  const L = getHomeLabels(language);
 
   const [targetPts, setTargetPts] = useState<number[]>([]);
   const [labels,    setLabels]    = useState<string[]>([]);

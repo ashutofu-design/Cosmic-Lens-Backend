@@ -402,11 +402,30 @@ def compute_tithi_overlay(sun_lon: Optional[float],
                    "Purnima/Amavasya"]
     tithi_name = TITHI_NAMES[paksha_pos - 1]
 
+    # ── STEP 4: Special Tithi Expansion (mental-bucket only) ─────────────
+    # Ekadashi  (tithi_idx 11 or 26) → +3 mental boost (fasting clarity)
+    # Amavasya  (tithi_idx 30)       → -5 mental low   (dark moon introspection)
+    # Purnima   (tithi_idx 15)       → +4 mental boost (full moon clarity)
+    # These add to mental bucket ONLY — global score logic unchanged.
+    mental_extra = 0.0
+    special_name: Optional[str] = None
+    if tithi_idx in (11, 26):
+        mental_extra = 3.0
+        special_name = "Ekadashi"
+    elif tithi_idx == 30:
+        mental_extra = -5.0
+        special_name = "Amavasya"
+    elif tithi_idx == 15:
+        mental_extra = 4.0
+        special_name = "Purnima"
+
     detail = {
-        "tithi_idx":   tithi_idx,
-        "paksha":      paksha_name,
-        "paksha_pos":  paksha_pos,
-        "tithi_name":  f"{paksha_name} {tithi_name}",
+        "tithi_idx":     tithi_idx,
+        "paksha":        paksha_name,
+        "paksha_pos":    paksha_pos,
+        "tithi_name":    f"{paksha_name} {tithi_name}",
+        "mental_extra":  mental_extra,
+        "special":       special_name,
     }
 
     if paksha_pos in {4, 9, 14}:
@@ -414,6 +433,291 @@ def compute_tithi_overlay(sun_lon: Optional[float],
     if paksha_pos in {5, 10, 15}:
         return 5.0, {**detail, "type": "Purna (peak)"}
     return 0.0, {**detail, "type": "Neutral"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STEP 1 — Transit-to-Natal Aspects (sign-based, simple conjunction/opposition)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_transit_natal_aspects(
+    saturn_today_sign: Optional[int],
+    mars_today_sign:   Optional[int],
+    jupiter_today_sign: Optional[int],
+    birth_moon_sign:   Optional[int],
+    birth_sun_sign:    Optional[int],
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    Step 1: Basic transit interactions with natal Moon & Sun.
+
+    Sign-based conjunction (1st = same sign) or opposition (7th from natal).
+    Saturn-Moon conjunction is intentionally SKIPPED here because Sade Sati
+    Madhya overlay already handles that case (would be double-counted).
+
+    - Transit Saturn  → natal Moon  (opposition only): -12
+    - Transit Mars    → natal Moon  (conj or opp):     -8
+    - Transit Jupiter → natal Moon (conj/trine 1/5/9): +10
+    - Transit Jupiter → natal Sun  (conj/trine 1/5/9): +10
+      (Jupiter→Moon and Jupiter→Sun do not stack; max +10 from this step)
+    """
+    delta = 0.0
+    aspects: List[str] = []
+
+    # Saturn → natal Moon (opposition only; conjunction handled by Sade Sati)
+    if saturn_today_sign is not None and birth_moon_sign is not None:
+        from_natal = ((saturn_today_sign - birth_moon_sign) % 12) + 1
+        if from_natal == 7:
+            delta -= 12
+            aspects.append("saturn_opposition_natal_moon")
+
+    # Mars → natal Moon (conjunction OR opposition)
+    if mars_today_sign is not None and birth_moon_sign is not None:
+        from_natal = ((mars_today_sign - birth_moon_sign) % 12) + 1
+        if from_natal in {1, 7}:
+            delta -= 8
+            aspects.append("mars_hit_natal_moon")
+
+    # Jupiter → natal Moon OR natal Sun (conjunction or trine 5/9). Cap at +10.
+    jupiter_support = False
+    jupiter_target: Optional[str] = None
+    if jupiter_today_sign is not None and birth_moon_sign is not None:
+        from_natal = ((jupiter_today_sign - birth_moon_sign) % 12) + 1
+        if from_natal in {1, 5, 9}:
+            jupiter_support = True
+            jupiter_target = "Moon"
+    if (not jupiter_support
+        and jupiter_today_sign is not None
+        and birth_sun_sign is not None):
+        from_natal = ((jupiter_today_sign - birth_sun_sign) % 12) + 1
+        if from_natal in {1, 5, 9}:
+            jupiter_support = True
+            jupiter_target = "Sun"
+    if jupiter_support:
+        delta += 10
+        aspects.append(f"jupiter_support_natal_{(jupiter_target or '').lower()}")
+
+    return delta, {
+        "aspects": aspects,
+        "delta":   delta,
+        "active":  bool(aspects),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STEP 2 — Jupiter & Mars Overlay Layer (lagna-relative house placement)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_jupiter_mars_overlay(
+    jupiter_today_sign: Optional[int],
+    mars_today_sign:    Optional[int],
+    lagna_sign:         Optional[int],
+    birth_moon_sign:    Optional[int],
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    Step 2: Lagna-relative current-transit overlay for Jupiter & Mars.
+
+    - Jupiter in kendra/trikona (1,4,5,7,9,10): +6
+    - Jupiter in dusthana       (6,8,12)     : +2 only (still benefic but muted)
+    - Mars    in dusthana       (6,8,12)     : -6
+    - Mars aspect Moon (same-sign or opposition from natal Moon): extra -4
+      (compounds with Step 1's -8 when both fire → Mars-Moon hit can be -12)
+
+    Returns (delta, detail). Flags are stored inside detail['flags'].
+    """
+    delta = 0.0
+    flags: List[str] = []
+    detail: Dict[str, Any] = {
+        "jupiter_house": None,
+        "mars_house":    None,
+        "mars_aspect_moon": False,
+        "flags": flags,
+    }
+
+    # Jupiter house from lagna
+    if jupiter_today_sign is not None and lagna_sign is not None:
+        jh = ((jupiter_today_sign - lagna_sign) % 12) + 1
+        detail["jupiter_house"] = jh
+        if jh in KENDRA_TRIKONA:
+            delta += 6
+            flags.append("jupiter_support")
+        elif jh in DUSHTHANA:
+            delta += 2
+            flags.append("jupiter_neutral")
+
+    # Mars house from lagna
+    if mars_today_sign is not None and lagna_sign is not None:
+        mh = ((mars_today_sign - lagna_sign) % 12) + 1
+        detail["mars_house"] = mh
+        if mh in DUSHTHANA:
+            delta -= 6
+            flags.append("mars_conflict")
+
+    # Mars aspect Moon (extra -4 when same-sign or opposition from natal Moon)
+    if mars_today_sign is not None and birth_moon_sign is not None:
+        from_natal = ((mars_today_sign - birth_moon_sign) % 12) + 1
+        if from_natal in {1, 7}:
+            delta -= 4
+            detail["mars_aspect_moon"] = True
+            if "mars_conflict" not in flags:
+                flags.append("mars_conflict")
+
+    detail["delta"] = delta
+    return delta, detail
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STEP 3 — Choghadiya + Hora (lightweight time-of-day variation)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Mon=0 .. Sun=6  (Python datetime.weekday convention)
+_WEEKDAY_LORDS = {
+    0: "Moon",     # Monday
+    1: "Mars",     # Tuesday
+    2: "Mercury",  # Wednesday
+    3: "Jupiter",  # Thursday
+    4: "Venus",    # Friday
+    5: "Saturn",   # Saturday
+    6: "Sun",      # Sunday
+}
+
+# Chaldean order — planetary horas cycle in this sequence (decreasing speed)
+_CHALDEAN = ["Saturn", "Jupiter", "Mars", "Sun", "Venus", "Mercury", "Moon"]
+
+# Rahukal segment (1-8) by weekday. Day divided into 8 equal parts from
+# sunrise (assumed 06:00 local) to sunset (assumed 18:00 local) → 1.5 hr each.
+_RAHUKAL_SEGMENT = {
+    0: 2,  # Mon  : 07:30-09:00
+    1: 7,  # Tue  : 15:00-16:30
+    2: 5,  # Wed  : 12:00-13:30
+    3: 6,  # Thu  : 13:30-15:00
+    4: 4,  # Fri  : 10:30-12:00
+    5: 3,  # Sat  : 09:00-10:30
+    6: 8,  # Sun  : 16:30-18:00
+}
+
+
+def _current_hora_lord(weekday: int, hour: int) -> str:
+    """
+    Returns the planetary lord of the current hora.
+
+    First hora of the day (starting at assumed sunrise 06:00) is ruled by the
+    weekday's lord. Subsequent horas cycle through the Chaldean order.
+    """
+    day_lord = _WEEKDAY_LORDS[weekday]
+    start_idx = _CHALDEAN.index(day_lord)
+    hours_since_sunrise = (hour - 6) % 24
+    return _CHALDEAN[(start_idx + hours_since_sunrise) % 7]
+
+
+def _is_rahukal(weekday: int, hour: int, minute: int = 0) -> bool:
+    """True if local time falls inside today's Rahukal window."""
+    seg = _RAHUKAL_SEGMENT.get(weekday)
+    if seg is None:
+        return False
+    seg_start = 6 + (seg - 1) * 1.5
+    seg_end   = seg_start + 1.5
+    current   = hour + minute / 60.0
+    return seg_start <= current < seg_end
+
+
+def compute_choghadiya_hora_overlay(
+    now_local: Optional[datetime],
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    Step 3: Time-of-day quality overlay (Rahukal + Hora).
+
+    - Rahukal active                 : -6
+    - Malefic hora (Saturn/Mars)     : -3
+    - Benefic hora (Jupiter/Venus)   : +3
+
+    No-op if now_local is missing.
+    """
+    if now_local is None:
+        return 0.0, {"active": False, "reason": "no_local_time"}
+
+    weekday = now_local.weekday()
+    hour    = now_local.hour
+    minute  = now_local.minute
+
+    delta = 0.0
+    flags: List[str] = []
+
+    rahukal = _is_rahukal(weekday, hour, minute)
+    if rahukal:
+        delta -= 6
+        flags.append("rahukal")
+
+    hora_lord = _current_hora_lord(weekday, hour)
+    hora_kind: Optional[str] = None
+    if hora_lord in {"Saturn", "Mars"}:
+        delta -= 3
+        hora_kind = "malefic"
+        flags.append("hora_malefic")
+    elif hora_lord in {"Jupiter", "Venus"}:
+        delta += 3
+        hora_kind = "benefic"
+        flags.append("hora_benefic")
+
+    return delta, {
+        "active":    bool(flags),
+        "rahukal":   rahukal,
+        "hora_lord": hora_lord,
+        "hora_kind": hora_kind,
+        "weekday":   weekday,
+        "hour":      hour,
+        "delta":     delta,
+        "flags":     flags,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# STEP 5 — Dasha Lord (PD) Current Transit House Check
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compute_pd_transit_overlay(
+    pd_planet:      Optional[str],
+    transit_signs:  Dict[str, int],
+    lagna_sign:     Optional[int],
+) -> Tuple[float, Dict[str, Any]]:
+    """
+    Step 5: Where is the Pratyantar Dasha lord transiting RIGHT NOW
+    relative to the user's lagna?
+
+    - PD lord in dusthana (6, 8, 12) from lagna : -8
+    - PD lord in 1, 5, 9, 10 from lagna         : +5
+    - else                                       :  0
+    """
+    if not pd_planet or lagna_sign is None:
+        return 0.0, {"active": False, "reason": "missing_pd_or_lagna"}
+    pd_sign = transit_signs.get(pd_planet) if transit_signs else None
+    if pd_sign is None:
+        return 0.0, {"active": False, "reason": "no_transit_sign_for_pd_lord",
+                     "pd_planet": pd_planet}
+
+    pd_house = ((pd_sign - lagna_sign) % 12) + 1
+
+    if pd_house in DUSHTHANA:
+        return -8.0, {
+            "active":    True,
+            "pd_planet": pd_planet,
+            "pd_house":  pd_house,
+            "kind":      "dusthana",
+            "delta":     -8.0,
+        }
+    if pd_house in {1, 5, 9, 10}:
+        return 5.0, {
+            "active":    True,
+            "pd_planet": pd_planet,
+            "pd_house":  pd_house,
+            "kind":      "kendra_trikona",
+            "delta":     5.0,
+        }
+    return 0.0, {
+        "active":    False,
+        "pd_planet": pd_planet,
+        "pd_house":  pd_house,
+        "kind":      "neutral",
+        "delta":     0.0,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -635,7 +939,8 @@ def _check_pd_retrograde(pd_planet: Optional[str],
 
 def _compute_buckets(moon_sc: float, tara_sc: float, dasha_sc: float,
                      av_sc: float, saturn_delta: float,
-                     tithi_delta: float) -> Dict[str, Dict[str, Any]]:
+                     tithi_delta: float,
+                     tithi_mental_extra: float = 0.0) -> Dict[str, Dict[str, Any]]:
     """
     Map existing component scores into 3 user-facing buckets.
 
@@ -646,6 +951,8 @@ def _compute_buckets(moon_sc: float, tara_sc: float, dasha_sc: float,
     Mental (Shaanti) — mind/clarity/mood
         Moon transit + Tara Bal (mind-related Vedic factors)
         Tithi overlay shifts it (Rikta = mental drain, Purna = clarity)
+        STEP 4: Special-tithi mental_extra (Ekadashi/Amavasya/Purnima)
+        is added to mental ONLY — never to physical/luck/global.
 
     Luck (Bhagya) — opportunities/flow/synchronicity
         Ashtakavarga + Dasha (running luck-period)
@@ -655,7 +962,8 @@ def _compute_buckets(moon_sc: float, tara_sc: float, dasha_sc: float,
     # Tithi (Rikta/Purna) directly affects MIND — full weight on mental.
     # Both saturn + tithi affect LUCK/flow moderately.
     physical = dasha_sc * 0.50 + av_sc * 0.40 + saturn_delta * 1.2
-    mental   = moon_sc * 0.55 + tara_sc * 0.40 + tithi_delta * 1.0 + saturn_delta * 0.4
+    mental   = (moon_sc * 0.55 + tara_sc * 0.40 + tithi_delta * 1.0
+                + saturn_delta * 0.4 + tithi_mental_extra)
     luck     = av_sc   * 0.45 + dasha_sc * 0.45 + tithi_delta * 0.6 + saturn_delta * 0.7
 
     def clamp(x: float) -> int:
@@ -723,7 +1031,12 @@ def _build_active_flags(saturn_d: Dict[str, Any],
                         moon_d: Dict[str, Any],
                         tara_d: Dict[str, Any],
                         md_sandhi: bool,
-                        retrograde_pd: Optional[str]) -> List[Dict[str, Any]]:
+                        retrograde_pd: Optional[str],
+                        transit_aspects_d: Optional[Dict[str, Any]] = None,
+                        jup_mars_d:        Optional[Dict[str, Any]] = None,
+                        time_quality_d:    Optional[Dict[str, Any]] = None,
+                        pd_transit_d:      Optional[Dict[str, Any]] = None,
+                        ) -> List[Dict[str, Any]]:
     flags: List[Dict[str, Any]] = []
 
     if saturn_d.get("active"):
@@ -745,6 +1058,21 @@ def _build_active_flags(saturn_d: Dict[str, Any],
                       "tithi": tithi_d.get("tithi_name"),
                       "severity": "low"})
 
+    # STEP 4: Special tithi flags (Ekadashi / Amavasya / Purnima)
+    special = tithi_d.get("special")
+    if special == "Ekadashi":
+        flags.append({"type": "tithi_ekadashi",
+                      "tithi": tithi_d.get("tithi_name"),
+                      "severity": "low"})
+    elif special == "Amavasya":
+        flags.append({"type": "tithi_amavasya",
+                      "tithi": tithi_d.get("tithi_name"),
+                      "severity": "medium"})
+    elif special == "Purnima":
+        flags.append({"type": "tithi_purnima",
+                      "tithi": tithi_d.get("tithi_name"),
+                      "severity": "low"})
+
     tn = tara_d.get("tara")
     if tn in {"Naidhana", "Vipat"}:
         flags.append({"type": "tara", "name": tn,
@@ -756,6 +1084,64 @@ def _build_active_flags(saturn_d: Dict[str, Any],
     if retrograde_pd:
         flags.append({"type": "pd_retrograde", "planet": retrograde_pd,
                       "severity": "low"})
+
+    # STEP 1: Transit-to-natal aspect flags
+    if transit_aspects_d:
+        for asp in transit_aspects_d.get("aspects") or []:
+            if asp == "saturn_opposition_natal_moon":
+                flags.append({"type": "saturn_aspect_natal_moon",
+                              "aspect": "opposition", "severity": "high"})
+            elif asp == "mars_hit_natal_moon":
+                flags.append({"type": "mars_aspect_natal_moon",
+                              "severity": "high"})
+            elif asp.startswith("jupiter_support_natal_"):
+                target = asp.replace("jupiter_support_natal_", "")
+                flags.append({"type": "jupiter_support_natal",
+                              "target": target, "severity": "low"})
+
+    # STEP 2: Jupiter & Mars overlay flags (use lagna-relative house data)
+    if jup_mars_d:
+        for f in jup_mars_d.get("flags") or []:
+            if f == "jupiter_support":
+                flags.append({"type": "jupiter_support",
+                              "house": jup_mars_d.get("jupiter_house"),
+                              "severity": "low"})
+            elif f == "jupiter_neutral":
+                flags.append({"type": "jupiter_neutral",
+                              "house": jup_mars_d.get("jupiter_house"),
+                              "severity": "low"})
+            elif f == "mars_conflict":
+                # Single mars_conflict flag even if both house & aspect fire
+                if not any(x.get("type") == "mars_conflict" for x in flags):
+                    flags.append({"type": "mars_conflict",
+                                  "house": jup_mars_d.get("mars_house"),
+                                  "aspect_moon": jup_mars_d.get("mars_aspect_moon"),
+                                  "severity": "medium"})
+
+    # STEP 3: Choghadiya / Hora flags
+    if time_quality_d and time_quality_d.get("active"):
+        if time_quality_d.get("rahukal"):
+            flags.append({"type": "rahukal", "severity": "medium"})
+        kind = time_quality_d.get("hora_kind")
+        if kind in {"benefic", "malefic"}:
+            flags.append({"type": "hora",
+                          "lord": time_quality_d.get("hora_lord"),
+                          "kind": kind,
+                          "severity": "low"})
+
+    # STEP 5: PD lord transit house flag
+    if pd_transit_d and pd_transit_d.get("active"):
+        kind = pd_transit_d.get("kind")
+        if kind == "dusthana":
+            flags.append({"type": "pd_transit_dusthana",
+                          "planet": pd_transit_d.get("pd_planet"),
+                          "house":  pd_transit_d.get("pd_house"),
+                          "severity": "high"})
+        elif kind == "kendra_trikona":
+            flags.append({"type": "pd_transit_kendra",
+                          "planet": pd_transit_d.get("pd_planet"),
+                          "house":  pd_transit_d.get("pd_house"),
+                          "severity": "low"})
 
     return flags
 
@@ -856,7 +1242,10 @@ def calculate_energy(user_data: Dict[str, Any],
                      today_moon: Dict[str, Any],
                      date_iso: Optional[str] = None,
                      today_sun: Optional[Dict[str, Any]] = None,
-                     today_saturn: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                     today_saturn: Optional[Dict[str, Any]] = None,
+                     today_planets: Optional[Dict[str, Dict[str, Any]]] = None,
+                     now_local: Optional[datetime] = None,
+                     ) -> Dict[str, Any]:
     """
     Compute today's energy score for one user.
 
@@ -869,6 +1258,13 @@ def calculate_energy(user_data: Dict[str, Any],
         - longitude (sidereal)
         - rashiIndex (0-11)  — optional, derived from longitude
         - nakshatraIndex (0-26) — optional, derived from longitude
+    today_planets (optional, NEW for v3.1 5-step upgrade):
+        - dict {planet_name: {longitude, rashiIndex}} for all 7 grahas + Rahu/Ketu
+        - powers Steps 1, 2, 5 (transit aspects, Jupiter/Mars overlay, PD transit)
+        - falls back to today_sun/today_saturn if not provided
+    now_local (optional, NEW for v3.1):
+        - local datetime for the user's timezone (default IST)
+        - powers Step 3 (Choghadiya + Hora)
     """
     today = date_iso or _today_iso()
 
@@ -906,6 +1302,8 @@ def calculate_energy(user_data: Dict[str, Any],
     _sign_map = _planet_sign_lookup(planets, lagna_sign)
     if "Moon" in _sign_map:
         birth_moon_sign = _sign_map["Moon"]
+    # Birth Sun sign (for Step 1 — Jupiter→natal Sun aspect)
+    birth_sun_sign: Optional[int] = _sign_map.get("Sun") if "Sun" in _sign_map else None
 
     # ── Moon-Sun angle at birth (for Paksha Bala inside Shadbala) ────────
     moon_sun_angle: Optional[float] = None
@@ -920,6 +1318,32 @@ def calculate_energy(user_data: Dict[str, Any],
     saturn_sign: Optional[int] = (today_saturn or {}).get("rashiIndex") if isinstance(today_saturn, dict) else None
     if saturn_sign is None and isinstance(sat_today_lon, (int, float)):
         saturn_sign = int(sat_today_lon / 30) % 12
+
+    # ── Build transit_signs dict (preferred from today_planets, fallback) ─
+    transit_signs: Dict[str, int] = {}
+    if today_planets:
+        for pname, pdata in today_planets.items():
+            if not isinstance(pdata, dict):
+                continue
+            sidx = pdata.get("rashiIndex")
+            if sidx is None and isinstance(pdata.get("longitude"), (int, float)):
+                sidx = int(pdata["longitude"] / 30) % 12
+            if isinstance(sidx, int):
+                transit_signs[pname] = sidx % 12
+    # Backward-compat fallback for callers that didn't pass today_planets
+    if "Moon" not in transit_signs and isinstance(moon_sign, int):
+        transit_signs["Moon"] = moon_sign
+    if "Sun" not in transit_signs and isinstance(today_sun, dict):
+        s = today_sun.get("rashiIndex")
+        if s is None and isinstance(sun_today_lon, (int, float)):
+            s = int(sun_today_lon / 30) % 12
+        if isinstance(s, int):
+            transit_signs["Sun"] = s
+    if "Saturn" not in transit_signs and isinstance(saturn_sign, int):
+        transit_signs["Saturn"] = saturn_sign
+
+    mars_sign    = transit_signs.get("Mars")
+    jupiter_sign = transit_signs.get("Jupiter")
 
     # ── Components (Aspect/Shadbala dropped — static birth chart) ────────
     dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
@@ -938,6 +1362,7 @@ def calculate_energy(user_data: Dict[str, Any],
     # ── Overlays ─────────────────────────────────────────────────────────
     saturn_delta, saturn_d = compute_saturn_overlay(saturn_sign, birth_moon_sign)
     tithi_delta,  tithi_d  = compute_tithi_overlay(sun_today_lon, moon_lon)
+    tithi_mental_extra = float(tithi_d.get("mental_extra") or 0.0)  # STEP 4
 
     # Inject delta into saturn_d so downstream summary/confidence/flags can read it
     saturn_d = {**saturn_d, "delta": saturn_delta}
@@ -948,7 +1373,30 @@ def calculate_energy(user_data: Dict[str, Any],
     md_sandhi = _detect_md_sandhi(dashas_list, today)
     md_sandhi_delta = -5.0 if md_sandhi else 0.0
 
-    raw_energy = base_energy + saturn_delta + tithi_delta + md_sandhi_delta
+    # ── STEP 1: Transit-to-natal aspects ─────────────────────────────────
+    aspect_delta, transit_aspects_d = compute_transit_natal_aspects(
+        saturn_sign, mars_sign, jupiter_sign,
+        birth_moon_sign, birth_sun_sign,
+    )
+
+    # ── STEP 2: Jupiter & Mars current-transit overlay ───────────────────
+    jup_mars_delta, jup_mars_d = compute_jupiter_mars_overlay(
+        jupiter_sign, mars_sign, lagna_sign, birth_moon_sign,
+    )
+
+    # ── STEP 3: Choghadiya + Hora time-of-day overlay ────────────────────
+    time_quality_delta, time_quality_d = compute_choghadiya_hora_overlay(now_local)
+
+    # ── STEP 5: PD lord current-transit house check ──────────────────────
+    pd_planet_for_transit = (dasha_d.get("pd") or {}).get("planet") if isinstance(dasha_d, dict) else None
+    pd_transit_delta, pd_transit_d = compute_pd_transit_overlay(
+        pd_planet_for_transit, transit_signs, lagna_sign,
+    )
+
+    raw_energy = (base_energy
+                  + saturn_delta + tithi_delta + md_sandhi_delta
+                  + aspect_delta + jup_mars_delta
+                  + time_quality_delta + pd_transit_delta)
 
     # ── Compression curve (pulls high end down) ──────────────────────────
     compressed = _compress_high_end(raw_energy)
@@ -984,10 +1432,16 @@ def calculate_energy(user_data: Dict[str, Any],
 
     # ── Buckets, confidence, flags ───────────────────────────────────────
     buckets = _compute_buckets(moon_sc, tara_sc, dasha_sc, av_sc,
-                                saturn_delta, tithi_delta)
+                                saturn_delta, tithi_delta,
+                                tithi_mental_extra)   # STEP 4: mental-only
     confidence = _compute_confidence(parts, saturn_d, tithi_d, moon_d, tara_d)
-    active_flags = _build_active_flags(saturn_d, tithi_d, moon_d, tara_d,
-                                        md_sandhi, retrograde_pd)
+    active_flags = _build_active_flags(
+        saturn_d, tithi_d, moon_d, tara_d, md_sandhi, retrograde_pd,
+        transit_aspects_d=transit_aspects_d,
+        jup_mars_d=jup_mars_d,
+        time_quality_d=time_quality_d,
+        pd_transit_d=pd_transit_d,
+    )
 
     return {
         "energy_score":     score,
@@ -1012,6 +1466,14 @@ def calculate_energy(user_data: Dict[str, Any],
             "saturn":            {"delta": saturn_delta, **saturn_d},
             "tithi":             {"delta": tithi_delta,  **tithi_d},
             "md_sandhi":         {"active": md_sandhi, "delta": md_sandhi_delta},
+            # STEP 1 — transit aspects to natal Moon/Sun
+            "transit_aspects":   {"delta": aspect_delta, **transit_aspects_d},
+            # STEP 2 — Jupiter & Mars current-transit overlay
+            "jupiter_mars":      {"delta": jup_mars_delta, **jup_mars_d},
+            # STEP 3 — Choghadiya / Hora time-of-day quality
+            "time_quality":      {"delta": time_quality_delta, **time_quality_d},
+            # STEP 5 — PD lord transiting house from lagna
+            "pd_transit":        {"delta": pd_transit_delta, **pd_transit_d},
             "base_score":        round(base_energy, 1),
             "after_overlays":    round(raw_energy, 1),
             "after_compression": round(compressed, 1),

@@ -2093,41 +2093,77 @@ def energy_today():
         except Exception:
             return jsonify({"error": "Saved kundli is corrupted"}), 500
 
-    # ── Compute today's Moon, Sun, Saturn (sidereal) ─────────────────────
+    # ── Compute today's transit positions for ALL grahas (sidereal) ──────
+    # v3.1 5-step upgrade: Steps 1, 2, 5 need Mars/Jupiter/Mercury/Venus/Rahu
+    # transit signs in addition to Sun/Moon/Saturn already used by overlays.
     jd = swe.julday(day.year, day.month, day.day,
                     day.hour + day.minute / 60.0)
     flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-    moon_lon   = swe.calc_ut(jd, swe.MOON,   flags)[0][0] % 360.0
-    sun_lon    = swe.calc_ut(jd, swe.SUN,    flags)[0][0] % 360.0
-    saturn_lon = swe.calc_ut(jd, swe.SATURN, flags)[0][0] % 360.0
 
+    _PLANET_SWE = {
+        "Sun":     swe.SUN,
+        "Moon":    swe.MOON,
+        "Mars":    swe.MARS,
+        "Mercury": swe.MERCURY,
+        "Jupiter": swe.JUPITER,
+        "Venus":   swe.VENUS,
+        "Saturn":  swe.SATURN,
+    }
+    today_planets: Dict[str, Dict[str, Any]] = {}
+    for pname, pcode in _PLANET_SWE.items():
+        plon = swe.calc_ut(jd, pcode, flags)[0][0] % 360.0
+        today_planets[pname] = {
+            "longitude":  round(plon, 4),
+            "rashiIndex": int(plon / 30) % 12,
+        }
+    # Rahu (mean node) + Ketu (Rahu + 180°) for PD-lord transit when PD = Rahu/Ketu
+    try:
+        rahu_lon = swe.calc_ut(jd, swe.MEAN_NODE, flags)[0][0] % 360.0
+        today_planets["Rahu"] = {
+            "longitude":  round(rahu_lon, 4),
+            "rashiIndex": int(rahu_lon / 30) % 12,
+        }
+        ketu_lon = (rahu_lon + 180.0) % 360.0
+        today_planets["Ketu"] = {
+            "longitude":  round(ketu_lon, 4),
+            "rashiIndex": int(ketu_lon / 30) % 12,
+        }
+    except Exception:
+        pass  # nodes optional — PD transit just no-ops if PD is Rahu/Ketu
+
+    moon_lon = today_planets["Moon"]["longitude"]
     today_moon = {
-        "longitude":      round(moon_lon, 4),
-        "rashiIndex":     int(moon_lon / 30) % 12,
+        "longitude":      moon_lon,
+        "rashiIndex":     today_planets["Moon"]["rashiIndex"],
         "nakshatraIndex": int(moon_lon / (360 / 27)) % 27,
     }
-    today_sun = {
-        "longitude":  round(sun_lon, 4),
-        "rashiIndex": int(sun_lon / 30) % 12,
-    }
-    today_saturn = {
-        "longitude":  round(saturn_lon, 4),
-        "rashiIndex": int(saturn_lon / 30) % 12,
-    }
+    today_sun    = today_planets["Sun"]
+    today_saturn = today_planets["Saturn"]
 
-    # ── Run engine (with Saturn + Tithi overlays) ────────────────────────
+    # ── now_local for Step 3 (Choghadiya/Hora). Default IST. ─────────────
+    # For backdated dates use noon of that date in IST.
+    from datetime import timedelta as _td
+    if date_str:
+        now_local = _dt.strptime(date_str, "%Y-%m-%d").replace(hour=12, minute=0)
+    else:
+        now_local = _dt.utcnow() + _td(hours=5, minutes=30)
+
+    # ── Run engine (5-step v3.1) ─────────────────────────────────────────
     result = calculate_energy(
         kundli_dict, today_moon,
         date_iso=date_iso,
         today_sun=today_sun,
         today_saturn=today_saturn,
+        today_planets=today_planets,
+        now_local=now_local,
     )
     if "error" in result:
         return jsonify(result), 400
 
-    result["today_moon"]   = today_moon
-    result["today_sun"]    = today_sun
-    result["today_saturn"] = today_saturn
+    result["today_moon"]    = today_moon
+    result["today_sun"]     = today_sun
+    result["today_saturn"]  = today_saturn
+    result["today_planets"] = today_planets
     return jsonify(result)
 
 

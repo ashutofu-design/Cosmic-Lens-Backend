@@ -478,8 +478,8 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
         </View>
       )}
 
-      {/* ── Bottom: insight (or top flag) + tap hint ── */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      {/* ── Bottom: insight (or top flag) ── */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
         {topFlag ? (
           <View style={[hero.insightPill, { backgroundColor: `${topFlag.color}10`, borderColor: `${topFlag.color}30` }]}>
             <Text style={hero.insightIcon}>{topFlag.icon}</Text>
@@ -491,10 +491,6 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
             <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
           </View>
         )}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-          <Text style={{ fontSize: 9.5, fontFamily: F.medium, color: `${insight.color}70` }}>{L.forecast7day}</Text>
-          <Feather name="chevron-right" size={10} color={`${insight.color}60`} />
-        </View>
       </View>
     </View>
   );

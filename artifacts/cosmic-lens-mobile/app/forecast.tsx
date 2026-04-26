@@ -1,5 +1,4 @@
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -20,265 +19,8 @@ import { useT } from "@/hooks/useT";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+import { computeRisk, DayForecast, fmtDate } from "@/components/RiskRadarCard";
 
-// ── Risk Radar types ─────────────────────────────────────────────────────────
-//   Each day carries its own risk profile derived from its energy score.
-//   `riskShort` is the FREE 1-line generic warning (every user sees it).
-//   `riskCategory` + `riskDetail` + `riskRemedy` are the PAID payload — the
-//   forecast page locks them behind a paywall for days 3-7 to drive return
-//   visits + premium conversion.
-type RiskLevel = "low" | "med" | "high";
-
-interface LuckyColor { name: string; emoji: string; hex: string; }
-
-interface DayForecast {
-  date: Date;
-  score: number;
-  moonLon: number;
-  moonSign: string;
-  phase: string;
-  summary: string;
-  // Risk Radar fields (computed per-day from score + day index + date)
-  riskLevel:    RiskLevel;
-  riskScore:    number;   // 0-10 gauge value
-  riskShort:    string;   // 1-line generic warning
-  riskCategory: string;   // e.g. "Communication", "Money"
-  riskDetail:   string;   // specific Hinglish what-the-risk-is line
-  riskDhyan:    string;   // what to be mindful of
-  riskAvoid:    string;   // what to avoid
-  riskKarna:    string;   // what to do
-  riskRemedy:   string;   // actionable upay
-  luckyNumbers: number[]; // 3 numbers (1-99)
-  luckyColor:   LuckyColor;
-  bestTime:     string;   // e.g. "10:30 AM — 12:45 PM"
-  avoidTime:    string;   // e.g. "3:15 PM — 5:00 PM"
-}
-
-// ── Risk content library ─────────────────────────────────────────────────────
-//   Curated Hinglish content covering all 4 quadrants of the 24-hour
-//   breakdown (risk / dhyan / avoid / karna). Generic enough to feel
-//   personalised without exposing any astrology jargon (no planet/dasha
-//   names), per the project's "Powered by Advanced Cosmic Intelligence" rule.
-const RISK_BY_LEVEL: Record<RiskLevel, {
-  shorts:  string[];
-  details: {
-    cat: string;
-    detail: string;
-    dhyan:  string;
-    avoid:  string;
-    karna:  string;
-    remedy: string;
-  }[];
-}> = {
-  low: {
-    shorts: [
-      "Stable din — apne kaam pe focus karo",
-      "Cosmic energies aapke favor mein hain",
-      "Smooth flow ka din hai",
-    ],
-    details: [
-      {
-        cat: "Career",
-        detail: "Naye projects ya pitches start karne ka safe din. Important conversations productive rahengi.",
-        dhyan:  "Opportunities ko khule mann se accept karein, momentum banaye rakhein.",
-        avoid:  "Negative logon ki advice, pessimistic news, ya self-doubt.",
-        karna:  "Meetings, presentations, networking, naye ideas pitch karein.",
-        remedy: "Subah 5 minute Surya Namaskar — energy boost ke liye.",
-      },
-      {
-        cat: "Money",
-        detail: "Investments aur savings ke liye accha din. Long-term financial decisions safely le sakte hain.",
-        dhyan:  "Long-term planning par focus rakhein, short-term shor ko ignore karein.",
-        avoid:  "Bekar ke kharch, impulse purchases, gambling.",
-        karna:  "SIP, bachat schemes, ya bills clear karein. Budget review karein.",
-        remedy: "Peeli ya golden kapde pehnna shubh rahega.",
-      },
-      {
-        cat: "Health",
-        detail: "Vitality high rahegi. Workout, meditation ya naye healthy habits build karne ka perfect time.",
-        dhyan:  "Routine maintain karein, sleep schedule consistent rakhein.",
-        avoid:  "Junk food, late-night screen time, alcohol.",
-        karna:  "Yoga, walk, healthy meal plan, hydration badhayein.",
-        remedy: "Subah tulsi-paani — overall wellness ke liye.",
-      },
-    ],
-  },
-  med: {
-    shorts: [
-      "Mixed signals — soch samajh ke decisions lo",
-      "Communication mein clarity rakhe",
-      "Patience aaj ka mantra hai",
-    ],
-    details: [
-      {
-        cat: "Communication",
-        detail: "Misunderstandings ka risk hai. Important messages double-check karein, clarity rakhein.",
-        dhyan:  "Har message aur email padh ke samajh ke bhejein.",
-        avoid:  "Voice calls bina prep ke, important texts jaldi mein, gossip.",
-        karna:  "Written confirmation lein, points note karein, listen pehle.",
-        remedy: "Important call ya meeting se pehle 5 deep breaths.",
-      },
-      {
-        cat: "Decisions",
-        detail: "Bade decisions postpone karein. Routine kaam continue, naye commitments aaj avoid karein.",
-        dhyan:  "Choti baatein bhi soch samajh ke karein, jaldbaazi nahi.",
-        avoid:  "Bade purchases, contracts sign karna, naye commitments.",
-        karna:  "Documents review karein, planning karein, pros-cons list banayein.",
-        remedy: "Decision se pehle paani peeke 2 min ruk jaayein.",
-      },
-      {
-        cat: "Relations",
-        detail: "Family ya partner se patience se baat karein. Choti baatein bade misunderstanding ban sakti hain.",
-        dhyan:  "Doosron ke mood aur tone ka khayal rakhein.",
-        avoid:  "Sensitive topics, criticism, gussa, blame game.",
-        karna:  "Sunne ka time dein, gratitude express karein, quality time spend karein.",
-        remedy: "Shaam ko ghar mein diya jalaayein — peace ke liye.",
-      },
-    ],
-  },
-  high: {
-    shorts: [
-      "Saavdhan rahe — important decisions postpone karo",
-      "Conflicts avoid karne ki koshish kare",
-      "Energy low — apna khayal rakhe",
-    ],
-    details: [
-      {
-        cat: "Conflict",
-        detail: "Arguments aur disputes ka risk high hai. Confrontations avoid karein — silence is power aaj.",
-        dhyan:  "Apna gussa aur reactions control mein rakhein.",
-        avoid:  "Arguments, blame game, sharp words, social media debates.",
-        karna:  "Solo time lein, meditation karein, breathing exercises.",
-        remedy: "Hanuman Chalisa ya Maha Mrityunjaya 11 baar.",
-      },
-      {
-        cat: "Money",
-        detail: "Financial decisions strictly avoid. Naye loans, investments aur big purchases postpone karein.",
-        dhyan:  "Existing savings safely rakhein, panic se decisions na lein.",
-        avoid:  "Loans, investments, bade purchases, kisi ko paisa udhaar dena.",
-        karna:  "Budget review karein, expenses track karein, savings safe karein.",
-        remedy: "Daan karein — chhota hi sahi, doosron ki madad.",
-      },
-      {
-        cat: "Health",
-        detail: "Energy aur immunity low rahegi. Heavy workouts skip karein, rest aur hydration priority dein.",
-        dhyan:  "Body ke signals sune — thakaan ho toh rest karein.",
-        avoid:  "Heavy workouts, late nights, junk food, alcohol.",
-        karna:  "Hydration, neend, light meals, gentle stretches.",
-        remedy: "Adrak-haldi paani din mein 2 baar.",
-      },
-    ],
-  },
-};
-
-function scoreToRiskScore(score: number): number {
-  // Inverse, slightly sharpened so the demo range produces variety:
-  //   score 100 → 0, 65 → 5, 50 → 7, 35 → 9, 0 → 10
-  return Math.round(Math.max(0, Math.min(10, (100 - score) / 7)));
-}
-
-function scoreToRiskLevel(rs: number): RiskLevel {
-  if (rs <= 3) return "low";
-  if (rs <= 6) return "med";
-  return "high";
-}
-
-// ── Lucky helpers ────────────────────────────────────────────────────────────
-//   All deterministic from date+score so the same day always produces the
-//   same "lucky" output. Day-to-day variation comes from the date hash.
-const LUCKY_COLORS: Record<RiskLevel, LuckyColor[]> = {
-  low: [
-    { name: "Hara",     emoji: "🟢", hex: "#4ade80" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-    { name: "Safed",    emoji: "⚪", hex: "#f3f4f6" },
-  ],
-  med: [
-    { name: "Neela",    emoji: "🔵", hex: "#60a5fa" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-    { name: "Suneheri", emoji: "🟠", hex: "#fb923c" },
-  ],
-  high: [
-    { name: "Safed",    emoji: "⚪", hex: "#f3f4f6" },
-    { name: "Kesari",   emoji: "🟠", hex: "#fb923c" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-  ],
-};
-
-const BEST_TIME_SLOTS = [
-  "10:30 AM — 12:45 PM",
-  "8:00 AM — 10:15 AM",
-  "4:30 PM — 6:30 PM",
-  "11:00 AM — 1:15 PM",
-  "9:00 AM — 11:00 AM",
-  "5:00 PM — 7:00 PM",
-  "7:30 AM — 9:45 AM",
-];
-
-const AVOID_TIME_SLOTS = [
-  "3:15 PM — 5:00 PM",
-  "1:00 PM — 2:30 PM",
-  "7:00 PM — 8:30 PM",
-  "2:30 PM — 4:00 PM",
-  "12:30 PM — 2:00 PM",
-  "8:00 PM — 9:30 PM",
-  "1:45 PM — 3:15 PM",
-];
-
-function dayHash(dateMs: number): number {
-  return Math.floor(dateMs / 86400000);
-}
-
-function getLuckyNumbers(dateMs: number, score: number): number[] {
-  const seed = dayHash(dateMs) + score;
-  const nums: number[] = [];
-  let i = 1;
-  while (nums.length < 3 && i < 60) {
-    const n = ((Math.abs(seed * (i * 17 + 7))) % 99) + 1;
-    if (!nums.includes(n)) nums.push(n);
-    i++;
-  }
-  return nums;
-}
-
-function getLuckyColor(level: RiskLevel, dateMs: number): LuckyColor {
-  const arr = LUCKY_COLORS[level];
-  return arr[dayHash(dateMs) % arr.length];
-}
-
-function getBestTime(dateMs: number): string {
-  return BEST_TIME_SLOTS[dayHash(dateMs) % BEST_TIME_SLOTS.length];
-}
-
-function getAvoidTime(dateMs: number): string {
-  // Offset by 2 so best/avoid don't accidentally overlap on the same day.
-  return AVOID_TIME_SLOTS[(dayHash(dateMs) + 2) % AVOID_TIME_SLOTS.length];
-}
-
-function computeRisk(score: number, dayIdx: number, date: Date) {
-  const riskScore = scoreToRiskScore(score);
-  const level     = scoreToRiskLevel(riskScore);
-  const bucket    = RISK_BY_LEVEL[level];
-  const shortLine = bucket.shorts[dayIdx % bucket.shorts.length];
-  const det       = bucket.details[dayIdx % bucket.details.length];
-  const dateMs    = date.getTime();
-  return {
-    riskLevel: level,
-    riskScore,
-    riskShort:    shortLine,
-    riskCategory: det.cat,
-    riskDetail:   det.detail,
-    riskDhyan:    det.dhyan,
-    riskAvoid:    det.avoid,
-    riskKarna:    det.karna,
-    riskRemedy:   det.remedy,
-    luckyNumbers: getLuckyNumbers(dateMs, score),
-    luckyColor:   getLuckyColor(level, dateMs),
-    bestTime:     getBestTime(dateMs),
-    avoidTime:    getAvoidTime(dateMs),
-  };
-}
 
 const SIGNS = [
   "Mesh","Vrishabh","Mithun","Kark","Simha","Kanya",
@@ -614,287 +356,6 @@ function WeekChart({
   );
 }
 
-// ── Cosmic Risk Radar ────────────────────────────────────────────────────────
-//   A consolidated per-day risk module that bundles every "what's happening
-//   in my next 24 hours" signal into one card: gauge, 24-hour breakdown
-//   (risk / dhyan / avoid / karna), upay, lucky numbers, lucky color, best
-//   time, and avoid time. Day 1 is a free preview for everyone; Day 2-7 are
-//   premium-gated (currently proxied via "kundli set"). The Safest /
-//   Challenging chips at the top double as week navigation.
-//
-//   Streak counter (top-right) increments once per UTC day and resets on a
-//   missed day — the daily-return habit hook.
-const FREE_DAYS = 1;  // only Day 1 is a free preview for non-premium users
-function RiskRadar({
-  days, selected, onSelect, fullAccess,
-}: {
-  days: DayForecast[]; selected: number; onSelect: (i: number) => void;
-  // True when the user has premium access (currently proxied via "kundli set").
-  // When false, only Day 1 is unlocked; Days 2-7 show the upgrade card.
-  fullAccess: boolean;
-}) {
-  const C = useC();
-
-  // ── Daily streak counter ─────────────────────────────────────────────────
-  // Persisted via AsyncStorage. Increments once per UTC day on first open;
-  // resets to 1 if the user missed a day. Only rendered when streak >= 2 so
-  // the badge doesn't clutter the header on day-1 installs.
-  const [streak, setStreak] = useState(0);
-  useEffect(() => {
-    (async () => {
-      try {
-        const today  = new Date().toISOString().slice(0, 10);
-        const last   = await AsyncStorage.getItem("@cl_radar_last_open");
-        const cntStr = await AsyncStorage.getItem("@cl_radar_streak");
-        const cnt    = parseInt(cntStr || "0", 10) || 0;
-        if (last === today) { setStreak(cnt); return; }
-        const yest = new Date(); yest.setUTCDate(yest.getUTCDate() - 1);
-        const yestStr = yest.toISOString().slice(0, 10);
-        const newCnt  = (last === yestStr) ? (cnt + 1) : 1;
-        await AsyncStorage.setItem("@cl_radar_last_open", today);
-        await AsyncStorage.setItem("@cl_radar_streak",    String(newCnt));
-        setStreak(newCnt);
-      } catch { /* AsyncStorage unavailable — streak stays 0, badge hides */ }
-    })();
-  }, []);
-
-  if (days.length === 0) return null;
-  const sel = days[selected];
-  if (!sel) return null;
-
-  // Find the safest (lowest risk) and riskiest (highest risk) days of the week.
-  let safestIdx = 0, riskiestIdx = 0;
-  days.forEach((d, i) => {
-    if (d.riskScore < days[safestIdx].riskScore)   safestIdx   = i;
-    if (d.riskScore > days[riskiestIdx].riskScore) riskiestIdx = i;
-  });
-
-  const isLocked = !fullAccess && selected >= FREE_DAYS;
-  const levelColor =
-    sel.riskLevel === "low" ? "#4ade80" :
-    sel.riskLevel === "med" ? "#fbbf24" : "#ef4444";
-  const levelLabel =
-    sel.riskLevel === "low" ? "LOW" :
-    sel.riskLevel === "med" ? "MEDIUM" : "HIGH";
-
-  // Marker x-position on the gauge: 0/10 → 0%, 10/10 → 100%.
-  const markerPct = `${(sel.riskScore / 10) * 100}%` as `${number}%`;
-
-  return (
-    <View style={[s.riskCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-      {/* Header — title, streak badge, day position */}
-      <View style={s.riskHeader}>
-        <View style={s.riskTitleRow}>
-          <Feather name="alert-triangle" size={13} color="#fbbf24" />
-          <Text style={[s.riskTitle, { color: C.text }]}>Cosmic Risk Radar</Text>
-        </View>
-        <View style={s.riskHeaderRight}>
-          {streak >= 2 && (
-            <View style={s.streakPill}>
-              <Text style={s.streakPillText}>🔥 {streak}</Text>
-            </View>
-          )}
-          <Text style={[s.riskHeaderHint, { color: C.textDim }]}>Day {selected + 1} of 7</Text>
-        </View>
-      </View>
-
-      {/* Week highlights — Safest / Challenging chips (always visible, free teaser) */}
-      <View style={s.riskChipsRow}>
-        <Pressable
-          onPress={() => { onSelect(safestIdx); Haptics.selectionAsync(); }}
-          style={[s.riskChip, {
-            backgroundColor: "rgba(74,222,128,0.10)",
-            borderColor:     "rgba(74,222,128,0.30)",
-          }]}
-        >
-          <Text style={[s.riskChipLabel, { color: "#4ade80" }]}>SAFEST</Text>
-          <Text style={[s.riskChipDay,   { color: C.text }]}>{fmtDate(days[safestIdx].date)}</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { onSelect(riskiestIdx); Haptics.selectionAsync(); }}
-          style={[s.riskChip, {
-            backgroundColor: "rgba(239,68,68,0.10)",
-            borderColor:     "rgba(239,68,68,0.30)",
-          }]}
-        >
-          <Text style={[s.riskChipLabel, { color: "#ef4444" }]}>CHALLENGING</Text>
-          <Text style={[s.riskChipDay,   { color: C.text }]}>{fmtDate(days[riskiestIdx].date)}</Text>
-        </Pressable>
-      </View>
-
-      {isLocked ? (
-        // ── Locked overlay for premium-gated days ──────────────────────────
-        <Pressable
-          style={[s.riskLockedCard, {
-            backgroundColor: "rgba(251,191,36,0.06)",
-            borderColor:     "rgba(251,191,36,0.30)",
-          }]}
-          onPress={() => router.push("/onboarding")}
-        >
-          <View style={s.riskLockedTop}>
-            <Feather name="lock" size={14} color="#fbbf24" />
-            <Text style={s.riskLockedTitle}>{fmtDate(sel.date)} ka radar locked</Text>
-          </View>
-          <Text style={s.riskLockedSub}>
-            Aane wale dino ka full radar — risk level, kya karna/avoid karna,
-            lucky numbers, best time aur upay — Premium se unlock karein.
-          </Text>
-          <Pressable
-            onPress={(e) => { e.stopPropagation?.(); onSelect(0); Haptics.selectionAsync(); }}
-            style={[s.riskLockedHint, { borderColor: C.border }]}
-          >
-            <Text style={[s.riskLockedHintText, { color: C.textMuted }]}>
-              💡 Day 1 free hai — preview ke liye tap karein
-            </Text>
-          </Pressable>
-          <View style={s.riskLockedCta}>
-            <Text style={s.riskLockedCtaText}>UNLOCK PREMIUM</Text>
-            <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={11} color="#fbbf24" />
-          </View>
-        </Pressable>
-      ) : (
-        <>
-          {/* ── Risk level gauge ─────────────────────────────────────────── */}
-          <View style={s.gaugeHeaderRow}>
-            <Text style={[s.gaugeMicroLabel, { color: C.textMuted }]}>RISK LEVEL</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={[s.gaugeLevelText, { color: levelColor   }]}>{levelLabel}</Text>
-              <Text style={[s.gaugeValueText, { color: C.textMuted  }]}>{sel.riskScore}/10</Text>
-            </View>
-          </View>
-          <View style={s.gaugeTrack}>
-            <View style={[s.gaugeSeg, { backgroundColor: "rgba(74,222,128,0.22)",  borderTopLeftRadius: 4, borderBottomLeftRadius: 4 }]} />
-            <View style={[s.gaugeSeg, { backgroundColor: "rgba(251,191,36,0.22)" }]} />
-            <View style={[s.gaugeSeg, { backgroundColor: "rgba(239,68,68,0.22)",   borderTopRightRadius: 4, borderBottomRightRadius: 4 }]} />
-            <View style={[s.gaugeMarker, {
-              left: markerPct,
-              backgroundColor: levelColor,
-              shadowColor: levelColor,
-            }]} />
-          </View>
-          <View style={s.gaugeScaleRow}>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Low</Text>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>Med</Text>
-            <Text style={[s.gaugeScaleText, { color: C.textDim }]}>High</Text>
-          </View>
-
-          {/* 1-line generic warning */}
-          <View style={[s.riskShortRow, { borderColor: C.border }]}>
-            <Text style={s.riskShortIcon}>💬</Text>
-            <Text style={[s.riskShortText, { color: C.text }]}>{sel.riskShort}</Text>
-          </View>
-
-          {/* ── 24-hour breakdown — 4 quadrants ──────────────────────────── */}
-          <View style={s.breakdownHeader}>
-            <Feather name="clock" size={11} color={C.textMuted} />
-            <Text style={[s.breakdownHeaderText, { color: C.textMuted }]}>
-              {selected === 0 ? "AAJ KE 24 GHANTE" : `${fmtDate(sel.date).toUpperCase()} KE 24 GHANTE`}
-            </Text>
-          </View>
-
-          <View style={[s.breakdownRow, {
-            backgroundColor: `${levelColor}10`,
-            borderColor:     `${levelColor}30`,
-          }]}>
-            <View style={[s.breakdownIconBox, { backgroundColor: `${levelColor}22` }]}>
-              <Feather name="alert-triangle" size={14} color={levelColor} />
-            </View>
-            <View style={s.breakdownText}>
-              <Text style={[s.breakdownLabel, { color: levelColor }]}>KYA RISK HAI</Text>
-              <Text style={[s.breakdownBody,  { color: C.text     }]}>{sel.riskDetail}</Text>
-            </View>
-          </View>
-
-          <View style={[s.breakdownRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={[s.breakdownIconBox, { backgroundColor: "rgba(96,165,250,0.18)" }]}>
-              <Feather name="eye" size={14} color="#60a5fa" />
-            </View>
-            <View style={s.breakdownText}>
-              <Text style={[s.breakdownLabel, { color: "#60a5fa" }]}>KYA DHYAN RAKHNA HAI</Text>
-              <Text style={[s.breakdownBody,  { color: C.text    }]}>{sel.riskDhyan}</Text>
-            </View>
-          </View>
-
-          <View style={[s.breakdownRow, {
-            backgroundColor: "rgba(239,68,68,0.08)",
-            borderColor:     "rgba(239,68,68,0.25)",
-          }]}>
-            <View style={[s.breakdownIconBox, { backgroundColor: "rgba(239,68,68,0.22)" }]}>
-              <Feather name="x-circle" size={14} color="#ef4444" />
-            </View>
-            <View style={s.breakdownText}>
-              <Text style={[s.breakdownLabel, { color: "#ef4444" }]}>KYA AVOID KARNA HAI</Text>
-              <Text style={[s.breakdownBody,  { color: C.text    }]}>{sel.riskAvoid}</Text>
-            </View>
-          </View>
-
-          <View style={[s.breakdownRow, {
-            backgroundColor: "rgba(74,222,128,0.08)",
-            borderColor:     "rgba(74,222,128,0.25)",
-          }]}>
-            <View style={[s.breakdownIconBox, { backgroundColor: "rgba(74,222,128,0.22)" }]}>
-              <Feather name="check-circle" size={14} color="#4ade80" />
-            </View>
-            <View style={s.breakdownText}>
-              <Text style={[s.breakdownLabel, { color: "#4ade80" }]}>KYA KARNA HAI</Text>
-              <Text style={[s.breakdownBody,  { color: C.text    }]}>{sel.riskKarna}</Text>
-            </View>
-          </View>
-
-          {/* ── Mini upay ────────────────────────────────────────────────── */}
-          <View style={[s.riskRemedyRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={s.riskRemedyIcon}>🪔</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.riskRemedyLabel, { color: C.textMuted }]}>UPAY</Text>
-              <Text style={[s.riskRemedyText,  { color: C.text      }]}>{sel.riskRemedy}</Text>
-            </View>
-          </View>
-
-          {/* ── Lucky grid — numbers + color (row 1), best/avoid time (row 2) ── */}
-          <View style={s.luckyGrid}>
-            <View style={[s.luckyTile, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.luckyTileLabel, { color: C.textMuted }]}>🍀 LUCKY NUMBERS</Text>
-              <View style={s.luckyNumRow}>
-                {sel.luckyNumbers.map((n) => (
-                  <View key={n} style={[s.luckyNumPill, { borderColor: C.border }]}>
-                    <Text style={[s.luckyNumText, { color: C.text }]}>{n}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-            <View style={[s.luckyTile, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[s.luckyTileLabel, { color: C.textMuted }]}>🎨 LUCKY COLOR</Text>
-              <View style={s.luckyColorRow}>
-                <View style={[s.luckyColorSwatch, {
-                  backgroundColor: sel.luckyColor.hex,
-                  borderColor:     sel.luckyColor.hex === "#f3f4f6" ? "rgba(255,255,255,0.3)" : "transparent",
-                }]} />
-                <Text style={[s.luckyColorName, { color: C.text }]}>{sel.luckyColor.name}</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={s.luckyGrid}>
-            <View style={[s.luckyTile, {
-              backgroundColor: "rgba(74,222,128,0.08)",
-              borderColor:     "rgba(74,222,128,0.25)",
-            }]}>
-              <Text style={[s.luckyTileLabel, { color: "#4ade80" }]}>⏰ BEST TIME</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{sel.bestTime}</Text>
-            </View>
-            <View style={[s.luckyTile, {
-              backgroundColor: "rgba(239,68,68,0.08)",
-              borderColor:     "rgba(239,68,68,0.25)",
-            }]}>
-              <Text style={[s.luckyTileLabel, { color: "#ef4444" }]}>🚫 AVOID TIME</Text>
-              <Text style={[s.luckyTimeText, { color: C.text }]}>{sel.avoidTime}</Text>
-            </View>
-          </View>
-        </>
-      )}
-    </View>
-  );
-}
 
 export default function ForecastScreen() {
   const insets   = useSafeAreaInsets();
@@ -1074,12 +535,36 @@ export default function ForecastScreen() {
             {/* Cosmic Risk Radar — focused per-day risk module with freemium gate.
                 Sits between the hero chart and the supporting info so it's the
                 first thing the user reads after seeing the day's score. */}
-            <RiskRadar
-              days={days}
-              selected={selected}
-              onSelect={setSelected}
-              fullAccess={!showDemo}
-            />
+            {/* Cosmic Risk Radar — full per-day card lives on the dedicated
+                Risk Radar screen. From here we just summarise + send the user
+                across, so the Forecast page stays focused on the chart. */}
+            <Pressable
+              onPress={() => { router.push("/dasha-risk"); Haptics.selectionAsync(); }}
+              style={[s.radarCta, {
+                backgroundColor: C.bgCard,
+                borderColor: C.border,
+              }]}
+            >
+              <View style={s.radarCtaLeft}>
+                <View style={s.radarCtaIconBox}>
+                  <Feather name="alert-triangle" size={16} color="#fbbf24" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.radarCtaTitle, { color: C.text }]}>
+                    Cosmic Risk Radar khole
+                  </Text>
+                  <Text style={[s.radarCtaSub, { color: C.textMuted }]} numberOfLines={2}>
+                    {fmtDate(sel.date)} ke 24 ghante — kya karna, kya avoid karna,
+                    lucky numbers aur upay
+                  </Text>
+                </View>
+              </View>
+              <Feather
+                name={I18nManager.isRTL ? "chevron-left" : "chevron-right"}
+                size={18}
+                color={C.textMuted}
+              />
+            </Pressable>
 
             {/* Day navigation row */}
             <View style={s.navRow}>
@@ -1189,128 +674,20 @@ const s = StyleSheet.create({
   unlockTitle: { color: "#fbbf24", fontSize: 13, fontWeight: "600" },
   unlockSub:   { color: "#92704e", fontSize: 11 },
 
-  // ── Cosmic Risk Radar ────────────────────────────────────────────────────
-  riskCard: {
-    borderRadius: 16, borderWidth: 1,
-    padding: 14, gap: 10,
-  },
-  riskHeader: {
+
+  // ── Risk Radar CTA card (replaces the in-page consolidated card) ──────────
+  radarCta: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 14, borderRadius: 14, borderWidth: 1, gap: 10,
   },
-  riskTitleRow:    { flexDirection: "row", alignItems: "center", gap: 6 },
-  riskTitle:       { fontSize: 13, fontWeight: "700", letterSpacing: 0.4 },
-  riskHeaderHint:  { fontSize: 10, fontWeight: "600", letterSpacing: 1 },
+  radarCtaLeft:    { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
+  radarCtaIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(251,191,36,0.12)",
+    borderWidth: 1, borderColor: "rgba(251,191,36,0.30)",
+  },
+  radarCtaTitle: { fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
+  radarCtaSub:   { fontSize: 11, fontWeight: "500", lineHeight: 15, marginTop: 2 },
 
-  // Safest / Riskiest day chips
-  riskChipsRow:    { flexDirection: "row", gap: 8 },
-  riskChip: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
-  },
-  riskChipLabel:   { fontSize: 9,  fontWeight: "800", letterSpacing: 1 },
-  riskChipDay:     { fontSize: 11, fontWeight: "600" },
-
-  // Gauge bar
-  gaugeHeaderRow:  { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  gaugeMicroLabel: { fontSize: 9,  fontWeight: "700", letterSpacing: 1.4 },
-  gaugeLevelText:  { fontSize: 13, fontWeight: "800", letterSpacing: 0.6 },
-  gaugeValueText:  { fontSize: 11, fontWeight: "600" },
-  gaugeTrack: {
-    flexDirection: "row", height: 8, borderRadius: 4, overflow: "visible", position: "relative",
-  },
-  gaugeSeg:        { flex: 1, height: 8 },
-  gaugeMarker: {
-    position: "absolute", top: -3, width: 14, height: 14, borderRadius: 7,
-    transform: [{ translateX: -7 }],
-    borderWidth: 2, borderColor: "#0f0a24",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7, shadowRadius: 6, elevation: 4,
-  },
-  gaugeScaleRow:   { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
-  gaugeScaleText:  { fontSize: 9, fontWeight: "600", letterSpacing: 0.5 },
-
-  // Free 1-line warning
-  riskShortRow: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1,
-    marginTop: 2,
-  },
-  riskShortIcon:   { fontSize: 13 },
-  riskShortText:   { flex: 1, fontSize: 12, fontWeight: "600", lineHeight: 16 },
-
-  // Header right side (streak pill + day-of-7 hint)
-  riskHeaderRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  streakPill: {
-    backgroundColor: "rgba(251,146,60,0.14)",
-    borderWidth: 1, borderColor: "rgba(251,146,60,0.40)",
-    paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10,
-  },
-  streakPillText: { color: "#fb923c", fontSize: 10, fontWeight: "800", letterSpacing: 0.4 },
-
-  // 24-hour breakdown rows (KYA RISK / DHYAN / AVOID / KARNA)
-  breakdownHeader: {
-    flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4,
-  },
-  breakdownHeaderText: { fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
-  breakdownRow: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
-    padding: 10, borderRadius: 10, borderWidth: 1,
-  },
-  breakdownIconBox: {
-    width: 28, height: 28, borderRadius: 8,
-    alignItems: "center", justifyContent: "center", flexShrink: 0,
-  },
-  breakdownText:  { flex: 1, gap: 3 },
-  breakdownLabel: { fontSize: 9,  fontWeight: "800", letterSpacing: 1.2 },
-  breakdownBody:  { fontSize: 12, fontWeight: "500", lineHeight: 17 },
-
-  // Mini upay row (kept from old design)
-  riskRemedyRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    padding: 10, borderRadius: 10, borderWidth: 1,
-  },
-  riskRemedyIcon:  { fontSize: 18 },
-  riskRemedyLabel: { fontSize: 9,  fontWeight: "800", letterSpacing: 1.4, marginBottom: 2 },
-  riskRemedyText:  { fontSize: 12, fontWeight: "600", lineHeight: 16 },
-
-  // Lucky grid (numbers, color, best/avoid time)
-  luckyGrid:    { flexDirection: "row", gap: 8 },
-  luckyTile: {
-    flex: 1, borderRadius: 10, borderWidth: 1,
-    paddingVertical: 10, paddingHorizontal: 10, gap: 8,
-    minHeight: 64, justifyContent: "space-between",
-  },
-  luckyTileLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 1.2 },
-
-  luckyNumRow:  { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  luckyNumPill: {
-    minWidth: 28, paddingHorizontal: 6, paddingVertical: 3,
-    borderRadius: 6, borderWidth: 1, alignItems: "center",
-    backgroundColor: "rgba(251,191,36,0.10)",
-  },
-  luckyNumText: { fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
-
-  luckyColorRow:    { flexDirection: "row", alignItems: "center", gap: 8 },
-  luckyColorSwatch: {
-    width: 20, height: 20, borderRadius: 10, borderWidth: 1,
-  },
-  luckyColorName:   { fontSize: 13, fontWeight: "700" },
-
-  luckyTimeText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
-
-  // Locked card (paywall)
-  riskLockedCard: {
-    borderRadius: 10, borderWidth: 1, padding: 12, gap: 8,
-  },
-  riskLockedTop:    { flexDirection: "row", alignItems: "center", gap: 8 },
-  riskLockedTitle:  { color: "#fbbf24", fontSize: 12, fontWeight: "700", flex: 1 },
-  riskLockedSub:    { color: "#92704e", fontSize: 11, lineHeight: 15 },
-  riskLockedHint: {
-    flexDirection: "row", alignItems: "center",
-    paddingVertical: 7, paddingHorizontal: 10,
-    borderRadius: 8, borderWidth: 1,
-  },
-  riskLockedHintText: { fontSize: 11, fontWeight: "600" },
-  riskLockedCta:      { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2, alignSelf: "flex-start" },
-  riskLockedCtaText:  { color: "#fbbf24", fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
 });

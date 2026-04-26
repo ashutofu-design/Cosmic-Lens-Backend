@@ -94,6 +94,15 @@ export interface FetchRiskRadarOpts {
   birthData?: Record<string, unknown> | null;
   userId?:    number | null;
   apiKey?:    string | null;
+  /**
+   * UI language code (UILang from `lib/i18n.ts` — e.g. "en", "hn", "hi",
+   * "mr", "ta"). Backend uses this to select the language of the AI-generated
+   * Risk Alert text (top_risk + per_day kya_risk_hai/kya_avoid/kya_karna/upay).
+   * When omitted, the server defaults to "hn" (Hinglish) so existing callers
+   * are unaffected. Unknown / unsupported codes also collapse to "hn"
+   * server-side, so callers don't need to pre-validate.
+   */
+  lang?:      string;
 }
 
 /**
@@ -109,7 +118,7 @@ export interface FetchRiskRadarOpts {
 export async function fetchRiskRadar(
   opts: FetchRiskRadarOpts = {},
 ): Promise<RiskRadarResult> {
-  const { date, kundli, birthData, userId, apiKey } = opts;
+  const { date, kundli, birthData, userId, apiKey, lang } = opts;
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (apiKey) headers["X-API-Key"] = apiKey;
@@ -118,6 +127,7 @@ export async function fetchRiskRadar(
     if (kundli)            body.kundli    = kundli;
     if (birthData)         body.birthData = birthData;
     if (userId != null)    body.user_id   = userId;
+    if (lang)              body.lang      = lang;
 
     const res = await apiFetch(`${API_BASE}/api/risk-radar`, {
       method: "POST",

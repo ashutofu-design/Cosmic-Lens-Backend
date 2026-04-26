@@ -48,15 +48,118 @@ log = logging.getLogger("risk_text_ai")
 _BANDS = ("mid", "high")
 _VARIANTS_PER_BAND = 3
 
-# Module-level cache. Key = trigger string. Value = {band -> [variant_dict_1..N]}
-_AI_CACHE: Dict[str, Dict[str, List[Dict[str, str]]]] = {}
+# Module-level cache. Key = (trigger, lang) tuple. Value = {band -> [variant_dict_1..N]}.
+# Each (trigger, lang) pair caches its own bundle so the same cosmic signal
+# can be served in any of the supported UI languages without re-prompting.
+_AI_CACHE: Dict[tuple, Dict[str, List[Dict[str, str]]]] = {}
 _CACHE_LOCK = threading.Lock()
 
-# In-flight dedup: per-trigger Event so concurrent first-hit + prewarm don't
-# duplicate OpenAI calls. Reader takes the lock, checks cache, otherwise
+# In-flight dedup: per-(trigger, lang) Event so concurrent first-hit + prewarm
+# don't duplicate OpenAI calls. Reader takes the lock, checks cache, otherwise
 # either becomes the writer (creates Event, releases lock, generates) or
 # waits on the existing Event.
-_INFLIGHT: Dict[str, threading.Event] = {}
+_INFLIGHT: Dict[tuple, threading.Event] = {}
+
+# ── Supported UI languages → AI prompt directive ──────────────────────────
+# Maps the mobile app's UILang code (matching lib/i18n.ts UILang) to a
+# natural-language directive injected into the AI prompt so the model
+# writes its 6-field guidance in the user's selected language. "hn"
+# (Hinglish) is the original brand-voice default; everything else asks
+# the model to translate while preserving voice + structure.
+DEFAULT_LANG = "hn"
+_LANG_DIRECTIVES: Dict[str, str] = {
+    "hn": (
+        "HINGLISH ONLY — Roman-script Hindi mixed with English "
+        "(conversational Mumbai / Delhi style). NOT pure Hindi devanagari. "
+        "NOT pure English.\n"
+        "  - Good: \"Aaj reactions slow karein, ek pause-breath-respond rule follow karein.\"\n"
+        "  - Bad (pure English): \"Today, slow your reactions and follow a pause-breath-respond rule.\"\n"
+        "  - Bad (pure Hindi): \"आज प्रतिक्रिया धीमी करें।\""
+    ),
+    "en": (
+        "ENGLISH ONLY — clear, friendly conversational English (US style). "
+        "Warm and supportive, like a wise older sibling. Do NOT mix Hindi / "
+        "Hinglish words in the 5 guidance fields. EXCEPTION: in the `upay` "
+        "field, traditional remedy names (Hanuman Chalisa, kaale til daan, "
+        "ghee diya, jal arghya) MAY remain in their original form because "
+        "users expect them — but explain them briefly in English."
+    ),
+    "hi": (
+        "PURE HINDI (DEVANAGARI SCRIPT) ONLY — conversational Hindi, "
+        "warm and supportive. Do NOT mix Roman script or English words in "
+        "the 5 guidance fields. EXCEPTION: in the `upay` field, mantra text "
+        "(\"ॐ शं शनैश्चराय नमः\") and remedy names should appear in Devanagari."
+    ),
+    "mr": (
+        "PURE MARATHI (DEVANAGARI SCRIPT) ONLY — conversational Marathi, "
+        "warm and supportive. Do NOT mix Roman script or English words in "
+        "the 5 guidance fields. EXCEPTION: traditional mantras and deity "
+        "names in the `upay` field stay in Devanagari."
+    ),
+    "bn": (
+        "PURE BENGALI (BENGALI SCRIPT) ONLY — conversational Bengali, "
+        "warm and supportive. Do NOT mix Roman script or English words "
+        "in the 5 guidance fields."
+    ),
+    "ta": (
+        "PURE TAMIL (TAMIL SCRIPT) ONLY — conversational Tamil, warm "
+        "and supportive. Do NOT mix Roman script or English words in "
+        "the 5 guidance fields."
+    ),
+    "te": (
+        "PURE TELUGU (TELUGU SCRIPT) ONLY — conversational Telugu, warm "
+        "and supportive. Do NOT mix Roman script or English words in "
+        "the 5 guidance fields."
+    ),
+    "gu": (
+        "PURE GUJARATI (GUJARATI SCRIPT) ONLY — conversational Gujarati, "
+        "warm and supportive."
+    ),
+    "kn": (
+        "PURE KANNADA (KANNADA SCRIPT) ONLY — conversational Kannada, "
+        "warm and supportive."
+    ),
+    "ml": (
+        "PURE MALAYALAM (MALAYALAM SCRIPT) ONLY — conversational Malayalam, "
+        "warm and supportive."
+    ),
+    "pa": (
+        "PURE PUNJABI (GURMUKHI SCRIPT) ONLY — conversational Punjabi, "
+        "warm and supportive."
+    ),
+    "or": (
+        "PURE ODIA (ODIA SCRIPT) ONLY — conversational Odia, warm and "
+        "supportive."
+    ),
+    "as": (
+        "PURE ASSAMESE (ASSAMESE SCRIPT) ONLY — conversational Assamese, "
+        "warm and supportive."
+    ),
+    # Global languages
+    "zh": "PURE SIMPLIFIED CHINESE (汉字) ONLY — warm, conversational tone.",
+    "es": "PURE SPANISH (Latin American conversational style) ONLY — warm, supportive tone.",
+    "ar": "PURE ARABIC (MSA, conversational) ONLY — warm, supportive tone.",
+    "fr": "PURE FRENCH (conversational, friendly) ONLY — warm, supportive tone.",
+    "pt": "PURE PORTUGUESE (Brazilian conversational style) ONLY — warm, supportive tone.",
+    "de": "PURE GERMAN (conversational, du-form) ONLY — warm, supportive tone.",
+    "ru": "PURE RUSSIAN (conversational) ONLY — warm, supportive tone.",
+    "ja": "PURE JAPANESE (conversational, polite ます-form) ONLY — warm, supportive tone.",
+    "id": "PURE BAHASA INDONESIA (conversational) ONLY — warm, supportive tone.",
+    "ko": "PURE KOREAN (conversational, 해요-style) ONLY — warm, supportive tone.",
+    "tr": "PURE TURKISH (conversational) ONLY — warm, supportive tone.",
+}
+
+
+def _normalize_lang(lang: Optional[str]) -> str:
+    """Coerce an incoming language code to a supported key, defaulting to Hinglish.
+
+    Accepts None, empty string, unknown codes — all collapse to ``DEFAULT_LANG``
+    so callers never have to pre-validate. Case-insensitive.
+    """
+    if not lang:
+        return DEFAULT_LANG
+    code = str(lang).strip().lower()
+    return code if code in _LANG_DIRECTIVES else DEFAULT_LANG
 
 # Track if a prewarm thread is already running so we don't spawn duplicates.
 _PREWARM_STARTED = False
@@ -262,7 +365,10 @@ _BAND_TONE_HINTS: Dict[str, str] = {
 }
 
 
-_SYSTEM_PROMPT = """You are Cosmic Lens, a friendly Vedic astrology guide for Indian audiences.
+# System prompt template — rule #4 (language) is filled in per-call from
+# _LANG_DIRECTIVES so the same engine can serve all UI languages without
+# duplicating the rest of the brand-voice rulebook.
+_SYSTEM_PROMPT_TEMPLATE = """You are Cosmic Lens, a friendly Vedic astrology guide for Indian and global audiences.
 
 Your voice is "Powered by Advanced Cosmic Intelligence" — warm, supportive, like a wise older sibling. Practical and grounding, never preachy or fearful.
 
@@ -270,27 +376,26 @@ ABSOLUTE RULES (violation = bad output):
 
 1. NEVER mention AI, GPT, ChatGPT, LLM, machine learning, technology, algorithm, model, "trained on", or anything that reveals you are a language model. You ARE Cosmic Lens — speak as the system itself.
 
-2. NEVER mention raw planet names (Mars, Saturn, Mercury, Jupiter, Venus, Rahu, Ketu, Sun, Moon) or technical Sanskrit jargon (dasha, antardasha, mahadasha, pratyantar, nakshatra, tithi, rahukaal, kantaka, sade sati, naidhana) in the output text. Use generic conversational terms instead:
-   - "aaj ki energy"
+2. NEVER mention raw planet names (Mars, Saturn, Mercury, Jupiter, Venus, Rahu, Ketu, Sun, Moon) or technical Sanskrit jargon (dasha, antardasha, mahadasha, pratyantar, nakshatra, tithi, rahukaal, kantaka, sade sati, naidhana) in the output text. Use generic conversational terms instead, translated into the OUTPUT LANGUAGE specified in rule 4:
+   - "today's energy", "aaj ki energy"
    - "current cosmic vibration"
-   - "ek sensitive samay window"
-   - "background mein steady pressure"
-   - "aaj ka cycle"
-   - "mann ki energy", "physical energy", "emotional weather"
+   - "a sensitive time window", "ek sensitive samay window"
+   - "steady background pressure"
+   - "today's cycle", "aaj ka cycle"
+   - "mind-energy", "physical energy", "emotional weather"
 
-3. EXCEPTION — only in the `upay` (remedy) field, the following ARE allowed and encouraged because users expect them:
+3. EXCEPTION — only in the `upay` (remedy) field, the following ARE allowed and encouraged because users expect them, in their original devotional form:
    - Deity names: Hanuman ji, Shani Dev, Surya Dev, Maa Lakshmi, Ganesha, Maa Durga
    - Specific mantras with text: "Om Sham Shanaishcharaya Namah", "Hanuman Chalisa", "Maha Mrityunjaya"
    - Traditional remedies: kaale til daan, ghee ka diya, gulab jal, haldi-doodh, jal arghya, masoor dal daan, sarso ka tel
+   You MAY add a short clarifying gloss in the OUTPUT LANGUAGE around these names so non-Hindi speakers understand them.
 
-4. Language: HINGLISH ONLY — Roman-script Hindi mixed with English (conversational Mumbai / Delhi style). NOT pure Hindi devanagari. NOT pure English.
-   - Good: "Aaj reactions slow karein, ek pause-breath-respond rule follow karein."
-   - Bad (pure English): "Today, slow your reactions and follow a pause-breath-respond rule."
-   - Bad (pure Hindi): "आज प्रतिक्रिया धीमी करें।"
+4. OUTPUT LANGUAGE — STRICT:
+{lang_directive}
 
 5. Length per field: 1 to 3 short sentences (~20-40 words). Concise, practical, action-oriented.
 
-6. Tone: supportive, friendly, never destiny / fate / fear language. NEVER use phrases like "kismat kharab hai", "graho ka prakop", "buri shakti", "dosh hai".
+6. Tone: supportive, friendly, never destiny / fate / fear language. NEVER use phrases like "kismat kharab hai", "graho ka prakop", "buri shakti", "dosh hai", "bad luck", "cursed", "doomed".
 
 7. Output must be valid JSON with EXACTLY these 6 keys:
    - "category": short 2-3 word title (e.g. "Conflict / Anger", "Pressure / Patience")
@@ -299,7 +404,14 @@ ABSOLUTE RULES (violation = bad output):
    - "kya_avoid_karna_hai": specific things to avoid
    - "kya_karna_hai": positive actions for today
    - "upay": ONE traditional remedy (mantra / daan / diya — deity names OK here)
+   The KEY NAMES stay in English (kya_risk_hai etc.) — only the VALUES are in the output language.
 """
+
+
+def _system_prompt_for(lang: str) -> str:
+    """Render the system prompt with the language directive baked in."""
+    directive = _LANG_DIRECTIVES.get(lang, _LANG_DIRECTIVES[DEFAULT_LANG])
+    return _SYSTEM_PROMPT_TEMPLATE.format(lang_directive=directive)
 
 
 _CLIENT_CACHE: Dict[str, Any] = {"client": None, "tried": False}
@@ -400,18 +512,26 @@ def _client():
     return cli
 
 
-def _scan_forbidden(text: str, field: str) -> Optional[str]:
+def _scan_forbidden(text: str, field: str, lang: str = DEFAULT_LANG) -> Optional[str]:
     """Return the first forbidden token found, or None if clean.
 
     Field-aware: deity / planet names + Sanskrit jargon are allowed in the
     `upay` field (user-expected for traditional remedies), but forbidden
     elsewhere. AI / GPT / model leaks are forbidden everywhere.
+
+    Language-aware: the non-upay planet/Sanskrit token list is Roman / Hinglish
+    transliteration. For non-`hn` output languages the model writes in a
+    different script (Devanagari, Tamil, Chinese, English, …) so the
+    Hinglish-token scan would either be a no-op (different script) or
+    produce false positives (legitimate English "Mars/Saturn" usage). We
+    keep the GLOBAL anti-leak scan (AI / GPT / etc. are forbidden in every
+    language) and skip the non-upay planet scan for non-Hinglish output.
     """
     lower = " " + text.lower() + " "
     for tok in _FORBIDDEN_GLOBAL:
         if tok in lower:
             return f"global:{tok.strip()}"
-    if field != "upay":
+    if field != "upay" and lang == DEFAULT_LANG:
         for tok in _FORBIDDEN_NON_UPAY:
             # Word-boundary-ish match — surround with spaces so "shukravar"
             # (Friday) doesn't trigger "shukra" inside.
@@ -420,7 +540,7 @@ def _scan_forbidden(text: str, field: str) -> Optional[str]:
     return None
 
 
-def _validate(payload: Any) -> Optional[Dict[str, str]]:
+def _validate(payload: Any, lang: str = DEFAULT_LANG) -> Optional[Dict[str, str]]:
     """Verify payload has all 6 required string fields, enforce length caps,
     and run the brand-voice forbidden-token scan field-aware. Returns the
     cleaned dict on success, None on any violation.
@@ -442,18 +562,21 @@ def _validate(payload: Any) -> Optional[Dict[str, str]]:
                 k, cap, len(v),
             )
             return None
-        violation = _scan_forbidden(v, k)
+        violation = _scan_forbidden(v, k, lang)
         if violation:
             log.warning(
-                "risk_text_ai: brand-voice violation in %s (%s) — rejecting",
-                k, violation,
+                "risk_text_ai: brand-voice violation in %s (%s, lang=%s) — rejecting",
+                k, violation, lang,
             )
             return None
         out[k] = v
     return out
 
 
-def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
+def _generate_bundle(
+    trigger: str,
+    lang: str = DEFAULT_LANG,
+) -> Optional[Dict[str, List[Dict[str, str]]]]:
     """Single AI call → all variants for a trigger.
 
     Asks the model to produce, in one structured response, ``N`` distinct
@@ -479,6 +602,7 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
     if not spec:
         log.warning("risk_text_ai: unknown trigger %r", trigger)
         return None
+    lang = _normalize_lang(lang)
 
     n = _VARIANTS_PER_BAND
     band_specs_block = "\n\n".join(
@@ -486,6 +610,12 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
         f"Generate exactly {n} DIFFERENT phrasing variants for this band."
         for band in _BANDS
     )
+
+    # Final language reminder in the user message — belt-and-braces with the
+    # system-prompt rule #4. The model occasionally drifts back to Hinglish
+    # mid-response on long prompts; restating "OUTPUT LANGUAGE: <lang>" right
+    # before the JSON spec keeps the response on-language.
+    lang_reminder = _LANG_DIRECTIVES.get(lang, _LANG_DIRECTIVES[DEFAULT_LANG])
 
     user_msg = (
         "Generate the Cosmic Lens daily guidance for this trigger, in TWO "
@@ -503,6 +633,7 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
         "with the same trigger don't read identically)\n"
         "  - stay short and within the brand voice rules\n"
         "  - keep the upay aligned to the canonical direction above\n\n"
+        f"OUTPUT LANGUAGE REMINDER (lang code = {lang}):\n{lang_reminder}\n\n"
         "Return strict JSON in EXACTLY this shape:\n"
         "{\n"
         f"  \"mid\":  [ v1, v2, v3 ],\n"
@@ -510,7 +641,8 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
         "}\n"
         "Each vN must have keys: category, kya_risk_hai, "
         "kya_dhyan_rakhna_hai, kya_avoid_karna_hai, kya_karna_hai, upay. "
-        "Hinglish only."
+        "All VALUES must be in the output language above. Keys themselves "
+        "stay in English."
     )
 
     model = os.environ.get("COSMIC_RISK_TEXT_MODEL", "gpt-4o-mini")
@@ -520,7 +652,7 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
         resp = cli.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": _system_prompt_for(lang)},
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
@@ -530,15 +662,15 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
         )
         content = (resp.choices[0].message.content or "").strip()
         if not content:
-            log.warning("risk_text_ai: empty response for %s", trigger)
+            log.warning("risk_text_ai: empty response for %s/%s", trigger, lang)
             return None
         try:
             payload = json.loads(content)
         except json.JSONDecodeError as exc:
-            log.warning("risk_text_ai: bad JSON for %s: %s", trigger, exc)
+            log.warning("risk_text_ai: bad JSON for %s/%s: %s", trigger, lang, exc)
             return None
         if not isinstance(payload, dict):
-            log.warning("risk_text_ai: top-level not a dict for %s", trigger)
+            log.warning("risk_text_ai: top-level not a dict for %s/%s", trigger, lang)
             return None
 
         bundle: Dict[str, List[Dict[str, str]]] = {}
@@ -546,24 +678,24 @@ def _generate_bundle(trigger: str) -> Optional[Dict[str, List[Dict[str, str]]]]:
             arr = payload.get(band)
             if not isinstance(arr, list) or len(arr) < n:
                 log.warning(
-                    "risk_text_ai: missing/short '%s' band for %s (got %r)",
-                    band, trigger, type(arr).__name__,
+                    "risk_text_ai: missing/short '%s' band for %s/%s (got %r)",
+                    band, trigger, lang, type(arr).__name__,
                 )
                 return None
             band_variants: List[Dict[str, str]] = []
             for idx, raw in enumerate(arr[:n]):
-                validated = _validate(raw)
+                validated = _validate(raw, lang=lang)
                 if validated is None:
                     log.warning(
-                        "risk_text_ai: variant %d of band %s failed validation for %s",
-                        idx, band, trigger,
+                        "risk_text_ai: variant %d of band %s failed validation for %s/%s",
+                        idx, band, trigger, lang,
                     )
                     return None
                 band_variants.append(validated)
             bundle[band] = band_variants
         return bundle
     except Exception as exc:
-        log.warning("risk_text_ai: generation failed for %s: %s", trigger, exc)
+        log.warning("risk_text_ai: generation failed for %s/%s: %s", trigger, lang, exc)
         return None
 
 
@@ -571,34 +703,42 @@ def get_text(
     trigger: str,
     band: str = "mid",
     variant_idx: int = 0,
+    lang: Optional[str] = None,
 ) -> Optional[Dict[str, str]]:
-    """Returns one AI-generated text variant for the trigger × band, or None.
+    """Returns one AI-generated text variant for the (trigger, lang) × band, or None.
 
     Caching model:
-      - One AI call per trigger (process-wide) generates the FULL bundle of
-        all band × variant combinations.
-      - Subsequent calls are O(1): pick `bundle[band][variant_idx % N]`.
+      - One AI call per (trigger, lang) (process-wide) generates the FULL
+        bundle of all band × variant combinations IN THAT LANGUAGE.
+      - Subsequent calls are O(1): pick ``bundle[band][variant_idx % N]``.
       - Same trigger across consecutive days rotates through N=3 variants
         (caller passes ``variant_idx=day_idx``) so the per-day card text
         actually CHANGES day-to-day even when the dominant cosmic signal
         is unchanged.
 
-    In-flight dedup: when two callers request the same trigger concurrently
-    (e.g. first user request + background prewarm worker), only one AI
-    call is made. The second caller waits on a per-trigger Event and reads
-    the result from cache once the first caller finishes.
+    Lang resolution:
+      - ``lang`` defaults to ``DEFAULT_LANG`` ("hn" — Hinglish, original
+        brand voice).
+      - Unknown / blank codes are coerced to ``DEFAULT_LANG`` so callers
+        can pass user-supplied strings without pre-validation.
+
+    In-flight dedup: keyed on ``(trigger, lang)`` — two callers asking for
+    the same language at the same time share one AI call; callers asking
+    for different languages don't block each other.
 
     Falls back gracefully:
       - Unknown band → coerced to "mid".
       - Trigger not in cache and AI unavailable → ``None`` (caller uses
-        engineering ``_TEXT_MAP``).
+        engineering ``_TEXT_MAP`` as a last resort).
     """
     if band not in _BANDS:
         band = "mid"
+    lang = _normalize_lang(lang)
+    cache_key = (trigger, lang)
 
     # Fast path: cached bundle present.
     with _CACHE_LOCK:
-        bundle = _AI_CACHE.get(trigger)
+        bundle = _AI_CACHE.get(cache_key)
     if bundle is not None:
         variants = bundle.get(band) or bundle.get("mid")
         if variants:
@@ -610,25 +750,25 @@ def get_text(
     own_event: Optional[threading.Event] = None
     wait_event: Optional[threading.Event] = None
     with _CACHE_LOCK:
-        bundle = _AI_CACHE.get(trigger)
+        bundle = _AI_CACHE.get(cache_key)
         if bundle is not None:
             variants = bundle.get(band) or bundle.get("mid")
             if variants:
                 return variants[variant_idx % len(variants)]
             return None
-        existing = _INFLIGHT.get(trigger)
+        existing = _INFLIGHT.get(cache_key)
         if existing is not None:
             wait_event = existing
         else:
             own_event = threading.Event()
-            _INFLIGHT[trigger] = own_event
+            _INFLIGHT[cache_key] = own_event
 
     # Waiter path: block until the writer signals, then read from cache.
     if wait_event is not None:
         timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "30"))
         wait_event.wait(timeout=timeout + 5.0)
         with _CACHE_LOCK:
-            bundle = _AI_CACHE.get(trigger)
+            bundle = _AI_CACHE.get(cache_key)
         if bundle is None:
             return None
         variants = bundle.get(band) or bundle.get("mid")
@@ -638,54 +778,66 @@ def get_text(
 
     # Writer path: generate the full bundle, store, signal waiters.
     try:
-        result = _generate_bundle(trigger)
+        result = _generate_bundle(trigger, lang=lang)
         if result is not None:
             with _CACHE_LOCK:
-                _AI_CACHE[trigger] = result
+                _AI_CACHE[cache_key] = result
             variants = result.get(band) or result.get("mid")
             if variants:
                 return variants[variant_idx % len(variants)]
         return None
     finally:
         with _CACHE_LOCK:
-            _INFLIGHT.pop(trigger, None)
+            _INFLIGHT.pop(cache_key, None)
         assert own_event is not None
         own_event.set()
 
 
 def cache_status() -> Dict[str, Any]:
-    """Diagnostic: which triggers are currently cached, plus per-band variant counts."""
+    """Diagnostic: which (trigger, lang) pairs are currently cached, plus per-band variant counts."""
     with _CACHE_LOCK:
-        per_trigger = {
-            trig: {band: len(variants) for band, variants in bundle.items()}
-            for trig, bundle in _AI_CACHE.items()
+        per_key = {
+            f"{trig}/{lang}": {band: len(variants) for band, variants in bundle.items()}
+            for (trig, lang), bundle in _AI_CACHE.items()
         }
+        cached_keys = sorted(f"{trig}/{lang}" for (trig, lang) in _AI_CACHE.keys())
         return {
-            "cached_triggers": sorted(_AI_CACHE.keys()),
+            "cached_keys": cached_keys,
             "cache_size": len(_AI_CACHE),
-            "total_known": len(_TRIGGER_BRIEFS),
+            "total_known_triggers": len(_TRIGGER_BRIEFS),
             "bands": list(_BANDS),
             "variants_per_band": _VARIANTS_PER_BAND,
-            "per_trigger_variants": per_trigger,
+            "supported_langs": sorted(_LANG_DIRECTIVES.keys()),
+            "default_lang": DEFAULT_LANG,
+            "per_key_variants": per_key,
         }
 
 
 def _prewarm_worker(triggers: List[str]) -> None:
-    """Background worker: generate full bundle for all triggers serially.
+    """Background worker: generate full bundle for all triggers in DEFAULT_LANG.
 
-    One AI call per trigger generates all bands × variants. ``get_text`` does
-    the actual cache write, so calling it once with default args is enough
-    to populate the bundle for every (band, variant_idx) combination.
+    One AI call per trigger generates all bands × variants in the default
+    Hinglish brand voice. ``get_text`` does the actual cache write, so calling
+    it once with default args is enough to populate the bundle for every
+    (band, variant_idx) combination.
+
+    NOTE: Other languages are NOT prewarmed — there are 13 triggers × 25
+    languages = 325 potential bundles, which would cost ~$0.50-1 per server
+    boot in OpenAI calls just to cover languages no one may use. Non-default
+    languages are generated lazily on first request, then cached for the
+    process lifetime so subsequent users on the same language are O(1).
     """
     for trig in triggers:
         try:
-            get_text(trig)
+            get_text(trig, lang=DEFAULT_LANG)
         except Exception as exc:
             log.warning("risk_text_ai: prewarm failed for %s: %s", trig, exc)
     log.info(
-        "risk_text_ai: prewarm done, cached %d/%d triggers (bands=%s, variants=%d)",
-        len(_AI_CACHE),
+        "risk_text_ai: prewarm done, cached %d/%d triggers in %s "
+        "(bands=%s, variants=%d, other langs are lazy)",
+        sum(1 for k in _AI_CACHE if k[1] == DEFAULT_LANG),
         len(_TRIGGER_BRIEFS),
+        DEFAULT_LANG,
         list(_BANDS),
         _VARIANTS_PER_BAND,
     )

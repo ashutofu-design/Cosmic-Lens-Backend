@@ -2302,6 +2302,12 @@ def risk_radar():
 
     body = request.get_json(force=True, silent=True) or {}
     date_str = (request.args.get("date") or body.get("date") or "").strip()
+    # UI language for AI-generated risk text. Accepts the mobile UILang code
+    # (e.g. "en", "hn", "hi", "mr", "ta", …). Unknown / blank values are
+    # coerced to the Hinglish default by `risk_text_ai._normalize_lang`,
+    # so we don't need to validate here. Querystring takes precedence over
+    # body so a quick `?lang=mr` works for ad-hoc testing.
+    ui_lang = (request.args.get("lang") or body.get("lang") or "").strip().lower()
 
     try:
         if date_str:
@@ -2443,7 +2449,8 @@ def risk_radar():
                                   birth_chart=kundli_dict,
                                   today_planets=today_planets,
                                   birth_data=birth_data,
-                                  today_date_iso=date_iso)
+                                  today_date_iso=date_iso,
+                                  lang=ui_lang)
         # Verify all expected enrichment keys are present before claiming success
         radar["enriched"] = bool(
             radar.get("top_risk") and

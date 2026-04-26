@@ -181,33 +181,64 @@ _LOW_NEUTRAL_BANK: List[Dict[str, str]] = [
 ]
 
 
+# Default UI language ("hn" = Hinglish — original brand voice). Kept here as
+# a module constant so callers that don't pass `lang` (e.g. legacy unit tests
+# or background tools) get the documented original behaviour. The runtime
+# language for a real user request is plumbed in from the HTTP route.
+_DEFAULT_UI_LANG = "hn"
+
+
 def _resolve_text(
     trigger: str,
     day_idx: int = 0,
     severity_band: str = "mid",
+    lang: str = _DEFAULT_UI_LANG,
 ) -> Dict[str, str]:
-    """Return the 6-field guidance dict for the trigger.
+    """Return the 6-field guidance dict for the trigger in the requested UI language.
 
     Resolution order:
       1. ``severity_band == "low"`` → engineering neutral bank rotated by
-         day_idx (no AI call, always available).
-      2. AI variants for (trigger, band) at ``variant_idx = day_idx``.
-      3. Engineering ``_TEXT_MAP`` fallback (single hand-written entry).
+         day_idx (no AI call, always available — Hinglish only).
+      2. AI variants for (trigger, lang, band) at ``variant_idx = day_idx``.
+      3. Engineering ``_TEXT_MAP`` fallback (single hand-written entry,
+         Hinglish only — used as a last resort when the AI call fails).
+
+    The Hinglish static banks (_LOW_NEUTRAL_BANK / _TEXT_MAP) are kept as
+    the absolute-last-resort safety net so the card is never empty even if
+    OpenAI is fully down. For non-Hinglish UI languages the user will
+    momentarily see Hinglish text in that degraded state — acceptable
+    versus an empty / broken card and warned via log so we can monitor it.
 
     Always returns a valid dict so callers can do ``text["category"]``
     etc. without None-guards. NEVER returns random / fake values.
     """
     if severity_band == "low":
+        # Low-severity neutral bank is Hinglish-only by design (no AI cost).
+        # For non-Hinglish callers we'd rather still return a valid dict than
+        # crash the card; log so we can size the gap if it matters.
+        if lang != _DEFAULT_UI_LANG:
+            log.debug(
+                "risk_text_engine: low-band stable text served in %s "
+                "(Hinglish neutral bank — no AI call for low band)", lang,
+            )
         return _LOW_NEUTRAL_BANK[day_idx % len(_LOW_NEUTRAL_BANK)]
     try:
         from risk_text_ai import get_text as _ai_get_text  # type: ignore
 
-        ai_text = _ai_get_text(trigger, band=severity_band, variant_idx=day_idx)
+        ai_text = _ai_get_text(
+            trigger, band=severity_band, variant_idx=day_idx, lang=lang,
+        )
         if ai_text is not None:
             return ai_text
     except Exception:
         # Module import or runtime issue — fall through to template.
         pass
+    if lang != _DEFAULT_UI_LANG:
+        log.warning(
+            "risk_text_engine: AI unavailable for %s/%s — falling back to "
+            "Hinglish static template (UI requested %s)",
+            trigger, lang, lang,
+        )
     return _TEXT_MAP.get(trigger) or _TEXT_MAP["stable_day"]
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -764,6 +795,7 @@ def compute_per_day_enrichment(
     days:          int = 7,
     birth_data:    Optional[Dict[str, Any]] = None,
     today_date_iso: Optional[str] = None,
+    lang:          str = _DEFAULT_UI_LANG,
 ) -> List[Dict[str, Any]]:
     """
     Compute REAL per-day enrichment for the next `days` days starting today.
@@ -926,7 +958,7 @@ def compute_per_day_enrichment(
         #   - day_idx rotates phrasing variants so consecutive days with
         #     the same dominant trigger don't read identically
         band       = _severity_band(severity)
-        text       = _resolve_text(trigger, day_idx=i, severity_band=band)
+        text       = _resolve_text(trigger, day_idx=i, severity_band=band, lang=lang)
         risk_score = _severity_to_score(severity)
         risk_level = _score_to_level(risk_score)
 
@@ -1003,6 +1035,7 @@ def enrich_risk_radar(radar:         Dict[str, Any],
                       today_planets: Optional[Dict[str, Dict[str, Any]]] = None,
                       birth_data:    Optional[Dict[str, Any]] = None,
                       today_date_iso: Optional[str] = None,
+                      lang:          str = _DEFAULT_UI_LANG,
                       ) -> Dict[str, Any]:
     """
     Merge personalised top-level text + Choghadiya timing into the Risk
@@ -1024,7 +1057,7 @@ def enrich_risk_radar(radar:         Dict[str, Any],
     # calm wording on mild-trigger days and direct wording only on
     # genuinely heightened days. day_idx=0 (today, first variant).
     band = _severity_band(_TRIGGER_SEVERITY.get(trigger, 0))
-    text = _resolve_text(trigger, day_idx=0, severity_band=band)
+    text = _resolve_text(trigger, day_idx=0, severity_band=band, lang=lang)
 
     radar["top_risk"] = {
         "trigger":              trigger,
@@ -1065,6 +1098,7 @@ def enrich_risk_radar(radar:         Dict[str, Any],
         energy_result, birth_chart or {}, today_planets,
         weekday, sunrise, sunset, current_h, days=7,
         birth_data=birth_data, today_date_iso=today_date_iso,
+        lang=lang,
     )
 
     # ── 4. Weekly anchor remedy ─────────────────────────────────────────────
@@ -1097,7 +1131,7 @@ def enrich_risk_radar(radar:         Dict[str, Any],
         anchor_band = _severity_band(anchor_severity)
         # variant_idx=0 → deterministic anchor wording (not day-rotated).
         anchor_text = _resolve_text(
-            anchor_trigger, day_idx=0, severity_band=anchor_band,
+            anchor_trigger, day_idx=0, severity_band=anchor_band, lang=lang,
         )
         weekly_upay_text = anchor_text["upay"]
 

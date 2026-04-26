@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
 import { fetchDailyLucky, type DailyLucky } from "@/lib/luckyAPI";
 import { fetchRiskRadar, isRiskRadarOk, type RiskRadarResponse } from "@/lib/riskTextAPI";
 
@@ -239,6 +240,7 @@ export function RiskRadarCard({
   days: DayForecast[]; selected: number; onSelect: (i: number) => void; fullAccess: boolean;
 }) {
   const C = useC();
+  const t = useT();
   const { user, kundli, birthData } = useUser();
 
   // ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ────────────
@@ -306,12 +308,24 @@ export function RiskRadarCard({
       setRiskApiErr(null);
       return;
     }
+    // Clear the previous payload immediately so the user does NOT see stale
+    // text in the OLD language for ~8s while the new language fetch is in
+    // flight. The card will fall back to its built-in skeleton/template view
+    // until the fresh response lands.
+    setRiskApi(null);
+    setRiskApiErr(null);
     let cancelled = false;
     fetchRiskRadar({
       userId:    user?.id,
       apiKey:    user?.api_key,
       kundli:    kundli as unknown as Record<string, unknown>,
       birthData: birthData as unknown as Record<string, unknown> | null,
+      // Forward the active UI language so the AI-generated 5-field text
+      // (top_risk + per_day kya_risk_hai/kya_avoid_karna_hai/kya_karna_hai/upay)
+      // comes back in the same language the rest of the app is rendering in.
+      // Listed in the dep array below so toggling the global language picker
+      // triggers a fresh fetch instead of leaving stale Hinglish text on screen.
+      lang:      t.lang,
     })
       .then(res => {
         if (cancelled) return;
@@ -325,7 +339,7 @@ export function RiskRadarCard({
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.api_key, kundliFp, birthFp]);
+  }, [user?.id, user?.api_key, kundliFp, birthFp, t.lang]);
 
   const [streak, setStreak] = useState(0);
   useEffect(() => {

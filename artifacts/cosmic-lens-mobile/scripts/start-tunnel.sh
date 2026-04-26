@@ -45,8 +45,13 @@ sleep 1
 CF_API_PID=$!
 
 PUBLIC_API_URL=""
-# Wait up to 15s for cloudflare to publish a URL AND not have already errored
-for i in $(seq 1 15); do
+# Wait up to 45s for cloudflare to (a) publish a URL, (b) not error, AND
+# (c) actually serve a 2xx through the edge. Cloudflare prints the public
+# URL ~1s after start but the edge connection often takes 15-30s more to
+# register — declaring READY too early causes the mobile app to bake in a
+# URL that returns 530/503 for the first ~20s, breaking demo login until
+# the user reloads.
+for i in $(seq 1 45); do
   URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_API_LOG" 2>/dev/null | tail -1)
   if [ -n "$URL" ]; then
     # Verify cloudflared hasn't shut down (which means tunnel registration failed)
@@ -54,9 +59,15 @@ for i in $(seq 1 15); do
       echo "[cf-api] tunnel registered URL but connection failed — falling back to localtunnel"
       URL=""
     else
-      PUBLIC_API_URL="$URL"
-      echo "[startup] API tunnel READY (cloudflare): $PUBLIC_API_URL"
-      break
+      # Probe through the edge — only mark READY when origin actually responds 200
+      HC=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 4 \
+            -H 'bypass-tunnel-reminder: true' \
+            "${URL}/api/healthz" 2>/dev/null || echo "000")
+      if [ "$HC" = "200" ]; then
+        PUBLIC_API_URL="$URL"
+        echo "[startup] API tunnel READY (cloudflare): $PUBLIC_API_URL (healthz=200 after ${i}s)"
+        break
+      fi
     fi
   fi
   sleep 1

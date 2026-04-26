@@ -1411,7 +1411,7 @@ def firebase_verify_route():
     else:
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
-        user.last_active = datetime.utcnow()
+        user.last_active = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
         if name and (not user.name or user.name.startswith("User ")):
             user.name = name
 
@@ -1447,12 +1447,12 @@ def demo_login_route():
     else:
         if not user.api_key:
             user.api_key = secrets.token_hex(32)
-        user.last_active = datetime.utcnow()
+        user.last_active = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     # Demo user always gets full Pro — for testing every paid feature end-to-end.
     user.is_pro      = True
     user.plan        = "pro"
-    user.plan_expiry = datetime.utcnow() + _td(days=365 * 10)
+    user.plan_expiry = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(days=365 * 10)
     db.session.commit()
     payload = user.to_dict()
     payload["subscription"] = subscription_status(user)
@@ -1605,7 +1605,7 @@ def save_user_kundli(user_id):
     k.lon        = data.get("lon")
     k.tz         = data.get("tz")
     k.chart_data = json.dumps(data.get("chart_data")) if data.get("chart_data") else None
-    k.updated_at = datetime.utcnow()
+    k.updated_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     db.session.commit()
     return jsonify({"success": True})
@@ -1673,7 +1673,7 @@ RECENTLY_DELETED_HOURS = 24
 def _purge_expired_deleted(user_id: int) -> None:
     """Hard-delete soft-deleted profiles older than the 24-hr restore window."""
     from datetime import timedelta as _td
-    cutoff = datetime.utcnow() - _td(hours=RECENTLY_DELETED_HOURS)
+    cutoff = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) - _td(hours=RECENTLY_DELETED_HOURS)
     expired = Profile.query.filter(
         Profile.user_id == user_id,
         Profile.deleted_at.isnot(None),
@@ -1730,7 +1730,7 @@ def restore_user_profile(user_id, client_id):
     if not row or row.deleted_at is None:
         return jsonify({"ok": False, "error": "Profile not found in Recently Deleted"}), 404
 
-    if row.deleted_at < datetime.utcnow() - _td(hours=RECENTLY_DELETED_HOURS):
+    if row.deleted_at < datetime.now(_UTC_TZ.utc).replace(tzinfo=None) - _td(hours=RECENTLY_DELETED_HOURS):
         # Window has elapsed — purge and reject
         db.session.delete(row)
         db.session.commit()
@@ -1761,7 +1761,7 @@ def sync_user_profiles(user_id):
     incoming_ids = {p.get("id") for p in incoming if p.get("id")}
     existing = {r.client_id: r for r in Profile.query.filter_by(user_id=user_id).all()}
 
-    now = datetime.utcnow()
+    now = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     # SOFT-delete profiles that disappeared from the active list (skip rows
     # already soft-deleted so we don't extend their restore window).
@@ -1808,7 +1808,7 @@ def admin_stats():
         return err
 
     from datetime import timedelta
-    today = datetime.utcnow() - timedelta(hours=24)
+    today = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) - timedelta(hours=24)
 
     total_users  = User.query.count()
     pro_users    = User.query.filter_by(is_pro=True).count()
@@ -2476,7 +2476,7 @@ def moon_transit():
         except ValueError:
             return jsonify({"error": "date must be YYYY-MM-DD"}), 400
     else:
-        now = datetime.utcnow()
+        now = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     jd   = swe.julday(now.year, now.month, now.day,
                       now.hour + now.minute / 60.0 + now.second / 3600.0)
@@ -2529,7 +2529,7 @@ def moon_history():
         step_hours = 24.0 / count
         times = [day_start + timedelta(hours=i * step_hours) for i in range(count)]
     else:
-        now = datetime.utcnow()
+        now = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
         times = [now - timedelta(hours=(count - 1 - i) * interval) for i in range(count)]
 
     points = []
@@ -2551,7 +2551,7 @@ def moon_history():
             "rashiIndex": rashi_idx,
             "rashiName":  rashi_names[rashi_idx],
             "label":      label,
-            "hoursAgo":   None if date_str else round((datetime.utcnow() - t).total_seconds() / 3600, 1),
+            "hoursAgo":   None if date_str else round((datetime.now(_UTC_TZ.utc).replace(tzinfo=None) - t).total_seconds() / 3600, 1),
         })
 
     return jsonify({"points": points})
@@ -3021,7 +3021,7 @@ def career_analysis():
     try:
         swe.set_sid_mode(swe.SIDM_LAHIRI)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        jd_now = swe.julday(*datetime.now(_UTC_TZ.utc).replace(tzinfo=None).timetuple()[:3], 12.0)
         for p_name, p_id in (("Jupiter", swe.JUPITER), ("Saturn", swe.SATURN)):
             res = swe.calc_ut(jd_now, p_id, flags)
             t_lon = res[0][0] % 360
@@ -3325,7 +3325,7 @@ def health_analysis():
     try:
         swe.set_sid_mode(swe.SIDM_LAHIRI)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        jd_now = swe.julday(*datetime.now(_UTC_TZ.utc).replace(tzinfo=None).timetuple()[:3], 12.0)
         for p_name, p_id in (("Saturn", swe.SATURN), ("Mars", swe.MARS),
                              ("Jupiter", swe.JUPITER), ("Rahu", swe.MEAN_NODE)):
             res = swe.calc_ut(jd_now, p_id, flags)
@@ -3708,7 +3708,7 @@ def finance_analysis():
     try:
         swe.set_sid_mode(swe.SIDM_LAHIRI)
         flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
-        jd_now = swe.julday(*datetime.utcnow().timetuple()[:3], 12.0)
+        jd_now = swe.julday(*datetime.now(_UTC_TZ.utc).replace(tzinfo=None).timetuple()[:3], 12.0)
         for p_name, p_id in (("Jupiter", swe.JUPITER), ("Saturn", swe.SATURN),
                              ("Rahu", swe.MEAN_NODE), ("Venus", swe.VENUS)):
             res = swe.calc_ut(jd_now, p_id, flags)
@@ -3913,7 +3913,7 @@ def current_transits():
     import swisseph as swe
     from datetime import datetime
 
-    now   = datetime.utcnow()
+    now   = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
     jd    = swe.julday(now.year, now.month, now.day,
                        now.hour + now.minute / 60.0 + now.second / 3600.0)
     flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
@@ -5284,7 +5284,7 @@ def astrovastu_create_order_route():
         db.session.commit()
 
     # Order id encodes user + purchase so webhook + status route can route fast.
-    ts       = int(datetime.utcnow().timestamp())
+    ts       = int(datetime.now(_UTC_TZ.utc).replace(tzinfo=None).timestamp())
     order_id = f"AV{user.id}_{purchase.id}_{ts}"
 
     return_url = (
@@ -5413,7 +5413,7 @@ def astrovastu_purchase_status_route(purchase_id):
                 payments = []
             if any(p.get("payment_status") == "SUCCESS" for p in payments):
                 purchase.status  = "paid"
-                purchase.paid_at = datetime.utcnow()
+                purchase.paid_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
                 db.session.commit()
                 grant_purchase_idempotent(purchase)
                 db.session.refresh(purchase)
@@ -6802,7 +6802,7 @@ def daily_alerts():
         {"offset":  2, "label": "Day After",     "label_hi": "परसों",      "emoji": "🔮"},
     ]
 
-    today_utc = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+    today_utc = datetime.now(_UTC_TZ.utc).replace(tzinfo=None).replace(hour=12, minute=0, second=0, microsecond=0)
     results   = []
 
     for meta in DAY_META:
@@ -7440,7 +7440,7 @@ def _activate_plan(user_id: int, plan: str, cycle: str, order_id: str):
     if user.plan_order_id and user.plan_order_id == order_id:
         return True
 
-    now = datetime.utcnow()
+    now = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
     # ── Trial: 7-day Basic-tier access, gated by trial_started_at ─────────
     if plan == "trial":
@@ -7519,7 +7519,7 @@ def create_payment_order():
 
     # Unique order ID — encodes user/plan/cycle for webhook parsing
     # plan codes: B=basic, P=pro, E=elite (legacy)
-    ts       = int(datetime.utcnow().timestamp())
+    ts       = int(datetime.now(_UTC_TZ.utc).replace(tzinfo=None).timestamp())
     order_id = f"CL{user_id}_{plan[0].upper()}{cycle[0].upper()}_{ts}"
 
     # Return URL shown in browser after payment completes (no deep link needed)
@@ -7731,7 +7731,7 @@ def payment_webhook():
             if purchase:
                 if purchase.status != "paid":
                     purchase.status  = "paid"
-                    purchase.paid_at = datetime.utcnow()
+                    purchase.paid_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
                     db.session.commit()
                 grant_purchase_idempotent(purchase)
                 app.logger.info(f"[CF-AV] webhook granted purchase id={purchase.id} sku={purchase.sku}")
@@ -9878,7 +9878,7 @@ def notifications_register():
 
     user.expo_push_token    = token or None
     user.push_enabled       = enabled
-    user.push_registered_at = datetime.utcnow()
+    user.push_registered_at = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
     db.session.commit()
     return jsonify({"ok": True, "registered": bool(token), "enabled": enabled})
 

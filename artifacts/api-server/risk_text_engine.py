@@ -44,7 +44,14 @@ Output (merged into the API response)
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional, Tuple
+
+# Module logger — used for non-fatal diagnostics inside per-day enrichment
+# (e.g. lucky_engine missing or a single-day calc failing). Keep at debug:
+# the route always continues and returns null lucky fields rather than
+# escalating to enriched=False (NO fake fallbacks).
+log = logging.getLogger(__name__)
 
 # Reuse the canonical Choghadiya tables + Rahukal segment map already
 # defined in energy_engine.py — single source of truth.
@@ -636,6 +643,8 @@ def compute_per_day_enrichment(
     sunset:        float,
     current_h:     float,
     days:          int = 7,
+    birth_data:    Optional[Dict[str, Any]] = None,
+    today_date_iso: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Compute REAL per-day enrichment for the next `days` days starting today.
@@ -691,6 +700,28 @@ def compute_per_day_enrichment(
         s = today_planets.get("Sun")
         if isinstance(s, dict) and isinstance(s.get("longitude"), (int, float)):
             today_sun_lon = float(s["longitude"])
+
+    # Lazy import — avoid circular import + keeps module light if lucky
+    # engine isn't on the path during isolated tests.
+    _compute_lucky = None
+    if birth_data and today_date_iso:
+        try:
+            from lucky_engine import compute_daily_lucky as _compute_lucky  # type: ignore
+        except Exception as _exc:
+            log.debug("per_day: lucky_engine unavailable (%s) — skipping lucky", _exc)
+            _compute_lucky = None
+
+    # Resolve a base date for forward projection (today + i days). Falls
+    # back to None when no date_iso passed → per-day lucky becomes None
+    # for all days (no fake values).
+    _base_date = None
+    if today_date_iso:
+        try:
+            from datetime import datetime as _dt_local, timedelta as _td_local
+            _base_date = _dt_local.strptime(today_date_iso, "%Y-%m-%d")
+            _td_cls = _td_local
+        except Exception:
+            _base_date = None
 
     out: List[Dict[str, Any]] = []
     for i in range(days):
@@ -786,6 +817,31 @@ def compute_per_day_enrichment(
         eff_h    = current_h if i == 0 else sunrise
         best_t, avoid_t = pick_best_avoid_times(sched, rahukal, eff_h)
 
+        # Per-day "Aaj Ka Shubh Ank + Rang" — same canonical engine the
+        # /api/lucky/today route uses, just driven by the projected Moon
+        # / Sun longitudes for this future date. NEVER inserts fake values:
+        # if any input is missing or the engine returns ok=False, we leave
+        # the lucky fields as None so the client renders an explicit
+        # "unavailable" state instead of a placeholder.
+        shubh_ank: Optional[int] = None
+        shubh_rang_name: Optional[str] = None
+        shubh_rang_hex: Optional[str] = None
+        if (_compute_lucky is not None and _base_date is not None
+                and proj_moon is not None and proj_sun is not None
+                and birth_data and birth_chart):
+            try:
+                proj_date_iso = (_base_date + _td_cls(days=i)).strftime("%Y-%m-%d")
+                lucky = _compute_lucky(
+                    birth_data, birth_chart, proj_date_iso,
+                    proj_moon, proj_sun,
+                )
+                if isinstance(lucky, dict) and lucky.get("ok"):
+                    shubh_ank       = lucky.get("shubh_ank")
+                    shubh_rang_name = lucky.get("shubh_rang_name")
+                    shubh_rang_hex  = lucky.get("shubh_rang_hex")
+            except Exception as _exc:
+                log.debug("per_day: lucky calc failed for day %d: %s", i, _exc)
+
         out.append({
             "day_idx":              i,
             "trigger":              trigger,
@@ -803,6 +859,9 @@ def compute_per_day_enrichment(
             "avoid_time":           avoid_t,
             "tara_idx":             tara_idx,
             "weekday":              proj_weekday,
+            "shubh_ank":            shubh_ank,
+            "shubh_rang_name":      shubh_rang_name,
+            "shubh_rang_hex":       shubh_rang_hex,
         })
     return out
 
@@ -819,6 +878,8 @@ def enrich_risk_radar(radar:         Dict[str, Any],
                       current_h:     float = 0.0,
                       birth_chart:   Optional[Dict[str, Any]] = None,
                       today_planets: Optional[Dict[str, Dict[str, Any]]] = None,
+                      birth_data:    Optional[Dict[str, Any]] = None,
+                      today_date_iso: Optional[str] = None,
                       ) -> Dict[str, Any]:
     """
     Merge personalised top-level text + Choghadiya timing into the Risk
@@ -877,6 +938,7 @@ def enrich_risk_radar(radar:         Dict[str, Any],
     radar["per_day"] = compute_per_day_enrichment(
         energy_result, birth_chart or {}, today_planets,
         weekday, sunrise, sunset, current_h, days=7,
+        birth_data=birth_data, today_date_iso=today_date_iso,
     )
 
     # ── 4. Brand-voice attribution (NEVER reveal AI/LLM) ────────────────────

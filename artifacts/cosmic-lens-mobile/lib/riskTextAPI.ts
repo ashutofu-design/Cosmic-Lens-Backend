@@ -45,6 +45,13 @@ export interface PerDayRisk {
   avoid_time:           RiskTextWindow;
   tara_idx:             number;          // -1 if natal nakshatra missing
   weekday:              number;          // 0..6 (Mon..Sun)
+  // Per-day "Aaj Ka Shubh Ank + Rang" — same engine as /api/lucky/today,
+  // computed for the day's projected Moon/Sun longitudes. NEVER fake — when
+  // missing (no birth data, kundli unavailable, lucky engine off), all three
+  // fields are null and the client must render an explicit unavailable state.
+  shubh_ank:            number | null;
+  shubh_rang_name:      string | null;
+  shubh_rang_hex:       string | null;
 }
 
 export interface RiskRadarLegacyItem {

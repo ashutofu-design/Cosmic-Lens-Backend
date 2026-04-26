@@ -435,6 +435,45 @@ export function RiskRadarCard({
         }
       : sel;
 
+  // ── Resolve "Aaj Ka Shubh Ank + Rang" for the SELECTED day ───────────
+  // - Day 0 (today): use the existing /api/lucky/today response (richer —
+  //   includes a Hinglish reasoning line).
+  // - Day 1-6 (future days): use the per-day lucky fields the backend now
+  //   computes inside the radar response (same engine, projected positions).
+  // - Returns null when lucky is unavailable so the UI shows an explicit
+  //   fallback (NEVER fake values).
+  const selLucky: {
+    ank: number; name: string; hex: string; reason: string | null;
+  } | null = (() => {
+    // Use the calendar offset (selOffset === 0 ⇒ TRUE today), NOT the
+    // chip index `selected`. The component is general enough that a caller
+    // could anchor `days[]` to a non-today date — in that case `selected===0`
+    // would point at days[0] (NOT today) and using dailyLucky there would
+    // mis-attribute today's lucky to a different date.
+    if (selOffset === 0) {
+      return dailyLucky
+        ? {
+            ank:    dailyLucky.shubh_ank,
+            name:   dailyLucky.shubh_rang_name,
+            hex:    dailyLucky.shubh_rang_hex,
+            reason: dailyLucky.reasoning_hinglish ?? null,
+          }
+        : null;
+    }
+    if (perDay
+        && typeof perDay.shubh_ank === "number"
+        && perDay.shubh_rang_name
+        && perDay.shubh_rang_hex) {
+      return {
+        ank:    perDay.shubh_ank,
+        name:   perDay.shubh_rang_name,
+        hex:    perDay.shubh_rang_hex,
+        reason: null,
+      };
+    }
+    return null;
+  })();
+
   let safestIdx = 0, riskiestIdx = 0;
   days.forEach((d, i) => {
     if (d.riskScore < days[safestIdx].riskScore)   safestIdx   = i;
@@ -601,49 +640,58 @@ export function RiskRadarCard({
             </View>
           </View>
 
-          {/* ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ───── */}
-          {selected === 0 && dailyLucky ? (
+          {/* ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ─────
+               Day 0 uses /api/lucky/today (richer — includes Hinglish reason).
+               Day 1-6 uses the per-day lucky fields from /api/risk-radar
+               (same engine, projected Moon/Sun for that future date). */}
+          {selLucky ? (
             <View style={[s.shubhCard, {
-              backgroundColor: `${dailyLucky.shubh_rang_hex}14`,
-              borderColor: `${dailyLucky.shubh_rang_hex}55`,
+              backgroundColor: `${selLucky.hex}14`,
+              borderColor: `${selLucky.hex}55`,
             }]}>
               <View style={s.shubhRow}>
                 <View style={s.shubhAnkBox}>
-                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>AAJ KA SHUBH ANK</Text>
+                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>
+                    {selOffset === 0 ? "AAJ KA SHUBH ANK" : "SHUBH ANK"}
+                  </Text>
                   <View style={[s.shubhAnkBadge, {
-                    borderColor: dailyLucky.shubh_rang_hex,
-                    backgroundColor: `${dailyLucky.shubh_rang_hex}22`,
+                    borderColor: selLucky.hex,
+                    backgroundColor: `${selLucky.hex}22`,
                   }]}>
-                    <Text style={[s.shubhAnkText, { color: C.text }]}>{dailyLucky.shubh_ank}</Text>
+                    <Text style={[s.shubhAnkText, { color: C.text }]}>{selLucky.ank}</Text>
                   </View>
                 </View>
                 <View style={s.shubhDivider} />
                 <View style={s.shubhRangBox}>
-                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>AAJ KA SHUBH RANG</Text>
+                  <Text style={[s.shubhMicro, { color: C.textMuted }]}>
+                    {selOffset === 0 ? "AAJ KA SHUBH RANG" : "SHUBH RANG"}
+                  </Text>
                   <View style={s.shubhRangRow}>
                     <View style={[s.shubhSwatch, {
-                      backgroundColor: dailyLucky.shubh_rang_hex,
-                      borderColor: dailyLucky.shubh_rang_hex === "#f3f4f6"
+                      backgroundColor: selLucky.hex,
+                      borderColor: selLucky.hex === "#f3f4f6"
                         ? "rgba(255,255,255,0.3)" : "transparent",
                     }]} />
-                    <Text style={[s.shubhRangName, { color: C.text }]}>{dailyLucky.shubh_rang_name}</Text>
+                    <Text style={[s.shubhRangName, { color: C.text }]}>{selLucky.name}</Text>
                   </View>
                 </View>
               </View>
-              <Text style={[s.shubhReason, { color: C.textMuted }]}>
-                {dailyLucky.reasoning_hinglish}
-              </Text>
+              {selLucky.reason ? (
+                <Text style={[s.shubhReason, { color: C.textMuted }]}>
+                  {selLucky.reason}
+                </Text>
+              ) : null}
               <Text style={[s.shubhFooter, { color: C.textDim }]}>
                 Powered by Advanced Cosmic Intelligence
               </Text>
             </View>
-          ) : selected === 0 && luckyLoading ? (
+          ) : selOffset === 0 && luckyLoading ? (
             <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.shubhReason, { color: C.textMuted, textAlign: "center" }]}>
                 Aapka shubh ank aur rang calculate ho raha hai…
               </Text>
             </View>
-          ) : selected === 0 && (luckyError || !user || !kundli) ? (
+          ) : selOffset === 0 && (luckyError || !user || !kundli) ? (
             <Pressable
               onPress={() => router.push("/onboarding")}
               style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
@@ -665,10 +713,10 @@ export function RiskRadarCard({
           ) : (
             <View style={[s.shubhCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.shubhMicro, { color: C.textMuted, marginBottom: 4 }]}>
-                AAJ KA SHUBH ANK + RANG
+                SHUBH ANK + RANG
               </Text>
               <Text style={[s.shubhReason, { color: C.textMuted }]}>
-                Personalised shubh ank aur rang sirf "Aaj" ke liye dikhte hain — Day 1 par tap karein.
+                Is din ke liye shubh ank aur rang abhi available nahi hain.
               </Text>
             </View>
           )}

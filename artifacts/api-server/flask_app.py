@@ -2441,7 +2441,9 @@ def risk_radar():
         radar = enrich_risk_radar(radar, energy_result, weekday,
                                   sunrise_h, sunset_h, current_h,
                                   birth_chart=kundli_dict,
-                                  today_planets=today_planets)
+                                  today_planets=today_planets,
+                                  birth_data=birth_data,
+                                  today_date_iso=date_iso)
         # Verify all expected enrichment keys are present before claiming success
         radar["enriched"] = bool(
             radar.get("top_risk") and

@@ -797,37 +797,6 @@ export default function ForecastScreen() {
               fullAccess={!showDemo}
             />
 
-            {/* Moon info */}
-            <View style={s.infoGrid}>
-              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={s.infoIcon}>🌙</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_moonRashi}</Text>
-                <Text style={[s.infoValue, { color: C.text }]}>{sel.moonSign}</Text>
-              </View>
-              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={s.infoIcon}>🔮</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_paksha}</Text>
-                <Text style={[s.infoValue, { color: C.text }]}>{sel.phase}</Text>
-              </View>
-              <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Text style={s.infoIcon}>⚡</Text>
-                <Text style={[s.infoLabel, { color: C.textMuted }]}>{t.fc_energy}</Text>
-                <Text style={[s.infoValue, { color: scoreColor }]}>
-                  {sel.score >= 65 ? "Uchch" : sel.score <= 40 ? "Neech" : "Madhyam"}
-                </Text>
-              </View>
-            </View>
-
-            {/* Lock hint — every day on this page is a future day, full personal
-                reading + remedies unlock on the home screen on that day itself.
-                This is the daily-return hook the product depends on. */}
-            <View style={[s.lockHint, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Feather name="lock" size={12} color="#fbbf24" />
-              <Text style={[s.lockHintText, { color: C.textMuted }]}>
-                Us din ki full reading + remedies us din ke arrival pe home screen pe khulengi
-              </Text>
-            </View>
-
             {/* Day navigation row */}
             <View style={s.navRow}>
               <Pressable
@@ -919,19 +888,6 @@ const s = StyleSheet.create({
 
   chartPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
   placeholderText: { color: "#1e3a5f" },
-
-  infoGrid: { flexDirection: "row", gap: 10 },
-  infoItem: {
-    flex: 1, backgroundColor: "#040e1f", borderRadius: 14,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
-    padding: 12, alignItems: "center", gap: 4,
-  },
-  infoIcon:  { fontSize: 18 },
-  infoLabel: { color: "#3d5a7a", fontSize: 10, textAlign: "center" },
-  infoValue: { color: "#dde8f4", fontSize: 13, fontWeight: "600", textAlign: "center" },
-
-  lockHint:   { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
-  lockHintText: { fontSize: 12, flex: 1, fontWeight: "500" },
 
   navRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   navBtn:    { flexDirection: "row", alignItems: "center", gap: 4, padding: 8 },

@@ -84,7 +84,7 @@ export default function DashaRiskScreen() {
 
   const loadRadar = useCallback(async (silent = false) => {
     if (!user?.id || !user?.api_key) {
-      setError("Login required");
+      setError("LOGIN_REQUIRED");
       setLoading(false);
       return;
     }
@@ -98,7 +98,12 @@ export default function DashaRiskScreen() {
       });
       const j = await r.json();
       if (!r.ok) {
-        setError(j?.error || "Could not load Risk Radar");
+        const msg = (j?.error || "").toLowerCase();
+        if (msg.includes("kundli") || r.status === 404) {
+          setError("NO_KUNDLI");
+        } else {
+          setError(j?.error || "Could not load Risk Radar");
+        }
         setData(null);
       } else {
         setData(j as RiskRadarData);
@@ -174,6 +179,40 @@ export default function DashaRiskScreen() {
             <Text style={[s.loadingTxt, { color: C.textMuted }]}>
               Aapka radar tayyar kar rahe hain…
             </Text>
+          </View>
+        ) : error === "NO_KUNDLI" ? (
+          <View style={[s.card, s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Text style={s.emptyIcon}>🪐</Text>
+            <Text style={[s.emptyTitle, { color: C.text }]}>
+              Pehle apni kundli banayein
+            </Text>
+            <Text style={[s.emptyBody, { color: C.textMuted }]}>
+              Risk Radar aapke janma kundli ke signals pe based hai. Kundli
+              banane ke baad aapko aaj aur agle 7 din ke important signals
+              dikhenge.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/(tabs)/profile")}
+              style={[s.retryBtn, { backgroundColor: C.accent }]}
+            >
+              <Text style={s.retryTxt}>Kundli banayein</Text>
+            </Pressable>
+          </View>
+        ) : error === "LOGIN_REQUIRED" ? (
+          <View style={[s.card, s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <Text style={s.emptyIcon}>🔐</Text>
+            <Text style={[s.emptyTitle, { color: C.text }]}>
+              Pehle login karein
+            </Text>
+            <Text style={[s.emptyBody, { color: C.textMuted }]}>
+              Risk Radar dekhne ke liye apne account mein login karein.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/login")}
+              style={[s.retryBtn, { backgroundColor: C.accent }]}
+            >
+              <Text style={s.retryTxt}>Login</Text>
+            </Pressable>
           </View>
         ) : error ? (
           <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -475,6 +514,18 @@ const s = StyleSheet.create({
   noteFooter: {
     fontSize: 10, fontFamily: F.semi, marginTop: 10, textAlign: "center",
     letterSpacing: 0.3,
+  },
+
+  emptyCard: {
+    alignItems: "center", paddingVertical: 28, gap: 8,
+  },
+  emptyIcon:  { fontSize: 44, marginBottom: 6 },
+  emptyTitle: {
+    fontSize: 17, fontFamily: F.bold, textAlign: "center",
+  },
+  emptyBody: {
+    fontSize: 13, fontFamily: F.regular, lineHeight: 19,
+    textAlign: "center", marginBottom: 12,
   },
 
   errTitle: { fontSize: 15, fontFamily: F.bold, marginBottom: 6 },

@@ -35,6 +35,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding"       options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"           options={{ headerShown: false }} />
       <Stack.Screen name="forecast"         options={{ headerShown: false }} />
+      <Stack.Screen name="dasha-risk"       options={{ headerShown: false }} />
       <Stack.Screen name="planet-position"  options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit"     options={{ headerShown: false }} />
       <Stack.Screen name="dosh"             options={{ headerShown: false }} />

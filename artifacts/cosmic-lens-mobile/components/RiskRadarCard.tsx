@@ -269,12 +269,24 @@ export function RiskRadarCard({
       setLuckyLoading(false);
       return;
     }
+    // ── Strict lang-aware refresh ────────────────────────────────────────
+    // Capture the lang at the moment the fetch is fired and clear any
+    // previously-cached payload immediately so the user never sees stale
+    // text in the OLD language overlaid with NEW-language labels (e.g.
+    // EN headers + Hinglish reasoning). The card falls back to the
+    // skeleton state until the fresh response — stamped with the current
+    // lang — arrives. We additionally guard the `setDailyLucky` call by
+    // comparing the captured lang with the resolved `reasoning_lang`
+    // echoed by the server to drop any out-of-order responses.
+    const fetchLang = t.lang;
+    setDailyLucky(null);
+    setLuckyError(null);
     let cancelled = false;
     setLuckyLoading(true);
     fetchDailyLucky(user.id, user.api_key, {
       kundli: kundli as unknown as Record<string, unknown>,
       birthData: birthData as unknown as Record<string, unknown> | null,
-      lang: t.lang,
+      lang: fetchLang,
     })
       .then(res => {
         if (cancelled) return;

@@ -256,6 +256,44 @@ export default function DashaRiskScreen() {
             {/* Sci-fi cosmic radar visualization (separate section, above the card) */}
             <CosmicRadarView risks={radarRisks} />
 
+            {/* Total risks banner — clear count of active threat signals for the day */}
+            {(() => {
+              const total = radarRisks.length;
+              const tone =
+                total >= 3 ? "#ef4444" :
+                total === 2 ? "#f59e0b" :
+                "#4ade80";
+              const label =
+                total >= 3 ? "HIGH ALERT" :
+                total === 2 ? "ELEVATED"   :
+                "STABLE";
+              const sub =
+                selected === 0
+                  ? "Aaj 24 ghante mein active threat signals"
+                  : `${dayLabel(days[selected].date, selected)} ke 24 ghante mein active signals`;
+              return (
+                <View
+                  style={[
+                    s.totalBanner,
+                    { backgroundColor: `${tone}10`, borderColor: `${tone}40` },
+                  ]}
+                >
+                  <View style={[s.totalNumBox, { backgroundColor: `${tone}22`, borderColor: tone }]}>
+                    <Text style={[s.totalNumTxt, { color: tone }]}>{total}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.totalLabel, { color: tone }]}>
+                      TOTAL RISK SIGNALS
+                    </Text>
+                    <Text style={[s.totalSub, { color: C.textMuted }]}>{sub}</Text>
+                  </View>
+                  <View style={[s.totalBadge, { backgroundColor: tone }]}>
+                    <Text style={s.totalBadgeTxt}>{label}</Text>
+                  </View>
+                </View>
+              );
+            })()}
+
             {/* The consolidated 8-section card */}
             <RiskRadarCard
               days={days}
@@ -326,5 +364,37 @@ const s = StyleSheet.create({
     fontSize: 10, fontWeight: "600",
     textAlign: "center", letterSpacing: 0.6,
     marginTop: 6,
+  },
+
+  totalBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  totalNumBox: {
+    width: 48, height: 48, borderRadius: 24,
+    borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
+  totalNumTxt: {
+    fontSize: 22, fontWeight: "900",
+  },
+  totalLabel: {
+    fontSize: 11, fontWeight: "800", letterSpacing: 1.4,
+  },
+  totalSub: {
+    fontSize: 11, fontWeight: "500", marginTop: 2,
+  },
+  totalBadge: {
+    paddingHorizontal: 9, paddingVertical: 5,
+    borderRadius: 8,
+  },
+  totalBadgeTxt: {
+    fontSize: 9, fontWeight: "900",
+    letterSpacing: 1.2,
+    color: "#0b0f1a",
   },
 });

@@ -249,25 +249,40 @@ export function RiskRadarCard({
   days: DayForecast[]; selected: number; onSelect: (i: number) => void; fullAccess: boolean;
 }) {
   const C = useC();
-  const { user, kundli } = useUser();
+  const { user, kundli, birthData } = useUser();
 
   // ── Personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" ────────────
   // Fetched from /api/lucky/today using the user's mool ank + janma
   // nakshatra. NEVER falls back to fake values — when missing the hero tile
   // shows a friendly Hinglish prompt.
+  //
+  // We also forward the LOCAL kundli + birthData so the server can compute
+  // even when the kundli hasn't been synced to the DB yet (demo flow,
+  // local-only profiles).
   const [dailyLucky, setDailyLucky] = useState<DailyLucky | null>(null);
   const [luckyError, setLuckyError] = useState<string | null>(null);
   const [luckyLoading, setLuckyLoading] = useState(false);
+
+  // Stable fingerprints to avoid re-fetching when object references change
+  // but the underlying values do not.
+  const kundliFp = kundli ? `${kundli.nakshatra ?? ""}|${kundli.moonLongitude ?? ""}` : "";
+  const birthFp  = birthData
+    ? `${birthData.year ?? ""}-${birthData.month ?? ""}-${birthData.day ?? ""}`
+    : "";
 
   useEffect(() => {
     if (!user?.id || !user?.api_key || !kundli) {
       setDailyLucky(null);
       setLuckyError(null);
+      setLuckyLoading(false);
       return;
     }
     let cancelled = false;
     setLuckyLoading(true);
-    fetchDailyLucky(user.id, user.api_key)
+    fetchDailyLucky(user.id, user.api_key, {
+      kundli: kundli as unknown as Record<string, unknown>,
+      birthData: birthData as unknown as Record<string, unknown> | null,
+    })
       .then(res => {
         if (cancelled) return;
         if (res.ok) {
@@ -280,7 +295,8 @@ export function RiskRadarCard({
       })
       .finally(() => { if (!cancelled) setLuckyLoading(false); });
     return () => { cancelled = true; };
-  }, [user?.id, user?.api_key, kundli]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.api_key, kundliFp, birthFp]);
 
   const [streak, setStreak] = useState(0);
   useEffect(() => {

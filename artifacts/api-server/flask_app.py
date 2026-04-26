@@ -2233,37 +2233,43 @@ def lucky_today():
         return jsonify({"error": "date must be YYYY-MM-DD"}), 400
     date_iso = day.strftime("%Y-%m-%d")
 
-    uid_raw = request.args.get("user_id") or body.get("user_id")
-    if not uid_raw:
-        return jsonify({"error": "user_id required (with X-API-Key)"}), 400
-    try:
-        user_id = int(uid_raw)
-    except (TypeError, ValueError):
-        return jsonify({"error": "user_id must be an integer"}), 400
+    # ── Resolve kundli + birth_data (mirrors risk_radar/energy_today) ────
+    # Priority: explicit body payload → DB lookup via user_id + API key.
+    # Stateless mode unblocks demo / local-only kundlis.
+    kundli_dict = body.get("kundli") or body.get("chart_data")
+    birth_data: Dict[str, Any] = body.get("birthData") or body.get("birth_data") or {}
 
-    user, err = get_authed_user(user_id)
-    if err:
-        return err
-    if not user.kundli or not user.kundli.chart_data:
-        return jsonify({"error": "no_kundli",
-                        "message": "Pehle apni kundli banayein."}), 404
+    if not kundli_dict:
+        uid_raw = request.args.get("user_id") or body.get("user_id")
+        if not uid_raw:
+            return jsonify({"error": "Provide user_id (with X-API-Key) or kundli body"}), 400
+        try:
+            user_id = int(uid_raw)
+        except (TypeError, ValueError):
+            return jsonify({"error": "user_id must be an integer"}), 400
 
-    try:
-        kundli_dict = _json.loads(user.kundli.chart_data)
-    except Exception:
-        return jsonify({"error": "Saved kundli is corrupted"}), 500
+        user, err = get_authed_user(user_id)
+        if err:
+            return err
+        if not user.kundli or not user.kundli.chart_data:
+            return jsonify({"error": "no_kundli",
+                            "message": "Pehle apni kundli banayein."}), 404
+        try:
+            kundli_dict = _json.loads(user.kundli.chart_data)
+        except Exception:
+            return jsonify({"error": "Saved kundli is corrupted"}), 500
 
-    # Pull birth_data from primary profile (for mool ank's birth-day source)
-    birth_data: Dict[str, Any] = {}
-    try:
-        prim = (Profile.query
-                .filter(Profile.user_id == user.id,
-                        Profile.is_primary.is_(True))
-                .first())
-        if prim and prim.birth_data:
-            birth_data = _json.loads(prim.birth_data) or {}
-    except Exception:
-        pass
+        # Pull birth_data from primary profile if not supplied
+        if not birth_data:
+            try:
+                prim = (Profile.query
+                        .filter(Profile.user_id == user.id,
+                                Profile.is_primary.is_(True))
+                        .first())
+                if prim and prim.birth_data:
+                    birth_data = _json.loads(prim.birth_data) or {}
+            except Exception:
+                pass
 
     # ── Compute today's Moon + Sun longitudes (sidereal) ─────────────────
     jd = swe.julday(day.year, day.month, day.day,

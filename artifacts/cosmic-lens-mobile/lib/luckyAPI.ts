@@ -25,9 +25,19 @@ export interface LuckyError {
 
 export type LuckyResult = DailyLucky | LuckyError;
 
+export interface FetchDailyLuckyOpts {
+  date?: string;
+  kundli?: Record<string, unknown> | null;
+  birthData?: Record<string, unknown> | null;
+}
+
 /**
  * Fetch personalised "Aaj Ka Shubh Ank" + "Aaj Ka Shubh Rang" for today
  * (or an optional date) for an authenticated user.
+ *
+ * If `kundli` (and optionally `birthData`) are passed, the server uses
+ * them directly (stateless mode) — this unblocks demo / local-only
+ * kundlis that haven't been synced to the server yet.
  *
  * Returns { ok: false, error, message } on auth/data-missing failures —
  * NEVER returns fake fallback values.
@@ -35,8 +45,9 @@ export type LuckyResult = DailyLucky | LuckyError;
 export async function fetchDailyLucky(
   userId: number,
   apiKey: string,
-  date?: string,
+  opts: FetchDailyLuckyOpts = {},
 ): Promise<LuckyResult> {
+  const { date, kundli, birthData } = opts;
   try {
     const res = await apiFetch(`${API_BASE}/api/lucky/today`, {
       method: "POST",
@@ -44,7 +55,12 @@ export async function fetchDailyLucky(
         "Content-Type": "application/json",
         "X-API-Key": apiKey,
       },
-      body: JSON.stringify({ user_id: userId, ...(date ? { date } : {}) }),
+      body: JSON.stringify({
+        user_id: userId,
+        ...(date ? { date } : {}),
+        ...(kundli ? { kundli } : {}),
+        ...(birthData ? { birthData } : {}),
+      }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {

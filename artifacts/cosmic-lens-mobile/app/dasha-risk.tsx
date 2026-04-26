@@ -75,7 +75,7 @@ function levelIcon(l: RiskLevel): string {
 export default function DashaRiskScreen() {
   const C        = useC();
   const insets   = useSafeAreaInsets();
-  const { user } = useUser();
+  const { user, kundli, birthData } = useUser();
 
   const [data, setData]         = useState<RiskRadarData | null>(null);
   const [loading, setLoading]   = useState(true);
@@ -83,19 +83,36 @@ export default function DashaRiskScreen() {
   const [error, setError]       = useState<string | null>(null);
 
   const loadRadar = useCallback(async (silent = false) => {
-    if (!user?.id || !user?.api_key) {
-      setError("LOGIN_REQUIRED");
+    // Prefer stateless POST with primary kundli (works for non-logged-in
+    // users too). Fall back to user_id+API key if local kundli not ready.
+    if (!silent) setLoading(true);
+    setError(null);
+
+    const hasLocalKundli = !!(kundli && Array.isArray(kundli.planets) && kundli.planets.length > 0);
+
+    if (!hasLocalKundli && !(user?.id && user?.api_key)) {
+      setError("NO_KUNDLI");
       setLoading(false);
       return;
     }
-    if (!silent) setLoading(true);
-    setError(null);
+
     try {
-      const url = `${API_BASE}/api/risk-radar?user_id=${user.id}`;
-      const r = await apiFetch(url, {
-        method: "GET",
-        headers: { "X-API-Key": user.api_key },
-      });
+      let r: Response;
+      if (hasLocalKundli) {
+        r = await apiFetch(`${API_BASE}/api/risk-radar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chart_data: kundli,
+            birthData: birthData ?? undefined,
+          }),
+        });
+      } else {
+        r = await apiFetch(`${API_BASE}/api/risk-radar?user_id=${user!.id}`, {
+          method: "GET",
+          headers: { "X-API-Key": user!.api_key },
+        });
+      }
       const j = await r.json();
       if (!r.ok) {
         const msg = (j?.error || "").toLowerCase();
@@ -115,7 +132,7 @@ export default function DashaRiskScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user?.id, user?.api_key]);
+  }, [user?.id, user?.api_key, kundli, birthData]);
 
   useEffect(() => { loadRadar(); }, [loadRadar]);
 

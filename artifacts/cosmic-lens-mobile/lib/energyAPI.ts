@@ -15,10 +15,32 @@ export type EnergyComponent = {
   [k: string]: any;
 };
 
+export type EnergyBucket = {
+  score: number;
+  label: string;
+};
+
+export type EnergyFlag = {
+  type:
+    | "saturn"
+    | "chandrashtama"
+    | "tithi_rikta"
+    | "tithi_purna"
+    | "tara"
+    | "md_sandhi"
+    | "pd_retrograde";
+  severity: "low" | "medium" | "high";
+  [k: string]: any;
+};
+
 export interface EnergyResult {
   energy_score: number;
+  /** Alias of energy_score for new consumers. */
+  overall_score?: number;
   category: "Low" | "Moderate" | "Good" | "Strong" | "Excellent";
   color: string;
+  /** Signal-alignment confidence ("high" = clean, "low" = mixed/contradictory). */
+  confidence?: "low" | "medium" | "high";
   date: string;
   summary: string;
   advice: string;
@@ -27,8 +49,20 @@ export interface EnergyResult {
     moon_transit:    EnergyComponent;
     ashtakavarga:    EnergyComponent;
     tara_bal:        EnergyComponent;
-    aspect_strength: EnergyComponent;
+    /** @deprecated dropped from v2 transit-first engine; kept optional for old responses. */
+    aspect_strength?: EnergyComponent;
   };
+  /** 3-bucket breakdown derived from existing components (no new astrology). */
+  buckets?: {
+    physical: EnergyBucket;
+    mental:   EnergyBucket;
+    luck:     EnergyBucket;
+  };
+  /** Structured list of currently-active flags for UI badges. */
+  active_flags?: EnergyFlag[];
+  /** Backend-ready: future per-user calibration adjustment value. */
+  feedback_enabled?: boolean;
+  feedback_adjustment?: number;
   today_moon: {
     longitude:      number;
     rashiIndex:     number;

@@ -589,6 +589,177 @@ def _category(score: float) -> Tuple[str, str]:
     return "Excellent", "green"
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# 9. MAHADASHA SANDHI DETECTION (transition penalty)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _detect_md_sandhi(dashas: List[Dict[str, Any]], today: str) -> bool:
+    """
+    True if today is within ~6 months of the active Mahadasha's start or end.
+    The transition between two MDs creates a classically "lost / disoriented"
+    period — small penalty applied.
+    """
+    if not dashas:
+        return False
+    md = _find_active(dashas, today)
+    if not md:
+        return False
+    s, e = md.get("startDate"), md.get("endDate")
+    if not (s and e):
+        return False
+    try:
+        td = datetime.strptime(today, "%Y-%m-%d")
+        sd = datetime.strptime(s, "%Y-%m-%d")
+        ed = datetime.strptime(e, "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return False
+    six_months_days = 183
+    return (td - sd).days < six_months_days or (ed - td).days < six_months_days
+
+
+def _check_pd_retrograde(pd_planet: Optional[str],
+                         planets: List[Dict[str, Any]]) -> Optional[str]:
+    """Return the PD lord's name if it is currently retrograde, else None."""
+    if not pd_planet:
+        return None
+    for p in planets or []:
+        name = p.get("name") or p.get("planet")
+        if name == pd_planet:
+            return pd_planet if p.get("retrograde") else None
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 10. BUCKETS (Physical / Mental / Luck) — derived from existing scores
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _compute_buckets(moon_sc: float, tara_sc: float, dasha_sc: float,
+                     av_sc: float, saturn_delta: float,
+                     tithi_delta: float) -> Dict[str, Dict[str, Any]]:
+    """
+    Map existing component scores into 3 user-facing buckets.
+
+    Physical (Shakti) — body/drive/vitality
+        Dasha (life-force lord) + Ashtakavarga (cosmic support)
+        Saturn overlay drags it down (Sade Sati = heavy body)
+
+    Mental (Shaanti) — mind/clarity/mood
+        Moon transit + Tara Bal (mind-related Vedic factors)
+        Tithi overlay shifts it (Rikta = mental drain, Purna = clarity)
+
+    Luck (Bhagya) — opportunities/flow/synchronicity
+        Ashtakavarga + Dasha (running luck-period)
+        Tithi gives subtle bonus, Saturn small drag
+    """
+    # Saturn (Sade Sati / Dhaiyya) hits BODY hardest — heavy multiplier on physical.
+    # Tithi (Rikta/Purna) directly affects MIND — full weight on mental.
+    # Both saturn + tithi affect LUCK/flow moderately.
+    physical = dasha_sc * 0.50 + av_sc * 0.40 + saturn_delta * 1.2
+    mental   = moon_sc * 0.55 + tara_sc * 0.40 + tithi_delta * 1.0 + saturn_delta * 0.4
+    luck     = av_sc   * 0.45 + dasha_sc * 0.45 + tithi_delta * 0.6 + saturn_delta * 0.7
+
+    def clamp(x: float) -> int:
+        return int(round(max(0.0, min(100.0, x))))
+
+    return {
+        "physical": {"score": clamp(physical), "label": "Shakti"},
+        "mental":   {"score": clamp(mental),   "label": "Shaanti"},
+        "luck":     {"score": clamp(luck),     "label": "Bhagya"},
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 11. CONFIDENCE LEVEL
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _compute_confidence(parts: Dict[str, float],
+                        saturn_d: Dict[str, Any],
+                        tithi_d: Dict[str, Any],
+                        moon_d: Dict[str, Any],
+                        tara_d: Dict[str, Any]) -> str:
+    """
+    Confidence reflects whether signals AGREE.
+        high   = all signals point same direction (clean good or clean bad day)
+        low    = strong contradiction (e.g. weighted base high but Saturn heavy)
+        medium = typical mixed day
+    """
+    scores = [v for v in parts.values() if isinstance(v, (int, float))]
+    avg = sum(scores) / len(scores) if scores else 60.0
+
+    sat_active = bool(saturn_d.get("active"))
+    sat_heavy  = sat_active and saturn_d.get("delta", 0) <= -15
+    chandrashtama = bool(moon_d.get("chandrashtama"))
+    rikta = (tithi_d.get("type") or "").startswith("Rikta")
+    purna = (tithi_d.get("type") or "").startswith("Purna")
+    bad_tara = tara_d.get("tara") in {"Naidhana", "Vipat"}
+    good_tara = tara_d.get("tara") in {"Sampat", "Mitra", "Ati Mitra"}
+
+    neg_signals = sum([sat_heavy, chandrashtama, rikta, bad_tara])
+    pos_signals = sum([purna, good_tara])
+
+    # Mixed = strong contradiction
+    if neg_signals >= 1 and pos_signals >= 1:
+        return "low"
+    if avg >= 70 and neg_signals >= 1:
+        return "low"
+    if avg <= 45 and pos_signals >= 1:
+        return "low"
+
+    # Clean alignment
+    if neg_signals >= 2 and avg <= 55:
+        return "high"
+    if pos_signals >= 1 and avg >= 65 and not sat_active:
+        return "high"
+
+    return "medium"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 12. ACTIVE FLAGS — structured array for UI
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _build_active_flags(saturn_d: Dict[str, Any],
+                        tithi_d: Dict[str, Any],
+                        moon_d: Dict[str, Any],
+                        tara_d: Dict[str, Any],
+                        md_sandhi: bool,
+                        retrograde_pd: Optional[str]) -> List[Dict[str, Any]]:
+    flags: List[Dict[str, Any]] = []
+
+    if saturn_d.get("active"):
+        delta = saturn_d.get("delta", 0)
+        sev = "high" if delta <= -15 else "medium"
+        flags.append({"type": "saturn", "phase": saturn_d.get("phase"),
+                      "severity": sev})
+
+    if moon_d.get("chandrashtama"):
+        flags.append({"type": "chandrashtama", "severity": "high"})
+
+    tt = (tithi_d.get("type") or "")
+    if tt.startswith("Rikta"):
+        flags.append({"type": "tithi_rikta",
+                      "tithi": tithi_d.get("tithi_name"),
+                      "severity": "medium"})
+    elif tt.startswith("Purna"):
+        flags.append({"type": "tithi_purna",
+                      "tithi": tithi_d.get("tithi_name"),
+                      "severity": "low"})
+
+    tn = tara_d.get("tara")
+    if tn in {"Naidhana", "Vipat"}:
+        flags.append({"type": "tara", "name": tn,
+                      "severity": "high" if tn == "Naidhana" else "medium"})
+
+    if md_sandhi:
+        flags.append({"type": "md_sandhi", "severity": "medium"})
+
+    if retrograde_pd:
+        flags.append({"type": "pd_retrograde", "planet": retrograde_pd,
+                      "severity": "low"})
+
+    return flags
+
+
 def _summary_and_advice(score: float,
                         parts: Dict[str, float],
                         details: Dict[str, Any]) -> Tuple[str, str]:
@@ -638,27 +809,42 @@ def _summary_and_advice(score: float,
         return (f"Rikta Tithi ({tithi_d.get('tithi_name','—')}) — energy drain wala din classically.{rikta_extra}",
                 "Naye launch/important meetings avoid. Routine maintenance + rest day banao.")
 
+    # ── Helper: identify weakest / strongest component for reason text ────
+    label_map = {"moon": "Moon transit", "tara": "Tara Bal",
+                 "dasha": "Dasha", "av": "Ashtakavarga"}
+    parts_sorted = sorted(parts.items(), key=lambda x: x[1])
+    weak_label, weak_val = (parts_sorted[0] if parts_sorted else ("moon", 60))
+    strong_label, strong_val = (parts_sorted[-1] if parts_sorted else ("moon", 60))
+
+    md_sandhi_active = bool(details.get("md_sandhi"))
+    sandhi_note = " Mahadasha sandhi (transition) bhi chal rahi — thodi disorientation feel ho sakti hai." if md_sandhi_active else ""
+
     # ── PRIORITY 2: Score-band defaults (when no critical signal) ─────────
     if score >= 85:
-        return ("Rare cosmic window — chandra + tara + dasha sab align ho rahe aaj. Energy peak pe.",
+        return (f"Rare cosmic window — {label_map[strong_label]} ({int(strong_val)}/100) "
+                "lead kar raha, chandra + tara + dasha sab align ho rahe. Energy peak pe.",
                 "Important launches, conversations, signings ke liye perfect din. Use this — har din nahi milta.")
 
     if score >= 70:
-        return ("Aaj momentum hai — productive aur smooth feel hoga. Planetary support strong.",
+        return (f"Aaj momentum hai — {label_map[strong_label]} strong support de raha "
+                f"({int(strong_val)}/100), productive aur smooth feel hoga.",
                 "Important kaam aaj nipta lo. Decisions, calls, exercise — sab favorable.")
 
     if score >= 55:
         nice_tithi = ""
         if (tithi_d.get("type") or "").startswith("Purna"):
             nice_tithi = f" {tithi_d.get('tithi_name','')} (Purna) ka subtle support hai."
-        return (f"Steady neutral day — drama nahi, magic bhi nahi.{nice_tithi}",
+        return (f"Steady neutral day — {label_map[weak_label]} thoda kam hai "
+                f"({int(weak_val)}/100), isliye drama nahi magic bhi nahi.{nice_tithi}{sandhi_note}",
                 "Apne regular kaam pe focus rakho. Major new commitments avoid, routine continue.")
 
     if score >= 40:
-        return ("Aaj thoda heavy/slow feel hoga — patience wala din. Cosmic support kam hai.",
+        return (f"Aaj thoda heavy/slow feel hoga — patience wala din, {label_map[weak_label]} "
+                f"down hai ({int(weak_val)}/100), cosmic support kam hai.{sandhi_note}",
                 "Light schedule, extra rest, exercise + meditation se reset karo. Bade decisions kal pe tal do.")
 
-    return ("Low-energy challenging din — bhari mehsoos hoga, normal hai is alignment ke saath.",
+    return (f"Low-energy challenging din — {label_map[weak_label]} bahut weak ({int(weak_val)}/100), "
+            f"bhari mehsoos hoga, normal hai is alignment ke saath.{sandhi_note}",
             "Aaj rest, journaling, mantra-japa. Self-care din hai — kal naturally better hoga.")
 
 
@@ -753,27 +939,69 @@ def calculate_energy(user_data: Dict[str, Any],
     saturn_delta, saturn_d = compute_saturn_overlay(saturn_sign, birth_moon_sign)
     tithi_delta,  tithi_d  = compute_tithi_overlay(sun_today_lon, moon_lon)
 
-    raw_energy = base_energy + saturn_delta + tithi_delta
+    # Inject delta into saturn_d so downstream summary/confidence/flags can read it
+    saturn_d = {**saturn_d, "delta": saturn_delta}
+
+    # ── Mahadasha Sandhi (transition window penalty) ─────────────────────
+    dashas_list = (user_data.get("dashas")
+                   or (user_data.get("chart_data") or {}).get("dashas") or [])
+    md_sandhi = _detect_md_sandhi(dashas_list, today)
+    md_sandhi_delta = -5.0 if md_sandhi else 0.0
+
+    raw_energy = base_energy + saturn_delta + tithi_delta + md_sandhi_delta
 
     # ── Compression curve (pulls high end down) ──────────────────────────
     compressed = _compress_high_end(raw_energy)
     energy = max(0.0, min(100.0, compressed))
+
+    # ── HARD CAP: Sade Sati Madhya peak cannot show as a "good day" ──────
+    # Critical trust-rule: if user is in Janma Rashi Saturn transit they
+    # ARE feeling heavy — score must reflect that, never break trust.
+    # Cap at 59 (NOT 60) so _category() returns "Moderate" not "Good"
+    # (boundary is score < 60 → Moderate). 60 itself would still display
+    # as "Good" while summary says "heavy", a trust-contradiction.
+    sade_sati_madhya = (saturn_d.get("active")
+                        and saturn_delta <= -20)
+    if sade_sati_madhya:
+        energy = min(energy, 59.0)
+
     score  = int(round(energy))
     cat, color = _category(energy)
 
     parts   = {"moon": moon_sc, "tara": tara_sc, "dasha": dasha_sc, "av": av_sc}
     details = {"dasha_detail": dasha_d, "moon_detail": moon_d,
                "av_detail": av_d, "tara_detail": tara_d,
-               "saturn_overlay": saturn_d, "tithi_overlay": tithi_d}
+               "saturn_overlay": saturn_d, "tithi_overlay": tithi_d,
+               "md_sandhi": md_sandhi}
     summary, advice = _summary_and_advice(energy, parts, details)
 
+    # ── PD lord retrograde advisory (appended to advice) ─────────────────
+    pd_planet = (dasha_d.get("pd") or {}).get("planet") if isinstance(dasha_d, dict) else None
+    retrograde_pd = _check_pd_retrograde(pd_planet, planets)
+    if retrograde_pd:
+        advice = (advice + f" Note: Pratyantar lord {retrograde_pd} abhi vakri (retrograde) "
+                           "hai — results thode delayed mil sakte, patience rakho.")
+
+    # ── Buckets, confidence, flags ───────────────────────────────────────
+    buckets = _compute_buckets(moon_sc, tara_sc, dasha_sc, av_sc,
+                                saturn_delta, tithi_delta)
+    confidence = _compute_confidence(parts, saturn_d, tithi_d, moon_d, tara_d)
+    active_flags = _build_active_flags(saturn_d, tithi_d, moon_d, tara_d,
+                                        md_sandhi, retrograde_pd)
+
     return {
-        "energy_score": score,
-        "category":     cat,
-        "color":        color,
-        "summary":      summary,
-        "advice":       advice,
-        "date":         today,
+        "energy_score":     score,
+        "overall_score":    score,        # alias for new API consumers
+        "category":         cat,
+        "color":            color,
+        "confidence":       confidence,
+        "summary":          summary,
+        "advice":           advice,
+        "date":             today,
+        "buckets":          buckets,
+        "active_flags":     active_flags,
+        "feedback_enabled": True,
+        "feedback_adjustment": 0,
         "components": {
             "moon_transit":   {"score": round(moon_sc, 1),  "weight": 0.35, **moon_d},
             "tara_bal":       {"score": round(tara_sc, 1),  "weight": 0.25, **tara_d},
@@ -781,10 +1009,12 @@ def calculate_energy(user_data: Dict[str, Any],
             "ashtakavarga":   {"score": round(av_sc, 1),    "weight": 0.15, **av_d},
         },
         "overlays": {
-            "saturn":     {"delta": saturn_delta, **saturn_d},
-            "tithi":      {"delta": tithi_delta,  **tithi_d},
-            "base_score": round(base_energy, 1),
-            "after_overlays": round(raw_energy, 1),
+            "saturn":            {"delta": saturn_delta, **saturn_d},
+            "tithi":             {"delta": tithi_delta,  **tithi_d},
+            "md_sandhi":         {"active": md_sandhi, "delta": md_sandhi_delta},
+            "base_score":        round(base_energy, 1),
+            "after_overlays":    round(raw_energy, 1),
             "after_compression": round(compressed, 1),
+            "after_hard_cap":    score,
         },
     }

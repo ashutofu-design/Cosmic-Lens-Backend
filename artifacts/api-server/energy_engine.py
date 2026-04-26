@@ -2,23 +2,28 @@
 Daily Energy Score Engine for Cosmic Lens
 ==========================================
 
-Computes a Vedic-astrology-based "Today's Energy Score" (0-100) using the
-following weighted formula (recalibrated 2026-04-25 for realism):
+Computes a Vedic-astrology-based "Today's Energy Score" (0-100) using a
+TRANSIT-FIRST design (philosophy: daily score must reflect things that
+ACTUALLY change daily — birth-chart static factors are deprioritised).
 
-    Energy =  Moon Transit   * 35%   (raised from 25%)
-            + Dasha          * 25%   (lowered from 30%)
-            + Ashtakavarga   * 20%
-            + Tara Bal       * 15%
-            + Aspect/Strength* 5%    (lowered from 10%)
+    Energy =  Moon Transit   * 35%   (where chandra is, lagna-relative + chandrashtama)
+            + Tara Bal       * 25%   (today's nakshatra friendship — Moon-driven)
+            + Dasha          * 25%   (background mood tilt — months/years constant)
+            + Ashtakavarga   * 15%   (cosmic bindus in today's Moon sign)
 
-Then OVERLAYS are applied (these can move the final score significantly):
+    [Aspect/Shadbala dropped — birth-chart static, doesn't affect daily mood]
+
+Overlays applied AFTER weighted sum:
     - Saturn overlay  : Sade Sati (-10/-20/-10) or Dhaiyya (-10/-15)
     - Tithi overlay   : Rikta (-5) / Purna (+5)
-    - Compression curve: pulls high end down so 75-85 isn't an everyday occurrence
+    - Compression curve: pulls scores >60 down so 75-85 isn't an everyday occurrence
 
-Each sub-score is independently 0-100 and explained in its own helper.
-The engine is pure Python (no DB / network) so it can be unit-tested and
-extended easily for premium variants.
+Net effect: 75% of the score is Moon-driven (transit + tara + AV) which
+matches Vedic principle that Moon = mind = mood. Dasha provides backdrop tilt.
+
+Summary text is signal-first (chandrashtama / Sade Sati / Naidhana detected
+before falling back to score-band defaults) so the description matches what
+the user actually feels.
 """
 
 from datetime import datetime
@@ -584,38 +589,77 @@ def _category(score: float) -> Tuple[str, str]:
     return "Excellent", "green"
 
 
-def _summary_and_advice(parts: Dict[str, float],
+def _summary_and_advice(score: float,
+                        parts: Dict[str, float],
                         details: Dict[str, Any]) -> Tuple[str, str]:
-    """Pick the single strongest factor for the summary and a tailored advice."""
-    strongest = max(parts.items(), key=lambda kv: kv[1])[0]
+    """
+    Mood-aware summary builder. Signal-first detection (worst signals win),
+    then falls back to score-band defaults. Output language deliberately
+    matches the felt-mood at each band so user trust holds.
+    """
+    moon_d   = details.get("moon_detail")    or {}
+    tara_d   = details.get("tara_detail")    or {}
+    saturn_d = details.get("saturn_overlay") or {}
+    tithi_d  = details.get("tithi_overlay")  or {}
 
-    summaries = {
-        "dasha": "Aapki current dasha period sahayak hai — planetary cycle aapke favour mein hai.",
-        "moon":  "Aaj ka chandra transit aapke ascendant ke liye anukool hai.",
-        "av":    "Ashtakavarga bindus strong hain — chandra ke house mein cosmic support active hai.",
-        "tara":  f"Tara Bal '{(details.get('tara_detail') or {}).get('tara','—')}' hai — favorable timing.",
-        "asp":   "Birth chart ki planetary strength achhi position mein hai aaj.",
-    }
-    weak_summaries = {
-        "dasha": "Dasha period thoda challenging hai — patience aur reflection ka samay.",
-        "moon":  "Aaj chandra aapke ascendant ke liye difficult ghar mein hai.",
-        "av":    "Ashtakavarga support kam hai — cautious decisions lein.",
-        "tara":  f"Tara Bal '{(details.get('tara_detail') or {}).get('tara','—')}' inauspicious hai.",
-        "asp":   "Birth chart strength average se kam hai aaj.",
-    }
+    tara_name = tara_d.get("tara")
+    sat_active = bool(saturn_d.get("active"))
+    sat_delta  = saturn_d.get("delta", 0) if isinstance(saturn_d, dict) else 0
 
-    advices = {
-        "dasha": "Dasha lord ko strengthen karne ke liye unke mantra ya daan kareiņ.",
-        "moon":  "Chandra ko balance karne ke liye safed cheezein (doodh, chawal) daan karein.",
-        "av":    "Aaj important launches avoid karein — passive work ya planning ka din hai.",
-        "tara":  "Subah meditation aur Gayatri Mantra se din shuru karein.",
-        "asp":   "Apne ishta devta ka smaran karein — aaj inner work se zyada labh hoga.",
-    }
+    # ── PRIORITY 1: Critical signals (override score band) ────────────────
+    if moon_d.get("chandrashtama"):
+        return ("Aaj Chandrashtama active hai — chandra aapke janma rashi se 8th mein. Mind restless rahega, important decisions postpone karein.",
+                "Subah Shiv mantra (Om Namah Shivay 108x), light food, extra rest. Travel/launches kal pe tal do.")
 
-    score = parts[strongest]
-    if score >= 65:
-        return summaries[strongest], advices[strongest]
-    return weak_summaries[strongest], advices[strongest]
+    if sat_active and sat_delta <= -20:
+        return ("Sade Sati Madhya peak chal raha hai — heavy, slow, demanding period. Yeh aap actually feel kar rahe honge.",
+                "Hanuman Chalisa daily, Saturday black sesame ya mustard oil ka daan, blue/black avoid. Patience hi remedy hai.")
+
+    if sat_active and sat_delta <= -15:
+        return (f"⚠️ Ashtam Sani active — Saturn aapke 8th from natal Moon mein. Health/transformation strain feel hoga.",
+                "Hanuman ji ka stotra, til/loha daan Saturday ko, oily/heavy food avoid. Body signals seriously lo.")
+
+    if sat_active:
+        return (f"⚠️ {saturn_d.get('phase','Saturn')} chal raha — life-phase shift active hai. Background mein bhaari chal raha hoga.",
+                "Discipline, simplicity, seva — Saturn yahi maang raha hai. Hanuman Chalisa daily helpful.")
+
+    if tara_name == "Naidhana":
+        return ("Naidhana Tara aaj — sabse inauspicious nakshatra friendship. Scattered, low-clarity feel hoga.",
+                "Important calls/decisions kal pe tal do. Gayatri Mantra subah, reading/quiet work ke liye din.")
+
+    if tara_name == "Vipat":
+        return ("Vipat Tara — chhote-chhote obstacles aane ka din. Patience test hoga.",
+                "Subah meditation, Ganesh mantra, schedule mein extra buffer rakho.")
+
+    if (tithi_d.get("type") or "").startswith("Rikta"):
+        rikta_extra = ""
+        if score < 50:
+            rikta_extra = " Aur score bhi low hai — combination heavy hai."
+        return (f"Rikta Tithi ({tithi_d.get('tithi_name','—')}) — energy drain wala din classically.{rikta_extra}",
+                "Naye launch/important meetings avoid. Routine maintenance + rest day banao.")
+
+    # ── PRIORITY 2: Score-band defaults (when no critical signal) ─────────
+    if score >= 85:
+        return ("Rare cosmic window — chandra + tara + dasha sab align ho rahe aaj. Energy peak pe.",
+                "Important launches, conversations, signings ke liye perfect din. Use this — har din nahi milta.")
+
+    if score >= 70:
+        return ("Aaj momentum hai — productive aur smooth feel hoga. Planetary support strong.",
+                "Important kaam aaj nipta lo. Decisions, calls, exercise — sab favorable.")
+
+    if score >= 55:
+        nice_tithi = ""
+        if (tithi_d.get("type") or "").startswith("Purna"):
+            nice_tithi = f" {tithi_d.get('tithi_name','')} (Purna) ka subtle support hai."
+        return (f"Steady neutral day — drama nahi, magic bhi nahi.{nice_tithi}",
+                "Apne regular kaam pe focus rakho. Major new commitments avoid, routine continue.")
+
+    if score >= 40:
+        return ("Aaj thoda heavy/slow feel hoga — patience wala din. Cosmic support kam hai.",
+                "Light schedule, extra rest, exercise + meditation se reset karo. Bade decisions kal pe tal do.")
+
+    return ("Low-energy challenging din — bhari mehsoos hoga, normal hai is alignment ke saath.",
+            "Aaj rest, journaling, mantra-japa. Self-care din hai — kal naturally better hoga.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -691,19 +735,19 @@ def calculate_energy(user_data: Dict[str, Any],
     if saturn_sign is None and isinstance(sat_today_lon, (int, float)):
         saturn_sign = int(sat_today_lon / 30) % 12
 
-    # ── Components ───────────────────────────────────────────────────────
+    # ── Components (Aspect/Shadbala dropped — static birth chart) ────────
     dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
     moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign, birth_moon_sign)
     av_sc,     av_d     = compute_ashtakavarga_score(planets, lagna_sign, moon_sign)
     tara_sc,   tara_d   = compute_tara_score(moon_nak, birth_nak_idx)
-    asp_sc,    asp_d    = compute_aspect_strength_score(planets, lagna_sign, moon_sun_angle)
 
-    # ── Weighted aggregate (REBALANCED 2026-04-25) ───────────────────────
-    # Moon transit promoted to dominant factor (35% — drives daily mood)
-    # Dasha demoted slightly (25% — long-term cycle, less day-by-day swing)
-    # Aspect/Shadbala demoted (5% — birth-chart strength is static, doesn't change daily)
-    base_energy = (moon_sc * 0.35 + dasha_sc * 0.25 + av_sc * 0.20
-                   + tara_sc * 0.15 + asp_sc * 0.05)
+    # ── Weighted aggregate (TRANSIT-FIRST v2 — 2026-04-25) ───────────────
+    # 75% of the score is Moon-driven (transit 35 + tara 25 + AV 15) because
+    # Vedic principle: Moon = mind = daily mood. Dasha (25%) gives backdrop
+    # tilt. Aspect/Shadbala dropped — it's pure birth-chart strength, never
+    # changes daily, was a wasted slot.
+    base_energy = (moon_sc * 0.35 + tara_sc * 0.25
+                   + dasha_sc * 0.25 + av_sc * 0.15)
 
     # ── Overlays ─────────────────────────────────────────────────────────
     saturn_delta, saturn_d = compute_saturn_overlay(saturn_sign, birth_moon_sign)
@@ -717,17 +761,11 @@ def calculate_energy(user_data: Dict[str, Any],
     score  = int(round(energy))
     cat, color = _category(energy)
 
-    parts   = {"dasha": dasha_sc, "moon": moon_sc, "av": av_sc,
-               "tara": tara_sc,  "asp": asp_sc}
+    parts   = {"moon": moon_sc, "tara": tara_sc, "dasha": dasha_sc, "av": av_sc}
     details = {"dasha_detail": dasha_d, "moon_detail": moon_d,
                "av_detail": av_d, "tara_detail": tara_d,
-               "asp_detail": asp_d,
                "saturn_overlay": saturn_d, "tithi_overlay": tithi_d}
-    summary, advice = _summary_and_advice(parts, details)
-
-    # If Saturn overlay is active, prepend a clear flag to summary
-    if saturn_d.get("active"):
-        summary = f"⚠️ {saturn_d['phase']} chal raha hai — {summary}"
+    summary, advice = _summary_and_advice(energy, parts, details)
 
     return {
         "energy_score": score,
@@ -738,10 +776,9 @@ def calculate_energy(user_data: Dict[str, Any],
         "date":         today,
         "components": {
             "moon_transit":   {"score": round(moon_sc, 1),  "weight": 0.35, **moon_d},
+            "tara_bal":       {"score": round(tara_sc, 1),  "weight": 0.25, **tara_d},
             "dasha":          {"score": round(dasha_sc, 1), "weight": 0.25, **dasha_d},
-            "ashtakavarga":   {"score": round(av_sc, 1),    "weight": 0.20, **av_d},
-            "tara_bal":       {"score": round(tara_sc, 1),  "weight": 0.15, **tara_d},
-            "aspect_strength":{"score": round(asp_sc, 1),   "weight": 0.05, **asp_d},
+            "ashtakavarga":   {"score": round(av_sc, 1),    "weight": 0.15, **av_d},
         },
         "overlays": {
             "saturn":     {"delta": saturn_delta, **saturn_d},

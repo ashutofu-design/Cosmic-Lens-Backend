@@ -360,7 +360,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         <Animated.View style={card2Anim}>
-          <BadTimeMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }} activeDasha={activeDasha} />
+          <BadTimeMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/dasha-risk"); }} activeDasha={activeDasha} />
         </Animated.View>
 
         <Animated.View style={card3Anim}>

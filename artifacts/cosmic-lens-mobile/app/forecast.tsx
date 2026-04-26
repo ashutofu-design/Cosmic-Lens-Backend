@@ -19,6 +19,7 @@ import { useT } from "@/hooks/useT";
 import { computeActiveDasha, pName } from "@/lib/proInsightEngine";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { fetchTodayEnergy } from "@/lib/energyAPI";
 
 const DAY_NAMES = ["Aaditya (Sun)", "Soma (Mon)", "Mangal (Tue)", "Budh (Wed)", "Guru (Thu)", "Shukra (Fri)", "Shani (Sat)"];
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -127,6 +128,7 @@ export default function ForecastScreen() {
   const botPad   = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
 
+  const { todayEnergy } = useUser();
   const [days, setDays]       = useState<DayForecast[]>([]);
   const [selected, setSelected] = useState(0);
   const [loading, setLoading]   = useState(false);
@@ -142,7 +144,8 @@ export default function ForecastScreen() {
     }
 
     if (showDemo) {
-      const demoScores = [72, 58, 81, 45, 70, 65, 77];
+      // Day 0 score MUST match the home demo (38) so users see one consistent number.
+      const demoScores = [38, 58, 81, 45, 70, 65, 77];
       const demoMoons  = [120, 133, 147, 162, 177, 192, 207];
       setDays(dates.map((ds, i) => {
         const dt = new Date(ds);
@@ -159,13 +162,17 @@ export default function ForecastScreen() {
     }
 
     setLoading(true);
-    apiFetch(`${API_BASE}/api/transits`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dates }),
-    })
-      .then(r => r.json())
-      .then((data: { date: string; positions: Record<string,number> }[]) => {
+    // Fire both requests in parallel — /api/transits for days 1-6 (transit-based),
+    // /api/energy/today for day 0 (the SAME authoritative score the home screen shows).
+    Promise.all([
+      apiFetch(`${API_BASE}/api/transits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dates }),
+      }).then(r => r.json()) as Promise<{ date: string; positions: Record<string,number> }[]>,
+      kundli ? fetchTodayEnergy(kundli) : Promise.resolve(null),
+    ])
+      .then(([data, todayResult]) => {
         const moonLon = moonData?.longitude ?? 0;
         const dasha   = kundli ? computeActiveDasha(kundli, moonLon) : null;
         const baseScore = dasha?.careerScore ?? 60;
@@ -174,7 +181,12 @@ export default function ForecastScreen() {
           const transitMoon = item.positions?.Moon ?? (moonLon + i * 13.2);
           const variation   = Math.sin(i * 1.3) * 12 + (item.positions?.Jupiter ? 5 : 0)
             - (item.positions?.Saturn ? 6 : 0);
-          const score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
+          let score = Math.max(10, Math.min(90, Math.round(baseScore + variation)));
+          // Day 0 → override with authoritative /api/energy/today score so it matches home screen.
+          if (i === 0) {
+            const home = todayResult?.energy_score ?? todayEnergy ?? null;
+            if (typeof home === "number") score = Math.round(home);
+          }
           const dt    = new Date(item.date + "T00:00:00");
           return {
             date:     dt,
@@ -193,7 +205,7 @@ export default function ForecastScreen() {
         setDays([]);
       })
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo]);
+  }, [kundli, moonData, showDemo, todayEnergy]);
 
   const sel = days[selected];
   const scoreColor = sel

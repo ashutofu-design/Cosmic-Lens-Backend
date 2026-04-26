@@ -557,25 +557,10 @@ export default function DashaRiskScreen() {
               </View>
             ))}
 
-            {/* Honest accuracy note */}
-            <View
-              style={[
-                s.noteCard,
-                { backgroundColor: C.bgCard2, borderColor: C.border3 },
-              ]}
-            >
-              <Text style={[s.noteTitle, { color: C.text }]}>
-                Note
-              </Text>
-              <Text style={[s.noteBody, { color: C.textMuted }]}>
-                Yeh radar aapke janma kundli + aaj ke gochar ke signals pe
-                based hai. Yeh probability hai, certainty nahi — aap apne
-                best judgement ke saath isko use karein.
-              </Text>
-              <Text style={[s.noteFooter, { color: C.textDim }]}>
-                Powered by Advanced Cosmic Intelligence
-              </Text>
-            </View>
+            {/* Footer */}
+            <Text style={[s.noteFooter, { color: C.textDim }]}>
+              Powered by Advanced Cosmic Intelligence
+            </Text>
           </>
         ) : null}
       </ScrollView>

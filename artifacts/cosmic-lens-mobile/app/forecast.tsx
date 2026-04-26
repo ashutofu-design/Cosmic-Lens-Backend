@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   I18nManager,
   Platform,
@@ -93,10 +93,11 @@ function shapeJourney(rawPts: number[]): number[] {
 //   from the home chart: 7 points (vs 12), date x-axis labels (vs day names),
 //   and the "selected" dot replaces home's "final/Now" dot for callouts.
 function WeekChart({
-  days, scores, selected, onSelect,
+  days, scores, selected, onSelect, instant = false,
 }: {
   days: DayForecast[]; scores: number[]; selected: number;
   onSelect: (i: number) => void;
+  instant?: boolean;
 }) {
   const C = useC();
   // Match home EnergyChart exactly.
@@ -108,6 +109,7 @@ function WeekChart({
   const GW  = VW - PL - PR;
   const GH  = 190;
   const BOT = PT + GH;
+  const RISE_MS = 1200;
 
   const N    = scores.length;
   const px   = (i: number) => PL + (N <= 1 ? GW / 2 : (i / (N - 1)) * GW);
@@ -115,14 +117,88 @@ function WeekChart({
 
   // VISUAL y-positions = always-rising journey (matches home).
   // Real scores still drive the callout text + the per-day cards below.
-  const journeyPts = shapeJourney(scores);
+  const journeyPts = useMemo(() => shapeJourney(scores), [scores]);
+
+  // ── Rise animation — same RAF-based easeOutCubic + per-dot stagger as home ──
+  //   animPts are the values that actually get rendered. They start at 0 (line
+  //   sits flat on the bottom axis), then each dot rises to its target journey
+  //   value with a delay of 0.08 * index, giving the same left-to-right sweep
+  //   the home chart shows on first paint.
+  const [animPts, setAnimPts] = useState<number[]>(
+    instant && journeyPts.length > 0 ? [...journeyPts] : Array(N).fill(0)
+  );
+  const [animate, setAnimate] = useState(instant && journeyPts.length > 0);
+  const [areaVis, setAreaVis] = useState(instant && journeyPts.length > 0);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (journeyPts.length === 0) {
+      cancelAnimationFrame(rafRef.current);
+      setAnimPts(Array(N).fill(0));
+      setAnimate(false);
+      setAreaVis(false);
+      return;
+    }
+
+    if (instant) {
+      setAnimPts([...journeyPts]);
+      setAnimate(true);
+      setAreaVis(true);
+      return;
+    }
+
+    cancelAnimationFrame(rafRef.current);
+    setAnimPts(Array(N).fill(0));
+    setAnimate(false);
+    setAreaVis(false);
+
+    let cancelled = false;
+    const values = journeyPts;
+
+    const tid = setTimeout(() => {
+      if (cancelled) return;
+      setAnimate(true);
+      let startTime = 0;
+      const MAX_DELAY = (N - 1) * 0.08;
+
+      function riseFrame(now: number) {
+        if (cancelled) return;
+        if (!startTime) startTime = now;
+        const elapsed = now - startTime;
+        const t = elapsed / RISE_MS;
+
+        setAnimPts(values.map((v, i) => {
+          const delay    = i * 0.08;
+          let progress   = t - delay;
+          if (progress < 0) progress = 0;
+          if (progress > 1) progress = 1;
+          const eased = 1 - Math.pow(1 - progress, 3);
+          return v * eased;
+        }));
+
+        if (t < 1 + MAX_DELAY) {
+          rafRef.current = requestAnimationFrame(riseFrame);
+        } else {
+          setAnimPts([...values]);
+          setTimeout(() => { if (!cancelled) setAreaVis(true); }, 80);
+        }
+      }
+      rafRef.current = requestAnimationFrame(riseFrame);
+    }, 50);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafRef.current);
+      clearTimeout(tid);
+    };
+  }, [journeyPts, instant, N]);
 
   const buildLinePath = () => {
-    if (journeyPts.length < 2) return "";
-    let d = `M ${px(0).toFixed(1)},${py(journeyPts[0]).toFixed(1)}`;
+    if (animPts.length < 2) return "";
+    let d = `M ${px(0).toFixed(1)},${py(animPts[0]).toFixed(1)}`;
     for (let i = 1; i < N; i++) {
-      const x0 = px(i - 1), y0 = py(journeyPts[i - 1]);
-      const x1 = px(i),     y1 = py(journeyPts[i]);
+      const x0 = px(i - 1), y0 = py(animPts[i - 1]);
+      const x1 = px(i),     y1 = py(animPts[i]);
       const cpx = (x0 + x1) / 2;
       d += ` C ${cpx.toFixed(1)},${y0.toFixed(1)} ${cpx.toFixed(1)},${y1.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
     }
@@ -155,7 +231,7 @@ function WeekChart({
     : "#00ff99";
 
   const sx = px(selected);
-  const sy = py(journeyPts[selected] ?? 0);   // visual position rides the journey curve
+  const sy = py(animPts[selected] ?? 0);       // follows the rising curve during animation
   const realScore = scores[selected] ?? 0;     // actual score shown inside the callout
 
   return (
@@ -170,8 +246,8 @@ function WeekChart({
           <Stop offset="100%" stopColor="#00ff99" />
         </SvgGrad>
         <SvgGrad id="wg-area" x1="0" y1={PT} x2="0" y2={BOT} gradientUnits="userSpaceOnUse">
-          <Stop offset="0%"   stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0.18} />
-          <Stop offset="50%"  stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0.06} />
+          <Stop offset="0%"   stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={areaVis ? 0.18 : 0} />
+          <Stop offset="50%"  stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={areaVis ? 0.06 : 0} />
           <Stop offset="100%" stopColor={C.isDark ? "#00ffcc" : "#9f7aea"} stopOpacity={0} />
         </SvgGrad>
       </Defs>
@@ -191,8 +267,11 @@ function WeekChart({
         </G>
       ))}
 
-      {scores.length > 1 && <Path d={areaPath} fill="url(#wg-area)" />}
+      {scores.length > 1 && (
+        <Path d={areaPath} fill="url(#wg-area)" opacity={areaVis ? 1 : 0} />
+      )}
 
+      {/* Glow + solid line — paths are built from animPts so they rise during animation */}
       {scores.length > 1 && (
         <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={14} opacity={0.06} strokeLinecap="round" strokeLinejoin="round" />
       )}
@@ -201,8 +280,7 @@ function WeekChart({
         <Path d={linePath} fill="none" stroke="url(#wg-line)" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" />
       )}
 
-      {/* Non-selected dot markers — same r=4 halo + r=2 dot as home.
-          y is shaped (journeyPts[i]) so all dots ride the rising sweep. */}
+      {/* Non-selected dot markers — fade in once animation starts; y rides animPts. */}
       {scores.map((_, i) => {
         if (i === selected) return null;
         const t = N <= 1 ? 0 : i / (N - 1);
@@ -211,17 +289,17 @@ function WeekChart({
           : t < 0.6 ? "#ffd700"
           : t < 0.8 ? "#f59e0b"
           : "#00ff99";
-        const x = px(i), y = py(journeyPts[i]);
+        const x = px(i), y = py(animPts[i] ?? 0);
         return (
-          <G key={i}>
+          <G key={i} opacity={animate ? 1 : 0}>
             <Circle cx={x} cy={y} r={4} fill={color} opacity={0.10} />
             <Circle cx={x} cy={y} r={2} fill={color} />
           </G>
         );
       })}
 
-      {/* Selected dot — pulse-style halo nest matching home's "final dot" */}
-      {scores.length > 0 && (
+      {/* Selected dot — pulse-style halo nest, only renders once animation starts */}
+      {scores.length > 0 && animate && (
         <G>
           <Circle cx={sx} cy={sy} r={12}  fill={selClr} opacity={0.07} />
           <Circle cx={sx} cy={sy} r={7}   fill={selClr} opacity={0.14} />
@@ -230,9 +308,8 @@ function WeekChart({
         </G>
       )}
 
-      {/* Selected score callout — same rect/stroke/font as home's final callout.
-          Edge-aware placement (left of dot by default; flips right if clipped). */}
-      {scores.length > 0 && (() => {
+      {/* Selected score callout — fades in with the rest of the animation. */}
+      {scores.length > 0 && animate && (() => {
         const W = 38, H = 21, GAP = 14;
         const minX = PL - 4;
         const maxX = PL + GW + 4 - W;
@@ -251,10 +328,10 @@ function WeekChart({
         );
       })()}
 
-      {/* Invisible tap targets — placed AFTER markers so they catch presses.
-          Use journey y-positions so taps line up with the visible dots. */}
+      {/* Invisible tap targets — sit on the animated curve so the touch zone
+          tracks the visible dot during the rise. */}
       {scores.map((_, i) => {
-        const x = px(i), y = py(journeyPts[i]);
+        const x = px(i), y = py(animPts[i] ?? 0);
         return (
           <Circle
             key={`tap-${i}`}
@@ -264,7 +341,7 @@ function WeekChart({
         );
       })}
 
-      {/* Date labels on x-axis (replaces home's "Now" + sparse weekday labels) */}
+      {/* Date labels on x-axis — fade in with the chart so nothing pops in early. */}
       {days.map((d, i) => {
         const isSel = i === selected;
         return (
@@ -273,7 +350,8 @@ function WeekChart({
             textAnchor="middle"
             fill={isSel ? selClr : axisLabel}
             fontSize={isSel ? 8 : 7}
-            fontWeight={isSel ? "700" : "400"}>
+            fontWeight={isSel ? "700" : "400"}
+            opacity={animate ? 1 : 0}>
             {fmtDate(d.date)}
           </SvgText>
         );

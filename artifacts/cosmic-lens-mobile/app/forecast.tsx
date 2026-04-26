@@ -284,8 +284,8 @@ export default function ForecastScreen() {
               </View>
             </View>
 
-            {/* Active dasha */}
-            {dasha && (
+            {/* Active dasha — TODAY ONLY (future days unlock when the day arrives) */}
+            {selected === 0 && dasha && (
               <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.fc_activeDasha}</Text>
                 <View style={s.dashaRow}>
@@ -295,6 +295,16 @@ export default function ForecastScreen() {
                   <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={10} color={C.textDim} />
                   <Text style={[s.dashaItem, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{pName(dasha.pdPlanet)} PD</Text>
                 </View>
+              </View>
+            )}
+
+            {/* Future-day lock hint — drives daily return visits */}
+            {selected > 0 && (
+              <View style={[s.lockHint, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                <Feather name="lock" size={12} color="#fbbf24" />
+                <Text style={[s.lockHintText, { color: C.textMuted }]}>
+                  Aaj ke din yeh full reading + remedies open hongi
+                </Text>
               </View>
             )}
 
@@ -404,6 +414,8 @@ const s = StyleSheet.create({
   dashaLabel: { color: "#1e3a5f", fontSize: 10, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" },
   dashaRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
   dashaItem:  { color: "#3d5a7a", fontSize: 12, fontWeight: "600" },
+  lockHint:   { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+  lockHintText: { fontSize: 12, flex: 1, fontWeight: "500" },
 
   navRow:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   navBtn:    { flexDirection: "row", alignItems: "center", gap: 4, padding: 8 },

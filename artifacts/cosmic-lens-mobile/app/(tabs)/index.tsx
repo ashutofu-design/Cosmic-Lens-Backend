@@ -318,6 +318,12 @@ export default function HomeScreen() {
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
+            style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
+          >
+            <Feather name="calendar" size={14} color={colors.C.textMuted} />
+          </Pressable>
+          <Pressable
             onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}
             style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
           >

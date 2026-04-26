@@ -80,7 +80,7 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
     details: [
       {
         cat: "Communication",
-        detail: "Misunderstandings ka risk hai. Important messages double-check karein, clarity rakhein.",
+        detail: "Aaj misunderstandings hone ke chances zyada hain. Important messages double-check karein, clarity rakhein.",
         dhyan:  "Har message aur email padh ke samajh ke bhejein.",
         avoid:  "Voice calls bina prep ke, important texts jaldi mein, gossip.",
         karna:  "Written confirmation lein, points note karein, listen pehle.",
@@ -113,7 +113,7 @@ const RISK_BY_LEVEL: Record<RiskLevel, {
     details: [
       {
         cat: "Conflict",
-        detail: "Arguments aur disputes ka risk high hai. Confrontations avoid karein — silence is power aaj.",
+        detail: "Aaj arguments aur disputes hone ke chances bahut zyada hain. Confrontations avoid karein — silence is power aaj.",
         dhyan:  "Apna gussa aur reactions control mein rakhein.",
         avoid:  "Arguments, blame game, sharp words, social media debates.",
         karna:  "Solo time lein, meditation karein, breathing exercises.",

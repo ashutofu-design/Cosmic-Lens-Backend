@@ -269,44 +269,99 @@ ABSOLUTE RULES (violation = bad output):
 _CLIENT_CACHE: Dict[str, Any] = {"client": None, "tried": False}
 
 
-def _client():
-    """Build (and cache) an OpenAI SDK client.
+def _try_replit_proxy():
+    """Build an OpenAI SDK client wired to the Replit AI Integrations proxy.
 
-    Prefers the Replit AI Integrations proxy (no separate billing) when the
-    ``AI_INTEGRATIONS_OPENAI_BASE_URL`` + ``AI_INTEGRATIONS_OPENAI_API_KEY``
-    env vars are present, otherwise falls back to the project's existing
-    ``openai_helper._get_client()`` (which uses ``OPENAI_API_KEY``).
-    Returns None if neither path is available.
+    Returns the client on success, None if the proxy env vars are missing or
+    SDK init fails.
     """
-    if _CLIENT_CACHE["tried"]:
-        return _CLIENT_CACHE["client"]
-    _CLIENT_CACHE["tried"] = True
-
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL", "").strip()
     api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY", "").strip()
-    if base_url and api_key:
-        try:
-            from openai import OpenAI  # type: ignore
+    if not (base_url and api_key):
+        return None
+    try:
+        from openai import OpenAI  # type: ignore
 
-            timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "20"))
-            cli = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
-            _CLIENT_CACHE["client"] = cli
-            log.info("risk_text_ai: using Replit AI Integrations proxy")
-            return cli
-        except Exception as exc:
-            log.warning("risk_text_ai: Replit proxy init failed: %s", exc)
+        timeout = float(os.environ.get("COSMIC_RISK_TEXT_TIMEOUT", "20"))
+        cli = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        log.info("risk_text_ai: using Replit AI Integrations proxy")
+        return cli
+    except Exception as exc:
+        log.warning("risk_text_ai: Replit proxy init failed: %s", exc)
+        return None
 
+
+def _try_direct_openai():
+    """Build an OpenAI SDK client using the user's own OPENAI_API_KEY.
+
+    Reuses ``openai_helper._get_client()`` so the same key path the rest of
+    the app uses is honored. Returns None if the key is missing or import
+    fails.
+    """
     try:
         from openai_helper import _get_client  # type: ignore
 
         cli = _get_client()
         if cli is not None:
             log.info("risk_text_ai: using direct OPENAI_API_KEY")
-        _CLIENT_CACHE["client"] = cli
         return cli
     except Exception as exc:
         log.warning("risk_text_ai: cannot import openai_helper client: %s", exc)
         return None
+
+
+def _client():
+    """Build (and cache) an OpenAI SDK client.
+
+    Provider selection is controlled by the ``COSMIC_AI_PROVIDER`` env var:
+
+      - ``auto`` (default): try Replit AI Integrations proxy first (no extra
+        billing on Replit), then fall back to the user's OPENAI_API_KEY.
+        This means in production on Replit the proxy is used, and in
+        VS Code / local where the proxy env vars are absent the OpenAI
+        key is used — no code change needed.
+      - ``replit``: only use the Replit proxy. Useful when you want a hard
+        guarantee that no charges hit your OpenAI account.
+      - ``openai``: only use the user's OPENAI_API_KEY, even on Replit.
+        Useful in future when you have a paid OpenAI plan and want
+        predictable per-token billing through your own OpenAI account.
+
+    Returns None if the selected provider(s) are unavailable. Result is
+    cached so this is a one-time decision per process.
+    """
+    if _CLIENT_CACHE["tried"]:
+        return _CLIENT_CACHE["client"]
+    _CLIENT_CACHE["tried"] = True
+
+    provider = os.environ.get("COSMIC_AI_PROVIDER", "auto").strip().lower()
+    if provider not in ("auto", "replit", "openai"):
+        log.warning(
+            "risk_text_ai: unknown COSMIC_AI_PROVIDER=%r, falling back to 'auto'",
+            provider,
+        )
+        provider = "auto"
+
+    cli = None
+    if provider == "replit":
+        cli = _try_replit_proxy()
+        if cli is None:
+            log.warning(
+                "risk_text_ai: COSMIC_AI_PROVIDER=replit but proxy env vars "
+                "missing — no client will be built"
+            )
+    elif provider == "openai":
+        cli = _try_direct_openai()
+        if cli is None:
+            log.warning(
+                "risk_text_ai: COSMIC_AI_PROVIDER=openai but OPENAI_API_KEY "
+                "missing — no client will be built"
+            )
+    else:  # auto
+        cli = _try_replit_proxy() or _try_direct_openai()
+
+    _CLIENT_CACHE["client"] = cli
+    _CLIENT_CACHE["provider"] = provider
+    return cli
 
 
 def _scan_forbidden(text: str, field: str) -> Optional[str]:

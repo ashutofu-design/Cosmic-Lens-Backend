@@ -2074,6 +2074,8 @@ def energy_today():
 
     # ── Resolve user kundli ──────────────────────────────────────────────
     kundli_dict = body.get("kundli") or body.get("chart_data")
+    # v3.2: birth lat/lon/tz for per-city sunrise/sunset (Step 3)
+    birth_data: Dict[str, Any] = body.get("birthData") or body.get("birth_data") or {}
     if not kundli_dict:
         uid_raw = request.args.get("user_id") or body.get("user_id")
         if not uid_raw:
@@ -2092,6 +2094,34 @@ def energy_today():
             kundli_dict = _json.loads(user.kundli.chart_data)
         except Exception:
             return jsonify({"error": "Saved kundli is corrupted"}), 500
+        # Pull birth_data from the user's primary profile if not provided in body
+        if not birth_data:
+            try:
+                prim = (Profile.query
+                        .filter(Profile.user_id == user.id,
+                                Profile.is_primary.is_(True))
+                        .first())
+                if prim and prim.birth_data:
+                    birth_data = _json.loads(prim.birth_data) or {}
+            except Exception:
+                pass
+
+    # v3.2: extract lat/lon/tz with sensible fallbacks
+    def _coerce_float(v):
+        try:
+            return float(v) if v is not None and v != "" else None
+        except (TypeError, ValueError):
+            return None
+    birth_lat = (_coerce_float(birth_data.get("latitude"))
+                 or _coerce_float(birth_data.get("lat"))
+                 or _coerce_float((kundli_dict or {}).get("latitude")))
+    birth_lon = (_coerce_float(birth_data.get("longitude"))
+                 or _coerce_float(birth_data.get("lon"))
+                 or _coerce_float((kundli_dict or {}).get("longitude")))
+    birth_tz  = (_coerce_float(birth_data.get("tzOffset"))
+                 or _coerce_float(birth_data.get("tz"))
+                 or _coerce_float((kundli_dict or {}).get("tzOffset"))
+                 or 5.5)  # IST default
 
     # ── Compute today's transit positions for ALL grahas (sidereal) ──────
     # v3.1 5-step upgrade: Steps 1, 2, 5 need Mars/Jupiter/Mercury/Venus/Rahu
@@ -2156,6 +2186,10 @@ def energy_today():
         today_saturn=today_saturn,
         today_planets=today_planets,
         now_local=now_local,
+        # v3.2: per-city sunrise/sunset for accurate Rahukal/Choghadiya/Hora
+        birth_lat=birth_lat,
+        birth_lon=birth_lon,
+        tz_offset=birth_tz,
     )
     if "error" in result:
         return jsonify(result), 400

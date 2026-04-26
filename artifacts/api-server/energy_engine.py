@@ -439,6 +439,23 @@ def compute_tithi_overlay(sun_lon: Optional[float],
 # STEP 1 — Transit-to-Natal Aspects (sign-based, simple conjunction/opposition)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _angular_separation(a: float, b: float) -> float:
+    """Shortest angular distance between two longitudes (0-180°)."""
+    d = abs((a - b) % 360.0)
+    return d if d <= 180.0 else 360.0 - d
+
+
+def _aspect_strength(actual_deg: float, exact_deg: float, orb: float) -> float:
+    """
+    Returns 0.0..1.0 strength based on how close actual is to exact aspect.
+    Linear falloff inside the orb; 0 outside.
+    """
+    diff = abs(actual_deg - exact_deg)
+    if diff > orb:
+        return 0.0
+    return 1.0 - (diff / orb)
+
+
 def compute_transit_natal_aspects(
     saturn_today_sign: Optional[int],
     mars_today_sign:   Optional[int],
@@ -446,73 +463,142 @@ def compute_transit_natal_aspects(
     birth_moon_sign:   Optional[int],
     birth_sun_sign:    Optional[int],
     skip_saturn:       bool = False,
+    # v3.2 degree-precision args (optional — fall back to sign-based if missing)
+    saturn_today_lon:  Optional[float] = None,
+    mars_today_lon:    Optional[float] = None,
+    jupiter_today_lon: Optional[float] = None,
+    birth_moon_lon:    Optional[float] = None,
+    birth_sun_lon:     Optional[float] = None,
 ) -> Tuple[float, Dict[str, Any]]:
     """
-    Step 1: Basic transit interactions with natal Moon & Sun.
+    Step 1 (v3.2): Transit interactions with natal Moon & Sun, now with
+    DEGREE-BASED orbs when longitudes are provided. Sign-based fallback
+    is preserved for backward compatibility.
 
-    Sign-based conjunction (1st = same sign) or opposition (7th from natal).
-    Saturn-Moon conjunction is intentionally SKIPPED here because Sade Sati
-    Madhya overlay already handles that case (would be double-counted).
+    Classical orbs (tightened for Vedic precision):
+      - Saturn aspects (3rd/7th/10th/conj) : 8°
+      - Mars   aspects (4th/7th/8th/conj)  : 6°
+      - Jupiter aspects (5th/7th/9th/conj) : 7°
 
-    FIX 1 (v3.1.1): when caller indicates Sade Sati / Dhaiyya is already
-    active (any Saturn-from-Moon overlay firing), skip the Saturn aspect
-    entirely to prevent double penalty. Mars + Jupiter aspects still apply.
+    Saturn-Moon conjunction skipped (Sade Sati overlay handles it).
+    Strength-based scaling: full weight at exact aspect, linear falloff to
+    zero at the orb boundary.
 
-    - Transit Saturn  → natal Moon  (opposition only): -12
-    - Transit Mars    → natal Moon  (conj or opp):     -8
-    - Transit Jupiter → natal Moon (conj/trine 1/5/9): +10
-    - Transit Jupiter → natal Sun  (conj/trine 1/5/9): +10
-      (Jupiter→Moon and Jupiter→Sun do not stack; max +10 from this step)
+    - Transit Saturn  → natal Moon  (opp only)            : up to -12
+    - Transit Mars    → natal Moon  (conj or opp)         : up to  -8
+    - Transit Jupiter → natal Moon  (conj/trine 120°/240°): up to +10
+    - Transit Jupiter → natal Sun   (conj/trine 120°/240°): up to +10
+      (Jupiter→Moon and Jupiter→Sun do not stack)
     """
     delta = 0.0
     aspects: List[str] = []
+    detail: Dict[str, Any] = {}
 
-    # Saturn → natal Moon (opposition only; conjunction handled by Sade Sati)
-    # FIX 1: skip entirely if Sade Sati / Dhaiyya already active.
-    if (not skip_saturn
-        and saturn_today_sign is not None
-        and birth_moon_sign is not None):
-        from_natal = ((saturn_today_sign - birth_moon_sign) % 12) + 1
-        if from_natal == 7:
-            delta -= 12
-            aspects.append("saturn_opposition_natal_moon")
+    use_degrees = (saturn_today_lon is not None and birth_moon_lon is not None
+                   and mars_today_lon is not None and jupiter_today_lon is not None)
 
-    # Mars → natal Moon (conjunction OR opposition)
+    # ── Saturn → natal Moon (opposition only) ────────────────────────────
+    if not skip_saturn and saturn_today_sign is not None and birth_moon_sign is not None:
+        if use_degrees:
+            sep = _angular_separation(saturn_today_lon, birth_moon_lon)
+            strength = _aspect_strength(sep, 180.0, 8.0)
+            if strength > 0:
+                delta -= 12 * strength
+                aspects.append("saturn_opposition_natal_moon")
+                detail["saturn_orb_deg"] = round(abs(sep - 180.0), 2)
+                detail["saturn_strength"] = round(strength, 3)
+        else:
+            from_natal = ((saturn_today_sign - birth_moon_sign) % 12) + 1
+            if from_natal == 7:
+                delta -= 12
+                aspects.append("saturn_opposition_natal_moon")
+
+    # ── Mars → natal Moon (conjunction or opposition) ────────────────────
     if mars_today_sign is not None and birth_moon_sign is not None:
-        from_natal = ((mars_today_sign - birth_moon_sign) % 12) + 1
-        if from_natal in {1, 7}:
-            delta -= 8
-            aspects.append("mars_hit_natal_moon")
+        if use_degrees:
+            sep = _angular_separation(mars_today_lon, birth_moon_lon)
+            s_conj = _aspect_strength(sep,   0.0, 6.0)
+            s_opp  = _aspect_strength(sep, 180.0, 6.0)
+            strength = max(s_conj, s_opp)
+            if strength > 0:
+                delta -= 8 * strength
+                aspects.append("mars_hit_natal_moon")
+                detail["mars_strength"] = round(strength, 3)
+                detail["mars_kind"] = "conjunction" if s_conj >= s_opp else "opposition"
+        else:
+            from_natal = ((mars_today_sign - birth_moon_sign) % 12) + 1
+            if from_natal in {1, 7}:
+                delta -= 8
+                aspects.append("mars_hit_natal_moon")
 
-    # Jupiter → natal Moon OR natal Sun (conjunction or trine 5/9). Cap at +10.
+    # ── Jupiter → natal Moon OR natal Sun (conj or trine, cap at +10) ────
     jupiter_support = False
     jupiter_target: Optional[str] = None
+    jupiter_strength = 0.0
     if jupiter_today_sign is not None and birth_moon_sign is not None:
-        from_natal = ((jupiter_today_sign - birth_moon_sign) % 12) + 1
-        if from_natal in {1, 5, 9}:
-            jupiter_support = True
-            jupiter_target = "Moon"
-    if (not jupiter_support
-        and jupiter_today_sign is not None
-        and birth_sun_sign is not None):
-        from_natal = ((jupiter_today_sign - birth_sun_sign) % 12) + 1
-        if from_natal in {1, 5, 9}:
-            jupiter_support = True
-            jupiter_target = "Sun"
+        if use_degrees:
+            sep = _angular_separation(jupiter_today_lon, birth_moon_lon)
+            s_conj = _aspect_strength(sep,   0.0, 7.0)
+            s_t1   = _aspect_strength(sep, 120.0, 7.0)
+            s_t2   = _aspect_strength(sep, 240.0, 7.0)
+            s = max(s_conj, s_t1, s_t2)
+            if s > 0:
+                jupiter_support = True
+                jupiter_target = "Moon"
+                jupiter_strength = s
+        else:
+            from_natal = ((jupiter_today_sign - birth_moon_sign) % 12) + 1
+            if from_natal in {1, 5, 9}:
+                jupiter_support = True
+                jupiter_target = "Moon"
+                jupiter_strength = 1.0
+    if not jupiter_support and jupiter_today_sign is not None and birth_sun_sign is not None:
+        if use_degrees and birth_sun_lon is not None:
+            sep = _angular_separation(jupiter_today_lon, birth_sun_lon)
+            s_conj = _aspect_strength(sep,   0.0, 7.0)
+            s_t1   = _aspect_strength(sep, 120.0, 7.0)
+            s_t2   = _aspect_strength(sep, 240.0, 7.0)
+            s = max(s_conj, s_t1, s_t2)
+            if s > 0:
+                jupiter_support = True
+                jupiter_target = "Sun"
+                jupiter_strength = s
+        else:
+            from_natal = ((jupiter_today_sign - birth_sun_sign) % 12) + 1
+            if from_natal in {1, 5, 9}:
+                jupiter_support = True
+                jupiter_target = "Sun"
+                jupiter_strength = 1.0
     if jupiter_support:
-        delta += 10
+        delta += 10 * jupiter_strength
         aspects.append(f"jupiter_support_natal_{(jupiter_target or '').lower()}")
+        detail["jupiter_strength"] = round(jupiter_strength, 3)
 
-    return delta, {
-        "aspects": aspects,
-        "delta":   delta,
-        "active":  bool(aspects),
-    }
+    detail["aspects"] = aspects
+    detail["delta"]   = delta
+    detail["active"]  = bool(aspects)
+    detail["mode"]    = "degree" if use_degrees else "sign"
+    return delta, detail
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Jupiter & Mars Overlay Layer (lagna-relative house placement)
 # ──────────────────────────────────────────────────────────────────────────────
+
+def _house_delta_for_planet(transit_sign: int, ref_sign: int,
+                             benefic_houses: set, malefic_houses: set,
+                             benefic_score: float, malefic_score: float) -> Tuple[float, int]:
+    """
+    Returns (delta, house) for a transit planet seen from a reference sign
+    (lagna or natal Moon). Used by Step 2 + Step 5 Lagna/Chandra-lagna blend.
+    """
+    house = ((transit_sign - ref_sign) % 12) + 1
+    if house in benefic_houses:
+        return benefic_score, house
+    if house in malefic_houses:
+        return malefic_score, house
+    return 0.0, house
+
 
 def compute_jupiter_mars_overlay(
     jupiter_today_sign: Optional[int],
@@ -521,45 +607,84 @@ def compute_jupiter_mars_overlay(
     birth_moon_sign:    Optional[int],
 ) -> Tuple[float, Dict[str, Any]]:
     """
-    Step 2: Lagna-relative current-transit overlay for Jupiter & Mars.
+    Step 2 (v3.2): Current-transit overlay for Jupiter & Mars, computed
+    from BOTH lagna and natal Moon (Chandra lagna), then weighted-blended.
 
-    - Jupiter in kendra/trikona (1,4,5,7,9,10): +6
-    - Jupiter in dusthana       (6,8,12)     : +2 only (still benefic but muted)
-    - Mars    in dusthana       (6,8,12)     : -6
-    - Mars aspect Moon (same-sign or opposition from natal Moon): extra -4
-      (compounds with Step 1's -8 when both fire → Mars-Moon hit can be -12)
+    Classical principle: a transit's effect should be evaluated from both
+    the lagna AND the natal Moon. Lagna 60% / Moon 40% per most schools.
 
-    Returns (delta, detail). Flags are stored inside detail['flags'].
+    - Jupiter in kendra/trikona (1,4,5,7,9,10): +6 (full)
+    - Jupiter in dusthana (6,8,12)           : +2 (muted)
+    - Mars    in dusthana (6,8,12)           : -6
+    - Mars aspect Moon (same-sign or opp)    : extra -4
     """
     delta = 0.0
     flags: List[str] = []
     detail: Dict[str, Any] = {
-        "jupiter_house": None,
-        "mars_house":    None,
-        "mars_aspect_moon": False,
-        "flags": flags,
+        "jupiter_house_lagna": None,
+        "jupiter_house_moon":  None,
+        "mars_house_lagna":    None,
+        "mars_house_moon":     None,
+        "mars_aspect_moon":    False,
+        "blend":               "lagna_60_moon_40",
+        "flags":               flags,
     }
 
-    # Jupiter house from lagna
-    if jupiter_today_sign is not None and lagna_sign is not None:
-        jh = ((jupiter_today_sign - lagna_sign) % 12) + 1
-        detail["jupiter_house"] = jh
-        if jh in KENDRA_TRIKONA:
-            delta += 6
+    LAGNA_W = 0.6
+    MOON_W  = 0.4
+
+    # ── Jupiter ──────────────────────────────────────────────────────────
+    if jupiter_today_sign is not None:
+        jup_delta = 0.0
+        if lagna_sign is not None:
+            d_l, h_l = _house_delta_for_planet(
+                jupiter_today_sign, lagna_sign,
+                KENDRA_TRIKONA, DUSHTHANA, +6.0, +2.0)
+            detail["jupiter_house_lagna"] = h_l
+            jup_delta += LAGNA_W * d_l
+        if birth_moon_sign is not None:
+            d_m, h_m = _house_delta_for_planet(
+                jupiter_today_sign, birth_moon_sign,
+                KENDRA_TRIKONA, DUSHTHANA, +6.0, +2.0)
+            detail["jupiter_house_moon"] = h_m
+            jup_delta += MOON_W * d_m
+        # Renormalize if only one ref available
+        if lagna_sign is None and birth_moon_sign is not None:
+            jup_delta = jup_delta / MOON_W
+        elif birth_moon_sign is None and lagna_sign is not None:
+            jup_delta = jup_delta / LAGNA_W
+        if jup_delta >= 4.0:
             flags.append("jupiter_support")
-        elif jh in DUSHTHANA:
-            delta += 2
+        elif jup_delta > 0:
             flags.append("jupiter_neutral")
+        delta += jup_delta
 
-    # Mars house from lagna
-    if mars_today_sign is not None and lagna_sign is not None:
-        mh = ((mars_today_sign - lagna_sign) % 12) + 1
-        detail["mars_house"] = mh
-        if mh in DUSHTHANA:
-            delta -= 6
+    # ── Mars ─────────────────────────────────────────────────────────────
+    if mars_today_sign is not None:
+        mars_delta = 0.0
+        # Mars dusthana check from both refs
+        if lagna_sign is not None:
+            d_l, h_l = _house_delta_for_planet(
+                mars_today_sign, lagna_sign,
+                set(), DUSHTHANA, 0.0, -6.0)
+            detail["mars_house_lagna"] = h_l
+            mars_delta += LAGNA_W * d_l
+        if birth_moon_sign is not None:
+            d_m, h_m = _house_delta_for_planet(
+                mars_today_sign, birth_moon_sign,
+                set(), DUSHTHANA, 0.0, -6.0)
+            detail["mars_house_moon"] = h_m
+            mars_delta += MOON_W * d_m
+        # Renormalize if only one ref available
+        if lagna_sign is None and birth_moon_sign is not None:
+            mars_delta = mars_delta / MOON_W
+        elif birth_moon_sign is None and lagna_sign is not None:
+            mars_delta = mars_delta / LAGNA_W
+        if mars_delta <= -4.0:
             flags.append("mars_conflict")
+        delta += mars_delta
 
-    # Mars aspect Moon (extra -4 when same-sign or opposition from natal Moon)
+    # Mars aspect natal Moon (extra -4 when same-sign or opposition)
     if mars_today_sign is not None and birth_moon_sign is not None:
         from_natal = ((mars_today_sign - birth_moon_sign) % 12) + 1
         if from_natal in {1, 7}:
@@ -605,37 +730,123 @@ _RAHUKAL_SEGMENT = {
 
 def _seasonal_sun_times(month: int) -> Tuple[float, float]:
     """
-    FIX 3 (v3.1.1): lightweight month-based sunrise/sunset approximation
-    (north-Indian latitudes). No external API needed.
-
+    Lightweight month-based sunrise/sunset fallback (north-Indian latitudes).
+    Used only when astronomical computation is not possible (lat/lng missing).
     Returns (sunrise_hour, sunset_hour) as decimal local hours.
     """
-    if month in {11, 12, 1}:        # Winter
-        return 6.5, 17.5            # 06:30 / 17:30
-    if month in {4, 5, 6}:          # Summer
-        return 5.5, 18.75           # 05:30 / 18:45
-    return 6.0, 18.0                # Spring/Monsoon/Autumn default
+    if month in {11, 12, 1}:
+        return 6.5, 17.5
+    if month in {4, 5, 6}:
+        return 5.5, 18.75
+    return 6.0, 18.0
+
+
+def _astronomical_sun_times(date_obj: datetime,
+                            lat: float,
+                            lon: float,
+                            tz_offset: float = 5.5) -> Tuple[float, float]:
+    """
+    v3.2: NOAA Solar-Position-Algorithm sunrise/sunset (no external API).
+
+    Pure-Python implementation accurate to ~1 minute for civilian use.
+    Inputs:
+      date_obj  : datetime (local date — only y/m/d used)
+      lat, lon  : geographic latitude/longitude in degrees (signed)
+      tz_offset : local time-zone offset from UTC in hours (e.g. IST = 5.5)
+
+    Returns (sunrise_hour, sunset_hour) as decimal local hours.
+    Falls back to seasonal approximation in polar/error cases.
+    """
+    import math
+    try:
+        # Day of year
+        n = date_obj.timetuple().tm_yday
+        # Fractional year γ in radians
+        gamma = (2.0 * math.pi / 365.0) * (n - 1 + (12 - 12) / 24.0)
+        # Equation of time (minutes)
+        eq_time = 229.18 * (
+            0.000075
+            + 0.001868 * math.cos(gamma)
+            - 0.032077 * math.sin(gamma)
+            - 0.014615 * math.cos(2 * gamma)
+            - 0.040849 * math.sin(2 * gamma)
+        )
+        # Solar declination (radians)
+        decl = (
+            0.006918
+            - 0.399912 * math.cos(gamma)
+            + 0.070257 * math.sin(gamma)
+            - 0.006758 * math.cos(2 * gamma)
+            + 0.000907 * math.sin(2 * gamma)
+            - 0.002697 * math.cos(3 * gamma)
+            + 0.00148  * math.sin(3 * gamma)
+        )
+        lat_r = math.radians(lat)
+        # Hour angle for sunrise/sunset (zenith = 90.833°, accounts for refraction)
+        cos_h = (
+            math.cos(math.radians(90.833))
+            - math.sin(lat_r) * math.sin(decl)
+        ) / (math.cos(lat_r) * math.cos(decl))
+        if cos_h > 1 or cos_h < -1:
+            # Polar day/night — fall back to seasonal table
+            return _seasonal_sun_times(date_obj.month)
+        ha = math.degrees(math.acos(cos_h))
+        # UTC times in minutes since midnight
+        sunrise_utc = 720 - 4 * (lon + ha) - eq_time
+        sunset_utc  = 720 - 4 * (lon - ha) - eq_time
+        # Convert to local hours
+        sunrise_local = (sunrise_utc / 60.0 + tz_offset) % 24
+        sunset_local  = (sunset_utc  / 60.0 + tz_offset) % 24
+        # Sanity check (sunset should be after sunrise on same day)
+        if sunset_local <= sunrise_local or sunset_local - sunrise_local > 18:
+            return _seasonal_sun_times(date_obj.month)
+        return sunrise_local, sunset_local
+    except Exception:
+        return _seasonal_sun_times(date_obj.month)
 
 
 def _current_hora_lord(weekday: int, hour: int, minute: int = 0,
-                       sunrise: float = 6.0) -> str:
+                       sunrise: float = 6.0, sunset: float = 18.0) -> Tuple[str, str]:
     """
-    Returns the planetary lord of the current hora.
+    v3.2 CLASSICAL day/night hora system.
 
-    First hora of the day (starting at sunrise) is ruled by the weekday's
-    lord. Subsequent horas cycle through the Chaldean order — each hora is
-    1 hour long for simplicity (classical version uses day/8 + night/8).
+    - Day = sunrise → sunset, divided into 12 equal parts (day-horas)
+    - Night = sunset → next sunrise (24h - day_length), divided into 12
+    - First hora of the day (at sunrise) is ruled by the weekday's lord
+    - Subsequent horas cycle through Chaldean order across both day & night
+
+    Returns (lord_name, period) where period ∈ {"day", "night"}.
     """
+    current = hour + minute / 60.0
+    day_length   = max(0.5, sunset - sunrise)
+    night_length = 24.0 - day_length
+    day_hora_len   = day_length   / 12.0
+    night_hora_len = night_length / 12.0
+
     day_lord = _WEEKDAY_LORDS[weekday]
     start_idx = _CHALDEAN.index(day_lord)
-    current = hour + minute / 60.0
-    hours_since_sunrise = int((current - sunrise) % 24)
-    return _CHALDEAN[(start_idx + hours_since_sunrise) % 7]
+
+    if sunrise <= current < sunset:
+        idx_in_day = int((current - sunrise) / day_hora_len)
+        hora_idx = idx_in_day  # 0-11 day horas
+        period = "day"
+    elif current >= sunset:
+        idx_in_night = int((current - sunset) / night_hora_len)
+        hora_idx = 12 + idx_in_night  # 12-23 night horas
+        period = "night"
+    else:
+        # before sunrise → late-night horas of previous day cycle
+        idx_in_night = int((current + 24 - sunset) / night_hora_len)
+        hora_idx = 12 + idx_in_night
+        period = "night"
+
+    lord = _CHALDEAN[(start_idx + hora_idx) % 7]
+    return lord, period
 
 
 def _is_rahukal(weekday: int, hour: int, minute: int = 0,
                 sunrise: float = 6.0, sunset: float = 18.0) -> bool:
-    """True if local time falls inside today's Rahukal window."""
+    """True if local time falls inside today's Rahukal window (sunrise→sunset / 8)."""
     seg = _RAHUKAL_SEGMENT.get(weekday)
     if seg is None:
         return False
@@ -647,17 +858,79 @@ def _is_rahukal(weekday: int, hour: int, minute: int = 0,
     return seg_start <= current < seg_end
 
 
+# ─── Full Choghadiya muhurat (v3.2) ─────────────────────────────────────────
+# 8 day-choghadiyas + 8 night-choghadiyas. The day-cycle starts with the
+# weekday's "first" choghadiya per classical sequence; night cycle is offset.
+# Reference: standard Vedic muhurat tables.
+_DAY_CHOGHADIYA = {
+    0: ["Amrit",  "Kaal",  "Shubh", "Rog",  "Udveg", "Char",  "Labh",  "Amrit"],   # Mon
+    1: ["Rog",    "Udveg", "Char",  "Labh", "Amrit", "Kaal",  "Shubh", "Rog"],     # Tue
+    2: ["Labh",   "Amrit", "Kaal",  "Shubh","Rog",   "Udveg", "Char",  "Labh"],    # Wed
+    3: ["Shubh",  "Rog",   "Udveg", "Char", "Labh",  "Amrit", "Kaal",  "Shubh"],   # Thu
+    4: ["Char",   "Labh",  "Amrit", "Kaal", "Shubh", "Rog",   "Udveg", "Char"],    # Fri
+    5: ["Kaal",   "Shubh", "Rog",   "Udveg","Char",  "Labh",  "Amrit", "Kaal"],    # Sat
+    6: ["Udveg",  "Char",  "Labh",  "Amrit","Kaal",  "Shubh", "Rog",   "Udveg"],   # Sun
+}
+_NIGHT_CHOGHADIYA = {
+    0: ["Char",   "Labh",  "Udveg", "Shubh","Amrit", "Char",  "Rog",   "Kaal"],    # Mon
+    1: ["Kaal",   "Labh",  "Udveg", "Shubh","Amrit", "Char",  "Rog",   "Kaal"],    # Tue
+    2: ["Rog",    "Kaal",  "Labh",  "Udveg","Shubh", "Amrit", "Char",  "Rog"],     # Wed
+    3: ["Amrit",  "Char",  "Rog",   "Kaal", "Labh",  "Udveg", "Shubh", "Amrit"],   # Thu
+    4: ["Rog",    "Kaal",  "Labh",  "Udveg","Shubh", "Amrit", "Char",  "Rog"],     # Fri
+    5: ["Labh",   "Udveg", "Shubh", "Amrit","Char",  "Rog",   "Kaal",  "Labh"],    # Sat
+    6: ["Shubh",  "Amrit", "Char",  "Rog",  "Kaal",  "Labh",  "Udveg", "Shubh"],   # Sun
+}
+# Choghadiya weights — Amrit best, Kaal worst
+_CHOGHADIYA_DELTA = {
+    "Amrit": +4, "Shubh": +3, "Labh": +3, "Char":  0,
+    "Udveg": -3, "Rog":  -4, "Kaal": -4,
+}
+
+
+def _current_choghadiya(weekday: int, hour: int, minute: int,
+                        sunrise: float, sunset: float) -> Tuple[str, str]:
+    """
+    Returns (choghadiya_name, period) for the given local time.
+    period ∈ {"day", "night"}. 8 segments per period.
+    """
+    current = hour + minute / 60.0
+    day_length   = max(0.5, sunset - sunrise)
+    night_length = 24.0 - day_length
+    if sunrise <= current < sunset:
+        seg_len = day_length / 8.0
+        idx = min(7, int((current - sunrise) / seg_len))
+        return _DAY_CHOGHADIYA[weekday][idx], "day"
+    if current >= sunset:
+        seg_len = night_length / 8.0
+        idx = min(7, int((current - sunset) / seg_len))
+        return _NIGHT_CHOGHADIYA[weekday][idx], "night"
+    # Before sunrise — last night cycle (prev weekday's night segments)
+    prev_wd = (weekday - 1) % 7
+    seg_len = night_length / 8.0
+    idx = min(7, int((current + 24 - sunset) / seg_len))
+    return _NIGHT_CHOGHADIYA[prev_wd][idx], "night"
+
+
 def compute_choghadiya_hora_overlay(
     now_local: Optional[datetime],
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    tz_offset: float = 5.5,
 ) -> Tuple[float, Dict[str, Any]]:
     """
-    Step 3: Time-of-day quality overlay (Rahukal + Hora).
+    Step 3 (v3.2): Time-of-day quality overlay.
 
-    - Rahukal active                 : -6
-    - Malefic hora (Saturn/Mars)     : -3
-    - Benefic hora (Jupiter/Venus)   : +3
+    Components:
+      - Rahukal active                 : -6
+      - Choghadiya quality             : ±3 / ±4  (full table)
+      - Hora lord (day/night unequal)  : ±2  (lighter than choghadiya, additive)
 
-    No-op if now_local is missing.
+    The choghadiya + hora pair are capped together to ±5 so they don't
+    overwhelm transit-based deltas. Rahukal stays separate (it's a hard
+    avoid-window in classical practice).
+
+    Uses astronomical sunrise/sunset when lat/lon provided, falls back to
+    seasonal table otherwise.
     """
     if now_local is None:
         return 0.0, {"active": False, "reason": "no_local_time"}
@@ -666,37 +939,70 @@ def compute_choghadiya_hora_overlay(
     hour    = now_local.hour
     minute  = now_local.minute
 
-    # FIX 3: seasonal sunrise/sunset for accurate Rahukal + Hora windows.
-    sunrise, sunset = _seasonal_sun_times(now_local.month)
+    # v3.2: per-city astronomical sunrise/sunset when lat/lon available
+    if lat is not None and lon is not None:
+        sunrise, sunset = _astronomical_sun_times(now_local, lat, lon, tz_offset)
+        sun_source = "astronomical"
+    else:
+        sunrise, sunset = _seasonal_sun_times(now_local.month)
+        sun_source = "seasonal_fallback"
 
-    delta = 0.0
     flags: List[str] = []
 
+    # Rahukal (separate component — full -6 weight retained)
+    rahukal_delta = 0.0
     rahukal = _is_rahukal(weekday, hour, minute, sunrise, sunset)
     if rahukal:
-        delta -= 6
+        rahukal_delta = -6
         flags.append("rahukal")
 
-    hora_lord = _current_hora_lord(weekday, hour, minute, sunrise)
+    # Choghadiya muhurat (full classical table)
+    chog_name, chog_period = _current_choghadiya(weekday, hour, minute, sunrise, sunset)
+    chog_delta = float(_CHOGHADIYA_DELTA.get(chog_name, 0))
+    if chog_delta >= 3:
+        flags.append("choghadiya_auspicious")
+    elif chog_delta <= -3:
+        flags.append("choghadiya_inauspicious")
+
+    # Day/night unequal hora (lighter weight, additive, ±2)
+    hora_lord, hora_period = _current_hora_lord(weekday, hour, minute, sunrise, sunset)
     hora_kind: Optional[str] = None
+    hora_delta = 0.0
     if hora_lord in {"Saturn", "Mars"}:
-        delta -= 3
+        hora_delta = -2
         hora_kind = "malefic"
         flags.append("hora_malefic")
     elif hora_lord in {"Jupiter", "Venus"}:
-        delta += 3
+        hora_delta = +2
         hora_kind = "benefic"
         flags.append("hora_benefic")
 
+    # Cap chog+hora combined to ±5 (avoid double-stacking similar concepts)
+    combined = chog_delta + hora_delta
+    if combined > 5:
+        combined = 5.0
+    elif combined < -5:
+        combined = -5.0
+
+    delta = rahukal_delta + combined
+
     return delta, {
-        "active":    bool(flags),
-        "rahukal":   rahukal,
-        "hora_lord": hora_lord,
-        "hora_kind": hora_kind,
-        "weekday":   weekday,
-        "hour":      hour,
-        "delta":     delta,
-        "flags":     flags,
+        "active":            bool(flags),
+        "rahukal":           rahukal,
+        "choghadiya":        chog_name,
+        "choghadiya_period": chog_period,
+        "choghadiya_delta":  chog_delta,
+        "hora_lord":         hora_lord,
+        "hora_period":       hora_period,
+        "hora_kind":         hora_kind,
+        "hora_delta":        hora_delta,
+        "weekday":           weekday,
+        "hour":              hour,
+        "sunrise":           round(sunrise, 3),
+        "sunset":            round(sunset, 3),
+        "sun_source":        sun_source,
+        "delta":             delta,
+        "flags":             flags,
     }
 
 
@@ -705,17 +1011,18 @@ def compute_choghadiya_hora_overlay(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def compute_pd_transit_overlay(
-    pd_planet:      Optional[str],
-    transit_signs:  Dict[str, int],
-    lagna_sign:     Optional[int],
+    pd_planet:       Optional[str],
+    transit_signs:   Dict[str, int],
+    lagna_sign:      Optional[int],
+    birth_moon_sign: Optional[int] = None,
 ) -> Tuple[float, Dict[str, Any]]:
     """
-    Step 5: Where is the Pratyantar Dasha lord transiting RIGHT NOW
-    relative to the user's lagna?
+    Step 5 (v3.2): Where is the Pratyantar Dasha lord transiting NOW,
+    relative to BOTH lagna AND natal Moon (Chandra lagna). 60/40 blend.
 
-    - PD lord in dusthana (6, 8, 12) from lagna : -8
-    - PD lord in 1, 5, 9, 10 from lagna         : +5
-    - else                                       :  0
+    - PD lord in dusthana (6,8,12)        : -8 (full)
+    - PD lord in 1, 5, 9, 10              : +5 (full)
+    - else                                :  0
     """
     if not pd_planet or lagna_sign is None:
         return 0.0, {"active": False, "reason": "missing_pd_or_lagna"}
@@ -724,30 +1031,50 @@ def compute_pd_transit_overlay(
         return 0.0, {"active": False, "reason": "no_transit_sign_for_pd_lord",
                      "pd_planet": pd_planet}
 
-    pd_house = ((pd_sign - lagna_sign) % 12) + 1
+    LAGNA_W = 0.6
+    MOON_W  = 0.4
+    KENDRA_FAV = {1, 5, 9, 10}
 
-    if pd_house in DUSHTHANA:
-        return -8.0, {
-            "active":    True,
-            "pd_planet": pd_planet,
-            "pd_house":  pd_house,
-            "kind":      "dusthana",
-            "delta":     -8.0,
-        }
-    if pd_house in {1, 5, 9, 10}:
-        return 5.0, {
-            "active":    True,
-            "pd_planet": pd_planet,
-            "pd_house":  pd_house,
-            "kind":      "kendra_trikona",
-            "delta":     5.0,
-        }
-    return 0.0, {
-        "active":    False,
-        "pd_planet": pd_planet,
-        "pd_house":  pd_house,
-        "kind":      "neutral",
-        "delta":     0.0,
+    # Score from lagna
+    house_lagna = ((pd_sign - lagna_sign) % 12) + 1
+    if house_lagna in DUSHTHANA:
+        d_lagna, kind_lagna = -8.0, "dusthana"
+    elif house_lagna in KENDRA_FAV:
+        d_lagna, kind_lagna = +5.0, "kendra_trikona"
+    else:
+        d_lagna, kind_lagna = 0.0, "neutral"
+
+    # Score from natal Moon (Chandra lagna)
+    if birth_moon_sign is not None:
+        house_moon = ((pd_sign - birth_moon_sign) % 12) + 1
+        if house_moon in DUSHTHANA:
+            d_moon, kind_moon = -8.0, "dusthana"
+        elif house_moon in KENDRA_FAV:
+            d_moon, kind_moon = +5.0, "kendra_trikona"
+        else:
+            d_moon, kind_moon = 0.0, "neutral"
+        delta = LAGNA_W * d_lagna + MOON_W * d_moon
+    else:
+        house_moon = None
+        kind_moon  = None
+        delta = d_lagna
+
+    # Pick a representative kind (use the stronger absolute side)
+    if birth_moon_sign is not None:
+        kind = kind_lagna if abs(d_lagna) >= abs(d_moon) else kind_moon
+    else:
+        kind = kind_lagna
+
+    return delta, {
+        "active":          delta != 0.0,
+        "pd_planet":       pd_planet,
+        "pd_house_lagna":  house_lagna,
+        "pd_house_moon":   house_moon,
+        "kind_lagna":      kind_lagna,
+        "kind_moon":       kind_moon,
+        "kind":            kind,
+        "blend":           "lagna_60_moon_40" if birth_moon_sign is not None else "lagna_only",
+        "delta":           delta,
     }
 
 
@@ -1276,6 +1603,9 @@ def calculate_energy(user_data: Dict[str, Any],
                      today_saturn: Optional[Dict[str, Any]] = None,
                      today_planets: Optional[Dict[str, Dict[str, Any]]] = None,
                      now_local: Optional[datetime] = None,
+                     birth_lat: Optional[float] = None,
+                     birth_lon: Optional[float] = None,
+                     tz_offset: float = 5.5,
                      ) -> Dict[str, Any]:
     """
     Compute today's energy score for one user.
@@ -1336,6 +1666,19 @@ def calculate_energy(user_data: Dict[str, Any],
     # Birth Sun sign (for Step 1 — Jupiter→natal Sun aspect)
     birth_sun_sign: Optional[int] = _sign_map.get("Sun") if "Sun" in _sign_map else None
 
+    # v3.2: birth Moon/Sun longitudes for degree-based aspects (Step 1)
+    birth_moon_lon: Optional[float] = None
+    birth_sun_lon:  Optional[float] = None
+    for _p in planets:
+        if not isinstance(_p, dict):
+            continue
+        nm = _p.get("name")
+        ln = _p.get("lon")
+        if nm == "Moon" and isinstance(ln, (int, float)):
+            birth_moon_lon = float(ln) % 360.0
+        elif nm == "Sun" and isinstance(ln, (int, float)):
+            birth_sun_lon = float(ln) % 360.0
+
     # ── Moon-Sun angle at birth (for Paksha Bala inside Shadbala) ────────
     moon_sun_angle: Optional[float] = None
     _lon_map = {p.get("name"): p.get("lon") for p in planets
@@ -1376,6 +1719,17 @@ def calculate_energy(user_data: Dict[str, Any],
     mars_sign    = transit_signs.get("Mars")
     jupiter_sign = transit_signs.get("Jupiter")
 
+    # v3.2: degree-precision transit longitudes for aspect engine
+    def _planet_lon(name: str) -> Optional[float]:
+        if today_planets and isinstance(today_planets.get(name), dict):
+            ln = today_planets[name].get("longitude")
+            if isinstance(ln, (int, float)):
+                return float(ln) % 360.0
+        return None
+    mars_today_lon    = _planet_lon("Mars")
+    jupiter_today_lon = _planet_lon("Jupiter")
+    saturn_today_lon  = sat_today_lon if isinstance(sat_today_lon, (int, float)) else _planet_lon("Saturn")
+
     # ── Components (Aspect/Shadbala dropped — static birth chart) ────────
     dasha_sc,  dasha_d  = compute_dasha_score(user_data, today, lagna_sign)
     moon_sc,   moon_d   = compute_moon_transit_score(moon_sign, lagna_sign, birth_moon_sign)
@@ -1411,20 +1765,28 @@ def calculate_energy(user_data: Dict[str, Any],
         saturn_sign, mars_sign, jupiter_sign,
         birth_moon_sign, birth_sun_sign,
         skip_saturn=bool(saturn_d.get("active")),
+        # v3.2 degree-precision (auto-falls-back to sign mode if any None)
+        saturn_today_lon=saturn_today_lon,
+        mars_today_lon=mars_today_lon,
+        jupiter_today_lon=jupiter_today_lon,
+        birth_moon_lon=birth_moon_lon,
+        birth_sun_lon=birth_sun_lon,
     )
 
-    # ── STEP 2: Jupiter & Mars current-transit overlay ───────────────────
+    # ── STEP 2: Jupiter & Mars current-transit overlay (Lagna+Moon blend) ─
     jup_mars_delta, jup_mars_d = compute_jupiter_mars_overlay(
         jupiter_sign, mars_sign, lagna_sign, birth_moon_sign,
     )
 
-    # ── STEP 3: Choghadiya + Hora time-of-day overlay ────────────────────
-    time_quality_delta, time_quality_d = compute_choghadiya_hora_overlay(now_local)
+    # ── STEP 3: Choghadiya + Hora time-of-day overlay (per-city sun-times) ─
+    time_quality_delta, time_quality_d = compute_choghadiya_hora_overlay(
+        now_local, lat=birth_lat, lon=birth_lon, tz_offset=tz_offset,
+    )
 
-    # ── STEP 5: PD lord current-transit house check ──────────────────────
+    # ── STEP 5: PD lord current-transit house check (Lagna+Moon blend) ───
     pd_planet_for_transit = (dasha_d.get("pd") or {}).get("planet") if isinstance(dasha_d, dict) else None
     pd_transit_delta, pd_transit_d = compute_pd_transit_overlay(
-        pd_planet_for_transit, transit_signs, lagna_sign,
+        pd_planet_for_transit, transit_signs, lagna_sign, birth_moon_sign,
     )
 
     # ── FIX 2: Global negative-stack cap (-35) ───────────────────────────

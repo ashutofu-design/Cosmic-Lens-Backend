@@ -1387,7 +1387,14 @@ def _putra(pl):
 
 # ── 14. Gandanta Dosh ──────────────────────────────────────────────────────────
 def _gandanta(pl):
-    """Moon at junction of water-fire signs: Pisces→Aries, Cancer→Leo, Scorpio→Sagittarius."""
+    """Moon at junction of water-fire signs: Pisces→Aries, Cancer→Leo, Scorpio→Sagittarius.
+
+    Classical Parashara (BPHS) sandhi width: 3°45' (= 3.75°) on each side of the junction.
+    This corresponds to the last pada of Ashlesha / Jyeshtha / Revati and the first pada of
+    Magha / Mula / Ashwini respectively.
+      • Mild zone  : Moon within 3°45' of the sandhi (sensitivity present)
+      • Active zone: Moon within 48' (= 0.8°) of the exact sandhi point (peak Gandanta)
+    """
     if not _has(pl, "Moon"):
         return ("None", "Insufficient data", "", [], "")
     moon_lon = _lon(pl, "Moon")
@@ -1395,12 +1402,17 @@ def _gandanta(pl):
     deg_in_sign = moon_lon % 30
     SIGN_NAMES  = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces']
 
-    in_water_end  = (sign_idx in (12, 4, 8) and deg_in_sign >= 27)
-    in_fire_start = (sign_idx in (1, 5, 9)  and deg_in_sign <= 3)
-    pos_str = f"Moon → {SIGN_NAMES[sign_idx-1]} {deg_in_sign:.1f}°"
+    # Classical sandhi half-width = 3°45' = 3.75°
+    SANDHI_HALF_WIDTH = 3.75
+    TIGHT_HALF_WIDTH  = 0.8   # 48 arc-minutes — exact junction zone
+
+    in_water_end  = (sign_idx in (12, 4, 8) and deg_in_sign >= (30.0 - SANDHI_HALF_WIDTH))
+    in_fire_start = (sign_idx in (1, 5, 9)  and deg_in_sign <= SANDHI_HALF_WIDTH)
+    pos_str = f"Moon → {SIGN_NAMES[sign_idx-1]} {deg_in_sign:.2f}° (sandhi width ±3°45')"
 
     if in_water_end or in_fire_start:
-        tight = (in_water_end and deg_in_sign >= 29.2) or (in_fire_start and deg_in_sign <= 0.8)
+        tight = (in_water_end and deg_in_sign >= (30.0 - TIGHT_HALF_WIDTH)) or \
+                (in_fire_start and deg_in_sign <= TIGHT_HALF_WIDTH)
         status = "Active" if tight else "Mild"
         return (
             status,

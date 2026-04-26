@@ -362,21 +362,67 @@ export default function ForecastScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: botPad + 30 }]} showsVerticalScrollIndicator={false}>
-        {/* Week chart */}
-        <View style={[s.chartCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <Text style={[s.chartLabel, { color: C.textMuted }]}>{t.fc_dailyEnergyScore}</Text>
-          {days.length > 0 ? (
-            <WeekChart
-              days={days}
-              scores={days.map(d => d.score)}
-              selected={selected}
-              onSelect={setSelected}
-            />
-          ) : (
-            <View style={s.chartPlaceholder}>
-              <Text style={[s.placeholderText, { color: C.textMuted }]}>
-                {loading ? t.loading : t.forecastError}
+        {/* Hero forecast card — mirrors the home HeroEnergyCard exactly:
+            same #0f0a24 background, score-tinted border + outer glow, top row
+            with label + selected score, chart filling the body, insight pill
+            at the bottom. Sized with a fixed minHeight so it has the same big
+            immersive presence the home card gets from `flex: 1` on home. */}
+        <View style={[
+          s.heroCard,
+          {
+            backgroundColor: "#0f0a24",
+            borderColor: `${scoreColor}40`,
+            shadowColor: scoreColor,
+          },
+        ]}>
+          {/* Top row — "ENERGY FORECAST" label + DEMO badge + selected score */}
+          <View style={s.heroTopRow}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={[s.heroLabel, { color: "rgba(255,255,255,0.45)" }]}>
+                {t.forecastTitle?.toUpperCase?.() ?? "ENERGY FORECAST"}
               </Text>
+              {showDemo && (
+                <View style={[s.heroDemoBadge, { backgroundColor: C.bgCard2 ?? C.bgCard, borderColor: C.border }]}>
+                  <Feather name="lock" size={8} color={C.textDim} />
+                  <Text style={[s.heroDemoBadgeText, { color: C.textDim }]}>{t.fc_demo ?? "DEMO"}</Text>
+                </View>
+              )}
+            </View>
+            {sel && (
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2 }}>
+                <Text style={[s.heroScore, { color: scoreColor }]}>{sel.score}</Text>
+                <Text style={[s.heroScoreMax, { color: C.textDim }]}>/100</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Chart — flex:1 so it fills the remaining card height, exactly like home */}
+          <View style={{ flex: 1, minHeight: 240 }}>
+            {days.length > 0 ? (
+              <WeekChart
+                days={days}
+                scores={days.map(d => d.score)}
+                selected={selected}
+                onSelect={setSelected}
+              />
+            ) : (
+              <View style={s.chartPlaceholder}>
+                <Text style={[s.placeholderText, { color: C.textMuted }]}>
+                  {loading ? t.loading : t.forecastError}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Insight pill — selected day's summary, styled like home's insightPill */}
+          {sel && (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={[s.heroInsightPill, { backgroundColor: `${scoreColor}10`, borderColor: `${scoreColor}30` }]}>
+                <Feather name="sun" size={11} color={scoreColor} />
+                <Text style={[s.heroInsightText, { color: scoreColor }]} numberOfLines={1}>
+                  {sel.date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {sel.summary}
+                </Text>
+              </View>
             </View>
           )}
         </View>
@@ -384,28 +430,6 @@ export default function ForecastScreen() {
         {/* Selected day detail */}
         {sel && (
           <>
-            {/* Day header */}
-            <View style={s.dayHeader}>
-              <View>
-                <Text style={[s.dayName, { color: C.text }]}>
-                  {sel.date.toLocaleDateString("en-IN", { weekday: "long" })}
-                </Text>
-                <Text style={[s.dayDate, { color: C.textMuted }]}>
-                  {sel.date.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-                </Text>
-              </View>
-              <View style={[s.scoreCircle, { borderColor: scoreColor }]}>
-                <Text style={[s.scoreNum, { color: scoreColor }]}>{sel.score}</Text>
-                <Text style={[s.scoreLabel, { color: C.textMuted }]}>score</Text>
-              </View>
-            </View>
-
-            {/* Summary */}
-            <View style={[s.summaryCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Feather name="sun" size={14} color={scoreColor} />
-              <Text style={[s.summaryText, { color: C.textMuted }]}>{sel.summary}</Text>
-            </View>
-
             {/* Moon info */}
             <View style={s.infoGrid}>
               <View style={[s.infoItem, { backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -497,33 +521,37 @@ const s = StyleSheet.create({
 
   content: { padding: 16, gap: 14 },
 
-  chartCard: {
-    backgroundColor: "#040e1f", borderRadius: 18,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
-    padding: 16, gap: 12,
+  // ── Hero forecast card — dimensionally + visually identical to home HeroEnergyCard ──
+  heroCard: {
+    borderRadius: 16, borderWidth: 1,
+    paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8,
+    overflow: "hidden", gap: 4,
+    minHeight: 380,                           // big immersive presence (home gets this from flex:1)
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28, shadowRadius: 24, elevation: 5,
   },
-  chartLabel: { color: "#3d5a7a", fontSize: 11, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase" },
-  chartPlaceholder: { height: 90, alignItems: "center", justifyContent: "center" },
+  heroTopRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between",
+  },
+  heroLabel:    { fontSize: 8.5, fontWeight: "700", letterSpacing: 2 },
+  heroScore:    { fontSize: 28, fontWeight: "800", letterSpacing: -1, lineHeight: 32 },
+  heroScoreMax: { fontSize: 12, fontWeight: "600", paddingBottom: 3 },
+  heroDemoBadge: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    borderWidth: 1, paddingVertical: 2,
+    paddingHorizontal: 6, borderRadius: 5,
+  },
+  heroDemoBadgeText: { fontSize: 7, fontWeight: "700", letterSpacing: 1.2 },
+  heroInsightPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderWidth: 1, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8,
+    flexShrink: 1, maxWidth: "100%",
+  },
+  heroInsightText: { fontSize: 10, fontWeight: "600", flexShrink: 1 },
+
+  chartPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
   placeholderText: { color: "#1e3a5f" },
-
-  dayHeader: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-  },
-  dayName:  { color: "#dde8f4", fontSize: 18, fontWeight: "700" },
-  dayDate:  { color: "#3d5a7a", fontSize: 12 },
-  scoreCircle: {
-    width: 60, height: 60, borderRadius: 30,
-    borderWidth: 2, alignItems: "center", justifyContent: "center", gap: 1,
-  },
-  scoreNum:   { fontSize: 20, fontWeight: "800" },
-  scoreLabel: { color: "#3d5a7a", fontSize: 9 },
-
-  summaryCard: {
-    backgroundColor: "#040e1f", borderRadius: 16,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.05)",
-    padding: 14, flexDirection: "row", gap: 10, alignItems: "flex-start",
-  },
-  summaryText: { color: "#94a3b8", fontSize: 13, lineHeight: 20, flex: 1 },
 
   infoGrid: { flexDirection: "row", gap: 10 },
   infoItem: {
@@ -535,14 +563,6 @@ const s = StyleSheet.create({
   infoLabel: { color: "#3d5a7a", fontSize: 10, textAlign: "center" },
   infoValue: { color: "#dde8f4", fontSize: 13, fontWeight: "600", textAlign: "center" },
 
-  dashaCard: {
-    backgroundColor: "#040e1f", borderRadius: 14,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.04)",
-    padding: 12, gap: 6,
-  },
-  dashaLabel: { color: "#1e3a5f", fontSize: 10, fontWeight: "600", letterSpacing: 1, textTransform: "uppercase" },
-  dashaRow:   { flexDirection: "row", alignItems: "center", gap: 6 },
-  dashaItem:  { color: "#3d5a7a", fontSize: 12, fontWeight: "600" },
   lockHint:   { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
   lockHintText: { fontSize: 12, flex: 1, fontWeight: "500" },
 

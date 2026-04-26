@@ -154,25 +154,72 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
   return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, isCardinal };
 });
 
-// Degree labels every 30° (subtle technical readout)
-const DEGREE_LABELS = Array.from({ length: 12 }, (_, i) => {
+// 12 Vedic house markers in Devanagari numerals (replaces "tactical" degree labels)
+const DEVANAGARI_NUMS = ["१","२","३","४","५","६","७","८","९","१०","११","१२"];
+const HOUSE_GLYPHS = DEVANAGARI_NUMS.map((sym, i) => {
   const angle = i * 30;
-  const r     = RADAR_R - 24;
+  const r     = RADAR_R - 16;
   const p     = polar(angle, r);
+  return { x: p.x, y: p.y + 4, label: sym };
+});
+
+// 27 Nakshatra micro-dots on outer rim (every 9th = navatara group head, slightly larger)
+const NAKSHATRA_DOTS = Array.from({ length: 27 }, (_, i) => {
+  const angle = (i * 360) / 27;
+  const p     = polar(angle, RADAR_R + 1);
+  return { x: p.x, y: p.y, isMajor: i % 9 === 0 };
+});
+
+// Sri Yantra style hexagram — two interlocking triangles (Shatkona), faint, behind everything
+const HEXAGRAM_R = RADAR_R * 0.62;
+function _triPath(offset: number) {
+  const pts = [0, 120, 240].map(a => polar(a + offset, HEXAGRAM_R));
+  return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y} L ${pts[2].x} ${pts[2].y} Z`;
+}
+const HEX_UP   = _triPath(0);   // ▲ apex top
+const HEX_DOWN = _triPath(60);  // ▼ apex bottom
+
+// Inner sacred geometry — a smaller hexagram for layered depth
+const HEXAGRAM_R_INNER = RADAR_R * 0.28;
+function _triPathInner(offset: number) {
+  const pts = [0, 120, 240].map(a => polar(a + offset, HEXAGRAM_R_INNER));
+  return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y} L ${pts[2].x} ${pts[2].y} Z`;
+}
+const HEX_UP_INNER   = _triPathInner(0);
+const HEX_DOWN_INNER = _triPathInner(60);
+
+// 8-point starburst polygon (used for risk dots — gemstone facet effect)
+function starPath(cx: number, cy: number, outerR: number, innerR: number, points: number = 8) {
+  const segs: string[] = [];
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i * 180 / points - 90) * Math.PI / 180;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    segs.push(`${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`);
+  }
+  return segs.join(" ") + " Z";
+}
+
+// Pre-computed starburst path centered at (14, 14) for a 28×28 dot canvas
+const RISK_STAR_PATH = starPath(14, 14, 13, 5, 8);
+
+// 8-spoke lens-flare ray endpoints (relative to the sweep tip)
+const FLARE_SPOKES = Array.from({ length: 8 }, (_, i) => {
+  const a   = (i * 45) * Math.PI / 180;
+  const len = i % 2 === 0 ? 14 : 8;
   return {
-    x: p.x,
-    y: p.y + 3,
-    label: angle.toString().padStart(3, "0"),
-    isCardinal: angle % 90 === 0,
+    dx: Math.cos(a) * len,
+    dy: Math.sin(a) * len,
   };
 });
 
 // Orbital particles outside the bezel (different radii + speeds)
 const ORBITS = [
-  { radius: RADAR_R + 14, duration: 9000,  size: 3,   color: "#22d3ee" },
+  { radius: RADAR_R + 14, duration: 9000,  size: 3,   color: "#FFD700" },
   { radius: RADAR_R + 18, duration: 13000, size: 2.5, color: "#a78bfa" },
   { radius: RADAR_R + 12, duration: 7000,  size: 2,   color: "#67e8f9" },
-  { radius: RADAR_R + 20, duration: 16000, size: 2,   color: "#fde68a" },
+  { radius: RADAR_R + 22, duration: 16000, size: 2.5, color: "#ff9933" },
 ];
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -429,6 +476,16 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
               strokeDasharray={i === 1 ? "3 5" : undefined} />
           ))}
 
+          {/* Sri Yantra Shatkona (sacred hexagram, faint, behind everything) */}
+          <Path d={HEX_UP}   stroke="#FFD700" strokeWidth={0.7}
+            strokeOpacity={0.32} fill="none" />
+          <Path d={HEX_DOWN} stroke="#a78bfa" strokeWidth={0.7}
+            strokeOpacity={0.30} fill="none" />
+          <Path d={HEX_UP_INNER}   stroke="#FFD700" strokeWidth={0.6}
+            strokeOpacity={0.40} fill="none" />
+          <Path d={HEX_DOWN_INNER} stroke="#67e8f9" strokeWidth={0.6}
+            strokeOpacity={0.40} fill="none" />
+
           {/* Spokes — 4 cardinal + 4 diagonal */}
           {[0, 45, 90, 135].map((angle, i) => {
             const p1 = polar(angle, RADAR_R - 4);
@@ -443,29 +500,36 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
             );
           })}
 
-          {/* Degree labels (subtle, technical readout) */}
-          {DEGREE_LABELS.map((d, i) => {
-            if (d.isCardinal) return null;
-            return (
-              <SvgText key={`deg-${i}`}
-                x={d.x} y={d.y}
-                fill="#67e8f9"
-                fillOpacity={0.45}
-                fontSize="7"
-                fontWeight="700"
-                textAnchor="middle">{d.label}</SvgText>
-            );
-          })}
+          {/* 27 Nakshatra micro-markers on outer rim (every 9th highlighted = navatara) */}
+          {NAKSHATRA_DOTS.map((n, i) => (
+            <Circle key={`nak-${i}`}
+              cx={n.x} cy={n.y}
+              r={n.isMajor ? 1.6 : 0.9}
+              fill={n.isMajor ? "#FFD700" : "#67e8f9"}
+              fillOpacity={n.isMajor ? 0.95 : 0.55} />
+          ))}
 
-          {/* Compass labels */}
-          <SvgText x={RADAR_C} y={20} fill="#67e8f9"
-            fontSize="11" fontWeight="800" textAnchor="middle">N</SvgText>
-          <SvgText x={RADAR_SIZE - 8} y={RADAR_C + 4} fill="#67e8f9"
-            fontSize="11" fontWeight="800" textAnchor="end">E</SvgText>
-          <SvgText x={RADAR_C} y={RADAR_SIZE - 8} fill="#67e8f9"
-            fontSize="11" fontWeight="800" textAnchor="middle">S</SvgText>
-          <SvgText x={8} y={RADAR_C + 4} fill="#67e8f9"
-            fontSize="11" fontWeight="800" textAnchor="start">W</SvgText>
+          {/* 12 Vedic house markers in Devanagari (gold) */}
+          {HOUSE_GLYPHS.map((g, i) => (
+            <SvgText key={`house-${i}`}
+              x={g.x} y={g.y}
+              fill="#FFD700"
+              fillOpacity={0.78}
+              fontSize="9"
+              fontWeight="700"
+              fontFamily="System"
+              textAnchor="middle">{g.label}</SvgText>
+          ))}
+
+          {/* Compass labels (gold accent) */}
+          <SvgText x={RADAR_C} y={20} fill="#FFD700"
+            fontSize="12" fontWeight="800" textAnchor="middle">N</SvgText>
+          <SvgText x={RADAR_SIZE - 8} y={RADAR_C + 4} fill="#FFD700"
+            fontSize="12" fontWeight="800" textAnchor="end">E</SvgText>
+          <SvgText x={RADAR_C} y={RADAR_SIZE - 8} fill="#FFD700"
+            fontSize="12" fontWeight="800" textAnchor="middle">S</SvgText>
+          <SvgText x={8} y={RADAR_C + 4} fill="#FFD700"
+            fontSize="12" fontWeight="800" textAnchor="start">W</SvgText>
 
           {/* Sonar pings */}
           <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
@@ -473,12 +537,18 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
           <AnimatedCircle cx={RADAR_C} cy={RADAR_C}
             stroke="#67e8f9" fill="none" animatedProps={ping2Props} />
 
-          {/* Premium center hub (5-layer glow stack) */}
-          <Circle cx={RADAR_C} cy={RADAR_C} r={11} fill="#22d3ee" fillOpacity={0.12} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={7}  fill="#22d3ee" fillOpacity={0.30} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={4.5} fill="#67e8f9" />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={2.5} fill="#fff" fillOpacity={0.95} />
-          <Circle cx={RADAR_C} cy={RADAR_C} r={1}   fill="#fff" />
+          {/* Premium center — ॐ on a jewel hub */}
+          <Circle cx={RADAR_C} cy={RADAR_C} r={14}
+            fill="#FFD700" fillOpacity={0.10} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={10}
+            fill="#FFD700" fillOpacity={0.22} />
+          <Circle cx={RADAR_C} cy={RADAR_C} r={7}
+            fill="#1f2a55" stroke="#FFD700" strokeWidth={1} strokeOpacity={0.85} />
+          <SvgText x={RADAR_C} y={RADAR_C + 4}
+            fill="#FFD700" fillOpacity={0.95}
+            fontSize="11" fontWeight="800"
+            fontFamily="System"
+            textAnchor="middle">ॐ</SvgText>
         </Svg>
 
         {/* Holographic shimmer bezel (slowly rotating) */}
@@ -498,13 +568,18 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
           <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
             <Defs>
               <SvgLinearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0%"   stopColor="#22d3ee" stopOpacity="0.95" />
-                <Stop offset="33%"  stopColor="#a78bfa" stopOpacity="0.75" />
-                <Stop offset="66%"  stopColor="#67e8f9" stopOpacity="0.95" />
-                <Stop offset="100%" stopColor="#fde68a" stopOpacity="0.6" />
+                <Stop offset="0%"   stopColor="#FFD700" stopOpacity="0.95" />
+                <Stop offset="25%"  stopColor="#22d3ee" stopOpacity="0.95" />
+                <Stop offset="50%"  stopColor="#a78bfa" stopOpacity="0.85" />
+                <Stop offset="75%"  stopColor="#67e8f9" stopOpacity="0.95" />
+                <Stop offset="100%" stopColor="#ff9933" stopOpacity="0.7" />
               </SvgLinearGradient>
             </Defs>
-            {/* Outer holographic bezel */}
+            {/* Gold filigree outer ring (dashed) */}
+            <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 8}
+              stroke="#FFD700" strokeWidth={1} fill="none"
+              strokeOpacity={0.55} strokeDasharray="2 4" />
+            {/* Outer holographic bezel (gold → cyan → violet → saffron) */}
             <Circle cx={RADAR_C} cy={RADAR_C} r={RADAR_R + 4}
               stroke="url(#bezelGrad)" strokeWidth={2.5} fill="none" />
             {/* Inner soft accent ring */}
@@ -549,12 +624,27 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
               stroke="#fff" strokeWidth={0.8} strokeOpacity={0.85}
               strokeLinecap="round" />
             {/* Tip glow stack */}
+            <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={10}
+              fill="#FFD700" fillOpacity={0.18} />
             <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={8}
-              fill="#22d3ee" fillOpacity={0.25} />
+              fill="#22d3ee" fillOpacity={0.30} />
             <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={5}
-              fill="#a5f3fc" fillOpacity={0.85} />
+              fill="#a5f3fc" fillOpacity={0.90} />
             <Circle cx={RADAR_C} cy={RADAR_C - RADAR_R + 6} r={2.5}
               fill="#fff" />
+            {/* 8-spoke lens flare on the tip — alternating long/short rays */}
+            {FLARE_SPOKES.map((s, i) => {
+              const tipY = RADAR_C - RADAR_R + 6;
+              return (
+                <Line key={`flare-${i}`}
+                  x1={RADAR_C} y1={tipY}
+                  x2={RADAR_C + s.dx} y2={tipY + s.dy}
+                  stroke={i % 2 === 0 ? "#FFD700" : "#a5f3fc"}
+                  strokeWidth={i % 2 === 0 ? 1 : 0.7}
+                  strokeOpacity={i % 2 === 0 ? 0.85 : 0.65}
+                  strokeLinecap="round" />
+              );
+            })}
           </Svg>
         </Animated.View>
 
@@ -620,26 +710,39 @@ function RadarView({ risks }: { risks: Risk24h[] }) {
                 dotPulseStyle,
               ]}
             />
-            {/* Inner soft glow */}
+            {/* Soft outer halo */}
             <View
               style={{
                 position: "absolute",
-                width: 28, height: 28, borderRadius: 14,
-                backgroundColor: d.color, opacity: 0.30,
+                width: 32, height: 32, borderRadius: 16,
+                backgroundColor: d.color, opacity: 0.22,
               }}
             />
-            {/* Solid dot with number badge */}
+            {/* Starburst gemstone (8-point) with golden rim */}
+            <Svg width={28} height={28} style={{ position: "absolute" }}>
+              <Defs>
+                <RadialGradient id={`dotGrad-${i}`} cx="50%" cy="50%" r="50%">
+                  <Stop offset="0%"  stopColor="#fff"   stopOpacity="1" />
+                  <Stop offset="45%" stopColor={d.color} stopOpacity="1" />
+                  <Stop offset="100%" stopColor={d.color} stopOpacity="0.65" />
+                </RadialGradient>
+              </Defs>
+              <Path d={RISK_STAR_PATH}
+                fill={`url(#dotGrad-${i})`}
+                stroke="#FFD700" strokeWidth={1} strokeOpacity={0.9} />
+            </Svg>
+            {/* Number badge (white, on top of gemstone) */}
             <View
               style={{
-                width: 20, height: 20, borderRadius: 10,
-                backgroundColor: d.color,
-                borderWidth: 2, borderColor: "#fff",
+                width: 14, height: 14, borderRadius: 7,
+                backgroundColor: "rgba(15, 23, 42, 0.85)",
+                borderWidth: 1, borderColor: "#FFD700",
                 alignItems: "center", justifyContent: "center",
                 shadowColor: d.color,
                 shadowOpacity: 0.9,
-                shadowRadius: 6,
+                shadowRadius: 5,
                 shadowOffset: { width: 0, height: 0 },
-                elevation: 6,
+                elevation: 4,
               }}
             >
               <Text style={radarS.dotIdx}>{d.idx}</Text>

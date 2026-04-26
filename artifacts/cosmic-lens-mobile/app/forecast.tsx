@@ -557,92 +557,133 @@ export default function ForecastScreen() {
               </Pressable>
             </View>
 
-            {/* Selected day's Lucky highlights — same compact card pattern used
-                on the Risk Radar screen (RiskRadarCard.tsx ~688–788), reusing the
-                exact engine fields already attached to every DayForecast by
-                computeRisk(): luckyNumbers, luckyColor, bestTime, avoidTime.
-                Date-deterministic so the same date always renders the same
-                values across screens. Labels are English by design to match the
-                project's English-default policy and the supplied design ref. */}
-            {sel.luckyNumbers?.length > 0 && sel.luckyColor?.hex && sel.bestTime && sel.avoidTime && (
-              <>
-                {/* Lucky Number + Lucky Colour card */}
-                <View style={[s.luckyCard, {
-                  backgroundColor: `${sel.luckyColor.hex}14`,
-                  borderColor:     `${sel.luckyColor.hex}55`,
-                }]}>
-                  <View style={s.luckyTopRow}>
-                    <View style={s.luckyHalf}>
-                      <Text style={[s.luckyMicro, { color: C.textMuted }]}>LUCKY NUMBER</Text>
-                      <View style={[s.luckyNumberBadge, {
-                        borderColor: sel.luckyColor.hex,
-                        backgroundColor: `${sel.luckyColor.hex}22`,
-                      }]}>
-                        <Text style={[s.luckyNumberText, { color: C.text }]}>
-                          {sel.luckyNumbers[0]}
-                        </Text>
+            {/* Selected day's Lucky highlights — reuses engine fields already
+                attached to every DayForecast by computeRisk(): luckyNumbers,
+                luckyColor, bestTime, avoidTime. Date-deterministic so the
+                same date always renders the same values across screens.
+                Every label and the reason sentence are pulled through the
+                useT() i18n table so the card switches script with the UI
+                language (English / Hinglish / Hindi explicit; other 21 langs
+                fall back to English via the existing { ...EN, ...XX } merge). */}
+            {sel.luckyNumbers?.length > 0 && sel.luckyColor?.hex && sel.bestTime && sel.avoidTime && (() => {
+              // ── Localized colour name (engine emits canonical Hinglish names
+              //    like "Suneheri" / "Pila"; map to active UI language). When
+              //    the engine returns an unrecognised name, we fall back to the
+              //    canonical name so the user never sees a blank or "[object]".
+              const COLOR_KEY: Record<string, keyof typeof t> = {
+                Hara:     "fc_luckyClrHara",
+                Pila:     "fc_luckyClrPila",
+                Safed:    "fc_luckyClrSafed",
+                Neela:    "fc_luckyClrNeela",
+                Suneheri: "fc_luckyClrSuneheri",
+                Kesari:   "fc_luckyClrKesari",
+              };
+              const ck = COLOR_KEY[sel.luckyColor.name];
+              const localizedColour = (ck ? (t[ck] as string) : null) || sel.luckyColor.name;
+
+              // ── Lang-aware date formatting. The UI language code we use
+              //    (e.g. "hn", "or") isn't always a valid BCP-47 tag, so we
+              //    translate to the closest Intl locale. Hinglish ("hn")
+              //    deliberately uses English month names in Latin script to
+              //    match the canonical Hinglish voice.
+              const LANG_TO_LOCALE: Record<string, string> = {
+                en: "en-IN", hn: "en-IN", hi: "hi-IN",
+                bn: "bn-IN", mr: "mr-IN", ta: "ta-IN", te: "te-IN",
+                gu: "gu-IN", kn: "kn-IN", ml: "ml-IN", pa: "pa-IN",
+                or: "or-IN", as: "as-IN",
+                zh: "zh-CN", es: "es-ES", ar: "ar",     fr: "fr-FR",
+                pt: "pt-BR", de: "de-DE", ru: "ru-RU",  ja: "ja-JP",
+                id: "id-ID", ko: "ko-KR", tr: "tr-TR",
+              };
+              const locale = LANG_TO_LOCALE[t.lang] || "en-IN";
+              const dateStr = sel.date.toLocaleDateString(locale, {
+                weekday: "short", day: "numeric", month: "short",
+              });
+
+              // ── Templated reason — engine-derived values only (no fake AI).
+              const reasonLine = t.fc_luckyReason
+                .replace("{date}",   dateStr)
+                .replace("{n}",      String(sel.luckyNumbers[0]))
+                .replace("{colour}", localizedColour);
+
+              return (
+                <>
+                  {/* Lucky Number + Lucky Colour card */}
+                  <View style={[s.luckyCard, {
+                    backgroundColor: `${sel.luckyColor.hex}14`,
+                    borderColor:     `${sel.luckyColor.hex}55`,
+                  }]}>
+                    <View style={s.luckyTopRow}>
+                      <View style={s.luckyHalf}>
+                        <Text style={[s.luckyMicro, { color: C.textMuted }]}>{t.rrLuckyShubhAnk}</Text>
+                        <View style={[s.luckyNumberBadge, {
+                          borderColor: sel.luckyColor.hex,
+                          backgroundColor: `${sel.luckyColor.hex}22`,
+                        }]}>
+                          <Text style={[s.luckyNumberText, { color: C.text }]}>
+                            {sel.luckyNumbers[0]}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={[s.luckyDivider, { backgroundColor: C.border }]} />
+
+                      <View style={s.luckyHalf}>
+                        <Text style={[s.luckyMicro, { color: C.textMuted }]}>{t.rrLuckyShubhRang}</Text>
+                        <View style={s.luckyColourRow}>
+                          <View style={[s.luckySwatch, {
+                            backgroundColor: sel.luckyColor.hex,
+                            borderColor: sel.luckyColor.hex === "#f3f4f6"
+                              ? "rgba(255,255,255,0.3)" : "transparent",
+                          }]} />
+                          <Text style={[s.luckyColourName, { color: C.text }]} numberOfLines={1}>
+                            {localizedColour}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={[s.luckyDivider, { backgroundColor: C.border }]} />
+                    {/* Templated reason — every value (date, number, colour) is
+                        engine-derived and already shown above. NOT a templated
+                        guess about nakshatra friendship — that data isn't
+                        available for future days. Strict no-fake-data. */}
+                    <Text style={[s.luckyReason, { color: C.textMuted }]}>
+                      {reasonLine}
+                    </Text>
 
-                    <View style={s.luckyHalf}>
-                      <Text style={[s.luckyMicro, { color: C.textMuted }]}>LUCKY COLOUR</Text>
-                      <View style={s.luckyColourRow}>
-                        <View style={[s.luckySwatch, {
-                          backgroundColor: sel.luckyColor.hex,
-                          borderColor: sel.luckyColor.hex === "#f3f4f6"
-                            ? "rgba(255,255,255,0.3)" : "transparent",
-                        }]} />
-                        <Text style={[s.luckyColourName, { color: C.text }]} numberOfLines={1}>
-                          {sel.luckyColor.name}
-                        </Text>
-                      </View>
+                    <Text style={[s.luckyInnerPoweredBy, { color: C.textDim }]}>
+                      {t.rrLuckyPoweredBy}
+                    </Text>
+                  </View>
+
+                  {/* Best Time + Avoid Time tile pair */}
+                  <View style={s.luckyTimeGrid}>
+                    <View style={[s.luckyTimeTile, {
+                      backgroundColor: "rgba(74,222,128,0.08)",
+                      borderColor:     "rgba(74,222,128,0.25)",
+                    }]}>
+                      <Text style={[s.luckyTimeLabel, { color: "#4ade80" }]}>{t.fc_luckyBestTimeLabel}</Text>
+                      <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
+                        {sel.bestTime}
+                      </Text>
+                    </View>
+                    <View style={[s.luckyTimeTile, {
+                      backgroundColor: "rgba(239,68,68,0.08)",
+                      borderColor:     "rgba(239,68,68,0.25)",
+                    }]}>
+                      <Text style={[s.luckyTimeLabel, { color: "#ef4444" }]}>{t.fc_luckyAvoidTimeLabel}</Text>
+                      <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
+                        {sel.avoidTime}
+                      </Text>
                     </View>
                   </View>
 
-                  {/* Reason line — short factual sentence that ties together the
-                      two real engine-derived values shown above (date, lucky
-                      number, lucky colour). NOT a templated guess about the
-                      user's nakshatra friendship — that data isn't available
-                      for future days. Strict no-fake-data: every value here
-                      comes from the same DayForecast object rendered above. */}
-                  <Text style={[s.luckyReason, { color: C.textMuted }]}>
-                    {`On ${sel.date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} — lucky number ${sel.luckyNumbers[0]} and ${sel.luckyColor.name} colour align with the day's cosmic energy.`}
+                  <Text style={[s.luckyPoweredBy, { color: C.textMuted }]}>
+                    {t.rrLuckyPoweredBy}
                   </Text>
-
-                  <Text style={[s.luckyInnerPoweredBy, { color: C.textDim }]}>
-                    ✨ Powered by Advanced Cosmic Intelligence
-                  </Text>
-                </View>
-
-                {/* Best Time + Avoid Time tile pair */}
-                <View style={s.luckyTimeGrid}>
-                  <View style={[s.luckyTimeTile, {
-                    backgroundColor: "rgba(74,222,128,0.08)",
-                    borderColor:     "rgba(74,222,128,0.25)",
-                  }]}>
-                    <Text style={[s.luckyTimeLabel, { color: "#4ade80" }]}>BEST TIME</Text>
-                    <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
-                      {sel.bestTime}
-                    </Text>
-                  </View>
-                  <View style={[s.luckyTimeTile, {
-                    backgroundColor: "rgba(239,68,68,0.08)",
-                    borderColor:     "rgba(239,68,68,0.25)",
-                  }]}>
-                    <Text style={[s.luckyTimeLabel, { color: "#ef4444" }]}>AVOID TIME</Text>
-                    <Text style={[s.luckyTimeText,  { color: C.text   }]} numberOfLines={2}>
-                      {sel.avoidTime}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={[s.luckyPoweredBy, { color: C.textMuted }]}>
-                  ✨ Powered by Advanced Cosmic Intelligence
-                </Text>
-              </>
-            )}
+                </>
+              );
+            })()}
           </>
         )}
 

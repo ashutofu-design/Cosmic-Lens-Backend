@@ -1644,6 +1644,18 @@ export interface MoreT {
   rrLuckyDetailsUnavail:     string;  // "Lucky details abhi available nahi hain."
   rrLuckyDayUnavail:         string;  // "Is din ke liye shubh ank aur rang abhi available nahi hain."
 
+  // Forecast — Lucky highlights card (lives on Forecast, not Risk Radar)
+  fc_luckyBestTimeLabel:     string;  // "BEST TIME"  (no emoji)
+  fc_luckyAvoidTimeLabel:    string;  // "AVOID TIME" (no emoji)
+  fc_luckyReason:            string;  // template — "On {date} — lucky number {n} and {colour} colour align with the day's cosmic energy."
+  // Lucky colour name → localized (canonical Hinglish names from engine)
+  fc_luckyClrHara:           string;  // "Hara"      → Green
+  fc_luckyClrPila:           string;  // "Pila"      → Yellow
+  fc_luckyClrSafed:          string;  // "Safed"     → White
+  fc_luckyClrNeela:          string;  // "Neela"     → Blue
+  fc_luckyClrSuneheri:       string;  // "Suneheri"  → Golden
+  fc_luckyClrKesari:         string;  // "Kesari"    → Saffron
+
   // Risk Radar — 24-hour breakdown / level badges
   rrSection24hToday:          string;
   rrSection24hWithDate:       string;
@@ -3303,6 +3315,17 @@ const EN: MoreT = {
   rrLuckyDetailsUnavail:     "Lucky details aren't available right now.",
   rrLuckyDayUnavail:         "Lucky number and colour aren't available for this day yet.",
 
+  // Forecast — Lucky highlights card
+  fc_luckyBestTimeLabel:     "BEST TIME",
+  fc_luckyAvoidTimeLabel:    "AVOID TIME",
+  fc_luckyReason:            "On {date} — lucky number {n} and {colour} colour align with the day's cosmic energy.",
+  fc_luckyClrHara:           "Green",
+  fc_luckyClrPila:           "Yellow",
+  fc_luckyClrSafed:          "White",
+  fc_luckyClrNeela:          "Blue",
+  fc_luckyClrSuneheri:       "Golden",
+  fc_luckyClrKesari:         "Saffron",
+
   // Risk Radar — 24-hour breakdown labels (EN)
   rrSection24hToday:          "NEXT 24 HOURS",
   rrSection24hWithDate:       "{date} — 24 HOURS",
@@ -4738,6 +4761,17 @@ const HN: Partial<MoreT> = {
   rrLuckyCreateKundliCta:    "KUNDLI BANAYEIN →",
   rrLuckyDetailsUnavail:     "Lucky details abhi available nahi hain.",
   rrLuckyDayUnavail:         "Is din ke liye shubh ank aur rang abhi available nahi hain.",
+
+  // Forecast — Lucky highlights card (Hinglish)
+  fc_luckyBestTimeLabel:     "SHUBH SAMAY",
+  fc_luckyAvoidTimeLabel:    "ASHUBH SAMAY",
+  fc_luckyReason:            "{date} ko — shubh ank {n} aur {colour} rang aaj ki cosmic energy ke saath align hain.",
+  fc_luckyClrHara:           "Hara",
+  fc_luckyClrPila:           "Pila",
+  fc_luckyClrSafed:          "Safed",
+  fc_luckyClrNeela:          "Neela",
+  fc_luckyClrSuneheri:       "Suneheri",
+  fc_luckyClrKesari:         "Kesari",
 
   // Risk Radar — 24-hour breakdown labels (HN)
   rrSection24hToday:          "AAJ KE 24 GHANTE",
@@ -6267,6 +6301,17 @@ const HI: Partial<MoreT> = {
   rrLuckyCreateKundliCta:    "कुंडली बनाएँ →",
   rrLuckyDetailsUnavail:     "शुभ विवरण अभी उपलब्ध नहीं हैं।",
   rrLuckyDayUnavail:         "इस दिन के लिए शुभ अंक और रंग अभी उपलब्ध नहीं हैं।",
+
+  // Forecast — Lucky highlights card (Hindi)
+  fc_luckyBestTimeLabel:     "शुभ समय",
+  fc_luckyAvoidTimeLabel:    "अशुभ समय",
+  fc_luckyReason:            "{date} को — शुभ अंक {n} और {colour} रंग आज की कॉस्मिक ऊर्जा के साथ संरेखित हैं।",
+  fc_luckyClrHara:           "हरा",
+  fc_luckyClrPila:           "पीला",
+  fc_luckyClrSafed:          "सफेद",
+  fc_luckyClrNeela:          "नीला",
+  fc_luckyClrSuneheri:       "सुनहरा",
+  fc_luckyClrKesari:         "केसरी",
 
   // Risk Radar — 24-hour breakdown labels (HI)
   rrSection24hToday:          "आज के 24 घंटे",

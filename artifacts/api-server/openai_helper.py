@@ -2276,7 +2276,16 @@ def _build_messages(
                 "'guarantee'. NEVER promise a specific country or visa.\n"
                 "  8. If `brand_safety_warnings` array in the verdict block "
                 "is non-empty, internalise EACH warning as an absolute "
-                "constraint for this turn.\n\n"
+                "constraint for this turn.\n"
+                "  9. DATE-PRECISION LOCK — the engine emits dates in "
+                "month-year resolution ONLY (e.g. 'Jul 2025 → Jun 2026'). "
+                "You MUST cite dates in the SAME resolution as printed. "
+                "FORBIDDEN: inventing specific day numbers like "
+                "'2025-07-25' or '15 July 2025' or '25/07/2025' when the "
+                "engine only gave you 'Jul 2025'. Just write 'Jul 2025 "
+                "se Jun 2026 ka window' or 'July 2025 → June 2026'. "
+                "ZERO day-precision unless the engine itself printed a "
+                "day number.\n\n"
                 + career_verdict_block
             ),
         })
@@ -3578,10 +3587,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             (m.get("content") or "") for m in messages if m.get("role") == "system"
         )
         _engine_window = ""
-        # Best-effort extract of the topic-specific engine window line
+        # Best-effort extract of the topic-specific engine window line.
+        # We require the line to look like an actual heading
+        # ("X window:" or "X-WINDOW:") emitted by an engine — NOT a free-
+        # text bullet that happens to mention "window". Topic keyword
+        # match is case-insensitive.
+        import re as _re_winscan
+        _heading_rx = _re_winscan.compile(
+            r"(marriage|child|career|promotion|wealth|foreign|property)"
+            r"[\s\-]+window\s*:",
+            _re_winscan.IGNORECASE,
+        )
         for _line in _facts_blob.splitlines():
-            if "window:" in _line and any(t in _line for t in
-                ("Marriage","Child","Career","Promotion","Wealth","Foreign","Property")):
+            if _heading_rx.search(_line):
                 _engine_window = _line.strip(); break
         _lock = enforce_timing_lock(question or "", text, _facts_blob, _engine_window)
         if not _lock["ok"]:

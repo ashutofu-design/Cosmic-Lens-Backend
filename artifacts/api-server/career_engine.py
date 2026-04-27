@@ -533,11 +533,64 @@ def _planets_aspecting_house(planets: list, target_house: int) -> list[str]:
 
 
 def _dasha_lords(kundli: dict) -> tuple[str, str, str]:
-    """Return current (MD, AD, PD) lord names from kundli.currentDasha (best-effort)."""
+    """Return current (MD, AD, PD) lord names from kundli.currentDasha
+    (best-effort across multiple naming conventions used by upstream
+    chart providers).
+
+    Recognised key variants:
+      MD: mahadasha | maha | MD | md_lord | mahadashaLord
+      AD: antardasha | antar | AD | ad_lord | antardashaLord
+      PD: pratyantardasha | pratyantar | PD | pd_lord | pratyantarLord
+
+    If `currentDasha` is absent, falls back to `currentPhase.name` which
+    typical providers format as `"<MD> – <AD>"` (en-dash separated).
+    PD is then derived from kundli.dashas hierarchy if available.
+    """
     cd = kundli.get("currentDasha") or {}
-    md = (cd.get("mahadasha") or cd.get("MD") or "").strip()
-    ad = (cd.get("antardasha") or cd.get("AD") or "").strip()
-    pd = (cd.get("pratyantardasha") or cd.get("PD") or "").strip()
+    md = (cd.get("mahadasha") or cd.get("maha") or cd.get("MD") or
+          cd.get("md_lord") or cd.get("mahadashaLord") or "").strip()
+    ad = (cd.get("antardasha") or cd.get("antar") or cd.get("AD") or
+          cd.get("ad_lord") or cd.get("antardashaLord") or "").strip()
+    pd = (cd.get("pratyantardasha") or cd.get("pratyantar") or
+          cd.get("PD") or cd.get("pd_lord") or
+          cd.get("pratyantarLord") or "").strip()
+
+    # Fallback 1 — parse currentPhase.name "Rahu – Sun"
+    if not md or not ad:
+        cp = kundli.get("currentPhase") or {}
+        nm = (cp.get("name") or "").strip()
+        if nm:
+            for sep in ("–", "-", "—", "/", "→"):
+                if sep in nm:
+                    parts = [p.strip() for p in nm.split(sep) if p.strip()]
+                    if len(parts) >= 1 and not md: md = parts[0]
+                    if len(parts) >= 2 and not ad: ad = parts[1]
+                    if len(parts) >= 3 and not pd: pd = parts[2]
+                    break
+
+    # Fallback 2 — derive PD from nested dashas hierarchy at "now"
+    if (md and ad) and not pd:
+        try:
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).date().isoformat()
+            for top in (kundli.get("dashas") or []):
+                if not isinstance(top, dict): continue
+                if top.get("planet") != md: continue
+                if not (str(top.get("startDate","")) <= now <= str(top.get("endDate","9999"))):
+                    continue
+                for sub in (top.get("subDashas") or []):
+                    if sub.get("planet") != ad: continue
+                    if not (str(sub.get("startDate","")) <= now <= str(sub.get("endDate","9999"))):
+                        continue
+                    for sub2 in (sub.get("subDashas") or []):
+                        if str(sub2.get("startDate","")) <= now <= str(sub2.get("endDate","9999")):
+                            pd = (sub2.get("planet") or "").strip()
+                            break
+                    break
+                break
+        except Exception:
+            pass
+
     return md, ad, pd
 
 
@@ -2529,8 +2582,18 @@ def _trigger_vimshottari(kundli: dict, intel: dict, karakas_d: dict) -> dict:
 
     md, ad, pd = _dasha_lords(kundli)
     cd = kundli.get("currentDasha") or {}
-    cur_start = cd.get("antardashaStart") or cd.get("ad_start")
-    cur_end = cd.get("antardashaEnd") or cd.get("ad_end")
+    cp = kundli.get("currentPhase") or {}
+    # Recognise multiple key conventions for AD start/end emitted by
+    # different chart providers (startDate/endDate, start/end,
+    # antardashaStart/antardashaEnd, ad_start/ad_end). currentPhase is
+    # used as a final fallback because it always represents the
+    # currently-active AD window.
+    cur_start = (cd.get("startDate") or cd.get("start")
+                 or cd.get("antardashaStart") or cd.get("ad_start")
+                 or cp.get("start"))
+    cur_end = (cd.get("endDate") or cd.get("end")
+               or cd.get("antardashaEnd") or cd.get("ad_end")
+               or cp.get("end"))
 
     tenth_lord = _house_lord(intel, 10)
     second_lord = _house_lord(intel, 2)
@@ -4188,18 +4251,70 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
             lines.append(f"   • {r}")
         lines.append("")
 
-    # Timing window
+    # Timing window — emit in validator-friendly form (lowercase "window:"
+    # + topic keyword + explicit "X Mahadasha / Y Antardasha" wording so
+    # the timing_validator (vedic/validator/timing_validator.py) can match
+    # both the dasha names and the month-year tokens that the AI cites.
     tw = v.get("timing_window") or {}
     cur = tw.get("current") or {}
-    if cur.get("lords"):
-        lines.append(f"▸ CURRENT DASHA WINDOW: {cur.get('lords')}")
-        if cur.get("start") or cur.get("end"):
-            lines.append(f"   • Window: {_ym_to_human(str(cur.get('start') or '')[:7])} → {_ym_to_human(str(cur.get('end') or '')[:7])}")
+    cur_lords = cur.get("lords")
+    # Normalise lords (tuple/list/str) → md/ad/pd
+    md = ad = pd = ""
+    if cur_lords:
+        if isinstance(cur_lords, (tuple, list)):
+            md = (cur_lords[0] if len(cur_lords) > 0 else "") or ""
+            ad = (cur_lords[1] if len(cur_lords) > 1 else "") or ""
+            pd = (cur_lords[2] if len(cur_lords) > 2 else "") or ""
+        else:
+            parts = [p.strip() for p in str(cur_lords).replace("/", "-").split("-") if p.strip()]
+            md = parts[0] if len(parts) > 0 else ""
+            ad = parts[1] if len(parts) > 1 else ""
+            pd = parts[2] if len(parts) > 2 else ""
+    # Only emit the engine window line when we ACTUALLY have at least
+    # one real dasha lord. This prevents the "(dasha unavailable)"
+    # placeholder string from leaking into the system prompt → into the
+    # AI's narration. The narrator will then either honestly omit dasha
+    # citation or rely on engine-cited Sthira / Chara dashas elsewhere.
+    if md or ad:
+        cur_s_h = _ym_to_human(str(cur.get("start") or "")[:7])
+        cur_e_h = _ym_to_human(str(cur.get("end") or "")[:7])
+        dasha_str_parts = []
+        if md: dasha_str_parts.append(f"{md} Mahadasha")
+        if ad: dasha_str_parts.append(f"{ad} Antardasha")
+        if pd: dasha_str_parts.append(f"{pd} Pratyantardasha")
+        dasha_str = " / ".join(dasha_str_parts)
+        if cur_s_h or cur_e_h:
+            lines.append(f"▸ Current Career window: {cur_s_h} → {cur_e_h} — {dasha_str}")
+        else:
+            lines.append(f"▸ Current Career window: {dasha_str}")
+        # Emit alias forms so the timing-validator's regex matches whatever
+        # phrasing the narrator chooses ("Saturn dasha", "Saturn MD",
+        # "Saturn maha", "Saturn antar", etc.).
+        alias_parts = []
+        for role, planet, abbr, full in (
+            ("MD", md, "MD", "Mahadasha"),
+            ("AD", ad, "AD", "Antardasha"),
+            ("PD", pd, "PD", "Pratyantardasha"),
+        ):
+            if not planet:
+                continue
+            alias_parts.append(
+                f"{planet} {full} (also: {planet} {abbr}, {planet} dasha, "
+                f"{planet} maha, {planet} antar)"
+            )
+        if alias_parts:
+            lines.append(f"   • Dasha aliases (validator-safe): {' | '.join(alias_parts)}")
     nxt = tw.get("next_career") or {}
     if nxt and nxt.get("ad"):
         s_h = _ym_to_human(str(nxt.get("start") or "")[:7])
         e_h = _ym_to_human(str(nxt.get("end") or "")[:7])
-        lines.append(f"▸ NEXT CAREER-WINDOW: {nxt.get('md','?')}/{nxt.get('ad','?')} ({s_h} → {e_h})")
+        nxt_md = nxt.get("md") or ""
+        nxt_ad = nxt.get("ad") or ""
+        nxt_dasha_parts = []
+        if nxt_md: nxt_dasha_parts.append(f"{nxt_md} Mahadasha")
+        if nxt_ad: nxt_dasha_parts.append(f"{nxt_ad} Antardasha")
+        nxt_dasha = " / ".join(nxt_dasha_parts) if nxt_dasha_parts else "(dasha unavailable)"
+        lines.append(f"▸ Next Career window: {s_h} → {e_h} — {nxt_dasha}")
         if nxt.get("reason"):
             lines.append(f"   • Reason: {nxt.get('reason')}")
     sat_t = tw.get("saturn_transit") or {}

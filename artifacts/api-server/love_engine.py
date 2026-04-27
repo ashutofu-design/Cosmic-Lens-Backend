@@ -202,9 +202,11 @@ _Q_PATTERNS = [
     # AFFAIR / CHEATING — most sensitive, must be detected first to prevent
     # accidental routing into compatibility / existing_status buckets.
     ("affair_third_party", [
-        r"\b(cheat|cheating|cheater|cheated)\b",
+        r"\b(cheat|cheating|cheater|cheated|cheats)\b",
         r"\b(affair|extra[- ]?marital|extramarital)\b",
-        r"\b(dhokha|dhoka|dhokhha|dhoke|bewafai|be-wafai|wafa nahi)\b",
+        r"\b(dhokha|dhoka|dhokhha|dhoke|bewafa|bewafai|be-wafai|wafa nahi|wafadar nahi)\b",
+        r"\b(bewafa|bewafai|wafadar)\b.*\b(nikleg|niklega|niklegi|nikalega|nikalegi|hoga|hogi|nikla|nikli)\b",
+        r"\b(loyal|wafadar|trust|trustworthy|imaandar|imandar)\b.*\b(nahi|nahin|nai|hai kya|rahega|rahegi)\b",
         r"\b(doosra|dusra|dusara|doosri|dusri)\b.*\b(koi|aur|bf|gf|ladka|ladki|partner|aurat|admi)\b",
         r"\b(koi aur|kuch aur)\b.*\b(hai|chal|chakkar|relation|love|partner)\b",
         r"\b(chakkar|chakar|chukker)\b",
@@ -314,6 +316,62 @@ def classify_love_question(text: str) -> str:
                  r"boyfriend|partner|rishta|relation|dating|soulmate)\b", s):
         return "feelings_check"
     return "feelings_check"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TENSE DETECTOR — for tense-aware narration (FUTURE prediction vs PRESENT
+# diagnosis vs GENERAL/timeless). Used by narrator override so:
+#   - PRESENT  → emphasise CURRENT Maha-Antar-Pratyantar lords + active transit
+#   - FUTURE   → emphasise next dasha window + upcoming Jupiter/Rahu transits
+#   - GENERAL  → balance both
+# ─────────────────────────────────────────────────────────────────────────────
+_TENSE_FUTURE_RX = re.compile(
+    r"\b(will|shall|going to|gonna|"
+    # Hinglish future markers
+    r"karega|karegi|karenge|hoga|hogi|honge|dega|degi|denge|"
+    r"milega|milegi|milenge|aayega|aayegi|aayenge|"
+    r"banega|banegi|banenge|jayega|jayegi|jayenge|"
+    r"nikleg|niklega|niklegi|nikalega|nikalegi|sakega|sakegi|"
+    r"future|aage|aage chal|baad mein|baad me|"
+    r"kab|kab tak|jaldi|kabhi|kabhi bhi|never)\b"
+    r"|भविष्य|आगे|कब|करेगा|करेगी|होगा|होगी|मिलेगा|मिलेगी|"
+    r"देगा|देगी|देंगे|जाएगा|जाएगी|बनेगा|बनेगी|आएगा|आएगी|निकलेगा|निकलेगी",
+    re.IGNORECASE,
+)
+_TENSE_PRESENT_RX = re.compile(
+    r"\b(now|right now|currently|today|"
+    # Hinglish present-progressive markers
+    r"abhi|aaj|aaj kal|aajkal|filhal|fil[- ]?haal|"
+    r"chal raha|chal rahi|chal rahe|kar raha|kar rahi|kar rahe|"
+    r"ho raha|ho rahi|ho rahe|de raha|de rahi|de rahe|"
+    r"hai kya|hai\?|hai$|present(?:ly)?)\b"
+    r"|अभी|आज|आजकल|वर्तमान|चल रहा|कर रहा|हो रहा",
+    re.IGNORECASE,
+)
+
+
+def detect_question_tense(text: str) -> str:
+    """Return 'future' | 'present' | 'general'.
+    PRESENT wins on tie because diagnostic questions ('abhi cheat kar raha hai
+    kya?') need current-dasha emphasis even when 'kya' (future-leaning particle)
+    is also present.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return "general"
+    s = text.lower().strip()
+    has_present = bool(_TENSE_PRESENT_RX.search(s))
+    has_future  = bool(_TENSE_FUTURE_RX.search(s))
+    if has_present and not has_future:
+        return "present"
+    if has_future and not has_present:
+        return "future"
+    if has_present and has_future:
+        # Both — disambiguate by stronger present markers
+        if re.search(r"\b(abhi|aaj kal|aajkal|currently|right now|now|"
+                     r"chal raha|kar raha|ho raha|de raha)\b", s):
+            return "present"
+        return "future"
+    return "general"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2802,9 +2860,10 @@ def assess_love(kundli: dict, intel: dict, kp: dict,
     moon_name = (kundli.get("moonSign") or "").strip().capitalize()
     moon_idx  = _sign_idx(moon_name)
 
-    # ── STEP 1 — Question type detection ─────────────────────────────────────
-    q_type = classify_love_question(question)
-    trace.append(f"Step 1: Question classified as '{q_type}'")
+    # ── STEP 1 — Question type + tense detection ─────────────────────────────
+    q_type  = classify_love_question(question)
+    q_tense = detect_question_tense(question)
+    trace.append(f"Step 1: Question classified as '{q_type}' (tense={q_tense})")
 
     # ── Pre-compute helper modules (best-effort) ─────────────────────────────
     shadbala_d = _maybe_shadbala(kundli, lagna_idx)
@@ -3054,6 +3113,7 @@ def assess_love(kundli: dict, intel: dict, kp: dict,
         "love_denied":          denied,
         "framework_decision":   framework,
         "question_type":        q_type,
+        "question_tense":       q_tense,
         # ── Summary one-liners ──
         "kp_verdict_summary":   kp_summary,
         "navamsa_summary":      navamsa_summary,
@@ -3159,6 +3219,7 @@ def _engine_json_envelope(v: dict) -> str:
         "love_promised":        v.get("love_promised"),
         "love_denied":          v.get("love_denied"),
         "question_type":        v.get("question_type"),
+        "question_tense":       v.get("question_tense"),
         "kp_verdict_summary":   v.get("kp_verdict_summary"),
         "navamsa_summary":      v.get("navamsa_summary"),
         "synastry_summary":     v.get("synastry_summary"),
@@ -3238,6 +3299,17 @@ def format_verdict_for_prompt(v: dict) -> str:
             f"BRAND-SAFETY: NEVER accuse partner — describe patterns only.\n"
         )
 
+    q_tense = v.get("question_tense") or "general"
+    tense_emphasis = {
+        "present": ("PRESENT-DIAGNOSTIC — user asks about CURRENT state. "
+                    "Emphasise CURRENT Dasha lords + active transit signal. "
+                    "DO NOT pivot to future timing windows as the headline."),
+        "future":  ("FUTURE-PREDICTIVE — user asks WILL/SHALL/KAB. "
+                    "Emphasise next dasha window + upcoming Jupiter/Rahu transits. "
+                    "DO NOT diagnose current state as the headline."),
+        "general": ("GENERAL — balance current dasha + next window equally."),
+    }[q_tense]
+
     return (
         _engine_json_envelope(v) + "\n"
         "════════════════════════════════════════════════════════════════════\n"
@@ -3250,6 +3322,7 @@ def format_verdict_for_prompt(v: dict) -> str:
         f"Current trigger: {v.get('current_trigger_score'):+d}   "
         f"Modifiers: {v.get('modifier_score'):+d}\n"
         f"  Question type:     {v.get('question_type')}\n"
+        f"  Question tense:    {q_tense.upper()} — {tense_emphasis}\n"
         f"  KP summary:        {v.get('kp_verdict_summary')}\n"
         f"  Navamsa summary:   {v.get('navamsa_summary')}\n"
         f"  5th lord:          {v.get('fifth_lord')} ({v.get('fifth_lord_dignity')}) — romance karaka\n"

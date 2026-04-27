@@ -4493,6 +4493,47 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     })
 
     build_meta: dict = {}
+
+    # ── AI EAR (P1 — telemetry only) ─────────────────────────────────────────
+    # Lightweight comprehension layer that classifies the user's question
+    # into structured {language, domain, ask_types, intents[], facts}.
+    # P1 = log-only: extraction is stashed in build_meta but does NOT change
+    # routing or engine selection. P2+ wires it into multi-intent rendering.
+    # Never fail ai_ask if AI Ear errors — caller's existing regex pipeline
+    # remains the source of truth for P1.
+    try:
+        if mode == "astro" and os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
+            from intent_extractor import (  # local import to avoid cycle
+                extract_intent_cached,
+                IntentExtractionError,
+            )
+            try:
+                _ext = extract_intent_cached(question)
+                build_meta["intent_extraction"] = _ext.to_log_dict()
+                _trace(req_id, "2b.AI_EAR", {
+                    "language":       _ext.language,
+                    "domain":         _ext.domain,
+                    "ask_types":      _ext.ask_types,
+                    "emotional_tone": _ext.emotional_tone,
+                    "intent_count":   len(_ext.intents),
+                    "primary_bucket": _ext.intents[0].bucket if _ext.intents else None,
+                    "confidence":     _ext.confidence,
+                    "latency_ms":     _ext.latency_ms,
+                    "source":         _ext.source,
+                })
+            except IntentExtractionError as _ear_exc:
+                _trace(req_id, "2b.AI_EAR_FAIL", {
+                    "error": str(_ear_exc)[:200],
+                    "fallback": "regex_routing_unchanged",
+                })
+    except Exception as _ear_outer_exc:
+        # Never let telemetry break the request.
+        try:
+            _trace(req_id, "2b.AI_EAR_OUTER_FAIL",
+                   {"error": str(_ear_outer_exc)[:200]})
+        except Exception:
+            pass
+
     messages = _build_messages(
         question, kundli, lang, reply_idx,
         birth=birth, topic=topic, history=history,
@@ -7207,3 +7248,359 @@ def analyze_room_visuals(
     if heading_deg is not None:
         parsed["heading_deg_input"] = float(heading_deg)
     return parsed
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# AI ASK V2 — multi-intent orchestrator (P2)
+# ═════════════════════════════════════════════════════════════════════════════
+# Wraps ai_ask() with an AI Ear front-end that can split a single user message
+# into up to 3 focused sub-questions and run them in parallel. Returns either:
+#
+#   • Backward-compat single-shape (when AI Ear failed, only 1 intent, or
+#     non-astro mode) — caller sees the existing ai_ask() response unchanged.
+#
+#   • Multi-card shape (when ≥2 intents detected):
+#         {
+#           "response_schema": "v2",
+#           "cards": [ { intent_label, text, topic, confidence, source,
+#                        follow_ups, ... }, ... ],
+#           "trimmed_count": <int>,
+#           "intent_extraction": {language, domain, ask_types, ...},
+#           "text":  <legacy combined string for old clients>,
+#           "topic": <primary domain>,
+#           "follow_ups": [...],
+#           "confidence": <avg>,
+#           "source": "ai_v2_multi"
+#         }
+#
+# Engines remain UNTOUCHED — each card runs the full deterministic chain on
+# its own focused question. Concurrency: ThreadPoolExecutor with max 3 workers
+# (matches max intents). OpenAI client is thread-safe.
+#
+# Per-card failure handling:
+#   • WealthStructuredError per card → that card returns a typed failure shape;
+#     other cards still render. Caller (Flask) decides 503 only if ALL cards
+#     failed. (For P2 we surface per-card failure inline.)
+#   • Generic Exception per card → that card carries error: "..." and source:
+#     "card_failed"; siblings unaffected.
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional as _Optional
+
+
+def _v2_should_split(intent_extraction) -> bool:
+    """Decide whether to enter multi-card mode. Single-intent extractions
+    fall through to the legacy ai_ask() path for full backward-compat."""
+    if not intent_extraction or intent_extraction.source != "ai_ear":
+        return False
+    if not intent_extraction.intents or len(intent_extraction.intents) < 2:
+        return False
+    # Confidence floor — if AI Ear is uncertain, prefer single-engine path.
+    if (intent_extraction.confidence or 0.0) < 0.55:
+        return False
+    return True
+
+
+def _v2_run_card(intent_summary: str,
+                 kundli: Any,
+                 lang: str,
+                 reply_idx: int,
+                 birth: Any,
+                 history: list | None,
+                 preferred_language: _Optional[str],
+                 intent_label: str,
+                 intent_bucket: str,
+                 intent_facts: dict,
+                 emotional_tone: str,
+                 narrator_lang: str,
+                 intent_domain: str = "") -> dict:
+    """Run ai_ask for ONE intent + (optionally) reshape into the
+    conversational diagnostic card via narrator_v2 (P3).
+    Catches per-card exceptions so siblings can still render."""
+    raw_engine_text = ""
+    raw_topic       = "general"
+    raw_source      = "ai"
+    raw_followups: list[str] = []
+    raw_confidence  = 0.5
+
+    try:
+        result = ai_ask(
+            intent_summary, kundli, lang, reply_idx,
+            birth=birth, history=history,
+            preferred_language=preferred_language,
+        )
+        if not isinstance(result, dict):
+            result = {"text": str(result), "source": "ai"}
+        raw_engine_text = (result.get("text") or "").strip()
+        raw_topic       = result.get("topic") or "general"
+        raw_source      = result.get("source") or "ai"
+        raw_followups   = list(result.get("follow_ups") or [])
+        raw_confidence  = float(result.get("confidence") or 0.5)
+    except Exception as exc:
+        err_type = type(exc).__name__
+        return {
+            "intent_label":   intent_label,
+            "intent_bucket":  intent_bucket,
+            "intent_summary": intent_summary,
+            "text": (
+                "Cosmic Intelligence ko is intent par abhi answer generate "
+                "karne mein dikkat aa rahi hai. Kripya thodi der baad dobara "
+                "try karein."
+            ),
+            "topic":      "general",
+            "confidence": 0.0,
+            "source":     "card_failed",
+            "follow_ups": [],
+            "error":      f"{err_type}: {str(exc)[:200]}",
+        }
+
+    # ── Deterministic-fail-safe BYPASS ─────────────────────────────────────
+    # If the engine's deterministic safety net fired (no-chart fail-safe,
+    # brand-safety block, off-topic refusal, etc.), the user MUST see that
+    # exact text — never let the conversational narrator soften it.
+    _DETERMINISTIC_SOURCES = {
+        "no_chart_failsafe",
+        "brand_safety",
+        "brand_safety_block",
+        "off_topic",
+        "rules",
+        "wealth_structured_unavailable",
+    }
+    if raw_source in _DETERMINISTIC_SOURCES:
+        return {
+            "intent_label":   intent_label,
+            "intent_bucket":  intent_bucket,
+            "intent_summary": intent_summary,
+            "text":           raw_engine_text or "(empty)",
+            "topic":          raw_topic,
+            "confidence":     raw_confidence,
+            "source":         raw_source,
+            "follow_ups":     raw_followups,
+        }
+
+    # ── P3: AI Mouth — reshape into conversational diagnostic card ─────────
+    if os.environ.get("NARRATOR_V2_ENABLED", "1") != "0":
+        try:
+            from narrator_v2 import (  # local import
+                compose_card_narrative,
+                NarratorV2Error,
+            )
+            try:
+                card = compose_card_narrative(
+                    intent_summary  = intent_summary,
+                    intent_bucket   = intent_bucket,
+                    intent_facts    = intent_facts or {},
+                    raw_engine_text = raw_engine_text,
+                    language        = narrator_lang,
+                    emotional_tone  = emotional_tone,
+                    intent_domain   = intent_domain,
+                )
+                client_card = card.to_client_dict()
+                # Compose final card payload for the client.
+                final_text = (
+                    f"{client_card['verdict_tag']}\n\n"
+                    f"{client_card['narrative']}"
+                )
+                if client_card.get("remedy_line"):
+                    final_text += f"\n\n{client_card['remedy_line']}"
+                if client_card.get("advisor_line"):
+                    final_text += f"\n\n{client_card['advisor_line']}"
+                return {
+                    "intent_label":   intent_label,
+                    "intent_bucket":  intent_bucket,
+                    "intent_summary": intent_summary,
+                    "verdict_tag":    client_card["verdict_tag"],
+                    "narrative":      client_card["narrative"],
+                    "remedy_line":    client_card.get("remedy_line", ""),
+                    "advisor_line":   client_card.get("advisor_line", ""),
+                    "text":           final_text,
+                    "topic":          raw_topic,
+                    "confidence":     raw_confidence,
+                    "source":         "ai_v2_narrator",
+                    "follow_ups":     raw_followups,
+                    "narrator_latency_ms": card.latency_ms,
+                }
+            except NarratorV2Error as nexc:
+                # Narrator failed — fall back to raw engine text so user
+                # still sees something. Mark source so caller can detect.
+                print(f"[ai_ask_v2] narrator_v2 failed → raw engine text "
+                      f"({nexc})", flush=True)
+        except Exception as outer:
+            print(f"[ai_ask_v2] narrator_v2 outer error: {outer}", flush=True)
+
+    # Fallback: return the raw engine text as a non-conversational card.
+    return {
+        "intent_label":   intent_label,
+        "intent_bucket":  intent_bucket,
+        "intent_summary": intent_summary,
+        "text":           raw_engine_text or "(empty)",
+        "topic":          raw_topic,
+        "confidence":     raw_confidence,
+        "source":         raw_source,
+        "follow_ups":     raw_followups,
+    }
+
+
+def ai_ask_v2(question: str,
+              kundli: Any,
+              lang: str = "en",
+              reply_idx: int = 0,
+              birth: Any = None,
+              history: list | None = None,
+              preferred_language: _Optional[str] = None) -> dict:
+    """Multi-intent aware version of ai_ask(). See module docstring above
+    for the response shape contract."""
+
+    # 1. Brand-safe / off-topic / no-chart fail-safe checks happen INSIDE
+    #    ai_ask() — we don't duplicate them here. Always go through ai_ask
+    #    on the legacy single-question path for backward compat.
+
+    # 2. Try AI Ear (best effort). On any failure we fall back to ai_ask()
+    #    with the original question and return its single-shape result.
+    intent_extraction = None
+    if os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
+        try:
+            from intent_extractor import extract_intent_cached  # local import
+            intent_extraction = extract_intent_cached(question)
+            print(
+                f"[ai_ask_v2] AI Ear: lang={intent_extraction.language} "
+                f"domain={intent_extraction.domain} "
+                f"intents={len(intent_extraction.intents)} "
+                f"conf={intent_extraction.confidence:.2f} "
+                f"latency={intent_extraction.latency_ms}ms",
+                flush=True,
+            )
+        except Exception as exc:
+            print(f"[ai_ask_v2] AI Ear failed (fallback to legacy): {exc}",
+                  flush=True)
+            intent_extraction = None
+
+    # 3. Single-intent / low-confidence / disabled → legacy single-shape.
+    #    BACKWARD-COMPAT: do NOT mutate the legacy result with
+    #    `intent_extraction` so existing callers see the exact ai_ask() shape.
+    #    Telemetry is only attached when AI_ASK_V2_TELEMETRY=1 (debug-only).
+    if not _v2_should_split(intent_extraction):
+        result = ai_ask(question, kundli, lang, reply_idx,
+                        birth=birth, history=history,
+                        preferred_language=preferred_language)
+        if (isinstance(result, dict)
+                and intent_extraction is not None
+                and os.environ.get("AI_ASK_V2_TELEMETRY") == "1"):
+            result["intent_extraction"] = intent_extraction.to_log_dict()
+        return result
+
+    # 4. Multi-intent → fan out in parallel (max 3 cards).
+    raw_intents = intent_extraction.intents[:3]
+    trimmed = max(0, len(intent_extraction.intents) - 3)
+
+    workers = min(3, max(1, len(raw_intents)))
+    cards: list[dict] = [None] * len(raw_intents)  # type: ignore
+
+    narrator_lang = intent_extraction.language or "hn"
+    emotional_tone = intent_extraction.emotional_tone or "neutral"
+
+    with ThreadPoolExecutor(max_workers=workers,
+                            thread_name_prefix="ai_ask_v2") as ex:
+        future_to_idx = {}
+        for idx, intent in enumerate(raw_intents):
+            label = intent.summary or f"Intent {idx + 1}"
+            facts_d = {
+                "numbers":   list(intent.facts.numbers),
+                "durations": list(intent.facts.durations),
+                "persons":   list(intent.facts.persons),
+                "places":    list(intent.facts.places),
+                "dates":     list(intent.facts.dates),
+            }
+            fut = ex.submit(
+                _v2_run_card,
+                intent.summary or question,
+                kundli, lang, reply_idx, birth, history, preferred_language,
+                label, intent.bucket,
+                facts_d, emotional_tone, narrator_lang,
+                intent_extraction.domain or "",
+            )
+            future_to_idx[fut] = idx
+        for fut in as_completed(future_to_idx):
+            idx = future_to_idx[fut]
+            try:
+                cards[idx] = fut.result()
+            except Exception as exc:
+                cards[idx] = {
+                    "intent_label":   raw_intents[idx].summary,
+                    "intent_bucket":  raw_intents[idx].bucket,
+                    "intent_summary": raw_intents[idx].summary,
+                    "text":           "Card failed unexpectedly.",
+                    "topic":          "general",
+                    "confidence":     0.0,
+                    "source":         "card_failed",
+                    "follow_ups":     [],
+                    "error":          f"{type(exc).__name__}: {str(exc)[:200]}",
+                }
+
+    # 4b. ALL-CARDS-FAILURE GUARD — if every card failed (engine failure or
+    #     narrator failure with no usable raw_engine_text), raise so the
+    #     route-level handler in flask_app.py can fall back to the
+    #     deterministic rule engine (process_ask). Returning a "v2" payload
+    #     full of failure cards would suppress that fallback and the user
+    #     would just see error text three times.
+    _FAILED_SOURCES = {"card_failed", "narrator_failed"}
+    all_failed = bool(cards) and all(
+        ((c.get("source") or "") in _FAILED_SOURCES)
+        and not (c.get("text") or "").strip().startswith(("🟢", "🟡", "🟠", "🔴", "⚪", "🔮"))
+        for c in cards
+    )
+    if all_failed:
+        first_err = next(
+            (c.get("error") for c in cards if c.get("error")),
+            "all cards failed",
+        )
+        raise RuntimeError(
+            f"ai_ask_v2: all {len(cards)} cards failed (sample: {first_err})"
+        )
+
+    # 5. Build legacy fallback text (concatenated card texts) so older mobile
+    #    clients that don't yet understand response_schema:"v2" still show
+    #    something coherent.
+    legacy_parts = []
+    for c in cards:
+        label = (c.get("intent_label") or "").strip()
+        body  = (c.get("text") or "").strip()
+        if not body:
+            continue
+        if label:
+            legacy_parts.append(f"👉 {label}\n{body}")
+        else:
+            legacy_parts.append(body)
+    legacy_text = "\n\n".join(legacy_parts) if legacy_parts else (
+        "Cosmic Intelligence ko abhi response generate karne mein dikkat "
+        "aa rahi hai. Kripya thodi der baad dobara try karein."
+    )
+
+    # 6. Aggregate metadata.
+    primary_topic = intent_extraction.domain or (
+        cards[0].get("topic", "general") if cards else "general"
+    )
+    avg_conf = (
+        sum(c.get("confidence", 0.0) for c in cards) / max(1, len(cards))
+    )
+    follow_ups: list[str] = []
+    for c in cards:
+        for fu in (c.get("follow_ups") or []):
+            if fu and fu not in follow_ups:
+                follow_ups.append(fu)
+            if len(follow_ups) >= 3:
+                break
+        if len(follow_ups) >= 3:
+            break
+
+    return {
+        "response_schema":   "v2",
+        "cards":             cards,
+        "trimmed_count":     trimmed,
+        "intent_extraction": intent_extraction.to_log_dict(),
+        "text":              legacy_text,
+        "topic":             primary_topic,
+        "confidence":        avg_conf,
+        "source":            "ai_v2_multi",
+        "follow_ups":        follow_ups,
+    }

@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
+import { CardsCarousel, type CardData } from "@/components/CardsCarousel";
 import { MarkdownReply } from "@/components/MarkdownReply";
 import { MessageActionsSheet } from "@/components/MessageActionsSheet";
 import { useC } from "@/context/ThemeContext";
@@ -40,6 +41,13 @@ interface Message {
   loading?: boolean;
   streaming?: boolean;
   followUps?: string[];
+  // P6: v2 multi-intent response — when present, the bubble renders a
+  // swipeable cards carousel instead of a single MarkdownReply. `text` is
+  // still populated with the legacy combined string so voice playback,
+  // copy, and regenerate continue to work unchanged.
+  cards?: CardData[];
+  trimmedCount?: number;
+  responseSchema?: "v2";
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -297,10 +305,28 @@ export default function AskScreen() {
             json.text ?? json.answer ?? json.response ??
             "Kshama karein, abhi jawab dene mein dikkat aa rahi hai.";
           const followUps: string[] = Array.isArray(json.follow_ups) ? json.follow_ups.slice(0, 3) : [];
+
+          // P6 — v2 multi-intent cards detection. When present, attach to
+          // the message so renderMsg switches to CardsCarousel. Legacy
+          // `text` is still kept for voice / copy / regenerate.
+          const isV2     = json.response_schema === "v2"
+                         && Array.isArray(json.cards)
+                         && json.cards.length > 0;
+          const cards: CardData[] | undefined = isV2 ? json.cards : undefined;
+          const trimmed = isV2 && typeof json.trimmed_count === "number"
+            ? json.trimmed_count
+            : undefined;
+
           const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
-              id: newAssistantId, role: "assistant", text: answer, followUps,
+              id: newAssistantId,
+              role: "assistant",
+              text: answer,
+              followUps,
+              cards,
+              trimmedCount: trimmed,
+              responseSchema: isV2 ? "v2" : undefined,
             })
           );
           return;
@@ -616,9 +642,14 @@ export default function AskScreen() {
               : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}
           >
             {item.loading ? (
-              <AcharyaTypingDots caption="Acharya ji likh rahe hain…" />
+              <AcharyaTypingDots caption="Cosmic Intelligence calculating…" />
             ) : isUser ? (
               <Text style={[s.bubbleText, s.bubbleTextUser, { color: C.text }]}>{item.text}</Text>
+            ) : item.cards && item.cards.length > 0 ? (
+              <CardsCarousel
+                cards={item.cards}
+                trimmedCount={item.trimmedCount ?? 0}
+              />
             ) : (
               <MarkdownReply text={item.text} />
             )}

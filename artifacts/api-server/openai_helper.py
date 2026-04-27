@@ -4943,6 +4943,264 @@ def _derive_follow_ups(topic: str, lang: str) -> list[str]:
     return list(by_lang.get(eff) or by_lang["hn"])[:3]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SUPERTYPE LAYER  (Sprint-24)
+# Maps the 15 fine-grained question_intent tags from _classify_ask_intent()
+# into 5 narrator-facing supertypes that drive the strict response-rule
+# contract injected as the LAST system message in every astro turn.
+#
+# Vocabulary (per user spec):
+#   PLANET_QUERY      → chart inspection ("mera Mars kaisa hai")
+#                       → ONLY explain strength, D1+D9 only,
+#                         NO dasha, NO future, NO advice.
+#   PROBLEM_QUERY     → "why is X happening" ("paisa nahi ruk raha")
+#                       → MUST include dasha + house activation.
+#   TIMING_QUERY      → "kab improve hoga" → mention dasha transition.
+#   DECISION_QUERY    → "X karu ya nahi" → clear YES/NO/WAIT + 1-2 reasons.
+#   GENERAL_ANALYSIS  → balanced overview, short.
+#
+# Detection order is most-specific → least-specific. Decision and Problem
+# patterns are LANGUAGE-AGNOSTIC (English + Hinglish + Devanagari).
+
+_DECISION_RX = re.compile(
+    # "X karu ya nahi" / "X karna chahiye" / "should I X" / "decide kya" /
+    # "X karu kya" / "X le lu kya" — Hinglish prefers the trailing "kya"
+    # form for short decision asks.
+    r"\b(?:karu(?:\s*ya\s*na|\s*ya\s*nahi|\s*kya|n)?|karna\s*chahiye|"
+    r"karni\s*chahiye|karein\s*ya|karen\s*ya|"
+    r"chahiye\s*ya\s*nahi|chahiye\s*ya\s*na|"
+    r"lena\s*chahiye|leni\s*chahiye|dena\s*chahiye|deni\s*chahiye|"
+    r"le\s*lu(?:n)?\s*kya|le\s*lo\s*kya|"
+    r"lagaun(?:\s*ya|\s*kya)?|lagayein|"
+    r"jaun\s*(?:ya|kya)|jana\s*chahiye|"
+    r"chodun(?:\s*ya|\s*kya)?|chod\s*du(?:\s*kya)?|chhodu|chhodun|"
+    r"badlun(?:\s*kya)?|badlaun|switch\s*karu(?:\s*kya)?|"
+    r"buy\s*or\s*not|sell\s*or\s*not|"
+    r"buy\s*karu\s*kya|sell\s*karu\s*kya|"
+    r"should\s+(?:i|we|he|she|they)\b|"
+    r"shall\s+i\b|"
+    r"yes\s*ya\s*no|haan\s*ya\s*na|haan\s*ya\s*naa|"
+    r"karna\s*sahi|karna\s*theek|"
+    r"decide\s*kya|decision\s*kya|"
+    r"acha\s*hai\s*ya\s*nahi|achha\s*hai\s*ya\s*nahi|"
+    r"sahi\s*hai\s*ya\s*nahi|theek\s*hai\s*ya\s*nahi)\b"
+    r"|करूं|करूँ\s*क्या|करना\s*चाहिए|चाहिए\s*या\s*नहीं|या\s*नहीं|"
+    r"छोड़ूं|छोड़ूँ\s*क्या|बदलूं|बदलूँ\s*क्या|ले\s*लूँ\s*क्या",
+    re.IGNORECASE,
+)
+
+_PROBLEM_RX = re.compile(
+    # "X nahi ho raha" / "X nahi mil raha" / "X nahi ruk raha" / "problem"
+    r"\b(?:problem|dikkat|dikkkat|issue|trouble|samasya|samasyaa|"
+    r"pareshani|pareshaani|pareshan|tension|stress|"
+    r"nahi\s+ho\s*raha|nahi\s+ho\s*rahi|nahi\s+ho\s*rahe|"
+    r"nahi\s+mil\s*raha|nahi\s+mil\s*rahi|nahi\s+mil\s*rahe|"
+    r"nahi\s+ruk\s*raha|nahi\s+ruk\s*rahi|nahi\s+ruk\s*rahe|"
+    r"nahi\s+chal\s*raha|nahi\s+chal\s*rahi|"
+    r"nahi\s+lag\s*raha|nahi\s+lag\s*rahi|"
+    r"nahi\s+ban\s*raha|nahi\s+ban\s*rahi|"
+    r"nahi\s+aa\s*raha|nahi\s+aa\s*rahi|"
+    r"nahi\s+hota|nahi\s+hoti|nahi\s+hote|"
+    r"kyu(?:n|\s)*nahi|kyun\s+nahi|kyon\s+nahi|why\s+not|"
+    r"kyu(?:n|\s)*ho\s*raha|kyun\s+ho\s*raha|"
+    r"stuck|fail(?:ed|ing)?|blocked|atak\s*gaya|atki\s*hai|atke|"
+    r"rok\s*raha|rok\s*rahi|ruk(?:a|i)?\s*hua|"
+    r"hamesha\s+(?:problem|dikkat|fail|atak)|"
+    r"baar\s*baar\s+(?:fail|problem|dikkat|atak)|"
+    r"loss\s+ho\s*raha|loss\s+ho\s*rahi|"
+    r"galat\s+ho\s*raha|galat\s+ho\s*rahi)\b"
+    r"|समस्या|परेशानी|दिक्कत|नहीं\s*हो\s*रहा|नहीं\s*मिल\s*रहा|"
+    r"नहीं\s*रुक\s*रहा|क्यों\s*नहीं|अटक",
+    re.IGNORECASE,
+)
+
+
+# Map of fine-grained intent → default supertype (overridden by problem/
+# decision/timing detectors that fire first below).
+_INTENT_TO_SUPERTYPE = {
+    # Chart-inspection asks → PLANET_QUERY
+    "planet_strength":    "PLANET_QUERY",
+    "planet_position":    "PLANET_QUERY",
+    "planet_in_house":    "PLANET_QUERY",
+    "planet_combo":       "PLANET_QUERY",
+    "comparison":         "PLANET_QUERY",
+    "lagna_lookup":       "PLANET_QUERY",
+    "moon_sign_lookup":   "PLANET_QUERY",
+    "sun_sign_lookup":    "PLANET_QUERY",
+    "nakshatra_lookup":   "PLANET_QUERY",
+    "house_lookup":       "PLANET_QUERY",
+    "yoga_check":         "PLANET_QUERY",
+    # Timing asks → TIMING_QUERY
+    "dasha_when":         "TIMING_QUERY",
+    "dasha_current":      "TIMING_QUERY",
+    "timing_when":        "TIMING_QUERY",
+    # Catch-all
+    "analysis_general":   "GENERAL_ANALYSIS",
+}
+
+
+def _classify_supertype(question: str, question_intent: dict | None = None) -> dict:
+    """Map a user question + already-computed fine-grained question_intent to
+    one of 5 narrator supertypes that drive the strict response-rule contract.
+
+    Detection priority (most-specific first):
+      1. DECISION_QUERY   — "X karu ya nahi", "should I X"
+      2. PROBLEM_QUERY    — "X nahi ho raha", "kyon nahi", "problem"
+      3. TIMING_QUERY     — fine intent ∈ {dasha_when, dasha_current, timing_when}
+      4. PLANET_QUERY     — fine intent matches one of the chart-inspection set
+      5. GENERAL_ANALYSIS — fallback
+
+    Returns: {supertype, confidence, reasons, source_intent}
+    """
+    q = (question or "").strip()
+    intent = (question_intent or {}).get("intent") or "analysis_general"
+    reasons: list[str] = []
+
+    if not q:
+        return {
+            "supertype": "GENERAL_ANALYSIS", "confidence": 0.0,
+            "reasons": ["empty question"], "source_intent": intent,
+        }
+
+    # 1. DECISION first — most pragmatic signal, user wants a verdict.
+    if _DECISION_RX.search(q):
+        reasons.append("decision pattern matched (X karu ya nahi / should I)")
+        return {
+            "supertype": "DECISION_QUERY", "confidence": 0.92,
+            "reasons": reasons, "source_intent": intent,
+        }
+
+    # 2. PROBLEM — "why is this happening" framing.
+    if _PROBLEM_RX.search(q):
+        reasons.append("problem pattern matched (nahi ho raha / kyon / dikkat)")
+        return {
+            "supertype": "PROBLEM_QUERY", "confidence": 0.90,
+            "reasons": reasons, "source_intent": intent,
+        }
+
+    # 3. TIMING — fine intent already detected dasha_when / timing_when /
+    #    dasha_current. We trust the fine classifier here.
+    if intent in ("dasha_when", "dasha_current", "timing_when"):
+        reasons.append(f"fine intent='{intent}' → timing")
+        return {
+            "supertype": "TIMING_QUERY", "confidence": 0.93,
+            "reasons": reasons, "source_intent": intent,
+        }
+
+    # 4. PLANET — chart-inspection asks.
+    mapped = _INTENT_TO_SUPERTYPE.get(intent)
+    if mapped == "PLANET_QUERY":
+        reasons.append(f"fine intent='{intent}' → planet inspection")
+        return {
+            "supertype": "PLANET_QUERY", "confidence": 0.90,
+            "reasons": reasons, "source_intent": intent,
+        }
+
+    # 5. Default
+    reasons.append(f"fine intent='{intent}' → general analysis fallback")
+    return {
+        "supertype": "GENERAL_ANALYSIS", "confidence": 0.55,
+        "reasons": reasons, "source_intent": intent,
+    }
+
+
+# Per-supertype STRICT contract block. Injected as the LAST system message in
+# the OpenAI call so it gets recency-lock priority over every earlier system
+# msg (chart, brand voice, engine verdict). Wording is intentionally short and
+# imperative — long contracts get partially ignored by the model.
+_SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
+    "PLANET_QUERY": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: PLANET_QUERY\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User asked about a PLANET / CHART INSPECTION ('Mars kaisa hai' style).\n"
+        "MUST do:\n"
+        "  • Explain ONLY the planet's strength (D1 + D9 cross-check if D9 line\n"
+        "    is present in locked facts).\n"
+        "  • Stay short, plain Hinglish, asli astrologer tone.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT mention dasha or any planetary period.\n"
+        "  • DO NOT predict the future or give timing windows.\n"
+        "  • DO NOT give advice, remedy, upay, or 'kya karein'.\n"
+        "  • DO NOT mix in other topics (career, marriage, money, etc.).\n"
+        "  • DO NOT over-answer. If the user asked about ONE planet, talk about\n"
+        "    that ONE planet only.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
+    "PROBLEM_QUERY": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: PROBLEM_QUERY\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User is reporting a PROBLEM ('paisa nahi ruk raha' style) and wants\n"
+        "to know WHY it is happening.\n"
+        "MUST do:\n"
+        "  • Explain WHY the problem is happening — be real and specific.\n"
+        "  • MUST cite the running dasha/antardasha AND the activated house\n"
+        "    (or its lord) that is creating the friction. Both are mandatory.\n"
+        "  • Use ONLY engine-provided / locked-fact dasha + house data — never\n"
+        "    invent.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT give a generic motivational answer.\n"
+        "  • DO NOT veer into unrelated areas the user did not ask about.\n"
+        "  • DO NOT promise quick fixes — diagnose the cause, that's the job.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
+    "TIMING_QUERY": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: TIMING_QUERY\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User asked WHEN something will happen / improve.\n"
+        "MUST do:\n"
+        "  • Answer the WHEN clearly — give the dasha transition date or the\n"
+        "    next favourable window from locked facts.\n"
+        "  • Mention which mahadasha/antardasha is changing and to what.\n"
+        "  • Keep the explanation SHORT — date + one-line cause is enough.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT invent dates not in the engine output.\n"
+        "  • DO NOT pad with unrelated chart analysis.\n"
+        "  • DO NOT add advice unless explicitly asked.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
+    "DECISION_QUERY": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: DECISION_QUERY\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User asked for a DECISION ('karu ya nahi' / 'should I' style).\n"
+        "MUST do:\n"
+        "  • Open with a CLEAR direction: HAAN / NAA / RUKO  (YES / NO / WAIT).\n"
+        "  • Back it with 1–2 specific reasons drawn from locked facts —\n"
+        "    name the dasha or planet that drove the call.\n"
+        "  • Keep the whole answer tight and confident.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT hedge with 'depends on you' / 'as per your wish'.\n"
+        "  • DO NOT list every possible factor — pick the strongest 1–2.\n"
+        "  • DO NOT switch to a different topic.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
+    "GENERAL_ANALYSIS": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: GENERAL_ANALYSIS\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User asked an open analysis question.\n"
+        "MUST do:\n"
+        "  • Give a balanced, SHORT overview. 2–3 lines is the target.\n"
+        "  • Stick to what the user actually asked.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT dump every chart fact. Keep it proportional.\n"
+        "  • DO NOT introduce new topics outside the question's scope.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
+}
+
+
+def _build_supertype_contract(supertype: str) -> str:
+    """Return the strict-rules system block for a given supertype.
+    Falls back to GENERAL_ANALYSIS if the supertype is unknown."""
+    return _SUPERTYPE_CONTRACT_BLOCKS.get(
+        supertype, _SUPERTYPE_CONTRACT_BLOCKS["GENERAL_ANALYSIS"]
+    )
+
+
 _ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
 
 
@@ -5013,6 +5271,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "source":     "brand_guard",
             "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
             "question_intent": question_intent,
+            "question_supertype": _classify_supertype(question, question_intent),
         }
 
     # ── Fail-safe: if no kundli planets at all AND this is a personal
@@ -5044,6 +5303,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "source":     "no_chart_failsafe",
             "follow_ups": _derive_follow_ups(_t, eff_lang),
             "question_intent": question_intent,
+            "question_supertype": _classify_supertype(question, question_intent),
         }
 
     client = _get_client()
@@ -5114,6 +5374,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "intent": question_intent.get("intent"),
         "subjects": question_intent.get("subjects"),
         "confidence": question_intent.get("confidence"),
+    })
+
+    # ── Sprint-24: Supertype layer. Maps the 15 fine-grained intents to the
+    # 5 narrator supertypes (PLANET / PROBLEM / TIMING / DECISION /
+    # GENERAL_ANALYSIS) that drive the strict response-rule contract
+    # injected as the LAST system message just before the OpenAI call.
+    question_supertype = _classify_supertype(question, question_intent)
+    build_meta["question_supertype"] = question_supertype
+    _trace(req_id, "2d.QUESTION_SUPERTYPE", {
+        "supertype":     question_supertype.get("supertype"),
+        "confidence":    question_supertype.get("confidence"),
+        "source_intent": question_supertype.get("source_intent"),
+        "reasons":       question_supertype.get("reasons"),
     })
 
     # ── AI EAR (P1 — telemetry only) ─────────────────────────────────────────
@@ -5204,6 +5477,49 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "tone":    _wealth_tone,
             "domain":  _wealth_domain,
         })
+
+    # ── Sprint-24: STRICT NARRATOR CONTRACT (per supertype) ─────────────────
+    # Inject the per-supertype response-rules block as the LAST system msg
+    # so it gets recency-lock priority over every earlier system message
+    # (chart, brand voice, engine verdict).
+    #
+    # SKIP CONDITIONS (each owns its own strict prompt — adding a second
+    # contract creates a "prompt battle" that produces inconsistent output):
+    #   • mode == "general" — concept-explainer pipeline, no chart/engine.
+    #   • _wealth_obj present — wealth path forces response_format=json_schema
+    #     (line ~5562). Appending a free-text MUST/MUST-NOT contract right
+    #     before a JSON-schema call risks schema violations or the model
+    #     dropping required fields trying to satisfy the prose contract.
+    #   • topic == "marriage" with marriage_verdict_block present — the
+    #     MARRIAGE NARRATOR mode already injects its own detailed
+    #     UL/templates/MUST rules; a second contract dilutes them.
+    _skip_contract_reason = ""
+    if mode != "astro":
+        _skip_contract_reason = "mode=general (no chart pipeline)"
+    elif _wealth_obj:
+        _skip_contract_reason = "wealth structured-output (json_schema mode)"
+    elif (topic == "marriage"
+          and (build_meta or {}).get("marriage_verdict_block")):
+        _skip_contract_reason = "marriage narrator mode owns the prompt"
+
+    if not _skip_contract_reason:
+        _supertype_tag = (question_supertype or {}).get("supertype") or "GENERAL_ANALYSIS"
+        try:
+            messages.append({
+                "role":    "system",
+                "content": _build_supertype_contract(_supertype_tag),
+            })
+            _trace(req_id, "2e.SUPERTYPE_CONTRACT_INSTALLED", {
+                "supertype": _supertype_tag,
+                "position":  len(messages) - 1,
+            })
+        except Exception as _sup_exc:
+            _trace(req_id, "2e.SUPERTYPE_CONTRACT_FAIL",
+                   {"error": str(_sup_exc)[:200]})
+    else:
+        _trace(req_id, "2e.SUPERTYPE_CONTRACT_SKIPPED",
+               {"reason": _skip_contract_reason,
+                "supertype": (question_supertype or {}).get("supertype")})
 
     # ── Mode/topic-aware sampling ────────────────────────────────────────────
     # Marriage astro AND wealth structured both use deterministic verdict
@@ -6925,6 +7241,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "source":     "openai",
         "follow_ups": follow_ups,
         "question_intent": question_intent,
+        "question_supertype": question_supertype,
     }
     if _wealth_structured_payload is not None:
         _result["structured"] = _wealth_structured_payload

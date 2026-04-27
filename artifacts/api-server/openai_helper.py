@@ -66,7 +66,10 @@ _STOCK_QUESTION_RX = __import__("re").compile(
     r"trading|trader|broker(age)?|equity|equities|portfolio|demat|"
     r"intraday|swing|scalping|fno|futures?|options?|derivative|"
     r"crypto|bitcoin|ethereum|dogecoin|nft|"
-    r"mutual[- ]?funds?|sip|lump[- ]?sum|invest(or|ing|ment)|"
+    # NOTE: SIP / mutual-funds / lump-sum / generic invest* DELIBERATELY
+    # REMOVED from stock vocab. Those are long-term wealth instruments
+    # (handled by wealth_engine), not active trading. Active-trading
+    # anchors above (stocks/shares/intraday/F&O/etc.) still route here.
     r"share[- ]?bazar|stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar|"
     # Trading-context bigrams that are unambiguously stock-market
     # (not generic life-finance). DELIBERATELY EXCLUDED because they
@@ -98,11 +101,52 @@ _STOCK_QUESTION_RX = __import__("re").compile(
 )
 
 
+# Wealth-instrument override (NARROWED). Matches ONLY explicit long-term
+# wealth-INSTRUMENT names (SIP / MF / PPF / NPS / FD / RD / insurance /
+# sovereign-gold / bonds). DELIBERATELY excludes generic words like
+# "savings", "kharcha", "expense", "corpus" — those would over-block
+# legitimate stock queries like "intraday trading expense kitna hai".
+# Generic savings/kharcha vocabulary still routes to wealth via
+# `_WEALTH_QUESTION_RX` directly; it just doesn't suppress stock here.
+_WEALTH_INSTRUMENT_STRICT_RX = __import__("re").compile(
+    r"\b(?:sip|sips|mutual[- ]?funds?|\bmf\b|\bmfs\b|"
+    r"ppf|nps|nsc|kvp|elss|"
+    r"\bfd\b|\bfds\b|fixed[- ]?deposit|fixed[- ]?deposits|"
+    r"\brd\b|\brds\b|recurring[- ]?deposit|"
+    r"insurance|life[- ]?insurance|term[- ]?insurance|health[- ]?insurance|"
+    r"sovereign[- ]?gold|gold[- ]?bond)\b",
+    __import__("re").IGNORECASE,
+)
+
+# Strong stock anchors. If ANY of these explicitly appear, the question is
+# a real stock-trading question — even when SIP/MF is also mentioned (e.g.
+# "share market vs SIP — kahan invest karu" → user genuinely wants both
+# compared, route to stock since stock has the comparison framework).
+_STRONG_STOCK_ANCHOR_RX = __import__("re").compile(
+    r"\b(?:stocks?|shares?|nifty|sensex|share[- ]?market|stock[- ]?market|"
+    r"intraday|swing|scalping|fno|futures?|options?|derivative|"
+    r"equity|equities|portfolio|demat|trading|trader|broker(?:age)?|"
+    r"crypto|bitcoin|ethereum)\b|f&o|F&O",
+    __import__("re").IGNORECASE,
+)
+
+
 def _is_stock_question(text: str) -> bool:
-    """True iff text matches the stock-engine trigger gate."""
+    """True iff text matches the stock trigger gate AND is not over-ridden
+    by a wealth-instrument-only context. Override fires only when the user
+    explicitly names a wealth instrument (SIP/MF/PPF/etc.) AND no strong
+    stock anchor (intraday/nifty/share market/etc.) coexists. This keeps
+    'SIP mein paisa lagana?' routed to wealth, while 'share market vs SIP
+    kya behtar?' stays with stock."""
     if not isinstance(text, str) or not text.strip():
         return False
-    return bool(_STOCK_QUESTION_RX.search(text))
+    if not _STOCK_QUESTION_RX.search(text):
+        return False
+    # Stock RX matched → check for the wealth-instrument override
+    if (_WEALTH_INSTRUMENT_STRICT_RX.search(text)
+            and not _STRONG_STOCK_ANCHOR_RX.search(text)):
+        return False
+    return True
 
 
 def _love_engine():
@@ -470,7 +514,24 @@ _WEALTH_QUESTION_RX = __import__("re").compile(
     r"dhana[- ]?karaka|dhan[- ]?karak|"
     r"financial[- ]?freedom|financial[- ]?stability|"
     r"financially[- ]?stable|paise[- ]?ki[- ]?tangi|tangi|"
-    r"paise[- ]?ki[- ]?problem|paise[- ]?ki[- ]?dikkat"
+    r"paise[- ]?ki[- ]?problem|paise[- ]?ki[- ]?dikkat|"
+    # Savings / bachat / kharcha — Hinglish lifestyle-finance vocabulary.
+    # Examples that previously slipped through:
+    #   "pichle saal se paisa nahi bach pa raha"
+    #   "savings kab build hogi"
+    #   "kharcha control nahi ho raha"
+    #   "fizool kharch ho jata hai"
+    r"savings?|saving[- ]?(?:kab|kaise|build|grow)|"
+    r"\bbachat\b|\bbachao\b|\bbachana\b|\bbachayi\b|\bbache(?:gi|ga|ge)?\b|"
+    r"paise?\s+(?:nahi|nhi|nah[ie])\s+bach|"
+    r"paise?\s+bach(?:[- ]?nahi|[- ]?paa|[- ]?na|na|ta|ti|te)?|"
+    r"\bbach\s+pa(?:[- ]?raha|[- ]?rahi|[- ]?rha|[- ]?rhi)\b|"
+    r"\bkharch[ae]?\b|\bkharcha\b|\bkharchey?\b|kharche?[- ]?(?:control|jyada|zyada|extra|fizool)|"
+    r"\bexpense(?:s)?\b|expense[- ]?(?:control|management)|"
+    r"fizool[- ]?(?:kharch|kharcha|kharche|paisa|paise)|"
+    r"faaltu[- ]?(?:kharch|kharcha|kharche|paisa|paise)|"
+    r"corpus|emergency[- ]?fund|retirement[- ]?fund|retirement[- ]?corpus|"
+    r"budget|budgeting|monthly[- ]?budget"
     r")\b)"
     # Devanagari anchors
     r"|धन|धनयोग|दौलत|संपत्ति|सम्पत्ति|"
@@ -2023,6 +2084,23 @@ def _build_messages(
     # Mirror of marriage/stock/love/career engine wiring.
     wealth_verdict_block = ""
     wealth_verdict_obj   = None
+    # ── TELEMETRY: routing-gate diagnostic. OFF by default. Enable in dev
+    #              with WEALTH_GATE_TELEMETRY=1. Question text is NOT logged
+    #              (PII / log-noise concerns at scale) — only boolean gate
+    #              outcomes + topic.
+    if os.environ.get("WEALTH_GATE_TELEMETRY") == "1":
+        _wealth_gate = {
+            "topic":                 topic,
+            "topic_ok":              topic in ("wealth", "finance", "career", "general"),
+            "no_marriage_block":     not marriage_verdict_block,
+            "no_stock_block":        not stock_verdict_block,
+            "no_love_block":         not love_verdict_block,
+            "no_career_block":       not career_verdict_block,
+            "kundli_has_planets":    bool(isinstance(kundli, dict) and kundli.get("planets")),
+            "is_wealth_question":    bool(_is_wealth_question(question)),
+            "question_len":          len(question or ""),
+        }
+        print(f"[wealth_gate] {_wealth_gate}")
     if (topic in ("wealth", "finance", "career", "general")
             and not marriage_verdict_block
             and not stock_verdict_block

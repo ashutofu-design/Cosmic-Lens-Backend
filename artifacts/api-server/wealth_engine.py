@@ -3015,14 +3015,19 @@ def _modifier_neecha_bhanga_dhana(intel: dict, kundli: dict) -> dict:
                        f"{deb_sign_lord} (sign-lord) in {deb_sign_lord_h}H "
                        f"kendra → +2 promise restored")
             continue
-        # Exaltation-lord check
-        exalt_lord = None
-        for sg, plnt in EXALTED_PLANETS.items() if isinstance(
-                EXALTED_PLANETS, dict) else []:
-            if plnt == pl:
-                # exalt sign of pl is sg → its lord
-                exalt_lord = SIGN_LORDS.get(_norm(sg))
-                break
+        # Exaltation-lord check. Direct planet → lord-of-exaltation-sign
+        # mapping (Sun exalts in Aries → Mars, Moon in Taurus → Venus, etc.)
+        # Replaces the previously-undefined EXALTED_PLANETS lookup.
+        _EXALT_SIGN_LORD = {
+            "Sun":     "Mars",      # Aries
+            "Moon":    "Venus",     # Taurus
+            "Mars":    "Saturn",    # Capricorn
+            "Mercury": "Mercury",   # Virgo (own sign)
+            "Jupiter": "Moon",      # Cancer
+            "Venus":   "Jupiter",   # Pisces
+            "Saturn":  "Venus",     # Libra
+        }
+        exalt_lord = _EXALT_SIGN_LORD.get(pl)
         if exalt_lord:
             ex_h = _planet_house(planets, exalt_lord)
             if ex_h in KENDRA:

@@ -4519,6 +4519,290 @@ def _classify_marriage_subtype(question: str) -> str:
     return "general"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# QUESTION-INTENT CLASSIFIER (Sprint-23)
+# ─────────────────────────────────────────────────────────────────────────────
+# Single source of truth for "what TYPE of question did the user ask?"
+# Returns a structured intent dict consumed by:
+#   - ai_ask trace (logged as 2c.QUESTION_INTENT)
+#   - ai_ask response payload (returned as `question_intent`)
+#   - brevity post-trim guard (replaces the older _is_short_planet_strength_q
+#     standalone regex — that flag is now derived from this classifier)
+#
+# Intent vocabulary (15 canonical categories — keep this list in sync with
+# downstream UI consumers and any analytics dashboards keyed on `intent`):
+#   planet_strength    : "Mars powerful ya weak", "Shani strong hai?"
+#   planet_position    : "Mars kahan hai?", "Sun kis sign mein hai?"
+#   planet_in_house    : "Saturn kis house mein hai?"
+#   planet_combo       : "Mars-Saturn combo", "Sun aur Moon ka relation"
+#                        (also: ambiguous multi-planet strength asks)
+#   lagna_lookup       : "Mera lagna kya hai?"
+#   moon_sign_lookup   : "Mera chandra rashi / moon sign / janma rashi?"
+#   sun_sign_lookup    : "Surya rashi / Sun sign kya hai?"
+#   nakshatra_lookup   : "Mera nakshatra kya hai?"
+#   house_lookup       : "5th house mein kya hai?"
+#   dasha_current      : "Abhi kaunsa dasha chal raha hai?"
+#   dasha_when         : "Saturn dasha kab aayegi?"
+#   yoga_check         : "Raj yoga hai kya?", "Gaja-Kesari yoga hai?"
+#   timing_when        : "Shaadi kab hogi?", "Job kab milegi?" (no chart-fact)
+#   comparison         : "Saturn vs Jupiter", "Mars zyada strong ya Saturn?"
+#   analysis_general   : "Meri kundli kaisi hai?" / fallback
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PLANET_TOKENS = {
+    "sun":     ["sun", "surya", "suraj", "ravi", "soma"],
+    "moon":    ["moon", "chandra", "chand", "chandrama", "chandr"],
+    "mars":    ["mars", "mangal", "mangala", "mangla", "kuja"],
+    "mercury": ["mercury", "budh", "budha"],
+    "jupiter": ["jupiter", "guru", "brihaspati", "brahaspati", "vrihaspati", "brihspati"],
+    "venus":   ["venus", "shukra", "shukr"],
+    "saturn":  ["saturn", "shani", "sani", "shanidev", "shaneswar"],
+    "rahu":    ["rahu"],
+    "ketu":    ["ketu"],
+}
+_HOUSE_RE = re.compile(
+    r"\b(\d+)(?:st|nd|rd|th)?\s*(?:house|ghar|bhav|bhava)\b"
+    r"|\b(?:lagna|first|pehla|pehle)\s*(?:house|ghar|bhav|bhava)\b"
+    r"|\b(saptam|panchm|dasham|chaturth|navam|tritiy|ashtam|labh|dhanu?)\s*(?:bhav|ghar)\b",
+    re.I,
+)
+_STRENGTH_RE = re.compile(
+    r"\b("
+    r"strong|strength|weak|weakness|powerful|power|"
+    r"debilitat(?:ed|ion)?|exalt(?:ed|ation)?|"
+    r"takat(?:vaar|war|var)?|takatvar|kamzor|kamjor|majboot|mazboot|dum|bal|"
+    r"shaktishali|shakti|"
+    r"neech|neecha|uchch|ucch|uchcha|"
+    r"good|bad|achha|achchha|accha|kharab|kharaab|"
+    r"favourable|favorable|"
+    r"kaisa|kaisi|kaise"
+    r")\b",
+    re.I,
+)
+_POSITION_RE = re.compile(
+    r"\b(kahan|kahaan|kaha|kis\s*(?:sign|rashi|house|ghar|bhav)|"
+    r"which\s*(?:sign|house|rashi|placement)|placement|placed|sthit|baitha)\b",
+    re.I,
+)
+_HOUSE_LOOKUP_RE = re.compile(
+    r"\b(?:kya|what|kaunse?|which|konsa)\b.{0,20}\b(?:planet|graha|house|ghar|bhav)\b",
+    re.I,
+)
+_LAGNA_RE     = re.compile(r"\b(lagna|ascendant|ascending|udaya|first\s*house\s*sign)\b", re.I)
+# Sun-sign explicit (must contain Sun-token + rashi/sign keyword) — checked BEFORE moon
+_SUN_SIGN_RE  = re.compile(r"\b(surya\s*rashi|sun\s*sign|ravi\s*rashi|suraj\s*rashi)\b", re.I)
+# Moon-sign explicit. Bare "rashi/raashi" defaults to moon-sign (Vedic convention:
+# "rashi" alone = janma-rashi = Moon sign) but ONLY checked AFTER sun-sign so
+# "surya rashi" doesn't get hijacked.
+_MOON_SIGN_RE = re.compile(r"\b(chandra\s*rashi|moon\s*sign|janma\s*rashi|janam\s*rashi|rashi|raashi)\b", re.I)
+_NAKSHATRA_RE = re.compile(r"\b(nakshatra|nakshatr|janma\s*nakshatra|birth\s*star)\b", re.I)
+_DASHA_RE     = re.compile(r"\b(dasha|dasa|antardasha|antar\s*dasha|mahadasha|maha\s*dasha|pratyantar)\b", re.I)
+_DASHA_NOW_RE = re.compile(r"\b(abhi|currently|current|now|chal\s*rah[ai]|running|active)\b", re.I)
+_DASHA_WHEN_RE= re.compile(r"\b(kab|when|kaunse?\s*(?:saal|year)|kis\s*saal)\b", re.I)
+_YOGA_RE      = re.compile(
+    r"\b(yoga|yog|raja\s*yoga|gaja[\s-]*kesari|kesari|"
+    r"neecha[\s-]*bhanga|panch\s*mahapurush|hamsa|malavya|ruchaka|sasha|bhadra|"
+    r"vipreet|vipreeta|kemadruma|kalathra|vish|shakata|chandala|guru[\s-]*chandala)\b",
+    re.I,
+)
+_TIMING_WHEN_RE = re.compile(r"\b(kab|when|timing|saal|year|month|mahina)\b", re.I)
+_COMPARISON_RE  = re.compile(
+    r"\b(vs\.?|versus|ya\s+(?!weak\b)(?!kamzor\b)|or\s+(?!weak\b)|zyada|"
+    r"jyada|kaunsa|konsa|which\s+(?:is\s+)?(?:more|stronger|better))\b",
+    re.I,
+)
+_COMBO_RE       = re.compile(r"\b(combo|combination|sambandh|relation|conjunction|yuti|together|saath|aspect|drishti)\b", re.I)
+
+
+def _detect_planets(q: str) -> list[str]:
+    """Return canonical planet names (Sun/Moon/...) found in question."""
+    ql = " " + (q or "").lower() + " "
+    found = []
+    for canonical, aliases in _PLANET_TOKENS.items():
+        for a in aliases:
+            if re.search(r"\b" + re.escape(a) + r"\b", ql):
+                found.append(canonical.capitalize())
+                break
+    return found
+
+
+def _detect_houses(q: str) -> list[str]:
+    """Return house tokens (e.g. '5', '7', 'lagna') found in question."""
+    out: list[str] = []
+    for m in _HOUSE_RE.finditer(q or ""):
+        num = m.group(1)
+        if num:
+            out.append(num)
+        else:
+            out.append("lagna" if "lagna" in m.group(0).lower() or "first" in m.group(0).lower() or "pehl" in m.group(0).lower() else "named")
+    return out
+
+
+def _classify_ask_intent(question: str, lang: str = "hn") -> dict:
+    """
+    Returns {intent, subjects, scope, confidence, reasons, word_count}.
+
+    `intent`     : one of the vocabulary tags above
+    `subjects`   : list — planet names + house numbers detected
+    `scope`      : 'single_planet' | 'multi_planet' | 'house' | 'lagna' |
+                   'moon_sign' | 'sun_sign' | 'nakshatra' | 'dasha' |
+                   'yoga' | 'timing' | 'general'
+    `confidence` : 0.0–1.0 (heuristic — high when keywords match cleanly)
+    `reasons`    : list[str] — human-readable why this intent was chosen
+    `word_count` : len(question.split())
+    """
+    q = (question or "").strip()
+    if not q:
+        return {
+            "intent": "analysis_general", "subjects": [], "scope": "general",
+            "confidence": 0.0, "reasons": ["empty question"], "word_count": 0,
+        }
+
+    wc = len(q.split())
+    planets = _detect_planets(q)
+    houses  = _detect_houses(q)
+    reasons: list[str] = []
+
+    has_strength    = bool(_STRENGTH_RE.search(q))
+    has_position    = bool(_POSITION_RE.search(q))
+    has_house_tok   = bool(houses)
+    has_lagna       = bool(_LAGNA_RE.search(q))
+    has_moon_sign   = bool(_MOON_SIGN_RE.search(q))
+    has_sun_sign    = bool(_SUN_SIGN_RE.search(q))
+    has_nakshatra   = bool(_NAKSHATRA_RE.search(q))
+    has_dasha       = bool(_DASHA_RE.search(q))
+    has_dasha_when  = bool(_DASHA_WHEN_RE.search(q))
+    has_dasha_now   = bool(_DASHA_NOW_RE.search(q))
+    has_yoga        = bool(_YOGA_RE.search(q))
+    has_timing_when = bool(_TIMING_WHEN_RE.search(q))
+    has_comparison  = bool(_COMPARISON_RE.search(q))
+    has_combo       = bool(_COMBO_RE.search(q))
+
+    # Most specific → least specific routing.
+    # 1. Lagna lookup (no other strong signal, just "lagna kya hai")
+    if has_lagna and not has_strength and not has_position and not has_house_tok:
+        reasons.append("lagna keyword without strength/position")
+        return {"intent": "lagna_lookup", "subjects": ["Lagna"], "scope": "lagna",
+                "confidence": 0.95, "reasons": reasons, "word_count": wc}
+
+    # 2. Sun-sign / Moon-sign / Nakshatra explicit lookups.
+    # Sun-sign MUST be checked before moon-sign because _MOON_SIGN_RE
+    # accepts bare "rashi/raashi" (Vedic convention: rashi alone = janma-rashi
+    # = Moon sign), which would otherwise hijack "surya rashi kya hai".
+    if has_nakshatra and not planets:
+        reasons.append("nakshatra keyword")
+        return {"intent": "nakshatra_lookup", "subjects": ["Nakshatra"], "scope": "nakshatra",
+                "confidence": 0.95, "reasons": reasons, "word_count": wc}
+    if has_sun_sign and not has_strength:
+        reasons.append("sun-sign keyword (explicit Sun token + sign keyword)")
+        return {"intent": "sun_sign_lookup", "subjects": ["Sun"], "scope": "sun_sign",
+                "confidence": 0.92, "reasons": reasons, "word_count": wc}
+    if has_moon_sign and not has_strength:
+        reasons.append("moon-sign keyword (rashi/raashi defaults to janma-rashi=Moon)")
+        return {"intent": "moon_sign_lookup", "subjects": ["Moon"], "scope": "moon_sign",
+                "confidence": 0.92, "reasons": reasons, "word_count": wc}
+
+    # 3. Dasha questions
+    if has_dasha:
+        if has_dasha_when and not has_dasha_now:
+            reasons.append("dasha + when")
+            return {"intent": "dasha_when", "subjects": planets or ["Dasha"], "scope": "dasha",
+                    "confidence": 0.90, "reasons": reasons, "word_count": wc}
+        reasons.append("dasha keyword (current/lookup)")
+        return {"intent": "dasha_current", "subjects": planets or ["Dasha"], "scope": "dasha",
+                "confidence": 0.92, "reasons": reasons, "word_count": wc}
+
+    # 4. Yoga check
+    if has_yoga:
+        reasons.append("yoga keyword")
+        return {"intent": "yoga_check", "subjects": planets or ["Yoga"], "scope": "yoga",
+                "confidence": 0.90, "reasons": reasons, "word_count": wc}
+
+    # 5. Comparison ("Saturn vs Jupiter", "Mars zyada strong ya Saturn")
+    if has_comparison and len(planets) >= 2:
+        reasons.append(f"comparison keyword + {len(planets)} planets")
+        return {"intent": "comparison", "subjects": planets, "scope": "multi_planet",
+                "confidence": 0.93, "reasons": reasons, "word_count": wc}
+
+    # 6. Combo / conjunction / aspect between 2+ planets
+    if has_combo and len(planets) >= 2:
+        reasons.append(f"combo/aspect keyword + {len(planets)} planets")
+        return {"intent": "planet_combo", "subjects": planets, "scope": "multi_planet",
+                "confidence": 0.90, "reasons": reasons, "word_count": wc}
+
+    # 7. Single-planet strength (most common) — short Q with EXACTLY ONE
+    # planet + strength word. Multi-planet strength asks ("Mars Jupiter strong
+    # hai kya") fall through to step 5 (comparison) or step 6 (combo) above
+    # if they have those signals; otherwise step 12 / fallback.
+    if len(planets) == 1 and has_strength and wc <= 14:
+        reasons.append(f"single planet ({planets[0]}) + strength keyword + short ({wc}w)")
+        return {"intent": "planet_strength", "subjects": planets, "scope": "single_planet",
+                "confidence": 0.95, "reasons": reasons, "word_count": wc}
+    # 7b. Multi-planet strength without comparison/combo cue → analytical
+    # (e.g. "Mars Jupiter strong hai" ambiguous). Tag as planet_combo so it
+    # gets multi-subject treatment, lower confidence.
+    if len(planets) >= 2 and has_strength:
+        reasons.append(f"multi planets ({planets}) + strength but no comparison/combo cue")
+        return {"intent": "planet_combo", "subjects": planets, "scope": "multi_planet",
+                "confidence": 0.70, "reasons": reasons, "word_count": wc}
+
+    # 8. Planet-in-house ("Saturn kis house mein hai" / "Mars 5th mein kya")
+    if planets and (has_house_tok or has_position) and not has_strength:
+        reasons.append(f"planet ({planets[0]}) + position/house keyword")
+        scope = "single_planet" if len(planets) == 1 else "multi_planet"
+        return {"intent": "planet_in_house" if has_house_tok else "planet_position",
+                "subjects": planets + houses, "scope": scope,
+                "confidence": 0.90, "reasons": reasons, "word_count": wc}
+
+    # 9. Position only ("Mars kahan hai")
+    if planets and has_position:
+        reasons.append(f"planet ({planets[0]}) + position keyword")
+        return {"intent": "planet_position", "subjects": planets[:1], "scope": "single_planet",
+                "confidence": 0.88, "reasons": reasons, "word_count": wc}
+
+    # 10. House lookup ("5th house mein kya hai")
+    if has_house_tok and not planets:
+        reasons.append(f"house token ({houses[0]}) without planet")
+        return {"intent": "house_lookup", "subjects": houses, "scope": "house",
+                "confidence": 0.88, "reasons": reasons, "word_count": wc}
+    if _HOUSE_LOOKUP_RE.search(q) and not planets:
+        reasons.append("'kya/what + house/planet' pattern")
+        return {"intent": "house_lookup", "subjects": houses or ["house"], "scope": "house",
+                "confidence": 0.80, "reasons": reasons, "word_count": wc}
+
+    # 11. Generic timing ("kab hoga") — no chart-only-fact, will route to engine timing
+    if has_timing_when and not planets and not has_dasha:
+        reasons.append("generic 'kab/when' without planet/dasha")
+        return {"intent": "timing_when", "subjects": [], "scope": "timing",
+                "confidence": 0.75, "reasons": reasons, "word_count": wc}
+
+    # 12. Single planet only, no strength keyword → analytical question about planet
+    if planets and len(planets) == 1:
+        reasons.append(f"single planet ({planets[0]}) mention, no strength/position keyword")
+        return {"intent": "planet_position", "subjects": planets, "scope": "single_planet",
+                "confidence": 0.65, "reasons": reasons, "word_count": wc}
+
+    # 13. Fallback
+    reasons.append("no specific signal — defaulting to general analysis")
+    return {"intent": "analysis_general", "subjects": planets + houses, "scope": "general",
+            "confidence": 0.50, "reasons": reasons, "word_count": wc}
+
+
+def _intent_is_short_strength(intent_dict: dict) -> bool:
+    """
+    Replaces the old standalone _is_short_planet_strength_q regex.
+    Used by the brevity post-trim guard to decide whether to enforce
+    strict 3-sentence cap + drop off-topic sentences.
+    """
+    if not isinstance(intent_dict, dict):
+        return False
+    return (
+        intent_dict.get("intent") == "planet_strength"
+        and intent_dict.get("scope") == "single_planet"
+        and (intent_dict.get("word_count") or 0) <= 14
+    )
+
+
 def _last_assistant_topic_was_marriage(history: list) -> bool:
     for h in reversed(history or []):
         if (h or {}).get("role") == "assistant":
@@ -4706,6 +4990,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "kundli.planet_count": len((kundli or {}).get("planets") or []) if has_planets_in else 0,
         "birth.has_coords":   isinstance(birth, dict) and birth.get("lat") is not None,
     })
+
+    # ── Sprint-23: Question-Intent Classifier (computed EARLY) ───────────────
+    # Detects WHAT TYPE of question the user is asking (planet_strength,
+    # planet_position, lagna_lookup, dasha_current, yoga_check, comparison,
+    # timing_when, analysis_general, etc.) along with subjects (which planet/
+    # house) and confidence. Logged in trace and returned in EVERY response
+    # payload as `question_intent` for full transparency. Computed before any
+    # early-exit so brand_guard / no_chart_failsafe also expose it.
+    question_intent = _classify_ask_intent(question, lang=lang or "hn")
+    _trace(req_id, "1b.QUESTION_INTENT", question_intent)
+
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
     # calling the LLM at all. Cheap, deterministic, never leaks chart data.
     if _is_brand_unsafe(question):
@@ -4717,6 +5012,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "confidence": 1.0,
             "source":     "brand_guard",
             "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
+            "question_intent": question_intent,
         }
 
     # ── Fail-safe: if no kundli planets at all AND this is a personal
@@ -4747,6 +5043,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "confidence": 0.0,
             "source":     "no_chart_failsafe",
             "follow_ups": _derive_follow_ups(_t, eff_lang),
+            "question_intent": question_intent,
         }
 
     client = _get_client()
@@ -4808,7 +5105,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "topic": topic, "marriage_subtype": marriage_subtype,
     })
 
+    # ── Sprint-23: Question-Intent already computed at step 1b. Stash into
+    # build_meta so downstream consumers (brevity guard, prompt builders,
+    # final return payload) can read it through one canonical channel.
     build_meta: dict = {}
+    build_meta["question_intent"] = question_intent
+    _trace(req_id, "2c.QUESTION_INTENT.cached", {
+        "intent": question_intent.get("intent"),
+        "subjects": question_intent.get("subjects"),
+        "confidence": question_intent.get("confidence"),
+    })
 
     # ── AI EAR (P1 — telemetry only) ─────────────────────────────────────────
     # Lightweight comprehension layer that classifies the user's question
@@ -5651,32 +5957,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # already requires the model to cite D1+D9 cleanly — bolt-on D16/D20/D24/
     # D27 lines just inflate the answer with unrelated dimensions the user
     # did not ask for. Brevity per user directive: 1-line Q → 2-3 line A.
-    _is_short_planet_strength_q = False
-    try:
-        import re as _reSPSQ
-        _q_norm = (question or "").lower().strip()
-        _q_wc = len(_q_norm.split())
-        _planet_alts = (
-            r"sun|surya|suraj|soma|moon|chandra|chand|mars|mangal|mangala|"
-            r"mercury|budh|budha|jupiter|guru|brihaspati|brihspati|brahaspati|"
-            r"venus|shukra|shukr|saturn|shani|sani|"
-            r"rahu|ketu"
-        )
-        _strength_alts = (
-            r"powerful|power|strong|strength|weak|weakness|kamzor|kamjor|"
-            r"shaktishali|shakti|takat|takatwar|takatvar|dum|bal|"
-            r"good|achha|achchha|accha|bad|"
-            r"kharab|kharaab|favourable|favorable|debilitated|exalted|"
-            r"uchcha|neech|neecha"
-        )
-        if (
-            _q_wc <= 12
-            and _reSPSQ.search(rf"\b({_planet_alts})\b", _q_norm)
-            and _reSPSQ.search(rf"\b({_strength_alts})\b", _q_norm)
-        ):
-            _is_short_planet_strength_q = True
-    except Exception:
-        _is_short_planet_strength_q = False
+    # Sprint-23: derive from unified Question-Intent classifier (build_meta).
+    # Falls back to False if intent missing for any reason.
+    _is_short_planet_strength_q = _intent_is_short_strength(
+        (build_meta or {}).get("question_intent") or {}
+    )
 
     if (
         isinstance(kundli, dict)
@@ -6639,6 +6924,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "confidence": confidence,
         "source":     "openai",
         "follow_ups": follow_ups,
+        "question_intent": question_intent,
     }
     if _wealth_structured_payload is not None:
         _result["structured"] = _wealth_structured_payload

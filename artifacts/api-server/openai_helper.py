@@ -7301,6 +7301,171 @@ def _v2_should_split(intent_extraction) -> bool:
     return True
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STRUCTURED WEALTH → V2 CARD (Phase 1: direct prescription-style mapping)
+# ─────────────────────────────────────────────────────────────────────────────
+# When ai_ask() runs the wealth structured-output path it attaches the
+# validated JSON payload at result["structured"]. The legacy text field carries
+# a pre-formatted bullet view for older clients.
+#
+# Without this helper, _v2_run_card hands raw_engine_text (the bullet view) to
+# narrator_v2.compose_card_narrative which rewrites everything into a generic
+# 50-80w "Dekho na… dheere clear hogi" paragraph — washing out every specific
+# date, action, and threshold the engine + structured prompt worked to lock in.
+#
+# This helper builds the v2 card SHAPE (verdict_tag / narrative / remedy_line /
+# advisor_line) deterministically from the structured payload — no second LLM
+# call. The narrative stitches headline + timeline pivot + first what_to_do
+# action so users get the asli-astrologer prescription voice the engine intends.
+#
+# Feature-flagged via STRUCTURED_NARRATOR_ENABLED (default "1"). Set to "0" to
+# fall back to the legacy narrator_v2 wrap.
+
+# Map structured-payload short tags → narrator_v2 canonical tag enum
+# (mobile UI matches the long form).
+_STRUCT_TAG_TO_V2 = {
+    "🟢 GO":      "🟢 GREEN GO",
+    "🟡 WAIT":    "🟡 WAIT",
+    "🟠 SLOW":    "🟠 SLOW BURN",
+    "🔴 CAUTION": "🔴 RED FLAG",
+}
+
+
+# Strip the trailing "(Planet–Planet)" / "(Planet-Planet)" annotation that
+# the engine appends to dasha window labels. Brand voice forbids planet
+# names in the narrative — the user-facing window should stay date-only.
+# Example:
+#   "Jul 2024 – Mar 2026 (Shukra–Budh)"  →  "Jul 2024 – Mar 2026"
+_DASHA_PLANET_TAIL_RX = re.compile(
+    r"\s*\([^)]*(?:Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu|"
+    r"Surya|Chandra|Mangal|Budh|Buddha|Guru|Brihaspati|Shukra|Shukr|"
+    r"Shani|Sani)[^)]*\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_planet_annotation(window_str: str) -> str:
+    """Remove the '(Planet–Planet)' suffix from a dasha-window label.
+    Returns the bare date span. Safe on already-clean strings."""
+    if not window_str:
+        return ""
+    return _DASHA_PLANET_TAIL_RX.sub("", window_str).strip()
+
+
+def _stitch_structured_narrative(payload: dict) -> str:
+    """Compose 60-100w Hinglish prose from the structured payload fields.
+
+    Pure deterministic — no LLM. Uses headline as the lead, then weaves in
+    timeline.next pivot date and the first what_to_do bullet so the user
+    sees specific facts (not generic prose). What_to_avoid bullet is added
+    if room remains.
+    """
+    if not isinstance(payload, dict):
+        return ""
+
+    headline = (payload.get("headline") or "").strip().rstrip(".")
+    tl       = payload.get("timeline") or {}
+    # Strip planet-name dasha annotation so brand voice stays clean.
+    cur      = _strip_planet_annotation((tl.get("current") or "").strip())
+    nxt      = _strip_planet_annotation((tl.get("next")    or "").strip())
+    do_arr    = payload.get("what_to_do")    or []
+    avoid_arr = payload.get("what_to_avoid") or []
+    will_arr  = payload.get("what_will_happen") or []
+
+    do_first    = (do_arr[0]    if do_arr    else "").strip().rstrip(".")
+    avoid_first = (avoid_arr[0] if avoid_arr else "").strip().rstrip(".")
+    will_first  = (will_arr[0]  if will_arr  else "").strip().rstrip(".")
+
+    parts: list[str] = []
+
+    # Lead — the engine's decision-oriented headline
+    if headline:
+        parts.append(headline + ".")
+
+    # What is happening / will happen — adds the "asli astrologer feel"
+    if will_first:
+        parts.append(f"{will_first.capitalize()}.")
+
+    # Timing pivot — specific date the engine locked
+    if cur and nxt:
+        parts.append(f"Abhi window {cur} ka chal raha hai — {nxt} ke baad shift hoga.")
+    elif nxt:
+        parts.append(f"{nxt} ke baad window better hota jaayega.")
+    elif cur:
+        parts.append(f"Abhi {cur} ka window active hai.")
+
+    # Concrete next action — engine's top recommendation, verbatim
+    if do_first:
+        parts.append(f"Karo: {do_first}.")
+
+    # Optional guardrail
+    if avoid_first:
+        parts.append(f"Avoid: {avoid_first}.")
+
+    narrative = " ".join(parts).strip()
+    # Schema floor is 80 chars; if too short (rare), fall back to headline
+    # repeated with a soft closure
+    if len(narrative) < 80 and headline:
+        narrative = (
+            f"{headline}. Window dheere shift hoga, disciplined approach se "
+            f"raasta khulta jaayega."
+        )
+    return narrative
+
+
+def _card_from_structured_wealth_payload(
+    payload: dict,
+    *,
+    intent_label: str,
+    intent_bucket: str,
+    intent_summary: str,
+    raw_topic: str,
+    raw_confidence: float,
+    raw_followups: list,
+    legacy_text: str,
+) -> dict:
+    """Build a v2 card dict directly from the wealth structured payload.
+
+    Bypasses narrator_v2 entirely — the structured payload is already
+    fact-locked + brand-safety-validated upstream by _validate_wealth_payload.
+    Output shape mirrors the existing ai_v2_narrator success-path return
+    so the mobile client doesn't need any change.
+    """
+    v_obj = payload.get("verdict") or {}
+    short_tag = (v_obj.get("tag") or "").strip()
+    verdict_tag = _STRUCT_TAG_TO_V2.get(short_tag, "🟡 WAIT")
+
+    narrative    = _stitch_structured_narrative(payload)
+    remedy_line  = (payload.get("remedy") or "").strip()
+    advisor_line = (payload.get("note")   or "").strip()
+
+    # Build the same display text format the narrator path uses (tag +
+    # narrative + remedy + advisor). Legacy text (the bullet view) is
+    # preserved for older clients via a separate field.
+    final_text = f"{verdict_tag}\n\n{narrative}"
+    if remedy_line:
+        final_text += f"\n\n🕉  Upay: {remedy_line}"
+    if advisor_line:
+        final_text += f"\n\nℹ  {advisor_line}"
+
+    return {
+        "intent_label":    intent_label,
+        "intent_bucket":   intent_bucket,
+        "intent_summary":  intent_summary,
+        "verdict_tag":     verdict_tag,
+        "narrative":       narrative,
+        "remedy_line":     remedy_line,
+        "advisor_line":    advisor_line,
+        "text":            final_text,
+        "topic":           raw_topic,
+        "confidence":      raw_confidence,
+        "source":          "ai_v2_wealth_structured",
+        "follow_ups":      raw_followups,
+        "structured":      payload,        # forward to client for rich UI
+        "legacy_bullets":  legacy_text,    # bullet-style fallback view
+    }
+
+
 def _v2_run_card(intent_summary: str,
                  kundli: Any,
                  lang: str,
@@ -7377,6 +7542,69 @@ def _v2_run_card(intent_summary: str,
             "source":         raw_source,
             "follow_ups":     raw_followups,
         }
+
+    # ── Phase 1: STRUCTURED WEALTH SHORT-CIRCUIT ───────────────────────────
+    # When the wealth engine ran the JSON-schema strict path, the validated
+    # payload is on result["structured"]. Render the v2 card directly from it
+    # — bypassing narrator_v2 — so the user sees the engine's specific
+    # headline + timeline.next date + concrete action verbatim, instead of a
+    # generic 50-80w "Dekho na… dheere clear hogi" rewrite.
+    #
+    # GATE — must be ALL of:
+    #   (a) feature flag on (STRUCTURED_NARRATOR_ENABLED != "0", default on)
+    #   (b) result["structured"] is a non-empty dict
+    #   (c) payload matches the WEALTH structured schema shape (so future
+    #       engines emitting their own structured payloads — e.g. career or
+    #       health — are NOT silently rendered as wealth cards). The shape
+    #       check requires verdict.tag, timeline (current|next), what_to_do
+    #       list, and the CA/SEBI advisor `note` (wealth-mandatory cite).
+    _struct_payload = result.get("structured") if isinstance(result, dict) else None
+
+    def _looks_like_wealth_payload(p: dict) -> bool:
+        if not isinstance(p, dict):
+            return False
+        v = p.get("verdict")
+        if not isinstance(v, dict) or not v.get("tag"):
+            return False
+        tl = p.get("timeline")
+        if not isinstance(tl, dict) or not (tl.get("current") or tl.get("next")):
+            return False
+        wd = p.get("what_to_do")
+        if not isinstance(wd, list):
+            return False
+        if not isinstance(p.get("note"), str):
+            return False
+        return True
+
+    if (os.environ.get("STRUCTURED_NARRATOR_ENABLED", "1") != "0"
+            and isinstance(_struct_payload, dict)
+            and _struct_payload
+            and _looks_like_wealth_payload(_struct_payload)):
+        try:
+            print(
+                f"[ai_ask_v2] structured wealth path used → "
+                f"tag={(_struct_payload.get('verdict') or {}).get('tag')!r} "
+                f"bucket={intent_bucket!r}",
+                flush=True,
+            )
+            return _card_from_structured_wealth_payload(
+                _struct_payload,
+                intent_label    = intent_label,
+                intent_bucket   = intent_bucket,
+                intent_summary  = intent_summary,
+                raw_topic       = raw_topic,
+                raw_confidence  = raw_confidence,
+                raw_followups   = raw_followups,
+                legacy_text     = raw_engine_text,
+            )
+        except Exception as exc:
+            # Structured-render failure → fall through to legacy narrator
+            # so the user still sees something. Logged so we can investigate.
+            print(
+                f"[ai_ask_v2] structured wealth render failed → narrator_v2 "
+                f"fallback ({type(exc).__name__}: {exc})",
+                flush=True,
+            )
 
     # ── P3: AI Mouth — reshape into conversational diagnostic card ─────────
     if os.environ.get("NARRATOR_V2_ENABLED", "1") != "0":

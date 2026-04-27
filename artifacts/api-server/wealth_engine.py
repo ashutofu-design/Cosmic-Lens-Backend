@@ -394,7 +394,30 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
 ]
 
 
-def classify_wealth_question(question: str) -> str:
+# Sprint-25 Fix-B: AI-Ear-trusted wealth bucket vocabulary. AI Ear's
+# vocabulary diverges from the engine's legacy bucket names in 3 places —
+# without normalization the bucket-specific conditionals (C1/C2/C4) and
+# `sudden_windfall` clamp would silently miss when AI Ear sets the bucket.
+# These aliases keep the engine's downstream logic intact.
+_VALID_WEALTH_BUCKETS = frozenset({
+    "salary_growth", "business_profit", "loan_emi", "loan_clearance",
+    "property", "property_purchase",
+    "inheritance", "inheritance_timing",
+    "savings_corpus", "debt_recovery", "foreign_income",
+    "partnership_finance", "investment_return",
+    "sudden_windfall", "tax_compliance",
+    "expense_leakage", "partnership_exit", "business_continuation",
+    "general_wealth",
+})
+_WEALTH_BUCKET_ALIASES = {
+    "loan_emi":     "loan_clearance",     # C1 conditional + debt-recovery cluster
+    "property":     "property_purchase",  # C2 conditional
+    "inheritance":  "inheritance_timing", # C4 conditional
+}
+
+
+def classify_wealth_question(question: str,
+                             pre_classified_bucket: str | None = None) -> str:
     """Return one of the 12 wealth buckets for the question text.
     First match wins; falls back to 'general_wealth' if no match. The
     classifier is INTENTIONALLY broad — the wealth gate in
@@ -403,7 +426,14 @@ def classify_wealth_question(question: str) -> str:
     Stock-share-SIP-equity-intraday questions are HIGHER priority and
     are routed to `stock_engine.py` upstream — they will not reach this
     classifier.
+
+    When `pre_classified_bucket` (Sprint-25 AI-Ear handoff) is in the
+    engine's known vocabulary, return it directly — bypassing regex.
     """
+    if pre_classified_bucket and pre_classified_bucket in _VALID_WEALTH_BUCKETS:
+        # Normalize AI Ear's vocab to legacy bucket names so the downstream
+        # bucket-keyed conditionals (C1/C2/C4) and clamps fire correctly.
+        return _WEALTH_BUCKET_ALIASES.get(pre_classified_bucket, pre_classified_bucket)
     if not isinstance(question, str) or not question.strip():
         return "general_wealth"
     s = question.lower().strip()
@@ -3642,7 +3672,8 @@ def assess_wealth(kundli: dict,
                   intel: dict,
                   kp: Optional[dict] = None,
                   birth: Optional[dict] = None,
-                  question: str = "") -> dict:
+                  question: str = "",
+                  pre_classified_bucket: str | None = None) -> dict:
     """Full deterministic wealth verdict. Returns dict with:
       bucket            — one of 12 wealth buckets
       tense             — future / present / general
@@ -3655,7 +3686,7 @@ def assess_wealth(kundli: dict,
       brand_safety_warnings — list of bullets narrator MUST honour
       layers/triggers/modifiers/conditionals — full audit trail
     """
-    bucket = classify_wealth_question(question)
+    bucket = classify_wealth_question(question, pre_classified_bucket)
     tense  = detect_question_tense(question)
     intel = intel or {}
     kp = kp or {}

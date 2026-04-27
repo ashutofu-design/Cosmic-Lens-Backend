@@ -2194,8 +2194,11 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for stock failed: {exc}")
             assess_stock, fmt_stock, stock_window_fn, classify_stock_q = _stock_engine()
+            # Sprint-25 Fix-B: surface AI Ear bucket when domain matches.
+            _stock_pre_bucket = _ai_ear_bucket_for(out_meta, "stock")
             stock_verdict_obj = assess_stock(
-                kundli, intel_obj or {}, kp_dict_s or {}, birth, question)
+                kundli, intel_obj or {}, kp_dict_s or {}, birth, question,
+                pre_classified_bucket=_stock_pre_bucket)
             if stock_verdict_obj:
                 stock_verdict_block = fmt_stock(stock_verdict_obj)
                 stock_window_str    = stock_window_fn(stock_verdict_obj) or ""
@@ -2233,8 +2236,10 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for love failed: {exc}")
             assess_love, fmt_love, love_window_fn, _classify_love_q = _love_engine()
+            _love_pre_bucket = _ai_ear_bucket_for(out_meta, "love")
             love_verdict_obj = assess_love(
-                kundli, intel_obj or {}, kp_dict_l or {}, birth, question)
+                kundli, intel_obj or {}, kp_dict_l or {}, birth, question,
+                pre_classified_bucket=_love_pre_bucket)
             if love_verdict_obj:
                 love_verdict_block = fmt_love(love_verdict_obj)
                 love_window_str    = love_window_fn(love_verdict_obj) or ""
@@ -2276,8 +2281,10 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for career failed: {exc}")
             assess_career, fmt_career, _classify_career_q = _career_engine()
+            _career_pre_bucket = _ai_ear_bucket_for(out_meta, "career")
             career_verdict_obj = assess_career(
-                kundli, intel_obj or {}, kp_dict_c or {}, birth, question)
+                kundli, intel_obj or {}, kp_dict_c or {}, birth, question,
+                pre_classified_bucket=_career_pre_bucket)
             if career_verdict_obj:
                 career_verdict_block = fmt_career(career_verdict_obj, question)
                 if isinstance(out_meta, dict):
@@ -2341,8 +2348,10 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for wealth failed: {exc}")
             assess_wealth, fmt_wealth, _classify_wealth_q = _wealth_engine()
+            _wealth_pre_bucket = _ai_ear_bucket_for(out_meta, "wealth")
             wealth_verdict_obj = assess_wealth(
-                kundli, intel_obj or {}, kp_dict_w or {}, birth, question)
+                kundli, intel_obj or {}, kp_dict_w or {}, birth, question,
+                pre_classified_bucket=_wealth_pre_bucket)
             if wealth_verdict_obj:
                 wealth_verdict_block = fmt_wealth(wealth_verdict_obj, question)
                 if isinstance(out_meta, dict):
@@ -2387,8 +2396,10 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for health failed: {exc}")
             assess_health, fmt_health, _classify_health_q = _health_engine()
+            _health_pre_bucket = _ai_ear_bucket_for(out_meta, "health")
             health_verdict_obj = assess_health(
-                kundli, intel_obj or {}, kp_dict_h or {}, birth, question)
+                kundli, intel_obj or {}, kp_dict_h or {}, birth, question,
+                pre_classified_bucket=_health_pre_bucket)
             if health_verdict_obj:
                 health_verdict_block = fmt_health(health_verdict_obj, question)
                 if isinstance(out_meta, dict):
@@ -3697,6 +3708,88 @@ def _token_budget_for(topic: str, question: str) -> int:
 
     # General concept / unknown
     return 200
+
+
+# ── Fix-A: AI Ear → topic mapping ────────────────────────────────────────────
+# AI Ear's `domain` vocabulary (intent_extractor.DOMAINS) is broader than the
+# legacy `_classify_topic` regex vocabulary (_TOPIC_KW.keys()). This map
+# collapses AI Ear domains down to the topic value the rest of the pipeline
+# (engine routing, prompt builders, brevity guards) reads.
+#
+# When AI Ear succeeds with high confidence we trust this mapping over the
+# regex topic classifier — the LLM has actually understood the sentence,
+# while the regex only counts keyword hits.
+# ── Sprint-25 Fix-B: AI-Ear bucket trust contract ──────────────────────────
+# Each engine has its own bucket vocabulary. When AI Ear's domain matches
+# the engine AND its primary intent has a bucket from that engine's vocab,
+# we hand the bucket to the engine and skip the engine's regex classifier.
+# Confidence floor + env gate both apply; failure = silent fall-through to
+# regex.
+_AI_EAR_TOPIC_TO_DOMAINS: dict[str, tuple[str, ...]] = {
+    "stock":   ("stock",),
+    "wealth":  ("wealth",),
+    "love":    ("love",),
+    "career":  ("career",),
+    "health":  ("health",),
+}
+
+
+def _ai_ear_bucket_for(out_meta: dict | None,
+                       engine_key: str,
+                       conf_floor: float = 0.70) -> str | None:
+    """Return the AI Ear primary bucket for `engine_key` (one of: stock, love,
+    career, wealth, health) when the extraction is confident AND the AI
+    Ear's domain matches the engine. Returns None on any miss — the engine
+    will then fall back to its regex classifier (existing behaviour).
+
+    Engines internally validate the returned bucket against their own
+    vocabulary (`_VALID_*_BUCKETS`) so unknown / cross-domain buckets are
+    rejected one more time downstream.
+    """
+    if os.environ.get("ENGINE_BUCKET_TRUST", "1") == "0":
+        return None
+    if not isinstance(out_meta, dict):
+        return None
+    extraction = out_meta.get("intent_extraction")
+    if not isinstance(extraction, dict):
+        return None
+    try:
+        if float(extraction.get("confidence") or 0.0) < conf_floor:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if (extraction.get("source") or "ai_ear") != "ai_ear":
+        return None
+    ear_domain = (extraction.get("domain") or "").strip().lower()
+    expected_domains = _AI_EAR_TOPIC_TO_DOMAINS.get(engine_key, ())
+    if ear_domain not in expected_domains:
+        return None
+    intents = extraction.get("intents") or []
+    if not intents or not isinstance(intents[0], dict):
+        return None
+    bucket = (intents[0].get("bucket") or "").strip().lower()
+    return bucket or None
+
+
+_AI_EAR_DOMAIN_TO_TOPIC: dict[str, str] = {
+    "marriage":   "marriage",
+    "stock":      "finance",     # stock engine is gated under topic=finance
+    "wealth":     "finance",     # wealth engine is gated under topic=finance
+    "love":       "relationship",
+    "career":     "career",
+    "health":     "health",
+    "remedy":     "remedy",
+    "spiritual":  "spiritual",
+    "education":  "education",
+    "child":      "child",
+    "litigation": "litigation",
+    "property":   "property",
+    "vehicle":    "vehicle",
+    "vastu":      "vastu",
+    "family":     "family",
+    "travel":     "travel",
+    "general":    "general",
+}
 
 
 def _classify_topic(question: str) -> str:
@@ -5039,6 +5132,98 @@ _INTENT_TO_SUPERTYPE = {
 }
 
 
+# ── Fix-C: AI Ear → supertype direct mapping ─────────────────────────────────
+# AI Ear's `ask_types` + `emotional_tone` + `domain` already capture the
+# semantic intent of the question much more reliably than a regex on the raw
+# text. When AI Ear succeeds with high confidence, we let it pick the
+# supertype directly and skip the regex-based `_classify_supertype` below.
+def _supertype_from_ai_ear(extraction) -> dict | None:
+    """Map an AI Ear IntentExtraction object → supertype dict.
+
+    Returns None if the extraction is missing, low-confidence, or the
+    ask_types signal is ambiguous — caller then falls back to the regex
+    `_classify_supertype`.
+    """
+    if not extraction or getattr(extraction, "source", "") != "ai_ear":
+        return None
+    conf = float(getattr(extraction, "confidence", 0.0) or 0.0)
+    if conf < 0.70:
+        return None
+
+    asks = set(getattr(extraction, "ask_types", []) or [])
+    tone = (getattr(extraction, "emotional_tone", "") or "").lower()
+    domain = (getattr(extraction, "domain", "") or "").lower()
+
+    # 1. DECISION — explicit decision ask wins regardless of other signals.
+    if "decision" in asks:
+        return {
+            "supertype": "DECISION_QUERY", "confidence": 0.92,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} contains 'decision'"],
+            "source":    "ai_ear",
+        }
+
+    # 2. PROBLEM — diagnosis ask MUST be paired with distress tone. A bare
+    #    "diagnosis" ask without distress is usually chart inspection
+    #    ("Foreign job ka yog hai kya") and should fall through to the
+    #    PLANET / regex layer instead. The regex `_PROBLEM_RX` already
+    #    catches explicit "nahi ho raha" / "kyon nahi" framings.
+    if "diagnosis" in asks and tone in (
+        "anxious", "desperate", "conflicted", "grieving", "angry"
+    ):
+        return {
+            "supertype": "PROBLEM_QUERY", "confidence": 0.88,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} + tone={tone}"],
+            "source":    "ai_ear",
+        }
+
+    # 3. TIMING — explicit "kab" ask.
+    if "timing" in asks:
+        return {
+            "supertype": "TIMING_QUERY", "confidence": 0.92,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} contains 'timing'"],
+            "source":    "ai_ear",
+        }
+
+    # 4. PLANET — explanation / comparison ask under the chart-inspection
+    #    domain (general / no specific life-area). This catches "Mars kaisa
+    #    hai", "Saturn vs Jupiter strong kaun", "lagna kya hai" etc.
+    if (("explanation" in asks or "comparison" in asks)
+            and domain in ("general", "")):
+        return {
+            "supertype": "PLANET_QUERY", "confidence": 0.85,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} + domain={domain}"],
+            "source":    "ai_ear",
+        }
+
+    # 5. OUTCOME without explicit timing — asking "kaisa rahega" without
+    #    a date. Treat as GENERAL_ANALYSIS (a balanced overview).
+    if "outcome" in asks and "timing" not in asks:
+        return {
+            "supertype": "GENERAL_ANALYSIS", "confidence": 0.75,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} (outcome only)"],
+            "source":    "ai_ear",
+        }
+
+    # 6. Recovery ("wapas milega") behaves like TIMING when conf is high.
+    if "recovery" in asks:
+        return {
+            "supertype": "TIMING_QUERY", "confidence": 0.85,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} (recovery → timing)"],
+            "source":    "ai_ear",
+        }
+
+    # 7. Remedy-only ask without other signals → GENERAL.
+    if "remedy" in asks and len(asks) == 1:
+        return {
+            "supertype": "GENERAL_ANALYSIS", "confidence": 0.75,
+            "reasons":   [f"AI Ear ask_types={sorted(asks)} (remedy only)"],
+            "source":    "ai_ear",
+        }
+
+    # Ambiguous — let regex layer try.
+    return None
+
+
 def _classify_supertype(question: str, question_intent: dict | None = None) -> dict:
     """Map a user question + already-computed fine-grained question_intent to
     one of 5 narrator supertypes that drive the strict response-rule contract.
@@ -5226,6 +5411,139 @@ def _trace(req_id: str, step: str, info: Any) -> None:
     print(f"[ask:{req_id}] {step}: {body}", flush=True)
 
 
+# ── Fix-D: SUPERTYPE CONTRACT VALIDATOR + 1-RETRY ───────────────────────────
+# Detects hard violations of the per-supertype contract injected at the LAST
+# system message (Sprint-24). When a violation is detected and retry budget
+# remains, we re-call the model ONCE with explicit corrective feedback.
+#
+# Returns a list of human-readable violation strings — empty list = clean.
+import re as _re_validator
+_DASHA_MENTION_RX = _re_validator.compile(
+    r"\b(dasha|mahadasha|antardasha|antar\s*dasha|maha\s*dasha|"
+    r"pratyantar|sookshma|vimshottari)\b|दशा|महादशा|अन्तर्दशा",
+    _re_validator.IGNORECASE,
+)
+_FUTURE_TIMING_RX = _re_validator.compile(
+    r"\b(?:20\d{2}|19\d{2})\b|"
+    r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)"
+    r"(?:uary|ruary|ch|il|ne|ly|ust|tember|ober|ember)?\b|"
+    r"\b(?:kab|when|next|after|baad|jaldi|soon|upcoming|coming|"
+    r"aane\s*wala|aayega|aayegi|hoga|hogi)\b",
+    _re_validator.IGNORECASE,
+)
+_ADVICE_RX = _re_validator.compile(
+    r"\b(upay|remedy|jaap|mantra|donate|daan|wear|pehnen|chadhayen|"
+    r"chadhaiye|bhog|fast|vrat|puja|पूजा|उपाय|जाप)\b|"
+    r"\b(?:should|chahiye|karein|kariye|do this|kar lo|kar lijiye)\b",
+    _re_validator.IGNORECASE,
+)
+_HOUSE_MENTION_RX = _re_validator.compile(
+    r"\b(?:1st|2nd|3rd|4th|5th|6th|7th|8th|9th|10th|11th|12th)\b|"
+    r"\b(?:bhava|bhav|house|भाव)\b|"
+    r"\b(?:lagna|lord)\b",
+    _re_validator.IGNORECASE,
+)
+_DECISION_OPENER_RX = _re_validator.compile(
+    r"^\s*[*_>•\-\"'`(]*\s*"  # markdown / quote leaders
+    r"(?:haan|haa|han|naa|na|nahi|nahin|ruko|ruk\s*jao|wait|"
+    r"yes|no|hold|abhi\s*nahi|abhi\s*na|kar\s*lo|mat\s*karo|"
+    r"sahi\s*hai|theek\s*hai|achha\s*hai|jaayiye|chalega|"
+    r"go\s*ahead|don'?t)\b",
+    _re_validator.IGNORECASE,
+)
+
+
+def _validate_supertype_contract(text: str, supertype: str) -> list[str]:
+    """Hard-violation check against the strict per-supertype response contract.
+
+    Returns a list of violation strings. Empty list = answer is contract-clean.
+    Soft style issues are NOT flagged here — only the rules that are spelled
+    out as "MUST" / "MUST NOT" in `_SUPERTYPE_CONTRACT_BLOCKS`.
+    """
+    if not text or not supertype:
+        return []
+    t = text.strip()
+    violations: list[str] = []
+
+    if supertype == "PLANET_QUERY":
+        # MUST NOT mention dasha
+        if _DASHA_MENTION_RX.search(t):
+            violations.append(
+                "PLANET_QUERY: response mentioned dasha/antardasha — "
+                "contract forbids any planetary period reference."
+            )
+        # MUST NOT predict future / timing
+        if _FUTURE_TIMING_RX.search(t):
+            violations.append(
+                "PLANET_QUERY: response contained future/timing tokens — "
+                "contract forbids any timing prediction."
+            )
+        # MUST NOT give advice / remedy
+        if _ADVICE_RX.search(t):
+            violations.append(
+                "PLANET_QUERY: response contained advice / remedy / upay — "
+                "contract forbids 'kya karein' style guidance."
+            )
+
+    elif supertype == "PROBLEM_QUERY":
+        # MUST cite dasha
+        if not _DASHA_MENTION_RX.search(t):
+            violations.append(
+                "PROBLEM_QUERY: response missing dasha citation — "
+                "contract requires naming the running mahadasha/antardasha."
+            )
+        # MUST cite house / bhava
+        if not _HOUSE_MENTION_RX.search(t):
+            violations.append(
+                "PROBLEM_QUERY: response missing house/bhava citation — "
+                "contract requires naming the activated house or its lord."
+            )
+
+    elif supertype == "TIMING_QUERY":
+        # MUST give a year/month/timing token
+        _has_year  = bool(_re_validator.search(r"\b(19|20)\d{2}\b", t))
+        _has_month = bool(_re_validator.search(
+            r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)"
+            r"(?:uary|ruary|ch|il|ne|ly|ust|tember|ober|ember)?\b",
+            t, _re_validator.IGNORECASE
+        ))
+        _has_dasha_window = bool(_DASHA_MENTION_RX.search(t))
+        if not (_has_year or _has_month or _has_dasha_window):
+            violations.append(
+                "TIMING_QUERY: response missing concrete WHEN — needs a year, "
+                "month, or dasha-transition window."
+            )
+
+    elif supertype == "DECISION_QUERY":
+        # MUST open with a clear direction marker (within first 90 chars).
+        _opener_window = t[:90]
+        if not _DECISION_OPENER_RX.search(_opener_window):
+            violations.append(
+                "DECISION_QUERY: response did not open with a clear "
+                "HAAN/NAA/RUKO (YES/NO/WAIT) verdict."
+            )
+
+    # GENERAL_ANALYSIS has no hard contract — soft style guard only.
+    return violations
+
+
+def _retry_feedback_for(supertype: str, violations: list[str]) -> str:
+    """Build the corrective system message appended on the retry round."""
+    lines = "\n".join(f"  • {v}" for v in violations)
+    return (
+        "════════════════════════════════════════════════════════════════════\n"
+        "CONTRACT VIOLATION DETECTED — REGENERATE\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        f"Your previous answer broke the {supertype} contract on:\n"
+        f"{lines}\n\n"
+        "Re-read the STRICT NARRATOR CONTRACT block above. Produce a NEW "
+        "answer that obeys EVERY MUST and MUST NOT rule for this question "
+        "type. Do not re-explain the violation — just emit the corrected "
+        "answer.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    )
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
            birth: Any = None, history: list | None = None,
            preferred_language: Optional[str] = None) -> dict:
@@ -5267,11 +5585,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         return {
             "text":       msg,
             "topic":      "off_topic",
+            "topic_source": "brand_guard",
             "confidence": 1.0,
             "source":     "brand_guard",
             "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
             "question_intent": question_intent,
             "question_supertype": _classify_supertype(question, question_intent),
+            "intent_extraction": None,
         }
 
     # ── Fail-safe: if no kundli planets at all AND this is a personal
@@ -5299,11 +5619,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         return {
             "text":       no_chart_msg,
             "topic":      _t,
+            "topic_source": "no_chart_failsafe",
             "confidence": 0.0,
             "source":     "no_chart_failsafe",
             "follow_ups": _derive_follow_ups(_t, eff_lang),
             "question_intent": question_intent,
             "question_supertype": _classify_supertype(question, question_intent),
+            "intent_extraction": None,
         }
 
     client = _get_client()
@@ -5396,6 +5718,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # routing or engine selection. P2+ wires it into multi-intent rendering.
     # Never fail ai_ask if AI Ear errors — caller's existing regex pipeline
     # remains the source of truth for P1.
+    # Track WHERE the current `topic` came from so Fix-A's AI Ear override
+    # below knows whether it is allowed to overwrite it. Stickiness wins
+    # over AI Ear (AI Ear can't see history, stickiness can).
+    _topic_source = "regex"
+    if topic == "marriage" and _classify_topic(question) != "marriage":
+        # Stickiness must have just forced topic=marriage for a follow-up.
+        _topic_source = "stickiness"
+
     try:
         if mode == "astro" and os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
             from intent_extractor import (  # local import to avoid cycle
@@ -5416,6 +5746,101 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "latency_ms":     _ext.latency_ms,
                     "source":         _ext.source,
                 })
+
+                # ── Fix-A: AI Ear becomes the topic source-of-truth ──────────
+                # When AI Ear successfully extracted a non-general domain with
+                # high confidence, it OVERRIDES the regex `_classify_topic`
+                # result. The regex only counts keyword hits; the LLM has
+                # actually understood the sentence. Stickiness still wins
+                # (it carries history context AI Ear can't see).
+                _ear_topic_override_enabled = (
+                    os.environ.get("AI_EAR_TOPIC_OVERRIDE", "1") != "0"
+                )
+                _ear_conf = float(_ext.confidence or 0.0)
+                _ear_domain = (_ext.domain or "").lower().strip()
+                _ear_candidate = _AI_EAR_DOMAIN_TO_TOPIC.get(_ear_domain)
+                if (
+                    _ear_topic_override_enabled
+                    and _ext.source == "ai_ear"
+                    and _ear_conf >= 0.70
+                    and _ear_candidate
+                    and _ear_candidate != "general"
+                    and _ear_candidate != topic
+                ):
+                    if _topic_source == "stickiness":
+                        _trace(req_id, "2b.AI_EAR_TOPIC_OVERRIDE_SKIPPED", {
+                            "reason":      "stickiness_won",
+                            "regex_topic": topic,
+                            "ear_topic":   _ear_candidate,
+                            "ear_domain":  _ear_domain,
+                            "ear_conf":    _ear_conf,
+                        })
+                    else:
+                        _old_topic = topic
+                        topic = _ear_candidate
+                        _topic_source = "ai_ear"
+                        # Marriage subtype was computed against the OLD topic
+                        # — re-derive if we just flipped into/out of marriage.
+                        if topic == "marriage":
+                            try:
+                                marriage_subtype = _classify_marriage_subtype(question)
+                            except Exception:
+                                pass
+                        _trace(req_id, "2b.AI_EAR_TOPIC_OVERRIDE", {
+                            "regex_topic":      _old_topic,
+                            "ear_topic":        topic,
+                            "ear_domain":       _ear_domain,
+                            "ear_conf":         _ear_conf,
+                            "marriage_subtype": (
+                                marriage_subtype if topic == "marriage" else None
+                            ),
+                        })
+
+                # ── Fix-C: AI Ear → supertype source-of-truth ────────────────
+                # Sprint-24's regex `_classify_supertype` ran at 2d above with
+                # only the 15-cat fine intent. Now that AI Ear has produced
+                # ask_types + emotional_tone + domain (richer signals), let it
+                # pick the supertype directly. Falls back to the regex result
+                # when AI Ear is ambiguous / low-conf.
+                _ear_supertype_override_enabled = (
+                    os.environ.get("AI_EAR_SUPERTYPE_OVERRIDE", "1") != "0"
+                )
+                if _ear_supertype_override_enabled:
+                    _ear_super = _supertype_from_ai_ear(_ext)
+                    if _ear_super:
+                        _old_super = (question_supertype or {}).get("supertype")
+                        _new_super = _ear_super.get("supertype")
+                        if _new_super != _old_super:
+                            question_supertype = {
+                                **_ear_super,
+                                "source_intent": (question_intent or {}).get("intent"),
+                            }
+                            build_meta["question_supertype"] = question_supertype
+                            _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_OVERRIDE", {
+                                "regex_supertype": _old_super,
+                                "ear_supertype":   _new_super,
+                                "ear_conf":        _ear_super.get("confidence"),
+                                "ear_reasons":     _ear_super.get("reasons"),
+                            })
+                        else:
+                            # AI Ear AGREES with regex — record the agreement
+                            # (also bumps the trust signal in build_meta).
+                            question_supertype = {
+                                **(question_supertype or {}),
+                                "source": "ai_ear+regex_agree",
+                            }
+                            build_meta["question_supertype"] = question_supertype
+                            _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_AGREE", {
+                                "supertype": _new_super,
+                                "ear_conf":  _ear_super.get("confidence"),
+                            })
+                    else:
+                        _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_AMBIGUOUS", {
+                            "ask_types":      _ext.ask_types,
+                            "emotional_tone": _ext.emotional_tone,
+                            "domain":         _ext.domain,
+                            "kept_regex":     (question_supertype or {}).get("supertype"),
+                        })
             except IntentExtractionError as _ear_exc:
                 _trace(req_id, "2b.AI_EAR_FAIL", {
                     "error": str(_ear_exc)[:200],
@@ -5428,6 +5853,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                    {"error": str(_ear_outer_exc)[:200]})
         except Exception:
             pass
+
+    # Stash the final topic decision provenance for downstream observers.
+    build_meta["topic"] = topic
+    build_meta["topic_source"] = _topic_source
 
     messages = _build_messages(
         question, kundli, lang, reply_idx,
@@ -5641,6 +6070,66 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     else:
         text = _call_once()
         _trace(req_id, "4.RAW_AI_RESPONSE", text)
+
+        # ── Fix-D: SUPERTYPE CONTRACT VALIDATOR + 1-RETRY ────────────────────
+        # The strict per-supertype contract was injected as the LAST system
+        # message above (Sprint-24). Sometimes the model partially ignores
+        # MUST/MUST-NOT rules — we catch hard violations here and re-prompt
+        # ONCE with corrective feedback. Cap = 1 retry (avoid runaway cost).
+        # Skipped when the contract was not installed (mode=general, wealth
+        # structured, marriage narrator) — those have their own validators.
+        try:
+            _supertype_validator_enabled = (
+                os.environ.get("SUPERTYPE_VALIDATOR", "1") != "0"
+            )
+            if (_supertype_validator_enabled
+                    and not _skip_contract_reason
+                    and isinstance(question_supertype, dict)):
+                _sup_tag = question_supertype.get("supertype") or "GENERAL_ANALYSIS"
+                _violations = _validate_supertype_contract(text, _sup_tag)
+                if _violations:
+                    _trace(req_id, "4z.SUPERTYPE_CONTRACT_VIOLATION", {
+                        "supertype":      _sup_tag,
+                        "violation_count": len(_violations),
+                        "violations":     _violations,
+                        "first_attempt_preview": text[:240],
+                    })
+                    # Append corrective feedback as a NEW LAST system msg so
+                    # it gets recency-lock priority on the retry call.
+                    messages.append({
+                        "role":    "system",
+                        "content": _retry_feedback_for(_sup_tag, _violations),
+                    })
+                    try:
+                        _retry_text = _call_once()
+                        _retry_violations = _validate_supertype_contract(
+                            _retry_text, _sup_tag
+                        )
+                        _trace(req_id, "4z.SUPERTYPE_CONTRACT_RETRY", {
+                            "supertype":           _sup_tag,
+                            "retry_violations":    _retry_violations,
+                            "retry_clean":         not _retry_violations,
+                            "retry_preview":       _retry_text[:240],
+                        })
+                        # Accept retry if it has FEWER violations than the
+                        # first attempt (even if not perfectly clean — it's
+                        # at least closer to the contract).
+                        if len(_retry_violations) < len(_violations):
+                            text = _retry_text
+                            _trace(req_id, "4z.SUPERTYPE_CONTRACT_ACCEPTED",
+                                   {"reason": "retry was closer to contract"})
+                        else:
+                            _trace(req_id, "4z.SUPERTYPE_CONTRACT_KEPT_FIRST",
+                                   {"reason": "retry not better than first"})
+                    except Exception as _retry_exc:
+                        _trace(req_id, "4z.SUPERTYPE_CONTRACT_RETRY_FAIL",
+                               {"error": str(_retry_exc)[:200]})
+                else:
+                    _trace(req_id, "4z.SUPERTYPE_CONTRACT_CLEAN",
+                           {"supertype": _sup_tag})
+        except Exception as _val_exc:
+            _trace(req_id, "4z.SUPERTYPE_CONTRACT_VALIDATOR_ERR",
+                   {"error": str(_val_exc)[:200]})
 
     # ── Sprint-51 TIMING VALIDATOR — hard anti-hallucination layer ──────────
     # If the question is a "kab/when" timing question, the AI is FORBIDDEN
@@ -7237,11 +7726,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     _result = {
         "text":       text,
         "topic":      topic,
+        "topic_source": (build_meta or {}).get("topic_source") or "regex",
         "confidence": confidence,
         "source":     "openai",
         "follow_ups": follow_ups,
         "question_intent": question_intent,
         "question_supertype": question_supertype,
+        "intent_extraction": (build_meta or {}).get("intent_extraction"),
     }
     if _wealth_structured_payload is not None:
         _result["structured"] = _wealth_structured_payload

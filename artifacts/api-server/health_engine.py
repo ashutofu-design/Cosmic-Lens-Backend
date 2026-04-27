@@ -302,7 +302,28 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
 ]
 
 
-def classify_health_question(text: str) -> str:
+# Sprint-25 Fix-B: AI-Ear-trusted health bucket vocabulary. AI Ear emits
+# generic `surgery_recovery`, `reproductive`, `longevity` — we expand to the
+# engine's finer-grained legacy names below. `skin_beauty` is treated as
+# generic wellness (engine has no dedicated branch yet).
+_VALID_HEALTH_BUCKETS = frozenset({
+    "chronic_illness", "acute_illness", "mental_health",
+    "surgery_timing", "recovery_timing", "surgery_recovery",
+    "longevity_general", "longevity",
+    "injury_accident", "addiction",
+    "female_reproductive", "male_reproductive", "reproductive",
+    "parent_health", "skin_beauty", "general_wellness",
+})
+_HEALTH_BUCKET_ALIASES = {
+    "surgery_recovery": "surgery_timing",
+    "longevity":        "longevity_general",
+    "reproductive":     "female_reproductive",  # default; gender-aware
+    "skin_beauty":      "general_wellness",
+}
+
+
+def classify_health_question(text: str,
+                             pre_classified_bucket: str | None = None) -> str:
     """Return one of:
       chronic_illness | acute_illness | mental_health | surgery_timing |
       recovery_timing | longevity_general | injury_accident | addiction |
@@ -311,7 +332,13 @@ def classify_health_question(text: str) -> str:
 
     Default: "general_wellness" (most generic health fallback).
     Order matters — most specific patterns checked first.
+
+    When `pre_classified_bucket` (Sprint-25 AI-Ear handoff) is in the
+    engine's known vocabulary, return it directly — bypassing regex.
     """
+    if pre_classified_bucket and pre_classified_bucket in _VALID_HEALTH_BUCKETS:
+        return _HEALTH_BUCKET_ALIASES.get(pre_classified_bucket,
+                                          pre_classified_bucket)
     if not isinstance(text, str) or not text.strip():
         return "general_wellness"
     s = text.lower().strip()
@@ -2752,7 +2779,8 @@ def assess_health(kundli: dict,
                   intel: dict,
                   kp: Optional[dict] = None,
                   birth: Optional[dict] = None,
-                  question: str = "") -> dict:
+                  question: str = "",
+                  pre_classified_bucket: str | None = None) -> dict:
     """Full deterministic health verdict. Returns dict with:
       bucket            — one of 12 question buckets
       tense             — future / present / general
@@ -2765,7 +2793,7 @@ def assess_health(kundli: dict,
       brand_safety_warnings — list of bullets narrator MUST honour
       layers/triggers/modifiers/conditionals — full audit trail
     """
-    bucket = classify_health_question(question)
+    bucket = classify_health_question(question, pre_classified_bucket)
     tense  = detect_question_tense(question)
     intel = intel or {}
     kp = kp or {}

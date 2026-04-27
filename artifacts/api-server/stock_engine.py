@@ -184,11 +184,31 @@ _Q_PATTERNS = [
 ]
 
 
-def classify_stock_question(text: str) -> str:
+# Sprint-25 Fix-B: AI Ear-trusted bucket vocabulary. When the upstream AI
+# Ear classifier emits one of these with high confidence, we honour it and
+# skip the regex pass.
+_VALID_STOCK_BUCKETS = frozenset({
+    "real_time", "intraday", "loss_recovery", "career", "career_path",
+    "partnership", "instrument_risk", "sector", "strategy",
+    "timing", "outcome", "suitability",
+})
+
+
+def classify_stock_question(text: str,
+                            pre_classified_bucket: str | None = None) -> str:
     """Return one of: real_time | intraday | loss_recovery | career |
     partnership | instrument_risk | sector | strategy | timing | outcome |
     suitability (default).
-    Order of patterns matters — most specific first."""
+    Order of patterns matters — most specific first.
+
+    When `pre_classified_bucket` is supplied (Sprint-25 AI-Ear handoff) AND
+    it is in the engine's known vocabulary, return it directly — bypassing
+    the regex pass. AI Ear's `career_path` is normalised to legacy `career`.
+    """
+    if pre_classified_bucket and pre_classified_bucket in _VALID_STOCK_BUCKETS:
+        # AI Ear uses `career_path`; engine's legacy bucket name is `career`.
+        return "career" if pre_classified_bucket == "career_path" \
+            else pre_classified_bucket
     if not isinstance(text, str) or not text.strip():
         return "suitability"
     s = text.lower().strip()
@@ -1625,7 +1645,8 @@ def _recommend_strategy(score: int, mer: dict, jup: dict, rah: dict,
 # ═════════════════════════════════════════════════════════════════════════════
 def assess_stock(kundli: dict, intel: dict, kp: dict,
                  birth: Optional[dict] = None,
-                 question: str = "") -> dict:
+                 question: str = "",
+                 pre_classified_bucket: str | None = None) -> dict:
     """Returns deterministic stock-market verdict — see top of file for the
     full layer/weight rubric.
 
@@ -1656,7 +1677,7 @@ def assess_stock(kundli: dict, intel: dict, kp: dict,
     asc_name = (asc_name or "").strip().capitalize()
     lagna_idx = _sign_idx(asc_name)
 
-    q_type = classify_stock_question(question)
+    q_type = classify_stock_question(question, pre_classified_bucket)
     trace.append(f"Question classified as: {q_type}")
 
     # ── Pre-compute helper modules (best-effort) ─────────────────────────────

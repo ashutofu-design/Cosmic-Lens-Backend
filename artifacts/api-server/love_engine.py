@@ -292,7 +292,23 @@ _Q_PATTERNS = [
 ]
 
 
-def classify_love_question(text: str) -> str:
+# Sprint-25 Fix-B: AI-Ear-trusted love bucket vocabulary. AI Ear's
+# `general_love` and `timing` are normalised to the engine's legacy
+# `feelings_check` and `new_love_timing` respectively.
+_VALID_LOVE_BUCKETS = frozenset({
+    "affair_third_party", "breakup_signal", "reconciliation",
+    "commitment_fear", "one_sided", "long_distance", "feelings_check",
+    "new_love_timing", "compatibility", "existing_status",
+    "general_love", "timing",
+})
+_LOVE_BUCKET_ALIASES = {
+    "general_love": "feelings_check",
+    "timing":       "new_love_timing",
+}
+
+
+def classify_love_question(text: str,
+                           pre_classified_bucket: str | None = None) -> str:
     """Return one of:
       affair_third_party | breakup_signal | reconciliation | commitment_fear |
       one_sided | long_distance | feelings_check | new_love_timing |
@@ -300,7 +316,13 @@ def classify_love_question(text: str) -> str:
 
     Default: "feelings_check" (most generic love question fallback).
     Order matters — most specific patterns checked first.
+
+    When `pre_classified_bucket` (Sprint-25 AI-Ear handoff) is in the
+    engine's known vocabulary, return it directly — bypassing regex.
     """
+    if pre_classified_bucket and pre_classified_bucket in _VALID_LOVE_BUCKETS:
+        return _LOVE_BUCKET_ALIASES.get(pre_classified_bucket,
+                                        pre_classified_bucket)
     if not isinstance(text, str) or not text.strip():
         return "feelings_check"
     s = text.lower().strip()
@@ -2827,7 +2849,8 @@ def assess_love(kundli: dict, intel: dict, kp: dict,
                 birth: Optional[dict] = None,
                 question: str = "",
                 partner_kundli: Optional[dict] = None,
-                partner_kp:     Optional[dict] = None) -> dict:
+                partner_kp:     Optional[dict] = None,
+                pre_classified_bucket: str | None = None) -> dict:
     """Returns deterministic love & relationship verdict.
 
     Full output dict shape — see top of file. Key fields:
@@ -2861,7 +2884,7 @@ def assess_love(kundli: dict, intel: dict, kp: dict,
     moon_idx  = _sign_idx(moon_name)
 
     # ── STEP 1 — Question type + tense detection ─────────────────────────────
-    q_type  = classify_love_question(question)
+    q_type  = classify_love_question(question, pre_classified_bucket)
     q_tense = detect_question_tense(question)
     trace.append(f"Step 1: Question classified as '{q_type}' (tense={q_tense})")
 

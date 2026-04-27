@@ -328,7 +328,16 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
 ]
 
 
-def classify_career_question(text: str) -> str:
+# Sprint-25 Fix-B: AI-Ear-trusted career bucket vocabulary.
+_VALID_CAREER_BUCKETS = frozenset({
+    "govt_job", "foreign_job", "promotion", "resignation", "business_start",
+    "partnership", "transfer", "career_setback", "new_job_timing",
+    "job_change", "career_field_choice", "general_career",
+})
+
+
+def classify_career_question(text: str,
+                             pre_classified_bucket: str | None = None) -> str:
     """Return one of:
       govt_job | foreign_job | promotion | resignation | business_start |
       partnership | transfer | career_setback | new_job_timing | job_change |
@@ -336,7 +345,12 @@ def classify_career_question(text: str) -> str:
 
     Default: "general_career" (most generic career fallback).
     Order matters — most specific patterns checked first.
+
+    When `pre_classified_bucket` (Sprint-25 AI-Ear handoff) is in the
+    engine's known vocabulary, return it directly — bypassing regex.
     """
+    if pre_classified_bucket and pre_classified_bucket in _VALID_CAREER_BUCKETS:
+        return pre_classified_bucket
     if not isinstance(text, str) or not text.strip():
         return "general_career"
     s = text.lower().strip()
@@ -3891,7 +3905,8 @@ def assess_career(kundli: dict,
                   birth: Optional[dict] = None,
                   question: str = "",
                   boss_kundli: Optional[dict] = None,
-                  partner_kundli: Optional[dict] = None) -> dict:
+                  partner_kundli: Optional[dict] = None,
+                  pre_classified_bucket: str | None = None) -> dict:
     """Full deterministic career verdict.
 
     Returns dict with:
@@ -3911,7 +3926,7 @@ def assess_career(kundli: dict,
       reasons           — flat list of all "why" strings (for transparency)
     """
 
-    bucket = classify_career_question(question)
+    bucket = classify_career_question(question, pre_classified_bucket)
     tense  = detect_question_tense(question)
 
     # Lagna context

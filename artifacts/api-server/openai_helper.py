@@ -6543,6 +6543,88 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception as _exc:
             print(f"[ai_ask] Chara post-inject failed: {_exc}")
 
+    # ── Sprint-22 STRICT BREVITY POST-TRIM ─────────────────────────────────────
+    # User explicitly directed: "Question ek line ka he ans maximum 2-3 line ka
+    # hona chahiye … Jo pucha Wahi ans doge". The model frequently still adds
+    # unsolicited Mahadasha / Antardasha / transit / Manglik-dosh / aspect /
+    # KP lines on short single-planet strength questions even though the
+    # prompt forbids it. This deterministic trim runs ONLY when the question
+    # is a short-single-planet-strength ask and rips out the off-topic tail.
+    if _is_short_planet_strength_q and isinstance(text, str) and text.strip():
+        try:
+            import re as _reTrim
+            # Split into sentences while preserving punctuation.
+            _raw_paras = [p.strip() for p in text.split("\n") if p.strip()]
+            _sents: list[str] = []
+            for _p in _raw_paras:
+                _sents.extend(
+                    s.strip() for s in _reTrim.split(r"(?<=[.!?।])\s+", _p)
+                    if s.strip()
+                )
+
+            # OFF-TOPIC pattern → drop these sentences entirely.
+            _OFF_TOPIC_RX = _reTrim.compile(
+                r"(?i)\b("
+                r"mahadasha|antardasha|antar\s*dasha|pratyantar|"
+                r"\bdasha\b|dasha\s+lord|"
+                r"transit(?:ing)?|gochar|"
+                r"manglik|mangal\s*dosh|kuja\s*dosh|"
+                r"sade\s*sati|sadhe\s*sati|saade\s*sati|"
+                r"ashtakavarga|ashtak\s*varga|sav\b|bhinnashtaka|"
+                r"\bkp\b|cusp|sub[\s\-]*lord|"
+                r"jaimini|arudha|upapada|chara\s*karaka|atmakaraka|"
+                r"shadbala|saptavargaja|ishta\s*phala|kashta\s*phala|"
+                r"vimshopaka|yuddha\s*bala|bhava\s*bala|"
+                r"vrishchika|kemadruma|daridra|shakata|kaal\s*sarp|"
+                r"remedy|upay|mantra|jaap|donate|daan|gemstone|"
+                r"d1[06]|d2[047]|d3\d|d40|d45|d60|"
+                r"chaturvimsamsa|trimsamsa|shashtyamsa|"
+                r"vimsamsa|bhamsa|drekkana|saptamsa|hora|dwadasamsa|"
+                r"2nd\s+house|3rd\s+house|4th\s+house|5th\s+house|"
+                r"6th\s+house|7th\s+house|8th\s+house|9th\s+house|"
+                r"10th\s+house|11th\s+house|12th\s+house"
+                r")\b"
+            )
+            # ON-TOPIC anchor — must mention at least one of these to be kept.
+            _ON_TOPIC_RX = _reTrim.compile(
+                r"(?i)\b("
+                r"d1\b|d9\b|navamsa|vargottama|neecha[\s\-]*bhanga|"
+                r"exalted|debilitated|own[\s\-]*sign|own\s*house|"
+                r"uchcha|neech|swarashi|moolatrikona|friendly|enemy|"
+                r"strong|weak|moderate|powerful|kamzor|kamjor|shaktishali|"
+                r"shakti|takat|takatwar|takatvar|good|achha|achchha|accha|"
+                r"sun|surya|suraj|moon|chandra|chand|mars|mangal|mangala|"
+                r"mercury|budh|budha|jupiter|guru|brihaspati|brahaspati|"
+                r"venus|shukra|shukr|saturn|shani|sani|rahu|ketu|"
+                r"mesh|vrishabh|mithun|kark|simha|kanya|tula|"
+                r"vrischik|vrishchik|dhanu|makar|kumbh|meen|"
+                r"aries|taurus|gemini|cancer|leo|virgo|libra|"
+                r"scorpio|sagittarius|capricorn|aquarius|pisces"
+                r")\b"
+            )
+
+            _kept: list[str] = []
+            for _s in _sents:
+                if _OFF_TOPIC_RX.search(_s):
+                    continue
+                if _ON_TOPIC_RX.search(_s):
+                    _kept.append(_s)
+            # Keep at most 3 sentences (user directive: "max 2-3 line").
+            _kept = _kept[:3]
+            if _kept:
+                _new_text = " ".join(_kept).strip()
+                # Make sure the trim didn't accidentally nuke the entire reply.
+                if len(_new_text.split()) >= 8:
+                    if _new_text != text.strip():
+                        print(
+                            f"[ai_ask][brevity-trim] short-planet-strength Q: "
+                            f"{len(text.split())}w → {len(_new_text.split())}w "
+                            f"({len(_sents)} sents → {len(_kept)} kept)"
+                        )
+                        text = _new_text
+        except Exception as _exc:
+            print(f"[ai_ask] brevity post-trim failed: {_exc}")
+
     follow_ups = _derive_follow_ups(topic, eff_lang)
     _trace(req_id, "5.FINAL_OUTPUT", text)
     _trace(req_id, "6.FOLLOW_UPS", {

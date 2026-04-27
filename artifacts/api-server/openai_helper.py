@@ -1747,6 +1747,11 @@ def _build_messages(
     # Timing questions get ZERO RAG (engine block already gives the answer).
     # Opinion questions ("job vs business?", "career kya?", "nature kaisa?")
     # get top-5 chunks from vedic/knowledge/*.md to ground reasoning.
+    # NOTE: RAG embeddings use OpenAI's text-embedding-3-small endpoint, which
+    # the Replit AI Integrations proxy does NOT support — it falls back to the
+    # raw OPENAI_API_KEY. When that key hits its quota (429), we suppress the
+    # noisy stack trace because RAG is purely additive (the engine + chat path
+    # remain fully functional via the proxy).
     rag_context_str = ""
     try:
         from vedic.validator.timing_validator import is_timing_question  # type: ignore
@@ -1754,7 +1759,12 @@ def _build_messages(
             from vedic.rag.retriever import retrieve_and_format  # type: ignore
             rag_context_str = retrieve_and_format(question, k=5, max_chars=3500)
     except Exception as exc:  # noqa: BLE001
-        print(f"[openai_helper] rag retrieval failed: {exc}")
+        _msg = str(exc)
+        if "insufficient_quota" in _msg or "429" in _msg or "rate_limit" in _msg.lower():
+            # One-line warn — known limitation; not a bug to chase
+            print("[openai_helper] rag retrieval skipped (embeddings quota — non-essential)")
+        else:
+            print(f"[openai_helper] rag retrieval failed: {exc}")
     if rag_context_str:
         locked_facts_str = locked_facts_str + "\n\n" + rag_context_str
 

@@ -339,6 +339,152 @@ def _is_health_question(text: str) -> bool:
     return bool(_HEALTH_QUESTION_RX.search(text))
 
 
+def _wealth_engine():
+    """Lazy-load deterministic wealth & finance verdict engine."""
+    from wealth_engine import (assess_wealth,                    # type: ignore
+                                format_verdict_for_prompt as _fmt_wealth,
+                                classify_wealth_question)
+    return assess_wealth, _fmt_wealth, classify_wealth_question
+
+
+# Wealth-question gate. Triggers wealth_engine when question is genuinely
+# about salary / business profit / loan / property / inheritance / savings
+# / sudden windfall / debt-recovery / partnership-finance. Routing priority
+# above wealth: marriage > stock > love > career. Wealth fires AFTER stock
+# so it must NOT swallow share/equity/SIP/intraday/F&O — those belong to
+# stock_engine. Bare "paisa" / "money" alone are NOT here because they
+# false-trigger generic chats; we require explicit dhana/wealth/loan/
+# property/inheritance/savings/salary/business-profit anchors instead.
+_WEALTH_QUESTION_RX = __import__("re").compile(
+    r"(?:\b("
+    # core wealth vocabulary
+    r"wealth|wealthy|prosper(?:ity|ous)?|"
+    r"dhana?[- ]?yog|dhanyog|dhana|dhan|"
+    r"lakshmi[- ]?yog|laxmi[- ]?yog|maha[- ]?lakshmi|"
+    r"finance|financial|finances|financially|"
+    r"income|incomes|earning|earnings|kamai|kamaai|kamaaee|"
+    r"salary|salaries|tankhwah|tankhah|vetan|"
+    r"savings?|saving|bachat|jamapunji|"
+    r"corpus|net[- ]?worth|"
+    # business profit (NOT business in general — that's career)
+    r"business[- ]?profit|business[- ]?income|business[- ]?earning|"
+    r"profit|profits|profitable|munafa|munafaa|labh|laabh|"
+    r"loss|losses|nuksan|nuksaan|haani|"
+    # loan / debt / EMI / credit
+    r"loan|loans|karz|karza|karzaa|qarz|qarza|udhaar|udhar|"
+    r"emi|emis|installment|kisht|"
+    r"debt|debts|borrow(?:ing)?|borrowed|"
+    r"home[- ]?loan|car[- ]?loan|personal[- ]?loan|education[- ]?loan|"
+    r"credit[- ]?card|credit[- ]?score|cibil|"
+    # property / real estate
+    r"property|properties|propert(?:y|ies)|"
+    r"real[- ]?estate|realestate|"
+    r"makaan|makan|"
+    # ghar lena / ghar lene / ghar liya / ghar lega … and khareedna /
+    # khareedne / khareedi inflections — Hinglish verbs conjugate by
+    # vowel ending, so we match the shared prefix `ghar[- ]?(le|khar)`
+    # plus a short word-character suffix.
+    r"ghar[- ]?(?:le|liy|leg|lej|leke|kharee?d|kha?r[iy]?d)\w*|"
+    r"flat|plot|plots|land[- ]?purchase|land[- ]?buy|zameen|zamin|"
+    r"house[- ]?buy|house[- ]?purchase|"
+    r"house[- ]?(?:le|liy|leg|leke)\w*|"
+    # inheritance / legacy
+    r"inheritance|inherit|inherited|heir|"
+    r"virasat|viraasat|paitrak|pitrarjit|"
+    r"will[- ]?money|ancestral[- ]?property|paternal[- ]?property|"
+    # sudden gain / windfall / lottery (engine ALWAYS softens these)
+    r"sudden[- ]?gain|sudden[- ]?gains|sudden[- ]?money|"
+    r"sudden[- ]?profit|sudden[- ]?profits|"
+    r"windfall|windfalls|"
+    r"lottery|jackpot|kbc|satta|matka|"
+    r"unexpected[- ]?money|unexpected[- ]?gain|unexpected[- ]?gains|"
+    r"unexpected[- ]?profit|unexpected[- ]?windfall|"
+    r"lucky[- ]?break|lucky[- ]?breaks|lucky[- ]?money|"
+    r"achanak[- ]?paisa|achanak[- ]?dhan|achanak[- ]?fayda|"
+    r"achanak[- ]?labh|achanak[- ]?munafa|"
+    # debt recovery / outstanding
+    r"debt[- ]?recovery|recover[- ]?money|paisa[- ]?wapas|"
+    r"udhaar[- ]?wapas|paisa[- ]?milega|"
+    # debt-recovery / outstanding payments — wider Hinglish coverage
+    r"paisa[- ]?\w*[- ]?wapas|paisa\s+\w*\s+wapas|"
+    r"paisa[- ]?\w*[- ]?milega|paisa\s+\w*\s+milega|"
+    r"paisa\s+(?:kab\s+)?(?:wapas|recover|milega|return)|"
+    r"diya[- ]?hua[- ]?paisa|diya[- ]?gaya[- ]?paisa|"
+    r"udhaar[- ]?\w*[- ]?milega|udhaar\s+\w*\s+milega|"
+    r"recover[- ]?(?:hoga|honga|hogi|kar|karna|krna)|"
+    r"recovery[- ]?(?:kab|hoga|honga|window)|"
+    r"outstanding[- ]?(?:payment|amount|balance|dues|due)?|"
+    r"payment[- ]?\w*[- ]?clear|clear\s+\w*\s+payment|"
+    r"pending[- ]?(?:payment|dues|amount)|"
+    r"due[- ]?(?:clear|recover|payment)|bakaya[- ]?\w*[- ]?(?:clear|wasool|wapas)|"
+    r"wasool[- ]?(?:hoga|honga|kab)|wasooli|"
+    r"logo[- ]?se\s+\w*\s+paisa|logon[- ]?se\s+\w*\s+paisa|"
+    # foreign income / NRI remittance (wealth-flavoured, not foreign-travel)
+    r"foreign[- ]?income|nri[- ]?income|remittance|remittances|"
+    r"dollar[- ]?income|forex[- ]?income|"
+    # partnership finance
+    r"partnership[- ]?finance|partnership[- ]?profit|partner[- ]?ka[- ]?paisa|"
+    r"joint[- ]?venture|joint[- ]?ventures|jv[- ]?profit|jv[- ]?investment|"
+    r"co[- ]?founder|co[- ]?promoter|saanjhedaari|sanjhedari|"
+    r"partnership[- ]?(?:munafa|labh|gain)|"
+    # generic investment / mutual-fund / SIP / FD vocabulary — these
+    # OVERLAP with stock_engine vocabulary (which fires upstream first
+    # via priority chain), so the wealth ENGINE will rarely fire on
+    # them. They are added here so the downstream wealth POST-PROCESSOR
+    # (CA cite + SEBI line + placeholder strip) still recognises these
+    # as wealth-flavoured questions and injects the mandatory
+    # SEBI-registered advisor disclaimer that stock_engine itself
+    # does not emit.
+    r"invest|investing|investment|investments|investor|investors|"
+    r"mutual[- ]?fund|mutual[- ]?funds|"
+    r"\bsip\b|\bsips\b|systematic[- ]?investment[- ]?plan|"
+    r"\bfd\b|\bfds\b|fixed[- ]?deposit|fixed[- ]?deposits|"
+    r"\bmf\b|\bmfs\b|"
+    r"\bppf\b|\bnps\b|\bnsc\b|\bkvp\b|\belss\b|"
+    r"insurance|policy[- ]?lena|life[- ]?insurance|term[- ]?insurance|"
+    r"health[- ]?insurance|"
+    r"recurring[- ]?deposit|\brd\b|\brds\b|"
+    r"bond|bonds|debenture|debentures|"
+    r"gold[- ]?investment|gold[- ]?bond|sovereign[- ]?gold|"
+    r"crypto|bitcoin|ethereum|altcoin|cryptocurrency|"
+    # explicit "kahan invest karu" / "paisa kahan lagaun" Hinglish forms
+    r"paisa[- ]?lagao|paisa[- ]?lagana|paisa[- ]?lagaun|"
+    r"paise[- ]?lagao|paise[- ]?lagana|paise[- ]?lagaun|"
+    r"kahan[- ]?invest|kahan[- ]?lagaun|kaha[- ]?lagaun|"
+    r"nivesh|nivesh[- ]?karna|"
+
+    # dhana karaka / vimshottari finance phrasings
+    r"dhana[- ]?karaka|dhan[- ]?karak|"
+    r"financial[- ]?freedom|financial[- ]?stability|"
+    r"financially[- ]?stable|paise[- ]?ki[- ]?tangi|tangi|"
+    r"paise[- ]?ki[- ]?problem|paise[- ]?ki[- ]?dikkat"
+    r")\b)"
+    # Devanagari anchors
+    r"|धन|धनयोग|दौलत|संपत्ति|सम्पत्ति|"
+    r"लक्ष्मी|आय|कमाई|वेतन|तनख्वाह|बचत|"
+    r"मुनाफ़ा|मुनाफा|लाभ|हानि|नुकसान|"
+    r"क़र्ज़|कर्ज|कर्ज़ा|उधार|ईएमआई|किश्त|"
+    r"मकान|ज़मीन|जमीन|प्रॉपर्टी|"
+    r"विरासत|पैतृक|"
+    r"लॉटरी|जैकपॉट|अचानक धन",
+    __import__("re").IGNORECASE,
+)
+
+
+def _is_wealth_question(text: str) -> bool:
+    """True iff text matches wealth trigger AND no higher-priority engine
+    (marriage / stock / love / career / health) has already claimed this
+    turn. Higher-priority gates are applied UPSTREAM in `_build_messages`,
+    so by the time we reach the wealth block we only need to confirm the
+    text genuinely smells wealth/finance-related.
+    Note: stock-market vocabulary (share/equity/SIP/intraday/F&O/nifty)
+    is intentionally EXCLUDED from this gate — those belong to
+    stock_engine which fires earlier in the priority chain."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return bool(_WEALTH_QUESTION_RX.search(text))
+
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -1373,7 +1519,7 @@ def _build_messages(
     stock_verdict_block = ""
     stock_verdict_obj   = None
     stock_window_str    = ""
-    if (topic in ("finance", "general")
+    if (topic in ("finance", "general", "wealth", "career")
             and not marriage_verdict_block
             and isinstance(kundli, dict) and kundli.get("planets")
             and _is_stock_question(question)):
@@ -1485,15 +1631,63 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] career_engine failed: {exc}")
 
+    # ── DETERMINISTIC WEALTH & FINANCE VERDICT ────────────────────────────────
+    # For wealth/finance-keyword questions (salary / business profit / loan /
+    # property / inheritance / savings / sudden-windfall / debt-recovery /
+    # foreign-income / partnership-finance / general dhana), compute
+    # deterministic verdict via wealth_engine. Routing priority above wealth:
+    # marriage > stock > love > career. Wealth must NOT swallow stock/share/
+    # SIP/equity/intraday/F&O — those belong to stock_engine which fires
+    # earlier. AI becomes pure narrator with STRICT brand-safety guards
+    # (NEVER predict rupee amounts, NEVER predict bankruptcy, NEVER advise
+    # loan-skip / EMI-default / tax-evasion, NEVER endorse lottery/satta/
+    # KBC, ALWAYS recommend CA / SEBI-registered advisor consult).
+    # Mirror of marriage/stock/love/career engine wiring.
+    wealth_verdict_block = ""
+    wealth_verdict_obj   = None
+    if (topic in ("wealth", "finance", "career", "general")
+            and not marriage_verdict_block
+            and not stock_verdict_block
+            and not love_verdict_block
+            and not career_verdict_block
+            and isinstance(kundli, dict) and kundli.get("planets")
+            and _is_wealth_question(question)):
+        try:
+            kp_dict_w = (locals().get("kp_dict")
+                         or locals().get("kp_dict_s")
+                         or locals().get("kp_dict_l")
+                         or locals().get("kp_dict_c"))
+            try:
+                if not kp_dict_w and isinstance(birth, dict):
+                    kp_dict_w = _kp_calc()(birth)
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for wealth failed: {exc}")
+            assess_wealth, fmt_wealth, _classify_wealth_q = _wealth_engine()
+            wealth_verdict_obj = assess_wealth(
+                kundli, intel_obj or {}, kp_dict_w or {}, birth, question)
+            if wealth_verdict_obj:
+                wealth_verdict_block = fmt_wealth(wealth_verdict_obj, question)
+                if isinstance(out_meta, dict):
+                    out_meta["wealth_verdict_obj"]   = wealth_verdict_obj
+                    out_meta["wealth_question_type"] = wealth_verdict_obj.get("bucket")
+                print(f"[openai_helper] wealth_engine OK → "
+                      f"bucket='{wealth_verdict_obj.get('bucket')}' "
+                      f"tense='{wealth_verdict_obj.get('tense')}' "
+                      f"verdict='{wealth_verdict_obj.get('verdict','')[:60]}' "
+                      f"score={wealth_verdict_obj.get('score')} "
+                      f"conf={wealth_verdict_obj.get('confidence')}")
+        except Exception as exc:
+            print(f"[openai_helper] wealth_engine failed: {exc}")
+
     # ── DETERMINISTIC HEALTH & VITALITY VERDICT ───────────────────────────────
     # For health-keyword questions (illness/surgery/recovery/mental-health/
     # addiction/parent-health/longevity), compute deterministic verdict via
     # health_engine. Routing priority above health: marriage > stock > love >
-    # career. AI becomes pure narrator with STRICT brand-safety guards
-    # (NEVER predict death, NEVER replace medical advice, ALWAYS recommend
-    # doctor consult, surface mental-health helplines on mental_health bucket,
-    # gender-sensitive reproductive guidance). Mirror of marriage/stock/love/
-    # career engine wiring.
+    # career > wealth. AI becomes pure narrator with STRICT brand-safety
+    # guards (NEVER predict death, NEVER replace medical advice, ALWAYS
+    # recommend doctor consult, surface mental-health helplines on
+    # mental_health bucket, gender-sensitive reproductive guidance).
+    # Mirror of marriage/stock/love/career/wealth engine wiring.
     health_verdict_block = ""
     health_verdict_obj   = None
     if (topic in ("health", "general")
@@ -1501,6 +1695,7 @@ def _build_messages(
             and not stock_verdict_block
             and not love_verdict_block
             and not career_verdict_block
+            and not wealth_verdict_block
             and isinstance(kundli, dict) and kundli.get("planets")
             and _is_health_question(question)):
         try:
@@ -2465,6 +2660,122 @@ def _build_messages(
                 "ZERO day-precision unless the engine itself printed a "
                 "day number.\n\n"
                 + career_verdict_block
+            ),
+        })
+
+    # ── WEALTH NARRATOR TURN-LEVEL OVERRIDE ───────────────────────────────────
+    # Appended LAST after career so recency bias keeps the lock authoritative.
+    # Mirror of stock/love/career narrator overrides + STRICT brand-safety
+    # guards specific to financial content: NEVER predict rupee amounts,
+    # NEVER predict bankruptcy, NEVER advise loan-skip / EMI-default /
+    # tax-evasion, NEVER endorse lottery / satta / KBC / matka, ALWAYS
+    # recommend qualified CA / SEBI-registered financial advisor consult,
+    # surface SEBI line on high-risk investment buckets.
+    if wealth_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔒 WEALTH NARRATOR OVERRIDE — this turn is a wealth / "
+                "finance / salary / business-profit / loan / property / "
+                "inheritance / savings / sudden-windfall / debt-recovery / "
+                "foreign-income / partnership-finance / general-dhana "
+                "question. The cosmic engine has already computed the "
+                "verdict bucket (salary_growth / business_profit / "
+                "loan_clearance / property_purchase / investment_return / "
+                "inheritance_timing / debt_recovery / sudden_windfall / "
+                "savings_capacity / foreign_income / partnership_finance / "
+                "general_wealth), the verdict status (green_go / yellow_wait "
+                "/ slow_burn / red_avoid), the score, the timing window via "
+                "Vimshottari + Jupiter / Saturn transits, the 2H/5H/8H/9H/"
+                "11H cross-check, the D9 + D2 (Hora) + D11 (Labha-amsa) "
+                "divisional overlay, the KP cuspal sub-lord on cusps "
+                "2/5/11, the Atmakaraka + Dhana Karaka (Jaimini), the "
+                "Lakshmi / Dhana / Maha-Lakshmi / Vipareeta-Raja yogas, "
+                "the Sade Sati phase on 2L/11L, and the remedy for you. "
+                "You are NOT advising — you are NARRATING a locked verdict "
+                "in warm Hinglish.\n\n"
+                "ABSOLUTE RULES (these override every other instruction this turn):\n"
+                "  1. The verdict bucket and verdict status are FINAL. Do NOT "
+                "contradict, do NOT hedge into the opposite bucket, do NOT "
+                "add 'lekin actually…' reversals. Use the verdict text as "
+                "the spine of your reply.\n"
+                "  2. Copy timing windows (Vimshottari Maha-Antar, Jupiter "
+                "transit window, Saturn transit window) EXACTLY as printed "
+                "in the locked block. No rounding, no shifting, no "
+                "blending.\n"
+                "  3. Copy score, dasha-lord names, lagnesh, Atmakaraka, "
+                "Dhana Karaka, house numbers, yoga names, and remedy "
+                "VERBATIM. No paraphrasing of numbers or planet names.\n"
+                "  4. NEVER reveal AI / LLM / GPT / model — brand voice is "
+                "'Powered by Advanced Cosmic Intelligence'. Speak as the "
+                "cosmic intelligence, never as a chatbot.\n"
+                "  5. NO fake/random fallbacks. If the engine is silent on "
+                "a specific date or amount, do NOT invent it. Vague "
+                "phrases like 'lakhpati ban jaaoge' without a window are "
+                "FORBIDDEN — only narrate what the engine produced.\n"
+                "  6. TENSE-AWARE FRAMING (mandatory) — read the "
+                "'QUESTION TENSE:' line in the verdict block:\n"
+                "     • PRESENT  → headline references CURRENT Maha-Antar-"
+                "Pratyantar (e.g. 'abhi Saturn-Mercury-Venus chal raha hai').\n"
+                "     • FUTURE   → headline references the NEXT favourable "
+                "wealth window from `▸ Wealth window:` line.\n"
+                "     • PAST     → frame retrospectively without inventing "
+                "a future date.\n"
+                "  7. ❌ ABSOLUTE FINANCIAL BRAND-SAFETY (hard prohibitions):\n"
+                "     • NEVER predict a SPECIFIC rupee amount or wealth "
+                "figure — FORBIDDEN: '50 lakh milega', '2 crore kamaaoge', "
+                "'15 lakh ki property', '₹1 crore networth', 'monthly "
+                "₹2 lakh income'. Use ONLY relative language: 'income mein "
+                "vridhi', 'savings strong', 'property scope strong', "
+                "'corpus build hoga', 'salary jump'.\n"
+                "     • NEVER predict bankruptcy / 'kangaal ho jaaoge' / "
+                "'barbaad ho jaaoge' / 'sab kuch lut jaayega' / 'sadak par "
+                "aa jaaoge' — soften every red verdict to 'extra-savitree "
+                "phase', 'corpus protect karein', 'expansion ke liye wait'.\n"
+                "     • NEVER advise loan-default / EMI-skip / tax-evasion / "
+                "GST-fraud / under-invoicing / black-money / havala / "
+                "any illegal financial behaviour — engine NEVER endorses "
+                "fraud.\n"
+                "     • NEVER predict lottery / satta / matka / KBC / "
+                "jackpot win — engine NEVER endorses gambling.\n"
+                "     • Bucket-aware framing:\n"
+                "       - loan_clearance → frame as 'loan close hone ka "
+                "natural cosmic window — discipline + EMI continue + bank "
+                "ke saath transparent communication'.\n"
+                "       - property_purchase → 'cosmic window favourable — "
+                "RERA-registered property, legal title verification, CA-"
+                "vetted budget zaroor karein'.\n"
+                "       - investment_return → 'investments market risk ke "
+                "adheen hain — SEBI-registered advisor + diversification "
+                "essential'.\n"
+                "       - inheritance_timing → frame with empathy, NEVER "
+                "promise specific amount, NEVER predict elder's death; "
+                "frame as 'paitrak sampatti / virasat ka cosmic timing'.\n"
+                "       - sudden_windfall → ALWAYS soften — 'sudden-money "
+                "yog dikh raha hai (bonus / arrears / past-due / "
+                "professional opportunity), NOT lottery/satta'. Engine "
+                "NEVER endorses gambling-route windfall.\n"
+                "  8. If `brand_safety_warnings` array in the verdict block "
+                "is non-empty, internalise EACH warning as an absolute "
+                "constraint for this turn.\n"
+                "  9. DATE-PRECISION LOCK — the engine emits dates in "
+                "month-year resolution ONLY (e.g. 'Jul 2025 → Jun 2026'). "
+                "You MUST cite dates in the SAME resolution as printed. "
+                "FORBIDDEN: inventing specific day numbers like "
+                "'2025-07-25' or '15 July 2025' or '25/07/2025' when the "
+                "engine only gave you 'Jul 2025'. Just write 'Jul 2025 "
+                "se Jun 2026 ka window' or 'July 2025 → June 2026'. "
+                "ZERO day-precision unless the engine itself printed a "
+                "day number.\n"
+                " 10. MANDATORY FINANCIAL-ADVISOR CITATION — every wealth "
+                "reply MUST contain at least ONE explicit advisor-cite "
+                "phrase (examples: 'qualified CA se consult karein', "
+                "'SEBI-registered financial advisor se baat karein', "
+                "'tax consultant ki guidance lein', 'financial planner ki "
+                "salaah zaroor lein'). This is non-negotiable. The "
+                "engine's brand_safety_warnings already include this — "
+                "narrate it visibly.\n\n"
+                + wealth_verdict_block
             ),
         })
 
@@ -4045,6 +4356,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _exc:  # noqa: BLE001
         _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_ERR", str(_exc))
 
+    # ── WEALTH BRAND-SAFETY POST-PROCESSOR — MOVED BELOW REGEN PATHS ──
+    # The wealth brand-safety injection (CA cite + SEBI line + engine-
+    # placeholder strip) used to live HERE, between the health post-
+    # processor and the general-mode validator. That placement was
+    # broken because both the general-mode validator (mode == "general")
+    # and the marriage narrator validator (topic == "marriage") can
+    # trigger ONE auto-regen via `text = _call_once()`, which silently
+    # CLOBBERED the freshly-injected CA cite — leaving the final reply
+    # with NO advisor disclaimer and unstripped `[engine: …]` tokens.
+    # The block now runs at the very end (right before the Tone
+    # scrubber), so it always operates on the FINAL post-regen text.
+    # Search for "WEALTH BRAND-SAFETY POST-PROCESSOR (final position)"
+    # below.
+
     # ── General-mode validators (chart-leak + strict structure) ──────────────
     # Two independent checks for general (non-astro) replies:
     #   (a) chart leak — references to user's kundli/planets/dasha/remedy
@@ -4118,6 +4443,176 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                            "content": messages[0]["content"] + override}
             text = _call_once()
             _trace(req_id, "4c.RAW_AI_REGEN(marriage)", text)
+
+    # ── WEALTH BRAND-SAFETY POST-PROCESSOR (final position) ─────────────────
+    # Runs AFTER both the general-mode validator regen and the marriage
+    # narrator regen so any `text = _call_once()` clobber upstream is
+    # safely overwritten with the deterministic CA cite + (high-risk
+    # buckets) SEBI line + engine-placeholder strip. The wealth engine +
+    # narrator override already mandate the same content, but the model
+    # occasionally drops it; this guarantees ZERO regressions on the
+    # NO_FINADVISOR_CITE / NO_SEBI_LINE bench checks without re-prompting.
+    try:
+        _wv = (build_meta or {}).get("wealth_verdict_obj")
+        _bm_w = (build_meta or {})
+        # Routing-collision guard: only TRUE-overlap engines that already
+        # own a CA / SEBI-registered advisor cite contract should suppress
+        # the wealth post-processor. None currently do — marriage / love
+        # are non-financial; stock and career DO involve money but neither
+        # injects an advisor cite of their own. So we only suppress when
+        # marriage or love claimed the turn (those are explicitly NOT
+        # financial-advice flavoured), and let wealth's safety-net fire
+        # alongside stock and career.
+        # - stock excluded: real-estate questions like "Real estate
+        #   investment ka cosmic window?" get hijacked by stock_engine
+        #   on the "investment" keyword, but stock engine has NO CA /
+        #   SEBI cite of its own — wealth must still inject.
+        # - career excluded: salary / business / partnership / promotion
+        #   questions legitimately overlap wealth and career engine does
+        #   not inject advisor cites either.
+        # Routing-collision guard removed: the gate `_is_wealth_q_text`
+        # below is already strict (regex matches only finance-flavoured
+        # vocabulary), so even when marriage / love engine claimed the
+        # turn upstream we still owe the user the CA / SEBI advisor
+        # disclaimer when the question itself is finance-y (e.g.
+        # "Partner ke saath finance kaisa rahega?" routes to love but
+        # explicitly asks about finance — over-adding the cite is far
+        # safer than missing it).
+        _higher_engine_fired_w = False
+        # Fallback: even when wealth engine did NOT fire (e.g. concept-mode
+        # finance question routed to general/concept flow, or marriage /
+        # love engine claimed a finance-flavoured question), if the
+        # question is wealth-related we still owe the user (a) advisor
+        # cite and (b) SEBI line on investment-flavoured questions.
+        _is_wealth_q_text = bool(_is_wealth_question(question or ""))
+        _bucket_fallback_w = None
+        _HIGH_RISK_W = {
+            "investment_return", "business_profit", "sudden_windfall",
+            "partnership_finance", "general_wealth",
+        }
+        if (not _wv and _is_wealth_q_text
+                and not _higher_engine_fired_w):
+            _ql = (question or "").lower()
+            _invest_kw = ("invest", "stock", "share", "sip", "mutual",
+                          "equity", "trading", "intraday", "lottery",
+                          "windfall", "jackpot", "kbc", "satta", "matka",
+                          "achanak", "sudden", "business profit",
+                          "munafa", "partnership")
+            _bucket_fallback_w = (
+                "investment_return"
+                if any(k in _ql for k in _invest_kw)
+                else "general_wealth"
+            )
+        if _wv or _bucket_fallback_w:
+            import re as _re_wealth
+            # NOTE: each alternative is wrapped in its own \b…\b so we don't
+            # hit the trailing-\s\b mismatch that broke "qualified CA\n\n…"
+            # (\s ate the newline, then \b couldn't follow at \n→\n).
+            _advisor_rx = _re_wealth.compile(
+                r"(?:"
+                r"\bCA\b|\bC\.A\.|\bC\.A\b|"
+                r"\bchartered\s+accountant\b|\bchartered[- ]accountant\b|"
+                r"\bfinancial\s+advisor\b|\bfinancial[- ]advisor\b|"
+                r"\bfinancial\s+planner\b|\bfinancial[- ]planner\b|"
+                r"\bSEBI[- ]registered\b|\bSEBI\s+registered\b|"
+                r"\btax\s+consultant\b|\btax[- ]consultant\b|"
+                r"\bqualified\s+financial\b|"
+                r"\bvittiy[a-z]*\s+salahkar\b|\bvitt\s+salahkar\b"
+                r")",
+                _re_wealth.IGNORECASE,
+            )
+            _sebi_rx = _re_wealth.compile(
+                r"(sebi[- ]registered|sebi\s+registered|"
+                r"market\s+risk|"
+                r"scheme\s+document|scheme[- ]document|"
+                r"diversification)",
+                _re_wealth.IGNORECASE,
+            )
+            _advisor_line = (
+                "\n\nQualified CA / SEBI-registered financial advisor se "
+                "zaroor consult karein — cosmic guidance investment, tax "
+                "planning ya loan decision ka vikalp nahi hai."
+            )
+            _sebi_line = (
+                "\n\nInvestments market risk ke adheen hain — scheme "
+                "documents carefully padein, SEBI-registered advisor se "
+                "consult karein, diversification + risk-tolerance match "
+                "karein."
+            )
+            _bucket_w = (_wv.get("bucket") if _wv else _bucket_fallback_w)
+            _added_w = []
+            # SAFETY-NET: strip any timing-validator placeholders that may
+            # have leaked through. Mirror of the health post-processor.
+            _ph_rx_w = _re_wealth.compile(
+                r"\[engine:\s*(?:dasha not cited|window pending|"
+                r"year[^\]]*|month[^\]]*)\]",
+                _re_wealth.IGNORECASE,
+            )
+            if _ph_rx_w.search(text or ""):
+                _stripped = _ph_rx_w.sub("", text or "")
+                _stripped = _re_wealth.sub(
+                    r"\(\s*se\s*\)", "", _stripped)
+                _stripped = _re_wealth.sub(
+                    r"\s+", " ", _stripped)
+                _stripped = _re_wealth.sub(
+                    r"\s+([,.;!?])", r"\1", _stripped)
+                _ph_kept_lines = []
+                _ph_bad_rx_w = _re_wealth.compile(
+                    r"^\s*(?:dasha\s+ke\s+dasha|"
+                    r"engine\s+data\s+insufficient).*$",
+                    _re_wealth.IGNORECASE,
+                )
+                for _ln in _stripped.splitlines():
+                    if _ph_bad_rx_w.search(_ln):
+                        continue
+                    _ph_kept_lines.append(_ln)
+                text = "\n".join(_ph_kept_lines)
+                _added_w.append("ph_strip")
+            # ALWAYS-ON prompt-template leak scrubber — runs regardless of
+            # whether `[engine: …]` placeholders were present, because the
+            # model occasionally echoes the system-prompt's tense bullet
+            # ("FUTURE → headline references the NEXT favourable wealth
+            # window from `▸ Wealth window:` line.") verbatim into normal
+            # replies that didn't trip the timing validator.
+            _leak_line_rx_w = _re_wealth.compile(
+                r"^\s*(?:.*headline\s+references\s+the\s+next|"
+                r".*favourable\s+wealth\s+window\s+from|"
+                r".*authoritative\s+window\s*:\s*future\s*[→>]).*$",
+                _re_wealth.IGNORECASE,
+            )
+            _leak_inline_rx_w = _re_wealth.compile(
+                r"\s*authoritative\s+window\s*:\s*future\s*[→>][^.\n]*"
+                r"(?:wealth\s+window\s*:?[^.\n]*)?\.?",
+                _re_wealth.IGNORECASE,
+            )
+            if (_leak_line_rx_w.search(text or "")
+                    or _leak_inline_rx_w.search(text or "")):
+                _leak_kept = []
+                for _ln in (text or "").splitlines():
+                    if _leak_line_rx_w.search(_ln):
+                        continue
+                    _ln = _leak_inline_rx_w.sub("", _ln)
+                    _leak_kept.append(_ln)
+                text = "\n".join(_leak_kept)
+                if "ph_strip" not in _added_w:
+                    _added_w.append("leak_strip")
+            if not _advisor_rx.search(text or ""):
+                text = (text or "").rstrip() + _advisor_line
+                _added_w.append("advisor_cite")
+            if (_bucket_w in _HIGH_RISK_W
+                    and not _sebi_rx.search(text)):
+                text = text.rstrip() + _sebi_line
+                _added_w.append("sebi_line")
+            if _added_w:
+                _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_INJECTED",
+                       {"bucket": _bucket_w, "added": _added_w,
+                        "src": "engine" if _wv else "fallback"})
+            else:
+                _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_OK",
+                       {"bucket": _bucket_w,
+                        "src": "engine" if _wv else "fallback"})
+    except Exception as _exc:  # noqa: BLE001
+        _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_ERR", str(_exc))
 
     # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
     pre_scrub = text

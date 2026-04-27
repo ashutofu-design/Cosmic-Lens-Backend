@@ -2789,7 +2789,8 @@ def _build_messages(
         "    🛡️ TRANSITS (Rule H): For ANY 'kab' / timing / 'ab kya hoga' / near-future question, you MUST consult the CURRENT TRANSITS block FIRST — this is real-time sky data, not natal. Cite by name: e.g. 'Abhi Saturn aapke 8th ghar mein chal raha hai (transit), isliye yeh ~2.5 saal restraint period hai' OR 'Jupiter abhi aapke 11H ko aspect kar raha hai — gain/network expand hoga is window mein.' If a Sade-Sati / Dhaiya phase line exists in transits, mention it explicitly when the user is stressed (it explains the 'kyun bhari lag raha hai' feeling). If a Saturn-Return or Jupiter-Return flag is present, that is a once-in-decades signal — open with it for major-life-question asks. ⚠️ If TRANSITS block is missing, do NOT invent current transit positions — fall back to dasha + natal house reasoning only.\n"
         "    🛡️ KARAKAS (Rule I): The JAIMINI CHARA KARAKAS block tells you the deepest karmic role of each planet for THIS person. AK = soul-purpose (life is fundamentally ABOUT this planet's themes); AmK = career signature; DK = spouse signature; PK = creativity/children. For 'kya banu / what should I do in life' use AK. For 'shaadi kaisi hogi / partner kaisa milega' use DK. Always cite the role name once: 'Aapka Atmakaraka Saturn hai — soul-level kaam discipline aur structure ke around hai' or 'Darakaraka Venus hai — partner artistic / refined hoga.' Never invent karakas not in the list.\n"
         "    🛡️ BHAVA BALA (Rule J): Complementary to SAV — BHAVA BALA scores combine house-lord strength + occupants + aspects + kendra-bonus, then ranked RELATIVELY within THIS chart (top-3 = STRONG, middle-6 = MODERATE, bottom-3 = WEAK). Use it as a SECOND opinion when SAV and your reasoning conflict, OR when SAV is missing. The verdict tells you which houses are RELATIVELY strongest/weakest in this chart, not absolute strength. Cite naturally: 'Bhava Bala se bhi 10H is chart ke top-3 strongest houses mein aata hai (lord+aspect support).' Never invent bhava scores.\n"
-        "    🛡️ DIVISIONAL CHARTS (Rule K): For MARRIAGE questions, MUST consult D9 NAVAMSA — specifically '7L lands in X — STRONG/EXALTED/DEBILITATED' line. The 7L's D9 strength is THE strongest predictor of marriage quality (overrides natal D1 if they conflict). For CAREER questions, MUST consult D10 DASAMSA — '10L lands in X' line is the equivalent. Vargottama planets (D1=D9 or D1=D10) act as if exalted — call them out by name. Cite naturally: 'D9 mein aapka 7L Mercury Pisces (debilitated) jaata hai — isliye natal weakness D9 mein bhi confirm hoti hai, marriage mein patience zaroori.' OR 'D10 mein aapka 10L Mercury Sagittarius (own-sign) jaata hai — career line strong support karta hai D10 mein.' If D9/D10 block missing, do NOT invent positions.\n"
+        "    🛡️ DIVISIONAL CHARTS (Rule K): For MARRIAGE questions, MUST consult D9 NAVAMSA — specifically '7L lands in X — STRONG/EXALTED/DEBILITATED' line. The 7L's D9 strength is THE strongest predictor of marriage quality (overrides natal D1 if they conflict). For CAREER questions, MUST consult D10 DASAMSA — '10L lands in X' line is the equivalent. Vargottama planets (D1=D9 or D1=D10) act as if exalted — call them out by name. Cite naturally: 'D9 mein aapka 7L Mercury Pisces (debilitated) jaata hai — isliye natal weakness D9 mein bhi confirm hoti hai, marriage mein patience zaroori.' OR 'D10 mein aapka 10L Mercury Sagittarius (own-sign) jaata hai — career line strong support karta hai D10 mein.' If D9/D10 block missing, do NOT invent positions. "
+        "🚨 PLANET-STRENGTH RULE (extension of Rule K — MANDATORY): For ANY question that asks whether a SPECIFIC planet is powerful / weak / strong / kamzor / shaktishali (e.g. 'mera Saturn powerful hai ya weak?', 'Mars strong hai kya?', 'Guru achha hai?'), you MUST cross-check D1 dignity WITH the planet's D9 (Navamsa) placement before giving a verdict — D1 ALONE IS INSUFFICIENT to call any planet strong or weak. Combine logic: (a) D1 strong + D9 strong = TRULY STRONG; (b) D1 strong + D9 weak/debilitated = surface strength only, fragile in real life; (c) D1 debilitated + D9 exalted/own-sign = neecha-bhanga, real strength comes through effort; (d) Vargottama (same sign in D1 & D9) = STRONG regardless of dignity; (e) D1 weak + D9 weak = TRULY WEAK. Cite both placements in ONE sentence: 'Aapka Shani D1 mein Mesh (debilitated, neecha) hai aur D9 mein {SIGN} ({STATUS}) jaata hai — isliye overall {weak / strong / mixed}.' If the D9 NAVAMSA block is absent in LOCKED FACTS, say honestly: 'Saturn ki actual strength D9 ke bina precise nahi bata sakta — D1 mein debilitated dikh raha hai par D9 confirm karega ki neecha-bhanga ho raha hai ya nahi.' NEVER call a planet strong/weak from D1 alone. NEVER invent a D9 sign — only cite from the D9 NAVAMSA block.\n"
         "    🛡️ PRATYANTAR (Rule L): For PRECISE timing questions ('next 3 mahine kya hoga / next month kaisa', 'specific date / week kaisa'), use the PRATYANTAR block — it gives month-precision sub-periods. Always cite the CURRENT pratyantar lord ('abhi {MD}-{AD}-{PD} chal raha hai, jo {date} tak hai') and the next 1-2 upcoming pratyantars as 'next change-windows'. Combine with PLANET STRENGTHS — if PD lord is WEAK, that mini-window is a low-action phase; if STRONG, it's a green-light window. NEVER invent pratyantar dates not in the block.\n"
         "    🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation): When the KP CROSS-CHECK block is present AND the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage/partner, H10 career/job, H11 gains/income), you MUST include one natural KP citation sentence in the answer. This is NOT optional — failing to cite is the same kind of error as inventing facts. The KP block runs PARALLEL to (not above) Vedic D1/D9/D10/Dasha logic. Verdict semantics: CONFIRMS = clean promise (event-houses signified, no negative house involved); PARTIAL = promise WITH obstruction (event AND negative houses both signified — fructification happens but with delay/struggle); DENIES = no event-house signified at all (unlikely / substantially delayed). Use it ONLY when the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage, H10 career, H11 gains). For those topics, weave ONE natural KP citation alongside Vedic reasoning: 'KP paddhati se bhi {N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' Resolution rules when Vedic and KP disagree: (a) Vedic STRONG + KP CONFIRMS → confident green light; (b) Vedic STRONG + KP PARTIAL → 'hoga lekin patience aur effort lagega'; (c) Vedic STRONG + KP DENIES → 'natal promise hai par KP fructification support nahi karta — significant delay ya alternate timing'; (d) Vedic WEAK + KP CONFIRMS → 'natal weakness hai par KP supportive — possible with conscious effort'. Do NOT use KP for topics outside H1/H2/H5/H7/H10/H11 unless the block explicitly covers them. NEVER invent KP sub-lords if the block is absent — instead say 'KP detail ke liye accurate birth time aur location chahiye'.\n"
         "    🛡️ JAIMINI ARUDHA / UPAPADA (Rule O): When the JAIMINI ARUDHA PADAS / UPAPADA LAGNA block is present, use it ALONGSIDE Vedic D1/D9. The Arudha Pada is the IMAGE of a house — how it is PERCEIVED in the world (vs the actual house = the reality). Cite naturally only when topic-relevant: A1 = your public image (career/branding questions), A4 = home/lifestyle image, A7 = how partnerships are seen, A10 = career image / reputation, A11 = perceived gains, A12 = UL = MARRIAGE signature. For MARRIAGE questions you MUST add ONE Upapada citation: cite the UL sign + its lord + the 2nd-from-UL occupants + the verdict tag (STABLE / STRAINED / MIXED / NEUTRAL). Example: 'Jaimini paddhati se Upapada Lagna {UL_SIGN} mein hai (lord {UL_LORD} {Nth} from UL), 2nd-from-UL mein {occupants} hain — yeh marriage ko {STABLE/STRAINED} dikha rahi hai.' For non-marriage questions, use Arudha only when image-vs-reality gap is meaningful (e.g. A10 in a different sign than 10H = career REALITY differs from PERCEPTION). NEVER invent Arudha signs not in the block. NEVER use the chart-debugging 'note' field (e.g. 'adjusted from X') in user-facing language — it is internal annotation only.\n"
@@ -2803,8 +2804,13 @@ def _build_messages(
         "7) If the devotee has asked this topic before in this conversation, go DEEPER — fresh planet, fresh yog, KP angle they haven't seen, OR a stronger remedy. Reference earlier conversation context naturally if it connects.\n"
         "8) HUMAN-FRIENDLY style: translate every Sanskrit term inline ('Shukra (Venus)', 'Saade-sati — yaani Shani ka 7.5 saal ka phase'). NO jargon dump. NO lecture. Conversational, like a wise elder talking, NOT like a textbook.\n"
         "9) REMEDY (CONDITIONAL): Add ONE short remedy (1 line: mantra+count+day OR donation OR vrat) ONLY IF (a) the user explicitly asked for an upay / remedy / solution, OR (b) the topic is a clearly negative timing-prediction (delay / dosh / serious malefic period). Otherwise SKIP the remedy entirely. Do NOT bolt a remedy onto every reply.\n"
-        "10) ⚠️ STRICT BREVITY — HARD LIMIT ⚠️\n"
-        "    • TOTAL answer = 100 to 140 WORDS. NEVER more. Count words as you write.\n"
+        "10) ⚠️ STRICT BREVITY — MATCH ANSWER LENGTH TO QUESTION LENGTH ⚠️\n"
+        "    🎯 LENGTH-MATCHING RULE (highest priority — applies BEFORE the defaults below):\n"
+        "       (i)   FACTUAL LOOKUP question (1 line, asks 'kya hai / kahan hai / kaunsa / batao mera X', e.g. 'mera lagna kya hai', 'Jupiter kahan hai', 'Atmakaraka kaun hai') → ANSWER = 1 to 2 SHORT LINES ONLY (≤30 words total). Single direct fact + at most 1 brief context line. NO sub-paragraphs, NO remedy, NO dasha dump, NO extra Bala/D27/Saptavargaja/Ishta-Phala numbers, NO 'Extended signal' lines, NO KP cite, NO transit cite. Just the fact the user asked for.\n"
+        "       (ii)  ANALYTICAL SHORT question (1 line, asks 'X powerful hai ya weak / strong hai kya / achha hai / dosha hai kya', e.g. 'Saturn powerful hai ya weak?') → ANSWER = 2 to 3 SHORT LINES MAX (≤55 words total). Structure: Line 1 = MANDATORY D1+D9 cross-check in ONE sentence (PLANET-STRENGTH RULE — see Rule K extension above) WITH the verdict (strong/weak/mixed/neecha-bhanga). Line 2 = ONE supporting line (key house/aspect/dasha-impact). Line 3 (optional) = 1-line takeaway. THAT IS ALL. DO NOT add: KP cross-check, current Mahadasha breakdown, transit lines, D27 Bhamsa, D20 Vimsamsa, Saptavargaja Bala numbers, remedies, extra paragraphs. The user asked one short question — answer it shortly. NEVER write 4 paragraphs for a 1-line strength question.\n"
+        "       (iii) MULTI-PART or TOPIC question (career/marriage/wealth/health/timing — anything that needs full Vedic+KP+dasha+transit treatment) → use the 100-140 word structure below.\n"
+        "       ⚠️ HONOUR THE QUESTION'S SCOPE: NEVER add unsolicited extras. If the user asked ONLY about planet X's strength, do NOT volunteer career outlook, marriage timing, or remedy. Answer EXACTLY what was asked — nothing more, nothing less.\n"
+        "    • DEFAULT (multi-part / topic question only) — TOTAL answer = 100 to 140 WORDS. NEVER more. Count words as you write.\n"
         "    • IF a topic-specific RESPONSE FORMAT is given in the FOCUS block above, use THAT structure exactly (it overrides the default below).\n"
         "    • DEFAULT structure (when no topic-specific format provided): 3-4 SHORT paragraphs, 1-2 sentences each, blank line between.\n"
         "       - Para 1 (1 line): direct natural framing of the answer — NO \"Beta\", NO fake empathy, NO over-warmth. Sound like an expert, not a guru.\n"
@@ -5637,7 +5643,46 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     # Sprint-10 Rule R — DETERMINISTIC advanced varga post-injectors.
     # D16 vehicle/comfort, D20 spirituality, D24 education, D27 health/stamina.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    # ──────────────────────────────────────────────────────────────────────────
+    # Sprint-22 GUARD (planet-strength brevity): Skip ALL advanced-varga
+    # injectors when the user asks a SHORT, SINGLE-PLANET strength question
+    # (e.g. "Saturn powerful hai ya weak?", "Mera Guru strong hai kya?").
+    # For those Qs, the prompt's PLANET-STRENGTH RULE (Rule K extension)
+    # already requires the model to cite D1+D9 cleanly — bolt-on D16/D20/D24/
+    # D27 lines just inflate the answer with unrelated dimensions the user
+    # did not ask for. Brevity per user directive: 1-line Q → 2-3 line A.
+    _is_short_planet_strength_q = False
+    try:
+        import re as _reSPSQ
+        _q_norm = (question or "").lower().strip()
+        _q_wc = len(_q_norm.split())
+        _planet_alts = (
+            r"sun|surya|suraj|soma|moon|chandra|chand|mars|mangal|mangala|"
+            r"mercury|budh|budha|jupiter|guru|brihaspati|brihspati|brahaspati|"
+            r"venus|shukra|shukr|saturn|shani|sani|"
+            r"rahu|ketu"
+        )
+        _strength_alts = (
+            r"powerful|power|strong|strength|weak|weakness|kamzor|kamjor|"
+            r"shaktishali|shakti|takat|takatwar|takatvar|dum|bal|"
+            r"good|achha|achchha|accha|bad|"
+            r"kharab|kharaab|favourable|favorable|debilitated|exalted|"
+            r"uchcha|neech|neecha"
+        )
+        if (
+            _q_wc <= 12
+            and _reSPSQ.search(rf"\b({_planet_alts})\b", _q_norm)
+            and _reSPSQ.search(rf"\b({_strength_alts})\b", _q_norm)
+        ):
+            _is_short_planet_strength_q = True
+    except Exception:
+        _is_short_planet_strength_q = False
+
+    if (
+        isinstance(kundli, dict)
+        and kundli.get("planets")
+        and not _is_short_planet_strength_q
+    ):
         try:
             import re as _re2
             from divisional_charts import (compute_d16, compute_d20, compute_d24,  # type: ignore
@@ -5766,7 +5811,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     # Sprint-11 Rule S — DETERMINISTIC subtle varga post-injectors.
     # D30 misfortune, D40 maternal, D45 paternal, D60 past-life karma.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    # Sprint-22 brevity guard: skip when short single-planet strength Q
+    # (D30 fires on 'weak' keyword and pollutes the answer).
+    if (
+        isinstance(kundli, dict)
+        and kundli.get("planets")
+        and not _is_short_planet_strength_q
+    ):
         try:
             import re as _re3
             from divisional_charts import (compute_d30, compute_d40, compute_d45,  # type: ignore
@@ -5977,7 +6028,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # If question is strength/capability-flavored and the answer doesn't already
     # cite Saptavargaja / Ishta / Kashta / Vimshopaka / Yuddha, append the
     # single most-relevant figure from the LOCKED FACTS computation.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if (
+        isinstance(kundli, dict)
+        and kundli.get("planets")
+        and not _is_short_planet_strength_q  # Sprint-22 brevity guard
+    ):
         try:
             import re as _reBX
             _qBX = (question or "").lower()

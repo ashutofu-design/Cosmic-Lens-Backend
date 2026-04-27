@@ -1159,6 +1159,76 @@ def _layer_moon_psychology(intel: dict, kundli: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DASHA LORD EXTRACTOR (multi-key tolerance — mirror of career_engine)
+# ─────────────────────────────────────────────────────────────────────────────
+def _stock_dasha_lords(kundli: dict) -> tuple[str, str, str]:
+    """Return current (MD, AD, PD) lord names from kundli.currentDasha,
+    tolerant of every key naming convention used by upstream chart
+    providers (mahadasha|maha|MD|md_lord|mahadashaLord, etc.). Falls
+    back to currentPhase.name parsing and finally to walking the
+    kundli.dashas hierarchy at "now". Mirror of career_engine._dasha_lords
+    so the stock narrator gets the same dasha-citation reliability."""
+    cd = kundli.get("currentDasha") or {}
+    md = (cd.get("mahadasha") or cd.get("maha") or cd.get("MD") or
+          cd.get("md_lord") or cd.get("mahadashaLord") or "").strip()
+    ad = (cd.get("antardasha") or cd.get("antar") or cd.get("AD") or
+          cd.get("ad_lord") or cd.get("antardashaLord") or "").strip()
+    pd = (cd.get("pratyantardasha") or cd.get("pratyantar") or
+          cd.get("PD") or cd.get("pd_lord") or
+          cd.get("pratyantarLord") or "").strip()
+    # Fallback 1 — parse currentPhase.name "Rahu – Sun"
+    if not md or not ad:
+        cp = kundli.get("currentPhase") or {}
+        nm = (cp.get("name") or "").strip()
+        if nm:
+            for sep in ("–", "-", "—", "/", "→"):
+                if sep in nm:
+                    parts = [p.strip() for p in nm.split(sep) if p.strip()]
+                    if len(parts) >= 1 and not md: md = parts[0]
+                    if len(parts) >= 2 and not ad: ad = parts[1]
+                    if len(parts) >= 3 and not pd: pd = parts[2]
+                    break
+    # Fallback 2 — derive PD from nested dashas hierarchy at "now"
+    if (md and ad) and not pd:
+        try:
+            from datetime import timezone
+            now = datetime.now(timezone.utc).date().isoformat()
+            for top in (kundli.get("dashas") or []):
+                if not isinstance(top, dict): continue
+                if top.get("planet") != md: continue
+                if not (str(top.get("startDate","")) <= now <= str(top.get("endDate","9999"))):
+                    continue
+                for sub in (top.get("subDashas") or []):
+                    if sub.get("planet") != ad: continue
+                    if not (str(sub.get("startDate","")) <= now <= str(sub.get("endDate","9999"))):
+                        continue
+                    for sub2 in (sub.get("subDashas") or []):
+                        if str(sub2.get("startDate","")) <= now <= str(sub2.get("endDate","9999")):
+                            pd = (sub2.get("planet") or "").strip()
+                            break
+                    break
+                break
+        except Exception:
+            pass
+    return md, ad, pd
+
+
+def _stock_dasha_window(kundli: dict) -> tuple[str, str]:
+    """Return (start, end) ISO date strings for the currently-active AD.
+    Tolerant of every start/end key naming convention. Returns ('','') if
+    none can be derived."""
+    cd = kundli.get("currentDasha") or {}
+    cp = kundli.get("currentPhase") or {}
+    start = (cd.get("startDate") or cd.get("start")
+             or cd.get("antardashaStart") or cd.get("ad_start")
+             or cp.get("start") or "")
+    end = (cd.get("endDate") or cd.get("end")
+           or cd.get("antardashaEnd") or cd.get("ad_end")
+           or cp.get("end") or "")
+    return str(start), str(end)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LAYER 16 — Vimshottari MD/AD/PD timing (weight 10)
 # LAYER 17 — Live Jupiter/Saturn transit + Sade Sati (weight 5)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1168,9 +1238,10 @@ def _layer_dasha_timing(kundli: dict, kp_sigs: dict, q_type: str) -> dict:
     sigs_271 = _significators_of(WEALTH_HOUSES, kp_sigs)
     today = datetime.utcnow()
 
-    # Current dasha activated check
-    cur = (kundli.get("currentDasha") or {})
-    cur_md, cur_ad = cur.get("maha") or "", cur.get("antar") or ""
+    # Current dasha — full multi-key extraction so the validator-friendly
+    # window line can cite real planet names + dates.
+    cur_md, cur_ad, cur_pd = _stock_dasha_lords(kundli)
+    cur_start, cur_end = _stock_dasha_window(kundli)
     current_supports = bool((cur_md and cur_md in sigs_271)
                             or (cur_ad and cur_ad in sigs_271))
 
@@ -1195,6 +1266,11 @@ def _layer_dasha_timing(kundli: dict, kp_sigs: dict, q_type: str) -> dict:
     s = max(-10, min(10, s))
     return {
         "current_dasha":   f"{cur_md}-{cur_ad}".strip("-"),
+        "current_dasha_md": cur_md,
+        "current_dasha_ad": cur_ad,
+        "current_dasha_pd": cur_pd,
+        "current_dasha_start": cur_start,
+        "current_dasha_end":   cur_end,
         "current_supports": current_supports,
         "next_window":     next_window,
         "pratyantar_window": pd_window,
@@ -1781,6 +1857,11 @@ def assess_stock(kundli: dict, intel: dict, kp: dict,
         "next_window":          L16.get("next_window"),
         "pratyantar_window":    L16.get("pratyantar_window"),
         "current_dasha":        L16.get("current_dasha"),
+        "current_dasha_md":     L16.get("current_dasha_md"),
+        "current_dasha_ad":     L16.get("current_dasha_ad"),
+        "current_dasha_pd":     L16.get("current_dasha_pd"),
+        "current_dasha_start":  L16.get("current_dasha_start"),
+        "current_dasha_end":    L16.get("current_dasha_end"),
         "current_dasha_supports": L16.get("current_supports"),
         "wealth_significators": L16.get("wealth_significators"),
         "fifth_lord":           L1.get("fifth_lord"),
@@ -1894,6 +1975,52 @@ def format_verdict_for_prompt(v: dict) -> str:
         nw_line = ("  Next favourable Dasha window: NOT FOUND in next 12 years\n"
                    "  >>> NARRATE: \"agle 12 saal mein koi spasht prabal wealth-yog window nahi mil raha\" — DO NOT invent dates. <<<\n")
 
+    # Validator-friendly current-window heading line + dasha aliases.
+    # Mirrors career_engine.format_verdict_for_prompt's "▸ Current Career
+    # window:" pattern so timing_validator's heading-only window picker
+    # (openai_helper.py ~3596 _heading_rx) and the planet-in-authorised-
+    # dasha matcher (timing_validator.py ~_planet_in_authorised_dasha)
+    # both see the current MD/AD/PD names, the human start→end window,
+    # and every alias form ("X dasha", "X MD", "X maha", "X antar") that
+    # the narrator might use. Without this, "kab"/timing questions on
+    # the stock engine leak [engine: dasha not cited] and
+    # [engine: window pending] placeholders into final answers.
+    cw_line = ""
+    cur_md = (v.get("current_dasha_md") or "").strip()
+    cur_ad = (v.get("current_dasha_ad") or "").strip()
+    cur_pd = (v.get("current_dasha_pd") or "").strip()
+    cur_s  = (v.get("current_dasha_start") or "").strip()
+    cur_e  = (v.get("current_dasha_end")   or "").strip()
+    if cur_md or cur_ad:
+        cur_s_h = _ym_to_human(cur_s[:7]) if cur_s else ""
+        cur_e_h = _ym_to_human(cur_e[:7]) if cur_e else ""
+        dasha_str_parts = []
+        if cur_md: dasha_str_parts.append(f"{cur_md} Mahadasha")
+        if cur_ad: dasha_str_parts.append(f"{cur_ad} Antardasha")
+        if cur_pd: dasha_str_parts.append(f"{cur_pd} Pratyantardasha")
+        dasha_str = " / ".join(dasha_str_parts)
+        if cur_s_h or cur_e_h:
+            cw_line = f"▸ Wealth window: {cur_s_h} → {cur_e_h} — {dasha_str}\n"
+        else:
+            cw_line = f"▸ Wealth window: {dasha_str}\n"
+        # Dasha aliases — authorise every loose phrasing the narrator may
+        # use ("Rahu dasha", "Rahu MD", "Rahu maha", "Rahu antar") so the
+        # validator's _planet_in_authorised_dasha() accepts them.
+        alias_parts = []
+        for planet, abbr, full in (
+            (cur_md, "MD", "Mahadasha"),
+            (cur_ad, "AD", "Antardasha"),
+            (cur_pd, "PD", "Pratyantardasha"),
+        ):
+            if not planet:
+                continue
+            alias_parts.append(
+                f"{planet} {full} (also: {planet} {abbr}, {planet} dasha, "
+                f"{planet} maha, {planet} antar)"
+            )
+        if alias_parts:
+            cw_line += f"   • Dasha aliases (validator-safe): {' | '.join(alias_parts)}\n"
+
     rs = "\n".join(f"    + {r}" for r in (v.get("reasons_strong") or [])[:6]) or "    (none)"
     rw = "\n".join(f"    - {r}" for r in (v.get("reasons_weak") or [])[:5]) or "    (none)"
 
@@ -1926,6 +2053,7 @@ def format_verdict_for_prompt(v: dict) -> str:
         f"  11th lord:         {v.get('eleventh_lord')} ({v.get('eleventh_lord_dignity')}) — gains karaka\n"
         f"  Speculation Yoga:  {v.get('speculation_gains_yoga')}    Dhana Yoga 2-11: {v.get('dhana_yoga_2_11')}\n"
         f"  Current Dasha:     {v.get('current_dasha')} (supports wealth = {v.get('current_dasha_supports')})\n"
+        f"{cw_line}"
         f"{kp_lines}"
         f"{nw_line}"
         f"{_strategy_line(v.get('strategy') or {})}"

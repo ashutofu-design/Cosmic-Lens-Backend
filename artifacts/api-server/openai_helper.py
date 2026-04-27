@@ -67,8 +67,32 @@ _STOCK_QUESTION_RX = __import__("re").compile(
     r"intraday|swing|scalping|fno|futures?|options?|derivative|"
     r"crypto|bitcoin|ethereum|dogecoin|nft|"
     r"mutual[- ]?funds?|sip|lump[- ]?sum|invest(or|ing|ment)|"
-    r"share[- ]?bazar|stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar)\b"
+    r"share[- ]?bazar|stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar|"
+    # Trading-context bigrams that are unambiguously stock-market
+    # (not generic life-finance). DELIBERATELY EXCLUDED because they
+    # false-trigger on non-stock contexts:
+    #   • "risk management" (life/health/work)
+    #   • "capital protection" (insurance/savings)
+    #   • bare "market mein aau/jaau/jaana" (sabzi/local market)
+    # The kept set requires a stock-trading-specific noun phrase or
+    # an explicit re-entry verb ("dobara/wapas/wapsi") that civilians
+    # don't use for sabzi-market visits.
+    r"profit[- ]?booking|stop[- ]?loss|trailing[- ]?stop|"
+    r"risk[- ]?reward|position[- ]?sizing|"
+    r"max(?:imum)?[- ]?drawdown|hedging|"
+    r"average[- ]?down|margin[- ]?call|wealth[- ]?window|"
+    r"dhan[- ]?yog|dhana[- ]?yog)\b"
     r"|f&o|F&O"
+    # Market re-entry / wapsi phrasings — unambiguous trading lingo.
+    # "dobara market" (returning to market after exit) and
+    # "market mein wapsi/wapas/wapis/return" are trading-specific;
+    # nobody uses these for sabzi-market or local-market trips.
+    r"|\bdobara\s+market\b"
+    r"|\bmarket\s+(?:me|mein|m[ae])\s+(?:wapsi|wapas|wapis|return)\b"
+    # "paisa lagana" (to deploy capital) — narrow trading verb that's
+    # almost always about investing/trading. Allow inflections.
+    r"|\bpaisa\s+(?:laga(?:na|u|ye|yi|ya)?|lagaa(?:na|u|ye|yi|ya)?|"
+    r"lag\s+(?:gaya|gayi))\b"
     r"|शेयर|शेयर बाज़ार|निवेश)",
     __import__("re").IGNORECASE,
 )

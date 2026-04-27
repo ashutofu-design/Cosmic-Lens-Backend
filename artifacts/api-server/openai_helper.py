@@ -80,6 +80,56 @@ def _is_stock_question(text: str) -> bool:
         return False
     return bool(_STOCK_QUESTION_RX.search(text))
 
+
+def _love_engine():
+    """Lazy-load deterministic love & relationship verdict engine."""
+    from love_engine import (assess_love,                       # type: ignore
+                              format_verdict_for_prompt as _fmt_love,
+                              extract_window_str as _love_window_str,
+                              classify_love_question)
+    return assess_love, _fmt_love, _love_window_str, classify_love_question
+
+
+# Love-question gate. Triggers love_engine ONLY when question is genuinely
+# about romance / relationship — NOT about marriage (marriage_engine wins
+# the routing collision via _MARRIAGE_OVERRIDE_RX below).
+_LOVE_QUESTION_RX = __import__("re").compile(
+    r"(?:\b(love|pyaar|pyar|crush|ishq|mohabbat|romance|romantic|"
+    r"dating|girlfriend|boyfriend|gf|bf|partner|rishta|rishtey|relation|"
+    r"relationship|breakup|break[- ]?up|patch[- ]?up|reunion|reconcil|"
+    r"chakkar|chakar|affair|cheating|cheater|dhokha|dhoka|bewafai|"
+    r"soulmate|jeevansathi|sathi|saathi|"
+    r"propose|izhaar|izhar|long[- ]?distance|ldr|"
+    r"one[- ]?sided|ekta-?rafa|ektarafa|"
+    r"compat(?:ible|ibility)|jodi|joodi)\b"
+    r"|प्यार|प्रेम|रिश्ता|ब्रेकअप|गर्लफ्रेंड|बॉयफ्रेंड)",
+    __import__("re").IGNORECASE,
+)
+
+# Marriage keywords that override love routing — if the user mentions
+# shaadi/vivah/spouse, it's a marriage question (even with love vocabulary
+# like "love marriage kab hogi"), so marriage_engine handles it.
+_MARRIAGE_OVERRIDE_RX = __import__("re").compile(
+    r"(?:\b(shaadi|shadi|marriage|marry|married|vivaah|vivah|"
+    r"wife|husband|spouse|biwi|pati|patni|dulhan|dulha|"
+    r"engagement|engaged|sagai|mangni|"
+    r"saptam|kalatra)\b"
+    r"|शादी|विवाह|पति|पत्नी|दूल्हा|दुल्हन)",
+    __import__("re").IGNORECASE,
+)
+
+
+def _is_love_question(text: str) -> bool:
+    """True iff text matches love trigger AND not the marriage-override gate.
+    Marriage routing has priority — questions like 'love marriage kab hogi'
+    go to marriage_engine, not love_engine."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    if _MARRIAGE_OVERRIDE_RX.search(text):
+        return False
+    return bool(_LOVE_QUESTION_RX.search(text))
+
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -1126,6 +1176,45 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] stock_engine failed: {exc}")
 
+    # ── DETERMINISTIC LOVE & RELATIONSHIP VERDICT ─────────────────────────────
+    # For love-keyword questions (non-marriage, non-stock), compute deterministic
+    # verdict via love_engine. AI becomes pure narrator with brand-safety guards
+    # for affair / breakup / one_sided buckets. Mirror of marriage/stock.
+    love_verdict_block = ""
+    love_verdict_obj   = None
+    love_window_str    = ""
+    if (topic in ("relationship", "general")
+            and not marriage_verdict_block
+            and not stock_verdict_block
+            and isinstance(kundli, dict) and kundli.get("planets")
+            and _is_love_question(question)):
+        try:
+            kp_dict_l = locals().get("kp_dict") or locals().get("kp_dict_s")
+            try:
+                if not kp_dict_l and isinstance(birth, dict):
+                    kp_dict_l = _kp_calc()(birth)
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for love failed: {exc}")
+            assess_love, fmt_love, love_window_fn, _classify_love_q = _love_engine()
+            love_verdict_obj = assess_love(
+                kundli, intel_obj or {}, kp_dict_l or {}, birth, question)
+            if love_verdict_obj:
+                love_verdict_block = fmt_love(love_verdict_obj)
+                love_window_str    = love_window_fn(love_verdict_obj) or ""
+                if isinstance(out_meta, dict):
+                    out_meta["love_verdict_obj"]   = love_verdict_obj
+                    out_meta["love_question_type"] = love_verdict_obj.get("question_type")
+                    out_meta["love_window_str"]    = love_window_str
+                print(f"[openai_helper] love_engine OK → "
+                      f"q_type='{love_verdict_obj.get('question_type')}' "
+                      f"verdict='{love_verdict_obj.get('verdict','')[:60]}' "
+                      f"score={love_verdict_obj.get('score')} "
+                      f"npx={love_verdict_obj.get('natal_promise_score')} "
+                      f"trig={love_verdict_obj.get('current_trigger_score')} "
+                      f"window='{love_window_str}'")
+        except Exception as exc:
+            print(f"[openai_helper] love_engine failed: {exc}")
+
     focus     = _focus_block(topic)
     # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
     # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
@@ -1908,6 +1997,57 @@ def _build_messages(
             ),
         })
 
+    # ── LOVE NARRATOR TURN-LEVEL OVERRIDE ─────────────────────────────────────
+    # Appended LAST (just before the user turn) so recency bias keeps the lock
+    # authoritative. Mirror of stock override + extra brand-safety guards for
+    # affair / breakup / one_sided buckets surfaced by love_engine in the
+    # `brand_safety_warnings` array of the JSON envelope.
+    if love_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔒 LOVE NARRATOR OVERRIDE — this turn is a love / relationship / "
+                "romance question. The cosmic engine has already computed the "
+                "verdict bucket, score, timing window, Venus/5L/7L lords, "
+                "Darakaraka, Upapada, KP cuspal cross-check, D9 Navamsa "
+                "overlay, and remedy for you. You are NOT analysing — you "
+                "are NARRATING a locked verdict in warm Hinglish.\n\n"
+                "ABSOLUTE RULES (these override every other instruction this turn):\n"
+                "  1. The verdict bucket (green / yellow_wait / slow_burn / "
+                "red_avoid) is FINAL. Do NOT contradict it, do NOT hedge it "
+                "into the opposite bucket, do NOT add 'lekin actually…' "
+                "reversals. Use the verdict text as the spine of your reply.\n"
+                "  2. Copy the timing window string EXACTLY as printed on the "
+                "line beginning '>>> NARRATE THIS WINDOW EXACTLY AS:'. No "
+                "rounding, no shifting, no blending.\n"
+                "  3. Copy score, dasha-lord names, 5th-lord, 7th-lord, Venus "
+                "house/dignity, Darakaraka name+persona, and remedy VERBATIM. "
+                "No paraphrasing of numbers or planet names.\n"
+                "  4. NEVER reveal AI / LLM / GPT / model — brand voice is "
+                "'Powered by Advanced Cosmic Intelligence'. Speak as the "
+                "cosmic intelligence, never as a chatbot.\n"
+                "  5. NO fake/random fallbacks. If the engine block is silent "
+                "on a detail, do NOT invent it.\n\n"
+                "  6. BRAND-SAFETY GUARDS (mandatory for these question_type "
+                "buckets):\n"
+                "     • affair_third_party → NEVER accuse the partner of "
+                "cheating. Describe cosmic patterns only ('Venus-Rahu axis', "
+                "'12L in 7H' etc.). Recommend self-introspection + open "
+                "communication + (high signal only) trust-rebuilding.\n"
+                "     • breakup_signal → soften language; pair every "
+                "separation indicator with a healing window + remedy. NEVER "
+                "say 'definite breakup hoga' — say 'cosmic plane pe distance "
+                "signal hai, lekin healing window agle X mahine khulega'.\n"
+                "     • one_sided → preserve self-worth. Frame as 'mutual "
+                "cosmic resonance abhi weak hai' not 'wo tumhe pasand nahi "
+                "karta'. NEVER make the user feel rejected as a person.\n"
+                "  7. If `brand_safety_warnings` array in the JSON envelope "
+                "is non-empty, internalise EACH warning as an absolute "
+                "constraint for this turn.\n\n"
+                + love_verdict_block
+            ),
+        })
+
     msgs.append({"role": "user", "content": user})
     return msgs
 
@@ -1937,9 +2077,15 @@ _TOPIC_KW = {
     "education":   ["study", "exam", "education", "padhai", "result", "college", "degree", "school",
                     "vidya", "graduation", "phd", "masters", "ias", "upsc", "neet", "jee", "gate",
                     "competitive", "scholarship", "admission"],
-    "relationship":["love", "relationship", "girlfriend", "boyfriend", "breakup", "rishta", "rishtey",
-                    "pyaar", "pyar", "ladka", "ladki", "dating", "crush", "ex", "love marriage",
-                    "inter-caste", "family opposition"],
+    "relationship":["love", "relationship", "girlfriend", "boyfriend", "gf", "bf", "breakup",
+                    "break-up", "patch-up", "patchup", "rishta", "rishtey", "pyaar", "pyar",
+                    "ishq", "mohabbat", "romance", "romantic", "ladka", "ladki", "dating",
+                    "crush", "ex", "love marriage", "inter-caste", "family opposition",
+                    "affair", "cheating", "dhokha", "bewafai", "chakkar",
+                    "soulmate", "jeevansathi", "sathi", "saathi",
+                    "propose", "izhaar", "izhar", "long-distance", "long distance", "ldr",
+                    "one-sided", "one sided", "ektarafa",
+                    "compatible", "compatibility", "jodi", "reconciliation", "reunion"],
     "travel":      ["travel", "abroad", "videsh", "foreign", "yatra", "visa", "passport", "trip",
                     "settlement", "usa", "u.s.", "canada", "uk", "u.k.", "australia", "germany",
                     "dubai", "migrate", "immigration", "tirth", "pilgrimage"],

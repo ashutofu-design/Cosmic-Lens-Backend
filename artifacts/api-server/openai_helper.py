@@ -498,6 +498,361 @@ def _is_wealth_question(text: str) -> bool:
     return bool(_WEALTH_QUESTION_RX.search(text))
 
 
+class WealthStructuredError(RuntimeError):
+    """Raised when the wealth structured-output path fails after retries.
+    Distinguished from generic OpenAI failures so /api/ask can return a
+    typed 503 instead of silently falling back to the rule-engine
+    (which would emit free-text and violate the no-fallback contract)."""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WEALTH STRUCTURED OUTPUT — JSON-schema mode (UX transformation)
+# ─────────────────────────────────────────────────────────────────────────────
+# Replaces the verbose narrator prose with strict JSON via OpenAI
+# response_format=json_schema (strict=True). Mobile UI gets a scannable
+# verdict card; legacy `text` field is populated by a deterministic
+# JSON→Hinglish formatter for backward-compat.
+# - temperature=0.0 (mirror marriage path)
+# - max 2 retries on parse / validation failure
+# - NO free-text fallback (per spec)
+# - Engine logic UNTOUCHED — this is purely the AI output layer.
+_WEALTH_VERDICT_TAG_MAP = {
+    "green_go":     "🟢 GO",
+    "yellow_wait":  "🟡 WAIT",
+    "slow_burn":    "🟠 SLOW",
+    "red_avoid":    "🔴 CAUTION",
+}
+
+_WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
+    "name": "wealth_structured_verdict",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["verdict", "headline", "timeline",
+                     "what_will_happen", "what_to_do",
+                     "what_to_avoid", "remedy", "note"],
+        "properties": {
+            "verdict": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["tag", "score", "confidence"],
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "enum": ["🟢 GO", "🟡 WAIT", "🟠 SLOW", "🔴 CAUTION"],
+                    },
+                    "score":      {"type": "integer", "minimum": 0, "maximum": 100},
+                    "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+                },
+            },
+            "headline": {
+                "type": "string",
+                "description": "Hinglish summary, decision-oriented, ≤15 words.",
+            },
+            "timeline": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["current", "next"],
+                "properties": {
+                    "current": {"type": "string"},
+                    "next":    {"type": "string"},
+                },
+            },
+            "what_will_happen": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "what_to_do": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "what_to_avoid": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "remedy": {"type": "string"},
+            "note":   {
+                "type": "string",
+                "description": (
+                    "MUST mention CA / SEBI-registered financial advisor "
+                    "consult in Hinglish (≤ 20 words). This is a strict "
+                    "brand-safety contract — do not omit."
+                ),
+            },
+        },
+    },
+}
+
+
+def _ym_human_w(ym: str) -> str:
+    """'2025-07' → 'Jul 2025'. Empty/invalid → ''."""
+    try:
+        if not ym:
+            return ""
+        parts = ym.split("-")
+        if len(parts) < 2:
+            return ""
+        y, m = parts[0], parts[1]
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return f"{months[int(m) - 1]} {y}"
+    except Exception:
+        return ""
+
+
+def _build_wealth_structured_system_prompt(verdict_obj: dict) -> str:
+    """Compact narrator-locked prompt for wealth structured-output mode.
+    Replaces the 100+ line verbose WEALTH NARRATOR OVERRIDE with a focused
+    facts-only prompt that fits in ~40 lines and demands strict JSON."""
+    bucket  = verdict_obj.get("bucket", "general_wealth")
+    tense   = verdict_obj.get("tense", "general")
+    verdict = verdict_obj.get("verdict", "yellow_wait")
+    score   = verdict_obj.get("score", 0)
+    conf    = verdict_obj.get("confidence", 0)
+    tag     = _WEALTH_VERDICT_TAG_MAP.get(verdict, "🟡 WAIT")
+
+    # Top 3 reasons — prefer ⭐ MANDATORY layer signals
+    reasons = verdict_obj.get("reasons") or []
+    top = [r for r in reasons if "⭐" in r or "MANDATORY" in r
+           or "Vargottama" in r or "Parivartana" in r
+           or "Vipareeta" in r or "Dhana Yoga" in r or "Lakshmi" in r][:3]
+    if not top:
+        top = reasons[:3]
+
+    # Window strings (server-side formatted so AI just copies)
+    tw  = verdict_obj.get("timing_window") or {}
+    cur = tw.get("current") or {}
+    nxt = tw.get("next") or {}
+    cur_label = ""
+    if cur.get("start") and cur.get("end"):
+        s = _ym_human_w(str(cur.get("start"))[:7])
+        e = _ym_human_w(str(cur.get("end"))[:7])
+        if s and e:
+            cur_label = f"{s} – {e} ({cur.get('md')}–{cur.get('ad')})"
+    nxt_label = ""
+    if nxt.get("start") and nxt.get("end"):
+        s = _ym_human_w(str(nxt.get("start"))[:7])
+        e = _ym_human_w(str(nxt.get("end"))[:7])
+        if s and e:
+            nxt_label = f"{s} – {e} ({nxt.get('md')}–{nxt.get('ad')})"
+
+    strategy = (verdict_obj.get("strategy") or "").strip()
+    rem_obj  = verdict_obj.get("remedy") or {}
+    rem      = (rem_obj.get("remedy_text") or "").strip() if isinstance(rem_obj, dict) else ""
+
+    bucket_hint = {
+        "investment_return":   "investments market risk; SEBI-registered advisor mandatory.",
+        "business_profit":     "business cycles ke risk acknowledge karein.",
+        "sudden_windfall":     "NEVER endorse lottery/satta — frame as bonus/arrears only.",
+        "loan_clearance":      "EMI continue + bank ke saath transparent communication.",
+        "property_purchase":   "RERA-registered + legal title + CA-vetted budget.",
+        "inheritance_timing":  "empathy, NEVER predict elder's death, NEVER promise amount.",
+        "partnership_finance": "written agreement + CA + legal advisor.",
+        "salary_growth":       "salary band relative — never promise specific % or package.",
+        "debt_recovery":       "patience + legal/CA channel for recovery.",
+        "savings_capacity":    "discipline + auto-debit SIP/RD; no get-rich claim.",
+        "foreign_income":      "FEMA + DTAA compliance + remittance via legal channel.",
+        "general_wealth":      "general financial discipline + advisor consult.",
+    }.get(bucket, "general financial discipline + advisor consult.")
+
+    parts = []
+    parts.append(
+        "You are the Cosmic Intelligence narrator. Output STRICT JSON ONLY "
+        "matching the provided schema. NO prose, NO markdown, NO commentary "
+        "outside the JSON object."
+    )
+    parts.append("")
+    parts.append("════ LOCKED FACTS (use VERBATIM, no invention) ════")
+    parts.append(f"Bucket:         {bucket}")
+    parts.append(f"Question tense: {tense}")
+    parts.append(f"Verdict tag:    {tag}")
+    parts.append(f"Score:          {score}")
+    parts.append(f"Confidence:     {conf}")
+    parts.append(f"Current window: {cur_label or '(engine silent — emit empty string)'}")
+    parts.append(f"Next window:    {nxt_label or '(engine silent — emit empty string)'}")
+    parts.append("Top cosmic factors:")
+    for r in top:
+        parts.append(f"   • {r}")
+    if strategy:
+        parts.append(f"Strategy: {strategy}")
+    if rem:
+        parts.append(f"Remedy:   {rem}")
+    parts.append(f"Bucket-specific safety: {bucket_hint}")
+    parts.append("")
+    parts.append("════ OUTPUT RULES ════")
+    parts.append(
+        "1. `verdict.tag` MUST equal the locked tag above. "
+        "`verdict.score` and `verdict.confidence` MUST equal the locked "
+        "numbers above (integer, no rounding)."
+    )
+    parts.append(
+        "2. `headline` ≤ 15 words, Hinglish, decision-oriented (no Sanskrit "
+        "jargon dump). Tense framing — PRESENT: 'abhi …', FUTURE: 'aane "
+        "wale time mein …', PAST: retrospective."
+    )
+    parts.append(
+        "3. `timeline.current` and `timeline.next` MUST equal the locked "
+        "window strings above (or empty string if engine was silent). "
+        "NO date invention."
+    )
+    parts.append(
+        "4. `what_will_happen` 1–3 bullets, each ≤ 10 words, derived from "
+        "the top cosmic factors above (paraphrased to plain Hinglish)."
+    )
+    parts.append(
+        "5. `what_to_do` 1–3 bullets, each ≤ 10 words, actionable Hinglish."
+    )
+    parts.append(
+        "6. `what_to_avoid` 1–3 bullets, each ≤ 10 words."
+    )
+    parts.append(
+        "7. `remedy` ≤ 20 words, copy from locked Remedy if present, else "
+        "'Thursday ko Jupiter mantra (108×) karein'."
+    )
+    parts.append(
+        "8. `note` MUST mention CA / SEBI-registered financial advisor "
+        "consult in Hinglish (≤ 20 words)."
+    )
+    parts.append("")
+    parts.append("════ ABSOLUTE PROHIBITIONS ════")
+    parts.append("• NEVER predict specific rupee amounts (lakh / crore / package).")
+    parts.append("• NEVER predict bankruptcy / kangaal / barbaad — soften to 'extra-savitree phase'.")
+    parts.append("• NEVER advise loan-default / EMI-skip / tax-evasion / GST-fraud.")
+    parts.append("• NEVER endorse lottery / satta / matka / KBC / jackpot.")
+    parts.append("• NEVER reveal AI / LLM / GPT — brand voice is 'Powered by Advanced Cosmic Intelligence'.")
+    parts.append("• NEVER invent dates not present in the locked window strings.")
+    return "\n".join(parts)
+
+
+def _format_wealth_structured_payload(payload: dict) -> str:
+    """Deterministic JSON → short Hinglish text formatter. Populates the
+    legacy `text` field for backward-compat with the current chat bubble
+    while the new `structured` field carries the raw JSON for richer
+    rendering when the mobile UI is upgraded."""
+    if not isinstance(payload, dict):
+        return ""
+    v        = payload.get("verdict") or {}
+    tag      = v.get("tag", "")
+    score    = v.get("score", "")
+    conf     = v.get("confidence", "")
+    headline = (payload.get("headline") or "").strip()
+    tl       = payload.get("timeline") or {}
+    cur      = (tl.get("current") or "").strip()
+    nxt      = (tl.get("next")    or "").strip()
+    will     = payload.get("what_will_happen") or []
+    do       = payload.get("what_to_do")        or []
+    avoid    = payload.get("what_to_avoid")     or []
+    remedy   = (payload.get("remedy") or "").strip()
+    note     = (payload.get("note")   or "").strip()
+
+    lines: list[str] = []
+    head = tag
+    if score != "":
+        head += f"  •  Score {score}/100"
+    if conf != "":
+        head += f"  •  Confidence {conf}%"
+    lines.append(head)
+    if headline:
+        lines.append("")
+        lines.append(headline)
+    if cur or nxt:
+        lines.append("")
+        if cur:
+            lines.append(f"📅 Window: {cur}")
+        if nxt:
+            lines.append(f"   ➜ Better: {nxt}")
+    if will:
+        lines.append("")
+        lines.append("Kya hoga:")
+        for x in will[:3]:
+            lines.append(f"  • {x}")
+    if do:
+        lines.append("")
+        lines.append("Kya karein:")
+        for x in do[:3]:
+            lines.append(f"  • {x}")
+    if avoid:
+        lines.append("")
+        lines.append("Kya na karein:")
+        for x in avoid[:3]:
+            lines.append(f"  • {x}")
+    if remedy:
+        lines.append("")
+        lines.append(f"🕉  Upay: {remedy}")
+    if note:
+        lines.append("")
+        lines.append(f"ℹ  {note}")
+    return "\n".join(lines).strip()
+
+
+def _validate_wealth_payload(payload: dict, locked: dict) -> tuple[bool, str]:
+    """Strict sanity check. Returns (ok, reason). Used by the retry loop
+    to reject drift even when OpenAI's strict json_schema accepts the
+    response as schema-valid."""
+    import re as _re_w
+    if not isinstance(payload, dict):
+        return False, "not a dict"
+    v = payload.get("verdict")
+    if not isinstance(v, dict):
+        return False, "verdict object missing"
+    locked_tag = _WEALTH_VERDICT_TAG_MAP.get(
+        locked.get("verdict", ""), "🟡 WAIT")
+    if v.get("tag") != locked_tag:
+        return False, f"verdict.tag drift (got {v.get('tag')!r}, expected {locked_tag!r})"
+    try:
+        if int(v.get("score", -1)) != int(locked.get("score", 0)):
+            return False, "verdict.score drift"
+        if int(v.get("confidence", -1)) != int(locked.get("confidence", 0)):
+            return False, "verdict.confidence drift"
+    except (TypeError, ValueError):
+        return False, "verdict score/confidence non-integer"
+    headline = payload.get("headline")
+    if not isinstance(headline, str) or not headline.strip():
+        return False, "headline empty"
+    if len(headline.split()) > 15:
+        return False, f"headline too long ({len(headline.split())} words; strict limit 15)"
+    for k in ("what_will_happen", "what_to_do", "what_to_avoid"):
+        arr = payload.get(k) or []
+        if not isinstance(arr, list) or not arr:
+            return False, f"{k} empty"
+        if len(arr) > 3:
+            return False, f"{k} > 3 bullets"
+        for b in arr:
+            if not isinstance(b, str):
+                return False, f"{k} non-string bullet"
+            if len(b.split()) > 10:
+                return False, f"{k} bullet > 10 words ({len(b.split())})"
+    note_str = payload.get("note") or ""
+    if not isinstance(note_str, str) or not note_str.strip():
+        return False, "note empty"
+    if not _re_w.search(
+            r"\b(CA|chartered\s+accountant|"
+            r"SEBI[- ]registered|"
+            r"financial\s+advisor|financial\s+planner|"
+            r"tax\s+consultant|"
+            r"vittiy[a-z]*\s+salahkar)\b",
+            note_str, _re_w.IGNORECASE):
+        return False, "note missing CA / SEBI-registered advisor cite"
+    blob = " ".join([
+        (payload.get("headline") or ""),
+        " ".join(payload.get("what_will_happen") or []),
+        " ".join(payload.get("what_to_do") or []),
+        " ".join(payload.get("what_to_avoid") or []),
+        (payload.get("remedy") or ""),
+        (payload.get("note") or ""),
+    ]).lower()
+    if _re_w.search(r"\b\d+\s*(?:lakh|crore|cr|lac)\b", blob):
+        return False, "specific rupee amount leaked"
+    if _re_w.search(
+            r"\b(kangaal|barbaad|bankruptcy|lottery|satta|matka|jackpot|kbc)\b",
+            blob):
+        return False, "prohibited brand-safety word leaked"
+    if _re_w.search(r"\b(llm|gpt|chatgpt|openai|chatbot)\b", blob):
+        return False, "AI/LLM mention leaked"
+    return True, "ok"
+
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -4147,9 +4502,34 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         marriage_subtype=marriage_subtype,
     )
 
+    # ── WEALTH STRUCTURED-OUTPUT REWRITE ─────────────────────────────────────
+    # When the wealth verdict engine produced a verdict_obj, we strip the
+    # verbose ~100-line WEALTH NARRATOR OVERRIDE that _build_messages
+    # appended and replace it with the short structured-output prompt.
+    # The model is then forced into JSON-schema mode (see _call_once below).
+    _wealth_obj = (build_meta or {}).get("wealth_verdict_obj")
+    _wealth_structured_payload: dict | None = None
+    if isinstance(_wealth_obj, dict) and _wealth_obj:
+        messages = [
+            m for m in messages
+            if not (m.get("role") == "system"
+                    and "WEALTH NARRATOR OVERRIDE" in (m.get("content") or ""))
+        ]
+        messages.append({
+            "role":    "system",
+            "content": _build_wealth_structured_system_prompt(_wealth_obj),
+        })
+        _trace(req_id, "2c.WEALTH_STRUCTURED_PROMPT_INSTALLED", {
+            "bucket":  _wealth_obj.get("bucket"),
+            "tense":   _wealth_obj.get("tense"),
+            "verdict": _wealth_obj.get("verdict"),
+            "score":   _wealth_obj.get("score"),
+        })
+
     # ── Mode/topic-aware sampling ────────────────────────────────────────────
-    # Marriage astro uses a deterministic verdict engine — AI is narrator only.
-    if mode == "astro" and topic == "marriage":
+    # Marriage astro AND wealth structured both use deterministic verdict
+    # engines — AI is narrator only. Force temp=0.0 to lock outputs.
+    if (mode == "astro" and topic == "marriage") or _wealth_obj:
         temperature       = 0.0
         presence_penalty  = 0.0
         frequency_penalty = 0.0
@@ -4173,6 +4553,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     or "kundli" in (m.get("content") or "").lower()
                     for m in messages)
         ),
+        "wealth_structured": bool(_wealth_obj),
     })
 
     def _call_once() -> str:
@@ -4193,8 +4574,78 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             raise RuntimeError("OpenAI returned empty response")
         return t
 
-    text = _call_once()
-    _trace(req_id, "4.RAW_AI_RESPONSE", text)
+    if _wealth_obj:
+        # Wealth structured-output path: json_schema (strict=True), temp=0.0,
+        # max 2 retries on parse / validation failure. NO free-text fallback.
+        import json as _json_w
+        _last_exc: Exception | None = None
+        _payload: dict | None = None
+        for _attempt in range(2):
+            try:
+                # JSON schema needs more headroom than prose — Hinglish
+                # bullets + remedy + note can run 1200+ tokens easily.
+                _wealth_max_tokens = max(1800, _token_budget_for(topic, question))
+                _resp_w = client.chat.completions.create(
+                    model            = model,
+                    messages         = messages,
+                    temperature      = 0.0,
+                    top_p            = 1,
+                    max_tokens       = _wealth_max_tokens,
+                    response_format  = {
+                        "type":        "json_schema",
+                        "json_schema": _WEALTH_STRUCTURED_JSON_SCHEMA,
+                    },
+                )
+            except Exception as _exc_w:
+                _last_exc = _exc_w
+                _trace(req_id,
+                       f"3a.WEALTH_JSON_REQ_FAIL_attempt{_attempt+1}",
+                       str(_exc_w))
+                _payload = None
+                continue
+            _raw_w = (_resp_w.choices[0].message.content or "").strip() \
+                if _resp_w.choices else ""
+            if not _raw_w:
+                _last_exc = RuntimeError("empty wealth structured response")
+                _trace(req_id,
+                       f"3a.WEALTH_JSON_EMPTY_attempt{_attempt+1}", "")
+                _payload = None
+                continue
+            try:
+                _payload = _json_w.loads(_raw_w)
+            except Exception as _exc_p:
+                _last_exc = _exc_p
+                _trace(req_id,
+                       f"3a.WEALTH_JSON_PARSE_FAIL_attempt{_attempt+1}",
+                       {"err": str(_exc_p), "raw_preview": _raw_w[:300]})
+                _payload = None
+                continue
+            ok_v, why_v = _validate_wealth_payload(_payload, _wealth_obj)
+            if not ok_v:
+                _last_exc = RuntimeError(f"validation failed: {why_v}")
+                _trace(req_id,
+                       f"3a.WEALTH_JSON_VALIDATE_FAIL_attempt{_attempt+1}",
+                       {"reason": why_v})
+                _payload = None
+                continue
+            break
+        if _payload is None:
+            raise WealthStructuredError(
+                "wealth structured generation failed after 2 attempts: "
+                f"{_last_exc}"
+            )
+        _wealth_structured_payload = _payload
+        text = _format_wealth_structured_payload(_payload)
+        _trace(req_id, "4.WEALTH_STRUCTURED_OK", {
+            "tag":            _payload.get("verdict", {}).get("tag"),
+            "headline_words": len((_payload.get("headline") or "").split()),
+            "will_n":         len(_payload.get("what_will_happen") or []),
+            "do_n":           len(_payload.get("what_to_do") or []),
+            "avoid_n":        len(_payload.get("what_to_avoid") or []),
+        })
+    else:
+        text = _call_once()
+        _trace(req_id, "4.RAW_AI_RESPONSE", text)
 
     # ── Sprint-51 TIMING VALIDATOR — hard anti-hallucination layer ──────────
     # If the question is a "kab/when" timing question, the AI is FORBIDDEN
@@ -4758,7 +5209,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             ):
                 _d2 = compute_d2(_planets_q, _lagna_lon)
                 _s2 = summarize_d2_for_wealth(_d2) if _d2 else {}
-                if _s2.get("verdict"):
+                if _s2.get("verdict") and not _wealth_structured_payload:
                     sun_p  = ", ".join(_s2.get("sun_hora_planets")  or []) or "koi nahi"
                     moon_p = ", ".join(_s2.get("moon_hora_planets") or []) or "koi nahi"
                     text = (text or "").rstrip() + (
@@ -5099,7 +5550,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         )
                         break
 
-            if clauses:
+            if clauses and not _wealth_structured_payload:
                 text = (text or "").rstrip() + (
                     f"\n\nDeep-strength signal: "
                     + "; ".join(clauses) + "."
@@ -5496,7 +5947,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _lgsSN = _lgSN.get("sign") if isinstance(_lgSN, dict) else _lgSN
                 _dobSN = birth if birth else None
                 # Sthira
-                if not _reSN.search(r"(?i)sthira", text or ""):
+                if (not _reSN.search(r"(?i)sthira", text or "")
+                        and not _wealth_structured_payload):
                     _sth = compute_sthira_dasha(_lgsSN, _dobSN) or {}
                     _md = _sth.get("current_md") or {}
                     if _md.get("sign"):
@@ -5510,7 +5962,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                             f"{_md['sign']}."
                         )
                 # Niryana Shoola
-                if not _reSN.search(r"(?i)niryana|shoola", text or ""):
+                if (not _reSN.search(r"(?i)niryana|shoola", text or "")
+                        and not _wealth_structured_payload):
                     _nir = compute_niryana_shoola(_lgsSN, _dobSN) or {}
                     _mdN = _nir.get("current_md") or {}
                     if _mdN.get("sign"):
@@ -5650,7 +6103,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 )
                 _md = _cd.get("current_md") if _cd else None
                 _ad = _cd.get("current_ad") if _cd else None
-                if _md:
+                if _md and not _wealth_structured_payload:
                     _ad_part = (
                         f", AD {_ad['sign']} ({_ad['lord']}) {_ad['start']}→{_ad['end']}"
                         if _ad else ""
@@ -5676,13 +6129,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "the NEXT user turn is reclassified independently — "
                     "mode does NOT inherit from this turn",
     })
-    return {
+    _result = {
         "text":       text,
         "topic":      topic,
         "confidence": confidence,
         "source":     "openai",
         "follow_ups": follow_ups,
     }
+    if _wealth_structured_payload is not None:
+        _result["structured"] = _wealth_structured_payload
+    return _result
 
 
 # ── Streaming variant ────────────────────────────────────────────────────────

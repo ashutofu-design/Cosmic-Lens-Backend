@@ -5589,6 +5589,25 @@ def ask_route():
                             history=history, preferred_language=preferred_language)
             used_ai = True
         except Exception as exc:
+            # Wealth structured-output failures must NOT fall back to the
+            # rule engine — the legacy free-text reply would violate the
+            # "JSON-only, no fallback" contract for wealth questions.
+            # Return a typed 503 so the mobile UI can show a retry prompt.
+            try:
+                from openai_helper import WealthStructuredError  # type: ignore
+            except Exception:
+                WealthStructuredError = ()  # type: ignore
+            if WealthStructuredError and isinstance(exc, WealthStructuredError):
+                print(f"[ask] wealth structured-output failed: {exc}")
+                return jsonify({
+                    "error":   "wealth_structured_unavailable",
+                    "message": (
+                        "Cosmic Intelligence ko abhi structured wealth verdict "
+                        "generate karne mein dikkat aa rahi hai. Kripya thodi "
+                        "der baad dobara try karein."
+                    ),
+                    "retryable": True,
+                }), 503
             print(f"[ask] OpenAI failed, falling back to rule engine: {exc}")
             result = None
 

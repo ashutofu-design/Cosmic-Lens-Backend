@@ -230,6 +230,115 @@ def _is_career_question(text: str) -> bool:
     return bool(_CAREER_QUESTION_RX.search(text))
 
 
+def _health_engine():
+    """Lazy-load deterministic health & vitality verdict engine."""
+    from health_engine import (assess_health,                    # type: ignore
+                                format_verdict_for_prompt as _fmt_health,
+                                classify_health_question)
+    return assess_health, _fmt_health, classify_health_question
+
+
+# Health-question gate. Triggers health_engine when question is genuinely
+# about wellness / illness / surgery / mental-health / addiction / parent-
+# health / longevity. Routing priority above health:
+#   marriage > stock > love > career > health > general.
+# This gate fires LAST among the topical engines, so we only need to defend
+# against false positives that look medical but actually belong to a
+# higher-priority bucket — e.g. "career stress" (career), "share market
+# tension" (stock), "rishta tension" (relationship/love), "santaan / IVF
+# / pregnancy" (child timing — handled in marriage/general flow).
+_HEALTH_QUESTION_RX = __import__("re").compile(
+    r"(?:\b("
+    r"health|healthy|healthcare|"
+    r"swasthya|swasth|swaasthya|sehat|sehet|sehatmand|tabiyat|tabeeyat|tabiat|"
+    r"illness|sickness|sick|unwell|"
+    r"disease|diseased|"
+    r"bimari|bimaari|beemar|beemari|beemaari|bimaar|"
+    r"rog|rogi|rogon|rogi|"
+    r"treatment|treat|cure|cured|curing|heal|healed|healing|"
+    r"theek|theekh|teek|theeke|achha[- ]?ho|thik|"
+    r"infection|infections|infected|infect|infectious|"
+    r"viral|virus|bacterial|bacteria|fungal|sankraman|"
+    r"flu|influenza|cold|cough|khansi|jukam|"
+    r"medicine|medicines|medication|medicational|dawai|dawaai|davai|davaai|"
+    r"hospital|hospitals|aspataal|aspatal|"
+    r"doctor|doctors|physician|specialist|consultation|"
+    r"operation|operations|surgery|surgeries|surgical|"
+    r"chronic|acute|sub[- ]?acute|"
+    r"recovery|recover|recovering|recovered|"
+    r"symptoms|symptom|lakshan|lakshana|"
+    r"diagnosis|diagnose|diagnosed|"
+    r"depression|depressed|"
+    r"anxiety|anxious|panic|panic[- ]?attack|"
+    r"stress|stressful|tension|tensed|"
+    r"mental|mental[- ]?health|manasik|maanasik|"
+    r"sleep|sleeping|insomnia|nind|neend|"
+    r"suicide|suicidal|self[- ]?harm|self[- ]?injur(?:y|ies)|"
+    r"atmahatya|aatmhatya|aatm[- ]?hatya|atmhatya|"
+    r"khudkushi|khud[- ]?kushi|"
+    r"jaan[- ]?dena|jaan[- ]?dene|jeena nahi|jeena nahin|"
+    r"marna chahta|marna chahti|end[- ]?my[- ]?life|kill[- ]?myself|"
+    r"longevity|aayu|ayu|aayush|ayush|jeevankaal|lifespan|life[- ]?span|"
+    r"umar|umra|umer|umr|jeevan|"
+    r"vitality|stamina|immunity|energy[- ]?levels?|weakness|kamzori|"
+    r"khoon|blood|"
+    r"addiction|addicted|addict|"
+    r"nasha|nashe|nashaa|sharab|sharaab|daru|daaru|"
+    r"cigarette|cigarettes|smoking|smoke|smoker|tobacco|tambaku|"
+    r"drug|drugs|"
+    r"injury|injuries|injured|chot|chot[- ]?lagna|accident|accidents|"
+    r"durghatna|haadsa|haadasa|"
+    r"fever|bukhar|bukhaar|"
+    r"diabetes|sugar|madhumeh|"
+    r"blood[- ]?pressure|bp|hypertension|"
+    r"cancer|tumor|tumour|"
+    r"heart|hriday|hridaya|cardiac|"
+    r"kidney|gurda|liver|jigar|lung|fefda|stomach|pet|"
+    r"eye|eyes|aankh|aankhein|"
+    r"ear|ears|kaan|"
+    r"skin|tvacha|tvacaa|chamdi|"
+    r"thyroid|asthma|migraine|arthritis|joint[- ]?pain|"
+    r"reproductive|fertility|infertility|infertile|"
+    r"pcos|pcod|menstrual|menstruation|periods|period|"
+    r"sperm|sperm[- ]?count|semen|virya|veerya|"
+    r"conceive|conceiving|conception|"
+    r"pregnancy|pregnant|garbh|garbhdharan|garbhavastha|"
+    r"santan|santaan|aulad|aulaad|baby[- ]?planning|ivf|iui|"
+    r"maa[- ]?ki[- ]?tabiyat|papa[- ]?ki[- ]?tabiyat|"
+    r"parent[- ]?health|parents[- ]?health|"
+    r"father[- ]?health|mother[- ]?health|"
+    r"pita[- ]?ki[- ]?tabiyat|mata[- ]?ki[- ]?tabiyat"
+    r")\b)"
+    r"|स्वास्थ्य|स्वस्थ|सेहत|बीमारी|बीमार|रोग|दवा|दवाई|अस्पताल|"
+    r"डॉक्टर|ऑपरेशन|सर्जरी|उपचार|इलाज|"
+    r"लक्षण|जांच|निदान|"
+    r"अवसाद|डिप्रेशन|चिंता|घबराहट|तनाव|"
+    r"मानसिक|दिमागी|"
+    r"नींद|अनिद्रा|"
+    r"आयु|जीवनकाल|"
+    r"नशा|शराब|सिगरेट|धूम्रपान|तंबाकू|"
+    r"चोट|दुर्घटना|हादसा|"
+    r"बुखार|मधुमेह|कैंसर|दिल|गुर्दा|जिगर|पेट|"
+    r"आंख|कान|त्वचा|दर्द|तबियत|तबीयत",
+    __import__("re").IGNORECASE,
+)
+
+
+def _is_health_question(text: str) -> bool:
+    """True iff text matches health trigger AND no higher-priority engine
+    (marriage / stock / love / career) would have already short-circuited
+    this turn. Higher-priority gates are applied UPSTREAM in
+    `_build_messages`, so by the time we reach the health block we only
+    need to confirm the text genuinely smells health-related.
+    Note: standalone 'stress'/'tension' words are intentionally INCLUDED
+    here. The career engine claims them only when career keywords are
+    also present — health gate fires after career has been ruled out, so
+    a leftover 'stress' here is genuinely mental-health territory."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return bool(_HEALTH_QUESTION_RX.search(text))
+
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -1376,6 +1485,51 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] career_engine failed: {exc}")
 
+    # ── DETERMINISTIC HEALTH & VITALITY VERDICT ───────────────────────────────
+    # For health-keyword questions (illness/surgery/recovery/mental-health/
+    # addiction/parent-health/longevity), compute deterministic verdict via
+    # health_engine. Routing priority above health: marriage > stock > love >
+    # career. AI becomes pure narrator with STRICT brand-safety guards
+    # (NEVER predict death, NEVER replace medical advice, ALWAYS recommend
+    # doctor consult, surface mental-health helplines on mental_health bucket,
+    # gender-sensitive reproductive guidance). Mirror of marriage/stock/love/
+    # career engine wiring.
+    health_verdict_block = ""
+    health_verdict_obj   = None
+    if (topic in ("health", "general")
+            and not marriage_verdict_block
+            and not stock_verdict_block
+            and not love_verdict_block
+            and not career_verdict_block
+            and isinstance(kundli, dict) and kundli.get("planets")
+            and _is_health_question(question)):
+        try:
+            kp_dict_h = (locals().get("kp_dict")
+                         or locals().get("kp_dict_s")
+                         or locals().get("kp_dict_l")
+                         or locals().get("kp_dict_c"))
+            try:
+                if not kp_dict_h and isinstance(birth, dict):
+                    kp_dict_h = _kp_calc()(birth)
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for health failed: {exc}")
+            assess_health, fmt_health, _classify_health_q = _health_engine()
+            health_verdict_obj = assess_health(
+                kundli, intel_obj or {}, kp_dict_h or {}, birth, question)
+            if health_verdict_obj:
+                health_verdict_block = fmt_health(health_verdict_obj, question)
+                if isinstance(out_meta, dict):
+                    out_meta["health_verdict_obj"]   = health_verdict_obj
+                    out_meta["health_question_type"] = health_verdict_obj.get("bucket")
+                print(f"[openai_helper] health_engine OK → "
+                      f"bucket='{health_verdict_obj.get('bucket')}' "
+                      f"tense='{health_verdict_obj.get('tense')}' "
+                      f"verdict='{health_verdict_obj.get('verdict','')[:60]}' "
+                      f"score={health_verdict_obj.get('score')} "
+                      f"conf={health_verdict_obj.get('confidence_pct')}")
+        except Exception as exc:
+            print(f"[openai_helper] health_engine failed: {exc}")
+
     focus     = _focus_block(topic)
     # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
     # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
@@ -2311,6 +2465,124 @@ def _build_messages(
                 "ZERO day-precision unless the engine itself printed a "
                 "day number.\n\n"
                 + career_verdict_block
+            ),
+        })
+
+    # ── HEALTH NARRATOR TURN-LEVEL OVERRIDE ───────────────────────────────────
+    # Appended LAST after career so recency bias keeps the lock authoritative.
+    # Mirror of stock/love/career narrator overrides + STRICT brand-safety
+    # guards specific to medical content: NEVER predict death, NEVER replace
+    # medical advice, NEVER tell user to skip surgery, NEVER blame chart for
+    # addiction, ALWAYS recommend doctor consultation, surface mental-health
+    # helplines on mental_health bucket, gender-sensitive reproductive
+    # guidance.
+    if health_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔒 HEALTH NARRATOR OVERRIDE — this turn is a health / "
+                "wellness / illness / surgery / mental-health / addiction / "
+                "parent-health / longevity question. The cosmic engine has "
+                "already computed the verdict bucket (chronic_illness / "
+                "acute_illness / mental_health / surgery_timing / "
+                "recovery_timing / longevity_general / injury_accident / "
+                "addiction / female_reproductive / male_reproductive / "
+                "parent_health / general_wellness), the verdict status "
+                "(green_go / yellow_wait / slow_burn / red_avoid), the "
+                "score, the timing window via Vimshottari + Saturn / Mars / "
+                "Jupiter / Rahu-Ketu transits, the 6th-8th-12th house cross-"
+                "check, the D9 + D6 (Shashtiamsa) + D30 (Trimsamsa) "
+                "divisional overlay, the KP cuspal sub-lord on cusps "
+                "1/6/8/12, the Atmakaraka, the Arishta / Ayushkara yogas, "
+                "the Sade Sati phase, and the remedy for you. You are NOT "
+                "diagnosing — you are NARRATING a locked verdict in warm "
+                "Hinglish.\n\n"
+                "ABSOLUTE RULES (these override every other instruction this turn):\n"
+                "  1. The verdict bucket and verdict status are FINAL. Do NOT "
+                "contradict, do NOT hedge into the opposite bucket, do NOT "
+                "add 'lekin actually…' reversals. Use the verdict text as "
+                "the spine of your reply.\n"
+                "  2. Copy timing windows (Vimshottari Maha-Antar, Saturn "
+                "transit window, Jupiter/Mars/Rahu-Ketu transit windows) "
+                "EXACTLY as printed in the locked block. No rounding, no "
+                "shifting, no blending.\n"
+                "  3. Copy score, dasha-lord names, lagnesh, Atmakaraka, "
+                "house numbers, yoga names, body-area names, and remedy "
+                "VERBATIM. No paraphrasing of numbers or planet names.\n"
+                "  4. NEVER reveal AI / LLM / GPT / model — brand voice is "
+                "'Powered by Advanced Cosmic Intelligence'. Speak as the "
+                "cosmic intelligence, never as a chatbot.\n"
+                "  5. NO fake/random fallbacks. If the engine is silent on a "
+                "specific date or symptom, do NOT invent it. Vague phrases "
+                "like 'jaldi theek ho jaayenge' without a window are "
+                "FORBIDDEN — only narrate what the engine produced.\n"
+                "  6. TENSE-AWARE FRAMING (mandatory) — read the "
+                "'QUESTION TENSE:' line in the verdict block:\n"
+                "     • PRESENT  → headline references CURRENT Maha-Antar-"
+                "Pratyantar lords + active Saturn/Mars transit. Do NOT "
+                "lead with 'agle X mahine mein…' for a 'abhi/aaj/currently/"
+                "right now/chal raha hai' question.\n"
+                "     • FUTURE   → headline references next dasha window + "
+                "upcoming Saturn/Jupiter/Mars transits. Do NOT lead with "
+                "'abhi to…' for a 'kab/will/karega/hoga/rahega' question.\n"
+                "     • GENERAL  → balance both naturally.\n"
+                "  7. STRICT MEDICAL BRAND-SAFETY GUARDS (mandatory always):\n"
+                "     • NEVER predict death, NEVER predict 'aap ki mrityu', "
+                "NEVER predict 'X saal tak life hai'. Even on longevity_"
+                "general bucket, frame as 'cosmic vitality strong/medium/"
+                "needs care', NEVER as a death timeline. ZERO TOLERANCE.\n"
+                "     • NEVER replace medical advice. Cosmic insight is "
+                "complementary, NOT a substitute for diagnosis or "
+                "treatment. Every reply MUST end with or contain a clear "
+                "doctor-consultation line.\n"
+                "     • NEVER tell the user to skip surgery, stop medicine, "
+                "discontinue treatment, or delay hospital visit. Even on "
+                "red_avoid surgery_timing, frame as 'agar surgery urgent "
+                "hai to doctor ki advice manein, cosmic window sirf "
+                "supplementary timing reference hai'.\n"
+                "     • NEVER blame the chart for addiction. Addiction is a "
+                "treatable condition. Frame as 'natal pattern indicates "
+                "vulnerability — recovery window favourable hai if you "
+                "engage professional help'. Recommend rehab / therapist / "
+                "support group, never 'mantra ki wajah se chhoot jayega'.\n"
+                "     • mental_health bucket → ALWAYS surface India helplines "
+                "verbatim from the engine block (iCall 9152987821, "
+                "Vandrevala Foundation 1860-2662-345). NEVER replace these "
+                "with mantra-only advice.\n"
+                "     • female_reproductive / male_reproductive → use "
+                "respectful, non-judgemental language. NEVER moralise. "
+                "NEVER promise IVF success or pregnancy on a specific "
+                "date. Always pair with 'gynec/urologist consultation '\n"
+                "       'parallel chalti rahe'.\n"
+                "     • parent_health → frame with empathy, NEVER predict "
+                "parent's death, NEVER frame as inevitable. Encourage "
+                "user to ensure parent has medical care + family support.\n"
+                "     • surgery_timing → green_go ≠ 'definitely safe'. "
+                "Always frame as 'cosmic window favourable — proceed only "
+                "with surgeon's clearance'. red_avoid ≠ 'cancel surgery'. "
+                "Frame as 'cosmic window mein resistance hai — if elective, "
+                "consider rescheduling AFTER discussion with doctor; if "
+                "urgent, doctor's call final hai'.\n"
+                "  8. If `brand_safety_warnings` array in the verdict block "
+                "is non-empty, internalise EACH warning as an absolute "
+                "constraint for this turn.\n"
+                "  9. DATE-PRECISION LOCK — the engine emits dates in "
+                "month-year resolution ONLY (e.g. 'Jul 2025 → Jun 2026'). "
+                "You MUST cite dates in the SAME resolution as printed. "
+                "FORBIDDEN: inventing specific day numbers like "
+                "'2025-07-25' or '15 July 2025' or '25/07/2025' when the "
+                "engine only gave you 'Jul 2025'. Just write 'Jul 2025 "
+                "se Jun 2026 ka window' or 'July 2025 → June 2026'. "
+                "ZERO day-precision unless the engine itself printed a "
+                "day number.\n"
+                " 10. MANDATORY DOCTOR-CONSULT CITATION — every health "
+                "reply MUST contain at least ONE explicit doctor-"
+                "consultation phrase (examples: 'doctor se consult karein', "
+                "'physician se baat karein', 'medical advice zaroor lein', "
+                "'qualified doctor ki guidance lein'). This is non-"
+                "negotiable. The engine's brand_safety_warnings already "
+                "include this — narrate it visibly.\n\n"
+                + health_verdict_block
             ),
         })
 
@@ -3618,7 +3890,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # match is case-insensitive.
         import re as _re_winscan
         _heading_rx = _re_winscan.compile(
-            r"(marriage|child|career|promotion|wealth|foreign|property)"
+            r"(marriage|child|career|promotion|wealth|foreign|property|"
+            r"health|illness|recovery|surgery|longevity)"
             r"[\s\-]+window\s*:",
             _re_winscan.IGNORECASE,
         )
@@ -3633,6 +3906,144 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             _trace(req_id, "4a.TIMING_VALIDATOR_OK", _lock["validation"])
     except Exception as _exc:  # noqa: BLE001
         _trace(req_id, "4a.TIMING_VALIDATOR_ERR", str(_exc))
+
+    # ── HEALTH BRAND-SAFETY POST-PROCESSOR (deterministic, last line) ───────
+    # The health engine + narrator override already mandate (a) doctor-consult
+    # citation in every reply and (b) mental-health helplines on the
+    # mental_health bucket. Despite the system message being explicit, the
+    # narrator occasionally drops these. We fix that deterministically here:
+    # if the verdict block was active for this turn AND the AI's reply does
+    # NOT contain a doctor cite, we APPEND a single mandatory line. For the
+    # mental_health bucket we additionally append the Indian crisis helpline
+    # numbers if they are missing. This guarantees ZERO regressions on the
+    # NO_DOCTOR_CITE / NO_HELPLINE bench checks without re-prompting OpenAI.
+    try:
+        _hv = (build_meta or {}).get("health_verdict_obj")
+        # Routing-collision guard: if a HIGHER-priority engine fired (marriage,
+        # stock, love, career), DO NOT inject the health doctor/helpline
+        # boilerplate even if the question contains a generic health-flavoured
+        # word (e.g. "career stress", "share market tension", "rishta tension").
+        # The fallback below is intended ONLY for genuinely health-routed
+        # questions that simply did not trigger the health engine output (e.g.
+        # concept-mode "Insomnia ka karan kya hai?"). Higher engines have their
+        # own brand-safety contracts.
+        _bm = (build_meta or {})
+        _higher_engine_fired = bool(
+            _bm.get("marriage_facts")
+            or _bm.get("stock_verdict_obj")
+            or _bm.get("love_verdict_obj")
+            or _bm.get("career_verdict_obj")
+        )
+        # Crisis override: explicit suicidal / self-harm phrasing ALWAYS earns
+        # helpline + doctor cite, regardless of which engine fired upstream.
+        # This is a non-negotiable safety net.
+        _crisis_rx = __import__("re").compile(
+            r"\b(suicid(?:e|al)|self[- ]?harm|self[- ]?injur(?:y|ies)|"
+            r"atmahatya|aatmhatya|aatm[- ]?hatya|atmhatya|"
+            r"khudkushi|khud[- ]?kushi|"
+            r"jaan[- ]?dena|jaan[- ]?dene|jeena nahi|jeena nahin|"
+            r"marna chahta|marna chahti|"
+            r"end[- ]?my[- ]?life|kill[- ]?myself)\b",
+            __import__("re").IGNORECASE,
+        )
+        _crisis_q = bool(_crisis_rx.search(question or ""))
+        # Fallback: even when health engine did NOT fire (e.g. concept-mode
+        # question routed to general/concept flow), if the question is health-
+        # related AND no higher-priority engine claimed it, we still owe the
+        # user (a) doctor-cite and (b) mental-health helpline.
+        _is_health_q_text = bool(_is_health_question(question or ""))
+        _bucket_fallback = None
+        if (not _hv and _is_health_q_text
+                and not _higher_engine_fired):
+            _ql = (question or "").lower()
+            _mental_kw = ("depress", "anxiety", "panic", "stress", "tension",
+                          "manasik", "maanasik", "mental", "insomnia",
+                          "nind", "neend", "sleep", "suicid", "self harm",
+                          "self-harm", "atmahatya", "khudkushi", "shanti",
+                          "jaan dena", "jaan dene", "marna chahta",
+                          "end my life", "kill myself")
+            _bucket_fallback = ("mental_health"
+                                if any(k in _ql for k in _mental_kw)
+                                else "general_wellness")
+        # Crisis ALWAYS forces mental_health bucket (overrides everything).
+        if _crisis_q:
+            _bucket_fallback = "mental_health"
+        if _hv or _bucket_fallback:
+            import re as _re_health
+            _doctor_rx = _re_health.compile(
+                r"\b(doctor|physician|specialist|gynec|gynae|cardiolog|"
+                r"neurolog|psychiatrist|psycholog|therapist|counsell?or|"
+                r"medical advice|medical consultation|qualified medical|"
+                r"vaidya|chikitsak|chikitsa|aspataal|hospital)\b",
+                _re_health.IGNORECASE,
+            )
+            _helpline_rx = _re_health.compile(
+                r"(iCall|9152987821|Vandrevala|1860[- ]?2662[- ]?345)",
+                _re_health.IGNORECASE,
+            )
+            _doctor_line = (
+                "\n\nQualified doctor se zaroor consult karein — "
+                "cosmic guidance medical diagnosis ya treatment ka "
+                "vikalp nahi hai."
+            )
+            _helpline_line = (
+                "\n\nMental health support ke liye free helplines: "
+                "iCall (9152987821) aur Vandrevala Foundation "
+                "(1860-2662-345). Aap akele nahi hain."
+            )
+            _bucket = (_hv.get("bucket") if _hv else _bucket_fallback)
+            _added = []
+            # SAFETY-NET: strip any timing-validator placeholders that may
+            # have leaked through ([engine: dasha not cited] / [engine:
+            # window pending] / [engine: year/month ...]). These come from
+            # vedic/validator/timing_validator.py when an engine returned
+            # a verdict but no usable window — they MUST never reach the
+            # user. Replace with neutral fillers that still make sense.
+            _ph_rx = _re_health.compile(
+                r"\[engine:\s*(?:dasha not cited|window pending|"
+                r"year[^\]]*|month[^\]]*)\]",
+                _re_health.IGNORECASE,
+            )
+            if _ph_rx.search(text or ""):
+                _stripped = _ph_rx.sub("", text or "")
+                # Collapse double-spaces / empty parens left behind.
+                _stripped = _re_health.sub(
+                    r"\(\s*se\s*\)", "", _stripped)
+                _stripped = _re_health.sub(
+                    r"\s+", " ", _stripped)
+                _stripped = _re_health.sub(
+                    r"\s+([,.;!?])", r"\1", _stripped)
+                # Drop any line that became meaningless after the strip
+                # (e.g. "dasha ke dasha () mein chal raha hai" → kill).
+                _kept_lines = []
+                _bad_line_rx = _re_health.compile(
+                    r"^\s*(?:dasha\s+ke\s+dasha|"
+                    r"engine\s+data\s+insufficient).*$",
+                    _re_health.IGNORECASE,
+                )
+                for _ln in _stripped.splitlines():
+                    if _bad_line_rx.search(_ln):
+                        continue
+                    _kept_lines.append(_ln)
+                text = "\n".join(_kept_lines)
+                _added.append("ph_strip")
+            if not _doctor_rx.search(text or ""):
+                text = (text or "").rstrip() + _doctor_line
+                _added.append("doctor_cite")
+            if (_bucket == "mental_health"
+                    and not _helpline_rx.search(text)):
+                text = text.rstrip() + _helpline_line
+                _added.append("helpline")
+            if _added:
+                _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_INJECTED",
+                       {"bucket": _bucket, "added": _added,
+                        "src": "engine" if _hv else "fallback"})
+            else:
+                _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_OK",
+                       {"bucket": _bucket,
+                        "src": "engine" if _hv else "fallback"})
+    except Exception as _exc:  # noqa: BLE001
+        _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_ERR", str(_exc))
 
     # ── General-mode validators (chart-leak + strict structure) ──────────────
     # Two independent checks for general (non-astro) replies:

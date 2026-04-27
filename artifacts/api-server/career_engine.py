@@ -220,8 +220,9 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
     ]),
     # ── FOREIGN JOB / VIDESH ──
     ("foreign_job", [
-        r"\b(foreign|abroad|videsh|vilayat|overseas|nri)\b.*\b(job|naukri|kaam|opportunity|settle|move|jana|jaana)\b",
-        r"\b(job|naukri|kaam|career)\b.*\b(foreign|abroad|videsh|vilayat|overseas)\b",
+        r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite|on[- ]?site|paradesh)\b",
+        r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite)\b.*\b(job|naukri|kaam|opportunity|settle|move|jana|jaana|attempt)\b",
+        r"\b(job|naukri|kaam|career|attempt|opportunity)\b.*\b(foreign|abroad|videsh|vilayat|overseas|onsite)\b",
         r"\b(usa|us|america|canada|uk|england|britain|australia|dubai|singapore|germany|new zealand)\b.*\b(job|naukri|move|settle|opportunity|visa)\b",
         r"\b(job|naukri|move|settle|opportunity|visa)\b.*\b(usa|us|america|canada|uk|england|australia|dubai|singapore|germany)\b",
         r"\b(h1b|h-1b|l1|l-1|pr|permanent residency|green card|work permit|work visa|skilled migration|express entry)\b",
@@ -238,33 +239,41 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(rank|position|grade|level)\b.*\b(badhega|badhegi|upgrade|promote)\b",
         r"\b(प्रमोशन|पदोन्नति|वेतन वृद्धि|तरक्की)\b",
     ]),
-    # ── RESIGNATION ──
+    # ── RESIGNATION (must come BEFORE job_change for "resign/quit/notice"
+    # specificity, but does NOT match generic "company chod di" — that goes
+    # to job_change because it implies switching, not quitting outright) ──
     ("resignation", [
         r"\b(resign|resignation|resignations|notice de|notice serve)\b",
-        r"\b(quit|quitting|leaving|leave)\b.*\b(job|naukri|company|firm|organization|organisation)\b",
-        r"\b(chod|chhod|chodu|chhodu|chodna|chhodna|chodkar|chod kar|chhod kar)\b.*\b(job|naukri|kaam|company)\b",
-        # Reverse word-order: "naukri chod kar..." (Hinglish OBJ-VERB)
-        r"\b(job|naukri|naukari|kaam|company|firm)\b.*\b(chod|chhod|chodu|chhodu|chodna|chhodna|chodkar|chod kar|chhod kar|chodne|chhodne)\b",
+        r"\b(quit|quitting)\b.*\b(job|naukri|sahi|theek|achha|right|karna|karu|chahiye)\b",
+        r"\b(quit|leaving|leave)\b.*\b(job|naukri)\b",
+        r"\b(chod|chhod|chodu|chhodu|chodna|chhodna|chodkar|chod kar|chhod kar)\b.*\b(job|naukri|kaam)\b",
+        # Reverse word-order: "naukri chod kar..." (Hinglish OBJ-VERB) — only
+        # job/naukri/kaam, not "company" (company-chod = job_change).
+        r"\b(job|naukri|naukari|kaam)\b.*\b(chod|chhod|chodu|chhodu|chodna|chhodna|chodkar|chod kar|chhod kar|chodne|chhodne)\b",
         r"\b(notice period|serve notice)\b",
         r"\b(istefa|istifa)\b",
         r"\b(त्यागपत्र|इस्तीफा|नौकरी छोड़|काम छोड़)\b",
     ]),
+    # ── PARTNERSHIP (must come BEFORE business_start because partnership is
+    # more specific — "partner ke saath kaam shuru karu" should match here,
+    # not generic business_start) ──
+    ("partnership", [
+        r"\b(partnership|joint venture|jv|co[- ]?founder)\b",
+        r"\b(business|kaam|venture|startup|firm)\b.*\b(partner|partnership|joint|associate|co[- ]?founder)\b",
+        r"\b(partner|partners)\b.*\b(business|kaam|venture|firm|sahi|theek|achha|right|jana|jaana|karu|karna|karoge|karenge|leke|sath|saath|shuru|start|launch)\b",
+        r"\b(saath|together|along)\b.*\b(business|kaam|partnership|joint)\b",
+        r"\b(equity|share|stake|profit[- ]?share)\b.*\b(partner|partnership|venture)\b",
+        r"\b(साझेदार|साझेदारी|पार्टनरशिप)\b",
+    ]),
     # ── BUSINESS START ──
     ("business_start", [
-        r"\b(business|vyapar|vyapaar|dhanda|kaam|startup|start-?up|venture)\b.*\b(start|shuru|begin|launch|open|kholu|kholna|chalu)\b",
+        r"\b(business|vyapar|vyapaar|dhanda|kaam|startup|start-?up|venture)\b.*\b(start|shuru|begin|launch|open|kholu|kholna|chalu|band|close|fail|tabaah|barbaad)\b",
         r"\b(start|shuru|begin|launch|open|kholu|kholna|chalu|own)\b.*\b(business|vyapar|vyapaar|dhanda|startup|start-?up|venture|firm|shop|store|cafe|restaurant)\b",
+        r"\b(startup|start[- ]?up)\b",
         r"\b(apna|apni|self|own)\b.*\b(business|vyapar|vyapaar|kaam|dhanda|firm|company|shop|venture)\b",
         r"\b(entrepreneur|entrepreneurship|founder|co-?founder|self-?employed)\b",
         r"\b(business|vyapar|dhanda)\b.*\b(karu|karoge|karenge|karna|karoon)\b",
         r"\b(व्यापार|व्यवसाय|धंधा|स्टार्टअप)\b.*\b(शुरू|खोल|चालू)\b",
-    ]),
-    # ── PARTNERSHIP ──
-    ("partnership", [
-        r"\b(partner|partnership|joint venture|jv|co[- ]?founder|associate)\b.*\b(business|kaam|venture|firm|sahi|theek|achha|right)\b",
-        r"\b(business|kaam|venture|startup|firm)\b.*\b(partner|partnership|joint|associate|co[- ]?founder)\b",
-        r"\b(saath|together|along)\b.*\b(business|kaam|partnership|joint)\b",
-        r"\b(equity|share|stake|profit[- ]?share)\b.*\b(partner|partnership|venture)\b",
-        r"\b(साझेदार|साझेदारी|पार्टनरशिप)\b",
     ]),
     # ── TRANSFER ──
     ("transfer", [
@@ -286,28 +295,32 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
     ]),
     # ── NEW JOB TIMING ──
     ("new_job_timing", [
-        r"\b(job|naukri|naukari|kaam|service|career)\b.*\b(kab|when|kab tak|kab milegi|kab milega|kab lagegi|kab lagega)\b",
+        r"\b(job|naukri|naukari|kaam|service|career)\b.*\b(kab|when|kab tak|kab milegi|kab milega|kab lagegi|kab lagega|mil rahi|mil raha|mil rahe)\b",
         r"\b(kab|when)\b.*\b(milegi|milega|lagegi|lagega|aayegi|aayega)\b.*\b(job|naukri|kaam|career)\b",
-        r"\b(first|pehli|pehla|new)\b.*\b(job|naukri|kaam)\b",
-        r"\b(joining|placement|offer letter|job offer)\b.*\b(kab|when|milegi|milega)\b",
+        r"\b(first|pehli|pehla|new|naya|nayi)\b.*\b(job|naukri|kaam)\b",
+        r"\b(joining|placement|offer letter|job offer)\b",
         r"\b(unemployed|berojgar|berozgar|bekar|bekaar)\b",
-        r"\b(naukari|naukri|job)\b.*\b(nahi|nahin|nai)\b.*\b(mil|mili|milti)\b",
+        r"\b(naukari|naukri|job)\b.*\b(nahi|nahin|nai)\b.*\b(mil|mili|milti|hui)\b",
+        r"\b(joining|placement)\b.*\b(nahi|nahin|nai|hui|hua)\b",
         r"\b(नौकरी|काम)\b.*\b(कब|कब मिलेगी|मिलेगी)\b",
     ]),
     # ── JOB CHANGE ──
     ("job_change", [
-        r"\b(job|naukri|naukari|kaam|company|firm|organization|organisation)\b.*\b(change|switch|badal|badalna|change karu|switch karu)\b",
+        r"\b(job|naukri|naukari|kaam|company|firm|organization|organisation)\b.*\b(change|switch|badal|badalna|change karu|switch karu|chod|chhod)\b",
         r"\b(change|switch|badal|badalna)\b.*\b(job|naukri|naukari|kaam|company|firm)\b",
-        r"\b(new|naya|nayi|naye|fresh)\b.*\b(job|naukri|opportunity|kaam|role|position|company)\b",
-        r"\b(switch|switching)\b.*\b(company|firm|kaam|industry)\b",
+        r"\b(switch|switching)\b.*\b(karu|karna|karoge|karenge|sahi|theek|right|company|firm|kaam|industry)\b",
+        r"\b(new|naya|nayi|naye|fresh)\b.*\b(job|naukri|opportunity|kaam|role|position|company)\b.*\b(change|switch|join)\b",
         r"\b(career|profession)\b.*\b(change|switch|badal|shift)\b",
+        r"\b(company)\b.*\b(chod|chhod|chodi|chhodi|chod di|chhod di|left|leave)\b",
         r"\b(छोड़कर|बदल|स्विच|चेंज)\b.*\b(नौकरी|काम|कंपनी)\b",
     ]),
     # ── CAREER FIELD CHOICE ──
     ("career_field_choice", [
         r"\b(it|software|engineering|engineer|cs|coding|developer)\b.*\b(vs|ya|ya phir|or)\b.*\b(govt|sarkari|business|finance|banking|teaching|medicine|doctor|cas)\b",
-        r"\b(career|kaam|profession|field)\b.*\b(choose|chunna|chuno|select|pick|decide)\b",
-        r"\b(kaunsi|kaun si|which)\b.*\b(field|career|line|profession|industry|sector)\b",
+        r"\b(career|kaam|profession|field)\b.*\b(choose|chunna|chuno|select|pick|decide|lu|lun|loon|le lu)\b",
+        r"\b(kaunsi|kaun si|kaunsa|kaun sa|konsa|konsi|which)\b.*\b(field|career|line|profession|industry|sector|stream|path|career path)\b",
+        r"\b(career path|career stream)\b",
+        r"\b(stream|specialisation|specialization)\b.*\b(galat|sahi|theek|right|wrong|kharab|achha|change|badal)\b",
         r"\b(arts|commerce|science|engineering|medical|law|management)\b.*\b(better|achha|theek|sahi|prefer)\b",
         r"\b(field|line|profession|career path)\b.*\b(suitable|sahi|theek|achha|right|best)\b.*\b(mere|mera|me|my)\b",
         r"\b(किस|कौन सी|कौनसी)\b.*\b(लाइन|फील्ड|करियर|पेशा)\b",

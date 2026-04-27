@@ -134,6 +134,78 @@ def _is_love_question(text: str) -> bool:
     return bool(_LOVE_QUESTION_RX.search(text))
 
 
+def _career_engine():
+    """Lazy-load deterministic career & profession verdict engine."""
+    from career_engine import (assess_career,                    # type: ignore
+                                format_verdict_for_prompt as _fmt_career,
+                                classify_career_question)
+    return assess_career, _fmt_career, classify_career_question
+
+
+# Career-question gate. Triggers career_engine when question is genuinely
+# about job / career / promotion / business / transfer / govt-exam — but
+# NOT when stock-market or marriage routing already wins. Order in the
+# orchestrator below: marriage > stock > love > career > general.
+_CAREER_QUESTION_RX = __import__("re").compile(
+    r"(?:\b(career|job|jobs|naukri|naukari|nokri|nokari|naukariya|"
+    r"profession|professional|kaam|kaamkaaj|kam|"
+    r"promotion|promote|promoted|appraisal|increment|hike|raise|"
+    r"transfer|posting|relocation|relocate|deputation|secondment|"
+    r"resign|resignation|quit|"
+    r"interview|placement|joining|offer letter|offer-letter|joining-letter|"
+    r"office|boss|manager|colleague|workplace|company|firm|organization|organisation|"
+    r"govt|government|sarkari|sarkar|civil[- ]?services|"
+    r"upsc|ssc|ibps|rbi|psc|tnpsc|mpsc|uppsc|bpsc|"
+    r"ias|ips|irs|ifs|"
+    r"foreign job|foreign[- ]?job|abroad|videsh|paradesh|onsite|"
+    r"freelance|freelancer|freelancing|consult(?:ing|ant|ancy)?|"
+    r"business|vyapar|vyapaar|vyaapar|dhanda|"
+    r"startup|start[- ]?up|entrepreneur(?:ship)?|founder|co[- ]?founder|"
+    r"partnership|joint[- ]?venture|jv|"
+    r"setback|fired|laid[- ]?off|layoff|terminated|sacked|"
+    r"unemployed|berojgar|berozgar|bekar|bekaar|"
+    r"salary|stipend|wage|earnings|pay[- ]?package|ctc|"
+    r"field|line|sector|industry|stream|specialisation|specialization)\b"
+    r"|नौकरी|काम|करियर|कैरियर|पेशा|व्यापार|व्यवसाय|धंधा|"
+    r"प्रमोशन|तरक्की|तबादला|ट्रांसफर|पोस्टिंग|"
+    r"सरकारी|सरकार|इंटरव्यू|बॉस|ऑफिस|"
+    r"साझेदार|साझेदारी|पार्टनरशिप|स्टार्टअप)",
+    __import__("re").IGNORECASE,
+)
+
+# Stock-market vocabulary that should NOT trigger career_engine even if
+# career keywords (business / venture) are also present — e.g.
+# "share business kaisa rahega" must go to stock_engine.
+#
+# Bare "equity/share/shares" is INTENTIONALLY excluded because it collides
+# with legitimate career queries like "startup partnership equity split"
+# or "share business start karu". We require an unambiguous trading-context
+# anchor (nifty/sensex/share[- ]market/trading/demat/broker/etc.) OR an
+# explicit instrument that has no career meaning (intraday/fno/options/
+# crypto/sip). Pure "equity"/"share" without these anchors stays in career.
+_CAREER_STOCK_OVERRIDE_RX = __import__("re").compile(
+    r"\b(nifty|sensex|share[- ]?market|stock[- ]?market|share[- ]?bazar|"
+    r"stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar|"
+    r"trading|trader|broker(age)?|demat|"
+    r"intraday|swing|scalping|fno|f&o|futures?|options?|derivative|"
+    r"crypto|bitcoin|ethereum|dogecoin|nft|mutual[- ]?funds?|sip|lump[- ]?sum)\b"
+    r"|शेयर बाज़ार|शेयर बाजार",
+    __import__("re").IGNORECASE,
+)
+
+
+def _is_career_question(text: str) -> bool:
+    """True iff text matches career trigger AND not marriage/stock overrides.
+    Routing priority above career: marriage > stock > love. So this gate
+    only needs to defend against stock-market false-positives explicitly
+    (the higher engines already short-circuit before this is checked)."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    if _CAREER_STOCK_OVERRIDE_RX.search(text):
+        return False
+    return bool(_CAREER_QUESTION_RX.search(text))
+
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -1219,6 +1291,46 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] love_engine failed: {exc}")
 
+    # ── DETERMINISTIC CAREER & PROFESSION VERDICT ─────────────────────────────
+    # For career-keyword questions (job/promotion/transfer/govt-job/business/
+    # partnership/setback), compute deterministic verdict via career_engine.
+    # Routing priority above career: marriage > stock > love. AI becomes
+    # pure narrator with brand-safety guards for govt-job / business-start /
+    # resignation / partnership softening. Mirror of marriage/stock/love.
+    career_verdict_block = ""
+    career_verdict_obj   = None
+    if (topic in ("career", "general")
+            and not marriage_verdict_block
+            and not stock_verdict_block
+            and not love_verdict_block
+            and isinstance(kundli, dict) and kundli.get("planets")
+            and _is_career_question(question)):
+        try:
+            kp_dict_c = (locals().get("kp_dict")
+                         or locals().get("kp_dict_s")
+                         or locals().get("kp_dict_l"))
+            try:
+                if not kp_dict_c and isinstance(birth, dict):
+                    kp_dict_c = _kp_calc()(birth)
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for career failed: {exc}")
+            assess_career, fmt_career, _classify_career_q = _career_engine()
+            career_verdict_obj = assess_career(
+                kundli, intel_obj or {}, kp_dict_c or {}, birth, question)
+            if career_verdict_obj:
+                career_verdict_block = fmt_career(career_verdict_obj, question)
+                if isinstance(out_meta, dict):
+                    out_meta["career_verdict_obj"]   = career_verdict_obj
+                    out_meta["career_question_type"] = career_verdict_obj.get("bucket")
+                print(f"[openai_helper] career_engine OK → "
+                      f"bucket='{career_verdict_obj.get('bucket')}' "
+                      f"tense='{career_verdict_obj.get('tense')}' "
+                      f"verdict='{career_verdict_obj.get('verdict','')[:60]}' "
+                      f"score={career_verdict_obj.get('score')} "
+                      f"conf={career_verdict_obj.get('confidence')}")
+        except Exception as exc:
+            print(f"[openai_helper] career_engine failed: {exc}")
+
     focus     = _focus_block(topic)
     # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
     # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
@@ -2062,6 +2174,89 @@ def _build_messages(
                 "is non-empty, internalise EACH warning as an absolute "
                 "constraint for this turn.\n\n"
                 + love_verdict_block
+            ),
+        })
+
+    # ── CAREER NARRATOR TURN-LEVEL OVERRIDE ───────────────────────────────────
+    # Appended LAST after love so recency bias keeps the lock authoritative.
+    # Mirror of stock/love narrator overrides + brand-safety guards for
+    # govt-job (no fake selection-date promise), business-start (no random
+    # capital-loss prediction), resignation (soften — never tell user to
+    # quit definitively), and partnership (always recommend written agreement).
+    if career_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔒 CAREER NARRATOR OVERRIDE — this turn is a career / job / "
+                "profession / business question. The cosmic engine has already "
+                "computed the verdict bucket (govt_job / foreign_job / "
+                "promotion / resignation / business_start / partnership / "
+                "transfer / career_setback / new_job_timing / job_change / "
+                "career_field_choice / general_career), the verdict status "
+                "(green_go / yellow_wait / slow_burn / red_avoid), the score, "
+                "the timing window via Vimshottari + Saturn + Jupiter+Yogini "
+                "transits, the 10th lord / D10 / KP cuspal cross-check, the "
+                "Amatya-Karaka, the Mahapurusha & Raj/Dhana Yogas, the Sade "
+                "Sati phase, and the remedy for you. You are NOT analysing — "
+                "you are NARRATING a locked verdict in warm Hinglish.\n\n"
+                "ABSOLUTE RULES (these override every other instruction this turn):\n"
+                "  1. The verdict bucket and verdict status are FINAL. Do NOT "
+                "contradict, do NOT hedge into the opposite bucket, do NOT "
+                "add 'lekin actually…' reversals. Use the verdict text as the "
+                "spine of your reply.\n"
+                "  2. Copy timing windows (Vimshottari Maha-Antar, Saturn "
+                "transit window, Jupiter transit window) EXACTLY as printed "
+                "in the locked block. No rounding, no shifting, no blending.\n"
+                "  3. Copy score, dasha-lord names, 10th-lord, Amatya-Karaka, "
+                "house numbers, Mahapurusha yoga names, and remedy VERBATIM. "
+                "No paraphrasing of numbers or planet names.\n"
+                "  4. NEVER reveal AI / LLM / GPT / model — brand voice is "
+                "'Powered by Advanced Cosmic Intelligence'. Speak as the "
+                "cosmic intelligence, never as a chatbot.\n"
+                "  5. NO fake/random fallbacks. If the engine is silent on a "
+                "specific date or company name, do NOT invent it. Vague "
+                "phrases like 'jaldi mil jayegi' without a window are "
+                "FORBIDDEN — only narrate what the engine produced.\n"
+                "  6. TENSE-AWARE FRAMING (mandatory) — read the "
+                "'QUESTION TENSE:' line in the verdict block:\n"
+                "     • PRESENT  → headline references CURRENT Maha-Antar-"
+                "Pratyantar lords + active Saturn/Jupiter transit. Do NOT "
+                "lead with 'agle X mahine mein…' for a 'abhi/aaj/currently/"
+                "right now/chal raha hai' question.\n"
+                "     • FUTURE   → headline references next dasha window + "
+                "upcoming Saturn/Jupiter transits. Do NOT lead with "
+                "'abhi to…' for a 'kab/will/karega/hoga/milega' question.\n"
+                "     • GENERAL  → balance both naturally.\n"
+                "  7. BRAND-SAFETY GUARDS (mandatory for these buckets):\n"
+                "     • govt_job → NEVER promise selection on a specific date. "
+                "Frame as 'agle X mahine ka window favourable hai — "
+                "tayari + form-fill on time'. Always pair with effort: "
+                "'cosmic window khulta hai, par mehnat aapki test hogi'.\n"
+                "     • business_start → NEVER predict 'capital loss hoga' or "
+                "'business band hoga' as a definite outcome. Frame "
+                "red_avoid / slow_burn as 'abhi natal promise weak hai, "
+                "X mahine ke baad activation window'. ALWAYS recommend "
+                "small-scale pilot first when score < 25.\n"
+                "     • resignation → NEVER tell the user to quit definitively. "
+                "Even on green_go, frame as 'cosmic window resign-friendly "
+                "hai LEKIN written next-offer hath mein hone ke baad hi "
+                "step lein'. red_avoid → 'abhi resign mat karein, X mahine "
+                "ruk jaayein'.\n"
+                "     • partnership → ALWAYS recommend WRITTEN agreement + "
+                "exit clause + profit-share clarity, regardless of verdict. "
+                "Frame green as 'partnership favourable hai par paper-work "
+                "first'. red as 'partnership friction signal hai — solo "
+                "ya silent-investor model better'.\n"
+                "     • career_setback → preserve self-worth. Frame as "
+                "'cosmic plane pe transit pressure hai, aapki capability "
+                "mein doubt nahi'. Pair every setback line with a healing "
+                "window + remedy.\n"
+                "     • foreign_job → frame timing as 'window' not "
+                "'guarantee'. NEVER promise a specific country or visa.\n"
+                "  8. If `brand_safety_warnings` array in the verdict block "
+                "is non-empty, internalise EACH warning as an absolute "
+                "constraint for this turn.\n\n"
+                + career_verdict_block
             ),
         })
 

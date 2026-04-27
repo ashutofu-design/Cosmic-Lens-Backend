@@ -97,6 +97,50 @@ export function CardsCarousel({ cards, trimmedCount = 0 }: Props) {
         if (w > 80 && Math.abs(w - pageW) > 2) setPageW(w);
       }}
     >
+      {/* TOP indicator strip — ALWAYS visible above the carousel so the user
+          immediately knows there are multiple answers and can swipe. The
+          original bottom strip got pushed off-screen behind the input bar
+          when narratives were long. */}
+      {safeCards.length > 1 ? (
+        <View style={[styles.topStrip, { borderColor: `${C.accent}40`, backgroundColor: `${C.accent}10` }]}>
+          <View style={styles.topStripLeft}>
+            <Feather name="layers" size={13} color={C.accent} />
+            <Text style={[styles.topStripText, { color: C.accent }]}>
+              {safeCards.length} jawab
+              {trimmedCount > 0 ? `  · ${trimmedCount} aur trim` : ""}
+            </Text>
+          </View>
+          <View style={styles.topStripRight}>
+            <Text style={[styles.topStripHint, { color: C.textDim }]}>
+              swipe karke dekho
+            </Text>
+            <Feather name="chevrons-right" size={14} color={C.accent} />
+          </View>
+        </View>
+      ) : null}
+
+      {/* Dot pager directly under the top strip — gives a persistent visual
+          anchor for which card is active. */}
+      {safeCards.length > 1 ? (
+        <View style={styles.topDotsRow}>
+          {safeCards.map((_, i) => (
+            <View
+              key={`tdot_${i}`}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: i === page ? C.accent : `${C.textDim}40`,
+                  width: i === page ? 18 : 6,
+                },
+              ]}
+            />
+          ))}
+          <Text style={[styles.topPageNum, { color: C.textDim }]}>
+            {page + 1}/{safeCards.length}
+          </Text>
+        </View>
+      ) : null}
+
       <FlatList
         ref={listRef}
         data={safeCards}
@@ -165,28 +209,6 @@ export function CardsCarousel({ cards, trimmedCount = 0 }: Props) {
         }}
       />
 
-      {/* Indicator strip */}
-      <View style={styles.indicator}>
-        <Text style={[styles.indicatorText, { color: C.textDim }]}>
-          {page + 1} of {safeCards.length}
-          {trimmedCount > 0 ? `  (${trimmedCount} aur intents trim ki gayi)` : ""}
-        </Text>
-        <View style={styles.dotsRow}>
-          {safeCards.map((_, i) => (
-            <View
-              key={`dot_${i}`}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor:
-                    i === page ? C.accent : `${C.textDim}40`,
-                  width: i === page ? 16 : 6,
-                },
-              ]}
-            />
-          ))}
-        </View>
-      </View>
     </View>
   );
 }
@@ -250,21 +272,48 @@ const makeStyles = (C: ReturnType<typeof useC>) =>
       lineHeight: 16,
       fontStyle: "italic",
     },
-    indicator: {
-      marginTop: 10,
+    topStrip: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderRadius: 8,
+      marginBottom: 6,
       gap: 8,
     },
-    indicatorText: {
-      fontSize: 11,
-      fontWeight: "600",
+    topStripLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
     },
-    dotsRow: {
+    topStripRight: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
+    },
+    topStripText: {
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0.2,
+    },
+    topStripHint: {
+      fontSize: 11,
+      fontWeight: "500",
+      fontStyle: "italic",
+    },
+    topDotsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      marginBottom: 8,
+    },
+    topPageNum: {
+      fontSize: 10,
+      fontWeight: "600",
+      marginLeft: 6,
     },
     dot: {
       height: 6,

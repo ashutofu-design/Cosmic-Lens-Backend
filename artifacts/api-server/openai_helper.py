@@ -215,14 +215,35 @@ def _get_client():
     global _client, _client_err
     if _client is not None or _client_err is not None:
         return _client
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        _client_err = "OPENAI_API_KEY missing"
+    # Prefer the Replit AI Integrations proxy when provisioned — no user
+    # API key / billing required, charges go to Replit credits. Fall back
+    # to a user-supplied OPENAI_API_KEY if the proxy is not configured.
+    proxy_base = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL", "").strip()
+    proxy_key  = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY", "").strip()
+    user_key   = os.environ.get("OPENAI_API_KEY", "").strip()
+    if proxy_base and proxy_key:
+        api_key  = proxy_key
+        base_url = proxy_base
+        source   = "replit-proxy"
+    elif user_key:
+        api_key  = user_key
+        base_url = None
+        source   = "user-key"
+    else:
+        _client_err = "OPENAI_API_KEY / AI_INTEGRATIONS_OPENAI_BASE_URL missing"
         return None
     try:
         from openai import OpenAI
         timeout = float(os.environ.get("OPENAI_TIMEOUT", "30"))
-        _client = OpenAI(api_key=api_key, timeout=timeout)
+        kwargs = {"api_key": api_key, "timeout": timeout}
+        if base_url:
+            kwargs["base_url"] = base_url
+        _client = OpenAI(**kwargs)
+        try:
+            print(f"[openai_helper] OpenAI client initialised via {source}",
+                  flush=True)
+        except Exception:
+            pass
         return _client
     except Exception as exc:
         _client_err = f"OpenAI SDK init failed: {exc}"

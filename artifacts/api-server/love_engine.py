@@ -210,8 +210,14 @@ _Q_PATTERNS = [
         r"\b(chakkar|chakar|chukker)\b",
         r"\b(third[- ]?party|teesra|tisra|tisri)\b",
         r"\b(side[- ]?chick|side\s*piece)\b",
-        r"\b(infidel|unfaithful|disloyal|loyal nahi)\b",
+        r"\b(infidel|infidelity|unfaithful|disloyal|loyal nahi)\b",
         r"\b(mere|mera|hamara)\b.*\b(partner|bf|gf|husband|wife|pati|patni)\b.*\b(kisi|koi|kuch)\b.*\b(aur|doosra|dusra)\b",
+        # Devanagari patterns (Hindi script)
+        r"धोखा",
+        r"बेवफा|बेवफाई",
+        r"चक्कर",
+        r"किसी और",
+        r"अफेयर|एफेयर",
     ]),
     # BREAKUP SIGNAL
     ("breakup_signal", [

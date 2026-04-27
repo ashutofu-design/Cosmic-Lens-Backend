@@ -97,12 +97,16 @@ _LOVE_QUESTION_RX = __import__("re").compile(
     r"(?:\b(love|pyaar|pyar|crush|ishq|mohabbat|romance|romantic|"
     r"dating|girlfriend|boyfriend|gf|bf|partner|rishta|rishtey|relation|"
     r"relationship|breakup|break[- ]?up|patch[- ]?up|reunion|reconcil|"
-    r"chakkar|chakar|affair|cheating|cheater|dhokha|dhoka|bewafai|"
+    r"chakkar|chakar|affair|cheating|cheater|cheated|dhokha|dhoka|"
+    r"dhokhha|dhoke|bewafai|be-wafai|wafa|infidel|infidelity|"
+    r"unfaithful|disloyal|"
     r"soulmate|jeevansathi|sathi|saathi|"
     r"propose|izhaar|izhar|long[- ]?distance|ldr|"
     r"one[- ]?sided|ekta-?rafa|ektarafa|"
     r"compat(?:ible|ibility)|jodi|joodi)\b"
-    r"|प्यार|प्रेम|रिश्ता|ब्रेकअप|गर्लफ्रेंड|बॉयफ्रेंड)",
+    r"|प्यार|प्रेम|रिश्ता|ब्रेकअप|गर्लफ्रेंड|बॉयफ्रेंड|"
+    r"धोखा|बेवफा|बेवफाई|चक्कर|किसी और|अफेयर|एफेयर|"
+    r"प्रेमी|प्रेमिका|साथी|जीवनसाथी)",
     __import__("re").IGNORECASE,
 )
 

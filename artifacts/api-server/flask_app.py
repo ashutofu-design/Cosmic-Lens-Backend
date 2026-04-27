@@ -5518,6 +5518,29 @@ def ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    # ── Strict astrology-only gate (route-level) ─────────────────────────────
+    # Refuse off-topic questions BEFORE auth/quota so we never charge a user a
+    # daily-question slot for a question we will not answer. Mirrored inside
+    # ai_ask() too, but called here as well so the rule-engine fallback path
+    # (when OpenAI is unavailable) also enforces the same policy.
+    from openai_helper import (
+        _is_brand_unsafe as _ask_is_brand_unsafe,
+        _BRAND_SAFE_REDIRECT as _ask_brand_safe_redirect,
+        _resolve_response_lang as _ask_resolve_lang,
+    )
+    if _ask_is_brand_unsafe(question):
+        eff_lang = _ask_resolve_lang(question, lang, None)
+        msg = _ask_brand_safe_redirect.get(eff_lang) or _ask_brand_safe_redirect["hn"]
+        return jsonify({
+            "text":       msg,
+            "topic":      "off_topic",
+            "confidence": 1.0,
+            "source":     "brand_guard",
+            "follow_ups": [],
+            "quota":      {"used": 0, "limit": 0},
+            "plan":       "free",
+        })
+
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
     if user_id:
@@ -5706,6 +5729,29 @@ def ask_stream_route():
 
     if not question:
         return jsonify({"error": "question is required"}), 400
+
+    # ── Strict astrology-only gate (route-level) ─────────────────────────────
+    # Refuse off-topic asks BEFORE auth/quota so we never charge a daily slot
+    # for a question we will not answer. ai_ask_stream() also enforces this
+    # internally; the route-level call additionally protects the rule-engine
+    # fallback path used when OpenAI is unavailable.
+    from openai_helper import (
+        _is_brand_unsafe as _ask_is_brand_unsafe,
+        _BRAND_SAFE_REDIRECT as _ask_brand_safe_redirect,
+        _resolve_response_lang as _ask_resolve_lang,
+    )
+    if _ask_is_brand_unsafe(question):
+        eff_lang = _ask_resolve_lang(question, lang, None)
+        msg = _ask_brand_safe_redirect.get(eff_lang) or _ask_brand_safe_redirect["hn"]
+        return jsonify({
+            "text":       msg,
+            "topic":      "off_topic",
+            "confidence": 1.0,
+            "source":     "brand_guard",
+            "follow_ups": [],
+            "quota":      {"used": 0, "limit": 0},
+            "plan":       "free",
+        })
 
     # ── Auth + quota — identical contract to /api/ask ────────────────────────
     user = None

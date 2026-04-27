@@ -2385,22 +2385,86 @@ def _classify_mode(question: str) -> str:
 # ── Public entry point ───────────────────────────────────────────────────────
 
 # ── Brand-safety pre-LLM guard ───────────────────────────────────────────────
-# Hard refuse list: questions about external events the app must never engage
-# with — sports/election/lottery/news predictions and similar fortune-telling.
+# Strict ASTROLOGY-ONLY policy: this app refuses every off-topic question
+# (programming help, recipes, math, weather, news, translation, general
+# knowledge, entertainment, etc.) BEFORE calling the LLM. Cheap, deterministic,
+# never leaks chart data and never burns OpenAI tokens on out-of-scope asks.
+#
+# Add a new pattern here when a real off-topic class shows up in production.
+# Keep patterns tight — false positives silently refuse genuine astrology
+# questions, which is the worst UX failure mode for the Ask screen.
 _BRAND_UNSAFE_PATTERNS = [
-    # sports / matches
+    # ── Sports / matches ────────────────────────────────────────────────────
     r"\b(match|cricket|ipl|world cup|t20|odi|football|fifa|nba|tournament)\b.*\b(jeet|win|kaun|who|result|score)",
     r"\b(jeet|win|kaun|who).*\b(match|cricket|ipl|world cup|t20|odi)\b",
     r"\b(india|pakistan|australia|england|sri lanka|new zealand|south africa)\s+(vs|v|versus)\s+\w+",
-    # elections
+    # ── Elections / politics predictions ────────────────────────────────────
     r"\b(election|chunav|vote|poll).*\b(jeet|win|kaun|who|result)",
-    r"\b(modi|rahul|kejriwal|trump|biden).*\b(jeet|win|election)",
-    # lottery / gambling
-    r"\b(lottery|lucky number|jackpot|satta|matka|powerball)\b",
-    r"\b(stock|share|crypto|bitcoin).*(price|prediction|tomorrow|kal)",
-    # generic fortune-telling about others
+    r"\b(modi|rahul|kejriwal|trump|biden|putin|xi jinping).*\b(jeet|win|election|kab|when)",
+    # ── Lottery / gambling / market predictions ─────────────────────────────
+    r"\b(lottery|jackpot|satta|matka|powerball|teer|kbc)\b",
+    r"\b(stock|share|crypto|bitcoin|nifty|sensex|forex|dogecoin|ethereum)\b.*(price|prediction|tomorrow|kal|target|buy|sell)",
+    # ── Generic fortune-telling about others ────────────────────────────────
     r"\bkaun (jeet|haar|marega|janega)",
     r"\bwho will (win|lose|die)",
+    # ── Programming / code / tech help ──────────────────────────────────────
+    r"\b(python|javascript|typescript|java|c\+\+|c#|golang|rust|kotlin|swift|php|ruby|html|css|sql)\b",
+    r"\b(code|coding|program|programming|debug|compile|syntax|algorithm|api|library|framework|github|stackoverflow|leetcode)\b",
+    r"\b(function|class|method|variable|loop|array|object|array)\s+(likh|likho|banao|create|write)",
+    r"\b(install|download|setup|configure)\s+(app|software|package|library|module|npm|pip|apk)",
+    # ── Recipes / cooking ───────────────────────────────────────────────────
+    # Note: do NOT match a bare "kaise banaye" — it's used in genuine astro
+    # asks like "kundli kaise banaye" / "yantra kaise banaye". Also do NOT
+    # match a bare "kitchen" — kitchen direction/placement is core vastu.
+    # Always pair with a food/cooking context.
+    r"\b(recipe|nuskha|cooking)\b",
+    r"\b(biryani|pulao|paneer|dal|sabzi|roti|paratha|samosa|chai|coffee|cake|cookie|pizza|burger|pasta|maggi|noodles|halwa|kheer|rasgulla|gulab jamun|jalebi|laddu)\b.*\b(recipe|kaise|banao|banaye|banaaye|vidhi|ingredients?|samagri|content)",
+    r"\b(khaana|khana|food|breakfast|lunch|dinner|nashta)\b.*\b(kaise|recipe|banao|banaye|banaaye|ingredients?|samagri)",
+    r"\bkitchen\b.*\b(recipe|kaise banaye|kaise banaaye|cook|cooking|dish|ingredients?)\b",
+    # ingredients/samagri tied to a dish/cooking verb in either order — covers
+    # "ingredients for biryani", "biryani ingredients", "samagri for cake" etc.
+    # Anchored to a food noun or cook verb so it doesn't catch puja-samagri /
+    # havan-samagri (those are astro/remedy in scope).
+    r"\bingredients?\b.*\b(biryani|pulao|paneer|dal|sabzi|roti|paratha|samosa|chai|coffee|cake|cookie|pizza|burger|pasta|maggi|noodles|halwa|kheer|rasgulla|gulab jamun|jalebi|laddu|khaana|khana|food|dish|recipe|cook)",
+    r"\b(biryani|pulao|paneer|dal|sabzi|roti|paratha|samosa|cake|cookie|pizza|burger|pasta|maggi|noodles|halwa|kheer|rasgulla|gulab jamun|jalebi|laddu)\s+ingredients?\b",
+    # ── Math / arithmetic / calculation ─────────────────────────────────────
+    r"\b\d+\s*[\+\-\*\/×x]\s*\d+\b",
+    r"\b(calculate|calculator|solve)\b.*\b(equation|sum|problem|math)",
+    r"\b(percentage|percent|prozent)\s+(of|nikalo|nikalna|kya hota)",
+    r"\b(square root|cube root|factorial|integral|derivative)\b",
+    # ── Translation / language tasks ────────────────────────────────────────
+    r"\b(translate|translation|anuvad|tarjuma)\b",
+    r"\b(in english|in hindi|english me kya|hindi me kya)\s+(bolte|kehte|kahte|kahenge|likhte)",
+    # ── Weather / current temperature ───────────────────────────────────────
+    r"\b(weather|mausam|temperature|barish|baarish|rain|snow|humidity|forecast aaj)\b",
+    # ── News / current affairs ──────────────────────────────────────────────
+    r"\b(news|khabar|samachar|breaking news|headlines|latest news)\b",
+    # ── General-knowledge / encyclopedia look-ups ───────────────────────────
+    r"\b(capital|rajdhani)\s+(of|ki|ka|hai)\b",
+    r"\b(distance|duri|दूरी)\s+(between|se|ke beech)\b",
+    r"\b(population|jansankhya|abadi)\s+(of|ki|ka)\b",
+    r"\b(prime minister|pradhan mantri|president|rashtrapati|chief minister)\s+(of|ka|ki|kaun)",
+    r"\b(highest|tallest|largest|biggest|smallest|sabse bada|sabse uncha|sabse chhota)\s+(mountain|river|country|city|building|tree|animal)",
+    # ── Entertainment / movies / songs ──────────────────────────────────────
+    r"\b(movie|film|netflix|prime video|hotstar|imdb|rotten tomatoes|trailer)\b",
+    r"\b(song|gana|lyrics|spotify|youtube music|playlist|album|singer)\b.*\b(suggest|recommend|batao|name)",
+    r"\b(joke|chutkula|funny|hasao|hasayie)\b",
+    # ── App / device / phone tech support ───────────────────────────────────
+    r"\b(iphone|android|samsung|whatsapp|instagram|facebook|gmail|chrome|wifi|bluetooth)\b.*\b(kaise|how to|problem|issue|setup|install|fix)",
+    # ── Writing / composition help ──────────────────────────────────────────
+    r"\b(write|likh|likho|create|compose)\s+(a|an|me|ek|mere liye)?\s*(poem|essay|story|email|letter|kahani|kavita|patr|nibandh|paragraph|article|blog)",
+    # ── Generic search-engine style queries ─────────────────────────────────
+    r"\bwikipedia\b",
+    r"\bgoogle\s+(search|me|kar|karke|karo)\b",
+    # ── Medical diagnosis / prescription (we do astrological remedies only) ─
+    # Note: do NOT block bare "treatment for" / "symptoms of" — they're used
+    # in genuine astro asks like "treatment for mangal dosh", "symptoms of
+    # sade sati". Pair with a clinical noun (medicine/tablet/prescription/
+    # disease name) to avoid false positives on astro remedy / dosh queries.
+    r"\b(prescription|prescribe|dosage)\b",
+    r"\b(medicine|tablet|capsule|injection|antibiotic|painkiller)\s+(name|naam|recommend|suggest|kaun|kaunsi|kya|dosage)",
+    r"\b(symptoms?\s+of|treatment\s+for)\s+(diabetes|cancer|fever|covid|cold|flu|tb|asthma|hypertension|bp|migraine|allergy|arthritis|thyroid|pcos)",
+    r"\b(dawai ka naam|tablet ka naam|kaun si dawai|kaunsi dava)\b",
 ]
 _BRAND_UNSAFE_RE = [re.compile(p, re.IGNORECASE) for p in _BRAND_UNSAFE_PATTERNS]
 
@@ -2412,14 +2476,19 @@ def _is_brand_unsafe(question: str) -> bool:
 
 
 _BRAND_SAFE_REDIRECT = {
-    "en": ("Beta, jyotish is a guide to your own life-path — predicting match results, election outcomes, "
-           "stock prices, or other external events is not what these classics teach. "
-           "Please ask me about your marriage, career, health, family, or any matter from your own life — I'll guide you with full heart."),
-    "hi": ("बेटा, ज्योतिष आपके अपने जीवन-पथ का मार्गदर्शन है — मैच, चुनाव, शेयर बाज़ार या बाहरी घटनाओं की भविष्यवाणी इसका कार्य नहीं। "
-           "कृपया अपनी शादी, करियर, स्वास्थ्य, परिवार या जीवन से जुड़ा कोई प्रश्न पूछिए — मैं पूरे मन से उत्तर दूँगा।"),
-    "hn": ("Beta, jyotish aapke khud ke jeevan-path ka margdarshan hai — match, election, stock-price, ya "
-           "kisi bhi bahar ki ghatna ki bhavishyavani iska kaam nahi. "
-           "Kripya apni shaadi, career, swasthya, parivar, ya jeevan se judi koi baat poochhein — main poore mann se uttar dunga."),
+    "en": ("Beta, this guide answers only jyotish (astrology) questions — your kundli, dasha, "
+           "marriage, career, health, finance, family, vastu, remedies, and life-path matters. "
+           "Cooking, coding, weather, news, sports, exam answers, translations and similar topics "
+           "are outside this scope. Please ask me an astrology question from your own life and I'll guide you with full heart."),
+    "hi": ("बेटा, यह मार्गदर्शिका केवल ज्योतिष से जुड़े प्रश्नों का उत्तर देती है — आपकी कुंडली, दशा, "
+           "विवाह, करियर, स्वास्थ्य, धन, परिवार, वास्तु, उपाय और जीवन-पथ के विषय। "
+           "खाना बनाना, कोडिंग, मौसम, समाचार, खेल, परीक्षा-उत्तर, अनुवाद आदि इसके दायरे में नहीं आते। "
+           "कृपया अपने जीवन से जुड़ा कोई ज्योतिष प्रश्न पूछिए — मैं पूरे मन से मार्गदर्शन करूँगा।"),
+    "hn": ("Beta, yeh guide sirf jyotish (astrology) ke prashno ka uttar deti hai — aapki kundli, dasha, "
+           "shaadi, career, swasthya, dhan, parivar, vastu, upay aur jeevan-path ke vishay. "
+           "Khaana banana, coding, mausam, news, khel, exam-uttar, translation jaisi cheezein iske dayre "
+           "mein nahi aati. Kripya apne jeevan se judi koi jyotish se sambandhit prashn poochein — "
+           "main poore mann se margdarshan karunga."),
 }
 
 

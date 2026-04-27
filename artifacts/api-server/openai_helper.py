@@ -45,6 +45,41 @@ def _marriage_engine():
     from marriage_engine import assess_marriage, format_verdict_for_prompt  # type: ignore
     return assess_marriage, format_verdict_for_prompt
 
+
+def _stock_engine():
+    """Lazy-load deterministic stock-market verdict engine."""
+    from stock_engine import (assess_stock,                     # type: ignore
+                              format_verdict_for_prompt as _fmt_stock,
+                              extract_window_str as _stock_window_str,
+                              classify_stock_question)
+    return assess_stock, _fmt_stock, _stock_window_str, classify_stock_question
+
+
+# Stock-question gate (regex). Triggers stock_engine ONLY when the question
+# is genuinely about share-market / trading / investing — not for generic
+# wealth/loan/property finance questions that the engine isn't designed for.
+_STOCK_QUESTION_RX = __import__("re").compile(
+    # Anchored stock vocabulary only. Bare "bazar" / "व्यापार" are NOT here
+    # because they false-trigger generic business-and-market questions; we
+    # require explicit share/stock/equity/fund/trading anchors instead.
+    r"(?:\b(stocks?|shares?|nifty|sensex|share[- ]?market|stock[- ]?market|"
+    r"trading|trader|broker(age)?|equity|equities|portfolio|demat|"
+    r"intraday|swing|scalping|fno|futures?|options?|derivative|"
+    r"crypto|bitcoin|ethereum|dogecoin|nft|"
+    r"mutual[- ]?funds?|sip|lump[- ]?sum|invest(or|ing|ment)|"
+    r"share[- ]?bazar|stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar)\b"
+    r"|f&o|F&O"
+    r"|शेयर|शेयर बाज़ार|निवेश)",
+    __import__("re").IGNORECASE,
+)
+
+
+def _is_stock_question(text: str) -> bool:
+    """True iff text matches the stock-engine trigger gate."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return bool(_STOCK_QUESTION_RX.search(text))
+
 # Lazy client so import does not crash if the SDK is missing in dev.
 _client = None
 _client_err: str | None = None
@@ -1050,6 +1085,47 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] marriage_engine failed: {exc}")
 
+    # ── DETERMINISTIC STOCK-MARKET VERDICT ────────────────────────────────────
+    # For topic == "finance" + stock-keyword question, we compute the verdict
+    # in pure Python BEFORE the AI is invoked. The AI is then forbidden from
+    # changing verdict / score / window / strategy / sectors / remedy — it is
+    # only a narrator. Mirror of marriage_engine integration above.
+    stock_verdict_block = ""
+    stock_verdict_obj   = None
+    stock_window_str    = ""
+    if (topic in ("finance", "general")
+            and not marriage_verdict_block
+            and isinstance(kundli, dict) and kundli.get("planets")
+            and _is_stock_question(question)):
+        try:
+            kp_dict_s = None
+            try:
+                # Reuse the marriage-path KP if we already computed it; else fresh.
+                kp_dict_s = locals().get("kp_dict")
+                if not kp_dict_s and isinstance(birth, dict):
+                    kp_dict_s = _kp_calc()(birth)
+            except Exception as exc:
+                print(f"[openai_helper] kp calc for stock failed: {exc}")
+            assess_stock, fmt_stock, stock_window_fn, classify_stock_q = _stock_engine()
+            stock_verdict_obj = assess_stock(
+                kundli, intel_obj or {}, kp_dict_s or {}, birth, question)
+            if stock_verdict_obj:
+                stock_verdict_block = fmt_stock(stock_verdict_obj)
+                stock_window_str    = stock_window_fn(stock_verdict_obj) or ""
+                if isinstance(out_meta, dict):
+                    out_meta["stock_verdict_obj"]   = stock_verdict_obj
+                    out_meta["stock_question_type"] = stock_verdict_obj.get("question_type")
+                    out_meta["stock_window_str"]    = stock_window_str
+                print(f"[openai_helper] stock_engine OK → "
+                      f"q_type='{stock_verdict_obj.get('question_type')}' "
+                      f"verdict='{stock_verdict_obj.get('verdict','')[:60]}' "
+                      f"score={stock_verdict_obj.get('score')} "
+                      f"npx={stock_verdict_obj.get('natal_promise_score')} "
+                      f"trig={stock_verdict_obj.get('current_trigger_score')} "
+                      f"window='{stock_window_str}'")
+        except Exception as exc:
+            print(f"[openai_helper] stock_engine failed: {exc}")
+
     focus     = _focus_block(topic)
     # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
     # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
@@ -1500,6 +1576,10 @@ def _build_messages(
             ),
         })
 
+    # NOTE: the STOCK NARRATOR override is appended LAST (just before the user
+    # turn) — see the bottom of this function — so it is the freshest system
+    # instruction the model sees and recency bias keeps the lock authoritative.
+
     # ── Final reminders (recency-bias citation pin) ──────────────────────────
     # The main system prompt has 14 rules; under gpt-4o-mini the model
     # sometimes drops the MANDATORY-citation ones (KP, Remedies, D9/D10) when
@@ -1795,6 +1875,39 @@ def _build_messages(
             ),
         })
 
+    # ── STOCK NARRATOR TURN-LEVEL OVERRIDE ───────────────────────────────────
+    # Appended LAST (just before the user turn) so recency bias keeps the lock
+    # authoritative. AI is reduced to NARRATOR — every fact (verdict bucket,
+    # window, score, dasha, planet names, remedy) is pre-decided by
+    # stock_engine.py and MUST be copied verbatim.
+    if stock_verdict_block:
+        msgs.append({
+            "role": "system",
+            "content": (
+                "🔒 STOCK NARRATOR OVERRIDE — this turn is a stock-market / "
+                "trading / investment question. The cosmic engine has already "
+                "computed the verdict, score, timing window, dasha context, "
+                "and remedy for you. You are NOT analysing — you are NARRATING "
+                "a locked verdict in warm Hinglish.\n\n"
+                "ABSOLUTE RULES (these override every other instruction this turn):\n"
+                "  1. The verdict bucket (go_now / wait / limited / avoid) is "
+                "FINAL. Do NOT contradict it, do NOT hedge it into the "
+                "opposite bucket, do NOT add 'lekin actually…' reversals.\n"
+                "  2. Copy the timing window string EXACTLY as printed on the "
+                "line beginning '>>> NARRATE THIS WINDOW EXACTLY AS:'. No "
+                "rounding, no shifting, no blending with neighbouring dashas.\n"
+                "  3. Copy the score, the dasha-lord names, and the remedy "
+                "verbatim. No paraphrasing of numbers or planet names.\n"
+                "  4. NEVER reveal AI / LLM / GPT / model — brand voice is "
+                "'Powered by Advanced Cosmic Intelligence'. Speak as the "
+                "cosmic intelligence, never as a chatbot.\n"
+                "  5. NO fake/random fallbacks. If the engine block below is "
+                "silent on a detail, do NOT invent it — stick to what is "
+                "printed.\n\n"
+                + stock_verdict_block
+            ),
+        })
+
     msgs.append({"role": "user", "content": user})
     return msgs
 
@@ -1809,8 +1922,14 @@ _TOPIC_KW = {
                     "kaam", "office", "boss", "salary", "transfer", "dhanda", "interview", "resign",
                     "switch", "freelance", "startup"],
     "finance":     ["money", "wealth", "finance", "paisa", "paise", "dhan", "loan", "debt", "karz",
-                    "investment", "share", "stock", "property", "lottery", "income", "tax", "loss",
-                    "profit", "savings", "fixed deposit", "mutual fund", "crypto"],
+                    "investment", "invest", "investor", "investing", "share", "shares", "stock",
+                    "stocks", "property", "lottery", "income", "tax", "loss", "profit", "savings",
+                    "fixed deposit", "mutual fund", "mutual funds", "sip", "lumpsum", "crypto",
+                    "bitcoin", "ethereum", "trading", "trader", "intraday", "swing", "scalping",
+                    "f&o", "fno", "futures", "options", "derivative", "derivatives", "equity",
+                    "equities", "portfolio", "demat", "broker", "brokerage", "nifty", "sensex",
+                    "share market", "stock market", "share bazar", "stock bazar", "shaire bazar",
+                    "shaire bazaar", "bazar", "sector"],
     "health":      ["health", "illness", "disease", "swasthya", "bimari", "operation", "surgery",
                     "doctor", "hospital", "rog", "kasht", "dard", "pain", "tabiyat", "fever",
                     "diabetes", "blood pressure", "bp", "cancer", "heart", "depression", "anxiety",

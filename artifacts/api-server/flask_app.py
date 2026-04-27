@@ -5627,6 +5627,17 @@ def ask_route():
         result["quota"]  = {"used": quota["used"], "limit": quota["limit"]}
         result["plan"]   = effective_plan(user) if user else "free"
         result["source"] = result.get("source", "ai" if used_ai else "rules")
+        # ── Hinglish-first zodiac swap (Sagittarius → Dhanu, etc.) ──────
+        # Resolves once per response on the SAME language signal the
+        # engines used; covers `text`, every card text/narrative, and the
+        # structured payload's user-visible fields (empathy_open / human_close
+        # / headline / remedy / note + the 3 bullet arrays).
+        try:
+            from openai_helper import hinglishify_response, _resolve_response_lang
+            eff_lang = _resolve_response_lang(question, lang, preferred_language)
+            hinglishify_response(result, eff_lang)
+        except Exception as exc:
+            print(f"[ask] hinglishify post-process failed (non-fatal): {exc}")
     return jsonify(result)
 
 

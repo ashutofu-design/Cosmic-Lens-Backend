@@ -405,6 +405,19 @@ _WEALTH_QUESTION_RX = __import__("re").compile(
     # debt recovery / outstanding
     r"debt[- ]?recovery|recover[- ]?money|paisa[- ]?wapas|"
     r"udhaar[- ]?wapas|paisa[- ]?milega|"
+    # generic finance + timeframe ("agle X mahine paisa kaisa", "next 6 months
+    # finance kaisa", "mere paise kaise rahenge", etc.)
+    r"paise?\s+kaise|paisa\s+kaisa|paise?\s+kaise\s+rahenge|"
+    r"paisa\s+\w*\s+aayega|paise?\s+\w*\s+aayenge|"
+    r"agle\s+\d*\s*(?:mahine|month|months|saal|year)\s+\w*\s*(?:paisa|paise|finance|dhan|kamai|income|earning)|"
+    r"(?:paisa|paise|finance|dhan|kamai|income|earning)\s+\w*\s*agle\s+\d*\s*(?:mahine|month|months|saal|year)|"
+    r"next\s+\d*\s*(?:month|months|year|years)\s+\w*\s*(?:finance|paisa|paise|wealth|money|earning|income)|"
+    r"(?:finance|paisa|paise|wealth|money|earning|income)\s+\w*\s*next\s+\d*\s*(?:month|months|year|years)|"
+    r"aane\s+wal[ae]\s+\d*\s*(?:mahine|month|months|saal|year)\s+\w*\s*(?:paisa|paise|finance|dhan|kamai|income|earning|wealth|money)|"
+    r"agle\s+\d*\s*(?:mahine|month|months|saal|year).{0,40}(?:finance|paisa|paise|dhan|kamai|income|wealth|money)|"
+    r"(?:finance|paisa|paise|dhan|kamai|income|wealth|money).{0,40}agle\s+\d*\s*(?:mahine|month|months|saal|year)|"
+    r"aane\s+wal[ae].{0,40}(?:finance|paisa|paise|dhan|kamai|income|wealth|money)|"
+    r"(?:finance|paisa|paise|dhan|kamai|income|wealth|money).{0,40}aane\s+wal[ae]|"
     # debt-recovery / outstanding payments — wider Hinglish coverage
     r"paisa[- ]?\w*[- ]?wapas|paisa\s+\w*\s+wapas|"
     r"paisa[- ]?\w*[- ]?milega|paisa\s+\w*\s+milega|"

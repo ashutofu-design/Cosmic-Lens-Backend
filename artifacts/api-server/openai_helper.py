@@ -590,9 +590,9 @@ _WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
     "schema": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["verdict", "headline", "timeline",
+        "required": ["verdict", "empathy_open", "headline", "timeline",
                      "what_will_happen", "what_to_do",
-                     "what_to_avoid", "remedy", "note"],
+                     "what_to_avoid", "remedy", "human_close", "note"],
         "properties": {
             "verdict": {
                 "type": "object",
@@ -606,6 +606,16 @@ _WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
                     "score":      {"type": "integer", "minimum": 0, "maximum": 100},
                     "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
                 },
+            },
+            "empathy_open": {
+                "type": "string",
+                "description": (
+                    "Single-sentence Hinglish opener that ACKNOWLEDGES the user's "
+                    "specific emotional concern from the question. ≤25 words. "
+                    "MUST follow the EMOTIONAL TREATMENT DIRECTIVE's `OPENING LINE` "
+                    "rule below — match the detected tone (anxious / hopeful / "
+                    "grieving / etc.). NO banned cliché phrases."
+                ),
             },
             "headline": {
                 "type": "string",
@@ -633,6 +643,17 @@ _WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
                 "items": {"type": "string"},
             },
             "remedy": {"type": "string"},
+            "human_close": {
+                "type": "string",
+                "description": (
+                    "Single-sentence Hinglish closer that REFRAMES the situation "
+                    "(phase, not sentence; discipline, not saza; signal, not "
+                    "strategy — depending on detected tone) and offers QUIET "
+                    "agency / hope. ≤25 words. MUST follow the EMOTIONAL "
+                    "TREATMENT DIRECTIVE's `CLOSING LINE` rule below. NO banned "
+                    "cliché phrases. This is SEPARATE from the advisor `note`."
+                ),
+            },
             "note":   {
                 "type": "string",
                 "description": (
@@ -662,10 +683,20 @@ def _ym_human_w(ym: str) -> str:
         return ""
 
 
-def _build_wealth_structured_system_prompt(verdict_obj: dict) -> str:
+def _build_wealth_structured_system_prompt(verdict_obj: dict,
+                                           emotional_tone: str = "neutral",
+                                           intent_domain: str = "wealth",
+                                           ask_types: list | None = None,
+                                           narrator_lang: str = "hn") -> str:
     """Compact narrator-locked prompt for wealth structured-output mode.
     Replaces the 100+ line verbose WEALTH NARRATOR OVERRIDE with a focused
-    facts-only prompt that fits in ~40 lines and demands strict JSON."""
+    facts-only prompt that fits in ~40 lines and demands strict JSON.
+
+    Phase 2 (Apr 2026): now also injects the EMOTIONAL TREATMENT DIRECTIVE
+    derived from `(emotional_tone × intent_domain)` so the LLM populates
+    `empathy_open` and `human_close` in the right human voice for the user's
+    current mood — anxious vs hopeful vs grieving etc.
+    """
     bucket  = verdict_obj.get("bucket", "general_wealth")
     tense   = verdict_obj.get("tense", "general")
     verdict = verdict_obj.get("verdict", "yellow_wait")
@@ -753,6 +784,19 @@ def _build_wealth_structured_system_prompt(verdict_obj: dict) -> str:
         "wale time mein …', PAST: retrospective."
     )
     parts.append(
+        "2a. `empathy_open` ≤ 25 words, single sentence. MUST acknowledge "
+        "the user's specific concern (echo a noun/situation from the "
+        "question, not a paraphrase of the verdict). Follow the OPENING "
+        "LINE rule from the EMOTIONAL TREATMENT DIRECTIVE below."
+    )
+    parts.append(
+        "2b. `human_close` ≤ 25 words, single sentence. MUST be SEPARATE "
+        "from `note` (which is the advisor disclaimer). MUST follow the "
+        "CLOSING LINE rule from the EMOTIONAL TREATMENT DIRECTIVE below — "
+        "reframe / agency / quiet hope, depending on tone. NO 'sab theek "
+        "ho jaayega', NO 'tension mat lo'."
+    )
+    parts.append(
         "3. `timeline.current` and `timeline.next` MUST equal the locked "
         "window strings above (or empty string if engine was silent). "
         "NO date invention."
@@ -783,6 +827,37 @@ def _build_wealth_structured_system_prompt(verdict_obj: dict) -> str:
     parts.append("• NEVER endorse lottery / satta / matka / KBC / jackpot.")
     parts.append("• NEVER reveal AI / LLM / GPT — brand voice is 'Powered by Advanced Cosmic Intelligence'.")
     parts.append("• NEVER invent dates not present in the locked window strings.")
+    # ── EMOTIONAL TREATMENT DIRECTIVE — Phase 2 (cross-engine playbook) ──
+    try:
+        from treatment_playbook import (
+            build_treatment_directive,
+            canonical_tone,
+            canonical_domain,
+        )
+        parts.append("")
+        parts.append(build_treatment_directive(
+            tone      = canonical_tone(emotional_tone),
+            domain    = canonical_domain(intent_domain) or "wealth",
+            ask_types = ask_types or [],
+            lang      = narrator_lang or "hn",
+        ))
+    except Exception as exc:
+        # Don't silently strip the directive — log loudly + use a minimal
+        # built-in fallback so empathy_open / human_close still get
+        # SOMETHING to anchor against (instead of free-form clichés).
+        import traceback as _tb_mod
+        print(f"[treatment_playbook] LOAD FAILED: {exc!r} — using fallback")
+        print(_tb_mod.format_exc())
+        parts.append("")
+        parts.append("════ EMOTIONAL TREATMENT (minimal fallback) ════")
+        parts.append("• empathy_open: ONE line acknowledging the user's "
+                     "specific situation in their words. NO clichés "
+                     "(no 'main samajh sakta hoon', no 'tension mat lo', "
+                     "no 'sab theek ho jaayega', no 'Beta,').")
+        parts.append("• human_close: ONE line reframing the engine facts "
+                     "into a concrete next step or perspective shift. "
+                     "Do NOT repeat the advisor cite from `note`.")
+        parts.append("• Both fields ≤ 25 words. Single sentence each.")
     return "\n".join(parts)
 
 
@@ -797,6 +872,7 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     tag      = v.get("tag", "")
     score    = v.get("score", "")
     conf     = v.get("confidence", "")
+    empathy_open = (payload.get("empathy_open") or "").strip()
     headline = (payload.get("headline") or "").strip()
     tl       = payload.get("timeline") or {}
     cur      = (tl.get("current") or "").strip()
@@ -805,6 +881,7 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     do       = payload.get("what_to_do")        or []
     avoid    = payload.get("what_to_avoid")     or []
     remedy   = (payload.get("remedy") or "").strip()
+    human_close = (payload.get("human_close") or "").strip()
     note     = (payload.get("note")   or "").strip()
 
     lines: list[str] = []
@@ -814,6 +891,10 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     if conf != "":
         head += f"  •  Confidence {conf}%"
     lines.append(head)
+    # Phase 2: empathy_open line (italic in markdown clients)
+    if empathy_open:
+        lines.append("")
+        lines.append(empathy_open)
     if headline:
         lines.append("")
         lines.append(headline)
@@ -841,6 +922,10 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     if remedy:
         lines.append("")
         lines.append(f"🕉  Upay: {remedy}")
+    # Phase 2: human_close line BEFORE the advisor disclaimer
+    if human_close:
+        lines.append("")
+        lines.append(human_close)
     if note:
         lines.append("")
         lines.append(f"ℹ  {note}")
@@ -873,6 +958,53 @@ def _validate_wealth_payload(payload: dict, locked: dict) -> tuple[bool, str]:
         return False, "headline empty"
     if len(headline.split()) > 15:
         return False, f"headline too long ({len(headline.split())} words; strict limit 15)"
+    # ── Phase 2: empathy_open + human_close validation ─────────────────────
+    # If the playbook can't be imported we DO NOT silently allow clichés
+    # through — fall back to a small inline ban list instead.
+    try:
+        from treatment_playbook import is_banned_empathy as _is_banned
+    except Exception as _exc:
+        print(f"[treatment_playbook] VALIDATOR LOAD FAILED: {_exc!r} — using inline ban list")
+        _INLINE_BAN = (
+            "main samajh sakta hoon", "i understand your pain",
+            "tension mat lo", "tension mat lijiye", "chinta mat karo",
+            "sab theek ho jaayega", "sab acha hoga", "sab achha hoga",
+            "as an ai", "as a language model", "beta,", "beta ,",
+            "khush rahein", "positive raho", "be positive",
+        )
+        def _is_banned(t: str) -> tuple[bool, str]:
+            tl = (t or "").lower()
+            for ph in _INLINE_BAN:
+                if ph in tl:
+                    return True, ph
+            return False, ""
+    # Single-sentence enforcement — empathy_open + human_close are each
+    # supposed to be ONE punchy line, never a paragraph.
+    _SENT_END_RX = _re_w.compile(r"[.!?।]")
+    for empathy_field, label, max_words in (
+        ("empathy_open", "empathy_open", 28),   # +3 words slack over schema 25
+        ("human_close",  "human_close",  28),
+    ):
+        val = payload.get(empathy_field)
+        if not isinstance(val, str) or not val.strip():
+            return False, f"{label} empty"
+        wc = len(val.split())
+        if wc > max_words:
+            return False, f"{label} too long ({wc} words; soft limit {max_words})"
+        # Count terminating punctuation; allow exactly one (or zero if no end mark).
+        end_marks = len(_SENT_END_RX.findall(val.rstrip()))
+        if end_marks > 1:
+            return False, f"{label} must be a single sentence (found {end_marks} sentence-end marks)"
+        banned, phrase = _is_banned(val)
+        if banned:
+            return False, f"{label} contains banned cliché: {phrase!r}"
+    # human_close MUST NOT just repeat the advisor cite — they're separate
+    hc_low = (payload.get("human_close") or "").lower()
+    if _re_w.search(
+            r"\b(CA|chartered\s+accountant|SEBI[- ]registered|"
+            r"financial\s+advisor|financial\s+planner|tax\s+consultant)\b",
+            hc_low, _re_w.IGNORECASE):
+        return False, "human_close should NOT contain advisor cite (note field handles that)"
     for k in ("what_will_happen", "what_to_do", "what_to_avoid"):
         arr = payload.get(k) or []
         if not isinstance(arr, list) or not arr:
@@ -896,11 +1028,13 @@ def _validate_wealth_payload(payload: dict, locked: dict) -> tuple[bool, str]:
             note_str, _re_w.IGNORECASE):
         return False, "note missing CA / SEBI-registered advisor cite"
     blob = " ".join([
+        (payload.get("empathy_open") or ""),   # Phase 2: also scan empathy
         (payload.get("headline") or ""),
         " ".join(payload.get("what_will_happen") or []),
         " ".join(payload.get("what_to_do") or []),
         " ".join(payload.get("what_to_avoid") or []),
         (payload.get("remedy") or ""),
+        (payload.get("human_close") or ""),    # Phase 2: also scan close
         (payload.get("note") or ""),
     ]).lower()
     if _re_w.search(r"\b\d+\s*(?:lakh|crore|cr|lac)\b", blob):
@@ -4644,15 +4778,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             if not (m.get("role") == "system"
                     and "WEALTH NARRATOR OVERRIDE" in (m.get("content") or ""))
         ]
+        # ── Phase 2: pull AI Ear's emotional_tone + domain + ask_types so
+        #            the wealth structured prompt can inject the EMOTIONAL
+        #            TREATMENT DIRECTIVE for empathy_open / human_close.
+        _ear = (build_meta or {}).get("intent_extraction") or {}
+        _wealth_tone   = (_ear.get("emotional_tone") or "neutral")
+        _wealth_domain = (_ear.get("domain")         or "wealth")
+        _wealth_asks   = list(_ear.get("ask_types")  or [])
+        _wealth_lang   = (_ear.get("language")       or "hn")
         messages.append({
             "role":    "system",
-            "content": _build_wealth_structured_system_prompt(_wealth_obj),
+            "content": _build_wealth_structured_system_prompt(
+                _wealth_obj,
+                emotional_tone = _wealth_tone,
+                intent_domain  = _wealth_domain,
+                ask_types      = _wealth_asks,
+                narrator_lang  = _wealth_lang,
+            ),
         })
         _trace(req_id, "2c.WEALTH_STRUCTURED_PROMPT_INSTALLED", {
             "bucket":  _wealth_obj.get("bucket"),
             "tense":   _wealth_obj.get("tense"),
             "verdict": _wealth_obj.get("verdict"),
             "score":   _wealth_obj.get("score"),
+            "tone":    _wealth_tone,
+            "domain":  _wealth_domain,
         })
 
     # ── Mode/topic-aware sampling ────────────────────────────────────────────
@@ -7441,16 +7591,17 @@ def _strip_planet_annotation(window_str: str) -> str:
 
 
 def _stitch_structured_narrative(payload: dict) -> str:
-    """Compose 60-100w Hinglish prose from the structured payload fields.
+    """Compose Hinglish prose from the structured payload fields.
 
-    Pure deterministic — no LLM. Uses headline as the lead, then weaves in
-    timeline.next pivot date and the first what_to_do bullet so the user
-    sees specific facts (not generic prose). What_to_avoid bullet is added
-    if room remains.
+    Pure deterministic — no LLM. Now (Phase 2) uses the EMPATHY SANDWICH
+    pattern: empathy_open → engine facts (headline / timing / actions) →
+    human_close. The middle stays fact-locked; the outer two lines carry
+    the human voice tuned by the EMOTIONAL TREATMENT DIRECTIVE upstream.
     """
     if not isinstance(payload, dict):
         return ""
 
+    empathy_open = (payload.get("empathy_open") or "").strip().rstrip(".")
     headline = (payload.get("headline") or "").strip().rstrip(".")
     tl       = payload.get("timeline") or {}
     # Strip planet-name dasha annotation so brand voice stays clean.
@@ -7459,6 +7610,7 @@ def _stitch_structured_narrative(payload: dict) -> str:
     do_arr    = payload.get("what_to_do")    or []
     avoid_arr = payload.get("what_to_avoid") or []
     will_arr  = payload.get("what_will_happen") or []
+    human_close = (payload.get("human_close") or "").strip().rstrip(".")
 
     do_first    = (do_arr[0]    if do_arr    else "").strip().rstrip(".")
     avoid_first = (avoid_arr[0] if avoid_arr else "").strip().rstrip(".")
@@ -7466,6 +7618,11 @@ def _stitch_structured_narrative(payload: dict) -> str:
 
     parts: list[str] = []
 
+    # ── EMPATHY OPEN — first sentence anchors the human voice ──
+    if empathy_open:
+        parts.append(empathy_open + ".")
+
+    # ── ENGINE FACTS (middle, fact-locked) ──
     # Lead — the engine's decision-oriented headline
     if headline:
         parts.append(headline + ".")
@@ -7489,6 +7646,10 @@ def _stitch_structured_narrative(payload: dict) -> str:
     # Optional guardrail
     if avoid_first:
         parts.append(f"Avoid: {avoid_first}.")
+
+    # ── HUMAN CLOSE — final sentence carries the reframe / agency ──
+    if human_close:
+        parts.append(human_close + ".")
 
     narrative = " ".join(parts).strip()
     # Schema floor is 80 chars; if too short (rare), fall back to headline

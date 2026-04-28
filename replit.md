@@ -637,3 +637,54 @@ Round 2 architect re-review: PASS. "Both residual FP classes are genuinely close
 - Stream-path POST_LOGIC parity + hard refusal in stream
 - Pending-clarification multi-turn carryover (from Phase 2 leftover)
 - Per-planet pada validation for non-Moon planets (engine data sparse)
+
+## Phase 4.4 — Stream-path validator parity + lookup_engine extension (SHIPPED Apr 2026)
+
+### Part A: Stream-path POST_LOGIC + supertype parity (T002-T005)
+Closed the gap where `/api/ask/stream` bypassed ALL Phase 4.1-4.3 fact-checking. The streaming endpoint now runs the same retry-or-refuse loop the sync `ai_ask` path has had since Phase 4.1.
+
+**Wire-up** (`openai_helper.py:10614+`): after the SSE loop accumulates `raw_text`, the stream calls `_validate_supertype_contract` then `_post_logic_check`. On violations:
+- ONE bounded retry via a new `_stream_retry_call` closure — same prompt+truth context, fresh OpenAI request
+- If retry passes → serve retry text + emit `replaced_by_validator: true` flag in the final SSE event
+- If retry violates again OR errors → serve `_POST_LOGIC_REFUSAL_TEXT` (or `_SUPERTYPE_REFUSAL_TEXT`) + emit flag
+
+**Flask SSE translation** (`flask_app.py:5892-5908`): the `replaced_by_validator` boolean is preserved into the `final` SSE payload so the mobile client can discard streamed deltas and use `final.text` as authoritative. Mobile already swaps streamed→final on the `done` event (`ask.tsx:432-440`), so T004 was obsolete.
+
+**Defensive timeout (T007)**: new `_VALIDATOR_RETRY_TIMEOUT_S=12.0` (env-overridable). All 3 validator retry sites — sync supertype (line ~8288), sync POST_LOGIC (~8346), stream `_stream_retry_call` (~10666) — pass it to `_call_once(timeout=...)`. Prevents a slow OpenAI retry from leaving the SSE stream hanging.
+
+### Part B: lookup_engine extension (T008-T009, scoped option C)
+User chose "do what is best" — discovery showed POST_LOGIC already had 7 detector families (planet_house, house_lord, planet_sign, retrograde, manglik, nakshatra, pada). Only TWO real gaps remained, so they were inlined into `_post_logic_check` (reusing the same retry/refuse infra) rather than building a parallel `_lookup_engine_check` pass.
+
+**New detector 1 — `lagna_mismatch`** (`openai_helper.py:6500-6551, 7140-7176`):
+- Two regex shapes: forward (`Aapki lagna Aries hai`) + inverted (`Aries lagna ke jatak hain`)
+- Sign normalization via `_SIGN_VARIANT_LC` — built FROM the engine's canonical `_TF_SIGN_ALIASES_LC` so Brish/Vrush/Singh/Karkat/Meenam/Vrischik all flow in automatically; explicit regional extras (brish/brishabh/vrush) added on top
+- Negation suppression via `_NEGATION_NEAR_RX` (60-char tail window)
+- Truth source: `_build_truth_facts` now attaches `_lagna` sentinel canonicalized via `_tf_canon_sign` → handles both string ascendant ("Aries") AND dict ascendant ({"sign":"Mesh"}) shapes, with fallback to top-level `kundli["lagna"]` when ascendant dict lacks `.sign`
+
+**New detector 2 — `dasha_end_year_mismatch`** (`openai_helper.py:6553-6601, 7178-7216`):
+- THREE regex shapes — FWD Hinglish (`Saturn Mahadasha 2039 tak`), INV Hinglish (`Mahadasha Saturn ki 2039 tak`), EN leading-keyword (`Saturn Mahadasha ends in 2055`)
+- **Planet-anchored**: only fires when `claimed_planet == truth.current_md.planet`. Future-MD descriptions like "phir Mercury Mahadasha 2056 tak chalegi" don't false-fire because Mercury ≠ current MD's planet.
+- **Tempered gap** `_DASHA_GAP_TEMPERED = (?:(?!\b(?:mahadasha|maha\s*dasha|dasha|md)\b)[^.\n]){0,60}?` — closes architect-found cross-MD bridging FP where "Saturn Mahadasha ke baad Mercury Mahadasha 2056 tak chalegi" would otherwise capture planet=Saturn + year=2056. The gap refuses to consume a second dasha-token, so once the next dasha clause begins the FWD pattern no longer extends through it.
+- **±1-year slack** for ayanamsa drift / calendar straddle (`abs(claimed - actual) > 1` to flag)
+- Negation-aware via `_NEGATION_NEAR_RX`
+
+**Correction-msg builder** (`_post_logic_correction_msg` line ~7259+): two new branches that emit `Aapki Lagna is X, NOT Y. FIX IT.` and `<Planet> Mahadasha (current) ends in X, NOT Y. FIX IT.`
+
+**Surgical disable**: env flag `LOOKUP_ENGINE=0` skips both new detectors without touching the 7 existing ones.
+
+### Verification
+- `test_phase44_lookup.py` (NEW): 33/33 PASS — covers positive/negative/variant/negation/disambiguation cases for each detector + dict-ascendant + Sanskrit-dict-ascendant + lagna-fallback + cross-MD bridging FP regression (×2) + benign-filler-gap recall lock + regional-alias coverage (Brish/Vrush/Singh) + correction-msg round-trip
+- `test_phase44_stream.py`: 5/5 PASS (clean-passthrough, violating-retry-clean, violating-violating-refusal, violating-retry-error-refusal, flask-sse-flag)
+- `test_phase43.py`: 67/67 PASS (full Phase 4.1-4.3 regression — no detector regressions)
+- Live SSE endpoint confirmed: `replaced_by_validator` flag emitted on adversarial wrong-MD claim, refusal text served
+
+### Architect sign-off
+Round 2 review (post-hotfix): **PASS — ship-ready**. Three originally-critical findings (cross-MD bridging FP, dict-ascendant gap, sign-variant map narrowness) all addressed with regression tests. Two non-blocking followups (ascendant→lagna fallback + benign-filler-gap recall lock) also shipped in this round.
+
+### Out of scope / deferred to Phase 4.5+
+- Sade Sati / Saturn-transit timing checks
+- KP cusp-lord verification
+- Numeric strength / Shadbala validation
+- Pending-clarification multi-turn carryover (from Phase 2 leftover)
+- Per-planet pada validation for non-Moon planets (engine data sparse)
+- Bare "Mahadasha 2039 tak" detection without explicit planet anchor (intentionally skipped — too FP-prone with future-MD narration)

@@ -6061,6 +6061,21 @@ _POST_LOGIC_REFUSAL_TEXT = (
     "kar do, ya thodi der baad try karo. Galat baat bolna nahi chahta."
 )
 
+# Phase 4.4 (Apr 28, 2026) — defensive timeout for VALIDATOR RETRY calls only.
+# The primary generation (sync) and primary stream call use the OpenAI client's
+# default timeout (60s). Validator retries (supertype + POST_LOGIC + lookup_engine)
+# happen invisibly AFTER the user has already seen the first attempt; if the
+# retry hangs, the SSE stream stays open with no `done` event → UI freeze.
+# Cap retry calls at 12s so a slow OpenAI can't hold a session open
+# indefinitely. On timeout, the existing retry-error refusal path fires.
+# Override via env: VALIDATOR_RETRY_TIMEOUT_S=<float>.
+try:
+    _VALIDATOR_RETRY_TIMEOUT_S = float(
+        os.environ.get("VALIDATOR_RETRY_TIMEOUT_S", "12.0")
+    )
+except (TypeError, ValueError):
+    _VALIDATOR_RETRY_TIMEOUT_S = 12.0
+
 # Phase 4.2 (Apr 28, 2026) — engine honesty refusal.
 # Fired when a PRIMARY engine phase (chart-intel / dasha / lagna / dosh /
 # verdicts) failed to compute. Replaces the pre-Phase-4.2 Sprint-26 Fix-K
@@ -6479,6 +6494,96 @@ def _tf_negated_after(text: str, end: int, max_chars: int = 30) -> bool:
     return bool(_NEGATION_NEAR_RX.search(tail[:cut]))
 
 
+# ── Phase 4.4 — LOOKUP_ENGINE constants (lagna + dasha-end-date) ────────────
+# Extends POST_LOGIC with two detector families that close the remaining
+# "engine-lookable" gap left by Phase 4.1/4.3:
+#   1. lagna_mismatch       — AI states a wrong ascendant sign
+#   2. dasha_end_year_mismatch — AI states a wrong end-year for the CURRENT MD
+# (planet-house, planet-sign, retrograde, manglik, nakshatra, pada, MD, AD
+# are already covered in Phase 4.1/4.3 above.) Both detectors are
+# conservative: explicit value mismatch only, negation-aware, and
+# disambiguated against the truth's CURRENT MD planet so future-Mahadasha
+# descriptions don't false-fire.
+# Phase 4.4 — sign variant map for lagna detection. Built FROM the
+# canonical _TF_SIGN_ALIASES_LC table so we stay in lock-step with the
+# rest of the engine's sign canonicalization (Brish/Vrush/Singh/Karkat
+# /Meenam etc. all flow through automatically). English canonical names
+# are added explicitly so they self-map.
+_SIGN_VARIANT_LC: dict[str, str] = {
+    s: s for s in _TF_SIGNS_LC
+}
+_SIGN_VARIANT_LC.update(_TF_SIGN_ALIASES_LC)
+# Architect-recommended extras: regional spellings not in the engine
+# alias table but plausible in user-facing copy.
+_SIGN_VARIANT_LC.update({
+    "brish": "taurus", "brishabh": "taurus", "vrush": "taurus",
+})
+# Sort by length DESC so longer variants match before their prefixes
+# (e.g. "vrishchika" before "vrish") in the regex alternation.
+_SIGN_VARIANTS_RX_FRAG = "|".join(
+    sorted(_SIGN_VARIANT_LC.keys(), key=len, reverse=True)
+)
+# Forward: "Aapki lagna Aries hai" / "ascendant is Mesh" / "lagna Aries hai"
+_TRUTH_LAGNA_FWD_RX = __import__("re").compile(
+    r"\b(?:aap?k[aieo]\s+|tumhari\s+|your\s+|mer[aieo]\s+)?"
+    r"(?:lagna|ascendant|asc\b|first\s+house)\s+"
+    r"(?:rashi\s+)?(?:is\s+|hai\s+|=\s*)?"
+    rf"({_SIGN_VARIANTS_RX_FRAG})\b",
+    __import__("re").IGNORECASE,
+)
+# Inverted: "Aries lagna" / "Mesh ascendant"
+_TRUTH_LAGNA_INV_RX = __import__("re").compile(
+    rf"\b({_SIGN_VARIANTS_RX_FRAG})\s+(?:lagna|ascendant|asc\b)\b",
+    __import__("re").IGNORECASE,
+)
+# Dasha end-year claims — planet-anchored only. We deliberately do NOT
+# match bare "Mahadasha 2039 tak" because that's ambiguous with future-MD
+# descriptions (e.g. "phir Mercury Mahadasha 2056 tak chalegi"). The
+# planet-anchored form lets us cross-check against truth.current_md.planet:
+# we only fire when the AI is talking about the CURRENT MD's end year.
+# Tempered gap that disallows another dasha token from "bridging"
+# adjacent MD clauses. Architect-found FP: "Saturn Mahadasha ke baad
+# Mercury Mahadasha 2056 tak chalegi." used to match planet=Saturn,
+# year=2056. The gap now refuses to consume a second mahadasha/dasha/MD
+# word, so once the next dasha clause begins the FWD pattern no longer
+# extends through it.
+_DASHA_GAP_TEMPERED = (
+    r"(?:(?!\b(?:mahadasha|maha\s*dasha|dasha|md)\b)[^.\n]){0,60}?"
+)
+# Forward: "Saturn Mahadasha 2039 tak", "Saturn dasha 2039 me khatam"
+_TRUTH_DASHA_END_FWD_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:ki\s+|ka\s+|of\s+)?"
+    r"(?:mahadasha|maha\s*dasha|dasha|MD)\b"
+    + _DASHA_GAP_TEMPERED +
+    r"\b(\d{4})\s+"
+    r"(?:tak|me\s+khatam|me\s+complete|until|ends?\s+in|"
+    r"end\s+ho|khatam\s+ho|complete\s+ho|samapt|chalegi|chalega|hogi|hoga)\b",
+    __import__("re").IGNORECASE,
+)
+# Inverted: "Mahadasha Saturn ki 2039 tak chalegi"
+_TRUTH_DASHA_END_INV_RX = __import__("re").compile(
+    r"\b(?:mahadasha|maha\s*dasha|dasha|MD)\s+"
+    rf"({_PL_ALT})\s+(?:ki\s+|ka\s+)?"
+    + _DASHA_GAP_TEMPERED +
+    r"\b(\d{4})\s+"
+    r"(?:tak|me\s+khatam|me\s+complete|until|ends?\s+in|"
+    r"end\s+ho|khatam\s+ho|complete\s+ho|samapt|chalegi|chalega|hogi|hoga)\b",
+    __import__("re").IGNORECASE,
+)
+# English leading-keyword form: "Saturn Mahadasha ends in 2055" / "until 2055"
+# (keyword appears BEFORE the year, not after — separate from the FWD/INV
+# Hinglish patterns where the keyword trails the year as in "2039 tak").
+_TRUTH_DASHA_END_EN_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:ki\s+|ka\s+|of\s+)?"
+    r"(?:mahadasha|maha\s*dasha|dasha|MD)\b"
+    + _DASHA_GAP_TEMPERED +
+    r"\b(?:ends?\s+in|will\s+end\s+in|expires?\s+in|"
+    r"runs?\s+(?:un)?til|completes?\s+in|finishes?\s+in|"
+    r"until|till)\s+(\d{4})\b",
+    __import__("re").IGNORECASE,
+)
+
+
 def _norm_planet_lc(name: str) -> str:
     """LOWERCASE canonical planet name. Distinct from _norm_planet_name
     (defined later in this module for legacy code) which returns Title-
@@ -6515,9 +6620,29 @@ def _build_truth_facts(kundli: dict) -> dict:
         "nakshatra_pada": {},
         "current_md":     None,
         "current_ad":     None,
+        # Phase 4.4 — ascendant carried as a sentinel so _post_logic_check
+        # can validate lagna claims without changing the function signature.
+        "_lagna":         "",
     }
     if not isinstance(kundli, dict):
         return out
+    # Phase 4.4 — capture ascendant. Handles both string ("Aries") and
+    # dict ({"sign": "Aries"}) shapes that exist across the codebase.
+    # Uses _tf_canon_sign (defined above) so Sanskrit/Hinglish kundli
+    # values (Mesh/Vrishabh/etc.) canonicalize to lowercase English the
+    # detector can compare against directly. Architect-followup: when
+    # ascendant is a truthy dict that LACKS .sign, fall back to the
+    # top-level "lagna" field rather than silently disabling validation.
+    def _extract_sign(v):
+        if isinstance(v, dict):
+            return v.get("sign") or ""
+        return v or ""
+    _asc_str = _extract_sign(kundli.get("ascendant"))
+    if not _asc_str:
+        _asc_str = _extract_sign(kundli.get("lagna"))
+    _asc_canon = _tf_canon_sign(_asc_str) if _asc_str else ""
+    if _asc_canon:
+        out["_lagna"] = _asc_canon
 
     # Planet → house / sign / retrograde maps. Architect-required: canonicalize
     # via _norm_planet_lc so non-canonical kundli labels (e.g. "Surya",
@@ -7022,6 +7147,91 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
                     continue
                 _check_pada(pd, m.start(), m.end())
 
+    # ─── PHASE 4.4 — LAGNA / ASCENDANT CLAIMS (lookup_engine extension) ────
+    # Off-by-default-disable via env (LOOKUP_ENGINE=0). On by default.
+    _lookup_engine_enabled = (
+        os.environ.get("LOOKUP_ENGINE", "1") != "0"
+    )
+    if _lookup_engine_enabled:
+        # Resolve actual ascendant — kundli passes through truth via the
+        # caller; truth itself doesn't store it, so we accept it from a
+        # back-channel the caller stuffs in (`_truth_ascendant`) OR fall
+        # back to the legacy field used elsewhere. _build_truth_facts
+        # callers always have kundli in scope — to keep this function's
+        # signature unchanged, we read the ascendant from a sentinel key
+        # we attach in _build_truth_facts going forward.
+        asc_raw = ((truth.get("_lagna") or "")
+                   if isinstance(truth, dict) else "")
+        if isinstance(asc_raw, str) and asc_raw.strip():
+            asc_canon = _SIGN_VARIANT_LC.get(
+                asc_raw.strip().lower(), asc_raw.strip().lower()
+            )
+            for rx in (_TRUTH_LAGNA_FWD_RX, _TRUTH_LAGNA_INV_RX):
+                _seen_lagna = False
+                for m in rx.finditer(text):
+                    if _seen_lagna:
+                        break
+                    tail = text[m.end(): m.end() + 60]
+                    if _NEGATION_NEAR_RX.search(tail):
+                        continue
+                    claimed_raw = (m.group(1) or "").lower()
+                    claimed_canon = _SIGN_VARIANT_LC.get(
+                        claimed_raw, claimed_raw)
+                    if claimed_canon and claimed_canon != asc_canon:
+                        violations.append({
+                            "kind":          "lagna_mismatch",
+                            "claimed_lagna": claimed_canon,
+                            "actual_lagna":  asc_canon,
+                            "severity":      "high",
+                        })
+                        _seen_lagna = True
+
+        # ─── PHASE 4.4 — DASHA END-YEAR CLAIMS (lookup_engine extension) ───
+        cur_md = (truth.get("current_md") or {}) if isinstance(truth, dict) else {}
+        md_planet = (cur_md.get("planet") or "").lower() if cur_md else ""
+        md_end = cur_md.get("end") if cur_md else None
+        md_end_year: int | None = None
+        if isinstance(md_end, str) and len(md_end) >= 4:
+            try:
+                md_end_year = int(md_end[:4])
+            except (TypeError, ValueError):
+                md_end_year = None
+        if md_planet and md_end_year:
+            _seen_end_year = False
+            for rx in (_TRUTH_DASHA_END_FWD_RX,
+                       _TRUTH_DASHA_END_INV_RX,
+                       _TRUTH_DASHA_END_EN_RX):
+                if _seen_end_year:
+                    break
+                for m in rx.finditer(text):
+                    if _seen_end_year:
+                        break
+                    tail = text[m.end(): m.end() + 60]
+                    if _NEGATION_NEAR_RX.search(tail):
+                        continue
+                    claimed_planet = _norm_planet_lc(m.group(1) or "")
+                    # Only fire when AI is talking about the CURRENT MD's
+                    # end year — if the named planet is some OTHER MD
+                    # (past or future), the year may be legitimately
+                    # different and we must not false-fire.
+                    if claimed_planet != md_planet:
+                        continue
+                    try:
+                        claimed_year = int(m.group(2))
+                    except (TypeError, ValueError):
+                        continue
+                    # ±1-year slack — dashas straddle calendar years and
+                    # ayanamsa choice can shift end-dates by months.
+                    if abs(claimed_year - md_end_year) > 1:
+                        violations.append({
+                            "kind":         "dasha_end_year_mismatch",
+                            "claimed_year": claimed_year,
+                            "actual_year":  md_end_year,
+                            "actual_md":    md_planet.title(),
+                            "severity":     "high",
+                        })
+                        _seen_end_year = True
+
     return violations
 
 
@@ -7077,6 +7287,17 @@ def _post_logic_correction_msg(violations: list[dict], truth: dict) -> str:
             lines.append(
                 f"  • Per Mars-from-lagna rule, the user is {verdict}. "
                 f"FIX IT."
+            )
+        elif v["kind"] == "lagna_mismatch":
+            lines.append(
+                f"  • Aapki Lagna (Ascendant) is "
+                f"{v['actual_lagna'].title()}, NOT "
+                f"{v['claimed_lagna'].title()}. FIX IT."
+            )
+        elif v["kind"] == "dasha_end_year_mismatch":
+            lines.append(
+                f"  • {v['actual_md']} Mahadasha (current) ends in "
+                f"{v['actual_year']}, NOT {v['claimed_year']}. FIX IT."
             )
     lines.append(
         "Do NOT add new claims, do NOT change topic. Only correct the "
@@ -8133,17 +8354,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "wealth_structured": bool(_wealth_obj),
     })
 
-    def _call_once() -> str:
+    def _call_once(timeout: float | None = None) -> str:
+        # Phase 4.4: validator retry sites pass `timeout=_VALIDATOR_RETRY_TIMEOUT_S`
+        # so a slow OpenAI retry can never hold an SSE stream open. Primary
+        # generation passes timeout=None (uses client default).
+        _create_kw = dict(
+            model            = model,
+            messages         = messages,
+            temperature      = temperature,
+            top_p            = 1,
+            max_tokens       = _token_budget_for(topic, question),
+            presence_penalty = presence_penalty,
+            frequency_penalty= frequency_penalty,
+        )
+        if timeout is not None:
+            _create_kw["timeout"] = timeout
         try:
-            r = client.chat.completions.create(
-                model            = model,
-                messages         = messages,
-                temperature      = temperature,
-                top_p            = 1,
-                max_tokens       = _token_budget_for(topic, question),
-                presence_penalty = presence_penalty,
-                frequency_penalty= frequency_penalty,
-            )
+            r = client.chat.completions.create(**_create_kw)
         except Exception as exc:
             raise RuntimeError(f"OpenAI request failed: {exc}") from exc
         t = (r.choices[0].message.content or "").strip() if r.choices else ""
@@ -8260,7 +8487,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         "content": _retry_feedback_for(_sup_tag, _violations),
                     })
                     try:
-                        _retry_text = _call_once()
+                        # Phase 4.4: bounded retry timeout — see _VALIDATOR_RETRY_TIMEOUT_S.
+                        _retry_text = _call_once(timeout=_VALIDATOR_RETRY_TIMEOUT_S)
                         _retry_violations = _validate_supertype_contract(
                             _retry_text, _sup_tag, kundli=kundli
                         )
@@ -8317,7 +8545,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                             _truth_violations, _truth),
                     })
                     try:
-                        _pl_retry_text = _call_once()
+                        # Phase 4.4: bounded retry timeout — see _VALIDATOR_RETRY_TIMEOUT_S.
+                        _pl_retry_text = _call_once(timeout=_VALIDATOR_RETRY_TIMEOUT_S)
                         _pl_retry_violations = _post_logic_check(
                             _pl_retry_text, _truth)
                         _trace(req_id, "2v.POST_LOGIC_CHECK_RETRY", {
@@ -10620,7 +10849,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     def _stream_retry_call(extra_messages: list) -> str:
         """Non-streaming retry. The user has already seen the first attempt
         as streamed deltas; the corrective retry runs invisibly and the
-        result lands in the `final` event (mobile swaps automatically)."""
+        result lands in the `final` event (mobile swaps automatically).
+
+        Phase 4.4: bounded by `_VALIDATOR_RETRY_TIMEOUT_S` (default 12s)
+        — a slow OpenAI retry must NEVER hold the SSE stream open. On
+        timeout the OpenAI client raises, the caller's except path fires,
+        and the existing retry-error refusal substitution kicks in.
+        """
         retry_msgs = list(messages) + list(extra_messages)
         resp = client.chat.completions.create(
             model             = model,
@@ -10631,6 +10866,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             presence_penalty  = 0.2,
             frequency_penalty = 0.2,
             stream            = False,
+            timeout           = _VALIDATOR_RETRY_TIMEOUT_S,
         )
         return ((resp.choices[0].message.content or "").strip()
                 if resp.choices else "")

@@ -7978,6 +7978,55 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception as _exc:
             print(f"[ai_ask] brevity post-trim failed: {_exc}")
 
+    # ── GLOBAL PLACEHOLDER STRIP (unconditional final scrub) ────────────────
+    # Sprint-26 brutal-test surfaced a real bug: the timing-validator
+    # placeholders ([engine: dasha not cited] / [engine: window pending] /
+    # [engine: year/month ...]) leak through to user-facing text whenever
+    # neither the HEALTH nor WEALTH brand-safety post-processor fires (e.g.
+    # general-topic PROBLEM_QUERY answers). Those gated scrubbers at
+    # lines ~6515 (health) and ~6755 (wealth) duplicate the same regex but
+    # only run when their respective verdict objects are present. We keep
+    # those in place (they also do bucket-specific cite injection) but add
+    # this UNCONDITIONAL global strip as the very last text mutation, so no
+    # supertype can leak placeholders to the user — verified via Q1 of the
+    # brutal-10 test set.
+    try:
+        import re as _re_global_ph
+        _global_ph_rx = _re_global_ph.compile(
+            r"\[engine:\s*(?:dasha not cited|window pending|"
+            r"year[^\]]*|month[^\]]*)\]",
+            _re_global_ph.IGNORECASE,
+        )
+        if text and _global_ph_rx.search(text):
+            _stripped = _global_ph_rx.sub("", text)
+            # Collapse empty parens / repeated whitespace / orphan punctuation
+            # left behind by the strip.
+            _stripped = _re_global_ph.sub(
+                r"\(\s*se\s*\)", "", _stripped)
+            _stripped = _re_global_ph.sub(
+                r"\(\s*\)", "", _stripped)
+            _stripped = _re_global_ph.sub(
+                r"\s+([,.;!?])", r"\1", _stripped)
+            _stripped = _re_global_ph.sub(
+                r"[ \t]+", " ", _stripped)
+            # Drop residual broken lines that lost their meaning after the
+            # strip — e.g. "dasha ke dasha mein chal raha hai" or
+            # "engine data insufficient" boilerplate.
+            _global_bad_rx = _re_global_ph.compile(
+                r"^\s*(?:dasha\s+ke\s+dasha|"
+                r"engine\s+data\s+insufficient|"
+                r"⚐\s*Note:\s*precise\s+dates).*$",
+                _re_global_ph.IGNORECASE,
+            )
+            _kept = [ln for ln in _stripped.splitlines()
+                     if not _global_bad_rx.search(ln)]
+            text = "\n".join(_kept).strip()
+            _trace(req_id, "4z.GLOBAL_PH_STRIP",
+                   {"reason": "unconditional final scrub of "
+                              "[engine: ...] placeholders"})
+    except Exception as _ph_exc:  # noqa: BLE001
+        _trace(req_id, "4z.GLOBAL_PH_STRIP_ERR", str(_ph_exc))
+
     follow_ups = _derive_follow_ups(topic, eff_lang)
     _trace(req_id, "5.FINAL_OUTPUT", text)
     _trace(req_id, "6.FOLLOW_UPS", {

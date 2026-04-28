@@ -8910,6 +8910,176 @@ def _question_depth_tier(question: str) -> str:
     return "simple"
 
 
+# ── Phase 5.0 (Apr 28 2026) — MINIMAL ASK PROMPT ────────────────────────────
+# Replaces the entire Phase 4.x prompt assembly (UNIFIED NARRATOR CONTRACT,
+# supertype contracts, multi-system messages, KP forcing, heavy locked_facts
+# dump) with a 2-message prompt: 1 short system + 1 user msg containing a
+# ~500-char chart summary + the question. The 3 critical guards still fire
+# downstream: TIMING_VALIDATOR, POST_LOGIC_CHECK, and the Phase 4.9 truncator.
+#
+# Reversible via env flag `PHASE50_MINIMAL_PROMPT` (default "1" = ON).
+# Set to "0" to fall back to the legacy Phase 4.x heavy path.
+
+_PHASE50_SIGN_LORDS = {
+    "aries": "Mars", "taurus": "Venus", "gemini": "Mercury",
+    "cancer": "Moon", "leo": "Sun", "virgo": "Mercury",
+    "libra": "Venus", "scorpio": "Mars", "sagittarius": "Jupiter",
+    "capricorn": "Saturn", "aquarius": "Saturn", "pisces": "Jupiter",
+}
+
+
+def _phase50_mini_chart_summary(kundli: Any) -> str:
+    """Phase 5.0 T028 — compact (~500 char) chart summary for the Ask
+    minimal prompt. Includes Lagna+lord, Moon+nakshatra+pada, Sun,
+    current MD/AD by lord names ONLY (no dates — TIMING_VALIDATOR
+    enforces no date-invention), and a planet-in-house list.
+
+    Pure, defensive — never raises on malformed input.
+    """
+    if not isinstance(kundli, dict):
+        return ""
+
+    lines: list[str] = []
+
+    # ── Lagna + lord ────────────────────────────────────────────────────
+    asc = (kundli.get("ascendant") or "").strip()
+    if asc:
+        lord = _PHASE50_SIGN_LORDS.get(asc.lower(), "")
+        lines.append(f"Lagna: {asc}" + (f" (lord {lord})" if lord else ""))
+
+    # ── Moon + nakshatra + pada ─────────────────────────────────────────
+    moon = (kundli.get("moonSign") or "").strip()
+    nak = (kundli.get("nakshatra") or "").strip()
+    nak_pada = kundli.get("nakshatraPada")
+    nak_ruler = (kundli.get("nakshatraRuler") or "").strip()
+    if moon:
+        moon_line = f"Moon: {moon}"
+        if nak:
+            moon_line += f" ({nak}"
+            if nak_pada:
+                moon_line += f" pada {nak_pada}"
+            if nak_ruler:
+                moon_line += f", ruler {nak_ruler}"
+            moon_line += ")"
+        lines.append(moon_line)
+
+    # ── Sun ─────────────────────────────────────────────────────────────
+    sun = (kundli.get("sunSign") or "").strip()
+    if sun:
+        lines.append(f"Sun: {sun}")
+
+    # ── Current dasha (lord names ONLY — no dates) ──────────────────────
+    cd = kundli.get("currentDasha") or {}
+    if isinstance(cd, dict):
+        md = (cd.get("maha") or cd.get("mahaDasha") or "").strip()
+        ad = (cd.get("antar") or cd.get("antarDasha") or "").strip()
+        if md or ad:
+            lines.append(f"Current Dasha: {md or '?'} MD / {ad or '?'} AD")
+
+    # ── Planets in houses (one line per house, grouped) ─────────────────
+    planets = kundli.get("planets")
+    by_house: dict[int, list[str]] = {}
+    if isinstance(planets, list):
+        for p in planets:
+            if not isinstance(p, dict):
+                continue
+            name = (p.get("name") or "").strip()
+            house = p.get("house")
+            sign = (p.get("sign") or "").strip()
+            retro = bool(p.get("retrograde"))
+            if name and isinstance(house, int):
+                tag = name + (f"({sign[:3]})" if sign else "") + ("[R]" if retro else "")
+                by_house.setdefault(house, []).append(tag)
+    elif isinstance(planets, dict):
+        for name, p in planets.items():
+            if not isinstance(p, dict):
+                continue
+            house = p.get("house")
+            sign = (p.get("sign") or "").strip()
+            retro = bool(p.get("retrograde"))
+            if isinstance(house, int):
+                tag = str(name) + (f"({sign[:3]})" if sign else "") + ("[R]" if retro else "")
+                by_house.setdefault(house, []).append(tag)
+
+    if by_house:
+        house_parts = []
+        for h in sorted(by_house.keys()):
+            house_parts.append(f"{h}H: {' '.join(by_house[h])}")
+        lines.append("Planets: " + " | ".join(house_parts))
+
+    return "\n".join(lines)
+
+
+_PHASE50_TIER_HINT = {
+    "simple":    "Reply in 1-2 short sentences. Direct verdict + one reason.",
+    "detailed":  "Reply in 3-5 short sentences. Plain-language explanation OK.",
+    "technical": "Reply with full technical detail (houses, dasha lords, "
+                 "yogas as applicable). No date ranges.",
+}
+
+
+def _phase50_build_minimal_messages(
+    question: str,
+    kundli: Any,
+    lang: str = "hn",
+    tier: str | None = None,
+    extra_facts: str = "",
+) -> list[dict]:
+    """Phase 5.0 T029 — build the 2-message minimal Ask prompt.
+
+    Returns [system, user]:
+      • system: short astrologer role + hard guard against invented
+        dasha/dates + language match.
+      • user: mini chart summary + optional engine-verdict fact line +
+        question + tier-aware length hint.
+
+    No supertype contracts, no UNIFIED NARRATOR preamble, no Rule 1-N,
+    no KP forcing, no multi-system messages.
+    """
+    if tier is None:
+        tier = _question_depth_tier(question or "")
+
+    chart_summary = _phase50_mini_chart_summary(kundli)
+    length_hint = _PHASE50_TIER_HINT.get(tier, _PHASE50_TIER_HINT["simple"])
+
+    # Language hint: keep as a soft instruction; the model already mirrors
+    # the question's language reliably with a short directive.
+    lang_hint = ""
+    if lang == "hn":
+        lang_hint = "Reply in the same Hindi/Hinglish style as the question."
+    elif lang == "en":
+        lang_hint = "Reply in English."
+    else:
+        lang_hint = "Match the user's language."
+
+    system_msg = (
+        "You are an experienced Vedic astrologer. Answer naturally and "
+        "clearly using ONLY the chart data given below. "
+        "Do NOT invent dasha names, dates, or planet positions — if a fact "
+        "is not in the chart data, do not state it. "
+        f"{lang_hint}"
+    )
+
+    user_parts = []
+    if chart_summary:
+        user_parts.append("CHART:\n" + chart_summary)
+    if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
+        user_parts.append("FACTS:\n" + extra_facts.strip())
+    user_parts.append("QUESTION:\n" + (question or "").strip())
+    user_parts.append(length_hint)
+
+    return [
+        {"role": "system", "content": system_msg},
+        {"role": "user",   "content": "\n\n".join(user_parts)},
+    ]
+
+
+def _phase50_minimal_prompt_enabled() -> bool:
+    """Read the env flag once per call. Default ON ("1")."""
+    import os as _os_p50
+    return _os_p50.environ.get("PHASE50_MINIMAL_PROMPT", "1") != "0"
+
+
 def _phase48_narrative_truncate(text: str, question: str,
                                 tier: str | None = None) -> str:
     """Phase 4.8 T019 + Phase 4.9 T024 — tier-aware narrative truncator.
@@ -9321,11 +9491,81 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "skipped": [e.get("phase") for e in (_engine_status.get("skipped") or [])],
     })
 
+    # ── Phase 5.0 (Apr 28 2026) — MINIMAL ASK PROMPT GATE ───────────────────
+    # When PHASE50_MINIMAL_PROMPT=1 (default), discard the heavy multi-system
+    # `messages` list built above and replace it with a 2-message minimal
+    # prompt. The expensive engines still ran (their facts flow into the
+    # `extra_facts` line), but the LLM never sees:
+    #   • UNIFIED NARRATOR CONTRACT preamble
+    #   • Per-supertype contract (GENERAL_ANALYSIS / TIMING / ...)
+    #   • Heavy Rule 1-N + KP forcing + locked_facts dump
+    #   • Multiple system prompts
+    # Downstream guards still fire: TIMING_VALIDATOR, POST_LOGIC_CHECK,
+    # phase48-trim (Phase 4.9 truncator). One-line revert by setting the
+    # env flag to "0".
+    _phase50_active = False
+    if mode == "astro" and _phase50_minimal_prompt_enabled():
+        _p50_facts_parts: list[str] = []
+        _bm = build_meta or {}
+        # Marriage verdict block (multi-line) → take first non-empty line
+        _mv = (_bm.get("marriage_verdict_block") or "").strip()
+        if _mv:
+            _mv_first = next((ln for ln in _mv.splitlines() if ln.strip()), "")
+            if _mv_first:
+                _p50_facts_parts.append(f"Marriage verdict: {_mv_first.strip()}")
+        # Wealth verdict obj → 1-line summary
+        _wv = _bm.get("wealth_verdict_obj")
+        if isinstance(_wv, dict):
+            _wv_v = (_wv.get("verdict") or "").strip()
+            _wv_b = (_wv.get("bucket")  or "").strip()
+            if _wv_v:
+                _p50_facts_parts.append(
+                    f"Wealth verdict: {_wv_v}" + (f" ({_wv_b})" if _wv_b else "")
+                )
+        # Other domain verdicts (love/career/health/stock) — 1 line each
+        for _key, _label in [
+            ("love_verdict_obj",   "Love verdict"),
+            ("career_verdict_obj", "Career verdict"),
+            ("health_verdict_obj", "Health verdict"),
+            ("stock_verdict_obj",  "Stock verdict"),
+        ]:
+            _o = _bm.get(_key)
+            if isinstance(_o, dict):
+                _v = (_o.get("verdict") or _o.get("summary") or "").strip()
+                if _v:
+                    _p50_facts_parts.append(f"{_label}: {_v}")
+
+        _p50_extra_facts = "\n".join(_p50_facts_parts)
+        _p50_tier = _question_depth_tier(question or "")
+        messages = _phase50_build_minimal_messages(
+            question or "", kundli, lang=lang,
+            tier=_p50_tier, extra_facts=_p50_extra_facts,
+        )
+        _phase50_active = True
+        try:
+            _p50_user_chars = len(messages[1]["content"])
+        except Exception:
+            _p50_user_chars = 0
+        print(
+            f"[openai_helper] Phase 5.0: minimal-prompt active — "
+            f"tier={_p50_tier} user_chars={_p50_user_chars} "
+            f"facts_lines={len(_p50_facts_parts)} (heavy assembly bypassed)"
+        )
+        _trace(req_id, "2x.PHASE50_MINIMAL_ACTIVE", {
+            "tier":         _p50_tier,
+            "user_chars":   _p50_user_chars,
+            "facts_lines":  len(_p50_facts_parts),
+            "message_count": len(messages),
+            "roles":        [m["role"] for m in messages],
+        })
+
     # ── Sprint-26 Fix-M — Cross-Domain Root-Cause Block ─────────────────────
     # When the user asks a dual-domain "same reason or different" question,
     # compute the deterministic cross-domain check and APPEND it to the
     # system prompt so the AI can answer the comparison without guessing.
-    if _qu_cross_domain and isinstance(kundli, dict) and kundli.get("planets"):
+    # Phase 5.0: skipped when minimal-prompt path is active (no system msg
+    # to append to; verdict facts already flow via extra_facts).
+    if (not _phase50_active) and _qu_cross_domain and isinstance(kundli, dict) and kundli.get("planets"):
         try:
             _xd = _compute_cross_domain_facts(kundli, _qu_topics_all)
             if _xd.get("text") and messages and isinstance(messages[0], dict):
@@ -9359,9 +9599,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # narrative contract (`_NARRATIVE_NARRATOR_BODY`) drives the answer.
     # The wealth engine still runs and its verdict facts (window, lord,
     # bucket) flow into `truth_facts` for the AI to ground on.
+    # Phase 5.0: minimal-prompt path bypasses ALL contract installs
+    # (including the wealth json_schema structured-output prompt).
     _use_wealth_structured_path = (
         isinstance(_wealth_obj, dict) and bool(_wealth_obj)
         and not _NARRATIVE_MODE
+        and not _phase50_active
     )
     if _use_wealth_structured_path:
         messages = [
@@ -9417,7 +9660,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     #     MARRIAGE NARRATOR mode already injects its own detailed
     #     UL/templates/MUST rules; a second contract dilutes them.
     _skip_contract_reason = ""
-    if mode != "astro":
+    if _phase50_active:
+        # Phase 5.0: minimal-prompt path owns the entire prompt — no
+        # contract install, no narrator preamble, no per-supertype rules.
+        _skip_contract_reason = "phase50 minimal-prompt path"
+    elif mode != "astro":
         _skip_contract_reason = "mode=general (no chart pipeline)"
     elif _use_wealth_structured_path:
         # Only skip the supertype contract when the json_schema wealth path
@@ -11991,6 +12238,63 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         marriage_subtype=marriage_subtype_stream,
     )
 
+    # ── Phase 5.0 (Apr 28 2026) — STREAM-PATH MINIMAL ASK PROMPT GATE ──
+    # Same flag + behaviour as ai_ask: discard the heavy `messages` list
+    # and replace with the 2-message minimal prompt. Engine verdicts still
+    # flow as a single fact line. Stream chunking, brand-safety gates and
+    # the Phase 4.9 truncator (T025) all still fire downstream.
+    _phase50_active_stream = False
+    if mode == "astro" and _phase50_minimal_prompt_enabled():
+        _p50s_facts_parts: list[str] = []
+        _bms = build_meta_stream or {}
+        _mvs = (_bms.get("marriage_verdict_block") or "").strip()
+        if _mvs:
+            _mvs_first = next((ln for ln in _mvs.splitlines() if ln.strip()), "")
+            if _mvs_first:
+                _p50s_facts_parts.append(f"Marriage verdict: {_mvs_first.strip()}")
+        _wvs = _bms.get("wealth_verdict_obj")
+        if isinstance(_wvs, dict):
+            _wvs_v = (_wvs.get("verdict") or "").strip()
+            _wvs_b = (_wvs.get("bucket")  or "").strip()
+            if _wvs_v:
+                _p50s_facts_parts.append(
+                    f"Wealth verdict: {_wvs_v}" + (f" ({_wvs_b})" if _wvs_b else "")
+                )
+        for _key, _label in [
+            ("love_verdict_obj",   "Love verdict"),
+            ("career_verdict_obj", "Career verdict"),
+            ("health_verdict_obj", "Health verdict"),
+            ("stock_verdict_obj",  "Stock verdict"),
+        ]:
+            _o = _bms.get(_key)
+            if isinstance(_o, dict):
+                _v = (_o.get("verdict") or _o.get("summary") or "").strip()
+                if _v:
+                    _p50s_facts_parts.append(f"{_label}: {_v}")
+        _p50s_extra = "\n".join(_p50s_facts_parts)
+        _p50s_tier  = _question_depth_tier(question or "")
+        messages = _phase50_build_minimal_messages(
+            question or "", kundli, lang=lang,
+            tier=_p50s_tier, extra_facts=_p50s_extra,
+        )
+        _phase50_active_stream = True
+        try:
+            _p50s_user_chars = len(messages[1]["content"])
+        except Exception:
+            _p50s_user_chars = 0
+        print(
+            f"[openai_helper] Phase 5.0(stream): minimal-prompt active — "
+            f"tier={_p50s_tier} user_chars={_p50s_user_chars} "
+            f"facts_lines={len(_p50s_facts_parts)} (heavy assembly bypassed)"
+        )
+        _trace(req_id, "2x.PHASE50_MINIMAL_ACTIVE(stream)", {
+            "tier":         _p50s_tier,
+            "user_chars":   _p50s_user_chars,
+            "facts_lines":  len(_p50s_facts_parts),
+            "message_count": len(messages),
+            "roles":        [m["role"] for m in messages],
+        })
+
     # ── Phase 4.5 — STREAM-PATH NARRATIVE CONTRACT INSTALL ─────────────
     # The sync `ai_ask_v2` path installs the unified narrator contract as
     # the LAST system message (~line 8466). The stream path historically
@@ -12000,7 +12304,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # legacy multi-paragraph + advisor-cite shape while sync answers get
     # the clean 3-5 sentence narrative — sync/stream parity violation.
     # Gated to narrative mode only so legacy-mode behavior is unchanged.
-    if _NARRATIVE_MODE:
+    # Phase 5.0: ALSO skipped when minimal-prompt path is active.
+    if _NARRATIVE_MODE and not _phase50_active_stream:
         # Derive supertype HERE (sync path computes it upstream and packs
         # it into a dict; stream path historically derived it ~110 lines
         # later for the post-completion validator). We need it BEFORE the

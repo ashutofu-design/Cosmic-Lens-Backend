@@ -1173,3 +1173,113 @@ only matters in narrative paths (other modes use full data dumps).
   taken before T017+T018+T019 shipped — they should re-test.
 - If model still over-explains under HARD CAP, consider further
   dropping Rule 11/12/13 advisory text (each adds prose tokens).
+
+---
+
+## Phase 4.9 — Adaptive Output Depth (3-tier) + Streaming Wire-In
+
+Phase 4.8 forced every narrative answer to 1-2 sentences regardless of
+what the user asked. Two real problems surfaced:
+
+1. **Over-collapse**: questions like "Explain why my career is stuck"
+   or "KP sublord chart batao" were getting trimmed to 1-2 sentences,
+   losing the explanation the user explicitly requested.
+2. **Streaming bypass**: the mobile client uses `/api/ask/stream`
+   (`ai_ask_stream`) for typewriter UX. Phase 4.8 wired the truncator
+   only into `ai_ask` (oneshot path) — the streaming endpoint emitted
+   the full untruncated `final_text`, so the user's screenshots showed
+   8-10 line answers even after Phase 4.8 shipped.
+
+### Tasks
+
+- **T022 — `_question_depth_tier(question)` classifier.** Pure
+  function in `openai_helper.py` (~line 8856) returning one of
+  `"simple"` | `"detailed"` | `"technical"`. Order matters: technical
+  takes precedence (covers KP / sublord / cuspal / divisional /
+  navamsa / D-9 / D-10 / bhava / pratyantar / atmakaraka / lagnesh),
+  then detailed (kaise / kyun / why / explain / detail / samjhao /
+  vistar / step by step), else simple (default).
+
+- **T023 — Tier-aware Rule 10 swap** (`openai_helper.py` ~line 3148,
+  replaces Phase 4.8 T018's flat swap). Behaviour by tier:
+  * `technical` → leaves Rule 10 default (100-140 WORDS) **untouched**
+    so KP / dasha-breakdown / houses get the full technical answer.
+  * `detailed`  → swaps in `NARRATIVE-MODE DETAILED ANSWER (Tier 2)`:
+    3-5 short sentences, ≤500 chars, planet/dasha-name terms allowed,
+    no ISO date ranges, no pratyantar/KP unless asked.
+  * `simple`    → swaps in the Phase 4.8 hard cap (1-2 sentences,
+    ≤200 chars, [VERDICT] → [1 reason]).
+  Telemetry now logs `tier=...` per call.
+
+- **T024 — Tier-aware truncator** (`_phase48_narrative_truncate`
+  ~line 8893). New optional `tier` kwarg; computed from `question`
+  via `_question_depth_tier` when omitted. Per-tier behaviour:
+  * `technical` → byte-identical pass-through.
+  * `detailed`  → ≤5 sentences, ≤600 chars, strip ISO date ranges,
+    KEEP planet/dasha sentences (`drop_pratyantar_sentences=False`).
+  * `simple`    → unchanged Phase 4.8 behaviour (≤2 sent, ≤280 chars,
+    drop pratyantar/antardasha for non-timing).
+
+- **T025 — Wire truncator into `ai_ask_stream`** (~line 12287).
+  Closes the streaming-endpoint bypass: just before
+  `_trace 5.FINAL_OUTPUT(stream)`, run `_phase48_narrative_truncate`
+  on `final_text` with the same idempotency guards as `ai_ask`
+  (skip if `_NARRATIVE_MODE` off, refusal text, or empty). Telemetry
+  tag `[ai_ask_stream][phase49-trim]` so production logs distinguish
+  oneshot vs stream trims.
+
+- **T026 — Tests** (`test_phase49_adaptive_depth.py`, 20 tests, all
+  pass): classifier (10 cases EN/HI/HG + technical-precedence +
+  case-insensitivity), truncator per-tier behaviour (5-sentence
+  Tier 2 cap, Tier 3 byte-identity, ISO-date stripping for Tier 2,
+  pratyantar drop for Tier 1, idempotence, empty-input), runtime
+  Rule 10 swap via mocked OpenAI client (`_CaptureClient` reused
+  pattern), and source-level check that `ai_ask_stream` references
+  the truncator + `_NARRATIVE_MODE` guard + `phase49-trim` telemetry.
+
+### Verification
+- 112 tests green: 20 Phase 4.9 + 16 Phase 4.8 + 16 Phase 4.7 context-
+  diet + 8 Phase 4.7 runtime invariants + 23 Phase 4.6 + 24 Phase 4.5
+  + 5 unrelated. No regressions.
+- Live restart: API server starts clean. T023 telemetry fires per
+  request: `Phase 4.9 T023: tier={simple|detailed|technical} —
+  replaced Rule 10 …`. Tier 3 prints `leaving Rule 10 default
+  (100-140 WORDS) intact for full technical answer.`
+
+### Reversibility
+- All Phase 4.9 logic is gated behind `_NARRATIVE_MODE` (same env
+  switch as Phase 4.8). Setting `NARRATIVE_MODE=0` reverts the swap
+  + truncator + stream wire-in; classifier becomes dead code with
+  no side effects.
+- Roll back to Phase 4.8 flat behaviour: in `_phase48_narrative_
+  truncate`, force `tier = "simple"` and in T023 swap, replace the
+  if/elif/elif tier ladder with the old single `user.replace`.
+
+### Architect review (PASS after fixes)
+Architect raised one CRITICAL ordering bug + classifier hardening:
+
+1. **CRITICAL — footer clipping**: in original T025, the engine-warn-
+   footer block ran BEFORE the truncator, so the truncator's char-cap
+   could clip `_ENGINE_WARN_FOOTER_TEXT` mid-string. **FIXED**: blocks
+   were reordered (truncate → footer). New test
+   `test_truncator_runs_BEFORE_engine_warn_footer` asserts the source
+   ordering so a future re-shuffle can't silently regress.
+2. **MEDIUM — false-positive substring matches**: keywords like
+   `"kp "`, `"bhava"`, `"varga"` could match inside unrelated words
+   (`bhavana`, etc.). **FIXED**: replaced the substring-list classifier
+   with two compiled `\b`-anchored regexes (`_PHASE49_TIER3_PATTERN`,
+   `_PHASE49_TIER2_PATTERN`). Also tightened: generic `dasha` alone
+   no longer triggers Tier 3 (must be `dasha breakdown` /
+   `antardasha breakdown`). All existing classifier tests still pass.
+3. **MINOR — cap drift (200→280, 500→600)**: documented as
+   intentional Devanagari headroom (Phase 4.8 inherited behaviour).
+   Not a bug; left as-is.
+
+### Out of scope / scheduled next
+- Live A/B with the user across all three tiers ("kya hoga?" →
+  Tier 1, "kaise hoga?" → Tier 2, "KP sublord batao" → Tier 3).
+- If Tier 2 still over-collapses on Hindi-only inputs (model emits
+  ≥6 sentences and post-trim cuts mid-thought), tune the 5-sentence
+  hard cap upward (e.g., 7) and bump `max_chars` accordingly.
+- Optional: surface `tier` in the streaming `final` event payload
+  for client-side analytics.

@@ -3142,9 +3142,14 @@ def _build_messages(
             "answer = 100 to 140 WORDS. NEVER more. Count words as you "
             "write.\n"
         )
-        _rule10_narrative_cap = (
-            "    • NARRATIVE-MODE HARD CAP — TOTAL answer = 1 to 2 "
-            "SHORT SENTENCES (≤200 chars total). Format: "
+        # Phase 4.9 T023 — adaptive depth: pick the cap based on the
+        # user's question intent (Tier 1/2/3). Tier 3 leaves Rule 10
+        # untouched so technical Qs (KP / houses / dasha breakdown)
+        # get the full 100-140 word answer.
+        _phase49_tier = _question_depth_tier(question or "")
+        _rule10_tier1_cap = (
+            "    • NARRATIVE-MODE HARD CAP (Tier 1 — simple Q) — TOTAL "
+            "answer = 1 to 2 SHORT SENTENCES (≤200 chars total). Format: "
             "[VERDICT in plain Hindi/Hinglish] → [1 short reason]. "
             "Example: 'Love ho sakta hai, lekin Mars ki impulsiveness "
             "aur Rahu ki confusion ki wajah se yeh zyada tar temporary "
@@ -3154,12 +3159,31 @@ def _build_messages(
             "charts, or dosha names unless the user asked about them by "
             "name. The verdict + 1 reason IS the whole reply.\n"
         )
-        if _rule10_old_default in user:
-            user = user.replace(_rule10_old_default, _rule10_narrative_cap)
-            print("[openai_helper] Phase 4.8 T018: replaced Rule 10 100-140w "
-                  "default with NARRATIVE HARD CAP (1-2 sentences, ≤200 chars).")
+        _rule10_tier2_cap = (
+            "    • NARRATIVE-MODE DETAILED ANSWER (Tier 2 — user said "
+            "'kaise/why/explain/detail') — TOTAL answer = 3 to 5 SHORT "
+            "SENTENCES (≤500 chars total). Simple human explanation. "
+            "Basic astrology terms allowed (planet names like Mars / "
+            "Rahu / Jupiter, current dasha by lord names). NEVER include "
+            "ISO date ranges (2026-02-18 etc.), pratyantar / sookshma "
+            "names, KP technicals, or divisional chart names UNLESS the "
+            "user asked about them by name. Stay conversational, no "
+            "bullet lists, no headings.\n"
+        )
+        if _phase49_tier == "technical":
+            # Tier 3 → leave Rule 10 alone (full technical answer).
+            print("[openai_helper] Phase 4.9 T023: tier=technical — "
+                  "leaving Rule 10 default (100-140 WORDS) intact for "
+                  "full technical answer.")
+        elif _rule10_old_default in user:
+            _chosen = (_rule10_tier2_cap if _phase49_tier == "detailed"
+                       else _rule10_tier1_cap)
+            user = user.replace(_rule10_old_default, _chosen)
+            print(f"[openai_helper] Phase 4.9 T023: tier={_phase49_tier} — "
+                  f"replaced Rule 10 100-140w default with "
+                  f"{'TIER-2 DETAILED (3-5 sentences, ≤500 chars)' if _phase49_tier == 'detailed' else 'TIER-1 HARD CAP (1-2 sentences, ≤200 chars)'}.")
         elif "100 to 140 WORDS" in user:
-            print("[openai_helper] ⚠️ Phase 4.8 T018: Rule 10 default literal "
+            print("[openai_helper] ⚠️ Phase 4.9 T023: Rule 10 default literal "
                   "drifted — '100 to 140 WORDS' present but not in expected "
                   "form. Update _rule10_old_default to match line ~2978.")
 
@@ -8809,24 +8833,125 @@ def _phase48_is_timing_question(question: str) -> bool:
     return any(k in q for k in _PHASE48_TIMING_KEYWORDS)
 
 
-def _phase48_narrative_truncate(text: str, question: str) -> str:
-    """Phase 4.8 T019 — strip date/pratyantar leaks (for non-timing
-    questions only) and cap the answer at 2 sentences / 280 chars.
+# ── Phase 4.9 T022 — Adaptive depth classifier ────────────────────────────
+# Replaces Phase 4.8's flat 1-2 sentence cap with intent-driven depth.
+#   "simple"    → default; yes/no, short advice → 1-2 sentences
+#   "detailed"  → user said kaise/why/explain/detail → 3-5 sentences
+#   "technical" → user explicitly asked KP/houses/dasha breakdown/sublord
+#                 → no truncation, full technical answer allowed.
+# Order matters: technical takes precedence (check first), then detailed,
+# else simple. Hindi + English keywords supported.
 
-    Behaviour summary:
-      • Non-timing question: drop sentences mentioning pratyantar /
-        antardasha / sookshma / ISO dates; strip date fragments from
-        surviving sentences.
-      • Either way: keep first 2 sentences max, hard-cap at 280 chars
-        (slightly over the 200-char rule budget to allow Devanagari).
-      • Idempotent on already-short, date-free answers.
+# ARCHITECT-FIX: word-boundary regex (not substring) so single tokens
+# like 'bhava' / 'varga' / 'kp' don't false-positive inside longer
+# unrelated words (e.g., 'bhavana', 'vargas' inside random text).
+# Keys that legitimately span multiple tokens (e.g., 'sub lord',
+# 'antardasha breakdown', 'd-9', '7th house') are matched via the
+# composite pattern below using `\b` anchors and explicit separators.
+import re as _re_phase49
+
+_PHASE49_TIER3_PATTERN = _re_phase49.compile(
+    r"(?ix)"
+    r"\b("
+    # KP system + sublord (KP must be a standalone token)
+    r"kp|k\.p\.|krishnamurti|krishnamoorthi|"
+    r"sub[\s\-]?lord|sublord|cuspal|cusp|"
+    # Divisional / vargas (full word only)
+    r"divisional|varga|vargas|navamsa|navamsha|"
+    r"dasamsa|dashamsa|saptamsa|saptamsha|"
+    r"d[\s\-]?9|d[\s\-]?10|d[\s\-]?7|"
+    # Houses (numeric ordinal forms)
+    r"house\s+number|"
+    r"\d+(?:st|nd|rd|th)\s+house|"
+    r"bhava|bhavas|"
+    # Deep dasha breakdown (only when user explicitly says 'breakdown'
+    # — generic 'dasha' alone is NOT Tier 3).
+    r"(?:antardasha|antar\s*dasha|dasha)\s+breakdown|"
+    r"pratyantar|pratyantardasha|"
+    r"sookshma|sukshma|prana\s+dasha|"
+    # Technical chart elements
+    r"ascendant\s+lord|lagnesh|yogakaraka|atmakaraka"
+    r")\b"
+)
+
+_PHASE49_TIER2_PATTERN = _re_phase49.compile(
+    r"(?ix)"
+    r"\b("
+    # English explainers
+    r"detail|details|explain|explanation|why|how|"
+    r"in[\s\-]?depth|step[\s\-]?by[\s\-]?step|"
+    r"elaborate|describe|"
+    # Hindi/Hinglish explainers (word-bounded to avoid 'samjhao' inside
+    # an unrelated phrase still being valid; these are real explainers).
+    r"kaise|kyun|kyon|kyo|"
+    r"samjhao|samjhaiye|samjha|"
+    r"vistaar|vistar|"
+    r"puri\s+baat|puri\s+detail"
+    r")\b"
+)
+
+
+def _question_depth_tier(question: str) -> str:
+    """Phase 4.9 T022 — classify user question into one of three depth
+    tiers: 'simple' | 'detailed' | 'technical'. Pure, deterministic,
+    case-insensitive, word-boundary safe (no false-positive substring
+    matches like 'kp' inside 'okay' or 'bhava' inside 'bhavana').
+    Returns 'simple' for empty/non-string input."""
+    if not isinstance(question, str) or not question.strip():
+        return "simple"
+    # Tier 3 first (highest precedence): user explicitly named a
+    # technical concept. They want the full breakdown.
+    if _PHASE49_TIER3_PATTERN.search(question):
+        return "technical"
+    # Tier 2: explainer/why-type question. Short paragraph allowed.
+    if _PHASE49_TIER2_PATTERN.search(question):
+        return "detailed"
+    # Tier 1: default, terse verdict + 1 reason.
+    return "simple"
+
+
+def _phase48_narrative_truncate(text: str, question: str,
+                                tier: str | None = None) -> str:
+    """Phase 4.8 T019 + Phase 4.9 T024 — tier-aware narrative truncator.
+
+    Tier behaviour:
+      • 'simple'    (default): ≤2 sentences, ≤280 chars; non-timing Qs
+                     also drop date / pratyantar / antardasha sentences.
+      • 'detailed': ≤5 sentences, ≤600 chars; strip date ranges only,
+                     keep planet/dasha-name explanations.
+      • 'technical': pass-through (returns text unchanged) so KP /
+                     dasha-breakdown / houses answers survive intact.
+
+    `tier` is computed from `question` via `_question_depth_tier` when
+    not supplied. Idempotent on already-conformant input.
     """
     import re as _reN
 
     if not isinstance(text, str) or not text.strip():
         return text
 
+    if tier is None:
+        tier = _question_depth_tier(question)
+
+    # ── Tier 3: pass-through. User asked for the full technical answer. ──
+    if tier == "technical":
+        return text
+
     is_timing = _phase48_is_timing_question(question)
+
+    # Per-tier caps.
+    if tier == "detailed":
+        max_sents = 5
+        max_chars = 600
+        # Detailed answers may legitimately mention dasha lord names
+        # ("Mars antardasha mein…") so we DO NOT drop sentences just
+        # because they reference a sub-period — only ISO date ranges
+        # are stripped.
+        drop_pratyantar_sentences = False
+    else:  # 'simple'
+        max_sents = 2
+        max_chars = 280
+        drop_pratyantar_sentences = True
 
     # ── Step 2: TIMING FILTER (only if NOT a timing question) ──
     if not is_timing:
@@ -8857,7 +8982,7 @@ def _phase48_narrative_truncate(text: str, question: str) -> str:
         ]
         kept = []
         for s in raw_sents:
-            if pratyantar_sent_rx.search(s):
+            if drop_pratyantar_sentences and pratyantar_sent_rx.search(s):
                 continue
             stripped = date_rx.sub("", s).strip()
             stripped = _reN.sub(r"\s{2,}", " ", stripped)
@@ -8867,20 +8992,20 @@ def _phase48_narrative_truncate(text: str, question: str) -> str:
         if kept:
             text = " ".join(kept)
 
-    # ── Step 3: HARD LENGTH CUT — first 2 sentences max ──
+    # ── Step 3: HARD LENGTH CUT — first N sentences max (per tier) ──
     final_sents = [
         s.strip() for s in
         _reN.split(r"(?<=[.!?।])\s+", text)
         if s.strip()
     ]
-    if len(final_sents) > 2:
-        text = " ".join(final_sents[:2])
+    if len(final_sents) > max_sents:
+        text = " ".join(final_sents[:max_sents])
         if text and text[-1] not in ".!?।":
             text = text + "."
 
-    # ── Step 4: HARD CHAR CAP — 280 chars ──
-    if len(text) > 280:
-        cut = text[:280]
+    # ── Step 4: HARD CHAR CAP — per tier ──
+    if len(text) > max_chars:
+        cut = text[:max_chars]
         last_punct = max(
             cut.rfind("."), cut.rfind("!"),
             cut.rfind("?"), cut.rfind("।"),
@@ -12147,10 +12272,42 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     eff_lang = _resolve_response_lang(question, lang, preferred_language)
     follow_ups = _derive_follow_ups(topic, eff_lang)
 
+    # Phase 4.9 T025 — wire the adaptive-depth truncator into the
+    # streaming endpoint. Last session shipped T019 only into ai_ask
+    # (oneshot path), so /api/ask/stream — which the mobile client
+    # uses for typewriter UX — was bypassing all output discipline.
+    # Same idempotency guards as oneshot: skip if narrative mode is
+    # off, refusal text, or empty.
+    #
+    # ARCHITECT-FIX (Phase 4.9 review): truncator MUST run BEFORE the
+    # engine-warn-footer block, otherwise the truncator's char-cap can
+    # clip the appended footer mid-string. Order: truncate → footer.
+    try:
+        if (_NARRATIVE_MODE
+                and isinstance(final_text, str)
+                and final_text.strip()
+                and final_text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                and final_text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()):
+            _stream_tier = _question_depth_tier(question or "")
+            _trimmed_s = _phase48_narrative_truncate(
+                final_text, question or "", tier=_stream_tier,
+            )
+            if _trimmed_s != final_text:
+                _is_timing_q_s = _phase48_is_timing_question(question or "")
+                print(f"[ai_ask_stream][phase49-trim] NARRATIVE_MODE "
+                      f"truncate: {len(final_text)}c → {len(_trimmed_s)}c "
+                      f"(tier={_stream_tier}, timing_q={_is_timing_q_s})")
+                final_text = _trimmed_s
+    except Exception as _trim_exc_s:  # noqa: BLE001
+        print(f"[ai_ask_stream] Phase 4.9 T025 stream truncator "
+              f"failed: {_trim_exc_s}")
+
     # Phase 4.2 — stream-path engine warning footer parity. Refusal cannot
     # cleanly abort a stream mid-flight (deferred to Phase 4.4 backlog), but
     # the warn footer for OPTIONAL-phase failures CAN be appended after the
     # stream completes. Same idempotency guards as oneshot path.
+    # NOTE: this runs AFTER the Phase 4.9 truncator above so the footer is
+    # never clipped by the per-tier char cap.
     try:
         if (final_text
                 and isinstance(final_text, str)

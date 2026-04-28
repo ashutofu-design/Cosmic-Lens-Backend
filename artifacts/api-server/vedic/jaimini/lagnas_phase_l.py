@@ -142,6 +142,13 @@ def varnada_lagna(lagna_si: int, hora_lagna_si: int) -> dict[str, Any]:
 
 # ─── Master orchestrator ──────────────────────────────────────────────
 def compute_lagnas_phase_l(kundli: dict, birth: dict) -> dict[str, Any]:
+    # Sprint-26 Fix-K: defensive None-handling. Father/spouse charts pass
+    # birth=None which previously crashed via 'NoneType.get' on the
+    # birth.get("dob")/birth.get("time") lines. We treat missing birth as
+    # an empty dict — those fields fall back to kundli.get("dob") /
+    # kundli.get("time") / "12:00" which the rest of the function
+    # already handles gracefully.
+    birth = birth or {}
     planets = kundli.get("planets") or []
     sun_lon = _sun_lon(planets)
     if sun_lon is None:

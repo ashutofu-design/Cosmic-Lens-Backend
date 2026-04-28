@@ -356,8 +356,62 @@ def _format_basics(kundli: dict, intel: dict) -> str:
     return "\n".join(parts)
 
 
+# Sprint-26 Fix-K: engine status tracker. Populated by build_locked_facts
+# every call so callers (openai_helper.py timing-validator) can reason
+# about whether the engine actually produced timing data, instead of
+# silently rejecting the AI's reasonable answer just because some phase
+# crashed upstream.
+#
+# Storage is thread-local — Flask serves requests on multiple threads,
+# and a plain module-global dict would let one request overwrite another's
+# status between build_locked_facts() and get_last_engine_status(),
+# producing wrong soften/reject decisions under concurrency.
+import threading as _threading_fixk
+_FIXK_TLS = _threading_fixk.local()
+
+
+def _fixk_get_status() -> dict[str, Any]:
+    s = getattr(_FIXK_TLS, "status", None)
+    if s is None:
+        s = {"ok": [], "skipped": [], "failed": [], "overall": "empty"}
+        _FIXK_TLS.status = s
+    return s
+
+
+def get_last_engine_status() -> dict[str, Any]:
+    """Return the engine status from the most recent build_locked_facts call
+    on THIS thread. Thread-local — safe under Flask's threaded server."""
+    return dict(_fixk_get_status())
+
+
+def _record_phase(name: str, status: str, reason: str = "") -> None:
+    """Record one phase's outcome. status ∈ {ok, skipped, failed}."""
+    entry = {"phase": name, "reason": reason} if reason else {"phase": name}
+    _fixk_get_status()[status].append(entry)
+
+
+def _finalise_engine_status() -> None:
+    """Compute overall verdict after all phases have reported."""
+    s = _fixk_get_status()
+    ok = len(s["ok"])
+    failed = len(s["failed"])
+    if ok == 0:
+        s["overall"] = "empty"
+    elif failed == 0:
+        s["overall"] = "ok"
+    else:
+        s["overall"] = "partial"
+
+
 def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     """Assemble the LOCKED FACTS block. Returns "" if kundli is empty."""
+    # Reset status tracker for this call (thread-local).
+    s = _fixk_get_status()
+    s["ok"] = []
+    s["skipped"] = []
+    s["failed"] = []
+    s["overall"] = "empty"
+
     if not isinstance(kundli, dict) or not kundli.get("planets"):
         return ""
 
@@ -938,8 +992,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                                                    format_phase_m_summary)
         _sm = compute_phase_m_extra(kundli, birth)
         sahams_m_str = format_phase_m_summary(_sm)
+        if _sm and _sm.get("available", True):
+            _record_phase("phase-M sahams (Sprint-38)", "ok")
+        else:
+            _record_phase("phase-M sahams (Sprint-38)", "skipped",
+                          (_sm or {}).get("reason", "no output"))
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] phase-M sahams (Sprint-38) failed: {exc}")
+        _record_phase("phase-M sahams (Sprint-38)", "failed", str(exc))
 
     # Sprint-37 / Phase L — Special Lagnas (Bhava/Hora/Ghati/Vighati/Pranapada/Varnada)
     lagnas_l_str = ""
@@ -948,8 +1008,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                                                     format_lagnas_phase_l_summary)
         _lp = compute_lagnas_phase_l(kundli, birth)
         lagnas_l_str = format_lagnas_phase_l_summary(_lp)
+        if _lp and _lp.get("available", True):
+            _record_phase("phase-L special lagnas (Sprint-37)", "ok")
+        else:
+            _record_phase("phase-L special lagnas (Sprint-37)", "skipped",
+                          (_lp or {}).get("reason", "no output"))
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] phase-L special lagnas (Sprint-37) failed: {exc}")
+        _record_phase("phase-L special lagnas (Sprint-37)", "failed", str(exc))
 
     # Sprint-36 / Phase K — Avashtas (planetary states)
     avashtas_str = ""
@@ -968,8 +1034,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                                               format_phase_j_summary)
         _pj = compute_phase_j_tajik(kundli, birth)
         phase_j_str = format_phase_j_summary(_pj)
+        if _pj and _pj.get("available", True):
+            _record_phase("phase-J tajik (Sprint-35)", "ok")
+        else:
+            _record_phase("phase-J tajik (Sprint-35)", "skipped",
+                          (_pj or {}).get("reason", "no output"))
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] phase-J tajik (Sprint-35) failed: {exc}")
+        _record_phase("phase-J tajik (Sprint-35)", "failed", str(exc))
 
     # Sprint-34 / Phase I — KP Advanced (I2 CIL + I5 Marriage)
     kp_phase_i_str = ""
@@ -988,8 +1060,14 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                                               format_phase_h_summary)
         _ph = compute_phase_h_transits(kundli, birth)
         phase_h_str = format_phase_h_summary(_ph)
+        if _ph and _ph.get("available", True):
+            _record_phase("phase-H transits (Sprint-33)", "ok")
+        else:
+            _record_phase("phase-H transits (Sprint-33)", "skipped",
+                          (_ph or {}).get("reason", "no output"))
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] phase-H transits (Sprint-33) failed: {exc}")
+        _record_phase("phase-H transits (Sprint-33)", "failed", str(exc))
 
     # Sprint-32 / Phase F — Per-Varga Full Depth (F3 + F4-expand + F5)
     varga_phase_f_str = ""
@@ -1015,8 +1093,11 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     try:
         from vedic.dashas.dasha_phase_e import (compute_all_phase_e_dashas,  # type: ignore
                                                   format_phase_e_summary)
+        # Sprint-26 Fix-K: defensive guard — birth may be None when the
+        # caller passed kundli without a paired birth dict.
+        _be = birth or {}
         _ke = dict(kundli)
-        _ke["dob"] = _ke.get("dob") or birth.get("dob") or birth.get("date")
+        _ke["dob"] = _ke.get("dob") or _be.get("dob") or _be.get("date")
         _pe = compute_all_phase_e_dashas(_ke)
         phase_e_dashas_str = format_phase_e_summary(_pe)
     except Exception as exc:  # noqa: BLE001

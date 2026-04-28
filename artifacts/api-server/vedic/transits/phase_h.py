@@ -309,6 +309,13 @@ def fixed_stars_expanded_overlap(natal_planets: list[dict],
 
 # ─── Master orchestrator ──────────────────────────────────────────────
 def compute_phase_h_transits(kundli: dict, birth: dict) -> dict[str, Any]:
+    # Sprint-26 Fix-K: defensive None-handling. The legacy callsite passed
+    # birth=None for father/spouse charts (no separate birth dict) which
+    # crashed the whole phase via 'NoneType.get' on line ~342. The phase
+    # can still emit Saros + fixed-stars + transits-from-now without a
+    # birth dict; only the prenatal-eclipse calc needs dob/time, and that
+    # block already has a `if isinstance(dob, str)` guard.
+    birth = birth or {}
     if not _HAS_SWE:
         return {"available": False, "reason": "swisseph unavailable"}
     planets = kundli.get("planets") or []

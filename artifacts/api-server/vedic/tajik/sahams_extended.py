@@ -72,6 +72,9 @@ def compute_sahams_extended(planets: list[dict], lagna_lon: float,
 
 
 def compute_phase_m_extra(kundli: dict, birth: dict) -> dict[str, Any]:
+    # Sprint-26 Fix-K: defensive None-handling. birth=None previously
+    # crashed via 'NoneType.get' on the dob/btime extraction lines.
+    birth = birth or {}
     dob = birth.get("dob") or birth.get("date") or kundli.get("dob")
     btime = birth.get("time") or kundli.get("time") or "12:00"
     if not isinstance(dob, str):

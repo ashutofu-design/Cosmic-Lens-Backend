@@ -362,6 +362,11 @@ def munis_period(age_years: int) -> dict[str, Any]:
 
 # ─── Master orchestrator ──────────────────────────────────────────────
 def compute_phase_j_tajik(kundli: dict, birth: dict) -> dict[str, Any]:
+    # Sprint-26 Fix-K: defensive None-handling. birth=None (legacy
+    # father/spouse callsite) previously crashed via 'NoneType.get'
+    # at the dob/btime extraction. Falling back to kundli.get() and
+    # the "12:00" default keeps the phase usable.
+    birth = birth or {}
     if not _HAS_SWE:
         return {"available": False, "reason": "swisseph unavailable"}
     dob = birth.get("dob") or birth.get("date") or kundli.get("dob")

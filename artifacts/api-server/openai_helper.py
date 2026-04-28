@@ -2020,11 +2020,26 @@ def _build_messages(
     # yogas, doshas, planet strengths, dasha. The AI is instructed (rules
     # below) to MIRROR these values verbatim — never invent counts/names.
     locked_facts_str = ""
+    engine_status = {"ok": [], "skipped": [], "failed": [], "overall": "empty"}
     try:
-        from locked_facts import build_locked_facts  # type: ignore
+        from locked_facts import (build_locked_facts,  # type: ignore
+                                   get_last_engine_status,
+                                   _finalise_engine_status)
         locked_facts_str = build_locked_facts(kundli, birth) or ""
+        # Sprint-26 Fix-K: capture which phases ran/failed so the
+        # downstream timing-validator can soften when the engine
+        # genuinely had no timing data to provide. We stash the
+        # status into out_meta — the caller (which holds req_id)
+        # is responsible for tracing it.
+        try:
+            _finalise_engine_status()
+        except Exception:
+            pass
+        engine_status = get_last_engine_status()
     except Exception as exc:
         print(f"[openai_helper] locked_facts failed: {exc}")
+    if isinstance(out_meta, dict):
+        out_meta["engine_status"] = engine_status
 
     # ── Sprint-52 RAG: classical knowledge retrieval (OPINION questions only) ─
     # Timing questions get ZERO RAG (engine block already gives the answer).
@@ -5447,8 +5462,19 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "    next favourable window from locked facts.\n"
         "  • Mention which mahadasha/antardasha is changing and to what.\n"
         "  • Keep the explanation SHORT — date + one-line cause is enough.\n"
+        "FALLBACK (Sprint-26 Fix-K) — when engine timing data is incomplete:\n"
+        "  • If the LOCKED FACTS block does NOT include a topic-specific\n"
+        "    'WINDOW:' line for the user's question, INFER the next\n"
+        "    favourable window from the dasha sequence + transit context\n"
+        "    that IS available in the kundli (current MD/AD with their\n"
+        "    end-dates, the next AD lord, ongoing transits).\n"
+        "  • State your reasoning explicitly so it is auditable, e.g.\n"
+        "    'Jupiter Mahadasha / Rahu Antardasha 2024-01-29 → 2026-06-22\n"
+        "     ke baad Jupiter MD / Saturn AD shuru hogi — control phase\n"
+        "     wahi se start hoga'.\n"
+        "  • Use ONLY the dasha names + dates that appear in the kundli's\n"
+        "    dasha section — do NOT invent names absent from the chart.\n"
         "MUST NOT do:\n"
-        "  • DO NOT invent dates not in the engine output.\n"
         "  • DO NOT pad with unrelated chart analysis.\n"
         "  • DO NOT add advice unless explicitly asked.\n"
         "════════════════════════════════════════════════════════════════════\n"
@@ -6106,6 +6132,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         marriage_subtype=marriage_subtype,
     )
 
+    # Sprint-26 Fix-K: trace engine status (populated by _build_messages
+    # via out_meta) so we can see which phases ran/failed and reason
+    # about the smart-validator decision downstream.
+    _engine_status = (build_meta or {}).get("engine_status") or {}
+    _trace(req_id, "2b.ENGINE_STATUS", {
+        "overall": _engine_status.get("overall"),
+        "ok_count": len(_engine_status.get("ok") or []),
+        "skipped_count": len(_engine_status.get("skipped") or []),
+        "failed_count": len(_engine_status.get("failed") or []),
+        "failed": [e.get("phase") for e in (_engine_status.get("failed") or [])],
+        "skipped": [e.get("phase") for e in (_engine_status.get("skipped") or [])],
+    })
+
     # ── WEALTH STRUCTURED-OUTPUT REWRITE ─────────────────────────────────────
     # When the wealth verdict engine produced a verdict_obj, we strip the
     # verbose ~100-line WEALTH NARRATOR OVERRIDE that _build_messages
@@ -6397,11 +6436,45 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             if _heading_rx.search(_line):
                 _engine_window = _line.strip(); break
         _lock = enforce_timing_lock(question or "", text, _facts_blob, _engine_window)
-        if not _lock["ok"]:
-            _trace(req_id, "4a.TIMING_VALIDATOR_REJECT", _lock["validation"])
+        # Sprint-26 Fix-K — SMART VALIDATOR (FIX 1): if the engine layer
+        # genuinely failed to produce any timing data (overall ∈
+        # {empty, partial} AND no authorised tokens were found), the
+        # validator's "every AI date is invented" verdict is a FALSE
+        # POSITIVE — it has no ground truth to verify against. In that
+        # case we TRUST the AI's reasoning over the engine's silence and
+        # let the text pass unchanged. Golden rule: engine absence ≠ AI
+        # hallucination. We trace the bypass so it's fully observable.
+        _eng = (build_meta or {}).get("engine_status") or {}
+        _engine_overall = _eng.get("overall", "ok")
+        _val = _lock.get("validation") or {}
+        _no_authorised = not (_val.get("authorised_tokens") or [])
+        # Sprint-26 Fix-K (architect-tightened): only soften when the
+        # engine produced ZERO phase output. "partial" means at least
+        # one phase succeeded — authoritative timing facts may exist
+        # even if some other phase failed, so we must NOT bypass the
+        # validator there. Tightening here protects against true AI
+        # hallucinations that would otherwise sneak through.
+        _engine_unavailable = (_engine_overall == "empty")
+        if (not _lock["ok"]
+                and _val.get("is_timing")
+                and _no_authorised
+                and _engine_unavailable):
+            _trace(req_id, "4a.TIMING_VALIDATOR_SOFTENED", {
+                "reason": "engine_unavailable_trust_ai",
+                "engine_overall": _engine_overall,
+                "engine_failed": [
+                    e.get("phase") for e in _eng.get("failed", [])
+                ],
+                "rejected_tokens": _val.get("invented_tokens", []),
+                "rule": "engine absence ≠ AI hallucination "
+                        "(Sprint-26 Fix-K)",
+            })
+            # Leave `text` untouched — AI's answer survives.
+        elif not _lock["ok"]:
+            _trace(req_id, "4a.TIMING_VALIDATOR_REJECT", _val)
             text = _lock["safe_text"]
         else:
-            _trace(req_id, "4a.TIMING_VALIDATOR_OK", _lock["validation"])
+            _trace(req_id, "4a.TIMING_VALIDATOR_OK", _val)
     except Exception as _exc:  # noqa: BLE001
         _trace(req_id, "4a.TIMING_VALIDATOR_ERR", str(_exc))
 
@@ -8062,7 +8135,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             _trace(req_id, "4y.AI_RAW_PRE_SCRUB",
                    {"text": text, "word_count": _pre_scrub_word_count})
 
-            # (1) Strip [engine: ...] tokens if any.
+            # Sprint-26 Fix-K (FIX 4) — MINIMAL SCRUB:
+            # Steps (2) sentence-line drops and (3) template-skeleton drops
+            # were band-aids for placeholder-injection that the smart
+            # validator (FIX 1) now PREVENTS at the source. Keeping them
+            # here would over-correct and risk dropping legitimate AI
+            # narration. We now do ONLY:
+            #   (1) Strip [engine: ...] placeholder brackets if any
+            #       leak through (e.g. when validator legitimately
+            #       rejects with engine_overall=ok).
+            #   (2) Drop the ⚐ "engine data insufficient" notice line —
+            #       still emitted by enforce_timing_lock when it does run.
+            # The aggressive sentence/skeleton scrubs are GONE.
             if _global_ph_rx.search(text):
                 text = _global_ph_rx.sub("", text)
                 # Collapse empty parens / repeated whitespace / orphan punct
@@ -8073,47 +8157,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 text = _re_global_ph.sub(r"[ \t]+", " ", text)
                 _changed = True
 
-            # (2) Drop residual broken lines (boilerplate left by upstream).
-            # Architect feedback: orphan-leading-particle rule narrowed to
-            # SHORT lines only (≤8 words) so legitimate wrapped continuation
-            # lines (which are typically longer) cannot be wrongly dropped.
+            # (2) Only drop the "⚐ Note: precise dates ONLY..." notice
+            # line emitted by enforce_timing_lock. Everything else stays.
             _kept_lines = []
             for _ln in text.splitlines():
                 if _bad_line_rx.search(_ln):
                     _changed = True
                     continue
-                if _orphan_lead_rx.match(_ln) and len(_ln.split()) <= 8:
-                    _changed = True
-                    continue
                 _kept_lines.append(_ln)
-            text = "\n".join(_kept_lines)
-
-            # (3) Sentence-level template-skeleton scrub. Architect feedback:
-            # the `≥2 bare "dasha" + no anchor` heuristic alone is too broad
-            # and would also drop legitimate Vedic concept explanations like
-            # "Dasha ke baad dasha badalta hai" or "Har dasha mein sub-dasha
-            # hoti hai". Tightened: ALSO require a SKELETON VERB pattern
-            # (khatam / shuru / chal raha / weak / strong hai/hogi) — that
-            # specific pattern is what distinguishes a stripped-placeholder
-            # template from a concept explanation.
-            _sent_split_rx = _re_global_ph.compile(r"(?<=[।\.!?])\s+")
-            _new_paragraphs = []
-            for _para in text.split("\n"):
-                if not _bare_dasha_rx.search(_para):
-                    _new_paragraphs.append(_para)
-                    continue
-                _parts = _sent_split_rx.split(_para)
-                _kept_parts = []
-                for _p in _parts:
-                    _bare_n = len(_bare_dasha_rx.findall(_p))
-                    if (_bare_n >= 2
-                            and not _dasha_anchor_rx.search(_p)
-                            and _skeleton_verb_rx.search(_p)):
-                        _changed = True
-                        continue
-                    _kept_parts.append(_p)
-                _new_paragraphs.append(" ".join(_kept_parts))
-            text = "\n".join(_new_paragraphs).strip()
+            text = "\n".join(_kept_lines).strip()
 
             # (4) ROLLBACK GUARD — if the scrub has destroyed too much of
             # the original content (e.g. AI generated all-template text and

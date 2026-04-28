@@ -30,7 +30,14 @@ INTENTS = ("problem", "timing", "decision", "planet", "analysis")
 TOPICS  = ("finance", "career", "marriage", "love", "health", "general")
 
 
-# ── Prompt (verbatim from spec) ─────────────────────────────────────────────
+# ── Prompt ──────────────────────────────────────────────────────────────────
+# Sprint-26 base prompt + boundary definitions added after empirical
+# evaluation showed the AI confused: (a) planet-status questions naming
+# "vargottam"/"exalted"/etc as decisions, (b) "bachhe" (children) as a
+# marriage topic, (c) "dosh" (defect) as analysis instead of problem.
+# The base structure (input shape, output shape, rules block) is unchanged
+# — we only added two short DEFINITIONS sections and three EDGE-CASE
+# examples. Output budget (max_tokens=80) is untouched.
 _PROMPT_TEMPLATE = (
     "You are a question understanding module.\n\n"
     "Your job is ONLY to understand what the user is asking.\n\n"
@@ -42,6 +49,33 @@ _PROMPT_TEMPLATE = (
     "  \"topic\": \"finance | career | marriage | love | health | general\",\n"
     "  \"confidence\": 0.0 to 1.0\n"
     "}}\n\n"
+    "INTENT definitions (pick the most specific that fits):\n"
+    "- planet   → ANY question that NAMES a graha (Sun, Moon, Mars, Mercury, "
+    "Jupiter, Venus, Saturn, Rahu, Ketu / Surya, Chandra, Mangal, Budh, Guru, "
+    "Shukra, Shani) — even if phrased as 'X kaisa hai' or 'X mera kaisi hai' "
+    "(asking about a single named graha = planet intent, not analysis). "
+    "ALSO planet: strong / weak / strongest / weakest / vargottam / exalted "
+    "/ debilitated / combust / retrograde status. Words like 'kaunsa planet', "
+    "'konsa graha', 'sabse powerful grah' ALWAYS mean planet — NOT decision.\n"
+    "- problem  → dosha / dosh / defect / affliction, 'kyun nahi', 'why not', "
+    "delay, stuck, suffering, complaint, kharab, bura. 'X dosh hai kya' is "
+    "ALWAYS problem — NOT analysis.\n"
+    "- timing   → 'when', 'kab', 'kab hoga', 'kitne saal', 'how long', a "
+    "future date or period.\n"
+    "- decision → 'should I', 'karu ya nahi', 'chahiye', 'sahi hai kya', "
+    "choosing between options or asking for a recommendation.\n"
+    "- analysis → general overview, 'kaisa hai', 'kaisi rahegi', concept / "
+    "comparison questions, fallback when none of the above fits.\n\n"
+    "TOPIC definitions (be strict — do NOT bleed across topics):\n"
+    "- marriage → ONLY spouse / wedding / partner / vivah / shaadi / "
+    "kalatra. Children, parents, family in general → 'general', NOT marriage.\n"
+    "- career   → job, business, work, promotion, profession, naukri, kaam.\n"
+    "- finance  → money, paisa, wealth, savings, loan, income, dhan.\n"
+    "- love     → romantic relationship, girlfriend / boyfriend / crush "
+    "(NOT marriage).\n"
+    "- health   → illness, body, disease, bimari, sehat.\n"
+    "- general  → anything not in the above five (children, parents, life "
+    "overview, concepts, planet status without a domain).\n\n"
     "Rules:\n"
     "- Do NOT answer the question\n"
     "- Do NOT explain anything\n"

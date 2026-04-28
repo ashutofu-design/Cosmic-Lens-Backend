@@ -6478,7 +6478,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # Crisis ALWAYS forces mental_health bucket (overrides everything).
         if _crisis_q:
             _bucket_fallback = "mental_health"
-        if _hv or _bucket_fallback:
+        # Sprint-25 Fix-J / Sprint-26 architect-fix: STRENGTH_SUMMARY contract
+        # demands 1–2 short lines (≤60 words). Appending the doctor-cite or
+        # bucket-fallback boilerplate would blow that budget. We skip the
+        # gentle health appender for STRENGTH_SUMMARY UNLESS the question is a
+        # crisis (suicide / self-harm) — crisis is non-negotiable and always
+        # gets the helpline + doctor cite regardless of supertype.
+        if _skip_post_injects and not _crisis_q:
+            _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_SKIP",
+                   {"reason": "supertype=STRENGTH_SUMMARY (1–2 line contract)"})
+        elif _hv or _bucket_fallback:
             import re as _re_health
             _doctor_rx = _re_health.compile(
                 r"\b(doctor|physician|specialist|gynec|gynae|cardiolog|"

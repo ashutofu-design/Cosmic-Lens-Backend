@@ -787,3 +787,108 @@ behaviour on factual lies is unchanged.
 - Narrative-mode adversarial test suite (current 10 tests cover format +
   helpers; need cross-topic live regressions).
 
+
+## Phase 4.6 — Combo Synthesis Hardening (Apr 28 2026)
+
+### Trigger
+Live screenshot of user 21's love question ("mera abhi jo dasha chal raha
+he kya mera love ho sakta he abhi kisi ke sath"): user said the answer was
+"ek dam bekar" — too long, enumerated planets one by one ("Jupiter MD chal
+raha hai, Jupiter weak hai. Rahu AD chal raha hai…"), drifted to KP
+paddhati / 7th cusp / sub-lord Sun / Upapada / marriage delay vocabulary.
+ChatGPT comparison shipped a clean 3-sentence FUSED combo verdict
+("Tumhari current Jupiter–Rahu–Mars phase me attraction… lekin Rahu
+confusion + Mars impulsiveness… love ho sakta hai par patience ke bina
+tikega nehi") — that became the target shape.
+
+### Three structural causes (Phase 4.5 only fixed one of them, for wealth)
+1. Per-topic verdict-block injectors for love / career / marriage / health
+   were still firing the heavy "🔒 NARRATOR OVERRIDE" header that demanded
+   "use the engine's verdict text as the spine" — forced enumeration.
+   Wealth had a `_NARRATIVE_MODE` bypass already (Phase 4.5); other four
+   didn't.
+2. `_NARRATIVE_NARRATOR_BODY` asked for combo synthesis but didn't ban
+   enumeration / preamble openers / KP-method namedrops / topic-pivot.
+3. Rule N (line ~2926) MANDATED a "KP paddhati se bhi {N}th cusp ka
+   sub-lord {planet}…" citation for H1/H2/H5/H7/H10/H11 questions —
+   louder than the brevity ask, model obeyed it.
+
+### Changes (artifacts/api-server/openai_helper.py)
+1. **`_NARRATIVE_NARRATOR_BODY` hardened** with a "PHASE 4.6 — COMBO-
+   FUSION DISCIPLINE" section: BAD-vs-GOOD examples (using the user's
+   ChatGPT pattern verbatim — "Jupiter–Rahu–Mars phase mein attraction
+   aur connection… Rahu confusion aur Mars impulsiveness… clarity aur
+   patience"), TOPIC FIDELITY rules per topic, banned preamble openers
+   ("Seedhi baat —", "Dekho —", "Sun lo", "Bhai —", "Ek baat batata"),
+   banned method namedrops (KP paddhati / Cuspal sub-lord / D9 navamsa /
+   Upapada Lagna / Darakaraka / Vimshottari / Jaimini), banned house-
+   numerology dump unless the user explicitly named a house.
+
+2. **Narrative-mode bypass** added for love / career / marriage / health
+   verdict-block injectors (T002-T005) — mirrors the Phase 4.5 wealth
+   pattern. Each one becomes:
+   ```
+   if X_verdict_block and _NARRATIVE_MODE:
+       msgs.append({"role":"system","content":
+         "X FACTS (engine-locked ground truth — narrate as a fused …
+          • TOPIC FIDELITY — this is a {LOVE|CAREER|MARRIAGE|HEALTH}
+            question. Do NOT pivot to {…}.
+          • Do NOT surface 'KP paddhati / cuspal sub-lord / D9 7L /
+            Upapada / D6 / D8 / D10' as user-facing text.
+          • {topic-specific brand-safety preserved}
+          + X_verdict_block"})
+   elif X_verdict_block:
+       # Legacy heavy NARRATOR OVERRIDE retained for NARRATIVE_MODE=0
+   ```
+   Health branch additionally preserves the crisis-safety cite for
+   `mental_health` / `surgery_timing` / `addiction` / `longevity_general`
+   buckets (the `_CRISIS_MARKER_RX` post-strip was already in place).
+
+3. **Rule N narrative-mode gate** (line ~2961, just before the system
+   message is sealed): when `_NARRATIVE_MODE` is on AND the system
+   prompt contains the "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation)"
+   block, swap it for the ADVISORY variant — "cite KP in user-facing
+   text ONLY when KP and Vedic verdicts DISAGREE on direction; otherwise
+   omit". Surgical `system.replace(MANDATORY, ADVISORY)` so the rest of
+   the giant prompt builder is untouched. Stream + sync paths share
+   `_build_messages`, so parity is automatic.
+
+### Verification
+- **`test_phase46_combo_narrative.py`** (NEW): 23/23 PASS. Covers
+  body discipline (BAD/GOOD examples present, banned openers listed,
+  banned method namedrops listed, topic-fidelity headers, ChatGPT
+  pattern example present), per-topic narrative-mode bypass for love /
+  career / marriage / health (each has the slim "FACTS" header and
+  retains the legacy heavy override branch for NARRATIVE_MODE=0
+  reversibility), wealth-bypass regression check (Phase 4.5 still
+  intact), Rule N gate (block present, ADVISORY text exists, fires
+  ONLY in narrative mode), health crisis-safety preserved (mental
+  health helpline cite, surgery safety, addiction dignity, longevity
+  safety all intact).
+- **`test_phase45_narrative.py`**: 24/24 PASS (no regression on Phase
+  4.5 baseline).
+- **Live regression** (`/api/ask`, user 21 / kundli 8, user's verbatim
+  question): answer is the fused combo verdict shape — Sentence 1
+  fuses Rahu + Mars + Venus + Jupiter into one combined effect
+  ("Rahu–Rahu phase mein tumhari attraction aur connection ke chances
+  hain, par Rahu ki weakness aur Mars ki impulsiveness clarity mein
+  rukawat la rahi hai"); zero KP / cusp / sub-lord / paddhati /
+  Upapada / D9 mentions; zero preamble openers; zero house-numerology
+  dump; topic stays on LOVE (no marriage drift). All 6 narrative
+  guard checks PASS.
+
+### What is preserved
+Setting `NARRATIVE_MODE=0` reverts every change — all four verdict-
+block injectors keep their legacy "🔒 NARRATOR OVERRIDE" branch (`elif
+X_verdict_block:`), Rule N stays MANDATORY (the gate only fires when
+`_NARRATIVE_MODE` is on), and the body bans are inside the narrative-
+only body builder. Phase 4.4 fact-validators (POST_LOGIC + lookup
+engine) still enforce factual correctness.
+
+### Out of scope / future work
+- Marriage-specific narrative shape (currently uses the same combo-fusion
+  rules as love; marriage answers may benefit from explicit shaadi-yoga
+  framing when the user does ask about marriage).
+- Stream-path live regression (sync verified end-to-end; stream goes
+  through the same `_build_messages` so the contract is identical, but
+  no separate stream live-regression script yet).

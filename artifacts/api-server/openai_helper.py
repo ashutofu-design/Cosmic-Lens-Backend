@@ -2955,6 +2955,39 @@ def _build_messages(
         "Now respond as the Cosmic Engine — natural, expert, MAXIMALLY CONCISE. Phone-friendly. Every sentence must earn its place. NO guru tone."
     )
 
+    # ── Phase 4.6 — RULE N (KP MANDATORY citation) NARRATIVE-MODE GATE ───────
+    # Rule N forces "you MUST include one natural KP citation sentence" for
+    # H1/H2/H5/H7/H10/H11 questions. In narrative mode this competes with
+    # (and beats) the 3-5-sentence combo-fusion ask, surfacing the technical
+    # "KP paddhati se bhi {N}th cusp ka sub-lord {planet}…" line that the
+    # user explicitly flagged as making the answer "ek dam bekar". When
+    # NARRATIVE_MODE is on, downgrade Rule N from MANDATORY to ADVISORY:
+    # cite KP ONLY when it CONTRADICTS the Vedic verdict. Otherwise the
+    # combo-narrative speaks for itself.
+    if _NARRATIVE_MODE and "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation)" in system:
+        _rule_n_mandatory_lead = (
+            "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation): When the KP "
+            "CROSS-CHECK block is present AND the user's question maps to a "
+            "covered house (H1 vitality, H2 money, H5 children/speculation, "
+            "H7 marriage/partner, H10 career/job, H11 gains/income), you "
+            "MUST include one natural KP citation sentence in the answer. "
+            "This is NOT optional — failing to cite is the same kind of "
+            "error as inventing facts."
+        )
+        _rule_n_advisory_lead = (
+            "🛡️ KP CROSS-CHECK (Rule N — NARRATIVE-MODE: ADVISORY only): "
+            "The KP CROSS-CHECK block is BACKGROUND data the engine uses to "
+            "compute the verdict. In narrative mode the user-facing answer "
+            "is a 3-5 sentence FUSED combo verdict, NOT a method comparison. "
+            "Cite KP in user-facing text ONLY when KP and Vedic verdicts "
+            "DISAGREE on direction (CONFIRMS vs DENIES) — then ONE short "
+            "clause is OK to flag the conflict ('Vedic side strong hai par "
+            "KP delay dikha raha hai'). Otherwise OMIT the KP citation; "
+            "translate the cosmic combination into human meaning instead."
+        )
+        if _rule_n_mandatory_lead in system:
+            system = system.replace(_rule_n_mandatory_lead, _rule_n_advisory_lead)
+
     # Build full conversation: system → prior turns → current user turn.
     msgs: list[dict] = [{"role": "system", "content": system}]
     if isinstance(history, list):
@@ -2974,7 +3007,36 @@ def _build_messages(
     # Placed RIGHT BEFORE the user turn so it is the freshest instruction the
     # model sees. This is the strongest lever to stop the AI from inventing
     # a year-range different from what marriage_engine computed.
-    if marriage_verdict_block:
+    if marriage_verdict_block and _NARRATIVE_MODE:
+        # Phase 4.6 — narrative-mode marriage override. Mirror of wealth
+        # Phase 4.5 pattern: keep engine facts as background ground truth
+        # so dates/lords/score don't get invented, but DROP the
+        # "narrate verbatim / verdict text as the spine / Upapada cite"
+        # rules that produced the heavy report shape.
+        msgs.append({
+            "role": "system",
+            "content": (
+                "MARRIAGE FACTS (engine-locked ground truth — narrate as a "
+                "fused combo verdict, do NOT enumerate):\n"
+                "  • Use the window dates, dasha lord names, house numbers, "
+                "and verdict direction (PROMISED / DENIED / DELAYED) EXACTLY "
+                "as printed below — no rounding, no swapping, no day-precision "
+                "invention.\n"
+                "  • Do NOT contradict the engine's marriage_promised / "
+                "marriage_denied flag — frame the narrative consistent with it.\n"
+                "  • Do NOT echo printed score / bullets / 'Verdict:' / 'Reason:' "
+                "/ 'Timing:' headers verbatim — your output shape is set by "
+                "the QUESTION TYPE: NARRATIVE_ANSWER contract above.\n"
+                "  • Do NOT surface 'Upapada Lagna {SIGN}', 'D9 navamsa 7L "
+                "{planet}', 'KP cuspal sub-lord on H7' as user-facing text. "
+                "These are background facts the engine uses to compute the "
+                "verdict — translate them into the human meaning instead.\n"
+                "  • Speak as Cosmic Intelligence — never AI / LLM / GPT / "
+                "model.\n\n"
+                + marriage_verdict_block
+            ),
+        })
+    elif marriage_verdict_block:
         msgs.append({
             "role": "system",
             "content": (
@@ -3327,7 +3389,54 @@ def _build_messages(
     # authoritative. Mirror of stock override + extra brand-safety guards for
     # affair / breakup / one_sided buckets surfaced by love_engine in the
     # `brand_safety_warnings` array of the JSON envelope.
-    if love_verdict_block:
+    if love_verdict_block and _NARRATIVE_MODE:
+        # Phase 4.6 — narrative-mode love override. Mirror of wealth Phase 4.5
+        # pattern: keep engine facts as background ground truth so dates/lords/
+        # bucket don't get invented, but DROP the "narrate verbatim / verdict
+        # text as the spine / KP cuspal cross-check / D9 7L / Upapada surface
+        # citation" rules that produced the heavy report shape (the user
+        # screenshot showed: "KP paddhati se bhi 7th ghar ka sub-lord Sun..."
+        # which was exactly this heavy override forcing technical jargon).
+        msgs.append({
+            "role": "system",
+            "content": (
+                "LOVE FACTS (engine-locked ground truth — narrate as a fused "
+                "combo verdict, do NOT enumerate, do NOT pivot to marriage):\n"
+                "  • Use the verdict bucket (green / yellow_wait / slow_burn / "
+                "red_avoid), the timing window dates, dasha lord names, and "
+                "Venus/5L/7L positions EXACTLY as printed below — no rounding, "
+                "no swapping, no day-precision invention.\n"
+                "  • Do NOT contradict the verdict bucket — frame the answer "
+                "consistent with it (e.g. yellow_wait → 'love ho sakta hai par "
+                "patience aur clarity ke bina tikega nehi').\n"
+                "  • Do NOT echo printed score / 'Verdict:' / 'Reason:' / "
+                "'Timing:' headers verbatim — your output shape is set by the "
+                "QUESTION TYPE: NARRATIVE_ANSWER contract above.\n"
+                "  • Do NOT surface 'KP paddhati', 'cuspal sub-lord', "
+                "'KP cross-check', 'D9 navamsa 7L', 'Upapada Lagna', "
+                "'Darakaraka', 'Vimshottari', or 'Jaimini' as user-facing text. "
+                "These are background facts the engine uses to compute the "
+                "verdict — translate them into the human meaning instead.\n"
+                "  • TOPIC FIDELITY — this is a LOVE question (attraction / "
+                "connection / stability of CURRENT or near-term relations). "
+                "Do NOT pivot to MARRIAGE analysis (shaadi promise, marriage "
+                "delay, marriage denial) unless the user explicitly used "
+                "marriage / shaadi / vivah vocabulary.\n"
+                "  • Brand-safety guards (still active for affair / breakup / "
+                "one_sided buckets):\n"
+                "      - affair_third_party → NEVER accuse partner; describe "
+                "cosmic patterns only.\n"
+                "      - breakup_signal → soften; pair separation with healing "
+                "window; never say 'definite breakup hoga'.\n"
+                "      - one_sided → preserve self-worth; frame as 'mutual "
+                "cosmic resonance abhi weak hai', never 'wo tumhe pasand "
+                "nahi karta'.\n"
+                "  • Speak as Cosmic Intelligence — never AI / LLM / GPT / "
+                "model.\n\n"
+                + love_verdict_block
+            ),
+        })
+    elif love_verdict_block:
         msgs.append({
             "role": "system",
             "content": (
@@ -3392,7 +3501,52 @@ def _build_messages(
     # govt-job (no fake selection-date promise), business-start (no random
     # capital-loss prediction), resignation (soften — never tell user to
     # quit definitively), and partnership (always recommend written agreement).
-    if career_verdict_block:
+    if career_verdict_block and _NARRATIVE_MODE:
+        # Phase 4.6 — narrative-mode career override. Mirror of wealth/love
+        # pattern: keep engine facts as background ground truth, drop the
+        # heavy "narrate verbatim / D10 dasamsha / Sade Sati / KP cusp"
+        # surface citations.
+        msgs.append({
+            "role": "system",
+            "content": (
+                "CAREER FACTS (engine-locked ground truth — narrate as a fused "
+                "combo verdict, do NOT enumerate, do NOT pivot to other "
+                "topics):\n"
+                "  • Use the verdict bucket (govt_job / promotion / resignation "
+                "/ business_start / partnership / transfer / career_setback / "
+                "general_career), the verdict status (green_go / yellow_wait / "
+                "slow_burn / red_avoid), the timing window dates, and dasha/"
+                "10L/Amatya-Karaka names EXACTLY as printed below — no "
+                "rounding, no swapping, no day-precision invention.\n"
+                "  • Do NOT contradict the verdict bucket / status — frame "
+                "the answer consistent with it.\n"
+                "  • Do NOT echo printed score / 'Verdict:' / 'Reason:' / "
+                "'Timing:' headers verbatim — your output shape is set by the "
+                "QUESTION TYPE: NARRATIVE_ANSWER contract above.\n"
+                "  • Do NOT surface 'D10 dasamsha', 'Sade Sati phase on 10L', "
+                "'KP cuspal sub-lord on H10', 'Amatya Karaka {planet}', "
+                "'Mahapurusha yoga', or 'Vimshottari' as user-facing text. "
+                "Translate them into human meaning instead.\n"
+                "  • TOPIC FIDELITY — this is a CAREER question (job / "
+                "promotion / switch / boss / business). Do NOT pivot to "
+                "marriage, finance, or relationship.\n"
+                "  • Brand-safety guards (still active for sensitive buckets):\n"
+                "      - govt_job → frame as 'window favourable hai, mehnat "
+                "test hogi'; never promise selection on a specific date.\n"
+                "      - business_start → never predict 'capital loss' or "
+                "'business band' as definite; recommend small-scale pilot "
+                "when score < 25.\n"
+                "      - resignation → never tell user to quit definitively; "
+                "always pair green with 'written next-offer hath mein hone "
+                "ke baad'.\n"
+                "      - partnership → always recommend WRITTEN agreement.\n"
+                "      - career_setback → preserve self-worth.\n"
+                "  • Speak as Cosmic Intelligence — never AI / LLM / GPT / "
+                "model.\n\n"
+                + career_verdict_block
+            ),
+        })
+    elif career_verdict_block:
         msgs.append({
             "role": "system",
             "content": (
@@ -3633,7 +3787,55 @@ def _build_messages(
     # addiction, ALWAYS recommend doctor consultation, surface mental-health
     # helplines on mental_health bucket, gender-sensitive reproductive
     # guidance.
-    if health_verdict_block:
+    if health_verdict_block and _NARRATIVE_MODE:
+        # Phase 4.6 — narrative-mode health override. Mirror of wealth/love/
+        # career pattern: keep engine facts as background, drop the heavy
+        # "narrate verbatim / D6/D8 dasamsha / KP cusp on H6" surface
+        # citations. CRISIS-SAFETY (mental-health helpline + qualified-doctor
+        # cite for serious buckets) IS PRESERVED — it flows through
+        # _CRISIS_MARKER_RX which already protects helpline/suicide/self-
+        # harm/Hinglish-crisis tokens from the disclaimer-strip pass.
+        msgs.append({
+            "role": "system",
+            "content": (
+                "HEALTH FACTS (engine-locked ground truth — narrate as a fused "
+                "combo verdict, do NOT enumerate, do NOT pivot to other "
+                "topics):\n"
+                "  • Use the verdict bucket (chronic_illness / acute_illness "
+                "/ mental_health / surgery_timing / recovery_timing / "
+                "longevity_general / injury_accident / addiction / "
+                "female_reproductive / male_reproductive / parent_health / "
+                "general_wellness), the verdict status (green_go / yellow_wait "
+                "/ slow_burn / red_avoid), the timing window dates, and "
+                "dasha/6L/8L/karaka names EXACTLY as printed below — no "
+                "rounding, no swapping, no day-precision invention.\n"
+                "  • Do NOT contradict the verdict bucket / status — frame "
+                "the answer consistent with it.\n"
+                "  • Do NOT echo printed score / 'Verdict:' / 'Reason:' / "
+                "'Timing:' headers verbatim — your output shape is set by the "
+                "QUESTION TYPE: NARRATIVE_ANSWER contract above.\n"
+                "  • Do NOT surface 'D6 shashthamsha', 'D8 ashtamsha', "
+                "'KP cuspal sub-lord on H6/H8', 'Maraka grah {planet}' as "
+                "user-facing text. Translate them into human meaning.\n"
+                "  • TOPIC FIDELITY — this is a HEALTH question (body / "
+                "wellness / illness / surgery / mental health). Do NOT "
+                "pivot to career, finance, or relationship.\n"
+                "  • CRISIS-SAFETY (mandatory, never strip):\n"
+                "      - mental_health bucket → MUST include qualified-"
+                "doctor / mental-health-helpline cite verbatim. The crisis-"
+                "marker guard preserves these from any post-processing.\n"
+                "      - surgery_timing → never tell user to skip surgery; "
+                "frame as 'window favourable hai par MD se confirm karein'.\n"
+                "      - addiction → preserve self-worth; never blame chart "
+                "for addiction; recommend professional support.\n"
+                "      - longevity_general → never predict death / specific "
+                "year-of-death.\n"
+                "  • Speak as Cosmic Intelligence — never AI / LLM / GPT / "
+                "model.\n\n"
+                + health_verdict_block
+            ),
+        })
+    elif health_verdict_block:
         msgs.append({
             "role": "system",
             "content": (
@@ -6105,6 +6307,57 @@ _NARRATIVE_NARRATOR_BODY: str = (
     "  • Voice: direct, conversational, 'tum/aap' — no hedging, no\n"
     "    motivational fluff, no 'depends on you'.\n"
     "\n"
+    "PHASE 4.6 — COMBO-FUSION DISCIPLINE (the BIG difference between\n"
+    "narrative and report):\n"
+    "  • SENTENCE 1 must FUSE the active planets into ONE combined verdict.\n"
+    "    DO NOT enumerate planet-by-planet — that is a report, not a\n"
+    "    narrative.\n"
+    "    BAD (enumeration / report):\n"
+    "      'Jupiter MD chal raha hai, Jupiter weak hai. Rahu AD chal\n"
+    "       raha hai, Rahu bhi weak hai. Mars PD chal raha hai, Mars\n"
+    "       energy de raha hai.'\n"
+    "    GOOD (fused combo verdict):\n"
+    "      'Tumhari current Jupiter–Rahu–Mars phase mein attraction aur\n"
+    "       connection ke chances definitely hain, lekin Rahu confusion\n"
+    "       aur Mars impulsiveness ki wajah se relationship stable\n"
+    "       rehna mushkil ho sakta hai — love ho sakta hai, par clarity\n"
+    "       aur patience ke bina tikega nehi.'\n"
+    "    Notice: planets are joined with em-dash or '+' or 'aur'; their\n"
+    "    natures are blended into ONE combined effect; the verdict is\n"
+    "    direct and decisive.\n"
+    "  • TOPIC FIDELITY — answer the user's ACTUAL question. Do NOT\n"
+    "    pivot:\n"
+    "      LOVE  question → talk attraction / connection / stability /\n"
+    "                       clarity of CURRENT or near-term relations.\n"
+    "                       NEVER drift to marriage promise / denial /\n"
+    "                       delay / Upapada / shaadi yoga unless the\n"
+    "                       user explicitly asked about marriage.\n"
+    "      CAREER question → talk job / promotion / switch / boss-clash.\n"
+    "                       NEVER drift to marriage or finance.\n"
+    "      WEALTH question → talk income / savings / property / debt.\n"
+    "                       NEVER drift to relationship.\n"
+    "      MARRIAGE question → talk shaadi promise / timing / partner.\n"
+    "                       NEVER pivot to general love-compatibility.\n"
+    "  • NO PREAMBLE. Sentence 1 = the verdict + the active planets.\n"
+    "    Banned openers: 'Seedhi baat —', 'Dekho —', 'Ek baat batata hu',\n"
+    "    'Sun lo —', 'Bhai —'.\n"
+    "  • NO METHOD-NAME-DROP in user-facing text. These are background\n"
+    "    facts the engine uses; the user does NOT need to read them:\n"
+    "      ✗ 'KP paddhati se bhi 7th cusp ka sub-lord …'\n"
+    "      ✗ 'Cuspal sub-lord Sun marriage delay dikhata hai'\n"
+    "      ✗ 'D9 navamsa mein 7L Mercury debilitated jaata hai'\n"
+    "      ✗ 'Vimshottari + KP cross-check confirm karta hai'\n"
+    "      ✗ 'Upapada Lagna Cancer mein hai'\n"
+    "      ✗ 'Darakaraka Venus signature dikhata hai'\n"
+    "      ✗ 'Jaimini paddhati se …'\n"
+    "    EXCEPTION: cite KP / D9 / Upapada ONLY if the engine's KP and\n"
+    "    Vedic verdicts DISAGREE on direction — then ONE short clause is\n"
+    "    OK to flag the conflict. Otherwise omit.\n"
+    "  • NO HOUSE-NUMEROLOGY DUMP unless the user explicitly named a\n"
+    "    house. Do not write '7th ghar / 5th house / 11H aspect' as a\n"
+    "    surface explanation; translate it to the human meaning instead\n"
+    "    ('partnership area', 'romance area', 'gains area').\n"
+    "\n"
     "MUST NOT (these will be auto-stripped — don't write them at all):\n"
     "  • NO score badges (🟡 WAIT 57/100 / 🟢 GO / 🔴 CAUTION).\n"
     "  • NO 'Verdict:' / 'Reason:' / 'Timing:' / 'Recovery:' headers.\n"
@@ -6118,7 +6371,8 @@ _NARRATIVE_NARRATOR_BODY: str = (
     "\n"
     "CORE RULE (yaad rakhna):\n"
     "  Active planets ka COMBINATION hi final result deta hai —\n"
-    "  single planet kabhi decision nahi deta.\n"
+    "  single planet kabhi decision nahi deta. Aur narrative ka matlab\n"
+    "  hai FUSED verdict, list nahi.\n"
 )
 
 

@@ -5888,14 +5888,20 @@ def ask_stream_route():
                     ) + "\n\n"
                 elif kind == "final":
                     yield "data: " + json.dumps({
-                        "done":       True,
-                        "text":       evt.get("text", ""),
-                        "topic":      evt.get("topic", "general"),
-                        "confidence": evt.get("confidence", 0.0),
-                        "source":     evt.get("source", "openai_stream"),
-                        "follow_ups": evt.get("follow_ups", []),
-                        "quota":      quota_payload,
-                        "plan":       plan_payload,
+                        "done":                  True,
+                        "text":                  evt.get("text", ""),
+                        "topic":                 evt.get("topic", "general"),
+                        "confidence":            evt.get("confidence", 0.0),
+                        "source":                evt.get("source", "openai_stream"),
+                        "follow_ups":            evt.get("follow_ups", []),
+                        # Phase 4.4 — telemetry flag for stream-path POST_LOGIC
+                        # / supertype substitutions. Mobile already swaps to
+                        # final.text on `done`, so no client change is needed
+                        # to honor the substitution; this flag lets clients
+                        # log/observe when it happened.
+                        "replaced_by_validator": bool(evt.get("replaced_by_validator", False)),
+                        "quota":                 quota_payload,
+                        "plan":                  plan_payload,
                     }, ensure_ascii=False) + "\n\n"
         except Exception as exc:
             print(f"[ask/stream] mid-stream error: {exc}")

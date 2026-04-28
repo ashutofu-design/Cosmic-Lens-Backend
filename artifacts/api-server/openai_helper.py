@@ -10608,6 +10608,165 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     if not final_text:
         raise RuntimeError("OpenAI returned empty after scrub")
 
+    # ── Phase 4.4 — STREAM-PATH POST_LOGIC + SUPERTYPE PARITY ─────────────
+    # Mirrors the sync ai_ask validator chain (~lines 8240-8370). Streaming
+    # cannot abort tokens mid-flight, but mobile clients already swap the
+    # accumulated stream text with `final.text` on `done`, so a refusal /
+    # retry substitution here is automatically reflected in the UI.
+    # `replaced_by_validator` is added to the final SSE event for telemetry
+    # so the client can log the substitution (no UI change required).
+    replaced_by_validator = False
+
+    def _stream_retry_call(extra_messages: list) -> str:
+        """Non-streaming retry. The user has already seen the first attempt
+        as streamed deltas; the corrective retry runs invisibly and the
+        result lands in the `final` event (mobile swaps automatically)."""
+        retry_msgs = list(messages) + list(extra_messages)
+        resp = client.chat.completions.create(
+            model             = model,
+            messages          = retry_msgs,
+            temperature       = 0.3,
+            top_p             = 1,
+            max_tokens        = _token_budget_for(topic, question),
+            presence_penalty  = 0.2,
+            frequency_penalty = 0.2,
+            stream            = False,
+        )
+        return ((resp.choices[0].message.content or "").strip()
+                if resp.choices else "")
+
+    # ── Supertype contract validator ─────────────────────────────────────
+    try:
+        _supertype_validator_enabled = (
+            os.environ.get("SUPERTYPE_VALIDATOR", "1") != "0"
+        )
+        # Stream path doesn't compute question_supertype upfront — derive
+        # it from the shared _qu now (cheap; same source as sync path).
+        # NOTE: supertype_for(intent: str) -> str. Sync path wraps it in a
+        # dict ({"supertype": ..., "confidence": ...}) before passing
+        # downstream — mirror that shape exactly.
+        _question_supertype = {
+            "supertype":  supertype_for(_qu_intent),
+            "confidence": float(_qu.get("confidence") or 0.0),
+            "source":     _qu.get("source") or "ai",
+            "source_intent": _qu_intent,
+        }
+        if (_supertype_validator_enabled
+                and isinstance(_question_supertype, dict)):
+            _sup_tag = _question_supertype.get("supertype") or "GENERAL_ANALYSIS"
+            _violations = _validate_supertype_contract(
+                final_text, _sup_tag, kundli=kundli
+            )
+            if _violations:
+                _trace(req_id, "4z.SUPERTYPE_CONTRACT_VIOLATION(stream)", {
+                    "supertype":             _sup_tag,
+                    "violation_count":       len(_violations),
+                    "violations":            _violations,
+                    "first_attempt_preview": final_text[:240],
+                })
+                try:
+                    _retry_text = _stream_retry_call([{
+                        "role":    "system",
+                        "content": _retry_feedback_for(_sup_tag, _violations),
+                    }])
+                    _retry_violations = _validate_supertype_contract(
+                        _retry_text, _sup_tag, kundli=kundli
+                    )
+                    _trace(req_id, "4z.SUPERTYPE_CONTRACT_RETRY(stream)", {
+                        "supertype":        _sup_tag,
+                        "retry_violations": _retry_violations,
+                        "retry_clean":      not _retry_violations,
+                        "retry_preview":    _retry_text[:240],
+                    })
+                    # Same accept-if-better-than-first heuristic as sync path.
+                    if len(_retry_violations) < len(_violations):
+                        final_text = _scrub_brand_tone(_retry_text)
+                        replaced_by_validator = True
+                        _trace(req_id, "4z.SUPERTYPE_CONTRACT_ACCEPTED(stream)",
+                               {"reason": "retry was closer to contract"})
+                    else:
+                        _trace(req_id, "4z.SUPERTYPE_CONTRACT_KEPT_FIRST(stream)",
+                               {"reason": "retry not better than first"})
+                except Exception as _retry_exc:
+                    _trace(req_id, "4z.SUPERTYPE_CONTRACT_RETRY_FAIL(stream)",
+                           {"error": str(_retry_exc)[:200]})
+            else:
+                _trace(req_id, "4z.SUPERTYPE_CONTRACT_CLEAN(stream)",
+                       {"supertype": _sup_tag})
+    except Exception as _val_exc:
+        _trace(req_id, "4z.SUPERTYPE_CONTRACT_VALIDATOR_ERR(stream)",
+               {"error": str(_val_exc)[:200]})
+
+    # ── POST_LOGIC_CHECK (truth validator) ───────────────────────────────
+    # Strict-terminal: ANY non-zero residual violation after one retry → 
+    # hard refusal. Mirrors sync path Architect-required Phase-3 v2 contract.
+    try:
+        _post_logic_enabled = (
+            os.environ.get("POST_LOGIC_CHECK", "1") != "0"
+        )
+        if _post_logic_enabled and isinstance(kundli, dict):
+            _truth = _build_truth_facts(kundli)
+            _truth_violations = _post_logic_check(final_text, _truth)
+            if _truth_violations:
+                _trace(req_id, "2v.POST_LOGIC_CHECK_VIOLATION(stream)", {
+                    "violation_count": len(_truth_violations),
+                    "violations":      _truth_violations,
+                    "truth_md":        (_truth.get("current_md") or {}).get("planet"),
+                })
+                try:
+                    _pl_retry_text = _stream_retry_call([{
+                        "role":    "system",
+                        "content": _post_logic_correction_msg(
+                            _truth_violations, _truth),
+                    }])
+                    _pl_retry_violations = _post_logic_check(
+                        _pl_retry_text, _truth
+                    )
+                    _trace(req_id, "2v.POST_LOGIC_CHECK_RETRY(stream)", {
+                        "retry_violations": _pl_retry_violations,
+                        "retry_clean":      not _pl_retry_violations,
+                        "retry_preview":    _pl_retry_text[:240],
+                    })
+                    if not _pl_retry_violations:
+                        final_text = _scrub_brand_tone(_pl_retry_text)
+                        replaced_by_validator = True
+                        _trace(req_id, "2v.POST_LOGIC_CHECK_ACCEPTED(stream)",
+                               {"reason":              "retry clean — facts corrected",
+                                "correction_applied": True})
+                    else:
+                        # Strict-terminal refusal.
+                        final_text = _POST_LOGIC_REFUSAL_TEXT
+                        replaced_by_validator = True
+                        _trace(req_id, "2v.POST_LOGIC_CHECK_REFUSAL(stream)", {
+                            "reason":                 "retry left residual violations",
+                            "residual_violation_count": len(_pl_retry_violations),
+                            "first_violations":       _truth_violations,
+                            "retry_violations":       _pl_retry_violations,
+                            "reduced_count":          len(_truth_violations)
+                                                      - len(_pl_retry_violations),
+                            "served_text":            "_POST_LOGIC_REFUSAL_TEXT",
+                        })
+                except Exception as _pl_retry_exc:
+                    # Retry-error MUST also refuse — never serve first
+                    # violating text (architect-required parity).
+                    final_text = _POST_LOGIC_REFUSAL_TEXT
+                    replaced_by_validator = True
+                    _trace(req_id, "2v.POST_LOGIC_CHECK_RETRY_ERR(stream)", {
+                        "error":            str(_pl_retry_exc)[:200],
+                        "first_violations": _truth_violations,
+                        "served_text":      "_POST_LOGIC_REFUSAL_TEXT",
+                        "reason":           "retry call errored — refusing rather "
+                                            "than serving first violating text",
+                    })
+            else:
+                _trace(req_id, "2v.POST_LOGIC_CHECK_CLEAN(stream)", {
+                    "truth_md": (_truth.get("current_md") or {}).get("planet"),
+                    "truth_ad": (_truth.get("current_ad") or {}).get("planet"),
+                })
+    except Exception as _pl_exc:
+        _trace(req_id, "2v.POST_LOGIC_CHECK_ERR(stream)",
+               {"error": str(_pl_exc)[:200]})
+
     has_dasha  = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
     has_coords = isinstance(birth, dict) and birth.get("lat") is not None and birth.get("lon") is not None
     if has_planets and has_dasha and has_coords:
@@ -10655,12 +10814,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "mode does NOT inherit from this turn",
     })
     yield {
-        "kind":       "final",
-        "text":       final_text,
-        "topic":      topic,
-        "confidence": confidence,
-        "source":     "openai_stream",
-        "follow_ups": follow_ups,
+        "kind":                  "final",
+        "text":                  final_text,
+        "topic":                 topic,
+        "confidence":            confidence,
+        "source":                "openai_stream",
+        "follow_ups":            follow_ups,
+        # Phase 4.4 — true when POST_LOGIC / supertype validator overrode the
+        # streamed text (retry accepted OR refusal substituted). Mobile
+        # already swaps streamed deltas with final.text on `done`, so this
+        # flag is purely telemetry — clients can log substitutions but no
+        # rendering change is required.
+        "replaced_by_validator": replaced_by_validator,
     }
 
 

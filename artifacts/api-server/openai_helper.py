@@ -8788,6 +8788,107 @@ def _compute_cross_domain_facts(kundli: Any, topics: list[str]) -> dict:
     }
 
 
+# ── Phase 4.8 T019 — narrative-mode post-process truncator ────────────────
+# Public for unit-testing. Idempotent: short already-disciplined replies
+# (≤2 sentences, ≤280 chars, no dates/pratyantar) pass through unchanged.
+_PHASE48_TIMING_KEYWORDS = (
+    "kab", "when", "date", "timeline", "kitna time",
+    "kitne time", "kitne din", "kitne mahine", "kitne saal",
+    "samay", "samaya", "muhurat", "muhurta", "year",
+    "month", "din", "saal", "window", "tak", "ke baad",
+    "schedule", "deadline",
+)
+
+
+def _phase48_is_timing_question(question: str) -> bool:
+    """True if the user's question is asking about WHEN/timing — in
+    which case dates in the answer ARE the answer and must survive."""
+    if not isinstance(question, str):
+        return False
+    q = question.lower()
+    return any(k in q for k in _PHASE48_TIMING_KEYWORDS)
+
+
+def _phase48_narrative_truncate(text: str, question: str) -> str:
+    """Phase 4.8 T019 — strip date/pratyantar leaks (for non-timing
+    questions only) and cap the answer at 2 sentences / 280 chars.
+
+    Behaviour summary:
+      • Non-timing question: drop sentences mentioning pratyantar /
+        antardasha / sookshma / ISO dates; strip date fragments from
+        surviving sentences.
+      • Either way: keep first 2 sentences max, hard-cap at 280 chars
+        (slightly over the 200-char rule budget to allow Devanagari).
+      • Idempotent on already-short, date-free answers.
+    """
+    import re as _reN
+
+    if not isinstance(text, str) or not text.strip():
+        return text
+
+    is_timing = _phase48_is_timing_question(question)
+
+    # ── Step 2: TIMING FILTER (only if NOT a timing question) ──
+    if not is_timing:
+        date_rx = _reN.compile(
+            r"\(?\b\d{4}-\d{2}-\d{2}(?:\s+se\s+\d{4}-\d{2}-\d{2})?\)?"
+            r"|\b(?:January|February|March|April|May|June|July|"
+            r"August|September|October|November|December|"
+            r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)"
+            r"\s+\d{4}\b"
+            r"|\b\d{4}\s+(?:tak|se|ke\s+baad|mein|me|ko)\b"
+        )
+        pratyantar_sent_rx = _reN.compile(
+            r"(?i)\b("
+            r"pratyantar|antardasha|antar\s*dasha|antar-dasha|"
+            r"sookshma|sukshma|"
+            r"mahadasha\s+\w+\s+(?:aur|and)\s+\w+\s+antardasha|"
+            r"\d{4}-\d{2}-\d{2}"
+            r")\b"
+        )
+        raw_sents = [
+            s.strip() for s in
+            _reN.split(r"(?<=[.!?।])\s+", text)
+            if s.strip()
+        ]
+        kept = []
+        for s in raw_sents:
+            if pratyantar_sent_rx.search(s):
+                continue
+            stripped = date_rx.sub("", s).strip()
+            stripped = _reN.sub(r"\s{2,}", " ", stripped)
+            stripped = _reN.sub(r"\(\s*\)|\[\s*\]", "", stripped).strip()
+            if len(stripped.split()) >= 3:
+                kept.append(stripped)
+        if kept:
+            text = " ".join(kept)
+
+    # ── Step 3: HARD LENGTH CUT — first 2 sentences max ──
+    final_sents = [
+        s.strip() for s in
+        _reN.split(r"(?<=[.!?।])\s+", text)
+        if s.strip()
+    ]
+    if len(final_sents) > 2:
+        text = " ".join(final_sents[:2])
+        if text and text[-1] not in ".!?।":
+            text = text + "."
+
+    # ── Step 4: HARD CHAR CAP — 280 chars ──
+    if len(text) > 280:
+        cut = text[:280]
+        last_punct = max(
+            cut.rfind("."), cut.rfind("!"),
+            cut.rfind("?"), cut.rfind("।"),
+        )
+        if last_punct > 80:
+            text = cut[:last_punct + 1]
+        else:
+            text = cut.rstrip() + "…"
+
+    return text
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
            birth: Any = None, history: list | None = None,
            preferred_language: Optional[str] = None) -> dict:
@@ -11303,6 +11404,37 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         text = _new_text
         except Exception as _exc:
             print(f"[ai_ask] brevity post-trim failed: {_exc}")
+
+    # ── Phase 4.8 T019 — NARRATIVE-MODE POST-PROCESS TRUNCATOR ─────────────
+    # User-reported (Apr 28, 2026, post-T017+T018): even after dropping
+    # PRATYANTAR/DASHA WINDOW from the input AND replacing Rule 10 with
+    # a 1-2 sentence HARD CAP, the model still emitted 6-8 line answers
+    # with date ranges ("2026-06-22 tak"), pratyantar names ("Moon
+    # Pratyantar", "Mars Pratyantar"), and full dasha breakdowns —
+    # because the model has 28K tokens of training-bias toward
+    # "explain your reasoning". The only reliable fix is post-generation
+    # discipline: strip dates+sub-period jargon BEFORE the user sees it,
+    # then truncate to first 2 sentences.
+    #
+    # Four controls (per user spec):
+    #   1. Intent lock — only fires for narrative mode (decision queries)
+    #   2. Timing filter — IF question doesn't contain {kab/when/date/
+    #      timeline/kitna time/date kya/timing}, strip date patterns +
+    #      pratyantar/antardasha mentions from the answer.
+    #   3. Hard length cut — keep first 2 meaningful sentences max.
+    #   4. Format enforcer — preserve [VERDICT] → [reason] shape.
+    if _NARRATIVE_MODE and isinstance(text, str) and text.strip():
+        try:
+            _trimmed = _phase48_narrative_truncate(text, question or "")
+            if _trimmed != text:
+                _orig_lines = len([l for l in text.split("\n") if l.strip()])
+                _new_lines = len([l for l in _trimmed.split("\n") if l.strip()])
+                print(f"[ai_ask][phase48-trim] NARRATIVE_MODE truncate: "
+                      f"{len(text)}c/{_orig_lines}l → "
+                      f"{len(_trimmed)}c/{_new_lines}l")
+                text = _trimmed
+        except Exception as _exc:
+            print(f"[ai_ask] Phase 4.8 T019 narrative truncator failed: {_exc}")
 
     # ── GLOBAL PLACEHOLDER STRIP (unconditional final scrub) ────────────────
     # Sprint-26 brutal-test surfaced a real bug: the timing-validator

@@ -8057,6 +8057,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             # leaving an empty response — empty is worse than ugly).
             _pre_scrub_text = text
             _pre_scrub_word_count = len(text.split())
+            # DEBUG: dump full pre-scrub text so we can show user exactly
+            # what AI generated before any post-processing.
+            _trace(req_id, "4y.AI_RAW_PRE_SCRUB",
+                   {"text": text, "word_count": _pre_scrub_word_count})
 
             # (1) Strip [engine: ...] tokens if any.
             if _global_ph_rx.search(text):

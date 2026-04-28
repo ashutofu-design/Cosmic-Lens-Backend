@@ -6161,11 +6161,51 @@ _PL_CANON = ("sun","moon","mars","mercury","jupiter","venus","saturn",
 _PL_ALT = "|".join(list(_PL_CANON) + list(_PL_SYNONYMS.keys()))
 
 _TRUTH_MD_RX = __import__("re").compile(
-    rf"\b({_PL_ALT})\s+(?:maha[\s\-]?dasha|mahadasa|m\.?d\.?)\b",
+    rf"\b({_PL_ALT})\s+(?:(?:ki|ka|ke|'s)\s+)?"
+    r"(?:maha[\s\-]?dasha|mahadasa|m\.?d\.?)\b",
     __import__("re").IGNORECASE,
 )
 _TRUTH_AD_RX = __import__("re").compile(
-    rf"\b({_PL_ALT})\s+(?:antar[\s\-]?dasha|antardasa|bhukti|a\.?d\.?)\b",
+    rf"\b({_PL_ALT})\s+(?:(?:ki|ka|ke|'s)\s+)?"
+    r"(?:antar[\s\-]?dasha|antardasa|bhukti|a\.?d\.?)\b",
+    __import__("re").IGNORECASE,
+)
+# Phase 4.3 — inverted-syntax recall ("Mahadasha Saturn ki chal rahi" /
+# "Antardasha Rahu ka", "MD Saturn", "Bhukti Rahu"). The original
+# Phase 3 regexes only caught "<planet> <dasha-word>" form, so common
+# Hinglish phrasing slipped through. Architect Phase-4 backlog item.
+#
+# Architect Phase-4.3-review fix #2 (revised): split the trailing tail into
+# two precision tiers. Path A (direct strong verb) accepts hai/is/chal*
+# right after the planet. Path B (possessive ki/ka/'s) is weaker on its own
+# — phrases like "Mahadasha Jupiter ki details samjho" or "Mahadasha
+# Jupiter ki wajah se pressure hai" should NOT register as current-MD
+# claims. So Path B additionally requires a `chal*` motion verb within ~3
+# tokens (the genuine "X ki chal rahi hai" shape).
+#
+# - "Mahadasha Saturn ki chal rahi hai." → fires (Path B: ki + chal)
+# - "Antardasha Venus hai abhi."         → fires (Path A: direct hai)
+# - "Mahadasha Jupiter ki details samjho." → no fire (Path B: no chal)
+# - "Mahadasha Jupiter ki wajah se pressure hai." → no fire (no chal)
+# - "Mahadasha Saturn ke yog ban rahe."  → no fire (ke not in tail set)
+_TRUTH_MD_INVERTED_RX = __import__("re").compile(
+    rf"\b(?:maha[\s\-]?dasha|mahadasa|m\.?d\.?)\s+({_PL_ALT})\s+"
+    r"(?:"
+        # Path A: direct strong present-claim verb
+        r"(?:hai|is|chal\w*|chal\s*rah[aiy]?)"
+        r"|"
+        # Path B: possessive + (≤3 words filler) + motion verb (chal*)
+        r"(?:ki|ka|'s)\s+(?:\w+\s+){0,3}chal\w*"
+    r")\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_AD_INVERTED_RX = __import__("re").compile(
+    rf"\b(?:antar[\s\-]?dasha|antardasa|bhukti|a\.?d\.?)\s+({_PL_ALT})\s+"
+    r"(?:"
+        r"(?:hai|is|chal\w*|chal\s*rah[aiy]?)"
+        r"|"
+        r"(?:ki|ka|'s)\s+(?:\w+\s+){0,3}chal\w*"
+    r")\b",
     __import__("re").IGNORECASE,
 )
 _TRUTH_PLANET_HOUSE_RX = __import__("re").compile(
@@ -6289,6 +6329,126 @@ _TRUTH_MANGLIK_RX = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
+# ── Phase 4.3 — NAKSHATRA truth constants + regexes ──────────────────────────
+# 27 canonical nakshatras + common Hinglish / spelling variants. Engine emits
+# Title-Case canonical via kundli["nakshatra"] (Moon) and planets[].nakshatra
+# (per planet). All variants normalize back to the canonical form.
+_NAK_CANON: tuple[str, ...] = (
+    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira",
+    "Ardra", "Punarvasu", "Pushya", "Ashlesha", "Magha",
+    "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati",
+    "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha",
+    "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
+    "Purva Bhadrapada", "Uttara Bhadrapada", "Revati",
+)
+# Variant → canonical Title-Case name. Includes spelling variants and
+# space-stripped forms for the multi-word nakshatras.
+_NAK_VARIANTS_LC: dict[str, str] = {
+    # singletons
+    "ashwini": "Ashwini", "ashvini": "Ashwini", "asvini": "Ashwini",
+    "bharani": "Bharani",
+    "krittika": "Krittika", "krithika": "Krittika", "kritika": "Krittika",
+    "krttika": "Krittika",
+    "rohini": "Rohini",
+    "mrigashira": "Mrigashira", "mrigshira": "Mrigashira",
+    "mrigasira": "Mrigashira", "mrugashira": "Mrigashira",
+    "ardra": "Ardra", "aardra": "Ardra", "arudra": "Ardra",
+    "punarvasu": "Punarvasu", "punervasu": "Punarvasu",
+    "pushya": "Pushya", "pushyami": "Pushya",
+    "ashlesha": "Ashlesha", "aslesha": "Ashlesha", "ashleysha": "Ashlesha",
+    "magha": "Magha", "makha": "Magha",
+    "hasta": "Hasta", "hast": "Hasta",
+    "chitra": "Chitra", "chitta": "Chitra",
+    "swati": "Swati", "svati": "Swati", "swathi": "Swati",
+    "vishakha": "Vishakha", "vishaka": "Vishakha", "visakha": "Vishakha",
+    "anuradha": "Anuradha", "anushada": "Anuradha",
+    "jyeshtha": "Jyeshtha", "jyeshta": "Jyeshtha", "jyeshtah": "Jyeshtha",
+    "jyestha": "Jyeshtha",
+    "mula": "Mula", "moola": "Mula", "mool": "Mula",
+    "shravana": "Shravana", "sravana": "Shravana", "shravan": "Shravana",
+    "dhanishta": "Dhanishta", "dhanishtha": "Dhanishta",
+    "dhanista": "Dhanishta",
+    "shatabhisha": "Shatabhisha", "satabhisha": "Shatabhisha",
+    "shatabhishak": "Shatabhisha", "shatataraka": "Shatabhisha",
+    "revati": "Revati",
+    # multi-word — spaceless and hyphenated variants
+    "purvaphalguni": "Purva Phalguni", "purva phalguni": "Purva Phalguni",
+    "purva-phalguni": "Purva Phalguni", "poorvaphalguni": "Purva Phalguni",
+    "uttaraphalguni": "Uttara Phalguni", "uttara phalguni": "Uttara Phalguni",
+    "uttara-phalguni": "Uttara Phalguni",
+    "purvaashadha": "Purva Ashadha", "purva ashadha": "Purva Ashadha",
+    "purva-ashadha": "Purva Ashadha", "poorvashadha": "Purva Ashadha",
+    "purvashadha": "Purva Ashadha",
+    "uttaraashadha": "Uttara Ashadha", "uttara ashadha": "Uttara Ashadha",
+    "uttara-ashadha": "Uttara Ashadha", "uttarashadha": "Uttara Ashadha",
+    "purvabhadrapada": "Purva Bhadrapada", "purva bhadrapada": "Purva Bhadrapada",
+    "purva-bhadrapada": "Purva Bhadrapada", "poorvabhadrapada": "Purva Bhadrapada",
+    "uttarabhadrapada": "Uttara Bhadrapada", "uttara bhadrapada": "Uttara Bhadrapada",
+    "uttara-bhadrapada": "Uttara Bhadrapada", "uttarabhadra": "Uttara Bhadrapada",
+}
+# Pre-populate the canonical form itself (lowercased) so direct matches work.
+for _c in _NAK_CANON:
+    _NAK_VARIANTS_LC.setdefault(_c.lower(), _c)
+
+
+def _norm_nakshatra(s: Any) -> str:
+    """Canonicalise nakshatra name to Title-Case canonical (e.g. 'krittika'
+    → 'Krittika', 'purvaphalguni' → 'Purva Phalguni'). Empty if unknown."""
+    if not s:
+        return ""
+    n = str(s).strip().lower()
+    # Collapse multiple internal spaces
+    n = " ".join(n.split())
+    # Try direct lookup
+    if n in _NAK_VARIANTS_LC:
+        return _NAK_VARIANTS_LC[n]
+    # Try spaceless lookup (handles "purva phalguni" → "purvaphalguni")
+    n_spaceless = n.replace(" ", "").replace("-", "")
+    return _NAK_VARIANTS_LC.get(n_spaceless, "")
+
+
+# Regex fragment alternation — sorted by length DESC so longer multi-word
+# variants match before their substring siblings (e.g. "purva phalguni" wins
+# over "phalguni"). Includes literal spaces and hyphens.
+_NAK_NAMES_SORTED = sorted(_NAK_VARIANTS_LC.keys(), key=len, reverse=True)
+_NAK_NAMES_RX_FRAG = "|".join(
+    __import__("re").escape(n) for n in _NAK_NAMES_SORTED
+)
+
+# AI claims: "(aapka|aapki|tumhara|your)\s+nakshatra\s+(is|hai)?\s+<NAK>"
+# Subject defaults to MOON (user's birth nakshatra) for generic possessive.
+_TRUTH_NAKSHATRA_USER_RX = __import__("re").compile(
+    r"\b(?:aap?ka|aap?ki|tumhara|tumhari|your|mera|meri|mer[ae])\s+"
+    r"(?:janm\s+)?nakshatra\s+(?:is\s+|hai\s+|=\s*)?"
+    rf"({_NAK_NAMES_RX_FRAG})\b",
+    __import__("re").IGNORECASE,
+)
+# AI claims: "Moon's nakshatra is <NAK>" / "Chandra ka nakshatra <NAK>" /
+# "<planet>'s nakshatra <NAK>"
+_TRUTH_NAKSHATRA_PLANET_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})(?:'s|\s+ka|\s+ki)?\s+nakshatra\s+"
+    r"(?:is\s+|hai\s+|=\s*)?"
+    rf"({_NAK_NAMES_RX_FRAG})\b",
+    __import__("re").IGNORECASE,
+)
+# AI claims: "nakshatra <NAK> hai" / "nakshatra is <NAK>" — bare assertion,
+# defaults to MOON subject.
+_TRUTH_NAKSHATRA_BARE_RX = __import__("re").compile(
+    rf"\bnakshatra\s+(?:is\s+|=\s*)?({_NAK_NAMES_RX_FRAG})\s+"
+    r"(?:hai|is)\b",
+    __import__("re").IGNORECASE,
+)
+# Pada claim — pada N where N is 1..4. Patterns:
+#   "pada 2", "2nd pada", "pada is 2", "<NAK> ke 3 pada", "pada 4 hai"
+_TRUTH_PADA_RX = __import__("re").compile(
+    r"\bpada\s+(?:is\s+|hai\s+|=\s*)?([1-4])\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_PADA_ORDINAL_RX = __import__("re").compile(
+    r"\b([1-4])(?:st|nd|rd|th)?\s+pada\b",
+    __import__("re").IGNORECASE,
+)
+
 # Phase 4.1 — when a "X Nth house" planet-house regex match is followed
 # closely by "swami/lord/malik/...", it's a LORD-OF-HOUSE claim, not an
 # IN-HOUSE claim. Suppress the planet-house violation in that case.
@@ -6339,18 +6499,22 @@ def _build_truth_facts(kundli: dict) -> dict:
           "retrograde":     set[planet_lc]            # Phase 4.1
           "house_lord":     {1..12: planet_lc}        # Phase 4.1
           "manglik":        bool | None               # Phase 4.1
+          "nakshatra":      {planet_lc: nak_canonical} # Phase 4.3
+          "nakshatra_pada": {planet_lc: int 1..4}     # Phase 4.3
           "current_md":     {"planet": str, ...} | None,
           "current_ad":     {"planet": str, ...} | None,
         }
     """
     out: dict = {
-        "planet_house": {},
-        "planet_sign":  {},
-        "retrograde":   set(),
-        "house_lord":   {},
-        "manglik":      None,
-        "current_md":   None,
-        "current_ad":   None,
+        "planet_house":   {},
+        "planet_sign":    {},
+        "retrograde":     set(),
+        "house_lord":     {},
+        "manglik":        None,
+        "nakshatra":      {},
+        "nakshatra_pada": {},
+        "current_md":     None,
+        "current_ad":     None,
     }
     if not isinstance(kundli, dict):
         return out
@@ -6386,6 +6550,32 @@ def _build_truth_facts(kundli: dict) -> dict:
             r = p.get("retrograde")
             if r is True:
                 out["retrograde"].add(nm)
+        # Phase 4.3 — per-planet nakshatra + pada (engine may emit either).
+        nak_canon = _norm_nakshatra(p.get("nakshatra"))
+        if nak_canon:
+            out["nakshatra"][nm] = nak_canon
+        pada_raw = p.get("nakshatraPada") or p.get("pada")
+        try:
+            pada_int = int(pada_raw) if pada_raw is not None else None
+        except (TypeError, ValueError):
+            pada_int = None
+        if isinstance(pada_int, int) and 1 <= pada_int <= 4:
+            out["nakshatra_pada"][nm] = pada_int
+
+    # Phase 4.3 — Moon nakshatra + pada from top-level kundli fields. This is
+    # the user's birth nakshatra ("janm nakshatra"). Engine emits these even
+    # when planets[].nakshatra is absent for Moon, so always check both.
+    moon_nak = _norm_nakshatra(kundli.get("nakshatra"))
+    if moon_nak and "moon" not in out["nakshatra"]:
+        out["nakshatra"]["moon"] = moon_nak
+    moon_pada_raw = kundli.get("nakshatraPada")
+    try:
+        moon_pada = int(moon_pada_raw) if moon_pada_raw is not None else None
+    except (TypeError, ValueError):
+        moon_pada = None
+    if isinstance(moon_pada, int) and 1 <= moon_pada <= 4 and \
+            "moon" not in out["nakshatra_pada"]:
+        out["nakshatra_pada"]["moon"] = moon_pada
 
     # House lord map via lagna + whole-sign sign-ruler chain.
     asc = kundli.get("ascendant") or kundli.get("lagna") or {}
@@ -6484,17 +6674,20 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
         # hai" must NOT count as a claim that Jupiter is current MD. We
         # look for a negation token within the next ~50 chars of the
         # match — narrow window keeps recall high for genuine claims.
-        def _claimed_planets(rx):
+        def _claimed_planets(*rxs):
+            """Phase 4.3 — accept multiple regexes (e.g. forward + inverted
+            syntax). Each regex must put the planet name in group(1)."""
             out = set()
-            for m in rx.finditer(text):
-                tail = text[m.end(): m.end() + 60]
-                if _NEGATION_NEAR_RX.search(tail):
-                    continue
-                out.add(_norm_planet_lc(m.group(1)))
+            for rx in rxs:
+                for m in rx.finditer(text):
+                    tail = text[m.end(): m.end() + 60]
+                    if _NEGATION_NEAR_RX.search(tail):
+                        continue
+                    out.add(_norm_planet_lc(m.group(1)))
             return out
 
-        md_claimed = _claimed_planets(_TRUTH_MD_RX)
-        ad_claimed = _claimed_planets(_TRUTH_AD_RX)
+        md_claimed = _claimed_planets(_TRUTH_MD_RX, _TRUTH_MD_INVERTED_RX)
+        ad_claimed = _claimed_planets(_TRUTH_AD_RX, _TRUTH_AD_INVERTED_RX)
 
         if cur_md and md_claimed and cur_md not in md_claimed:
             violations.append({
@@ -6693,6 +6886,141 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
                 "severity":  "high",
             })
             break  # first mismatch is sufficient (one violation per response)
+
+    # ─── PHASE 4.3 — NAKSHATRA CLAIMS ──────────────────────────────────────
+    # AI invents janm-nakshatra freely. Three claim shapes:
+    #   1. "aapka nakshatra Bharani hai"  → subject = MOON (user)
+    #   2. "Moon's nakshatra is Bharani" / "Chandra ka nakshatra Bharani"
+    #        → subject = explicit planet
+    #   3. "nakshatra Bharani hai"  → bare, defaults to MOON
+    nak_truth = truth.get("nakshatra") or {}
+    seen_nak: set = set()
+
+    def _check_nakshatra(planet_lc: str, claimed_nak: str):
+        if not planet_lc or not claimed_nak:
+            return
+        actual = nak_truth.get(planet_lc)
+        if not actual or actual == claimed_nak:
+            return
+        key = ("NK", planet_lc, claimed_nak)
+        if key in seen_nak:
+            return
+        seen_nak.add(key)
+        violations.append({
+            "kind":              "nakshatra_mismatch",
+            "planet":            planet_lc,
+            "claimed_nakshatra": claimed_nak,
+            "actual_nakshatra":  actual,
+            "severity":          "high",
+        })
+
+    # Form 1 — possessive ("aapka/your nakshatra <NAK>") → Moon
+    for m in _TRUTH_NAKSHATRA_USER_RX.finditer(text):
+        if _tf_negated_after(text, m.end()):
+            continue
+        nak = _norm_nakshatra(m.group(1))
+        _check_nakshatra("moon", nak)
+
+    # Form 2 — explicit planet ("<planet>'s/ka nakshatra <NAK>"). Track
+    # spans so the bare-form (Form 3) below can skip overlapping matches
+    # — otherwise "Saturn ka nakshatra Chitra hai" would also fire Form 3
+    # and falsely accuse the Moon nakshatra.
+    form2_spans: list[tuple[int, int]] = []
+    for m in _TRUTH_NAKSHATRA_PLANET_RX.finditer(text):
+        form2_spans.append((m.start(), m.end()))
+        if _tf_negated_after(text, m.end()):
+            continue
+        pn = _norm_planet_lc(m.group(1))
+        # Hinglish "Chandra" maps to "moon" via _PL_SYNONYMS; trust _norm.
+        nak = _norm_nakshatra(m.group(2))
+        _check_nakshatra(pn, nak)
+
+    # Form 3 — bare ("nakshatra <NAK> hai") → defaults to Moon. Skip if
+    # the match falls inside a Form 2 span (already attributed to a planet).
+    for m in _TRUTH_NAKSHATRA_BARE_RX.finditer(text):
+        # Form 3's match starts at the "nakshatra" token; if Form 2 already
+        # covers that token (planet+possessive+nakshatra...), skip.
+        if any(s <= m.start() < e for s, e in form2_spans):
+            continue
+        if _tf_negated_after(text, m.end()):
+            continue
+        nak = _norm_nakshatra(m.group(1))
+        _check_nakshatra("moon", nak)
+
+    # ─── PHASE 4.3 — NAKSHATRA PADA CLAIMS ─────────────────────────────────
+    # Pada is always tied to a nakshatra; in birth-chart context the default
+    # subject is Moon (janm-nakshatra pada). But "Saturn ka pada 3 hai" or
+    # "Rahu pada 1 mein" mention pada of OTHER planets — those must NOT be
+    # validated against Moon's pada (would yield high-severity false-pos).
+    #
+    # Architect Phase-4.3-review fix: only fire when the pada claim is
+    # anchored to Moon-context. We require either:
+    #   (a) a Moon-context anchor (aapka/your/tumhara/janm/moon/chandra/
+    #       nakshatra) within ~40 chars BEFORE the pada token, AND
+    #   (b) NO non-Moon planet name in the prior ~25 chars (which would
+    #       indicate a planet-specific pada claim we cannot validate yet).
+    pada_truth = truth.get("nakshatra_pada") or {}
+    actual_moon_pada = pada_truth.get("moon")
+    if isinstance(actual_moon_pada, int):
+        seen_pada: set = set()
+        import re as _re_pada
+        _MOON_PADA_ANCHOR_RX = _re_pada.compile(
+            r"\b(aap?ka|aap?ki|tumhara|tumhari|your|mera|meri|mer[ae]|"
+            r"janm|moon|chandra|chandr|nakshatra)\b",
+            _re_pada.IGNORECASE,
+        )
+        # Other planets (anything except moon/chandra). Used to disqualify
+        # the claim when, e.g., "Saturn ka pada 3" appears.
+        _OTHER_PLANET_RX = _re_pada.compile(
+            r"\b(sun|surya|ravi|mars|mangal|kuja|mercury|budh|budha|"
+            r"jupiter|brihaspati|guru|venus|shukra|sukra|saturn|shani|"
+            r"sani|rahu|ketu)\b",
+            _re_pada.IGNORECASE,
+        )
+
+        def _check_pada(claimed: int, mstart: int, mend: int):
+            if not (1 <= claimed <= 4) or claimed == actual_moon_pada:
+                return
+            if claimed in seen_pada:
+                return
+            # Disqualify FIRST if a non-Moon planet appears in the lookbehind
+            # window — that's a planet-specific claim we cannot validate
+            # against Moon's pada. Architect Phase-4.3 re-review: widen veto
+            # window from 25 → 40 chars to match anchor-window symmetry.
+            # Catches multi-clause cases like "Saturn ka nakshatra Chitra
+            # mein aapka 1st pada hai" (Saturn appears 38 chars before pada
+            # token — beyond old 25-char window).
+            veto_start = max(0, mstart - 40)
+            veto_window = text[veto_start:mstart]
+            if _OTHER_PLANET_RX.search(veto_window):
+                return
+            # Moon-context anchor must appear within ±40 chars of the pada
+            # match. Allowing trailing anchor too ("Pada 4 hai aapka") so we
+            # don't miss Hinglish word-order variants where the possessive
+            # follows the pada noun.
+            lookbehind_start = max(0, mstart - 40)
+            lookahead_end = min(len(text), mend + 40)
+            window = text[lookbehind_start:mstart] + text[mend:lookahead_end]
+            if not _MOON_PADA_ANCHOR_RX.search(window):
+                return  # no Moon-context — can't safely attribute to Moon
+            seen_pada.add(claimed)
+            violations.append({
+                "kind":         "nakshatra_pada_mismatch",
+                "planet":       "moon",
+                "claimed_pada": claimed,
+                "actual_pada":  actual_moon_pada,
+                "severity":     "high",
+            })
+
+        for rx in (_TRUTH_PADA_RX, _TRUTH_PADA_ORDINAL_RX):
+            for m in rx.finditer(text):
+                if _tf_negated_after(text, m.end()):
+                    continue
+                try:
+                    pd = int(m.group(1))
+                except (TypeError, ValueError):
+                    continue
+                _check_pada(pd, m.start(), m.end())
 
     return violations
 

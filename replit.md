@@ -398,7 +398,7 @@ PASS. All previously-flagged HIGH/MEDIUM items addressed:
 
 ### Known v1 limitations / Phase-4 backlog
 - Stream path (`ai_ask_stream`) only runs POST_LOGIC for general/marriage/gate cases that delegate to `ai_ask` oneshot. Pure stream-astro path does NOT run POST_LOGIC. Acceptable for v1 because most truth-claim risk is in oneshot analysis answers.
-- Detection misses "Mahadasha Saturn ki" inverted syntax — recall improvement for Phase 4.
+- ~~Detection misses "Mahadasha Saturn ki" inverted syntax — recall improvement for Phase 4.~~ **SHIPPED in Phase 4.3** (also fixes "Jupiter ki Mahadasha" possessive-mid form).
 - Detection misses present-tense claims without explicit anchor (e.g. bare "Saturn MD hai" without abhi/chal raha/etc) — accepted to avoid false positives on historical mentions; architect proposes proximity-based anchor heuristic for Phase 4.
 - ~~House-lord checks (occupancy ≠ lordship) deferred to Phase 4 — needs sign-→-lord mapping + house-cusp data.~~ **SHIPPED in Phase 4.1** (see below).
 - Pending-clarification multi-turn carryover still queued from Phase 2 backlog.
@@ -561,3 +561,79 @@ Because the Ask section is gated by birth/kundli presence, primary engine phases
 ### Known v1 limitations (Phase 4.4 backlog)
 - Stream-path REFUSAL deferred — `ai_ask_stream` cannot cleanly abort mid-stream; only WARN footer applies in stream
 - Phases F, G reserved for future primary phases (e.g. divisional charts when promoted to primary)
+
+
+## Phase 4.3 — Nakshatra Fact-Checking + Inverted-Syntax MD/AD Recall (Apr 28, 2026)
+
+Goal: extend Phase 4.1's truth-claim validator with two adjacent fact classes that the AI was inventing or that classifier was missing — janm-nakshatra (with pada) and inverted-syntax dasha mentions ("Mahadasha Saturn ki" / "Jupiter ki Mahadasha"). All within the existing `_TRUTH_*_RX` + `_build_truth_facts` + `_post_logic_check` pipeline; no new infrastructure.
+
+### Scope (`openai_helper.py:6166-6444` regexes/constants, `:6486-6555` truth-facts builder, `:6864-6952` post-logic checks)
+
+**1. Nakshatra fact-class** (3 claim shapes)
+
+| Form | Regex | Subject | Example |
+| --- | --- | --- | --- |
+| 1 — possessive | `_TRUTH_NAKSHATRA_USER_RX` | Moon (user's janm) | "aapka nakshatra Bharani hai", "your nakshatra is Bharani", "tumhara janm nakshatra Bharani" |
+| 2 — explicit planet | `_TRUTH_NAKSHATRA_PLANET_RX` | Named planet | "Moon's nakshatra is Bharani", "Saturn ka nakshatra Chitra hai", "Chandra ka nakshatra Bharani" |
+| 3 — bare | `_TRUTH_NAKSHATRA_BARE_RX` | Moon (default) | "nakshatra Bharani hai" |
+
+Form 3 skips when its match span overlaps a Form 2 span (otherwise "Saturn ka nakshatra Chitra hai" would also fire as a Moon-nakshatra claim and falsely accuse Moon).
+
+**2. Pada fact-class** — `_TRUTH_PADA_RX` matches "pada N" / "pada is N", `_TRUTH_PADA_ORDINAL_RX` matches "Nth pada" / "N pada". Subject is always Moon for v1 (per-planet pada checks deferred — engine pada data sparse for non-Moon planets).
+
+**3. Nakshatra name canonicalization** — `_NAK_CANON` (27 canonical Title-Case names) + `_NAK_VARIANTS_LC` (~70 spelling variants: Krittika/Krithika/Krittika; Anuradha/Anushada; Mula/Moola/Mool; multi-word "Purva Phalguni" + spaceless "purvaphalguni" + hyphenated "purva-phalguni"). `_norm_nakshatra(s)` returns canonical Title-Case or empty if unknown.
+
+**4. Inverted-syntax dasha recall** — three new patterns:
+- `_TRUTH_MD_INVERTED_RX` / `_TRUTH_AD_INVERTED_RX` capture `<dasha-word> <planet>` form ("Mahadasha Saturn ki", "MD Saturn", "Bhukti Mercury")
+- Existing `_TRUTH_MD_RX` / `_TRUTH_AD_RX` extended with optional `(?:ki|ka|ke|'s)\s+` between planet and dasha-word ("Jupiter ki Mahadasha")
+- `_claimed_planets()` widened to accept multiple regexes — now called with both forward and inverted regex per axis
+
+### Truth-facts schema additions (`_build_truth_facts` returns)
+```
+"nakshatra":      {planet_lc: nak_canonical}   # Phase 4.3 — moon from kundli["nakshatra"], others from planets[].nakshatra
+"nakshatra_pada": {planet_lc: int 1..4}        # Phase 4.3 — moon from kundli["nakshatraPada"], others from planets[].nakshatraPada
+```
+Defensive: missing field → key not added → downstream `_check_*` skips silently. No false positives when engine omits a field.
+
+### Violation kinds emitted
+- `nakshatra_mismatch` — `{planet, claimed_nakshatra, actual_nakshatra, severity: "high"}`
+- `nakshatra_pada_mismatch` — `{planet: "moon", claimed_pada, actual_pada, severity: "high"}`
+- (existing `dasha_md_mismatch` / `dasha_ad_mismatch` now fire on inverted/possessive syntax too)
+
+### Negation handling
+All three nakshatra forms + both pada forms route through Phase 4.1's `_tf_negated_after` (clause-bounded 30-char window stopping at `.,;\n` or `aur/and/lekin/but/par`). Verified with 4 negation cases — none fire.
+
+### Architect-review precision fixes (closed before SHIP)
+Round 1 found two real false-positive paths; round 2 found two more residual edge-cases. Both rounds resolved:
+
+**Pada subjecting** (`openai_helper.py:6985-7020`) — pada check defaulted to Moon, but "Saturn ka pada 3 hai" / "Rahu pada 1 mein" were mis-attributing planet-specific pada claims to Moon. Added two-stage subjecting guard:
+- DISQUALIFY if a non-Moon planet token (sun/surya/mars/mangal/mercury/budh/jupiter/guru/venus/shukra/saturn/shani/rahu/ketu) appears in 40-char lookbehind (round 2: widened from 25 → 40 to catch multi-clause "Saturn ka nakshatra Chitra mein aapka 1st pada hai")
+- REQUIRE Moon-context anchor (aapka/aapki/tumhara/your/mera/janm/moon/chandra/nakshatra) within ±40 chars of pada token — anchor window covers both lookbehind AND lookahead so trailing-possessive Hinglish ("Pada 4 hai aapka") still fires
+
+**Inverted MD/AD precision** (`openai_helper.py:6181-6213`) — original optional-tail allowed "Mahadasha Jupiter ke yog ban rahe hain" to register as current-MD claim. Round 1 made tail required. Round 2 split tail into two precision tiers because bare possessive (ki/ka) was still too permissive ("Mahadasha Jupiter ki details samjho" / "ki wajah se pressure hai" still misfired):
+- Path A (direct strong verb): `<DW>\s+<PL>\s+(hai|is|chal\w*|chal\s*rah[aiy]?)`
+- Path B (possessive + motion verb): `<DW>\s+<PL>\s+(ki|ka|'s)\s+(?:\w+\s+){0,3}chal\w*` — requires `chal*` motion verb within 3 words of possessive
+
+### Verification (`test_phase43.py`, 67/67 PASS)
+- 4 truth-facts schema population checks (Moon + Saturn nakshatra/pada built correctly)
+- 10 nakshatra positive cases (correct claims across all 3 forms + multi-word + spelling variant) → no violation
+- 10 nakshatra negative cases (invented claims) → all emit `nakshatra_mismatch` with right planet+claim
+- 4 negation cases → suppressed
+- 7 pada cases (3 correct + 4 invented; all 4 invented now use explicit Moon-anchor) → correct ones suppressed, invented ones violate with right `claimed_pada`
+- 13 inverted-syntax MD/AD cases — covers `Mahadasha <planet> ki`, `Maha-dasha <planet>`, `MD <planet>`, `Antardasha <planet> ki`, `Antar-dasha <planet>`, `Bhukti <planet>`, plus `<planet> ki Mahadasha` possessive-mid form
+- 6 architect-adversarial pada-FP guards (Saturn/Rahu/Mars/Jupiter/no-anchor + multi-clause Saturn-veto regression)
+- 4 architect-adversarial pada-TP cases (anchored Moon claims still fire after guards)
+- 9 architect-adversarial inverted-MD precision cases (3 ke-yog/pe/ke-effects no-fires + 3 ki-without-chal no-fires + 3 genuine-claim fires)
+- Live regression on real user 21 chart (`kundlis.id=8`, Moon=Purva Phalguni pada 2, Rahu MD/AD): adversarial wrong-nakshatra fires `nakshatra_mismatch`, correct one suppresses; adversarial wrong-MD-inverted fires `dasha_md_mismatch`, correct one suppresses. Multi-word "Purva Phalguni" canonicalizes correctly through engine schema.
+
+### Architect sign-off
+Round 2 architect re-review: PASS. "Both residual FP classes are genuinely closed in the current code, and Phase 4.3 is ready to ship."
+
+### Out of scope (Phase 4.4-4.5 backlog)
+- Bare present-tense MD claim ("Saturn MD hai" without `abhi/chal raha`) — deferred to avoid false positives on historical mentions
+- Sade Sati / Saturn-transit timing checks
+- KP cusp-lord verification
+- Numeric strength / Shadbala validation
+- Stream-path POST_LOGIC parity + hard refusal in stream
+- Pending-clarification multi-turn carryover (from Phase 2 leftover)
+- Per-planet pada validation for non-Moon planets (engine data sparse)

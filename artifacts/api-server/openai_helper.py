@@ -5137,12 +5137,44 @@ _INTENT_TO_SUPERTYPE = {
 # semantic intent of the question much more reliably than a regex on the raw
 # text. When AI Ear succeeds with high confidence, we let it pick the
 # supertype directly and skip the regex-based `_classify_supertype` below.
-def _supertype_from_ai_ear(extraction) -> dict | None:
+# Sprint-25 Fix-C2: chart-wide / multi-planet sweep markers. When ANY of
+# these appear, a single-planet PLANET_QUERY contract is wrong — the user
+# wants a chart overview, so we route to GENERAL_ANALYSIS instead.
+_MULTI_PLANET_SWEEP_RX = re.compile(
+    r"\b("
+    r"kya[-\s]*kya|"
+    r"saare|sabhi|sab\s+(?:planet|grah)|"
+    r"konsa[-\s]*konsa|kaun[-\s]*kaun|"
+    r"powerful\s+planets?\s+(?:he|hai|hain)|weak\s+planets?\s+(?:he|hai|hain)|"
+    r"all\s+(?:my\s+)?planets?|every\s+planet|"
+    r"list\s+(?:of\s+)?(?:my\s+)?planets?|"
+    r"strong\s+(?:and|aur|or)\s+weak|powerful\s+(?:and|aur|or)\s+weak|"
+    r"(?:kundli|chart)\s+(?:me|mein)\s+(?:kya|konsa|kaun|kitne)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _is_multi_planet_sweep(question_text: str | None) -> bool:
+    """True when the question asks for a chart-wide planet overview rather
+    than a single-planet inspection. Keeps the AI Ear supertype mapper from
+    forcing PLANET_QUERY on multi-planet sweeps like 'kya kya powerful
+    planets he kya weak planets he batao'."""
+    if not isinstance(question_text, str) or not question_text.strip():
+        return False
+    return bool(_MULTI_PLANET_SWEEP_RX.search(question_text))
+
+
+def _supertype_from_ai_ear(extraction, question_text: str | None = None) -> dict | None:
     """Map an AI Ear IntentExtraction object → supertype dict.
 
     Returns None if the extraction is missing, low-confidence, or the
     ask_types signal is ambiguous — caller then falls back to the regex
     `_classify_supertype`.
+
+    `question_text` (optional) lets the mapper veto PLANET_QUERY for
+    multi-planet sweeps that AI Ear emits as `domain=general,
+    ask_types=[explanation,…]`.
     """
     if not extraction or getattr(extraction, "source", "") != "ai_ear":
         return None
@@ -5153,6 +5185,14 @@ def _supertype_from_ai_ear(extraction) -> dict | None:
     asks = set(getattr(extraction, "ask_types", []) or [])
     tone = (getattr(extraction, "emotional_tone", "") or "").lower()
     domain = (getattr(extraction, "domain", "") or "").lower()
+    # Primary bucket — first intent's bucket name (model-emitted vocab).
+    _intents = getattr(extraction, "intents", []) or []
+    primary_bucket = ""
+    if _intents:
+        _b = getattr(_intents[0], "bucket", None) or (
+            _intents[0].get("bucket") if isinstance(_intents[0], dict) else None
+        )
+        primary_bucket = (_b or "").lower()
 
     # 1. DECISION — explicit decision ask wins regardless of other signals.
     if "decision" in asks:
@@ -5187,11 +5227,23 @@ def _supertype_from_ai_ear(extraction) -> dict | None:
     # 4. PLANET — explanation / comparison ask under the chart-inspection
     #    domain (general / no specific life-area). This catches "Mars kaisa
     #    hai", "Saturn vs Jupiter strong kaun", "lagna kya hai" etc.
+    #
+    #    VETO when the question is a chart-wide multi-planet sweep
+    #    ("kya kya powerful planets", "saare grah", "all planets") OR when
+    #    AI Ear's primary bucket is itself a chart-overview signal
+    #    ("analysis" / "general"). PLANET_QUERY is single-planet — using
+    #    it for sweeps gives a contract-locked single-planet answer that
+    #    ignores the rest of the chart.
     if (("explanation" in asks or "comparison" in asks)
-            and domain in ("general", "")):
+            and domain in ("general", "")
+            and not _is_multi_planet_sweep(question_text)
+            and primary_bucket not in ("analysis", "general", "")):
         return {
             "supertype": "PLANET_QUERY", "confidence": 0.85,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} + domain={domain}"],
+            "reasons":   [
+                f"AI Ear ask_types={sorted(asks)} + domain={domain}"
+                f" + bucket={primary_bucket or 'none'}"
+            ],
             "source":    "ai_ear",
         }
 
@@ -5806,7 +5858,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     os.environ.get("AI_EAR_SUPERTYPE_OVERRIDE", "1") != "0"
                 )
                 if _ear_supertype_override_enabled:
-                    _ear_super = _supertype_from_ai_ear(_ext)
+                    _ear_super = _supertype_from_ai_ear(_ext, question_text=question)
                     if _ear_super:
                         _old_super = (question_supertype or {}).get("supertype")
                         _new_super = _ear_super.get("supertype")

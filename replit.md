@@ -304,3 +304,39 @@ The project is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9.
     - Validator bypass mechanism so a gated response is not retried into an answer.
     - Telemetry hooks (gate-trigger counts, finish_reason capture for the truncation in `S4_far_timing` v1 ending mid-sentence on "lekin" — likely token-cap, not safety-related, but worth confirming).
     - Routing-classifier weakness in `question_understanding.py` where explicit "career mein paisa" still tagged topic=general — separate Step-3 work.
+
+- **Sprint 26 — Step 4 Phase 2 (Apr 28 2026): SAFE NARRATION LAYER (deterministic gate, GUARD-2 LANDED)**
+  - **Why**: Phase 1 architect verdict was FAIL-for-hard-guardrail on GUARD-2 — even verbatim-MUST + PRE-FLIGHT CHECK + explicit override of "open with answer" + ban on domain inference, the model still inferred relationship/partnership from KP 7th-cusp signals. User reply (Hinglish): *"Abhi aur kitna questions puchenge... questions detect me expert hi"* — i.e. stop asking, just build expert-level detection + gate. Phase 2 makes GUARD-2 deterministic in Python so the LLM is never given the chance to fabricate.
+  - **Surgery — `question_understanding.py`**:
+    - `_DOMAIN_ANCHOR_RX` (lines ~413+): broad regex covering career/job/naukri/business/kaam, money/paisa/wealth/loan/income, rishta/rishtey/relationship/love/girlfriend/marriage/shaadi/spouse, sehat/health/illness, ghar/home, child/santaan/bachhe, study/exam/padhai. Includes Hinglish synonyms.
+    - `_SUSTAINED_PROBLEM_RX`: matches "problem hi problem", "sab kuch ulta", time-bound suffering ("8-10 mahine se", "pichle X mahine se"), "contradiction", "phir bhi.+(problem|nahi|stuck)", and similar patterns.
+    - `detect_domain_anchor() / detect_sustained_problem() / needs_domain_clarification()` exposed as module-level helpers.
+    - All flags surfaced as `out["domain_anchor_found"]`, `out["sustained_problem_pattern"]`, `out["clarification_needed"]` on EVERY return path: AI success (~673-698), AI low-confidence fallback, AI error fallback, regex fallback (~198-216), empty input.
+    - **Topic recovery post-pass**: when AI returns `topic="general"` but a clear anchor is matched in the question, override with `_FALLBACK_TOPIC_RX`. Diagnostic flags `topic_recovered_from_general=True` + `topic_original_ai="general"` recorded for telemetry. Architect-recommended widening: added rishta/rishtey/rishton/partner/breakup to the love regex so it matches what `detect_domain_anchor` sees (otherwise gate-skip-but-topic-stays-general inconsistency).
+  - **Surgery — `openai_helper.py`**:
+    - `_safe_narration_gate(qu, qu_intent, mode, topic, topic_source, question_intent, question_supertype, req_id)` at line ~5975. Returns a complete response dict matching `no_chart_failsafe` shape (text/topic/topic_source/confidence/source/follow_ups/question_intent/question_supertype/intent_extraction) when GUARD-2 fires, else None.
+    - Trigger: `clarification_needed` AND `intent in (analysis, problem)` AND `mode != "general"`. Decision/timing/planet intents intentionally excluded — they have a clear ask, clarification would be wrong UX.
+    - `source = "safe_narration_gate_v2_domain_clarification"`. Trace event `2g.SAFE_NARRATION_GATE`.
+    - Wired into `ai_ask` IMMEDIATELY AFTER `2.UNDERSTANDING_TELEMETRY` and BEFORE `_build_messages` (line ~6885) so the LLM is never called for gated responses → no validator conflict, no token spend.
+    - Wired into `ai_ask_stream` (line ~9262) by delegating to `ai_ask` oneshot when same trigger fires (single source of truth; streaming a 1-line clarification adds no value).
+  - **Why pre-LLM short-circuit (not post-LLM validator)**:
+    1. The supertype retry validator enforces "must mention dasha + timing" for GENERAL_ANALYSIS — would reject a clarification answer and force a domain answer, undoing the gate (architect-flagged in Phase 1).
+    2. Skipping the LLM call also saves tokens on every gated request (and trims contradict-question latency from ~10s to 2.9s).
+    3. Trace + metrics are explicit (single 2g event vs guessing prompt-vs-validator interaction).
+  - **Verification (live API, all HTTP 200)**:
+    - **Detector unit tests: 7/7 PASS** covering all anchor/sustained/clarify combinations across the 5 problem domains.
+    - **Live matrix: 5/5 PASS**:
+      - `S4_contradict` (the user's original failing question — "dasha bolte hain achha... problem hi problem... 8-10 mahine se... contradiction kyun"): GATE FIRED, 1 line, 26 words, 2.9s, source=safe_narration_gate_v2_domain_clarification, verbatim text. **The exact failure mode that GUARD-2 prompt-side could not block is now deterministically blocked.**
+      - `S4_clear_domain` ("career mein paisa rukne... 8-10 mahine se... kyun aur kab tak"): gate did NOT fire (anchor present). Normal V→R→T answer.
+      - `S4_far_timing` ("Saturn MD 2055 ke baad... exact kab khatm"): gate did NOT fire. GUARD-3 prompt-side still works ("exact khatam hone ka time locked facts mein nahi hai").
+      - `S4_planet_check` ("Mera Mars kaisa hai"): gate did NOT fire (planet intent excluded).
+      - `S4_pure_timing` ("Saturn mahadasha kab khatam"): gate did NOT fire (timing intent).
+    - **Topic-recovery fix verification** ("rishtey mein problem hi problem 8 mahine se"): gate correctly skipped (anchor present), topic correctly recovered to `love` (was returning `general` before the regex widening), targeted answer about 7th house / Rahu Antardasha. No regression on contradict / clear_domain.
+  - **Architect verdict**: PASS (with 2 medium-scope follow-ups, no blocker for Phase 2 sign-off). Quote: *"core gate is correctly implemented and scoped... fires only when clarification_needed && intent in {analysis, problem} && mode != general, and is invoked in ai_ask before _build_messages so no LLM call occurs on gated requests."* Confirmed: keep `decision` excluded for v1; double `understand_question()` in stream delegation acceptable for v1 (other modes already do this); regex maintenance risk acceptable (failure mode is mostly false negatives that fall through to LLM). The widened `_FALLBACK_TOPIC_RX` for love resolved the inconsistency the architect flagged.
+  - **Known multi-turn UX limitation (NOT fixed in Phase 2)**: when the gate fires and user replies "career" alone, the next turn classifies cleanly (intent=analysis, topic=career, no sustained-problem, gate doesn't fire) but lacks the ORIGINAL question's "kyun aisa ho raha hai aur kab tak" framing. Architect concurs: outside strict Phase-2 scope. Phase 3 should add a "pending-clarification" carryover state (stash original question + requested domain, resolve on the next turn).
+  - **Out of scope, queued for Phase 3**:
+    - GUARD-1 deterministic version: needs `locked_facts` dasha-presence inspector (probe MD/AD lines + end-dates before LLM call). Prompt-side rule remains as soft layer until then.
+    - Pending-clarification state carryover (above).
+    - Telemetry counters for `clarification_needed=true`, `gate_fired`, and `anchor_found_but_topic_recovery_failed` to drive iterative regex tuning.
+    - Mixed-domain priority improvement (architect note): when multiple anchors match, picking by first textual occurrence (or AI's `topics_all[0]` when non-general) is better than fixed global priority. Not a real-world failure yet, deferred until live data shows it.
+    - Step-3 cross-cutting Rule N reconciliation (still pending from Step-2).

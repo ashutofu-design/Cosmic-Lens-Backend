@@ -5950,6 +5950,83 @@ def _build_unified_narrator_contract(supertype: str,
     )
 
 
+# ── Sprint-26 Step 4 Phase 2 (Apr 28 2026) — DETERMINISTIC SAFE-NARRATION GATE
+# Phase 1 (prompt-side _NARRATOR_SAFE_FALLBACK) confirmed the LLM cannot be
+# trusted to refuse / clarify reliably — even verbatim-MUST + explicit
+# discipline override + ban on domain inference, the model still inferred
+# domain from KP cusp signals. Phase 2 makes GUARD-2 deterministic by
+# short-circuiting BEFORE the LLM call.
+#
+# Why pre-LLM short-circuit (not post-LLM validator):
+#   1. The supertype retry validator enforces "must mention dasha + timing"
+#      for GENERAL_ANALYSIS — a clarification answer would be marked deficient
+#      and the retry would force a domain answer, undoing the gate.
+#   2. Skipping the LLM call also saves tokens on every gated request.
+#   3. Trace + metrics are explicit (single 2g.SAFE_NARRATION_GATE event).
+#
+# GUARD-1 (data-presence refusal) and GUARD-3 (no fake dates) are NOT yet
+# moved to Python-side. GUARD-3 works fine prompt-only (verified live).
+# GUARD-1 needs a locked-facts dasha-presence inspector that requires
+# probing the kundli/build_meta structure — separate Phase-3 task. The
+# prompt-side rule remains as the soft layer until then.
+def _safe_narration_gate(qu: dict,
+                         qu_intent: str,
+                         mode: str,
+                         topic: str,
+                         topic_source: str,
+                         question_intent: dict | None,
+                         question_supertype: dict | None,
+                         req_id: str) -> dict | None:
+    """Returns a complete response dict when the gate fires (caller MUST
+    return immediately without calling the LLM) or None when normal flow
+    should continue.
+
+    GUARD-2 (DOMAIN CLARIFICATION) trigger:
+      - qu['clarification_needed'] is True (= sustained_problem_pattern AND
+        NOT domain_anchor_found, computed deterministically by
+        question_understanding.py).
+      - intent is analysis or problem (planet/timing/decision questions
+        have a clear ask — clarification would be wrong UX).
+      - mode is NOT 'general' (concept questions are not personal-domain).
+    """
+    if not qu.get("clarification_needed"):
+        return None
+    if qu_intent not in ("analysis", "problem"):
+        return None
+    if mode == "general":
+        return None
+
+    _trace(req_id, "2g.SAFE_NARRATION_GATE", {
+        "guard":                       "GUARD-2_DOMAIN_CLARIFICATION",
+        "sustained_problem_pattern":   True,
+        "domain_anchor_found":         False,
+        "intent":                      qu_intent,
+        "mode":                        mode,
+        "topic":                       topic,
+        "outcome":                     "short_circuit_no_llm_call",
+    })
+
+    # Verbatim clarification text — same wording as the prompt-side GUARD-2
+    # so behaviour is consistent whether the gate fires or the LLM does.
+    clarify_text = (
+        "Problem kis area mein zyada hai — career, paisa, rishtey, ya sehat? "
+        "Specific area pakad lu, fir actual reason aur exit timing precise "
+        "bata sakta hu."
+    )
+
+    return {
+        "text":               clarify_text,
+        "topic":              topic,
+        "topic_source":       topic_source,
+        "confidence":         float(qu.get("confidence") or 0.0),
+        "source":             "safe_narration_gate_v2_domain_clarification",
+        "follow_ups":         [],
+        "question_intent":    question_intent,
+        "question_supertype": question_supertype,
+        "intent_extraction":  None,
+    }
+
+
 def _build_supertype_contract(supertype: str,
                               *,
                               has_recovery_subask: bool = False) -> str:
@@ -6801,6 +6878,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "mode":           mode,
         "latency_ms":     _qu.get("latency_ms"),
     })
+
+    # ── Sprint-26 Step 4 Phase 2 — Safe-Narration Gate (deterministic) ─────
+    # Fires BEFORE _build_messages so the LLM is never called for gated
+    # responses. Currently implements GUARD-2 (domain clarification when
+    # the question describes a sustained problem with no domain anchor).
+    _gate_response = _safe_narration_gate(
+        _qu, _qu_intent, mode, topic, _topic_source,
+        question_intent, question_supertype, req_id,
+    )
+    if _gate_response is not None:
+        return _gate_response
 
     messages = _build_messages(
         question, kundli, lang, reply_idx,
@@ -9163,6 +9251,20 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     if mode == "astro" and topic == "marriage":
         _trace(req_id, "2b.ROUTE", "astro+marriage → ai_ask oneshot "
                                     "(deterministic engine)")
+        yield {"kind": "oneshot",
+               "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
+                              history=history, preferred_language=preferred_language)}
+        return
+
+    # ── Sprint-26 Step 4 Phase 2 — Safe-Narration Gate (stream variant) ────
+    # When the deterministic gate would fire (sustained-problem pattern AND
+    # no domain anchor), delegate to ai_ask oneshot so the gate runs in a
+    # single place. Streaming a clarification adds no value; a 1-line ask
+    # is shorter than the stream protocol overhead anyway.
+    if (_qu.get("clarification_needed")
+            and _qu_intent in ("analysis", "problem")
+            and mode != "general"):
+        _trace(req_id, "2b.ROUTE", "safe_narration_gate → ai_ask oneshot")
         yield {"kind": "oneshot",
                "data": ai_ask(question, kundli, lang, reply_idx, birth=birth,
                               history=history, preferred_language=preferred_language)}

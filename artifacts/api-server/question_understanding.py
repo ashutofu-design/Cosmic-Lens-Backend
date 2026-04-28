@@ -166,7 +166,15 @@ _FALLBACK_TOPIC_RX: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("health",   re.compile(
         r"\b(health|sehat|swasth|illness|disease|bimari|rog)\b", re.I)),
     ("love",     re.compile(
-        r"\b(love|pyaar|pyar|relationship|girlfriend|boyfriend|crush|ishq)\b", re.I)),
+        # Sprint-26 Step 4 Phase 2 (architect-recommended fix): added
+        # rishta / rishtey / rishton / partner / breakup so the topic
+        # recovery post-pass can lift these out of 'general' to match
+        # what detect_domain_anchor() already recognises. Without these,
+        # a question like "rishtey mein problem hi problem" correctly
+        # bypasses the clarification gate (anchor found) but its topic
+        # would stay 'general' downstream — inconsistent.
+        r"\b(love|pyaar|pyar|relationship|girlfriend|boyfriend|crush|ishq|"
+        r"rishta|rishtey|rishton|partner|breakup)\b", re.I)),
 )
 
 
@@ -192,6 +200,12 @@ def _fallback_classify(question: str) -> dict:
     # fallback, empty input). Putting it inside the function instead of
     # only in ai_ask() removes the silent-failure risk where a future
     # refactor of question_understanding callers would lose the flag.
+    # Sprint-26 Step 4 Phase 2 — emit the deterministic safety flags from
+    # the regex fallback path too, so downstream gate logic in
+    # openai_helper.py never sees a missing key regardless of which return
+    # path fired.
+    _fb_anchor    = detect_domain_anchor(q) if q else False
+    _fb_sustained = detect_sustained_problem(q) if q else False
     return {
         "intent":     intent,
         "topic":      topic,
@@ -200,6 +214,9 @@ def _fallback_classify(question: str) -> dict:
         "hidden_intent":           None,
         "cross_domain_root_cause": False,
         "has_recovery_subask":     bool(_RECOVERY_SUBASK_RX.search(q)) if q else False,
+        "domain_anchor_found":      _fb_anchor,
+        "sustained_problem_pattern": _fb_sustained,
+        "clarification_needed":      _fb_sustained and not _fb_anchor,
         "confidence":              0.5,
         "source":                  "regex_fallback",
     }
@@ -407,6 +424,105 @@ def has_recovery_subask(question: str) -> bool:
     return bool(_RECOVERY_SUBASK_RX.search(question))
 
 
+# ── Sprint-26 Step 4 Phase 2 (Apr 28 2026) — DETERMINISTIC SAFETY DETECTORS ─
+# Phase 1 (prompt-side) failed to make the model ask for clarification on
+# domain-ambiguous "problem hi problem" questions — even with verbatim-MUST +
+# explicit override of "open with answer" + ban on domain inference, the LLM
+# still inferred relationship from KP cusp signals. Phase 2 makes the
+# detection deterministic so the gate in openai_helper.py can short-circuit
+# to a clarification template BEFORE calling the LLM. The classifier surfaces
+# three new flags that downstream consumers (gate, narrator, validators) can
+# trust without recomputing.
+#
+# Anchor list mirrors GUARD-2 wording in _NARRATOR_SAFE_FALLBACK at
+# openai_helper.py:5685 — keeping the two in sync is critical: if a word
+# becomes an anchor here, the prompt-side guard must also recognise it,
+# otherwise a fall-through to the LLM (e.g. when the gate is bypassed) would
+# get inconsistent behaviour.
+_DOMAIN_ANCHOR_RX = re.compile(
+    r"\b("
+    # Career / work
+    r"career|job|naukri|nokri|kaam|work|business|biznes|profession|"
+    r"promotion|interview|office|"
+    # Money / finance
+    r"paisa|paise|paisey|money|wealth|finance|financial|dhan|loan|"
+    r"income|salary|kamai|savings|investment|stock|share|trading|"
+    r"property|investment|mutual\s*fund|"
+    # Relationships (non-marriage)
+    r"rishta|rishtey|rishton|relationship|partner|breakup|"
+    # Marriage
+    r"shaadi|shadi|vivah|marriage|spouse|wife|husband|patni|pati|"
+    r"kalatra|engagement|engaged|"
+    # Romantic
+    r"love|pyar|pyaar|girlfriend|boyfriend|crush|ishq|"
+    # Health
+    r"sehat|swasth|health|illness|disease|bimari|rog|body|"
+    r"medical|hospital|doctor|"
+    # Home / property
+    r"ghar|home|makaan|makan|"
+    # Children / family
+    r"child|children|santaan|santan|bachhe|bachche|bachhon|baby|"
+    r"family|parents|maa|maan|baap|pita|mata|"
+    # Education
+    r"study|studies|education|exam|padhai|college|university|school"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+# Sustained-problem pattern — the exact triggers GUARD-2 was supposed to
+# catch. Keeping it tight on purpose: false positives here would over-fire
+# the clarification gate on perfectly clear questions, which would feel
+# more annoying than helpful.
+_SUSTAINED_PROBLEM_RX = re.compile(
+    r"("
+    # "problem hi problem" / "samasya hi samasya"
+    r"problem\s+hi\s+problem|samasya\s+hi\s+samasya|"
+    # "sab kuch ulta" / "sab kuch galat" / "sab kuch bura"
+    r"sab\s+(?:kuch\s+)?(?:ulta|galat|bura|kharab)|"
+    # "kuch theek nahi" / "kuch bhi theek nahi"
+    r"kuch\s+(?:bhi\s+)?theek\s+nahi|"
+    # "X-Y mahine" or "X-Y months" or "X to Y mahine"
+    r"\d+\s*(?:[-–to]+\s*)\d+\s+(?:mahine|months?|saal|years?)\s+se|"
+    # "pichle X mahine" / "last X months"
+    r"(?:pichle|pichhle|piche|last)\s+\d+\s+(?:mahine|months?|saal|years?)|"
+    # Explicit contradiction wording
+    r"contradiction|paradox|inconsistency|virodhabhas|"
+    # "phir bhi" + negative — classic Hinglish contradiction marker
+    r"phir\s+bhi.+?(?:problem|nahi|nahin|kharab|galat|bura|stuck)"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def detect_domain_anchor(question: str) -> bool:
+    """True when the question explicitly names a life-area anchor.
+
+    Used by the Phase-2 safe-narration gate to decide whether the GUARD-2
+    domain-clarification short-circuit should fire. A `True` here means the
+    user told us where to look (career / paisa / rishtey / sehat / ghar /
+    child / study / etc.) — no clarification needed.
+    """
+    return bool(_DOMAIN_ANCHOR_RX.search(question or ""))
+
+
+def detect_sustained_problem(question: str) -> bool:
+    """True when the question describes a sustained / recurring negative
+    state pattern. Tight on purpose — false positives over-fire the
+    clarification gate."""
+    return bool(_SUSTAINED_PROBLEM_RX.search(question or ""))
+
+
+def needs_domain_clarification(question: str) -> bool:
+    """Composite signal — sustained problem AND no explicit domain anchor.
+    This is the precondition the Phase-2 gate uses to short-circuit to a
+    clarification template instead of calling the LLM."""
+    if not question:
+        return False
+    return (detect_sustained_problem(question)
+            and not detect_domain_anchor(question))
+
+
 def _maybe_promote_analysis_for_why(question: str,
                                     intents_ranked: list[str],
                                     intent: str) -> tuple[list[str], str, bool]:
@@ -568,6 +684,32 @@ def understand_question(question: str,
         # downstream consumers (wealth structured-output prompt, narrator
         # contract, post-validator) can rely on it without re-computing.
         out["has_recovery_subask"] = bool(_RECOVERY_SUBASK_RX.search(q))
+        # ── Sprint-26 Step 4 Phase 2 — deterministic safety detectors ──
+        # Three new flags surfaced on every AI-success return so the
+        # downstream gate in openai_helper.py can short-circuit without
+        # recomputing. Names are stable across all return paths (AI ok,
+        # AI low-conf fallback, AI error fallback, regex fallback, empty).
+        domain_anchor = detect_domain_anchor(q)
+        sustained = detect_sustained_problem(q)
+        out["domain_anchor_found"]      = domain_anchor
+        out["sustained_problem_pattern"] = sustained
+        out["clarification_needed"]      = sustained and not domain_anchor
+        # Topic recovery — when the AI returned topic="general" but the
+        # question text contains a clear life-area anchor, override using
+        # the regex fallback so downstream domain-specific paths fire.
+        # ONLY applies when topic was the catch-all 'general' AND a
+        # specific anchor is found — never overrides an explicit AI
+        # choice between two specific topics.
+        if out.get("topic") == "general" and domain_anchor:
+            for tname, rx in _FALLBACK_TOPIC_RX:
+                if rx.search(q):
+                    out["topic_recovered_from_general"] = True
+                    out["topic_original_ai"] = "general"
+                    out["topic"] = tname
+                    existing = [t for t in (out.get("topics_all") or [])
+                                if t != tname and t != "general"]
+                    out["topics_all"] = [tname] + existing
+                    break
         return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)

@@ -5916,14 +5916,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "birth.has_coords":   isinstance(birth, dict) and birth.get("lat") is not None,
     })
 
-    # ── Sprint-23: Question-Intent Classifier (computed EARLY) ───────────────
-    # Detects WHAT TYPE of question the user is asking (planet_strength,
-    # planet_position, lagna_lookup, dasha_current, yoga_check, comparison,
-    # timing_when, analysis_general, etc.) along with subjects (which planet/
-    # house) and confidence. Logged in trace and returned in EVERY response
-    # payload as `question_intent` for full transparency. Computed before any
-    # early-exit so brand_guard / no_chart_failsafe also expose it.
-    question_intent = _classify_ask_intent(question, lang=lang or "hn")
+    # ── Sprint-26: AI-ONLY Question Understanding (single source of truth) ───
+    # ONE classifier call → {intent, topic, confidence}. No regex pipeline,
+    # no AI-Ear merge, no override layers. Replaces the entire Sprint-23/24/25
+    # multi-source understanding stack. Falls back to a minimal regex ONLY
+    # when AI confidence < 0.6 OR the call itself errors (safety-net).
+    from question_understanding import understand_question, supertype_for
+    _qu = understand_question(question)
+    _trace(req_id, "1.UNDERSTANDING", _qu)
+
+    _qu_intent = (_qu.get("intent") or "analysis").lower()
+    _qu_topic  = (_qu.get("topic")  or "general").lower()
+    _qu_conf   = float(_qu.get("confidence") or 0.0)
+    _qu_source = _qu.get("source") or "ai"
+
+    # Legacy-shape question_intent so the response payload + brevity guards
+    # continue to work without touching downstream code.
+    question_intent = {
+        "intent":     f"{_qu_intent}_general",  # legacy compound label
+        "subjects":   [],
+        "scope":      "general",
+        "confidence": _qu_conf,
+        "source":     _qu_source,
+        "raw_intent": _qu_intent,
+        "raw_topic":  _qu_topic,
+    }
     _trace(req_id, "1b.QUESTION_INTENT", question_intent)
 
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
@@ -5939,7 +5956,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "source":     "brand_guard",
             "follow_ups": _derive_follow_ups("general", _resolve_response_lang(question, lang, preferred_language)),
             "question_intent": question_intent,
-            "question_supertype": _classify_supertype(question, question_intent),
+            "question_supertype": {
+                "supertype":     supertype_for(_qu_intent),
+                "confidence":    _qu_conf,
+                "source":        _qu_source,
+                "source_intent": _qu_intent,
+            },
             "intent_extraction": None,
         }
 
@@ -5949,7 +5971,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # failure mode for an astrology app's credibility. General-mode concept
     # questions ("kp vs vedic kya hai") don't need a chart and skip this.
     has_planets = isinstance(kundli, dict) and bool(kundli.get("planets"))
-    _early_mode, _early_reason = _classify_mode_with_reason(question)
+    # Sprint-26: mode is derived from the AI understanding result. A pure
+    # concept question (intent=analysis + topic=general) doesn't need a chart;
+    # everything else does.
+    _early_mode = "general" if (_qu_intent == "analysis" and _qu_topic == "general") else "astro"
+    _early_reason = f"qu intent={_qu_intent} topic={_qu_topic}"
     if not has_planets and _early_mode == "astro":
         _trace(req_id, "2.MODE_DETECT",
                {"mode": _early_mode, "reason": _early_reason,
@@ -5964,7 +5990,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                    "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga."),
         }.get(eff_lang) or ("Beta, abhi mere paas aapki poori janm-kundli nahi hai — iske bina mai imaandari se koi timing ya specific bhavishyavani nahi kar sakta. "
                             "Kripya pehle apna janm vivran (date, sahi samay, aur sthan) save karein; jaise hi mai aapki kundli dekh paunga, poori spashtata se margdarshan dunga.")
-        _t = _classify_topic(question)
+        _t = _qu_topic
         return {
             "text":       no_chart_msg,
             "topic":      _t,
@@ -5973,7 +5999,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "source":     "no_chart_failsafe",
             "follow_ups": _derive_follow_ups(_t, eff_lang),
             "question_intent": question_intent,
-            "question_supertype": _classify_supertype(question, question_intent),
+            "question_supertype": {
+                "supertype":     supertype_for(_qu_intent),
+                "confidence":    _qu_conf,
+                "source":        _qu_source,
+                "source_intent": _qu_intent,
+            },
             "intent_extraction": None,
         }
 
@@ -5983,22 +6014,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     model = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
-    topic = _classify_topic(question)
-    mode, mode_reason = _classify_mode_with_reason(question)
-    _trace(req_id, "2.MODE_DETECT", {
-        "mode": mode, "topic": topic, "reason": mode_reason,
-        "follow_up_inherits_mode": False,
-        "note": "mode is RECLASSIFIED every turn from current question only — "
-                "history influences ONLY marriage topic-stickiness below",
-    })
+    # ── Sprint-26: Routing derived from the SINGLE understanding result ──────
+    # All previous regex / AI-Ear / supertype-override layers are removed.
+    # `_qu_intent` and `_qu_topic` (set above) are the ONLY routing inputs.
+    topic = _qu_topic
+    mode  = _early_mode  # already derived from _qu above
+    _topic_source = _qu_source
 
-    # ── TOPIC STICKINESS for marriage follow-ups ─────────────────────────────
-    # Constraint follow-ups like "uske baad batao" / "dusra time chahiye" AND
-    # generic followups like "aur detail mein batao" / "iska upay batao" don't
-    # contain marriage keywords, so the classifier returns "general" and the
-    # baked-answer path never fires — letting the AI hallucinate a fake date.
-    # Force topic="marriage" when (a) constraint OR generic followup detected
-    # AND (b) the prior assistant turn talked about vivah/shaadi/marriage.
+    # ── TOPIC STICKINESS for marriage follow-ups (multi-turn context only) ──
+    # NOT question understanding — this is conversation context. Constraint
+    # follow-ups ("uske baad batao", "iska upay batao") don't carry topic
+    # keywords; we look at the previous assistant turn to keep marriage
+    # threads sticky so the baked-answer path keeps firing.
     try:
         if topic != "marriage" and (
             _detect_marriage_constraint(question, history or [])
@@ -6007,28 +6034,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         ):
             for h in reversed(history or []):
                 if (h.get("role") == "assistant"):
-                    # Mobile client sends history as {role, text}; older callers
-                    # may send {role, content}. Accept either to avoid silently
-                    # missing the topic-stickiness signal on a follow-up.
                     prev = ((h.get("content") or h.get("text") or "")).lower()
                     if any(k in prev for k in
                            ("vivah", "shaadi", "shadi", "marriage",
                             "विवाह", "शादी", "spouse", "wife", "husband")):
                         topic = "marriage"
-                        print("[ai_ask] topic stickiness: forced topic=marriage "
-                              "(constraint detected on follow-up)")
+                        _topic_source = "stickiness"
+                        print("[ai_ask] topic stickiness: forced topic=marriage")
                         break
     except Exception as exc:
         print(f"[ai_ask] topic-stickiness check failed: {exc}")
 
-    # Marriage stickiness only matters in astro mode. In general mode, the
-    # user is asking a concept/comparison question — no chart, no narrator.
+    # General-mode concept questions never need a chart-bound topic.
     if mode == "general":
         topic = "general"
 
-    # Marriage subtype: timing / remedy / analysis. Drives whether the locked
-    # narrator template fires (timing/remedy) or AI does free chart analysis
-    # (analysis). Only relevant when topic == marriage; harmless otherwise.
+    _trace(req_id, "2.MODE_DETECT", {
+        "mode": mode, "topic": topic, "topic_source": _topic_source,
+        "reason": _early_reason,
+    })
+
+    # Marriage subtype (timing / remedy / analysis) — sub-classifier kept
+    # because it drives a different narrator template, not the engine choice.
     marriage_subtype = (
         _classify_marriage_subtype(question) if topic == "marriage" else "timing"
     )
@@ -6036,257 +6063,39 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "topic": topic, "marriage_subtype": marriage_subtype,
     })
 
-    # ── Sprint-23: Question-Intent already computed at step 1b. Stash into
-    # build_meta so downstream consumers (brevity guard, prompt builders,
-    # final return payload) can read it through one canonical channel.
-    build_meta: dict = {}
-    build_meta["question_intent"] = question_intent
-    _trace(req_id, "2c.QUESTION_INTENT.cached", {
-        "intent": question_intent.get("intent"),
-        "subjects": question_intent.get("subjects"),
-        "confidence": question_intent.get("confidence"),
-    })
-
-    # ── Sprint-24: Supertype layer. Maps the 15 fine-grained intents to the
-    # 5 narrator supertypes (PLANET / PROBLEM / TIMING / DECISION /
-    # GENERAL_ANALYSIS) that drive the strict response-rule contract
-    # injected as the LAST system message just before the OpenAI call.
-    question_supertype = _classify_supertype(question, question_intent)
-    build_meta["question_supertype"] = question_supertype
+    # ── Supertype: derived directly from the AI intent ──────────────────────
+    question_supertype = {
+        "supertype":     supertype_for(_qu_intent),
+        "confidence":    _qu_conf,
+        "source":        _qu_source,
+        "source_intent": _qu_intent,
+    }
+    build_meta: dict = {
+        "question_intent":     question_intent,
+        "question_supertype":  question_supertype,
+        "intent_extraction":   None,   # legacy field; AI-Ear is gone
+        "topic":               topic,
+        "topic_source":        _topic_source,
+        "understanding":       _qu,
+    }
     _trace(req_id, "2d.QUESTION_SUPERTYPE", {
-        "supertype":     question_supertype.get("supertype"),
-        "confidence":    question_supertype.get("confidence"),
-        "source_intent": question_supertype.get("source_intent"),
-        "reasons":       question_supertype.get("reasons"),
+        "supertype":     question_supertype["supertype"],
+        "confidence":    question_supertype["confidence"],
+        "source":        question_supertype["source"],
+        "source_intent": question_supertype["source_intent"],
     })
 
-    # ── AI EAR (P1 — telemetry only) ─────────────────────────────────────────
-    # Lightweight comprehension layer that classifies the user's question
-    # into structured {language, domain, ask_types, intents[], facts}.
-    # P1 = log-only: extraction is stashed in build_meta but does NOT change
-    # routing or engine selection. P2+ wires it into multi-intent rendering.
-    # Never fail ai_ask if AI Ear errors — caller's existing regex pipeline
-    # remains the source of truth for P1.
-    # Track WHERE the current `topic` came from so Fix-A's AI Ear override
-    # below knows whether it is allowed to overwrite it. Stickiness wins
-    # over AI Ear (AI Ear can't see history, stickiness can).
-    _topic_source = "regex"
-    if topic == "marriage" and _classify_topic(question) != "marriage":
-        # Stickiness must have just forced topic=marriage for a follow-up.
-        _topic_source = "stickiness"
-
-    try:
-        if mode == "astro" and os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
-            from intent_extractor import (  # local import to avoid cycle
-                extract_intent_cached,
-                IntentExtractionError,
-            )
-            try:
-                _ext = extract_intent_cached(question)
-                build_meta["intent_extraction"] = _ext.to_log_dict()
-                _trace(req_id, "2b.AI_EAR", {
-                    "language":       _ext.language,
-                    "domain":         _ext.domain,
-                    "ask_types":      _ext.ask_types,
-                    "emotional_tone": _ext.emotional_tone,
-                    "intent_count":   len(_ext.intents),
-                    "primary_bucket": _ext.intents[0].bucket if _ext.intents else None,
-                    "confidence":     _ext.confidence,
-                    "latency_ms":     _ext.latency_ms,
-                    "source":         _ext.source,
-                    "question_scope": getattr(_ext, "question_scope", "unknown"),
-                })
-
-                # Sprint-25 Fix-F: marriage subtype trust contract.
-                # When the AI Ear gives a confident marriage bucket, re-derive
-                # marriage_subtype using that bucket — works whether topic
-                # stays marriage (regex agreed) OR flips to marriage below.
-                if topic == "marriage":
-                    _mar_pre_bucket = _ai_ear_bucket_for(build_meta, "marriage")
-                    if _mar_pre_bucket:
-                        try:
-                            _new_subtype = _classify_marriage_subtype(question, _mar_pre_bucket)
-                            if _new_subtype != marriage_subtype:
-                                _trace(req_id, "2c.MARRIAGE_SUBTYPE.AI_EAR_OVERRIDE", {
-                                    "old":    marriage_subtype,
-                                    "new":    _new_subtype,
-                                    "bucket": _mar_pre_bucket,
-                                })
-                                marriage_subtype = _new_subtype
-                        except Exception:
-                            pass
-
-                # ── Fix-A: AI Ear becomes the topic source-of-truth ──────────
-                # When AI Ear successfully extracted a non-general domain with
-                # high confidence, it OVERRIDES the regex `_classify_topic`
-                # result. The regex only counts keyword hits; the LLM has
-                # actually understood the sentence. Stickiness still wins
-                # (it carries history context AI Ear can't see).
-                _ear_topic_override_enabled = (
-                    os.environ.get("AI_EAR_TOPIC_OVERRIDE", "1") != "0"
-                )
-                _ear_conf = float(_ext.confidence or 0.0)
-                _ear_domain = (_ext.domain or "").lower().strip()
-                _ear_candidate = _AI_EAR_DOMAIN_TO_TOPIC.get(_ear_domain)
-                if (
-                    _ear_topic_override_enabled
-                    and _ext.source == "ai_ear"
-                    and _ear_conf >= 0.70
-                    and _ear_candidate
-                    and _ear_candidate != "general"
-                    and _ear_candidate != topic
-                ):
-                    if _topic_source == "stickiness":
-                        _trace(req_id, "2b.AI_EAR_TOPIC_OVERRIDE_SKIPPED", {
-                            "reason":      "stickiness_won",
-                            "regex_topic": topic,
-                            "ear_topic":   _ear_candidate,
-                            "ear_domain":  _ear_domain,
-                            "ear_conf":    _ear_conf,
-                        })
-                    else:
-                        _old_topic = topic
-                        topic = _ear_candidate
-                        _topic_source = "ai_ear"
-                        # Marriage subtype was computed against the OLD topic
-                        # — re-derive if we just flipped into/out of marriage.
-                        # Sprint-25 Fix-F: pass AI Ear bucket so the engine
-                        # trusts the LLM's classification when available.
-                        if topic == "marriage":
-                            try:
-                                _mar_pre_bucket = _ai_ear_bucket_for(build_meta, "marriage")
-                                marriage_subtype = _classify_marriage_subtype(
-                                    question, _mar_pre_bucket,
-                                )
-                            except Exception:
-                                pass
-                        _trace(req_id, "2b.AI_EAR_TOPIC_OVERRIDE", {
-                            "regex_topic":      _old_topic,
-                            "ear_topic":        topic,
-                            "ear_domain":       _ear_domain,
-                            "ear_conf":         _ear_conf,
-                            "marriage_subtype": (
-                                marriage_subtype if topic == "marriage" else None
-                            ),
-                        })
-
-                # ── Fix-C: AI Ear → supertype source-of-truth ────────────────
-                # Sprint-24's regex `_classify_supertype` ran at 2d above with
-                # only the 15-cat fine intent. Now that AI Ear has produced
-                # ask_types + emotional_tone + domain (richer signals), let it
-                # pick the supertype directly. Falls back to the regex result
-                # when AI Ear is ambiguous / low-conf.
-                _ear_supertype_override_enabled = (
-                    os.environ.get("AI_EAR_SUPERTYPE_OVERRIDE", "1") != "0"
-                )
-                if _ear_supertype_override_enabled:
-                    _ear_super = _supertype_from_ai_ear(_ext, question_text=question)
-                    if _ear_super:
-                        _old_super = (question_supertype or {}).get("supertype")
-                        _new_super = _ear_super.get("supertype")
-                        if _new_super != _old_super:
-                            question_supertype = {
-                                **_ear_super,
-                                "source_intent": (question_intent or {}).get("intent"),
-                            }
-                            build_meta["question_supertype"] = question_supertype
-                            _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_OVERRIDE", {
-                                "regex_supertype": _old_super,
-                                "ear_supertype":   _new_super,
-                                "ear_conf":        _ear_super.get("confidence"),
-                                "ear_reasons":     _ear_super.get("reasons"),
-                            })
-                        else:
-                            # AI Ear AGREES with regex — record the agreement
-                            # (also bumps the trust signal in build_meta).
-                            question_supertype = {
-                                **(question_supertype or {}),
-                                "source": "ai_ear+regex_agree",
-                            }
-                            build_meta["question_supertype"] = question_supertype
-                            _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_AGREE", {
-                                "supertype": _new_super,
-                                "ear_conf":  _ear_super.get("confidence"),
-                            })
-                    else:
-                        _trace(req_id, "2d.QUESTION_SUPERTYPE.AI_EAR_AMBIGUOUS", {
-                            "ask_types":      _ext.ask_types,
-                            "emotional_tone": _ext.emotional_tone,
-                            "domain":         _ext.domain,
-                            "kept_regex":     (question_supertype or {}).get("supertype"),
-                        })
-            except IntentExtractionError as _ear_exc:
-                _trace(req_id, "2b.AI_EAR_FAIL", {
-                    "error": str(_ear_exc)[:200],
-                    "fallback": "regex_routing_unchanged",
-                })
-    except Exception as _ear_outer_exc:
-        # Never let telemetry break the request.
-        try:
-            _trace(req_id, "2b.AI_EAR_OUTER_FAIL",
-                   {"error": str(_ear_outer_exc)[:200]})
-        except Exception:
-            pass
-
-    # ── Sprint-25 Fix-J: STRENGTH_SUMMARY supertype override ────────────────
-    # Strong/weak/vargottam-planet questions get a dedicated supertype with
-    # a 1–2 line crisp contract + bucket-grounded validator. We layer this
-    # AFTER the AI Ear override block so it always wins regardless of what
-    # the regex or AI Ear initially picked. Source-of-truth for these queries
-    # is the deterministic STRENGTH BUCKETS line in locked facts.
-    try:
-        if _is_strength_summary_question(question or ""):
-            _old_super_ss = (question_supertype or {}).get("supertype")
-            question_supertype = {
-                "supertype":     "STRENGTH_SUMMARY",
-                "source":        "regex_strength_summary",
-                "source_intent": (question_intent or {}).get("intent"),
-            }
-            build_meta["question_supertype"] = question_supertype
-            _trace(req_id, "2d.QUESTION_SUPERTYPE.STRENGTH_SUMMARY_OVERRIDE", {
-                "previous_supertype": _old_super_ss,
-                "new_supertype":      "STRENGTH_SUMMARY",
-                "reason":             "strength/vargottam-planet question detected",
-            })
-    except Exception as _ss_exc:
-        try:
-            _trace(req_id, "2d.QUESTION_SUPERTYPE.STRENGTH_SUMMARY_FAIL",
-                   {"error": str(_ss_exc)[:200]})
-        except Exception:
-            pass
-
-    # Sprint-25 Fix-G: scope/source/disagree telemetry. One canonical line
-    # per request so we can grep aggregate metrics: scope distribution,
-    # AI-Ear vs regex disagreement rate, source mix. Never raise.
-    try:
-        _ie = build_meta.get("intent_extraction") or {}
-        _qsuper = build_meta.get("question_supertype") or {}
-        _qint = build_meta.get("question_intent") or {}
-        _super_src = _qsuper.get("source") or "regex"
-        # "disagree" = AI Ear ran AND chose a supertype that differs from
-        # what the regex initially picked. Sources that mean OVERRIDE:
-        #   "ai_ear"        — Fix-C ask_types/tone heuristic override
-        #   "ai_ear_scope"  — Fix-E question_scope deterministic override
-        # Sources that mean AGREE / NO-OVERRIDE:
-        #   "ai_ear+regex_agree", "regex"
-        _disagree = bool(_ie) and _super_src in {"ai_ear", "ai_ear_scope"}
-        _trace(req_id, "2.SUPERTYPE_TELEMETRY", {
-            "scope":          _ie.get("question_scope", "unknown"),
-            "supertype":      _qsuper.get("supertype"),
-            "supertype_src":  _super_src,
-            "topic":          topic,
-            "topic_src":      _topic_source,
-            "ear_domain":     _ie.get("domain"),
-            "ear_conf":       _ie.get("confidence"),
-            "intent":         _qint.get("intent"),
-            "disagree":       _disagree,
-        })
-    except Exception:
-        pass
-
-    # Stash the final topic decision provenance for downstream observers.
-    build_meta["topic"] = topic
-    build_meta["topic_source"] = _topic_source
+    # Single canonical telemetry line — same shape as before so metrics work.
+    _trace(req_id, "2.UNDERSTANDING_TELEMETRY", {
+        "intent":         _qu_intent,
+        "topic":          topic,
+        "supertype":      question_supertype["supertype"],
+        "confidence":     _qu_conf,
+        "source":         _qu_source,
+        "topic_source":   _topic_source,
+        "mode":           mode,
+        "latency_ms":     _qu.get("latency_ms"),
+    })
 
     messages = _build_messages(
         question, kundli, lang, reply_idx,
@@ -8221,12 +8030,17 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                               history=history, preferred_language=preferred_language)}
         return
 
-    # Mode + topic classification — same logic as ai_ask.
-    topic = _classify_topic(question)
-    mode, mode_reason = _classify_mode_with_reason(question)
+    # Sprint-26: SINGLE AI understanding call — same source of truth as ai_ask.
+    from question_understanding import understand_question, supertype_for
+    _qu = understand_question(question)
+    _qu_intent = (_qu.get("intent") or "analysis").lower()
+    _qu_topic  = (_qu.get("topic")  or "general").lower()
+    topic = _qu_topic
+    mode  = "general" if (_qu_intent == "analysis" and _qu_topic == "general") else "astro"
+    _trace(req_id, "1.UNDERSTANDING(stream)", _qu)
     _trace(req_id, "2.MODE_DETECT", {
-        "mode": mode, "topic": topic, "reason": mode_reason,
-        "follow_up_inherits_mode": False,
+        "mode": mode, "topic": topic,
+        "reason": f"qu intent={_qu_intent} topic={_qu_topic}",
     })
 
     try:
@@ -9694,159 +9508,17 @@ def ai_ask_v2(question: str,
               birth: Any = None,
               history: list | None = None,
               preferred_language: _Optional[str] = None) -> dict:
-    """Multi-intent aware version of ai_ask(). See module docstring above
-    for the response shape contract."""
+    """Sprint-26: thin passthrough to ai_ask().
 
-    # 1. Brand-safe / off-topic / no-chart fail-safe checks happen INSIDE
-    #    ai_ask() — we don't duplicate them here. Always go through ai_ask
-    #    on the legacy single-question path for backward compat.
-
-    # 2. Try AI Ear (best effort). On any failure we fall back to ai_ask()
-    #    with the original question and return its single-shape result.
-    intent_extraction = None
-    if os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
-        try:
-            from intent_extractor import extract_intent_cached  # local import
-            intent_extraction = extract_intent_cached(question)
-            print(
-                f"[ai_ask_v2] AI Ear: lang={intent_extraction.language} "
-                f"domain={intent_extraction.domain} "
-                f"intents={len(intent_extraction.intents)} "
-                f"conf={intent_extraction.confidence:.2f} "
-                f"latency={intent_extraction.latency_ms}ms",
-                flush=True,
-            )
-        except Exception as exc:
-            print(f"[ai_ask_v2] AI Ear failed (fallback to legacy): {exc}",
-                  flush=True)
-            intent_extraction = None
-
-    # 3. Single-intent / low-confidence / disabled → legacy single-shape.
-    #    BACKWARD-COMPAT: do NOT mutate the legacy result with
-    #    `intent_extraction` so existing callers see the exact ai_ask() shape.
-    #    Telemetry is only attached when AI_ASK_V2_TELEMETRY=1 (debug-only).
-    if not _v2_should_split(intent_extraction):
-        result = ai_ask(question, kundli, lang, reply_idx,
-                        birth=birth, history=history,
-                        preferred_language=preferred_language)
-        if (isinstance(result, dict)
-                and intent_extraction is not None
-                and os.environ.get("AI_ASK_V2_TELEMETRY") == "1"):
-            result["intent_extraction"] = intent_extraction.to_log_dict()
-        return result
-
-    # 4. Multi-intent → fan out in parallel (max 3 cards).
-    raw_intents = intent_extraction.intents[:3]
-    trimmed = max(0, len(intent_extraction.intents) - 3)
-
-    workers = min(3, max(1, len(raw_intents)))
-    cards: list[dict] = [None] * len(raw_intents)  # type: ignore
-
-    narrator_lang = intent_extraction.language or "hn"
-    emotional_tone = intent_extraction.emotional_tone or "neutral"
-
-    with ThreadPoolExecutor(max_workers=workers,
-                            thread_name_prefix="ai_ask_v2") as ex:
-        future_to_idx = {}
-        for idx, intent in enumerate(raw_intents):
-            label = intent.summary or f"Intent {idx + 1}"
-            facts_d = {
-                "numbers":   list(intent.facts.numbers),
-                "durations": list(intent.facts.durations),
-                "persons":   list(intent.facts.persons),
-                "places":    list(intent.facts.places),
-                "dates":     list(intent.facts.dates),
-            }
-            fut = ex.submit(
-                _v2_run_card,
-                intent.summary or question,
-                kundli, lang, reply_idx, birth, history, preferred_language,
-                label, intent.bucket,
-                facts_d, emotional_tone, narrator_lang,
-                intent_extraction.domain or "",
-            )
-            future_to_idx[fut] = idx
-        for fut in as_completed(future_to_idx):
-            idx = future_to_idx[fut]
-            try:
-                cards[idx] = fut.result()
-            except Exception as exc:
-                cards[idx] = {
-                    "intent_label":   raw_intents[idx].summary,
-                    "intent_bucket":  raw_intents[idx].bucket,
-                    "intent_summary": raw_intents[idx].summary,
-                    "text":           "Card failed unexpectedly.",
-                    "topic":          "general",
-                    "confidence":     0.0,
-                    "source":         "card_failed",
-                    "follow_ups":     [],
-                    "error":          f"{type(exc).__name__}: {str(exc)[:200]}",
-                }
-
-    # 4b. ALL-CARDS-FAILURE GUARD — if every card failed (engine failure or
-    #     narrator failure with no usable raw_engine_text), raise so the
-    #     route-level handler in flask_app.py can fall back to the
-    #     deterministic rule engine (process_ask). Returning a "v2" payload
-    #     full of failure cards would suppress that fallback and the user
-    #     would just see error text three times.
-    _FAILED_SOURCES = {"card_failed", "narrator_failed"}
-    all_failed = bool(cards) and all(
-        ((c.get("source") or "") in _FAILED_SOURCES)
-        and not (c.get("text") or "").strip().startswith(("🟢", "🟡", "🟠", "🔴", "⚪", "🔮"))
-        for c in cards
+    Historically this fanned out into multi-intent cards driven by the AI Ear
+    extractor. The AI Ear has been removed (replaced by the single-shot
+    `understand_question` classifier inside ai_ask), so multi-intent fan-out
+    no longer exists. We keep this entry point so flask_app.py and any
+    older callers continue to work — it just delegates to ai_ask() and
+    returns the single-shape result.
+    """
+    return ai_ask(
+        question, kundli, lang, reply_idx,
+        birth=birth, history=history,
+        preferred_language=preferred_language,
     )
-    if all_failed:
-        first_err = next(
-            (c.get("error") for c in cards if c.get("error")),
-            "all cards failed",
-        )
-        raise RuntimeError(
-            f"ai_ask_v2: all {len(cards)} cards failed (sample: {first_err})"
-        )
-
-    # 5. Build legacy fallback text (concatenated card texts) so older mobile
-    #    clients that don't yet understand response_schema:"v2" still show
-    #    something coherent.
-    legacy_parts = []
-    for c in cards:
-        label = (c.get("intent_label") or "").strip()
-        body  = (c.get("text") or "").strip()
-        if not body:
-            continue
-        if label:
-            legacy_parts.append(f"👉 {label}\n{body}")
-        else:
-            legacy_parts.append(body)
-    legacy_text = "\n\n".join(legacy_parts) if legacy_parts else (
-        "Cosmic Intelligence ko abhi response generate karne mein dikkat "
-        "aa rahi hai. Kripya thodi der baad dobara try karein."
-    )
-
-    # 6. Aggregate metadata.
-    primary_topic = intent_extraction.domain or (
-        cards[0].get("topic", "general") if cards else "general"
-    )
-    avg_conf = (
-        sum(c.get("confidence", 0.0) for c in cards) / max(1, len(cards))
-    )
-    follow_ups: list[str] = []
-    for c in cards:
-        for fu in (c.get("follow_ups") or []):
-            if fu and fu not in follow_ups:
-                follow_ups.append(fu)
-            if len(follow_ups) >= 3:
-                break
-        if len(follow_ups) >= 3:
-            break
-
-    return {
-        "response_schema":   "v2",
-        "cards":             cards,
-        "trimmed_count":     trimmed,
-        "intent_extraction": intent_extraction.to_log_dict(),
-        "text":              legacy_text,
-        "topic":             primary_topic,
-        "confidence":        avg_conf,
-        "source":            "ai_v2_multi",
-        "follow_ups":        follow_ups,
-    }

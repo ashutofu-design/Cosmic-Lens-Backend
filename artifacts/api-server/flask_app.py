@@ -5829,34 +5829,12 @@ def ask_stream_route():
             result["source"] = result.get("source", "rules")
         return jsonify(result)
 
-    # ── P2/P3 v2 early-routing: if AI Ear detects ≥2 intents, skip streaming
-    # and use ai_ask_v2 to fan out parallel cards. Returned as one-shot JSON
-    # (mobile's non-streaming handler renders cards[]). Single-intent or
-    # AI Ear failure → fall through to the existing streaming path.
-    if os.environ.get("INTENT_EAR_ENABLED", "1") != "0":
-        try:
-            from intent_extractor import extract_intent_cached
-            _ie = extract_intent_cached(question)
-            if (_ie.source == "ai_ear"
-                and len(_ie.intents) >= 2
-                and (_ie.confidence or 0.0) >= 0.55):
-                print(f"[ask/stream] v2 multi-intent detected "
-                      f"(intents={len(_ie.intents)} conf={_ie.confidence:.2f}) "
-                      f"→ routing to ai_ask_v2 (no stream)")
-                try:
-                    result = ai_ask_v2(question, kundli, lang, reply_idx,
-                                       birth=birth, history=history,
-                                       preferred_language=preferred_language)
-                    if isinstance(result, dict):
-                        result["quota"]  = quota_payload
-                        result["plan"]   = plan_payload
-                        result["source"] = result.get("source", "ai_v2_multi")
-                    return jsonify(result)
-                except Exception as exc:
-                    print(f"[ask/stream] ai_ask_v2 failed → continuing to "
-                          f"streaming fallback: {exc}")
-        except Exception as exc:
-            print(f"[ask/stream] AI Ear early-route check failed: {exc}")
+    # ── Sprint-26: AI Ear early-routing block REMOVED ───────────────────────
+    # Multi-intent fan-out depended on `extract_intent_cached.intents[]`.
+    # That entire pipeline has been retired in favour of the single
+    # `understand_question` classifier which returns ONE routing decision.
+    # `ai_ask_v2` is now a thin passthrough to `ai_ask`, so this early
+    # branch was dead code adding latency + path inconsistency.
 
     # ── Probe first event to decide stream vs one-shot vs hard-fallback ────
     try:

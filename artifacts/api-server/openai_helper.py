@@ -6490,6 +6490,43 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4b.POST_INJECT_SKIP",
                {"reason": "supertype=STRENGTH_SUMMARY (1–2 line contract)"})
 
+    # ── Sprint-26 Fix-L: SIMPLIFY NARRATOR — suppress verbose Jaimini/varga
+    # bolt-ons by default. User feedback: "Brain perfect chal raha hai, bas
+    # bolne ka style thoda simplify karna hai". The AI's first 3-4 paragraphs
+    # already deliver the answer (verdict + dasha rationale + KP/transit
+    # support); appending D2 Hora active-earner verdict + Sthira Dasha
+    # (Jaimini stability layer) + Niryana Shoola Dasha (longevity) + Argala
+    # (Jaimini intervention) + Chara Dasha cross-check + Upapada (marriage
+    # signature) + Saptavargaja Bala numerics + D27 Bhamsa as 5–8 separate
+    # paragraphs of Sanskrit terminology buries the actual answer in jargon
+    # that a normal user can't parse. We default-suppress these "advanced"
+    # injectors and re-enable them ONLY when the user explicitly asks for
+    # those layers (e.g. "Argala kya hai", "Jaimini paddhati batao", "Chara
+    # dasha bata", "varga depth", "deep analysis", "Bhamsa", "Saptavargaja").
+    # Topic-specific injectors that ONLY fire when the question is about
+    # parents (D12) or siblings (D3) or higher-education (D24) are kept
+    # because they directly answer those questions.
+    import re as _re_jargon
+    _q_lower_jargon = (question or "").lower()
+    _user_asked_for_depth = bool(_re_jargon.search(
+        r"\b(argala|chara\s*dasha|sthira\s*dasha|niryana|shoola|"
+        r"upapada|jaimini|hora|bhamsa|saptavargaja|ishta\s*phala|"
+        r"kashta\s*phala|vimshopaka|yuddha\s*bala|extended\s*bala|"
+        r"varga|divisional|deep\s*analysis|"
+        r"detailed\s*chart|complete\s*reading|full\s*analysis|"
+        r"vistar(\s*se|\s*me|\s*mein)?|gehrai|deep\s*dive|"
+        r"technical|advanced|elaborate|in[\-\s]?depth|"
+        r"detail\s*(me|mein|se)|thoda\s*detail|"
+        r"poora?\s*(chart|reading|analysis|kundli)|"
+        r"poori\s*(reading|analysis|kundli))\b",
+        _q_lower_jargon
+    ))
+    _skip_verbose_jargon = not _user_asked_for_depth
+    if _skip_verbose_jargon:
+        _trace(req_id, "4b.JARGON_INJECT_SKIP",
+               {"reason": "user did not request depth — keeping answer simple",
+                "rule": "Sprint-26 Fix-L SIMPLIFY NARRATOR"})
+
     # ── HEALTH BRAND-SAFETY POST-PROCESSOR (deterministic, last line) ───────
     # The health engine + narrator override already mandate (a) doctor-consult
     # citation in every reply and (b) mental-health helplines on the
@@ -7021,7 +7058,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
 
             # D2 — finance/wealth
-            if topic == "finance" and not _re.search(
+            if topic == "finance" and not _skip_verbose_jargon and not _re.search(
                 r"(?i)\bd[\-\s]?2\b|\bhora\b", text or ""
             ):
                 _d2 = compute_d2(_planets_q, _lagna_lon)
@@ -7212,7 +7249,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 r"weak|weakness|immunity|workout|gym|athletic|game|games)\b",
                 _q_low2
             ))
-            if _is_health_q and not _re2.search(
+            if _is_health_q and not _skip_verbose_jargon and not _re2.search(
                 r"(?i)\bd[\-\s]?27\b|bhamsa|saptavims|nakshatramsa", text or ""
             ):
                 _d27 = compute_d27(_planets_q2, _lagna_lon2)
@@ -7458,6 +7495,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         and kundli.get("planets")
         and not _is_short_planet_strength_q  # Sprint-22 brevity guard
         and not _skip_post_injects  # Sprint-25 Fix-J STRENGTH_SUMMARY guard
+        and not _skip_verbose_jargon  # Sprint-26 Fix-L SIMPLIFY NARRATOR guard
     ):
         try:
             import re as _reBX
@@ -7795,7 +7833,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _lgsSN = _lgSN.get("sign") if isinstance(_lgSN, dict) else _lgSN
                 _dobSN = birth if birth else None
                 # Sthira
-                if (not _reSN.search(r"(?i)sthira", text or "")
+                if (not _skip_verbose_jargon
+                        and not _reSN.search(r"(?i)sthira", text or "")
                         and not _wealth_structured_payload):
                     _sth = compute_sthira_dasha(_lgsSN, _dobSN) or {}
                     _md = _sth.get("current_md") or {}
@@ -7810,7 +7849,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                             f"{_md['sign']}."
                         )
                 # Niryana Shoola
-                if (not _reSN.search(r"(?i)niryana|shoola", text or "")
+                if (not _skip_verbose_jargon
+                        and not _reSN.search(r"(?i)niryana|shoola", text or "")
                         and not _wealth_structured_payload):
                     _nir = compute_niryana_shoola(_lgsSN, _dobSN) or {}
                     _mdN = _nir.get("current_md") or {}
@@ -7852,7 +7892,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _kw_topic = "child"
                 elif _reAR.search(r"(health|bimari|swasth|disease|rog|illness)", _qAR):
                     _kw_topic = "health"
-            if _kw_topic and not _reAR.search(r"(?i)argala", text or ""):
+            if (_kw_topic and not _skip_verbose_jargon
+                    and not _reAR.search(r"(?i)argala", text or "")):
                 from argala import compute_argala  # type: ignore
                 _lgAR = kundli.get("ascendant") or kundli.get("lagna")
                 _lgsAR = _lgAR.get("sign") if isinstance(_lgAR, dict) else _lgAR
@@ -7895,7 +7936,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _qUL
                 ))
             )
-            if _is_marriage_q and not _reUL.search(r"(?i)upapada|\bUL\b", text or ""):
+            if (_is_marriage_q and not _skip_verbose_jargon
+                    and not _reUL.search(r"(?i)upapada|\bUL\b", text or "")):
                 from jaimini import compute_arudha_padas, compute_upapada  # type: ignore
                 _lgUL = kundli.get("ascendant") or kundli.get("lagna")
                 _lgsign_UL = _lgUL.get("sign") if isinstance(_lgUL, dict) else _lgUL
@@ -7938,7 +7980,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 topic in ("marriage", "career", "finance", "child")
                 or (_is_timing_q and topic != "remedy")
             )
-            if _need_chara and not _re.search(r"(?i)chara dasha", text or ""):
+            if (_need_chara and not _skip_verbose_jargon
+                    and not _re.search(r"(?i)chara dasha", text or "")):
                 from chara_dasha import compute_chara_dasha  # type: ignore
                 _lg2 = kundli.get("ascendant")
                 if isinstance(_lg2, dict):

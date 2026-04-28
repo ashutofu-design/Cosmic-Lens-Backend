@@ -403,6 +403,25 @@ def _finalise_engine_status() -> None:
         s["overall"] = "partial"
 
 
+# Phase 4.2 — primary vs optional phase classifier (Apr 28, 2026).
+# PRIMARY phases (phase-A through phase-G) are core kundli facts that MUST
+# succeed — birth time/date is guaranteed present per the gating constraint
+# ("ask section bina kundli ke khulta hi nahi"). Failure of any primary
+# phase means a real backend bug, NOT a legitimate data gap, so the timing
+# validator must REFUSE instead of silently softening (Sprint-26 Fix-K
+# inversion). OPTIONAL phases (phase-H onward, Sprint-33+) may legitimately
+# fail/skip and only warrant a footer warning.
+import re as _re_fixk_phase
+_PRIMARY_PHASE_RX = _re_fixk_phase.compile(r"^phase-[A-G]\b", _re_fixk_phase.IGNORECASE)
+
+
+def _is_primary_phase(name: str) -> bool:
+    """True if this phase is core (failure → user-facing refusal)."""
+    if not name or not isinstance(name, str):
+        return False
+    return bool(_PRIMARY_PHASE_RX.search(name.strip()))
+
+
 def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     """Assemble the LOCKED FACTS block. Returns "" if kundli is empty."""
     # Reset status tracker for this call (thread-local).
@@ -412,7 +431,25 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     s["failed"] = []
     s["overall"] = "empty"
 
-    if not isinstance(kundli, dict) or not kundli.get("planets"):
+    # Phase 4.2 — primary phase tracking (Apr 28, 2026).
+    # The /api/ask endpoint is gated on a complete kundli (birth time + date
+    # + place required to even open the ask section), so any missing core
+    # fact here is a real backend bug — NOT a legitimate data gap. Record
+    # primary phases so the downstream timing-validator can REFUSE honestly
+    # instead of silently softening (Sprint-26 Fix-K inversion).
+    if not isinstance(kundli, dict):
+        try:
+            _record_phase("phase-A chart-intel (core)", "failed",
+                          f"kundli not a dict (type={type(kundli).__name__})")
+        except Exception:
+            pass
+        return ""
+    if not kundli.get("planets"):
+        try:
+            _record_phase("phase-A chart-intel (core)", "failed",
+                          "kundli has no planets array")
+        except Exception:
+            pass
         return ""
 
     # Lazy imports to avoid circular dependencies and keep test paths light
@@ -420,20 +457,94 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         from chart_intelligence import analyze_chart  # type: ignore
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] import chart_intelligence failed: {exc}")
+        try:
+            _record_phase("phase-A chart-intel (core)", "failed",
+                          f"import failed: {exc}")
+        except Exception:
+            pass
         return ""
 
-    intel = analyze_chart(kundli, birth) or {}
-    if not intel:
+    # Phase 4.2 — phase-A core chart intelligence (must succeed)
+    try:
+        intel = analyze_chart(kundli, birth) or {}
+        if not intel:
+            try:
+                _record_phase("phase-A chart-intel (core)", "failed",
+                              "analyze_chart returned empty")
+            except Exception:
+                pass
+            return ""
+        try:
+            _record_phase("phase-A chart-intel (core)", "ok")
+        except Exception:
+            pass
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] analyze_chart failed: {exc}")
+        try:
+            _record_phase("phase-A chart-intel (core)", "failed", str(exc))
+        except Exception:
+            pass
         return ""
 
-    # Doshas (9-dosh engine)
+    # Phase 4.2 — phase-B dasha presence (kundli must carry dasha info
+    # for any timing/event question to be answerable honestly).
+    # Accept multiple schema variants:
+    #   - currentDasha.{maha|md|mahadasha|MD}   (compact form)
+    #   - dashas: [...]                         (array form, vimshottari)
+    #   - currentPhase.name                     (computed display form)
+    try:
+        _cd = kundli.get("currentDasha") or kundli.get("dasha") or {}
+        _cph = kundli.get("currentPhase") or {}
+        _dashas = kundli.get("dashas") or []
+        _has_compact = isinstance(_cd, dict) and any(
+            _cd.get(k) for k in ("maha", "md", "mahadasha", "MD",
+                                  "lord", "planet")
+        )
+        _has_array = isinstance(_dashas, list) and len(_dashas) > 0
+        _has_phase = isinstance(_cph, dict) and bool(_cph.get("name"))
+        if _has_compact or _has_array or _has_phase:
+            _record_phase("phase-B dasha-presence (core)", "ok")
+        else:
+            _record_phase("phase-B dasha-presence (core)", "failed",
+                          "kundli missing all dasha forms "
+                          "(currentDasha/dashas/currentPhase)")
+    except Exception as exc:  # noqa: BLE001
+        try:
+            _record_phase("phase-B dasha-presence (core)", "failed", str(exc))
+        except Exception:
+            pass
+
+    # Phase 4.2 — phase-C lagna presence (house facts depend on this)
+    try:
+        _lg = kundli.get("ascendant") or kundli.get("lagna")
+        _lg_sign = _lg.get("sign") if isinstance(_lg, dict) else _lg
+        if isinstance(_lg_sign, str) and _lg_sign.strip():
+            _record_phase("phase-C lagna-presence (core)", "ok")
+        else:
+            _record_phase("phase-C lagna-presence (core)", "failed",
+                          "kundli missing ascendant/lagna sign")
+    except Exception as exc:  # noqa: BLE001
+        try:
+            _record_phase("phase-C lagna-presence (core)", "failed", str(exc))
+        except Exception:
+            pass
+
+    # Doshas (9-dosh engine) — phase-D (core: powers manglik/dosh truth)
     dosh = None
     try:
         from dosh_engine import analyze_doshas  # type: ignore
         dosh = analyze_doshas(_normalise_planets_for_dosh(kundli),
                               kundli.get("nakshatra") or "")
+        try:
+            _record_phase("phase-D dosh-engine (core)", "ok")
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] dosh_engine failed: {exc}")
+        try:
+            _record_phase("phase-D dosh-engine (core)", "failed", str(exc))
+        except Exception:
+            pass
 
     # Shadbala (best-effort — needs lagna + lon)
     shadbala = None
@@ -447,12 +558,21 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         print(f"[locked_facts] shadbala failed: {exc}")
 
     # Planet strength verdicts (uses shadbala if present, else fallback)
+    # phase-E (core: powers planet_strength truth class in Phase 4.1)
     verdicts = {}
     try:
         from planet_strength import verdict_table  # type: ignore
         verdicts = verdict_table(intel.get("dignities") or [], shadbala)
+        try:
+            _record_phase("phase-E planet-verdicts (core)", "ok")
+        except Exception:
+            pass
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] planet_strength failed: {exc}")
+        try:
+            _record_phase("phase-E planet-verdicts (core)", "failed", str(exc))
+        except Exception:
+            pass
 
     # Sprint-25 Fix-J: deterministic vargottam + strength buckets
     strength_facts = {}

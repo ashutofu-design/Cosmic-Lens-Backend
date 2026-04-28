@@ -501,5 +501,63 @@ Refactored anchor + yes/no marker subpatterns into named module-level constants 
 - KP cusp-lord verification
 - Sade Sati / Saturn transit timing
 - Stream-path POST_LOGIC parity (currently Fix-P override applies; Stage A check does not)
-- `engine_status` honesty + Fix-K reversal
+- ~~`engine_status` honesty + Fix-K reversal~~ **SHIPPED in Phase 4.2** (see below).
 - Numeric strength / shadbala validation
+
+---
+
+## Phase 4.2 — Engine Status Honesty + Fix-K Reversal (Apr 28, 2026)
+
+### Constraint that drives the design
+> User clarification (Apr 28): "Birth time/date primary kundli HAMESHA hoga — bina uske ask section open hi nahi hota."
+
+Because the Ask section is gated by birth/kundli presence, primary engine phases (chart-intel, dasha, lagna, dosh, planet-verdicts) MUST always succeed. Any failure or skip there is a backend bug, not a legitimate data gap. This **inverts** the old Fix-K assumption (which silently softened on engine emptiness).
+
+### Phase classification convention
+- **PRIMARY** (regex `^phase-[A-G]\b`): tracked in `locked_facts.py` `build_locked_facts`:
+  - `phase-A chart-intel (core)` — planets list non-empty
+  - `phase-B dasha-presence (core)` — currentDasha / dashas[] / currentPhase any form
+  - `phase-C lagna-presence (core)` — ascendant / lagna present
+  - `phase-D dosh-engine (core)` — dosh computation
+  - `phase-E planet-verdicts (core)` — planet strength verdicts
+- **OPTIONAL** (regex `^phase-[H-Z]\b`): pre-existing Sprint-33+ phases:
+  - `phase-H transits`, `phase-J tajik`, `phase-L special-lagnas`, `phase-M sahams`
+- Helper: `locked_facts._is_primary_phase(name) -> bool`
+
+### Decision matrix (`_engine_honesty_check` in `openai_helper.py:6087`)
+| Condition                                       | Verdict   |
+|-------------------------------------------------|-----------|
+| Any PRIMARY in `failed`                         | REFUSE    |
+| Any PRIMARY in `skipped` (kundli guaranteed)    | REFUSE    |
+| Only OPTIONAL in `failed` / `skipped`           | WARN      |
+| All ok (or status empty / fast-path)            | NO ACTION |
+| Status non-dict / import failed (defensive)     | NO ACTION |
+| `ENGINE_HONESTY=0` (kill-switch)                | NO ACTION |
+
+### Behavior
+- **REFUSE** (oneshot only — stream cannot abort mid-flight): replace AI text with `_ENGINE_HONESTY_REFUSAL_TEXT` (Hinglish: *"Abhi engine se kundli ka core data calculate karne mein technical issue aa raha hai..."*). Telemetry: `4a.TIMING_VALIDATOR_HONEST_REFUSAL`.
+- **WARN** (oneshot AND stream parity): append `_ENGINE_WARN_FOOTER_TEXT` (`ⓘ Note: kuch advanced calculations (transits/varshaphala/sahams) abhi available nahi hain — main answer affected nahi hai.`). Idempotent — skip if marker `ⓘ Note:` already present or text equals refusal template. Telemetry: `4c.ENGINE_WARNING_INJECTED` with `path: "oneshot"|"stream"`.
+- **Fix-K reversal** (`openai_helper.py:8138`): primary failure path now returns refusal instead of silent bypass. Legacy soften branch retained behind `ENGINE_HONESTY=0` for emergency rollback.
+- **Fix-M preserved verbatim**: validator-bucket softening for `analysis_primary` / `cross_domain` / `why_leading` is unchanged — those are intent-classification mismatches, not engine failures.
+
+### Files touched
+- `artifacts/api-server/locked_facts.py`
+  - `_is_primary_phase` regex helper (~line 421)
+  - phase-A/B/C/D/E `_record_phase` instrumentation in `build_locked_facts` (~437–565)
+  - phase-B accepts `currentDasha.{maha|md|mahadasha|MD|lord|planet}` OR `dashas[]` array OR `currentPhase.name` (live-test fix — fixture uses `maha` field)
+- `artifacts/api-server/openai_helper.py`
+  - `_ENGINE_HONESTY_REFUSAL_TEXT`, `_ENGINE_WARN_FOOTER_TEXT`, `_ENGINE_WARN_FOOTER_MARKER` constants (~6067)
+  - `_engine_honesty_check()` helper (~6087, pure function with kill-switch)
+  - Fix-K reversal at primary-failure branch (~8122–8175)
+  - Warn-footer injection — oneshot path (~10025–10048)
+  - Warn-footer injection — stream path parity (~10295–10318)
+
+### Verification
+- 12/12 unit tests pass (decision matrix 5 rows + primary classifier 10 phases + kill-switch + edge cases)
+- 29/29 adversarial scenarios pass (primary-failed REFUSE, optional-failed WARN, primary-skipped REFUSE, primary+optional REFUSE wins, empty/fast-path NO-ACTION, non-dict defensive, kill-switch toggle round-trip, refusal/footer text shape)
+- 0/6 false-positive refusals on healthy WV1-6 audit fixtures
+- Phase 4.1 truth-coverage checks unaffected (WV4 still returns clean house-lord/retrograde claim)
+
+### Known v1 limitations (Phase 4.4 backlog)
+- Stream-path REFUSAL deferred — `ai_ask_stream` cannot cleanly abort mid-stream; only WARN footer applies in stream
+- Phases F, G reserved for future primary phases (e.g. divisional charts when promoted to primary)

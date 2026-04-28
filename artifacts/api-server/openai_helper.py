@@ -6061,6 +6061,92 @@ _POST_LOGIC_REFUSAL_TEXT = (
     "kar do, ya thodi der baad try karo. Galat baat bolna nahi chahta."
 )
 
+# Phase 4.2 (Apr 28, 2026) — engine honesty refusal.
+# Fired when a PRIMARY engine phase (chart-intel / dasha / lagna / dosh /
+# verdicts) failed to compute. Replaces the pre-Phase-4.2 Sprint-26 Fix-K
+# silent bypass which let the AI's invented timing pass through whenever
+# `engine_status.overall == "empty"`. The new stance: engine failure on a
+# primary phase = real backend bug → refuse honestly, never guess.
+_ENGINE_HONESTY_REFUSAL_TEXT = (
+    "Abhi engine se kundli ka core data calculate karne mein technical issue "
+    "aa raha hai — sahi answer dene ke liye thodi der baad try karo. Galat "
+    "date ya prediction nahi dena chahta."
+)
+
+# Phase 4.2 — warning footer for OPTIONAL-phase failures (Sprint-33+
+# transits/tajik/sahams/special-lagnas). Main answer survives, but user
+# is told some advanced calculations are temporarily unavailable so they
+# don't trust transit/varshaphala-derived claims that aren't in the answer.
+_ENGINE_WARN_FOOTER_MARKER = "ⓘ Note:"
+_ENGINE_WARN_FOOTER_TEXT = (
+    "\n\nⓘ Note: kuch advanced calculations (transits/varshaphala/sahams) "
+    "abhi available nahi hain — main answer affected nahi hai."
+)
+
+
+def _engine_honesty_check(engine_status, qu=None):
+    """Phase 4.2 — decide whether to REFUSE, WARN, or take no action based
+    on engine_status. Pure function. Kill-switch: env var ENGINE_HONESTY=0
+    reverts to Phase 4.1 behavior (no refuse, no warn).
+
+    Returns: {refuse: bool, warn: bool, failed_phases: list[str],
+              optional_failed: list[str], reason: str}
+
+    Decision matrix (per Apr 28 2026 user clarification — kundli always
+    present, so primary failure = backend bug, not data gap):
+      | Condition                                  | Verdict       |
+      | any PRIMARY phase in `failed`              | REFUSE        |
+      | only OPTIONAL phases in `failed`/skipped   | WARN          |
+      | all phases ok                              | NO ACTION     |
+    """
+    import os as _os_eh
+    if _os_eh.getenv("ENGINE_HONESTY", "1").strip() == "0":
+        return {"refuse": False, "warn": False, "failed_phases": [],
+                "optional_failed": [], "reason": "kill_switch_off"}
+    if not isinstance(engine_status, dict):
+        return {"refuse": False, "warn": False, "failed_phases": [],
+                "optional_failed": [], "reason": "no_status"}
+    try:
+        from locked_facts import _is_primary_phase  # type: ignore
+    except Exception:
+        return {"refuse": False, "warn": False, "failed_phases": [],
+                "optional_failed": [], "reason": "import_failed"}
+    failed_entries = engine_status.get("failed") or []
+    skipped_entries = engine_status.get("skipped") or []
+    primary_failed = []
+    optional_failed = []
+    for e in failed_entries:
+        if not isinstance(e, dict):
+            continue
+        ph = e.get("phase", "")
+        if _is_primary_phase(ph):
+            primary_failed.append(ph)
+        else:
+            optional_failed.append(ph)
+    # OPTIONAL skipped phases also contribute to warn (e.g. transits skipped
+    # due to upstream issue) — but PRIMARY skipped is treated like failed
+    # because kundli is guaranteed present so a skip here = bug.
+    for e in skipped_entries:
+        if not isinstance(e, dict):
+            continue
+        ph = e.get("phase", "")
+        if _is_primary_phase(ph):
+            primary_failed.append(ph)
+        else:
+            optional_failed.append(ph)
+    if primary_failed:
+        return {"refuse": True, "warn": False,
+                "failed_phases": primary_failed,
+                "optional_failed": optional_failed,
+                "reason": "primary_phase_failed"}
+    if optional_failed:
+        return {"refuse": False, "warn": True,
+                "failed_phases": [],
+                "optional_failed": optional_failed,
+                "reason": "optional_phase_failed"}
+    return {"refuse": False, "warn": False, "failed_phases": [],
+            "optional_failed": [], "reason": "all_ok"}
+
 _PL_SYNONYMS = {
     "surya": "sun",       "ravi": "sun",
     "chandra": "moon",    "chandrama": "moon",
@@ -8030,10 +8116,53 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _multi_intent_softens = (_is_analysis_primary
                                  or _qu_cross_domain
                                  or _why_leading)
+        # Phase 4.2 (Apr 28, 2026) — engine honesty check INVERTS the old
+        # Sprint-26 Fix-K silent bypass. Per user-clarified gating constraint
+        # ("ask section bina kundli ke khulta hi nahi"), birth time/date is
+        # GUARANTEED present, so engine_overall == "empty" + missing primary
+        # phase = real backend bug, NOT a legitimate data gap. We refuse
+        # honestly instead of letting the AI's invented timing pass through.
+        # Fix-M softening (analysis_primary / cross_domain / why_leading)
+        # is preserved unchanged below — those are validator-bucket
+        # mismatches, not engine failures.
+        try:
+            _hon = _engine_honesty_check(_eng, qu=locals().get("_qu"))
+        except Exception as _hon_exc:  # noqa: BLE001
+            _trace(req_id, "4a.ENGINE_HONESTY_ERR", str(_hon_exc))
+            _hon = {"refuse": False, "warn": False,
+                    "failed_phases": [], "optional_failed": [],
+                    "reason": "honesty_check_exception"}
         if (not _lock["ok"]
                 and _val.get("is_timing")
                 and _no_authorised
+                and _hon.get("refuse")):
+            # PRIMARY phase failed/skipped → honest refusal. NOTE: we
+            # intentionally DO NOT require `_engine_unavailable` here —
+            # if any primary phase failed, overall=="partial" (because
+            # other primary phases ok'd), but the chart is still
+            # corrupt enough that timing answers are unsafe. Architect
+            # caught this gating bug in Phase 4.2 review (Apr 28 2026).
+            _trace(req_id, "4a.TIMING_VALIDATOR_HONEST_REFUSAL", {
+                "reason": "primary_phase_failed",
+                "engine_overall": _engine_overall,
+                "failed_primary": _hon.get("failed_phases", []),
+                "engine_failed_all": [
+                    e.get("phase") for e in _eng.get("failed", [])
+                ],
+                "rejected_tokens": _val.get("invented_tokens", []),
+                "served_text": "_ENGINE_HONESTY_REFUSAL_TEXT",
+                "rule": "engine primary failure → honest refusal "
+                        "(Phase 4.2)",
+            })
+            text = _ENGINE_HONESTY_REFUSAL_TEXT
+        elif (not _lock["ok"]
+                and _val.get("is_timing")
+                and _no_authorised
                 and _engine_unavailable):
+            # Engine empty but no primary failure recorded — could be
+            # kill-switch off (ENGINE_HONESTY=0) OR pre-Phase-4.2
+            # untracked state. Preserve legacy Fix-K silent bypass for
+            # backwards compat / emergency rollback.
             _trace(req_id, "4a.TIMING_VALIDATOR_SOFTENED", {
                 "reason": "engine_unavailable_trust_ai",
                 "engine_overall": _engine_overall,
@@ -8041,8 +8170,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     e.get("phase") for e in _eng.get("failed", [])
                 ],
                 "rejected_tokens": _val.get("invented_tokens", []),
+                "honesty_reason": _hon.get("reason"),
                 "rule": "engine absence ≠ AI hallucination "
-                        "(Sprint-26 Fix-K)",
+                        "(Sprint-26 Fix-K, kill-switch active)",
             })
             # Leave `text` untouched — AI's answer survives.
         elif (not _lock["ok"]
@@ -9894,6 +10024,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "2v.POST_LOGIC_CHECK_POST_TIMING_ERR",
                {"error": str(_safety_exc)[:200]})
 
+    # Phase 4.2 (Apr 28, 2026) — engine warning footer for OPTIONAL-phase
+    # failures. If only Sprint-33+ optional phases (transits/tajik/sahams/
+    # special-lagnas) failed/skipped, the main answer survives but we surface
+    # the gap to the user transparently. Skip if (a) text is already a
+    # refusal template, (b) footer marker already present (idempotency).
+    try:
+        if (text
+                and isinstance(text, str)
+                and text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                and text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()
+                and _ENGINE_WARN_FOOTER_MARKER not in text):
+            _hon_warn = _engine_honesty_check(
+                (build_meta or {}).get("engine_status") or {},
+                qu=locals().get("_qu"),
+            )
+            if _hon_warn.get("warn"):
+                text = text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+                _trace(req_id, "4c.ENGINE_WARNING_INJECTED", {
+                    "path": "oneshot",
+                    "optional_failed": _hon_warn.get("optional_failed", []),
+                    "reason": _hon_warn.get("reason"),
+                })
+    except Exception as _warn_exc:  # noqa: BLE001
+        _trace(req_id, "4c.ENGINE_WARNING_ERR", str(_warn_exc)[:200])
+
     _trace(req_id, "5.FINAL_OUTPUT", text)
     _trace(req_id, "6.FOLLOW_UPS", {
         "topic": topic, "lang": eff_lang, "items": follow_ups,
@@ -10138,6 +10293,32 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
 
     eff_lang = _resolve_response_lang(question, lang, preferred_language)
     follow_ups = _derive_follow_ups(topic, eff_lang)
+
+    # Phase 4.2 — stream-path engine warning footer parity. Refusal cannot
+    # cleanly abort a stream mid-flight (deferred to Phase 4.4 backlog), but
+    # the warn footer for OPTIONAL-phase failures CAN be appended after the
+    # stream completes. Same idempotency guards as oneshot path.
+    try:
+        if (final_text
+                and isinstance(final_text, str)
+                and final_text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                and final_text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()
+                and _ENGINE_WARN_FOOTER_MARKER not in final_text):
+            _hon_warn_s = _engine_honesty_check(
+                (build_meta_stream or {}).get("engine_status") or {},
+                qu=locals().get("_qu"),
+            )
+            if _hon_warn_s.get("warn"):
+                final_text = final_text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+                _trace(req_id, "4c.ENGINE_WARNING_INJECTED", {
+                    "path": "stream",
+                    "optional_failed": _hon_warn_s.get("optional_failed", []),
+                    "reason": _hon_warn_s.get("reason"),
+                })
+    except Exception as _warn_exc_s:  # noqa: BLE001
+        _trace(req_id, "4c.ENGINE_WARNING_ERR",
+               f"stream:{str(_warn_exc_s)[:180]}")
+
     _trace(req_id, "5.FINAL_OUTPUT(stream)", final_text)
     _trace(req_id, "6.FOLLOW_UPS(stream)", {
         "topic": topic, "lang": eff_lang, "items": follow_ups,

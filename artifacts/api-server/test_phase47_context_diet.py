@@ -157,18 +157,24 @@ class SlimLockedFactsUnit(unittest.TestCase):
         self.assertNotIn("UPAPADA LAGNA", out_career)
 
     def test_indented_arrow_lines_treated_as_subline_not_header(self):
-        """`   ▸ NOW: Rahu Pratyantar...` (indented ▸) is a sub-line under
-        ▸ PRATYANTAR, NOT a new section. Must pass through when parent
-        section is kept."""
+        """`   ▸ MD lord: Rahu` (indented ▸) is a sub-line under
+        ▸ CURRENT DASHA, NOT a new section. Must pass through when
+        parent section is kept.
+
+        Phase 4.8 T017 update: switched the fixture from `▸ PRATYANTAR`
+        to `▸ CURRENT DASHA` because PRATYANTAR was intentionally
+        dropped from the allowlist. The test's structural intent —
+        that indented `▸` lines are treated as sublines, not new
+        section headers — is unchanged."""
         src = (
-            "▸ PRATYANTAR (sub-period under Rahu MD → Rahu AD):\n"
-            "   ▸ NOW: Rahu Pratyantar (2026-01-03 → 2026-05-30)\n"
-            "   ▸ NEXT pratyantars (month-precision timing windows):\n"
-            "      • Jupiter (2026-05-30 → 2026-10-09)\n"
+            "▸ CURRENT DASHA: Rahu MD → Mercury AD\n"
+            "   ▸ MD lord: Rahu (in 7H, exalted)\n"
+            "   ▸ AD lord: Mercury (in 5H, retrograde)\n"
+            "      • Sub-impact: communication-heavy phase\n"
         )
         out = self.oh._slim_locked_facts_for_narrative(src)
-        self.assertIn("NOW: Rahu Pratyantar", out)
-        self.assertIn("Jupiter (2026-05-30", out)
+        self.assertIn("MD lord: Rahu", out)
+        self.assertIn("Sub-impact: communication", out)
 
     def test_empty_input_returns_empty(self):
         self.assertEqual(self.oh._slim_locked_facts_for_narrative(""), "")
@@ -312,6 +318,11 @@ class Phase47ContextDietRuntime(unittest.TestCase):
     )
 
     # Allowlisted essentials that MUST remain in msg[2] in narrative mode
+    # NOTE: Phase 4.8 T017 intentionally DROPPED "▸ DASHA WINDOW:" and
+    # "▸ PRATYANTAR" from the allowlist — they were the source of date-
+    # range leaks ("Moon Pratyantar 2026-02-18 se 2026-05-01") that
+    # broke the 1-2 sentence narrative discipline. The model still gets
+    # MD-AD lord names via "▸ CURRENT DASHA:".
     REQUIRED_ESSENTIALS = (
         "▸ LAGNA:",
         "▸ MOON SIGN",
@@ -320,7 +331,6 @@ class Phase47ContextDietRuntime(unittest.TestCase):
         "▸ PLANET STRENGTHS:",
         "▸ ACTIVE DOSHAS:",
         "▸ CURRENT DASHA:",
-        "▸ DASHA WINDOW:",
         "▸ HOUSE-LORD PLACEMENTS:",
         "DEVOTEE'S BIRTH CHART:",
     )

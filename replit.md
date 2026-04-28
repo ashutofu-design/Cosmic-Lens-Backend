@@ -1064,3 +1064,112 @@ The diet is a feature flag, not a permanent removal.
 - love_engine returning empty `love_verdict_block` for some questions
   (probe noted this — Phase 4.6 T002 slim-FACTS bypass cannot fire
   when the engine returns empty). Investigate engine classification.
+
+## Phase 4.8 — Output Discipline (Apr 28, 2026)
+
+### The problem after Phase 4.7
+
+Phase 4.7 T016 cut INPUT from 116K → 25K chars (78% drop). Live test
+post-T016 confirmed the prompt got smaller — but the ACTUAL ANSWER
+was still 6-10 lines with full date dumps. User screenshot showed:
+
+> "Mahadasha Mars aur Mercury antardasha (2026-02-18 se 2026-05-01)
+> ke dauran emotional pull strong rahega. Moon Pratyantar mein
+> (2026-06-22 tak) ek naya connection ban sakta hai. Lekin Mars ki
+> impulsiveness ki wajah se yeh zyada tar temporary rahega. KP
+> paddhati se 7th cusp ka sub-lord Saturn confirm karta hai. ..."
+
+User wanted the format `[Verdict] → [1 reason]`, e.g.:
+> "Love ho sakta hai, lekin Mars ki impulsiveness aur Rahu ki
+> confusion ki wajah se yeh zyada tar temporary rahega."
+
+Trimming the input alone wasn't enough — the model has 28K tokens of
+training-bias toward "explain your reasoning". Three new layers:
+
+### T017 — Drop date-bearing prefixes from `_LF_KEEP_PREFIXES`
+`openai_helper.py:6803-6822` — removed `"▸ DASHA WINDOW:"` and
+`"▸ PRATYANTAR"` from the dasha-block allowlist. These were the
+literal source of "Moon Pratyantar (2026-02-18 se 2026-05-01)" leaks
+into narrative answers. Kept `"▸ CURRENT DASHA:"` so the model still
+knows MD-AD lord names — just not the calendar windows.
+
+### T018 — Replace Rule 10 BREVITY with NARRATIVE HARD CAP
+`openai_helper.py:3131-3167` — in narrative mode, after the dead-rule
+strip, `user.replace(...)` swaps the existing default literal:
+> "DEFAULT (multi-part / topic question only) — TOTAL answer = 100 to
+> 140 WORDS. NEVER more."
+
+with the new HARD CAP:
+> "NARRATIVE-MODE HARD CAP — TOTAL answer = 1 to 2 SHORT SENTENCES
+> (≤200 chars total). Format: [VERDICT in plain Hindi/Hinglish] →
+> [1 short reason]. ... NEVER mention dates, year ranges,
+> Mahadasha/Antardasha/Pratyantar names, KP, divisional charts, or
+> dosha names unless the user asked about them by name."
+
+Loud telemetry: `"[openai_helper] Phase 4.8 T018: replaced Rule 10
+100-140w default with NARRATIVE HARD CAP"` fires on every successful
+swap. Drift warning fires if `"100 to 140 WORDS"` is present but the
+exact replace literal drifted.
+
+### T019 — Post-generation truncator `_phase48_narrative_truncate`
+`openai_helper.py:8794-8888` — public helper called from `ai_ask`
+after the Sprint-22 brevity trim. Four controls per user spec:
+
+1. **Intent lock** — only fires when `_NARRATIVE_MODE` is on.
+2. **Timing-question detection** — `_phase48_is_timing_question`
+   checks for `kab / when / date / timeline / kitna time / muhurat /
+   tak / ke baad / saal / din / ...` (Hindi+English+Hinglish).
+3. **Date+sub-period strip** (only if NOT a timing question) — drops
+   sentences mentioning `pratyantar / antardasha / sookshma / ISO
+   dates`; strips date fragments (`YYYY-MM-DD`, `(... se ...)`,
+   `Month YYYY`, `YYYY tak`) from surviving sentences.
+4. **Hard caps** — first 2 sentences max, ≤280 chars (slightly over
+   the 200-char rule budget to allow Devanagari width).
+
+Idempotent: short, date-free, ≤2-sentence replies pass through
+unchanged. Loud telemetry on any actual truncation:
+`"[ai_ask][phase48-trim] NARRATIVE_MODE truncate: 480c/8l → 152c/1l"`.
+
+### T020 — Tests
+`test_phase48_output_discipline.py` — 16 tests, all pass:
+- T017 source check: line-scanned `_LF_KEEP_PREFIXES` literal
+  entries (skipping comment lines), confirms `▸ PRATYANTAR` and
+  `▸ DASHA WINDOW` are gone, `▸ CURRENT DASHA` retained.
+- T018 runtime: intercepts the OpenAI client, asserts the user-turn
+  content has `"NARRATIVE-MODE HARD CAP"` and `"1 to 2"`, no
+  `"100 to 140 WORDS"`. Also asserts no DATED `Pratyantar (YYYY-...)`
+  leak and < 3 ISO dates total in the user turn (the bare word
+  `Pratyantar` may legitimately remain in instructional rule text —
+  the bug shape is the dated DATA dump).
+- T019 unit: 10 direct tests on `_phase48_narrative_truncate` — timing
+  intent detection on 6 timing Qs and 3 decision Qs; long dated reply
+  trimmed to ≤2 sentences / ≤280c / no dates / no pratyantar for
+  decision Qs; dates+pratyantar SURVIVE on timing Qs (they ARE the
+  answer); short reply idempotency (1-sentence + 2-sentence shapes);
+  empty-input passthrough; Devanagari `।` punctuation split.
+- Stale Phase 4.7 fixtures updated to reflect T017's allowlist
+  change: `REQUIRED_ESSENTIALS` no longer expects `▸ DASHA WINDOW:`
+  (intentionally dropped); `test_indented_arrow_lines_treated_as_
+  subline_not_header` switched from `▸ PRATYANTAR` fixture to
+  `▸ CURRENT DASHA` (structural intent unchanged).
+
+### Verification
+- 92 tests green: 16 Phase 4.8 + 16 Phase 4.7 context-diet (was 16,
+  one fixture updated) + 8 Phase 4.7 runtime invariants + 23 Phase
+  4.6 + 24 Phase 4.5 + 5 unrelated. No regressions in Phase 4.5/4.6.
+- Live restart: API server starts clean, T018 telemetry fires on
+  every narrative-mode call (`Phase 4.8 T018: replaced Rule 10
+  100-140w default with NARRATIVE HARD CAP`).
+
+### Reversibility
+`NARRATIVE_MODE=0` reverts every Phase 4.8 change — Rule 10 stays at
+100-140 word default, T019 truncator is gated behind
+`if _NARRATIVE_MODE:`, T017's allowlist drop is unconditional but
+only matters in narrative paths (other modes use full data dumps).
+
+### Out of scope / scheduled next
+- Live-confirm with user that the actual chat output is now 1-2 lines
+  in their app. T018+T019 are tested but the user's screenshot was
+  taken before T017+T018+T019 shipped — they should re-test.
+- If model still over-explains under HARD CAP, consider further
+  dropping Rule 11/12/13 advisory text (each adds prose tokens).

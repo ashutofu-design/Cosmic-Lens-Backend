@@ -8840,9 +8840,13 @@ def _phase48_narrative_truncate(text: str, question: str) -> str:
         )
         pratyantar_sent_rx = _reN.compile(
             r"(?i)\b("
-            r"pratyantar|antardasha|antar\s*dasha|antar-dasha|"
+            # Architect-flagged spelling variants:
+            #   antardasha / antardasa (without 'h') / antar dasha / antar-dasha
+            #   pratyantar / pratyantardasha (full word)
+            r"pratyantar(?:dasha)?|"
+            r"antardash[ae]|antar\s*dash[ae]|antar-dash[ae]|"
             r"sookshma|sukshma|"
-            r"mahadasha\s+\w+\s+(?:aur|and)\s+\w+\s+antardasha|"
+            r"mahadasha\s+\w+\s+(?:aur|and)\s+\w+\s+antardash[ae]|"
             r"\d{4}-\d{2}-\d{2}"
             r")\b"
         )
@@ -11429,9 +11433,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             if _trimmed != text:
                 _orig_lines = len([l for l in text.split("\n") if l.strip()])
                 _new_lines = len([l for l in _trimmed.split("\n") if l.strip()])
+                # Architect-flagged: include timing_q in telemetry so a
+                # production "missing dates" complaint can be debugged
+                # by checking whether the question was classified as
+                # timing (in which case dates SHOULD have survived).
+                _is_timing_q = _phase48_is_timing_question(question or "")
                 print(f"[ai_ask][phase48-trim] NARRATIVE_MODE truncate: "
                       f"{len(text)}c/{_orig_lines}l → "
-                      f"{len(_trimmed)}c/{_new_lines}l")
+                      f"{len(_trimmed)}c/{_new_lines}l "
+                      f"(timing_q={_is_timing_q})")
                 text = _trimmed
         except Exception as _exc:
             print(f"[ai_ask] Phase 4.8 T019 narrative truncator failed: {_exc}")

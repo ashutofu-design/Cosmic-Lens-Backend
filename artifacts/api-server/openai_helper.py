@@ -7988,42 +7988,190 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # only run when their respective verdict objects are present. We keep
     # those in place (they also do bucket-specific cite injection) but add
     # this UNCONDITIONAL global strip as the very last text mutation, so no
-    # supertype can leak placeholders to the user — verified via Q1 of the
-    # brutal-10 test set.
+    # supertype can leak placeholders to the user.
+    #
+    # Sprint-26 hard-test (20 questions) follow-up: simple bracket strip is
+    # not enough — the AI sometimes emits TEMPLATE SKELETONS like
+    # "tab hoga jab dasha khatam hogi aur dasha shuru hogi" (two bare "dasha"
+    # tokens with no planet / MD / AD name to ground them) or
+    # " ke baad dasha shuru hogi" (orphan leading-particle line, the leading
+    # space is the residue of a stripped "[Planet]" placeholder). Both are
+    # useless to the user and look broken. Extended this scrub to:
+    #   (a) drop sentences with 2+ bare "dasha" tokens AND no planet /
+    #       Mahadasha / Antardasha / Pratyantardasha / MD/AD/PD anchor in
+    #       the same sentence, and
+    #   (b) drop lines whose only content begins with whitespace + a Hindi
+    #       connective particle (ke/ka/ki/me/mein/se/tak/ko) — these are
+    #       always template-fragment leftovers.
     try:
         import re as _re_global_ph
+
         _global_ph_rx = _re_global_ph.compile(
             r"\[engine:\s*(?:dasha not cited|window pending|"
             r"year[^\]]*|month[^\]]*)\]",
             _re_global_ph.IGNORECASE,
         )
-        if text and _global_ph_rx.search(text):
-            _stripped = _global_ph_rx.sub("", text)
-            # Collapse empty parens / repeated whitespace / orphan punctuation
-            # left behind by the strip.
-            _stripped = _re_global_ph.sub(
-                r"\(\s*se\s*\)", "", _stripped)
-            _stripped = _re_global_ph.sub(
-                r"\(\s*\)", "", _stripped)
-            _stripped = _re_global_ph.sub(
-                r"\s+([,.;!?])", r"\1", _stripped)
-            _stripped = _re_global_ph.sub(
-                r"[ \t]+", " ", _stripped)
-            # Drop residual broken lines that lost their meaning after the
-            # strip — e.g. "dasha ke dasha mein chal raha hai" or
-            # "engine data insufficient" boilerplate.
-            _global_bad_rx = _re_global_ph.compile(
-                r"^\s*(?:dasha\s+ke\s+dasha|"
-                r"engine\s+data\s+insufficient|"
-                r"⚐\s*Note:\s*precise\s+dates).*$",
-                _re_global_ph.IGNORECASE,
-            )
-            _kept = [ln for ln in _stripped.splitlines()
-                     if not _global_bad_rx.search(ln)]
-            text = "\n".join(_kept).strip()
-            _trace(req_id, "4z.GLOBAL_PH_STRIP",
-                   {"reason": "unconditional final scrub of "
-                              "[engine: ...] placeholders"})
+        # Anchors that legitimise a bare "dasha" token in a sentence.
+        # Architect-recommended expansion: include bhukti / vimshottari /
+        # yogini / char / hyphenated antar-dasha / spaced pratyantar dasha /
+        # Devanagari महादशा / अंतरदशा / प्रत्यंतर forms.
+        _dasha_anchor_rx = _re_global_ph.compile(
+            r"\b(?:jupiter|saturn|mars|mercury|venus|sun|moon|rahu|ketu|"
+            r"surya|chandra|mangal|budh|guru|shukra|shani|"
+            r"mahadasha|antardasha|pratyantardasha|"
+            r"antar[\s\-]dasha|pratyantar[\s\-]dasha|"
+            r"bhukti|vimshottari|yogini|char[\s\-]dasha|"
+            r"\bmd\b|\bad\b|\bpd\b)|"
+            r"महादशा|अंतरदशा|अन्तर्दशा|प्रत्यंतर|प्रत्यन्तर",
+            _re_global_ph.IGNORECASE,
+        )
+        _bare_dasha_rx = _re_global_ph.compile(r"\bdasha\b", _re_global_ph.IGNORECASE)
+        # Verb pattern that distinguishes a TEMPLATE skeleton (fill-in
+        # expectation that never happened) from a legitimate Vedic concept
+        # explanation. Skeletons say "<dasha> khatam/shuru/chal raha/weak/
+        # strong hai/hogi"; concept lines say "<dasha> badalta hai" /
+        # "<dasha> ka concept hai" / "<dasha> mein sub-dasha hoti hai".
+        _skeleton_verb_rx = _re_global_ph.compile(
+            r"\b(?:khatam|shuru|chal\s+raha|chal\s+rahi|weak|strong|"
+            r"weak\s+hai|strong\s+hai|chal\s+raha\s+hai|chal\s+rahi\s+hai)\b",
+            _re_global_ph.IGNORECASE,
+        )
+        # Orphan leading-particle line — only drop SHORT lines (≤8 words),
+        # because legitimate wrapped continuation lines are usually longer.
+        _orphan_lead_rx = _re_global_ph.compile(
+            r"^\s+(?:ke|ka|ki|me|mein|se|tak|ko)\s",
+            _re_global_ph.IGNORECASE,
+        )
+        _bad_line_rx = _re_global_ph.compile(
+            r"^\s*(?:dasha\s+ke\s+dasha|"
+            r"engine\s+data\s+insufficient|"
+            r"⚐\s*Note:\s*precise\s+dates).*$",
+            _re_global_ph.IGNORECASE,
+        )
+
+        if text:
+            _changed = False
+            # Snapshot the pre-scrub text so we can rollback if our scrub
+            # accidentally destroys too much (worst-case: AI generated
+            # all-template-skeleton output and every sentence gets dropped,
+            # leaving an empty response — empty is worse than ugly).
+            _pre_scrub_text = text
+            _pre_scrub_word_count = len(text.split())
+
+            # (1) Strip [engine: ...] tokens if any.
+            if _global_ph_rx.search(text):
+                text = _global_ph_rx.sub("", text)
+                # Collapse empty parens / repeated whitespace / orphan punct
+                # left behind by the strip.
+                text = _re_global_ph.sub(r"\(\s*se\s*\)", "", text)
+                text = _re_global_ph.sub(r"\(\s*\)", "", text)
+                text = _re_global_ph.sub(r"\s+([,.;!?])", r"\1", text)
+                text = _re_global_ph.sub(r"[ \t]+", " ", text)
+                _changed = True
+
+            # (2) Drop residual broken lines (boilerplate left by upstream).
+            # Architect feedback: orphan-leading-particle rule narrowed to
+            # SHORT lines only (≤8 words) so legitimate wrapped continuation
+            # lines (which are typically longer) cannot be wrongly dropped.
+            _kept_lines = []
+            for _ln in text.splitlines():
+                if _bad_line_rx.search(_ln):
+                    _changed = True
+                    continue
+                if _orphan_lead_rx.match(_ln) and len(_ln.split()) <= 8:
+                    _changed = True
+                    continue
+                _kept_lines.append(_ln)
+            text = "\n".join(_kept_lines)
+
+            # (3) Sentence-level template-skeleton scrub. Architect feedback:
+            # the `≥2 bare "dasha" + no anchor` heuristic alone is too broad
+            # and would also drop legitimate Vedic concept explanations like
+            # "Dasha ke baad dasha badalta hai" or "Har dasha mein sub-dasha
+            # hoti hai". Tightened: ALSO require a SKELETON VERB pattern
+            # (khatam / shuru / chal raha / weak / strong hai/hogi) — that
+            # specific pattern is what distinguishes a stripped-placeholder
+            # template from a concept explanation.
+            _sent_split_rx = _re_global_ph.compile(r"(?<=[।\.!?])\s+")
+            _new_paragraphs = []
+            for _para in text.split("\n"):
+                if not _bare_dasha_rx.search(_para):
+                    _new_paragraphs.append(_para)
+                    continue
+                _parts = _sent_split_rx.split(_para)
+                _kept_parts = []
+                for _p in _parts:
+                    _bare_n = len(_bare_dasha_rx.findall(_p))
+                    if (_bare_n >= 2
+                            and not _dasha_anchor_rx.search(_p)
+                            and _skeleton_verb_rx.search(_p)):
+                        _changed = True
+                        continue
+                    _kept_parts.append(_p)
+                _new_paragraphs.append(" ".join(_kept_parts))
+            text = "\n".join(_new_paragraphs).strip()
+
+            # (4) ROLLBACK GUARD — if the scrub has destroyed too much of
+            # the original content (e.g. AI generated all-template text and
+            # every sentence got dropped), restore the pre-scrub text. An
+            # ugly answer is materially better for the user than an empty
+            # one. Architect-corrected thresholds:
+            #   * Always rollback if scrubbed text is empty.
+            #   * Only enforce the 30-word ABSOLUTE floor when the original
+            #     was substantial (>50 words). Short originals can produce
+            #     legitimately short answers — don't punish them.
+            #   * Enforce 30% RELATIVE floor only when original >50 words.
+            # CRITICAL safety: when rolling back, ALWAYS re-strip the
+            # `[engine: ...]` bracket placeholders first — restoring raw
+            # pre-scrub text would re-leak internal markers and defeat the
+            # scrub's primary objective. Skeleton residue in the rolled-
+            # back text is acceptable (it's just ugly text) but bracket
+            # placeholders MUST never reach the user.
+            if _changed:
+                _post_word_count = len(text.split())
+                _is_empty = not text
+                _too_short_absolute = (
+                    _pre_scrub_word_count > 50
+                    and _post_word_count < 30
+                )
+                _too_short_relative = (
+                    _pre_scrub_word_count > 50
+                    and _post_word_count
+                    < max(30, int(_pre_scrub_word_count * 0.30))
+                )
+                if _is_empty or _too_short_absolute or _too_short_relative:
+                    # Safe rollback: re-strip bracket placeholders from
+                    # pre-scrub text so we never re-leak them.
+                    _safe_rollback = _global_ph_rx.sub("", _pre_scrub_text)
+                    _safe_rollback = _re_global_ph.sub(
+                        r"\(\s*se\s*\)", "", _safe_rollback)
+                    _safe_rollback = _re_global_ph.sub(
+                        r"\(\s*\)", "", _safe_rollback)
+                    _safe_rollback = _re_global_ph.sub(
+                        r"\s+([,.;!?])", r"\1", _safe_rollback)
+                    _safe_rollback = _re_global_ph.sub(
+                        r"[ \t]+", " ", _safe_rollback)
+                    _trace(req_id, "4z.GLOBAL_PH_STRIP_ROLLBACK", {
+                        "reason": "scrub removed too much content — "
+                                  "restoring bracket-stripped pre-scrub "
+                                  "text (skeleton residue acceptable, "
+                                  "placeholders never re-leaked)",
+                        "trigger": ("empty" if _is_empty
+                                    else "abs_floor" if _too_short_absolute
+                                    else "rel_floor"),
+                        "pre_words": _pre_scrub_word_count,
+                        "post_words": _post_word_count,
+                        "rollback_words": len(_safe_rollback.split()),
+                    })
+                    text = _safe_rollback.strip()
+                else:
+                    _trace(req_id, "4z.GLOBAL_PH_STRIP",
+                           {"reason": "unconditional final scrub of "
+                                      "[engine: ...] placeholders + "
+                                      "template-skeleton sentences + "
+                                      "orphan leading-particle lines",
+                            "pre_words": _pre_scrub_word_count,
+                            "post_words": _post_word_count})
     except Exception as _ph_exc:  # noqa: BLE001
         _trace(req_id, "4z.GLOBAL_PH_STRIP_ERR", str(_ph_exc))
 

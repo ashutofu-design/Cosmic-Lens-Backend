@@ -1283,3 +1283,121 @@ Architect raised one CRITICAL ordering bug + classifier hardening:
   hard cap upward (e.g., 7) and bump `max_chars` accordingly.
 - Optional: surface `tier` in the streaming `final` event payload
   for client-side analytics.
+
+---
+
+## Phase 5.0 — FINAL STRIP (minimal Ask prompt)
+
+### What changed
+Phase 5.0 strips the Ask prompt down to the bare minimum: a single
+short system message + a single user message containing a ~500-char
+mini chart summary and the question. All multi-system contracts,
+narrator/supertype preambles, KP forcing, mandatory-reminder blocks,
+repeated locked_facts dumps, style/jargon/format validators, and tier
+hacks inside the prompt have been removed for the Phase 5.0 path.
+
+The ONLY guards retained from older phases are the two correctness
+guards that prevent date/dasha hallucination:
+- `POST_LOGIC_CHECK` (`2v.POST_LOGIC_CHECK_CLEAN`) — verifies the
+  model didn't invent an MD/AD that contradicts the chart.
+- `TIMING_VALIDATOR` (`4a.TIMING_VALIDATOR_OK`) — verifies any
+  timing claim is anchored in authorised tokens from the chart.
+
+Output style/length is now determined by the model itself, not by
+in-prompt tier hints or post-hoc Phase 4.9 truncators (which are
+explicitly skipped on the Phase 5.0 path — see telemetry below).
+
+### New helpers (openai_helper.py)
+- `_phase50_mini_chart_summary(kundli) -> str` (~9025) — deterministic
+  ~500-char block: Lagna+lord, Moon+nakshatra, Sun, current MD/AD by
+  lord names (NO dates), planet-in-house list (`1H: Mars(Sag) | …`).
+  Defensive against missing keys; never raises.
+- `_phase50_extract_verdict_facts(build_meta) -> list[str]` (~9081) —
+  pulls marriage/wealth verdict text out of the precomputed
+  `build_meta` as plain fact lines (NOT a contract).
+- `_phase50_build_minimal_messages(question, kundli, lang,
+  verdict_facts) -> (messages, telemetry_dict)` (~9094) — returns
+  EXACTLY 2 messages (`system`, `user`). System: "You are an
+  experienced Vedic astrologer. Answer the question naturally using
+  ONLY the chart data given below. Do NOT invent dasha names, dates,
+  or planet positions — if a fact is not in the chart data, do not
+  state it. Reply in the same Hindi/Hinglish style as the question."
+  No tier hint, no length hint.
+- `_phase50_install_minimal_messages(question, kundli, lang,
+  build_meta, req_id, path_label)` (~9135) — shared install helper
+  used by BOTH `ai_ask` and `ai_ask_stream` so the sync and stream
+  paths cannot drift.
+- `_PHASE50_TIER_HINT = ""` — the per-tier length hint used in earlier
+  T028 drafts is now an empty constant, intentionally retained as a
+  named anchor so tier behaviour can be re-introduced behind a
+  separate flag without re-plumbing the builder signature.
+
+### Wiring (ai_ask + ai_ask_stream)
+- Sync gate at ~9601 and stream gate at ~12295 both call the same
+  shared `_phase50_install_minimal_messages` helper, which:
+  1. Sets `_phase50_active` / `_phase50_active_stream` on the local
+     scope so downstream blocks can detect the path.
+  2. Builds the 2-message list and prints
+     `[ask:<id>] 2x.PHASE50_MINIMAL_ACTIVE: {...}` and
+     `[ask:<id>] 2e.SUPERTYPE_CONTRACT_SKIPPED: {...}`.
+- Cross-domain block, wealth structured path, and supertype contract
+  install are BYPASSED on the Phase 5.0 path (their pre-conditions
+  short-circuit on the active flag).
+- Style scrubber (sync ~10666, stream ~12415) is gated to skip when
+  the active flag is set, emitting `4d.SCRUBBER_SKIPPED`.
+- Phase 4.9 / Phase 4.8 truncator (sync ~11858, stream ~12632) is
+  gated to skip when the active flag is set, emitting
+  `phase48.TRUNCATOR_SKIPPED` with `raw_chars` for visibility.
+
+### Telemetry (Phase 5.0 active path — single live trace)
+```
+2x.PHASE50_MINIMAL_ACTIVE: {"user_chars": 354, "facts_lines": 0,
+                            "message_count": 2, "roles": ["system","user"]}
+2e.SUPERTYPE_CONTRACT_SKIPPED: {"reason": "phase50 minimal-prompt path"}
+3.PROMPT: message_count=2, roles=["system","user"], system_preview
+  = "You are an experienced Vedic astrologer. Answer the question
+     naturally using ONLY the chart data given below. …"
+2v.POST_LOGIC_CHECK_CLEAN: {"truth_md": "jupiter", "truth_ad": "rahu"}
+4a.TIMING_VALIDATOR_OK: {"ok": true, "is_timing": false, ...}
+4d.SCRUBBER_SKIPPED: {"reason": "phase50 minimal-prompt path …"}
+phase48.TRUNCATOR_SKIPPED: {"reason": "phase50 minimal-prompt path …",
+                            "raw_chars": 900}
+```
+The model produced a natural 891-char Hindi answer with 4 paragraphs
+— length chosen by the model, not by in-prompt or post-hoc trimmers.
+
+### Reversibility
+- Single env flag `PHASE50_MINIMAL_PROMPT` (default `"1"`).
+- Setting `PHASE50_MINIMAL_PROMPT=0` and restarting the api-server
+  reverts BOTH paths to the legacy heavy assembly: the install helper
+  no longer fires, `_phase50_active*` flags stay false, the scrubber
+  + truncator gates fall through to their original behaviour, and
+  the supertype contract install resumes.
+- All flag-aware tests (`test_phase50_minimal_prompt.py` + 5
+  class-level `skipIf` decorators on the legacy phase47/48 suites)
+  re-activate the legacy assertions automatically when the flag is
+  back to `0`.
+
+### Tests
+- `artifacts/api-server/test_phase50_minimal_prompt.py` (25 tests):
+  mini-summary unit tests, builder shape (exactly 2 messages, no
+  contract literals, no tier hints, empty `_PHASE50_TIER_HINT`),
+  verdict extractor, env-flag honour, sync↔stream parity via the
+  shared install helper.
+- Legacy suites updated with `@unittest.skipIf(_oh_p50.
+  _phase50_minimal_prompt_enabled(), …)` on 5 classes
+  (Phase47BannedNarrativeSubstrings, Phase47ContextDietRuntime,
+  Phase47DeadRuleStripRuntime, Phase48HardCapInPrompt,
+  TestT023RuleSwapRuntime). Skips re-enable when flag=0.
+- Full suite: **138 tests, 0 failures, 0 errors, 23 skipped** with
+  `PHASE50_MINIMAL_PROMPT=1` (the default).
+
+### What this deprecates
+- Phase 4.5 supertype contracts (still in source, gated off).
+- Phase 4.7 narrator preamble + dead-rule strip (still in source,
+  gated off).
+- Phase 4.8 hard-cap-in-prompt + Phase 4.9 tier swap & truncator
+  (truncator still wired, but skipped on the Phase 5.0 path).
+
+These remain in the codebase intentionally so the env-flag revert is
+a true one-liner.

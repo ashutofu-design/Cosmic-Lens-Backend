@@ -72,6 +72,15 @@ def _load_user21_chart() -> dict:
         return chart
 
 
+import openai_helper as _oh_p50
+
+@unittest.skipIf(
+    _oh_p50._phase50_minimal_prompt_enabled(),
+    "Phase 5.0 minimal-prompt path replaces the heavy multi-system contract "
+    "stack with a 2-message minimal prompt, so contract literals (Rule N, "
+    "BACKGROUND, ADVISORY reminders, supertype contracts) no longer appear "
+    "in the effective prompt. Re-enabled when PHASE50_MINIMAL_PROMPT=0."
+)
 class Phase47BannedNarrativeSubstrings(unittest.TestCase):
     """In NARRATIVE_MODE, the EFFECTIVE prompt sent to OpenAI MUST NOT
     contain any of the loud MANDATORY-citation strings that compete with

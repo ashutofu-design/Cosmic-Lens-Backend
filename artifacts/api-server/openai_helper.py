@@ -9010,12 +9010,13 @@ def _phase50_mini_chart_summary(kundli: Any) -> str:
     return "\n".join(lines)
 
 
-_PHASE50_TIER_HINT = {
-    "simple":    "Reply in 1-2 short sentences. Direct verdict + one reason.",
-    "detailed":  "Reply in 3-5 short sentences. Plain-language explanation OK.",
-    "technical": "Reply with full technical detail (houses, dasha lords, "
-                 "yogas as applicable). No date ranges.",
-}
+# Phase 5.0 Final Strip (Apr 28 2026): tier-aware length hints REMOVED.
+# The user's directive — "tier hacks jo prompt ke andar likhe hain" — explicitly
+# bans length-control text inside the prompt. The model now decides answer
+# length naturally from the question. Constant kept as an empty dict for
+# backward compatibility with anything still importing it; do NOT re-introduce
+# tier hints here.
+_PHASE50_TIER_HINT: dict[str, str] = {}
 
 
 def _phase50_build_minimal_messages(
@@ -9036,28 +9037,29 @@ def _phase50_build_minimal_messages(
     No supertype contracts, no UNIFIED NARRATOR preamble, no Rule 1-N,
     no KP forcing, no multi-system messages.
     """
-    if tier is None:
-        tier = _question_depth_tier(question or "")
+    # `tier` is intentionally accepted but unused in the Final Strip path:
+    # tier-based length hints have been removed from the prompt. Argument
+    # kept so existing callers (and tests) need no signature change, and so
+    # we can re-introduce a tier-aware behaviour later via env flag without
+    # another callsite churn.
+    _ = tier
 
     chart_summary = _phase50_mini_chart_summary(kundli)
-    length_hint = _PHASE50_TIER_HINT.get(tier, _PHASE50_TIER_HINT["simple"])
 
-    # Language hint: keep as a soft instruction; the model already mirrors
-    # the question's language reliably with a short directive.
-    lang_hint = ""
+    # Language: a single soft mirroring instruction folded into the system
+    # message. No length, no format, no rules — model decides naturally.
     if lang == "hn":
-        lang_hint = "Reply in the same Hindi/Hinglish style as the question."
+        lang_hint = " Reply in the same Hindi/Hinglish style as the question."
     elif lang == "en":
-        lang_hint = "Reply in English."
+        lang_hint = " Reply in English."
     else:
-        lang_hint = "Match the user's language."
+        lang_hint = " Match the user's language."
 
     system_msg = (
-        "You are an experienced Vedic astrologer. Answer naturally and "
-        "clearly using ONLY the chart data given below. "
-        "Do NOT invent dasha names, dates, or planet positions — if a fact "
-        "is not in the chart data, do not state it. "
-        f"{lang_hint}"
+        "You are an experienced Vedic astrologer. Answer the question "
+        "naturally using ONLY the chart data given below. Do NOT invent "
+        "dasha names, dates, or planet positions — if a fact is not in "
+        "the chart data, do not state it." + lang_hint
     )
 
     user_parts = []
@@ -9066,12 +9068,102 @@ def _phase50_build_minimal_messages(
     if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
         user_parts.append("FACTS:\n" + extra_facts.strip())
     user_parts.append("QUESTION:\n" + (question or "").strip())
-    user_parts.append(length_hint)
 
     return [
         {"role": "system", "content": system_msg},
         {"role": "user",   "content": "\n\n".join(user_parts)},
     ]
+
+
+def _phase50_extract_verdict_facts(build_meta: Any) -> str:
+    """Phase 5.0 Final Strip — single shared extractor for engine verdicts.
+
+    Returns a newline-joined facts block (≤6 short lines, possibly empty)
+    extracted from the marriage/wealth/love/career/health/stock verdict
+    objects on `build_meta`. Used by both ai_ask and ai_ask_stream so the
+    minimal-prompt path has exactly ONE source of truth for verdict-fact
+    forwarding (no sync/stream drift).
+    """
+    parts: list[str] = []
+    bm = build_meta or {}
+    if not isinstance(bm, dict):
+        return ""
+
+    # Marriage verdict: multi-line block → first non-empty line only.
+    mv = (bm.get("marriage_verdict_block") or "").strip()
+    if mv:
+        first = next((ln for ln in mv.splitlines() if ln.strip()), "")
+        if first:
+            parts.append(f"Marriage verdict: {first.strip()}")
+
+    # Wealth verdict object: 1-line summary with optional bucket tag.
+    wv = bm.get("wealth_verdict_obj")
+    if isinstance(wv, dict):
+        v = (wv.get("verdict") or "").strip()
+        b = (wv.get("bucket")  or "").strip()
+        if v:
+            parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
+
+    # Other domain verdicts — 1 line each.
+    for key, label in [
+        ("love_verdict_obj",   "Love verdict"),
+        ("career_verdict_obj", "Career verdict"),
+        ("health_verdict_obj", "Health verdict"),
+        ("stock_verdict_obj",  "Stock verdict"),
+    ]:
+        o = bm.get(key)
+        if isinstance(o, dict):
+            v = (o.get("verdict") or o.get("summary") or "").strip()
+            if v:
+                parts.append(f"{label}: {v}")
+
+    return "\n".join(parts)
+
+
+def _phase50_install_minimal_messages(
+    question: str,
+    kundli: Any,
+    lang: str,
+    build_meta: Any,
+    req_id: str,
+    path_label: str = "",
+) -> tuple[list[dict], dict]:
+    """Phase 5.0 Final Strip — unified gate body for ai_ask + ai_ask_stream.
+
+    Performs the full minimal-prompt installation atomically:
+      1. Extract engine verdict facts from `build_meta` (shared logic).
+      2. Build the 2-message minimal prompt.
+      3. Emit the `[openai_helper] Phase 5.0:` console line + the
+         `2x.PHASE50_MINIMAL_ACTIVE` trace event.
+      4. Return (messages, telemetry) for the caller to assign.
+
+    `path_label` is appended to the trace event key (e.g. "(stream)") so
+    sync vs stream paths remain distinguishable in the trace; callers
+    pass "" for sync and "(stream)" for the stream path.
+    """
+    facts = _phase50_extract_verdict_facts(build_meta)
+    facts_lines = len([ln for ln in facts.splitlines() if ln.strip()]) if facts else 0
+    messages = _phase50_build_minimal_messages(
+        question or "", kundli, lang=lang,
+        tier=None, extra_facts=facts,
+    )
+    try:
+        user_chars = len(messages[1]["content"])
+    except Exception:
+        user_chars = 0
+    print(
+        f"[openai_helper] Phase 5.0{path_label}: minimal-prompt active — "
+        f"user_chars={user_chars} facts_lines={facts_lines} "
+        f"(heavy assembly bypassed)"
+    )
+    telemetry = {
+        "user_chars":    user_chars,
+        "facts_lines":   facts_lines,
+        "message_count": len(messages),
+        "roles":         [m["role"] for m in messages],
+    }
+    _trace(req_id, f"2x.PHASE50_MINIMAL_ACTIVE{path_label}", telemetry)
+    return messages, telemetry
 
 
 def _phase50_minimal_prompt_enabled() -> bool:
@@ -9505,59 +9597,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # env flag to "0".
     _phase50_active = False
     if mode == "astro" and _phase50_minimal_prompt_enabled():
-        _p50_facts_parts: list[str] = []
-        _bm = build_meta or {}
-        # Marriage verdict block (multi-line) → take first non-empty line
-        _mv = (_bm.get("marriage_verdict_block") or "").strip()
-        if _mv:
-            _mv_first = next((ln for ln in _mv.splitlines() if ln.strip()), "")
-            if _mv_first:
-                _p50_facts_parts.append(f"Marriage verdict: {_mv_first.strip()}")
-        # Wealth verdict obj → 1-line summary
-        _wv = _bm.get("wealth_verdict_obj")
-        if isinstance(_wv, dict):
-            _wv_v = (_wv.get("verdict") or "").strip()
-            _wv_b = (_wv.get("bucket")  or "").strip()
-            if _wv_v:
-                _p50_facts_parts.append(
-                    f"Wealth verdict: {_wv_v}" + (f" ({_wv_b})" if _wv_b else "")
-                )
-        # Other domain verdicts (love/career/health/stock) — 1 line each
-        for _key, _label in [
-            ("love_verdict_obj",   "Love verdict"),
-            ("career_verdict_obj", "Career verdict"),
-            ("health_verdict_obj", "Health verdict"),
-            ("stock_verdict_obj",  "Stock verdict"),
-        ]:
-            _o = _bm.get(_key)
-            if isinstance(_o, dict):
-                _v = (_o.get("verdict") or _o.get("summary") or "").strip()
-                if _v:
-                    _p50_facts_parts.append(f"{_label}: {_v}")
-
-        _p50_extra_facts = "\n".join(_p50_facts_parts)
-        _p50_tier = _question_depth_tier(question or "")
-        messages = _phase50_build_minimal_messages(
-            question or "", kundli, lang=lang,
-            tier=_p50_tier, extra_facts=_p50_extra_facts,
+        # Single-call install — verdict-fact extraction, message build,
+        # and telemetry all live in `_phase50_install_minimal_messages`
+        # so the stream path uses identical logic (no sync/stream drift).
+        messages, _ = _phase50_install_minimal_messages(
+            question or "", kundli, lang, build_meta, req_id, path_label="",
         )
         _phase50_active = True
-        try:
-            _p50_user_chars = len(messages[1]["content"])
-        except Exception:
-            _p50_user_chars = 0
-        print(
-            f"[openai_helper] Phase 5.0: minimal-prompt active — "
-            f"tier={_p50_tier} user_chars={_p50_user_chars} "
-            f"facts_lines={len(_p50_facts_parts)} (heavy assembly bypassed)"
-        )
-        _trace(req_id, "2x.PHASE50_MINIMAL_ACTIVE", {
-            "tier":         _p50_tier,
-            "user_chars":   _p50_user_chars,
-            "facts_lines":  len(_p50_facts_parts),
-            "message_count": len(messages),
-            "roles":        [m["role"] for m in messages],
-        })
 
     # ── Sprint-26 Fix-M — Cross-Domain Root-Cause Block ─────────────────────
     # When the user asks a dual-domain "same reason or different" question,
@@ -10614,13 +10660,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _exc:  # noqa: BLE001
         _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_ERR", str(_exc))
 
-    # ── Tone scrubber (always) — strip any blacklisted AI-style phrases.
-    pre_scrub = text
-    text = _scrub_brand_tone(text)
-    if pre_scrub != text:
-        _trace(req_id, "4d.SCRUBBER_CHANGED", {
-            "before_preview": pre_scrub[:200],
-            "after_preview":  text[:200],
+    # ── Tone scrubber — strip any blacklisted AI-style phrases.
+    # Phase 5.0 Final Strip: skipped when the minimal-prompt path is active.
+    # The scrubber is a STYLE controller (rewrites tone/phrasing); user spec
+    # explicitly bans style-modifying validators. Hallucination guards
+    # (TIMING_VALIDATOR + POST_LOGIC_CHECK) remain — those are correctness,
+    # not style.
+    if not _phase50_active:
+        pre_scrub = text
+        text = _scrub_brand_tone(text)
+        if pre_scrub != text:
+            _trace(req_id, "4d.SCRUBBER_CHANGED", {
+                "before_preview": pre_scrub[:200],
+                "after_preview":  text[:200],
+            })
+    else:
+        _trace(req_id, "4d.SCRUBBER_SKIPPED", {
+            "reason": "phase50 minimal-prompt path — style validators disabled",
         })
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")
@@ -11799,7 +11855,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     #      pratyantar/antardasha mentions from the answer.
     #   3. Hard length cut — keep first 2 meaningful sentences max.
     #   4. Format enforcer — preserve [VERDICT] → [reason] shape.
-    if _NARRATIVE_MODE and isinstance(text, str) and text.strip():
+    # Phase 5.0 Final Strip: the truncator is a TIER+FORMAT controller — it
+    # caps to N sentences/chars based on the question tier and strips date
+    # ranges per format rules. User spec ("tier hacks jo prompt ke andar
+    # likhe hain" + "format wale validators") bans these in the minimal
+    # path. Hallucination guards (TIMING_VALIDATOR + POST_LOGIC_CHECK)
+    # remain active above. NOTE: TIMING_VALIDATOR already invalidates
+    # invented date tokens, so the truncator's date-strip is redundant in
+    # the minimal path; trusting the model + the validator is the new contract.
+    if _NARRATIVE_MODE and not _phase50_active and isinstance(text, str) and text.strip():
         try:
             _trimmed = _phase48_narrative_truncate(text, question or "")
             if _trimmed != text:
@@ -11817,6 +11881,11 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 text = _trimmed
         except Exception as _exc:
             print(f"[ai_ask] Phase 4.8 T019 narrative truncator failed: {_exc}")
+    elif _phase50_active and _NARRATIVE_MODE:
+        _trace(req_id, "phase48.TRUNCATOR_SKIPPED", {
+            "reason": "phase50 minimal-prompt path — format/tier validators disabled",
+            "raw_chars": len(text) if isinstance(text, str) else 0,
+        })
 
     # ── GLOBAL PLACEHOLDER STRIP (unconditional final scrub) ────────────────
     # Sprint-26 brutal-test surfaced a real bug: the timing-validator
@@ -12245,55 +12314,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # the Phase 4.9 truncator (T025) all still fire downstream.
     _phase50_active_stream = False
     if mode == "astro" and _phase50_minimal_prompt_enabled():
-        _p50s_facts_parts: list[str] = []
-        _bms = build_meta_stream or {}
-        _mvs = (_bms.get("marriage_verdict_block") or "").strip()
-        if _mvs:
-            _mvs_first = next((ln for ln in _mvs.splitlines() if ln.strip()), "")
-            if _mvs_first:
-                _p50s_facts_parts.append(f"Marriage verdict: {_mvs_first.strip()}")
-        _wvs = _bms.get("wealth_verdict_obj")
-        if isinstance(_wvs, dict):
-            _wvs_v = (_wvs.get("verdict") or "").strip()
-            _wvs_b = (_wvs.get("bucket")  or "").strip()
-            if _wvs_v:
-                _p50s_facts_parts.append(
-                    f"Wealth verdict: {_wvs_v}" + (f" ({_wvs_b})" if _wvs_b else "")
-                )
-        for _key, _label in [
-            ("love_verdict_obj",   "Love verdict"),
-            ("career_verdict_obj", "Career verdict"),
-            ("health_verdict_obj", "Health verdict"),
-            ("stock_verdict_obj",  "Stock verdict"),
-        ]:
-            _o = _bms.get(_key)
-            if isinstance(_o, dict):
-                _v = (_o.get("verdict") or _o.get("summary") or "").strip()
-                if _v:
-                    _p50s_facts_parts.append(f"{_label}: {_v}")
-        _p50s_extra = "\n".join(_p50s_facts_parts)
-        _p50s_tier  = _question_depth_tier(question or "")
-        messages = _phase50_build_minimal_messages(
-            question or "", kundli, lang=lang,
-            tier=_p50s_tier, extra_facts=_p50s_extra,
+        # Identical install logic as ai_ask — `(stream)` label keeps the
+        # trace key distinguishable. No more sync/stream code drift.
+        messages, _ = _phase50_install_minimal_messages(
+            question or "", kundli, lang, build_meta_stream, req_id,
+            path_label="(stream)",
         )
         _phase50_active_stream = True
-        try:
-            _p50s_user_chars = len(messages[1]["content"])
-        except Exception:
-            _p50s_user_chars = 0
-        print(
-            f"[openai_helper] Phase 5.0(stream): minimal-prompt active — "
-            f"tier={_p50s_tier} user_chars={_p50s_user_chars} "
-            f"facts_lines={len(_p50s_facts_parts)} (heavy assembly bypassed)"
-        )
-        _trace(req_id, "2x.PHASE50_MINIMAL_ACTIVE(stream)", {
-            "tier":         _p50s_tier,
-            "user_chars":   _p50s_user_chars,
-            "facts_lines":  len(_p50s_facts_parts),
-            "message_count": len(messages),
-            "roles":        [m["role"] for m in messages],
-        })
 
     # ── Phase 4.5 — STREAM-PATH NARRATIVE CONTRACT INSTALL ─────────────
     # The sync `ai_ask_v2` path installs the unified narrator contract as
@@ -12382,11 +12409,20 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         raise RuntimeError("OpenAI returned empty stream")
     _trace(req_id, "4.RAW_AI_RESPONSE(stream)", raw_text)
 
-    final_text = _scrub_brand_tone(raw_text)
-    if raw_text != final_text:
-        _trace(req_id, "4d.SCRUBBER_CHANGED(stream)", {
-            "before_preview": raw_text[:200],
-            "after_preview":  final_text[:200],
+    # Phase 5.0 Final Strip: stream-side scrubber gated identically to sync
+    # path. STYLE rewriting is removed in the minimal-prompt mode; only
+    # correctness validators survive.
+    if not _phase50_active_stream:
+        final_text = _scrub_brand_tone(raw_text)
+        if raw_text != final_text:
+            _trace(req_id, "4d.SCRUBBER_CHANGED(stream)", {
+                "before_preview": raw_text[:200],
+                "after_preview":  final_text[:200],
+            })
+    else:
+        final_text = raw_text
+        _trace(req_id, "4d.SCRUBBER_SKIPPED(stream)", {
+            "reason": "phase50 minimal-prompt path — style validators disabled",
         })
     if not final_text:
         raise RuntimeError("OpenAI returned empty after scrub")
@@ -12587,8 +12623,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # ARCHITECT-FIX (Phase 4.9 review): truncator MUST run BEFORE the
     # engine-warn-footer block, otherwise the truncator's char-cap can
     # clip the appended footer mid-string. Order: truncate → footer.
+    # Phase 5.0 Final Strip: same gate as sync path. Stream truncator is a
+    # tier+format controller; banned in the minimal-prompt mode. Sync/stream
+    # parity preserved (both gate on the same flag).
     try:
         if (_NARRATIVE_MODE
+                and not _phase50_active_stream
                 and isinstance(final_text, str)
                 and final_text.strip()
                 and final_text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
@@ -12603,6 +12643,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                       f"truncate: {len(final_text)}c → {len(_trimmed_s)}c "
                       f"(tier={_stream_tier}, timing_q={_is_timing_q_s})")
                 final_text = _trimmed_s
+        elif _phase50_active_stream and _NARRATIVE_MODE:
+            _trace(req_id, "phase48.TRUNCATOR_SKIPPED(stream)", {
+                "reason": "phase50 minimal-prompt path — format/tier validators disabled",
+                "raw_chars": len(final_text) if isinstance(final_text, str) else 0,
+            })
     except Exception as _trim_exc_s:  # noqa: BLE001
         print(f"[ai_ask_stream] Phase 4.9 T025 stream truncator "
               f"failed: {_trim_exc_s}")

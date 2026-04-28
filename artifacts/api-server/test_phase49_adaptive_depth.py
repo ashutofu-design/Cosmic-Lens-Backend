@@ -235,6 +235,12 @@ class _CaptureClient:
         self.chat = _Chat()
 
 
+@unittest.skipIf(
+    oh._phase50_minimal_prompt_enabled(),
+    "Phase 5.0 minimal-prompt path removes the in-prompt tier-aware HARD CAP "
+    "/ DETAILED rule swap (the model decides answer depth naturally, with no "
+    "tier hint inside the prompt). Re-enabled when PHASE50_MINIMAL_PROMPT=0."
+)
 class TestT023RuleSwapRuntime(unittest.TestCase):
     """End-to-end: drive ai_ask with a mocked OpenAI client and inspect the
     user-turn message that was sent. Rule 10 should match the inferred tier."""

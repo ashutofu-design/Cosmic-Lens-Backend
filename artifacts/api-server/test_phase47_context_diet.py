@@ -250,6 +250,15 @@ class SlimTransitUnit(unittest.TestCase):
 # RUNTIME INTEGRATION TESTS — full _build_messages → assert effective prompt
 # ────────────────────────────────────────────────────────────────────────────
 
+import openai_helper as _oh_p50
+
+@unittest.skipIf(
+    _oh_p50._phase50_minimal_prompt_enabled(),
+    "Phase 5.0 minimal-prompt path bypasses _build_messages (and therefore "
+    "the context-diet helpers it invokes) entirely. The effective user-turn "
+    "size is now ~500 chars (vs the diet's ~25K target). Re-enabled when "
+    "PHASE50_MINIMAL_PROMPT=0."
+)
 class Phase47ContextDietRuntime(unittest.TestCase):
     """Full pipeline: ai_ask → intercepted client → assert msg[2] respects
     the diet. Mirrors Phase 4.7 Fix-1/Fix-2 runtime invariant pattern."""
@@ -475,6 +484,12 @@ class Phase47ContextDietPreservation(unittest.TestCase):
         )
 
 
+@unittest.skipIf(
+    _oh_p50._phase50_minimal_prompt_enabled(),
+    "Phase 5.0 minimal-prompt path bypasses _build_messages so the dead-rule "
+    "strip's effects are no longer observable in the effective prompt. "
+    "Re-enabled when PHASE50_MINIMAL_PROMPT=0."
+)
 class Phase47DeadRuleStripRuntime(unittest.TestCase):
     """Architect-flagged: assert that Rules F/G/I/J/K (and conditionally O)
     are actually absent from the effective msg[2] in narrative mode. The

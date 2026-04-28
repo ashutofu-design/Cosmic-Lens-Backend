@@ -176,6 +176,14 @@ class Phase48AllowlistDropsPratyantar(unittest.TestCase):
 # ── T018 + runtime: HARD CAP rule reaches the model ─────────────────────
 
 
+import openai_helper as _oh_p50
+
+@unittest.skipIf(
+    _oh_p50._phase50_minimal_prompt_enabled(),
+    "Phase 5.0 minimal-prompt path removes the in-prompt HARD CAP rule "
+    "(the model decides answer length naturally, not via tier hints). "
+    "Re-enabled when PHASE50_MINIMAL_PROMPT=0."
+)
 class Phase48HardCapInPrompt(unittest.TestCase):
     """T018 runtime check: the actual user-turn message in narrative mode
     contains the new 1-2 sentence HARD CAP and NOT the old 100-140 word

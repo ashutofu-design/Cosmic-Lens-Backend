@@ -5527,47 +5527,81 @@ def _classify_supertype(question: str, question_intent: dict | None = None) -> d
 # the OpenAI call so it gets recency-lock priority over every earlier system
 # msg (chart, brand voice, engine verdict). Wording is intentionally short and
 # imperative — long contracts get partially ignored by the model.
-_SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
+# ── Sprint-26 Step 1 (Apr 28 2026) — UNIFIED NARRATOR BASE PROMPT ───────────
+# Until now, each supertype owned a fully self-contained string in
+# `_SUPERTYPE_CONTRACT_BLOCKS` — six near-duplicate scaffolds with the same
+# divider lines and the same "use only engine facts / don't switch topic"
+# rules pasted into each. That's the "scattered wiring" the user flagged:
+# changing one universal rule meant editing six places.
+#
+# Step 1 of the unification migration extracts ONLY the genuinely-universal
+# rules (those that appear verbatim in 3+ supertypes) into one header that
+# every contract gets prepended with. Per-supertype BODIES keep all of their
+# original type-specific rules — we are NOT re-tuning behavior, just
+# de-duplicating the shared scaffolding.
+#
+# Out of scope for Step 1 (deliberately untouched):
+#   • Domain-specific NARRATOR OVERRIDES (WEALTH/HEALTH/CAREER/LOVE/STOCK/
+#     MARRIAGE) which live in separate code paths — Step 3.
+#   • Wealth structured-output JSON schema + prompt — Step 3.
+#   • Validators / brand-safety guards — Step 3 (kept as safety layer).
+#
+# Public API preserved: `_build_supertype_contract(supertype)` is still the
+# single entry point, so the install site at line 6670 needs no change.
+_NARRATOR_UNIVERSAL_HEADER: str = (
+    "════════════════════════════════════════════════════════════════════\n"
+    "COSMIC INTELLIGENCE — UNIFIED NARRATOR CONTRACT\n"
+    "════════════════════════════════════════════════════════════════════\n"
+    "UNIVERSAL RULES (apply to EVERY answer regardless of question type):\n"
+    "  • Use ONLY engine-provided / locked-fact data — never invent dasha\n"
+    "    names, dates, house lords, planet positions, or transit windows\n"
+    "    that are absent from the LOCKED FACTS block above.\n"
+    "  • DO NOT switch to topics the user did NOT ask about (no career when\n"
+    "    user asked finance, no marriage when user asked health, etc.).\n"
+    "  • Tone: asli astrologer, plain Hinglish, confident not preachy.\n"
+    "    No 'as an AI', 'main samajh sakta hoon', no LLM-speak.\n"
+    "  • Open with the answer — no throat-clearing, no preamble, no generic\n"
+    "    philosophy ('har dasha mein ups-downs hote hain').\n"
+    "════════════════════════════════════════════════════════════════════\n"
+)
+
+
+# Per-supertype BODIES — only the type-specific rules. The universal header
+# above and the closing divider below are added by `_build_unified_narrator_contract`.
+_NARRATOR_TYPE_BODIES: dict[str, str] = {
     "PLANET_QUERY": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: PLANET_QUERY\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: PLANET_QUERY\n"
         "User asked about a PLANET / CHART INSPECTION ('Mars kaisa hai' style).\n"
         "MUST do:\n"
         "  • Explain ONLY the planet's strength (D1 + D9 cross-check if D9 line\n"
         "    is present in locked facts).\n"
-        "  • Stay short, plain Hinglish, asli astrologer tone.\n"
+        # Sprint-26 Step 1 (post-architect-review patch) — restored the
+        # explicit brevity cap. The architect flagged that the universal
+        # tone rule ("asli astrologer, plain Hinglish") was weaker than the
+        # original PLANET-specific "Stay short" wording; without an explicit
+        # ceiling here the model could pad a planet-only answer.
+        "  • Stay short — max 1–2 lines. One planet, one verdict, done.\n"
         "MUST NOT do:\n"
         "  • DO NOT mention dasha or any planetary period.\n"
         "  • DO NOT predict the future or give timing windows.\n"
         "  • DO NOT give advice, remedy, upay, or 'kya karein'.\n"
-        "  • DO NOT mix in other topics (career, marriage, money, etc.).\n"
         "  • DO NOT over-answer. If the user asked about ONE planet, talk about\n"
         "    that ONE planet only.\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
     "PROBLEM_QUERY": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: PROBLEM_QUERY\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: PROBLEM_QUERY\n"
         "User is reporting a PROBLEM ('paisa nahi ruk raha' style) and wants\n"
         "to know WHY it is happening.\n"
         "MUST do:\n"
         "  • Explain WHY the problem is happening — be real and specific.\n"
         "  • MUST cite the running dasha/antardasha AND the activated house\n"
         "    (or its lord) that is creating the friction. Both are mandatory.\n"
-        "  • Use ONLY engine-provided / locked-fact dasha + house data — never\n"
-        "    invent.\n"
         "MUST NOT do:\n"
         "  • DO NOT give a generic motivational answer.\n"
-        "  • DO NOT veer into unrelated areas the user did not ask about.\n"
         "  • DO NOT promise quick fixes — diagnose the cause, that's the job.\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
     "TIMING_QUERY": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: TIMING_QUERY\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: TIMING_QUERY\n"
         "User asked WHEN something will happen / improve.\n"
         "MUST do:\n"
         "  • Answer the WHEN clearly — give the dasha transition date or the\n"
@@ -5584,17 +5618,12 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "    'Jupiter Mahadasha / Rahu Antardasha 2024-01-29 → 2026-06-22\n"
         "     ke baad Jupiter MD / Saturn AD shuru hogi — control phase\n"
         "     wahi se start hoga'.\n"
-        "  • Use ONLY the dasha names + dates that appear in the kundli's\n"
-        "    dasha section — do NOT invent names absent from the chart.\n"
         "MUST NOT do:\n"
         "  • DO NOT pad with unrelated chart analysis.\n"
         "  • DO NOT add advice unless explicitly asked.\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
     "DECISION_QUERY": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: DECISION_QUERY\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: DECISION_QUERY\n"
         "User asked for a DECISION ('karu ya nahi' / 'should I' style).\n"
         "MUST do:\n"
         "  • Open with a CLEAR direction: HAAN / NAA / RUKO  (YES / NO / WAIT).\n"
@@ -5604,13 +5633,9 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "MUST NOT do:\n"
         "  • DO NOT hedge with 'depends on you' / 'as per your wish'.\n"
         "  • DO NOT list every possible factor — pick the strongest 1–2.\n"
-        "  • DO NOT switch to a different topic.\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
     "GENERAL_ANALYSIS": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: GENERAL_ANALYSIS\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: GENERAL_ANALYSIS\n"
         "User asked an open analysis question — usually a WHY + WHEN combo\n"
         "('kyun ho raha hai aur kab tak chalega').\n"
         "\n"
@@ -5659,8 +5684,7 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "    delays, Mars for action). Skip the others.\n"
         "\n"
         "MUST do:\n"
-        "  • Open with the Verdict line. No throat-clearing, no preamble.\n"
-        "  • Use ONLY engine-provided dasha lords + dates. Never invent.\n"
+        "  • Open with the Verdict line.\n"
         "  • Default length: 4–6 short lines (≤80 words). Tight, not bloated.\n"
         "    Relaxed to ~150 words ONLY when user asked 'detail mein' / 'depth\n"
         "    mein' / 'exact muhurat' explicitly.\n"
@@ -5669,15 +5693,10 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "  • DO NOT dump every chart fact, every house, every planet.\n"
         "  • DO NOT introduce 6H/8H/12H/dushtana houses for non-loss topics.\n"
         "  • DO NOT add Pratyantar / Sookshma / nakshatra-lord chains by default.\n"
-        "  • DO NOT introduce new topics (career when user asked finance, etc).\n"
         "  • DO NOT add upay / remedy unless the user asked for it.\n"
-        "  • DO NOT pad with generic philosophy ('har dasha mein ups-downs hote hain').\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
     "STRENGTH_SUMMARY": (
-        "════════════════════════════════════════════════════════════════════\n"
-        "STRICT NARRATOR CONTRACT — QUESTION TYPE: STRENGTH_SUMMARY\n"
-        "════════════════════════════════════════════════════════════════════\n"
+        "QUESTION TYPE: STRENGTH_SUMMARY\n"
         "User asked which planets are strong / weak / vargottam in their chart.\n"
         "Locked facts already contain the authoritative buckets:\n"
         "  ▸ STRENGTH BUCKETS — STRONG: ... | MODERATE: ... | WEAK: ...\n"
@@ -5698,16 +5717,61 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "  • DO NOT add caveats / hedges (\"lekin yaad rakho...\" etc.).\n"
         "  • DO NOT invent vargottam, exalted, debilitated labels not in facts.\n"
         "  • DO NOT mention more than 2 lines total.\n"
-        "════════════════════════════════════════════════════════════════════\n"
     ),
 }
 
 
-def _build_supertype_contract(supertype: str) -> str:
-    """Return the strict-rules system block for a given supertype.
-    Falls back to GENERAL_ANALYSIS if the supertype is unknown."""
-    return _SUPERTYPE_CONTRACT_BLOCKS.get(
-        supertype, _SUPERTYPE_CONTRACT_BLOCKS["GENERAL_ANALYSIS"]
+# ── Sprint-26 Step 1 — Backwards-compatibility alias ────────────────────────
+# Old name kept so any external import / inspect paths continue to work, but
+# it now points at the new bodies-only dict (without the per-block headers
+# and footers that the unified header/footer adds back). Anything that
+# read the dict directly for STRING content will see SHORTER strings now —
+# that's intentional and surfaces accidental direct-reads at startup.
+_SUPERTYPE_CONTRACT_BLOCKS = _NARRATOR_TYPE_BODIES
+
+
+# Closing divider that wraps every contract — matches the universal header
+# style so the model sees one clean bracket pair per turn.
+_NARRATOR_UNIVERSAL_FOOTER: str = (
+    "════════════════════════════════════════════════════════════════════\n"
+)
+
+
+def _build_unified_narrator_contract(supertype: str,
+                                     *,
+                                     has_recovery_subask: bool = False) -> str:
+    """Sprint-26 Step 1 — single source of truth for the narrator contract.
+    Combines the universal header, the per-supertype body, and the closing
+    footer. Falls back to GENERAL_ANALYSIS body when an unknown supertype
+    is passed (preserves the old `_build_supertype_contract` semantics).
+
+    `has_recovery_subask` is read-through metadata that future steps can
+    use to conditionally trim the GENERAL_ANALYSIS Recovery clause out of
+    the prompt entirely when no recovery sub-ask was detected. For now we
+    keep the conditional clause inline with explicit "SKIP when not asked"
+    guard wording (same as before Step 1) so behavior stays byte-equivalent
+    for the LLM — the parameter is plumbed for Step 2 use.
+    """
+    body = _NARRATOR_TYPE_BODIES.get(
+        supertype, _NARRATOR_TYPE_BODIES["GENERAL_ANALYSIS"]
+    )
+    return (
+        _NARRATOR_UNIVERSAL_HEADER
+        + body
+        + _NARRATOR_UNIVERSAL_FOOTER
+    )
+
+
+def _build_supertype_contract(supertype: str,
+                              *,
+                              has_recovery_subask: bool = False) -> str:
+    """Public entry point — preserved for the install site at line 6670.
+    Now a thin shim over `_build_unified_narrator_contract`. The
+    `has_recovery_subask` kwarg is forwarded so consumers (the install
+    site) can pass `question_intent['has_recovery_subask']` through
+    without any further wiring."""
+    return _build_unified_narrator_contract(
+        supertype, has_recovery_subask=has_recovery_subask
     )
 
 
@@ -6665,13 +6729,25 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if not _skip_contract_reason:
         _supertype_tag = (question_supertype or {}).get("supertype") or "GENERAL_ANALYSIS"
         try:
+            # Sprint-26 Step 1 — unified narrator contract. Forward the
+            # recovery sub-ask flag so the contract builder can route it to
+            # any future conditional sections (currently the GENERAL_ANALYSIS
+            # Recovery clause is inline; Step 2 may trim it dynamically).
             messages.append({
                 "role":    "system",
-                "content": _build_supertype_contract(_supertype_tag),
+                "content": _build_supertype_contract(
+                    _supertype_tag,
+                    has_recovery_subask=bool(
+                        question_intent.get("has_recovery_subask")
+                    ),
+                ),
             })
             _trace(req_id, "2e.SUPERTYPE_CONTRACT_INSTALLED", {
                 "supertype": _supertype_tag,
                 "position":  len(messages) - 1,
+                "has_recovery_subask": bool(
+                    question_intent.get("has_recovery_subask")
+                ),
             })
         except Exception as _sup_exc:
             _trace(req_id, "2e.SUPERTYPE_CONTRACT_FAIL",

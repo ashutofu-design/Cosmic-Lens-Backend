@@ -688,3 +688,102 @@ Round 2 review (post-hotfix): **PASS — ship-ready**. Three originally-critical
 - Pending-clarification multi-turn carryover (from Phase 2 leftover)
 - Per-planet pada validation for non-Moon planets (engine data sparse)
 - Bare "Mahadasha 2039 tak" detection without explicit planet anchor (intentionally skipped — too FP-prone with future-MD narration)
+
+---
+
+## Phase 4.5 — Narrative Mode (V→R→T template killed)
+*Apr 28, 2026*
+
+### Goal
+Kill the V→R→T template (verdict badges, score headers, "Kya hoga / karein /
+na karein" bullet sections, mandatory upay line, CA/SEBI + medical
+disclaimers) across **every** topic. Replace with a 3-5 sentence flowing
+Hinglish narrative grounded in the **MD-AD-PD active-planet COMBINATION**.
+
+Core rule the AI must internalise:
+> "Active planets ka combination hi final result deta hai — single planet
+> kabhi decision nahi deta."
+
+### Feature flag
+`NARRATIVE_MODE = os.getenv("NARRATIVE_MODE", "1") == "1"` (defaults ON).
+Flip to `0` to revert to Phase 4.4 V→R→T template instantly.
+
+### Surface changes (all gated on `_NARRATIVE_MODE`)
+
+1. **Truth-facts** (`_build_truth_facts`, line ~6920): walks the dasha tree
+   to populate `current_pd` (Pratyantar Dasha) so the AI has 3 active
+   planets to reason over (MD + AD + PD).
+
+2. **Narrator contract** (`_build_unified_narrator_contract`,
+   `_NARRATOR_TYPE_BODIES`): when narrative mode is on, every supertype
+   (PLANET_QUERY, RELATIONSHIP_TIMING, GENERAL_ANALYSIS, etc.) emits the
+   single `_NARRATIVE_NARRATOR_BODY` — 3-5 sentences, ≥2 active planets
+   named, ONE near-term inflection cited, NO badges/bullets/upay/disclaimer.
+
+3. **Wealth structured-output bypass** (lines 8364 / 8424 / 8522 / 12428):
+   `_use_wealth_structured_path = bool(_wealth_obj) and not _NARRATIVE_MODE`.
+   Wealth `json_schema` retry loop and the `format_wealth_answer`
+   structured-payload formatter are skipped — the model emits free-form
+   narrative directly.
+
+4. **Wealth narrator override** (line 3492): the legacy "Rule #10 — MUST
+   cite CA/SEBI advisor + V→R→T framing" override is replaced (in
+   narrative mode) with a narrative-friendly variant that keeps engine
+   facts but drops both the disclaimer mandate and the V→R→T scaffold.
+
+5. **Disclaimer + upay injectors disabled**: medical doctor-cite (line
+   9057), CA/SEBI brand-safety injector (lines 9329-9335), and the upay
+   suffix appender (bypassed via the structured-path skip) all no-op when
+   `_NARRATIVE_MODE=1`.
+
+6. **Supertype contract validator** (`_validate_supertype_contract`, line
+   7610): returns `[]` (no violations) in narrative mode — the legacy
+   format-validator enforced V→R→T headers and would falsely refuse the
+   new short paragraph format.
+
+7. **Marriage validator** (line 9147): gated off in narrative mode (it
+   enforced "Window: <date>" header which no longer exists).
+
+8. **Stream-path parity** (line 10994): `_build_supertype_contract` is
+   installed into the stream path's message stack right after
+   `_build_messages`, mirroring the sync path so streamed answers receive
+   the same narrative contract.
+
+9. **Defense-in-depth disclaimer strip** (`_strip_narrative_disclaimers`,
+   line 5176; called from `_scrub_brand_tone` line 5212): a regex
+   post-strip removes any disclaimer sentence the model bakes in despite
+   the contract — covers "CA / SEBI advisor", "qualified doctor",
+   "financial advisor consult", "doctor se consult", "medical
+   professional advice", etc. Idempotent and gated on `_NARRATIVE_MODE`.
+
+### What is preserved
+Phase 4.4 fact-validators (POST_LOGIC + lookup engine) stay live in narrative
+mode — they enforce **factual** correctness (right Lagna, right MD planet,
+right MD end-date), not output **format**. Phase 4.4's strict-refusal
+behaviour on factual lies is unchanged.
+
+### Verification
+- **`test_phase45_narrative.py`** (NEW): 10/10 PASS — covers flag default,
+  validator no-op, contract installation, disclaimer-strip across CA/SEBI
+  /doctor/financial-advisor variants, idempotence, scrub-brand-tone
+  integration, and PD extraction from the dasha tree.
+- **Live regression** (`/api/ask` + `/api/ask/stream` against user 21 /
+  kundli 8, finance question):
+  - Sync: 854 chars, single paragraph, 3+ active planets named (Rahu MD/AD,
+    Jupiter PD, Saturn transit), near-term inflection cited (Sep 2028), no
+    badge / no bullets / no upay / no disclaimer.
+  - Stream: 704 chars, ≤3 short paragraphs, 8 distinct planets named, same
+    clean structure — no badge / no bullets / no upay / no disclaimer.
+- **Phase 4.4 lookup-engine + POST_LOGIC** fact-validators still active —
+  any factual lie in the narrative output still triggers the strict-refusal
+  retry path (verified by running the existing 4.4 test fixture under
+  `NARRATIVE_MODE=1` — fact-violation tests still trip refusal).
+
+### Out of scope / future work
+- Dynamic narrative length tuning (currently a hard 3-5 sentence target —
+  dense charts may benefit from 6-8 sentences).
+- Per-topic tone calibration (marriage vs finance currently use identical
+  contract — could differentiate voice).
+- Narrative-mode adversarial test suite (current 10 tests cover format +
+  helpers; need cross-topic live regressions).
+

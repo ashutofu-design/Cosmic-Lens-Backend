@@ -3486,7 +3486,38 @@ def _build_messages(
     # tax-evasion, NEVER endorse lottery / satta / KBC / matka, ALWAYS
     # recommend qualified CA / SEBI-registered financial advisor consult,
     # surface SEBI line on high-risk investment buckets.
-    if wealth_verdict_block:
+    if wealth_verdict_block and _NARRATIVE_MODE:
+        # Phase 4.5 — narrative-mode wealth override. Keep the engine's
+        # locked facts (window, lord, score, bucket) flowing as ground
+        # truth so the AI grounds dates correctly, but DROP the V→R→T
+        # framing rules and Rule #10's "MANDATORY CA / SEBI cite" — both
+        # of which forced the legacy template + disclaimer suffix that
+        # narrative mode is explicitly killing.
+        msgs.append({
+            "role": "system",
+            "content": (
+                "WEALTH FACTS (engine-locked ground truth — narrate, do "
+                "not invent):\n"
+                "  • Use the window dates, planet names, house numbers, "
+                "and bucket label EXACTLY as printed below — no rounding, "
+                "no swapping, no day-precision invention.\n"
+                "  • Do NOT contradict the verdict status (green_go / "
+                "yellow_wait / slow_burn / red_avoid) — frame the answer "
+                "consistent with it.\n"
+                "  • Do NOT echo the printed score badge / bullets / "
+                "headers / 'Karo:' / 'Avoid:' / 'Upay:' lines verbatim. "
+                "Use them as facts only — your narrative shape is set "
+                "by the QUESTION TYPE: NARRATIVE_ANSWER contract.\n"
+                "  • Do NOT append any 'CA / SEBI-registered advisor se "
+                "consult karein' / 'qualified financial advisor' / "
+                "'tax consultant' phrasing. The platform handles "
+                "advisor-cite separately when needed.\n"
+                "  • Speak as Cosmic Intelligence — never AI / LLM / "
+                "GPT / model.\n\n"
+                + wealth_verdict_block
+            ),
+        })
+    elif wealth_verdict_block:
         msgs.append({
             "role": "system",
             "content": (
@@ -5120,6 +5151,122 @@ _TONE_SCRUB_PATTERNS = [
 ]
 
 
+_NARRATIVE_DISCLAIMER_SENT_RX = re.compile(
+    # Match ONLY the narrow suffix-boilerplate disclaimer sentences the
+    # legacy V→R→T template appended verbatim. We deliberately require
+    # the consult/advisor/professional CTA pair to fire — bare mentions
+    # of "doctor", "CA", or "advisor" inside legitimate astro narration
+    # (e.g. "Saturn ke prabhav se career mein aap doctor ban sakte ho",
+    # "advisor banne ka yog hai", "CA ka kaam start kar sakte ho") will
+    # NOT match because they don't contain the imperative consult phrase.
+    # Note: ALL inner character classes use [^.!?\n] (NOT [\w\s/.\-]) so
+    # the regex CANNOT cross sentence boundaries. Earlier draft included
+    # `.` in inner classes which let one match span 2-3 sentences and
+    # delete legitimate trailing prose.
+    r"[^.!?\n]*\b("
+    # Boilerplate 1: CA/SEBI/tax advisor + consult/salah CTA in same sentence.
+    r"(?:CA|SEBI[-\s]registered|qualified|financial|tax)[^.!?\n]*?"
+    r"(?:advisor|consultant|professional)[^.!?\n]{0,80}?"
+    r"(?:consult|salah|salaah|raay|baat|guidance)\b[^.!?\n]{0,40}"
+    r"(?:karein|lein|karna|zaroori|chahiye|recommended|must)?"
+    # Boilerplate 2: medical-disclaimer suffix (doctor + consult CTA).
+    r"|(?:qualified|certified|licensed|registered)?\s*"
+    r"(?:doctor|physician|medical\s+professional)\b[^.!?\n]{0,80}?"
+    r"(?:consult|salah|salaah|baat|milein|milna|advice)\b[^.!?\n]{0,40}"
+    r"(?:karein|lein|karna|zaroori|chahiye|recommended|must)?"
+    # Boilerplate 3: explicit "consult <a> CA/doctor/SEBI advisor" pattern.
+    r"|consult[^.!?\n]{0,40}?"
+    r"(?:CA|SEBI[-\s]registered\s+advisor|financial\s+advisor|"
+    r"qualified\s+doctor|physician|medical\s+professional)\b"
+    # Boilerplate 4: bare "CA" + IMPERATIVE consult/salah CTA (legacy
+    # Rule #10 short form). The imperative verb (karein/lein/le lein/
+    # chahiye/zaroori) is the discriminator — career mentions like
+    # "CA ka practice", "CA ban sakte ho", "CA ka kaam" don't carry it.
+    r"|\bCA\b[^.!?\n]{0,30}?"
+    r"(?:se\s+)?(?:consult|salah|salaah|guidance|raay)\s+"
+    r"(?:karein|lein|le\s+lein|karna\s+(?:chahiye|zaroori))\b"
+    # Boilerplate 5: "financial planner" + salah/consult + IMPERATIVE
+    # CTA. Imperative verb is MANDATORY (no `?`) to prevent stripping
+    # narrative sentences like "financial planner ki salaah se long-term
+    # discipline bana paoge" — those are predictions, not disclaimers.
+    r"|financial\s+planner[^.!?\n]{0,40}?"
+    r"(?:salaah|salah|guidance|advice|consult)\b"
+    r"[^.!?\n]{0,30}"
+    r"(?:karein|lein|le\s+lein|chahiye|zaroori|zaroor|recommended|must)\b"
+    r")[^.!?\n]*[.!?]?",
+    re.IGNORECASE,
+)
+
+
+# Crisis / mental-health markers — when ANY of these appear in the text,
+# the disclaimer-strip is skipped entirely because the doctor-cite + helpline
+# block injected by the health crisis safety net is mandatory and must
+# survive intact (architect Round 4 finding).
+_CRISIS_MARKER_RX = re.compile(
+    r"("
+    # Helpline / brand markers (use \b for word boundary safety).
+    r"\bhelpline\b"
+    r"|\biCall\b"
+    r"|\b9152987821\b"
+    r"|\bVandrevala\b"
+    r"|\b1860[-\s]?2662[-\s]?345\b"
+    # Self-harm / suicide variants — `suicid` as STEM (not bounded) so
+    # suicide / suicidal / suicidality / suicides all match. Architect
+    # Round 5: bare `suicid\b` only matched the rare token "suicid",
+    # missing real-world variants.
+    r"|\bself[\-\s]?harm\b"
+    r"|suicid(?:e|al|ality|es)?\b"
+    # Hindi/Hinglish crisis phrases.
+    r"|\bkhud[\-\s]?ko[\-\s]?nuksaan\b"
+    r"|\bjaan[\-\s]?lena\b"
+    r"|\bjeena\s+nahi\s+chahta\b"
+    r"|\bmarne\s+ka\s+(?:man|mann|dil)\b"
+    # Safety-block sentinels (any of these implies the crisis injector
+    # already fired upstream — preserve verbatim).
+    r"|\baap\s+akele\s+nahi\s+hain\b"
+    r"|\bmental\s+health\s+support\b"
+    r"|\bcrisis\s+helpline\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _strip_narrative_disclaimers(text: str) -> str:
+    """Phase 4.5 — narrative-mode safety net.
+
+    Even with the unified narrative contract installed (which forbids any
+    'CA / SEBI advisor', 'qualified doctor', 'consult' disclaimer suffix),
+    the model occasionally bakes one in — particularly on wealth/health
+    turns where the per-topic narrator override historically mandated it.
+    This post-strip removes those sentences as a defense-in-depth measure
+    so the user's narrative answer stays clean. Idempotent and safe to
+    run on already-clean text (regex matches nothing → returns unchanged).
+
+    CRISIS GUARD (architect Round 4): if the text contains any crisis /
+    mental-health marker (helpline number, "aap akele nahi hain", Vandrevala,
+    iCall, suicid*, self-harm, etc.), the strip is skipped entirely. The
+    health crisis safety injector treats the doctor-cite + helpline block
+    as non-negotiable, and the strip would otherwise remove the doctor
+    line — leaving the user with a partial safety message.
+    """
+    if not text:
+        return text
+    if _CRISIS_MARKER_RX.search(text):
+        # Crisis path — preserve all disclaimer / safety language verbatim.
+        return text
+    out = _NARRATIVE_DISCLAIMER_SENT_RX.sub("", text)
+    # Collapse the punctuation/whitespace artefacts the strip leaves behind.
+    out = re.sub(r"\s*;\s*\.", ".", out)         # "; ." → "."
+    out = re.sub(r"\s*,\s*\.", ".", out)         # ", ." → "."
+    out = re.sub(r"\s+([,.;:!?])", r"\1", out)   # " ." → "."
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    # Drop now-empty lines / paragraphs.
+    out = "\n".join(ln.rstrip() for ln in out.splitlines()
+                    if ln.strip() not in ("", ".", ";", ",", "—"))
+    return out.strip()
+
+
 def _scrub_brand_tone(text: str) -> str:
     """Strip AI-style phrases that break the human-Pandit illusion."""
     if not text:
@@ -5127,6 +5274,11 @@ def _scrub_brand_tone(text: str) -> str:
     out = text
     for rx, repl in _TONE_SCRUB_PATTERNS:
         out = rx.sub(repl, out)
+    # Phase 4.5: in narrative mode, also strip any leftover disclaimer
+    # sentences the AI may have added against the contract. Cheap regex,
+    # runs only when the flag is on.
+    if _NARRATIVE_MODE:
+        out = _strip_narrative_disclaimers(out)
     # Collapse double spaces / orphan punctuation introduced by removals.
     out = re.sub(r"[ \t]{2,}", " ", out)
     out = re.sub(r"\n{3,}",   "\n\n", out)
@@ -5911,6 +6063,65 @@ _NARRATOR_UNIVERSAL_FOOTER: str = (
 )
 
 
+# ── Phase 4.5 — NARRATIVE NARRATOR BODY ─────────────────────────────────────
+# When `_NARRATIVE_MODE` is on, this single body REPLACES every per-supertype
+# body in `_NARRATOR_TYPE_BODIES`. The contract is intentionally short and
+# voice-first so the model writes a 3-5 sentence flowing answer instead of
+# the structured V→R→T template. Length-cap + tone discipline come from
+# `_NARRATOR_OUTPUT_DISCIPLINE` (already prepended); safe-fallback rules
+# from `_NARRATOR_SAFE_FALLBACK` still apply (refuse if data missing).
+_NARRATIVE_NARRATOR_BODY: str = (
+    "QUESTION TYPE: NARRATIVE_ANSWER\n"
+    "Write a SHORT flowing Hinglish narrative — like an experienced\n"
+    "astrologer talking directly to the user. NOT a report, NOT a template.\n"
+    "\n"
+    "REASONING METHOD — MD-AD-PD COMBINATION (mandatory):\n"
+    "  Step 1: Identify the 3 active dasha planets — Mahadasha lord (MD),\n"
+    "          Antardasha lord (AD), Pratyantar dasha lord (PD if present).\n"
+    "  Step 2: Read each planet's POSITION from locked facts — house, sign,\n"
+    "          retrograde, conjunction.\n"
+    "  Step 3: Tag each planet's NATURE for the user's topic —\n"
+    "          growth-giver / confusion-creator / aggressive-fast / slow-stable\n"
+    "          / loss-trigger.\n"
+    "  Step 4: COMBINE the 3 tags into ONE result — stable / mixed / volatile /\n"
+    "          unstable. The combination IS the answer; never decide from one\n"
+    "          planet alone.\n"
+    "  Step 5: STABILITY CHECK — paisa rukega ya flow karega? Consistency hai\n"
+    "          ya ups-downs? Health steady hai ya fluctuating? (topic-aware).\n"
+    "  Step 6: NEAR-TERM TIMING — when does the next active-planet change\n"
+    "          (next AD or PD shift) and what does that flip the combo to?\n"
+    "          Use month-precision when AD/PD end-date is within 18 months,\n"
+    "          else year-precision.\n"
+    "\n"
+    "OUTPUT SHAPE — strict:\n"
+    "  • 3-5 sentences, ONE flowing paragraph.\n"
+    "  • Reference at least 2 of {MD lord, AD lord, PD lord} BY NAME and\n"
+    "    describe their COMBINED nature (e.g. 'Jupiter growth dena chahta\n"
+    "    hai, par Rahu confusion create kar raha hai').\n"
+    "  • Give ONE near-term inflection date in the user's natural phrasing\n"
+    "    ('mid-June ke baad', 'Sep 2027 se', 'antardasha change hone ke\n"
+    "    baad'). Pull the actual date from locked AD/PD end-dates — never\n"
+    "    invent.\n"
+    "  • Voice: direct, conversational, 'tum/aap' — no hedging, no\n"
+    "    motivational fluff, no 'depends on you'.\n"
+    "\n"
+    "MUST NOT (these will be auto-stripped — don't write them at all):\n"
+    "  • NO score badges (🟡 WAIT 57/100 / 🟢 GO / 🔴 CAUTION).\n"
+    "  • NO 'Verdict:' / 'Reason:' / 'Timing:' / 'Recovery:' headers.\n"
+    "  • NO 'Window: …' or '➜ Better: …' lines.\n"
+    "  • NO 'Kya hoga / Kya karein / Kya na karein' bullet sections.\n"
+    "  • NO bullet points or emoji headers anywhere.\n"
+    "  • NO upay / remedy / mantra line (🕉) unless user explicitly asked.\n"
+    "  • NO 'Qualified doctor se consult karein' / 'CA / SEBI-registered\n"
+    "    advisor' disclaimer suffix — these will be appended only if needed.\n"
+    "  • NO defining astrology terms ('antardasha matlab sub-period…').\n"
+    "\n"
+    "CORE RULE (yaad rakhna):\n"
+    "  Active planets ka COMBINATION hi final result deta hai —\n"
+    "  single planet kabhi decision nahi deta.\n"
+)
+
+
 def _build_unified_narrator_contract(supertype: str,
                                      *,
                                      has_recovery_subask: bool = False) -> str:
@@ -5925,10 +6136,19 @@ def _build_unified_narrator_contract(supertype: str,
     keep the conditional clause inline with explicit "SKIP when not asked"
     guard wording (same as before Step 1) so behavior stays byte-equivalent
     for the LLM — the parameter is plumbed for Step 2 use.
+
+    Phase 4.5 (Apr 28, 2026): when `_NARRATIVE_MODE` is on, the per-
+    supertype body is REPLACED with `_NARRATIVE_NARRATOR_BODY` regardless
+    of `supertype`. The universal header / output-discipline / safe-
+    fallback layers stay intact so truthfulness + refuse-on-missing-data
+    + no-domain-inference guards remain enforced.
     """
-    body = _NARRATOR_TYPE_BODIES.get(
-        supertype, _NARRATOR_TYPE_BODIES["GENERAL_ANALYSIS"]
-    )
+    if _NARRATIVE_MODE:
+        body = _NARRATIVE_NARRATOR_BODY
+    else:
+        body = _NARRATOR_TYPE_BODIES.get(
+            supertype, _NARRATOR_TYPE_BODIES["GENERAL_ANALYSIS"]
+        )
     # Sprint-26 Step 2 — output-discipline layer is injected between the
     # truthfulness header (Step 1) and the type-specific body. This puts the
     # length/tone/format defaults BEFORE the body so the body's overrides
@@ -6075,6 +6295,20 @@ try:
     )
 except (TypeError, ValueError):
     _VALIDATOR_RETRY_TIMEOUT_S = 12.0
+
+# ── Phase 4.5 (Apr 28, 2026) — NARRATIVE MODE ──────────────────────────────
+# Kills the V→R→T template (verdict badges, score 0-100, "Kya hoga / Kya
+# karein / Kya na karein" bullet sections, upay suffix, CA/SEBI + medical
+# disclaimer suffixes) across every supertype. Replaces it with a single
+# 3-5 sentence Hinglish narrative grounded in the MD-AD-PD active-planet
+# combination. The user's core rule:
+#   "Active planets ka combination hi final result deta hai —
+#    single planet kabhi decision nahi deta."
+# Set NARRATIVE_MODE=0 to instantly revert to the legacy V→R→T contract +
+# structured formatters + disclaimer injectors. Default ON. Fact-validators
+# from Phase 4.4 (POST_LOGIC + lookup_engine) stay live in narrative mode —
+# only FORMAT-validators + post-formatters get bypassed.
+_NARRATIVE_MODE = os.environ.get("NARRATIVE_MODE", "1") != "0"
 
 # Phase 4.2 (Apr 28, 2026) — engine honesty refusal.
 # Fired when a PRIMARY engine phase (chart-intel / dasha / lagna / dosh /
@@ -6608,6 +6842,7 @@ def _build_truth_facts(kundli: dict) -> dict:
           "nakshatra_pada": {planet_lc: int 1..4}     # Phase 4.3
           "current_md":     {"planet": str, ...} | None,
           "current_ad":     {"planet": str, ...} | None,
+          "current_pd":     {"planet": str, ...} | None,  # Phase 4.5
         }
     """
     out: dict = {
@@ -6620,6 +6855,12 @@ def _build_truth_facts(kundli: dict) -> dict:
         "nakshatra_pada": {},
         "current_md":     None,
         "current_ad":     None,
+        # Phase 4.5 — Pratyantar dasha (3rd active planet). Required by the
+        # narrative-mode MD-AD-PD combo prompt so the AI can reason from a
+        # 3-planet combination instead of single-planet citation. Extracted
+        # from the dasha-tree's third level (subDashas → subDashas) when
+        # `currentDasha` shortcut omits it.
+        "current_pd":     None,
         # Phase 4.4 — ascendant carried as a sentinel so _post_logic_check
         # can validate lagna claims without changing the function signature.
         "_lagna":         "",
@@ -6743,37 +6984,54 @@ def _build_truth_facts(kundli: dict) -> dict:
                 }
                 break
 
-    if not (out["current_md"] and out["current_ad"]):
-        from datetime import datetime
-        today = datetime.utcnow().strftime("%Y-%m-%d")
-        dashas = kundli.get("dashas") or kundli.get("dasha") or []
-        if isinstance(dashas, list):
-            for md in dashas:
-                if not isinstance(md, dict):
-                    continue
-                md_s = md.get("startDate") or "9999-99-99"
-                md_e = md.get("endDate")   or "0000-00-00"
-                if md_s <= today <= md_e:
-                    if not out["current_md"]:
-                        out["current_md"] = {
-                            "planet": (md.get("planet") or "").lower(),
-                            "start":  md.get("startDate"),
-                            "end":    md.get("endDate"),
-                        }
-                    for ad in (md.get("subDashas") or []):
-                        if not isinstance(ad, dict):
-                            continue
-                        ad_s = ad.get("startDate") or "9999-99-99"
-                        ad_e = ad.get("endDate")   or "0000-00-00"
-                        if ad_s <= today <= ad_e:
-                            if not out["current_ad"]:
-                                out["current_ad"] = {
-                                    "planet": (ad.get("planet") or "").lower(),
-                                    "start":  ad.get("startDate"),
-                                    "end":    ad.get("endDate"),
-                                }
-                            break
-                    break
+    # Always walk the dasha tree to capture PD (Phase 4.5 narrative-mode
+    # combo) — the `currentDasha` shortcut typically omits Pratyantar even
+    # when MD+AD are populated. We also use the same walk to backfill MD/AD
+    # if the shortcut was empty (legacy behaviour).
+    from datetime import datetime
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    dashas = kundli.get("dashas") or kundli.get("dasha") or []
+    if isinstance(dashas, list):
+        for md in dashas:
+            if not isinstance(md, dict):
+                continue
+            md_s = md.get("startDate") or "9999-99-99"
+            md_e = md.get("endDate")   or "0000-00-00"
+            if md_s <= today <= md_e:
+                if not out["current_md"]:
+                    out["current_md"] = {
+                        "planet": (md.get("planet") or "").lower(),
+                        "start":  md.get("startDate"),
+                        "end":    md.get("endDate"),
+                    }
+                for ad in (md.get("subDashas") or []):
+                    if not isinstance(ad, dict):
+                        continue
+                    ad_s = ad.get("startDate") or "9999-99-99"
+                    ad_e = ad.get("endDate")   or "0000-00-00"
+                    if ad_s <= today <= ad_e:
+                        if not out["current_ad"]:
+                            out["current_ad"] = {
+                                "planet": (ad.get("planet") or "").lower(),
+                                "start":  ad.get("startDate"),
+                                "end":    ad.get("endDate"),
+                            }
+                        # Phase 4.5 — walk one level deeper for PD.
+                        for pd in (ad.get("subDashas") or []):
+                            if not isinstance(pd, dict):
+                                continue
+                            pd_s = pd.get("startDate") or "9999-99-99"
+                            pd_e = pd.get("endDate")   or "0000-00-00"
+                            if pd_s <= today <= pd_e:
+                                if not out["current_pd"]:
+                                    out["current_pd"] = {
+                                        "planet": (pd.get("planet") or "").lower(),
+                                        "start":  pd.get("startDate"),
+                                        "end":    pd.get("endDate"),
+                                    }
+                                break
+                        break
+                break
 
     return out
 
@@ -7488,7 +7746,18 @@ def _validate_supertype_contract(text: str, supertype: str,
     Returns a list of violation strings. Empty list = answer is contract-clean.
     Soft style issues are NOT flagged here — only the rules that are spelled
     out as "MUST" / "MUST NOT" in `_SUPERTYPE_CONTRACT_BLOCKS`.
+
+    Phase 4.5 (Apr 28, 2026) — NARRATIVE_MODE bypass:
+    The per-supertype contracts encode the V→R→T template (e.g.
+    PLANET_QUERY forbids dasha mentions, GENERAL_ANALYSIS requires
+    "Verdict / Reason / Timing" sections, etc.). Narrative mode runs a
+    UNIFIED narrative contract instead, so the per-supertype FORMAT
+    checks would fire false-positives on intentionally-different output.
+    Fact correctness is still enforced by `_post_logic_check` (Phase 4.1)
+    and `_lookup_engine` detectors (Phase 4.4) which sit downstream.
     """
+    if _NARRATIVE_MODE:
+        return []
     if not text or not supertype:
         return []
     t = text.strip()
@@ -8231,7 +8500,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # The model is then forced into JSON-schema mode (see _call_once below).
     _wealth_obj = (build_meta or {}).get("wealth_verdict_obj")
     _wealth_structured_payload: dict | None = None
-    if isinstance(_wealth_obj, dict) and _wealth_obj:
+    # Phase 4.5 NARRATIVE_MODE: bypass the wealth json_schema structured-
+    # output path entirely. That path forces the model to emit a fixed
+    # `{verdict, headline, what_will_happen, what_to_do, what_to_avoid,
+    # remedy, note}` JSON which `_format_wealth_structured_payload` then
+    # renders into the V→R→T template (Score badge / 📅 Window / Kya hoga
+    # bullets / 🕉 Upay / CA-SEBI cite). When NARRATIVE_MODE is on, we
+    # skip the prompt install AND the json_schema call so the unified
+    # narrative contract (`_NARRATIVE_NARRATOR_BODY`) drives the answer.
+    # The wealth engine still runs and its verdict facts (window, lord,
+    # bucket) flow into `truth_facts` for the AI to ground on.
+    _use_wealth_structured_path = (
+        isinstance(_wealth_obj, dict) and bool(_wealth_obj)
+        and not _NARRATIVE_MODE
+    )
+    if _use_wealth_structured_path:
         messages = [
             m for m in messages
             if not (m.get("role") == "system"
@@ -8287,10 +8570,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     _skip_contract_reason = ""
     if mode != "astro":
         _skip_contract_reason = "mode=general (no chart pipeline)"
-    elif _wealth_obj:
+    elif _use_wealth_structured_path:
+        # Only skip the supertype contract when the json_schema wealth path
+        # is actually about to fire. In NARRATIVE_MODE we WANT the unified
+        # narrative contract installed even on wealth questions.
         _skip_contract_reason = "wealth structured-output (json_schema mode)"
     elif (topic == "marriage"
-          and (build_meta or {}).get("marriage_verdict_block")):
+          and (build_meta or {}).get("marriage_verdict_block")
+          and not _NARRATIVE_MODE):
+        # Phase 4.5: marriage narrator mode also overrides the prompt with
+        # its own V→R→T contract. Let the narrative contract take over in
+        # narrative mode so marriage answers get the same flowing format.
         _skip_contract_reason = "marriage narrator mode owns the prompt"
 
     if not _skip_contract_reason:
@@ -8378,7 +8668,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             raise RuntimeError("OpenAI returned empty response")
         return t
 
-    if _wealth_obj:
+    if _use_wealth_structured_path:
         # Wealth structured-output path: json_schema (strict=True), temp=0.0,
         # max 2 retries on parse / validation failure. NO free-text fallback.
         import json as _json_w
@@ -8932,7 +9222,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _kept_lines.append(_ln)
                 text = "\n".join(_kept_lines)
                 _added.append("ph_strip")
-            if not _doctor_rx.search(text or ""):
+            # Phase 4.5 NARRATIVE_MODE: skip the boilerplate doctor cite
+            # in narrative mode UNLESS the question contains crisis phrasing
+            # (suicide / self-harm) — those always earn the cite + helpline
+            # regardless of mode, as a non-negotiable safety net.
+            _suppress_doctor_cite = (
+                _NARRATIVE_MODE
+                and not _crisis_q
+                and _bucket != "mental_health"
+            )
+            if not _doctor_rx.search(text or "") and not _suppress_doctor_cite:
                 text = (text or "").rstrip() + _doctor_line
                 _added.append("doctor_cite")
             if (_bucket == "mental_health"
@@ -9011,7 +9310,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     # ── Marriage narrator validator — verifies AI echoed locked window verbatim
     # and didn't relapse into jargon labels or guru greetings. ONE auto-regen.
-    if (mode == "astro" and topic == "marriage"
+    # Phase 4.5 NARRATIVE_MODE: skip this validator. Its "no Reason:/Timing:/
+    # Remedy:" clause is enforced by the new narrative contract already, and
+    # its "exact verbatim window" requirement conflicts with the narrative-
+    # mode preference for natural near-term phrasing ("mid-June ke baad").
+    if (not _NARRATIVE_MODE
+            and mode == "astro" and topic == "marriage"
             and build_meta.get("marriage_facts")):
         active_w = build_meta.get("active_window") or ""
         violated, why_m = _marriage_reply_violates(text, active_w)
@@ -9190,11 +9494,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 text = "\n".join(_leak_kept)
                 if "ph_strip" not in _added_w:
                     _added_w.append("leak_strip")
-            if not _advisor_rx.search(text or ""):
+            # Phase 4.5 NARRATIVE_MODE: skip the boilerplate CA / SEBI
+            # advisor disclaimer in narrative mode (user explicitly asked
+            # for clean narrative). The wealth engine still runs and feeds
+            # ground-truth verdict + window facts to the AI; only the
+            # appended disclaimer suffix is suppressed.
+            if not _advisor_rx.search(text or "") and not _NARRATIVE_MODE:
                 text = (text or "").rstrip() + _advisor_line
                 _added_w.append("advisor_cite")
             if (_bucket_w in _HIGH_RISK_W
-                    and not _sebi_rx.search(text)):
+                    and not _sebi_rx.search(text)
+                    and not _NARRATIVE_MODE):
                 text = text.rstrip() + _sebi_line
                 _added_w.append("sebi_line")
             if _added_w:
@@ -9239,7 +9549,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-7 Rule O — DETERMINISTIC UPAPADA INJECTION (last-resort).
     # If topic == "marriage" and the model dropped the Jaimini citation,
     # append one engine-generated sentence so Rule O is satisfied 100%.
-    if topic == "marriage" and isinstance(kundli, dict) and kundli.get("planets"):
+    # Phase 4.5: skipped in narrative mode — the unified narrative contract
+    # forbids mandatory engine-appended technical paragraphs (breaks the
+    # 3-5 sentence flowing-paragraph shape).
+    if (topic == "marriage"
+            and not _NARRATIVE_MODE
+            and isinstance(kundli, dict) and kundli.get("planets")):
         try:
             import re as _re
             if not _re.search(r"(?i)upapada|jaimini", text or ""):
@@ -10789,6 +11104,54 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         out_meta=build_meta_stream,
         marriage_subtype=marriage_subtype_stream,
     )
+
+    # ── Phase 4.5 — STREAM-PATH NARRATIVE CONTRACT INSTALL ─────────────
+    # The sync `ai_ask_v2` path installs the unified narrator contract as
+    # the LAST system message (~line 8466). The stream path historically
+    # didn't, relying instead on per-topic narrator overrides inside
+    # `_build_messages`. In NARRATIVE_MODE we MUST install the unified
+    # narrative contract here too, otherwise stream answers retain the
+    # legacy multi-paragraph + advisor-cite shape while sync answers get
+    # the clean 3-5 sentence narrative — sync/stream parity violation.
+    # Gated to narrative mode only so legacy-mode behavior is unchanged.
+    if _NARRATIVE_MODE:
+        # Derive supertype HERE (sync path computes it upstream and packs
+        # it into a dict; stream path historically derived it ~110 lines
+        # later for the post-completion validator). We need it BEFORE the
+        # OpenAI call so the contract is in the prompt — derive once,
+        # reuse below.
+        try:
+            _question_supertype = {
+                "supertype":     supertype_for(_qu_intent),
+                "confidence":    float(_qu.get("confidence") or 0.0),
+                "source":        _qu.get("source") or "ai",
+                "source_intent": _qu_intent,
+            }
+            _supertype_tag_stream = (
+                _question_supertype.get("supertype") or "GENERAL_ANALYSIS"
+            )
+            messages.append({
+                "role":    "system",
+                "content": _build_supertype_contract(
+                    _supertype_tag_stream,
+                    has_recovery_subask=bool(
+                        _qu.get("has_recovery_subask")
+                    ),
+                ),
+            })
+            _trace(req_id, "2e.SUPERTYPE_CONTRACT_INSTALLED(stream)", {
+                "supertype":      _supertype_tag_stream,
+                "position":       len(messages) - 1,
+                "narrative_mode": True,
+            })
+        except Exception as _sup_exc_s:
+            _trace(req_id, "2e.SUPERTYPE_CONTRACT_FAIL(stream)",
+                   {"error": str(_sup_exc_s)[:200]})
+            # In narrative mode the contract is structural, not optional —
+            # surface the failure loudly so it gets caught in dev.
+            _question_supertype = None
+            _supertype_tag_stream = "GENERAL_ANALYSIS"
+
     _trace(req_id, "3.PROMPT(stream)", {
         "model": model, "message_count": len(messages),
         "roles": [m["role"] for m in messages],
@@ -10881,12 +11244,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         # NOTE: supertype_for(intent: str) -> str. Sync path wraps it in a
         # dict ({"supertype": ..., "confidence": ...}) before passing
         # downstream — mirror that shape exactly.
-        _question_supertype = {
-            "supertype":  supertype_for(_qu_intent),
-            "confidence": float(_qu.get("confidence") or 0.0),
-            "source":     _qu.get("source") or "ai",
-            "source_intent": _qu_intent,
-        }
+        # Phase 4.5: in narrative mode the upstream contract-install block
+        # already derived this dict; reuse it to avoid double-derivation.
+        if not (
+            _NARRATIVE_MODE
+            and isinstance(locals().get("_question_supertype"), dict)
+        ):
+            _question_supertype = {
+                "supertype":     supertype_for(_qu_intent),
+                "confidence":    float(_qu.get("confidence") or 0.0),
+                "source":        _qu.get("source") or "ai",
+                "source_intent": _qu_intent,
+            }
         if (_supertype_validator_enabled
                 and isinstance(_question_supertype, dict)):
             _sup_tag = _question_supertype.get("supertype") or "GENERAL_ANALYSIS"
@@ -12282,7 +12651,14 @@ def _v2_run_card(intent_summary: str,
             return False
         return True
 
-    if (os.environ.get("STRUCTURED_NARRATOR_ENABLED", "1") != "0"
+    # Phase 4.5 NARRATIVE_MODE: bypass the structured wealth payload short-
+    # circuit entirely. The structured renderer would emit a "Verdict tag /
+    # Window / Karo / Avoid / 🕉 Upay / CA-SEBI cite" card which is exactly
+    # the V→R→T template the user asked us to kill. Letting the legacy
+    # narrator path serve `raw_engine_text` keeps the AI's clean Hinglish
+    # narrative answer (which the wealth verdict block fed as ground-truth).
+    if (not _NARRATIVE_MODE
+            and os.environ.get("STRUCTURED_NARRATOR_ENABLED", "1") != "0"
             and isinstance(_struct_payload, dict)
             and _struct_payload
             and _looks_like_wealth_payload(_struct_payload)):

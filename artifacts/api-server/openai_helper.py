@@ -5482,6 +5482,32 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "  • DO NOT introduce new topics outside the question's scope.\n"
         "════════════════════════════════════════════════════════════════════\n"
     ),
+    "STRENGTH_SUMMARY": (
+        "════════════════════════════════════════════════════════════════════\n"
+        "STRICT NARRATOR CONTRACT — QUESTION TYPE: STRENGTH_SUMMARY\n"
+        "════════════════════════════════════════════════════════════════════\n"
+        "User asked which planets are strong / weak / vargottam in their chart.\n"
+        "Locked facts already contain the authoritative buckets:\n"
+        "  ▸ STRENGTH BUCKETS — STRONG: ... | MODERATE: ... | WEAK: ...\n"
+        "  ▸ VARGOTTAM (D1 sign == D9 sign): ...\n"
+        "MUST do:\n"
+        "  • Answer in EXACTLY 1–2 short Hinglish lines, nothing more.\n"
+        "  • Use this exact format pattern:\n"
+        "      \"Apke strong planets <X, Y, Z> hain. Weak planets <A, B> hain.\"\n"
+        "    (Hinglish, comma-separated, no bullets, no headings.)\n"
+        "  • Pull planet names ONLY from the STRENGTH BUCKETS line above.\n"
+        "    Strong line → only STRONG bucket. Weak line → only WEAK bucket.\n"
+        "  • If a bucket is empty, say e.g. \"koi planet strong nahi hai\" —\n"
+        "    DO NOT borrow from another bucket.\n"
+        "  • If you mention 'vargottam', the planet name MUST appear in the\n"
+        "    VARGOTTAM list above. If list says (none), DO NOT use the word.\n"
+        "MUST NOT do:\n"
+        "  • DO NOT add a long narrative, dasha, advice, remedy, or upay.\n"
+        "  • DO NOT add caveats / hedges (\"lekin yaad rakho...\" etc.).\n"
+        "  • DO NOT invent vargottam, exalted, debilitated labels not in facts.\n"
+        "  • DO NOT mention more than 2 lines total.\n"
+        "════════════════════════════════════════════════════════════════════\n"
+    ),
 }
 
 
@@ -5601,6 +5627,45 @@ _HOUSE_RX_COMPILED: tuple[tuple[str, "_re_validator.Pattern"], ...] = tuple(
     for num, pat in _HOUSE_PATTERNS
 )
 
+# ── Sprint-25 Fix-J: STRENGTH_SUMMARY detector ──────────────────────────────
+# Triggers when the user asks "which planets are strong / weak / powerful /
+# vargottam in my chart" — Hinglish + English. We bind a strength keyword to
+# a planet/grah keyword within ~30 chars in either order so generic mentions
+# of "strong" don't false-fire.
+_STRENGTH_KEYWORDS = (
+    r"strong|weak|powerful|kamzor|kamjor|kamjore|kamzore|"
+    r"shaktishaali|shaktishali|balwaan|balwan|balavan|"
+    r"achch?h?e|achch?h?a|kharab|bekaar|bekar|"
+    r"vargottam|vargottama"
+)
+_PLANET_KEYWORDS = r"planet|planets|grah|graha|grahon|grahaon|grahas"
+_STRENGTH_SUMMARY_RX = _re_validator.compile(
+    rf"\b(?:{_STRENGTH_KEYWORDS})\b[^\n]{{0,30}}\b(?:{_PLANET_KEYWORDS})\b"
+    rf"|"
+    rf"\b(?:{_PLANET_KEYWORDS})\b[^\n]{{0,30}}\b(?:{_STRENGTH_KEYWORDS})\b",
+    _re_validator.IGNORECASE,
+)
+
+
+def _is_strength_summary_question(question: str) -> bool:
+    if not question:
+        return False
+    return bool(_STRENGTH_SUMMARY_RX.search(question))
+
+
+# Vargottam-claim parser: catches "Moon vargottam hai" / "vargottama Moon" etc.
+# Used by the STRENGTH_SUMMARY validator to enforce that any planet labelled
+# vargottam is in the precomputed list.
+_VARGOTTAM_NEAR_PLANET_RX = _re_validator.compile(
+    rf"(?:vargottam|vargottama)\b[^\n]{{0,40}}?\b({_PLANET_KEYWORDS}|"
+    rf"sun|surya|moon|chandra|mars|mangal|mercury|budh|jupiter|guru|"
+    rf"venus|shukra|saturn|shani|rahu|ketu)\b"
+    rf"|"
+    rf"\b(sun|surya|moon|chandra|mars|mangal|mercury|budh|jupiter|guru|"
+    rf"venus|shukra|saturn|shani|rahu|ketu)\b[^\n]{{0,40}}?(?:vargottam|vargottama)\b",
+    _re_validator.IGNORECASE,
+)
+
 
 def _count_distinct_planets(text: str) -> int:
     """Number of DISTINCT planets named in the text (max 9)."""
@@ -5616,7 +5681,8 @@ def _count_distinct_houses(text: str) -> int:
     return sum(1 for _num, rx in _HOUSE_RX_COMPILED if rx.search(text))
 
 
-def _validate_supertype_contract(text: str, supertype: str) -> list[str]:
+def _validate_supertype_contract(text: str, supertype: str,
+                                 kundli: Any = None) -> list[str]:
     """Hard-violation check against the strict per-supertype response contract.
 
     Returns a list of violation strings. Empty list = answer is contract-clean.
@@ -5700,6 +5766,112 @@ def _validate_supertype_contract(text: str, supertype: str) -> list[str]:
                     f"and {_nh} house(s) — a chart overview MUST sweep "
                     "≥3 distinct planets OR ≥3 distinct houses."
                 )
+
+    elif supertype == "STRENGTH_SUMMARY":
+        # Sprint-25 Fix-J — three checks:
+        #   1. Length: must be ≤ 60 words (1–2 lines).
+        #   2. Vargottam: any planet labelled vargottam MUST be in the
+        #      precomputed vargottam list.
+        #   3. Strong/weak buckets: planets named on the "strong" line MUST
+        #      be in the STRONG bucket; planets on the "weak" line MUST be
+        #      in the WEAK bucket. Cross-bucket bleed = violation.
+        # Length check
+        _wc = len(t.split())
+        if _wc > 60:
+            violations.append(
+                f"STRENGTH_SUMMARY: answer is {_wc} words — contract requires "
+                "1–2 short lines (≤60 words)."
+            )
+
+        # Pull deterministic facts (cheap — cached on kundli)
+        _facts = {}
+        if kundli is not None:
+            try:
+                from locked_facts import compute_strength_facts  # type: ignore
+                _facts = compute_strength_facts(kundli) or {}
+            except Exception:
+                _facts = {}
+
+        _vargottam_set = {p.lower() for p in (_facts.get("vargottam") or [])}
+        _strong_set    = {p.lower() for p in (_facts.get("strong")    or [])}
+        _weak_set      = {p.lower() for p in (_facts.get("weak")      or [])}
+        _moderate_set  = {p.lower() for p in (_facts.get("moderate")  or [])}
+
+        # Map any spelling → canonical planet name (lowercase)
+        _SPELL_TO_CANON = {
+            "sun":"sun","surya":"sun","soorya":"sun","ravi":"sun",
+            "moon":"moon","chandra":"moon","chand":"moon","chandr":"moon",
+            "mars":"mars","mangal":"mars","mangala":"mars","kuja":"mars",
+            "mercury":"mercury","budh":"mercury","budha":"mercury",
+            "jupiter":"jupiter","guru":"jupiter","brihaspati":"jupiter",
+            "venus":"venus","shukra":"venus","sukra":"venus",
+            "saturn":"saturn","shani":"saturn",
+            "rahu":"rahu","ketu":"ketu",
+        }
+
+        def _canon(name: str) -> str:
+            return _SPELL_TO_CANON.get((name or "").lower().strip(), "")
+
+        # 2. Vargottam claim check (only when facts are available)
+        if _facts:
+            for m in _VARGOTTAM_NEAR_PLANET_RX.finditer(t):
+                # group(1) = planet word in first alternative
+                # group(2) = planet word in second alternative
+                _word = (m.group(1) or m.group(2) or "").lower()
+                _can = _canon(_word)
+                if not _can:
+                    continue  # not a real planet (e.g. "planets" generic)
+                if _can not in _vargottam_set:
+                    violations.append(
+                        f"STRENGTH_SUMMARY: claimed '{_can.title()} vargottam' "
+                        f"but vargottam list is "
+                        f"{sorted(p.title() for p in _vargottam_set) or '(none)'}."
+                    )
+
+        # 3. Strong / weak bucket integrity
+        if _facts and (_strong_set or _weak_set or _moderate_set):
+            # Find lines containing strong / weak labels and extract planet
+            # tokens from each.
+            _line_rx = _re_validator.compile(
+                r"\b(strong|powerful|shaktishaali|shaktishali|balwan|"
+                r"weak|kamzor|kamjor|kamjore|kamzore|bekaar|bekar)\b"
+                r"[^\.\n]*",
+                _re_validator.IGNORECASE,
+            )
+            for seg in _line_rx.finditer(t):
+                seg_text = seg.group(0)
+                kind = (seg.group(1) or "").lower()
+                is_strong_seg = kind in {
+                    "strong","powerful","shaktishaali","shaktishali","balwan"
+                }
+                is_weak_seg = kind in {
+                    "weak","kamzor","kamjor","kamjore","kamzore","bekaar","bekar"
+                }
+                if not (is_strong_seg or is_weak_seg):
+                    continue
+                # Extract planet names in this segment
+                claimed: list[str] = []
+                for _name, _rx in _PLANET_RX_COMPILED:
+                    if _rx.search(seg_text):
+                        claimed.append(_name)
+                if not claimed:
+                    continue
+                if is_strong_seg:
+                    bad = [c for c in claimed if c not in _strong_set]
+                    if bad:
+                        violations.append(
+                            "STRENGTH_SUMMARY: 'strong' line names "
+                            f"{[b.title() for b in bad]} but STRONG bucket is "
+                            f"{sorted(p.title() for p in _strong_set) or '(none)'}."
+                        )
+                if is_weak_seg:
+                    bad = [c for c in claimed if c not in _weak_set]
+                    if bad:
+                        violations.append(
+                            "STRENGTH_SUMMARY: 'weak' line names "
+                            f"{[b.title() for b in bad]} but WEAK bucket is "
+                            f"{sorted(p.title() for p in _weak_set) or '(none)'}."
+                        )
 
     return violations
 
@@ -6056,6 +6228,33 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception:
             pass
 
+    # ── Sprint-25 Fix-J: STRENGTH_SUMMARY supertype override ────────────────
+    # Strong/weak/vargottam-planet questions get a dedicated supertype with
+    # a 1–2 line crisp contract + bucket-grounded validator. We layer this
+    # AFTER the AI Ear override block so it always wins regardless of what
+    # the regex or AI Ear initially picked. Source-of-truth for these queries
+    # is the deterministic STRENGTH BUCKETS line in locked facts.
+    try:
+        if _is_strength_summary_question(question or ""):
+            _old_super_ss = (question_supertype or {}).get("supertype")
+            question_supertype = {
+                "supertype":     "STRENGTH_SUMMARY",
+                "source":        "regex_strength_summary",
+                "source_intent": (question_intent or {}).get("intent"),
+            }
+            build_meta["question_supertype"] = question_supertype
+            _trace(req_id, "2d.QUESTION_SUPERTYPE.STRENGTH_SUMMARY_OVERRIDE", {
+                "previous_supertype": _old_super_ss,
+                "new_supertype":      "STRENGTH_SUMMARY",
+                "reason":             "strength/vargottam-planet question detected",
+            })
+    except Exception as _ss_exc:
+        try:
+            _trace(req_id, "2d.QUESTION_SUPERTYPE.STRENGTH_SUMMARY_FAIL",
+                   {"error": str(_ss_exc)[:200]})
+        except Exception:
+            pass
+
     # Sprint-25 Fix-G: scope/source/disagree telemetry. One canonical line
     # per request so we can grep aggregate metrics: scope distribution,
     # AI-Ear vs regex disagreement rate, source mix. Never raise.
@@ -6317,7 +6516,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     and not _skip_contract_reason
                     and isinstance(question_supertype, dict)):
                 _sup_tag = question_supertype.get("supertype") or "GENERAL_ANALYSIS"
-                _violations = _validate_supertype_contract(text, _sup_tag)
+                _violations = _validate_supertype_contract(text, _sup_tag, kundli=kundli)
                 if _violations:
                     _trace(req_id, "4z.SUPERTYPE_CONTRACT_VIOLATION", {
                         "supertype":      _sup_tag,
@@ -6334,7 +6533,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     try:
                         _retry_text = _call_once()
                         _retry_violations = _validate_supertype_contract(
-                            _retry_text, _sup_tag
+                            _retry_text, _sup_tag, kundli=kundli
                         )
                         _trace(req_id, "4z.SUPERTYPE_CONTRACT_RETRY", {
                             "supertype":           _sup_tag,
@@ -6396,6 +6595,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             _trace(req_id, "4a.TIMING_VALIDATOR_OK", _lock["validation"])
     except Exception as _exc:  # noqa: BLE001
         _trace(req_id, "4a.TIMING_VALIDATOR_ERR", str(_exc))
+
+    # ── Sprint-25 Fix-J: skip ALL deterministic post-injectors when the
+    # supertype is STRENGTH_SUMMARY. The contract requires 1–2 short lines —
+    # appending D27 Bhamsa, Extended Bala, KP cross-checks, varga injects,
+    # etc. would blow the length budget and bury the bucket-grounded answer.
+    _skip_post_injects = (
+        isinstance(question_supertype, dict)
+        and question_supertype.get("supertype") == "STRENGTH_SUMMARY"
+    )
+    if _skip_post_injects:
+        _trace(req_id, "4b.POST_INJECT_SKIP",
+               {"reason": "supertype=STRENGTH_SUMMARY (1–2 line contract)"})
 
     # ── HEALTH BRAND-SAFETY POST-PROCESSOR (deterministic, last line) ───────
     # The health engine + narrator override already mandate (a) doctor-consult
@@ -6870,7 +7081,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     # Sprint-9 Rule Q — DETERMINISTIC topic-specific varga post-injectors.
     # D7 for child Q, D2 for finance Q, D12 if parents mentioned, D3 if siblings.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _re
             from divisional_charts import (compute_d2, compute_d3, compute_d7,  # type: ignore
@@ -7003,6 +7214,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         isinstance(kundli, dict)
         and kundli.get("planets")
         and not _is_short_planet_strength_q
+        and not _skip_post_injects
     ):
         try:
             import re as _re2
@@ -7138,6 +7350,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         isinstance(kundli, dict)
         and kundli.get("planets")
         and not _is_short_planet_strength_q
+        and not _skip_post_injects
     ):
         try:
             import re as _re3
@@ -7254,7 +7467,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # If model mentioned a specific planet by name AND that planet is exceptional
     # (vargottama in 5+ vargas) OR very-strong/very-weak in Shadvarga Bala,
     # append one short clause naming that signal. Skip if already cited.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _re4
             from divisional_charts import (compute_vargottama_matrix,  # type: ignore
@@ -7300,7 +7513,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-15 Rule W — DETERMINISTIC PER-VARGA YOGA INJECTION (last-resort).
     # If detected yogas are present and not cited, append the single most-relevant
     # one (priority: Pancha Mahapurusha > Raj > Vipreet).
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reVY
             already_cited = bool(_reVY.search(
@@ -7353,6 +7566,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         isinstance(kundli, dict)
         and kundli.get("planets")
         and not _is_short_planet_strength_q  # Sprint-22 brevity guard
+        and not _skip_post_injects  # Sprint-25 Fix-J STRENGTH_SUMMARY guard
     ):
         try:
             import re as _reBX
@@ -7430,7 +7644,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-18.5 Rule X+ — DETERMINISTIC BHAVA BALA DEEP INJECTION (last-resort).
     # If user mentions a specific house and answer doesn't cite its 4-fold balance,
     # append the relevant H#'s breakdown.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reBH
             _qBH = (question or "").lower()
@@ -7535,7 +7749,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # If user asks about Kaal Sarp / Dhana / Vipreet / Pravrajya / Nabhasa and the
     # answer either invents a yoga not in our detector OR fails to confirm absence,
     # surgically strip the false claim and append the correct deterministic verdict.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reCY
             _qCY = (question or "").lower()
@@ -7673,7 +7887,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-14 Rule V — DETERMINISTIC STHIRA + NIRYANA SHOOLA INJECTION
     # For timing questions, append a one-line cross-check from each dasha if not
     # already cited. Only fires if the question is timing-flavored.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reSN
             _qSN = (question or "").lower()
@@ -7722,7 +7936,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-13 Rule U — DETERMINISTIC ARGALA INJECTION (last-resort).
     # If the answer concerns marriage/career/finance/child/health and a relevant
     # house has STRONG-BENEFIC or STRONG-MALEFIC argala, append a single clause.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reAR
             _qAR = (question or "").lower()
@@ -7777,7 +7991,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-7 Rule O — DETERMINISTIC UPAPADA LAGNA INJECTION (last-resort).
     # Marriage answers MUST cite UL + UL-lord placement. If model skipped it,
     # append a one-line UL signature so Rule O is satisfied 100%.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _reUL
             _qUL = (question or "").lower()
@@ -7820,7 +8034,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Sprint-8 Rule P — DETERMINISTIC CHARA DASHA INJECTION (last-resort).
     # Append a Chara MD/AD line for marriage answers OR any timing question
     # ("kab", "when", "next", "kitne saal", etc.) so Rule P is satisfied 100%.
-    if isinstance(kundli, dict) and kundli.get("planets"):
+    if isinstance(kundli, dict) and kundli.get("planets") and not _skip_post_injects:
         try:
             import re as _re
             _q_lower = (question or "").lower()

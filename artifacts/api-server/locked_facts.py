@@ -155,8 +155,117 @@ def _format_dosh_block(dosh: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_strength_block(verdicts: dict, dignities: list) -> str:
-    """Tabular planet strength block."""
+# ─── Sprint-25 Fix-J: deterministic strength facts ─────────────────────────
+# Vargottam (D1 sign == D9 sign) + STRONG / MODERATE / WEAK buckets are
+# precomputed and emitted explicitly into the prompt so the narrator cannot
+# fabricate ("Moon vargottam" when Moon is Mithun→Makar across D1/D9).
+# Also exposed via compute_strength_facts() for the supertype validator to
+# enforce "named planets MUST come from these buckets" at response time.
+_SIGN_NORM_ALIASES = {
+    "mesh": "aries", "vrishabh": "taurus", "vrishabha": "taurus",
+    "mithun": "gemini", "mithuna": "gemini",
+    "kark": "cancer", "karka": "cancer", "karkat": "cancer",
+    "simh": "leo", "simha": "leo",
+    "kanya": "virgo",
+    "tula": "libra", "tul": "libra",
+    "vrishchik": "scorpio", "vrischika": "scorpio", "vrischik": "scorpio",
+    "dhanu": "sagittarius", "dhanus": "sagittarius",
+    "makar": "capricorn", "makara": "capricorn",
+    "kumbh": "aquarius", "kumbha": "aquarius",
+    "meen": "pisces", "meena": "pisces",
+}
+
+
+def _norm_sign_name(s: Any) -> str:
+    if not isinstance(s, str):
+        return ""
+    k = s.strip().lower()
+    return _SIGN_NORM_ALIASES.get(k, k)
+
+
+def compute_strength_facts(kundli: Any,
+                           verdicts: Optional[dict] = None) -> dict:
+    """Deterministic strength buckets for a chart.
+
+    Returns:
+        {
+          "vargottam": [planet_name, ...],   # D1 sign == D9 sign
+          "strong":    [planet_name, ...],   # verdict band STRONG
+          "moderate":  [planet_name, ...],   # verdict band MODERATE
+          "weak":      [planet_name, ...],   # verdict band WEAK
+        }
+
+    Cached on `kundli["_strength_facts_cache"]` so prompt builder + validator
+    pay the cost only once per request.
+    """
+    if isinstance(kundli, dict):
+        cached = kundli.get("_strength_facts_cache")
+        if isinstance(cached, dict) and cached.get("_built"):
+            return cached
+
+    out: dict = {"vargottam": [], "strong": [], "moderate": [], "weak": [],
+                 "_built": True}
+
+    if not isinstance(kundli, dict):
+        return out
+
+    # ── Vargottam: D1 sign == D9 sign ────────────────────────────────────
+    d1_signs: dict[str, str] = {}
+    for p in (kundli.get("planets") or []):
+        if not isinstance(p, dict):
+            continue
+        nm = p.get("name") or p.get("planet")
+        sg = p.get("sign")
+        if isinstance(nm, str) and isinstance(sg, str):
+            d1_signs[nm] = _norm_sign_name(sg)
+
+    d9 = ((kundli.get("divisionalCharts") or {}).get("D9") or {})
+    d9_signs: dict[str, str] = {}
+    d9_planets = d9.get("planets") if isinstance(d9, dict) else None
+    if isinstance(d9_planets, list):
+        for p in d9_planets:
+            if not isinstance(p, dict):
+                continue
+            nm = p.get("name") or p.get("planet")
+            sg = p.get("sign")
+            if isinstance(nm, str) and isinstance(sg, str):
+                d9_signs[nm] = _norm_sign_name(sg)
+
+    out["vargottam"] = sorted([
+        nm for nm in d1_signs
+        if nm in d9_signs and d1_signs[nm] and d1_signs[nm] == d9_signs[nm]
+    ])
+
+    # ── STRONG / MODERATE / WEAK buckets (from verdict_table) ────────────
+    if isinstance(verdicts, dict):
+        for nm, v in verdicts.items():
+            band = (v or {}).get("verdict") if isinstance(v, dict) else None
+            if band == "STRONG":
+                out["strong"].append(nm)
+            elif band == "MODERATE":
+                out["moderate"].append(nm)
+            elif band == "WEAK":
+                out["weak"].append(nm)
+        out["strong"]   = sorted(out["strong"])
+        out["moderate"] = sorted(out["moderate"])
+        out["weak"]     = sorted(out["weak"])
+
+    if isinstance(kundli, dict):
+        kundli["_strength_facts_cache"] = out
+
+    return out
+
+
+def _format_strength_block(verdicts: dict,
+                           dignities: list,
+                           strength_facts: Optional[dict] = None) -> str:
+    """Tabular planet strength block + explicit vargottam / bucket lines.
+
+    `strength_facts` is the dict returned by `compute_strength_facts()`. When
+    present, two extra lines are emitted so the LLM can ground its answer:
+        ▸ VARGOTTAM (D1 sign == D9 sign): Mars, Jupiter
+        ▸ STRENGTH BUCKETS — STRONG: Mars, Jupiter | MODERATE: Sun | WEAK: Saturn
+    """
     if not verdicts:
         return "▸ PLANET STRENGTHS: (unavailable)"
     # Build dignity lookup for sign/house annotations
@@ -170,6 +279,27 @@ def _format_strength_block(verdicts: dict, dignities: list) -> str:
             continue
         sign, house = sign_house.get(p, ("?","?"))
         lines.append(f"   {p:<8} {v['verdict']:<8} ({sign} H{house} — {v['reason']})")
+
+    if isinstance(strength_facts, dict):
+        vg = strength_facts.get("vargottam") or []
+        lines.append(
+            "▸ VARGOTTAM (D1 sign == D9 sign): "
+            + (", ".join(vg) if vg else "(none — no planet has same sign in D1 and D9)")
+        )
+        s_strong = strength_facts.get("strong")   or []
+        s_mod    = strength_facts.get("moderate") or []
+        s_weak   = strength_facts.get("weak")     or []
+        lines.append(
+            "▸ STRENGTH BUCKETS — "
+            f"STRONG: {', '.join(s_strong) if s_strong else '(none)'} | "
+            f"MODERATE: {', '.join(s_mod) if s_mod else '(none)'} | "
+            f"WEAK: {', '.join(s_weak) if s_weak else '(none)'}"
+        )
+        lines.append(
+            "   ▸ When asked which planets are strong/weak/vargottam, answer "
+            "ONLY from the lists on the two lines above. Do NOT move planets "
+            "between buckets, do NOT invent vargottam."
+        )
     return "\n".join(lines)
 
 
@@ -269,6 +399,13 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         verdicts = verdict_table(intel.get("dignities") or [], shadbala)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] planet_strength failed: {exc}")
+
+    # Sprint-25 Fix-J: deterministic vargottam + strength buckets
+    strength_facts = {}
+    try:
+        strength_facts = compute_strength_facts(kundli, verdicts)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[locked_facts] compute_strength_facts failed: {exc}")
 
     # Sprint-2 — Ashtakavarga (Sarvashtakavarga per house)
     av_str = ""
@@ -1089,7 +1226,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         _format_basics(kundli, intel),
         _format_yoga_block(intel.get("yogas") or []),
         _format_dosh_block(dosh) if dosh else f"▸ MANGAL-DOSH: {intel.get('mangal_dosh','(unavailable)')}",
-        _format_strength_block(verdicts, intel.get("dignities") or []),
+        _format_strength_block(verdicts, intel.get("dignities") or [], strength_facts),
         av_str,
         bb_str,
         bbd_str,

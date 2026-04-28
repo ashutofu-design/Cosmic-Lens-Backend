@@ -6027,6 +6027,329 @@ def _safe_narration_gate(qu: dict,
     }
 
 
+# ── Sprint-26 Step 4 Phase 3 (Apr 28 2026) — POST_LOGIC_CHECK ───────────────
+# User's post-Phase-2 verdict: gate fixed input-side fabrication, but the LLM
+# still has free hand on output-side. Existing validators are FORMAT-level
+# only (dasha-word mention, timing-token presence, semantic dup). Truth-level
+# claims (CURRENT MD planet name, CURRENT AD planet name, planet-in-house
+# placements) are unchecked — model can confidently say "aap abhi Saturn MD
+# mein hain" when actual is Jupiter MD, and validators wave it through.
+#
+# Phase 3 adds a TRUTH validator that runs AFTER the LLM call (and AFTER the
+# supertype-contract retry). On mismatch: ONE corrective retry with the
+# actual values injected as a system message (Option C — hybrid). If retry
+# still mismatches → hard refusal template. Every correction event is
+# explicitly traced — NO silent corrections (per user instruction).
+#
+# Scope (MVP):
+#   - dasha_md_mismatch: response names a "current" Mahadasha that is NOT
+#     the actual current MD from kundli['dashas'] tree (or currentDasha).
+#   - dasha_ad_mismatch: same for Antardasha.
+#   - planet_house_mismatch: response says "X in Nth house" but actual house
+#     is different.
+# Out of scope (Phase 4): transit verification (needs live ephemeris), KP
+# sub-lord claims, yoga/dosha presence claims, numeric strength claims.
+#
+# Conservative-flag policy: dasha checks only fire when the response uses a
+# present-tense temporal anchor ("abhi", "currently", "chal raha", "running",
+# "present") — references to past/future MDs (e.g. "Saturn MD 2055 ke baad")
+# are intentionally not flagged.
+
+_POST_LOGIC_REFUSAL_TEXT = (
+    "Mujhe abhi data inspect karne mein chhoti si discrepancy mil rahi hai — "
+    "sahi answer dene ke liye birth time aur place ek baar dobara confirm "
+    "kar do, ya thodi der baad try karo. Galat baat bolna nahi chahta."
+)
+
+_PL_SYNONYMS = {
+    "surya": "sun",       "ravi": "sun",
+    "chandra": "moon",    "chandrama": "moon",
+    "mangal": "mars",     "kuja": "mars",
+    "budh": "mercury",    "buddha": "mercury",
+    "guru": "jupiter",    "brihaspati": "jupiter", "brhaspati": "jupiter",
+    "shukra": "venus",    "shukr": "venus",
+    "shani": "saturn",    "shanaiscara": "saturn",
+}
+_PL_CANON = ("sun","moon","mars","mercury","jupiter","venus","saturn",
+             "rahu","ketu")
+_PL_ALT = "|".join(list(_PL_CANON) + list(_PL_SYNONYMS.keys()))
+
+_TRUTH_MD_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:maha[\s\-]?dasha|mahadasa|m\.?d\.?)\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_AD_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:antar[\s\-]?dasha|antardasa|bhukti|a\.?d\.?)\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_PLANET_HOUSE_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:in\s+|is\s+in\s+|sits?\s+in\s+|"
+    r"placed\s+in\s+|hai\s+|ke\s+)?"
+    r"(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(?:house|ghar|bhava|bhav)\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_HOUSE_PLANET_RX = __import__("re").compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)\s+"
+    r"(?:mein|me|main|m[ae]\b|in)\s+"
+    rf"({_PL_ALT})\b",
+    __import__("re").IGNORECASE,
+)
+_NEGATION_NEAR_RX = __import__("re").compile(
+    r"\b(nahi+n?|nahin|nai+|naa|not\b|never|kabhi\s+nahi|abhi\s+nahi|"
+    r"khatam|khatm|finished|over|past|past\s+ho|wasn'?t|wasnt|wasn'?t)\b",
+    __import__("re").IGNORECASE,
+)
+
+_TRUTH_PRESENT_RX = __import__("re").compile(
+    r"\b(abhi|currently|chal\s*rah[aiy]|running|present|"
+    r"now|aaj\s*kal|active|ongoing)\b",
+    __import__("re").IGNORECASE,
+)
+
+
+def _norm_planet_lc(name: str) -> str:
+    """LOWERCASE canonical planet name. Distinct from _norm_planet_name
+    (defined later in this module for legacy code) which returns Title-
+    Case. POST_LOGIC_CHECK uses lowercase consistently for set-membership
+    and dict-key comparisons against planet_house map.
+    """
+    n = (name or "").lower().strip()
+    return _PL_SYNONYMS.get(n, n)
+
+
+def _build_truth_facts(kundli: dict) -> dict:
+    """Extract authoritative facts from kundli for POST_LOGIC_CHECK.
+
+    Returns:
+        {
+          "planet_house": {planet_name_lower: house_int},
+          "current_md":   {"planet": str, "start": str, "end": str} or None,
+          "current_ad":   same shape or None,
+        }
+    """
+    out = {"planet_house": {}, "current_md": None, "current_ad": None}
+    if not isinstance(kundli, dict):
+        return out
+
+    # Planet → house map. Architect-required: canonicalize via
+    # _norm_planet_lc so non-canonical kundli labels (e.g. "Surya",
+    # "Shani") map to the same keys the regex matchers will produce.
+    planets = kundli.get("planets") or []
+    if isinstance(planets, list):
+        for p in planets:
+            if not isinstance(p, dict):
+                continue
+            nm = _norm_planet_lc(p.get("name") or "")
+            if not nm:
+                continue
+            h = p.get("house")
+            if isinstance(h, int):
+                out["planet_house"][nm] = h
+    elif isinstance(planets, dict):
+        for k, v in planets.items():
+            nm = _norm_planet_lc(k or "")
+            if not nm or not isinstance(v, dict):
+                continue
+            h = v.get("house")
+            if isinstance(h, int):
+                out["planet_house"][nm] = h
+
+    # Current MD/AD — try precomputed first, fall back to dasha-tree traversal
+    # by today's date.
+    cur = kundli.get("currentDasha") or kundli.get("currentPhase") or {}
+    if isinstance(cur, dict):
+        for md_key in ("mahadasha", "md", "MD", "maha"):
+            md = cur.get(md_key)
+            if isinstance(md, dict) and md.get("planet"):
+                out["current_md"] = {
+                    "planet": (md.get("planet") or "").lower(),
+                    "start":  md.get("startDate") or md.get("start"),
+                    "end":    md.get("endDate")   or md.get("end"),
+                }
+                break
+        for ad_key in ("antardasha", "ad", "AD", "antar", "bhukti"):
+            ad = cur.get(ad_key)
+            if isinstance(ad, dict) and ad.get("planet"):
+                out["current_ad"] = {
+                    "planet": (ad.get("planet") or "").lower(),
+                    "start":  ad.get("startDate") or ad.get("start"),
+                    "end":    ad.get("endDate")   or ad.get("end"),
+                }
+                break
+
+    if not (out["current_md"] and out["current_ad"]):
+        from datetime import datetime
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        dashas = kundli.get("dashas") or kundli.get("dasha") or []
+        if isinstance(dashas, list):
+            for md in dashas:
+                if not isinstance(md, dict):
+                    continue
+                md_s = md.get("startDate") or "9999-99-99"
+                md_e = md.get("endDate")   or "0000-00-00"
+                if md_s <= today <= md_e:
+                    if not out["current_md"]:
+                        out["current_md"] = {
+                            "planet": (md.get("planet") or "").lower(),
+                            "start":  md.get("startDate"),
+                            "end":    md.get("endDate"),
+                        }
+                    for ad in (md.get("subDashas") or []):
+                        if not isinstance(ad, dict):
+                            continue
+                        ad_s = ad.get("startDate") or "9999-99-99"
+                        ad_e = ad.get("endDate")   or "0000-00-00"
+                        if ad_s <= today <= ad_e:
+                            if not out["current_ad"]:
+                                out["current_ad"] = {
+                                    "planet": (ad.get("planet") or "").lower(),
+                                    "start":  ad.get("startDate"),
+                                    "end":    ad.get("endDate"),
+                                }
+                            break
+                    break
+
+    return out
+
+
+def _post_logic_check(text: str, truth: dict) -> list[dict]:
+    """Returns a list of structured violations. Empty list = clean.
+
+    Each violation is a dict with at least {kind, severity, ...detail}.
+    """
+    violations: list[dict] = []
+    if not text or not isinstance(truth, dict):
+        return violations
+
+    # ─── DASHA CLAIMS ──────────────────────────────────────────────────────
+    has_present_anchor = bool(_TRUTH_PRESENT_RX.search(text))
+
+    if has_present_anchor:
+        cur_md = (truth.get("current_md") or {}).get("planet")
+        cur_ad = (truth.get("current_ad") or {}).get("planet")
+
+        # Architect-required (Phase-3 v2): suppress claims that are NEGATED
+        # in their immediate context. e.g. "Jupiter mahadasha active nahi
+        # hai" must NOT count as a claim that Jupiter is current MD. We
+        # look for a negation token within the next ~50 chars of the
+        # match — narrow window keeps recall high for genuine claims.
+        def _claimed_planets(rx):
+            out = set()
+            for m in rx.finditer(text):
+                tail = text[m.end(): m.end() + 60]
+                if _NEGATION_NEAR_RX.search(tail):
+                    continue
+                out.add(_norm_planet_lc(m.group(1)))
+            return out
+
+        md_claimed = _claimed_planets(_TRUTH_MD_RX)
+        ad_claimed = _claimed_planets(_TRUTH_AD_RX)
+
+        if cur_md and md_claimed and cur_md not in md_claimed:
+            violations.append({
+                "kind":           "dasha_md_mismatch",
+                "claimed":        sorted(md_claimed),
+                "actual_current": cur_md,
+                "severity":       "high",
+            })
+        if cur_ad and ad_claimed and cur_ad not in ad_claimed:
+            violations.append({
+                "kind":           "dasha_ad_mismatch",
+                "claimed":        sorted(ad_claimed),
+                "actual_current": cur_ad,
+                "severity":       "high",
+            })
+
+    # ─── PLANET-HOUSE CLAIMS ───────────────────────────────────────────────
+    ph = truth.get("planet_house") or {}
+    seen_pairs: set = set()
+
+    for m in _TRUTH_PLANET_HOUSE_RX.finditer(text):
+        try:
+            pname = _norm_planet_lc(m.group(1))
+            house = int(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        if not (1 <= house <= 12):
+            continue
+        actual = ph.get(pname)
+        if actual is None or actual == house:
+            continue
+        key = ("PH", pname, house)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        violations.append({
+            "kind":          "planet_house_mismatch",
+            "planet":        pname,
+            "claimed_house": house,
+            "actual_house":  actual,
+            "severity":      "high",
+        })
+
+    for m in _TRUTH_HOUSE_PLANET_RX.finditer(text):
+        try:
+            house = int(m.group(1))
+            pname = _norm_planet_lc(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        if not (1 <= house <= 12):
+            continue
+        actual = ph.get(pname)
+        if actual is None or actual == house:
+            continue
+        key = ("PH", pname, house)
+        if key in seen_pairs:
+            continue
+        seen_pairs.add(key)
+        violations.append({
+            "kind":          "planet_house_mismatch",
+            "planet":        pname,
+            "claimed_house": house,
+            "actual_house":  actual,
+            "severity":      "high",
+        })
+
+    return violations
+
+
+def _post_logic_correction_msg(violations: list[dict], truth: dict) -> str:
+    """Build the corrective system message for the POST_LOGIC retry."""
+    lines = [
+        "⚠️ FACTUAL CORRECTION REQUIRED — your previous answer named WRONG "
+        "chart facts. Regenerate using ONLY these correct values. Keep the "
+        "same topic, tone, and length — just fix the facts:",
+    ]
+    for v in violations:
+        if v["kind"] == "dasha_md_mismatch":
+            md = truth.get("current_md") or {}
+            lines.append(
+                f"  • CURRENT Mahadasha is "
+                f"{(md.get('planet') or '?').title()} "
+                f"({md.get('start','?')} → {md.get('end','?')}). You named "
+                f"{', '.join(p.title() for p in v['claimed'])} as current. FIX IT."
+            )
+        elif v["kind"] == "dasha_ad_mismatch":
+            ad = truth.get("current_ad") or {}
+            lines.append(
+                f"  • CURRENT Antardasha is "
+                f"{(ad.get('planet') or '?').title()} "
+                f"({ad.get('start','?')} → {ad.get('end','?')}). You named "
+                f"{', '.join(p.title() for p in v['claimed'])} as current. FIX IT."
+            )
+        elif v["kind"] == "planet_house_mismatch":
+            lines.append(
+                f"  • {v['planet'].title()} is in house "
+                f"{v['actual_house']}, NOT house {v['claimed_house']}. FIX IT."
+            )
+    lines.append(
+        "Do NOT add new claims, do NOT change topic. Only correct the "
+        "factual mistakes above."
+    )
+    return "\n".join(lines)
+
+
 def _build_supertype_contract(supertype: str,
                               *,
                               has_recovery_subask: bool = False) -> str:
@@ -7219,6 +7542,85 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception as _val_exc:
             _trace(req_id, "4z.SUPERTYPE_CONTRACT_VALIDATOR_ERR",
                    {"error": str(_val_exc)[:200]})
+
+        # ── Sprint-26 Step 4 Phase 3 — POST_LOGIC_CHECK (TRUTH validator) ─
+        # Hybrid (Option C): if claims mismatch kundli ground truth, fire
+        # ONE corrective retry with actual values injected. If retry STILL
+        # mismatches → hard refusal template. NO silent corrections —
+        # every check + retry + accept/refuse is traced.
+        try:
+            _post_logic_enabled = (
+                os.environ.get("POST_LOGIC_CHECK", "1") != "0"
+            )
+            if _post_logic_enabled and isinstance(kundli, dict):
+                _truth = _build_truth_facts(kundli)
+                _truth_violations = _post_logic_check(text, _truth)
+                if _truth_violations:
+                    _trace(req_id, "2v.POST_LOGIC_CHECK_VIOLATION", {
+                        "violation_count": len(_truth_violations),
+                        "violations":      _truth_violations,
+                        "truth_md":        (_truth.get("current_md") or {}).get("planet"),
+                        "truth_ad":        (_truth.get("current_ad") or {}).get("planet"),
+                        "first_attempt_preview": text[:240],
+                    })
+                    # Inject corrective system message + retry once.
+                    messages.append({
+                        "role":    "system",
+                        "content": _post_logic_correction_msg(
+                            _truth_violations, _truth),
+                    })
+                    try:
+                        _pl_retry_text = _call_once()
+                        _pl_retry_violations = _post_logic_check(
+                            _pl_retry_text, _truth)
+                        _trace(req_id, "2v.POST_LOGIC_CHECK_RETRY", {
+                            "retry_violations":    _pl_retry_violations,
+                            "retry_clean":         not _pl_retry_violations,
+                            "retry_preview":       _pl_retry_text[:240],
+                        })
+                        if not _pl_retry_violations:
+                            text = _pl_retry_text
+                            _trace(req_id, "2v.POST_LOGIC_CHECK_ACCEPTED",
+                                   {"reason": "retry clean — facts corrected",
+                                    "correction_applied": True})
+                        else:
+                            # Architect-required strict-terminal (Phase-3 v2,
+                            # Option C contract): ANY non-zero residual
+                            # violation → refusal. Removed the previous
+                            # PARTIAL-accept branch, which architect flagged
+                            # as serving still-violating text and breaking
+                            # the no-silent-correction guarantee.
+                            text = _POST_LOGIC_REFUSAL_TEXT
+                            _trace(req_id, "2v.POST_LOGIC_CHECK_REFUSAL", {
+                                "reason": ("retry clean" if False
+                                           else "retry left residual violations"),
+                                "residual_violation_count": len(_pl_retry_violations),
+                                "first_violations": _truth_violations,
+                                "retry_violations": _pl_retry_violations,
+                                "reduced_count":   len(_truth_violations)
+                                                   - len(_pl_retry_violations),
+                                "served_text": "_POST_LOGIC_REFUSAL_TEXT",
+                            })
+                    except Exception as _pl_retry_exc:
+                        # Architect-required: retry-error MUST also refuse —
+                        # cannot fall through and ship the first violating
+                        # answer. Refusal preferred over the known-bad text.
+                        text = _POST_LOGIC_REFUSAL_TEXT
+                        _trace(req_id, "2v.POST_LOGIC_CHECK_RETRY_ERR", {
+                            "error": str(_pl_retry_exc)[:200],
+                            "first_violations": _truth_violations,
+                            "served_text": "_POST_LOGIC_REFUSAL_TEXT",
+                            "reason": "retry call errored — refusing rather "
+                                      "than serving first violating text",
+                        })
+                else:
+                    _trace(req_id, "2v.POST_LOGIC_CHECK_CLEAN", {
+                        "truth_md": (_truth.get("current_md") or {}).get("planet"),
+                        "truth_ad": (_truth.get("current_ad") or {}).get("planet"),
+                    })
+        except Exception as _pl_exc:
+            _trace(req_id, "2v.POST_LOGIC_CHECK_ERR",
+                   {"error": str(_pl_exc)[:200]})
 
     # ── Sprint-51 TIMING VALIDATOR — hard anti-hallucination layer ──────────
     # If the question is a "kab/when" timing question, the AI is FORBIDDEN
@@ -9129,6 +9531,36 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4z.GLOBAL_PH_STRIP_ERR", str(_ph_exc))
 
     follow_ups = _derive_follow_ups(topic, eff_lang)
+    # ── Sprint-26 Step 4 Phase 3 v2 — POST_LOGIC SAFETY RE-CHECK ───────
+    # Architect-required final guarantee: downstream validators (timing,
+    # scrub, GLOBAL_PH_STRIP, jargon-inject) can rewrite the text after
+    # POST_LOGIC_CHECK ran. A rewrite could (in theory) re-introduce a
+    # truth violation. This is a CHEAP no-retry re-check: if the served
+    # text still has any high-severity violation, refuse. Skips when
+    # text is already the refusal template (idempotent) or when the
+    # check is disabled by env.
+    try:
+        if (text and text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()
+                and os.environ.get("POST_LOGIC_CHECK", "1") != "0"
+                and isinstance(kundli, dict)):
+            _safety_truth = _build_truth_facts(kundli)
+            _safety_violations = _post_logic_check(text, _safety_truth)
+            if _safety_violations:
+                _trace(req_id, "2v.POST_LOGIC_CHECK_POST_TIMING_REFUSAL", {
+                    "reason": "downstream validators left/introduced truth "
+                              "violations in served text — refusing",
+                    "residual_violations": _safety_violations,
+                    "served_text": "_POST_LOGIC_REFUSAL_TEXT",
+                })
+                text = _POST_LOGIC_REFUSAL_TEXT
+            else:
+                _trace(req_id, "2v.POST_LOGIC_CHECK_POST_TIMING_CLEAN", {
+                    "stage": "post-timing-final-safety"
+                })
+    except Exception as _safety_exc:
+        _trace(req_id, "2v.POST_LOGIC_CHECK_POST_TIMING_ERR",
+               {"error": str(_safety_exc)[:200]})
+
     _trace(req_id, "5.FINAL_OUTPUT", text)
     _trace(req_id, "6.FOLLOW_UPS", {
         "topic": topic, "lang": eff_lang, "items": follow_ups,

@@ -340,3 +340,65 @@ The project is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9.
     - Telemetry counters for `clarification_needed=true`, `gate_fired`, and `anchor_found_but_topic_recovery_failed` to drive iterative regex tuning.
     - Mixed-domain priority improvement (architect note): when multiple anchors match, picking by first textual occurrence (or AI's `topics_all[0]` when non-general) is better than fixed global priority. Not a real-world failure yet, deferred until live data shows it.
     - Step-3 cross-cutting Rule N reconciliation (still pending from Step-2).
+
+## Sprint-26 Step 4 Phase 3 — POST_LOGIC_CHECK (TRUTH validator) — COMPLETE
+**Date**: 2026-04-28 · **File**: `artifacts/api-server/openai_helper.py` (single-file change)
+
+### Why
+Phase-2 gate fixes input-side fabrication, but post-LLM truth-level claims (current MD/AD planet name, planet-in-house placements) were unchecked. Format validators (supertype contract, timing-validator) waved them through. Model could confidently say "Saturn MD chal raha hai" when actual is Jupiter MD. Phase 3 closes the loop with a deterministic kundli-vs-text check + corrective retry + hard refusal.
+
+### Design — Option C (hybrid), strict-terminal per architect review-2
+1. After LLM response, extract authoritative facts from `kundli` (`_build_truth_facts`).
+2. Run `_post_logic_check` to find {dasha_md_mismatch, dasha_ad_mismatch, planet_house_mismatch}.
+3. If clean → trace `2v.POST_LOGIC_CHECK_CLEAN`, ship.
+4. If violations → trace `VIOLATION` + inject corrective system msg ("CURRENT MD is X, you said Y. FIX IT") + retry once.
+5. **Strict terminal**: ANY non-zero residual violation OR retry error → ship verbatim refusal template. **No silent corrections, no PARTIAL accept.**
+6. **Final post-timing safety re-check** before `5.FINAL_OUTPUT`: cheap no-retry check that downstream validators (timing scrub, jargon-inject, GLOBAL_PH_STRIP) didn't reintroduce a violation. Refuses if dirty.
+
+### Helpers (added near `openai_helper.py:6033-6300`)
+- `_POST_LOGIC_REFUSAL_TEXT` — verbatim Hinglish refusal: *"data inspect karne mein chhoti si discrepancy mil rahi hai... galat baat bolna nahi chahta"*.
+- `_PL_SYNONYMS` / `_PL_ALT` — Hindi+Sanskrit planet aliases (surya/ravi→sun, mangal→mars, guru/brihaspati→jupiter, shukra→venus, shani→saturn, etc).
+- `_TRUTH_MD_RX`, `_TRUTH_AD_RX` — match "<planet> Mahadasha/MD" and "<planet> Antardasha/AD/Bhukti".
+- `_TRUTH_PLANET_HOUSE_RX`, `_TRUTH_HOUSE_PLANET_RX` — "<planet> in Nth house/ghar" and inverted form.
+- `_TRUTH_PRESENT_RX` — present-tense anchors gating dasha checks (abhi, currently, chal raha, running, present, now, aaj kal, active, ongoing). Past/future MD references like "Saturn MD 2055 ke baad" are deliberately not flagged.
+- **`_NEGATION_NEAR_RX`** (architect-required) — suppresses claims followed by negation within ~60 chars (nahi/nahin/nai/naa/not/never/khatam/finished/over/past). Eliminates the Phase-3-v1 false positive on "Jupiter mahadasha abhi active **nahi hai**".
+- `_norm_planet_lc(name)` — LOWERCASE canonical normalizer. Deliberately distinct from existing `_norm_planet_name(n: Any)` at line ~6770 which returns Title-Case for legacy callers — separate name to avoid silent shadowing (caught in unit tests, fixed before any live call).
+- `_build_truth_facts(kundli)` — extracts `{planet_house, current_md, current_ad}` from kundli; tries `currentDasha` precomputed first, falls back to `dashas` tree traversal by today's UTC date. **Now canonicalizes via `_norm_planet_lc`** (architect-required) so non-canonical kundli labels like "Surya"/"Shani" map to the same keys regex matchers produce.
+- `_post_logic_check(text, truth)` → list of structured violations.
+- `_post_logic_correction_msg(violations, truth)` → corrective system message with explicit "FIX IT" directives per violation, telling the model the actual correct values.
+
+### Wire site: `ai_ask` two-stage
+- **Stage A (post-LLM, pre-timing-validator, ~line 7531)**: full check + retry pipeline. Env kill-switch `POST_LOGIC_CHECK=0`.
+- **Stage B (after GLOBAL_PH_STRIP, just before `5.FINAL_OUTPUT`, ~line 9536)**: lightweight no-retry safety re-check. Idempotent — skipped when text already equals refusal template.
+
+### Telemetry events (all `2v.*` prefix — no silent path)
+- `POST_LOGIC_CHECK_CLEAN` — first attempt clean
+- `POST_LOGIC_CHECK_VIOLATION` — first attempt violations (with full detail + first 240 chars preview)
+- `POST_LOGIC_CHECK_RETRY` — retry result (`retry_violations`, `retry_clean`, `retry_preview`)
+- `POST_LOGIC_CHECK_ACCEPTED` — retry clean → served retry, `correction_applied: true`
+- `POST_LOGIC_CHECK_REFUSAL` — retry left residual → served refusal, both first+retry violations logged, `reduced_count` for tuning
+- `POST_LOGIC_CHECK_RETRY_ERR` — retry call errored → served refusal (no leak of first violating text), original violations logged
+- `POST_LOGIC_CHECK_POST_TIMING_REFUSAL` / `_CLEAN` / `_ERR` — Stage B safety re-check
+- `POST_LOGIC_CHECK_ERR` — Stage A wrapper exception trap
+
+### Verification
+- **Unit tests**: 16/16 PASS (12 original + 4 new architect-required negation cases). Includes "NEGATED_md_should_not_flag", "NEGATED_with_khatam", "NOT_NEGATED_close_text_should_flag" to verify negation guard precision.
+- **Live regression** (5 production fixtures, all HTTP 200): all show `POST_LOGIC_CHECK_CLEAN` with truth_md=jupiter truth_ad=rahu — **zero false positives**. Existing supertype-retry still fires (60e589cf strong→moderate); POST_LOGIC then runs clean on the corrected text. Final output unchanged from Phase-2 baseline.
+- **Adversarial #1** (truth-fake current_md=saturn, present-tense question "abhi kaunsi MD chal rahi hai?"): VIOLATION (2 violations: md+ad mismatch) → corrective RETRY → ACCEPTED. The LLM gracefully retreated to "birth time confirm karo" rather than fabricating either Saturn or Jupiter — ideal Option-C ACCEPTED outcome. Post-timing safety re-check also CLEAN.
+- **Adversarial #2** (`_post_logic_check` patched to always violate): VIOLATION → RETRY → REFUSAL with `served_text="_POST_LOGIC_REFUSAL_TEXT"`, `reduced_count: 0`. Final output is the verbatim refusal template.
+- **All 3 terminal branches (ACCEPTED/REFUSAL-residual/REFUSAL-error) verified live with full telemetry.**
+
+### Architect review-2 verdict
+PASS. All previously-flagged HIGH/MEDIUM items addressed:
+1. ✓ PARTIAL-accept removed (was Option-C contract breach — could ship still-violating text).
+2. ✓ RETRY_ERR no longer leaks first violating text — refuses instead.
+3. ✓ Final post-timing safety re-check added.
+4. ✓ Truth canonicalization via `_norm_planet_lc` (kundli labels normalized to match regex output).
+5. ✓ Negation handling (e.g. "X mahadasha nahi hai") via `_NEGATION_NEAR_RX` window-scan.
+
+### Known v1 limitations / Phase-4 backlog
+- Stream path (`ai_ask_stream`) only runs POST_LOGIC for general/marriage/gate cases that delegate to `ai_ask` oneshot. Pure stream-astro path does NOT run POST_LOGIC. Acceptable for v1 because most truth-claim risk is in oneshot analysis answers.
+- Detection misses "Mahadasha Saturn ki" inverted syntax — recall improvement for Phase 4.
+- Detection misses present-tense claims without explicit anchor (e.g. bare "Saturn MD hai" without abhi/chal raha/etc) — accepted to avoid false positives on historical mentions; architect proposes proximity-based anchor heuristic for Phase 4.
+- House-lord checks (occupancy ≠ lordship) deferred to Phase 4 — needs sign-→-lord mapping + house-cusp data.
+- Pending-clarification multi-turn carryover still queued from Phase 2 backlog.

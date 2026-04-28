@@ -3726,11 +3726,24 @@ def _token_budget_for(topic: str, question: str) -> int:
 # Confidence floor + env gate both apply; failure = silent fall-through to
 # regex.
 _AI_EAR_TOPIC_TO_DOMAINS: dict[str, tuple[str, ...]] = {
-    "stock":   ("stock",),
-    "wealth":  ("wealth",),
-    "love":    ("love",),
-    "career":  ("career",),
-    "health":  ("health",),
+    "stock":    ("stock",),
+    "wealth":   ("wealth",),
+    "love":     ("love",),
+    "career":   ("career",),
+    "health":   ("health",),
+    "marriage": ("marriage",),
+}
+
+
+# Sprint-25 Fix-F: AI Ear marriage bucket → engine subtype map. AI Ear emits
+# 5 marriage buckets (timing|remedy|analysis|compatibility|reconciliation);
+# the marriage engine has 4 subtypes (timing|remedy|analysis|general).
+_MARRIAGE_BUCKET_TO_SUBTYPE: dict[str, str] = {
+    "timing":         "timing",
+    "remedy":         "remedy",
+    "analysis":       "analysis",
+    "compatibility":  "analysis",   # compatibility is a flavor of analysis
+    "reconciliation": "analysis",   # reconciliation is also analytical
 }
 
 
@@ -4595,8 +4608,18 @@ def _is_chart_fact_question(question: str) -> bool:
     return False
 
 
-def _classify_marriage_subtype(question: str) -> str:
-    """Return 'timing' / 'remedy' / 'analysis' / 'general'."""
+def _classify_marriage_subtype(question: str,
+                               pre_classified_bucket: str | None = None) -> str:
+    """Return 'timing' / 'remedy' / 'analysis' / 'general'.
+
+    Sprint-25 Fix-F: When `pre_classified_bucket` is supplied (AI Ear handoff)
+    AND it is in `_MARRIAGE_BUCKET_TO_SUBTYPE`, that mapping is trusted and
+    the regex below is skipped. Falls back to regex on any miss / mismatch.
+    """
+    if pre_classified_bucket:
+        mapped = _MARRIAGE_BUCKET_TO_SUBTYPE.get(pre_classified_bucket.strip().lower())
+        if mapped:
+            return mapped
     q = (question or "").strip()
     if not q:
         return "general"
@@ -5536,6 +5559,62 @@ _DECISION_OPENER_RX = _re_validator.compile(
     _re_validator.IGNORECASE,
 )
 
+# Sprint-25 Fix-H: planet & house counters used by GENERAL_ANALYSIS validator.
+# Each tuple = canonical English name → regex of accepted spellings (Vedic +
+# English + Devanagari). One *match* per planet contributes 1 to the distinct
+# count regardless of how many times the planet is named.
+_PLANET_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("sun",     r"\b(?:sun|surya|soorya|ravi)\b|सूर्य|रवि"),
+    ("moon",    r"\b(?:moon|chandra|chandr|chand)\b|चंद्र|चन्द्र"),
+    ("mars",    r"\b(?:mars|mangal|mangala|kuja|bhauma)\b|मंगल"),
+    ("mercury", r"\b(?:mercury|budh|budha|budhh)\b|बुध"),
+    ("jupiter", r"\b(?:jupiter|guru|brihaspati|brihaspat|jeev|jeeva)\b|गुरु|बृहस्पति"),
+    ("venus",   r"\b(?:venus|shukra|shukr|sukra)\b|शुक्र"),
+    ("saturn",  r"\b(?:saturn|shani|shanaishchara|shanaishchar)\b|शनि"),
+    ("rahu",    r"\b(?:rahu)\b|राहु"),
+    ("ketu",    r"\b(?:ketu)\b|केतु"),
+)
+_PLANET_RX_COMPILED: tuple[tuple[str, "_re_validator.Pattern"], ...] = tuple(
+    (name, _re_validator.compile(pat, _re_validator.IGNORECASE))
+    for name, pat in _PLANET_PATTERNS
+)
+
+# Distinct house tokens. We bucket by ordinal so "1st" and "lagna" both
+# count toward house #1 (no double-credit). "house" / "bhava" alone (no
+# ordinal) is NOT counted — too ambiguous.
+_HOUSE_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("1",  r"\b(?:1st|first|prathama|pratham|lagna|ascendant)\b"),
+    ("2",  r"\b(?:2nd|second|dwitiya|dvitiya|dhana)\b"),
+    ("3",  r"\b(?:3rd|third|tritiya|sahaja)\b"),
+    ("4",  r"\b(?:4th|fourth|chaturth|chaturtha|sukha)\b"),
+    ("5",  r"\b(?:5th|fifth|panchama|pancham|putra)\b"),
+    ("6",  r"\b(?:6th|sixth|shashtha|shashta|ari|ripu)\b"),
+    ("7",  r"\b(?:7th|seventh|saptama|saptam|kalatra|yuvati)\b"),
+    ("8",  r"\b(?:8th|eighth|ashtama|ashtam|randhra|ayu)\b"),
+    ("9",  r"\b(?:9th|ninth|navama|navam|dharma|bhagya)\b"),
+    ("10", r"\b(?:10th|tenth|dasama|dasam|karma|rajya)\b"),
+    ("11", r"\b(?:11th|eleventh|labha|aaya)\b"),
+    ("12", r"\b(?:12th|twelfth|dvadasha|dvadasa|vyaya|moksha)\b"),
+)
+_HOUSE_RX_COMPILED: tuple[tuple[str, "_re_validator.Pattern"], ...] = tuple(
+    (num, _re_validator.compile(pat, _re_validator.IGNORECASE))
+    for num, pat in _HOUSE_PATTERNS
+)
+
+
+def _count_distinct_planets(text: str) -> int:
+    """Number of DISTINCT planets named in the text (max 9)."""
+    if not text:
+        return 0
+    return sum(1 for _name, rx in _PLANET_RX_COMPILED if rx.search(text))
+
+
+def _count_distinct_houses(text: str) -> int:
+    """Number of DISTINCT houses named in the text (max 12)."""
+    if not text:
+        return 0
+    return sum(1 for _num, rx in _HOUSE_RX_COMPILED if rx.search(text))
+
 
 def _validate_supertype_contract(text: str, supertype: str) -> list[str]:
     """Hard-violation check against the strict per-supertype response contract.
@@ -5607,7 +5686,21 @@ def _validate_supertype_contract(text: str, supertype: str) -> list[str]:
                 "HAAN/NAA/RUKO (YES/NO/WAIT) verdict."
             )
 
-    # GENERAL_ANALYSIS has no hard contract — soft style guard only.
+    elif supertype == "GENERAL_ANALYSIS":
+        # Sprint-25 Fix-H: a chart-overview MUST be a sweep, not a single-
+        # planet narrative. Require ≥3 distinct planets OR ≥3 distinct houses.
+        # Bypass for very short answers (<240 chars) — these are conversational
+        # follow-ups, not chart overviews.
+        if len(t) >= 240:
+            _np = _count_distinct_planets(t)
+            _nh = _count_distinct_houses(t)
+            if _np < 3 and _nh < 3:
+                violations.append(
+                    f"GENERAL_ANALYSIS: response named only {_np} planet(s) "
+                    f"and {_nh} house(s) — a chart overview MUST sweep "
+                    "≥3 distinct planets OR ≥3 distinct houses."
+                )
+
     return violations
 
 
@@ -5829,7 +5922,27 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "confidence":     _ext.confidence,
                     "latency_ms":     _ext.latency_ms,
                     "source":         _ext.source,
+                    "question_scope": getattr(_ext, "question_scope", "unknown"),
                 })
+
+                # Sprint-25 Fix-F: marriage subtype trust contract.
+                # When the AI Ear gives a confident marriage bucket, re-derive
+                # marriage_subtype using that bucket — works whether topic
+                # stays marriage (regex agreed) OR flips to marriage below.
+                if topic == "marriage":
+                    _mar_pre_bucket = _ai_ear_bucket_for(build_meta, "marriage")
+                    if _mar_pre_bucket:
+                        try:
+                            _new_subtype = _classify_marriage_subtype(question, _mar_pre_bucket)
+                            if _new_subtype != marriage_subtype:
+                                _trace(req_id, "2c.MARRIAGE_SUBTYPE.AI_EAR_OVERRIDE", {
+                                    "old":    marriage_subtype,
+                                    "new":    _new_subtype,
+                                    "bucket": _mar_pre_bucket,
+                                })
+                                marriage_subtype = _new_subtype
+                        except Exception:
+                            pass
 
                 # ── Fix-A: AI Ear becomes the topic source-of-truth ──────────
                 # When AI Ear successfully extracted a non-general domain with
@@ -5865,9 +5978,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         _topic_source = "ai_ear"
                         # Marriage subtype was computed against the OLD topic
                         # — re-derive if we just flipped into/out of marriage.
+                        # Sprint-25 Fix-F: pass AI Ear bucket so the engine
+                        # trusts the LLM's classification when available.
                         if topic == "marriage":
                             try:
-                                marriage_subtype = _classify_marriage_subtype(question)
+                                _mar_pre_bucket = _ai_ear_bucket_for(build_meta, "marriage")
+                                marriage_subtype = _classify_marriage_subtype(
+                                    question, _mar_pre_bucket,
+                                )
                             except Exception:
                                 pass
                         _trace(req_id, "2b.AI_EAR_TOPIC_OVERRIDE", {
@@ -5937,6 +6055,35 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                    {"error": str(_ear_outer_exc)[:200]})
         except Exception:
             pass
+
+    # Sprint-25 Fix-G: scope/source/disagree telemetry. One canonical line
+    # per request so we can grep aggregate metrics: scope distribution,
+    # AI-Ear vs regex disagreement rate, source mix. Never raise.
+    try:
+        _ie = build_meta.get("intent_extraction") or {}
+        _qsuper = build_meta.get("question_supertype") or {}
+        _qint = build_meta.get("question_intent") or {}
+        _super_src = _qsuper.get("source") or "regex"
+        # "disagree" = AI Ear ran AND chose a supertype that differs from
+        # what the regex initially picked. Sources that mean OVERRIDE:
+        #   "ai_ear"        — Fix-C ask_types/tone heuristic override
+        #   "ai_ear_scope"  — Fix-E question_scope deterministic override
+        # Sources that mean AGREE / NO-OVERRIDE:
+        #   "ai_ear+regex_agree", "regex"
+        _disagree = bool(_ie) and _super_src in {"ai_ear", "ai_ear_scope"}
+        _trace(req_id, "2.SUPERTYPE_TELEMETRY", {
+            "scope":          _ie.get("question_scope", "unknown"),
+            "supertype":      _qsuper.get("supertype"),
+            "supertype_src":  _super_src,
+            "topic":          topic,
+            "topic_src":      _topic_source,
+            "ear_domain":     _ie.get("domain"),
+            "ear_conf":       _ie.get("confidence"),
+            "intent":         _qint.get("intent"),
+            "disagree":       _disagree,
+        })
+    except Exception:
+        pass
 
     # Stash the final topic decision provenance for downstream observers.
     build_meta["topic"] = topic
@@ -7919,8 +8066,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # marriage facts meta here — but we still pass an empty out_meta for
     # forward-compat / parity with ai_ask.
     build_meta_stream: dict = {}
+    # Sprint-25 Fix-F: streaming variant — pass AI Ear marriage bucket when
+    # available (build_meta_stream is empty here, so the helper returns None
+    # and we fall back to regex; future stream-side AI Ear work will populate).
+    _mar_pre_bucket_stream = _ai_ear_bucket_for(build_meta_stream, "marriage")
     marriage_subtype_stream = (
-        _classify_marriage_subtype(question) if topic == "marriage" else "timing"
+        _classify_marriage_subtype(question, _mar_pre_bucket_stream)
+        if topic == "marriage" else "timing"
     )
     _trace(req_id, "2.MODE_DETECT.subtype(stream)", {
         "topic": topic, "marriage_subtype": marriage_subtype_stream,

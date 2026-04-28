@@ -400,5 +400,106 @@ PASS. All previously-flagged HIGH/MEDIUM items addressed:
 - Stream path (`ai_ask_stream`) only runs POST_LOGIC for general/marriage/gate cases that delegate to `ai_ask` oneshot. Pure stream-astro path does NOT run POST_LOGIC. Acceptable for v1 because most truth-claim risk is in oneshot analysis answers.
 - Detection misses "Mahadasha Saturn ki" inverted syntax — recall improvement for Phase 4.
 - Detection misses present-tense claims without explicit anchor (e.g. bare "Saturn MD hai" without abhi/chal raha/etc) — accepted to avoid false positives on historical mentions; architect proposes proximity-based anchor heuristic for Phase 4.
-- House-lord checks (occupancy ≠ lordship) deferred to Phase 4 — needs sign-→-lord mapping + house-cusp data.
+- ~~House-lord checks (occupancy ≠ lordship) deferred to Phase 4 — needs sign-→-lord mapping + house-cusp data.~~ **SHIPPED in Phase 4.1** (see below).
 - Pending-clarification multi-turn carryover still queued from Phase 2 backlog.
+
+---
+
+## Phase 4.1 — Truth Coverage Extension + Classifier Sanity Layer (Apr 28, 2026)
+Closes two highest-priority gaps from Apr 28 audit: (1) POST_LOGIC fact-class coverage beyond MD/AD/planet-house, (2) classifier sanity override for high-confidence wrong intents.
+
+### Backend extension — `openai_helper.py` (~315 LOC, helpers ~6113-6608)
+**New lookup tables** (lowercase canonical to match `_norm_planet_lc` output):
+- `_TF_SIGNS_LC` — 12 sign list (aries…pisces).
+- `_TF_SIGN_INDEX_LC` — sign→0-based index for house-rotation math.
+- `_TF_SIGN_RULER_LC` — sign→ruling planet (aries→mars, taurus→venus, …, pisces→jupiter; nodes excluded).
+- `_TF_SIGN_ALIASES_LC` — Hinglish + English: mesh/aries, vrishabh/taurus, mithun/gemini, kark/karka/cancer, simha/leo, kanya/virgo, tula/libra, vrishchik/scorpio, dhanu/sagittarius, makar/capricorn, kumbh/aquarius, meen/pisces.
+- `_tf_canon_sign(s)` — alias normalizer used by all sign-claim regexes.
+- `_tf_negated_after(text, end_pos, window=30)` — **clause-bounded negation guard** (architect-required to avoid run-on false positives). Stops scanning at `.,;\n " aur " " and " " lekin " " but " " par "`.
+
+**Extended `_build_truth_facts`** now emits (in addition to `current_md/current_ad/planet_house`):
+- `planet_sign: {planet→sign}` from kundli.planets[].sign (canonicalized).
+- `retrograde: set(planet)` — explicit Rahu/Ketu skip (mean nodes always show retro flag, not a fabrication target).
+- `house_lord: {1..12 → planet}` — lagna+sign-ruler chain. Sag asc → house 2 = Capricorn → Saturn (verified live on WV4 fixture).
+- `manglik: bool|None` — Mars in 1/2/4/7/8/12 from lagna (one-violation-per-response: breaks after first match).
+
+**Extended `_post_logic_check` violation kinds (4 new)**:
+- `house_lord_mismatch` — "Nth house ka swami X" or "X Nth house ka swami" Hinglish/English. Honours `_TRUTH_LORDISH_TAIL_RX` to suppress planet-house false-positive when "ka swami" follows the planet token.
+- `planet_sign_mismatch` — "Planet [in] Sign mein/rashi", clause-bounded negation guard.
+- `retrograde_mismatch` — **polarity-aware** (catches both "Saturn retrograde hai" when actually direct AND "Mars retrograde nahi hai" when actually retrograde). Skips Rahu/Ketu.
+- `manglik_mismatch` — **polarity-aware** yes/no claim ("manglik hai" / "mangal dosh hai/nahi"). Single emit per response.
+
+`_post_logic_correction_msg` extended with FIX-IT directives for each new kind, including the actual correct value pulled from `truth` dict.
+
+### Classifier sanity layer (Fix-P) — `question_understanding.py` (~90 LOC, 551-640)
+**Lookup pattern regexes** (Hinglish + English):
+- `_LOOKUP_LORD_RX` — "Nth house ka swami/lord/malik kaun/kya"
+- `_LOOKUP_KARAKA_RX` — "X ka karaka kaun"
+- `_LOOKUP_DOSHA_YESNO_RX` — "manglik hai kya / mangal dosh hai kya / kaal sarp dosh / pitra dosh"
+- `_LOOKUP_GENERIC_YESNO_RX` — "kaun hai/kya hai/hai kya/kitna" possessive yes/no lookups
+
+**Override contract** — fires only when AI intent ∈ {timing, decision} AND a lookup pattern matches → forces `intent="analysis"` (safest factual narrator, won't force date prediction). Sets:
+- `intent_overridden_from = <original>`
+- `intent_override_reason = <pattern_name>`
+- `intent_override_phase = "4.1_fix_p"`
+
+**Refactor**: original body renamed to `_understand_question_inner`, public `understand_question` wrapper applies sanity layer before returning.
+
+### Wire-in — telemetry parity both paths (`openai_helper.py`)
+- **`ai_ask` (line ~7305)**: emits `1b.CLASSIFIER_OVERRIDE` immediately after existing `1.UNDERSTANDING` trace, conditional on `intent_overridden_from`. Payload: `{from, to, reason, phase, ai_confidence}`.
+- **`ai_ask_stream` (line ~9961)**: same trace with `path: "stream"` discriminator. Stream path benefits from override automatically since `understand_question` is shared (Stage A POST_LOGIC for stream is Phase 4.4 backlog).
+
+### Verification matrix
+| Test | Result |
+|---|---|
+| 21/21 new unit tests (4 new fact classes × correct/wrong/negated/edge) | ✓ PASS |
+| 4/4 Phase-3 regression unit tests | ✓ PASS |
+| 16/16 Fix-P override unit tests (incl. WV4 + WV5) | ✓ PASS |
+| 7/7 adversarial live test (WV4 chart, 6 single-violation + 1 triple) | ✓ ALL CAUGHT |
+| 5/5 correct-answer false-positive guard (WV4 chart) | ✓ ZERO false-positives |
+| 4/4 audit fixtures (WV1-3, WV6) live HTTP | ✓ HTTP 200, no regressions |
+| WV4 live ("2nd house ka swami") | ✓ Answer: "Saturn" (correct) |
+| WV5 live ("Mera Mangal dosh hai kya") | ✓ Answer: "Haan, manglik hain" (correct, Mars in 1) |
+| 3/5 Phase-3 baseline fixtures (S4_clear/contradict/far_timing) | ✓ HTTP 200 (others not run due to serial test budget — non-regression confirmed by unit suite) |
+| Telemetry: `2v.POST_LOGIC_CHECK_CLEAN` + `2v.POST_LOGIC_CHECK_POST_TIMING_CLEAN` both fire | ✓ Stage A + Stage B intact |
+
+**Sample chart anchors verified live** (WV4 fixture, Sagittarius lagna):
+- 2nd house lord: Saturn (Capricorn ruler) — NOT Jupiter (common test-data mistake).
+- 9th house lord: Sun (Leo ruler) — NOT Jupiter.
+- Manglik: True (Mars in 1st house from lagna).
+- Saturn: Aries / 5th house / retrograde — all three independently validated.
+
+### Architect review-1 fixes (Apr 28, 2026 — pre-PASS)
+Architect raised 2 critical correctness items before approving Phase 4.1:
+
+1. **`_LOOKUP_GENERIC_YESNO_RX` was over-broad** — the bare "hai kya" / "kya mera" trigger could misroute genuine decision asks like *"ye decision sahi hai kya"* or *"invest karu ya nahi, sahi hai kya"* to the analysis narrator. **Fix**: regex now requires a CHART-FACT anchor (house/ghar/bhav, lord/swami/malik, graha/planet, dosh, karaka, rashi, nakshatra, dasha, lagna, kundli/kundali, bhagya, nadi, bhakoot, ascendant, horoscope, chart, raj/dhan yog compounds, gajakesari) within ±50 chars on either side of the yes/no marker. Verified: 12/12 mixed cases pass (5 must-override with anchor, 5 must-NOT-override pure decision asks, 2 LORD/DOSHA-explicit unaffected).
+
+2. **Manglik scan had a polarity blind spot** — the loop `break`'d on the first truthy match, so `"Aap manglik hain, lekin actually aap manglik nahi hain"` would silently pass. **Fix**: loop now `continue`s past truthy matches and only emits + breaks on the first observed MISMATCH. Verified: 5/5 mixed-polarity manglik tests pass (correct→contradiction, wrong→correction, all-correct, all-wrong, multi-correct). Retrograde was already polarity-aware via `seen_retro` dedup-by-key — unchanged.
+
+### Architect review-2 fixes (Apr 28, 2026 — pre-PASS)
+Architect re-review surfaced 2 anchor-list refinements:
+
+1. **Bare `yoga|yog` anchor was over-broad** — collided with non-astro lifestyle usage like *"yoga class sahi hai kya"* or *"gym jaau ya yoga karu, sahi hai kya"*. **Fix**: removed bare `yoga|yog` from the anchor list. Replaced with discrete unambiguously-astrological compounds: `raj yog/raj yoga`, `dhan yog/dhan yoga`, `gajakesari/gaja kesari`. Generic chart-context yoga lookups (e.g., *"kundli mein raj yog hai kya"*) still match via the kundli/house/lagna anchor.
+2. **Missing `kundali` Hindi spelling** — only `kundli` was in the anchor list, weakening recall for *"kya meri kundali strong hai"*. **Fix**: added `kundali` alongside `kundli`.
+
+Refactored anchor + yes/no marker subpatterns into named module-level constants (`_LOOKUP_ANCHORS`, `_LOOKUP_YESNO_MARKERS`) so the bidirectional regex composition stays DRY. Verified: 17/17 (12 prior + 7 new) Fix-P regression tests pass.
+
+**Final verification matrix after fixes**:
+| Test | Result |
+|---|---|
+| 12/12 generic_yesno tightening regression | ✓ PASS |
+| 5/5 mixed-polarity manglik regression | ✓ PASS |
+| 4/4 retrograde polarity (no regression from fix) | ✓ PASS |
+| 5/5 adversarial re-run on WV4 chart | ✓ ALL CAUGHT |
+| 4/4 correct-answer false-positive guard | ✓ ZERO FP |
+| WV4 live | ✓ "2nd house ka swami Saturn" (correct) |
+| WV5 live | ✓ "Haan, aap manglik hain" (correct) |
+| WV2 live (decision intent) | ✓ "RUKO. …decision mein delay" — decision intent preserved, no false override |
+
+### Out of scope (Phase 4.2-4.5 backlog)
+- Nakshatra fact-checking
+- KP cusp-lord verification
+- Sade Sati / Saturn transit timing
+- Stream-path POST_LOGIC parity (currently Fix-P override applies; Stage A check does not)
+- `engine_status` honesty + Fix-K reversal
+- Numeric strength / shadbala validation

@@ -545,7 +545,139 @@ def _maybe_promote_analysis_for_why(question: str,
 
 
 # ── Main API ────────────────────────────────────────────────────────────────
+# ── Phase 4.1 Fix-P: Classifier Sanity Layer ───────────────────────────────
+# Deterministic post-classification override. The AI sometimes returns
+# `intent="timing"` with confidence ≥ 0.9 for questions that are pure
+# CHART-FACT lookups ("Nth house ka swami kaun hai", "Mangal dosh hai
+# kya"). These questions have no temporal answer; routing them through the
+# TIMING_QUERY narrator forces the model to invent dates. This sanity
+# layer detects unambiguous lookup/yes-no patterns and re-tags such
+# requests as `analysis` (the most flexible factual narrator). It runs
+# AFTER the AI verdict and is confidence-blind — even 0.95 verdicts get
+# corrected when the pattern is decisive. Every override is recorded on
+# the returned dict (`intent_overridden_from`, `intent_override_reason`,
+# `intent_override_phase`) so callers can trace it via the `1b.CLASSIFIER
+# _OVERRIDE` telemetry hook in openai_helper.py.
+
+# "Nth house ka swami / lord / malik / adhipati / owner"
+_LOOKUP_LORD_RX = re.compile(
+    r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)\s+"
+    r"(?:k[ae]\s+)?(?:swami|lord|malik|adhipati|owner)\b",
+    re.IGNORECASE,
+)
+# Karaka lookups
+_LOOKUP_KARAKA_RX = re.compile(
+    r"\b(?:atmakaraka|amatyakaraka|yogakaraka|darakaraka|"
+    r"bhratrukaraka|matrukaraka|putrakaraka|gnati[\s\-]?karaka)\b",
+    re.IGNORECASE,
+)
+# Yes/no dosha questions
+_LOOKUP_DOSHA_YESNO_RX = re.compile(
+    r"\b(?:manglik|mangal\s+dosh[ai]?|mangalik|nadi\s+dosh[ai]?|"
+    r"bhakoot\s+dosh[ai]?|kaal\s+sarp|kalsarp|sade\s+sati|"
+    r"kemdrum|chandal|guru\s+chandal|grahan\s+dosh)\b"
+    r"[^.?!\n]{0,40}?\b(?:hai|hu|hain|ho|kya|hoon|hain\s+kya|hai\s+kya)\b",
+    re.IGNORECASE,
+)
+# Generic yes/no chart-fact lookups ("kya mera 5th house strong hai", "5th
+# house strong hai kya"). Phase 4.1 architect-required tightening: the
+# bare "hai kya" / "kya mera" trigger was over-broad and would misroute
+# legitimate decision asks like "ye decision sahi hai kya" or "invest
+# karu ya nahi, sahi hai kya". The pattern now requires a CHART-FACT
+# anchor (house/ghar/bhav, lord/swami/malik, graha/planet, dosh, karaka,
+# rashi, nakshatra, dasha, lagna, kundli/kundali, bhagya, nadi, bhakoot,
+# ascendant, horoscope, chart) within ±50 chars of the yes/no marker
+# before the override is allowed to fire.
+#
+# Architect review-2 refinements:
+#   - bare "yoga|yog" REMOVED — collided with non-astro usage ("yoga
+#     class sahi hai kya"). Astrology yoga lookups ALWAYS pair with a
+#     chart noun (kundli, house, lagna, dasha, planet, raj+yog compound)
+#     so other anchors still catch them. The qualified compound forms
+#     `rajyog|rajyoga|dhanyog|dhanyoga|gajakesari` are kept as discrete
+#     tokens because they're unambiguously astrological.
+#   - Added "kundali" spelling variant alongside "kundli" (also "janam
+#     kundali") to recover Hindi-spelling lookup recall.
+_LOOKUP_ANCHORS = (
+    r"\b(?:house|ghar|bhav[ae]?|lord|swami|malik|adhipati|graha|grah|"
+    r"planet|dosh[ai]?|karaka|rashi|nakshatra|dasha|antardasha|"
+    r"mahadasha|lagna|kundli|kundali|bhagya|nadi|bhakoot|ascendant|"
+    r"horoscope|chart|"
+    r"raj\s*yog[a]?|dhan\s*yog[a]?|gajakesari|gaja\s*kesari)\b"
+)
+_LOOKUP_YESNO_MARKERS = (
+    r"(?:\bkya\s+mer[ae]\b|\bkya\s+meri\b|"
+    r"\b(?:hu|hoon|hai|hain|ho)\s+kya\b)"
+)
+_LOOKUP_GENERIC_YESNO_RX = re.compile(
+    # anchor-then-yesno OR yesno-then-anchor, both within ±50 chars
+    r"(?:" + _LOOKUP_ANCHORS + r"[^.?!\n]{0,50}?" + _LOOKUP_YESNO_MARKERS
+    + r"|" + _LOOKUP_YESNO_MARKERS + r"[^.?!\n]{0,50}?" + _LOOKUP_ANCHORS
+    + r")",
+    re.IGNORECASE,
+)
+
+
+def _apply_classifier_sanity_layer(out: dict, question: str) -> dict:
+    """Phase 4.1 Fix-P. Mutates and returns `out`.
+
+    Override rule (conservative):
+      - Trigger ONLY when the question matches a hard lookup pattern AND
+        the AI returned `intent in {"timing", "decision"}` (the two most
+        common false positives for lookup queries). Other intents are
+        left alone — they're either already correct (`analysis`,
+        `planet`) or domain-meaningful (`problem`).
+      - Override target is always `analysis` (GENERAL_ANALYSIS narrator
+        — flexible, doesn't force date prediction or remedy commitment).
+      - Diagnostic fields added on the dict for telemetry tracing.
+    """
+    if not isinstance(out, dict) or not question:
+        return out
+    intent = (out.get("intent") or "").lower()
+    if intent not in ("timing", "decision"):
+        return out
+
+    matched = None
+    if _LOOKUP_LORD_RX.search(question):
+        matched = "lookup_lord"
+    elif _LOOKUP_KARAKA_RX.search(question):
+        matched = "lookup_karaka"
+    elif _LOOKUP_DOSHA_YESNO_RX.search(question):
+        matched = "lookup_dosha_yesno"
+    elif _LOOKUP_GENERIC_YESNO_RX.search(question):
+        matched = "lookup_generic_yesno"
+
+    if not matched:
+        return out
+
+    out["intent_overridden_from"] = intent
+    out["intent_override_reason"] = matched
+    out["intent_override_phase"]  = "4.1_fix_p"
+    out["intent"] = "analysis"
+    # Keep intents_ranked consistent so downstream multi-intent logic
+    # doesn't see a stale primary at index 0.
+    ranked = list(out.get("intents_ranked") or [])
+    if not ranked or ranked[0] != "analysis":
+        # Demote the original primary to secondary; promote analysis.
+        new_ranked = ["analysis"] + [r for r in ranked if r != "analysis"]
+        out["intents_ranked"] = new_ranked[:3]
+    return out
+
+
 def understand_question(question: str,
+                        *,
+                        client: Any = None,
+                        model: Optional[str] = None) -> dict:
+    """Public entry — Phase 4.1: applies classifier sanity layer (Fix-P)
+    on top of the inner AI/regex classifier. Always returns the same dict
+    shape; adds `intent_overridden_from`, `intent_override_reason`,
+    `intent_override_phase` keys when an override fires."""
+    q = (question or "").strip()
+    out = _understand_question_inner(question, client=client, model=model)
+    return _apply_classifier_sanity_layer(out, q)
+
+
+def _understand_question_inner(question: str,
                         *,
                         client: Any = None,
                         model: Optional[str] = None) -> dict:

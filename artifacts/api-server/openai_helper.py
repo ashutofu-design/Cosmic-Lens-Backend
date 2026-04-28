@@ -6107,6 +6107,131 @@ _TRUTH_PRESENT_RX = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
+# ── Phase 4.1 — extended truth-validator coverage ───────────────────────────
+# Lookup tables local to truth-facts (small constants; kept here so the
+# truth-facts block is self-contained and not order-dependent on the
+# legacy _SIGN_RULER_M defined later in the module).
+_TF_SIGNS_LC: tuple[str, ...] = (
+    "aries", "taurus", "gemini", "cancer", "leo", "virgo",
+    "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces",
+)
+_TF_SIGN_INDEX_LC: dict[str, int] = {s: i for i, s in enumerate(_TF_SIGNS_LC)}
+_TF_SIGN_RULER_LC: dict[str, str] = {
+    "aries": "mars",        "taurus": "venus",     "gemini": "mercury",
+    "cancer": "moon",       "leo": "sun",          "virgo": "mercury",
+    "libra": "venus",       "scorpio": "mars",     "sagittarius": "jupiter",
+    "capricorn": "saturn",  "aquarius": "saturn",  "pisces": "jupiter",
+}
+# Sanskrit / Hinglish sign aliases → canonical lowercase English.
+_TF_SIGN_ALIASES_LC: dict[str, str] = {
+    "mesh": "aries", "mesha": "aries",
+    "vrish": "taurus", "vrishabh": "taurus", "vrishabha": "taurus", "vrushabh": "taurus",
+    "mithun": "gemini", "mithuna": "gemini",
+    "kark": "cancer", "karka": "cancer", "karkat": "cancer", "karkata": "cancer",
+    "simha": "leo", "sinh": "leo", "singh": "leo",
+    "kanya": "virgo",
+    "tula": "libra", "tul": "libra",
+    "vrishchik": "scorpio", "vrischik": "scorpio", "vrishchika": "scorpio",
+    "dhanu": "sagittarius", "dhanusha": "sagittarius", "dhanus": "sagittarius",
+    "makar": "capricorn", "makara": "capricorn",
+    "kumbh": "aquarius", "kumbha": "aquarius",
+    "meen": "pisces", "meena": "pisces", "meenam": "pisces",
+}
+
+
+def _tf_canon_sign(s: Any) -> str:
+    """Canonicalise sign name to lowercase English. Empty if unknown."""
+    if not s:
+        return ""
+    n = str(s).strip().lower()
+    n = _TF_SIGN_ALIASES_LC.get(n, n)
+    return n if n in _TF_SIGN_INDEX_LC else ""
+
+
+# Phase 4.1 — extended claim-detection regexes.
+# All patterns are scoped so that incidental textbook-style references
+# ("Saturn rules Capricorn") don't trip them; only chart-anchored
+# assertions about the user's own chart should match.
+
+# "Nth house ka swami/lord X" or "X is the Nth lord"
+_TRUTH_HOUSE_LORD_RX = __import__("re").compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)\s+"
+    r"(?:k[ae]\s+)?(?:swami|lord|malik|adhipati|owner)\s+"
+    rf"(?:hai\s+|is\s+)?({_PL_ALT})\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_LORD_HOUSE_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:hai\s+|is\s+)?"
+    r"(\d{1,2})(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)\s+"
+    r"(?:k[ae]\s+)?(?:swami|lord|malik|adhipati|owner)",
+    __import__("re").IGNORECASE,
+)
+
+# Sign-name regex (English + Hinglish aliases)
+_TF_SIGN_NAMES_RX_FRAG = (
+    "aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|"
+    "sagittarius|capricorn|aquarius|pisces|"
+    "mesh|mesha|vrish|vrishabh|vrishabha|vrushabh|"
+    "mithun|mithuna|kark|karka|karkat|karkata|"
+    "simha|sinh|singh|kanya|tula|tul|vrishchik|vrischik|vrishchika|"
+    "dhanu|dhanusha|dhanus|makar|makara|kumbh|kumbha|meen|meena|meenam"
+)
+
+# "X in <sign>" / "X is in <sign>" / "X hai <sign>" / "X placed in <sign>"
+_TRUTH_PLANET_SIGN_RX_A = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:is\s+in\s+|in\s+|hai\s+|placed\s+in\s+|sits?\s+in\s+|ke\s+)"
+    rf"({_TF_SIGN_NAMES_RX_FRAG})\b",
+    __import__("re").IGNORECASE,
+)
+# "X <sign> rashi/sign/mein" — explicit suffix anchor
+_TRUTH_PLANET_SIGN_RX_B = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+({_TF_SIGN_NAMES_RX_FRAG})\s+"
+    r"(?:rashi|sign|mein|me|main)\b",
+    __import__("re").IGNORECASE,
+)
+
+# "X retrograde hai / is retrograde / vakri"
+_TRUTH_RETROGRADE_RX = __import__("re").compile(
+    rf"\b({_PL_ALT})\s+(?:is\s+|hai\s+)?"
+    r"(?:retrograde|retro\b|vakri)\b",
+    __import__("re").IGNORECASE,
+)
+
+# "manglik" / "mangal dosh(a)" / "mars dosha" — fact-class marker
+_TRUTH_MANGLIK_RX = __import__("re").compile(
+    r"\b(manglik|mangal\s+dosh[ai]?|mangalik|mars\s+dosha?)\b",
+    __import__("re").IGNORECASE,
+)
+
+# Phase 4.1 — when a "X Nth house" planet-house regex match is followed
+# closely by "swami/lord/malik/...", it's a LORD-OF-HOUSE claim, not an
+# IN-HOUSE claim. Suppress the planet-house violation in that case.
+_TRUTH_LORDISH_TAIL_RX = __import__("re").compile(
+    r"^\s*(?:k[ae]\s+)?(?:swami|lord|malik|adhipati|owner)\b",
+    __import__("re").IGNORECASE,
+)
+
+
+def _tf_negated_after(text: str, end: int, max_chars: int = 30) -> bool:
+    """Phase-4.1 clause-bounded negation guard for chart-fact claims.
+
+    Scans `text` starting at `end` for up to `max_chars`, but STOPS at the
+    first clause-boundary marker (`.`, `,`, `;`, ` aur `, ` and `, ` lekin `,
+    ` but `, newline). Returns True if a negation token appears in that
+    bounded slice. Tighter than the raw 60-char tail used for dasha/planet-
+    house (those rarely co-occur with unrelated negations).
+    """
+    if end >= len(text):
+        return False
+    tail = text[end: end + max_chars + 30]  # small look-ahead for boundary
+    # Clause boundaries
+    import re as _re
+    bm = _re.search(r"[.,;\n]| aur | and | lekin | but | par ", tail,
+                    _re.IGNORECASE)
+    cut = bm.start() if bm else min(max_chars, len(tail))
+    cut = min(cut, max_chars)
+    return bool(_NEGATION_NEAR_RX.search(tail[:cut]))
+
 
 def _norm_planet_lc(name: str) -> str:
     """LOWERCASE canonical planet name. Distinct from _norm_planet_name
@@ -6123,37 +6248,76 @@ def _build_truth_facts(kundli: dict) -> dict:
 
     Returns:
         {
-          "planet_house": {planet_name_lower: house_int},
-          "current_md":   {"planet": str, "start": str, "end": str} or None,
-          "current_ad":   same shape or None,
+          "planet_house":   {planet_lc: house_int},
+          "planet_sign":    {planet_lc: sign_lc}      # Phase 4.1
+          "retrograde":     set[planet_lc]            # Phase 4.1
+          "house_lord":     {1..12: planet_lc}        # Phase 4.1
+          "manglik":        bool | None               # Phase 4.1
+          "current_md":     {"planet": str, ...} | None,
+          "current_ad":     {"planet": str, ...} | None,
         }
     """
-    out = {"planet_house": {}, "current_md": None, "current_ad": None}
+    out: dict = {
+        "planet_house": {},
+        "planet_sign":  {},
+        "retrograde":   set(),
+        "house_lord":   {},
+        "manglik":      None,
+        "current_md":   None,
+        "current_ad":   None,
+    }
     if not isinstance(kundli, dict):
         return out
 
-    # Planet → house map. Architect-required: canonicalize via
-    # _norm_planet_lc so non-canonical kundli labels (e.g. "Surya",
+    # Planet → house / sign / retrograde maps. Architect-required: canonicalize
+    # via _norm_planet_lc so non-canonical kundli labels (e.g. "Surya",
     # "Shani") map to the same keys the regex matchers will produce.
     planets = kundli.get("planets") or []
+    _planet_iter = []
     if isinstance(planets, list):
         for p in planets:
-            if not isinstance(p, dict):
-                continue
-            nm = _norm_planet_lc(p.get("name") or "")
-            if not nm:
-                continue
-            h = p.get("house")
-            if isinstance(h, int):
-                out["planet_house"][nm] = h
+            if isinstance(p, dict):
+                _planet_iter.append(
+                    (_norm_planet_lc(p.get("name") or ""), p)
+                )
     elif isinstance(planets, dict):
         for k, v in planets.items():
-            nm = _norm_planet_lc(k or "")
-            if not nm or not isinstance(v, dict):
-                continue
-            h = v.get("house")
-            if isinstance(h, int):
-                out["planet_house"][nm] = h
+            if isinstance(v, dict):
+                _planet_iter.append((_norm_planet_lc(k or ""), v))
+
+    for nm, p in _planet_iter:
+        if not nm:
+            continue
+        h = p.get("house")
+        if isinstance(h, int) and 1 <= h <= 12:
+            out["planet_house"][nm] = h
+        sg = _tf_canon_sign(p.get("sign"))
+        if sg:
+            out["planet_sign"][nm] = sg
+        # retrograde: skip Rahu/Ketu (always retrograde by convention; chart
+        # data may or may not flag them — validating them yields noise).
+        if nm not in ("rahu", "ketu"):
+            r = p.get("retrograde")
+            if r is True:
+                out["retrograde"].add(nm)
+
+    # House lord map via lagna + whole-sign sign-ruler chain.
+    asc = kundli.get("ascendant") or kundli.get("lagna") or {}
+    asc_sign_raw = asc.get("sign") if isinstance(asc, dict) else asc
+    asc_sign = _tf_canon_sign(asc_sign_raw)
+    asc_idx = _TF_SIGN_INDEX_LC.get(asc_sign)
+    if asc_idx is not None:
+        for hi in range(1, 13):
+            sign_at = _TF_SIGNS_LC[(asc_idx + hi - 1) % 12]
+            ruler = _TF_SIGN_RULER_LC.get(sign_at)
+            if ruler:
+                out["house_lord"][hi] = ruler
+
+    # Manglik (from-lagna rule): Mars in 1, 2, 4, 7, 8, or 12 from lagna.
+    # Conservative MVP — only this one rule (not Moon/Venus variants).
+    mars_h = out["planet_house"].get("mars")
+    if isinstance(mars_h, int) and 1 <= mars_h <= 12:
+        out["manglik"] = mars_h in (1, 2, 4, 7, 8, 12)
 
     # Current MD/AD — try precomputed first, fall back to dasha-tree traversal
     # by today's date.
@@ -6273,6 +6437,11 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
             continue
         if not (1 <= house <= 12):
             continue
+        # Phase 4.1 — if "ka swami / lord / malik" follows the matched
+        # "X Nth house" span, it's a LORD-OF-HOUSE statement, not an
+        # IN-HOUSE statement. Skip; the house-lord check below handles it.
+        if _TRUTH_LORDISH_TAIL_RX.match(text[m.end(): m.end() + 30]):
+            continue
         actual = ph.get(pname)
         if actual is None or actual == house:
             continue
@@ -6296,6 +6465,8 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
             continue
         if not (1 <= house <= 12):
             continue
+        if _TRUTH_LORDISH_TAIL_RX.match(text[m.end(): m.end() + 30]):
+            continue
         actual = ph.get(pname)
         if actual is None or actual == house:
             continue
@@ -6310,6 +6481,132 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
             "actual_house":  actual,
             "severity":      "high",
         })
+
+    # ─── PHASE 4.1 — HOUSE-LORD CLAIMS ─────────────────────────────────────
+    hl = truth.get("house_lord") or {}
+    seen_lord: set = set()
+
+    def _check_house_lord(house_num: int, pname: str):
+        if not (1 <= house_num <= 12):
+            return
+        actual = hl.get(house_num)
+        if not actual or actual == pname:
+            return
+        key = ("HL", house_num, pname)
+        if key in seen_lord:
+            return
+        seen_lord.add(key)
+        violations.append({
+            "kind":           "house_lord_mismatch",
+            "house":          house_num,
+            "claimed_lord":   pname,
+            "actual_lord":    actual,
+            "severity":       "high",
+        })
+
+    for m in _TRUTH_HOUSE_LORD_RX.finditer(text):
+        try:
+            h = int(m.group(1)); pn = _norm_planet_lc(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        # clause-bounded negation guard: "Nth house ka swami X nahi hai"
+        if _tf_negated_after(text, m.end()):
+            continue
+        _check_house_lord(h, pn)
+
+    for m in _TRUTH_LORD_HOUSE_RX.finditer(text):
+        try:
+            pn = _norm_planet_lc(m.group(1)); h = int(m.group(2))
+        except (TypeError, ValueError):
+            continue
+        if _tf_negated_after(text, m.end()):
+            continue
+        _check_house_lord(h, pn)
+
+    # ─── PHASE 4.1 — PLANET-SIGN CLAIMS ────────────────────────────────────
+    ps = truth.get("planet_sign") or {}
+    seen_sign: set = set()
+
+    def _check_planet_sign(pname: str, sign_lc: str):
+        if not pname or not sign_lc:
+            return
+        actual = ps.get(pname)
+        if not actual or actual == sign_lc:
+            return
+        key = ("PS", pname, sign_lc)
+        if key in seen_sign:
+            return
+        seen_sign.add(key)
+        violations.append({
+            "kind":           "planet_sign_mismatch",
+            "planet":         pname,
+            "claimed_sign":   sign_lc,
+            "actual_sign":    actual,
+            "severity":       "high",
+        })
+
+    for rx in (_TRUTH_PLANET_SIGN_RX_A, _TRUTH_PLANET_SIGN_RX_B):
+        for m in rx.finditer(text):
+            if _tf_negated_after(text, m.end()):
+                continue
+            pn = _norm_planet_lc(m.group(1))
+            sg = _tf_canon_sign(m.group(2))
+            _check_planet_sign(pn, sg)
+
+    # ─── PHASE 4.1 — RETROGRADE CLAIMS ─────────────────────────────────────
+    # Polarity-aware: "Saturn retrograde hai" (no negation) asserts retro=True;
+    # "Saturn retrograde nahi hai" asserts retro=False.
+    retro_set = truth.get("retrograde") or set()
+    ph_known = truth.get("planet_house") or {}
+    seen_retro: set = set()
+    for m in _TRUTH_RETROGRADE_RX.finditer(text):
+        pn = _norm_planet_lc(m.group(1))
+        if not pn or pn in ("rahu", "ketu"):
+            continue
+        if pn not in ph_known:
+            # planet not in our chart at all — can't validate
+            continue
+        is_negated = _tf_negated_after(text, m.end())
+        claimed = not is_negated
+        actual = pn in retro_set
+        if claimed == actual:
+            continue
+        key = ("RG", pn, claimed)
+        if key in seen_retro:
+            continue
+        seen_retro.add(key)
+        violations.append({
+            "kind":      "retrograde_mismatch",
+            "planet":    pn,
+            "claimed":   claimed,
+            "actual":    actual,
+            "severity":  "high",
+        })
+
+    # ─── PHASE 4.1 — MANGLIK CLAIMS ────────────────────────────────────────
+    # Polarity-aware: emit on the FIRST mismatched assertion in the
+    # response. Architect-required fix: an early truthy assertion (e.g.
+    # "Aap manglik hain") must NOT short-circuit the scan — a later
+    # contradictory clause ("…lekin actually nahi hain") would otherwise
+    # be missed. We continue iterating past truthy matches and only emit
+    # (and break) on the first observed mismatch.
+    actual_manglik = truth.get("manglik")
+    if isinstance(actual_manglik, bool):
+        for m in _TRUTH_MANGLIK_RX.finditer(text):
+            # Hinglish: "manglik nahi hai" — negation is always after
+            # the noun. Clause-bounded so unrelated downstream negations
+            # ("manglik hai. lekin yoga nahi") don't flip polarity.
+            is_negated = _tf_negated_after(text, m.end())
+            claimed = not is_negated
+            if claimed == actual_manglik:
+                continue  # this clause matches truth — keep scanning
+            violations.append({
+                "kind":      "manglik_mismatch",
+                "claimed":   claimed,
+                "actual":    actual_manglik,
+                "severity":  "high",
+            })
+            break  # first mismatch is sufficient (one violation per response)
 
     return violations
 
@@ -6342,6 +6639,30 @@ def _post_logic_correction_msg(violations: list[dict], truth: dict) -> str:
             lines.append(
                 f"  • {v['planet'].title()} is in house "
                 f"{v['actual_house']}, NOT house {v['claimed_house']}. FIX IT."
+            )
+        elif v["kind"] == "house_lord_mismatch":
+            lines.append(
+                f"  • {v['house']}th house ka swami (lord) is "
+                f"{v['actual_lord'].title()}, NOT {v['claimed_lord'].title()}. "
+                f"FIX IT."
+            )
+        elif v["kind"] == "planet_sign_mismatch":
+            lines.append(
+                f"  • {v['planet'].title()} is in sign "
+                f"{v['actual_sign'].title()}, NOT {v['claimed_sign'].title()}. "
+                f"FIX IT."
+            )
+        elif v["kind"] == "retrograde_mismatch":
+            state = "retrograde" if v["actual"] else "NOT retrograde"
+            lines.append(
+                f"  • {v['planet'].title()} is {state} in this chart. "
+                f"FIX IT."
+            )
+        elif v["kind"] == "manglik_mismatch":
+            verdict = "manglik" if v["actual"] else "NOT manglik"
+            lines.append(
+                f"  • Per Mars-from-lagna rule, the user is {verdict}. "
+                f"FIX IT."
             )
     lines.append(
         "Do NOT add new claims, do NOT change topic. Only correct the "
@@ -6984,6 +7305,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # changes) — it's a sibling flag the relevant consumers read.
     _qu["has_recovery_subask"] = has_recovery_subask(question)
     _trace(req_id, "1.UNDERSTANDING", _qu)
+    # Phase 4.1 Fix-P — surface classifier sanity-layer override decisions
+    # as a separate, easy-to-grep telemetry event. Fires only when the
+    # override actually changed the intent (override metadata is set by
+    # _apply_classifier_sanity_layer in question_understanding.py).
+    if _qu.get("intent_overridden_from"):
+        _trace(req_id, "1b.CLASSIFIER_OVERRIDE", {
+            "from":   _qu.get("intent_overridden_from"),
+            "to":     _qu.get("intent"),
+            "reason": _qu.get("intent_override_reason"),
+            "phase":  _qu.get("intent_override_phase"),
+            "ai_confidence": _qu.get("confidence"),
+        })
 
     _qu_intent = (_qu.get("intent") or "analysis").lower()
     _qu_topic  = (_qu.get("topic")  or "general").lower()
@@ -9624,6 +9957,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Sprint-26: SINGLE AI understanding call — same source of truth as ai_ask.
     from question_understanding import understand_question, supertype_for
     _qu = understand_question(question)
+    # Phase 4.1 Fix-P — telemetry parity with ai_ask (non-stream) for the
+    # classifier sanity-layer override decision. Stream path does not yet
+    # run POST_LOGIC (Phase 4.4 backlog), but it benefits from the same
+    # classifier correction since `understand_question` is shared.
+    if _qu.get("intent_overridden_from"):
+        _trace(req_id, "1b.CLASSIFIER_OVERRIDE", {
+            "from":   _qu.get("intent_overridden_from"),
+            "to":     _qu.get("intent"),
+            "reason": _qu.get("intent_override_reason"),
+            "phase":  _qu.get("intent_override_phase"),
+            "ai_confidence": _qu.get("confidence"),
+            "path":   "stream",
+        })
     _qu_intent = (_qu.get("intent") or "analysis").lower()
     _qu_topic  = (_qu.get("topic")  or "general").lower()
     topic = _qu_topic

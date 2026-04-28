@@ -191,11 +191,13 @@ class Phase46RuleNNarrativeGate(unittest.TestCase):
             self.src = fh.read()
 
     def test_rule_n_gate_block_present(self):
+        # Phase 4.7 superseded Phase 4.6 — gate now patches the `user`
+        # variable (Rule N actually lives there, not in `system`).
         self.assertIn(
-            "Phase 4.6 — RULE N (KP MANDATORY citation) NARRATIVE-MODE GATE",
+            "Phase 4.7 — RULE N (KP MANDATORY citation) NARRATIVE-MODE GATE",
             self.src,
-            "Rule N narrative-mode gate must be present in the prompt-"
-            "build path")
+            "Phase 4.7 Rule N narrative-mode gate must be present in "
+            "the prompt-build path")
 
     def test_advisory_replacement_text_exists(self):
         self.assertIn(
@@ -204,11 +206,35 @@ class Phase46RuleNNarrativeGate(unittest.TestCase):
         )
 
     def test_gate_only_fires_in_narrative_mode(self):
-        # The gate must be `if _NARRATIVE_MODE and …`, never unconditional.
+        # Phase 4.7 — gate is `if _NARRATIVE_MODE:` and operates on the
+        # `user` variable (where Rule N actually lives, line ~2926).
+        self.assertIn("if _NARRATIVE_MODE:", self.src)
         self.assertIn(
-            "if _NARRATIVE_MODE and \"🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation)\" in system:",
+            "if _rule_n_mandatory_lead in user:",
+            self.src,
+            "Phase 4.7 fix: gate must operate on `user` (where Rule N "
+            "lives), not `system` (Phase 4.6 silent no-op bug).",
+        )
+        self.assertIn(
+            "user = user.replace(_rule_n_mandatory_lead, _rule_n_advisory_lead)",
             self.src,
         )
+
+    def test_gate_has_loud_failure_telemetry(self):
+        # Phase 4.7 architect-flagged need: fail loudly if literal drifts.
+        # Substrings here are chosen to NOT span Python adjacent-string-
+        # literal line breaks in the source.
+        self.assertIn("Phase 4.7: Rule N MANDATORY lead", self.src)
+        self.assertIn("literal mismatch", self.src)
+        self.assertIn("gate did not fire", self.src)
+
+    def test_body_imperative_also_neutralised(self):
+        # Phase 4.7 — strip the body's example phrase too, not just the lead.
+        self.assertIn("_rule_n_body_imperative", self.src)
+        self.assertIn("_rule_n_body_advisory", self.src)
+        # Substring chosen to NOT span an adjacent-string-literal break.
+        self.assertIn("do NOT surface the technical KP cusp", self.src)
+        self.assertIn("user-facing answer", self.src)
 
 
 class Phase46HealthCrisisSafetyPreserved(unittest.TestCase):

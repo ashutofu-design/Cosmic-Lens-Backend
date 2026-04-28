@@ -2955,16 +2955,14 @@ def _build_messages(
         "Now respond as the Cosmic Engine — natural, expert, MAXIMALLY CONCISE. Phone-friendly. Every sentence must earn its place. NO guru tone."
     )
 
-    # ── Phase 4.6 — RULE N (KP MANDATORY citation) NARRATIVE-MODE GATE ───────
-    # Rule N forces "you MUST include one natural KP citation sentence" for
-    # H1/H2/H5/H7/H10/H11 questions. In narrative mode this competes with
-    # (and beats) the 3-5-sentence combo-fusion ask, surfacing the technical
-    # "KP paddhati se bhi {N}th cusp ka sub-lord {planet}…" line that the
-    # user explicitly flagged as making the answer "ek dam bekar". When
-    # NARRATIVE_MODE is on, downgrade Rule N from MANDATORY to ADVISORY:
-    # cite KP ONLY when it CONTRADICTS the Vedic verdict. Otherwise the
-    # combo-narrative speaks for itself.
-    if _NARRATIVE_MODE and "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation)" in system:
+    # ── Phase 4.7 — RULE N (KP MANDATORY citation) NARRATIVE-MODE GATE ───────
+    # Phase 4.6 attempted this gate but operated on the wrong variable
+    # (`system` instead of `user`) and silently no-op'd — confirmed via
+    # live OpenAI-call interception probe. Rule N is built INSIDE the
+    # `user` block at line ~2926, so we must patch `user`. We also fail
+    # LOUDLY (print warning) if the literal drifts, so future regressions
+    # are caught immediately instead of silently passing.
+    if _NARRATIVE_MODE:
         _rule_n_mandatory_lead = (
             "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation): When the KP "
             "CROSS-CHECK block is present AND the user's question maps to a "
@@ -2985,8 +2983,49 @@ def _build_messages(
             "KP delay dikha raha hai'). Otherwise OMIT the KP citation; "
             "translate the cosmic combination into human meaning instead."
         )
-        if _rule_n_mandatory_lead in system:
-            system = system.replace(_rule_n_mandatory_lead, _rule_n_advisory_lead)
+        # Phase 4.7 — also strip the body imperative example phrase that
+        # surfaced "KP paddhati se bhi {N}th cusp ka sub-lord {planet}…"
+        # in user-facing answers (the exact line the user flagged).
+        _rule_n_body_imperative = (
+            "For those topics, weave ONE natural KP citation alongside "
+            "Vedic reasoning: 'KP paddhati se bhi {N}th cusp ka sub-lord "
+            "{planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.'"
+        )
+        _rule_n_body_advisory = (
+            "In narrative mode, do NOT surface the technical KP cusp / "
+            "sub-lord phrasing in the user-facing answer. The KP block "
+            "is BACKGROUND only; let the verdict speak through human "
+            "language."
+        )
+
+        if _rule_n_mandatory_lead in user:
+            user = user.replace(_rule_n_mandatory_lead, _rule_n_advisory_lead)
+        elif "🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation)" in user:
+            # Literal drifted — fail loudly so we catch this regression.
+            print("[openai_helper] ⚠️ Phase 4.7: Rule N MANDATORY lead "
+                  "literal mismatch — gate did not fire. Source drifted; "
+                  "update _rule_n_mandatory_lead to match line ~2926.")
+
+        if _rule_n_body_imperative in user:
+            user = user.replace(_rule_n_body_imperative, _rule_n_body_advisory)
+
+        # Phase 4.7 — Rule 3 (line ~2931 in STRICT INSTRUCTIONS) also seeds
+        # the user with the same surface-citation template. Soften it.
+        _rule3_kp_imperative = (
+            "3) KP cross-check: If a KP block is provided, USE it — verify "
+            "the Vedic verdict against the cusp Sub-Lord rule for the "
+            "relevant houses. State whether KP confirms or modifies the "
+            "Vedic verdict ('KP paddhati se bhi yahi confirm hota hai...')."
+        )
+        _rule3_kp_advisory = (
+            "3) KP cross-check (BACKGROUND ONLY in narrative mode): the "
+            "engine has already cross-checked the Vedic verdict against "
+            "KP. Use the agreement to gain confidence in your fused combo "
+            "verdict, but do NOT name 'KP paddhati', 'cusp', or 'sub-lord' "
+            "in the user-facing reply."
+        )
+        if _rule3_kp_imperative in user:
+            user = user.replace(_rule3_kp_imperative, _rule3_kp_advisory)
 
     # Build full conversation: system → prior turns → current user turn.
     msgs: list[dict] = [{"role": "system", "content": system}]
@@ -3303,13 +3342,26 @@ def _build_messages(
     kp_topics = {"marriage", "relationship", "career", "finance",
                  "child", "health", "general"}
     if has_kp and topic in kp_topics:
-        reminder_lines.append(
-            "• KP citation is MANDATORY this turn. Find the relevant house in the "
-            "'KP CROSS-CHECK' block (H7=marriage, H10=career, H2/H11=money, H5=children, "
-            "H1=health/vitality) and weave ONE natural sentence: 'KP paddhati se bhi "
-            "{N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' "
-            "Skipping this is a hallucination-class error."
-        )
+        if _NARRATIVE_MODE:
+            # Phase 4.7 — soft advisory only. The original MANDATORY language
+            # was the loudest competing signal vs the 3-5 sentence narrative
+            # contract and was the primary cause of the user-reported "ek dam
+            # bekar" KP-paddhati surface citations.
+            reminder_lines.append(
+                "• KP cite is OPTIONAL — only if KP and Vedic verdicts "
+                "DISAGREE on direction (CONFIRMS vs DENIES), then ONE "
+                "short clause to flag the conflict. Otherwise OMIT — the "
+                "user-facing reply is a 3-5 sentence FUSED combo verdict, "
+                "not a method comparison. The KP block is BACKGROUND."
+            )
+        else:
+            reminder_lines.append(
+                "• KP citation is MANDATORY this turn. Find the relevant house in the "
+                "'KP CROSS-CHECK' block (H7=marriage, H10=career, H2/H11=money, H5=children, "
+                "H1=health/vitality) and weave ONE natural sentence: 'KP paddhati se bhi "
+                "{N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' "
+                "Skipping this is a hallucination-class error."
+            )
 
     # Remedies (Rule M) — quote verbatim, never invent
     has_rem = "REMEDIES" in lf and "MANTRA:" in lf
@@ -3327,27 +3379,58 @@ def _build_messages(
     has_d9  = "D9 NAVAMSA" in lf or "NAVAMSA" in lf
     has_d10 = "D10 DASAMSA" in lf or "DASAMSA" in lf
     if topic == "marriage" and has_d9:
-        reminder_lines.append(
-            "• Marriage question: you MUST cite the 7L's D9 placement from the "
-            "DIVISIONAL CHARTS block (one line, e.g. 'D9 mein 7L Mercury Pisces "
-            "debilitated jaata hai — natal weakness D9 mein bhi confirm hoti hai')."
-        )
+        if _NARRATIVE_MODE:
+            # Phase 4.7 — engine still uses D9 internally; user-facing
+            # reply doesn't need to namedrop "D9 mein 7L Mercury Pisces".
+            reminder_lines.append(
+                "• Marriage question: D9 verdict is BACKGROUND — let it "
+                "shape your direction (stable / strained) but do NOT "
+                "name-drop 'D9 mein 7L X' in the user-facing combo reply."
+            )
+        else:
+            reminder_lines.append(
+                "• Marriage question: you MUST cite the 7L's D9 placement from the "
+                "DIVISIONAL CHARTS block (one line, e.g. 'D9 mein 7L Mercury Pisces "
+                "debilitated jaata hai — natal weakness D9 mein bhi confirm hoti hai')."
+            )
     if topic == "career" and has_d10:
-        reminder_lines.append(
-            "• Career question: you MUST cite the 10L's D10 placement from the "
-            "DIVISIONAL CHARTS block (one line, e.g. 'D10 mein 10L Mercury Sagittarius "
-            "own-sign mein jaata hai — career line strong support karta hai D10 mein')."
-        )
+        if _NARRATIVE_MODE:
+            reminder_lines.append(
+                "• Career question: D10 verdict is BACKGROUND — let it "
+                "shape your direction (support / friction) but do NOT "
+                "name-drop 'D10 mein 10L X' in the user-facing combo reply."
+            )
+        else:
+            reminder_lines.append(
+                "• Career question: you MUST cite the 10L's D10 placement from the "
+                "DIVISIONAL CHARTS block (one line, e.g. 'D10 mein 10L Mercury Sagittarius "
+                "own-sign mein jaata hai — career line strong support karta hai D10 mein')."
+            )
 
     if reminder_lines:
+        if _NARRATIVE_MODE:
+            # Phase 4.7 — softer trailer. The original "MANDATORY citations
+            # sit ABOVE the brevity rule — trim prose, NOT the citations"
+            # was the loudest recency-bias contradiction vs the narrative
+            # contract. Reverse priority: shape > cite.
+            _trailer = (
+                "\n\nThese reminders are ADVISORY — they only fire if "
+                "they fit the 3-5 sentence FUSED combo verdict shape. "
+                "If a citation can't be woven naturally into ≤2 short "
+                "sentences, OMIT it. Narrative shape > raw citation count."
+            )
+        else:
+            _trailer = (
+                "\n\nThese are MANDATORY citations for this turn. They sit ABOVE "
+                "the brevity rule — if Rule 10 (140-word cap) and these reminders "
+                "conflict, trim the prose, NOT the citations."
+            )
         msgs.append({
             "role": "system",
             "content": (
                 "🔔 FINAL REMINDERS — read these LAST before composing your reply:\n"
                 + "\n".join(reminder_lines)
-                + "\n\nThese are MANDATORY citations for this turn. They sit ABOVE "
-                  "the brevity rule — if Rule 10 (140-word cap) and these reminders "
-                  "conflict, trim the prose, NOT the citations."
+                + _trailer
             ),
         })
 

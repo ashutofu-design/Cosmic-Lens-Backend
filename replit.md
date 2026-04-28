@@ -892,3 +892,110 @@ engine) still enforce factual correctness.
 - Stream-path live regression (sync verified end-to-end; stream goes
   through the same `_build_messages` so the contract is identical, but
   no separate stream live-regression script yet).
+
+---
+
+## Phase 4.7 — Kill MANDATORY KP Citation Pressure (Apr 28, 2026)
+
+### Trigger
+Live OpenAI-call interception probe (Apr 28, post-Phase 4.6) revealed
+two architect-flagged critical bugs:
+
+1. **Phase 4.6 T006 Rule N gate was a silent no-op.** The gate called
+   `system.replace(...)` but Rule N actually lives inside the `user`
+   variable (built at line ~2887, Rule N at line 2926). The `if "..." in
+   system:` test returned False, the replace never fired. Static source-
+   string tests passed because they checked the *gate's existence*, not
+   its *runtime effectiveness*. Result: legacy "you MUST include one
+   natural KP citation sentence — failing to cite is the same kind of
+   error as inventing facts" still reached the model.
+
+2. **FINAL REMINDERS block (line ~3307) was never gated for narrative
+   mode.** It still injected the loudest competing signal — "KP citation
+   is MANDATORY this turn… Skipping is a hallucination-class error" plus
+   the trailer "MANDATORY citations sit ABOVE the brevity rule — trim
+   the prose, NOT the citations". This msg[1] system message had high
+   salience (early-position priming) and directly contradicted the
+   3-5-sentence FUSED combo verdict shape that Phase 4.5/4.6 enforce.
+
+### Fixes shipped
+
+#### Fix 2 — Rule N gate moved to `user` + telemetry + body imperative
+- Old gate at `_build_messages` (line 2967): `if _NARRATIVE_MODE and
+  "🛡️ KP CROSS-CHECK..." in system: system = system.replace(...)`
+  silently no-op'd because Rule N is in the `user` variable, not
+  `system`.
+- New Phase 4.7 gate operates on `user` (the correct variable), uses
+  the same MANDATORY → ADVISORY swap, and **prints a loud warning** if
+  the literal drifts (`[openai_helper] ⚠️ Phase 4.7: Rule N MANDATORY
+  lead literal mismatch — gate did not fire`). Future regressions are
+  caught at runtime instead of silently passing tests.
+- Also strips two related imperative phrasings:
+  - Rule N body's example: `"For those topics, weave ONE natural KP
+    citation alongside Vedic reasoning: 'KP paddhati se bhi {N}th cusp
+    ka sub-lord {planet}…'"` → background-only sentence
+  - Rule 3 (STRICT INSTRUCTIONS): same KP-cite imperative phrasing →
+    `"BACKGROUND ONLY in narrative mode"` advisory
+
+#### Fix 1 — FINAL REMINDERS gated for narrative mode (3 sub-fixes)
+- KP MANDATORY reminder (line ~3307): in narrative mode replaced with
+  `"KP cite is OPTIONAL — only if KP and Vedic verdicts DISAGREE on
+  direction, then ONE short clause to flag the conflict. Otherwise
+  OMIT. The KP block is BACKGROUND."`
+- D9 MANDATORY for marriage (line ~3329): in narrative mode →
+  `"D9 verdict is BACKGROUND — let it shape your direction (stable /
+  strained) but do NOT name-drop 'D9 mein 7L X'."`
+- D10 MANDATORY for career (line ~3335): same pattern.
+- Trailer (line ~3346): in narrative mode replaced with `"These
+  reminders are ADVISORY — they only fire if they fit the 3-5
+  sentence FUSED combo verdict shape. Narrative shape > raw citation
+  count."`
+
+### Runtime invariant tests (architect-flagged need)
+New `test_phase47_runtime_invariants.py` (8 tests) intercepts the
+OpenAI `chat.completions.create` call via a `_CaptureClient` patched
+into `_get_client`, then asserts the EFFECTIVE message stack:
+- 9 banned-in-narrative-mode substrings (all MANDATORY/Skipping/cite
+  templates) have count==0 in the prompt sent to the model.
+- 3 required advisory replacements ("Rule N — NARRATIVE-MODE: ADVISORY
+  only", "These reminders are ADVISORY", "BACKGROUND") are present.
+- The KP-paddhati template only appears as a NEGATIVE example in the
+  body discipline block; no imperative phrasings remain.
+- Phase 4.6 body discipline still fires (`PHASE 4.6 — COMBO-FUSION
+  DISCIPLINE`, `TOPIC FIDELITY`).
+- Phase 4.5 supertype contract still installed (`NARRATIVE_ANSWER`).
+- Non-narrative-mode preservation: source still contains both legacy
+  MANDATORY strings, gate is a feature flag (NARRATIVE_MODE=0 reverts).
+
+### Verification
+- **`test_phase47_runtime_invariants.py`**: 8/8 PASS.
+- **`test_phase46_combo_narrative.py`**: 23/23 PASS (Phase 4.6 source-
+  check tests updated to match Phase 4.7 gate location: `user` var,
+  loud-failure telemetry, body imperative neutralisation).
+- **`test_phase45_narrative.py`**: 24/24 PASS (no regression).
+- **Total**: 55 tests across Phase 4.5/4.6/4.7 — all pass.
+- **Live runtime probe** (`/tmp/probe_live_call.py`, intercepts the
+  actual `chat.completions.create` for user 21's verbatim love
+  question): all 11 BANNED-IN-NARRATIVE-MODE substrings count==0,
+  required ADVISORY substrings present, msg[1] FINAL REMINDERS
+  shrunk and softened.
+
+### What is preserved
+`NARRATIVE_MODE=0` reverts every Phase 4.7 change — Rule N stays
+MANDATORY in `user`, FINAL REMINDERS reverts to "KP citation is
+MANDATORY this turn / sit ABOVE the brevity rule", D9/D10 reminders
+revert to "you MUST cite". Both branches coexist so the legacy
+behaviour is one env-var flip away.
+
+### Out of scope / scheduled next
+- **Fix 3 — Context diet for narrative mode (next session, T016).**
+  Today msg[2] (user turn) = 116K chars / ~29K tokens (full kundli +
+  transits + locked facts × 17 + planet strengths × 4 + divisional
+  charts + KP cuspal + Darakaraka + Upapada). ChatGPT achieves the
+  same answer with <2K tokens. Slim msg[2] in narrative mode to:
+  current MD/AD only, top-3 active planets, 1 transit window line,
+  drop Darakaraka / Upapada / full KP cuspal / D6/D8/D27 / full
+  ashtakavarga. Goal: prompt size <8K tokens in narrative mode.
+- love_engine returning empty `love_verdict_block` for some questions
+  (probe noted this — Phase 4.6 T002 slim-FACTS bypass cannot fire
+  when the engine returns empty). Investigate engine classification.

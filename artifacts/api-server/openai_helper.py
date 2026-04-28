@@ -6221,6 +6221,26 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # everything else does.
     _early_mode = "general" if (_qu_intent == "analysis" and _qu_topic == "general") else "astro"
     _early_reason = f"qu intent={_qu_intent} topic={_qu_topic}"
+    # Sprint-26 Fix-O — Personal-chart override: if the user named a personal
+    # chart anchor ("mera dasha", "meri kundli", "mera lagna", "mere chart",
+    # "meri birth", planet possessives, Devanagari forms), they are asking
+    # about THEIR chart, not a generic concept. Force mode=astro so the
+    # chart pipeline runs and the narrator can cite real MD/AD/lord names
+    # from the kundli — even if the AI classifier marked topic=general.
+    if _early_mode == "general":
+        try:
+            from question_understanding import is_personal_chart_question
+            if is_personal_chart_question(question):
+                _early_mode = "astro"
+                _early_reason = (f"qu intent={_qu_intent} topic={_qu_topic} "
+                                 f"→ FORCED astro (personal-chart anchor "
+                                 f"in question, Fix-O)")
+                _trace(req_id, "2.MODE_DETECT.personal_chart_override", {
+                    "rule": "Sprint-26 Fix-O",
+                    "reason": "personal possessive next to chart noun",
+                })
+        except Exception:
+            pass
     if not has_planets and _early_mode == "astro":
         _trace(req_id, "2.MODE_DETECT",
                {"mode": _early_mode, "reason": _early_reason,
@@ -8625,10 +8645,23 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     _qu_topic  = (_qu.get("topic")  or "general").lower()
     topic = _qu_topic
     mode  = "general" if (_qu_intent == "analysis" and _qu_topic == "general") else "astro"
+    _mode_reason = f"qu intent={_qu_intent} topic={_qu_topic}"
+    # Sprint-26 Fix-O — Personal-chart override (mirror of ai_ask path).
+    if mode == "general":
+        try:
+            from question_understanding import is_personal_chart_question
+            if is_personal_chart_question(question):
+                mode = "astro"
+                _mode_reason += " → FORCED astro (personal-chart anchor, Fix-O)"
+                _trace(req_id, "2.MODE_DETECT.personal_chart_override(stream)", {
+                    "rule": "Sprint-26 Fix-O",
+                    "reason": "personal possessive next to chart noun",
+                })
+        except Exception:
+            pass
     _trace(req_id, "1.UNDERSTANDING(stream)", _qu)
     _trace(req_id, "2.MODE_DETECT", {
-        "mode": mode, "topic": topic,
-        "reason": f"qu intent={_qu_intent} topic={_qu_topic}",
+        "mode": mode, "topic": topic, "reason": _mode_reason,
     })
 
     try:

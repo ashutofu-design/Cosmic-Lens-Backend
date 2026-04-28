@@ -273,6 +273,63 @@ _WHY_LEADING_RX = _re_why.compile(
 )
 
 
+# ── Sprint-26 Fix-O — Personal-chart-anchor detector ─────────────────────────
+# When a question contains a personal possessive ("mera/meri/mere/my") next
+# to a chart-anchor noun (dasha/kundli/lagna/chart/horoscope/etc.), it is
+# UNAMBIGUOUSLY a personal astrology question that MUST go through the chart
+# pipeline — even when the AI classifier marks topic=general (which would
+# normally route to concept-explainer mode and skip the chart entirely).
+# Without this override, "Mera dasha bolte hain achha chal raha hai…" loses
+# access to the user's actual MD/AD lord names and the answer goes shallow.
+# Sprint-26 Fix-O hardening (architect-found regression):
+# DO NOT allow arbitrary filler words between possessive and anchor — that
+# matched third-person ownership chains ("mere dost ki kundli", "meri maa
+# ki dasha", "मेरी माँ की कुंडली") which are NOT the user's own chart and
+# must not force astro mode. Instead, require either:
+#   (a) direct adjacency: possessive + chart-noun, OR
+#   (b) an OPTIONAL astro-qualifier word between them (janma/janam/navamsa/
+#       navmansh/chalit/moon/sun/birth) — these are pure astrology vocabulary
+#       and cannot be mistaken for relationship nouns ("dost", "maa", "pati").
+# Roman compound forms (janamkundli, janmakundli, janampatri/patrika) are
+# added explicitly to the anchor list so they remain detectable.
+_PERSONAL_CHART_RX = _re_why.compile(
+    r"\b(?:mera|meri|mere|apna|apni|apne|my)\s+"
+    r"(?:(?:janma|janam|navamsa|navmansh|chalit|moon|sun|birth)\s+)?"
+    r"(?:dasha|maha\s*dasha|mahadasha|antar\s*dasha|antardasha|"
+    r"pratyantar|bhukti|"
+    r"kundli|kundali|kundli|chart|"
+    r"janamkundli|janmakundli|janampatri|janampatrika|"
+    r"lagna|ascendant|"
+    r"rashi|moon\s*sign|sun\s*sign|"
+    r"nakshatra|"
+    r"janma|janm|birth\s*chart|birth|horoscope|"
+    r"saturn|shani|mars|mangal|jupiter|guru|brihaspati|"
+    r"venus|shukra|mercury|budh|rahu|ketu|sun|surya|moon|chandra)\b",
+    _re_why.IGNORECASE,
+)
+# Devanagari forms — same hardening: direct adjacency or optional
+# astro-qualifier (जन्म/जनम/नवमांश), no arbitrary fillers, so genitive
+# ownership chains like "मेरे दोस्त की कुंडली" / "मेरी माँ की कुंडली"
+# (which contain "की" + a kinship noun before the anchor) do NOT match.
+_PERSONAL_CHART_DEVA_RX = _re_why.compile(
+    r"(?:मेरा|मेरी|मेरे|अपना|अपनी|अपने)\s+"
+    r"(?:(?:जन्म|जनम|नवमांश|चलित)\s+)?"
+    r"(?:दशा|महादशा|अंतरदशा|अन्तर्दशा|कुंडली|कुण्डली|"
+    r"जन्मकुंडली|जन्मकुण्डली|जन्मपत्री|जन्मपत्रिका|"
+    r"लग्न|राशि|नक्षत्र|जन्म|चार्ट|"
+    r"शनि|मंगल|गुरु|बृहस्पति|शुक्र|बुध|राहु|केतु|सूर्य|चंद्र|चन्द्र)"
+)
+
+
+def is_personal_chart_question(question: str) -> bool:
+    """True when the question has a personal-possessive next to a chart noun.
+    Used by openai_helper to FORCE mode=astro even when topic=general."""
+    if not question:
+        return False
+    return bool(_PERSONAL_CHART_RX.search(question)
+                or _PERSONAL_CHART_DEVA_RX.search(question))
+
+
 def _maybe_promote_analysis_for_why(question: str,
                                     intents_ranked: list[str],
                                     intent: str) -> tuple[list[str], str, bool]:

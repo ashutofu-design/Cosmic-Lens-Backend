@@ -124,6 +124,54 @@ EMOTIONAL_TONES = (
     "conflicted", "grieving", "angry", "skeptical",
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# QUESTION SCOPE  (Sprint-25 Fix-E — added to give the supertype router a
+# disambiguating signal that captures the *shape* of the ask, not just the
+# topic. Maps 1-to-1 to the 5 narrator supertypes downstream.)
+# ─────────────────────────────────────────────────────────────────────────────
+QUESTION_SCOPES = (
+    # ── Chart-inspection family ─────────────────────────────────────────
+    "single_planet",          # ONE named planet ("Mars kaisa hai", "Saturn weak hai kya")
+                              #   → supertype = PLANET_QUERY
+    "multi_planet_or_chart",  # Multiple planets or chart-wide overview
+                              # ("kya kya powerful planets", "saare grah strength",
+                              #  "mera kundli analysis", "chart mein kya hai",
+                              #  "Mars vs Jupiter konsa strong")
+                              #   → supertype = GENERAL_ANALYSIS
+
+    # ── Life-area family (a real life domain is the subject) ────────────
+    "life_area_problem",      # Distress report — either tied to a specific life area
+                              # OR generalized "everything is stuck / nothing is working"
+                              # ("paisa nahi ruk raha", "naukri nahi mil rahi",
+                              #  "shaadi tut gayi", "tabiyat kharab rehti hai",
+                              #  "sab kuch atka hua hai", "kuch bhi sahi nahi ho raha")
+                              #   → supertype = PROBLEM_QUERY
+    "life_area_timing",       # "kab" question for a life event
+                              # ("shaadi kab hogi", "promotion kab milega",
+                              #  "ghar kab milega", "loan kab utrega")
+                              #   → supertype = TIMING_QUERY
+    "life_decision",          # Should I do X or not / X vs Y / kya karu
+                              # ("job change karu ya nahi", "ghar khareedu ya rent",
+                              #  "is share mein invest karu", "abhi shaadi karu")
+                              #   → supertype = DECISION_QUERY
+    "life_area_general",      # Open-ended life-area question without distress,
+                              # without timing, without decision
+                              # ("foreign job ka yog hai kya", "career kaisa rahega",
+                              #  "shaadi ka yog hai", "wealth potential batao")
+                              #   → supertype = GENERAL_ANALYSIS
+
+    # ── Remedy family ───────────────────────────────────────────────────
+    "remedy_request",         # ONLY asking for upay / parihar
+                              # ("Saturn ka upay batao", "kya jap karoon")
+                              #   → supertype = GENERAL_ANALYSIS
+
+    # ── Off-domain or unclassifiable ────────────────────────────────────
+    "off_topic",              # Greeting / non-astrology / out-of-scope
+                              #   → caller decides; usually GENERAL_ANALYSIS
+
+    "unknown",                # Model could not classify with confidence
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DATA TYPES
@@ -160,6 +208,11 @@ class IntentExtraction:
     latency_ms:      int = 0
     source:          str = "ai_ear"         # "ai_ear" | "regex_fallback"
     raw_question:    str = ""
+    # Sprint-25 Fix-E — captures the SHAPE of the question (not the topic).
+    # Maps 1-to-1 to the 5 narrator supertypes downstream. Old extractions
+    # default to "unknown" so the supertype router falls back to the
+    # ask_types/tone heuristic cleanly.
+    question_scope:  str = "unknown"        # one of QUESTION_SCOPES
 
     def to_log_dict(self) -> dict:
         d = asdict(self)
@@ -189,7 +242,7 @@ _INTENT_SCHEMA = {
         "type": "object",
         "additionalProperties": False,
         "required": [
-            "language", "domain", "ask_types", "emotional_tone",
+            "language", "domain", "question_scope", "ask_types", "emotional_tone",
             "intents", "confidence",
         ],
         "properties": {
@@ -201,6 +254,22 @@ _INTENT_SCHEMA = {
             "domain": {
                 "type": "string",
                 "enum": list(DOMAINS),
+            },
+            "question_scope": {
+                "type": "string",
+                "enum": list(QUESTION_SCOPES),
+                "description": (
+                    "The SHAPE of the question (NOT the topic). Pick exactly ONE:\n"
+                    " • single_planet — asking about ONE named graha (Mars/Saturn/Rahu/etc.) only\n"
+                    " • multi_planet_or_chart — asking about MULTIPLE planets or chart-wide ('kya kya powerful planets', 'all planets', 'kundli analysis', 'Mars vs Jupiter')\n"
+                    " • life_area_problem — distress / 'kyon nahi ho raha' in a real life area (paisa/job/shaadi/health)\n"
+                    " • life_area_timing — 'kab' question for a life event (shaadi kab, promotion kab)\n"
+                    " • life_decision — 'karu ya nahi' / 'X ya Y' decision ask\n"
+                    " • life_area_general — open-ended life-area question without distress / timing / decision (foreign job ka yog, career kaisa rahega)\n"
+                    " • remedy_request — ONLY asking for upay / parihar\n"
+                    " • off_topic — greeting / non-astrology\n"
+                    " • unknown — cannot classify with confidence"
+                ),
             },
             "ask_types": {
                 "type": "array",
@@ -277,6 +346,34 @@ or 'general' (only when no domain clearly applies).
 timing / decision / recovery / diagnosis / remedy / explanation / outcome / comparison. \
 One question can have multiple ask_types (e.g. "kab hoga aur kya karu" = [timing, decision]).
 
+3a. QUESTION_SCOPE — pick exactly ONE that captures the SHAPE of the question \
+(NOT the topic). This is the MOST IMPORTANT routing signal. Use the decision tree:
+
+   STEP 1: Is the user asking about specific named planets / chart structure?
+   - If ONE planet named (Mars/Saturn/Sun/Moon/Mercury/Venus/Jupiter/Rahu/Ketu/lagna lord) \
+and the question is about its strength / position / dignity → "single_planet"
+   - If MULTIPLE planets, "kya kya / saare / sab / konsa konsa / all" planets, OR \
+"chart/kundli mein kya hai", OR "X vs Y compare" between two planets, OR a generic \
+"chart analysis / kundli batao" without naming any specific life area → "multi_planet_or_chart"
+   - Else continue to STEP 2.
+
+   STEP 2: Is there a specific life area (career/wealth/marriage/health/love/child/etc.) \
+OR a generalized distress signal ("sab kuch atka hua", "kuch nahi ho raha", "pareshan")?
+   - User reports DISTRESS / "nahi ho raha" / "nahi mil rahi" / "atka hua" / something \
+broken — whether tied to a specific area OR general → "life_area_problem"
+   - User asks "KAB" / when will this happen → "life_area_timing"
+   - User asks "karu ya nahi" / "X ya Y" / should I → "life_decision"
+   - User asks "yog hai kya" / "kaisa rahega" / "possibility" / "potential" without \
+distress, without timing, without decision → "life_area_general"
+
+   STEP 3: ONLY asking for upay / remedy / parihar → "remedy_request"
+
+   STEP 4: Greeting / non-astrology / cannot tell → "off_topic" or "unknown"
+
+   IMPORTANT: a single named planet inside a multi-area question is still "single_planet" \
+ONLY if the WHOLE question is about that planet's strength. \
+"Mars career mein kya karega" is "life_area_general" (career), not "single_planet".
+
 4. EMOTIONAL_TONE — choose from: anxious / curious / desperate / hopeful / neutral / \
 conflicted / grieving / angry / skeptical. Pick the dominant tone; do not infer beyond \
 what the words show. If user uses "atka", "kuch nahi ho raha", "pareshan" → likely "anxious".
@@ -305,14 +402,45 @@ Bucket selection guide (most specific wins, otherwise general_<domain>):
 
 EXAMPLES:
 Q: "Aajkal sab kuch atka hua hai, kuch nahi ho raha"
-→ language="hn" (Hinglish words: aajkal, atka, ho raha), domain="general", \
+→ language="hn", domain="general", question_scope="life_area_problem", \
 ask_types=["diagnosis"], emotional_tone="anxious", \
 intents=[{bucket:"general", summary:"Sab kuch atka hua hai, progress nahi"}]
 
 Q: "Mera promotion is saal hoga ya nahi"
-→ language="hn", domain="career", ask_types=["timing","outcome"], \
-emotional_tone="hopeful", intents=[{bucket:"promotion", \
-summary:"Promotion is saal hoga ya nahi", facts:{durations:["is saal"]}}]"""
+→ language="hn", domain="career", question_scope="life_area_timing", \
+ask_types=["timing","outcome"], emotional_tone="hopeful", \
+intents=[{bucket:"promotion", summary:"Promotion is saal hoga ya nahi", \
+facts:{durations:["is saal"]}}]
+
+Q: "Saturn weak hai ya powerful"
+→ language="hn", domain="spiritual", question_scope="single_planet", \
+ask_types=["diagnosis","explanation"], emotional_tone="curious", \
+intents=[{bucket:"general", summary:"Saturn ki strength batao"}]
+
+Q: "Kya kya powerful planets hain mere chart mein"
+→ language="hn", domain="general", question_scope="multi_planet_or_chart", \
+ask_types=["diagnosis","explanation"], emotional_tone="curious", \
+intents=[{bucket:"general", summary:"Powerful aur weak planets ka overview"}]
+
+Q: "Paisa nahi ruk raha ghar mein"
+→ language="hn", domain="wealth", question_scope="life_area_problem", \
+ask_types=["diagnosis"], emotional_tone="anxious", \
+intents=[{bucket:"expense_leakage", summary:"Paisa save nahi ho raha"}]
+
+Q: "Job change karu ya nahi"
+→ language="hn", domain="career", question_scope="life_decision", \
+ask_types=["decision"], emotional_tone="conflicted", \
+intents=[{bucket:"job_change", summary:"Job change karna chahiye ya nahi"}]
+
+Q: "Foreign job ka yog hai kya"
+→ language="hn", domain="career", question_scope="life_area_general", \
+ask_types=["diagnosis"], emotional_tone="curious", \
+intents=[{bucket:"foreign_job", summary:"Foreign job ka yog batao"}]
+
+Q: "Saturn ka upay batao"
+→ language="hn", domain="remedy", question_scope="remedy_request", \
+ask_types=["remedy"], emotional_tone="neutral", \
+intents=[{bucket:"general", summary:"Saturn ke liye upay"}]"""
 
 
 def _user_prompt(question: str) -> str:
@@ -353,6 +481,7 @@ def regex_fallback(question: str) -> IntentExtraction:
         latency_ms=0,
         source="regex_fallback",
         raw_question=question,
+        question_scope="unknown",
     )
 
 
@@ -447,6 +576,7 @@ def extract_intent(question: str,
             latency_ms     = elapsed_ms,
             source         = "ai_ear",
             raw_question   = question,
+            question_scope = (data.get("question_scope") or "unknown"),
         )
     except KeyError as exc:
         raise IntentExtractionError(f"missing required field {exc}") from exc
@@ -506,6 +636,7 @@ def extract_intent_cached(question: str) -> IntentExtraction:
         latency_ms  = cached.latency_ms,
         source      = cached.source,
         raw_question= question,
+        question_scope = getattr(cached, "question_scope", "unknown"),
     )
 
 

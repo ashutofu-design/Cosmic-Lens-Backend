@@ -5165,16 +5165,35 @@ def _is_multi_planet_sweep(question_text: str | None) -> bool:
     return bool(_MULTI_PLANET_SWEEP_RX.search(question_text))
 
 
+# Sprint-25 Fix-E: canonical scope → supertype map. Each scope value emitted
+# by the AI Ear corresponds to exactly ONE narrator supertype contract. This
+# replaces the old ask_types/tone/bucket heuristic chain (kept as fallback
+# for legacy extractions where question_scope=='unknown').
+_SCOPE_TO_SUPERTYPE: dict[str, tuple[str, float]] = {
+    "single_planet":          ("PLANET_QUERY",     0.95),
+    "multi_planet_or_chart":  ("GENERAL_ANALYSIS", 0.95),
+    "life_area_problem":      ("PROBLEM_QUERY",    0.95),
+    "life_area_timing":       ("TIMING_QUERY",     0.95),
+    "life_decision":          ("DECISION_QUERY",   0.95),
+    "life_area_general":      ("GENERAL_ANALYSIS", 0.85),
+    "remedy_request":         ("GENERAL_ANALYSIS", 0.80),
+    "off_topic":              ("GENERAL_ANALYSIS", 0.60),
+}
+
+
 def _supertype_from_ai_ear(extraction, question_text: str | None = None) -> dict | None:
     """Map an AI Ear IntentExtraction object → supertype dict.
 
-    Returns None if the extraction is missing, low-confidence, or the
-    ask_types signal is ambiguous — caller then falls back to the regex
-    `_classify_supertype`.
+    PRIMARY signal (Sprint-25 Fix-E): the AI Ear's `question_scope` field
+    deterministically picks the supertype via `_SCOPE_TO_SUPERTYPE`. This
+    is the source of truth — no regex post-processing needed.
 
-    `question_text` (optional) lets the mapper veto PLANET_QUERY for
-    multi-planet sweeps that AI Ear emits as `domain=general,
-    ask_types=[explanation,…]`.
+    FALLBACK signal: when scope == "unknown" (cache miss / older extraction
+    schema), the legacy ask_types/tone/bucket heuristic decides.
+
+    Returns None if extraction is missing, low-confidence, or both signals
+    are inconclusive — caller then falls back to the regex
+    `_classify_supertype`.
     """
     if not extraction or getattr(extraction, "source", "") != "ai_ear":
         return None
@@ -5182,6 +5201,19 @@ def _supertype_from_ai_ear(extraction, question_text: str | None = None) -> dict
     if conf < 0.70:
         return None
 
+    # ── PRIMARY: question_scope ─────────────────────────────────────────
+    scope = (getattr(extraction, "question_scope", "") or "unknown").strip().lower()
+    mapped = _SCOPE_TO_SUPERTYPE.get(scope)
+    if mapped:
+        st, st_conf = mapped
+        return {
+            "supertype":  st,
+            "confidence": st_conf,
+            "reasons":    [f"AI Ear question_scope='{scope}' → {st}"],
+            "source":     "ai_ear_scope",
+        }
+
+    # ── FALLBACK: legacy ask_types/tone heuristic (scope=='unknown') ────
     asks = set(getattr(extraction, "ask_types", []) or [])
     tone = (getattr(extraction, "emotional_tone", "") or "").lower()
     domain = (getattr(extraction, "domain", "") or "").lower()

@@ -5506,13 +5506,57 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "════════════════════════════════════════════════════════════════════\n"
         "STRICT NARRATOR CONTRACT — QUESTION TYPE: GENERAL_ANALYSIS\n"
         "════════════════════════════════════════════════════════════════════\n"
-        "User asked an open analysis question.\n"
+        "User asked an open analysis question — usually a WHY + WHEN combo\n"
+        "('kyun ho raha hai aur kab tak chalega').\n"
+        "\n"
+        "MANDATORY OUTPUT STRUCTURE — Verdict → Reason → Timing\n"
+        "  1. VERDICT (1 line): Direct answer to the user's core ask. State\n"
+        "     the conclusion first — do NOT bury it under analysis.\n"
+        "     Examples:\n"
+        "       \"Seedhi baat — Rahu hi main reason hai, akela nahi par primary.\"\n"
+        "       \"Seedhi baat — yeh sirf dasha nahi, transit Saturn bhi push kar raha hai.\"\n"
+        "  2. REASON (1–2 lines): Cite the SPECIFIC dasha + ONE relevant\n"
+        "     house (or its lord) that drives the verdict. Name the planet\n"
+        "     and what it is doing — not a textbook description.\n"
+        "  3. TIMING (1 line): Give the next inflection date from locked\n"
+        "     facts (AD end-date, MD transition, or transit shift). One date,\n"
+        "     not a range of speculations.\n"
+        "\n"
+        "FOCUS DISCIPLINE — surgical, not exhaustive:\n"
+        "  • Houses to mention by topic (default allow-list — strict):\n"
+        "      finance → 2H, 11H ONLY (12H is a LOSS-house, gated below).\n"
+        "      career  → 10H, 6H (work-effort), 11H ONLY.\n"
+        "      marriage → 7H, 5H (love), 2H (family) ONLY.\n"
+        "      health  → 1H (lagna), 6H, 8H ONLY.\n"
+        "  • Loss / dushtana houses (6H, 8H, 12H) are OFF-limits for finance,\n"
+        "    career, marriage UNLESS the user's question explicitly mentions\n"
+        "    loan, karz, EMI, loss, theft, hospital, sudden event, divorce,\n"
+        "    accident, or similar adverse trigger word.\n"
+        "  • Multi-domain questions (e.g. finance + career, marriage + health):\n"
+        "    use ONLY the PRIMARY topic's allow-list. Do NOT take a union.\n"
+        "    Primary topic is the FIRST one mentioned in the user's question.\n"
+        "  • Dasha depth: cite MD lord + current AD lord + AD end-date. STOP.\n"
+        "    NO Pratyantar dasha, NO Sookshma, NO nakshatra dispositor chains\n"
+        "    UNLESS the user explicitly asked for 'detail mein' / 'depth mein'\n"
+        "    / 'exact muhurat'. In that case length cap is relaxed to ~150 words.\n"
+        "  • Planets: name at most 3 — the dasha lord(s) + the most relevant\n"
+        "    karaka (Jupiter for wealth, Venus for relationships, Saturn for\n"
+        "    delays, Mars for action). Skip the others.\n"
+        "\n"
         "MUST do:\n"
-        "  • Give a balanced, SHORT overview. 2–3 lines is the target.\n"
-        "  • Stick to what the user actually asked.\n"
+        "  • Open with the Verdict line. No throat-clearing, no preamble.\n"
+        "  • Use ONLY engine-provided dasha lords + dates. Never invent.\n"
+        "  • Default length: 4–6 short lines (≤80 words). Tight, not bloated.\n"
+        "    Relaxed to ~150 words ONLY when user asked 'detail mein' / 'depth\n"
+        "    mein' / 'exact muhurat' explicitly.\n"
+        "\n"
         "MUST NOT do:\n"
-        "  • DO NOT dump every chart fact. Keep it proportional.\n"
-        "  • DO NOT introduce new topics outside the question's scope.\n"
+        "  • DO NOT dump every chart fact, every house, every planet.\n"
+        "  • DO NOT introduce 6H/8H/12H/dushtana houses for non-loss topics.\n"
+        "  • DO NOT add Pratyantar / Sookshma / nakshatra-lord chains by default.\n"
+        "  • DO NOT introduce new topics (career when user asked finance, etc).\n"
+        "  • DO NOT add upay / remedy unless the user asked for it.\n"
+        "  • DO NOT pad with generic philosophy ('har dasha mein ups-downs hote hain').\n"
         "════════════════════════════════════════════════════════════════════\n"
     ),
     "STRENGTH_SUMMARY": (
@@ -5786,19 +5830,36 @@ def _validate_supertype_contract(text: str, supertype: str,
             )
 
     elif supertype == "GENERAL_ANALYSIS":
-        # Sprint-25 Fix-H: a chart-overview MUST be a sweep, not a single-
-        # planet narrative. Require ≥3 distinct planets OR ≥3 distinct houses.
-        # Bypass for very short answers (<240 chars) — these are conversational
-        # follow-ups, not chart overviews.
-        if len(t) >= 240:
-            _np = _count_distinct_planets(t)
-            _nh = _count_distinct_houses(t)
-            if _np < 3 and _nh < 3:
-                violations.append(
-                    f"GENERAL_ANALYSIS: response named only {_np} planet(s) "
-                    f"and {_nh} house(s) — a chart overview MUST sweep "
-                    "≥3 distinct planets OR ≥3 distinct houses."
-                )
+        # Sprint-26 Fix-P: legacy "≥3 planets OR ≥3 houses" sweep requirement
+        # was REMOVED. The new V→R→T contract intentionally caps at 3 planets
+        # and one focal house — keeping the old check would force regenerate
+        # loops back to the old dump-style answer. Replaced with structure +
+        # dasha-citation checks aligned with the new contract.
+        #
+        # 1. Must cite a dasha (MD or AD) — REASON line requires it.
+        # 2. Must include a TIMING token (year, month, or "tak"/"se" window)
+        #    — TIMING line requires a single inflection date.
+        # 3. Soft length advisory: log when output exceeds the relaxed cap
+        #    (~150 words) but do NOT regenerate; the prompt itself nudges the
+        #    AI toward 4-6 lines and over-runs are recoverable noise, not
+        #    contract breaks.
+        if not _DASHA_MENTION_RX.search(t):
+            violations.append(
+                "GENERAL_ANALYSIS: response missing dasha citation — "
+                "V→R→T contract requires the REASON line to name the "
+                "running mahadasha or antardasha."
+            )
+        _has_year_ga = bool(_re_validator.search(r"\b(19|20)\d{2}\b", t))
+        _has_window_ga = bool(_re_validator.search(
+            r"\b(tak|se|until|after|before|baad|pehle)\b",
+            t, _re_validator.IGNORECASE
+        ))
+        if not (_has_year_ga or _has_window_ga):
+            violations.append(
+                "GENERAL_ANALYSIS: response missing timing inflection — "
+                "V→R→T contract requires the TIMING line to name a year "
+                "or window marker (tak/se/baad)."
+            )
 
     elif supertype == "STRENGTH_SUMMARY":
         # Sprint-25 Fix-J — three checks:

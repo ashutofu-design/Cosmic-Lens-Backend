@@ -9172,6 +9172,39 @@ def _phase50_minimal_prompt_enabled() -> bool:
     return _os_p50.environ.get("PHASE50_MINIMAL_PROMPT", "1") != "0"
 
 
+# ── Phase 5.1 — TOTAL STRIP ─────────────────────────────────────────────────
+# When PHASE51_BARE_PROMPT=1 (default), the Ask path runs ONLY:
+#   1. engine compute (kundli + verdicts via existing _build_messages call)
+#   2. Phase 5.0 minimal-prompt assembly (system + user, ~500-char chart)
+#   3. ONE OpenAI chat.completions.create call
+#   4. RAW model output → returned as `text` (no mutation, no validators)
+#
+# Everything else in the post-response chain is BYPASSED via early-return:
+#   - SUPERTYPE_CONTRACT validator + retry        (was already inert)
+#   - POST_LOGIC_CHECK (date/dasha hallucination guard)
+#   - TIMING_VALIDATOR (timing-claim authorisation)
+#   - JARGON_INJECT (Sanskrit jargon back-injection)
+#   - HEALTH_BRAND_SAFETY (CA/SEBI medical disclaimer)
+#   - VALIDATORS framework + RAW_AI_REGEN
+#   - MARRIAGE_VALIDATOR + RAW_AI_REGEN(marriage)
+#   - WEALTH_BRAND_SAFETY (SEBI investment disclaimer)
+#   - SCRUBBER (brand-tone style rewriter)         (was already skipped)
+#   - phase48 TRUNCATOR (tier/format controller)   (was already skipped)
+#   - GLOBAL_PH_STRIP (placeholder `[…]` strip)
+#   - POST_LOGIC_CHECK_POST_TIMING (second-pass guard)
+#   - ENGINE_WARNING_INJECTED footer
+#   - FOLLOW_UPS chip generation                   (returns [])
+#
+# Reversibility: setting PHASE51_BARE_PROMPT=0 restores the Phase 5.0 path
+# (which itself can be reverted via PHASE50_MINIMAL_PROMPT=0). Both flags
+# are independent. Default cascade: 5.1 ON → 5.0 ON → engines + minimal +
+# raw output, no validators of any kind.
+def _phase51_bare_prompt_enabled() -> bool:
+    """Read the env flag once per call. Default ON ("1")."""
+    import os as _os_p51
+    return _os_p51.environ.get("PHASE51_BARE_PROMPT", "1") != "0"
+
+
 def _phase48_narrative_truncate(text: str, question: str,
                                 tier: str | None = None) -> str:
     """Phase 4.8 T019 + Phase 4.9 T024 — tier-aware narrative truncator.
@@ -9888,6 +9921,36 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     else:
         text = _call_once()
         _trace(req_id, "4.RAW_AI_RESPONSE", text)
+
+        # ── Phase 5.1 — TOTAL STRIP early-return ──────────────────────────────
+        # When PHASE51_BARE_PROMPT=1 (default), bypass ALL post-response
+        # validators / mutators / footer-injectors / follow-up generation and
+        # return the model's raw text verbatim. See `_phase51_bare_prompt_
+        # enabled` for the full list of bypassed stages.
+        if _phase50_active and _phase51_bare_prompt_enabled():
+            _trace(req_id, "5.PHASE51_BARE_RETURN", {
+                "raw_chars": len(text or ""),
+                "bypassed": [
+                    "supertype_contract_validator", "post_logic_check",
+                    "timing_validator", "jargon_inject", "health_brand_safety",
+                    "validators_framework", "marriage_validator",
+                    "wealth_brand_safety", "scrubber", "phase48_truncator",
+                    "global_ph_strip", "post_logic_check_post_timing",
+                    "engine_warning_footer", "follow_ups",
+                ],
+            })
+            _result_bare = {
+                "text":              text,
+                "topic":             topic,
+                "topic_source":      (build_meta or {}).get("topic_source") or "regex",
+                "confidence":        _qu_conf,
+                "source":            "openai_bare",
+                "follow_ups":        [],
+                "question_intent":   question_intent,
+                "question_supertype": question_supertype,
+                "intent_extraction": (build_meta or {}).get("intent_extraction"),
+            }
+            return _result_bare
 
         # ── Fix-D: SUPERTYPE CONTRACT VALIDATOR + 1-RETRY ────────────────────
         # The strict per-supertype contract was injected as the LAST system
@@ -12408,6 +12471,36 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     if not raw_text:
         raise RuntimeError("OpenAI returned empty stream")
     _trace(req_id, "4.RAW_AI_RESPONSE(stream)", raw_text)
+
+    # ── Phase 5.1 — TOTAL STRIP early-return (stream parity) ──────────────
+    # Mirrors the sync `ai_ask` early-return: when PHASE51_BARE_PROMPT=1
+    # (default), bypass ALL stream-side post-response validators / mutators
+    # / footer-injectors / follow-up generation and yield the raw stream
+    # text as the final event. Deltas have already been yielded above as
+    # they arrived; the mobile client swaps deltas with `final.text` on
+    # `done`, so this single yield is what reaches the user.
+    if _phase50_active_stream and _phase51_bare_prompt_enabled():
+        _trace(req_id, "5.PHASE51_BARE_RETURN(stream)", {
+            "raw_chars": len(raw_text or ""),
+            "bypassed": [
+                "supertype_contract_validator", "post_logic_check",
+                "timing_validator", "jargon_inject", "health_brand_safety",
+                "validators_framework", "marriage_validator",
+                "wealth_brand_safety", "scrubber", "phase48_truncator",
+                "global_ph_strip", "post_logic_check_post_timing",
+                "engine_warning_footer", "follow_ups",
+            ],
+        })
+        yield {
+            "kind":                  "final",
+            "text":                  raw_text,
+            "topic":                 topic,
+            "confidence":            float((_qu or {}).get("confidence") or 0.0),
+            "source":                "openai_stream_bare",
+            "follow_ups":            [],
+            "replaced_by_validator": False,
+        }
+        return
 
     # Phase 5.0 Final Strip: stream-side scrubber gated identically to sync
     # path. STYLE rewriting is removed in the minimal-prompt mode; only

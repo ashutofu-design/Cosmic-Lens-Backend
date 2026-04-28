@@ -1401,3 +1401,88 @@ The model produced a natural 891-char Hindi answer with 4 paragraphs
 
 These remain in the codebase intentionally so the env-flag revert is
 a true one-liner.
+
+## Phase 5.1 — TOTAL STRIP (raw-LLM Ask path)
+
+### Why
+Phase 5.0 already removed everything from the prompt-build side
+(supertype contracts, narrator preamble, dead rules, KP forcing,
+multi-system messages). But the post-response side was still running
+14 mutators / validators / footer-injectors / chip generators that
+collectively re-shaped the model's natural reply, sometimes injecting
+templated jargon, brand-safety overrides, and follow-up scaffolding.
+
+User instruction: **"Remove all except engine"**. Phase 5.1 is the
+post-response analogue of Phase 5.0 — the engines (chart, dasha,
+career/marriage/wealth precompute) still run and their verdict line
+is still allowed into the prompt as a fact, but the **raw model text
+is returned verbatim**.
+
+### What Phase 5.1 strips
+The Ask path now early-returns immediately after `4.RAW_AI_RESPONSE`
+(sync) and `4.RAW_AI_RESPONSE(stream)` (stream). The following 14
+post-response stages are bypassed when the flag is on:
+
+  1. supertype_contract_validator + 1-retry (sync only)
+  2. POST_LOGIC_CHECK (semantic-vs-question contradiction guard)
+  3. TIMING_VALIDATOR (date/dasha hallucination guard)
+  4. JARGON_INJECT (forced sanskrit-term insertion)
+  5. HEALTH_BRAND_SAFETY
+  6. WEALTH_BRAND_SAFETY
+  7. VALIDATORS framework dispatch (per-supertype rule pack)
+  8. MARRIAGE_VALIDATOR (subtype-aware narrator rewrites)
+  9. SCRUBBER (style/tone normaliser)
+  10. Phase 4.8/4.9 TRUNCATOR (tier-based length cap)
+  11. GLOBAL_PH_STRIP (placeholder cleanup)
+  12. POST_LOGIC_CHECK_POST_TIMING (second pass)
+  13. ENGINE_WARNING_FOOTER (red-flag callout block)
+  14. FOLLOW_UPS chip generation
+
+The reply is returned with `source = "openai_bare"` (sync) or
+`"openai_stream_bare"` (stream), `follow_ups = []`, and the natural
+text the model produced.
+
+### What is preserved
+- All upstream understanding (`1.UNDERSTANDING`, `1b.CLASSIFIER_OVERRIDE`).
+- All engine precompute (career, marriage, wealth, KP, transits).
+- Phase 5.0 minimal prompt assembly + the fact line for verdicts.
+- The 2-message contract (system + user) — this is the entire prompt.
+- Telemetry: every legacy event before `4.RAW_AI_RESPONSE` still fires;
+  a new `5.PHASE51_BARE_RETURN` event lists the bypassed stages.
+
+### Reversibility
+Two-flag gating, both default `"1"` = ON:
+- `PHASE51_BARE_PROMPT` — controls the post-response strip in this
+  phase. Set to `"0"` to restore the full Phase 4.x post-response chain.
+- `PHASE50_MINIMAL_PROMPT` — controls the prompt-side strip from
+  Phase 5.0. Set to `"0"` to restore the legacy heavy prompt build.
+
+Phase 5.1 only fires when Phase 5.0 is ALSO on (the early-return is
+gated on `_phase50_active AND _phase51_bare_prompt_enabled()`), so
+flipping EITHER flag to `"0"` re-enables the corresponding legacy
+chain. Both flags are independent, which lets us roll back the prompt
+side and the post-response side separately if needed.
+
+Note: at the HTTP layer, `flask_app.py` still applies
+`hinglishify_response(...)` to the sync response so hn/hi locales get
+the correct script. This is a locale transform, not a validator —
+the model's content/structure is preserved.
+
+### Live verification (request `openai_bare`, 28-Apr-2026)
+- `1.UNDERSTANDING(stream)` → `intent=analysis topic=career conf=0.95`.
+- `2b.ENGINE_STATUS` → 9/9 ok.
+- Phase 5.0 prompt: `message_count=2 user_chars=365 facts_lines=1`.
+- `4.RAW_AI_RESPONSE(stream)` → 479-char Hinglish answer referencing
+  Lagna Sagittarius, Jupiter MD / Rahu AD, planet placements.
+- `5.PHASE51_BARE_RETURN(stream)` → emitted; downstream chain skipped.
+- Final response to client: `source=openai_bare`, `follow_ups=[]`,
+  text returned verbatim.
+
+### Failure mode caught during rollout
+Initial implementation referenced a `confidence` local that was only
+bound LATER in the function (lines 10754-10760 sync, 12698-12700
+stream). The early-return triggered `UnboundLocalError`, which the
+HTTP handler caught and silently fell back to the rules engine
+(`source=rules`). Fixed by using `_qu_conf` (sync) and
+`float((_qu or {}).get("confidence") or 0.0)` (stream) — both bound
+from the single understanding call earlier in the function.

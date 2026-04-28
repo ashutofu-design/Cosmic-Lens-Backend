@@ -5566,8 +5566,86 @@ _NARRATOR_UNIVERSAL_HEADER: str = (
 )
 
 
+# ── Sprint-26 Step 2 (Apr 28 2026) — OUTPUT DISCIPLINE LAYER ────────────────
+# Step 1 cleaned up the SCAFFOLDING (one base prompt, one builder, no copy-
+# paste of universal rules). Step 2 adds the actual OUTPUT DISCIPLINE on top
+# — the rules that govern how the LLM should *shape* its answer regardless of
+# topic: length default, decisive tone, anti-bloat, arrow-style format,
+# no-repetition. These were either missing or were buried inside individual
+# supertype bodies in inconsistent wording.
+#
+# Design choice — why a SEPARATE constant (not merged into the header):
+#   • Keeps Step 2's contribution surgically visible in the file. If we ever
+#     need to roll back output-discipline tuning without losing Step 1's
+#     deduplication, we delete this block alone.
+#   • The two layers serve different purposes: header = "stay truthful",
+#     discipline = "stay tight". They tune independently.
+#
+# Type-body precedence: a per-supertype body MAY relax the default length
+# (e.g. GENERAL_ANALYSIS sets 4–6 lines for V→R→T) or tighten it (e.g.
+# PLANET_QUERY sets 1–2 lines). The "default" wording below makes that
+# precedence explicit so the model knows to honour the body when the two
+# disagree.
+#
+# Out of scope (deferred to Step 3 per the user's "step by step" directive):
+#   • Semantic-duplicate validator (post-hoc detection of repeated points
+#     using embedding similarity) — belongs in the validator/safety layer.
+#   • Hedge-language hard-block validator (regex on 'shayad', 'maybe',
+#     'ho sakta hai' as the FINAL verdict) — belongs in the validator layer.
+#   • Splitting DASHA / DOSHA / MATCH / TRANSIT into their own supertype
+#     routes — a routing-engine change, not a narrator-prompt change.
+_NARRATOR_OUTPUT_DISCIPLINE: str = (
+    "OUTPUT DISCIPLINE (default rules — type-specific body may override):\n"
+    "  • DEFAULT length: 1–3 short lines. Type body may extend this cap\n"
+    "    (e.g. GENERAL_ANALYSIS allows 4–6 lines for the V→R→T structure)\n"
+    "    or tighten it further. NEVER pad beyond what the body sets.\n"
+    "  • One concept → one verdict. NEVER restate the same point in different\n"
+    "    words across consecutive lines. If two sentences mean the same thing,\n"
+    "    delete the weaker one.\n"
+    "  • Decisive tone. Use HAI / HOGA / NAHI HOGA / RUKO / KARO. The hedge\n"
+    "    ban applies to the FIRST-LINE verdict ONLY: 'shayad', 'maybe',\n"
+    "    'ho sakta hai', 'might', 'depends on you' MUST NOT appear as the\n"
+    "    conclusion the user reads first. Inside reasoning lines, bounded\n"
+    "    uncertainty is allowed when timing is INFERRED (next AD lord change,\n"
+    "    transit window) rather than read off a locked date — say so\n"
+    "    explicitly ('approx', '~', 'aas-paas') so the user knows it's an\n"
+    "    estimate and not invented.\n"
+    "  • Arrow-style format for CAUSAL explanation (planet/house → effect).\n"
+    "    Use it when the answer is 'X causes Y'. Examples:\n"
+    "      ▸ Timing:  \"Jupiter MD end → Saturn MD shuru, control phase.\"\n"
+    "      ▸ Finance: \"2H lord Saturn debilitated → savings rukne mein dikkat.\"\n"
+    "      ▸ Career:  \"10H lord weak + Mars 6H → boss-clash, switch ka pressure.\"\n"
+    "    Reserve plain prose for non-causal contexts (STRENGTH bucket lines,\n"
+    "    structured V→R→T paragraphs where the body explicitly asks for it).\n"
+    "    Do NOT force arrow-style into a single-line bucket answer.\n"
+    "  • Anti-bloat — assume the user knows the system:\n"
+    "      ▸ DO NOT define astrology terms ('antardasha matlab sub-period…',\n"
+    "        'mahadasha is the major period of…') — the user already knows.\n"
+    "      ▸ DO NOT explain Vedic basics, planet karakas, or house meanings\n"
+    "        from scratch. Cite them only when they directly drive the verdict.\n"
+    # ── Sprint-26 Step 2 — METHOD-NAME-DROP RULE WITHHELD ───────────────────
+    # An earlier draft of this discipline included a bullet banning casual
+    # name-drops of KP / Vimshottari / Parashari / Jaimini unless the method
+    # choice changed the verdict. Live regression revealed it directly
+    # contradicted Rule N (`openai_helper.py` ~line 2926) which MANDATES a
+    # KP citation for finance/career/marriage topics ("you MUST include one
+    # natural KP citation sentence... failing to cite is the same kind of
+    # error as inventing facts"). The model correctly followed the louder
+    # "MUST" instruction. Reconciling the two — either tightening Rule N to
+    # "cite ONLY when KP and Vedic disagree" or removing Rule N entirely —
+    # is a deliberate Step-3 task (cross-cutting rule unification across the
+    # scattered domain prompts) and NOT something Step 2 should do silently.
+    # Logged in replit.md for Step 3.
+    "      ▸ DO NOT add philosophical filler ('har dasha mein ups-downs hote\n"
+    "        hain', 'patience aur disciplined approach') unless the user\n"
+    "        directly asked for guidance.\n"
+    "════════════════════════════════════════════════════════════════════\n"
+)
+
+
 # Per-supertype BODIES — only the type-specific rules. The universal header
-# above and the closing divider below are added by `_build_unified_narrator_contract`.
+# AND the output-discipline layer above are added by
+# `_build_unified_narrator_contract`; the closing divider is added below.
 _NARRATOR_TYPE_BODIES: dict[str, str] = {
     "PLANET_QUERY": (
         "QUESTION TYPE: PLANET_QUERY\n"
@@ -5755,8 +5833,15 @@ def _build_unified_narrator_contract(supertype: str,
     body = _NARRATOR_TYPE_BODIES.get(
         supertype, _NARRATOR_TYPE_BODIES["GENERAL_ANALYSIS"]
     )
+    # Sprint-26 Step 2 — output-discipline layer is injected between the
+    # truthfulness header (Step 1) and the type-specific body. This puts the
+    # length/tone/format defaults BEFORE the body so the body's overrides
+    # (e.g. PLANET_QUERY's tighter "1–2 lines" or GENERAL_ANALYSIS's looser
+    # "4–6 lines") win on conflict — the model honours the most-recent rule
+    # for the active supertype.
     return (
         _NARRATOR_UNIVERSAL_HEADER
+        + _NARRATOR_OUTPUT_DISCIPLINE
         + body
         + _NARRATOR_UNIVERSAL_FOOTER
     )

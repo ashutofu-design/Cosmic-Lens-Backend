@@ -2619,6 +2619,40 @@ def _build_messages(
             beh_lines.append(f"  Recent prior questions:\n{prior_q_lines}")
         beh_block = "\n".join(beh_lines)
 
+    # ── Phase 4.7 T016 — CONTEXT DIET (narrative mode only) ─────────────────
+    # Pre-Phase-4.7 the user-turn was 116K chars / ~29K tokens (full chart +
+    # 17 sprint engines: ashtakavarga / shadbala-full / avashtas / sahams /
+    # lal-kitab / astrocartography / medical / financial / vastu / numerology /
+    # phase-Q/R/S / etc.). ChatGPT achieves the same answer with <2K tokens.
+    # In narrative mode we slim to the essentials needed for the FUSED combo
+    # verdict: lagna/moon/sun/nakshatra, current MD/AD + window + pratyantar,
+    # planet strengths, active doshas, top yogas, house-lord placements,
+    # current transits (slow planets), classical remedies. Drops Sprint-19+
+    # engine dumps + raw KP cuspal table + raw transit degrees + Darakaraka
+    # + most divisional charts. Setting NARRATIVE_MODE=0 reverts to the full
+    # block. Architect-flagged sustainability of literal-substring approach
+    # mitigated by a section-header allowlist + loud-failure telemetry.
+    if _NARRATIVE_MODE:
+        _orig_lf_chars = len(locked_facts_str)
+        locked_facts_str = _slim_locked_facts_for_narrative(locked_facts_str, topic=topic)
+        _orig_intel_chars = len(intel_str)
+        intel_str = _slim_intel_for_narrative(intel_str)
+        _orig_kp_chars = len(kp_block)
+        kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
+        _orig_tr_chars = len(tr_block)
+        tr_block = _slim_transit_for_narrative(tr_block)
+        _slimmed = (_orig_lf_chars - len(locked_facts_str)) + \
+                   (_orig_intel_chars - len(intel_str)) + \
+                   _orig_kp_chars + \
+                   (_orig_tr_chars - len(tr_block))
+        if _slimmed > 0:
+            print(f"[openai_helper] Phase 4.7 T016: narrative-mode context diet "
+                  f"trimmed {_slimmed:,} chars "
+                  f"(locked_facts {_orig_lf_chars:,}→{len(locked_facts_str):,}, "
+                  f"intel {_orig_intel_chars:,}→{len(intel_str):,}, "
+                  f"kp {_orig_kp_chars:,}→0, "
+                  f"transit {_orig_tr_chars:,}→{len(tr_block):,})")
+
     kp_section    = f"\n\n{kp_block}\n" if kp_block else ""
     tr_section    = f"\n\n{tr_block}\n" if tr_block else ""
     intel_section = f"\n\n{intel_str}\n" if intel_str else ""
@@ -3026,6 +3060,70 @@ def _build_messages(
         )
         if _rule3_kp_imperative in user:
             user = user.replace(_rule3_kp_imperative, _rule3_kp_advisory)
+
+        # ── Phase 4.7 T016 — DROP DEAD-CODE RULE PARAGRAPHS ─────────────
+        # Rules F (ASHTAKAVARGA), G (ASPECTS), I (KARAKAS), J (BHAVA BALA),
+        # K (DIVISIONAL CHARTS / D9 / D10), O (JAIMINI ARUDHA / UPAPADA)
+        # all teach the model how to cite specific data blocks. In
+        # narrative mode the corresponding data blocks (SARVASHTAKAVARGA,
+        # KEY ASPECTS, JAIMINI CHARA KARAKAS, BHAVA BALA, divisional
+        # charts, JAIMINI ARUDHA PADAS) are removed by
+        # `_slim_locked_facts_for_narrative`. Keeping the rules creates
+        # TWO problems: (a) wastes ~3K chars of prompt, (b) bias toward
+        # enumeration / made-up numbers because the rules contain example
+        # citations like "Aapka 10th ghar mein SAV 34 hai jo VERY STRONG
+        # hai..." that the model may try to match. Drop them line-by-line
+        # to keep narrative shape clean. Rules H (TRANSITS) and L
+        # (PRATYANTAR) are retained — those data blocks are kept by the
+        # diet. Rule M (REMEDIES) is retained. Rule O is retained for
+        # love/marriage topic since UPAPADA LAGNA stays in the diet.
+        _rule_prefixes_to_drop = (
+            "    🛡️ ASHTAKAVARGA (Rule F):",
+            "    🛡️ ASPECTS (Rule G):",
+            "    🛡️ KARAKAS (Rule I):",
+            "    🛡️ BHAVA BALA (Rule J):",
+            "    🛡️ DIVISIONAL CHARTS (Rule K):",
+        )
+        if topic not in ("love", "marriage"):
+            _rule_prefixes_to_drop = _rule_prefixes_to_drop + (
+                "    🛡️ JAIMINI ARUDHA / UPAPADA (Rule O):",
+            )
+        _orig_rule_chars = len(user)
+        _kept_lines = []
+        _matched_prefixes = set()
+        for _line in user.split("\n"):
+            for _p in _rule_prefixes_to_drop:
+                if _line.startswith(_p):
+                    _matched_prefixes.add(_p)
+                    break
+            else:
+                _kept_lines.append(_line)
+                continue
+        user = "\n".join(_kept_lines)
+        _rule_chars_dropped = _orig_rule_chars - len(user)
+        if _rule_chars_dropped > 0:
+            print(f"[openai_helper] Phase 4.7 T016: dropped {_rule_chars_dropped:,} "
+                  f"chars of dead-code rule paragraphs (Rules F/G/I/J/K"
+                  f"{'/O' if topic not in ('love','marriage') else ''}) "
+                  f"from user turn (data blocks they reference are slimmed out).")
+        # ── DRIFT DETECTION (architect-flagged parity with Rule N gate) ──
+        # If a prefix never matched but a recognisable substring still appears
+        # in `user`, the source has drifted (text reindented, emoji changed,
+        # rule renamed). Warn loudly so the next CI / live probe surfaces it.
+        _missed = []
+        for _p in _rule_prefixes_to_drop:
+            if _p in _matched_prefixes:
+                continue
+            # Strip the leading 4 spaces + emoji to get a robust substring
+            _needle = _p.split("(")[0].strip().split()[-1]  # e.g. "ASHTAKAVARGA"
+            if _needle and _needle in user:
+                _missed.append((_p, _needle))
+        if _missed:
+            print(f"[openai_helper] ⚠️ Phase 4.7 T016 DRIFT WARNING: "
+                  f"{len(_missed)} dead-rule prefix(es) did not strip but "
+                  f"their keyword still appears in user turn — source likely "
+                  f"drifted. Update _rule_prefixes_to_drop literals: "
+                  f"{[m[0][:40] + '...' for m in _missed]}")
 
     # Build full conversation: system → prior turns → current user turn.
     msgs: list[dict] = [{"role": "system", "content": system}]
@@ -6646,6 +6744,148 @@ except (TypeError, ValueError):
 # from Phase 4.4 (POST_LOGIC + lookup_engine) stay live in narrative mode —
 # only FORMAT-validators + post-formatters get bypassed.
 _NARRATIVE_MODE = os.environ.get("NARRATIVE_MODE", "1") != "0"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Phase 4.7 T016 — CONTEXT DIET HELPERS (narrative mode only)
+# ────────────────────────────────────────────────────────────────────────────
+# Pre-Phase-4.7 the user-turn was 116K chars / ~29K tokens (full chart + 17
+# sprint engines). ChatGPT achieves the same answer with <2K tokens. These
+# slimmers strip everything not needed for the FUSED 3-5 sentence combo
+# verdict shape that Phase 4.5/4.6/4.7 enforce. They ONLY run when
+# `_NARRATIVE_MODE` is True; setting NARRATIVE_MODE=0 reverts to the full
+# 116K block. The fact-validators (POST_LOGIC + lookup_engine from Phase 4.4)
+# do NOT depend on these blocks being in the prompt — they re-derive from the
+# kundli object, so slimming the prompt does not weaken correctness.
+
+# Section-header allowlist for `locked_facts_str`. Lines must start with these
+# EXACT prefixes (top-level "▸ " — column 0, no leading whitespace). Indented
+# sub-lines under a kept header pass through; any other "▸ " or "── " section
+# header is dropped along with its sub-lines.
+_LF_KEEP_PREFIXES = (
+    "▸ LAGNA:",
+    "▸ MOON SIGN",
+    "▸ SUN SIGN:",
+    "▸ NAKSHATRA:",
+    "▸ SADE-SATI:",
+    "▸ YOGA COUNT:",
+    "▸ POSITIVE YOGAS:",
+    "▸ YOGA NAMES (raw,",
+    "▸ DOSHA COUNT (Active):",
+    "▸ ACTIVE DOSHAS:",
+    "▸ MILD DOSHAS:",
+    "▸ PLANET STRENGTHS:",
+    "▸ VARGOTTAM (",  # NB: "(" disambiguates from "▸ VARGOTTAMA MATRIX"
+    "▸ STRENGTH BUCKETS",
+    "▸ CURRENT TRANSITS",
+    "▸ CURRENT DASHA:",
+    "▸ DASHA WINDOW:",
+    "▸ PRATYANTAR",
+    "▸ HOUSE-LORD PLACEMENTS:",
+    "▸ REMEDIES (classical",
+)
+
+# Topic-conditional additions (BACKGROUND-only, no name-drop required).
+_LF_KEEP_BY_TOPIC = {
+    "marriage": ("▸ UPAPADA LAGNA",),
+    "love":     ("▸ UPAPADA LAGNA",),
+}
+
+
+def _slim_locked_facts_for_narrative(s: str, topic: str = "") -> str:
+    """Phase 4.7 T016: drop heavy Sprint-19+ engine dumps from the
+    LOCKED FACTS block. Keep only the core allowlist needed for the FUSED
+    combo verdict. Reverts to identity if `s` is empty or has no header
+    structure.
+
+    Args:
+        s: full locked_facts_str (~95K chars typical, 17 engine dumps)
+        topic: question topic (love/marriage/career/health/...) — selects
+            topic-specific additions from `_LF_KEEP_BY_TOPIC`
+
+    Returns:
+        slimmed string with only allowlisted ▸ sections + their sub-lines.
+        Typical reduction: 95K → ~3K chars.
+    """
+    if not s:
+        return s
+    extra = _LF_KEEP_BY_TOPIC.get(topic or "", ())
+    keep_prefixes = _LF_KEEP_PREFIXES + extra
+    keep = True  # before any section header, default to keep (catches preamble)
+    out_lines = []
+    for line in s.splitlines():
+        # Top-level section opener = column-0 ▸ / ── / ═══ (NOT indented)
+        is_section_marker = (
+            line.startswith("▸ ") or
+            line.startswith("── ") or
+            line.startswith("═")
+        )
+        if is_section_marker:
+            if line.startswith("═"):
+                # Always keep the framing ═══ separators
+                keep = True
+                out_lines.append(line)
+                continue
+            if line.startswith("── "):
+                # Sprint-19+ engine sub-blocks — drop all in narrative mode
+                keep = False
+                continue
+            # ▸ section header — keep iff allowlisted
+            if any(line.startswith(p) for p in keep_prefixes):
+                keep = True
+                out_lines.append(line)
+            else:
+                keep = False
+            continue
+        # Non-section line (blank / indented sub-line / preamble) — emit only
+        # when in a kept section
+        if keep:
+            out_lines.append(line)
+    out = "\n".join(out_lines)
+    # Collapse 3+ consecutive blank lines down to 2 (dropped sections leave
+    # blank gaps)
+    while "\n\n\n\n" in out:
+        out = out.replace("\n\n\n\n", "\n\n\n")
+    return out
+
+
+def _slim_intel_for_narrative(s: str) -> str:
+    """Phase 4.7 T016: keep the structural intel (planet status / house-lord
+    placements / detected yogas / dosh / sade-sati) but drop the raw
+    'Current transits today, sidereal Lahiri' degree dump — that data is
+    redundant with the slim transit block, and the raw degrees are noise
+    for narrative-mode answers.
+    """
+    if not s:
+        return s
+    out_lines = []
+    drop_until_blank = False
+    for line in s.splitlines():
+        if line.strip().startswith("Current transits"):
+            drop_until_blank = True
+            continue
+        if drop_until_blank:
+            if line.strip() == "":
+                drop_until_blank = False
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines).rstrip() + ("\n" if out_lines else "")
+
+
+def _slim_transit_for_narrative(s: str) -> str:
+    """Phase 4.7 T016: drop the standalone transit block ENTIRELY in
+    narrative mode. Locked-facts allowlist already retains the
+    `▸ CURRENT TRANSITS (as of YYYY-MM-DD):` summary (slow-planet
+    sign + house mapping from natal), which is the only transit signal
+    needed for a 3-5 sentence FUSED verdict. The standalone block
+    leaks raw degree numbers ("Jupiter: 84.38° Gemini") + a
+    "sidereal Lahiri, UTC ..." technical header that biases the model
+    toward enumeration / pseudo-precision instead of human language.
+    """
+    if not s:
+        return s
+    return ""
+
 
 # Phase 4.2 (Apr 28, 2026) — engine honesty refusal.
 # Fired when a PRIMARY engine phase (chart-intel / dasha / lagna / dosh /

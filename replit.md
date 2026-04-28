@@ -987,15 +987,80 @@ MANDATORY this turn / sit ABOVE the brevity rule", D9/D10 reminders
 revert to "you MUST cite". Both branches coexist so the legacy
 behaviour is one env-var flip away.
 
+### Fix 3 — Context diet for narrative mode (Apr 28, 2026, T016)
+
+#### Trigger
+After Fix 1+2 stopped the model from being yelled at to cite KP, the
+prompt itself was still 116K chars / ~29K tokens (all 17 Sprint-19+
+engine dumps + raw KP cuspal table + raw transit degrees + 4× planet
+strengths + 9 divisional charts) — fed every turn. ChatGPT achieves the
+same FUSED 3-5 sentence verdict with <2K tokens. The bloat caused the
+model to default to enumeration / pseudo-precision because the *shape*
+of msg[2] was a data dump, not a question for a wise human answer.
+
+#### What changed
+1. **`_slim_locked_facts_for_narrative`** (openai_helper.py ~6685-6820):
+   allowlist-based section keeper — keeps only LAGNA, MOON, current MD/
+   AD, planet-house map, dosh count, vargottam, dasha window, current
+   transits (slow planets only), house-lord summary, top-3 strength
+   buckets. Drops the 17 heavy Sprint-19+ dumps (SARVASHTAKAVARGA full
+   table, BHAVA BALA, JAIMINI CHARA KARAKAS, divisional charts D2-D60,
+   PHASE Q-S engines, ASTROCARTOGRAPHY, FINANCIAL DEEP, MEDICAL DEEP
+   etc.). For love/marriage topics, also keeps UPAPADA LAGNA verdict
+   line.
+2. **`_slim_intel_for_narrative`** (~6740): drops the
+   "Current transits today, sidereal Lahiri, UTC ..." raw-degree
+   block from intel_section.
+3. **`_slim_transit_for_narrative`** (~6852): returns `""` for the
+   standalone transit block — the locked-facts allowlist already
+   retains the structural slow-planet sign+house mapping; the
+   standalone block leaks raw degrees + UTC technical header that
+   biases toward enumeration.
+4. **Diet wiring in `_build_messages`** (~2625-2657): in `_NARRATIVE_
+   MODE`, slims locked_facts + intel + transit, EMPTIES `kp_block`
+   (KP background-only per Fix 1+2). Loud-failure telemetry print logs
+   "Phase 4.7 T016: narrative-mode context diet trimmed N → M chars".
+5. **Drop dead-code rule paragraphs** (~3067-3106): in narrative
+   mode, line-strip Rules F (ASHTAKAVARGA), G (ASPECTS), I (KARAKAS),
+   J (BHAVA BALA), K (DIVISIONAL CHARTS) — they teach the model how
+   to cite data blocks the diet just removed, plus contain example
+   citations like "Aapka 10th ghar mein SAV 34 hai jo VERY STRONG
+   hai..." that bias toward enumeration. Rule O (UPAPADA) retained
+   for love/marriage topic only. Rules H (TRANSITS), L (PRATYANTAR),
+   M (REMEDIES), N (KP advisory) retained — those data blocks stay.
+
+#### Numbers
+- **Prompt total: 141K → 44K chars** (69% drop, Apr 28 live probe).
+- **msg[2] user turn: 116K → 25K chars / ~29K → ~6K tokens** (78%
+  drop) — under the <8K-token goal.
+- **msg[1] system: 6.1K chars** (already shrunk by Fix 2).
+- Live answer pre/post-diet remains: "Rahu–Mars phase mein attraction
+  ke chances hain par patience zaroori hai" — perfect FUSED combo
+  verdict, no enumeration, no KP cite.
+
+#### Tests
+- `test_phase47_context_diet.py` — 16 tests:
+  - Unit tests for the 3 slim helpers (allowlist correctness, prefix
+    disambiguation: `"▸ VARGOTTAM ("` vs `"▸ VARGOTTAMA MATRIX"`,
+    empty-input round-trip).
+  - Runtime invariant tests using the same `_CaptureClient` /
+    longest-user-content selector pattern as Phase 4.7 Fix 1+2:
+    BANNED engine sections (with `"▸ "` bullet prefix to disambiguate
+    from retained anti-bias rule text), KP data-block header
+    (`"KP (Krishnamurti Paddhati) cross-check:"` — distinct from the
+    retained Rule N advisory text), `"sidereal Lahiri, UTC"` raw-
+    degree dump, REQUIRED essentials still present, telemetry log
+    present in source, slim helpers gated behind `if _NARRATIVE_MODE:`
+    so `NARRATIVE_MODE=0` reverts.
+- All 72 tests pass (16 new + 8 Phase 4.7 invariant + 23 Phase 4.6
+  combo + 24 Phase 4.5 + 1 retained = 72 green).
+
+#### What is preserved
+`NARRATIVE_MODE=0` reverts every Fix-3 change — full 116K msg[2]
+returns, all 17 engine dumps re-included, Rules F/G/I/J/K active.
+The diet is a feature flag, not a permanent removal.
+
 ### Out of scope / scheduled next
-- **Fix 3 — Context diet for narrative mode (next session, T016).**
-  Today msg[2] (user turn) = 116K chars / ~29K tokens (full kundli +
-  transits + locked facts × 17 + planet strengths × 4 + divisional
-  charts + KP cuspal + Darakaraka + Upapada). ChatGPT achieves the
-  same answer with <2K tokens. Slim msg[2] in narrative mode to:
-  current MD/AD only, top-3 active planets, 1 transit window line,
-  drop Darakaraka / Upapada / full KP cuspal / D6/D8/D27 / full
-  ashtakavarga. Goal: prompt size <8K tokens in narrative mode.
 - love_engine returning empty `love_verdict_block` for some questions
   (probe noted this — Phase 4.6 T002 slim-FACTS bypass cannot fire
   when the engine returns empty). Investigate engine classification.

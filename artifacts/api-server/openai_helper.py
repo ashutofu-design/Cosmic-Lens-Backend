@@ -5643,6 +5643,102 @@ _NARRATOR_OUTPUT_DISCIPLINE: str = (
 )
 
 
+# ── Sprint-26 Step 4 Phase 1 (Apr 28 2026) — SAFE NARRATION LAYER ───────────
+# User feedback after Step 2: "Tumne khud catch kiya — narrator might fabricate
+# explanation to be helpful. Yeh sabse dangerous line hai. System unsafe state
+# mein hai." User asked for hard guardrails: refuse rather than hallucinate
+# when key signals are missing, ask one clarification line when domain is
+# ambiguous, never invent dates.
+#
+# Phase 1 is the PROMPT-SIDE layer — three explicit rules the model reads and
+# (mostly) obeys. Phase 2 will add the deterministic Python-side pre-LLM gate
+# that checks locked_facts for required signals before calling OpenAI and
+# short-circuits to a template when missing. Phase 1 first because:
+#   1. It is a string addition — same surgical pattern as Steps 1 and 2.
+#   2. If the LLM mostly obeys, Phase 2 may not be needed for low-stakes calls
+#      and we ship a safer system today.
+#   3. If the LLM ignores (the way it ignored METHOD-name-drop because Rule N
+#      had a louder MUST), Phase 2 becomes the natural escalation with real
+#      live evidence to justify it.
+#
+# Three rules:
+#   GUARD-1: DATA-PRESENCE — refuse if dasha block missing/partial, instead
+#            of fabricating a "good MD bad AD" explanation.
+#   GUARD-2: DOMAIN-AMBIGUITY — when topic was tagged 'general' AND the
+#            question described a sustained problem pattern, open with ONE
+#            short clarifying line so the answer is precise instead of vague.
+#   GUARD-3: NO FAKE DATES — when the user asked WHEN and locked facts have
+#            no specific end-date, use temporary-phase language (Hinglish:
+#            "phase temporary hai", "exact date locked nahi hai") rather
+#            than inventing a month/year.
+#
+# Order in the contract: header → discipline → SAFE_FALLBACK → body → footer.
+# Safe-fallback sits BEFORE the body so a body that says "always cite a date"
+# (e.g. TIMING_QUERY) reads the body LAST and still wins on conflict — but
+# the body is type-specific guidance, while the safe-fallback is a refusal
+# trigger that overrides answer attempts. To resolve, the safe-fallback rules
+# are phrased as preconditions ("IF data missing THEN refuse"), not as
+# always-on overrides. They co-exist with type bodies cleanly.
+_NARRATOR_SAFE_FALLBACK: str = (
+    "SAFE NARRATION GUARDRAILS (refusal > hallucination — when in doubt, stop):\n"
+    "  • GUARD-1 — DATA PRESENCE. Before answering ANY 'why is this happening'\n"
+    "    or contradiction question, scan the LOCKED FACTS block for an\n"
+    "    explicit CURRENT MAHADASHA line AND CURRENT ANTARDASHA line with\n"
+    "    start–end dates. If EITHER is missing or partial, REFUSE rather than\n"
+    "    invent. Use exactly:\n"
+    "      \"Iss question ka honest answer dene ke liye aapki current dasha\n"
+    "       aur transit context confirm karna padega. Birth time aur place\n"
+    "       exact share kar sakte ho? Tab actual reason aur kab tak chalega\n"
+    "       woh precise bata dunga.\"\n"
+    "    NEVER fabricate a 'good MD bad AD' explanation when the dasha block\n"
+    "    is absent or incomplete. This is the single most dangerous failure\n"
+    "    mode for an astrology system.\n"
+    "  • GUARD-2 — DOMAIN AMBIGUITY (PRE-FLIGHT CHECK BEFORE FIRST SENTENCE).\n"
+    "    BEFORE writing ANY answer, run this two-line preflight in your head:\n"
+    "      Q1: Did the user describe a sustained-problem pattern?\n"
+    "          Triggers: 'problem hi problem', 'sab kuch ulta', '8–10\n"
+    "          mahine se', 'kuch theek nahi', 'contradiction', 'paradox',\n"
+    "          a 'kyun' question about a recurring negative state.\n"
+    "          → SUSTAINED_PROBLEM = true / false\n"
+    "      Q2: Did the user EXPLICITLY name a life-area anywhere in the\n"
+    "          question text? Anchors: career / job / kaam, paisa / money\n"
+    "          / finance / wealth, rishtey / relationship / marriage /\n"
+    "          shaadi, sehat / health / body, ghar / home / property,\n"
+    "          child / santaan, study / education / exam.\n"
+    "          → DOMAIN_ANCHOR = true / false\n"
+    "    IF SUSTAINED_PROBLEM=true AND DOMAIN_ANCHOR=false:\n"
+    "      → Line 1 of your output MUST be exactly (verbatim):\n"
+    "          \"Problem kis area mein zyada hai — career, paisa, rishtey,\n"
+    "           ya sehat? Specific area pakad lu, fir actual reason aur\n"
+    "           exit timing precise bata sakta hu.\"\n"
+    "      → NO domain nouns, NO house-specific KP/Vedic inference,\n"
+    "        NO 'relationship/career/finance/health' assumption may appear\n"
+    "        BEFORE this line. Silently picking a domain from a KP cusp\n"
+    "        signal or planet placement is FORBIDDEN in this branch.\n"
+    "      → THIS RULE OVERRIDES the discipline-layer rule 'Open with the\n"
+    "        answer — no preamble'. In this branch the clarifying question\n"
+    "        IS the answer; stopping there is the safest move.\n"
+    "      → If you choose to add more after Line 1, you MAY add ONE short\n"
+    "        general-scan sentence flagged as 'general scan, domain-specific\n"
+    "        deeper read alag se du' — but you MUST NOT cite a specific\n"
+    "        house's promise/denial as if it were the user's actual issue.\n"
+    "    IF SUSTAINED_PROBLEM=false OR DOMAIN_ANCHOR=true: skip GUARD-2 and\n"
+    "    answer normally per the body rules below.\n"
+    "  • GUARD-3 — NO FAKE DATES, EVER. If the user asked 'kab tak' / 'when'\n"
+    "    AND the LOCKED FACTS do NOT contain an explicit end-date for the\n"
+    "    relevant AD or a transit exit-date for the relevant graha, you\n"
+    "    MUST NOT invent a month / year / window. Use:\n"
+    "      \"Yeh phase temporary hai — exact end-date next transit ya dasha\n"
+    "       shift par depend karta hai. Locked facts mein abhi exact boundary\n"
+    "       nahi hai, isse aage date pin karne ke liye chart re-cast chahiye.\"\n"
+    "    Bounded-uncertainty wording ('approx', '~', 'aas-paas', '±1 mahina')\n"
+    "    is allowed ONLY when the AD or transit IS present in locked facts\n"
+    "    but the day-level boundary is fuzzy. NEVER invent a date that is\n"
+    "    not anchored to a fact already in the block above.\n"
+    "════════════════════════════════════════════════════════════════════\n"
+)
+
+
 # Per-supertype BODIES — only the type-specific rules. The universal header
 # AND the output-discipline layer above are added by
 # `_build_unified_narrator_contract`; the closing divider is added below.
@@ -5839,9 +5935,16 @@ def _build_unified_narrator_contract(supertype: str,
     # (e.g. PLANET_QUERY's tighter "1–2 lines" or GENERAL_ANALYSIS's looser
     # "4–6 lines") win on conflict — the model honours the most-recent rule
     # for the active supertype.
+    #
+    # Sprint-26 Step 4 Phase 1 — safe-narration guardrails (refusal,
+    # clarification, no-fake-dates) sit between the discipline layer and the
+    # type body. They are PRECONDITION rules ("IF data missing THEN refuse"),
+    # not blanket overrides, so they coexist with type bodies cleanly while
+    # still being read before the body's positive instructions.
     return (
         _NARRATOR_UNIVERSAL_HEADER
         + _NARRATOR_OUTPUT_DISCIPLINE
+        + _NARRATOR_SAFE_FALLBACK
         + body
         + _NARRATOR_UNIVERSAL_FOOTER
     )

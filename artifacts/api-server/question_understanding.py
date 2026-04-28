@@ -186,6 +186,12 @@ def _fallback_classify(question: str) -> dict:
     # Sprint-26 Fix-M: minimal multi-intent shape so downstream code can rely
     # on the new fields even when the LLM call failed. We only seed the
     # primary entries — the AI is the one that ranks secondaries.
+    # Sprint-26 Fix-Q (post-architect-review): `has_recovery_subask` is now
+    # part of the canonical contract emitted by every code path of
+    # understand_question() (AI success, AI low-conf, AI error, regex
+    # fallback, empty input). Putting it inside the function instead of
+    # only in ai_ask() removes the silent-failure risk where a future
+    # refactor of question_understanding callers would lose the flag.
     return {
         "intent":     intent,
         "topic":      topic,
@@ -193,6 +199,7 @@ def _fallback_classify(question: str) -> dict:
         "topics_all":              [topic],
         "hidden_intent":           None,
         "cross_domain_root_cause": False,
+        "has_recovery_subask":     bool(_RECOVERY_SUBASK_RX.search(q)) if q else False,
         "confidence":              0.5,
         "source":                  "regex_fallback",
     }
@@ -330,6 +337,76 @@ def is_personal_chart_question(question: str) -> bool:
                 or _PERSONAL_CHART_DEVA_RX.search(question))
 
 
+# ── Sprint-26 Fix-Q — Recovery sub-ask detector ──────────────────────────────
+# Some questions carry a SECONDARY ask about whether the loss / damage / drop
+# can be RECOVERED — independent of the primary intent (which is usually
+# decision or problem). Examples:
+#   • decision + recovery: "exit karu ya continue? agar continue karu to paisa
+#                           recover hoga ya nahi?"
+#   • problem  + recovery: "paisa stuck hai, kya wapas milega?"
+#   • timing   + recovery: "kab tak nuksan recover hoga?"
+# Until Fix-Q, the classifier collapsed these into [decision, problem] and
+# the wealth/narrator output answered only the primary, dropping the
+# recovery sub-question entirely.
+#
+# Fix-Q is a deterministic regex post-pass — does NOT add a new INTENTS enum
+# value (which would ripple through supertype routing, fallback regex, etc.).
+# Instead it sets a separate boolean flag `has_recovery_subask` on the
+# returned dict so downstream code can:
+#   • inject a `recovery_outlook` field into the wealth structured-output
+#     schema and prompt, and
+#   • add a "Recovery line" instruction to the GENERAL_ANALYSIS narrator
+#     contract so V→Recovery→Timing replaces V→Reason→Timing for these
+#     questions.
+_RECOVERY_SUBASK_RX = _re_why.compile(
+    # English / Hinglish recovery vocabulary — direct verbs and noun forms.
+    # Anchored on "recover", "recoup", "vasool" so we don't false-positive
+    # on every "wapas" (which can also mean "back" in non-money contexts —
+    # we restrict it to combos like "wapas aayega/milega/aana/milna").
+    #
+    # Sprint-26 Fix-Q (post-architect-review patch) — added the following
+    # high-frequency Hinglish phrasings flagged as missed by the architect:
+    #   • "paisa kab tak aayega"      → "(paisa|paise|amount|funds) kab tak"
+    #   • "loss/nuksan bharne mein"   → "(loss|nuksan|nuksaan) bharne"
+    #   • "wapis" (vs only "wapas")   → added "wapis" alongside "wapas"
+    #   • "vasooli kab"               → "vasooli|vasuli" already covered by
+    #                                   the existing "vasool(?:i|na)?" stem
+    #                                   but added "kab" trigger pair to be
+    #                                   exhaustive on the timing-asking form.
+    #   • "kitna time lagega" + loss / paise context → covered by the new
+    #     "kab tak" + "(paisa|loss|nuksan|funds)" combos.
+    r"\b("
+    r"recover(?:y|ed|ing)?|recoup(?:ed|ing)?|"
+    r"recoverable|recovery|"
+    r"vasool(?:i|na)?|vasul(?:i|na)?|vasooli|vasuli|"
+    r"(?:wapas|wapis)\s+(?:aayega|aana|aaye(?:gi|ga)?|milega|milegi|milna|"
+    r"paayega|laana|le(?:na|kar))|"
+    r"(?:paisa|paise|paisey|amount|funds?)\s+(?:wapas|wapis|laut|return|"
+    r"aayega|aayegi|recover|vasool|kab\s+tak)|"
+    r"(?:loss|nuksan|nuksaan)\s+(?:cover|recover|wapas|wapis|recoup|"
+    r"patega|patta|bhar(?:ne|ega|egi|ne\s+me(?:in)?)?)|"
+    r"(?:loss|nuksan|nuksaan)\s+(?:bharne|recover|cover)\s+"
+    r"(?:me(?:in)?|mein)\s+kitna(?:\s+time|\s+samay)?|"
+    r"vasooli\s+kab|"
+    r"recoup|"
+    # Devanagari forms
+    r"वसूल(?:ी|ना)?|वापस\s+(?:आएगा|आना|मिलेगा|मिलना|पाएगा)|"
+    r"नुकसान\s+(?:भर|वापस|कवर)"
+    r")\b",
+    _re_why.IGNORECASE,
+)
+
+
+def has_recovery_subask(question: str) -> bool:
+    """True when the question carries a secondary recovery ask.
+    Used by openai_helper to inject `recovery_outlook` into wealth
+    structured output and to add a Recovery line in the GENERAL_ANALYSIS
+    narrator contract."""
+    if not question:
+        return False
+    return bool(_RECOVERY_SUBASK_RX.search(question))
+
+
 def _maybe_promote_analysis_for_why(question: str,
                                     intents_ranked: list[str],
                                     intent: str) -> tuple[list[str], str, bool]:
@@ -384,6 +461,9 @@ def understand_question(question: str,
             "topic":      "general",
             "confidence": 0.0,
             "source":     "empty",
+            # Sprint-26 Fix-Q (post-architect-review): always emit the flag
+            # so callers never see KeyError on the canonical contract.
+            "has_recovery_subask": False,
         }
 
     if model is None:
@@ -483,6 +563,11 @@ def understand_question(question: str,
             out["intents_ranked"] = new_ranked
             out["intent"] = new_intent
             out["why_promoted"] = True
+        # Sprint-26 Fix-Q (post-architect-review): canonical recovery
+        # sub-ask flag — emitted by every successful AI return path so
+        # downstream consumers (wealth structured-output prompt, narrator
+        # contract, post-validator) can rely on it without re-computing.
+        out["has_recovery_subask"] = bool(_RECOVERY_SUBASK_RX.search(q))
         return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)

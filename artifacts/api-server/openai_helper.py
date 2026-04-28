@@ -590,7 +590,8 @@ _WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
     "schema": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["verdict", "empathy_open", "headline", "timeline",
+        "required": ["verdict", "empathy_open", "headline",
+                     "recovery_outlook", "timeline",
                      "what_will_happen", "what_to_do",
                      "what_to_avoid", "remedy", "human_close", "note"],
         "properties": {
@@ -620,6 +621,24 @@ _WEALTH_STRUCTURED_JSON_SCHEMA: dict = {
             "headline": {
                 "type": "string",
                 "description": "Hinglish summary, decision-oriented, ≤15 words.",
+            },
+            "recovery_outlook": {
+                "type": "string",
+                "description": (
+                    "Sprint-26 Fix-Q. Single-line Hinglish recovery insight. "
+                    "MUST be a non-empty string when the user's question "
+                    "explicitly asks about RECOVERY (recover / wapas / "
+                    "milega / vasool / loss-cover) — populate ONLY in that "
+                    "case. Format: '<label>: <1-line reason from locked "
+                    "facts>'. Allowed labels: PARTIAL, FULL, SLOW, UNLIKELY. "
+                    "≤25 words. Use the locked timing window + verdict score "
+                    "+ top cosmic factors as evidence — do NOT promise a "
+                    "rupee amount, do NOT predict bankruptcy. When the "
+                    "question has NO recovery sub-ask, emit empty string. "
+                    "Example: 'PARTIAL: Jupiter–Saturn period (Jun 2026 "
+                    "onwards) mein gradual recovery dikh raha hai, full "
+                    "vapsi 2-3 cycles le sakti hai.'"
+                ),
             },
             "timeline": {
                 "type": "object",
@@ -687,7 +706,8 @@ def _build_wealth_structured_system_prompt(verdict_obj: dict,
                                            emotional_tone: str = "neutral",
                                            intent_domain: str = "wealth",
                                            ask_types: list | None = None,
-                                           narrator_lang: str = "hn") -> str:
+                                           narrator_lang: str = "hn",
+                                           has_recovery_subask: bool = False) -> str:
     """Compact narrator-locked prompt for wealth structured-output mode.
     Replaces the 100+ line verbose WEALTH NARRATOR OVERRIDE with a focused
     facts-only prompt that fits in ~40 lines and demands strict JSON.
@@ -819,6 +839,30 @@ def _build_wealth_structured_system_prompt(verdict_obj: dict,
         "8. `note` MUST mention CA / SEBI-registered financial advisor "
         "consult in Hinglish (≤ 20 words)."
     )
+    # Sprint-26 Fix-Q — Recovery sub-ask handling. The user's question carried
+    # an explicit RECOVERY ask (e.g. "paisa recover hoga ya nahi") in addition
+    # to the primary decision/problem ask. The schema's `recovery_outlook`
+    # field MUST be populated with a labelled 1-line insight; otherwise the
+    # secondary intent gets dropped from the answer.
+    if has_recovery_subask:
+        parts.append(
+            "9. RECOVERY SUB-ASK DETECTED. `recovery_outlook` MUST be a "
+            "non-empty single-line Hinglish string in the format "
+            "'<LABEL>: <reason>'. Allowed labels: PARTIAL, FULL, SLOW, "
+            "UNLIKELY. Pick the label by reading the LOCKED FACTS — the "
+            "verdict tag, score (0-100), confidence, and timing window are "
+            "your evidence. Mapping guide: 🟢 GO + score≥70 → FULL or "
+            "PARTIAL; 🟡 WAIT + score 40-69 → PARTIAL or SLOW; 🟠 SLOW → "
+            "SLOW; 🔴 CAUTION + score<40 → UNLIKELY or SLOW. Reason MUST "
+            "cite the next-better window (or current window's exit point) "
+            "from the locked timing strings — NO date invention, NO rupee "
+            "amounts, NO bankruptcy prediction. ≤25 words total."
+        )
+    else:
+        parts.append(
+            "9. NO RECOVERY SUB-ASK. `recovery_outlook` MUST be the empty "
+            "string \"\"."
+        )
     parts.append("")
     parts.append("════ ABSOLUTE PROHIBITIONS ════")
     parts.append("• NEVER predict specific rupee amounts (lakh / crore / package).")
@@ -874,6 +918,7 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     conf     = v.get("confidence", "")
     empathy_open = (payload.get("empathy_open") or "").strip()
     headline = (payload.get("headline") or "").strip()
+    recovery_outlook = (payload.get("recovery_outlook") or "").strip()
     tl       = payload.get("timeline") or {}
     cur      = (tl.get("current") or "").strip()
     nxt      = (tl.get("next")    or "").strip()
@@ -898,6 +943,13 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     if headline:
         lines.append("")
         lines.append(headline)
+    # Sprint-26 Fix-Q — Recovery line renders BEFORE the timing window so the
+    # output reads Verdict → Recovery → Timing (the user's required structure
+    # for decision-plus-recovery questions). When the question had no
+    # recovery sub-ask, the field is empty string and we skip silently.
+    if recovery_outlook:
+        lines.append("")
+        lines.append(f"💰 Recovery: {recovery_outlook}")
     if cur or nxt:
         lines.append("")
         if cur:
@@ -932,10 +984,22 @@ def _format_wealth_structured_payload(payload: dict) -> str:
     return "\n".join(lines).strip()
 
 
-def _validate_wealth_payload(payload: dict, locked: dict) -> tuple[bool, str]:
+def _validate_wealth_payload(payload: dict,
+                             locked: dict,
+                             *,
+                             has_recovery_subask: bool = False
+                             ) -> tuple[bool, str]:
     """Strict sanity check. Returns (ok, reason). Used by the retry loop
     to reject drift even when OpenAI's strict json_schema accepts the
-    response as schema-valid."""
+    response as schema-valid.
+
+    Sprint-26 Fix-Q (post-architect-review): added optional
+    `has_recovery_subask` keyword to enforce deterministic Recovery
+    semantics — when the user asked about recovery the field MUST be
+    populated with a labelled one-liner; when they did NOT, the field
+    MUST be empty so an LLM hallucination cannot inject a Recovery
+    line into a question that did not request it.
+    """
     import re as _re_w
     if not isinstance(payload, dict):
         return False, "not a dict"
@@ -1045,6 +1109,47 @@ def _validate_wealth_payload(payload: dict, locked: dict) -> tuple[bool, str]:
         return False, "prohibited brand-safety word leaked"
     if _re_w.search(r"\b(llm|gpt|chatgpt|openai|chatbot)\b", blob):
         return False, "AI/LLM mention leaked"
+    # ── Sprint-26 Fix-Q (post-architect-review) — recovery_outlook gate ──
+    # Deterministic post-validation closes the LLM drift hole that the
+    # strict-json-schema layer cannot enforce on its own:
+    #   • when has_recovery_subask=True  → field MUST be non-empty AND
+    #     must lead with one of the four prescribed labels;
+    #   • when has_recovery_subask=False → field MUST be empty so the
+    #     model cannot hallucinate a Recovery line into a question that
+    #     did not ask for one.
+    # The retry loop in the caller will regenerate the response when
+    # this returns False.
+    recovery_raw = (payload.get("recovery_outlook") or "")
+    recovery_str = recovery_raw.strip() if isinstance(recovery_raw, str) else ""
+    if has_recovery_subask:
+        if not recovery_str:
+            return False, "recovery_outlook empty but recovery sub-ask present"
+        if not _re_w.match(
+                r"^(PARTIAL|FULL|SLOW|UNLIKELY)\s*[:\-]",
+                recovery_str, _re_w.IGNORECASE):
+            return False, (
+                "recovery_outlook must start with one of "
+                "PARTIAL|FULL|SLOW|UNLIKELY label, got "
+                f"{recovery_str[:30]!r}")
+        if len(recovery_str.split()) > 30:
+            return False, (
+                f"recovery_outlook too long "
+                f"({len(recovery_str.split())} words; soft limit 30)")
+        # Re-scan the recovery line for the same brand-safety bans we
+        # apply to other fields (rupee amounts + bankruptcy vocab).
+        rec_low = recovery_str.lower()
+        if _re_w.search(r"\b\d+\s*(?:lakh|crore|cr|lac)\b", rec_low):
+            return False, "recovery_outlook leaked specific rupee amount"
+        if _re_w.search(
+                r"\b(kangaal|barbaad|bankruptcy|lottery|satta|matka|jackpot|kbc)\b",
+                rec_low):
+            return False, "recovery_outlook leaked prohibited brand-safety word"
+    else:
+        if recovery_str:
+            return False, (
+                "recovery_outlook populated but no recovery sub-ask in "
+                "question — drop the field to prevent hallucinated "
+                "Recovery line")
     return True, "ok"
 
 
@@ -5509,7 +5614,7 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "User asked an open analysis question — usually a WHY + WHEN combo\n"
         "('kyun ho raha hai aur kab tak chalega').\n"
         "\n"
-        "MANDATORY OUTPUT STRUCTURE — Verdict → Reason → Timing\n"
+        "MANDATORY OUTPUT STRUCTURE — Verdict → Reason → [Recovery?] → Timing\n"
         "  1. VERDICT (1 line): Direct answer to the user's core ask. State\n"
         "     the conclusion first — do NOT bury it under analysis.\n"
         "     Examples:\n"
@@ -5518,6 +5623,16 @@ _SUPERTYPE_CONTRACT_BLOCKS: dict[str, str] = {
         "  2. REASON (1–2 lines): Cite the SPECIFIC dasha + ONE relevant\n"
         "     house (or its lord) that drives the verdict. Name the planet\n"
         "     and what it is doing — not a textbook description.\n"
+        "  2b. RECOVERY (1 line, CONDITIONAL — Sprint-26 Fix-Q):\n"
+        "     INSERT this line ONLY when the user's question explicitly\n"
+        "     asks about recovery — vocabulary triggers: 'recover',\n"
+        "     'wapas aayega/milega', 'vasool', 'paisa wapas', 'nuksan\n"
+        "     bharega/cover', 'recoup'. When triggered, format MUST be:\n"
+        "       \"💰 Recovery: <LABEL>: <1-line reason>\"\n"
+        "     LABEL ∈ {PARTIAL, FULL, SLOW, UNLIKELY}. Reason cites the\n"
+        "     locked dasha window or transit shift — NO rupee amount,\n"
+        "     NO bankruptcy prediction. ≤25 words. SKIP this line entirely\n"
+        "     when no recovery sub-ask is present.\n"
         "  3. TIMING (1 line): Give the next inflection date from locked\n"
         "     facts (AD end-date, MD transition, or transit shift). One date,\n"
         "     not a range of speculations.\n"
@@ -6205,8 +6320,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # no AI-Ear merge, no override layers. Replaces the entire Sprint-23/24/25
     # multi-source understanding stack. Falls back to a minimal regex ONLY
     # when AI confidence < 0.6 OR the call itself errors (safety-net).
-    from question_understanding import understand_question, supertype_for
+    from question_understanding import (
+        understand_question, supertype_for, has_recovery_subask,
+    )
     _qu = understand_question(question)
+    # Sprint-26 Fix-Q — deterministic recovery sub-ask detector. Adds a
+    # boolean flag to the understanding dict so downstream wealth structured
+    # output and the GENERAL_ANALYSIS narrator contract can demand a Recovery
+    # line in the answer when the user explicitly asked about it. Does NOT
+    # add a new INTENTS enum value (which would ripple into supertype/router
+    # changes) — it's a sibling flag the relevant consumers read.
+    _qu["has_recovery_subask"] = has_recovery_subask(question)
     _trace(req_id, "1.UNDERSTANDING", _qu)
 
     _qu_intent = (_qu.get("intent") or "analysis").lower()
@@ -6237,6 +6361,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "topics_all":              _qu_topics_all,
         "hidden_intent":           _qu_hidden_intent,
         "cross_domain_root_cause": _qu_cross_domain,
+        # Sprint-26 Fix-Q — recovery sub-ask flag (forwarded to wealth
+        # structured-output prompt + GENERAL_ANALYSIS narrator contract).
+        "has_recovery_subask":     bool(_qu.get("has_recovery_subask")),
     }
     _trace(req_id, "1b.QUESTION_INTENT", question_intent)
     if len(_qu_intents_ranked) > 1 or len(_qu_topics_all) > 1 or _qu_hidden_intent or _qu_cross_domain:
@@ -6487,6 +6614,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _wealth_domain = (_ear.get("domain")         or "wealth")
         _wealth_asks   = list(_ear.get("ask_types")  or [])
         _wealth_lang   = (_ear.get("language")       or "hn")
+        # Sprint-26 Fix-Q — propagate recovery sub-ask flag so the prompt
+        # builder demands a `recovery_outlook` line when the user asked it.
+        _wealth_recovery = bool(question_intent.get("has_recovery_subask"))
         messages.append({
             "role":    "system",
             "content": _build_wealth_structured_system_prompt(
@@ -6495,6 +6625,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 intent_domain  = _wealth_domain,
                 ask_types      = _wealth_asks,
                 narrator_lang  = _wealth_lang,
+                has_recovery_subask = _wealth_recovery,
             ),
         })
         _trace(req_id, "2c.WEALTH_STRUCTURED_PROMPT_INSTALLED", {
@@ -6504,6 +6635,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "score":   _wealth_obj.get("score"),
             "tone":    _wealth_tone,
             "domain":  _wealth_domain,
+            "has_recovery_subask": _wealth_recovery,
         })
 
     # ── Sprint-24: STRICT NARRATOR CONTRACT (per supertype) ─────────────────
@@ -6643,7 +6775,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                        {"err": str(_exc_p), "raw_preview": _raw_w[:300]})
                 _payload = None
                 continue
-            ok_v, why_v = _validate_wealth_payload(_payload, _wealth_obj)
+            # Sprint-26 Fix-Q (post-architect-review): pass the recovery
+            # sub-ask flag so the validator can enforce both directions —
+            # required-when-asked AND empty-when-not-asked.
+            ok_v, why_v = _validate_wealth_payload(
+                _payload, _wealth_obj,
+                has_recovery_subask=bool(question_intent.get("has_recovery_subask")),
+            )
             if not ok_v:
                 _last_exc = RuntimeError(f"validation failed: {why_v}")
                 _trace(req_id,

@@ -254,6 +254,46 @@ def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
     }
 
 
+# ── Sprint-26 Fix-N — "Why-leading" intent promoter ──────────────────────────
+# When a question explicitly asks WHY (kyun/why) or names a CONTRADICTION /
+# MISMATCH between expectation and reality, the user is asking for
+# root-cause REASONING, not just complaint description. The classifier
+# sometimes picks `problem` (the surface complaint) as primary; we must
+# promote `analysis` to PRIMARY in that case so the narrator routes through
+# GENERAL_ANALYSIS and explains MD/AD/transit reasoning instead of just
+# acknowledging the pain.
+import re as _re_why
+_WHY_LEADING_RX = _re_why.compile(
+    r"\b(kyun|kyo+n|kyu+|why|क्यों|क्यूँ|"
+    r"contradiction|contradict|"
+    r"mismatch|mismatched|"
+    r"opposite|ulta|ulti|"
+    r"clash(?:ing)?|conflict(?:ing)?)\b",
+    _re_why.IGNORECASE,
+)
+
+
+def _maybe_promote_analysis_for_why(question: str,
+                                    intents_ranked: list[str],
+                                    intent: str) -> tuple[list[str], str, bool]:
+    """If the question is WHY-leading or describes a contradiction, promote
+    `analysis` to PRIMARY. Demote whatever was primary down to secondary.
+    Returns (new_intents_ranked, new_intent, promoted_flag).
+    """
+    if not question or not _WHY_LEADING_RX.search(question):
+        return intents_ranked, intent, False
+    if not intents_ranked:
+        intents_ranked = [intent] if intent in INTENTS else ["analysis"]
+    # Already analysis-primary? Nothing to do.
+    if intents_ranked[0] == "analysis":
+        return intents_ranked, intent, False
+    # Build new ranking: analysis first, then keep the rest in order
+    # (de-duped). Cap at 3.
+    new_ranked = ["analysis"] + [i for i in intents_ranked if i != "analysis"]
+    new_ranked = new_ranked[:3]
+    return new_ranked, "analysis", True
+
+
 # ── Main API ────────────────────────────────────────────────────────────────
 def understand_question(question: str,
                         *,
@@ -378,6 +418,14 @@ def understand_question(question: str,
             "latency_ms": latency_ms,
         }
         out.update(_normalise_multi_fields(data, intent, topic))
+        # Sprint-26 Fix-N: deterministic post-pass — promote `analysis` to
+        # PRIMARY when the question is WHY-leading or names a contradiction.
+        new_ranked, new_intent, promoted = _maybe_promote_analysis_for_why(
+            q, out.get("intents_ranked") or [], out["intent"])
+        if promoted:
+            out["intents_ranked"] = new_ranked
+            out["intent"] = new_intent
+            out["why_promoted"] = True
         return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)

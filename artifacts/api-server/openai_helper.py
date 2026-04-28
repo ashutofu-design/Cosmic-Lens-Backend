@@ -4347,7 +4347,14 @@ _BRAND_UNSAFE_PATTERNS = [
     r"\bingredients?\b.*\b(biryani|pulao|paneer|dal|sabzi|roti|paratha|samosa|chai|coffee|cake|cookie|pizza|burger|pasta|maggi|noodles|halwa|kheer|rasgulla|gulab jamun|jalebi|laddu|khaana|khana|food|dish|recipe|cook)",
     r"\b(biryani|pulao|paneer|dal|sabzi|roti|paratha|samosa|cake|cookie|pizza|burger|pasta|maggi|noodles|halwa|kheer|rasgulla|gulab jamun|jalebi|laddu)\s+ingredients?\b",
     # ── Math / arithmetic / calculation ─────────────────────────────────────
-    r"\b\d+\s*[\+\-\*\/×x]\s*\d+\b",
+    # Sprint-26 Fix-N: tightened to require a math context word AND restricted
+    # operator class (no `-` / `x`) — the original pattern false-matched
+    # extremely common Hindi duration phrases like "8-10 mahine", "2-3 din",
+    # "5x growth", "5x weak". Now we only fire on real arithmetic asks.
+    # Operator class: + * / × only (NEVER `-` or `x` — too ambiguous).
+    # Anchored with a math verb / equals sign within ±20 chars.
+    r"\b\d+\s*[\+\*\/×]\s*\d+\b.*?(=|\bcalculate\b|\bsolve\b|\bbarabar\b|\bjawab\b|\buttar\b|\banswer\b)",
+    r"(=|\bcalculate\b|\bsolve\b|\bbarabar\b|\bjawab\b|\buttar\b|\banswer\b).{0,30}\b\d+\s*[\+\*\/×]\s*\d+\b",
     r"\b(calculate|calculator|solve)\b.*\b(equation|sum|problem|math)",
     r"\b(percentage|percent|prozent)\s+(of|nikalo|nikalna|kya hota)",
     r"\b(square root|cube root|factorial|integral|derivative)\b",
@@ -6704,7 +6711,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         #       "unauthorised" by definition.
         _primary_intent = (_qu_intents_ranked[0] if _qu_intents_ranked else _qu_intent)
         _is_analysis_primary = (_primary_intent == "analysis")
-        _multi_intent_softens = _is_analysis_primary or _qu_cross_domain
+        # Sprint-26 Fix-N: WHY-leading questions ("kyun", "why",
+        # "contradiction", "mismatch") almost always need to quote MD/AD
+        # lord names + dates to explain the root cause — the strict
+        # validator's per-topic bucket doesn't cover this reasoning path,
+        # so it strips the very tokens the user needs to see. Soften.
+        try:
+            from question_understanding import _WHY_LEADING_RX as _why_rx
+            _why_leading = bool(_why_rx.search(question or ""))
+        except Exception:
+            _why_leading = False
+        _multi_intent_softens = (_is_analysis_primary
+                                 or _qu_cross_domain
+                                 or _why_leading)
         if (not _lock["ok"]
                 and _val.get("is_timing")
                 and _no_authorised

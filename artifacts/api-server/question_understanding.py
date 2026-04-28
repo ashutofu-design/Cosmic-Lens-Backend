@@ -47,8 +47,48 @@ _PROMPT_TEMPLATE = (
     "{{\n"
     "  \"intent\": \"problem | timing | decision | planet | analysis\",\n"
     "  \"topic\": \"finance | career | marriage | love | health | general\",\n"
+    "  \"intents_ranked\": [\"<primary>\", \"<secondary?>\", \"<tertiary?>\"],\n"
+    "  \"topics_all\": [\"<primary>\", \"<secondary?>\"],\n"
+    "  \"hidden_intent\": \"<≤8 words underlying ask, no psychology guessing>\",\n"
+    "  \"cross_domain_root_cause\": true | false,\n"
     "  \"confidence\": 0.0 to 1.0\n"
     "}}\n\n"
+    "MULTI-INTENT RANKING (intents_ranked):\n"
+    "- Always include the PRIMARY intent first (same value as the `intent` field).\n"
+    "- Add SECONDARY only if the question genuinely carries a second ask "
+    "(e.g. 'why is this happening AND when will it end' = problem + timing).\n"
+    "- Add TERTIARY only if a third ask is clearly present.\n"
+    "- Pick the PRIMARY by what the user MOST wants answered:\n"
+    "  • analysis > problem when the user asks 'same reason or different' / "
+    "'kya dono ek hi reason se' / 'compare these two' (the comparison IS the ask).\n"
+    "  • problem > timing when the user is venting frustration first and asking "
+    "'kab' as a follow-on (e.g. 'paisa nahi ruk raha, kab control hoga' → "
+    "primary=problem, secondary=timing).\n"
+    "  • timing > problem when 'kab' is the lead and the problem is just context.\n"
+    "  • decision is always primary when 'should I X or Y' is the lead.\n\n"
+    "MULTI-DOMAIN (topics_all):\n"
+    "- Include EVERY domain the question genuinely spans (max 2). Do NOT add a "
+    "second domain just because a word brushes past it — the user must be "
+    "actually asking about both areas.\n"
+    "- 'finance + career', 'marriage + love', 'health + career' are common pairs.\n"
+    "- IMPORTANT: the singular `topic` field MUST be ONE single value (the "
+    "PRIMARY domain — same as topics_all[0]). Never put 'finance | career' or "
+    "any combined string in `topic` — that field accepts ONE enum value only.\n"
+    "- Same rule for the singular `intent`: ONE value (= intents_ranked[0]).\n\n"
+    "HIDDEN INTENT (hidden_intent):\n"
+    "- ≤8 words capturing the underlying ASK in plain language. NO psychology, "
+    "NO behavioural guessing, NO speculation about user's mindset.\n"
+    "- Good: 'savings/retention issue', 'common root cause vs separate', "
+    "'phase exit timing', 'compatibility check'.\n"
+    "- Bad: 'user wants validation', 'looking for external fix', "
+    "'avoiding accountability'.\n"
+    "- If no hidden layer beyond the surface ask, return null (JSON null).\n\n"
+    "CROSS-DOMAIN ROOT CAUSE (cross_domain_root_cause):\n"
+    "- TRUE only when topics_all has ≥2 entries AND the user explicitly asks "
+    "whether the two issues share a single cause — phrases like 'ek hi reason "
+    "se', 'same reason', 'connected hai', 'related hain', 'dono ek saath', "
+    "'because of the same thing'.\n"
+    "- Otherwise FALSE.\n\n"
     "INTENT definitions (pick the most specific that fits):\n"
     "- planet   → ANY question that NAMES a graha (Sun, Moon, Mars, Mercury, "
     "Jupiter, Venus, Saturn, Rahu, Ketu / Surya, Chandra, Mangal, Budh, Guru, "
@@ -143,11 +183,74 @@ def _fallback_classify(question: str) -> dict:
         if rx.search(q):
             topic = name
             break
+    # Sprint-26 Fix-M: minimal multi-intent shape so downstream code can rely
+    # on the new fields even when the LLM call failed. We only seed the
+    # primary entries — the AI is the one that ranks secondaries.
     return {
         "intent":     intent,
         "topic":      topic,
-        "confidence": 0.5,
-        "source":     "regex_fallback",
+        "intents_ranked":          [intent],
+        "topics_all":              [topic],
+        "hidden_intent":           None,
+        "cross_domain_root_cause": False,
+        "confidence":              0.5,
+        "source":                  "regex_fallback",
+    }
+
+
+def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
+    """Sanitise the new multi-intent fields against the allowed enums.
+    Falls back to the primary intent/topic if the AI emitted garbage."""
+    raw_intents = data.get("intents_ranked")
+    if isinstance(raw_intents, list):
+        cleaned: list[str] = []
+        for v in raw_intents[:3]:
+            if isinstance(v, str):
+                vv = v.strip().lower()
+                if vv in INTENTS and vv not in cleaned:
+                    cleaned.append(vv)
+        intents_ranked = cleaned or [intent]
+    else:
+        intents_ranked = [intent]
+    if intent not in intents_ranked:
+        intents_ranked = [intent] + [x for x in intents_ranked if x != intent]
+        intents_ranked = intents_ranked[:3]
+
+    raw_topics = data.get("topics_all")
+    if isinstance(raw_topics, list):
+        cleaned_t: list[str] = []
+        for v in raw_topics[:2]:
+            if isinstance(v, str):
+                vv = v.strip().lower()
+                if vv in TOPICS and vv not in cleaned_t:
+                    cleaned_t.append(vv)
+        topics_all = cleaned_t or [topic]
+    else:
+        topics_all = [topic]
+    if topic not in topics_all:
+        topics_all = [topic] + [x for x in topics_all if x != topic]
+        topics_all = topics_all[:2]
+
+    raw_hidden = data.get("hidden_intent")
+    if isinstance(raw_hidden, str):
+        hidden = raw_hidden.strip()
+        # Cap at 12 words, drop when empty/null-ish or when AI hallucinated
+        # psychology language we explicitly told it to avoid.
+        if hidden.lower() in ("", "null", "none", "n/a"):
+            hidden = None
+        else:
+            hidden = " ".join(hidden.split()[:12])
+    else:
+        hidden = None
+
+    raw_cross = data.get("cross_domain_root_cause")
+    cross = bool(raw_cross) and len(topics_all) >= 2
+
+    return {
+        "intents_ranked":          intents_ranked,
+        "topics_all":              topics_all,
+        "hidden_intent":           hidden,
+        "cross_domain_root_cause": cross,
     }
 
 
@@ -207,7 +310,7 @@ def understand_question(question: str,
         resp = client.chat.completions.create(
             model=model,
             temperature=0.1,
-            max_tokens=80,
+            max_tokens=220,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "user", "content": _PROMPT_TEMPLATE.format(question=q)}
@@ -229,7 +332,23 @@ def understand_question(question: str,
         if conf > 1.0:
             conf = 1.0
 
-        # Schema validation — bad enum value = treat as fallback.
+        # Schema validation — bad enum value normally = fallback.
+        # BUT if the AI returned a malformed singular `intent` / `topic`
+        # (e.g. "finance | career") AND the corresponding ranked list has a
+        # valid first element, recover from that. This keeps multi-intent
+        # answers usable when the AI just confuses the singular field.
+        if intent not in INTENTS:
+            raw_ir = data.get("intents_ranked") or []
+            for v in raw_ir:
+                if isinstance(v, str) and v.strip().lower() in INTENTS:
+                    intent = v.strip().lower()
+                    break
+        if topic not in TOPICS:
+            raw_tp = data.get("topics_all") or []
+            for v in raw_tp:
+                if isinstance(v, str) and v.strip().lower() in TOPICS:
+                    topic = v.strip().lower()
+                    break
         if intent not in INTENTS or topic not in TOPICS:
             fb = _fallback_classify(q)
             fb["source"] = "ai_error_regex_fallback"
@@ -246,15 +365,20 @@ def understand_question(question: str,
             fb["ai_topic"] = topic
             fb["ai_confidence"] = conf
             fb["latency_ms"] = latency_ms
+            # Keep AI's ranked extras even at low confidence — they're useful
+            # diagnostics even if the engine routing uses regex primaries.
+            fb.update(_normalise_multi_fields(data, intent, topic))
             return fb
 
-        return {
+        out = {
             "intent":     intent,
             "topic":      topic,
             "confidence": conf,
             "source":     "ai",
             "latency_ms": latency_ms,
         }
+        out.update(_normalise_multi_fields(data, intent, topic))
+        return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)
         fb = _fallback_classify(q)

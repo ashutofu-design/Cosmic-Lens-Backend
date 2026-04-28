@@ -5919,6 +5919,196 @@ def _retry_feedback_for(supertype: str, violations: list[str]) -> str:
     )
 
 
+# ── Sprint-26 Fix-M — Cross-Domain Root-Cause Helper ───────────────────────
+# When the user asks a dual-domain question with an explicit "is this the
+# same root cause or different" framing (cross_domain_root_cause=True),
+# we compute a small deterministic block that the AI can cite to answer
+# the comparison directly — without psychology guessing.
+#
+# Pure interpretation: which planets actually touch BOTH domain house-sets
+# (by placement OR ownership) and whether the current MD/AD lord lands in
+# either domain. The AI uses this block (no inference layer added here).
+
+_SIGNS_M = ("Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+            "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces")
+_SIGN_INDEX_M = {s: i for i, s in enumerate(_SIGNS_M)}
+_SIGN_RULER_M = {
+    "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury", "Cancer": "Moon",
+    "Leo": "Sun", "Virgo": "Mercury", "Libra": "Venus", "Scorpio": "Mars",
+    "Sagittarius": "Jupiter", "Capricorn": "Saturn",
+    "Aquarius": "Saturn", "Pisces": "Jupiter",
+}
+# Houses each domain primarily reads. Kept narrow on purpose — we don't
+# want noise from co-located houses that aren't actually the user's ask.
+_DOMAIN_HOUSES_M = {
+    "finance":  [2, 11, 12],
+    "career":   [6, 10],
+    "marriage": [7, 8],
+    "love":     [5, 7],
+    "health":   [1, 6, 8],
+    "general":  [1],
+}
+
+
+def _norm_planet_name(n: Any) -> str:
+    if not n:
+        return ""
+    s = str(n).strip()
+    # Map common Sanskrit aliases to canonical English names
+    aliases = {
+        "surya": "Sun", "ravi": "Sun",
+        "chandra": "Moon", "soma": "Moon",
+        "mangal": "Mars", "kuja": "Mars",
+        "budh": "Mercury", "budha": "Mercury",
+        "guru": "Jupiter", "brihaspati": "Jupiter",
+        "shukra": "Venus",
+        "shani": "Saturn",
+    }
+    return aliases.get(s.lower(), s.capitalize())
+
+
+def _compute_cross_domain_facts(kundli: Any, topics: list[str]) -> dict:
+    """Return {text, summary} or {text:'', summary:{}} when not applicable."""
+    empty = {"text": "", "summary": {}}
+    if not isinstance(kundli, dict) or not topics or len(topics) < 2:
+        return empty
+    planets = kundli.get("planets") or []
+    if not planets:
+        return empty
+
+    # Lagna/asc sign (for whole-sign house-lord computation)
+    asc = kundli.get("ascendant") or kundli.get("lagna") or {}
+    asc_sign = asc.get("sign") if isinstance(asc, dict) else asc
+    asc_idx = _SIGN_INDEX_M.get(str(asc_sign or "").strip().capitalize())
+
+    # planet → placed-house
+    planet_house: dict[str, int] = {}
+    for p in planets:
+        if not isinstance(p, dict):
+            continue
+        nm = _norm_planet_name(p.get("name") or p.get("planet"))
+        h = p.get("house")
+        try:
+            h = int(h) if h is not None else None
+        except (TypeError, ValueError):
+            h = None
+        if nm and h:
+            planet_house[nm] = h
+
+    # planet → houses-owned (whole-sign from lagna)
+    planet_owns: dict[str, list[int]] = {}
+    if asc_idx is not None:
+        for hi in range(1, 13):
+            sign_at = _SIGNS_M[(asc_idx + hi - 1) % 12]
+            ruler = _SIGN_RULER_M.get(sign_at)
+            if ruler:
+                planet_owns.setdefault(ruler, []).append(hi)
+
+    d1, d2 = topics[0], topics[1]
+    h1 = set(_DOMAIN_HOUSES_M.get(d1, []))
+    h2 = set(_DOMAIN_HOUSES_M.get(d2, []))
+    if not h1 or not h2:
+        return empty
+
+    # Common planets: those whose placement OR ownership touches both sets
+    common: list[dict] = []
+    for pl in sorted(set(planet_house) | set(planet_owns)):
+        owns = planet_owns.get(pl, [])
+        ph = planet_house.get(pl)
+        owns_d1 = sorted(h for h in owns if h in h1)
+        owns_d2 = sorted(h for h in owns if h in h2)
+        sits_d1 = ph in h1
+        sits_d2 = ph in h2
+        touches_d1 = bool(owns_d1) or sits_d1
+        touches_d2 = bool(owns_d2) or sits_d2
+        if touches_d1 and touches_d2:
+            reasons = []
+            if sits_d1:
+                reasons.append(f"sits H{ph}({d1})")
+            if sits_d2 and not sits_d1:
+                reasons.append(f"sits H{ph}({d2})")
+            if owns_d1:
+                reasons.append(f"owns {','.join(f'H{h}' for h in owns_d1)}({d1})")
+            if owns_d2:
+                reasons.append(f"owns {','.join(f'H{h}' for h in owns_d2)}({d2})")
+            common.append({"planet": pl, "reasons": reasons})
+
+    # Current MD / AD lords + which domain houses they touch
+    cd = kundli.get("currentDasha") or {}
+    md_raw = cd.get("maha") or cd.get("mahadasha") or cd.get("md") or cd.get("planet") if isinstance(cd, dict) else None
+    ad_raw = cd.get("antar") or cd.get("antardasha") or cd.get("ad") if isinstance(cd, dict) else None
+    md = _norm_planet_name(md_raw)
+    ad = _norm_planet_name(ad_raw)
+
+    def _lord_touch(planet: str) -> dict:
+        if not planet:
+            return {}
+        ph = planet_house.get(planet)
+        owns = planet_owns.get(planet, [])
+        touches = []
+        if ph in h1 or any(h in h1 for h in owns):
+            touches.append(d1)
+        if ph in h2 or any(h in h2 for h in owns):
+            touches.append(d2)
+        return {"planet": planet, "house": ph, "owns": owns, "touches": touches}
+
+    md_info = _lord_touch(md)
+    ad_info = _lord_touch(ad)
+
+    md_both = md_info.get("touches", []) and len(md_info.get("touches") or []) == 2
+    ad_both = ad_info.get("touches", []) and len(ad_info.get("touches") or []) == 2
+
+    if md_both or ad_both:
+        verdict = "SAME_ROOT_CAUSE"
+        verdict_line = (
+            f"Same dasha lord affects BOTH domains → likely SAME root cause "
+            f"({md if md_both else ad} = current "
+            f"{'MD' if md_both else 'AD'} lord touches both)"
+        )
+    elif common:
+        verdict = "PARTIAL_OVERLAP"
+        verdict_line = (
+            f"Shared planet(s) — {', '.join(c['planet'] for c in common[:3])} — "
+            f"touch both domains → PARTIAL common cause (planet linkage but "
+            f"not via the active dasha)"
+        )
+    else:
+        verdict = "SEPARATE_CAUSES"
+        verdict_line = (
+            "No shared planet/dasha touches both domain houses → likely "
+            "SEPARATE causes (each domain runs on independent karakas)"
+        )
+
+    lines = ["▸ CROSS-DOMAIN ROOT-CAUSE CHECK (engine-computed, no guessing):"]
+    h1_str = ",".join(f"H{h}" for h in sorted(h1))
+    h2_str = ",".join(f"H{h}" for h in sorted(h2))
+    lines.append(f"   Domains tested: {d1} ({h1_str}) + {d2} ({h2_str})")
+    if common:
+        per = "; ".join(f"{c['planet']} ({', '.join(c['reasons'])})"
+                       for c in common[:5])
+        lines.append(f"   Common planets touching BOTH: {per}")
+    else:
+        lines.append("   Common planets touching BOTH: NONE")
+    if md and md_info.get("house"):
+        ti = " + ".join(md_info.get("touches") or []) or "neither domain directly"
+        lines.append(f"   Current MD lord {md} sits H{md_info['house']} → touches {ti}")
+    if ad and ad_info.get("house"):
+        ti = " + ".join(ad_info.get("touches") or []) or "neither domain directly"
+        lines.append(f"   Current AD lord {ad} sits H{ad_info['house']} → touches {ti}")
+    lines.append(f"   VERDICT: {verdict_line}")
+
+    return {
+        "text": "\n".join(lines),
+        "summary": {
+            "domains":       [d1, d2],
+            "common":        [c["planet"] for c in common],
+            "md_touches":    md_info.get("touches") or [],
+            "ad_touches":    ad_info.get("touches") or [],
+            "verdict":       verdict,
+        },
+    }
+
+
 def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
            birth: Any = None, history: list | None = None,
            preferred_language: Optional[str] = None) -> dict:
@@ -5956,6 +6146,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     _qu_conf   = float(_qu.get("confidence") or 0.0)
     _qu_source = _qu.get("source") or "ai"
 
+    # Sprint-26 Fix-M — multi-intent priority + multi-domain awareness.
+    # Default everything to single-element lists so any code that doesn't
+    # understand the new fields still works.
+    _qu_intents_ranked = _qu.get("intents_ranked") or [_qu_intent]
+    _qu_topics_all     = _qu.get("topics_all")     or [_qu_topic]
+    _qu_hidden_intent  = _qu.get("hidden_intent")  # None when no hidden layer
+    _qu_cross_domain   = bool(_qu.get("cross_domain_root_cause")) and len(_qu_topics_all) >= 2
+
     # Legacy-shape question_intent so the response payload + brevity guards
     # continue to work without touching downstream code.
     question_intent = {
@@ -5966,8 +6164,22 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "source":     _qu_source,
         "raw_intent": _qu_intent,
         "raw_topic":  _qu_topic,
+        # Sprint-26 Fix-M — multi-intent diagnostics
+        "intents_ranked":          _qu_intents_ranked,
+        "topics_all":              _qu_topics_all,
+        "hidden_intent":           _qu_hidden_intent,
+        "cross_domain_root_cause": _qu_cross_domain,
     }
     _trace(req_id, "1b.QUESTION_INTENT", question_intent)
+    if len(_qu_intents_ranked) > 1 or len(_qu_topics_all) > 1 or _qu_hidden_intent or _qu_cross_domain:
+        _trace(req_id, "1c.MULTI_INTENT", {
+            "primary":    _qu_intents_ranked[0] if _qu_intents_ranked else _qu_intent,
+            "secondary":  _qu_intents_ranked[1] if len(_qu_intents_ranked) > 1 else None,
+            "tertiary":   _qu_intents_ranked[2] if len(_qu_intents_ranked) > 2 else None,
+            "domains":    _qu_topics_all,
+            "hidden":     _qu_hidden_intent,
+            "cross_domain_root_cause": _qu_cross_domain,
+        })
 
     # ── Brand-safety: refuse off-topic / fortune-telling questions WITHOUT
     # calling the LLM at all. Cheap, deterministic, never leaks chart data.
@@ -6144,6 +6356,27 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "failed": [e.get("phase") for e in (_engine_status.get("failed") or [])],
         "skipped": [e.get("phase") for e in (_engine_status.get("skipped") or [])],
     })
+
+    # ── Sprint-26 Fix-M — Cross-Domain Root-Cause Block ─────────────────────
+    # When the user asks a dual-domain "same reason or different" question,
+    # compute the deterministic cross-domain check and APPEND it to the
+    # system prompt so the AI can answer the comparison without guessing.
+    if _qu_cross_domain and isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            _xd = _compute_cross_domain_facts(kundli, _qu_topics_all)
+            if _xd.get("text") and messages and isinstance(messages[0], dict):
+                _xd_block = (
+                    "\n\n════ CROSS-DOMAIN ROOT-CAUSE CHECK (engine-verified) ════\n"
+                    f"{_xd['text']}\n"
+                    "Use this block VERBATIM to answer 'ek hi reason hai ya alag'. "
+                    "Do NOT invent psychological / behavioural causes — cite ONLY "
+                    "what the engine verdict says above.\n"
+                    "═══════════════════════════════════════════════════════════"
+                )
+                messages[0]["content"] = (messages[0].get("content") or "") + _xd_block
+                _trace(req_id, "2c.CROSS_DOMAIN_FACTS", _xd.get("summary") or {})
+        except Exception as _xd_exc:
+            _trace(req_id, "2c.CROSS_DOMAIN_FAILED", {"error": str(_xd_exc)[:200]})
 
     # ── WEALTH STRUCTURED-OUTPUT REWRITE ─────────────────────────────────────
     # When the wealth verdict engine produced a verdict_obj, we strip the
@@ -6455,6 +6688,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # validator there. Tightening here protects against true AI
         # hallucinations that would otherwise sneak through.
         _engine_unavailable = (_engine_overall == "empty")
+        # Sprint-26 Fix-M: extend the soften gate for two routing cases the
+        # original Fix-K didn't cover. In both, the validator's per-topic
+        # token bucket is the wrong yardstick — but engine FACTS (LOCKED
+        # FACTS dasha block + transits) ARE present, so we should trust
+        # the AI's quoting of them.
+        #   (a) PRIMARY intent is `analysis` (e.g. "ek hi reason ya alag")
+        #       — the validator was designed for pure timing questions;
+        #       analysis questions legitimately quote dasha dates as part
+        #       of their reasoning. authorised_tokens=[] here means the
+        #       analysis path simply didn't surface its tokens, NOT that
+        #       the AI hallucinated.
+        #   (b) cross_domain_root_cause is True — the validator only reads
+        #       one topic's bucket, so dual-domain answers always look
+        #       "unauthorised" by definition.
+        _primary_intent = (_qu_intents_ranked[0] if _qu_intents_ranked else _qu_intent)
+        _is_analysis_primary = (_primary_intent == "analysis")
+        _multi_intent_softens = _is_analysis_primary or _qu_cross_domain
         if (not _lock["ok"]
                 and _val.get("is_timing")
                 and _no_authorised
@@ -6468,6 +6718,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 "rejected_tokens": _val.get("invented_tokens", []),
                 "rule": "engine absence ≠ AI hallucination "
                         "(Sprint-26 Fix-K)",
+            })
+            # Leave `text` untouched — AI's answer survives.
+        elif (not _lock["ok"]
+                and _val.get("is_timing")
+                and _no_authorised
+                and _multi_intent_softens):
+            _trace(req_id, "4a.TIMING_VALIDATOR_SOFTENED", {
+                "reason": "multi_intent_or_analysis_primary",
+                "primary_intent":          _primary_intent,
+                "cross_domain_root_cause": _qu_cross_domain,
+                "domains":                 _qu_topics_all,
+                "rejected_tokens":         _val.get("invented_tokens", []),
+                "rule": "validator-bucket per-topic mismatch "
+                        "(Sprint-26 Fix-M)",
             })
             # Leave `text` untouched — AI's answer survives.
         elif not _lock["ok"]:

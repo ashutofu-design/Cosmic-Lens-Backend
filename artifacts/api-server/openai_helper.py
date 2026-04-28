@@ -3125,6 +3125,44 @@ def _build_messages(
                   f"drifted. Update _rule_prefixes_to_drop literals: "
                   f"{[m[0][:40] + '...' for m in _missed]}")
 
+        # ── Phase 4.8 T018 — NARRATIVE-MODE HARD OUTPUT CAP ─────────────
+        # User-reported (Apr 28, 2026): even after the input diet + dead-
+        # rule strip, the model's actual ANSWER was 8-10 lines with full
+        # dasha breakdowns, pratyantar date ranges, Manglik-dosh asides,
+        # and the actual verdict buried at the end. The existing Rule 10
+        # BREVITY default is "100-140 words, 3-4 short paragraphs" — which
+        # is the EXACT shape the model produced and which violates the
+        # narrative-mode contract (3-5 sentences total, FUSED combo
+        # verdict, no enumeration). We replace Rule 10 entirely in
+        # narrative mode with a HARD CAP: 1-2 sentences, [VERDICT] →
+        # [1 reason] format, NEVER mention dates/dasha-names/pratyantar/
+        # antardasha/KP/divisional charts in user-facing text.
+        _rule10_old_default = (
+            "    • DEFAULT (multi-part / topic question only) — TOTAL "
+            "answer = 100 to 140 WORDS. NEVER more. Count words as you "
+            "write.\n"
+        )
+        _rule10_narrative_cap = (
+            "    • NARRATIVE-MODE HARD CAP — TOTAL answer = 1 to 2 "
+            "SHORT SENTENCES (≤200 chars total). Format: "
+            "[VERDICT in plain Hindi/Hinglish] → [1 short reason]. "
+            "Example: 'Love ho sakta hai, lekin Mars ki impulsiveness "
+            "aur Rahu ki confusion ki wajah se yeh zyada tar temporary "
+            "rahega.' That is the ENTIRE answer. NEVER write a 3-paragraph "
+            "explanation. NEVER mention dates, year ranges, "
+            "Mahadasha/Antardasha/Pratyantar names, KP, divisional "
+            "charts, or dosha names unless the user asked about them by "
+            "name. The verdict + 1 reason IS the whole reply.\n"
+        )
+        if _rule10_old_default in user:
+            user = user.replace(_rule10_old_default, _rule10_narrative_cap)
+            print("[openai_helper] Phase 4.8 T018: replaced Rule 10 100-140w "
+                  "default with NARRATIVE HARD CAP (1-2 sentences, ≤200 chars).")
+        elif "100 to 140 WORDS" in user:
+            print("[openai_helper] ⚠️ Phase 4.8 T018: Rule 10 default literal "
+                  "drifted — '100 to 140 WORDS' present but not in expected "
+                  "form. Update _rule10_old_default to match line ~2978.")
+
     # Build full conversation: system → prior turns → current user turn.
     msgs: list[dict] = [{"role": "system", "content": system}]
     if isinstance(history, list):
@@ -6779,8 +6817,12 @@ _LF_KEEP_PREFIXES = (
     "▸ STRENGTH BUCKETS",
     "▸ CURRENT TRANSITS",
     "▸ CURRENT DASHA:",
-    "▸ DASHA WINDOW:",
-    "▸ PRATYANTAR",
+    # Phase 4.8 T017 — DROPPED: "▸ DASHA WINDOW:" + "▸ PRATYANTAR"
+    # These leak date ranges like "Moon Pratyantar (2026-02-18 se
+    # 2026-05-01)" that the model dutifully recites in narrative-mode
+    # answers, blowing the 1-2 sentence budget. CURRENT DASHA gives
+    # MD-AD lord names which is the only timing signal needed for a
+    # FUSED verdict; user can ask "kab" follow-up to get the window.
     "▸ HOUSE-LORD PLACEMENTS:",
     "▸ REMEDIES (classical",
 )

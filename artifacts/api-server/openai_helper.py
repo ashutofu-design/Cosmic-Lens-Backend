@@ -9824,40 +9824,19 @@ def _phase55_format_locked_verdict_block(
     # Prefer the public/UX headline; fall back to legacy text for safety.
     headline = v.get("verdict_text_public") or v.get("verdict_text_hi") or ""
 
-    if explain_mode:
-        instruction = (
-            "INSTRUCTION (CRITICAL — EXPLAIN MODE): A deterministic Vedic-"
-            "rules engine has already computed the verdict from the user's "
-            "D1 + D9 charts. The user has explicitly asked HOW / WHY the "
-            "verdict was reached, so you MUST now expand the answer:\n"
-            "  1. State the HEADLINE in the user's language as the FIRST "
-            "sentence — do NOT contradict, change, or soften the direction.\n"
-            "  2. Then list 3-5 of the strongest reasons from REASONS_LOVE "
-            "and REASONS_ARRANGE above, translated into plain Hindi/"
-            "Hinglish/English (whichever matches the user's language). "
-            "Use the side that matches the headline as the dominant set "
-            "(love side for clear_love/leaning_love, arrange side for "
-            "clear_arrange/leaning_arrange).\n"
-            "  3. Keep each reason 1 short line. Total response: 4-7 short "
-            "sentences. Do NOT add the raw score numbers (e.g. '5 vs 4'). "
-            "Do NOT invent extra reasons not in the lists above. Do NOT "
-            "re-derive from the kundli — the engine has already done that."
-        )
-    else:
-        instruction = (
-            "INSTRUCTION (CRITICAL): A deterministic Vedic-rules engine has "
-            "already computed this verdict from the user's D1 + D9 charts. "
-            "Your ONLY job is to express the HEADLINE in the user's "
-            "language (Hindi/Hinglish/English) in 1-2 short sentences. The "
-            "HEADLINE already gives a clear direction (clear / leaning / "
-            "situation-dependent) — keep that direction; do NOT soften it "
-            "back to 'mixed' or 'dono possibilities'. Do NOT add score "
-            "numbers. Do NOT list the reasons unless the user explicitly "
-            "asks 'kyun' / 'why' / 'reason batao' / 'explain' / 'detail "
-            "mein batao' / 'how'. Do NOT contradict the verdict. Do NOT "
-            "re-derive it from the kundli — the engine has already done "
-            "that work."
-        )
+    # Phase 5.7.1 — facts-only contract. The system message already says
+    # "verdict is computed by the engine, do not recompute". We do NOT
+    # repeat that contract here as prose. Engine emits FACTS; LLM
+    # narrates them. The only mode-marker we keep is a single line so
+    # the model knows whether to give a 1-line headline or a 3-5 reason
+    # explanation — that's a length-cue, not a rule.
+    explain_marker = (
+        "\nEXPLAIN MODE — list 3-5 reasons from REASONS_LOVE / "
+        "REASONS_ARRANGE above in plain language (the side matching "
+        "the headline)."
+        if explain_mode
+        else ""
+    )
 
     # ── Phase 5.5g — optional KP explanation layer ──
     # Only emitted when the engine return dict carries actual KP cuspal-
@@ -9867,8 +9846,7 @@ def _phase55_format_locked_verdict_block(
     kp_block = _phase55_format_kp_explanation_block(v.get("kp_facts"))
 
     return (
-        "AUTHORITATIVE_ENGINE_VERDICT (locked — DO NOT change, contradict, "
-        "or recompute):\n"
+        "AUTHORITATIVE_ENGINE_VERDICT (locked — engine-computed facts):\n"
         f"  VERDICT: {v.get('verdict_public') or v.get('verdict')}\n"
         f"  LOVE_SCORE: {v.get('love_score')}    "
         f"ARRANGE_SCORE: {v.get('arrange_score')}\n"
@@ -9876,8 +9854,7 @@ def _phase55_format_locked_verdict_block(
         f"  REASONS_LOVE:\n{rs_love}\n"
         f"  REASONS_ARRANGE:\n{rs_arr}\n"
         + (kp_block if kp_block else "")
-        + "\n"
-        + instruction
+        + explain_marker
     )
 
 
@@ -9932,34 +9909,14 @@ def _phase55_format_kp_explanation_block(kp_facts: Any) -> str:
         _fmt_csl("CSL_11 (fulfillment)", "csl_11"),
     ])
 
+    # Phase 5.7.1 — facts-only. The classical KP rules and the
+    # "additive, not decisional" instructions used to live here as
+    # prose, but the system message already governs that ("verdict
+    # is computed by the engine, do not recompute"). Engine emits
+    # KP facts; LLM narrates them.
     return (
-        "\n\nKP_FACTS (engine-computed cuspal sublords — DO NOT recompute):\n"
-        f"{facts_lines}\n\n"
-        "KP_EXPLANATION_GUIDE (use ONLY these classical KP rules to "
-        "support — never to override — the verdict above):\n"
-        "  - 5th CSL connects to {5, 7, 11}  → supports love → marriage\n"
-        "  - 5th CSL connects to {6, 8, 12}  → obstacles / denial of love\n"
-        "  - 7th CSL connects to {2, 7, 11}  → marriage materializes\n"
-        "  - 11th CSL supports              → desired outcome fulfilled\n"
-        "  - 6/8/12 dominate                → delays, breaks, conversion\n"
-        "INSTRUCTION (KP layer — additive, NOT decisional):\n"
-        "  • The verdict above is FINAL. KP must NOT change or flip it.\n"
-        "  • In HEADLINE-ONLY mode (when the user did NOT ask kyun / why "
-        "/ explain / detail / how), do NOT mention KP at all — keep the "
-        "headline pure.\n"
-        "  • In EXPLAIN mode (when the user asks 'kyun' / 'why' / "
-        "'reason batao' / 'detail mein samjhao' / 'kaise' / 'how'), you "
-        "MUST cite KP at least once alongside the Vedic reasons — using "
-        "ONLY the KP_FACTS above. One natural sentence is enough. "
-        "Example: \"KP paddhati me bhi 5th CSL Venus Taurus mein hai aur "
-        "houses 5/8/10 se connected hai, jo love marriage ko support "
-        "karta hai par 8th house ki involvement se thoda obstacle bhi "
-        "deta hai.\" Citation MUST name the cusp number (5th/7th/11th), "
-        "the sign and lord exactly as printed in KP_FACTS, and at least "
-        "one of the connected houses — verbatim from the data above.\n"
-        "  • If the KP_FACTS lines say '(not provided)' for a CSL, do "
-        "NOT mention that CSL at all. Do NOT invent KP facts. Do NOT "
-        "reason from planet positions to derive CSLs yourself."
+        "\n\nKP_FACTS (engine-computed cuspal sublords):\n"
+        f"{facts_lines}"
     )
 
 

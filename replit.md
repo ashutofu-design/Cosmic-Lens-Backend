@@ -2302,3 +2302,134 @@ no "let me think through this" preamble, no over-analysis.
   ABSENT (was previously asserted PRESENT — the inversion is the point).
 
 **Full regression: 251/251 pass** (23 pre-existing skips, 0 new failures).
+
+---
+
+## Phase 5.7.1 — Strip lock-mode + KP rule blocks (extension)
+
+**Why a follow-up:** Phase 5.7 cleaned the system message and the
+general user-message path, but the **lock-mode** branch (LvA verdict)
+and the **KP** branch still injected ~50 lines of classical-rule prose
+into the prompt — same anti-pattern in another location. Architect
+review flagged this as an incomplete strip. Phase 5.7.1 closes the gap.
+
+### What was stripped
+
+**`_phase55_format_locked_verdict_block`** (love-vs-arrange lock):
+
+Removed both `INSTRUCTION (CRITICAL)` paragraphs (one for default mode,
+one for explain mode) which together totaled ~25 lines of "do NOT
+soften / do NOT add scores / do NOT list reasons unless asked / do
+NOT contradict / do NOT re-derive from the kundli — the engine has
+already done that work" prose. Kept ONLY the engine facts:
+
+```
+AUTHORITATIVE_ENGINE_VERDICT (locked — engine-computed facts):
+  VERDICT: inconclusive
+  LOVE_SCORE: 3    ARRANGE_SCORE: 2
+  HEADLINE: Aapki kundli mein dono taraf strong indication nahi hai…
+  REASONS_LOVE:
+  + D9 Venus exalted in Pisces (sublime love bond)
+  REASONS_ARRANGE:
+  - D9 7th lord (Mercury) in dusthana 12H — partner friction
+```
+
+In **explain mode** a single one-line marker is appended (a length-cue,
+not a rule):
+
+```
+EXPLAIN MODE — list 3-5 reasons from REASONS_LOVE / REASONS_ARRANGE
+above in plain language (the side matching the headline).
+```
+
+**`_phase55_format_kp_explanation_block`** (KP narration):
+
+Removed the entire `KP_EXPLANATION_GUIDE` (5 classical KP rules:
+"5th CSL connects to {5,7,11} → supports love → marriage" etc.) and
+the `INSTRUCTION (KP layer — additive, NOT decisional)` footer (3
+bullets about HEADLINE-ONLY vs EXPLAIN mode behavior, citation
+formatting, "do not invent KP facts"). Kept ONLY the engine-computed
+cuspal-sublord facts:
+
+```
+KP_FACTS (engine-computed cuspal sublords):
+  CSL_5  (love): Leo (lord Sun) → connected houses: 5,7,11
+  CSL_7  (marriage): Aqua (lord Saturn) → connected houses: 2,7,11
+  CSL_11 (fulfillment): Sag (lord Jupiter) → connected houses: 5,11
+```
+
+### Why this is safe
+
+The "do not recompute / do not contradict" contract is now enforced
+in **one place**: the unified system message ("The final verdict is
+already computed by the engine. Do NOT recompute or change it."). The
+old approach repeated the same contract three times (system message +
+lock-block INSTRUCTION + KP-block INSTRUCTION) with slightly different
+wording — that's redundant, increases token cost, and makes the model
+re-litigate rules instead of narrating facts.
+
+The structured `AUTHORITATIVE_ENGINE_VERDICT` block in the user
+message is the actual lock anchor — its FORMAT (engine-emitted
+HEADLINE + REASONS_LOVE/REASONS_ARRANGE) leaves no room for the model
+to invent a different verdict.
+
+### Live verification (Bhubaneswar fixture, EXPLAIN MODE)
+
+```
+Q: "love marriage hoga ya arrange — kyun explain karo"
+
+Aapki kundli mein dono taraf strong indication nahi hai, isliye love
+marriage ya arranged marriage dono ho sakte hain, situation par depend
+karega.
+1. Love side mein, D9 mein Venus exalted hai Pisces mein, jo ek gehra
+   aur sublime love bond dikhata hai.
+2. Arrange side mein, D9 ka 7th house ka lord Mercury 12th house mein
+   hai, jo partner ke saath kuch friction ya challenges dikha sakta hai.
+Isliye, kundli ke hisaab se dono possibilities hain, aur aapki life
+situation aur paristithiyan decide karengi ki love marriage hoga ya
+arranged.
+```
+
+Telemetry: `message_count=2`, `roles=["system","user"]`, `source=openai_bare`,
+`PHASE51_BARE_RETURN` confirms minimal-prompt path with all heavy
+validators bypassed. The model used the engine's REASONS_LOVE and
+REASONS_ARRANGE verbatim — exactly the facts-only narration we want.
+
+### Tests updated
+
+- `test_locked_block_is_facts_only` (was `test_locked_block_has_do_not_change_instruction`)
+  — flipped to assert the INSTRUCTION prose is ABSENT.
+- `test_locked_block_uses_public_headline` — added negative assertions
+  for `INSTRUCTION (CRITICAL`, `do NOT soften`, `Do NOT list the reasons`.
+- `test_locked_block_explain_mode_emits_listing_instruction` — keeps
+  the `EXPLAIN MODE` and `3-5` markers, removes the `do not contradict`
+  prose check.
+- `test_kp_block_renders_when_facts_provided` — drops assertions for
+  `KP_EXPLANATION_GUIDE`, classical-rule literals (`5, 7, 11` /
+  `6, 8, 12` / `2, 7, 11`), `FINAL`, `must NOT change`,
+  `Do NOT invent KP facts`. Keeps facts-only checks (CSL labels,
+  lord+sign, connected houses formatted as `5,7,11`).
+- `test_kp_block_partial_facts_handled_gracefully` — keeps the
+  `(not provided)` data check, drops the prose `do not mention that csl`
+  assertion.
+- `test_kp_block_lock_supremacy` → renamed to `test_kp_block_is_facts_only`
+  — inverted: asserts no rule prose is present.
+- `test_locked_block_includes_kp_when_facts_set` — ordering check
+  changed from `KP_FACTS before INSTRUCTION (CRITICAL)` to
+  `KP_FACTS after REASONS_ARRANGE`.
+- `test_engine_kp_activation_geo_path` — flips
+  `KP_EXPLANATION_GUIDE` check from `assertIn` to `assertNotIn`.
+
+**Full regression: 251/251 pass** (23 pre-existing skips, 0 new failures).
+
+### Net result of Phase 5.7 + 5.7.1 combined
+
+Every prompt path — general questions, yoga questions, LvA verdict
+questions, KP narration — now sends ONLY:
+1. The user's clean 6-bullet system message (~430 chars), and
+2. Engine-computed FACTS in the user message.
+
+Zero classical-rule prose. Zero "INSTRUCTION (CRITICAL)" paragraphs.
+Zero "do NOT" repetition. The mantra holds end-to-end:
+
+**Engine sochta hai, LLM bolta hai.**

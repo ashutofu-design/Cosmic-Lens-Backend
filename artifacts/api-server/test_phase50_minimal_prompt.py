@@ -899,13 +899,17 @@ class TestPhase55Engine(unittest.TestCase):
 
     def test_locked_block_uses_public_headline(self):
         """The block the LLM sees must carry the PUBLIC verdict text as
-        HEADLINE — not the legacy internal wording — and contain the
-        explicit anti-softening instruction."""
+        HEADLINE — not the legacy internal wording. Phase 5.7.1: the
+        block is FACTS-ONLY (no instruction prose); the system message
+        owns the 'do not recompute' contract."""
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         block = oh._phase55_format_locked_verdict_block(v)
         self.assertIn(v["verdict_text_public"], block)
         self.assertIn(f"VERDICT: {v['verdict_public']}", block)
-        self.assertIn("do NOT soften", block)
+        # Phase 5.7.1 facts-only guarantee — no INSTRUCTION prose.
+        self.assertNotIn("INSTRUCTION (CRITICAL", block)
+        self.assertNotIn("do NOT soften", block)
+        self.assertNotIn("Do NOT list the reasons", block)
 
     def test_explain_mode_question_detector(self):
         """Phase 5.5c: helper that distinguishes 'why/explain' follow-ups
@@ -932,22 +936,22 @@ class TestPhase55Engine(unittest.TestCase):
             )
 
     def test_locked_block_explain_mode_emits_listing_instruction(self):
-        """Phase 5.5c: with explain_mode=True the block must drop the
-        'do NOT list reasons' guard and instead REQUIRE 3-5 reasons in
-        the answer."""
+        """Phase 5.5c + 5.7.1: with explain_mode=True the block must
+        emit a tiny 'EXPLAIN MODE — list 3-5 reasons' marker so the
+        LLM gives an explanation instead of a 1-line headline. The
+        marker is a length-cue, not a rules block."""
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         block = oh._phase55_format_locked_verdict_block(v, explain_mode=True)
         # Headline still present
         self.assertIn(v["verdict_text_public"], block)
-        # The cautious "do NOT list reasons" instruction is GONE
-        self.assertNotIn("Do NOT list the reasons", block)
-        # The positive listing instruction is PRESENT
+        # The positive listing marker is PRESENT
         self.assertIn("EXPLAIN MODE", block)
         self.assertIn("3-5", block)
-        # Direction lock must remain (model still cannot flip the verdict)
-        self.assertIn("do not contradict", block.lower())
-        # And the engine block header still warns against changes/recompute
+        # And the engine block header still labels the facts as locked.
         self.assertIn("locked", block.lower())
+        # Phase 5.7.1 facts-only guarantee — no rule prose injected.
+        self.assertNotIn("INSTRUCTION (CRITICAL", block)
+        self.assertNotIn("Do NOT list the reasons", block)
 
     def test_builder_passes_explain_mode_through_for_followup(self):
         """End-to-end: when the user asks 'explain karo love marriage',
@@ -1038,17 +1042,25 @@ class TestPhase55Engine(unittest.TestCase):
             {"planets": [{"name": "Sun", "sign": "Leo", "house": 1}]}        # no ascendant
         ))
 
-    def test_locked_block_has_do_not_change_instruction(self):
+    def test_locked_block_is_facts_only(self):
+        """Phase 5.7.1 — the locked verdict block is FACTS-ONLY. The
+        'do not recompute / 1-2 short sentences / brevity' rules used
+        to live in this block as INSTRUCTION (CRITICAL) prose, but
+        were stripped because the system message already governs all
+        of that. Engine emits facts; LLM narrates them."""
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         block = oh._phase55_format_locked_verdict_block(v)
+        # Facts header still present.
         self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
-        self.assertIn("DO NOT change", block)
         self.assertIn("HEADLINE", block)
-        self.assertIn("1-2 short sentences", block)
-        # Must NOT instruct the model to compute or analyze
+        # The legacy INSTRUCTION (CRITICAL) prose is gone.
+        self.assertNotIn("INSTRUCTION (CRITICAL", block)
+        self.assertNotIn("DO NOT change", block)
+        self.assertNotIn("1-2 short sentences", block)
         self.assertNotIn("compute your own verdict", block.lower())
-        # Brevity is preserved — only explain when user asks why
-        self.assertIn("kyun", block)
+        # The "kyun / why / explain" rule list also lived in the
+        # INSTRUCTION prose; in non-explain mode there is no marker.
+        self.assertNotIn("kyun", block)
 
 
 class TestPhase55eConfidenceRatio(unittest.TestCase):
@@ -1404,11 +1416,11 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
       • `_phase55_format_kp_explanation_block(None)` returns "" — the
         locked block emits NO KP prompt section at all.
       • `_phase55_format_kp_explanation_block({...real kp dict...})`
-        emits the full KP_FACTS + KP_EXPLANATION_GUIDE + INSTRUCTION
-        block per user's spec, gated behind the engine verdict lock so
-        KP can EXPLAIN but NEVER override.
-      • Verdict lock language is preserved: "DO NOT change, contradict,
-        or recompute" still applies; KP narration is additive only.
+        emits a FACTS-ONLY KP_FACTS section (Phase 5.7.1) — the
+        classical KP rules and "additive, not decisional" instructions
+        used to live here as prose but were stripped because the system
+        message already enforces "verdict is computed by engine, do not
+        recompute". Engine emits CSL facts; LLM narrates them.
 
     Why scaffolding-only (not active):
       • Current kundli payload has nakshatra/pada/ruler but NO
@@ -1457,7 +1469,7 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
 
     def test_kp_block_renders_when_facts_provided(self):
         """When a real-shape kp_facts dict is supplied, the formatter
-        emits the full KP narration block per user's spec."""
+        emits a FACTS-ONLY KP_FACTS block (Phase 5.7.1)."""
         kp = {
             "csl_5":  {"sign": "Leo",   "lord": "Sun",
                        "connected_houses": [5, 7, 11]},
@@ -1469,7 +1481,6 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         block = oh._phase55_format_kp_explanation_block(kp)
         # Required structure
         self.assertIn("KP_FACTS", block)
-        self.assertIn("KP_EXPLANATION_GUIDE", block)
         # CSL labels
         self.assertIn("CSL_5", block)
         self.assertIn("CSL_7", block)
@@ -1477,21 +1488,21 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         # Lord + sign
         self.assertIn("Sun", block)
         self.assertIn("Saturn", block)
-        # Connected houses formatted
+        # Connected houses formatted (engine data, no spaces)
         self.assertIn("5,7,11", block)
-        # Classical KP rules from user's spec
-        self.assertIn("5, 7, 11", block)
-        self.assertIn("6, 8, 12", block)
-        self.assertIn("2, 7, 11", block)
-        # Lock language — KP must not override verdict
-        self.assertIn("FINAL", block)
-        self.assertIn("must NOT change", block)
-        self.assertIn("Do NOT invent KP facts", block)
+        self.assertIn("2,7,11", block)
+        # Phase 5.7.1 facts-only guarantee — no rule prose, no
+        # classical-rule guide, no INSTRUCTION footer.
+        self.assertNotIn("KP_EXPLANATION_GUIDE", block)
+        self.assertNotIn("INSTRUCTION", block)
+        self.assertNotIn("must NOT change", block)
+        self.assertNotIn("Do NOT invent KP facts", block)
 
     def test_kp_block_partial_facts_handled_gracefully(self):
         """If only some CSLs are provided (e.g. csl_5 only), the
-        missing ones must render as '(not provided)' so the LLM is
-        explicitly told NOT to mention them."""
+        missing ones must render as '(not provided)' so the LLM has
+        explicit data showing the absence (the prose 'do not mention'
+        instruction was removed in Phase 5.7.1 — facts-only contract)."""
         kp = {
             "csl_5": {"sign": "Leo", "lord": "Sun",
                       "connected_houses": [5, 7, 11]},
@@ -1499,28 +1510,29 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         block = oh._phase55_format_kp_explanation_block(kp)
         self.assertIn("CSL_5", block)
         self.assertIn("Sun", block)
+        # Missing CSLs are explicit in the data — LLM sees they're absent.
         self.assertIn("(not provided)", block)
-        # Must still tell the LLM how to handle missing data —
-        # case-insensitive search to avoid wording-tweak fragility.
-        flat = block.replace("\n", " ").lower()
-        self.assertIn("do not mention that csl", flat)
 
-    def test_kp_block_lock_supremacy(self):
-        """The KP block must explicitly subordinate KP to the engine
-        verdict — no flipping allowed. This is the architectural
-        guarantee that adding KP can never regress Phase 5.5e/5.5f."""
+    def test_kp_block_is_facts_only(self):
+        """Phase 5.7.1 architectural guarantee — the KP block emits
+        ONLY engine-computed CSL facts. No classical rules, no
+        instruction footer, no 'additive vs decisional' prose. The
+        system message owns the 'verdict is computed by engine, do
+        not recompute' contract."""
         kp = {"csl_5": {"sign": "Leo", "lord": "Sun",
                         "connected_houses": [5, 7, 11]}}
         block = oh._phase55_format_kp_explanation_block(kp)
         block_lc = block.lower()
-        self.assertIn("verdict above is final", block_lc)
-        self.assertIn("must not change or flip", block_lc)
-        self.assertIn("additive", block_lc)
+        self.assertNotIn("verdict above is final", block_lc)
+        self.assertNotIn("must not change or flip", block_lc)
+        self.assertNotIn("additive", block_lc)
+        self.assertNotIn("instruction", block_lc)
+        self.assertNotIn("classical kp rules", block_lc)
 
     def test_locked_block_includes_kp_when_facts_set(self):
         """End-to-end: setting kp_facts on the engine dict makes the
-        locked block include the KP narration section. This is the
-        single-knob activation path for next turn."""
+        locked block include the KP_FACTS section after the reasons.
+        This is the single-knob activation path."""
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         v["kp_facts"] = {
             "csl_5": {"sign": "Leo", "lord": "Sun",
@@ -1532,12 +1544,15 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         # Verdict lock still primary
         self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
         self.assertIn("HEADLINE", block)
-        # KP appears AFTER reasons, BEFORE the main instruction
-        kp_idx = block.find("KP_FACTS")
-        instr_idx = block.find("INSTRUCTION (CRITICAL")
+        # KP appears AFTER reasons (ordering preserved)
+        kp_idx       = block.find("KP_FACTS")
+        reasons_idx  = block.find("REASONS_ARRANGE")
         self.assertGreater(kp_idx, 0)
-        self.assertGreater(instr_idx, kp_idx,
-                           "KP section must come before main instruction")
+        self.assertGreater(kp_idx, reasons_idx,
+                           "KP_FACTS must come after REASONS_ARRANGE")
+        # Phase 5.7.1 — no rule prose anywhere in the assembled block.
+        self.assertNotIn("INSTRUCTION (CRITICAL", block)
+        self.assertNotIn("KP_EXPLANATION_GUIDE", block)
 
 
 class TestPhase55hKpActivation(unittest.TestCase):
@@ -1725,10 +1740,11 @@ class TestPhase55hKpActivation(unittest.TestCase):
                 self.assertIsInstance(h, int)
                 self.assertTrue(1 <= h <= 12)
 
-        # Locked block must now include the KP narration section
+        # Locked block must now include the KP_FACTS narration section
+        # (Phase 5.7.1 — facts-only; KP_EXPLANATION_GUIDE was stripped).
         block = oh._phase55_format_locked_verdict_block(v)
         self.assertIn("KP_FACTS",            block)
-        self.assertIn("KP_EXPLANATION_GUIDE", block)
+        self.assertNotIn("KP_EXPLANATION_GUIDE", block)
         # Engine verdict still primary — Phase 5.5e/5.5f guarantee
         self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
         self.assertIn("HEADLINE",            block)

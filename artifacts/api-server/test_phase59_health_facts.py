@@ -420,11 +420,13 @@ class TestHealthFormatter(unittest.TestCase):
 class TestHealthExtractorIntegration(unittest.TestCase):
 
     def test_health_q_with_obj_emits_block_no_1liner(self):
+        """v3 vocabulary: extractor surfaces overall_risk (not bucket).
+        Legacy 'Health verdict: ...' 1-liner suppressed when block fires."""
         bm = {"health_verdict_obj": _health_obj_general_yellow()}
         out = oh._phase50_extract_verdict_facts(
             bm, "Meri sehat kaisi rahegi?")
         self.assertIn("HEALTH_FACTS:", out)
-        self.assertIn("  - bucket: general_wellness", out)
+        self.assertIn("  - overall_risk: stable", out)
         self.assertNotIn("Health verdict:", out)
 
     def test_non_health_q_with_health_obj_only_emits_1liner(self):
@@ -512,12 +514,12 @@ class TestHealthSensitiveTopicSafety(unittest.TestCase):
         self.assertNotIn("MANDATORY D30", clean)
 
     def test_helpline_survives_malformed_bucket_field(self):
-        """Architect-flagged: even when the engine returns a malformed /
-        missing bucket, the brand_safety bullets (including the
-        mental-health helpline) MUST still pass through. The formatter
-        must NOT gate brand_safety emission on bucket validity — the
-        helpline is the engine's deterministic safety net and must
-        survive any bucket-routing regression."""
+        """Architect-flagged guard, v3 vocabulary: even when the engine
+        returns a malformed / missing bucket, the brand_safety bullets
+        (including the mental-health helpline) MUST still pass through.
+        The formatter must NOT gate brand_safety emission on bucket
+        validity. v3 note: bucket no longer surfaces in prompt block
+        at all, but malformed bucket must still be tolerated end-to-end."""
         for bad_bucket in [None, "", 12345, [], {"x": 1}]:
             v = _health_obj_mental_health_red().copy()
             v["bucket"] = bad_bucket
@@ -527,20 +529,146 @@ class TestHealthSensitiveTopicSafety(unittest.TestCase):
                           f"helpline lost on bucket={bad_bucket!r}")
             self.assertIn("Vandrevala 1860-2662-345", out,
                           f"vandrevala lost on bucket={bad_bucket!r}")
-            # Bucket falls back to safe default (or stringifies cleanly)
-            self.assertIn("  - bucket:", out)
+            # New-vocab fields still emit safely (bucket is no longer surfaced)
+            self.assertIn("  - overall_risk:", out,
+                          f"overall_risk missing on bucket={bad_bucket!r}")
+            self.assertIn("  - tone_rules:", out,
+                          f"tone_rules missing on bucket={bad_bucket!r}")
+            # Bucket value MUST NOT leak into prompt under any form
+            self.assertNotIn("  - bucket:", out)
 
-    def test_red_avoid_verdict_score_preserved_no_softening(self):
-        """The formatter must NOT soften a red_avoid verdict by hiding
-        the negative score or raising the verdict label. Engine ka final
-        word — formatter is pure pass-through."""
-        v = _health_obj_mental_health_red()  # score=-28, verdict=red_avoid
+    def test_red_avoid_no_softening_in_new_vocabulary(self):
+        """ARCHITECT-LOCKED INVARIANT (v3): a red_avoid verdict from the
+        engine must NEVER be softened to a benign tier in the new
+        vocabulary. red_avoid → vulnerable or high_risk only — never
+        strong/stable/fluctuating. Formatter is pure pass-through; the
+        engine's worst-tier signal must surface as a worst-tier label."""
+        # Default: score=-28 → vulnerable (>= -40 threshold)
+        v = _health_obj_mental_health_red()
         out = oh._phase59_format_health_facts_block(v)
-        self.assertIn("  - verdict: red_avoid", out)
-        self.assertIn("  - score: -28", out)
-        # No "yellow_wait" / "green_go" injected
-        self.assertNotIn("verdict: yellow_wait", out)
-        self.assertNotIn("verdict: green_go", out)
+        self.assertIn("  - overall_risk: vulnerable", out)
+        # No softer tier injected
+        for soft in ("strong", "stable", "fluctuating"):
+            self.assertNotIn(f"overall_risk: {soft}", out,
+                             f"red_avoid softened to {soft!r}")
+
+        # Boundary: score < -40 → high_risk (worst tier)
+        v_severe = _health_obj_mental_health_red().copy()
+        v_severe["score"] = -55
+        out_severe = oh._phase59_format_health_facts_block(v_severe)
+        self.assertIn("  - overall_risk: high_risk", out_severe)
+        for soft in ("strong", "stable", "fluctuating", "vulnerable"):
+            self.assertNotIn(f"overall_risk: {soft}", out_severe,
+                             f"severe red_avoid softened to {soft!r}")
+
+
+# ──────────────────────────── v3 vocabulary mapping (helpers) ────────────────────────────
+
+
+class TestHealthVocabularyMapping(unittest.TestCase):
+    """Phase 5.9 Batch 3c v3 — pure unit tests for the new vocabulary
+    mapping helpers. These lock the verdict→overall_risk and
+    signal-balance→stability translations against accidental drift."""
+
+    def test_overall_risk_green_go_to_strong(self):
+        # Score irrelevant for green_go (already strongest tier)
+        for s in (100, 0, -50, -100):
+            self.assertEqual(
+                oh._phase59_health_overall_risk("green_go", s), "strong",
+                f"green_go must map to strong regardless of score (was score={s})")
+
+    def test_overall_risk_yellow_wait_to_stable(self):
+        for s in (50, 12, 0, -10):
+            self.assertEqual(
+                oh._phase59_health_overall_risk("yellow_wait", s), "stable")
+
+    def test_overall_risk_slow_burn_to_fluctuating(self):
+        for s in (10, 0, -5, -30):
+            self.assertEqual(
+                oh._phase59_health_overall_risk("slow_burn", s), "fluctuating")
+
+    def test_overall_risk_red_avoid_score_threshold(self):
+        # Above / at the -40 boundary → vulnerable
+        for s in (-1, -20, -40):
+            self.assertEqual(
+                oh._phase59_health_overall_risk("red_avoid", s), "vulnerable",
+                f"red_avoid+score={s} must be vulnerable (>= -40)")
+        # Below -40 → high_risk (worst tier)
+        for s in (-41, -55, -100):
+            self.assertEqual(
+                oh._phase59_health_overall_risk("red_avoid", s), "high_risk",
+                f"red_avoid+score={s} must be high_risk (< -40)")
+
+    def test_overall_risk_unknown_verdict_safe_default(self):
+        # Truly unknown / malformed inputs default to fluctuating
+        for v in ("", None, "garbage", "purple", "wait_yellow", "  "):
+            self.assertEqual(
+                oh._phase59_health_overall_risk(v, 0), "fluctuating",
+                f"unknown verdict {v!r} must default to fluctuating")
+
+    def test_overall_risk_case_insensitive_match(self):
+        """Defensive: engine sometimes serializes verdicts in different
+        cases. Helper must accept any casing without falling through to
+        the unknown-default path."""
+        # Mixed case still routes to the canonical mapping (case-insensitive)
+        self.assertEqual(
+            oh._phase59_health_overall_risk("RED_AVOID", -10), "vulnerable")
+        self.assertEqual(
+            oh._phase59_health_overall_risk("GreenGo", 0), "fluctuating",
+            "GreenGo (no underscore) is NOT a canonical verdict — falls through")
+        self.assertEqual(
+            oh._phase59_health_overall_risk("Green_Go", 0), "strong",
+            "case-insensitive but underscore preserved")
+        self.assertEqual(
+            oh._phase59_health_overall_risk("YELLOW_WAIT", 0), "stable")
+        self.assertEqual(
+            oh._phase59_health_overall_risk("  slow_burn  ", 0), "fluctuating",
+            "whitespace stripped")
+
+    def test_stability_strong_with_supportive_majority_is_stable(self):
+        self.assertEqual(
+            oh._phase59_health_stability("strong", n_concerns=0, n_supportive=2),
+            "stable")
+        self.assertEqual(
+            oh._phase59_health_stability("stable", n_concerns=1, n_supportive=2),
+            "stable")
+        # equal counts still satisfy the <= condition
+        self.assertEqual(
+            oh._phase59_health_stability("stable", n_concerns=2, n_supportive=2),
+            "stable")
+
+    def test_stability_strong_but_concerns_outweigh_is_fluctuating(self):
+        # The general_yellow fixture case (2 concerns / 1 supportive)
+        self.assertEqual(
+            oh._phase59_health_stability("stable", n_concerns=2, n_supportive=1),
+            "fluctuating")
+
+    def test_stability_vulnerable_with_concerns_majority_is_vulnerable(self):
+        self.assertEqual(
+            oh._phase59_health_stability("vulnerable", n_concerns=3, n_supportive=0),
+            "vulnerable")
+        self.assertEqual(
+            oh._phase59_health_stability("high_risk", n_concerns=2, n_supportive=1),
+            "vulnerable")
+
+    def test_stability_middle_tier_is_fluctuating(self):
+        # fluctuating tier always maps to fluctuating
+        self.assertEqual(
+            oh._phase59_health_stability("fluctuating", n_concerns=0, n_supportive=0),
+            "fluctuating")
+        self.assertEqual(
+            oh._phase59_health_stability("fluctuating", n_concerns=5, n_supportive=5),
+            "fluctuating")
+
+    def test_high_risk_threshold_changes_only_at_negative_40(self):
+        """Boundary protection — moving the high_risk threshold accidentally
+        is a silent severity downgrade. Lock it explicitly."""
+        # Just at the boundary
+        self.assertEqual(
+            oh._phase59_health_overall_risk("red_avoid", -40), "vulnerable")
+        # One step below
+        self.assertEqual(
+            oh._phase59_health_overall_risk("red_avoid", -41), "high_risk")
 
 
 class TestHealthToneRules(unittest.TestCase):

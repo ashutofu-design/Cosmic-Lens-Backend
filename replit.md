@@ -2793,6 +2793,86 @@ in the prompt-construction layer.
 
 ---
 
+### Batch 3c v3 — HEALTH_FACTS vocabulary MERGE (no algorithm change)
+
+**User-driven scope:** new spec proposed a simplified vocabulary
+(`overall_risk` / `stability` / `sensitive_areas` / `supportive_factors`
+/ `risk_factors`) but a literal implementation would have dropped the
+iCall + Vandrevala helpline bullets and the engine-owned tone rules
+just shipped in v2/v2.1. Flagged the conflict, user chose **MERGE** —
+adopt the new vocabulary while preserving every safety guarantee.
+
+**Pure formatter swap (zero engine change, zero new astrology):**
+
+- New helper `_phase59_health_overall_risk(verdict, score)` — maps the
+  engine's already-bucketed verdict to the user-spec 5-tier vocabulary:
+  `green_go → strong`, `yellow_wait → stable`, `slow_burn →
+  fluctuating`, `red_avoid + score ≥ -40 → vulnerable`, `red_avoid +
+  score < -40 → high_risk`. Case-insensitive + whitespace-tolerant.
+- New helper `_phase59_health_stability(overall_risk, n_concerns,
+  n_supportive)` — derives stability from signal balance + risk tier.
+  Pure heuristic, no astrology.
+- `_phase59_format_health_facts_block` rewritten to emit the new
+  vocabulary in the prompt block. `bucket` / `tense` / `verdict` /
+  `score` are no longer surfaced (engine still computes them for
+  routing + legacy 1-liner backward compat).
+- `top_concerns` → `sensitive_areas:` sub-list. `top_supportive` →
+  `supportive_factors:` sub-list. `risk_context` → `risk_factors:`
+  sub-list (transit windows like "Rahu-Saturn 2026 — Sade-sati 2nd
+  phase peak intensity" surface here).
+- **brand_safety: UNCHANGED, verbatim.** iCall 9152987821 + Vandrevala
+  1860-2662-345 helpline citations preserved exactly.
+- **tone_rules: UNCHANGED, FAIL-CLOSED, last position.** All 5
+  engine-owned rules still emit on every health response.
+
+**Architect-locked invariant tests added:**
+
+- `test_red_avoid_no_softening_in_new_vocabulary` — red_avoid must
+  surface as `vulnerable` or `high_risk` only, never as the softer
+  tiers (`strong` / `stable` / `fluctuating`). Boundary test included
+  for the -40 high_risk threshold.
+- `test_helpline_survives_malformed_bucket_field` — even when the
+  engine returns garbage in `bucket`, the helpline + tone_rules + the
+  new `overall_risk` field still emit cleanly.
+- New `TestHealthVocabularyMapping` class — 11 unit tests locking
+  every verdict→tier mapping, the stability heuristic, the -40
+  boundary, and case-insensitive verdict acceptance.
+
+**Test count: 254/254** (243 baseline + 11 new for v3 mapping).
+
+**Live verification (BBSR mental-health red fixture):**
+
+```
+HEALTH_FACTS:
+  - overall_risk: vulnerable
+  - stability: vulnerable
+  - confidence: 71
+  - current_window: Rahu/Saturn (2026-01..2026-12)
+  - sensitive_areas:
+    - L6_moon_karaka
+    - L25_sade_sati
+    - C4_mental
+  - risk_factors:
+    - Rahu-Saturn 2026 — Sade-sati 2nd phase peak intensity
+  - strategy: Active mental-health support recommended now; consider therapy.
+  - brand_safety:
+    - Yeh diagnosis nahi hai — kisi qualified MD/therapist se consult karein.
+    - Mental-health helpline India: iCall 9152987821, Vandrevala 1860-2662-345.
+    - Crisis ho to immediate professional help lein.
+  - tone_rules:
+    - ABSOLUTE claims kabhi mat karo. ...
+    - DIAGNOSIS tone strictly band. ...
+    - NEUTRAL phrasing rakho. ...
+    - PRESCRIPTION kabhi mat do. ...
+    - PROBABILITY ki language use karo, CERTAINTY ki nahi. ...
+```
+
+**Reversibility:** the swap is contained entirely in the formatter
+(plus 2 helpers). The engine schema is unchanged. To revert the
+vocabulary, restore the previous formatter — no engine work needed.
+
+---
+
 ## Phase 5.9 — Career FACTS block (Batch 3b: career_engine wired)
 
 Continues the Batch 3a pattern by wiring `career_engine.assess_career()`

@@ -1941,3 +1941,103 @@ arrange?" — see live trace below in this turn's notes.
 - `test_phase50_minimal_prompt.py` — new `TestPhase55fDirectional
   InconclusiveWording` class (9 tests); existing Phase 5.5e end-to-end
   test annotated with cross-reference comment.
+
+## Phase 5.5g — KP narration scaffolding (Apr 29 2026, NOT YET ACTIVE)
+
+### Problem
+User requested adding Krishnamurti Paddhati (KP) cuspal-sublord (CSL)
+explanation to the LLM narration so the verdict can be supported with
+classical KP logic ("KP me 5th CSL ka 5/7/11 se connection love-marriage
+conversion ko support karta hai"). Their explicit constraint: KP must
+EXPLAIN the engine verdict, never decide it.
+
+### Blocker discovered during inspection
+The current kundli payload contains:
+- `nakshatra`, `nakshatraPada`, `nakshatraRuler` (Moon's KP-adjacent data)
+- `planets[].house` (Whole-Sign occupancy)
+- `ascendantDeg`, planet longitudes
+
+It does **NOT** contain:
+- Placidus house cusps (KP uses Placidus, not Whole-Sign)
+- Cuspal sublords for the 5th/7th/11th cusps
+- Sub-lord chain for any planet
+
+Activating a KP narration prompt without real CSL data would force the
+LLM into one of two failure modes:
+1. **Hallucinate** CSL values to satisfy the prompt — direct violation of
+   Phase 5.0's hard hallucination ban.
+2. **Refuse** with "KP analysis nahi de sakta" — pure noise to the user.
+
+Both are regressions. The right move is scaffolding-only until the chart
+provider (or a future CSL extractor) supplies real KP facts.
+
+### Scaffolding shipped
+1. **Engine field** — `_phase55_compute_love_vs_arrange` return dict now
+   carries `kp_facts: None` placeholder (default). Single knob for
+   activation: populate this dict and KP narration auto-engages.
+2. **Formatter** — new `_phase55_format_kp_explanation_block(kp_facts)`
+   emits the full KP narration block per user spec when fed real data,
+   returns empty string when fed None / `{}` / non-dict. **Hard guard.**
+3. **Lock-block injection** — `_phase55_format_locked_verdict_block`
+   conditionally appends the KP block AFTER reasons, BEFORE the main
+   verdict-lock instruction. Empty when scaffolding inactive.
+
+### Activation contract (for next turn / chart provider)
+Engine must populate `kp_facts` like:
+```python
+{
+    "csl_5":  {"sign": "Leo",   "lord": "Sun",     "connected_houses": [5, 7, 11]},
+    "csl_7":  {"sign": "Aqua",  "lord": "Saturn",  "connected_houses": [2, 7, 11]},
+    "csl_11": {"sign": "Sag",   "lord": "Jupiter", "connected_houses": [5, 11]},
+}
+```
+Partial data is allowed — missing CSLs render as `(not provided)` and
+the LLM is explicitly instructed not to mention them.
+
+### KP narration block contents (per user's production-ready prompt)
+- KP_FACTS — engine-computed CSL sign + lord + connected house list
+- KP_EXPLANATION_GUIDE — 5 classical interpretation rules:
+  - 5th CSL → {5,7,11} supports love→marriage
+  - 5th CSL → {6,8,12} obstacles/denial
+  - 7th CSL → {2,7,11} marriage materializes
+  - 11th CSL supports → fulfillment
+  - 6/8/12 dominate → delays/breaks/conversion
+- INSTRUCTION (additive, NOT decisional):
+  - Verdict above is FINAL — KP must NOT change/flip
+  - Explain mode: add ONE short KP line after headline
+  - Never invent CSL facts; never derive CSLs from planet positions
+
+### Tests
+**202/202 green** (was 195, +7 new in `TestPhase55gKpScaffolding`):
+- `kp_facts` field exposed on engine return
+- `_phase55_format_kp_explanation_block(None|{}|"")` → `""`
+- Locked block excludes ALL KP language when facts are None (the no-
+  hallucination guarantee — this is the critical test)
+- Block renders fully with real-shape facts (CSL labels, sign, lord,
+  connected houses, classical rules, lock language)
+- Partial facts handled gracefully ("(not provided)" + don't-mention
+  instruction)
+- Lock supremacy enforced (verdict is FINAL, KP is additive)
+- Block ordering verified (KP appears after reasons, before main instr)
+
+### Live verification
+Same BBSR 5v4 kundli, canonical question — response is byte-identical
+to Phase 5.5f:
+> "Love marriage ki taraf thoda jhukav hai, lekin strong confirmation
+>  nahi hai — yeh situation par depend karega."
+
+No KP language leaked, scaffolding is genuinely a no-op while inactive.
+
+### Activation path (for next turn)
+Two options exist:
+1. **Provider-side** — chart-generation service computes Placidus cusps
+   + sublord chain, returns `kp_facts` in kundli payload. Wire is then
+   `kp_facts = kundli.get("kp_facts")` in the engine return.
+2. **Server-side extractor** — new function `_phase55_compute_kp_facts
+   (kundli)` using `pyswisseph` (Swiss Ephemeris) to compute Placidus
+   cusps from `dob/time/place` + standard KP ayanamsa, then derives
+   CSL sign-lord-sub-sub for cusps 5/7/11. Heavier but self-contained.
+
+User has offered to provide the KP calculator code — when it lands, the
+single change required is populating `kp_facts` in the engine dict.
+Everything else (prompt, formatting, lock language, tests) is ready.

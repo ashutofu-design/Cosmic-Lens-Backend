@@ -9683,6 +9683,16 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
         "verdict_public":       verdict_public,         # UX verdict
         "verdict_text_public":  verdict_text_public,    # UX headline (this is
                                                         # what the LLM narrates)
+        # ── Phase 5.5g (Apr 29 2026) — KP scaffolding placeholder ──
+        # Reserved for KP (Krishnamurti Paddhati) cuspal-sublord facts.
+        # When populated by the chart provider (or a future CSL extractor)
+        # this dict will carry: csl_5, csl_7, csl_11 (each with sign, lord,
+        # connected_houses) and the locked verdict block will append a
+        # KP-narration instruction. While `None`, the LLM gets NO KP
+        # prompt at all — preventing CSL hallucination. See
+        # `_phase55_format_locked_verdict_block` and
+        # `_phase55_format_kp_explanation_block`.
+        "kp_facts":             None,
     }
 
 
@@ -9749,6 +9759,13 @@ def _phase55_format_locked_verdict_block(
             "that work."
         )
 
+    # ── Phase 5.5g — optional KP explanation layer ──
+    # Only emitted when the engine return dict carries actual KP cuspal-
+    # sublord facts (kp_facts is non-empty). Hard guard prevents the LLM
+    # from being told "use KP rules" when no real KP data exists, which
+    # would invite CSL hallucination — exactly the Phase 5.0 violation.
+    kp_block = _phase55_format_kp_explanation_block(v.get("kp_facts"))
+
     return (
         "AUTHORITATIVE_ENGINE_VERDICT (locked — DO NOT change, contradict, "
         "or recompute):\n"
@@ -9757,8 +9774,84 @@ def _phase55_format_locked_verdict_block(
         f"ARRANGE_SCORE: {v.get('arrange_score')}\n"
         f"  HEADLINE: {headline}\n"
         f"  REASONS_LOVE:\n{rs_love}\n"
-        f"  REASONS_ARRANGE:\n{rs_arr}\n\n"
+        f"  REASONS_ARRANGE:\n{rs_arr}\n"
+        + (kp_block if kp_block else "")
+        + "\n"
         + instruction
+    )
+
+
+def _phase55_format_kp_explanation_block(kp_facts: Any) -> str:
+    """Phase 5.5g — render the KP (Krishnamurti Paddhati) narration block.
+
+    Returns "" (empty string) when `kp_facts` is None / empty / not a dict.
+    This is a HARD guard: without real CSL facts the prompt section is
+    omitted entirely so the LLM never gets told "use KP" without data
+    (which would invite CSL hallucination).
+
+    Expected `kp_facts` shape (when populated by chart provider or a
+    future CSL extractor):
+        {
+            "csl_5":  {"sign": "Leo",    "lord": "Sun",
+                       "connected_houses": [5, 7, 11]},
+            "csl_7":  {"sign": "Aqua",   "lord": "Saturn",
+                       "connected_houses": [2, 7, 11]},
+            "csl_11": {"sign": "Sag",    "lord": "Jupiter",
+                       "connected_houses": [5, 11]},
+        }
+
+    Interpretation rules embedded in the prompt (per user spec):
+      - 5th CSL  → love / romance
+      - 7th CSL  → marriage
+      - 11th CSL → fulfillment / success
+      - Connected to {5, 7, 11} → supports love → marriage
+      - Connected to {6, 8, 12} → obstacles, denial, conversion
+      - Connected to {2, 7, 11} on 7th CSL → marriage materializes
+
+    The LLM is NEVER asked to compute KP — only to explain what the
+    engine has computed. The KP facts feed into the existing
+    AUTHORITATIVE_ENGINE_VERDICT lock — verdict cannot be recomputed
+    or contradicted by the KP narration.
+    """
+    if not kp_facts or not isinstance(kp_facts, dict):
+        return ""
+
+    def _fmt_csl(label: str, key: str) -> str:
+        c = kp_facts.get(key)
+        if not isinstance(c, dict):
+            return f"  {label}: (not provided)"
+        sign = c.get("sign") or "?"
+        lord = c.get("lord") or "?"
+        houses = c.get("connected_houses") or []
+        houses_s = ",".join(str(h) for h in houses) if houses else "(none)"
+        return f"  {label}: {sign} (lord {lord}) → connected houses: {houses_s}"
+
+    facts_lines = "\n".join([
+        _fmt_csl("CSL_5  (love)",        "csl_5"),
+        _fmt_csl("CSL_7  (marriage)",    "csl_7"),
+        _fmt_csl("CSL_11 (fulfillment)", "csl_11"),
+    ])
+
+    return (
+        "\n\nKP_FACTS (engine-computed cuspal sublords — DO NOT recompute):\n"
+        f"{facts_lines}\n\n"
+        "KP_EXPLANATION_GUIDE (use ONLY these classical KP rules to "
+        "support — never to override — the verdict above):\n"
+        "  - 5th CSL connects to {5, 7, 11}  → supports love → marriage\n"
+        "  - 5th CSL connects to {6, 8, 12}  → obstacles / denial of love\n"
+        "  - 7th CSL connects to {2, 7, 11}  → marriage materializes\n"
+        "  - 11th CSL supports              → desired outcome fulfilled\n"
+        "  - 6/8/12 dominate                → delays, breaks, conversion\n"
+        "INSTRUCTION (KP layer — additive, NOT decisional):\n"
+        "  • The verdict above is FINAL. KP must NOT change or flip it.\n"
+        "  • If the user asks 'kyun' / 'why' / 'kaise', you MAY add ONE "
+        "short KP line after the headline that explains the verdict in "
+        "KP terms using ONLY the facts above (e.g. \"KP me 5th CSL ka "
+        "5/7/11 se connection love-marriage conversion ko support karta "
+        "hai.\").\n"
+        "  • If the KP_FACTS lines say '(not provided)' for a CSL, do "
+        "NOT mention that CSL at all. Do NOT invent KP facts. Do NOT "
+        "reason from planet positions to derive CSLs yourself."
     )
 
 

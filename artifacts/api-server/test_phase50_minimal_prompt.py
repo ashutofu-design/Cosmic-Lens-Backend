@@ -1387,6 +1387,151 @@ class TestPhase55fDirectionalInconclusiveWording(unittest.TestCase):
                           f"{love}v{arrange} missing leaning openness phrase")
 
 
+class TestPhase55gKpScaffolding(unittest.TestCase):
+    """Phase 5.5g — KP (Krishnamurti Paddhati) explanation layer scaffolding.
+
+    Goal: provide a SAFE, GUARDED hook for adding KP cuspal-sublord
+    narration to the locked verdict block, WITHOUT activating it until
+    real KP facts can be supplied by the chart provider (or a future
+    CSL extractor).
+
+    Hard contract:
+      • Engine return dict carries `kp_facts` field (None by default).
+      • `_phase55_format_kp_explanation_block(None)` returns "" — the
+        locked block emits NO KP prompt section at all.
+      • `_phase55_format_kp_explanation_block({...real kp dict...})`
+        emits the full KP_FACTS + KP_EXPLANATION_GUIDE + INSTRUCTION
+        block per user's spec, gated behind the engine verdict lock so
+        KP can EXPLAIN but NEVER override.
+      • Verdict lock language is preserved: "DO NOT change, contradict,
+        or recompute" still applies; KP narration is additive only.
+
+    Why scaffolding-only (not active):
+      • Current kundli payload has nakshatra/pada/ruler but NO
+        Placidus cusps and NO cuspal sublords. Activating KP narration
+        without those would invite the LLM to either invent CSLs
+        (Phase 5.0 hallucination violation) or refuse — both bad.
+      • Once chart provider returns kp_facts, flipping this on is a
+        zero-code change (just populate `kp_facts` in the engine dict).
+    """
+
+    def test_engine_return_dict_carries_kp_facts_field(self):
+        """Engine output must expose `kp_facts` so downstream layers
+        can populate it. Default is None — ensures no behavior change
+        until real KP data arrives."""
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        self.assertIn("kp_facts", v)
+        self.assertIsNone(v["kp_facts"],
+                          "Default kp_facts must be None until real "
+                          "CSL extractor lands — prevents hallucination.")
+
+    def test_kp_block_is_empty_when_facts_are_none(self):
+        """No kp_facts → empty string → locked block emits no KP
+        section → LLM never told to use KP."""
+        self.assertEqual(oh._phase55_format_kp_explanation_block(None), "")
+        self.assertEqual(oh._phase55_format_kp_explanation_block({}), "")
+        self.assertEqual(oh._phase55_format_kp_explanation_block("not a dict"),
+                         "")
+
+    def test_locked_block_excludes_kp_when_facts_none(self):
+        """End-to-end: with kp_facts=None (current real-world state),
+        the locked verdict block has zero KP language. CRITICAL —
+        this is the no-hallucination guarantee."""
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        block = oh._phase55_format_locked_verdict_block(v)
+        self.assertNotIn("KP_FACTS", block)
+        self.assertNotIn("KP_EXPLANATION_GUIDE", block)
+        self.assertNotIn("cuspal sublord", block)
+        self.assertNotIn("CSL_5", block)
+        # Existing locked-block contract still intact
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
+        self.assertIn("HEADLINE", block)
+
+    def test_kp_block_renders_when_facts_provided(self):
+        """When a real-shape kp_facts dict is supplied, the formatter
+        emits the full KP narration block per user's spec."""
+        kp = {
+            "csl_5":  {"sign": "Leo",   "lord": "Sun",
+                       "connected_houses": [5, 7, 11]},
+            "csl_7":  {"sign": "Aqua",  "lord": "Saturn",
+                       "connected_houses": [2, 7, 11]},
+            "csl_11": {"sign": "Sag",   "lord": "Jupiter",
+                       "connected_houses": [5, 11]},
+        }
+        block = oh._phase55_format_kp_explanation_block(kp)
+        # Required structure
+        self.assertIn("KP_FACTS", block)
+        self.assertIn("KP_EXPLANATION_GUIDE", block)
+        # CSL labels
+        self.assertIn("CSL_5", block)
+        self.assertIn("CSL_7", block)
+        self.assertIn("CSL_11", block)
+        # Lord + sign
+        self.assertIn("Sun", block)
+        self.assertIn("Saturn", block)
+        # Connected houses formatted
+        self.assertIn("5,7,11", block)
+        # Classical KP rules from user's spec
+        self.assertIn("5, 7, 11", block)
+        self.assertIn("6, 8, 12", block)
+        self.assertIn("2, 7, 11", block)
+        # Lock language — KP must not override verdict
+        self.assertIn("FINAL", block)
+        self.assertIn("must NOT change", block)
+        self.assertIn("Do NOT invent KP facts", block)
+
+    def test_kp_block_partial_facts_handled_gracefully(self):
+        """If only some CSLs are provided (e.g. csl_5 only), the
+        missing ones must render as '(not provided)' so the LLM is
+        explicitly told NOT to mention them."""
+        kp = {
+            "csl_5": {"sign": "Leo", "lord": "Sun",
+                      "connected_houses": [5, 7, 11]},
+        }
+        block = oh._phase55_format_kp_explanation_block(kp)
+        self.assertIn("CSL_5", block)
+        self.assertIn("Sun", block)
+        self.assertIn("(not provided)", block)
+        # Must still tell the LLM how to handle missing data —
+        # case-insensitive search to avoid wording-tweak fragility.
+        flat = block.replace("\n", " ").lower()
+        self.assertIn("do not mention that csl", flat)
+
+    def test_kp_block_lock_supremacy(self):
+        """The KP block must explicitly subordinate KP to the engine
+        verdict — no flipping allowed. This is the architectural
+        guarantee that adding KP can never regress Phase 5.5e/5.5f."""
+        kp = {"csl_5": {"sign": "Leo", "lord": "Sun",
+                        "connected_houses": [5, 7, 11]}}
+        block = oh._phase55_format_kp_explanation_block(kp)
+        block_lc = block.lower()
+        self.assertIn("verdict above is final", block_lc)
+        self.assertIn("must not change or flip", block_lc)
+        self.assertIn("additive", block_lc)
+
+    def test_locked_block_includes_kp_when_facts_set(self):
+        """End-to-end: setting kp_facts on the engine dict makes the
+        locked block include the KP narration section. This is the
+        single-knob activation path for next turn."""
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        v["kp_facts"] = {
+            "csl_5": {"sign": "Leo", "lord": "Sun",
+                      "connected_houses": [5, 7, 11]},
+        }
+        block = oh._phase55_format_locked_verdict_block(v)
+        self.assertIn("KP_FACTS", block)
+        self.assertIn("CSL_5", block)
+        # Verdict lock still primary
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
+        self.assertIn("HEADLINE", block)
+        # KP appears AFTER reasons, BEFORE the main instruction
+        kp_idx = block.find("KP_FACTS")
+        instr_idx = block.find("INSTRUCTION (CRITICAL")
+        self.assertGreater(kp_idx, 0)
+        self.assertGreater(instr_idx, kp_idx,
+                           "KP section must come before main instruction")
+
+
 class TestPhase55BuilderIntegration(unittest.TestCase):
     """When a love-vs-arrange question fires, the prompt builder must
     REPLACE the topic-rule checklist with the locked verdict block —

@@ -601,12 +601,12 @@ class TestPhase55ContextMemoryDetector(unittest.TestCase):
         # Phase 5.7: lock-mode no longer needs a special "VERDICT-LOCK MODE"
         # preamble — the unified clean system message already says
         # "verdict is computed by the engine, do not recompute". The
-        # AUTHORITATIVE_ENGINE_VERDICT block in the user message is the
+        # ENGINE_VERDICT block in the user message is the
         # actual lock enforcement.
-        self.assertIn("verdict is already computed by the engine", sys_text)
+        self.assertIn("verdict and facts are already computed by the engine", sys_text)
         self.assertIn("Do NOT recompute", sys_text)
         # Locked verdict block in the user message.
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", usr_text)
+        self.assertIn("ENGINE_VERDICT", usr_text)
         # Explain mode flipped on → must list 3-5 reasons.
         self.assertIn("EXPLAIN MODE", usr_text)
         self.assertIn("3-5", usr_text)
@@ -905,7 +905,7 @@ class TestPhase55Engine(unittest.TestCase):
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         block = oh._phase55_format_locked_verdict_block(v)
         self.assertIn(v["verdict_text_public"], block)
-        self.assertIn(f"VERDICT: {v['verdict_public']}", block)
+        self.assertIn(f"verdict: {v['verdict_public']}", block)
         # Phase 5.7.1 facts-only guarantee — no INSTRUCTION prose.
         self.assertNotIn("INSTRUCTION (CRITICAL", block)
         self.assertNotIn("do NOT soften", block)
@@ -947,8 +947,8 @@ class TestPhase55Engine(unittest.TestCase):
         # The positive listing marker is PRESENT
         self.assertIn("EXPLAIN MODE", block)
         self.assertIn("3-5", block)
-        # And the engine block header still labels the facts as locked.
-        self.assertIn("locked", block.lower())
+        # And the engine block header still labels the facts.
+        self.assertIn("ENGINE_VERDICT", block)
         # Phase 5.7.1 facts-only guarantee — no rule prose injected.
         self.assertNotIn("INSTRUCTION (CRITICAL", block)
         self.assertNotIn("Do NOT list the reasons", block)
@@ -969,7 +969,7 @@ class TestPhase55Engine(unittest.TestCase):
                       "explain-mode follow-up must reach the prompt with "
                       "the listing instruction")
         # And the lock itself must still be active (verdict block present)
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user_text)
+        self.assertIn("ENGINE_VERDICT", user_text)
 
     def test_builder_no_explain_mode_for_direct_compare(self):
         """The original direct-compare question stays in HEADLINE-only
@@ -981,7 +981,7 @@ class TestPhase55Engine(unittest.TestCase):
             lang="hn",
         )
         user_text = msgs[1]["content"]
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user_text)
+        self.assertIn("ENGINE_VERDICT", user_text)
         self.assertNotIn("EXPLAIN MODE", user_text)
 
     def test_locked_block_falls_back_to_legacy_when_public_missing(self):
@@ -1000,7 +1000,7 @@ class TestPhase55Engine(unittest.TestCase):
             # NOTE: deliberately no verdict_public / verdict_text_public
         }
         block = oh._phase55_format_locked_verdict_block(legacy_only)
-        self.assertIn("VERDICT: mixed", block)
+        self.assertIn("verdict: mixed", block)
         self.assertIn(legacy_only["verdict_text_hi"], block)
 
     def test_evidence_floor_downgrades_sparse_directional(self):
@@ -1051,8 +1051,8 @@ class TestPhase55Engine(unittest.TestCase):
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         block = oh._phase55_format_locked_verdict_block(v)
         # Facts header still present.
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
-        self.assertIn("HEADLINE", block)
+        self.assertIn("ENGINE_VERDICT", block)
+        self.assertIn("headline", block)
         # The legacy INSTRUCTION (CRITICAL) prose is gone.
         self.assertNotIn("INSTRUCTION (CRITICAL", block)
         self.assertNotIn("DO NOT change", block)
@@ -1462,10 +1462,10 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         self.assertNotIn("KP_FACTS", block)
         self.assertNotIn("KP_EXPLANATION_GUIDE", block)
         self.assertNotIn("cuspal sublord", block)
-        self.assertNotIn("CSL_5", block)
+        self.assertNotIn("csl_5", block)
         # Existing locked-block contract still intact
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
-        self.assertIn("HEADLINE", block)
+        self.assertIn("ENGINE_VERDICT", block)
+        self.assertIn("headline", block)
 
     def test_kp_block_renders_when_facts_provided(self):
         """When a real-shape kp_facts dict is supplied, the formatter
@@ -1482,9 +1482,9 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         # Required structure
         self.assertIn("KP_FACTS", block)
         # CSL labels
-        self.assertIn("CSL_5", block)
-        self.assertIn("CSL_7", block)
-        self.assertIn("CSL_11", block)
+        self.assertIn("csl_5", block)
+        self.assertIn("csl_7", block)
+        self.assertIn("csl_11", block)
         # Lord + sign
         self.assertIn("Sun", block)
         self.assertIn("Saturn", block)
@@ -1508,10 +1508,10 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
                       "connected_houses": [5, 7, 11]},
         }
         block = oh._phase55_format_kp_explanation_block(kp)
-        self.assertIn("CSL_5", block)
+        self.assertIn("csl_5", block)
         self.assertIn("Sun", block)
         # Missing CSLs are explicit in the data — LLM sees they're absent.
-        self.assertIn("(not provided)", block)
+        self.assertIn("not_provided", block)
 
     def test_kp_block_is_facts_only(self):
         """Phase 5.7.1 architectural guarantee — the KP block emits
@@ -1540,16 +1540,16 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         }
         block = oh._phase55_format_locked_verdict_block(v)
         self.assertIn("KP_FACTS", block)
-        self.assertIn("CSL_5", block)
+        self.assertIn("csl_5", block)
         # Verdict lock still primary
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
-        self.assertIn("HEADLINE", block)
+        self.assertIn("ENGINE_VERDICT", block)
+        self.assertIn("headline", block)
         # KP appears AFTER reasons (ordering preserved)
         kp_idx       = block.find("KP_FACTS")
-        reasons_idx  = block.find("REASONS_ARRANGE")
+        reasons_idx  = block.find("reasons_arrange")
         self.assertGreater(kp_idx, 0)
         self.assertGreater(kp_idx, reasons_idx,
-                           "KP_FACTS must come after REASONS_ARRANGE")
+                           "KP_FACTS must come after reasons_arrange")
         # Phase 5.7.1 — no rule prose anywhere in the assembled block.
         self.assertNotIn("INSTRUCTION (CRITICAL", block)
         self.assertNotIn("KP_EXPLANATION_GUIDE", block)
@@ -1703,7 +1703,7 @@ class TestPhase55hKpActivation(unittest.TestCase):
         self.assertIsNone(v["kp_facts"])
         block = oh._phase55_format_locked_verdict_block(v)
         self.assertNotIn("KP_FACTS", block)
-        self.assertNotIn("CSL_7", block)
+        self.assertNotIn("csl_7", block)
 
     def test_engine_kp_facts_populated_with_geo(self):
         """Real path through the engine WITH geo: pyswisseph fires →
@@ -1746,8 +1746,8 @@ class TestPhase55hKpActivation(unittest.TestCase):
         self.assertIn("KP_FACTS",            block)
         self.assertNotIn("KP_EXPLANATION_GUIDE", block)
         # Engine verdict still primary — Phase 5.5e/5.5f guarantee
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
-        self.assertIn("HEADLINE",            block)
+        self.assertIn("ENGINE_VERDICT", block)
+        self.assertIn("headline", block)
 
     def test_engine_kp_activation_does_not_change_verdict(self):
         """ARCHITECTURAL GUARANTEE — turning KP on must NOT alter the
@@ -1784,7 +1784,7 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
             topic="marriage",
         )
         user = msgs[-1]["content"]
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+        self.assertIn("ENGINE_VERDICT", user)
         # MARRIAGE rules checklist (Phase 5.3) must be SUPPRESSED so the
         # model has nothing to derive its own verdict from.
         self.assertNotIn("MARRIAGE-question CHECKLIST", user)
@@ -1804,13 +1804,13 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
         sysm = msgs[0]["content"]
         # Phase 5.7: unified clean system message — same line covers both
         # lock-mode and non-lock-mode ("verdict is computed by engine").
-        self.assertIn("verdict is already computed by the engine", sysm)
+        self.assertIn("verdict and facts are already computed by the engine", sysm)
         self.assertIn("Do NOT recompute", sysm)
         # Default system msg "ARRIVE at the right verdict" must be GONE.
         self.assertNotIn("ARRIVE at the right verdict", sysm)
         self.assertNotIn("MANDATORY D9", sysm)
         # Locked-verdict block must still anchor the user message.
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", msgs[1]["content"])
+        self.assertIn("ENGINE_VERDICT", msgs[1]["content"])
 
     def test_lock_combined_prompt_has_no_recompute_verbs(self):
         """Architect-review pin: across the COMBINED system+user prompt
@@ -1859,7 +1859,7 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
         user = msgs[-1]["content"]
         self.assertNotIn("FULL_KUNDLI_JSON", user)
         # Mini chart summary stays — engine output stays — that's it.
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+        self.assertIn("ENGINE_VERDICT", user)
 
     def test_no_lock_for_non_lva_marriage_question(self):
         """Pure timing question must keep the rule checklist (no lock)."""
@@ -1871,7 +1871,7 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
             topic="marriage",
         )
         user = msgs[-1]["content"]
-        self.assertNotIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+        self.assertNotIn("ENGINE_VERDICT", user)
 
     def test_lock_fires_independent_of_topic(self):
         """Detector keys off the question text, not the topic — protects
@@ -1885,4 +1885,4 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
             topic="general",
         )
         user = msgs[-1]["content"]
-        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+        self.assertIn("ENGINE_VERDICT", user)

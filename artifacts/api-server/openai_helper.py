@@ -9819,20 +9819,21 @@ def _phase55_format_locked_verdict_block(
     """
     if not isinstance(v, dict):
         return ""
-    rs_love = "\n".join(f"  + {r}" for r in (v.get("reasons_love") or [])) or "  (none)"
-    rs_arr  = "\n".join(f"  - {r}" for r in (v.get("reasons_arrange") or [])) or "  (none)"
+    rs_love = "\n".join(f"    - {r}" for r in (v.get("reasons_love") or [])) or "    - (none)"
+    rs_arr  = "\n".join(f"    - {r}" for r in (v.get("reasons_arrange") or [])) or "    - (none)"
     # Prefer the public/UX headline; fall back to legacy text for safety.
     headline = v.get("verdict_text_public") or v.get("verdict_text_hi") or ""
+    confidence = v.get("confidence")
+    conf_str = f"{confidence:.2f}" if isinstance(confidence, (int, float)) else "n/a"
 
-    # Phase 5.7.1 — facts-only contract. The system message already says
-    # "verdict is computed by the engine, do not recompute". We do NOT
-    # repeat that contract here as prose. Engine emits FACTS; LLM
+    # Phase 5.7.1 final — clean ENGINE_VERDICT facts block. No header
+    # parenthetical, no instruction prose. Engine emits FACTS; LLM
     # narrates them. The only mode-marker we keep is a single line so
     # the model knows whether to give a 1-line headline or a 3-5 reason
     # explanation — that's a length-cue, not a rule.
     explain_marker = (
-        "\nEXPLAIN MODE — list 3-5 reasons from REASONS_LOVE / "
-        "REASONS_ARRANGE above in plain language (the side matching "
+        "\nEXPLAIN MODE — list 3-5 reasons from reasons_love / "
+        "reasons_arrange above in plain language (the side matching "
         "the headline)."
         if explain_mode
         else ""
@@ -9846,13 +9847,14 @@ def _phase55_format_locked_verdict_block(
     kp_block = _phase55_format_kp_explanation_block(v.get("kp_facts"))
 
     return (
-        "AUTHORITATIVE_ENGINE_VERDICT (locked — engine-computed facts):\n"
-        f"  VERDICT: {v.get('verdict_public') or v.get('verdict')}\n"
-        f"  LOVE_SCORE: {v.get('love_score')}    "
-        f"ARRANGE_SCORE: {v.get('arrange_score')}\n"
-        f"  HEADLINE: {headline}\n"
-        f"  REASONS_LOVE:\n{rs_love}\n"
-        f"  REASONS_ARRANGE:\n{rs_arr}\n"
+        "ENGINE_VERDICT:\n"
+        f"  - verdict: {v.get('verdict_public') or v.get('verdict')}\n"
+        f"  - confidence: {conf_str}\n"
+        f"  - love_score: {v.get('love_score')}\n"
+        f"  - arrange_score: {v.get('arrange_score')}\n"
+        f"  - headline: {headline}\n"
+        f"  - reasons_love:\n{rs_love}\n"
+        f"  - reasons_arrange:\n{rs_arr}\n"
         + (kp_block if kp_block else "")
         + explain_marker
     )
@@ -9896,26 +9898,24 @@ def _phase55_format_kp_explanation_block(kp_facts: Any) -> str:
     def _fmt_csl(label: str, key: str) -> str:
         c = kp_facts.get(key)
         if not isinstance(c, dict):
-            return f"  {label}: (not provided)"
+            return f"  - {label}: not_provided"
         sign = c.get("sign") or "?"
         lord = c.get("lord") or "?"
         houses = c.get("connected_houses") or []
         houses_s = ",".join(str(h) for h in houses) if houses else "(none)"
-        return f"  {label}: {sign} (lord {lord}) → connected houses: {houses_s}"
+        return f"  - {label}: {sign} / lord {lord} / houses {houses_s}"
 
     facts_lines = "\n".join([
-        _fmt_csl("CSL_5  (love)",        "csl_5"),
-        _fmt_csl("CSL_7  (marriage)",    "csl_7"),
-        _fmt_csl("CSL_11 (fulfillment)", "csl_11"),
+        _fmt_csl("csl_5 (love)",         "csl_5"),
+        _fmt_csl("csl_7 (marriage)",     "csl_7"),
+        _fmt_csl("csl_11 (fulfillment)", "csl_11"),
     ])
 
-    # Phase 5.7.1 — facts-only. The classical KP rules and the
-    # "additive, not decisional" instructions used to live here as
-    # prose, but the system message already governs that ("verdict
-    # is computed by the engine, do not recompute"). Engine emits
-    # KP facts; LLM narrates them.
+    # Phase 5.7.1 final — clean KP_FACTS block. No header parenthetical,
+    # no instruction prose, no classical-rule guide. Engine emits KP
+    # facts; LLM narrates them.
     return (
-        "\n\nKP_FACTS (engine-computed cuspal sublords):\n"
+        "\n\nKP_FACTS:\n"
         f"{facts_lines}"
     )
 
@@ -10027,15 +10027,16 @@ def _phase50_build_minimal_messages(
     # already computes every verdict. The LLM's job is narration ONLY.
     # ───────────────────────────────────────────────────────────────────
     system_msg = (
-        "You are a Vedic astrology assistant.\n\n"
-        "The final verdict is already computed by the engine.\n"
-        "Do NOT recompute or change it.\n\n"
-        "Use the given facts to answer simply.\n"
+        "You are a Vedic astrology assistant.\n"
+        "The final verdict and facts are already computed by the engine.\n"
+        "Do NOT recompute or change them.\n"
+        "Answer naturally:\n"
         "- Be clear and direct\n"
-        "- Keep it short unless asked\n"
-        "- If explanation is asked, explain briefly\n"
+        "- Keep it short unless explanation is asked\n"
+        "- If explanation is asked, explain briefly using the given facts\n"
         "- Do not add extra analysis\n"
-        "- Speak naturally like a human" + lang_hint
+        "- Do not introduce new rules or logic\n"
+        "Speak simply and like a human." + lang_hint
     )
 
     user_parts: list[str] = []
@@ -10469,18 +10470,17 @@ def _phase56_format_yoga_facts_block(
     if not buckets_to_show:
         return ""
 
-    # Phase 5.7: facts-only — no INSTRUCTION footer. The system message
-    # already tells the LLM "verdict is computed by engine, do not
-    # recompute". Adding rule bullets here is the exact anti-pattern
-    # we are removing — engine sochta hai, LLM bolta hai.
+    # Phase 5.7.1 final — clean YOGA_FACTS block. No header
+    # parenthetical, no INSTRUCTION footer. Engine emits yoga facts;
+    # LLM narrates them.
     lines: list[str] = [
-        f"Yogas — positive: {facts.get('positive', 0)}, "
-        f"negative: {facts.get('negative', 0)}, "
-        f"mixed: {facts.get('mixed', 0)}",
+        "YOGA_FACTS:",
+        f"  - positive_count: {facts.get('positive', 0)}",
+        f"  - negative_count: {facts.get('negative', 0)}",
+        f"  - mixed_count: {facts.get('mixed', 0)}",
     ]
     if filter_label:
-        lines.append(f"(showing {filter_label} category only)")
-    lines.append("")
+        lines.append(f"  - filter: {filter_label}")
 
     for b in buckets_to_show:
         items = by_bucket.get(b) or []
@@ -10489,20 +10489,23 @@ def _phase56_format_yoga_facts_block(
         # Sort: positive first, then mixed, then negative.
         order = {"POSITIVE": 0, "MIXED": 1, "NEGATIVE": 2}
         items_sorted = sorted(items, key=lambda y: order.get(y.get("polarity"), 3))
-        lines.append(f"{b} ({len(items_sorted)}):")
+        lines.append(f"  - {b.lower()}_count: {len(items_sorted)}")
+        names_only = [y.get("name", "?") for y in items_sorted[:8]]
+        lines.append(f"  - {b.lower()}_names: [{', '.join(names_only)}]")
+        # Per-yoga details (polarity + short detail) follow as a nested
+        # list so the LLM has both the names and the basis facts.
         for y in items_sorted[:8]:
             tag = {"POSITIVE": "+", "NEGATIVE": "-", "MIXED": "~"}.get(
                 y.get("polarity"), "•")
             detail = y.get("detail") or ""
             if len(detail) > 90:
                 detail = detail[:87] + "..."
-            line = f"  {tag} {y.get('name', '?')}"
+            line = f"      {tag} {y.get('name', '?')}"
             if detail:
                 line += f" — {detail}"
             lines.append(line)
         if len(items_sorted) > 8:
-            lines.append(f"  … (+{len(items_sorted) - 8} more)")
-        lines.append("")
+            lines.append(f"      … (+{len(items_sorted) - 8} more)")
 
     return "\n".join(lines).rstrip() + "\n"
 

@@ -2433,3 +2433,106 @@ Zero classical-rule prose. Zero "INSTRUCTION (CRITICAL)" paragraphs.
 Zero "do NOT" repetition. The mantra holds end-to-end:
 
 **Engine sochta hai, LLM bolta hai.**
+
+---
+
+## Phase 5.7.1 FINAL — clean labels (Apr 29, 2026)
+
+User's exact spec applied: strip ALL stylistic/header artifacts so the
+prompt is a textbook facts-only contract.
+
+### System message (verbatim user wording, 435 chars)
+
+```
+You are a Vedic astrology assistant.
+The final verdict and facts are already computed by the engine.
+Do NOT recompute or change them.
+Answer naturally:
+- Be clear and direct
+- Keep it short unless explanation is asked
+- If explanation is asked, explain briefly using the given facts
+- Do not add extra analysis
+- Do not introduce new rules or logic
+Speak simply and like a human.
+```
+
+Changes vs Phase 5.7: "verdict" → "verdict and facts" (plural),
+new bullet "Do not introduce new rules or logic", "Speak naturally
+like a human" → "Speak simply and like a human", "Keep it short
+unless asked" → "Keep it short unless explanation is asked".
+
+### Lock block — `ENGINE_VERDICT:` clean header
+
+Old: `AUTHORITATIVE_ENGINE_VERDICT (locked — engine-computed facts):`
+with uppercase keys (`VERDICT`, `LOVE_SCORE`, `HEADLINE`, `REASONS_LOVE`).
+New:
+
+```
+ENGINE_VERDICT:
+  - verdict: inconclusive
+  - confidence: 0.55
+  - love_score: 3
+  - arrange_score: 2
+  - headline: <engine UX text>
+  - reasons_love:
+    - <reason>
+  - reasons_arrange:
+    - <reason>
+```
+
+Added `confidence:` field (engine had it but we never surfaced it).
+Header parenthetical removed; lowercase keys; uniform `-` bullet style.
+
+### KP block — `KP_FACTS:` clean header
+
+Old: `KP_FACTS (engine-computed cuspal sublords):` with `CSL_5  (love):
+Leo (lord Sun) → connected houses: 5,7,11`. New:
+
+```
+KP_FACTS:
+  - csl_5 (love): Leo / lord Sun / houses 5,7,11
+  - csl_7 (marriage): Aqua / lord Saturn / houses 2,7,11
+  - csl_11 (fulfillment): Sag / lord Jupiter / houses 5,11
+```
+
+Missing CSLs render as `not_provided` (was `(not provided)`).
+
+### Yoga block — `YOGA_FACTS:` clean header
+
+Old: `Yogas — positive: 11, negative: 4, mixed: 1` plus `(showing
+Dhan category only)`. New:
+
+```
+YOGA_FACTS:
+  - positive_count: 11
+  - negative_count: 4
+  - mixed_count: 1
+  - filter: Dhan
+  - dhan_count: 4
+  - dhan_names: [Mahabhagya, Dhana, ...]
+      + Mahabhagya yoga (male signature) — Sun, Moon, Lagna...
+```
+
+Added structured `<bucket>_count` and `<bucket>_names` fields per bucket
+for direct LLM consumption; per-yoga detail lines preserved as nested
+bullets.
+
+### Tests updated (~25 assertions across 2 files)
+
+Bulk renames: `AUTHORITATIVE_ENGINE_VERDICT` → `ENGINE_VERDICT`,
+`CSL_5/7/11` → `csl_5/7/11`, `Yogas — positive:` → `YOGA_FACTS:`,
+`HEADLINE` → `headline`, `VERDICT:` → `verdict:`, `(not provided)` →
+`not_provided`. Yoga assertions updated to check `positive_count:`,
+`dhan_count:`, `dhan_names:`, `filter: Dhan`. **251/251 pass**
+(23 pre-existing skips).
+
+### Live verification
+
+POST /api/ask with BBSR fixture + `"Mera love marriage hoga ya arrange?
+kyun explain karo"` → model emitted clean inconclusive verdict citing
+ONLY the engine reasons (`D9 Venus exalted in Pisces`, `D9 7th lord
+Mercury 12H`) verbatim. EXPLAIN MODE marker fired correctly. No new
+rules invented.
+
+**Net result: prompt is now a pure facts-only contract. Engine emits
+labels in exactly the form the user specified; LLM narrates them.**

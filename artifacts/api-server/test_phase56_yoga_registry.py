@@ -302,9 +302,10 @@ class TestPhase56Formatter(unittest.TestCase):
         k = _load_bbsr_kundli()
         facts = oh._phase56_compute_yoga_facts(k)
         block = oh._phase56_format_yoga_facts_block(facts, "Kitne yog hain?")
-        self.assertIn("Yogas — positive:", block)
-        self.assertIn("negative:", block)
-        self.assertIn("mixed:", block)
+        self.assertIn("YOGA_FACTS:", block)
+        self.assertIn("positive_count:", block)
+        self.assertIn("negative_count:", block)
+        self.assertIn("mixed_count:", block)
         # The instruction footer must NOT be there — it was telling the
         # LLM how to behave, which is what Phase 5.7 strips.
         self.assertNotIn("INSTRUCTION", block)
@@ -317,19 +318,20 @@ class TestPhase56Formatter(unittest.TestCase):
         facts = oh._phase56_compute_yoga_facts(k)
         block = oh._phase56_format_yoga_facts_block(
             facts, "Mera kitne dhan yog hai?")
-        self.assertIn("Dhan (", block)
-        self.assertIn("(showing Dhan category only)", block)
-        # Should NOT include Negative section header when filtering for Dhan
-        self.assertNotIn("Negative (", block)
+        self.assertIn("dhan_count:", block)
+        self.assertIn("dhan_names:", block)
+        self.assertIn("filter: Dhan", block)
+        # Should NOT include Negative section when filtering for Dhan
+        self.assertNotIn("negative_names:", block)
 
     def test_shows_all_buckets_for_generic_question(self):
         k = _load_bbsr_kundli()
         facts = oh._phase56_compute_yoga_facts(k)
         block = oh._phase56_format_yoga_facts_block(
             facts, "Kitne yog hain mere chart mein?")
-        self.assertNotIn("(showing", block)
+        self.assertNotIn("filter:", block)
         # Should show Dhan section since BBSR has Dhana yogas
-        self.assertIn("Dhan (", block)
+        self.assertIn("dhan_count:", block)
 
     def test_includes_yoga_names_in_output(self):
         """The actual yoga names from the detector must appear verbatim
@@ -375,10 +377,10 @@ class TestPhase56Wiring(unittest.TestCase):
         self.assertTrue(telem.get("yoga_active"),
                         "yoga_active should be True for dhan yog question")
         self.assertGreater(telem.get("yoga_total", 0), 0)
-        # Phase 5.7: header is "Yogas — positive: …" (no YOGA_FACTS label,
+        # Phase 5.7: header is "YOGA_FACTS: …" (no YOGA_FACTS label,
         # no INSTRUCTION footer — facts only).
-        self.assertIn("Yogas — positive:", msgs[1]["content"])
-        self.assertIn("Dhan (", msgs[1]["content"])
+        self.assertIn("YOGA_FACTS:", msgs[1]["content"])
+        self.assertIn("dhan_count:", msgs[1]["content"])
 
     def test_non_yoga_question_does_not_inject(self):
         k = _load_bbsr_kundli()
@@ -391,8 +393,8 @@ class TestPhase56Wiring(unittest.TestCase):
         )
         self.assertFalse(telem.get("yoga_active"),
                          "yoga_active should be False for non-yoga question")
-        # Phase 5.7: facts-only header is "Yogas — positive: …".
-        self.assertNotIn("Yogas — positive:", msgs[1]["content"])
+        # Phase 5.7: facts-only header is "YOGA_FACTS: …".
+        self.assertNotIn("YOGA_FACTS:", msgs[1]["content"])
 
     def test_yoga_block_does_not_replace_verdict_facts(self):
         k = _load_bbsr_kundli()
@@ -408,8 +410,8 @@ class TestPhase56Wiring(unittest.TestCase):
         body = msgs[1]["content"]
         # Both should be present (verdict-facts and yoga-facts coexist).
         self.assertIn("Marriage verdict", body)
-        # Phase 5.7: yoga block uses "Yogas — positive: …" header.
-        self.assertIn("Yogas — positive:", body)
+        # Phase 5.7: yoga block uses "YOGA_FACTS: …" header.
+        self.assertIn("YOGA_FACTS:", body)
 
     def test_failure_in_yoga_compute_does_not_break_install(self):
         """If the yoga orchestrator throws, the install function must

@@ -17,10 +17,13 @@ Configuration:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 # Lazy KP/transit calculators — only loaded when needed so test paths don't
 # need swisseph configured.
@@ -11109,6 +11112,29 @@ def _phase59_is_health_question(question: Any) -> bool:
     return _is_health_question(question)
 
 
+# ── HEALTH_TONE_RULES hardcoded floor (FAIL-CLOSED safety net) ───────────
+# Mandatory minimum tone-policy enforcement that ships even if
+# `health_engine.HEALTH_TONE_RULES` cannot be imported (broken module,
+# missing constant, partial deploy, etc.). The formatter tries the
+# engine source first and only falls back here on import failure.
+#
+# Architect-mandated (Phase 5.9 Batch 3c v2): silently dropping tone
+# rules would revert tone control to LLM discretion — the exact failure
+# the user asked us to eliminate. Better to ship a duplicate floor and
+# log the import error than to silently degrade brand-safety.
+#
+# This list MUST be kept in sync with health_engine.HEALTH_TONE_RULES.
+# The engine constant is the source of truth in normal operation; this
+# floor exists purely to guarantee the policy never disappears.
+_HEALTH_TONE_RULES_FALLBACK: tuple = (
+    "ABSOLUTE claims kabhi mat karo. 'Aapko X bimari hogi' / 'Yeh definitely hoga' / 'Pakka cure ho jayega' jaisi language band. Hamesha probabilistic framing: 'indication hai', 'tendency dikh rahi hai', 'is window mein extra dhyaan zaroori hai'.",
+    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). General areas mein baat karo: 'mental wellbeing', 'digestive system', 'energy levels', 'hormonal balance'. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
+    "NEUTRAL phrasing rakho. Alarmist language ('khatre mein ho', 'turant problem aayegi', 'serious risk hai') aur false reassurance ('bilkul tension mat lo, sab perfect hai', 'kuch nahi hoga') — dono band. Honest, calm, supportive tone — jaise ek mature counsellor baat karta hai.",
+    "PRESCRIPTION kabhi mat do. Medicine names, dosages, treatment plans, surgery decisions, alternative-medicine recommendations = strictly forbidden. Sirf cosmic timing aur supportive context bata sakte ho — actual treatment decisions qualified doctor / specialist ke pass.",
+    "PROBABILITY ki language use karo, CERTAINTY ki nahi. 'Ho sakta hai', 'tendency hai', 'window mein care zaroori hai', 'consultation se clarity milegi' — yeh acceptable hai. 'Hoga hi', '100% sure', 'guaranteed' — yeh acceptable nahi.",
+)
+
+
 def _phase59_format_health_facts_block(v: Any) -> str:
     """Render `assess_health()` output as a clean, prose-free facts block.
 
@@ -11262,6 +11288,44 @@ def _phase59_format_health_facts_block(v: Any) -> str:
         lines.append("  - brand_safety:")
         for b in bullets:
             lines.append(f"    - {b}")
+
+    # ── Tone rules (ENGINE-OWNED, ALWAYS emitted, FAIL-CLOSED) ──────────
+    # Health is the highest-risk topic surface. Tone policy lives in the
+    # engine module (`health_engine.HEALTH_TONE_RULES`) — this formatter
+    # is a pure pass-through. Emitted as the LAST section so it carries
+    # the highest recency-bias weight in the LLM's attention window.
+    #
+    # Always emitted (even when brand_safety / strategy absent) — every
+    # health response must respect tone, regardless of bucket / verdict.
+    #
+    # FAIL-CLOSED architecture (architect-mandated, Phase 5.9 Batch 3c v2):
+    # If the engine import fails for any reason, we DO NOT silently drop
+    # tone rules (that would revert tone control to LLM discretion — the
+    # exact failure mode the user asked us to eliminate). Instead, we
+    # emit a hardcoded MANDATORY FLOOR (`_HEALTH_TONE_RULES_FALLBACK`)
+    # and log the import failure so the regression is visible in prod.
+    # The floor is a duplicate of the engine source — DRY violation
+    # accepted because brand-safety determinism > DRY.
+    _tone_rules: tuple = _HEALTH_TONE_RULES_FALLBACK
+    try:
+        from health_engine import HEALTH_TONE_RULES as _engine_tone_rules
+        if isinstance(_engine_tone_rules, tuple) and _engine_tone_rules:
+            _tone_rules = _engine_tone_rules
+    except Exception as _e:
+        try:
+            logger.error(
+                "[Phase 5.9] HEALTH_TONE_RULES engine import failed: %s — "
+                "falling back to hardcoded floor (tone enforcement preserved).",
+                _e,
+            )
+        except Exception:
+            pass
+    tone_bullets = [_safe_str(r) for r in _tone_rules if isinstance(r, str)]
+    tone_bullets = [r for r in tone_bullets if r]
+    if tone_bullets:
+        lines.append("  - tone_rules:")
+        for r in tone_bullets:
+            lines.append(f"    - {r}")
 
     return "\n".join(lines)
 

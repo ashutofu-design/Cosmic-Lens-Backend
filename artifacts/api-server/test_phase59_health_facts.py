@@ -505,5 +505,176 @@ class TestHealthSensitiveTopicSafety(unittest.TestCase):
         self.assertNotIn("verdict: green_go", out)
 
 
+class TestHealthToneRules(unittest.TestCase):
+    """User-mandated tone-rule enforcement (Phase 5.9 Batch 3c v2):
+    avoid absolute claims / no diagnosis tone / neutral phrasing must be
+    handled by the ENGINE, not LLM discretion. The formatter surfaces
+    `health_engine.HEALTH_TONE_RULES` as a verbatim `tone_rules:` section
+    in EVERY HEALTH_FACTS block — regardless of bucket / verdict /
+    presence of brand_safety bullets."""
+
+    def test_tone_rules_constant_lives_in_engine_module(self):
+        """Single source of truth: rules MUST be defined in
+        health_engine, not in openai_helper. Locks the architectural
+        invariant 'tone policy = engine ka decision'."""
+        from health_engine import HEALTH_TONE_RULES
+        self.assertIsInstance(HEALTH_TONE_RULES, tuple,
+                              "Must be tuple (immutable, prevents accidental mutation)")
+        self.assertGreaterEqual(len(HEALTH_TONE_RULES), 4,
+                                "At minimum: absolute / diagnosis / neutral / prescription rules")
+        for r in HEALTH_TONE_RULES:
+            self.assertIsInstance(r, str)
+            self.assertGreater(len(r.strip()), 30,
+                               f"Rule too short to be meaningful: {r!r}")
+
+    def test_tone_rules_section_present_in_every_health_facts(self):
+        """Tone rules emit for ALL buckets / verdicts (not just red_avoid).
+        Even green-go / surgery / general-wellness must carry tone rules."""
+        for fixture in (
+            _health_obj_mental_health_red(),
+            _health_obj_surgery_slow_burn(),
+            _health_obj_minimal(),
+            _health_obj_general_yellow(),
+        ):
+            out = oh._phase59_format_health_facts_block(fixture)
+            self.assertIn("  - tone_rules:", out,
+                          f"Missing tone_rules in: {fixture.get('bucket')}")
+
+    def test_tone_rules_emit_verbatim_no_paraphrasing(self):
+        """Each engine-defined rule appears verbatim as a sub-bullet.
+        Locks the 'pure pass-through' invariant."""
+        from health_engine import HEALTH_TONE_RULES
+        out = oh._phase59_format_health_facts_block(_health_obj_mental_health_red())
+        for rule in HEALTH_TONE_RULES:
+            self.assertIn(f"    - {rule}", out,
+                          f"Rule not surfaced verbatim: {rule[:60]}...")
+
+    def test_tone_rules_appear_after_brand_safety(self):
+        """Tone rules must be the LAST section of HEALTH_FACTS so they
+        get the highest recency-bias attention weight in the LLM's
+        prompt window. Locks the section ordering."""
+        out = oh._phase59_format_health_facts_block(_health_obj_mental_health_red())
+        bs_idx = out.find("  - brand_safety:")
+        tr_idx = out.find("  - tone_rules:")
+        self.assertGreater(bs_idx, 0, "brand_safety section must exist")
+        self.assertGreater(tr_idx, bs_idx,
+                           "tone_rules MUST come after brand_safety (recency bias)")
+
+    def test_tone_rules_emit_even_when_no_brand_safety(self):
+        """Tone rules are independent of brand_safety bullets. Even when
+        the engine emits zero brand_safety_warnings, tone rules still
+        appear (every health response must respect tone)."""
+        v = _health_obj_minimal().copy()
+        v["brand_safety_warnings"] = []
+        out = oh._phase59_format_health_facts_block(v)
+        self.assertNotIn("  - brand_safety:", out)
+        self.assertIn("  - tone_rules:", out)
+
+    def test_tone_rules_cover_required_policies(self):
+        """The four user-mandated policies (absolute / diagnosis /
+        neutral / prescription) must each be represented in the rules."""
+        from health_engine import HEALTH_TONE_RULES
+        joined = " ".join(HEALTH_TONE_RULES).upper()
+        self.assertIn("ABSOLUTE", joined,
+                      "Missing 'avoid absolute claims' rule")
+        self.assertIn("DIAGNOSIS", joined,
+                      "Missing 'no diagnosis tone' rule")
+        self.assertIn("NEUTRAL", joined,
+                      "Missing 'neutral phrasing' rule")
+        self.assertIn("PRESCRIPTION", joined,
+                      "Missing 'no prescription' rule")
+
+    def test_tone_rules_emit_when_engine_import_fails_fail_closed(self):
+        """Architect-mandated FAIL-CLOSED guard: even if the engine
+        import fails (broken module / missing constant / partial deploy),
+        tone rules MUST still emit using the hardcoded floor in
+        openai_helper. Silent dropping = reverting to LLM discretion =
+        the exact failure mode the user banned. This test simulates the
+        import failure by patching sys.modules to break the import."""
+        import sys
+        import unittest.mock as mock
+
+        # Verify the floor constant exists in openai_helper
+        self.assertTrue(hasattr(oh, "_HEALTH_TONE_RULES_FALLBACK"),
+                        "_HEALTH_TONE_RULES_FALLBACK floor missing from openai_helper")
+        floor = oh._HEALTH_TONE_RULES_FALLBACK
+        self.assertIsInstance(floor, tuple)
+        self.assertGreaterEqual(len(floor), 4,
+                                "Floor must carry at least 4 rules")
+
+        # Verify the floor and engine constant agree (DRY-violation
+        # sync-check — if they drift, this test fails immediately)
+        from health_engine import HEALTH_TONE_RULES as engine_rules
+        self.assertEqual(floor, engine_rules,
+                         "Floor and engine HEALTH_TONE_RULES must stay in sync")
+
+        # Simulate the import failing by replacing health_engine in
+        # sys.modules with a broken stub that raises on attribute access
+        class _BrokenStub:
+            def __getattr__(self, name):
+                raise ImportError(f"simulated failure for {name}")
+
+        original = sys.modules.get("health_engine")
+        sys.modules["health_engine"] = _BrokenStub()
+        try:
+            out = oh._phase59_format_health_facts_block(
+                _health_obj_mental_health_red()
+            )
+            self.assertIn("  - tone_rules:", out,
+                          "FAIL-CLOSED violated: tone_rules dropped on import failure")
+            # Each floor rule must still appear
+            for rule in floor:
+                self.assertIn(f"    - {rule}", out,
+                              f"Floor rule missing on import failure: {rule[:60]}")
+        finally:
+            if original is not None:
+                sys.modules["health_engine"] = original
+            else:
+                sys.modules.pop("health_engine", None)
+
+    def test_engine_import_failure_is_logged(self):
+        """Architect-recommended: when the engine import fails and we
+        fall back to the floor, the failure MUST be logged via the
+        module logger so prod observability is preserved. Silent
+        fallback (even if functionally correct) hides regressions."""
+        import sys
+        import logging
+
+        original = sys.modules.get("health_engine")
+
+        class _BrokenStub:
+            def __getattr__(self, name):
+                raise ImportError(f"simulated failure for {name}")
+
+        sys.modules["health_engine"] = _BrokenStub()
+        try:
+            with self.assertLogs(oh.logger.name, level="ERROR") as cm:
+                _ = oh._phase59_format_health_facts_block(
+                    _health_obj_mental_health_red()
+                )
+            joined = "\n".join(cm.output)
+            self.assertIn("HEALTH_TONE_RULES", joined,
+                          "Import-failure log must mention HEALTH_TONE_RULES")
+            self.assertIn("falling back", joined.lower(),
+                          "Log must indicate fallback was used")
+        finally:
+            if original is not None:
+                sys.modules["health_engine"] = original
+            else:
+                sys.modules.pop("health_engine", None)
+
+    def test_tone_rules_survive_in_extractor_output(self):
+        """End-to-end check: when the extractor emits HEALTH_FACTS for a
+        health Q, the tone_rules section must be present in the final
+        prompt-bound text (not just in the formatter's direct output)."""
+        bm = {"health_verdict_obj": _health_obj_mental_health_red()}
+        out = oh._phase50_extract_verdict_facts(bm, "Mental health kaisi rahegi?")
+        self.assertIn("HEALTH_FACTS:", out)
+        self.assertIn("  - tone_rules:", out)
+        # And at least one tone-rule keyword survives the pipe
+        self.assertIn("ABSOLUTE", out)
+        self.assertIn("DIAGNOSIS", out)
+
+
 if __name__ == "__main__":
     unittest.main()

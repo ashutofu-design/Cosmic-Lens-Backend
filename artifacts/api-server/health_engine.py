@@ -136,6 +136,32 @@ DUSHTANA = {6, 8, 12}                    # difficult houses for vitality
 KENDRA = {1, 4, 7, 10}
 TRIKONA = {1, 5, 9}
 
+# ─────────────────────────────────────────────────────────────────────────
+# HEALTH_TONE_RULES — deterministic narrator tone enforcement
+# ─────────────────────────────────────────────────────────────────────────
+# Health is the highest-risk topic surface in the product. These rules
+# encode TONE policy (how the narrator must SPEAK about health) as a
+# deterministic, engine-owned constant — not as LLM discretion. They are
+# surfaced verbatim in every HEALTH_FACTS prompt block so the LLM cannot
+# paraphrase them away.
+#
+# Mantra: engine sochta hai, LLM bolta hai. Tone = engine ka decision.
+#
+# Each rule is a single Hinglish sentence. Order matters — most-violated
+# rules first (absolute claims, diagnosis tone) so they get highest
+# attention weight in the prompt.
+#
+# These are CONTRACT — narrator MUST honour every rule. Adding /
+# removing rules is a brand-safety change requiring architect review.
+HEALTH_TONE_RULES = (
+    "ABSOLUTE claims kabhi mat karo. 'Aapko X bimari hogi' / 'Yeh definitely hoga' / 'Pakka cure ho jayega' jaisi language band. Hamesha probabilistic framing: 'indication hai', 'tendency dikh rahi hai', 'is window mein extra dhyaan zaroori hai'.",
+    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). General areas mein baat karo: 'mental wellbeing', 'digestive system', 'energy levels', 'hormonal balance'. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
+    "NEUTRAL phrasing rakho. Alarmist language ('khatre mein ho', 'turant problem aayegi', 'serious risk hai') aur false reassurance ('bilkul tension mat lo, sab perfect hai', 'kuch nahi hoga') — dono band. Honest, calm, supportive tone — jaise ek mature counsellor baat karta hai.",
+    "PRESCRIPTION kabhi mat do. Medicine names, dosages, treatment plans, surgery decisions, alternative-medicine recommendations = strictly forbidden. Sirf cosmic timing aur supportive context bata sakte ho — actual treatment decisions qualified doctor / specialist ke pass.",
+    "PROBABILITY ki language use karo, CERTAINTY ki nahi. 'Ho sakta hai', 'tendency hai', 'window mein care zaroori hai', 'consultation se clarity milegi' — yeh acceptable hai. 'Hoga hi', '100% sure', 'guaranteed' — yeh acceptable nahi.",
+)
+
+
 # Body parts ruled by each planet (for narration, not prediction)
 PLANET_BODY = {
     "Sun":     "heart, eyes (right), immune system, vitality",

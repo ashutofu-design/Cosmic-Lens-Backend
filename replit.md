@@ -2744,6 +2744,53 @@ call, out of formatter/extractor scope).
 - **Batch 3d (love)**: same pattern with `love_engine.assess_love`.
 - Sade-sati `transit_engine` wiring remains DEFERRED.
 
+### Batch 3c v2 follow-up — Engine-owned tone rules (FAIL-CLOSED)
+
+Sub-batch driven by user directive: *"avoid absolute claims / no diagnosis
+tone / neutral phrasing — yeh engine me hi handle hona chahiye, LLM pe
+nahi chhodna"* (tone policy must be deterministic, owned by the engine
+module, not LLM discretion). This is the **"domain OS, not chatbot"**
+shift — every brand-safety policy is engine-encoded, not prompt-implied.
+
+**What changed:**
+
+1. **`HEALTH_TONE_RULES` constant in `health_engine.py`** — tuple of 5
+   rules (absolute claims / diagnosis tone / neutral phrasing /
+   prescription / probability framing) in Hinglish, encoding the
+   tone policy as a deterministic engine-owned constant.
+2. **Formatter emits `tone_rules:` section** as the LAST section of
+   every HEALTH_FACTS block — recency-bias attention weight + always
+   emitted (regardless of bucket / verdict / brand_safety presence).
+3. **FAIL-CLOSED architecture** (architect-mandated): a hardcoded
+   `_HEALTH_TONE_RULES_FALLBACK` in `openai_helper.py` mirrors the
+   engine constant. The formatter starts on the floor and only
+   upgrades to the engine source on successful import. **Silent
+   fallback to empty is impossible** — that would have reverted tone
+   control to LLM discretion, the exact failure the user banned.
+4. **Module logger added** to `openai_helper.py` so engine-import
+   failures are visible in production logs (`logger.error(...)`).
+5. **Drift guardrail**: a regression test asserts byte-for-byte
+   equality between the engine constant and the floor — accidental
+   divergence fails CI immediately.
+6. **8 new tests** (`TestHealthToneRules`) covering: constant ownership,
+   verbatim emission, recency-ordering after brand_safety, emission
+   without brand_safety, required-policy keyword presence, end-to-end
+   through extractor, FAIL-CLOSED behavior on engine import failure,
+   and log-firing on import failure.
+
+**Test count: 243/243.** Architect: **PASS** on both v2 (engine
+ownership + tone surfacing) and v2.1 (FAIL-CLOSED + observability fix).
+
+**Architectural pattern unlocked for future batches:**
+
+The `<DOMAIN>_TONE_RULES` engine-owned constant + FAIL-CLOSED floor +
+sync-test pattern is now reusable for any sensitive surface. Likely
+next applications: love (no betrayal-prediction certainty), marriage
+(no timing absolutism), parents (no death-prediction language).
+Establishes the **"domain OS"** principle — every policy that affects
+brand safety on a sensitive surface lives in the domain engine, not
+in the prompt-construction layer.
+
 ---
 
 ## Phase 5.9 — Career FACTS block (Batch 3b: career_engine wired)

@@ -76,6 +76,49 @@ const STARTERS = [
   "Dhan-laabh kab hoga mujhe?",
 ];
 
+// ── Recent-Questions formatters ──────────────────────────────────────────
+// `verdict_summary` is a structured tag emitted by the engine layer (e.g.
+// "answered:health", "yellow_wait", "love_likely"). Map a small known set
+// to user-friendly Hinglish labels; fall back to title-casing otherwise.
+const VERDICT_LABELS: Record<string, string> = {
+  "answered":         "Reply mila",
+  "answered:health":  "Health update",
+  "answered:career":  "Career update",
+  "answered:love":    "Love update",
+  "answered:marriage":"Marriage update",
+  "answered:wealth":  "Dhan update",
+  "answered:yoga":    "Yoga reading",
+  "answered:dosh":    "Dosh reading",
+  "answered:general": "Reply mila",
+  "off_topic":        "Off-topic",
+  "yellow_wait":      "Wait",
+  "green_go":         "Auspicious",
+  "red_avoid":        "Avoid",
+  "love_likely":      "Love marriage",
+  "arrange_likely":   "Arranged",
+  "manglik":          "Manglik",
+  "unstable":         "Unstable",
+  "stable":           "Stable",
+};
+function prettyVerdict(raw: string): string {
+  const v = (raw || "").trim().toLowerCase();
+  if (VERDICT_LABELS[v]) return VERDICT_LABELS[v];
+  // Generic fallback: drop "answered:" prefix and title-case rest.
+  const clean = v.replace(/^answered:/, "").replace(/[_:]/g, " ");
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "Reply mila";
+}
+function prettyAgo(iso: string): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const sec = Math.max(1, Math.floor((Date.now() - t) / 1000));
+  if (sec < 60)        return "just now";
+  if (sec < 3600)      return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400)     return `${Math.floor(sec / 3600)}h ago`;
+  if (sec < 86400 * 7) return `${Math.floor(sec / 86400)}d ago`;
+  return new Date(t).toLocaleDateString();
+}
+
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
@@ -134,6 +177,37 @@ export default function AskScreen() {
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ── Recent Questions (history) — read-only surface populated by /api/ask
+  // and /api/ask/stream's server-side logger. Pure storage layer; clicking
+  // an item just seeds the chat with the same question text.
+  type HistoryItem = {
+    id: string;
+    question_text: string;
+    topic: string;
+    verdict_summary: string;
+    created_at: string;
+  };
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const fetchHistory = useCallback(async () => {
+    if (!user?.id || !user?.api_key) return;
+    try {
+      const res = await apiFetch(`${API_BASE}/api/history?limit=20`, {
+        headers: {
+          "X-User-Id":  String(user.id),
+          "X-API-Key":  user.api_key,
+        },
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      setHistory(Array.isArray(j?.items) ? j.items : []);
+    } catch {
+      // non-fatal — history is decorative
+    }
+  }, [user?.id, user?.api_key]);
+
+  // Fetch on landing mount + whenever the user returns to the landing.
+  useEffect(() => { if (mode === null) fetchHistory(); }, [mode, fetchHistory]);
   const [quotaModal, setQuotaModal] = useState<null | {
     used: number;
     limit: number;
@@ -869,6 +943,52 @@ export default function AskScreen() {
             </LinearGradient>
           </Pressable>
 
+          {/* ─── Recent Questions ──────────────────────────────────────
+              Read-only history strip. Logged server-side after every
+              Ask flow (storage layer only — no full kundli, no full
+              LLM text persisted). Tap an item to refill the input
+              for re-asking. */}
+          {!showDemo && history.length > 0 && (
+            <View style={s.historyWrap}>
+              <View style={s.historyHeader}>
+                <Feather name="clock" size={13} color={C.textMid} />
+                <Text style={[s.historyTitle, { color: C.textMid }]}>Recent Questions</Text>
+              </View>
+              {history.slice(0, 5).map(h => (
+                <Pressable
+                  key={h.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setMode("chat");
+                    setInput(h.question_text);
+                  }}
+                  style={({ pressed }) => [
+                    s.historyItem,
+                    { backgroundColor: C.bgCard, borderColor: C.border },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[s.historyQ, { color: C.text }]} numberOfLines={2}>
+                      {h.question_text}
+                    </Text>
+                    <View style={s.historyMeta}>
+                      <View style={[s.historyTag, { backgroundColor: `${C.accent}22`, borderColor: `${C.accent}55` }]}>
+                        <Text style={[s.historyTagText, { color: C.accent }]} numberOfLines={1}>
+                          {prettyVerdict(h.verdict_summary)}
+                        </Text>
+                      </View>
+                      <Text style={[s.historyTime, { color: C.textMuted }]}>
+                        {prettyAgo(h.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={C.textMuted} />
+                </Pressable>
+              ))}
+            </View>
+          )}
+
           {/* Optional: small Divya Prashna link (legacy, less prominent) */}
           <Pressable
             onPress={() => {
@@ -1260,6 +1380,25 @@ const s = StyleSheet.create({
     backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(245,158,11,0.15)",
   },
   starterText: { color: "#f59e0b", fontSize: 12 },
+
+  // ── Recent Questions strip ─────────────────────────────────────────────
+  historyWrap:   { marginTop: 22, gap: 8 },
+  historyHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4, paddingHorizontal: 4 },
+  historyTitle:  { fontSize: 12, fontWeight: "700", letterSpacing: 0.4, textTransform: "uppercase" },
+  historyItem: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 14, borderWidth: 1,
+    // backgroundColor + borderColor injected from theme at render time.
+  },
+  historyQ:       { fontSize: 14, fontWeight: "600", lineHeight: 19 },
+  historyMeta:    { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  historyTag: {
+    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1,
+    maxWidth: 160,
+  },
+  historyTagText: { fontSize: 11, fontWeight: "700" },
+  historyTime:    { fontSize: 11 },
 
   inputRow: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,

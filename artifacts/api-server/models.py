@@ -351,6 +351,57 @@ class FaceReadingLog(db.Model):
     )
 
 
+class UserQuestion(db.Model):
+    """Lightweight log of every Ask-flow question and the engine's verdict.
+
+    STRICT SCOPE — this is a STORAGE + RETRIEVAL layer only:
+      • NO full kundli JSON is stored here.
+      • NO full LLM response text is stored here.
+      • Only the question text, detected topic, the integer kundli FK,
+        and a short structured verdict summary (≤120 chars) are persisted.
+
+    Used by /api/history and /api/history/search to power the
+    "Recent Questions" surface in the Ask tab.
+    """
+    __tablename__ = "user_questions"
+
+    # UUID PK (string) — stable across DB engines (Postgres, SQLite) without
+    # driver-specific UUID column types. Generated app-side, never client-supplied.
+    id                = db.Column(db.String(36), primary_key=True)
+    user_id           = db.Column(db.Integer,
+                                  db.ForeignKey("users.id", ondelete="CASCADE"),
+                                  nullable=False, index=True)
+    question_text     = db.Column(db.Text,        nullable=False)
+    # Detected primary topic from ask_engine.detect_topic — health, career,
+    # love, marriage, wealth, yoga, dosh, general, off_topic, etc.
+    topic             = db.Column(db.String(40),  nullable=False, default="general", index=True)
+    # FK to kundlis.id of the chart used to answer (the user's primary chart).
+    # Nullable so demo / no-chart asks (off_topic, brand_guard) still log.
+    primary_kundli_id = db.Column(db.Integer,
+                                  db.ForeignKey("kundlis.id", ondelete="SET NULL"),
+                                  nullable=True)
+    # Short structured verdict — e.g. "unstable", "yellow_wait", "leaning_love",
+    # "manglik", "answered". NEVER the full LLM explanation. Capped to 120 chars.
+    verdict_summary   = db.Column(db.String(120), nullable=False, default="answered")
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow,
+                                  nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_user_questions_user_created", "user_id", "created_at"),
+        db.Index("ix_user_questions_user_topic",   "user_id", "topic"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":                self.id,
+            "question_text":     self.question_text,
+            "topic":             self.topic,
+            "primary_kundli_id": self.primary_kundli_id,
+            "verdict_summary":   self.verdict_summary,
+            "created_at":        self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 def compute_birth_key(birth_data) -> str:
     """
     Deterministic dedup key for a kundli computation. Two birth-data inputs

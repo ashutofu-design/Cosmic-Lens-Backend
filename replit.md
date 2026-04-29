@@ -3674,3 +3674,115 @@ landing page renders intact in preview, architect review PASS with no
 severe issues. Optional follow-up flagged: extract `TAB_BAR_HEIGHT`
 into a shared constant exported from `CustomTabBar.tsx` to avoid
 duplication drift.
+
+
+## Phase 6.0c — Question Logging + History (Apr 29, 2026)
+
+User mantra: **"engine ko mat chhedo. Sirf question + verdict tag
+store karo aur 'Recent Questions' UI dikhao."**
+
+Pure storage + retrieval layer for the Ask flow. ZERO astrology
+engine touches, ZERO LLM/full-kundli storage. Logs only the user's
+question text + the engine's structured verdict tag (≤120 chars).
+
+### Schema — `user_questions` (new table only)
+
+```python
+class UserQuestion(db.Model):
+    id                = String(36) UUID PK            # uuid4 hex
+    user_id           = Integer FK CASCADE → users.id
+    primary_kundli_id = Integer FK SET NULL → kundlis.id
+    question_text     = Text (≤1000 chars, truncated)
+    topic             = String(40) lowercased
+    verdict_summary   = String(120) (engine tag, e.g. "answered:health")
+    created_at        = DateTime UTC, default now()
+```
+
+Indexes: `(user_id, created_at DESC)` for the recent feed, plus
+`(user_id, topic)` for the topic-filter use case. New table only —
+no existing PK was touched (preserves the existing `users.id`
+serial / `kundlis.id` serial integers exactly as they were).
+SQLAlchemy `db.create_all()` (already in `init_db()`) creates the
+table idempotently — verified via psql.
+
+### Module — `artifacts/api-server/question_history.py`
+
+Pure storage helpers, all wrapped in try/except so a logging
+failure can NEVER break the user's Ask flow:
+
+* `extract_verdict_summary(result, topic)` — probes
+  `result.verdict` (str OR dict.verdict/tag), `result.tag`,
+  `result.bucket`, `result.label`, with `brand_guard → off_topic`
+  and `topic → answered:{topic}` fallbacks. 120-char cap.
+* `save_user_question(user_id, question_text, topic, ...)` →
+  returns the new row's UUID or `None` (never raises).
+* `get_recent_questions(user_id, limit=20)` — newest-first list,
+  limit clamped to `max(1, min(limit, 100))`.
+* `search_questions(user_id, q, limit=20)` — case-insensitive
+  substring match on `question_text` OR `topic`.
+
+26 unit tests in `test_question_history.py` cover extraction
+shapes, save/truncation/error paths, retrieval order + limit
+clamping, and search.
+
+### Hook sites in `flask_app.py`
+
+The save call is wired into EVERY result-bearing path so authed
+users always get a row, regardless of which engine branch ran:
+
+| Path                                              | Hook |
+|---------------------------------------------------|------|
+| `/api/ask` brand_guard early return               | `_log_brand_guard_question(...)` (line ~5668) |
+| `/api/ask` main success return                    | `_log_question_history(...)` (line ~5772) |
+| `/api/ask/stream` brand_guard early return        | `_log_brand_guard_question(...)` (line ~5939) |
+| `/api/ask/stream` no-OpenAI rule fallback         | `_log_question_history(...)` (line ~5982) |
+| `/api/ask/stream` ai_ask fallback JSON path       | `_log_question_history(...)` (line ~6021) |
+| `/api/ask/stream` one-shot JSON path              | `_log_question_history(...)` (line ~6031) |
+| `/api/ask/stream` SSE final event                 | inline save in generator (line ~6042) |
+
+The SSE branch captures `user.id` / `kundli.id` / `question` BEFORE
+the generator starts because the SQLAlchemy session may detach the
+`user` object by the time the streamed final event fires.
+
+### Read endpoints
+
+* `GET /api/history?limit=N` — newest-first list for the caller.
+* `GET /api/history/search?q=…&limit=N` — substring filter.
+
+Both use `X-User-Id` + `X-API-Key` header auth (matches the
+existing read-side contract for kundli/profile endpoints). The
+ask-side write contract continues to use `user_id` in the JSON
+body — known minor inconsistency, kept to avoid breaking the
+mobile client.
+
+### Mobile UI — Ask landing "Recent Questions" strip
+
+`artifacts/cosmic-lens-mobile/app/(tabs)/ask.tsx`:
+
+* `fetchHistory()` calls `/api/history?limit=20` on mode=null
+  mount. Degrades silently on 401/500 (UX never crashes).
+* Renders up to 5 most recent questions below the two big
+  Ask-mode cards (Ask Anything / Prashna Kundli). Each row shows
+  the question text, a coloured verdict tag (`prettyVerdict`
+  maps known engine tags to friendly Hinglish labels with a
+  generic title-case fallback), and a relative timestamp
+  (`prettyAgo`: just now / Nm ago / Nh ago / Nd ago / locale date).
+* Tap a row → `setMode("chat")` + `setInput(question_text)` so the
+  user can re-ask or tweak the previous prompt.
+
+### Verified
+
+* 26/26 unit tests pass (`pytest test_question_history.py`).
+* End-to-end via curl: POST `/api/ask` (with `user_id` in body) →
+  row appears in `user_questions` → `GET /api/history` returns it
+  newest-first with topic + verdict_summary populated.
+* Mobile typecheck clean (`pnpm --filter @workspace/cosmic-lens-mobile typecheck`).
+* Architect review PASS. One severe finding fixed: brand-guard
+  early returns now log too via `_log_brand_guard_question`.
+
+Optional follow-ups (NOT shipped — not in scope of this phase):
+* Standardize auth contract across ask + history endpoints.
+* Mobile: clear local history state on 401 to avoid stale display
+  across user-switch sessions.
+* Add a trigram / FTS index on `question_text` if per-user history
+  grows past a few hundred rows and search latency becomes visible.

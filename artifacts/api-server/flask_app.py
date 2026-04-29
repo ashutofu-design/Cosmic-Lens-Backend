@@ -29,6 +29,12 @@ from dosh_engine import analyze_doshas
 from energy_engine import calculate_energy
 from database import db, init_db
 from models import User, Kundli, Profile
+from question_history import (
+    save_user_question,
+    extract_verdict_summary,
+    get_recent_questions,
+    search_questions,
+)
 
 app = Flask(__name__)
 import logging as _logging
@@ -1524,6 +1530,71 @@ def start_trial_route():
 
 
 # ── API key auth helper ────────────────────────────────────────────────────────
+
+def _log_brand_guard_question(question_text: str, request_data: dict):
+    """Log an authenticated off-topic ask that hits the brand_guard early
+    return path. Does its OWN lightweight auth resolution (no quota consume)
+    so the caller can stay branch-free. NEVER raises.
+
+    Resolution rules — must mirror /api/ask + /api/ask/stream:
+      • user_id from JSON body (preferred) or X-User-Id header (fallback)
+      • X-API-Key header must match user.api_key
+      • Anonymous demo asks (no creds / bad creds) → silently skipped
+    """
+    try:
+        uid_raw = request_data.get("user_id") or request.headers.get("X-User-Id")
+        if not uid_raw:
+            return
+        try:
+            uid_int = int(str(uid_raw).strip())
+        except (TypeError, ValueError):
+            return
+        api_key = (request.headers.get("X-API-Key") or "").strip()
+        if not api_key:
+            return
+        u = User.query.get(uid_int)
+        if not u or u.api_key != api_key:
+            return
+        kundli_id = u.kundli.id if getattr(u, "kundli", None) else None
+        save_user_question(
+            user_id           = u.id,
+            question_text     = question_text or "",
+            topic             = "off_topic",
+            primary_kundli_id = kundli_id,
+            verdict_summary   = "off_topic",
+        )
+    except Exception as exc:
+        print(f"[ask] brand_guard question_history save failed (non-fatal): {exc}")
+
+
+def _log_question_history(user, question_text: str, result):
+    """Shared post-Ask hook — extracts topic + verdict + kundli FK and
+    persists ONE row via question_history.save_user_question.
+
+    No-ops when:
+      • user is None (anonymous demo asks)
+      • result is not a dict (defensive)
+      • question_text is empty/blank
+
+    NEVER raises — every failure mode is swallowed and printed because a
+    telemetry log must NEVER break the user's Ask flow.
+    """
+    if user is None or not isinstance(result, dict):
+        return
+    try:
+        topic_logged   = result.get("topic") or "general"
+        verdict_logged = extract_verdict_summary(result, topic_logged)
+        kundli_id      = user.kundli.id if getattr(user, "kundli", None) else None
+        save_user_question(
+            user_id           = user.id,
+            question_text     = question_text or "",
+            topic             = topic_logged,
+            primary_kundli_id = kundli_id,
+            verdict_summary   = verdict_logged,
+        )
+    except Exception as exc:
+        print(f"[ask] question_history save failed (non-fatal): {exc}")
+
 
 def get_authed_user(user_id: int):
     """Validate X-API-Key header for a given user_id. Returns (user, error_response)."""
@@ -5496,6 +5567,62 @@ def astrovastu_dev_grant_route():
                     "room_credits": user.astrovastu_room_credits})
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Question history — read-only retrieval surface for the "Recent Questions"
+# section in the Ask tab. Storage is populated by /api/ask + /api/ask/stream.
+# Auth: X-User-Id + X-API-Key (same contract as the rest of the per-user APIs).
+# ─────────────────────────────────────────────────────────────────────────────
+@app.route("/api/history", methods=["GET"])
+def history_route():
+    """Return up to 20 most-recent questions for the authenticated user.
+
+    Query params:
+      limit (int, optional) — clamp 1..100, default 20.
+    Response: { items: [ { question_text, topic, verdict_summary,
+                           created_at, primary_kundli_id, id } ] }
+    """
+    raw_uid = request.headers.get("X-User-Id", "").strip()
+    try:
+        uid = int(raw_uid)
+    except ValueError:
+        return jsonify({"error": "X-User-Id required"}), 401
+    user, err = get_authed_user(uid)
+    if err:
+        return err
+    try:
+        limit = int(request.args.get("limit", "20"))
+    except ValueError:
+        limit = 20
+    items = get_recent_questions(user.id, limit=limit)
+    return jsonify({"items": items})
+
+
+@app.route("/api/history/search", methods=["GET"])
+def history_search_route():
+    """Filter the user's history by topic OR question_text substring.
+
+    Query params:
+      q     (str, required) — substring matched against topic + question_text
+      limit (int, optional) — clamp 1..100, default 20.
+    Response: identical shape to /api/history. Empty `q` → empty items.
+    """
+    raw_uid = request.headers.get("X-User-Id", "").strip()
+    try:
+        uid = int(raw_uid)
+    except ValueError:
+        return jsonify({"error": "X-User-Id required"}), 401
+    user, err = get_authed_user(uid)
+    if err:
+        return err
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = int(request.args.get("limit", "20"))
+    except ValueError:
+        limit = 20
+    items = search_questions(user.id, q, limit=limit)
+    return jsonify({"items": items})
+
+
 @app.route("/api/ask", methods=["POST"])
 def ask_route():
     """
@@ -5531,6 +5658,11 @@ def ask_route():
     if _ask_is_brand_unsafe(question):
         eff_lang = _ask_resolve_lang(question, lang, None)
         msg = _ask_brand_safe_redirect.get(eff_lang) or _ask_brand_safe_redirect["hn"]
+        # Telemetry: log authenticated off-topic asks before early-return.
+        # Brand-guard fires BEFORE main auth/quota, so we do our own
+        # lightweight credential check inside the helper. Anonymous demo
+        # asks are silently skipped.
+        _log_brand_guard_question(question, data)
         return jsonify({
             "text":       msg,
             "topic":      "off_topic",
@@ -5638,6 +5770,28 @@ def ask_route():
             hinglishify_response(result, eff_lang)
         except Exception as exc:
             print(f"[ask] hinglishify post-process failed (non-fatal): {exc}")
+
+    # ── Question history log (storage layer only — see question_history.py) ─
+    # Save AFTER the engine has produced its verdict but BEFORE we ship the
+    # response back to the mobile client. Wrapped helper never raises, so a
+    # logging failure cannot break the user's Ask flow. Only authenticated
+    # users (have a user row) get logged — anonymous demo asks do not.
+    if user and isinstance(result, dict):
+        try:
+            topic_logged   = result.get("topic") or "general"
+            verdict_logged = extract_verdict_summary(result, topic_logged)
+            kundli_id      = user.kundli.id if getattr(user, "kundli", None) else None
+            save_user_question(
+                user_id           = user.id,
+                question_text     = question,
+                topic             = topic_logged,
+                primary_kundli_id = kundli_id,
+                verdict_summary   = verdict_logged,
+            )
+        except Exception as exc:
+            # Defensive — save_user_question() already swallows; this is a
+            # second belt-and-braces guard for the kundli FK lookup.
+            print(f"[ask] question_history save failed (non-fatal): {exc}")
     return jsonify(result)
 
 
@@ -5777,6 +5931,9 @@ def ask_stream_route():
     if _ask_is_brand_unsafe(question):
         eff_lang = _ask_resolve_lang(question, lang, None)
         msg = _ask_brand_safe_redirect.get(eff_lang) or _ask_brand_safe_redirect["hn"]
+        # Telemetry: log authenticated off-topic asks before early-return.
+        # See /api/ask brand-guard for the matching block.
+        _log_brand_guard_question(question, data)
         return jsonify({
             "text":       msg,
             "topic":      "off_topic",
@@ -5827,6 +5984,7 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "rules")
+        _log_question_history(user, question, result)
         return jsonify(result)
 
     # ── Sprint-26: AI Ear early-routing block REMOVED ───────────────────────
@@ -5865,6 +6023,7 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "ai" if used_ai else "rules")
+        _log_question_history(user, question, result)
         return jsonify(result)
 
     # One-shot paths (brand_guard / no_chart / marriage) → return as JSON.
@@ -5874,7 +6033,15 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "ai")
+        _log_question_history(user, question, result)
         return jsonify(result)
+
+    # Capture FK primary keys up-front — the SQLAlchemy User instance can
+    # become detached by the time the SSE generator runs, so we don't
+    # touch user.* inside sse(). save_user_question() only needs the ints.
+    log_user_id    = user.id if user else None
+    log_kundli_id  = (user.kundli.id if user and getattr(user, "kundli", None) else None)
+    log_question   = question
 
     # ── True SSE stream ──────────────────────────────────────────────────────
     def sse():
@@ -5887,10 +6054,11 @@ def ask_stream_route():
                         ensure_ascii=False,
                     ) + "\n\n"
                 elif kind == "final":
+                    final_topic = evt.get("topic", "general")
                     yield "data: " + json.dumps({
                         "done":                  True,
                         "text":                  evt.get("text", ""),
-                        "topic":                 evt.get("topic", "general"),
+                        "topic":                 final_topic,
                         "confidence":            evt.get("confidence", 0.0),
                         "source":                evt.get("source", "openai_stream"),
                         "follow_ups":            evt.get("follow_ups", []),
@@ -5903,6 +6071,23 @@ def ask_stream_route():
                         "quota":                 quota_payload,
                         "plan":                  plan_payload,
                     }, ensure_ascii=False) + "\n\n"
+
+                    # ── Question history log (storage layer only) ──────
+                    # Save AFTER the engine final event has been
+                    # serialised to the wire so any failure here cannot
+                    # delay the user's reply. helper swallows all errors.
+                    if log_user_id:
+                        try:
+                            verdict_logged = extract_verdict_summary(evt, final_topic)
+                            save_user_question(
+                                user_id           = log_user_id,
+                                question_text     = log_question,
+                                topic             = final_topic,
+                                primary_kundli_id = log_kundli_id,
+                                verdict_summary   = verdict_logged,
+                            )
+                        except Exception as exc:
+                            print(f"[ask/stream] question_history save failed (non-fatal): {exc}")
         except Exception as exc:
             print(f"[ask/stream] mid-stream error: {exc}")
             yield "data: " + json.dumps(

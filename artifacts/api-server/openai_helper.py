@@ -9994,9 +9994,23 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             parts.append(block)
             emitted_career_block = True
 
+    # ── HEALTH (Phase 5.9 Batch 3c) ──────────────────────────────────────
+    # Sensitive-topic surface — narrator MUST honour brand_safety bullets
+    # (no diagnosis, see qualified MD, mental-health helpline). The
+    # detector delegates to upstream `_is_health_question` to inherit the
+    # routing-collision defenses (career-stress / stock-tension etc.).
+    hv = bm.get("health_verdict_obj")
+    emitted_health_block = False
+    if routed and _phase59_is_health_question(q) and isinstance(hv, dict):
+        block = _phase59_format_health_facts_block(hv)
+        if block:
+            parts.append(block)
+            emitted_health_block = True
+
     # ── Other domain verdicts — 1 line each (unchanged this phase). ─────
-    # Career is suppressed when CAREER_FACTS already fired (above), to
-    # avoid duplicating engine output as both rich block + 1-liner.
+    # Career / health are suppressed when their FACTS block already fired
+    # (above), to avoid duplicating engine output as both rich block +
+    # 1-liner.
     for key, label in [
         ("love_verdict_obj",   "Love verdict"),
         ("career_verdict_obj", "Career verdict"),
@@ -10004,6 +10018,8 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
         ("stock_verdict_obj",  "Stock verdict"),
     ]:
         if key == "career_verdict_obj" and emitted_career_block:
+            continue
+        if key == "health_verdict_obj" and emitted_health_block:
             continue
         o = bm.get(key)
         if isinstance(o, dict):
@@ -11035,6 +11051,205 @@ def _phase59_format_career_facts_block(v: Any) -> str:
         # Trim any prose tail beyond ~240 chars — the engine sometimes
         # ships a multi-paragraph strategy; the FACTS block stays terse
         # so the narrator does the prose, not us.
+        if len(strategy) > 240:
+            strategy = strategy[:237].rstrip() + "..."
+        lines.append(f"  - strategy: {strategy}")
+
+    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
+    bsw = _safe_iter(v.get("brand_safety_warnings"))
+    bullets = [_safe_str(b) for b in bsw]
+    bullets = [b for b in bullets if b]
+    if bullets:
+        lines.append("  - brand_safety:")
+        for b in bullets:
+            lines.append(f"    - {b}")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.9 Batch 3c — HEALTH_FACTS block (engine sochta hai, LLM bolta hai)
+# ─────────────────────────────────────────────────────────────────────────────
+# Surfaces health_engine.assess_health() output as a structured HEALTH_FACTS
+# block in the minimal-prompt path. Replaces the legacy 1-line
+# "Health verdict: ..." that left the LLM blind to bucket / risk-window /
+# top concerns / brand-safety guardrails.
+#
+# Strict rule (architect-enforced): NO new astrology logic. The block is
+# pure formatting of fields already produced by health_engine. brand_safety
+# bullets are surfaced VERBATIM — they are the engine's deterministic
+# "no diagnosis / see qualified MD / mental-health helpline" guardrails
+# that the narrator MUST honour for this sensitive topic.
+#
+# Detector delegates to upstream `_is_health_question` — the same gate
+# that decides whether `assess_health` is invoked. Single source of truth
+# eliminates detector ↔ executor drift on routing-collision queries
+# ("career stress", "share market tension", "rishta tension" etc.).
+#
+# IMPORTANT — coexistence with the doctor-cite/helpline fallback:
+# A separate fallback mechanism (~L12290) appends doctor-cite / helpline
+# lines to the AI's REPLY when the engine fired. That layer is unchanged
+# by this batch — HEALTH_FACTS only changes what the LLM SEES in its
+# prompt. Together they form belt-and-braces brand-safety on the
+# sensitive-topic surface.
+
+
+def _phase59_is_health_question(question: Any) -> bool:
+    """True iff the question is a health / illness / wellness query.
+
+    Defensive against non-string input. Delegates to the upstream
+    `_is_health_question()` — the SAME gate that decides whether
+    `assess_health` is invoked. This guarantees zero detector ↔
+    executor drift on routing-collision queries (the upstream gate has
+    `_HEALTH_QUESTION_RX` defenses against career-stress / stock-tension
+    / rishta-tension false positives that route to those higher engines).
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return _is_health_question(question)
+
+
+def _phase59_format_health_facts_block(v: Any) -> str:
+    """Render `assess_health()` output as a clean, prose-free facts block.
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      HEALTH_FACTS:
+        - bucket: <12-bucket name>
+        - tense: <future|present|general>
+        - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
+        - score: <int>
+        - confidence: <int>
+        - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
+        - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
+        - risk_context: <window_str> — <reason>                  [if present]
+        - top_concerns: <layer1>, <layer2>, <layer3>             [if any]
+        - top_supportive: <layer1>, <layer2>                     [if any]
+        - strategy: <one-line strategy>                          [if present]
+        - brand_safety:                                          [if any]
+          - <bullet1>
+          - <bullet2>
+
+    Mapping rules (no new astrology logic — only formatting):
+      Each field is read directly from the engine output dict. Strings
+      pass through `_safe_str` to collapse newlines / control chars
+      (prompt-injection guard, mirrors Phase 5.9 v3 dosh hardening).
+
+    Why brand_safety is included:
+      `brand_safety_warnings` are deterministic narrator guardrails the
+      engine produces for sensitive buckets ("not a diagnosis", "see
+      qualified MD", mental-health helpline cite, surgery deferral
+      caveats). They are NOT astrology reasoning — they are mandatory
+      narrator instructions. Surfacing them in the FACTS block is what
+      enforces them in the LLM's output.
+
+    Why reasons are OMITTED:
+      The engine's `reasons` strings sometimes contain Phase-5.7-cleaned
+      literals (varga-required markers, vargottama tags) used as internal
+      sort keys. Surfacing them would re-leak the very prose Phase 5.7
+      cleaned up. `top_concerns` / `top_supportive` carry the diagnostic
+      signal in structured form without that risk.
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    def _safe_str(x: Any) -> str:
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    bucket  = _safe_str(v.get("bucket"))   or "general_wellness"
+    tense   = _safe_str(v.get("tense"))    or "general"
+    verdict = _safe_str(v.get("verdict"))  or "yellow_wait"
+    score   = _safe_int(v.get("score"))
+    # Engine canonical key is `confidence`; some call sites also log
+    # `confidence_pct`. Accept both, prefer canonical.
+    if "confidence" in v:
+        conf = _safe_int(v.get("confidence"))
+    else:
+        conf = _safe_int(v.get("confidence_pct"))
+
+    lines: list[str] = [
+        "HEALTH_FACTS:",
+        f"  - bucket: {bucket}",
+        f"  - tense: {tense}",
+        f"  - verdict: {verdict}",
+        f"  - score: {score}",
+        f"  - confidence: {conf}",
+    ]
+
+    # ── Timing windows (current / next / risk) ───────────────────────────
+    # Health engine schema differs from career: window dicts have flat
+    # md/ad/pd keys (not nested `lords` tuple).
+    tw = v.get("timing_window") or {}
+    if isinstance(tw, dict):
+        cur = tw.get("current") or {}
+        if isinstance(cur, dict):
+            md = _safe_str(cur.get("md"))
+            ad = _safe_str(cur.get("ad"))
+            pd = _safe_str(cur.get("pd"))
+            if md or ad:
+                lord_str = "/".join(p for p in (md, ad, pd) if p)
+                start = _safe_str(cur.get("start"))[:7]
+                end   = _safe_str(cur.get("end"))[:7]
+                window_tail = f" ({start}..{end})" if (start or end) else ""
+                lines.append(f"  - current_window: {lord_str}{window_tail}")
+
+        nxt = tw.get("next") or {}
+        if isinstance(nxt, dict):
+            n_md = _safe_str(nxt.get("md"))
+            n_ad = _safe_str(nxt.get("ad"))
+            if n_md or n_ad:
+                lord_str = "/".join(p for p in (n_md, n_ad) if p)
+                start = _safe_str(nxt.get("start"))[:7]
+                end   = _safe_str(nxt.get("end"))[:7]
+                window_tail = f" ({start}..{end})" if (start or end) else ""
+                lines.append(f"  - next_window: {lord_str}{window_tail}")
+
+        # Risk context — engine surfaces this for active health-stress
+        # transit windows (Saturn-Mars, sade-sati, etc.). CRITICAL signal
+        # the narrator must respect.
+        risk = tw.get("risk") or {}
+        if isinstance(risk, dict):
+            wstr = _safe_str(risk.get("window_str"))
+            reason = _safe_str(risk.get("reason"))
+            if wstr or reason:
+                tail = f" — {reason}" if reason else ""
+                lines.append(f"  - risk_context: {wstr}{tail}")
+
+    # ── Top concerns / supportive (chart-level signal areas) ─────────────
+    # Engine schema: list of {"layer": str, "score": int}.
+    def _layer_names(items: list, max_n: int = 3) -> list[str]:
+        out = []
+        for it in items[:max_n]:
+            if isinstance(it, dict):
+                name = _safe_str(it.get("layer"))
+                if name:
+                    out.append(name)
+        return out
+
+    concerns = _layer_names(_safe_iter(v.get("top_concerns")), max_n=3)
+    if concerns:
+        lines.append(f"  - top_concerns: {', '.join(concerns)}")
+
+    supportive = _layer_names(_safe_iter(v.get("top_supportive")), max_n=3)
+    if supportive:
+        lines.append(f"  - top_supportive: {', '.join(supportive)}")
+
+    # ── Strategy (one line, capped) ──────────────────────────────────────
+    strategy = _safe_str(v.get("strategy"))
+    if strategy:
         if len(strategy) > 240:
             strategy = strategy[:237].rstrip() + "..."
         lines.append(f"  - strategy: {strategy}")

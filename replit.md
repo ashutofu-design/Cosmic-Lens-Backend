@@ -2622,6 +2622,130 @@ for those (only fragments inside `wealth_engine`, D7, D16).
 
 ---
 
+## Phase 5.9 — Health FACTS block (Batch 3c: health_engine wired)
+
+Continues the Batch 3a (dosh) + Batch 3b (career) pattern by wiring
+`health_engine.assess_health()` into the minimal-prompt path as a single
+deterministic `HEALTH_FACTS` block. **No new astrology logic** — only
+formatting + routing of fields the engine already computes (5 buckets:
+`mental_health` / `chronic_disease` / `surgery` / `acute_illness` /
+`general_wellness`). Mantra remains: *engine sochta hai, LLM bolta hai.*
+
+### Why this batch needed extra brand-safety scrutiny
+
+Health is the **highest-risk topic surface** in the product:
+
+- Mental-health questions can come from users in active crisis.
+- Naming a specific disease = legal exposure (we are not doctors).
+- Recommending a medicine = unauthorized practice of medicine.
+- Missing a "see a qualified doctor" caveat on a chronic-disease Q
+  could cause real-world harm.
+
+The engine already encodes these guardrails in
+`brand_safety_warnings` (4 bullets per output, including the iCall
+9152987821 + Vandrevala 1860-2662-345 mental-health helplines). This
+batch's job is to surface those bullets **verbatim** into the prompt so
+the LLM cannot paraphrase them away.
+
+### What the LLM now receives (health question)
+
+```
+HEALTH_FACTS:
+  - bucket: <5-bucket name>
+  - tense: <future|present|general>
+  - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
+  - score: <int>
+  - confidence: <int>
+  - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
+  - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
+  - risk_context: <sade-sati / Mars-Saturn warning>        [if present]
+  - top_concerns: <up to 3 layer names>                    [if present]
+  - top_supportive: <up to 3 layer names>                  [if present]
+  - strategy: <one-line strategy>                          [if present]
+  - brand_safety:                                          [if any]
+    - <verbatim guardrail bullet 1>
+    - <verbatim guardrail bullet 2>
+    - ...
+```
+
+Schema design notes:
+- **`reasons` field intentionally OMITTED.** Engine reason strings
+  sometimes carry Phase-5.7-cleaned internal sort tokens; surfacing
+  them risks re-leaking the prose Phase 5.7 cleaned. `top_concerns` /
+  `top_supportive` carry the same diagnostic signal in structured form.
+- **`brand_safety` bullets pass through verbatim** (only whitespace /
+  control-char anti-injection normalization). The helpline string
+  must survive any bucket-routing regression — locked by an
+  architect-flagged guard test (`test_helpline_survives_malformed_bucket_field`).
+- **Strategy capped at 240 chars + ellipsis** — shared cap with career.
+- **Top concerns / supportive truncated to 3 layer names each** to
+  avoid prompt bloat from the engine's internal layer-scoring detail.
+
+### Belt-and-braces with the existing reply-side fallback
+
+This batch is the **prompt-side** safety lever. The pre-existing
+doctor-cite / helpline injector at `openai_helper.py` ~L12290 is the
+**reply-side** safety net (it patches missing doctor / helpline lines
+into the LLM's text *after* generation). Together they form
+defense-in-depth:
+
+| Surface          | When it fires             | Catches                                    |
+|------------------|---------------------------|--------------------------------------------|
+| `HEALTH_FACTS`   | Pre-generation (prompt)   | LLM ignoring softer guardrails             |
+| Reply injector   | Post-generation (text)    | LLM dropping the helpline despite prompt   |
+
+Architect explicitly confirmed this is **not redundant** — each
+catches a failure mode the other cannot.
+
+### Detector — single source of truth
+
+`_phase59_is_health_question()` delegates directly to the upstream
+`_is_health_question()` (per the same Batch 3b architect feedback that
+fixed `_phase59_is_career_question`). This guarantees that all upstream
+routing-collision defenses (career-stress / share-market-tension /
+rishta-tension queries that mention "stress" but are NOT health
+questions) automatically apply to the FACTS-block path too. Locked by
+parity tests that assert byte-for-byte detector equality on the full
+collision-query set.
+
+### Suppression rule
+
+When `HEALTH_FACTS` emits, the legacy `Health verdict: …` 1-liner is
+suppressed (no double-signal to the LLM). For non-health questions, the
+1-liner is restored (backward-compat for any chart that incidentally
+has a health verdict precomputed).
+
+### Test coverage (24 tests)
+
+All cover sensitive-topic safety:
+- Detector parity with `_is_health_question` (incl. routing collisions)
+- Formatter pass-through (verbatim brand_safety, helpline preservation)
+- `red_avoid` verdict not softened (engine's final word respected)
+- Malformed input safety (`None` / wrong-type / empty / missing fields)
+- **Helpline survives malformed bucket** (architect-flagged guard)
+- No fabrication of forbidden literals (Phase 5.7 source-cleanliness)
+- Anti-injection: control-char + newline normalization in bullets
+- Wiring: HEALTH_FACTS emits for health Qs, suppresses 1-liner;
+  non-health Qs fall back to 1-liner cleanly
+
+234/234 tests pass. Live-verified on real BBSR chart for "Mental
+health kaisi rahegi?" — `bucket=mental_health`, all 4 brand_safety
+bullets surfaced verbatim with iCall + Vandrevala helplines intact.
+
+### Architect rating: **PASS**
+
+Sensitive-topic safety judged sufficient. One non-blocking residual
+risk noted: an end-to-end test of HEALTH_FACTS × reply-side injector
+interplay would further harden the seam — deferred (requires real LLM
+call, out of formatter/extractor scope).
+
+### Next batch
+
+- **Batch 3d (love)**: same pattern with `love_engine.assess_love`.
+- Sade-sati `transit_engine` wiring remains DEFERRED.
+
+---
+
 ## Phase 5.9 — Career FACTS block (Batch 3b: career_engine wired)
 
 Continues the Batch 3a pattern by wiring `career_engine.assess_career()`

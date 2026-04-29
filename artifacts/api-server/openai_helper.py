@@ -9007,6 +9007,48 @@ def _phase50_mini_chart_summary(kundli: Any) -> str:
             house_parts.append(f"{h}H: {' '.join(by_house[h])}")
         lines.append("Planets: " + " | ".join(house_parts))
 
+    # ── Divisional charts (D9 Navamsha, D10 Dashamsha) ──────────────────
+    # Users frequently ask about D9 (marriage) and D10 (career) placements.
+    # Without this, the model hallucinates D9/D10 positions from D1 data.
+    # Compact format: "D10 (Dashamsha — career): asc=Sign | Sun=Sign(Hh) ..."
+    dcharts = kundli.get("divisionalCharts") or {}
+    if isinstance(dcharts, dict):
+        for dkey, dlabel in (("D9", "D9 (Navamsha — marriage)"),
+                             ("D10", "D10 (Dashamsha — career)")):
+            d = dcharts.get(dkey)
+            if not isinstance(d, dict):
+                continue
+            d_asc = (d.get("ascendant") or "").strip()
+            d_planets = d.get("planets")
+            if not d_asc and not d_planets:
+                continue
+            parts = [dlabel + ":"]
+            if d_asc:
+                parts.append(f"asc={d_asc}")
+            d_pairs = []
+            if isinstance(d_planets, list):
+                for p in d_planets:
+                    if not isinstance(p, dict):
+                        continue
+                    pname = (p.get("name") or "").strip()
+                    psign = (p.get("sign") or "").strip()
+                    phouse = p.get("house")
+                    if pname and psign:
+                        h_tag = f"({phouse}H)" if isinstance(phouse, int) else ""
+                        d_pairs.append(f"{pname}={psign}{h_tag}")
+            elif isinstance(d_planets, dict):
+                for pname, p in d_planets.items():
+                    if not isinstance(p, dict):
+                        continue
+                    psign = (p.get("sign") or "").strip()
+                    phouse = p.get("house")
+                    if psign:
+                        h_tag = f"({phouse}H)" if isinstance(phouse, int) else ""
+                        d_pairs.append(f"{pname}={psign}{h_tag}")
+            if d_pairs:
+                parts.append(" | ".join(d_pairs))
+            lines.append(" ".join(parts))
+
     return "\n".join(lines)
 
 

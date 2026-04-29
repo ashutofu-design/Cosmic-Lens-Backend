@@ -3786,3 +3786,130 @@ Optional follow-ups (NOT shipped — not in scope of this phase):
   across user-switch sessions.
 * Add a trigram / FTS index on `question_text` if per-user history
   grows past a few hundred rows and search latency becomes visible.
+
+---
+
+## Phase 6.0d (Apr 29 2026) — ENGINE-AWARE PHASE51_BARE_RETURN GATE
+
+**Files touched:** `artifacts/api-server/openai_helper.py` (sync path
+~L13700-13767, stream path ~L16365-16425). +75 / -2 lines total. No
+schema changes, no new dependencies.
+
+### Bug
+
+`PHASE51_BARE_RETURN` (`ai_ask` L13705) and the stream-path mirror
+(`ai_ask_stream` L16369) bypassed the entire 14-validator chain
+whenever the env flags `PHASE50_MINIMAL_PROMPT=1` and
+`PHASE51_BARE_PROMPT=1` were both set — regardless of whether the
+locked-facts engine actually ran successfully. When phase-A
+chart-intel (or any primary engine in `locked_facts.py`) failed and
+`engine_status.overall` was `"empty"` / `"partial"` / `"failed"`, the
+`HEALTH_FACTS` block was assembled from `_phase60_format_health_facts_block`'s
+default safe-middle projections (verdict empty → "fluctuating",
+mixed dasha, confidence=55) without real engine backing. The Phase
+6.0b health-vocab scrubber (`_PHASE60_FORBIDDEN_HEALTH_VOCAB`, 28
+medical/clinical nouns) was inside the bypassed chain, so words like
+`vitality_dip`, `weakness`, `vulnerability` could leak verbatim on
+the sensitive health surface.
+
+Reproduction trace `ask:502d235e` (pre-fix): `2b.ENGINE_STATUS:
+overall=empty, failed=[phase-A chart-intel (core)]` immediately
+followed by `5.PHASE51_BARE_RETURN: ...bypassed=[..., scrubber, ...]`,
+final output contained `vitality_dip` and `weakness ke chances`.
+
+### Fix
+
+Two-line semantic gate added to BOTH the sync `ai_ask` bare-return
+block AND the stream `ai_ask_stream` bare-return block:
+
+```python
+_engine_status_meta = (build_meta or {}).get("engine_status") or {}
+_engine_overall    = _engine_status_meta.get("overall")
+_engine_ran_ok     = _engine_overall == "ok"
+if _phase50_active and _phase51_bare_prompt_enabled() and _engine_ran_ok:
+    # bare-return as before
+```
+
+`engine_status` is set inside `_build_messages` (L2156) from
+`locked_facts.get_last_engine_status()` and is reliably present in
+`build_meta` / `build_meta_stream` by the time the bare-return gate
+is evaluated. Only `overall == "ok"` enables bare-return; everything
+else (`partial`, `empty`, `failed`) forces the full validator chain
+including the Phase 6.0b health-vocab scrubber.
+
+### Telemetry
+
+New trace event `5.PHASE51_VALIDATORS_FORCED` (sync) and
+`5.PHASE51_VALIDATORS_FORCED(stream)` fired in the failure path with:
+* `reason: "engine_not_ok"`
+* `engine_overall` (`"partial"` / `"empty"` / etc.)
+* `failed_engines[:8]`, `skipped_engines[:8]` (full phase records
+  with reason strings)
+* `raw_chars` of the LLM response
+
+Pure logging — no behaviour change. Helps separate "scrubber engaged
+because of LLM violation" from "scrubber engaged because engine was
+empty" in production diagnostics.
+
+### Why NOT also gate on `confidence >= 70`
+
+Initial proposal (architect's friend) suggested an additional
+`health_facts.get("confidence", 0) >= 70` predicate. Dropped because:
+* `health_engine` legitimately emits confidence=55-65 for real
+  low-data charts; gating on confidence would push majority of
+  responses into the slow validator chain.
+* `engine_status == "ok"` is already a strong proxy for "engine
+  produced real backing" — confidence threshold is redundant and
+  introduces latency surprise.
+
+### Why we did NOT touch `_phase60_format_health_facts_block`
+
+Helper is architect-locked (`tone_rules` always last, FAIL-CLOSED on
+import). It is a pure vocabulary projection — defaulting empty
+verdict to "fluctuating" is intentional safe-middle. The actual
+leak path was the bare-return bypass, not the helper itself.
+
+### Verified
+
+* Replay of original failing question via `POST /api/ask` (sync path,
+  trace `ask:641315e1`):
+  * `engine_status overall=partial, failed=[phase-B dasha-presence,
+    phase-C lagna-presence]`
+  * `5.PHASE51_VALIDATORS_FORCED` fires with full failure records.
+  * `5.PHASE51_BARE_RETURN` does NOT fire.
+  * Response `source: "openai"` (not `"openai_bare"`).
+  * Final text clean: no `vitality_dip` / `weakness` /
+    `vulnerability`.
+  * Validator chain runs: `2v.POST_LOGIC_CHECK_CLEAN`,
+    `4a.TIMING_VALIDATOR_OK`, `4a2.HEALTH_BRAND_SAFETY_OK`.
+* Replay via `POST /api/ask/stream`:
+  * `done` event returns `source: "openai_stream"` (not
+    `"openai_stream_bare"`).
+  * `replaced_by_validator: false` (validators ran but no
+    substitution needed).
+* Architect review PASS on sync path; flagged stream parity gap →
+  fixed in the same commit.
+* Python `ast.parse` clean on the full file (~18000 lines).
+
+### Healthy-path latency
+
+Zero regression: when `engine_status.overall == "ok"` (majority of
+production asks with complete kundli + birth coords + dasha), the
+gate evaluates true and bare-return fires exactly as before. Only
+the engine-degraded minority pays the validator-chain cost.
+
+### Related future work (NOT in this phase)
+
+* The trace also revealed `4d.SCRUBBER_SKIPPED: phase50 minimal-
+  prompt path — style validators disabled` still fires inside the
+  forced validator chain. Architect confirmed this skips
+  `_scrub_brand_tone` (style rewriting), NOT `_phase60_health_vocab_
+  scrub` (health vocab lock), so it is not the primary leak path.
+  No action needed unless the health vocab lock is later observed
+  to also skip on phase50.
+* Root-cause investigation of WHY `phase-A chart-intel (core)` /
+  `phase-B dasha-presence` / `phase-C lagna-presence` fail in the
+  user's reproduction case (likely missing birth coords for
+  Shadbala, but not confirmed). Out of scope — this phase only
+  closes the validator-bypass blast radius, not the upstream engine
+  failure.

@@ -13702,9 +13702,25 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # validators / mutators / footer-injectors / follow-up generation and
         # return the model's raw text verbatim. See `_phase51_bare_prompt_
         # enabled` for the full list of bypassed stages.
-        if _phase50_active and _phase51_bare_prompt_enabled():
+        #
+        # Phase 6.0d — ENGINE-AWARE GATE: bare-return is only safe when the
+        # locked-facts engine actually ran successfully. When phase-A
+        # chart-intel (or any primary engine) failed, the FACTS block was
+        # built from default safe-middle projections without real engine
+        # backing — bypassing the validator chain in that state would let
+        # the LLM emit forbidden vocab on sensitive surfaces (notably the
+        # Phase 6.0b health-vocab scrubber gets skipped, leaking words like
+        # "vitality_dip" / "weakness"). For engine-degraded responses we
+        # force the full validator pipeline (scrubber + brand-safety etc).
+        # This adds NO latency on the healthy path (engine_status="ok"
+        # majority of asks) — only the failure path takes the slower route.
+        _engine_status_meta = (build_meta or {}).get("engine_status") or {}
+        _engine_overall = _engine_status_meta.get("overall")
+        _engine_ran_ok = _engine_overall == "ok"
+        if _phase50_active and _phase51_bare_prompt_enabled() and _engine_ran_ok:
             _trace(req_id, "5.PHASE51_BARE_RETURN", {
                 "raw_chars": len(text or ""),
+                "engine_overall": _engine_overall,
                 "bypassed": [
                     "supertype_contract_validator", "post_logic_check",
                     "timing_validator", "jargon_inject", "health_brand_safety",
@@ -13726,6 +13742,26 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 "intent_extraction": (build_meta or {}).get("intent_extraction"),
             }
             return _result_bare
+
+        # ── Phase 6.0d — ENGINE_SKIPPED telemetry ─────────────────────────────
+        # When the bare-return WOULD have fired (env flags ON) but engine_status
+        # blocked it, log a clear trace event so we can diagnose how often the
+        # engine-degraded path is taken in production. This is a pure logging
+        # event — no behaviour change. Helps separate "scrubber engaged because
+        # of LLM violation" from "scrubber engaged because engine was empty".
+        if _phase50_active and _phase51_bare_prompt_enabled() and not _engine_ran_ok:
+            try:
+                _failed_engines = _engine_status_meta.get("failed") or []
+                _skipped_engines = _engine_status_meta.get("skipped") or []
+                _trace(req_id, "5.PHASE51_VALIDATORS_FORCED", {
+                    "reason":          "engine_not_ok",
+                    "engine_overall":  _engine_overall,
+                    "failed_engines":  _failed_engines[:8],
+                    "skipped_engines": _skipped_engines[:8],
+                    "raw_chars":       len(text or ""),
+                })
+            except Exception:
+                pass
 
         # ── Fix-D: SUPERTYPE CONTRACT VALIDATOR + 1-RETRY ────────────────────
         # The strict per-supertype contract was injected as the LAST system
@@ -16330,9 +16366,24 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # text as the final event. Deltas have already been yielded above as
     # they arrived; the mobile client swaps deltas with `final.text` on
     # `done`, so this single yield is what reaches the user.
-    if _phase50_active_stream and _phase51_bare_prompt_enabled():
+    #
+    # Phase 6.0d — ENGINE-AWARE GATE (stream parity): same architecture as
+    # the sync path — bare-return is only safe when the locked-facts engine
+    # actually ran successfully. When phase-A chart-intel (or any primary
+    # engine) failed, the FACTS block was built from default safe-middle
+    # projections without real engine backing — bypassing the stream-side
+    # validator chain in that state would let the LLM emit forbidden vocab
+    # on sensitive surfaces (notably the Phase 6.0b health-vocab scrubber
+    # gets skipped, leaking words like "vitality_dip" / "weakness"). For
+    # engine-degraded responses we force the full validator pipeline.
+    _engine_status_meta_stream = (build_meta_stream or {}).get("engine_status") or {}
+    _engine_overall_stream = _engine_status_meta_stream.get("overall")
+    _engine_ran_ok_stream = _engine_overall_stream == "ok"
+    if (_phase50_active_stream and _phase51_bare_prompt_enabled()
+            and _engine_ran_ok_stream):
         _trace(req_id, "5.PHASE51_BARE_RETURN(stream)", {
             "raw_chars": len(raw_text or ""),
+            "engine_overall": _engine_overall_stream,
             "bypassed": [
                 "supertype_contract_validator", "post_logic_check",
                 "timing_validator", "jargon_inject", "health_brand_safety",
@@ -16352,6 +16403,25 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             "replaced_by_validator": False,
         }
         return
+
+    # ── Phase 6.0d — ENGINE_SKIPPED telemetry (stream parity) ─────────────
+    # Mirrors the sync-path 5.PHASE51_VALIDATORS_FORCED trace event. Pure
+    # logging — no behaviour change. Helps diagnose how often the
+    # engine-degraded path is taken on the streaming endpoint.
+    if (_phase50_active_stream and _phase51_bare_prompt_enabled()
+            and not _engine_ran_ok_stream):
+        try:
+            _failed_engines_stream = _engine_status_meta_stream.get("failed") or []
+            _skipped_engines_stream = _engine_status_meta_stream.get("skipped") or []
+            _trace(req_id, "5.PHASE51_VALIDATORS_FORCED(stream)", {
+                "reason":          "engine_not_ok",
+                "engine_overall":  _engine_overall_stream,
+                "failed_engines":  _failed_engines_stream[:8],
+                "skipped_engines": _skipped_engines_stream[:8],
+                "raw_chars":       len(raw_text or ""),
+            })
+        except Exception:
+            pass
 
     # Phase 5.0 Final Strip: stream-side scrubber gated identically to sync
     # path. STYLE rewriting is removed in the minimal-prompt mode; only

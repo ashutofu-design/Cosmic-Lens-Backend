@@ -6043,6 +6043,18 @@ def ask_stream_route():
     log_kundli_id  = (user.kundli.id if user and getattr(user, "kundli", None) else None)
     log_question   = question
 
+    # ── Phase 6.0i — FIX 3 (HISTORY PERSISTENCE): capture the live Flask
+    # app instance BEFORE entering the SSE generator. The generator runs
+    # AFTER Flask pops the request context (Response(stream, ...)), so any
+    # `db.session.*` call inside it raises "Working outside of application
+    # context". `current_app` is a LocalProxy and also fails inside the
+    # generator. Capturing the underlying app object now lets us re-enter
+    # `app.app_context()` only around the persistence call, without
+    # reviving the full request context. Pure persistence-layer fix —
+    # engine + LLM + scrubber pipeline untouched.
+    from flask import current_app as _current_app
+    _app_for_save = _current_app._get_current_object()
+
     # ── True SSE stream ──────────────────────────────────────────────────────
     def sse():
         try:
@@ -6076,15 +6088,28 @@ def ask_stream_route():
                     # Save AFTER the engine final event has been
                     # serialised to the wire so any failure here cannot
                     # delay the user's reply. helper swallows all errors.
+                    #
+                    # Phase 6.0i — FIX 3 (HISTORY PERSISTENCE): wrap the
+                    # save in `_app_for_save.app_context()` so SQLAlchemy
+                    # `db.session.*` works AFTER Flask has popped the
+                    # request context for the streaming response. Without
+                    # this, every streamed Ask logged "Working outside of
+                    # application context" and silently dropped the row.
                     if log_user_id:
                         try:
                             verdict_logged = extract_verdict_summary(evt, final_topic)
-                            save_user_question(
-                                user_id           = log_user_id,
-                                question_text     = log_question,
-                                topic             = final_topic,
-                                primary_kundli_id = log_kundli_id,
-                                verdict_summary   = verdict_logged,
+                            with _app_for_save.app_context():
+                                save_user_question(
+                                    user_id           = log_user_id,
+                                    question_text     = log_question,
+                                    topic             = final_topic,
+                                    primary_kundli_id = log_kundli_id,
+                                    verdict_summary   = verdict_logged,
+                                )
+                            print(
+                                f"[ask/stream] phase60i_history_save_ok: "
+                                f"user_id={log_user_id} topic={final_topic} "
+                                f"verdict={verdict_logged!r}"
                             )
                         except Exception as exc:
                             print(f"[ask/stream] question_history save failed (non-fatal): {exc}")

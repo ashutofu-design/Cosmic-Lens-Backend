@@ -6712,6 +6712,21 @@ try:
 except (TypeError, ValueError):
     _VALIDATOR_RETRY_TIMEOUT_S = 12.0
 
+# Phase 6.2 (Apr 29, 2026) — defensive timeout for the PRIMARY LLM call.
+# Without this, an OpenAI hang (network blip, 503, queueing) holds the SSE
+# stream open with no `done` event → UI freeze → user closes the app. We
+# cap the primary generation at 25s (longer narratives can legitimately
+# take 15-20s under load) and reuse _VALIDATOR_RETRY_TIMEOUT_S=12s for
+# validator retries. On timeout, the existing exception path raises
+# RuntimeError → caller falls back to the rule engine. Override via env:
+# PRIMARY_LLM_TIMEOUT_S=<float>.
+try:
+    _PRIMARY_LLM_TIMEOUT_S = float(
+        os.environ.get("PRIMARY_LLM_TIMEOUT_S", "25.0")
+    )
+except (TypeError, ValueError):
+    _PRIMARY_LLM_TIMEOUT_S = 25.0
+
 # ── Phase 4.5 (Apr 28, 2026) — NARRATIVE MODE ──────────────────────────────
 # Kills the V→R→T template (verdict badges, score 0-100, "Kya hoga / Kya
 # karein / Kya na karein" bullet sections, upay suffix, CA/SEBI + medical
@@ -12383,8 +12398,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     def _call_once(timeout: float | None = None) -> str:
         # Phase 4.4: validator retry sites pass `timeout=_VALIDATOR_RETRY_TIMEOUT_S`
-        # so a slow OpenAI retry can never hold an SSE stream open. Primary
-        # generation passes timeout=None (uses client default).
+        # so a slow OpenAI retry can never hold an SSE stream open.
+        # Phase 6.2: primary generation (timeout=None) now defaults to
+        # _PRIMARY_LLM_TIMEOUT_S (was: client default ~60s) so OpenAI
+        # hangs never freeze the SSE stream / UI. Caller can still pass
+        # an explicit timeout to override (e.g. validator retries pass
+        # the shorter _VALIDATOR_RETRY_TIMEOUT_S).
+        _effective_timeout = (
+            timeout if timeout is not None else _PRIMARY_LLM_TIMEOUT_S
+        )
         _create_kw = dict(
             model            = model,
             messages         = messages,
@@ -12393,9 +12415,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             max_tokens       = _token_budget_for(topic, question),
             presence_penalty = presence_penalty,
             frequency_penalty= frequency_penalty,
+            timeout          = _effective_timeout,
         )
-        if timeout is not None:
-            _create_kw["timeout"] = timeout
         try:
             r = client.chat.completions.create(**_create_kw)
         except Exception as exc:
@@ -12422,6 +12443,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     temperature      = 0.0,
                     top_p            = 1,
                     max_tokens       = _wealth_max_tokens,
+                    # Phase 6.2: bound the wealth structured-output call so
+                    # an OpenAI hang on the primary path can't freeze SSE.
+                    timeout          = _PRIMARY_LLM_TIMEOUT_S,
                     response_format  = {
                         "type":        "json_schema",
                         "json_schema": _WEALTH_STRUCTURED_JSON_SCHEMA,
@@ -12513,30 +12537,72 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # + validators_framework) regardless of engine state.
         if (_phase50_active and _phase51_bare_prompt_enabled()
                 and _engine_ran_ok and topic != "health"):
-            _trace(req_id, "5.PHASE51_BARE_RETURN", {
-                "raw_chars": len(text or ""),
-                "engine_overall": _engine_overall,
-                "bypassed": [
-                    "supertype_contract_validator", "post_logic_check",
-                    "timing_validator", "jargon_inject", "health_brand_safety",
-                    "validators_framework", "marriage_validator",
-                    "wealth_brand_safety", "scrubber", "phase48_truncator",
-                    "global_ph_strip", "post_logic_check_post_timing",
-                    "engine_warning_footer", "follow_ups",
-                ],
-            })
-            _result_bare = {
-                "text":              text,
-                "topic":             topic,
-                "topic_source":      (build_meta or {}).get("topic_source") or "regex",
-                "confidence":        _qu_conf,
-                "source":            "openai_bare",
-                "follow_ups":        [],
-                "question_intent":   question_intent,
-                "question_supertype": question_supertype,
-                "intent_extraction": (build_meta or {}).get("intent_extraction"),
-            }
-            return _result_bare
+            # ── Phase 6.2 — TRUTH safety net BEFORE bare-return ───────────
+            # The bare-return path was originally a "trust the locked-facts
+            # prompt" optimization that bypassed every validator including
+            # _post_logic_check. Architect (Apr 29 2026) flagged this as a
+            # HIGH-severity gap: empirically the LLM still occasionally
+            # contradicts the FACTS block (wrong MD/AD planet, wrong house
+            # for a planet, etc). _post_logic_check is pure regex/string
+            # comparison against `_build_truth_facts(kundli)` — cost is
+            # ~milliseconds, no LLM call. So we run it cheaply ONCE here:
+            # if clean, bare-return as planned (no latency regression); if
+            # violations found, drop the bypass and fall through to the
+            # full validator chain (which will fire the corrective retry
+            # at the existing POST_LOGIC_CHECK site below). Respects the
+            # POST_LOGIC_CHECK env flag (off → skip the pre-check too,
+            # matching previous behaviour).
+            _bare_truth_clean = True
+            try:
+                if (os.environ.get("POST_LOGIC_CHECK", "1") != "0"
+                        and isinstance(kundli, dict)):
+                    _bare_truth_facts = _build_truth_facts(kundli)
+                    _bare_truth_violations = _post_logic_check(
+                        text, _bare_truth_facts)
+                    if _bare_truth_violations:
+                        _bare_truth_clean = False
+                        _trace(req_id, "5.PHASE51_BARE_RETURN_BLOCKED", {
+                            "reason": "truth_violation",
+                            "violation_count": len(_bare_truth_violations),
+                            "violations":      _bare_truth_violations[:8],
+                            "first_attempt_preview": text[:240],
+                        })
+            except Exception as _bare_truth_exc:
+                # Fail open: pre-check error must not block the bare-return
+                # path. Worst case is the original phase50 behaviour (no
+                # validator) — same as before this Phase 6.2 patch.
+                _trace(req_id, "5.PHASE51_BARE_TRUTH_PRECHECK_ERR",
+                       {"error": str(_bare_truth_exc)[:200]})
+
+            if _bare_truth_clean:
+                _trace(req_id, "5.PHASE51_BARE_RETURN", {
+                    "raw_chars": len(text or ""),
+                    "engine_overall": _engine_overall,
+                    "truth_precheck": "clean",
+                    "bypassed": [
+                        "supertype_contract_validator",
+                        "timing_validator", "jargon_inject", "health_brand_safety",
+                        "validators_framework", "marriage_validator",
+                        "wealth_brand_safety", "scrubber", "phase48_truncator",
+                        "global_ph_strip", "post_logic_check_post_timing",
+                        "engine_warning_footer", "follow_ups",
+                    ],
+                })
+                _result_bare = {
+                    "text":              text,
+                    "topic":             topic,
+                    "topic_source":      (build_meta or {}).get("topic_source") or "regex",
+                    "confidence":        _qu_conf,
+                    "source":            "openai_bare",
+                    "follow_ups":        [],
+                    "question_intent":   question_intent,
+                    "question_supertype": question_supertype,
+                    "intent_extraction": (build_meta or {}).get("intent_extraction"),
+                }
+                return _result_bare
+            # else: violations present → fall through to the full validator
+            # chain below; the existing POST_LOGIC_CHECK block will catch
+            # them and fire the corrective retry.
 
         # ── Phase 6.0d — ENGINE_SKIPPED telemetry ─────────────────────────────
         # When the bare-return WOULD have fired (env flags ON) but engine_status
@@ -14923,6 +14989,15 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             presence_penalty = 0.2,
             frequency_penalty= 0.2,
             stream           = True,
+            # Phase 6.2 — hard timeout on the streaming primary call.
+            # _call_once() in the sync path defaults timeout to
+            # _PRIMARY_LLM_TIMEOUT_S; this is the matching protection on
+            # the SSE hot path. Without it, a stuck stream holds the
+            # connection open forever and the UI shows a permanent
+            # spinner. The OpenAI client treats this as the per-request
+            # cap (covers both connect-time AND wait-for-first-chunk).
+            # See _PRIMARY_LLM_TIMEOUT_S definition for env override.
+            timeout          = _PRIMARY_LLM_TIMEOUT_S,
         )
         for chunk in stream:
             try:
@@ -14967,28 +15042,60 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # when the health_engine reports engine_status="ok".
     if (_phase50_active_stream and _phase51_bare_prompt_enabled()
             and _engine_ran_ok_stream and topic != "health"):
-        _trace(req_id, "5.PHASE51_BARE_RETURN(stream)", {
-            "raw_chars": len(raw_text or ""),
-            "engine_overall": _engine_overall_stream,
-            "bypassed": [
-                "supertype_contract_validator", "post_logic_check",
-                "timing_validator", "jargon_inject", "health_brand_safety",
-                "validators_framework", "marriage_validator",
-                "wealth_brand_safety", "scrubber", "phase48_truncator",
-                "global_ph_strip", "post_logic_check_post_timing",
-                "engine_warning_footer", "follow_ups",
-            ],
-        })
-        yield {
-            "kind":                  "final",
-            "text":                  raw_text,
-            "topic":                 topic,
-            "confidence":            float((_qu or {}).get("confidence") or 0.0),
-            "source":                "openai_stream_bare",
-            "follow_ups":            [],
-            "replaced_by_validator": False,
-        }
-        return
+        # ── Phase 6.2 — TRUTH safety net BEFORE bare-return (stream parity) ──
+        # See sync-path block of the same name for full rationale. Same
+        # pre-check applied here so the SSE hot path benefits from the
+        # exact same hallucination guard. Cost: a few ms regex/string
+        # comparison; no extra LLM call when clean. On violation, drop
+        # the bypass and fall through to the full validator chain below
+        # (its existing POST_LOGIC_CHECK block will fire the corrective
+        # retry via _stream_retry_call).
+        _bare_truth_clean_stream = True
+        try:
+            if (os.environ.get("POST_LOGIC_CHECK", "1") != "0"
+                    and isinstance(kundli, dict)):
+                _bare_truth_facts_s = _build_truth_facts(kundli)
+                _bare_truth_violations_s = _post_logic_check(
+                    raw_text, _bare_truth_facts_s)
+                if _bare_truth_violations_s:
+                    _bare_truth_clean_stream = False
+                    _trace(req_id, "5.PHASE51_BARE_RETURN_BLOCKED(stream)", {
+                        "reason": "truth_violation",
+                        "violation_count": len(_bare_truth_violations_s),
+                        "violations":      _bare_truth_violations_s[:8],
+                        "first_attempt_preview": raw_text[:240],
+                    })
+        except Exception as _bare_truth_exc_s:
+            _trace(req_id, "5.PHASE51_BARE_TRUTH_PRECHECK_ERR(stream)",
+                   {"error": str(_bare_truth_exc_s)[:200]})
+
+        if _bare_truth_clean_stream:
+            _trace(req_id, "5.PHASE51_BARE_RETURN(stream)", {
+                "raw_chars": len(raw_text or ""),
+                "engine_overall": _engine_overall_stream,
+                "truth_precheck": "clean",
+                "bypassed": [
+                    "supertype_contract_validator",
+                    "timing_validator", "jargon_inject", "health_brand_safety",
+                    "validators_framework", "marriage_validator",
+                    "wealth_brand_safety", "scrubber", "phase48_truncator",
+                    "global_ph_strip", "post_logic_check_post_timing",
+                    "engine_warning_footer", "follow_ups",
+                ],
+            })
+            yield {
+                "kind":                  "final",
+                "text":                  raw_text,
+                "topic":                 topic,
+                "confidence":            float((_qu or {}).get("confidence") or 0.0),
+                "source":                "openai_stream_bare",
+                "follow_ups":            [],
+                "replaced_by_validator": False,
+            }
+            return
+        # else: violations present → fall through to full validator chain
+        # below; its existing POST_LOGIC_CHECK block fires the corrective
+        # retry.
 
     # ── Phase 6.0d — ENGINE_SKIPPED telemetry (stream parity) ─────────────
     # Mirrors the sync-path 5.PHASE51_VALIDATORS_FORCED trace event. Pure

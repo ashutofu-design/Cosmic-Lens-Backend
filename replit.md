@@ -4622,3 +4622,163 @@ openai_helper.py reader paths defensively allow dict-form
 (`or {} … _extract_sign(...)`). The schema mismatch isn't currently
 firing in production because the chart pipeline emits string-form, but
 the mixed contract is fragile and worth normalising in a future pass.
+
+---
+
+## Phase 6.2 — Lifetime Stability Pack (Apr 29, 2026)
+
+**Goal:** Ship 3 small orchestration upgrades so the app:
+1. Never freezes on a slow / down OpenAI
+2. Never burns API cost / latency on greetings
+3. Reuses the existing TRUTH validator more reliably
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- Pure orchestration-layer changes only (3 files touched, 1 file added)
+
+### Change set
+
+**A. Hard timeout on PRIMARY LLM call**
+- `openai_helper.py` — new constant `_PRIMARY_LLM_TIMEOUT_S` (default
+  25.0s, env override `PRIMARY_LLM_TIMEOUT_S`). Added near
+  `_VALIDATOR_RETRY_TIMEOUT_S` for symmetry.
+- `_call_once(timeout=...)` updated: when caller passes `timeout=None`
+  (the primary-generation path), we now substitute
+  `_PRIMARY_LLM_TIMEOUT_S` instead of the OpenAI client's ~60s
+  default. Validator-retry sites (which already pass an explicit
+  `timeout=_VALIDATOR_RETRY_TIMEOUT_S`) are unchanged.
+- Wealth structured-output call (`_resp_w = client.chat.completions.
+  create(...)`) given an explicit `timeout=_PRIMARY_LLM_TIMEOUT_S`.
+- Net effect: every primary OpenAI call is now bounded → SSE stream
+  never holds open without a `done` event → UI never freezes.
+
+**B. Hard timeout on CLASSIFIER (`question_understanding.py`)**
+- New constant `_QU_TIMEOUT_S` (default 5.0s, env override
+  `QU_TIMEOUT_S`). Sits at module top next to `INTENTS` / `TOPICS`.
+- Added `timeout=_QU_TIMEOUT_S` to the single
+  `client.chat.completions.create(...)` call inside
+  `_understand_question_inner`. The existing `except Exception` branch
+  catches OpenAI's `APITimeoutError` and falls through to
+  `_fallback_classify(q)` with `source="ai_error_regex_fallback"`.
+- Net effect: the classifier can never block the answer pipeline;
+  worst case is a regex classification with the existing fallback
+  rules, still served well under 6s.
+
+**C. Top-N shortcut layer (NEW `shortcuts.py`)**
+- New module `artifacts/api-server/shortcuts.py` with
+  `try_shortcut(question, lang) -> Optional[dict]`.
+- Six anchored regex patterns, multilingual (en / hi / hn) replies:
+  greet, thank, farewell, intro, capabilities, help.
+- Anchored `^...$` patterns + 80-char length cap → false-positive on
+  a real ask is structurally impossible (e.g. "namaste, meri shaadi
+  kab hogi" does NOT match because the greeting is not the entire
+  question).
+- Hooked at the route layer in `flask_app.py`:
+  - `/api/ask/stream` (line ~5950) — after brand-guard, before
+    auth + quota
+  - `/api/ask` (line ~5679) — after brand-guard, before auth + quota
+- Greetings do NOT consume a daily-quota slot (`quota={"used":0,
+  "limit":0}`). Anonymous users still get a friendly hello.
+- `source` field set to `shortcut:<kind>` for telemetry separation
+  from `openai` / `openai_stream` / `brand_guard` / `rules`.
+
+### Live verification (smoke tests)
+
+| Test | Expected | Actual |
+|------|----------|--------|
+| `namaste` (hn) | shortcut, <100 ms | source=shortcut:greet, **50 ms** |
+| `thanks` (hn) | shortcut, <100 ms | source=shortcut:thank, **40 ms** |
+| `tum kaun ho` (hn) | shortcut:intro, <100 ms | source=shortcut:intro, **38 ms** |
+| `help` (en) | shortcut:help, EN reply | source=shortcut:help, **40 ms** |
+| `meri shaadi kab hogi` | NORMAL pipeline | classifier fired, intent=timing, **4.7 s** |
+| `namaste, meri health kaisi rahegi 2026 me?` | NORMAL pipeline (greeting prefix must NOT shortcut) | classifier fired, hidden_intent="future health condition in 2026", **1.7 s** |
+| `hello` (en) | shortcut:greet, EN reply | source=shortcut:greet, **39 ms** |
+
+Latency win: ~5500 ms → ~40 ms = **~138x** for shortcut-eligible
+queries. Cost win: $0 OpenAI spend on those queries.
+
+### Existing TRUTH validator (Fix 2 — already shipped earlier)
+- `_post_logic_check(text, _build_truth_facts(kundli))` already runs
+  on every primary response (env `POST_LOGIC_CHECK=1` default ON,
+  L12627 in openai_helper.py).
+- Catches LLM claims that contradict the kundli's MD/AD/PD ground
+  truth. On violation it appends a corrective system message and
+  retries once with `timeout=_VALIDATOR_RETRY_TIMEOUT_S`.
+- Phase 6.2 deliberately did NOT add a duplicate validator —
+  strengthening the existing one with stricter unknown-planet
+  detection is deferred to a future pass.
+
+### Env knobs (all optional, sane defaults)
+- `PRIMARY_LLM_TIMEOUT_S=25.0`
+- `VALIDATOR_RETRY_TIMEOUT_S=12.0`
+- `QU_TIMEOUT_S=5.0`
+- `POST_LOGIC_CHECK=1`
+- `SUPERTYPE_VALIDATOR=1`
+- `NARRATIVE_MODE=1`
+
+### Files touched
+- `artifacts/api-server/openai_helper.py` — `_PRIMARY_LLM_TIMEOUT_S`
+  constant + `_call_once` default + wealth structured timeout
+- `artifacts/api-server/question_understanding.py` — `_QU_TIMEOUT_S`
+  constant + classifier `timeout=` kwarg
+- `artifacts/api-server/flask_app.py` — shortcut hook on `/api/ask`
+  and `/api/ask/stream` (after brand-guard, before auth/quota)
+- `artifacts/api-server/shortcuts.py` — NEW module, ~220 lines
+
+### What's NOT changed
+- engine code (health, dosh, career, love, marriage, wealth)
+- DB schema, models, migrations
+- Auth / quota logic
+- Mobile client (Expo) — backend response shape unchanged
+- Existing classifier behaviour (sanity layer, why-promote, recovery
+  sub-ask detector, etc.) — all untouched
+
+### Phase 6.2 — Post-architect tighten (same day, Apr 29 2026)
+
+Architect review surfaced 2 HIGH-severity gaps in the initial Phase 6.2
+edits. Both fixed in the same session:
+
+**Fix #1 — Streaming primary call missing timeout**
+- `_PRIMARY_LLM_TIMEOUT_S` was being applied via `_call_once` for the
+  sync path, but the streaming primary at `ai_ask_stream`
+  (`client.chat.completions.create(..., stream=True)`, ~L14944) had no
+  `timeout=` kwarg — so the SSE hot path could still hang on a stuck
+  upstream.
+- Added `timeout=_PRIMARY_LLM_TIMEOUT_S` to the streaming primary
+  call. The OpenAI client treats this as the per-request cap covering
+  both connect-time AND wait-for-first-chunk.
+
+**Fix #2 — TRUTH validator bypass on PHASE51_BARE_RETURN**
+- The phase50 minimal-prompt optimization had bare-return paths in
+  both `ai_ask` (~L12541) and `ai_ask_stream` (~L15046) that
+  short-circuited BEFORE the `_post_logic_check` block — so for the
+  majority engine_status="ok" non-health path, the TRUTH validator
+  was never invoked. This contradicted the user-facing "1-2%
+  hallucination rate" claim.
+- Added a **cheap pre-check** before each bare-return:
+  `_post_logic_check(text, _build_truth_facts(kundli))` is pure
+  regex/string comparison, no LLM call → adds ~ms when clean. If
+  clean, bare-return as planned (no latency regression on the >99%
+  clean case). If violations present, drop the bypass and fall through
+  to the full validator chain — its existing POST_LOGIC_CHECK block
+  fires the corrective LLM retry.
+- Fail-open: any exception in the pre-check (e.g. malformed kundli
+  causing `_build_truth_facts` to raise) reverts to the original
+  phase50 behaviour rather than blocking the user.
+- New trace events: `5.PHASE51_BARE_RETURN_BLOCKED` and
+  `5.PHASE51_BARE_TRUTH_PRECHECK_ERR` (sync + stream variants) for
+  observability.
+
+### Re-verification after post-architect fixes
+- `/api/healthz` = 200
+- Shortcut: `namaste` → 46 ms, `source=shortcut:greet` (unchanged)
+- Sync real ask: `meri career growth kab hogi` → 2.35 s, classifier
+  fired (intent=timing), engine + LLM both ran, full validator chain
+  exercised
+- Stream real ask: `mera dhan kab badhega` → 1.49 s, classifier fired
+  (confidence 0.95), TRUTH precheck passed cleanly → bare-return fired
+  on healthy path with new safety net active
+- Zero stack traces in logs

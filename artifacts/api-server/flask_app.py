@@ -5673,6 +5673,24 @@ def ask_route():
             "plan":       "free",
         })
 
+    # ── Phase 6.2 — Shortcut layer (greetings, intro, help) ──────────────────
+    # Bypass classifier + LLM for obvious queries that have a fixed canned
+    # reply. Fires AFTER brand-guard (so off-topic still wins) but BEFORE
+    # auth/quota (greetings shouldn't consume a daily question slot, and
+    # anonymous users should still get a friendly hello). Returns None
+    # for any real question → normal pipeline continues unchanged.
+    try:
+        from shortcuts import try_shortcut as _try_shortcut
+        _shortcut = _try_shortcut(question, lang=lang)
+    except Exception as _exc:
+        # Shortcut module bug must never block the ask flow.
+        print(f"[ask] shortcut layer error (non-fatal): {_exc}")
+        _shortcut = None
+    if _shortcut:
+        _shortcut["quota"] = {"used": 0, "limit": 0}
+        _shortcut["plan"]  = "free"
+        return jsonify(_shortcut)
+
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
     if user_id:
@@ -5943,6 +5961,24 @@ def ask_stream_route():
             "quota":      {"used": 0, "limit": 0},
             "plan":       "free",
         })
+
+    # ── Phase 6.2 — Shortcut layer (greetings, intro, help) ──────────────────
+    # Bypass classifier + LLM for obvious queries that have a fixed canned
+    # reply. Fires AFTER brand-guard (so off-topic still wins) but BEFORE
+    # auth/quota (greetings shouldn't consume a daily question slot, and
+    # anonymous users should still get a friendly hello). Returns None
+    # for any real question → normal pipeline continues unchanged.
+    try:
+        from shortcuts import try_shortcut as _try_shortcut
+        _shortcut = _try_shortcut(question, lang=lang)
+    except Exception as _exc:
+        # Shortcut module bug must never block the ask flow.
+        print(f"[ask/stream] shortcut layer error (non-fatal): {_exc}")
+        _shortcut = None
+    if _shortcut:
+        _shortcut["quota"] = {"used": 0, "limit": 0}
+        _shortcut["plan"]  = "free"
+        return jsonify(_shortcut)
 
     # ── Auth + quota — identical contract to /api/ask ────────────────────────
     user = None

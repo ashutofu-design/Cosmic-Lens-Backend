@@ -30,6 +30,19 @@ INTENTS = ("problem", "timing", "decision", "planet", "analysis")
 TOPICS  = ("finance", "career", "marriage", "love", "health", "general")
 
 
+# Phase 6.2 (Apr 29, 2026) — defensive timeout for the classifier LLM call.
+# The classifier runs BEFORE the main answer call; if it hangs (network
+# blip, 503, queueing) the whole pipeline blocks and the user stares at
+# a blank screen. 5s gives ~3s headroom over the typical 1.5-2s response
+# time. On timeout, the existing exception handler in `_understand_
+# question_inner` falls back to `_fallback_classify` (regex). Override
+# via env: QU_TIMEOUT_S=<float>.
+try:
+    _QU_TIMEOUT_S = float(os.environ.get("QU_TIMEOUT_S", "5.0"))
+except (TypeError, ValueError):
+    _QU_TIMEOUT_S = 5.0
+
+
 # ── Prompt ──────────────────────────────────────────────────────────────────
 # Sprint-26 base prompt + boundary definitions added after empirical
 # evaluation showed the AI confused: (a) planet-status questions naming
@@ -736,6 +749,11 @@ def _understand_question_inner(question: str,
             model=model,
             temperature=0.1,
             max_tokens=220,
+            # Phase 6.2: hard timeout — see _QU_TIMEOUT_S above. On timeout
+            # the OpenAI client raises, the except branch below catches it,
+            # and we fall back to `_fallback_classify` (regex). UI never
+            # blocks on a stuck classifier call.
+            timeout=_QU_TIMEOUT_S,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "user", "content": _PROMPT_TEMPLATE.format(question=q)}

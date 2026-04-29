@@ -3413,3 +3413,40 @@ zero forbidden vocab leaks, mandatory doctor-consult line present,
 coherent narrative — no `4y.PHASE60_HEALTH_LOCK_SCRUB` trace fired
 because the LLM stayed on-script (which is the goal — the scrubber
 is a safety-net, not a primary mechanism).
+
+---
+
+## Phase 6.0a — Vedic Vocab Disambiguation (Apr 29, 2026)
+
+**Bug.** User reported the LLM saying "Aapka rashi Sagittarius hai,
+kyunki aapka Lagna Sagittarius me hai" — wrong: in Vedic usage,
+'rashi' alone = Moon sign (Chandra Rashi), not Lagna. The chart data
+WAS available (Moon line in mini summary) but the LLM grabbed Lagna
+because the labels in CHART block didn't disambiguate the two.
+
+**Two-line fix.**
+
+1. `_phase50_mini_chart_summary` now labels rows explicitly:
+   - `Lagna (Ascendant): <sign>` (was `Lagna: <sign>`)
+   - `Moon (Rashi / Chandra Rashi): <sign>` (was `Moon: <sign>`)
+   - `Sun (Surya Rashi): <sign>` (was `Sun: <sign>`)
+
+2. `_phase50_build_minimal_messages` system prompt gains a 2-line
+   Vedic-vocab glossary right after the "engine sochta hai" line:
+   ```
+   Vedic vocab (read CHART literally, never substitute):
+   rashi/राशि = Moon sign; lagna/लग्न = Ascendant; sun sign = Sun.
+   ```
+
+**Cap bumped 500c → 600c** with explicit comment in
+`test_system_message_under_600_chars`. This is fact-correction, not
+rule-creep — anything > 600c IS rule creep.
+
+**Live verification (Lagna=Sagittarius, Moon=Cancer, Sun=Sagittarius):**
+
+- `mera rashi kya he?` → "Aapka rashi (Moon sign) Kark hai." ✓
+- `mera lagna kya he?` → "Aapka lagna Dhanu (धनु) hai." ✓
+- `mera sun sign kya he?` → "Aapka sun sign Dhanu (धनु) hai." ✓
+
+**Tests:** 5 new (3 chart-summary label tests + 2 glossary tests) →
+132/132 in the Phase 5/6 suite green.

@@ -125,6 +125,45 @@ class TestPhase50MiniChartSummary(unittest.TestCase):
         self.assertIsInstance(out, str)
         self.assertIn("Jupiter", out)
 
+    def test_phase60a_lagna_labelled_as_ascendant(self):
+        """Phase 6.0a: Lagna line must carry the explicit '(Ascendant)'
+        disambiguation so the LLM never returns Lagna when asked for rashi."""
+        s = oh._phase50_mini_chart_summary(_sample_kundli())
+        self.assertIn("Lagna (Ascendant):", s)
+
+    def test_phase60a_moon_labelled_as_rashi(self):
+        """Phase 6.0a: Moon line must carry the explicit '(Rashi / Chandra
+        Rashi)' label so 'mera rashi kya hai' maps to Moon, not Lagna."""
+        s = oh._phase50_mini_chart_summary(_sample_kundli())
+        self.assertIn("Moon (Rashi / Chandra Rashi):", s)
+
+    def test_phase60a_sun_labelled_as_surya_rashi(self):
+        s = oh._phase50_mini_chart_summary(_sample_kundli())
+        self.assertIn("Sun (Surya Rashi):", s)
+
+
+class TestPhase60aVedicVocabGlossary(unittest.TestCase):
+    """Phase 6.0a — system message must teach 'rashi' = Moon sign."""
+
+    def test_system_message_contains_rashi_glossary(self):
+        msgs = oh._phase50_build_minimal_messages(
+            "mera rashi kya hai?", _sample_kundli(), lang="hn",
+        )
+        sys_content = msgs[0]["content"]
+        self.assertIn("rashi", sys_content.lower())
+        self.assertIn("moon sign", sys_content.lower())
+
+    def test_system_message_distinguishes_lagna_from_rashi(self):
+        msgs = oh._phase50_build_minimal_messages(
+            "mera rashi kya hai?", _sample_kundli(), lang="hn",
+        )
+        sys_content = msgs[0]["content"]
+        # Both terms must be defined separately
+        self.assertIn("lagna", sys_content.lower())
+        self.assertIn("ascendant", sys_content.lower())
+        # And the never-substitute clause
+        self.assertIn("never substitute", sys_content.lower())
+
 
 class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
     """The 2-message builder: strict shape, no contracts, no tier hints."""
@@ -223,14 +262,18 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         self.assertIn("Hindi", msgs_hi[0]["content"])
         self.assertIn("English", msgs_en[0]["content"])
 
-    def test_system_message_under_500_chars(self):
-        """System message must stay tiny — Phase 5.7 strip.
-        Old: 2500c with MANDATORY D9 + 5-rule checklist + OUTPUT STYLE.
-        New: ~500c — clean 6-bullet "engine sochta hai, LLM bolta hai"
-        prompt. Anything > 500c means rules are creeping back in.
+    def test_system_message_under_600_chars(self):
+        """System message must stay tiny.
+        Old (Phase 5.0):  2500c with MANDATORY D9 + 5-rule checklist.
+        Phase 5.7 strip:  ~500c — clean "engine sochta hai" prompt.
+        Phase 6.0a bump:  600c — added a 2-line Vedic-vocab glossary
+                          (rashi/lagna/sun-sign disambiguation) after
+                          live trace showed the LLM substituting Lagna
+                          when asked for rashi. This is fact-correction,
+                          not rule-creep — anything > 600c IS rule creep.
         """
         msgs = oh._phase50_build_minimal_messages("q?", _sample_kundli(), lang="hn")
-        self.assertLessEqual(len(msgs[0]["content"]), 500,
+        self.assertLessEqual(len(msgs[0]["content"]), 600,
             f"system msg too long ({len(msgs[0]['content'])}c) — rules creeping back?")
 
 

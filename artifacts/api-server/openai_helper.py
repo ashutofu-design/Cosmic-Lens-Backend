@@ -8956,18 +8956,25 @@ def _phase50_mini_chart_summary(kundli: Any) -> str:
     lines: list[str] = []
 
     # ── Lagna + lord ────────────────────────────────────────────────────
+    # Phase 6.0a: explicit "(Ascendant)" label so the LLM never confuses
+    # Lagna with Rashi. Earlier traces showed the LLM answering "your
+    # rashi is X because your lagna is X" — wrong: in Vedic usage,
+    # 'rashi' alone = Moon sign (Chandra Rashi), not the ascendant.
     asc = (kundli.get("ascendant") or "").strip()
     if asc:
         lord = _PHASE50_SIGN_LORDS.get(asc.lower(), "")
-        lines.append(f"Lagna: {asc}" + (f" (lord {lord})" if lord else ""))
+        lines.append(f"Lagna (Ascendant): {asc}" + (f" (lord {lord})" if lord else ""))
 
     # ── Moon + nakshatra + pada ─────────────────────────────────────────
+    # Phase 6.0a: explicit "(Rashi / Chandra Rashi)" label so a question
+    # like "mera rashi kya hai?" maps directly to this row in the data
+    # block instead of the LLM grabbing Lagna by mistake.
     moon = (kundli.get("moonSign") or "").strip()
     nak = (kundli.get("nakshatra") or "").strip()
     nak_pada = kundli.get("nakshatraPada")
     nak_ruler = (kundli.get("nakshatraRuler") or "").strip()
     if moon:
-        moon_line = f"Moon: {moon}"
+        moon_line = f"Moon (Rashi / Chandra Rashi): {moon}"
         if nak:
             moon_line += f" ({nak}"
             if nak_pada:
@@ -8980,7 +8987,7 @@ def _phase50_mini_chart_summary(kundli: Any) -> str:
     # ── Sun ─────────────────────────────────────────────────────────────
     sun = (kundli.get("sunSign") or "").strip()
     if sun:
-        lines.append(f"Sun: {sun}")
+        lines.append(f"Sun (Surya Rashi): {sun}")
 
     # ── Current dasha (lord names ONLY — no dates) ──────────────────────
     cd = kundli.get("currentDasha") or {}
@@ -9871,6 +9878,8 @@ def _phase50_build_minimal_messages(
         "You are a Vedic astrology assistant.\n"
         "The final verdict and facts are already computed by the engine.\n"
         "Do NOT recompute or change them.\n"
+        "Vedic vocab (read CHART literally, never substitute):\n"
+        "rashi/राशि = Moon sign; lagna/लग्न = Ascendant; sun sign = Sun.\n"
         "Answer naturally:\n"
         "- Be clear and direct\n"
         "- Keep it short unless explanation is asked\n"

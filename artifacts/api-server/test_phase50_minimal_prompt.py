@@ -142,11 +142,11 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         )
         joined = (msgs[0]["content"] + "\n" + msgs[1]["content"])
         # Literals from the heavy contracts that MUST be absent now.
-        # Note: "MANDATORY" was previously forbidden as a contract-bloat
-        # marker, but Phase 5.3 legitimately uses it for the classical
-        # "MANDATORY D9 CHECK" rule (D9 verification before any verdict),
-        # so it is no longer in the forbidden list. The other tokens still
-        # represent old heavy-contract preamble that must stay out.
+        # Phase 5.7 ("engine sochta hai, LLM bolta hai"): added back
+        # MANDATORY, FULL_KUNDLI_JSON, and the Phase 5.3 D9 rule sheet
+        # to the forbidden list — they were taking the LLM back to
+        # "do astrology yourself" mode. The engines compute verdicts;
+        # the prompt no longer teaches astrology rules.
         forbidden = [
             "UNIFIED NARRATOR",
             "SUPERTYPE",
@@ -159,6 +159,9 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
             "PLANET-STRENGTH RULE",
             "JAIMINI UL CITATION",
             "STRICT RESPONSE CONTROL",
+            "MANDATORY D9",
+            "FULL_KUNDLI_JSON",
+            "Vargottama",
         ]
         for token in forbidden:
             self.assertNotIn(token, joined,
@@ -193,13 +196,12 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         msgs = oh._phase50_build_minimal_messages(
             "career?", _sample_kundli(), lang="en",
         )
-        # Phase 5.2: label changed from "CHART:" to "CHART (quick reference):"
-        # because we now ALSO append a FULL_KUNDLI_JSON block. Keep the test
-        # tolerant — only require the leading "CHART" token.
+        # Phase 5.7: FULL_KUNDLI_JSON dump removed — only the compact
+        # "CHART (quick reference)" summary is sent. The LLM no longer
+        # gets the raw kundli object (was making it re-derive verdicts).
         self.assertIn("CHART", msgs[1]["content"])
         self.assertIn("Sagittarius", msgs[1]["content"])
-        # Phase 5.2: full kundli JSON must also be present.
-        self.assertIn("FULL_KUNDLI_JSON", msgs[1]["content"])
+        self.assertNotIn("FULL_KUNDLI_JSON", msgs[1]["content"])
 
     def test_extra_facts_appended_when_provided(self):
         msgs = oh._phase50_build_minimal_messages(
@@ -221,18 +223,15 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         self.assertIn("Hindi", msgs_hi[0]["content"])
         self.assertIn("English", msgs_en[0]["content"])
 
-    def test_system_message_under_2500_chars(self):
-        """System message must stay reasonable — no preamble bloat allowed.
-        Phase 5.2: bumped from 400 → 1500c (ChatGPT-style guidance prompt
-        + COPY-EXACTLY instruction).
-        Phase 5.3: bumped 1500 → 2500c to accommodate the classical
-        "MANDATORY D9 (NAVAMSHA) CHECK" rule block (Vargottama,
-        neecha-bhanga, dignity-change, karaka-per-topic, D9-wins-over-D1).
-        Anything > 2500c indicates new preamble drift beyond the D9 rule.
+    def test_system_message_under_500_chars(self):
+        """System message must stay tiny — Phase 5.7 strip.
+        Old: 2500c with MANDATORY D9 + 5-rule checklist + OUTPUT STYLE.
+        New: ~500c — clean 6-bullet "engine sochta hai, LLM bolta hai"
+        prompt. Anything > 500c means rules are creeping back in.
         """
         msgs = oh._phase50_build_minimal_messages("q?", _sample_kundli(), lang="hn")
-        self.assertLessEqual(len(msgs[0]["content"]), 2500,
-            f"system msg too long ({len(msgs[0]['content'])}c) — preamble drift?")
+        self.assertLessEqual(len(msgs[0]["content"]), 500,
+            f"system msg too long ({len(msgs[0]['content'])}c) — rules creeping back?")
 
 
 # ───────────────────────── T030 / T031 — verdict extractor ─────────────────
@@ -599,8 +598,13 @@ class TestPhase55ContextMemoryDetector(unittest.TestCase):
         self.assertEqual(len(msgs), 2)
         sys_text = msgs[0]["content"]
         usr_text = msgs[1]["content"]
-        # Lock-mode system message swap.
-        self.assertIn("VERDICT-LOCK MODE", sys_text)
+        # Phase 5.7: lock-mode no longer needs a special "VERDICT-LOCK MODE"
+        # preamble — the unified clean system message already says
+        # "verdict is computed by the engine, do not recompute". The
+        # AUTHORITATIVE_ENGINE_VERDICT block in the user message is the
+        # actual lock enforcement.
+        self.assertIn("verdict is already computed by the engine", sys_text)
+        self.assertIn("Do NOT recompute", sys_text)
         # Locked verdict block in the user message.
         self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", usr_text)
         # Explain mode flipped on → must list 3-5 reasons.
@@ -1782,10 +1786,15 @@ class TestPhase55BuilderIntegration(unittest.TestCase):
             topic="marriage",
         )
         sysm = msgs[0]["content"]
-        self.assertIn("VERDICT-LOCK MODE", sysm)
+        # Phase 5.7: unified clean system message — same line covers both
+        # lock-mode and non-lock-mode ("verdict is computed by engine").
+        self.assertIn("verdict is already computed by the engine", sysm)
+        self.assertIn("Do NOT recompute", sysm)
         # Default system msg "ARRIVE at the right verdict" must be GONE.
         self.assertNotIn("ARRIVE at the right verdict", sysm)
         self.assertNotIn("MANDATORY D9", sysm)
+        # Locked-verdict block must still anchor the user message.
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", msgs[1]["content"])
 
     def test_lock_combined_prompt_has_no_recompute_verbs(self):
         """Architect-review pin: across the COMBINED system+user prompt

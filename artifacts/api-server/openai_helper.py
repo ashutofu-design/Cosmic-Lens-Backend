@@ -10060,117 +10060,42 @@ def _phase50_build_minimal_messages(
     if _phase55_is_love_vs_arrange_question(question or "", history=history):
         locked_verdict = _phase55_compute_love_vs_arrange(kundli)
 
-    if locked_verdict:
-        # Lock-mode system message: short, single instruction, NO
-        # "compute your own verdict" language. The authoritative engine
-        # block in the user message is the source of truth.
-        system_msg = (
-            "You are a Vedic astrology assistant.\n\n"
-            "VERDICT-LOCK MODE: A deterministic Vedic-rules engine has "
-            "ALREADY computed the verdict for this question from the "
-            "user's D1 + D9 charts. The verdict is provided in the user "
-            "message under AUTHORITATIVE_ENGINE_VERDICT.\n\n"
-            "Your ONLY job:\n"
-            "- Express the engine's HEADLINE in the user's language in "
-            "1-2 short sentences.\n"
-            "- Do NOT recompute, contradict, or flip the verdict.\n"
-            "- Do NOT mention scores, indicator counts, or 'engine'.\n"
-            "- Do NOT list the reasons unless the user explicitly asks "
-            "'kyun' / 'why' / 'reason batao' / 'explain' / 'detail mein "
-            "batao' / 'how'.\n"
-            "- Speak like a human astrologer, not a report." + lang_hint
-        )
-    else:
-        system_msg = (
-            "You are a Vedic astrology assistant.\n\n"
-            "You have access to the user's kundli (planets, houses, current "
-            "dasha, AND all divisional charts D1-D60 in FULL_KUNDLI_JSON).\n"
-            "Use it internally to think.\n\n"
-            "OUTPUT STYLE — answer only what is asked:\n\n"
-            "- Give a clear and direct answer.\n"
-            "- For a simple yes/no or A-vs-B question: reply with the verdict "
-            "briefly in a single short response. Do NOT add reasoning, planet "
-            "names, house numbers, D9/D10/D30 details, or astrological "
-            "breakdown unless the user explicitly asks 'kyun', 'reason "
-            "batao', 'explain', 'detail mein batao', 'how', or similar.\n"
-            "- Only expand into a detailed analysis when the user asks for "
-            "explanation or technical reasoning.\n"
-            "- If a clear answer is possible, do not avoid it.\n"
-            "- Focus only on what the user asked. Do not stay vague or "
-            "neutral. Speak like a human, not a report.\n\n"
-            "CLASSICAL RULE — MANDATORY D9 (NAVAMSHA) CHECK (INTERNAL ONLY):\n"
-            "For ANY prediction or life-event question (marriage, career, "
-            "wealth, children, foreign travel, spiritual growth, etc.), you "
-            "MUST consult the D9 chart SILENTLY before forming your verdict. "
-            "D9 is the 'phaladayak' (fruit-giving) chart. Rules to apply "
-            "INTERNALLY (do not narrate them in the answer unless the user "
-            "asks for reasoning):\n"
-            "  1. Planet STRONG in D1 but WEAK in D9 → result under-delivers.\n"
-            "  2. Planet WEAK in D1 but STRONG in D9 (own/exalted/Vargottama) "
-            "→ neecha-bhanga, much better than D1 suggests.\n"
-            "  3. VARGOTTAMA (same sign in D1 and D9) = doubles the result.\n"
-            "  4. Always silently check D9 position of: (a) the topic karaka "
-            "(Venus=marriage, Sun=career, Jupiter=wealth/children, "
-            "Moon=mind, Mercury=business, Saturn=longevity), (b) the "
-            "relevant house lord, (c) D9 lagna and lagna lord.\n"
-            "  5. If D1 and D9 disagree, D9 wins for the FINAL outcome.\n"
-            "Use this D9 check to ARRIVE at the right verdict. Then output "
-            "ONLY the verdict (1-2 sentences) — keep all this reasoning "
-            "internal unless the user asks 'why' or 'explain'." + lang_hint
-        )
+    # ── Phase 5.7 — "Engine sochta hai, LLM bolta hai" (Apr 2026) ───────
+    # Stripped EVERYTHING that taught the LLM how to do astrology:
+    #   ❌ MANDATORY D9 (NAVAMSHA) CHECK   — moved into the engines
+    #   ❌ FULL_KUNDLI_JSON dump           — LLM was re-deriving verdicts
+    #   ❌ Phase 5.3 topic-rule checklists — same problem
+    #   ❌ Verbose OUTPUT STYLE rule sheets — bloat
+    # The engine pipeline (LvA / yoga / KP / marriage / wealth / dosh)
+    # already computes every verdict. The LLM's job is narration ONLY.
+    # ───────────────────────────────────────────────────────────────────
+    system_msg = (
+        "You are a Vedic astrology assistant.\n\n"
+        "The final verdict is already computed by the engine.\n"
+        "Do NOT recompute or change it.\n\n"
+        "Use the given facts to answer simply.\n"
+        "- Be clear and direct\n"
+        "- Keep it short unless asked\n"
+        "- If explanation is asked, explain briefly\n"
+        "- Do not add extra analysis\n"
+        "- Speak naturally like a human" + lang_hint
+    )
 
-    user_parts = []
+    user_parts: list[str] = []
     if chart_summary:
         user_parts.append("CHART (quick reference):\n" + chart_summary)
-
-    # Phase 5.2 — Pass the FULL kundli object as raw JSON so the model
-    # can answer ANY chart question (D1-D60 divisional charts, full
-    # 120-year Vimshottari dasha sequence with dates, transits, yogas,
-    # KP sub-lords, ashtakavarga, shadbala, doshas — anything the
-    # kundli engine produced). The model is told to look here for any
-    # detail not in the quick-reference summary.
-    #
-    # Phase 5.5 architect-review: when the verdict-lock is active we
-    # OMIT FULL_KUNDLI_JSON entirely. Without the raw chart, the model
-    # has no material from which to recompute its own verdict — it has
-    # only the locked engine output to express. The mini chart summary
-    # remains so the model can still say "Aapki Sagittarius lagna mein…"
-    # if it wants natural framing, but cannot flip the conclusion.
-    if not locked_verdict:
-        try:
-            if isinstance(kundli, dict) and kundli:
-                kundli_json = json.dumps(kundli, ensure_ascii=False, separators=(",", ":"))
-                user_parts.append(
-                    "FULL_KUNDLI_JSON (authoritative — use this for ANY "
-                    "chart detail not in the quick reference above; do NOT "
-                    "invent anything outside this object):\n" + kundli_json
-                )
-        except Exception:
-            # Defensive — never fail the prompt build over JSON serialisation.
-            pass
 
     if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
         user_parts.append("FACTS:\n" + extra_facts.strip())
 
     if locked_verdict:
-        # Lock-mode: ONLY the locked verdict block — no rule checklist,
-        # no FULL_KUNDLI_JSON. The system message has been swapped to
-        # the narrate-only variant above. Phase 5.5c: detect explain-mode
-        # and flip the block's instruction so the model lists the engine
-        # reasons instead of just the headline.
+        # Lock-mode: append the engine's authoritative verdict block.
+        # Phase 5.5c: detect explain-mode so the block surfaces engine
+        # reasons when the user asked "kyun / why / reason batao".
         explain_mode = _phase55_is_explain_mode_question(question or "")
         user_parts.append(_phase55_format_locked_verdict_block(
             locked_verdict, explain_mode=explain_mode,
         ))
-    else:
-        # Phase 5.3 — inject topic-specific classical-rule checklist when
-        # the detected topic has well-known Vedic rules (marriage / career
-        # / wealth / health). Forces step-by-step rule walking instead of
-        # one-indicator confidence. Empty for unknown topics — falls back
-        # to general guidance.
-        rules_block = _phase53_topic_rules(topic)
-        if rules_block:
-            user_parts.append(rules_block)
 
     user_parts.append("QUESTION:\n" + (question or "").strip())
 
@@ -10587,14 +10512,17 @@ def _phase56_format_yoga_facts_block(
     if not buckets_to_show:
         return ""
 
+    # Phase 5.7: facts-only — no INSTRUCTION footer. The system message
+    # already tells the LLM "verdict is computed by engine, do not
+    # recompute". Adding rule bullets here is the exact anti-pattern
+    # we are removing — engine sochta hai, LLM bolta hai.
     lines: list[str] = [
-        "YOGA_FACTS (deterministic detection from your D1 chart, do NOT recompute):",
-        f"Total positive yogas: {facts.get('positive', 0)} | "
-        f"negative: {facts.get('negative', 0)} | "
+        f"Yogas — positive: {facts.get('positive', 0)}, "
+        f"negative: {facts.get('negative', 0)}, "
         f"mixed: {facts.get('mixed', 0)}",
     ]
     if filter_label:
-        lines.append(f"Filtered for: {filter_label} category only")
+        lines.append(f"(showing {filter_label} category only)")
     lines.append("")
 
     for b in buckets_to_show:
@@ -10604,9 +10532,9 @@ def _phase56_format_yoga_facts_block(
         # Sort: positive first, then mixed, then negative.
         order = {"POSITIVE": 0, "MIXED": 1, "NEGATIVE": 2}
         items_sorted = sorted(items, key=lambda y: order.get(y.get("polarity"), 3))
-        lines.append(f"{b.upper()} ({len(items_sorted)}):")
+        lines.append(f"{b} ({len(items_sorted)}):")
         for y in items_sorted[:8]:
-            tag = {"POSITIVE": "✓", "NEGATIVE": "✗", "MIXED": "◐"}.get(
+            tag = {"POSITIVE": "+", "NEGATIVE": "-", "MIXED": "~"}.get(
                 y.get("polarity"), "•")
             detail = y.get("detail") or ""
             if len(detail) > 90:
@@ -10616,20 +10544,10 @@ def _phase56_format_yoga_facts_block(
                 line += f" — {detail}"
             lines.append(line)
         if len(items_sorted) > 8:
-            lines.append(f"  … (+{len(items_sorted) - 8} more in this category)")
+            lines.append(f"  … (+{len(items_sorted) - 8} more)")
         lines.append("")
 
-    lines.extend([
-        "INSTRUCTION (yoga layer — additive, NOT decisional):",
-        "- Cite the count and yoga names VERBATIM from the YOGA_FACTS above.",
-        "- If the user asked 'kitne' / 'how many', state the count clearly.",
-        "- If the user asked for names or a list, list them (do NOT skip).",
-        "- Do NOT invent yoga names that are NOT in YOGA_FACTS above.",
-        "- Do NOT claim a yoga is present if it is not in the list.",
-        "- Keep the explanation concise and grounded in the listed yogas.",
-    ])
-
-    return "\n".join(lines)
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _phase50_install_minimal_messages(

@@ -2206,3 +2206,99 @@ regressions in any prior phase (5.0 / 5.1 / 5.5 / 5.5g / 5.5h KP).
 **Reuses 100% of existing detector code** — zero duplication of yoga
 logic. Phase 5.6 is purely a *wiring* layer that surfaces what was
 already being computed (but discarded by Phase 5.0's minimal prompt).
+
+---
+
+## Phase 5.7 — "Engine sochta hai, LLM bolta hai" prompt strip (Apr 29, 2026)
+
+**Problem (user-flagged):** The Phase 5.0 minimal-prompt path had drifted
+back into being a *heavy* prompt. Three anti-patterns had accumulated:
+
+1. **`MANDATORY D9 (NAVAMSHA) CHECK`** — a 5-rule checklist in the system
+   message telling the LLM how to consult Navamsha (Vargottama, neecha-bhanga,
+   karaka-per-topic, "D9 wins for the FINAL outcome"). This made the LLM
+   re-derive verdicts that the engines already compute deterministically.
+2. **`FULL_KUNDLI_JSON`** dump — the entire kundli object (~230 KB raw)
+   serialised into the user message "so the model can answer ANY chart
+   question". Same problem: gives the LLM enough material to invent its
+   own astrology and contradict the engine.
+3. **Phase 5.3 `_phase53_topic_rules`** — topic-specific classical rule
+   checklists injected per question.
+4. **Phase 5.6 `INSTRUCTION` footer** in the yoga block — 6 bullets
+   telling the LLM how to behave ("cite verbatim", "do NOT invent",
+   "additive, NOT decisional"). Same anti-pattern at smaller scale.
+
+**Core principle (user mantra):** *Engine sochta hai, LLM bolta hai.*
+The engines (LvA, yoga registry, KP CSL, marriage_engine, wealth_engine,
+dosh_engine) compute the verdicts. The LLM's job is narration only —
+NEVER recomputation, NEVER its own analysis from raw chart data.
+
+**Surgical changes** (`openai_helper.py` — `_phase50_build_minimal_messages`
+~10011 and `_phase56_format_yoga_facts_block` ~10520):
+
+- ❌ Removed `MANDATORY D9 (NAVAMSHA) CHECK` 5-rule block from system msg
+- ❌ Removed verbose OUTPUT STYLE rule sheet (`Do NOT add reasoning…
+  unless user explicitly asks 'kyun'…` — the model decides naturally)
+- ❌ Removed `FULL_KUNDLI_JSON` injection from user message
+- ❌ Removed `_phase53_topic_rules(topic)` injection
+- ❌ Removed `INSTRUCTION` footer (6 bullets) from yoga block
+- ✅ Unified lock-mode and non-lock system message into ONE clean prompt
+  (the user's exact 6-bullet wording — see below). The lock contract
+  is now enforced by the `AUTHORITATIVE_ENGINE_VERDICT` block in the
+  user message + the universal "verdict is computed by engine, do not
+  recompute" line in the system message.
+
+**New system prompt** (one prompt, both lock-mode and non-lock cases):
+```
+You are a Vedic astrology assistant.
+
+The final verdict is already computed by the engine.
+Do NOT recompute or change it.
+
+Use the given facts to answer simply.
+- Be clear and direct
+- Keep it short unless asked
+- If explanation is asked, explain briefly
+- Do not add extra analysis
+- Speak naturally like a human
+```
++ language hint (`Reply in Hindi/Hinglish style…` or `Reply in English.`).
+
+**Size delta:** system message went from **~2400 chars** (with 5-rule D9
+checklist + OUTPUT STYLE) to **~430 chars**. User message dropped the
+~230 KB FULL_KUNDLI_JSON dump on every yoga/general question.
+
+**Yoga block — Phase 5.7 facts-only format:**
+```
+Yogas — positive: 11, negative: 4, mixed: 1
+(showing Dhan category only)            ← only when narrowed
+
+Dhan (4):
+  + Dhana yoga (1L+2L conj) — Jupiter & Saturn both in Aries
+  + Dhana yoga (1L+5L parivartana) — Jupiter↔Mars sign exchange
+  + Dhana yoga (9L+11L parivartana) — Sun↔Venus sign exchange
+  + Mahabhagya yoga (male signature) — Sun, Moon, Lagna in odd signs
+```
+No `YOGA_FACTS:` label, no `INSTRUCTION:` footer, no `Do NOT invent`
+bullets — just facts. Engine sochta hai, LLM bolta hai.
+
+**Live verification (Bhubaneswar fixture):**
+```
+Q: "Mera kitne dhan yog hain?"      → "Aapke chart mein total 6 dhan yog hain."
+Q: "Naam batao?"                    → lists yoga names from engine output
+Q: "Saturn powerful hai ya weak?"   → 2-line brief analysis (not a wall of text)
+```
+All concise, direct, grounded in engine outputs. No D9 rule-walking,
+no "let me think through this" preamble, no over-analysis.
+
+**Tests updated:**
+- `test_phase50_minimal_prompt.py` — `MANDATORY D9` and `FULL_KUNDLI_JSON`
+  added to forbidden-tokens list (they used to be expected); system msg
+  size cap tightened from 2500c to 500c; lock-mode tests now check for
+  the unified "verdict is computed by engine" wording instead of the
+  removed `VERDICT-LOCK MODE` preamble.
+- `test_phase56_yoga_registry.py` — formatter tests now assert the new
+  facts-only header `Yogas — positive: …` and assert `INSTRUCTION` is
+  ABSENT (was previously asserted PRESENT — the inversion is the point).
+
+**Full regression: 251/251 pass** (23 pre-existing skips, 0 new failures).

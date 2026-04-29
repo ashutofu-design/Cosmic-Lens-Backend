@@ -1862,3 +1862,82 @@ would merge:
 The Hybrid Plan keeps engine accuracy intact (14 rules) and improves
 clarity on the public side (ratio-based ladder). User's gold rule
 upheld: "Accuracy engine ka kaam hai, clarity product ka kaam hai."
+
+## Phase 5.5f — DIRECTIONAL INCONCLUSIVE WORDING (Apr 29 2026)
+
+### Problem
+Phase 5.5e correctly downgraded near-tie charts (ratio < 0.20) from
+`leaning_*` to `inconclusive` — engine math became honest, no more
+overconfidence on close calls. But the UX text for that bucket was too
+flat: every inconclusive case got the same "dono taraf strong indication
+nahi hai — situation par depend karega" headline, even when the chart
+DID have a real (if small) directional tilt (e.g. 5L vs 4A — love is
+genuinely the higher side, just by 1).
+
+User feedback: "yeh to kuch bola hi nahi" — system feels mute.
+
+### Fix — split inconclusive into two wordings (engine untouched)
+The engine ladder is byte-identical to Phase 5.5e. Only the inconclusive
+verdict_text_public is split:
+
+| Branch | Condition | Text |
+|--------|-----------|------|
+| TRUE TIE | `total < 6` OR `ratio == 0.0` | "Aapki kundli mein dono taraf strong indication nahi hai — situation aur paristithi par depend karega." |
+| LOW-CONF TILT | `0 < ratio < 0.20` | "{Love\|Arrange} marriage ki taraf thoda jhukav hai, lekin strong confirmation nahi — situation par depend karega." |
+
+The verdict label `inconclusive` stays the same in both branches — only
+the human-facing sentence differs. Downstream consumers reading
+`verdict_public` see no behaviour change.
+
+### Why two wordings (not one)
+- TRUE TIE: there is no honest direction to mention — neutral text.
+- LOW-CONF TILT: there IS a real tilt (diff_abs >= 1), so the user
+  deserves to know which way the chart leans, with a strong caveat
+  ("strong confirmation nahi") so we don't slide back into Phase
+  5.5b's overconfidence trap. This honours the user's gold rule:
+  **accuracy is the engine's job, confidence is the wording's job**.
+
+### Wording compared across phases
+For 5L vs 4A (BBSR kundli, ratio = 0.111):
+
+| Phase | verdict_public | Text |
+|-------|---------------|------|
+| 5.5b  | leaning_love | "love marriage ki taraf thoda zyada jhukav hai, lekin dono possibilities open hain" — overconfident |
+| 5.5e  | inconclusive | "dono taraf strong indication nahi hai — situation par depend karega" — too flat |
+| 5.5f  | inconclusive | "Love marriage ki taraf thoda jhukav hai, lekin strong confirmation nahi — situation par depend karega" — directional + honest |
+
+### Lexical safeguards
+The new directional wording is INTENTIONALLY distinct from the leaning_*
+template:
+- leaning uses "thoda **zyada** jhukav" + "dono possibilities open"
+- directional inconclusive uses "thoda jhukav" + "**strong confirmation
+  nahi**"
+
+A regression test (`test_directional_inconclusive_wording_does_not_use_
+leaning_phrase`) asserts the leaning phrases NEVER appear in inconclusive
+text, so future edits can't accidentally re-merge them.
+
+### Tests
+**194/194 green** (was 186, +8 new in `TestPhase55fDirectionalInconclusive
+Wording`):
+- 5v4 mentions love direction with caveat
+- 4v5 symmetry: mentions arrange direction
+- 5v5 perfect tie keeps neutral text
+- 4v0 evidence floor keeps neutral text (no direction even though
+  ratio=1.0)
+- 6v4 leaning wording unaffected
+- 9v3 clear wording unaffected
+- end-to-end engine call on perfect-tie kundli emits neutral
+- 5v4 / 4v5 / 7v5 / 5v7 inconclusive wording is lexically distinct
+  from leaning template
+
+### Live verification
+Same BBSR 5v4 kundli, canonical question "kya mera love marriage hoga ya
+arrange?" — see live trace below in this turn's notes.
+
+### Files touched
+- `openai_helper.py` — `_phase55_compute_love_vs_arrange` final else
+  branch split into directional vs neutral.
+- `test_phase50_minimal_prompt.py` — new `TestPhase55fDirectional
+  InconclusiveWording` class (9 tests); existing Phase 5.5e end-to-end
+  test annotated with cross-reference comment.

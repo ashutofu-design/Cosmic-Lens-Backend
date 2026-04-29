@@ -9613,6 +9613,21 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
     higher_is_love = love_score > arrange_score
     confidence_ratio = (diff_abs / total) if total > 0 else 0.0
 
+    # ── Phase 5.5f (Apr 29 2026) — DIRECTIONAL INCONCLUSIVE WORDING ────
+    # Phase 5.5e correctly downgraded near-ties (ratio < 0.20) from
+    # leaning to inconclusive — engine math is honest. But the UX text
+    # was too flat: "dono taraf strong indication nahi hai" felt like
+    # "system kuch bola hi nahi" when the chart did have a tiny tilt
+    # (e.g. 5L vs 4A — love is genuinely the higher side, just by 1).
+    #
+    # Fix: keep the engine ladder unchanged, but split the inconclusive
+    # branch into two wordings:
+    #   • TRUE TIE  (ratio == 0 OR total < 6) → neutral text (no
+    #     direction to mention honestly)
+    #   • LOW-CONF TILT (0 < ratio < 0.20)    → directional text that
+    #     acknowledges the tilt + strong "no confirmation" caveat
+    # Verdict label `inconclusive` stays the same in both cases — only
+    # the human-facing sentence differs. Engine accuracy + public clarity.
     if total < 6 or confidence_ratio == 0.0:
         verdict_public = "inconclusive"
         verdict_text_public = (
@@ -9641,12 +9656,20 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
             )
     else:
         # confidence_ratio in (0.0, 0.20) — engine evidence is too
-        # diffuse to call a side honestly. Phase 5.5e fix.
+        # diffuse to call a side cleanly, but there IS a small tilt
+        # (diff_abs >= 1) that we can honestly mention with a strong
+        # caveat. Phase 5.5f UX upgrade — Phase 5.5e math kept intact.
         verdict_public = "inconclusive"
-        verdict_text_public = (
-            "Aapki kundli mein dono taraf strong indication nahi hai — "
-            "situation aur paristithi par depend karega."
-        )
+        if higher_is_love:
+            verdict_text_public = (
+                "Love marriage ki taraf thoda jhukav hai, lekin strong "
+                "confirmation nahi — situation par depend karega."
+            )
+        else:
+            verdict_text_public = (
+                "Arrange marriage ki taraf thoda jhukav hai, lekin strong "
+                "confirmation nahi — situation par depend karega."
+            )
 
     return {
         "verdict":              verdict,                # internal (diagnostic)

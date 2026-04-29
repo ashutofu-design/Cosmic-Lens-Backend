@@ -3063,3 +3063,183 @@ foreign-travel, property, vehicle, child, sade-sati, kalsarpa, manglik,
 litigation) still flow through the legacy 1-liner path. Wiring them on
 the same `<DOMAIN>_FACTS` shape is the next step in the roadmap and is
 **not** part of this turn.
+
+---
+
+## Phase 5.9 Batch 3d — LOVE_FACTS block (engine sochta hai, LLM bolta hai)
+
+**Status:** SHIPPED · 2026-04-29 · 48 new tests + 254 existing = 302/302 green
+**Mantra:** "engine sochta hai, LLM bolta hai" — domain OS, not chatbot.
+
+### Why this batch
+
+Phase 5.9 Batch 3c (Health) v3 established the canonical sensitive-topic
+FACTS architecture: domain-neutral vocabulary (`overall_risk` /
+`stability` / `sensitive_areas` / `supportive_factors` / `risk_factors`),
+FAIL-CLOSED tone-rules floor in the LAST prompt position, brand_safety
+verbatim survival, and architect-locked invariants ("no softening on
+worst-tier", "guardrails survive malformed engine output").
+
+Love is the second sensitive-topic surface. Before this batch the love
+domain still flowed through the legacy 1-line `Love verdict: ...` path,
+leaving the LLM blind to the engine's bucket / question_type /
+brand-safety guardrails / tone policy. This batch wires
+`love_engine.assess_love` into the same FACTS shape as Health, with
+love-specific tone rules (no betrayal certainty, no rejection certainty,
+no third-party identification, no timing absolutism).
+
+### What changed (zero new astrology — pure formatter + tone rules)
+
+#### `love_engine.py`
+- **NEW** `LOVE_TONE_RULES` 5-tuple constant (Hinglish, ~L170-196):
+  - rule 1: no betrayal certainty (cosmic-pattern framing only)
+  - rule 2: no rejection certainty (preserve self-worth on one-sided)
+  - rule 3: no absolute breakup prediction (always pair with healing window)
+  - rule 4: no third-party identification (cosmic patterns only)
+  - rule 5: no timing absolutism (probability language, dasha ranges)
+- **NEW** `bucket` field exposed in `assess_love` return dict (~L3170):
+  additive surface of an already-local var. The CLE 4-band classifier
+  (`green` / `yellow_wait` / `slow_burn` / `red_avoid`) is now consumable
+  by the formatter without re-deriving from the clipped score.
+
+#### `openai_helper.py`
+- **NEW** `_phase59_is_love_question(q)` — delegates to upstream
+  `_is_love_question()` (the SAME gate that decides whether
+  `assess_love` runs). Inherits the marriage-override defense:
+  love-marriage queries route to `marriage_engine`, not `love_engine`.
+- **NEW** `_LOVE_TONE_RULES_FALLBACK` — hardcoded byte-equal copy of
+  the engine constant. FAIL-CLOSED safety net: if the engine import
+  fails for any reason, this floor still ships and tone enforcement
+  is preserved. A sync test asserts byte-equality with the engine
+  source so drift fails CI.
+- **NEW** `_phase59_love_overall_risk(bucket, score)` — pure mapping:
+  - `green`               → `strong`
+  - `yellow_wait`         → `stable`
+  - `slow_burn`           → `fluctuating`
+  - `red_avoid` + score≥25 → `vulnerable`
+  - `red_avoid` + score<25 → `high_risk`
+  - unknown/malformed     → `fluctuating` (safe middle, never claims strength)
+
+  The 25-boundary for love (vs -40 for health) reflects love's 0-100
+  clipped score range — `red_avoid` clips at `min(score, 40)` so the
+  midpoint of that range splits "recoverable with effort" from "needs
+  healing window first".
+- **NEW** `_phase59_love_stability(overall_risk, n_supportive, n_risk)`
+  — pure formatter heuristic (no astrology):
+  - upper-tier with risk ≤ supportive → `stable`
+  - worst-tier with risk ≥ supportive → `vulnerable`
+  - everything else                   → `fluctuating`
+- **NEW** `_PHASE59_LOVE_SENSITIVE_BUCKETS` map — surfaces three
+  question-type buckets as structural sensitive-area labels:
+  `affair_third_party` → `affair_check_active`,
+  `breakup_signal`     → `breakup_signal_active`,
+  `one_sided`          → `one_sided_dynamic`.
+- **NEW** `_phase59_format_love_facts_block(v)` — full LOVE_FACTS
+  formatter mirroring the v3 Health architecture:
+
+  ```
+  LOVE_FACTS:
+    - overall_risk: <strong|stable|fluctuating|vulnerable|high_risk>
+    - stability:    <stable|fluctuating|vulnerable>
+    - confidence:   <int 0-100>
+    - question_type: <bucket name>                    [if present]
+    - current_dasha: <md/ad>                          [if present]
+    - next_window:   <dasha> (<YYYY-MM..YYYY-MM>)     [if present]
+    - sensitive_areas:                                [if any]
+      - <bucket-derived label>
+      - <affair_check / foreign_check fire labels>
+    - supportive_factors:                             [if any]
+      - <reasons_strong[:3]>
+    - risk_factors:                                   [if any]
+      - <reasons_weak[:3]>
+    - strategy: <strategy.do[0], 240-char cap>        [if present]
+    - brand_safety:                                   [if any]
+      - <verbatim engine warning>
+    - tone_rules:                                     [ALWAYS, LAST]
+      - <engine-owned tone-policy bullet × 5>
+  ```
+
+  - bucket / verdict / score are NOT surfaced (mirrors the v3 Health
+    vocabulary swap — the LLM sees only user-spec terminology so it
+    doesn't fall back to engine jargon when narrating).
+  - reasons capped at 3 each — keeps the prompt terse while preserving
+    the strongest signals.
+  - strategy reads `strategy["do"][0]` (love_engine returns dict with
+    do/do_not lists, not a flat string).
+  - affair_check / foreign_check fires surface as STRUCTURAL labels —
+    NEVER names of specific people (engine-locked invariant).
+  - tone_rules is ALWAYS emitted (FAIL-CLOSED) and ALWAYS last
+    (recency-bias attention weight).
+
+#### Extractor wiring (`_phase50_extract_verdict_facts`, ~L10024)
+
+```python
+lv = bm.get("love_verdict_obj")
+emitted_love_block = False
+if routed and _phase59_is_love_question(q) and isinstance(lv, dict):
+    block = _phase59_format_love_facts_block(lv)
+    if block:
+        parts.append(block)
+        emitted_love_block = True
+```
+
+Then in the 1-liner backward-compat loop:
+
+```python
+if key == "love_verdict_obj" and emitted_love_block:
+    continue   # suppress duplicate "Love verdict: ..." 1-liner
+```
+
+This preserves the architecture invariant: existing tests that mock
+`{"love_verdict_obj": {"verdict": "L"}}` with an EMPTY question still
+get the 1-liner (detector returns False on empty input), so no
+backward-compat regression.
+
+### Tests (`test_phase59_love_facts.py` — 49 tests, 838 lines)
+
+Eight test classes covering every architect-locked invariant:
+
+- **TestLoveQuestionDetector** (6) — English / Hinglish / Hindi /
+  Devanagari matching, marriage-override routing defense, defensive
+  non-string + empty handling.
+- **TestLoveFormatter** (10) — full block shape, `breakup_signal` red
+  with brand_safety verbatim, `one_sided` self-worth guardrail,
+  `affair_check` high-signal sensitive_area, `long_distance` with
+  foreign_check, minimal verdict graceful fields, long-strategy
+  truncation, newline collapsing, malformed field types don't raise,
+  non-dict input → empty, `confidence_pct` fallback.
+- **TestLoveVocabularyMapping** (10) — exhaustive bucket→overall_risk
+  mapping, score=25 boundary lock for red_avoid, unknown bucket safe
+  default, case-insensitive bucket matching, full stability heuristic
+  matrix.
+- **TestLoveSensitiveTopicSafety** (6) — brand_safety verbatim for
+  breakup / one-sided / affair, third-party identity NEVER leaked,
+  brand_safety SURVIVES malformed bucket field, red_avoid NEVER
+  surfaces as softer tiers (architect-locked).
+- **TestLoveToneRules** (8) — engine-source-of-truth contract,
+  fallback↔engine BYTE-EQUAL sync test, tone_rules in EVERY block,
+  verbatim no-paraphrasing, LAST position (after brand_safety),
+  emit even with no brand_safety, all 5 required policy areas
+  named, FAIL-CLOSED on engine import failure.
+- **TestLoveExtractorIntegration** (5) — block fires for love q +
+  1-liner suppressed, non-love q falls back to 1-liner, marriage q
+  falls back to 1-liner (override routing), no obj → nothing,
+  coexistence with career/health/stock 1-liners.
+- **TestLoveSourceCleanliness** (1) — Phase 5.7 forbidden literals
+  (FULL_KUNDLI_JSON, MANDATORY-D, supertype contract, etc.) NEVER
+  re-leak into the new block.
+
+Suite: 302 tests in 0.4s — green across the whole Phase 5.9 surface
+(love + health + career + dosh + marriage/wealth + minimal-prompt +
+yoga registry).
+
+### Sleeping engines remaining
+
+After Batch 3d, the FACTS rich-prompt surface covers: marriage,
+wealth, career, dosh, health, **love**.
+
+The remaining 11 sleeping engines (education, family, foreign-travel,
+property, vehicle, child, sade-sati, kalsarpa, manglik, litigation,
+stock) still flow through the legacy 1-liner path. Wiring them on
+the same `<DOMAIN>_FACTS` shape is the next step in the roadmap and
+is **not** part of this turn.

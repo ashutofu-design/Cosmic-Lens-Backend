@@ -10010,16 +10010,34 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             parts.append(block)
             emitted_health_block = True
 
+    # ── LOVE (Phase 5.9 Batch 3d) ────────────────────────────────────────
+    # Sensitive-topic surface — narrator MUST honour brand_safety bullets
+    # (affair softening, breakup non-prediction, one-sided self-worth)
+    # AND the engine-owned LOVE_TONE_RULES (no betrayal certainty, no
+    # rejection certainty, no third-party identification, no timing
+    # absolutism). The detector delegates to upstream `_is_love_question`
+    # to inherit marriage-override routing (love-marriage q → marriage
+    # engine, not love).
+    lv = bm.get("love_verdict_obj")
+    emitted_love_block = False
+    if routed and _phase59_is_love_question(q) and isinstance(lv, dict):
+        block = _phase59_format_love_facts_block(lv)
+        if block:
+            parts.append(block)
+            emitted_love_block = True
+
     # ── Other domain verdicts — 1 line each (unchanged this phase). ─────
-    # Career / health are suppressed when their FACTS block already fired
-    # (above), to avoid duplicating engine output as both rich block +
-    # 1-liner.
+    # Love / career / health are suppressed when their FACTS block already
+    # fired (above), to avoid duplicating engine output as both rich
+    # block + 1-liner.
     for key, label in [
         ("love_verdict_obj",   "Love verdict"),
         ("career_verdict_obj", "Career verdict"),
         ("health_verdict_obj", "Health verdict"),
         ("stock_verdict_obj",  "Stock verdict"),
     ]:
+        if key == "love_verdict_obj"   and emitted_love_block:
+            continue
         if key == "career_verdict_obj" and emitted_career_block:
             continue
         if key == "health_verdict_obj" and emitted_health_block:
@@ -11416,6 +11434,396 @@ def _phase59_format_health_facts_block(v: Any) -> str:
         try:
             logger.error(
                 "[Phase 5.9] HEALTH_TONE_RULES engine import failed: %s — "
+                "falling back to hardcoded floor (tone enforcement preserved).",
+                _e,
+            )
+        except Exception:
+            pass
+    tone_bullets = [_safe_str(r) for r in _tone_rules if isinstance(r, str)]
+    tone_bullets = [r for r in tone_bullets if r]
+    if tone_bullets:
+        lines.append("  - tone_rules:")
+        for r in tone_bullets:
+            lines.append(f"    - {r}")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.9 Batch 3d — LOVE_FACTS block (engine sochta hai, LLM bolta hai)
+# ─────────────────────────────────────────────────────────────────────────────
+# Surfaces love_engine.assess_love() output as a structured LOVE_FACTS block
+# in the minimal-prompt path. Replaces the legacy 1-line "Love verdict: ..."
+# that left the LLM blind to bucket / question_type / brand-safety
+# guardrails / tone policy on a sensitive topic surface.
+#
+# Mirror of the v3 Health architecture: same vocabulary (overall_risk /
+# stability / sensitive_areas / supportive_factors / risk_factors),
+# same FAIL-CLOSED tone-rules floor, same architect-locked invariants
+# (no-softening on red_avoid, brand_safety verbatim survival).
+#
+# Strict rule (architect-enforced): NO new astrology logic. The block is
+# pure formatting of fields already produced by love_engine. Brand-safety
+# warnings (affair check, breakup softening, one-sided self-worth) are
+# surfaced VERBATIM. Tone rules from `love_engine.LOVE_TONE_RULES` are
+# emitted in the LAST position with FAIL-CLOSED fallback for prompt
+# attention recency.
+#
+# Detector delegates to upstream `_is_love_question` — the SAME gate that
+# decides whether `assess_love` is invoked (with marriage-override
+# routing). Single source of truth eliminates detector ↔ executor drift.
+
+
+def _phase59_is_love_question(question: Any) -> bool:
+    """True iff the question is a love / relationship query.
+
+    Defensive against non-string input. Delegates to the upstream
+    `_is_love_question()` — the SAME gate that decides whether
+    `assess_love` is invoked. This guarantees zero detector ↔ executor
+    drift, including the marriage-override routing (e.g. "love marriage
+    kab hogi" routes to marriage, not love). A True here implies (for
+    a normally-routed request) that `love_verdict_obj` will be on
+    `out_meta`.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return _is_love_question(question)
+
+
+# ── LOVE_TONE_RULES hardcoded floor (FAIL-CLOSED safety net) ─────────────
+# Mandatory minimum tone-policy enforcement that ships even if
+# `love_engine.LOVE_TONE_RULES` cannot be imported (broken module,
+# missing constant, partial deploy, etc.). The formatter tries the
+# engine source first and only falls back here on import failure.
+#
+# Architect-mandated (Phase 5.9 Batch 3c v2 pattern, replicated for love
+# in Batch 3d): silently dropping tone rules would revert tone control to
+# LLM discretion — the exact failure mode the user asked us to eliminate
+# on sensitive surfaces. Better to ship a duplicate floor and log the
+# import error than to silently degrade brand-safety.
+#
+# This list MUST be kept in sync with love_engine.LOVE_TONE_RULES. The
+# engine constant is the source of truth in normal operation; this floor
+# exists purely to guarantee the policy never disappears. A sync test in
+# test_phase59_love_facts.py asserts byte-equality.
+_LOVE_TONE_RULES_FALLBACK: tuple = (
+    "BETRAYAL ki CERTAINTY kabhi mat do. 'Wo aapko dhokha de raha/rahi hai' / 'Affair pakka hai' / 'Cheating ho rahi hai' jaisi language strictly band. Hamesha cosmic-pattern framing: 'cosmic indication hai', 'patterns suggest karte hain', 'is window mein extra communication zaroori hai'. Partner ke character ka direct accusation NEVER.",
+    "REJECTION ki CERTAINTY kabhi mat do. 'Wo tumhe kabhi pasand nahi karega/karegi' / 'One-sided hi rahega' jaisi language band. One-sided cases mein self-worth preserve karo: 'mutual cosmic resonance abhi weak hai' frame karo, 'wo tumhe pasand nahi karta/karti' NEVER. User ki dignity sabse upar.",
+    "BREAKUP ki ABSOLUTE prediction band. 'Aap dono ka definite breakup hoga' / 'Rishta tootega hi' / 'Separation pakka hai' jaisi language nahi. Separation indicators ko ALWAYS pair karo healing window + remedy ke saath: 'is window mein friction risk hai, agar X dasha tak care nahi liya to' — strategy + recovery path mandatory.",
+    "THIRD-PARTY ki IDENTITY kabhi mat name karo. 'Aapka cousin', 'office colleague', 'school-friend', 'neighbor' jaisi specific identification strictly band — even if user hint dene ki koshish kare. Cosmic-pattern level pe baat karo: 'external influence ka indication hai', 'social-circle dynamics active hain'. Specific persons name karna = defamation risk + relationship destruction.",
+    "TIMING ki ABSOLUTISM band, PROBABILITY ki language use karo. 'X tareekh ko milega/milegi', 'pakka is mahine' — band. 'Window indicate karta hai', 'is dasha period mein cosmic support better hai', 'agar tab tak tayyari ki to chances strong' — yeh acceptable. Dasha windows ko range ke roop mein bolo, single-point prediction ke roop mein NEVER.",
+)
+
+
+def _phase59_love_overall_risk(bucket: str, score: int) -> str:
+    """Map engine bucket + score → user-facing `overall_risk` tier.
+
+    Mirror of `_phase59_health_overall_risk` for love. The engine
+    produces `bucket` (CLE 4-band: green / yellow_wait / slow_burn /
+    red_avoid) and `score` (0-100, clipped per bucket) internally. The
+    prompt-facing schema uses the v3 Batch 3c 5-tier vocabulary
+    (strong / stable / fluctuating / vulnerable / high_risk).
+
+    Mapping is pure formatter logic — NO new astrology, NO score
+    re-thresholding. Bucket is the engine's already-classified
+    semantic output, so we map 1:1 from bucket and only use `score` to
+    distinguish vulnerable vs. high_risk for the worst tier:
+
+      green                              → strong
+      yellow_wait                        → stable
+      slow_burn                          → fluctuating
+      red_avoid + score >= 25            → vulnerable
+      red_avoid + score < 25             → high_risk
+
+    Why score boundary at 25 for love (vs -40 for health):
+      Love's score is normalized to 0-100 (not -100 to +100 like
+      health). The engine clips red_avoid to `min(score, 40)`, so
+      red_avoid scores typically span 0-40. The 25 boundary splits
+      this into upper-half (vulnerable — recoverable with effort) and
+      lower-half (high_risk — needs healing window first per the
+      engine's own framework).
+
+    Unknown bucket → "fluctuating" (safe middle default).
+    """
+    b = (bucket or "").strip().lower()
+    if b == "green":
+        return "strong"
+    if b == "yellow_wait":
+        return "stable"
+    if b == "slow_burn":
+        return "fluctuating"
+    if b == "red_avoid":
+        return "high_risk" if score < 25 else "vulnerable"
+    return "fluctuating"
+
+
+def _phase59_love_stability(
+    overall_risk: str,
+    n_supportive: int,
+    n_risk: int,
+) -> str:
+    """Derive `stability` tag from signal balance + risk tier.
+
+    Stability is about CONSISTENCY of cosmic signal, not severity:
+      - stable      = signals lean supportive / strong tier
+      - fluctuating = mixed signals, middle tiers
+      - vulnerable  = repeated friction, worst tiers
+
+    Pure formatter heuristic (no astrology):
+      strong / stable tier with risk ≤ supportive          → "stable"
+      vulnerable / high_risk tier with risk ≥ supportive   → "vulnerable"
+      everything else                                      → "fluctuating"
+    """
+    if overall_risk in ("strong", "stable") and n_risk <= n_supportive:
+        return "stable"
+    if overall_risk in ("vulnerable", "high_risk") and n_risk >= n_supportive:
+        return "vulnerable"
+    return "fluctuating"
+
+
+# Bucket → sensitive-area label. Keeps the LLM's prompt aware that the
+# question itself routes to a brand-safety-sensitive bucket WITHOUT
+# leaking engine-internal trace strings (which can contain Phase-5.7
+# cleaned literals or specific reason text).
+_PHASE59_LOVE_SENSITIVE_BUCKETS: dict = {
+    "affair_third_party": "affair_check_active",
+    "breakup_signal":     "breakup_signal_active",
+    "one_sided":          "one_sided_dynamic",
+}
+
+
+def _phase59_format_love_facts_block(v: Any) -> str:
+    """Render `assess_love()` output as a clean, prose-free facts block.
+
+    Phase 5.9 Batch 3d — adopts the v3 Batch 3c vocabulary
+    (overall_risk / stability / sensitive_areas / supportive_factors /
+    risk_factors). Pure FORMATTER — no engine changes, no algorithm
+    changes, no regression on safety guarantees (brand_safety +
+    LOVE_TONE_RULES emitted unchanged with FAIL-CLOSED floor).
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      LOVE_FACTS:
+        - overall_risk: <strong|stable|fluctuating|vulnerable|high_risk>
+        - stability:    <stable|fluctuating|vulnerable>
+        - confidence:   <int 0-100>
+        - question_type: <bucket name>                            [if present]
+        - current_dasha: <md/ad>                                  [if present]
+        - next_window:   <dasha> (<YYYY-MM..YYYY-MM>)             [if present]
+        - sensitive_areas:                                        [if any]
+          - <bucket-derived sensitive label>
+          - <conditional fire — affair_check / foreign_check>
+        - supportive_factors:                                     [if any]
+          - <reason 1>
+          - <reason 2>
+        - risk_factors:                                           [if any]
+          - <weak reason 1>
+        - strategy: <one-line strategy>                           [if present]
+        - brand_safety:                                           [if any]
+          - <verbatim engine warning>
+        - tone_rules:                                             [ALWAYS]
+          - <engine-owned tone-policy bullet>
+
+    Vocabulary mapping (pure formatter, no astrology):
+      bucket / verdict / score — DROPPED from prompt (engine still
+                                  computes for routing + 1-liner
+                                  backward compat); bucket maps to
+                                  overall_risk via
+                                  `_phase59_love_overall_risk()`.
+      reasons_strong[:3]       — surfaced as supportive_factors
+      reasons_weak[:3]         — surfaced as risk_factors
+      question_type            — surfaced as the routing context label
+      affair_check / foreign_check — when fired, surfaced as
+                                  sensitive_areas hints (NEVER named
+                                  third party — engine-locked)
+      brand_safety_warnings    — UNCHANGED, verbatim
+      LOVE_TONE_RULES          — UNCHANGED, FAIL-CLOSED, last section
+
+    Why bucket / verdict / score are NOT surfaced:
+      Mirrors the v3 Health vocabulary swap. The LLM sees only the
+      user-spec terminology so it doesn't fall back to the engine's
+      internal jargon when narrating. Engine still uses bucket
+      internally for routing and 1-liner fallback.
+
+    Why reasons are CAPPED at 3 each:
+      Love reasons are short, structured strings (e.g. "Venus in 5th
+      house — strong romance karaka"). Capping prevents the prompt
+      from ballooning while preserving the strongest signals.
+
+    Why brand_safety is included VERBATIM:
+      Affair / breakup / one-sided buckets emit deterministic
+      narrator guardrails. They are NOT astrology reasoning — they
+      are MANDATORY narrator instructions. Surfacing them verbatim
+      enforces them in the LLM's output.
+
+    Why tone_rules is the LAST section:
+      Recency-bias attention weight in the LLM's prompt window. Tone
+      policy lives in `love_engine.LOVE_TONE_RULES` and is emitted
+      via FAIL-CLOSED architecture (hardcoded floor + sync test).
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    def _safe_str(x: Any) -> str:
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    # Engine raw fields (read for vocab mapping; not surfaced directly).
+    # NOTE: we deliberately do NOT default `bucket` to "yellow_wait" here.
+    # If the engine produces a malformed / missing bucket (defensive
+    # case — the engine itself always emits one of 4 canonical strings),
+    # we let `_phase59_love_overall_risk()` apply its own
+    # unknown→"fluctuating" fallback (safe middle, never claims strength).
+    bucket  = _safe_str(v.get("bucket"))
+    score   = _safe_int(v.get("score"))
+    if "confidence" in v:
+        conf = _safe_int(v.get("confidence"))
+    else:
+        conf = _safe_int(v.get("confidence_pct"))
+
+    # ── Vocabulary mapping (pure formatter logic) ────────────────────────
+    overall_risk = _phase59_love_overall_risk(bucket, score)
+
+    # Pre-compute supportive / risk reason counts for stability heuristic
+    reasons_strong = [
+        _safe_str(r) for r in _safe_iter(v.get("reasons_strong"))[:3]
+    ]
+    reasons_strong = [r for r in reasons_strong if r]
+    reasons_weak = [
+        _safe_str(r) for r in _safe_iter(v.get("reasons_weak"))[:3]
+    ]
+    reasons_weak = [r for r in reasons_weak if r]
+
+    stability = _phase59_love_stability(
+        overall_risk,
+        n_supportive=len(reasons_strong),
+        n_risk=len(reasons_weak),
+    )
+
+    lines: list[str] = [
+        "LOVE_FACTS:",
+        f"  - overall_risk: {overall_risk}",
+        f"  - stability: {stability}",
+        f"  - confidence: {conf}",
+    ]
+
+    # ── Question type (routing context — useful for LLM tone selection) ──
+    q_type = _safe_str(v.get("question_type"))
+    if q_type:
+        lines.append(f"  - question_type: {q_type}")
+
+    # ── Timing windows (current + next) ──────────────────────────────────
+    cur_dasha = _safe_str(v.get("current_dasha"))
+    if cur_dasha:
+        lines.append(f"  - current_dasha: {cur_dasha}")
+
+    nw = v.get("next_window") or {}
+    if isinstance(nw, dict):
+        n_dasha = _safe_str(nw.get("dasha"))
+        n_start = _safe_str(nw.get("start"))[:7]
+        n_end   = _safe_str(nw.get("end"))[:7]
+        if n_dasha or n_start or n_end:
+            window_tail = f" ({n_start}..{n_end})" if (n_start or n_end) else ""
+            label = n_dasha if n_dasha else "(unspecified)"
+            lines.append(f"  - next_window: {label}{window_tail}")
+
+    # ── Sensitive areas (bucket-derived + conditional fires) ─────────────
+    # The bucket itself signals which sensitive sub-topic is in play.
+    # Conditional fires (affair_check, foreign_check) add structural
+    # context — but NEVER names of specific people (engine-locked).
+    sensitive: list[str] = []
+    sens_label = _PHASE59_LOVE_SENSITIVE_BUCKETS.get((q_type or "").strip().lower())
+    if sens_label:
+        sensitive.append(sens_label)
+
+    affair_check = v.get("affair_check") or {}
+    if isinstance(affair_check, dict) and affair_check.get("fires"):
+        sig_strength = _safe_str(affair_check.get("signal_strength")) or "low"
+        if sig_strength.lower() in ("moderate", "high"):
+            label = f"affair_check_{sig_strength.lower()}_signal"
+            if label not in sensitive:
+                sensitive.append(label)
+
+    foreign_check = v.get("foreign_check") or {}
+    if isinstance(foreign_check, dict) and foreign_check.get("fires"):
+        sensitive.append("foreign_distance_factor")
+
+    if sensitive:
+        lines.append("  - sensitive_areas:")
+        for s in sensitive:
+            lines.append(f"    - {s}")
+
+    # ── Supportive factors / risk factors ────────────────────────────────
+    if reasons_strong:
+        lines.append("  - supportive_factors:")
+        for r in reasons_strong:
+            lines.append(f"    - {r}")
+
+    if reasons_weak:
+        lines.append("  - risk_factors:")
+        for r in reasons_weak:
+            lines.append(f"    - {r}")
+
+    # ── Strategy (one line, capped) ──────────────────────────────────────
+    # love_engine.strategy is a dict with do/do_not lists — collapse to
+    # a single one-liner referencing the most actionable advice.
+    strategy_obj = v.get("strategy")
+    strategy_line = ""
+    if isinstance(strategy_obj, dict):
+        do_list = _safe_iter(strategy_obj.get("do"))
+        if do_list:
+            top = _safe_str(do_list[0])
+            if top:
+                strategy_line = top
+    elif isinstance(strategy_obj, str):
+        strategy_line = _safe_str(strategy_obj)
+    if strategy_line:
+        if len(strategy_line) > 240:
+            strategy_line = strategy_line[:237].rstrip() + "..."
+        lines.append(f"  - strategy: {strategy_line}")
+
+    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
+    bsw = _safe_iter(v.get("brand_safety_warnings"))
+    bullets = [_safe_str(b) for b in bsw]
+    bullets = [b for b in bullets if b]
+    if bullets:
+        lines.append("  - brand_safety:")
+        for b in bullets:
+            lines.append(f"    - {b}")
+
+    # ── Tone rules (ENGINE-OWNED, ALWAYS emitted, FAIL-CLOSED) ──────────
+    # Mirror of HEALTH_TONE_RULES architecture. Tone policy lives in the
+    # engine module (`love_engine.LOVE_TONE_RULES`) — this formatter is
+    # a pure pass-through. Emitted as the LAST section so it carries
+    # the highest recency-bias weight in the LLM's attention window.
+    #
+    # Always emitted (even when brand_safety / strategy absent) — every
+    # love response must respect tone, regardless of bucket / verdict.
+    #
+    # FAIL-CLOSED: if engine import fails for any reason, we emit the
+    # hardcoded MANDATORY FLOOR and log the import failure. Brand-safety
+    # determinism > DRY.
+    _tone_rules: tuple = _LOVE_TONE_RULES_FALLBACK
+    try:
+        from love_engine import LOVE_TONE_RULES as _engine_tone_rules
+        if isinstance(_engine_tone_rules, tuple) and _engine_tone_rules:
+            _tone_rules = _engine_tone_rules
+    except Exception as _e:
+        try:
+            logger.error(
+                "[Phase 5.9] LOVE_TONE_RULES engine import failed: %s — "
                 "falling back to hardcoded floor (tone enforcement preserved).",
                 _e,
             )

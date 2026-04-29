@@ -165,6 +165,35 @@ _MONTHS = ["", "January","February","March","April","May","June",
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# LOVE_TONE_RULES — deterministic narrator tone enforcement
+# ─────────────────────────────────────────────────────────────────────────────
+# Love & relationship is a sensitive surface — second only to health in
+# brand-safety risk. Affair / breakup / one-sided buckets carry real
+# psychological stakes (paranoia spirals, breakup anxiety, self-worth
+# erosion, accusations of named third parties). These rules encode TONE
+# policy (how the narrator must SPEAK about romance) as a deterministic,
+# engine-owned constant — not as LLM discretion. They are surfaced
+# verbatim in every LOVE_FACTS prompt block so the LLM cannot
+# paraphrase them away.
+#
+# Mantra: engine sochta hai, LLM bolta hai. Tone = engine ka decision.
+#
+# Each rule is a single Hinglish sentence. Order matters — most-violated
+# rules first (betrayal certainty, rejection certainty) so they get
+# highest attention weight in the prompt.
+#
+# These are CONTRACT — narrator MUST honour every rule. Adding /
+# removing rules is a brand-safety change requiring architect review.
+LOVE_TONE_RULES = (
+    "BETRAYAL ki CERTAINTY kabhi mat do. 'Wo aapko dhokha de raha/rahi hai' / 'Affair pakka hai' / 'Cheating ho rahi hai' jaisi language strictly band. Hamesha cosmic-pattern framing: 'cosmic indication hai', 'patterns suggest karte hain', 'is window mein extra communication zaroori hai'. Partner ke character ka direct accusation NEVER.",
+    "REJECTION ki CERTAINTY kabhi mat do. 'Wo tumhe kabhi pasand nahi karega/karegi' / 'One-sided hi rahega' jaisi language band. One-sided cases mein self-worth preserve karo: 'mutual cosmic resonance abhi weak hai' frame karo, 'wo tumhe pasand nahi karta/karti' NEVER. User ki dignity sabse upar.",
+    "BREAKUP ki ABSOLUTE prediction band. 'Aap dono ka definite breakup hoga' / 'Rishta tootega hi' / 'Separation pakka hai' jaisi language nahi. Separation indicators ko ALWAYS pair karo healing window + remedy ke saath: 'is window mein friction risk hai, agar X dasha tak care nahi liya to' — strategy + recovery path mandatory.",
+    "THIRD-PARTY ki IDENTITY kabhi mat name karo. 'Aapka cousin', 'office colleague', 'school-friend', 'neighbor' jaisi specific identification strictly band — even if user hint dene ki koshish kare. Cosmic-pattern level pe baat karo: 'external influence ka indication hai', 'social-circle dynamics active hain'. Specific persons name karna = defamation risk + relationship destruction.",
+    "TIMING ki ABSOLUTISM band, PROBABILITY ki language use karo. 'X tareekh ko milega/milegi', 'pakka is mahine' — band. 'Window indicate karta hai', 'is dasha period mein cosmic support better hai', 'agar tab tak tayyari ki to chances strong' — yeh acceptable. Dasha windows ko range ke roop mein bolo, single-point prediction ke roop mein NEVER.",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # REMEDY LOOKUP (single source = remedies._REMEDY_TABLE)
 # ─────────────────────────────────────────────────────────────────────────────
 def _remedy_for_planet(planet: str) -> str:
@@ -3128,6 +3157,14 @@ def assess_love(kundli: dict, intel: dict, kp: dict,
         "verdict":              verdict,
         "score":                score,
         "confidence":           int(confidence),
+        # Phase 5.9 Batch 3d: expose canonical bucket name for the
+        # LOVE_FACTS formatter's verdict→overall_risk mapping. The
+        # bucket value already exists locally (CLE 4-band scheme:
+        # green / yellow_wait / slow_burn / red_avoid) — surfacing it
+        # in the return dict is a non-breaking additive change that
+        # avoids re-deriving it from score (which is clipped per
+        # bucket and therefore lossy for downstream consumers).
+        "bucket":               bucket,
         "natal_promise_score":  natal_promise_score,
         "current_trigger_score": current_trigger_score,
         "modifier_score":       modifier_score,

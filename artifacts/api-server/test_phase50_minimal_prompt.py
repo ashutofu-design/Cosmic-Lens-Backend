@@ -315,9 +315,12 @@ class TestPhase50InstallParity(unittest.TestCase):
         self.assertEqual([m["role"] for m in msgs_sync], ["system", "user"])
 
     def test_install_telemetry_shape(self):
+        # Phase 5.8 — facts are now question-routed. Use a marriage question
+        # so the marriage verdict on the fixture build_meta is emitted
+        # (otherwise routing strips it for an unrelated topic).
         msgs, tele = oh._phase50_install_minimal_messages(
-            "q?", _sample_kundli(), "hn", _sample_build_meta(),
-            req_id="tele-test",
+            "kya mera shaadi hoga?", _sample_kundli(), "hn",
+            _sample_build_meta(), req_id="tele-test",
         )
         self.assertEqual(tele["message_count"], 2)
         self.assertEqual(tele["roles"], ["system", "user"])

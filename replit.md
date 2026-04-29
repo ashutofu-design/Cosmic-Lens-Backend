@@ -2536,3 +2536,103 @@ rules invented.
 
 **Net result: prompt is now a pure facts-only contract. Engine emits
 labels in exactly the form the user specified; LLM narrates them.**
+
+## Phase 5.8 — Marriage & Wealth FACTS blocks (engine sochta hai, LLM bolta hai)
+
+Extends the Phase 5.7.1 clean-facts pattern (`ENGINE_VERDICT` /
+`KP_FACTS` / `YOGA_FACTS`) to the marriage and wealth engines, both of
+which were already firing upstream but were either invisible to the
+minimal-prompt path or rendered through legacy prose helpers
+(`format_verdict_for_prompt`) that mixed labels with `>>> NARRATE`-style
+instructions.
+
+### What the LLM now receives
+
+When a marriage question is detected and `assess_marriage()` ran:
+
+```
+MARRIAGE_FACTS:
+  - verdict: clear | leaning | inconclusive
+  - confidence: 0.0-1.0
+  - timing_window: <human range or 'unknown'>
+  - reasons_positive:
+    - <reason 1>
+    - <reason 2>
+  - reasons_negative:
+    - <reason 1>
+    - <reason 2>
+```
+
+When a wealth question is detected and `assess_wealth()` ran:
+
+```
+WEALTH_FACTS:
+  - wealth_level: strong | moderate | weak
+  - stability: stable | mixed | unstable
+  - bucket: <engine bucket label>            (omitted when missing)
+  - supporting_indicators:
+    - <layer 1>
+    - <layer 2>
+  - risk_factors:
+    - <layer 1>
+  - confidence: 0.0-1.0
+```
+
+No `>>> NARRATE`, no JSON envelope, no embedded instructions. Pure
+lowercase-key facts the LLM reads and translates into prose.
+
+### Implementation
+
+- **Plumbing**: `out_meta["marriage_verdict_obj"] = marriage_verdict_obj`
+  added at `openai_helper.py:2199` (parallel to the existing
+  `wealth_verdict_obj` plumb at ~2478) so the assessment dict survives
+  to the minimal-prompt extractor.
+- **Extractor**: `_phase50_extract_verdict_facts(build_meta, question)`
+  now routes by question:
+  - marriage Q + obj → `MARRIAGE_FACTS` block
+  - wealth Q + obj → `WEALTH_FACTS` block
+  - empty question → backward-compat 1-liners (preserves baseline)
+  - unrelated Q → strips marriage/wealth blocks entirely
+- **Routing gates**: `_phase58_is_marriage_question` and
+  `_phase58_is_wealth_question_p58`. The wealth gate is **intentionally
+  wider** than the upstream engine-firing `_is_wealth_question` — it
+  surfaces an already-computed wealth verdict for any
+  wealth/paisa/income/dhan/rich question, but never causes the engine
+  to fire on those alone (avoiding stock/career steal). Per user spec.
+- **Formatters**: `_phase58_format_marriage_facts_block` and
+  `_phase58_format_wealth_facts_block` map the engine's raw fields onto
+  the human-friendly verdict labels above. Verdict mapping:
+  - marriage: `denied` OR `score<35` → inconclusive; `promised` AND
+    `score≥60` → clear; else leaning.
+  - wealth: bucket from score (≥70 strong / ≥45 moderate / else weak);
+    verdict from `verdict_color` (green→stable, yellow/slow→mixed,
+    red→unstable).
+- **Question threading**: `_phase50_install_minimal_messages` now
+  passes `question` through to the extractor.
+
+### Tests
+
+`test_phase58_marriage_wealth_facts.py` — 28 tests covering: regex
+detection (English / Hindi / Hinglish / Devanagari), formatter output
+shape, routing precedence, verdict-label mapping, defensive empty/None
+handling, and full extractor round-trips. **166/166 pass** (138
+baseline + 28 new).
+
+### Live verification
+
+POST /api/ask with the BBSR fixture (29 Oct 1999, 11:30 IST):
+
+1. `"Mera marriage kab hoga?"` → telemetry shows `facts_lines=14` and
+   the model reply quotes the engine window verbatim
+   (`January 2024 to June 2026`) without inventing dates.
+2. `"Mera dhan-yog strong hai? Income kab badhega?"` → wealth engine
+   fires, `WEALTH_FACTS` injected, model reports the engine's
+   "4 strong dhan yogas" finding without conjuring new rules.
+
+### Out of scope (deferred)
+
+The remaining 12 sleeping engines (career, health, education, family,
+foreign-travel, property, vehicle, child, sade-sati, kalsarpa, manglik,
+litigation) still flow through the legacy 1-liner path. Wiring them on
+the same `<DOMAIN>_FACTS` shape is the next step in the roadmap and is
+**not** part of this turn.

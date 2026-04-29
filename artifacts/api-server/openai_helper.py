@@ -2190,6 +2190,11 @@ def _build_messages(
             marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
             if marriage_verdict_obj:
                 marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
+                # Phase 5.8 — expose verdict dict on build_meta so the
+                # minimal-prompt path can render the clean MARRIAGE_FACTS
+                # block (instead of the legacy first-line text hack).
+                if isinstance(out_meta, dict):
+                    out_meta["marriage_verdict_obj"] = marriage_verdict_obj
                 # Sprint-7: append Jaimini Upapada line so MARRIAGE NARRATOR
                 # mode (which supersedes Rules 2-6) still sees it as ground truth.
                 try:
@@ -10063,36 +10068,71 @@ def _phase50_build_minimal_messages(
     ]
 
 
-def _phase50_extract_verdict_facts(build_meta: Any) -> str:
+def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
     """Phase 5.0 Final Strip — single shared extractor for engine verdicts.
 
-    Returns a newline-joined facts block (≤6 short lines, possibly empty)
-    extracted from the marriage/wealth/love/career/health/stock verdict
-    objects on `build_meta`. Used by both ai_ask and ai_ask_stream so the
+    Returns a newline-joined facts block extracted from the marriage /
+    wealth / love / career / health / stock verdict objects on
+    `build_meta`. Used by both ai_ask and ai_ask_stream so the
     minimal-prompt path has exactly ONE source of truth for verdict-fact
     forwarding (no sync/stream drift).
+
+    Phase 5.8 — question-routed clean blocks:
+      * marriage question + `marriage_verdict_obj`  → MARRIAGE_FACTS block
+      * wealth   question + `wealth_verdict_obj`    → WEALTH_FACTS block
+      * marriage question + only legacy text block  → 1-line fallback
+      * empty/no question (unit-test path)          → legacy 1-liners for
+        all domains (backward compatible — preserves earlier semantics).
+
+    Other domain verdicts (love/career/health/stock) keep the 1-liner
+    behaviour until later phases convert them to clean facts blocks.
     """
     parts: list[str] = []
     bm = build_meta or {}
     if not isinstance(bm, dict):
         return ""
 
-    # Marriage verdict: multi-line block → first non-empty line only.
-    mv = (bm.get("marriage_verdict_block") or "").strip()
-    if mv:
-        first = next((ln for ln in mv.splitlines() if ln.strip()), "")
-        if first:
-            parts.append(f"Marriage verdict: {first.strip()}")
+    q = question if isinstance(question, str) else ""
+    routed = bool(q.strip())
 
-    # Wealth verdict object: 1-line summary with optional bucket tag.
+    # ── MARRIAGE ─────────────────────────────────────────────────────────
+    mv_obj  = bm.get("marriage_verdict_obj")
+    mv_text = (bm.get("marriage_verdict_block") or "").strip()
+    is_marriage_q = (not routed) or _phase58_is_marriage_question(q)
+    if is_marriage_q:
+        if isinstance(mv_obj, dict) and mv_obj and routed:
+            block = _phase58_format_marriage_facts_block(mv_obj)
+            if block:
+                parts.append(block)
+            elif mv_text:
+                first = next((ln for ln in mv_text.splitlines() if ln.strip()), "")
+                if first:
+                    parts.append(f"Marriage verdict: {first.strip()}")
+        elif mv_text:
+            first = next((ln for ln in mv_text.splitlines() if ln.strip()), "")
+            if first:
+                parts.append(f"Marriage verdict: {first.strip()}")
+
+    # ── WEALTH ───────────────────────────────────────────────────────────
     wv = bm.get("wealth_verdict_obj")
-    if isinstance(wv, dict):
-        v = (wv.get("verdict") or "").strip()
-        b = (wv.get("bucket")  or "").strip()
-        if v:
-            parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
+    is_wealth_q = (not routed) or _phase58_is_wealth_question_p58(q)
+    if is_wealth_q and isinstance(wv, dict):
+        if routed:
+            block = _phase58_format_wealth_facts_block(wv)
+            if block:
+                parts.append(block)
+            else:
+                v = (wv.get("verdict") or "").strip()
+                b = (wv.get("bucket")  or "").strip()
+                if v:
+                    parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
+        else:
+            v = (wv.get("verdict") or "").strip()
+            b = (wv.get("bucket")  or "").strip()
+            if v:
+                parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
 
-    # Other domain verdicts — 1 line each.
+    # ── Other domain verdicts — 1 line each (unchanged this phase). ─────
     for key, label in [
         ("love_verdict_obj",   "Love verdict"),
         ("career_verdict_obj", "Career verdict"),
@@ -10510,6 +10550,306 @@ def _phase56_format_yoga_facts_block(
     return "\n".join(lines).rstrip() + "\n"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.8 — Marriage & Wealth FACTS blocks (clean architecture)
+# ─────────────────────────────────────────────────────────────────────────────
+# Same lock pattern as Phase 5.5h KP / Phase 5.6 yoga / Phase 5.7.1 verdict:
+# engine = source of truth, LLM = narrator only. Replaces the heavy
+# `format_verdict_for_prompt` prose blocks (with `>>> NARRATE EXACTLY ... <<<`
+# instructions, JSON envelopes, Sanskrit jargon labels) with clean facts
+# blocks gated on question routing.
+#
+#   - Marriage question → MARRIAGE_FACTS block (verdict / confidence /
+#     timing_window / reasons_positive / reasons_negative)
+#   - Wealth question  → WEALTH_FACTS block (wealth_level / stability /
+#     bucket / supporting_indicators / risk_factors / confidence)
+#
+# Routing is question-text driven; only the matching engine's facts are
+# emitted. Other domain verdicts (love/career/health/stock) keep their
+# legacy 1-line summaries until later phases convert them.
+# ─────────────────────────────────────────────────────────────────────────────
+
+import re as _re_p58
+
+_PHASE58_MARRIAGE_QUESTION_RE = _re_p58.compile(
+    r"\bmarriage\b|\bmarry\b|\bmarried\b|\bmarrying\b|\bmarries\b|"
+    r"\bshaadi\b|\bshadi\b|\bvivah\b|\bvivaah\b|\bwedding\b|"
+    r"\bspouse\b|\bpati\b|\bpatni\b|\bbiwi\b|"
+    r"\bhusband\b|\bwife\b|\blife[- ]?partner\b|\bjeevansaathi\b|\bjeevansathi\b|"
+    r"\bkab shaadi\b|\bmarriage timing\b|\bshaadi kab\b|"
+    r"शादी|विवाह|पति|पत्नी|जीवनसाथी",
+    _re_p58.IGNORECASE,
+)
+
+# Routing-only wealth regex. INTENTIONALLY wider than the upstream
+# `_WEALTH_QUESTION_RX` (which gates engine-firing and excludes bare
+# "paisa"/"money" to avoid stealing stock/career questions). For the
+# minimal-prompt FACTS routing decision we only need to know whether
+# the user is asking about wealth at all — so a wealth_verdict_obj
+# computed upstream is surfaced. Per user spec: marriage / shaadi /
+# wealth / paisa / income / rich / dhan all route here.
+_PHASE58_WEALTH_QUESTION_RE = _re_p58.compile(
+    r"\bwealth\b|\bwealthy\b|\brich\b|\briches\b|\bprosper(?:ity|ous)?\b|"
+    r"\bdhan\b|\bdhana\b|\bdhanyog\b|\bdhana?[- ]?yog\b|"
+    r"\blakshmi\b|\blaxmi\b|"
+    r"\bmoney\b|\bpaisa\b|\bpaise\b|"
+    r"\bincome\b|\bincomes\b|\bearning\b|\bearnings\b|\bkamai\b|\bkamaai\b|"
+    r"\bsalary\b|\btankhwah\b|\bvetan\b|"
+    r"\bsavings?\b|\bbachat\b|"
+    r"\bfinance\b|\bfinancial\b|\bfinances\b|"
+    r"\bnet[- ]?worth\b|\bcorpus\b|"
+    r"\bprofit\b|\bprofits\b|\bmunafa\b|\blabh\b|"
+    r"\bloan\b|\bloans\b|\bkarz\b|\bdebt\b|\bemi\b|\bcibil\b|"
+    r"\bproperty\b|\breal[- ]?estate\b|\bmakaan\b|\bzameen\b|\bplot\b|\bland\b|"
+    r"\binheritance\b|\bvirasat\b|\bpaitrak\b|"
+    r"\bwindfall\b|\blottery\b|\bjackpot\b|"
+    r"धन|पैसा|पैसे|आय|वेतन|कमाई|बचत|सम्पत्ति|"
+    r"लक्ष्मी|कर्ज|कर्जा|विरासत|प्रॉपर्टी|मकान|ज़मीन",
+    _re_p58.IGNORECASE,
+)
+
+
+def _phase58_is_marriage_question(question: Any) -> bool:
+    """True iff the question is about marriage / spouse / wedding timing.
+
+    Defensive against non-string input. Used by the minimal-prompt path
+    to gate emission of the MARRIAGE_FACTS block.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_PHASE58_MARRIAGE_QUESTION_RE.search(question))
+
+
+def _phase58_is_wealth_question_p58(question: Any) -> bool:
+    """True iff the question is about wealth / money / income / dhan.
+
+    Routing-gate semantics — wider than the upstream `_is_wealth_question`
+    (which is the narrower engine-firing gate). Defensive against
+    non-string input. Used by the minimal-prompt path to gate emission
+    of the WEALTH_FACTS block.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_PHASE58_WEALTH_QUESTION_RE.search(question))
+
+
+def _phase58_format_marriage_facts_block(v: Any) -> str:
+    """Render `assess_marriage()` output as a clean, prose-free facts block.
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      MARRIAGE_FACTS:
+        - verdict: clear|leaning|inconclusive
+        - confidence: 0.0-1.0
+        - timing_window: <human range or 'unknown'>
+        - reasons_positive:
+          - <reason 1>
+          ...
+        - reasons_negative:
+          - <reason 1>
+          ...
+
+    Mapping rules (no new astrology logic — only formatting):
+      verdict      ← engine flags + score
+        denied OR score < 35           → inconclusive
+        promised AND score ≥ 60        → clear
+        otherwise (promised, mid-score
+          or weakly-promised)          → leaning
+      confidence   ← engine confidence (0-100) ÷ 100, rounded to 2 dp
+      timing_window ← extract_window_str(v) (engine's canonical phrase) or
+                      'unknown' when no window
+      reasons_positive ← reasons_strong (cap 5)
+      reasons_negative ← reasons_weak + delay_reasons (de-duped, cap 5)
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    promised = bool(v.get("marriage_promised"))
+    denied = bool(v.get("marriage_denied"))
+    try:
+        score = int(v.get("score", 0) or 0)
+    except (TypeError, ValueError):
+        score = 0
+    try:
+        conf_raw = int(v.get("confidence", 0) or 0)
+    except (TypeError, ValueError):
+        conf_raw = 0
+    confidence = round(max(0, min(100, conf_raw)) / 100.0, 2)
+
+    if denied or score < 35:
+        verdict_label = "inconclusive"
+    elif promised and score >= 60:
+        verdict_label = "clear"
+    else:
+        verdict_label = "leaning"
+
+    timing = "unknown"
+    try:
+        from marriage_engine import extract_window_str  # type: ignore
+        tw = extract_window_str(v) or ""
+        if tw.strip():
+            timing = tw.strip()
+    except Exception:
+        timing = "unknown"
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    pos: list[str] = []
+    for r in _safe_iter(v.get("reasons_strong")):
+        if isinstance(r, str) and r.strip():
+            pos.append(r.strip())
+        if len(pos) >= 5:
+            break
+
+    neg: list[str] = []
+    for r in _safe_iter(v.get("reasons_weak")):
+        if isinstance(r, str) and r.strip():
+            neg.append(r.strip())
+        if len(neg) >= 5:
+            break
+    for r in _safe_iter(v.get("delay_reasons")):
+        if not isinstance(r, str) or not r.strip():
+            continue
+        s = r.strip()
+        if s in neg:
+            continue
+        if len(neg) >= 5:
+            break
+        neg.append(s)
+
+    lines: list[str] = [
+        "MARRIAGE_FACTS:",
+        f"  - verdict: {verdict_label}",
+        f"  - confidence: {confidence}",
+        f"  - timing_window: {timing}",
+    ]
+    if pos:
+        lines.append("  - reasons_positive:")
+        for r in pos:
+            lines.append(f"    - {r}")
+    else:
+        lines.append("  - reasons_positive: none")
+    if neg:
+        lines.append("  - reasons_negative:")
+        for r in neg:
+            lines.append(f"    - {r}")
+    else:
+        lines.append("  - reasons_negative: none")
+
+    return "\n".join(lines)
+
+
+def _phase58_format_wealth_facts_block(v: Any) -> str:
+    """Render `assess_wealth()` output as a clean, prose-free facts block.
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      WEALTH_FACTS:
+        - wealth_level: strong|moderate|weak
+        - stability: stable|mixed|unstable
+        - bucket: <engine bucket>            (omitted when missing)
+        - supporting_indicators:
+          - <layer name>
+          ...
+        - risk_factors:
+          - <layer name>
+          ...
+        - confidence: 0.0-1.0
+
+    Mapping rules (no new astrology logic — only formatting):
+      wealth_level ← engine score
+        ≥ 70 → strong
+        ≥ 45 → moderate
+        else → weak
+      stability    ← engine verdict tag
+        green_go               → stable
+        yellow_wait/slow_burn  → mixed
+        red_avoid (or unknown) → unstable
+      supporting_indicators ← top_supportive[*].layer (cap 3)
+      risk_factors          ← top_concerns[*].layer   (cap 3)
+      confidence            ← engine confidence ÷ 100, rounded to 2 dp
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    try:
+        score = int(v.get("score", 0) or 0)
+    except (TypeError, ValueError):
+        score = 0
+    _v_raw = v.get("verdict")
+    verdict_tag = _v_raw.strip().lower() if isinstance(_v_raw, str) else ""
+    _b_raw = v.get("bucket")
+    bucket = _b_raw.strip() if isinstance(_b_raw, str) else ""
+    try:
+        conf_raw = int(v.get("confidence", 0) or 0)
+    except (TypeError, ValueError):
+        conf_raw = 0
+    confidence = round(max(0, min(100, conf_raw)) / 100.0, 2)
+
+    if score >= 70:
+        wealth_level = "strong"
+    elif score >= 45:
+        wealth_level = "moderate"
+    else:
+        wealth_level = "weak"
+
+    if verdict_tag == "green_go":
+        stability = "stable"
+    elif verdict_tag in ("yellow_wait", "slow_burn"):
+        stability = "mixed"
+    else:
+        stability = "unstable"
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    supportive: list[str] = []
+    for s in _safe_iter(v.get("top_supportive")):
+        if isinstance(s, dict):
+            name = s.get("layer")
+            if isinstance(name, str) and name.strip():
+                supportive.append(name.strip())
+        if len(supportive) >= 3:
+            break
+
+    risks: list[str] = []
+    for s in _safe_iter(v.get("top_concerns")):
+        if isinstance(s, dict):
+            name = s.get("layer")
+            if isinstance(name, str) and name.strip():
+                risks.append(name.strip())
+        if len(risks) >= 3:
+            break
+
+    lines: list[str] = [
+        "WEALTH_FACTS:",
+        f"  - wealth_level: {wealth_level}",
+        f"  - stability: {stability}",
+    ]
+    if bucket:
+        lines.append(f"  - bucket: {bucket}")
+    if supportive:
+        lines.append("  - supporting_indicators:")
+        for s in supportive:
+            lines.append(f"    - {s}")
+    else:
+        lines.append("  - supporting_indicators: none")
+    if risks:
+        lines.append("  - risk_factors:")
+        for r in risks:
+            lines.append(f"    - {r}")
+    else:
+        lines.append("  - risk_factors: none")
+    lines.append(f"  - confidence: {confidence}")
+
+    return "\n".join(lines)
+
+
 def _phase50_install_minimal_messages(
     question: str,
     kundli: Any,
@@ -10534,7 +10874,7 @@ def _phase50_install_minimal_messages(
     sync vs stream paths remain distinguishable in the trace; callers
     pass "" for sync and "(stream)" for the stream path.
     """
-    facts = _phase50_extract_verdict_facts(build_meta)
+    facts = _phase50_extract_verdict_facts(build_meta, question=question or "")
 
     # Phase 5.6 — yoga facts injection (only when question matches).
     yoga_block = ""

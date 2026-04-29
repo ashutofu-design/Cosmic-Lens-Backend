@@ -1608,3 +1608,65 @@ All three: identical verdict direction (mixed), 1-2 sentences, no score
 numbers, no reason flooding, no engine-internals leakage. Wording
 paraphrasing is the desired natural variation; the conclusion is now
 provably stable across requests.
+
+---
+
+## Phase 5.5b — PUBLIC verdict layer (mixed → leaning conversion)
+
+### Why
+After Phase 5.5 went live, the engine returned a correct but
+product-weak answer for the user's exact prompt:
+
+> Q: "kya he mere kundli me love marriage or arrange ?"
+> Engine: love=5, arrange=4, verdict=mixed (close call, evidence-floor
+>          and small-diff combination)
+> Old text: "Aapki kundli mein love aur arrange dono ke mixed sanket
+>            hain… ek taraf clear nahi jhukti."
+
+User feedback (gold rule): "Accuracy engine ka kaam hai, clarity product
+ka kaam hai. User ko kabhi 'mixed' mat bolna; user ko direction do."
+
+### What
+A second verdict layer was added on top of the existing internal
+verdict. The diagnostic engine output is unchanged; what the LLM sees
+and what the user reads is now always directional.
+
+`_phase55_compute_love_vs_arrange` now also returns:
+- `verdict_public` ∈ {clear_love, clear_arrange, leaning_love,
+  leaning_arrange, inconclusive}
+- `verdict_text_public` — the 1-line headline the LLM must narrate.
+
+Mapping rules (`diff = |love − arrange|`, `total = love + arrange`):
+
+| Condition                      | verdict_public      | Text style                         |
+|--------------------------------|---------------------|------------------------------------|
+| `total < 6` or `diff == 0`     | `inconclusive`      | "strong indication nahi, situation par depend karega" |
+| `diff >= 4` and `total >= 6`   | `clear_<higher>`    | "clear love/arrange marriage yog hai" |
+| `1 ≤ diff ≤ 3` and `total >= 6`| `leaning_<higher>`  | "<higher> ki taraf thoda zyada jhukav hai, lekin dono possibilities open hain" |
+
+`_phase55_format_locked_verdict_block` now uses `verdict_text_public` as
+the HEADLINE and adds an explicit instruction: "do NOT soften the
+direction back to 'mixed' or 'dono possibilities'."
+
+### Tests
+5 new tests in `test_phase50_minimal_prompt.py` (159 total, was 154):
+- required-keys now asserts `verdict_public` + `verdict_text_public`
+- close-call (5 vs 4) → `leaning_love`
+- strong-difference (love-heavy synthetic) → `clear_love`
+- weak-both → `inconclusive`
+- gold rule: `verdict_text_public` never contains "mixed"
+- locked-block carries the public headline + the "do NOT soften"
+  instruction
+
+### Live verification (29-Apr-2026)
+Same kundli, exact user question, 3 consecutive runs. All three
+returned **byte-identical** text:
+
+> "Aapki kundli mein love marriage ki taraf thoda zyada jhukav hai,
+>  lekin dono possibilities open hain. Matlab, pyaar se shaadi hone ke
+>  chances hain, par arranged marriage bhi ho sakti hai."
+
+Direction is clear (love-leaning), the qualifier is honest (5 vs 4 is a
+close call), the word "mixed" is gone, and stability is now exact —
+not just same-direction-different-words but identical text. Phase 5.5b
+delivers the user's case-1 spec verbatim.

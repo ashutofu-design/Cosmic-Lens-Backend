@@ -9500,14 +9500,60 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
             "ek taraf clear nahi jhukti."
         )
 
+    # ── Phase 5.5b — PUBLIC (UX) VERDICT LAYER ────────────────────────────
+    # User feedback: "mixed" is engineering-correct but product-weak.
+    # Users asking "love ya arrange?" want a direction, even when the
+    # internal verdict is genuinely close. So we layer a UX-friendly
+    # "leaning" verdict on top of the diagnostic internal verdict:
+    #
+    #   total < 6                 → inconclusive (situation-dependent)
+    #   diff == 0                 → inconclusive (perfectly balanced)
+    #   diff >= 4  (and total>=6) → CLEAR direction
+    #   1 <= diff <= 3 (and t>=6) → LEANING direction (acknowledges
+    #                                both possibilities are open)
+    #
+    # Internal `verdict` field stays as-is for telemetry/debugging.
+    diff_abs = abs(love_score - arrange_score)
+    higher_is_love = love_score > arrange_score
+
+    if total < 6 or diff_abs == 0:
+        verdict_public = "inconclusive"
+        verdict_text_public = (
+            "Aapki kundli mein dono taraf strong indication nahi hai — "
+            "situation aur paristithi par depend karega."
+        )
+    elif diff_abs >= 4:
+        if higher_is_love:
+            verdict_public = "clear_love"
+            verdict_text_public = "Aapki kundli mein clear love marriage yog hai."
+        else:
+            verdict_public = "clear_arrange"
+            verdict_text_public = "Aapki kundli mein clear arrange marriage yog hai."
+    else:  # 1 <= diff_abs <= 3, total >= 6 — close call but pick a side
+        if higher_is_love:
+            verdict_public = "leaning_love"
+            verdict_text_public = (
+                "Aapki kundli mein love marriage ki taraf thoda zyada "
+                "jhukav hai, lekin dono possibilities open hain."
+            )
+        else:
+            verdict_public = "leaning_arrange"
+            verdict_text_public = (
+                "Aapki kundli mein arrange marriage ki taraf thoda zyada "
+                "jhukav hai, lekin dono possibilities open hain."
+            )
+
     return {
-        "verdict":         verdict,
-        "confidence":      round(confidence, 2),
-        "love_score":      love_score,
-        "arrange_score":   arrange_score,
-        "reasons_love":    reasons_love[:5],
-        "reasons_arrange": reasons_arrange[:5],
-        "verdict_text_hi": verdict_text,
+        "verdict":              verdict,                # internal (diagnostic)
+        "confidence":           round(confidence, 2),
+        "love_score":           love_score,
+        "arrange_score":        arrange_score,
+        "reasons_love":         reasons_love[:5],
+        "reasons_arrange":      reasons_arrange[:5],
+        "verdict_text_hi":      verdict_text,           # internal text (legacy)
+        "verdict_public":       verdict_public,         # UX verdict
+        "verdict_text_public":  verdict_text_public,    # UX headline (this is
+                                                        # what the LLM narrates)
     }
 
 
@@ -9516,29 +9562,38 @@ def _phase55_format_locked_verdict_block(v: dict) -> str:
 
     Tells the LLM: this is the verdict, your only job is to express it
     briefly. NO re-analysis, NO contradicting, NO flipping.
+
+    The HEADLINE comes from `verdict_text_public` (Phase 5.5b UX layer)
+    which always gives a directional answer (clear / leaning /
+    inconclusive) — never the engineering "mixed" word that confuses
+    users asking "love ya arrange?".
     """
     if not isinstance(v, dict):
         return ""
     rs_love = "\n".join(f"  + {r}" for r in (v.get("reasons_love") or [])) or "  (none)"
     rs_arr  = "\n".join(f"  - {r}" for r in (v.get("reasons_arrange") or [])) or "  (none)"
+    # Prefer the public/UX headline; fall back to legacy text for safety.
+    headline = v.get("verdict_text_public") or v.get("verdict_text_hi") or ""
     return (
         "AUTHORITATIVE_ENGINE_VERDICT (locked — DO NOT change, contradict, "
         "or recompute):\n"
-        f"  VERDICT: {v.get('verdict')}\n"
-        f"  CONFIDENCE: {v.get('confidence')}\n"
+        f"  VERDICT: {v.get('verdict_public') or v.get('verdict')}\n"
         f"  LOVE_SCORE: {v.get('love_score')}    "
         f"ARRANGE_SCORE: {v.get('arrange_score')}\n"
-        f"  HEADLINE: {v.get('verdict_text_hi')}\n"
+        f"  HEADLINE: {headline}\n"
         f"  REASONS_LOVE:\n{rs_love}\n"
         f"  REASONS_ARRANGE:\n{rs_arr}\n\n"
         "INSTRUCTION (CRITICAL): A deterministic Vedic-rules engine has "
         "already computed this verdict from the user's D1 + D9 charts. "
         "Your ONLY job is to express the HEADLINE in the user's language "
-        "(Hindi/Hinglish/English) in 1-2 short sentences. Do NOT add the "
-        "score numbers. Do NOT list the reasons unless the user explicitly "
-        "asks 'kyun' / 'why' / 'reason batao' / 'explain' / 'detail mein "
-        "batao'. Do NOT contradict or change the verdict. Do NOT re-derive "
-        "it from the kundli — the engine has already done that work."
+        "(Hindi/Hinglish/English) in 1-2 short sentences. The HEADLINE "
+        "already gives a clear direction (clear / leaning / situation-"
+        "dependent) — keep that direction; do NOT soften it back to "
+        "'mixed' or 'dono possibilities'. Do NOT add score numbers. Do "
+        "NOT list the reasons unless the user explicitly asks 'kyun' / "
+        "'why' / 'reason batao' / 'explain' / 'detail mein batao' / "
+        "'how'. Do NOT contradict the verdict. Do NOT re-derive it from "
+        "the kundli — the engine has already done that work."
     )
 
 

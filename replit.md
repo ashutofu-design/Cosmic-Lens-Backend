@@ -3628,3 +3628,49 @@ Code-review pass surfaced 3 regression risks. All addressed:
 explain-mode positive fires `topic_source=phase60b_explain_shortcircuit,
 source=engine_pipeline`; prognosis negative falls through to rules
 engine as expected.
+
+---
+
+## Ask UI keyboard fix (April 29, 2026)
+
+Bug: On the Ask tab, when the soft keyboard opened the input row got
+trapped under the keyboard / the chat thread compressed to roughly
+half-screen. Reported in Hinglish: "keyboard ane ke baad adha screen
+dikh raha he."
+
+Root causes in `artifacts/cosmic-lens-mobile/app/(tabs)/ask.tsx`:
+
+1. The input row had a static `paddingBottom: botPad + 90` that did
+   not change when the keyboard appeared, so the row added ~90 px of
+   wasted air on top of whatever the KAV was already pushing.
+2. `KeyboardAvoidingView`'s `keyboardVerticalOffset` was hard-coded to
+   `0` on both platforms. Because `CustomTabBar` (`BAR_H = 84`) is
+   absolute-positioned beneath the screen content, the OS thought the
+   visible area extended to the bottom of the device — so the kb only
+   pushed content up to the top of the tab bar, not flush with the
+   keyboard top.
+3. Starter chips kept rendering while typing, eating chat real estate.
+
+Fix:
+
+* Added `Keyboard` import + a `kbVisible` state driven by
+  `keyboardWillShow/Hide` (iOS) and `keyboardDidShow/Hide` (Android)
+  listeners with proper cleanup.
+* New constant `TAB_BAR_HEIGHT = 84` (matches `CustomTabBar.BAR_H`).
+* `KeyboardAvoidingView`: `behavior="padding"` on iOS with
+  `keyboardVerticalOffset = botPad + TAB_BAR_HEIGHT`; `behavior=undefined`
+  on Android (rely on the default `adjustResize`).
+* Input row `paddingBottom` is now dynamic:
+  `kbVisible ? 10 : botPad + TAB_BAR_HEIGHT`.
+* Starter chips render only when `messages.length <= 1 && !showDemo
+  && !kbVisible`.
+* Removed hardcoded dark colors from `s.inputRow` / `s.input`
+  StyleSheet entries (the render site already injects `C.bg`,
+  `C.bgCard`, `C.border`, `C.text`); bumped input min-height to 44
+  and tightened paddings for a cleaner look.
+
+Verified: `pnpm --filter @workspace/cosmic-lens-mobile typecheck` clean,
+landing page renders intact in preview, architect review PASS with no
+severe issues. Optional follow-up flagged: extract `TAB_BAR_HEIGHT`
+into a shared constant exported from `CustomTabBar.tsx` to avoid
+duplication drift.

@@ -9,6 +9,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -84,6 +85,30 @@ export default function AskScreen() {
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
+
+  // ── Tab bar height (matches CustomTabBar.BAR_H = 84). Used for both
+  // the input row's resting paddingBottom (clear the tab bar) and the
+  // KeyboardAvoidingView's verticalOffset on iOS (so the keyboard pushes
+  // the input row to sit FLUSH above the keyboard top, not above the
+  // tab bar top — which was the half-screen bug).
+  const TAB_BAR_HEIGHT = 84;
+
+  // ── Track keyboard visibility. When kb is up we collapse the input
+  // row's bottom padding (no tab-bar gap needed — keyboard occupies
+  // that space) AND hide starter chips so the chat thread stays
+  // readable instead of being squished into "half a screen".
+  const [kbVisible, setKbVisible] = useState(false);
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvt, () => setKbVisible(true));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKbVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
+  // Resting bottom padding clears the tab bar; keyboard-open shrinks
+  // it to a small visual gap so the input sits flush above the kb.
+  const inputRowBottomPad = kbVisible ? 10 : botPad + TAB_BAR_HEIGHT;
 
   // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
   const [mode, setMode] = useState<"chat" | null>(null);
@@ -715,8 +740,15 @@ export default function AskScreen() {
     <CosmicBg>
     <KeyboardAvoidingView
       style={s.root}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      // iOS: `padding` adds bottom padding equal to (kb_height - offset).
+      //   verticalOffset = TAB_BAR_HEIGHT + botPad so the input lands
+      //   FLUSH above the keyboard (instead of above the tab bar, which
+      //   was the original "half screen" symptom).
+      // Android: rely on the default `windowSoftInputMode=adjustResize`
+      //   for input pushup; use behavior=undefined to avoid double-
+      //   adjustment that compresses the FlatList area.
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? botPad + TAB_BAR_HEIGHT : 0}
     >
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
@@ -866,8 +898,10 @@ export default function AskScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Starter chips (only if single init message) */}
-      {messages.length <= 1 && !showDemo && (
+      {/* Starter chips — visible only at fresh-thread state AND when
+          keyboard is closed (else they eat the chat area while user
+          is typing). */}
+      {messages.length <= 1 && !showDemo && !kbVisible && (
         <View style={s.starters}>
           {STARTERS.map(q => (
             <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: `${C.accent}30` }]} onPress={() => send(q)}>
@@ -887,8 +921,11 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* Input row */}
-      <View style={[s.inputRow, { paddingBottom: botPad + 90, backgroundColor: C.bg, borderTopColor: C.border }]}>
+      {/* Input row — dynamic bottom padding:
+          • keyboard hidden → clear the tab bar (botPad + TAB_BAR_HEIGHT)
+          • keyboard visible → small flush gap (10px), KAV pushes the
+            row above the keyboard top automatically. */}
+      <View style={[s.inputRow, { paddingBottom: inputRowBottomPad, backgroundColor: C.bg, borderTopColor: C.border }]}>
         <TextInput
           style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
           value={input}
@@ -1226,14 +1263,15 @@ const s = StyleSheet.create({
 
   inputRow: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,
-    paddingHorizontal: 16, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.04)",
-    backgroundColor: "#020d1a",
+    paddingHorizontal: 14, paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    // borderTopColor + backgroundColor injected at render-time from theme.
   },
   input: {
-    flex: 1, backgroundColor: "#040e1f", borderRadius: 22, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)", paddingHorizontal: 16, paddingVertical: 10,
-    color: "#dde8f4", fontSize: 13, maxHeight: 100,
+    flex: 1, borderRadius: 22, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 12,
+    fontSize: 14, lineHeight: 20, maxHeight: 120, minHeight: 44,
+    // backgroundColor + borderColor + color injected at render-time from theme.
   },
   sendBtn:  { borderRadius: 22, overflow: "hidden" },
   sendGrad: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },

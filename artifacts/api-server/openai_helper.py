@@ -277,113 +277,10 @@ def _is_career_question(text: str) -> bool:
     return bool(_CAREER_QUESTION_RX.search(text))
 
 
-def _health_engine():
-    """Lazy-load deterministic health & vitality verdict engine."""
-    from health_engine import (assess_health,                    # type: ignore
-                                format_verdict_for_prompt as _fmt_health,
-                                classify_health_question)
-    return assess_health, _fmt_health, classify_health_question
 
 
-# Health-question gate. Triggers health_engine when question is genuinely
-# about wellness / illness / surgery / mental-health / addiction / parent-
-# health / longevity. Routing priority above health:
-#   marriage > stock > love > career > health > general.
-# This gate fires LAST among the topical engines, so we only need to defend
-# against false positives that look medical but actually belong to a
-# higher-priority bucket — e.g. "career stress" (career), "share market
-# tension" (stock), "rishta tension" (relationship/love), "santaan / IVF
-# / pregnancy" (child timing — handled in marriage/general flow).
-_HEALTH_QUESTION_RX = __import__("re").compile(
-    r"(?:\b("
-    r"health|healthy|healthcare|"
-    r"swasthya|swasth|swaasthya|sehat|sehet|sehatmand|tabiyat|tabeeyat|tabiat|"
-    r"illness|sickness|sick|unwell|"
-    r"disease|diseased|"
-    r"bimari|bimaari|beemar|beemari|beemaari|bimaar|"
-    r"rog|rogi|rogon|rogi|"
-    r"treatment|treat|cure|cured|curing|heal|healed|healing|"
-    r"theek|theekh|teek|theeke|achha[- ]?ho|thik|"
-    r"infection|infections|infected|infect|infectious|"
-    r"viral|virus|bacterial|bacteria|fungal|sankraman|"
-    r"flu|influenza|cold|cough|khansi|jukam|"
-    r"medicine|medicines|medication|medicational|dawai|dawaai|davai|davaai|"
-    r"hospital|hospitals|aspataal|aspatal|"
-    r"doctor|doctors|physician|specialist|consultation|"
-    r"operation|operations|surgery|surgeries|surgical|"
-    r"chronic|acute|sub[- ]?acute|"
-    r"recovery|recover|recovering|recovered|"
-    r"symptoms|symptom|lakshan|lakshana|"
-    r"diagnosis|diagnose|diagnosed|"
-    r"depression|depressed|"
-    r"anxiety|anxious|panic|panic[- ]?attack|"
-    r"stress|stressful|tension|tensed|"
-    r"mental|mental[- ]?health|manasik|maanasik|"
-    r"sleep|sleeping|insomnia|nind|neend|"
-    r"suicide|suicidal|self[- ]?harm|self[- ]?injur(?:y|ies)|"
-    r"atmahatya|aatmhatya|aatm[- ]?hatya|atmhatya|"
-    r"khudkushi|khud[- ]?kushi|"
-    r"jaan[- ]?dena|jaan[- ]?dene|jeena nahi|jeena nahin|"
-    r"marna chahta|marna chahti|end[- ]?my[- ]?life|kill[- ]?myself|"
-    r"longevity|aayu|ayu|aayush|ayush|jeevankaal|lifespan|life[- ]?span|"
-    r"umar|umra|umer|umr|jeevan|"
-    r"vitality|stamina|immunity|energy[- ]?levels?|weakness|kamzori|"
-    r"khoon|blood|"
-    r"addiction|addicted|addict|"
-    r"nasha|nashe|nashaa|sharab|sharaab|daru|daaru|"
-    r"cigarette|cigarettes|smoking|smoke|smoker|tobacco|tambaku|"
-    r"drug|drugs|"
-    r"injury|injuries|injured|chot|chot[- ]?lagna|accident|accidents|"
-    r"durghatna|haadsa|haadasa|"
-    r"fever|bukhar|bukhaar|"
-    r"diabetes|sugar|madhumeh|"
-    r"blood[- ]?pressure|bp|hypertension|"
-    r"cancer|tumor|tumour|"
-    r"heart|hriday|hridaya|cardiac|"
-    r"kidney|gurda|liver|jigar|lung|fefda|stomach|pet|"
-    r"eye|eyes|aankh|aankhein|"
-    r"ear|ears|kaan|"
-    r"skin|tvacha|tvacaa|chamdi|"
-    r"thyroid|asthma|migraine|arthritis|joint[- ]?pain|"
-    r"reproductive|fertility|infertility|infertile|"
-    r"pcos|pcod|menstrual|menstruation|periods|period|"
-    r"sperm|sperm[- ]?count|semen|virya|veerya|"
-    r"conceive|conceiving|conception|"
-    r"pregnancy|pregnant|garbh|garbhdharan|garbhavastha|"
-    r"santan|santaan|aulad|aulaad|baby[- ]?planning|ivf|iui|"
-    r"maa[- ]?ki[- ]?tabiyat|papa[- ]?ki[- ]?tabiyat|"
-    r"parent[- ]?health|parents[- ]?health|"
-    r"father[- ]?health|mother[- ]?health|"
-    r"pita[- ]?ki[- ]?tabiyat|mata[- ]?ki[- ]?tabiyat"
-    r")\b)"
-    r"|स्वास्थ्य|स्वस्थ|सेहत|बीमारी|बीमार|रोग|दवा|दवाई|अस्पताल|"
-    r"डॉक्टर|ऑपरेशन|सर्जरी|उपचार|इलाज|"
-    r"लक्षण|जांच|निदान|"
-    r"अवसाद|डिप्रेशन|चिंता|घबराहट|तनाव|"
-    r"मानसिक|दिमागी|"
-    r"नींद|अनिद्रा|"
-    r"आयु|जीवनकाल|"
-    r"नशा|शराब|सिगरेट|धूम्रपान|तंबाकू|"
-    r"चोट|दुर्घटना|हादसा|"
-    r"बुखार|मधुमेह|कैंसर|दिल|गुर्दा|जिगर|पेट|"
-    r"आंख|कान|त्वचा|दर्द|तबियत|तबीयत",
-    __import__("re").IGNORECASE,
-)
 
 
-def _is_health_question(text: str) -> bool:
-    """True iff text matches health trigger AND no higher-priority engine
-    (marriage / stock / love / career) would have already short-circuited
-    this turn. Higher-priority gates are applied UPSTREAM in
-    `_build_messages`, so by the time we reach the health block we only
-    need to confirm the text genuinely smells health-related.
-    Note: standalone 'stress'/'tension' words are intentionally INCLUDED
-    here. The career engine claims them only when career keywords are
-    also present — health gate fires after career has been ruled out, so
-    a leftover 'stress' here is genuinely mental-health territory."""
-    if not isinstance(text, str) or not text.strip():
-        return False
-    return bool(_HEALTH_QUESTION_RX.search(text))
 
 
 def _wealth_engine():
@@ -1379,7 +1276,6 @@ _TOPIC_FOCUS = {
         "Kanya=intestine, Tula=kidney, Vrishchik=reproductive, Dhanu=hips/thighs, Makar=knees, Kumbh=calves, Meen=feet.\n"
         "• Affliction = malefic conjunction/aspect to Lagna or relevant house.\n"
         "• Current Dasha lord afflicting Lagna/6/8/12 = health-attention period.\n"
-        "• MANDATORY: always say 'qualified doctor se zaroor consult karein — jyotish margdarshan deti hai, diagnosis nahi'.\n"
         "• Cite: BPHS Ch.41 (Aristha — disease yogas), Phaladeepika Ch.12, Maharishi Charaka."
     ),
     "child": (
@@ -2500,161 +2396,6 @@ def _build_messages(
         except Exception as exc:
             print(f"[openai_helper] wealth_engine failed: {exc}")
 
-    # ── DETERMINISTIC HEALTH & VITALITY VERDICT ───────────────────────────────
-    # For health-keyword questions (illness/surgery/recovery/mental-health/
-    # addiction/parent-health/longevity), compute deterministic verdict via
-    # health_engine. Routing priority above health: marriage > stock > love >
-    # career > wealth. AI becomes pure narrator with STRICT brand-safety
-    # guards (NEVER predict death, NEVER replace medical advice, ALWAYS
-    # recommend doctor consult, surface mental-health helplines on
-    # mental_health bucket, gender-sensitive reproductive guidance).
-    # Mirror of marriage/stock/love/career/wealth engine wiring.
-    health_verdict_block = ""
-    health_verdict_obj   = None
-    if (topic in ("health", "general")
-            and not marriage_verdict_block
-            and not stock_verdict_block
-            and not love_verdict_block
-            and not career_verdict_block
-            and not wealth_verdict_block
-            and isinstance(kundli, dict) and kundli.get("planets")
-            and _is_health_question(question)):
-        try:
-            kp_dict_h = (locals().get("kp_dict")
-                         or locals().get("kp_dict_s")
-                         or locals().get("kp_dict_l")
-                         or locals().get("kp_dict_c"))
-            try:
-                if not kp_dict_h and isinstance(birth, dict):
-                    kp_dict_h = _kp_calc()(birth)
-            except Exception as exc:
-                print(f"[openai_helper] kp calc for health failed: {exc}")
-            assess_health, fmt_health, _classify_health_q = _health_engine()
-            _health_pre_bucket = _ai_ear_bucket_for(out_meta, "health")
-
-            # ── Phase 6.0j — FIX 4 (ENGINE INPUT INTEGRITY CHECK) ──────────
-            # Permanent debug trace proving the deterministic engine receives
-            # FULL raw chart data (kundli dict + intelligence + KP dict +
-            # birth dict) — INDEPENDENT of the Phase 4.7 LLM-text trim.
-            #
-            # Architectural truth (verified):
-            #   • assess_health() takes 4 RAW dicts (kundli, intel, kp, birth)
-            #   • intel_obj is freshly produced upstream by analyze_chart()
-            #   • kp_dict_h is freshly produced upstream by _kp_calc()(birth)
-            #   • kp_block / tr_block STRINGS (built ~80 lines below this
-            #     call) are LLM-facing text only; the trim that zeroes them
-            #     happens AFTER the engine has already consumed the raw dicts
-            #
-            # If `kp_dict_present=False` or `transits_present=False` ever
-            # appear in this log, THEN engine integrity is genuinely broken —
-            # otherwise the trim numbers refer to LLM text and are harmless.
-
-            # ── Phase 6.0m — FIX 11 (TRANSIT INJECTION) ────────────────────
-            # health_engine has internal transit helpers but the orchestrator
-            # is also expected to ship `intel_obj["transits"]` (and a mirror
-            # at `kundli["transits"]`) so layers T2/T3 + the Phase 6.0j
-            # input-integrity probe both see live transit data.
-            #
-            # If `intel_obj["transits"]` is absent we compute it now via
-            # `transits.compute_transits(lagna_idx, moon_idx, dob)` and
-            # inject in-place. Failure is non-fatal — engine continues with
-            # whatever transit data its internal helpers can derive.
-            try:
-                if not isinstance(intel_obj, dict):
-                    intel_obj = {}
-                _has_tr_pre = bool(intel_obj.get("transits")) or any(
-                    ("transit" in k.lower() or "tr_" in k.lower())
-                    for k in intel_obj.keys()
-                )
-                if not _has_tr_pre:
-                    from transits import compute_transits as _f11_ct  # type: ignore
-                    from datetime import datetime as _f11_dt
-                    _SIGN_F11 = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
-                                 "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
-                    def _f11_name_to_idx(_n: Any) -> Optional[int]:
-                        if not isinstance(_n, str):
-                            return None
-                        _c = _n.strip().capitalize()
-                        return _SIGN_F11.index(_c) if _c in _SIGN_F11 else None
-                    # Lagna sign idx (kundli['ascendant'] may be dict OR str)
-                    _asc_f11 = kundli.get("ascendant") if isinstance(kundli, dict) else None
-                    _lagna_idx_f11: Optional[int] = None
-                    if isinstance(_asc_f11, dict):
-                        _lagna_idx_f11 = _f11_name_to_idx(_asc_f11.get("sign") or _asc_f11.get("name"))
-                    elif isinstance(_asc_f11, str):
-                        _lagna_idx_f11 = _f11_name_to_idx(_asc_f11)
-                    # Moon sign idx
-                    _moon_str_f11 = (kundli.get("moonSign") or kundli.get("moon_sign")
-                                     if isinstance(kundli, dict) else None)
-                    _moon_idx_f11 = _f11_name_to_idx(_moon_str_f11)
-                    # DOB → datetime (best-effort, supports {date}|{dob}|{birthDate} string
-                    # and {year,month,day,hour,minute} dict shapes)
-                    _dob_f11: Optional[Any] = None
-                    if isinstance(birth, dict):
-                        _dob_str_f11 = birth.get("date") or birth.get("dob") or birth.get("birthDate")
-                        if isinstance(_dob_str_f11, str) and len(_dob_str_f11) >= 10:
-                            try:
-                                _dob_f11 = _f11_dt.strptime(_dob_str_f11[:10], "%Y-%m-%d")
-                            except Exception:
-                                _dob_f11 = None
-                        if _dob_f11 is None and all(k in birth for k in ("day", "month", "year")):
-                            try:
-                                _dob_f11 = _f11_dt(int(birth["year"]), int(birth["month"]), int(birth["day"]),
-                                                   int(birth.get("hour") or 0), int(birth.get("minute") or 0))
-                            except Exception:
-                                _dob_f11 = None
-                    if _lagna_idx_f11 is not None:
-                        _tr_f11 = _f11_ct(_lagna_idx_f11, _moon_idx_f11, dob=_dob_f11) or {}
-                        if _tr_f11:
-                            intel_obj["transits"] = _tr_f11
-                            if isinstance(kundli, dict):
-                                kundli["transits"] = _tr_f11
-                _tr_inj = (intel_obj.get("transits") if isinstance(intel_obj, dict) else None) or {}
-                print(
-                    "[openai_helper] phase60k_engine_transit_check: "
-                    f"transits_present={bool(_tr_inj)} "
-                    f"transit_keys={len(_tr_inj.keys()) if isinstance(_tr_inj, dict) else 0} "
-                    f"injected={'yes' if (not _has_tr_pre and _tr_inj) else ('no' if _has_tr_pre else 'failed')}"
-                )
-            except Exception as _exc:
-                print(f"[openai_helper] phase60k_engine_transit_check failed (non-fatal): {_exc}")
-
-            try:
-                _intel_keys = sorted((intel_obj or {}).keys()) if isinstance(intel_obj, dict) else []
-                _kp_keys    = sorted((kp_dict_h or {}).keys()) if isinstance(kp_dict_h, dict) else []
-                _planets_n  = len(kundli.get("planets") or []) if isinstance(kundli, dict) else 0
-                _has_transits = any(("transit" in k.lower() or "tr_" in k.lower()) for k in _intel_keys)
-                print(
-                    "[openai_helper] phase60j_engine_input_check: "
-                    f"kundli_planets={_planets_n} "
-                    f"intel_keys={len(_intel_keys)} "
-                    f"transits_present={_has_transits} "
-                    f"kp_dict_present={bool(_kp_keys)} kp_dict_keys={len(_kp_keys)} "
-                    f"birth_present={bool(birth)} "
-                    f"bucket_pre={_health_pre_bucket!r}"
-                )
-            except Exception as _exc:
-                print(f"[openai_helper] phase60j_engine_input_check failed (non-fatal): {_exc}")
-
-            health_verdict_obj = assess_health(
-                kundli, intel_obj or {}, kp_dict_h or {}, birth, question,
-                pre_classified_bucket=_health_pre_bucket)
-            if health_verdict_obj:
-                health_verdict_block = fmt_health(health_verdict_obj, question)
-                if isinstance(out_meta, dict):
-                    out_meta["health_verdict_obj"]   = health_verdict_obj
-                    out_meta["health_question_type"] = health_verdict_obj.get("bucket")
-                print(f"[openai_helper] health_engine OK → "
-                      f"bucket='{health_verdict_obj.get('bucket')}' "
-                      f"tense='{health_verdict_obj.get('tense')}' "
-                      f"verdict='{health_verdict_obj.get('verdict','')[:60]}' "
-                      f"score={health_verdict_obj.get('score')} "
-                      f"conf={health_verdict_obj.get('confidence_pct')}")
-        except Exception as exc:
-            print(f"[openai_helper] health_engine failed: {exc}")
-
-    focus     = _focus_block(topic)
-    # ── MARRIAGE ANALYSIS-MODE FOCUS OVERRIDE ──────────────────────────────
     # For analytical follow-ups in marriage topic ("aur detail", "kyun delay",
     # "kaun sa grah", "7th lord kahan", "explain my chart"), discard the rigid
     # 3-paragraph timing template and let the AI act as an expert chart reader.
@@ -2762,23 +2503,14 @@ def _build_messages(
         # force-keep marker (added to `_slim_locked_facts_for_narrative`) to
         # protect the HEALTH_FACTS column-0 block from inheriting a dropped
         # ── section's ``keep=False`` flag.
-        _is_health_topic = (topic == "health")
         _orig_lf_chars = len(locked_facts_str)
         locked_facts_str = _slim_locked_facts_for_narrative(locked_facts_str, topic=topic)
         _orig_intel_chars = len(intel_str)
         intel_str = _slim_intel_for_narrative(intel_str)
         _orig_kp_chars = len(kp_block)
-        if _is_health_topic:
-            # Phase 6.0g — KP retained for health (L19 MANDATORY input).
-            pass
-        else:
-            kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
+        kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
         _orig_tr_chars = len(tr_block)
-        if _is_health_topic:
-            # Phase 6.0g — transit block retained for health (T1-T3 inputs).
-            pass
-        else:
-            tr_block = _slim_transit_for_narrative(tr_block)
+        tr_block = _slim_transit_for_narrative(tr_block)
         _slimmed = (_orig_lf_chars - len(locked_facts_str)) + \
                    (_orig_intel_chars - len(intel_str)) + \
                    (_orig_kp_chars - len(kp_block)) + \
@@ -2794,22 +2526,6 @@ def _build_messages(
         # inputs survived the trim. Looking for non-zero kp / transit /
         # health_facts char counts. If any of these is zero on a health
         # question, the FACTS LOSS FIX has regressed.
-        if _is_health_topic:
-            _hf_chars = 0
-            if locked_facts_str and "HEALTH_FACTS:" in locked_facts_str:
-                _hf_tail = locked_facts_str.split("HEALTH_FACTS:", 1)[1]
-                # Count chars belonging to the HEALTH_FACTS block (until next
-                # column-0 section marker — ▸ / ── / ═══ — or end of string).
-                _hf_block_lines: list[str] = []
-                for _hf_ln in _hf_tail.splitlines():
-                    if (_hf_ln.startswith("▸ ") or _hf_ln.startswith("── ")
-                            or _hf_ln.startswith("═")):
-                        break
-                    _hf_block_lines.append(_hf_ln)
-                _hf_chars = len("\n".join(_hf_block_lines))
-            print(f"[openai_helper] phase47_trim_health_check: "
-                  f"kp_chars={len(kp_block)} transit_chars={len(tr_block)} "
-                  f"health_facts_chars={_hf_chars}")
 
     kp_section    = f"\n\n{kp_block}\n" if kp_block else ""
     tr_section    = f"\n\n{tr_block}\n" if tr_block else ""
@@ -5396,52 +5112,8 @@ def _classify_marriage_subtype(question: str,
     return "general"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 6.0k — FIX 5: HEALTH SUBTYPE CLASSIFIER
-# ─────────────────────────────────────────────────────────────────────────────
-# Minimal, regex-based health subtype detector. Mirrors the marriage subtype
-# pattern (timing / cause / risk / general) but is consumed ONLY when topic
-# is health, so cross-domain noise can never appear in MODE_DETECT.subtype.
-#
-# Currently used for telemetry only — does NOT change engine routing or
-# narrator template (those still flow through health_engine + Phase 6.0h
-# health-narrator-contract). Future routing logic can branch on
-# health_subtype without re-running cross-topic classifiers.
-_HEALTH_TIMING_RE = re.compile(
-    r"\b(kab|when|kis ?(month|mahine|saal|year)|month\s*\w+|"
-    r"jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|"
-    r"period|window|timing|date|tarikh)\b",
-    re.IGNORECASE,
-)
-_HEALTH_CAUSE_RE = re.compile(
-    r"\b(kyu+n?|kyon|why|reason|wajah|karan|explain|samjhao|"
-    r"kis ?(grah|planet|wajah)|cause)\b",
-    re.IGNORECASE,
-)
-_HEALTH_RISK_RE = re.compile(
-    r"\b(risk|chance|possibility|sambhavna|injury|surgery|operation|"
-    r"hospital|emergency|danger|khatra|khatre)\b",
-    re.IGNORECASE,
-)
 
 
-def _classify_health_subtype(question: str) -> str:
-    """Return 'timing' / 'cause' / 'risk' / 'general' for a health question.
-
-    Pure regex — no engine call, no LLM, no I/O. Order of checks: risk first
-    (most specific clinical signal), then cause (analytical "why"), then
-    timing (when/period), then default general.
-    """
-    q = (question or "").strip()
-    if not q:
-        return "general"
-    if _HEALTH_RISK_RE.search(q):
-        return "risk"
-    if _HEALTH_CAUSE_RE.search(q):
-        return "cause"
-    if _HEALTH_TIMING_RE.search(q):
-        return "timing"
-    return "general"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5918,167 +5590,14 @@ def _strip_narrative_disclaimers(text: str) -> str:
     return out.strip()
 
 
-_HEALTH_FORBIDDEN_REPLACE: list[tuple["re.Pattern[str]", str]] = [
-    # ── COMPOUND patterns FIRST (must run before standalone replacements
-    #    so the standalone rule does not double-fire and produce noise like
-    #    "sudden sudden issues") ────────────────────────────────────────────
-    (re.compile(r"\bsudden\s+triggers?\b",     re.IGNORECASE), "sudden issues"),
-    (re.compile(r"\bsudden\s+sudden\b",        re.IGNORECASE), "sudden"),
-    (re.compile(r"\bfluctuating?\s+risk\b",    re.IGNORECASE), "varying risk"),
-    (re.compile(r"\bslow[\s-]+burn\b",         re.IGNORECASE), "gradual"),
-    # ── SINGLE-WORD replacements ─────────────────────────────────────────
-    (re.compile(r"\btriggers?\b",              re.IGNORECASE), "sudden issues"),
-    (re.compile(r"\btendency\b",               re.IGNORECASE), "chance"),
-    (re.compile(r"\btendencies\b",             re.IGNORECASE), "chances"),
-    (re.compile(r"\bchronic\b",                re.IGNORECASE), "long-term"),
-    (re.compile(r"\bfluctuat\w*\b",            re.IGNORECASE), "varying"),
-    (re.compile(r"\binstabilit(?:y|ies)\b",    re.IGNORECASE), "variability"),
-    (re.compile(r"\bimbalance\b",              re.IGNORECASE), "stress"),
-]
-
-# Final cleanup: collapse adjacent duplicate words like "sudden sudden",
-# "long-term long-term", "varying varying" left over from earlier stylistic
-# accidents or from compound-vs-standalone regex collisions.
-_HEALTH_DUP_COLLAPSE = re.compile(r"\b([\w-]+)\s+\1\b", re.IGNORECASE)
 
 
-def _health_post_scrub_safety(text: str) -> tuple[str, list[str]]:
-    """Phase 6.0m FIX 10 — HARD post-LLM safety net for topic=health.
-    Replaces forbidden clinical/loaded words AFTER the LLM stream so they
-    cannot leak through Phase 5.0 minimal-prompt's bypassed style validators.
-    Returns (cleaned_text, list_of_pattern_strings_that_fired).
-    Caller MUST gate by topic == "health" — non-health topics keep their
-    original wording.
-
-    Phase 6.0n upgrade — compound patterns added (`sudden triggers`,
-    `fluctuating risk`, `slow burn`) PLUS adjacent-duplicate-word
-    collapse pass to heal cases like "sudden sudden issues" that the
-    earlier compound-then-standalone ordering used to produce.
-    """
-    if not text:
-        return text, []
-    out  = text
-    hits: list[str] = []
-    for rx, repl in _HEALTH_FORBIDDEN_REPLACE:
-        new = rx.sub(repl, out)
-        if new != out:
-            hits.append(rx.pattern)
-            out = new
-    # Heal "sudden sudden issues" / "long-term long-term" type residue.
-    collapsed = _HEALTH_DUP_COLLAPSE.sub(r"\1", out)
-    if collapsed != out:
-        hits.append("ADJACENT_DUP_COLLAPSE")
-        out = collapsed
-    return out, hits
 
 
-# ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (health-only) ──────────────────────
-# When the system prompt instructs the LLM to emit exactly:
-#     Cause:  ...
-#     Effect: ...
-#     Advice: ...
-# the model frequently complies but ALSO wraps the 3 lines in storytelling
-# preamble or a closing sentence ("During May–June 2026, ... Cause: ... .
-# Take care."). This extractor isolates the three labelled lines and drops
-# the storytelling so the user sees only the engine-mandated 3-liner.
-#
-# CRITICAL — brand-safety footer preservation (architect-flagged):
-# The HEALTH_BRAND_SAFETY post-processor (~L14757 in ai_ask /
-# ~L16980 in ai_ask_stream) appends MANDATORY doctor-cite + (for
-# mental_health bucket) helpline lines to `text` BEFORE this extractor
-# runs. Those lines are non-negotiable medical-adjacent compliance
-# (qualified doctor cite, iCall 9152987821, Vandrevala 1860-2662-345).
-# Without the peel-off below, the extractor would silently strip them
-# whenever Cause:/Effect:/Advice: labels are present — a SAFETY
-# regression. The peel-off identifies safety lines via marker regex,
-# excludes them from label extraction, then re-attaches them after the
-# clean 3-liner so legal/safety contract is preserved.
-#
-# Tolerant of:
-#   - bullet markers (▸ • - * >) and leading whitespace
-#   - colon variants (`:` ASCII or `：` fullwidth)
-#   - synonym labels (Reason → Cause, Action / Guidance → Advice)
-# Returns (text, extracted_bool):
-#   extracted_bool=True  → 3-line clean form (+ safety footer if present)
-#   extracted_bool=False → labels missing, return original text untouched
-#                          (caller keeps the LLM's natural answer to avoid
-#                          deleting a valid response that just doesn't fit
-#                          the strict format).
-_HEALTH_LABEL_LINE = re.compile(
-    r"^\s*[-•*▸>]?\s*(Cause|Reason|Effect|Advice|Action|Guidance)\s*[:：]\s*(.+?)\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
-
-# Safety-footer markers — any line matching these is preserved verbatim
-# and re-attached AFTER the extracted 3-liner so brand-safety / helpline /
-# doctor-cite content from `_doctor_line` + `_helpline_line` (defined in
-# the HEALTH_BRAND_SAFETY post-processor at ~L14700) survives extraction.
-_HEALTH_SAFETY_MARKER_RE = re.compile(
-    r"(?:"
-    r"doctor\s+se\s+(?:zaroor\s+)?consult"
-    r"|qualified\s+doctor"
-    r"|qualified\s+(?:medical\s+)?professional"
-    r"|mental\s+health\s+support"
-    r"|free\s+helpline"
-    r"|\biCall\b"
-    r"|\bVandrevala\b"
-    r"|9152987821"
-    r"|1860-2662-345"
-    r"|medical\s+diagnosis\s+ya\s+treatment"
-    r"|akele\s+nahi\s+hain"
-    r")",
-    re.IGNORECASE,
-)
 
 
-def _health_extract_strict_3line(text: str) -> tuple[str, bool]:
-    """Try to coerce LLM output into the literal 3-line `Cause:/Effect:/
-    Advice:` form. Returns (clean_text, True) when all three labels are
-    found; returns (text, False) otherwise.
 
-    Brand-safety footer (doctor cite + iCall/Vandrevala helpline lines
-    injected by `4a2.HEALTH_BRAND_SAFETY_INJECTED`) is detected via
-    marker regex, peeled off BEFORE extraction, and re-attached AFTER
-    the clean 3-liner so safety/legal contract is preserved.
-    """
-    if not text:
-        return text, False
 
-    # Peel off safety-footer lines so they cannot be eaten by extraction
-    # AND so they cannot accidentally satisfy any label by coincidence.
-    safety_lines: list[str] = []
-    body_lines:   list[str] = []
-    for ln in text.splitlines():
-        if _HEALTH_SAFETY_MARKER_RE.search(ln):
-            stripped = ln.strip()
-            if stripped:
-                safety_lines.append(stripped)
-        else:
-            body_lines.append(ln)
-    body = "\n".join(body_lines)
-
-    cause = effect = advice = None
-    for m in _HEALTH_LABEL_LINE.finditer(body):
-        label = m.group(1).strip().lower()
-        body_text = m.group(2).strip()
-        if not body_text:
-            continue
-        if label in ("cause", "reason") and cause is None:
-            cause = body_text
-        elif label == "effect" and effect is None:
-            effect = body_text
-        elif label in ("advice", "action", "guidance") and advice is None:
-            advice = body_text
-
-    if cause and effect and advice:
-        clean = f"Cause: {cause}\nEffect: {effect}\nAdvice: {advice}"
-        if safety_lines:
-            # Mirror the `\n\n` gap shape used by `_doctor_line` /
-            # `_helpline_line` in the brand-safety post-processor so the
-            # final output is visually identical to the un-extracted form.
-            clean = clean + "\n\n" + "\n\n".join(safety_lines)
-        return clean, True
-    return text, False
 
 
 def _scrub_brand_tone(text: str) -> str:
@@ -7259,8 +6778,6 @@ def _slim_locked_facts_for_narrative(s: str, topic: str = "") -> str:
 
     # Phase 6.0g — *_FACTS force-keep markers (column-0 labels, not ▸ headers).
     _facts_force_keep: tuple[str, ...] = ()
-    if topic == "health":
-        _facts_force_keep = ("HEALTH_FACTS:",)
 
     keep = True  # before any section header, default to keep (catches preamble)
     out_lines = []
@@ -10278,72 +9795,6 @@ def _phase50_build_minimal_messages(
     # Phase 4.7 trim — it only constrains what the LLM is instructed to emit.
     # Layered on top of the post-LLM scrubber + health_brand_safety + Phase
     # 6.0f topic-aware bare-return gate as defense-in-depth.
-    if (topic or "").lower() == "health":
-        # ── Phase 6.0n — STRICT 3-LINE HEALTH FORMAT (LLM CONTROL FIX 3) ──
-        # Phase 6.0h's prose-style 6-rule list was being IGNORED by the LLM
-        # (live evidence: storytelling preamble + banned words like
-        # `fluctuating risk` + `chronic` survived into the final answer).
-        # User spec (Apr 29 2026) is explicit:
-        #   "Engine calculate karega, LLM sirf translate karega."
-        #   "Pehle calculation, fir direct translation — no storytelling."
-        #   Format: exactly 3 lines — "Cause:", "Effect:", "Advice:".
-        # This block REPLACES the soft prose rules with a hard, example-led
-        # mandate. Combined with the post-LLM `_health_extract_strict_3line`
-        # extractor + `_health_post_scrub_safety` regex map (in sync +
-        # stream answer paths), it forms a 3-layer defense:
-        #   1. PROMPT — instruct LLM to emit 3 labelled lines only.
-        #   2. EXTRACTOR — if LLM wraps the 3 lines in storytelling, drop
-        #      everything outside the labels.
-        #   3. SCRUBBER — if any banned word slips in, regex-replace it.
-        system_msg += (
-            "\n\n"
-            "════════════════════════════════════════════════════════════\n"
-            "HEALTH ANSWER — STRICT 3-LINE FORMAT (MANDATORY)\n"
-            "════════════════════════════════════════════════════════════\n"
-            "OUTPUT EXACTLY 3 LINES. Each line MUST start with the literal\n"
-            "label below, in this order, on its own line. NOTHING ELSE.\n"
-            "\n"
-            "  Cause: <planet name(s) + current dasha lord>\n"
-            "  Effect: <specific symptom + risk level + window>\n"
-            "  Advice: <one short non-medical actionable instruction>\n"
-            "\n"
-            "EXAMPLE (Hinglish):\n"
-            "  Cause: Mars + Jupiter–Rahu dasha\n"
-            "  Effect: heat aur chot ka moderate risk May–June 2026\n"
-            "  Advice: routine controlled rakho, careless action avoid karo\n"
-            "\n"
-            "EXAMPLE (English):\n"
-            "  Cause: Saturn in 6H + Saturn mahadasha\n"
-            "  Effect: low energy and joint stiffness, mild risk this month\n"
-            "  Advice: keep a steady sleep schedule, avoid late-night work\n"
-            "\n"
-            "ABSOLUTE RULES:\n"
-            "1. EXACTLY 3 LINES. NO preamble (no 'During...', 'Aapke chart\n"
-            "   me...', 'Currently...'). NO closing sentence. NO greeting.\n"
-            "   Just the 3 labelled lines.\n"
-            "2. Each line MUST begin with the literal label 'Cause:',\n"
-            "   'Effect:', or 'Advice:' (case-sensitive, with the colon).\n"
-            "3. Cause line MUST contain at least one planet name (Mars /\n"
-            "   Saturn / Rahu / Ketu / Sun / Mercury / Venus / Jupiter /\n"
-            "   Moon) AND at least one dasha lord from CHART / HEALTH_FACTS.\n"
-            "4. Effect line MUST be CONCRETE — heat, acidity, injury,\n"
-            "   sleep-disturbance, stress, low-energy, joint-stiffness,\n"
-            "   headache, etc. NEVER abstract ('overall risk', 'imbalance',\n"
-            "   'instability').\n"
-            "5. Advice line MUST be ONE actionable instruction — a verb +\n"
-            "   simple action. NO 'consult doctor' (engine adds disclaimer\n"
-            "   separately). NO 'take care'. NO 'manage carefully'.\n"
-            "6. BANNED WORDS — DO NOT USE EVEN ONCE: chronic, triggers,\n"
-            "   trigger, tendency, tendencies, fluctuating, fluctuation,\n"
-            "   instability, imbalance, slow burn, vitality, weakness,\n"
-            "   fatigue, vague, generally, overall risk.\n"
-            "7. Match the user's language register exactly. Question in\n"
-            "   Hinglish → answer in Hinglish. English → English. Hindi →\n"
-            "   Hindi. NEVER mix scripts mid-line.\n"
-            "8. Engine FACTS / HEALTH_FACTS are the source of truth. Do\n"
-            "   NOT invent planets, dashas, or symptoms not present there.\n"
-            "════════════════════════════════════════════════════════════\n"
-        )
 
     user_parts: list[str] = []
     if chart_summary:
@@ -10462,23 +9913,6 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             parts.append(block)
             emitted_career_block = True
 
-    # ── HEALTH (Phase 5.9 Batch 3c v4 — user-spec standardized FACTS) ────
-    # Sensitive-topic surface — narrator MUST honour brand_safety bullets
-    # (no diagnosis, see qualified MD, mental-health helpline) AND the
-    # 2-3 line response_format constraint. The v4 schema replaces the
-    # earlier 5-tier vocabulary with the user's simplified 4-field
-    # contract (overall_risk / stability / key_triggers / dasha_effect).
-    # The detector delegates to upstream `_is_health_question` to inherit
-    # the routing-collision defenses (career-stress / stock-tension etc.).
-    hv = bm.get("health_verdict_obj")
-    emitted_health_block = False
-    if routed and _phase59_is_health_question(q) and isinstance(hv, dict):
-        block = _phase60_format_health_facts_block(hv)
-        if block:
-            parts.append(block)
-            emitted_health_block = True
-
-    # ── LOVE (Phase 5.9 Batch 3d) ────────────────────────────────────────
     # Sensitive-topic surface — narrator MUST honour brand_safety bullets
     # (affair softening, breakup non-prediction, one-sided self-worth)
     # AND the engine-owned LOVE_TONE_RULES (no betrayal certainty, no
@@ -10501,14 +9935,11 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
     for key, label in [
         ("love_verdict_obj",   "Love verdict"),
         ("career_verdict_obj", "Career verdict"),
-        ("health_verdict_obj", "Health verdict"),
         ("stock_verdict_obj",  "Stock verdict"),
     ]:
         if key == "love_verdict_obj"   and emitted_love_block:
             continue
         if key == "career_verdict_obj" and emitted_career_block:
-            continue
-        if key == "health_verdict_obj" and emitted_health_block:
             continue
         o = bm.get(key)
         if isinstance(o, dict):
@@ -11556,1395 +10987,73 @@ def _phase59_format_career_facts_block(v: Any) -> str:
     return "\n".join(lines)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 5.9 Batch 3c — HEALTH_FACTS block (engine sochta hai, LLM bolta hai)
-# ─────────────────────────────────────────────────────────────────────────────
-# Surfaces health_engine.assess_health() output as a structured HEALTH_FACTS
-# block in the minimal-prompt path. Replaces the legacy 1-line
-# "Health verdict: ..." that left the LLM blind to bucket / risk-window /
-# top concerns / brand-safety guardrails.
-#
-# Strict rule (architect-enforced): NO new astrology logic. The block is
-# pure formatting of fields already produced by health_engine. brand_safety
-# bullets are surfaced VERBATIM — they are the engine's deterministic
-# "no diagnosis / see qualified MD / mental-health helpline" guardrails
-# that the narrator MUST honour for this sensitive topic.
-#
-# Detector delegates to upstream `_is_health_question` — the same gate
-# that decides whether `assess_health` is invoked. Single source of truth
-# eliminates detector ↔ executor drift on routing-collision queries
-# ("career stress", "share market tension", "rishta tension" etc.).
-#
-# IMPORTANT — coexistence with the doctor-cite/helpline fallback:
-# A separate fallback mechanism (~L12290) appends doctor-cite / helpline
-# lines to the AI's REPLY when the engine fired. That layer is unchanged
-# by this batch — HEALTH_FACTS only changes what the LLM SEES in its
-# prompt. Together they form belt-and-braces brand-safety on the
-# sensitive-topic surface.
-
-
-def _phase59_is_health_question(question: Any) -> bool:
-    """True iff the question is a health / illness / wellness query.
-
-    Defensive against non-string input. Delegates to the upstream
-    `_is_health_question()` — the SAME gate that decides whether
-    `assess_health` is invoked. This guarantees zero detector ↔
-    executor drift on routing-collision queries (the upstream gate has
-    `_HEALTH_QUESTION_RX` defenses against career-stress / stock-tension
-    / rishta-tension false positives that route to those higher engines).
-    """
-    if not isinstance(question, str) or not question.strip():
-        return False
-    return _is_health_question(question)
-
-
-# ── HEALTH_TONE_RULES hardcoded floor (FAIL-CLOSED safety net) ───────────
-# Mandatory minimum tone-policy enforcement that ships even if
-# `health_engine.HEALTH_TONE_RULES` cannot be imported (broken module,
-# missing constant, partial deploy, etc.). The formatter tries the
-# engine source first and only falls back here on import failure.
-#
-# Architect-mandated (Phase 5.9 Batch 3c v2): silently dropping tone
-# rules would revert tone control to LLM discretion — the exact failure
-# the user asked us to eliminate. Better to ship a duplicate floor and
-# log the import error than to silently degrade brand-safety.
-#
-# This list MUST be kept in sync with health_engine.HEALTH_TONE_RULES.
-# The engine constant is the source of truth in normal operation; this
-# floor exists purely to guarantee the policy never disappears.
-_HEALTH_TONE_RULES_FALLBACK: tuple = (
-    "ABSOLUTE claims kabhi mat karo. 'Aapko X bimari hogi' / 'Yeh definitely hoga' / 'Pakka cure ho jayega' jaisi language band. Hamesha probabilistic framing: 'indication hai', 'tendency dikh rahi hai', 'is window mein extra dhyaan zaroori hai'.",
-    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). Phase 6.0 — abstract body-system terms bhi band: 'hormonal', 'chronic', 'mental', 'emotional', 'internal imbalance' jaise words SIRF tab use karo agar woh key_triggers list mein literal hain. Phase 6.0b — symptom / trajectory nouns ('vitality', 'weakness', 'fatigue', 'illness', 'infection', 'immunity', 'metabolic', 'vulnerability', 'nervous' aur similar) bhi SAME rule — sirf tab use karo jab key_triggers mein literal hain. Naye symptom / condition / body-system terms invent mat karo. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
-    "NEUTRAL phrasing rakho. Alarmist language ('khatre mein ho', 'turant problem aayegi', 'serious risk hai') aur false reassurance ('bilkul tension mat lo, sab perfect hai', 'kuch nahi hoga') — dono band. Honest, calm, supportive tone — jaise ek mature counsellor baat karta hai.",
-    "PRESCRIPTION kabhi mat do. Medicine names, dosages, treatment plans, surgery decisions, alternative-medicine recommendations = strictly forbidden. Sirf cosmic timing aur supportive context bata sakte ho — actual treatment decisions qualified doctor / specialist ke pass.",
-    "PROBABILITY ki language use karo, CERTAINTY ki nahi. 'Ho sakta hai', 'tendency hai', 'window mein care zaroori hai', 'consultation se clarity milegi' — yeh acceptable hai. 'Hoga hi', '100% sure', 'guaranteed' — yeh acceptable nahi.",
-)
-
-
-def _phase59_health_overall_risk(verdict: str, score: int) -> str:
-    """Map engine verdict + score → user-facing `overall_risk` tier.
-
-    Phase 5.9 Batch 3c v3 vocabulary merge: the engine still produces
-    `verdict` (green_go / yellow_wait / slow_burn / red_avoid) and
-    `score` internally, but the prompt-facing schema now uses the
-    spec's 5-tier vocabulary (strong / stable / fluctuating /
-    vulnerable / high_risk).
-
-    Mapping is pure formatter logic — NO new astrology, NO score
-    re-thresholding. Verdict is the engine's already-bucketed semantic
-    output, so we map 1:1 from verdict and only use `score` to
-    distinguish vulnerable vs. high_risk for the worst tier:
-
-      green_go                          → strong
-      yellow_wait                       → stable
-      slow_burn                         → fluctuating
-      red_avoid + score >= -40          → vulnerable
-      red_avoid + score < -40           → high_risk
-
-    Unknown verdict → "fluctuating" (safe middle default).
-    """
-    v = (verdict or "").strip().lower()
-    if v == "green_go":
-        return "strong"
-    if v == "yellow_wait":
-        return "stable"
-    if v == "slow_burn":
-        return "fluctuating"
-    if v == "red_avoid":
-        return "high_risk" if score < -40 else "vulnerable"
-    return "fluctuating"
-
-
-def _phase59_health_stability(
-    overall_risk: str,
-    n_concerns: int,
-    n_supportive: int,
-) -> str:
-    """Derive `stability` tag from signal balance + risk tier.
-
-    Stability is about CONSISTENCY of signal, not severity:
-      - stable      = signals lean supportive / strong tier
-      - fluctuating = mixed signals, middle tiers
-      - vulnerable  = repeated negatives, worst tiers
-
-    Pure formatter heuristic (no astrology):
-      strong / stable tier with concerns ≤ supportive   → "stable"
-      vulnerable / high_risk tier with concerns ≥ supp  → "vulnerable"
-      everything else                                   → "fluctuating"
-    """
-    if overall_risk in ("strong", "stable") and n_concerns <= n_supportive:
-        return "stable"
-    if overall_risk in ("vulnerable", "high_risk") and n_concerns >= n_supportive:
-        return "vulnerable"
-    return "fluctuating"
-
-
-def _phase59_format_health_facts_block(v: Any) -> str:
-    """Render `assess_health()` output as a clean, prose-free facts block.
-
-    Phase 5.9 Batch 3c v3 — VOCABULARY MERGE. The engine still produces
-    its internal bucket / verdict / score schema, but the prompt-facing
-    block uses the user-spec vocabulary (overall_risk / stability /
-    sensitive_areas / supportive_factors / risk_factors). This is a
-    pure FORMATTER swap — no engine changes, no algorithm changes, no
-    regression on safety guarantees (brand_safety + tone_rules
-    unchanged).
-
-    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
-
-      HEALTH_FACTS:
-        - overall_risk: <strong|stable|fluctuating|vulnerable|high_risk>
-        - stability:    <stable|fluctuating|vulnerable>
-        - confidence:   <int 0-100>
-        - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
-        - next_window:    <md>/<ad> (<YYYY-MM..YYYY-MM>)         [if present]
-        - sensitive_areas:                                       [if any]
-          - <layer / area 1>
-          - <layer / area 2>
-        - supportive_factors:                                    [if any]
-          - <layer / factor 1>
-        - risk_factors:                                          [if any]
-          - <window_str — reason>     (transit risk)
-        - strategy: <one-line strategy>                          [if present]
-        - brand_safety:                                          [if any]
-          - <verbatim guardrail bullet>      (helplines preserved)
-        - tone_rules:                                            [ALWAYS]
-          - <engine-owned tone-policy bullet>
-
-    Vocabulary mapping (pure formatter, no astrology):
-      bucket / tense        — DROPPED from prompt (engine still computes
-                              for routing; not surfaced to LLM)
-      verdict + score       — mapped to overall_risk via
-                              `_phase59_health_overall_risk()`
-      top_concerns          — renamed → sensitive_areas (max 3)
-      top_supportive        — renamed → supportive_factors (max 3)
-      timing_window.risk    — folded into risk_factors list
-      brand_safety_warnings — UNCHANGED, verbatim (helplines preserved)
-      HEALTH_TONE_RULES     — UNCHANGED, FAIL-CLOSED, last section
-
-    Why bucket / verdict / score are NOT surfaced:
-      User directive (Phase 5.9 Batch 3c v3): "adopt the new spec's
-      overall_risk / stability vocabulary INSTEAD of bucket / verdict".
-      The engine still uses these internally for routing + 1-liner
-      fallback compatibility, but the LLM-facing block only carries
-      the user-spec terminology.
-
-    Why reasons are OMITTED:
-      The engine's `reasons` strings sometimes contain Phase-5.7-cleaned
-      literals used as internal sort keys. Surfacing them would re-leak
-      the prose Phase 5.7 cleaned up. `sensitive_areas` /
-      `supportive_factors` carry the diagnostic signal structurally.
-
-    Why brand_safety is included VERBATIM:
-      `brand_safety_warnings` carry the iCall + Vandrevala mental-health
-      helpline citations and the "see qualified MD" caveats. These are
-      NOT astrology reasoning — they are MANDATORY narrator instructions
-      from the domain engine. Surfacing them verbatim is what enforces
-      them in the LLM's output. Architect-locked guard test asserts
-      helplines survive any bucket-routing regression.
-
-    Why tone_rules is the LAST section:
-      Recency-bias attention weight in the LLM's prompt window. Tone
-      policy lives in `health_engine.HEALTH_TONE_RULES` and is emitted
-      via FAIL-CLOSED architecture (hardcoded floor + sync test).
-
-    Returns "" for empty / non-dict input — never raises.
-    """
-    if not isinstance(v, dict) or not v:
-        return ""
-
-    def _safe_int(x: Any, default: int = 0) -> int:
-        try:
-            return int(x)
-        except (TypeError, ValueError):
-            return default
-
-    def _safe_iter(x: Any) -> list:
-        return x if isinstance(x, list) else []
-
-    def _safe_str(x: Any) -> str:
-        if not isinstance(x, str):
-            return ""
-        return _re_p58.sub(r"\s+", " ", x).strip()
-
-    # Engine raw fields (read for vocab mapping; not surfaced directly).
-    verdict = _safe_str(v.get("verdict")) or "yellow_wait"
-    score   = _safe_int(v.get("score"))
-    # Engine canonical key is `confidence`; some call sites also log
-    # `confidence_pct`. Accept both, prefer canonical.
-    if "confidence" in v:
-        conf = _safe_int(v.get("confidence"))
-    else:
-        conf = _safe_int(v.get("confidence_pct"))
-
-    # ── Vocabulary mapping (pure formatter logic) ────────────────────────
-    overall_risk = _phase59_health_overall_risk(verdict, score)
-
-    # Pre-compute concern/supportive counts for stability heuristic
-    def _layer_names(items: list, max_n: int = 3) -> list[str]:
-        out = []
-        for it in items[:max_n]:
-            if isinstance(it, dict):
-                name = _safe_str(it.get("layer"))
-                if name:
-                    out.append(name)
-        return out
-
-    sensitive_areas    = _layer_names(_safe_iter(v.get("top_concerns")), max_n=3)
-    supportive_factors = _layer_names(_safe_iter(v.get("top_supportive")), max_n=3)
-    stability = _phase59_health_stability(
-        overall_risk,
-        n_concerns=len(sensitive_areas),
-        n_supportive=len(supportive_factors),
-    )
-
-    lines: list[str] = [
-        "HEALTH_FACTS:",
-        f"  - overall_risk: {overall_risk}",
-        f"  - stability: {stability}",
-        f"  - confidence: {conf}",
-    ]
-
-    # ── Timing windows (current / next) ──────────────────────────────────
-    # Health engine schema: window dicts have flat md/ad/pd keys.
-    tw = v.get("timing_window") or {}
-    risk_factors_lines: list[str] = []
-    if isinstance(tw, dict):
-        cur = tw.get("current") or {}
-        if isinstance(cur, dict):
-            md = _safe_str(cur.get("md"))
-            ad = _safe_str(cur.get("ad"))
-            pd = _safe_str(cur.get("pd"))
-            if md or ad:
-                lord_str = "/".join(p for p in (md, ad, pd) if p)
-                start = _safe_str(cur.get("start"))[:7]
-                end   = _safe_str(cur.get("end"))[:7]
-                window_tail = f" ({start}..{end})" if (start or end) else ""
-                lines.append(f"  - current_window: {lord_str}{window_tail}")
-
-        nxt = tw.get("next") or {}
-        if isinstance(nxt, dict):
-            n_md = _safe_str(nxt.get("md"))
-            n_ad = _safe_str(nxt.get("ad"))
-            if n_md or n_ad:
-                lord_str = "/".join(p for p in (n_md, n_ad) if p)
-                start = _safe_str(nxt.get("start"))[:7]
-                end   = _safe_str(nxt.get("end"))[:7]
-                window_tail = f" ({start}..{end})" if (start or end) else ""
-                lines.append(f"  - next_window: {lord_str}{window_tail}")
-
-        # Risk context — engine surfaces this for active health-stress
-        # transit windows (Saturn-Mars, sade-sati, etc.). Folded into
-        # the risk_factors list per the v3 vocabulary merge.
-        risk = tw.get("risk") or {}
-        if isinstance(risk, dict):
-            wstr = _safe_str(risk.get("window_str"))
-            reason = _safe_str(risk.get("reason"))
-            if wstr or reason:
-                tail = f" — {reason}" if reason else ""
-                risk_factors_lines.append(f"{wstr}{tail}".strip(" —"))
-
-    # ── Sensitive areas / supportive factors / risk factors ──────────────
-    if sensitive_areas:
-        lines.append("  - sensitive_areas:")
-        for a in sensitive_areas:
-            lines.append(f"    - {a}")
-
-    if supportive_factors:
-        lines.append("  - supportive_factors:")
-        for s in supportive_factors:
-            lines.append(f"    - {s}")
-
-    if risk_factors_lines:
-        lines.append("  - risk_factors:")
-        for rf in risk_factors_lines:
-            lines.append(f"    - {rf}")
-
-    # ── Strategy (one line, capped) ──────────────────────────────────────
-    strategy = _safe_str(v.get("strategy"))
-    if strategy:
-        if len(strategy) > 240:
-            strategy = strategy[:237].rstrip() + "..."
-        lines.append(f"  - strategy: {strategy}")
-
-    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
-    bsw = _safe_iter(v.get("brand_safety_warnings"))
-    bullets = [_safe_str(b) for b in bsw]
-    bullets = [b for b in bullets if b]
-    if bullets:
-        lines.append("  - brand_safety:")
-        for b in bullets:
-            lines.append(f"    - {b}")
-
-    # ── Tone rules (ENGINE-OWNED, ALWAYS emitted, FAIL-CLOSED) ──────────
-    # Health is the highest-risk topic surface. Tone policy lives in the
-    # engine module (`health_engine.HEALTH_TONE_RULES`) — this formatter
-    # is a pure pass-through. Emitted as the LAST section so it carries
-    # the highest recency-bias weight in the LLM's attention window.
-    #
-    # Always emitted (even when brand_safety / strategy absent) — every
-    # health response must respect tone, regardless of bucket / verdict.
-    #
-    # FAIL-CLOSED architecture (architect-mandated, Phase 5.9 Batch 3c v2):
-    # If the engine import fails for any reason, we DO NOT silently drop
-    # tone rules (that would revert tone control to LLM discretion — the
-    # exact failure mode the user asked us to eliminate). Instead, we
-    # emit a hardcoded MANDATORY FLOOR (`_HEALTH_TONE_RULES_FALLBACK`)
-    # and log the import failure so the regression is visible in prod.
-    # The floor is a duplicate of the engine source — DRY violation
-    # accepted because brand-safety determinism > DRY.
-    _tone_rules: tuple = _HEALTH_TONE_RULES_FALLBACK
-    try:
-        from health_engine import HEALTH_TONE_RULES as _engine_tone_rules
-        if isinstance(_engine_tone_rules, tuple) and _engine_tone_rules:
-            _tone_rules = _engine_tone_rules
-    except Exception as _e:
-        try:
-            logger.error(
-                "[Phase 5.9] HEALTH_TONE_RULES engine import failed: %s — "
-                "falling back to hardcoded floor (tone enforcement preserved).",
-                _e,
-            )
-        except Exception:
-            pass
-    tone_bullets = [_safe_str(r) for r in _tone_rules if isinstance(r, str)]
-    tone_bullets = [r for r in tone_bullets if r]
-    if tone_bullets:
-        lines.append("  - tone_rules:")
-        for r in tone_bullets:
-            lines.append(f"    - {r}")
-
-    return "\n".join(lines)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 5.9 Batch 3c v4 — STANDARDIZED HEALTH FACTS (user-spec contract)
-# ─────────────────────────────────────────────────────────────────────────────
-# User-spec 7-step pipeline (Apr 2026):
-#   STEP 1  Identify health indicators (Lagna / 6H / 8H / 12H)
-#   STEP 2  Planet contributions (Mars/Saturn/Rahu/Ketu/Venus/Jupiter)
-#   STEP 3  Dasha impact (MD/AD/PD benefic vs malefic)
-#   STEP 4  Combine into total_score
-#   STEP 5  Map to verdict (stable / fluctuating / sensitive)
-#   STEP 6  Output FACTS only (overall_risk, stability, key_triggers,
-#           dasha_effect)
-#   STEP 7  LLM converts FACTS into 2-3 line natural answer
-#
-# Implementation note: Steps 1-4 are ALREADY done by the existing
-# `health_engine.assess_health()` (23 layers + 3 triggers + 7 modifiers
-# + 5 conditionals → score 0-100 + verdict). The v4 layer is a PURE
-# PROJECTION: it maps the engine's rich output onto the user's
-# simplified 4-field schema. NO new astrology, NO new scoring, NO
-# changes to the underlying engine — only a vocabulary collapse and a
-# trigger/dasha-effect derivation from data the engine already produces.
-#
-# This SUPERSEDES the v3 schema (5-tier overall_risk + sensitive_areas /
-# supportive_factors / risk_factors). The v3 helpers stay in the file
-# for backwards reference but are NOT wired into the extractor.
-#
-# Brand-safety + tone_rules: UNCHANGED — same FAIL-CLOSED architecture,
-# same 5 verbatim engine-owned tone-policy bullets, same helpline
-# survival guarantee. Architect-locked invariants from v3 are preserved.
-
-# ── Vocabulary mapping tables (pure formatter, no astrology) ─────────────
-
-# Layer-name → trigger tag. Derived from engine layer semantics
-# (health_engine.py L1-L25). Tags are short, narrator-friendly nouns
-# the LLM can drop into a 2-3 line answer without naming planets.
-_PHASE60_HEALTH_LAYER_TAGS: dict[str, str] = {
-    # Houses
-    "L1_lagna_first_house":  "vitality_dip",
-    "L2_sixth_house":        "infection",
-    "L3_eighth_house":       "sudden",
-    "L4_twelfth_house":      "weakness",
-    # Planet karakas (Step-2 contributors)
-    "L5_sun_karaka":         "energy",
-    "L6_moon_karaka":        "stress",
-    "L7_mars_karaka":        "heat",
-    "L8_saturn_karaka":      "chronic",
-    "L9_jupiter_karaka":     "metabolic",
-    "L10_mercury_karaka":    "nervous",
-    "L11_venus_karaka":      "hormonal",
-    "L12_rahu_karaka":       "sudden",
-    "L13_ketu_karaka":       "hidden",
-    "L14_atmakaraka":         "vitality_dip",
-    "L15_lagna_bhava_aspect": "vitality_dip",
-    # Divisional / strength (engine layer IDs verified against
-    # health_engine.py emitted "layer" strings — must stay byte-equal).
-    # NOTE: L16/L17/L18 d-chart overlays are computed inside the engine
-    # but NEVER surface on `top_concerns[*].layer`. Excluded from the
-    # mapping to keep `test_layer_keys_parity_against_engine_emitted_ids`
-    # green and to prevent silent drift if the engine starts emitting
-    # them — at that point, add them back with verified layer IDs.
-    "L19_kp_csl_health":      "vitality_dip",
-    "L20_ashtakavarga":       "vitality_dip",
-    "L21_shadbala":           "vitality_dip",
-    "L22_bhava_bala":         "vitality_dip",
-    # Yogas
-    "L23_arishta_yogas":      "vulnerability",
-    "L24_ayushkara_yogas":    "weakness",
-    "L25_sade_sati":          "stress",
-}
-
-# Bucket → trigger tag (additive — engine's bucket classifier already
-# routes the question type, so we surface that as a default trigger).
-_PHASE60_HEALTH_BUCKET_TAGS: dict[str, str] = {
-    "mental_health":       "stress",
-    "acute_illness":       "sudden",
-    "chronic_illness":     "chronic",
-    "injury_accident":     "heat",
-    "addiction":           "stress",
-    "surgery_timing":      "sudden",
-    "recovery_timing":     "weakness",
-    "female_reproductive": "hormonal",
-    "male_reproductive":   "hormonal",
-    "longevity_general":   "vitality_dip",
-    "parent_health":       "vitality_dip",
-    "general_wellness":    "vitality_dip",
-}
-
-# Planet benefic/malefic classification for dasha_effect projection.
-# Classical Vedic taxonomy (no waxing-Moon nuance — engine does that
-# upstream; this layer is for narrator-facing dasha_effect summary).
-_PHASE60_HEALTH_BENEFICS: frozenset = frozenset({
-    "Jupiter", "Venus", "Moon", "Mercury",
-})
-_PHASE60_HEALTH_MALEFICS: frozenset = frozenset({
-    "Saturn", "Mars", "Rahu", "Ketu", "Sun",
-})
-
-
-def _phase60_health_overall_risk(verdict: str) -> str:
-    """Map engine verdict → user-spec 3-tier overall_risk.
-
-    Per user-spec STEP 5 (Apr 2026):
-      score high   → stable
-      score medium → fluctuating
-      score low    → sensitive
-
-    Engine verdict is the already-bucketed semantic of the score range
-    (green_go ≥65, yellow_wait 55-64, slow_burn 40-54, red_avoid <40),
-    so we map 1:1 from verdict — no re-thresholding, no new scoring:
-
-      green_go    → stable
-      yellow_wait → stable        (medium-high band; engine's safe-go)
-      slow_burn   → fluctuating
-      red_avoid   → sensitive
-
-    Unknown / empty verdict → "fluctuating" (safe middle default — never
-    silently default to "stable" on a sensitive surface).
-    """
-    v = (verdict or "").strip().lower()
-    if v in ("green_go", "yellow_wait"):
-        return "stable"
-    if v == "slow_burn":
-        return "fluctuating"
-    if v == "red_avoid":
-        return "sensitive"
-    return "fluctuating"
-
-
-def _phase60_health_stability(
-    overall_risk: str,
-    n_concerns: int,
-    n_supportive: int,
-) -> str:
-    """Derive binary `stability` tag (stable / unstable).
-
-    Per user-spec STEP 6 vocabulary. Pure heuristic on signal balance:
-
-      overall_risk == "stable" AND concerns ≤ supportive  → "stable"
-      everything else                                     → "unstable"
-
-    Rationale: a "stable" overall_risk verdict that nonetheless has
-    more concerns than supportive layers is by definition NOT stable
-    in signal — it's a tier downgrade waiting to happen. Returning
-    "unstable" surfaces that to the narrator without overriding the
-    engine's verdict.
-    """
-    if overall_risk == "stable" and n_concerns <= n_supportive:
-        return "stable"
-    return "unstable"
-
-
-def _phase60_health_key_triggers(v: dict) -> list[str]:
-    """Derive `key_triggers` tag list from engine output.
-
-    Per user-spec STEP 6 — emits short narrator-friendly nouns
-    (heat, stress, sudden, chronic, etc.) that the LLM can drop into
-    a 2-3 line answer WITHOUT naming planets. Pure projection of
-    engine fields — no new astrology.
-
-    Sources (in priority order, deduped):
-      1. top_concerns layer names → _PHASE60_HEALTH_LAYER_TAGS
-      2. bucket → _PHASE60_HEALTH_BUCKET_TAGS
-      3. timing_window.risk.reason keyword scan (Mars / Saturn /
-         Rahu / Ketu / inflammation / chronic / anxiety)
-
-    Capped at 4 triggers max for narrator focus (the user-spec example
-    showed `[heat, stress, sudden]` — 3 tags). Returns empty list when
-    engine has no signals (defensive — never raises).
-    """
-    if not isinstance(v, dict):
-        return []
-
-    tags: list[str] = []
-    seen: set[str] = set()
-
-    def _add(tag: str) -> None:
-        if tag and tag not in seen:
-            tags.append(tag)
-            seen.add(tag)
-
-    # 1) Top concerns (engine's 3 worst layers)
-    concerns = v.get("top_concerns") or []
-    if isinstance(concerns, list):
-        for c in concerns[:3]:
-            if isinstance(c, dict):
-                layer = (c.get("layer") or "").strip()
-                tag = _PHASE60_HEALTH_LAYER_TAGS.get(layer)
-                if tag:
-                    _add(tag)
-
-    # 2) Bucket-driven default
-    bucket = (v.get("bucket") or "").strip().lower()
-    bucket_tag = _PHASE60_HEALTH_BUCKET_TAGS.get(bucket)
-    if bucket_tag:
-        _add(bucket_tag)
-
-    # 3) Active transit-risk reason keywords
-    tw = v.get("timing_window") or {}
-    if isinstance(tw, dict):
-        risk = tw.get("risk") or {}
-        if isinstance(risk, dict):
-            reason = (risk.get("reason") or "").lower()
-            if "mars" in reason or "inflammation" in reason or "accident" in reason:
-                _add("heat")
-            if "saturn" in reason or "chronic" in reason:
-                _add("chronic")
-            if "rahu" in reason or "anxiety" in reason:
-                _add("sudden")
-            if "ketu" in reason:
-                _add("hidden")
-
-    # Phase 6.0b — neutralize medical-noun tags (vitality_dip / weakness /
-    # infection / hormonal / metabolic / vulnerability) into safer
-    # phase-descriptor tokens (extra_care / balance) BEFORE surfacing to
-    # the narrator. Engine internals (audit trail, top_concerns) keep the
-    # original tags. Reversible via env flag PHASE60B_NEUTRALIZE_TAGS=0.
-    return _phase60b_neutralize_triggers(tags[:4])
-
-
-def _phase60_health_dasha_effect(v: dict) -> str:
-    """Derive `dasha_effect` tag from current MD/AD/PD lord nature.
-
-    Per user-spec STEP 3 — classifies the active MD/AD/PD lords as
-    benefic vs malefic and projects the balance:
-
-      benefic_count > malefic_count   → "supportive"
-      benefic_count < malefic_count   → "challenging"
-      equal (incl. unknown / empty)   → "mixed"
-
-    Pure formatter projection — uses the lords already computed by
-    `health_engine._build_timing_window()` and surfaced on
-    `timing_window.current.{md, ad, pd}`. NO new dasha computation.
-
-    Defensive: returns "mixed" (safe middle) on missing / non-dict input.
-    """
-    if not isinstance(v, dict):
-        return "mixed"
-    tw = v.get("timing_window") or {}
-    if not isinstance(tw, dict):
-        return "mixed"
-    cur = tw.get("current") or {}
-    if not isinstance(cur, dict):
-        return "mixed"
-
-    benefic = 0
-    malefic = 0
-    for key in ("md", "ad", "pd"):
-        lord = cur.get(key)
-        if not isinstance(lord, str):
-            continue
-        lord_clean = lord.strip().title()
-        if lord_clean in _PHASE60_HEALTH_BENEFICS:
-            benefic += 1
-        elif lord_clean in _PHASE60_HEALTH_MALEFICS:
-            malefic += 1
-
-    if benefic > malefic:
-        return "supportive"
-    if malefic > benefic:
-        return "challenging"
-    return "mixed"
-
-
-# ── Response-format constraint (engine-owned, narrator-facing) ───────────
-# Architect mantra: engine sochta hai, LLM bolta hai. The engine doesn't
-# just decide the verdict — it also tells the narrator HOW LONG the
-# answer should be. This keeps the LLM from drifting into 6-8 line
-# explanations on a sensitive-surface where 2-3 lines is safer
-# (no over-disclosure, no diagnosis drift, no fear-induction).
-#
-# Surfaced as a FACTS-block bullet, BEFORE tone_rules so tone_rules
-# retains LAST-position recency weight.
-_PHASE60_HEALTH_RESPONSE_FORMAT: str = (
-    "Answer in EXACTLY 2-3 lines using ONLY the facts above. "
-    "No planet names, no house numbers, no dasha lord names, no "
-    "astrology jargon. Mention 1-2 key_triggers naturally if relevant. "
-    "Calm, supportive, probabilistic tone — no fear, no certainty. "
-    "Phase 6.0 LOCK: do NOT introduce any new symptom, condition, or "
-    "body-system term. Body-system abstractions (e.g. 'hormonal', "
-    "'chronic', 'mental', 'emotional', 'internal imbalance') AND "
-    "symptom / trajectory nouns (e.g. 'vitality', 'weakness', "
-    "'fatigue', 'illness', 'infection', 'immunity', 'metabolic', "
-    "'vulnerability', 'nervous') are allowed ONLY if they appear "
-    "literally in key_triggers. Do not paraphrase, elaborate, or "
-    "invent body-area terms beyond the FACTS block."
-)
-
-
-# ── Phase 6.0 — HEALTH NARRATOR LOCK ──────────────────────────────────────
-# Even with the response_format constraint surfaced in the FACTS block,
-# the LLM occasionally sneaks in abstract body-system vocabulary that the
-# engine never authorised (e.g. "hormonal changes ka indication",
-# "chronic issues par dhyaan", "mental imbalance"). Phase 6.0 adds a
-# deterministic post-LLM scrubber that strips those sentences UNLESS the
-# forbidden word appears literally in the `key_triggers` list (which is
-# where Saturn-karaka legitimately surfaces "chronic" and Venus-karaka
-# legitimately surfaces "hormonal").
-#
-# Architect mantra extension: engine sochta hai, LLM bolta hai, narrator
-# lock guarantee karta hai ki LLM sirf engine-authorised vocabulary use
-# kare. Sentence-level scrub keeps the answer coherent (no orphan
-# fragments). If >50% sentences are dropped, fall back to a deterministic
-# template keyed off `overall_risk` so the user never sees a broken or
-# empty answer.
-#
-# Reversible: env flag `PHASE60_HEALTH_NARRATOR_LOCK` (default "1" = ON).
-# Set to "0" to disable the post-scrubber and template fallback (the
-# response_format constraint and tone-rule update remain — those are
-# prompt-side improvements that cost nothing to keep).
-# Phase 6.0 — original 5 (body-system abstractions). ALWAYS active when
-# the narrator lock is ON, regardless of Phase 6.0b flags.
-_PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE: tuple[str, ...] = (
-    "hormonal",
-    "chronic",
-    "mental",
-    "emotional",
-    "internal imbalance",
-)
-
-# Phase 6.0b — symptom/trajectory nouns the LLM invents on a health
-# surface. User flagged "vitality dip" / "weakness ke chances" as
-# leakage on a stable-vs-risky question. Even though the engine's tag
-# dictionary internally maps some layers to these tokens, Phase 6.0b
-# neutralises engine-emitted triggers via `_PHASE60B_TRIGGER_NEUTRALIZER`
-# BEFORE they reach the FACTS block — so these words can NEVER
-# legitimately appear in `key_triggers` and the scrubber will always
-# strip them. Single-word entries; multi-word phrases stay in BASE.
-#
-# Gated by the SAME env flag as the trigger neutraliser
-# (`PHASE60B_NEUTRALIZE_TAGS`, default "1" = ON) so the two halves of
-# Phase 6.0b stay in lockstep — when neutralisation is OFF, engine tags
-# surface verbatim AND the matching forbidden-vocab is dropped from the
-# scrubber, so allowed_triggers like 'vitality_dip' don't get killed by
-# the 'vitality' substring match. This makes `PHASE60B_NEUTRALIZE_TAGS=0`
-# a coherent revert path (architect-mandated, Phase 6.0b code review).
-_PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA: tuple[str, ...] = (
-    "vitality",
-    "weakness",
-    "fatigue",
-    "tiredness",
-    "exhaustion",
-    "lethargy",
-    "drowsiness",
-    "dizziness",
-    "ailment",
-    "illness",
-    "sickness",
-    "infection",
-    "inflammation",
-    "immunity",
-    "immune",
-    "disease",
-    "vigor",
-    "vigour",
-    "stamina",
-    "nervous",
-    "metabolic",
-    "vulnerability",
-    "vulnerable",
-)
-
-
-def _phase60_active_forbidden_vocab() -> tuple[str, ...]:
-    """Return the active forbidden-vocab list based on Phase 6.0b flag.
-
-    When `PHASE60B_NEUTRALIZE_TAGS=1` (default) returns BASE + EXTRA.
-    When `PHASE60B_NEUTRALIZE_TAGS=0` returns BASE only — restoring
-    pre-Phase-6.0b scrubber behaviour, in lockstep with the trigger
-    neutraliser also being disabled.
-    """
-    if _phase60b_neutralize_tags_enabled():
-        return _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
-    return _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE
-
-
-# Backwards-compat alias — many tests / call sites read the full list as
-# a module attribute. Updated whenever the flag is OFF would require a
-# restart, but the flag rarely flips at runtime; the runtime regex
-# (`_phase60_forbidden_re`) is the source of truth for scrub decisions.
-_PHASE60_FORBIDDEN_HEALTH_VOCAB: tuple[str, ...] = (
-    _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
-)
-
-
-# ── Phase 6.0b — ENGINE-TAG → NARRATOR-TAG NEUTRALIZATION ─────────────────
-# The engine's `_PHASE60_HEALTH_LAYER_TAGS` maps natal/karaka layers to
-# medical-noun tokens (vitality_dip, weakness, infection, hormonal,
-# metabolic, vulnerability) so the audit trail stays specific. But those
-# same tokens leak into `key_triggers` of the FACTS block, where the LLM
-# dutifully turns "weakness" / "vitality_dip" into "weakness ke chances"
-# / "vitality dip" in the narration — which the user flagged as
-# diagnosis-drift on a sensitive surface.
-#
-# Phase 6.0b neutralises the worst offenders BEFORE they surface to the
-# narrator: medical-noun tags map to safer phase-descriptor tokens
-# ("extra_care", "balance", "sensitive_phase"). Engine internals stay
-# unchanged — the audit trail still records vitality_dip etc. The
-# neutralisation is purely a narrator-facing projection.
-#
-# Tags already in safe-noun form (heat / stress / sudden / hidden /
-# chronic / energy) pass through unchanged.
-#
-# Reversible: env flag `PHASE60B_NEUTRALIZE_TAGS` (default "1" = ON).
-_PHASE60B_TRIGGER_NEUTRALIZER: dict[str, str] = {
-    # Body-system inventions → neutral phase descriptors
-    "vitality_dip":   "extra_care",
-    "weakness":       "extra_care",
-    "infection":      "extra_care",
-    "vulnerability":  "extra_care",
-    "hormonal":       "balance",
-    "metabolic":      "balance",
-    "nervous":        "stress",  # collapse into mental-strain bucket
-    # Tags already in safe form — preserved (identity)
-    "chronic":        "chronic",
-    "heat":           "heat",
-    "stress":         "stress",
-    "sudden":         "sudden",
-    "hidden":         "hidden",
-    "energy":         "energy",
-}
-
-
-def _phase60b_neutralize_tags_enabled() -> bool:
-    """True when Phase 6.0b engine-tag → narrator-tag neutralization is active.
-
-    Reversible via env flag `PHASE60B_NEUTRALIZE_TAGS` (default "1" = ON).
-    Set to "0" to surface engine tags verbatim in `key_triggers` (the
-    pre-Phase 6.0b behaviour — useful when comparing scrubber telemetry
-    or debugging the engine's tag dictionary in isolation).
-    """
-    return os.environ.get("PHASE60B_NEUTRALIZE_TAGS", "1") != "0"
-
-
-def _phase60b_neutralize_triggers(triggers: list | tuple | None) -> list[str]:
-    """Project engine tag list through `_PHASE60B_TRIGGER_NEUTRALIZER`.
-
-    Pure, defensive — non-string entries dropped silently. Preserves
-    order, dedupes after mapping (so `[vitality_dip, weakness] → [extra_care]`
-    instead of `[extra_care, extra_care]`).
-
-    Returns the input list unchanged when the env flag is OFF (one-line
-    revert path). Returns `[]` for non-iterable input.
-    """
-    if not _phase60b_neutralize_tags_enabled():
-        if isinstance(triggers, (list, tuple)):
-            return [t for t in triggers if isinstance(t, str)]
-        return []
-    if not isinstance(triggers, (list, tuple)):
-        return []
-    out: list[str] = []
-    seen: set[str] = set()
-    for t in triggers:
-        if not isinstance(t, str) or not t.strip():
-            continue
-        mapped = _PHASE60B_TRIGGER_NEUTRALIZER.get(t.strip().lower(), t.strip().lower())
-        if mapped not in seen:
-            out.append(mapped)
-            seen.add(mapped)
-    return out
-
-# Sentence-split pattern: handles `.`, `!`, `?`, Hindi danda `।`, and
-# the newline boundaries the model often produces between sentences.
-# Splits on whitespace OR newline OR a danda followed immediately by an
-# uppercase letter (Devanagari-formatted text often omits the post-danda
-# space). Captures keep terminator attached to the prior sentence.
-_PHASE60_SENTENCE_SPLIT = re.compile(
-    r"(?<=[.!?।])\s+|(?<=[.!?])\n+|(?<=।)(?=[A-ZÀ-ÖØ-öø-ÿ\u0900-\u097F])"
-)
-
-# Word-boundary forbidden-vocab matchers. Case-insensitive. Multi-word
-# phrases handled via direct substring (re.escape) so "internal imbalance"
-# matches even across collapsed whitespace.
-#
-# We pre-compile BOTH variants (full = base+extra, base-only = pre-6.0b
-# revert) at module load and pick at runtime via `_phase60_forbidden_re()`,
-# so the env flag flip is honoured without paying re.compile cost on
-# every scrub call.
-_PHASE60_FORBIDDEN_RE_FULL = re.compile(
-    r"(?i)\b(?:" + "|".join(
-        re.escape(w) for w in (
-            _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
-        )
-    ) + r")\b"
-)
-_PHASE60_FORBIDDEN_RE_BASE = re.compile(
-    r"(?i)\b(?:" + "|".join(
-        re.escape(w) for w in _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE
-    ) + r")\b"
-)
-
-
-def _phase60_forbidden_re() -> "re.Pattern[str]":
-    """Active forbidden-vocab matcher, gated by `PHASE60B_NEUTRALIZE_TAGS`.
-
-    ON (default) → full 28-word matcher (Phase 6.0 + 6.0b expansion).
-    OFF          → base 5-word matcher (pre-Phase-6.0b behaviour),
-                   in lockstep with the trigger neutraliser also being
-                   disabled — a coherent revert path.
-    """
-    if _phase60b_neutralize_tags_enabled():
-        return _PHASE60_FORBIDDEN_RE_FULL
-    return _PHASE60_FORBIDDEN_RE_BASE
-
-
-# Backwards-compat alias — call sites that captured the regex eagerly
-# at import time still work, but prefer `_phase60_forbidden_re()` for
-# correct env-flag-aware matching.
-_PHASE60_FORBIDDEN_RE = _PHASE60_FORBIDDEN_RE_FULL
-
-# Deterministic fallback templates by overall_risk. Used when sentence
-# scrub drops too much of the original answer to remain coherent.
-# Calibrated to the 2-3 line spec + mandatory doctor-consult disclaimer.
-_PHASE60_HEALTH_FALLBACK_TEMPLATES: dict[str, str] = {
-    "stable": (
-        "Aapki sehat is window mein generally stable rahegi. "
-        "Routine self-care kaafi hai. Kisi serious symptom ke liye "
-        "doctor se consult zaroor karein."
-    ),
-    "fluctuating": (
-        "Aapki sehat is window mein thodi fluctuate kar sakti hai. "
-        "Extra rest aur balanced routine zaroori hai. Kisi serious "
-        "symptom ke liye doctor se consult zaroor karein."
-    ),
-    "sensitive": (
-        "Aapki sehat is window mein sensitive phase mein hai. "
-        "Extra dhyaan aur regular check-up zaroori hai. Kisi serious "
-        "symptom ke liye doctor se consult zaroor karein."
-    ),
-}
-
-
-def _phase60_health_narrator_lock_enabled() -> bool:
-    """True when Phase 6.0 health narrator lock is active. Default ON.
-
-    One-line revert: set env `PHASE60_HEALTH_NARRATOR_LOCK=0` and
-    restart the api-server. Engine-side response_format constraint and
-    tone-rule vocabulary tightening remain in effect either way (those
-    are prompt-side improvements with no runtime cost to keep).
-    """
-    return os.environ.get("PHASE60_HEALTH_NARRATOR_LOCK", "1") != "0"
-
-
-def _phase60_health_vocab_scrub(
-    text: str,
-    allowed_triggers: list | tuple | None = None,
-    overall_risk: str = "fluctuating",
-) -> tuple[str, dict]:
-    """Phase 6.0 — strip sentences containing forbidden health vocabulary.
-
-    A forbidden word is allowed only if it appears literally (case-insensitive,
-    word-boundary) in `allowed_triggers`. Sentences containing any
-    not-allowed forbidden word are dropped. If scrubbing leaves the
-    answer too short (≤ half original sentence count OR fewer than 2
-    sentences total), the entire answer is replaced with a deterministic
-    fallback template keyed off `overall_risk`.
-
-    Returns `(scrubbed_text, telemetry_dict)`. Telemetry includes:
-      - dropped_sentences: count of sentences removed
-      - dropped_words:     forbidden words that triggered drops
-      - fallback_used:     bool — True if template fallback fired
-      - allowed:           lowercase set of triggers that bypassed scrub
-
-    Pure, defensive — never raises on malformed input. Returns
-    `(text, {})` for empty / non-string input.
-    """
-    if not isinstance(text, str) or not text.strip():
-        return text or "", {}
-
-    # Build allowed-set from key_triggers (case-insensitive). A trigger
-    # like "chronic" allows the word "chronic" anywhere in the text;
-    # multi-word triggers handled the same way.
-    allowed: set[str] = set()
-    for t in (allowed_triggers or []):
-        if isinstance(t, str) and t.strip():
-            allowed.add(t.strip().lower())
-
-    sentences = _PHASE60_SENTENCE_SPLIT.split(text.strip())
-    sentences = [s for s in sentences if s.strip()]
-    if not sentences:
-        return text, {}
-
-    kept: list[str] = []
-    dropped_words: list[str] = []
-    for s in sentences:
-        # Find ALL forbidden words in this sentence
-        matches = [m.group(0).lower() for m in _phase60_forbidden_re().finditer(s)]
-        # Sentence is OK if every match is allowed (in key_triggers)
-        violations = [w for w in matches if w not in allowed]
-        if violations:
-            dropped_words.extend(violations)
-            continue
-        kept.append(s)
-
-    dropped_count = len(sentences) - len(kept)
-    telemetry: dict = {
-        "dropped_sentences": dropped_count,
-        "dropped_words":     sorted(set(dropped_words)),
-        "allowed":           sorted(allowed),
-        "fallback_used":     False,
-    }
-
-    # Coherence guard: ONLY fire fallback when scrub actually damaged
-    # the answer — i.e. at least one sentence was dropped AND the
-    # remaining text is too thin to stand on its own. Without the
-    # `dropped_count > 0` gate, naturally short clean answers would be
-    # incorrectly replaced by template (architect-flagged regression).
-    if dropped_count > 0 and (
-        len(kept) == 0
-        or (len(sentences) >= 3 and len(kept) <= len(sentences) // 2)
-    ):
-        risk_key = (overall_risk or "fluctuating").strip().lower()
-        fallback = _PHASE60_HEALTH_FALLBACK_TEMPLATES.get(
-            risk_key, _PHASE60_HEALTH_FALLBACK_TEMPLATES["fluctuating"]
-        )
-        telemetry["fallback_used"] = True
-        return fallback, telemetry
-
-    return " ".join(kept), telemetry
-
-
-def _phase60_extract_health_lock_context(build_meta: Any) -> tuple[list, str]:
-    """Extract `(key_triggers, overall_risk)` for the narrator-lock scrubber.
-
-    Pulls from `build_meta['health_verdict_obj']` (the engine's raw
-    output) — the same object that feeds `_phase60_format_health_facts_block`.
-    Defensive: returns `([], "fluctuating")` on missing or malformed input.
-    """
-    if not isinstance(build_meta, dict):
-        return [], "fluctuating"
-    hv = build_meta.get("health_verdict_obj")
-    if not isinstance(hv, dict) or not hv:
-        return [], "fluctuating"
-    try:
-        triggers = _phase60_health_key_triggers(hv) or []
-    except Exception:
-        triggers = []
-    try:
-        verdict = (hv.get("verdict") or "").strip()
-        risk = _phase60_health_overall_risk(verdict)
-    except Exception:
-        risk = "fluctuating"
-    return list(triggers), risk
-
-
-# ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT FOR HEALTH FOLLOW-UPS ─────────
-# When a user asks "kaise check kiya?" / "kya kya dekha?" / "how did you
-# check this?" right after a health question, the LLM's instinct is to
-# regurgitate generic Vedic textbook content (Identify your Lagna, note
-# planetary positions, observe Dasha, analyse Navamsha D9, Dashamsha
-# D10…). The user flagged this as drift — they want the actual ENGINE
-# pipeline steps, not a generic astrology lesson.
-#
-# Phase 6.0b detects explain-mode follow-ups in HEALTH context and
-# short-circuits the LLM entirely with a deterministic engine-pipeline
-# answer. Health context is established by scanning the most recent user
-# turns (history) for a health question — the current question itself
-# typically does NOT contain "health" / "sehat" because it's a follow-up
-# pronoun-style question ("aur yeh tumne kaise bataya").
-#
-# Reversible: env flag `PHASE60B_EXPLAIN_MODE` (default "1" = ON).
-# Centralised list of "investigative / explain-intent" verb stems used
-# in BOTH the bare-kaise branch and the pronoun branch below. Keeping
-# them in sync prevents drift like "added analy[sz] to pronoun branch
-# but forgot bare-kaise". Add new variants here, not in the regex.
-_PHASE60B_EXPLAIN_VERBS_RE = (
-    r"(?:check|pata|dekh\w*|bata\w*|bta\w*|nikal\w*|kiya|kar\w*\s+pata|"
-    r"determin\w*|find|figure|analy[sz]\w*|know|"
-    # Hinglish "maloom / malum hua" (came-to-know), "samajh me aaya"
-    # (was understood), "use kiya" (was used) — all explain-intent
-    # past-tense forms the user naturally reaches for.
-    r"maloom|malum|samajh\w*|use\s+kiya)"
-)
-
-_PHASE60B_EXPLAIN_PAT = re.compile(
-    r"(?i)(?:"
-    # Bare "kaise + investigative-verb" — e.g. "kaise check kiya",
-    # "kaise dekha", "kaise maloom hua", "kaise analyse kiya".
-    r"\bkaise\s+" + _PHASE60B_EXPLAIN_VERBS_RE + r"\b|"
-    r"\bkya\s+kya\s+(?:check|dekh\w*|kiya|kar\w*)\b|"
-    # English patterns
-    r"\bhow\s+(?:did|do)\s+you\s+(?:check|find|determine|analy[sz]e|figure|know)\b|"
-    r"\bhow\s+(?:is|was)\s+(?:this|it|that)\s+(?:check|determin|analy[sz])\w*\b|"
-    # Generic step / process / method asks. Two shapes:
-    #   - "steps batao / process explain karo / method describe karo"
-    #   - "konsa / which method use kiya" — backwards form the user
-    #     often reaches for when asking "what method did you use?"
-    r"\b(?:steps?|process|method)\s+(?:bata|btao|kya|explain|describe)\w*\b|"
-    r"\b(?:konsa|kaunsa|which)\s+(?:method|process|steps?)\s+use\s+kiya\b|"
-    r"\b(?:method|process|steps?)\s+use\s+kiya\b|"
-    r"\bstep\s+by\s+step\b|"
-    # Pronoun-style follow-up — TWO tight branches (Phase 6.0b architect
-    # review: the original `\w*` wildcard between subject + kaise was too
-    # permissive and matched prognosis questions like "Iska treatment
-    # kaise hoga?" / "Iska effect kaise rahega?"). Now requires EITHER:
-    #   (a) past-tense agency: "yeh tumne / aapne kaise [...]" — implies
-    #       "you did", which means an explain-mode question even without
-    #       a verb constraint after kaise.
-    #   (b) explain-intent verb after kaise — uses the same shared verb
-    #       list as the bare-kaise branch. Excludes "hoga / rahega /
-    #       lagega" (prognosis).
-    r"\b(?:yeh|iss?ki?|iska|isse)\s+(?:tumne|aapne|tune)\s+(?:kaise|how)\b|"
-    r"\b(?:yeh|iss?ki?|iska|isse)\s+(?:kaise|how)\s+" + _PHASE60B_EXPLAIN_VERBS_RE + r"\b"
-    r")"
-)
-
-
-# Health-context pattern — detects whether a recent turn was about
-# health. Mirrors `_is_health_question` keyword set but is a smaller
-# focused pattern used only for explain-mode context detection (we want
-# fast, conservative matching here — false negatives mean we fall back
-# to LLM, which is safe; false positives would emit engine steps for a
-# non-health question, which would be confusing).
-_PHASE60B_HEALTH_CONTEXT_PAT = re.compile(
-    r"(?i)\b(?:"
-    r"health|sehat|tabi[ae]?t|"
-    r"bimari|beemari|bimar|beemar|"
-    r"illness|disease|sick|"
-    r"stable|risky\s+phase|risk\s+phase|"
-    r"body|sharir|sareer|"
-    r"medical|doctor|hospital|"
-    r"surgery|operation|"
-    r"chronic|acute|"
-    r"mental\s+health|depression|anxiety|"
-    r"injury|chot|"
-    r"recovery|healing|"
-    r"longevity|life\s+expectancy|"
-    r"diabetes|bp|blood\s+pressure|heart|"
-    r"weakness|vitality|fatigue"
-    r")\b"
-)
-
-
-def _phase60b_explain_mode_enabled() -> bool:
-    """True when Phase 6.0b explain-mode short-circuit is active.
-
-    Reversible via env flag `PHASE60B_EXPLAIN_MODE` (default "1" = ON).
-    Set to "0" to fall back to the LLM-narrated explanation (the
-    pre-Phase 6.0b behaviour).
-    """
-    return os.environ.get("PHASE60B_EXPLAIN_MODE", "1") != "0"
-
-
-def _phase60b_is_health_explain_followup(
-    question: str, history: list | None,
-) -> bool:
-    """Detect 'kaise check kiya?' style follow-ups to a health question.
-
-    Returns True only when BOTH conditions hold:
-      1. Current `question` matches `_PHASE60B_EXPLAIN_PAT` (explain-style
-         phrasing — "kaise / how / steps / process / method").
-      2. At least one of the last 4 user turns in `history` matches
-         `_PHASE60B_HEALTH_CONTEXT_PAT` (recent health context).
-
-    Pure, defensive — never raises. Returns False on missing /
-    malformed input. The 4-turn window is generous enough to span an
-    "unrelated chit-chat in between" pattern but small enough to avoid
-    accidentally matching across topic switches earlier in the session.
-    """
-    if not isinstance(question, str) or not question.strip():
-        return False
-    if not _PHASE60B_EXPLAIN_PAT.search(question):
-        return False
-    if not isinstance(history, list) or not history:
-        # Without history we can't verify health context — fall back to LLM.
-        # This is the safe choice: a false-positive engine-steps emission
-        # for a non-health question would be confusing.
-        return False
-    # Scan last 4 user turns for health context. Skip assistant turns —
-    # the assistant might mention "health" generically (e.g. "general
-    # wellness") in a non-health answer, which would falsely trigger.
-    for turn in reversed(history[-8:]):
-        if not isinstance(turn, dict):
-            continue
-        if turn.get("role") != "user":
-            continue
-        content = turn.get("content")
-        if not isinstance(content, str):
-            continue
-        if _PHASE60B_HEALTH_CONTEXT_PAT.search(content):
-            return True
-    return False
-
-
-# Deterministic engine-pipeline explanations — emitted verbatim when
-# explain-mode short-circuit fires. Hinglish + English variants picked
-# by `eff_lang` at the call site (mirrors fallback-template selection
-# in `_phase60_health_vocab_scrub`).
-#
-# Content is grounded in the actual `health_engine.assess_health`
-# pipeline (L1-L25 layers, T1-T3 triggers, M1-M7 modifiers, conditional
-# bucket bonuses, final score → verdict) — NO generic Vedic textbook
-# phrasing. The user's stated ideal answer:
-#   "Lagna check / 6th house / 8th/12th / current dasha / final combine"
-# is the structural template here.
-_PHASE60B_HEALTH_EXPLAIN_HI: str = (
-    "Engine ne aapki health analysis ke liye ye steps follow kiye:\n"
-    "1. Lagna lord ki strength check ki (1st house ka adhipati).\n"
-    "2. 6th, 8th aur 12th house ke planets dekhe (sehat ke 3 main houses).\n"
-    "3. Body-karaks (Sun, Moon, Mars, Saturn, Jupiter, Mercury, Venus, Rahu, Ketu) ke roles analyze kiye.\n"
-    "4. Current Mahadasha aur Antardasha lord ka health par effect dekha.\n"
-    "5. Saturn, Mars, Rahu aur Ketu ke transits ko 6/8/12 house ke against score kiya.\n"
-    "6. Sade Sati phase aur Ashtama Shani ki position check ki.\n"
-    "7. Sab signals ko combine karke final verdict (stable / unstable / fluctuating) banaya.\n"
-    "Generic astrology nahi — ye actual engine pipeline hai jo aapke chart par chala."
-)
-
-
-_PHASE60B_HEALTH_EXPLAIN_EN: str = (
-    "The engine ran these steps for your health analysis:\n"
-    "1. Lagna lord strength check (the ruler of the 1st house).\n"
-    "2. 6th, 8th, and 12th house planets review (the 3 main health houses).\n"
-    "3. Body-karaks (Sun, Moon, Mars, Saturn, Jupiter, Mercury, Venus, Rahu, Ketu) role analysis.\n"
-    "4. Current Mahadasha and Antardasha lord's effect on health.\n"
-    "5. Saturn, Mars, Rahu and Ketu transit aspects scored against the 6th/8th/12th houses.\n"
-    "6. Sade Sati phase and Ashtama Shani position check.\n"
-    "7. All signals combined into a final verdict (stable / unstable / fluctuating).\n"
-    "This is the actual engine pipeline that ran on your chart — not a generic astrology explanation."
-)
-
-
-def _phase60b_health_explain_text(lang: str) -> str:
-    """Return the deterministic engine-pipeline explanation in the right language.
-
-    Defaults to Hinglish (the primary user language for this app). Only
-    returns English when `lang` is explicitly an English code ("en",
-    "en-IN", "english"). Mirrors the language-selection convention used
-    by other Phase 5.x/6.x deterministic emitters in this module.
-    """
-    code = (lang or "").strip().lower()
-    if code in ("en", "en-in", "en-us", "english"):
-        return _PHASE60B_HEALTH_EXPLAIN_EN
-    return _PHASE60B_HEALTH_EXPLAIN_HI
-
-
-def _phase60l_emit_health_facts_trace(req_id: str, build_meta: Any) -> None:
-    """Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE VISIBILITY).
-
-    Emit a SEPARATE, STRUCTURED trace event ``3a.HEALTH_FACTS`` so the
-    engine → FACTS → LLM → output chain can be audited without parsing
-    the multi-thousand-character locked_facts blob.
-
-    Strict surface:
-      • No engine logic touched (pure read of stored verdict dict).
-      • No FACTS schema touched (formatter still produces the exact same
-        block consumed by the LLM).
-      • No LLM behaviour touched (this is a telemetry sibling of
-        ``3.PROMPT.user_preview``, not a replacement).
-
-    Lists are emitted at FULL length (no truncation) per user spec so
-    the trace can be diffed line-by-line against the final answer to
-    verify which engine signals were honoured / dropped.
-
-    No-op when no health verdict was produced (non-health turn, engine
-    skipped, formatter saw an empty payload).
-    """
-    if not isinstance(build_meta, dict):
-        return
-    hv = build_meta.get("health_verdict_obj")
-    if not isinstance(hv, dict) or not hv:
-        return
-    try:
-        verdict_str   = hv.get("verdict") or ""
-        # Re-run the EXACT projections the formatter applies, so the
-        # trace surfaces what the LLM literally sees in HEALTH_FACTS:
-        overall_risk  = _phase60_health_overall_risk(verdict_str) if verdict_str else None
-        top_concerns  = hv.get("top_concerns") if isinstance(hv.get("top_concerns"), list) else []
-        top_supportive = hv.get("top_supportive") if isinstance(hv.get("top_supportive"), list) else []
-        stability     = (_phase60_health_stability(
-                            overall_risk or "",
-                            len(top_concerns),
-                            len(top_supportive))
-                         if overall_risk else None)
-        key_triggers  = _phase60_health_key_triggers(hv)
-        dasha_effect  = _phase60_health_dasha_effect(hv)
-        confidence    = hv.get("confidence")
-        if confidence is None:
-            confidence = hv.get("confidence_pct")
-
-        _trace(req_id, "3a.HEALTH_FACTS", {
-            # ── Engine raw (1-line audit, mirrors `health_engine OK` log) ──
-            "bucket":                hv.get("bucket"),
-            "tense":                 hv.get("tense"),
-            "verdict":               verdict_str,
-            "score":                 hv.get("score"),
-            "confidence":            confidence,
-            # ── Engine structured details (full lists, NO truncation) ──────
-            "score_breakdown":       hv.get("score_breakdown"),
-            "timing_window":         hv.get("timing_window"),
-            "top_concerns":          top_concerns,
-            "top_supportive":        top_supportive,
-            "triggers":              hv.get("triggers"),
-            "layers_count":          len(hv.get("layers") or []),
-            "brand_safety_warnings": hv.get("brand_safety_warnings"),
-            # ── Narrator-facing FACTS (derived — what LLM literally reads) ─
-            "facts_overall_risk":    overall_risk,
-            "facts_stability":       stability,
-            "facts_key_triggers":    key_triggers,
-            "facts_dasha_effect":    dasha_effect,
-        })
-    except Exception as exc:
-        # Telemetry must NEVER break the response pipeline.
-        try:
-            _trace(req_id, "3a.HEALTH_FACTS.error", {"error": repr(exc)})
-        except Exception:
-            pass
-
-
-def _phase60_format_health_facts_block(v: Any) -> str:
-    """Render `assess_health()` output as v4 user-spec FACTS block.
-
-    Phase 5.9 Batch 3c v4 — USER-SPEC SCHEMA (Apr 2026). Replaces v3's
-    5-tier vocabulary (overall_risk: strong/stable/fluctuating/
-    vulnerable/high_risk + sensitive_areas/supportive_factors/
-    risk_factors) with the user's simplified 4-field contract:
-
-      HEALTH_FACTS:
-        - overall_risk:  stable | fluctuating | sensitive
-        - stability:     stable | unstable
-        - key_triggers:  [heat, stress, sudden, chronic, ...]
-        - dasha_effect:  supportive | mixed | challenging
-        - confidence:    <int 0-100>
-        - response_format: <2-3 line constraint, narrator-facing>
-        - brand_safety:  [verbatim engine guardrails — helplines]
-        - tone_rules:    [verbatim engine-owned 5 tone bullets]
-
-    Vocabulary collapse rationale (user directive):
-      v3 5-tier → v4 3-tier:    cleaner narrator vocabulary
-      v3 sensitive_areas/etc → v4 key_triggers: tag-based not
-        layer-name-based (LLM-friendly nouns: heat / stress / sudden)
-      v3 risk_factors          → folded into key_triggers via reason scan
-
-    UNCHANGED from v3 (architect-locked invariants):
-      - brand_safety_warnings emitted VERBATIM (helpline survival)
-      - tone_rules emitted as LAST section, FAIL-CLOSED on engine import
-      - 1-liner verdict suppression in extractor (emitted_health_block)
-
-    Returns "" for empty / non-dict input — never raises.
-    """
-    if not isinstance(v, dict) or not v:
-        return ""
-
-    def _safe_int(x: Any, default: int = 0) -> int:
-        try:
-            return int(x)
-        except (TypeError, ValueError):
-            return default
-
-    def _safe_iter(x: Any) -> list:
-        return x if isinstance(x, list) else []
-
-    def _safe_str(x: Any) -> str:
-        if not isinstance(x, str):
-            return ""
-        return _re_p58.sub(r"\s+", " ", x).strip()
-
-    # ── Vocabulary projections ──────────────────────────────────────────
-    # Pass raw verdict through — DO NOT pre-default to "yellow_wait" here.
-    # The helper already defaults unknown/empty → "fluctuating" (safe
-    # middle). Pre-defaulting to "yellow_wait" would over-soften malformed
-    # payloads to "stable" on a sensitive surface (architect-flagged
-    # regression caught during v4 review).
-    verdict = _safe_str(v.get("verdict"))
-    overall_risk = _phase60_health_overall_risk(verdict)
-
-    n_concerns   = len(_safe_iter(v.get("top_concerns")))
-    n_supportive = len(_safe_iter(v.get("top_supportive")))
-    stability    = _phase60_health_stability(overall_risk, n_concerns, n_supportive)
-
-    key_triggers = _phase60_health_key_triggers(v)
-    dasha_effect = _phase60_health_dasha_effect(v)
-
-    if "confidence" in v:
-        conf = _safe_int(v.get("confidence"))
-    else:
-        conf = _safe_int(v.get("confidence_pct"))
-
-    # ── Block assembly ──────────────────────────────────────────────────
-    lines: list[str] = [
-        "HEALTH_FACTS:",
-        f"  - overall_risk: {overall_risk}",
-        f"  - stability: {stability}",
-    ]
-    if key_triggers:
-        triggers_str = ", ".join(key_triggers)
-        lines.append(f"  - key_triggers: [{triggers_str}]")
-    else:
-        lines.append("  - key_triggers: []")
-    lines.append(f"  - dasha_effect: {dasha_effect}")
-    lines.append(f"  - confidence: {conf}")
-
-    # ── Response format constraint (narrator-facing, engine-owned) ──────
-    lines.append(f"  - response_format: {_PHASE60_HEALTH_RESPONSE_FORMAT}")
-
-    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
-    bsw = _safe_iter(v.get("brand_safety_warnings"))
-    bullets = [_safe_str(b) for b in bsw]
-    bullets = [b for b in bullets if b]
-    if bullets:
-        lines.append("  - brand_safety:")
-        for b in bullets:
-            lines.append(f"    - {b}")
-
-    # ── Tone rules (ENGINE-OWNED, ALWAYS emitted, FAIL-CLOSED) ──────────
-    # Same FAIL-CLOSED architecture as v3: try engine source, fall back
-    # to hardcoded floor on import failure, log the regression. Tone
-    # policy is the highest-stakes contract on the sensitive-topic
-    # surface; silent degradation is unacceptable.
-    _tone_rules: tuple = _HEALTH_TONE_RULES_FALLBACK
-    try:
-        from health_engine import HEALTH_TONE_RULES as _engine_tone_rules
-        if isinstance(_engine_tone_rules, tuple) and _engine_tone_rules:
-            _tone_rules = _engine_tone_rules
-    except Exception as _e:
-        try:
-            logger.error(
-                "[Phase 5.9 v4] HEALTH_TONE_RULES engine import failed: %s — "
-                "falling back to hardcoded floor (tone enforcement preserved).",
-                _e,
-            )
-        except Exception:
-            pass
-    tone_bullets = [_safe_str(r) for r in _tone_rules if isinstance(r, str)]
-    tone_bullets = [r for r in tone_bullets if r]
-    if tone_bullets:
-        lines.append("  - tone_rules:")
-        for r in tone_bullets:
-            lines.append(f"    - {r}")
-
-    return "\n".join(lines)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13612,44 +11721,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "ai_confidence": _qu.get("confidence"),
         })
 
-    # ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT (HEALTH FOLLOW-UP) ──────
-    # When user asks "kaise check kiya?" / "how did you check?" right
-    # after a health question, return the deterministic engine pipeline
-    # instead of letting the LLM regurgitate generic Vedic textbook.
-    # Fires BEFORE any heavy LLM work — pure telemetry + canned answer.
-    # Reversible via env flag PHASE60B_EXPLAIN_MODE=0.
-    try:
-        if (
-            _phase60b_explain_mode_enabled()
-            and _phase60b_is_health_explain_followup(question or "", history)
-        ):
-            _exp_lang = _resolve_response_lang(question, lang, preferred_language)
-            _exp_text = _phase60b_health_explain_text(_exp_lang)
-            _trace(req_id, "1c.PHASE60B_EXPLAIN_SHORTCIRCUIT", {
-                "lang":           _exp_lang,
-                "history_turns":  len(history or []),
-                "answer_chars":   len(_exp_text),
-                "reason":         "health-context follow-up + explain-mode "
-                                  "phrasing detected — bypassing LLM with "
-                                  "deterministic engine pipeline",
-            })
-            return {
-                "text":         _exp_text,
-                "topic":        "health",
-                "topic_source": "phase60b_explain_shortcircuit",
-                "confidence":   0.95,
-                "source":       "engine_pipeline",
-                "follow_ups":   [],
-            }
-    except Exception as _exp_exc:  # noqa: BLE001
-        _trace(req_id, "1c.PHASE60B_EXPLAIN_ERR", str(_exp_exc)[:200])
-
-    _qu_intent = (_qu.get("intent") or "analysis").lower()
-    _qu_topic  = (_qu.get("topic")  or "general").lower()
-    _qu_conf   = float(_qu.get("confidence") or 0.0)
-    _qu_source = _qu.get("source") or "ai"
-
-    # Sprint-26 Fix-M — multi-intent priority + multi-domain awareness.
     # Default everything to single-element lists so any code that doesn't
     # understand the new fields still works.
     _qu_intents_ranked = _qu.get("intents_ranked") or [_qu_intent]
@@ -13857,10 +11928,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         marriage_subtype = _classify_marriage_subtype(question)
         health_subtype   = None
         subtype_label    = f"marriage_{marriage_subtype}"
-    elif topic == "health":
-        marriage_subtype = "timing"          # back-compat default; ignored downstream
-        health_subtype   = _classify_health_subtype(question)
-        subtype_label    = f"health_{health_subtype}"
     else:
         marriage_subtype = "timing"          # back-compat default; ignored downstream
         health_subtype   = None
@@ -13939,12 +12006,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "skipped": [e.get("phase") for e in (_engine_status.get("skipped") or [])],
     })
 
-    # ── Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE VISIBILITY) ──────────────
-    # Emit the engine's raw health verdict + the formatter's narrator
-    # projections as a SEPARATE structured trace event, so we can audit
-    # engine → FACTS → LLM → output without parsing the locked_facts
-    # blob. No-op for non-health turns (helper guards on missing dict).
-    _phase60l_emit_health_facts_trace(req_id, build_meta)
 
     # ── Phase 5.0 (Apr 28 2026) — MINIMAL ASK PROMPT GATE ───────────────────
     # When PHASE50_MINIMAL_PROMPT=1 (default), discard the heavy multi-system
@@ -14673,162 +12734,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                {"reason": "user did not request depth — keeping answer simple",
                 "rule": "Sprint-26 Fix-L SIMPLIFY NARRATOR"})
 
-    # ── HEALTH BRAND-SAFETY POST-PROCESSOR (deterministic, last line) ───────
-    # The health engine + narrator override already mandate (a) doctor-consult
-    # citation in every reply and (b) mental-health helplines on the
-    # mental_health bucket. Despite the system message being explicit, the
-    # narrator occasionally drops these. We fix that deterministically here:
-    # if the verdict block was active for this turn AND the AI's reply does
-    # NOT contain a doctor cite, we APPEND a single mandatory line. For the
-    # mental_health bucket we additionally append the Indian crisis helpline
-    # numbers if they are missing. This guarantees ZERO regressions on the
-    # NO_DOCTOR_CITE / NO_HELPLINE bench checks without re-prompting OpenAI.
-    try:
-        _hv = (build_meta or {}).get("health_verdict_obj")
-        # Routing-collision guard: if a HIGHER-priority engine fired (marriage,
-        # stock, love, career), DO NOT inject the health doctor/helpline
-        # boilerplate even if the question contains a generic health-flavoured
-        # word (e.g. "career stress", "share market tension", "rishta tension").
-        # The fallback below is intended ONLY for genuinely health-routed
-        # questions that simply did not trigger the health engine output (e.g.
-        # concept-mode "Insomnia ka karan kya hai?"). Higher engines have their
-        # own brand-safety contracts.
-        _bm = (build_meta or {})
-        _higher_engine_fired = bool(
-            _bm.get("marriage_facts")
-            or _bm.get("stock_verdict_obj")
-            or _bm.get("love_verdict_obj")
-            or _bm.get("career_verdict_obj")
-        )
-        # Crisis override: explicit suicidal / self-harm phrasing ALWAYS earns
-        # helpline + doctor cite, regardless of which engine fired upstream.
-        # This is a non-negotiable safety net.
-        _crisis_rx = __import__("re").compile(
-            r"\b(suicid(?:e|al)|self[- ]?harm|self[- ]?injur(?:y|ies)|"
-            r"atmahatya|aatmhatya|aatm[- ]?hatya|atmhatya|"
-            r"khudkushi|khud[- ]?kushi|"
-            r"jaan[- ]?dena|jaan[- ]?dene|jeena nahi|jeena nahin|"
-            r"marna chahta|marna chahti|"
-            r"end[- ]?my[- ]?life|kill[- ]?myself)\b",
-            __import__("re").IGNORECASE,
-        )
-        _crisis_q = bool(_crisis_rx.search(question or ""))
-        # Fallback: even when health engine did NOT fire (e.g. concept-mode
-        # question routed to general/concept flow), if the question is health-
-        # related AND no higher-priority engine claimed it, we still owe the
-        # user (a) doctor-cite and (b) mental-health helpline.
-        _is_health_q_text = bool(_is_health_question(question or ""))
-        _bucket_fallback = None
-        if (not _hv and _is_health_q_text
-                and not _higher_engine_fired):
-            _ql = (question or "").lower()
-            _mental_kw = ("depress", "anxiety", "panic", "stress", "tension",
-                          "manasik", "maanasik", "mental", "insomnia",
-                          "nind", "neend", "sleep", "suicid", "self harm",
-                          "self-harm", "atmahatya", "khudkushi", "shanti",
-                          "jaan dena", "jaan dene", "marna chahta",
-                          "end my life", "kill myself")
-            _bucket_fallback = ("mental_health"
-                                if any(k in _ql for k in _mental_kw)
-                                else "general_wellness")
-        # Crisis ALWAYS forces mental_health bucket (overrides everything).
-        if _crisis_q:
-            _bucket_fallback = "mental_health"
-        # Sprint-25 Fix-J / Sprint-26 architect-fix: STRENGTH_SUMMARY contract
-        # demands 1–2 short lines (≤60 words). Appending the doctor-cite or
-        # bucket-fallback boilerplate would blow that budget. We skip the
-        # gentle health appender for STRENGTH_SUMMARY UNLESS the question is a
-        # crisis (suicide / self-harm) — crisis is non-negotiable and always
-        # gets the helpline + doctor cite regardless of supertype.
-        if _skip_post_injects and not _crisis_q:
-            _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_SKIP",
-                   {"reason": "supertype=STRENGTH_SUMMARY (1–2 line contract)"})
-        elif _hv or _bucket_fallback:
-            import re as _re_health
-            _doctor_rx = _re_health.compile(
-                r"\b(doctor|physician|specialist|gynec|gynae|cardiolog|"
-                r"neurolog|psychiatrist|psycholog|therapist|counsell?or|"
-                r"medical advice|medical consultation|qualified medical|"
-                r"vaidya|chikitsak|chikitsa|aspataal|hospital)\b",
-                _re_health.IGNORECASE,
-            )
-            _helpline_rx = _re_health.compile(
-                r"(iCall|9152987821|Vandrevala|1860[- ]?2662[- ]?345)",
-                _re_health.IGNORECASE,
-            )
-            _doctor_line = (
-                "\n\nQualified doctor se zaroor consult karein — "
-                "cosmic guidance medical diagnosis ya treatment ka "
-                "vikalp nahi hai."
-            )
-            _helpline_line = (
-                "\n\nMental health support ke liye free helplines: "
-                "iCall (9152987821) aur Vandrevala Foundation "
-                "(1860-2662-345). Aap akele nahi hain."
-            )
-            _bucket = (_hv.get("bucket") if _hv else _bucket_fallback)
-            _added = []
-            # SAFETY-NET: strip any timing-validator placeholders that may
-            # have leaked through ([engine: dasha not cited] / [engine:
-            # window pending] / [engine: year/month ...]). These come from
-            # vedic/validator/timing_validator.py when an engine returned
-            # a verdict but no usable window — they MUST never reach the
-            # user. Replace with neutral fillers that still make sense.
-            _ph_rx = _re_health.compile(
-                r"\[engine:\s*(?:dasha not cited|window pending|"
-                r"year[^\]]*|month[^\]]*)\]",
-                _re_health.IGNORECASE,
-            )
-            if _ph_rx.search(text or ""):
-                _stripped = _ph_rx.sub("", text or "")
-                # Collapse double-spaces / empty parens left behind.
-                _stripped = _re_health.sub(
-                    r"\(\s*se\s*\)", "", _stripped)
-                _stripped = _re_health.sub(
-                    r"\s+", " ", _stripped)
-                _stripped = _re_health.sub(
-                    r"\s+([,.;!?])", r"\1", _stripped)
-                # Drop any line that became meaningless after the strip
-                # (e.g. "dasha ke dasha () mein chal raha hai" → kill).
-                _kept_lines = []
-                _bad_line_rx = _re_health.compile(
-                    r"^\s*(?:dasha\s+ke\s+dasha|"
-                    r"engine\s+data\s+insufficient).*$",
-                    _re_health.IGNORECASE,
-                )
-                for _ln in _stripped.splitlines():
-                    if _bad_line_rx.search(_ln):
-                        continue
-                    _kept_lines.append(_ln)
-                text = "\n".join(_kept_lines)
-                _added.append("ph_strip")
-            # Phase 4.5 NARRATIVE_MODE: skip the boilerplate doctor cite
-            # in narrative mode UNLESS the question contains crisis phrasing
-            # (suicide / self-harm) — those always earn the cite + helpline
-            # regardless of mode, as a non-negotiable safety net.
-            _suppress_doctor_cite = (
-                _NARRATIVE_MODE
-                and not _crisis_q
-                and _bucket != "mental_health"
-            )
-            if not _doctor_rx.search(text or "") and not _suppress_doctor_cite:
-                text = (text or "").rstrip() + _doctor_line
-                _added.append("doctor_cite")
-            if (_bucket == "mental_health"
-                    and not _helpline_rx.search(text)):
-                text = text.rstrip() + _helpline_line
-                _added.append("helpline")
-            if _added:
-                _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_INJECTED",
-                       {"bucket": _bucket, "added": _added,
-                        "src": "engine" if _hv else "fallback"})
-            else:
-                _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_OK",
-                       {"bucket": _bucket,
-                        "src": "engine" if _hv else "fallback"})
-    except Exception as _exc:  # noqa: BLE001
-        _trace(req_id, "4a2.HEALTH_BRAND_SAFETY_ERR", str(_exc))
-
     # ── WEALTH BRAND-SAFETY POST-PROCESSOR — MOVED BELOW REGEN PATHS ──
     # The wealth brand-safety injection (CA cite + SEBI line + engine-
     # placeholder strip) used to live HERE, between the health post-
@@ -15099,23 +13004,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_ERR", str(_exc))
 
     # ── Tone scrubber — strip any blacklisted AI-style phrases.
-    # Phase 5.0 Final Strip: skipped when the minimal-prompt path is active
-    # — EXCEPT for topic == "health" where the scrubber is FORCED on by
-    # Phase 6.0m FIX 10. The scrubber is a STYLE controller (rewrites
-    # tone/phrasing); user spec explicitly bans style-modifying validators
-    # for non-health topics. Hallucination guards (TIMING_VALIDATOR +
-    # POST_LOGIC_CHECK) remain — those are correctness, not style.
-    #
-    # Why the health override exists: phase50 minimal-prompt removes the
-    # "no clinical jargon" instruction that normally lives in the system
-    # prompt, so the LLM now leaks words like "triggers", "tendency",
-    # "chronic" into health answers. Re-running the brand-tone scrubber
-    # plus a hard-coded post-scrub safety map stops this leak without
-    # disturbing any other topic.
-    if (not _phase50_active) or topic == "health":
+    # Phase 5.0 Final Strip: skipped when the minimal-prompt path is active.
+    # The scrubber is a STYLE controller (rewrites tone/phrasing); user
+    # spec explicitly bans style-modifying validators. Hallucination
+    # guards (TIMING_VALIDATOR + POST_LOGIC_CHECK) remain — those are
+    # correctness, not style. (Phase 6.1.0: health-topic forced-on
+    # override removed along with full health code wipe.)
+    if not _phase50_active:
         pre_scrub = text
         text = _scrub_brand_tone(text)
-        _scrub_reason = "normal" if not _phase50_active else "phase60m_fix10_health_override"
+        _scrub_reason = "normal"
         if pre_scrub != text:
             _trace(req_id, "4d.SCRUBBER_CHANGED", {
                 "before_preview": pre_scrub[:200],
@@ -15136,36 +13034,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Health topic only: replace forbidden clinical/loaded words that the
     # LLM may have leaked through phase50 minimal prompt's loosened style
     # constraints. Non-health topics keep their original wording verbatim.
-    if topic == "health" and text:
-        _pre_safe = text
-        text, _safe_hits = _health_post_scrub_safety(text)
-        if _safe_hits:
-            _trace(req_id, "4d.HEALTH_POST_SCRUB_SAFETY_FIRED", {
-                "patterns_hit":   _safe_hits,
-                "before_preview": _pre_safe[:200],
-                "after_preview":  text[:200],
-            })
-
-        # ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (health only) ───────────
-        # If the LLM produced labelled `Cause:/Effect:/Advice:` lines but
-        # also wrapped them in storytelling preamble or postamble, strip
-        # everything outside those three lines. Defensive: if the labels
-        # are missing the function returns the original text unchanged so
-        # we never delete a valid answer that happens to skip the format.
-        _pre_3line = text
-        text, _extracted_3line = _health_extract_strict_3line(text)
-        if _extracted_3line and text != _pre_3line:
-            _trace(req_id, "4d.HEALTH_STRICT_3LINE_EXTRACTED", {
-                "before_preview": _pre_3line[:240],
-                "after_preview":  text[:240],
-                "before_chars":   len(_pre_3line),
-                "after_chars":    len(text),
-            })
-        elif not _extracted_3line:
-            _trace(req_id, "4d.HEALTH_STRICT_3LINE_NOT_FOUND", {
-                "preview": text[:240],
-                "reason":  "LLM did not emit Cause:/Effect:/Advice: labels",
-            })
 
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")
@@ -15474,31 +13342,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         f"ka core indicator hai."
                     )
 
-            # D27 — health/stamina
-            _is_health_q = bool(_re2.search(
-                r"\b(health|stamina|strength|sports|fitness|energy|vitality|"
-                r"sehat|sharir|body|sickness|illness|disease|bimari|"
-                r"weak|weakness|immunity|workout|gym|athletic|game|games)\b",
-                _q_low2
-            ))
-            if _is_health_q and not _skip_verbose_jargon and not _re2.search(
-                r"(?i)\bd[\-\s]?27\b|bhamsa|saptavims|nakshatramsa", text or ""
-            ):
-                _d27 = compute_d27(_planets_q2, _lagna_lon2)
-                _s27 = summarize_d27_for_strength(_d27, _intel_q2) if _d27 else {}
-                parts = []
-                if _s27.get("lagna_lord_d27_sign"):
-                    parts.append(f"lagna-lord {_s27['lagna_lord']} {_s27['lagna_lord_d27_sign']} ({_s27['lagna_lord_d27_strength']})")
-                if _s27.get("mars_d27_sign"):
-                    parts.append(f"Mars (energy-karaka) {_s27['mars_d27_sign']}")
-                if _s27.get("sun_d27_sign"):
-                    parts.append(f"Sun (vitality-karaka) {_s27['sun_d27_sign']}")
-                if parts:
-                    text = (text or "").rstrip() + (
-                        f"\n\nD27 Bhamsa (physical strength refinement) mein "
-                        f"{', '.join(parts)} — yeh stamina, vitality aur "
-                        f"physical resilience ka core signal hai."
-                    )
         except Exception as _exc:
             print(f"[ai_ask] advanced vargas (D16/D20/D24/D27) post-inject failed: {_exc}")
 
@@ -16556,34 +14399,6 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _ph_exc:  # noqa: BLE001
         _trace(req_id, "4z.GLOBAL_PH_STRIP_ERR", str(_ph_exc))
 
-    # ── Phase 6.0 — HEALTH NARRATOR LOCK (post-LLM vocab scrub) ─────────
-    # Strip sentences containing forbidden abstract body-system terms
-    # (hormonal, chronic, mental, emotional, internal imbalance) UNLESS
-    # the word appears literally in engine-derived `key_triggers`. Only
-    # fires for health questions. Reversible via env flag.
-    try:
-        if (
-            text and isinstance(text, str)
-            and _phase60_health_narrator_lock_enabled()
-            and _is_health_question(question or "")
-        ):
-            _p60_triggers, _p60_risk = _phase60_extract_health_lock_context(build_meta)
-            _p60_pre = text
-            text, _p60_tel = _phase60_health_vocab_scrub(
-                text, allowed_triggers=_p60_triggers, overall_risk=_p60_risk,
-            )
-            if _p60_tel.get("dropped_sentences", 0) > 0 or _p60_tel.get("fallback_used"):
-                _trace(req_id, "4y.PHASE60_HEALTH_LOCK_SCRUB", {
-                    "dropped_sentences": _p60_tel.get("dropped_sentences"),
-                    "dropped_words":     _p60_tel.get("dropped_words"),
-                    "allowed_triggers":  _p60_tel.get("allowed"),
-                    "fallback_used":     _p60_tel.get("fallback_used"),
-                    "overall_risk":      _p60_risk,
-                    "pre_chars":         len(_p60_pre),
-                    "post_chars":        len(text),
-                })
-    except Exception as _p60_exc:  # noqa: BLE001
-        _trace(req_id, "4y.PHASE60_HEALTH_LOCK_ERR", str(_p60_exc)[:200])
 
     follow_ups = _derive_follow_ups(topic, eff_lang)
     # ── Sprint-26 Step 4 Phase 3 v2 — POST_LOGIC SAFETY RE-CHECK ───────
@@ -16749,39 +14564,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         _mode_reason += " → FORCED astro (Phase 5.5d context-memory)"
     _trace(req_id, "1.UNDERSTANDING(stream)", _qu)
 
-    # ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT (HEALTH FOLLOW-UP, stream) ──
-    # Stream-path parity with the sync ai_ask path. When detected, emit
-    # the deterministic engine pipeline as a single chunked stream
-    # (delta + final) and skip all LLM work. Reversible via env flag
-    # PHASE60B_EXPLAIN_MODE=0.
-    try:
-        if (
-            _phase60b_explain_mode_enabled()
-            and _phase60b_is_health_explain_followup(question or "", history)
-        ):
-            _exp_lang_s = _resolve_response_lang(question, lang, preferred_language)
-            _exp_text_s = _phase60b_health_explain_text(_exp_lang_s)
-            _trace(req_id, "1c.PHASE60B_EXPLAIN_SHORTCIRCUIT(stream)", {
-                "lang":          _exp_lang_s,
-                "history_turns": len(history or []),
-                "answer_chars":  len(_exp_text_s),
-                "reason":        "health-context follow-up + explain-mode "
-                                 "phrasing detected — bypassing LLM stream "
-                                 "with deterministic engine pipeline",
-            })
-            yield {"kind": "delta", "text": _exp_text_s}
-            yield {
-                "kind":         "final",
-                "text":         _exp_text_s,
-                "topic":        "health",
-                "topic_source": "phase60b_explain_shortcircuit",
-                "confidence":   0.95,
-                "source":       "engine_pipeline",
-                "follow_ups":   [],
-            }
-            return
-    except Exception as _exp_exc_s:  # noqa: BLE001
-        _trace(req_id, "1c.PHASE60B_EXPLAIN_ERR(stream)", str(_exp_exc_s)[:200])
 
     _trace(req_id, "2.MODE_DETECT", {
         "mode": mode, "topic": topic, "reason": _mode_reason,
@@ -16866,10 +14648,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         )
         health_subtype_stream   = None
         subtype_label_stream    = f"marriage_{marriage_subtype_stream}"
-    elif topic == "health":
-        marriage_subtype_stream = "timing"   # back-compat default; ignored downstream
-        health_subtype_stream   = _classify_health_subtype(question)
-        subtype_label_stream    = f"health_{health_subtype_stream}"
     else:
         marriage_subtype_stream = "timing"   # back-compat default; ignored downstream
         health_subtype_stream   = None
@@ -16889,11 +14667,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         marriage_subtype=marriage_subtype_stream,
     )
 
-    # ── Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE — STREAM VARIANT) ────────
-    # Mirror of the sync-path trace at line ~13683. Same helper, same
-    # event key (`3a.HEALTH_FACTS`), so log consumers can pattern-match
-    # uniformly across both call paths. No-op for non-health turns.
-    _phase60l_emit_health_facts_trace(req_id, build_meta_stream)
 
     # ── Phase 5.0 (Apr 28 2026) — STREAM-PATH MINIMAL ASK PROMPT GATE ──
     # Same flag + behaviour as ai_ask: discard the heavy `messages` list
@@ -17068,15 +14841,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
 
     # Phase 5.0 Final Strip: stream-side scrubber gated identically to sync
     # path. STYLE rewriting is removed in the minimal-prompt mode; only
-    # correctness validators survive.
-    # Phase 6.0m FIX 10: forced ON for topic == "health" so the LLM cannot
-    # leak clinical jargon ("triggers" / "tendency" / "chronic") through
-    # the loosened phase50 minimal prompt. Other topics keep the original
-    # phase50 skip behaviour.
-    if (not _phase50_active_stream) or topic == "health":
+    # correctness validators survive. (Phase 6.1.0: health-topic forced-on
+    # override removed along with full health code wipe.)
+    if not _phase50_active_stream:
         final_text = _scrub_brand_tone(raw_text)
-        _scrub_reason_s = ("normal" if not _phase50_active_stream
-                           else "phase60m_fix10_health_override")
+        _scrub_reason_s = "normal"
         if raw_text != final_text:
             _trace(req_id, "4d.SCRUBBER_CHANGED(stream)", {
                 "before_preview": raw_text[:200],
@@ -17098,35 +14867,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Health topic only: replace forbidden clinical/loaded words that the
     # LLM may have leaked through phase50 minimal prompt's loosened style
     # constraints. Non-health topics keep their original wording verbatim.
-    if topic == "health" and final_text:
-        _pre_safe_s = final_text
-        final_text, _safe_hits_s = _health_post_scrub_safety(final_text)
-        if _safe_hits_s:
-            _trace(req_id, "4d.HEALTH_POST_SCRUB_SAFETY_FIRED(stream)", {
-                "patterns_hit":   _safe_hits_s,
-                "before_preview": _pre_safe_s[:200],
-                "after_preview":  final_text[:200],
-            })
-
-        # ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (stream side) ───────────
-        # Mirrors the sync site. The streamed deltas were already shown to
-        # the user, but mobile clients swap their accumulated buffer with
-        # `final.text` on the `done` SSE event, so this clean form is what
-        # the user actually keeps.
-        _pre_3line_s = final_text
-        final_text, _extracted_3line_s = _health_extract_strict_3line(final_text)
-        if _extracted_3line_s and final_text != _pre_3line_s:
-            _trace(req_id, "4d.HEALTH_STRICT_3LINE_EXTRACTED(stream)", {
-                "before_preview": _pre_3line_s[:240],
-                "after_preview":  final_text[:240],
-                "before_chars":   len(_pre_3line_s),
-                "after_chars":    len(final_text),
-            })
-        elif not _extracted_3line_s:
-            _trace(req_id, "4d.HEALTH_STRICT_3LINE_NOT_FOUND(stream)", {
-                "preview": final_text[:240],
-                "reason":  "LLM did not emit Cause:/Effect:/Advice: labels",
-            })
 
     if not final_text:
         raise RuntimeError("OpenAI returned empty after scrub")
@@ -17303,33 +15043,6 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         _trace(req_id, "2v.POST_LOGIC_CHECK_ERR(stream)",
                {"error": str(_pl_exc)[:200]})
 
-    # ── Phase 6.0 — HEALTH NARRATOR LOCK (stream parity) ───────────────
-    # Same post-LLM vocab scrub as the sync ai_ask path. Strips abstract
-    # body-system terms unless engine-authorised in key_triggers. Runs
-    # before the phase48 truncator so the trim works on cleaned text.
-    try:
-        if (
-            final_text and isinstance(final_text, str)
-            and _phase60_health_narrator_lock_enabled()
-            and _is_health_question(question or "")
-        ):
-            _p60s_triggers, _p60s_risk = _phase60_extract_health_lock_context(build_meta_stream)
-            _p60s_pre = final_text
-            final_text, _p60s_tel = _phase60_health_vocab_scrub(
-                final_text, allowed_triggers=_p60s_triggers, overall_risk=_p60s_risk,
-            )
-            if _p60s_tel.get("dropped_sentences", 0) > 0 or _p60s_tel.get("fallback_used"):
-                _trace(req_id, "4y.PHASE60_HEALTH_LOCK_SCRUB(stream)", {
-                    "dropped_sentences": _p60s_tel.get("dropped_sentences"),
-                    "dropped_words":     _p60s_tel.get("dropped_words"),
-                    "allowed_triggers":  _p60s_tel.get("allowed"),
-                    "fallback_used":     _p60s_tel.get("fallback_used"),
-                    "overall_risk":      _p60s_risk,
-                    "pre_chars":         len(_p60s_pre),
-                    "post_chars":        len(final_text),
-                })
-    except Exception as _p60s_exc:  # noqa: BLE001
-        _trace(req_id, "4y.PHASE60_HEALTH_LOCK_ERR(stream)", str(_p60s_exc)[:200])
 
     has_dasha  = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
     has_coords = isinstance(birth, dict) and birth.get("lat") is not None and birth.get("lon") is not None

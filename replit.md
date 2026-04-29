@@ -4266,3 +4266,177 @@ Phase 6.0n implementation:
   key_triggers / strategy) for the 0% case where labels are missing.
 * Phase 6.0g Fix 8 — `answer_text` column add (still pending).
 * Engine native confidence=None bridging (still pending).
+
+---
+
+## Phase 6.1.0 — FULL HEALTH CODE WIPE (2026-04-29)
+
+**User explicit instruction:** "FULL PHYSICAL DELETE of ALL health-specific
+code from `artifacts/api-server/openai_helper.py` — clean slate, spec_later
+for new design."
+
+### Result
+
+* **2,276 lines deleted** from `openai_helper.py` (18,774 → 16,498).
+* `health_engine.py` file **UNTOUCHED** (just no longer imported).
+* All non-health flows preserved: dosh, career, love, marriage, wealth.
+* DB layer **UNTOUCHED** (`users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK).
+* Server boots clean, `/api/healthz` → 200.
+
+### What was deleted
+
+**Top-level health defs/constants (53 items via AST):**
+
+* `_health_engine`, `_HEALTH_QUESTION_RX`, `_is_health_question`
+* `_HEALTH_TIMING_RE`, `_HEALTH_CAUSE_RE`, `_HEALTH_RISK_RE`
+* `_classify_health_subtype`, `_HEALTH_FORBIDDEN_REPLACE`,
+  `_HEALTH_DUP_COLLAPSE`, `_health_post_scrub_safety`,
+  `_HEALTH_LABEL_LINE`, `_HEALTH_SAFETY_MARKER_RE`,
+  `_health_extract_strict_3line`
+* `_phase59_is_health_question`, `_HEALTH_TONE_RULES_FALLBACK`,
+  `_phase59_health_overall_risk`, `_phase59_health_stability`,
+  `_phase59_format_health_facts_block`
+* `_PHASE60_HEALTH_LAYER_TAGS`, `_PHASE60_HEALTH_BUCKET_TAGS`,
+  `_PHASE60_HEALTH_BENEFICS`, `_PHASE60_HEALTH_MALEFICS`,
+  `_phase60_health_overall_risk`, `_phase60_health_stability`,
+  `_phase60_health_key_triggers`, `_phase60_health_dasha_effect`
+* `_PHASE60_HEALTH_RESPONSE_FORMAT`,
+  `_PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE`,
+  `_PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA`,
+  `_phase60_active_forbidden_vocab`,
+  `_PHASE60_FORBIDDEN_HEALTH_VOCAB`, `_PHASE60B_TRIGGER_NEUTRALIZER`,
+  `_phase60b_neutralize_tags_enabled`, `_phase60b_neutralize_triggers`,
+  `_PHASE60_SENTENCE_SPLIT`, `_PHASE60_FORBIDDEN_RE_FULL`,
+  `_PHASE60_FORBIDDEN_RE_BASE`, `_phase60_forbidden_re`,
+  `_PHASE60_FORBIDDEN_RE`, `_PHASE60_HEALTH_FALLBACK_TEMPLATES`
+* `_phase60_health_narrator_lock_enabled`, `_phase60_health_vocab_scrub`,
+  `_phase60_extract_health_lock_context`
+* `_PHASE60B_EXPLAIN_VERBS_RE`, `_PHASE60B_EXPLAIN_PAT`,
+  `_PHASE60B_HEALTH_CONTEXT_PAT`, `_phase60b_explain_mode_enabled`,
+  `_phase60b_is_health_explain_followup`,
+  `_PHASE60B_HEALTH_EXPLAIN_HI`, `_PHASE60B_HEALTH_EXPLAIN_EN`,
+  `_phase60b_health_explain_text`
+* `_phase60l_emit_health_facts_trace`, `_phase60_format_health_facts_block`
+
+**Inline call-site blocks (10 hardcoded ranges, all marker-verified):**
+
+* L1382 mandatory doctor-cite line
+* L2503-2657 — DETERMINISTIC HEALTH & VITALITY VERDICT engine init
+  (inside `ai_ask`)
+* L10465-10481 — HEALTH branch in `_phase58_format_topic_facts_block`
+  (Phase 5.9 Batch 3c v4 standardized FACTS)
+* L13615-13652 — Phase 6.0b EXPLAIN-MODE SHORT-CIRCUIT (sync)
+* L13942-13947 — Phase 6.0l HEALTH_FACTS trace (sync)
+* L14676-14831 — HEALTH BRAND-SAFETY POST-PROCESSOR (doctor-cite +
+  iCall 9152987821 + Vandrevala 1860-2662-345 helpline injection +
+  ph_strip for engine placeholders)
+* L16559-16586 — Phase 6.0 HEALTH NARRATOR LOCK (post-LLM vocab
+  scrub, sync)
+* L16752-16784 — Phase 6.0b EXPLAIN-MODE SHORT-CIRCUIT (stream)
+* L16892-16896 — Phase 6.0l HEALTH_FACTS trace (stream)
+* L17306-17332 — Phase 6.0 HEALTH NARRATOR LOCK (stream parity)
+
+**Indent-detected branches (6 sites via Pass 3):**
+
+* All `if topic == "health":` and `elif topic == "health":` blocks
+  whose body was health-only.
+
+**`_is_health_topic` flag (4 sites via Pass 5):**
+
+* Removed assignment + `if _is_health_topic: pass` blocks; matching
+  `else:` clauses kept-and-dedented so non-health code path now runs
+  unconditionally.
+
+**Orphan tuple item + emitted_health_block clause (Pass 6):**
+
+* Removed `("health_verdict_obj", "Health verdict")` from verdict
+  loop in `_phase58_format_topic_facts_block`.
+* Removed `if key == "health_verdict_obj" and emitted_health_block:
+  continue` clause that depended on now-deleted `emitted_health_block`
+  variable.
+
+**D27 health/stamina post-injector (Pass 7):**
+
+* Removed `# D27 — health/stamina` block from advanced-vargas
+  pipeline.
+
+**Stale block-comments cleaned (post-architect-review):**
+
+* L13009-13015 — sync tone-scrubber comment (removed
+  "EXCEPT for topic == 'health'" + "Why the health override exists"
+  prose; replaced with concise note pointing to Phase 6.1.0).
+* L14845-14848 — stream tone-scrubber comment (removed
+  "Phase 6.0m FIX 10: forced ON for topic == 'health'" prose).
+* `_scrub_reason` / `_scrub_reason_s` ternaries simplified to
+  constant `"normal"` (else-branch was unreachable dead code).
+
+### What was KEPT untouched
+
+* `health_engine.py` file (dormant, no callers).
+* All wealth brand-safety chain (CA / SEBI cite path) — verified
+  intact by architect.
+* `_phase58_is_marriage_question`, `_phase58_format_marriage_facts_block`.
+* `_phase59_is_dosh_question`, `_phase59_format_dosh_facts_block`.
+* `_phase59_is_career_question`, `_phase59_format_career_facts_block`.
+* `_phase59_is_love_question`, `_phase59_format_love_facts_block`,
+  and all `_phase59_love_*` helpers.
+* Generic topic-detection dicts that include `"health"` as one of
+  many topic strings (`_TOPIC_KEYWORDS_EN`, `_TOPIC_KEYWORDS_HI`,
+  topic-house tables, etc.) — health intent can still be ROUTED
+  (returns generic answer without specialized narrator).
+* `topic != "health"` runtime guards at L12345 / L14806 — these now
+  effectively no-op (always evaluate True since no live code assigns
+  `topic="health"` from the deleted handlers; keyword detector at
+  L13976 can still set it but downstream handler is generic).
+* DB layer entirely.
+
+### Quarantined orphan tests (preserved for spec_later)
+
+Moved to `/tmp/phase61_orphan_tests/` (out of artifact tree):
+
+* `test_phase59_health_facts.py`
+* `test_phase60_health_facts.py`
+* `test_phase60_health_lock.py`
+* `test_phase60b_health_cage.py`
+
+### Backup + scripts
+
+* `/tmp/openai_helper.py.pre-phase61-wipe` — pre-wipe snapshot
+  (18,774 lines).
+* `/tmp/wipe_health_v2.py` — 7-pass deletion script (AST + hardcoded
+  ranges + indent detection + else-unwrap + orphan handling). All 10
+  hardcoded ranges marker-verified before execution.
+
+### Verification (architect + smoke)
+
+* Server boots clean (Flask on :8080, DB connected, `/api/healthz`
+  → 200).
+* `import openai_helper` succeeds — 332 module attrs.
+* All 16 representative deleted symbols GONE
+  (verified via `hasattr(M, name)`).
+* All 8 representative KEPT symbols present (marriage / dosh / career
+  / love phase58/59 functions).
+* Architect review (post-deletion git diff): zero CRITICAL findings;
+  MAJOR-flagged stale comments at L13008/L14852 cleaned in follow-up
+  edit; remaining health-string mentions are docstring-only or
+  generic infrastructure (per architect: "wipe was successful and
+  clean").
+* Final residual scan: zero NameError-risk references; only safe
+  comment/docstring mentions remain (e.g.,
+  `# Mirror of _phase59_health_overall_risk for love.` at L11128).
+
+### What spec_later needs to define
+
+When new health design lands, will need to re-add:
+
+1. Health intent detector (replaces `_is_health_question`).
+2. Health verdict producer (replaces `_health_engine` + Phase 5.9
+   `_phase59_format_health_facts_block` + Phase 6.0
+   `_phase60_format_health_facts_block`).
+3. Brand-safety footer policy (replaces deleted
+   doctor-cite + iCall/Vandrevala helpline injector at L14676-14831).
+4. Tone/jargon policy (replaces deleted Phase 6.0 narrator lock +
+   Phase 6.0n strict 3-line extractor).
+5. Test fixtures (4 quarantined files in `/tmp/phase61_orphan_tests/`
+   provide historical reference for what the OLD spec checked).

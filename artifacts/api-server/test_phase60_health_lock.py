@@ -195,10 +195,18 @@ def test_engine_tone_rules_match_fallback() -> None:
 # ── Forbidden-vocab tuple sanity ────────────────────────────────────────
 
 
-def test_forbidden_vocab_set_is_exactly_the_five_terms() -> None:
-    assert set(oh._PHASE60_FORBIDDEN_HEALTH_VOCAB) == {
-        "hormonal", "chronic", "mental", "emotional", "internal imbalance",
-    }
+def test_forbidden_vocab_contains_phase60_originals() -> None:
+    """Phase 6.0b expanded the vocab from 5 → 28 terms. The original 5
+    must remain (engine-side abstraction-noun guard) and the new 23
+    symptom/trajectory nouns flagged by user must be present."""
+    actual = set(oh._PHASE60_FORBIDDEN_HEALTH_VOCAB)
+    # Phase 6.0 originals
+    assert {"hormonal", "chronic", "mental", "emotional", "internal imbalance"}.issubset(actual)
+    # Phase 6.0b additions (user-flagged drift words)
+    assert {
+        "vitality", "weakness", "fatigue", "infection", "nervous",
+        "metabolic", "vulnerability", "vulnerable", "illness", "disease",
+    }.issubset(actual)
 
 
 def test_fallback_templates_have_doctor_consult() -> None:

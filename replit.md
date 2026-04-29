@@ -3450,3 +3450,181 @@ rule-creep — anything > 600c IS rule creep.
 
 **Tests:** 5 new (3 chart-summary label tests + 2 glossary tests) →
 132/132 in the Phase 5/6 suite green.
+
+## Phase 6.0b — Health Narrator Cage (Apr 29, 2026)
+
+User feedback after Phase 6.0 ship: "vitality dip aur weakness ke
+chances dikh rahe hain" leaked into a stable-vs-risky health answer
+even though the Phase 6.0 scrubber was active. AND when user asked
+"Aur yeh tumne kaise bataya kya kya check kiya", the system returned a
+generic Vedic textbook walkthrough (Identify your Lagna, Note Dasha,
+Analyse Navamsha D9, Dashamsha D10…) instead of the actual engine
+steps that produced the verdict.
+
+User mantra: **"LLM ko 100% cage me daalna baaki hai."**
+
+Two-fix release. Both reversible via env flags.
+
+### Fix 1 — Engine-tag neutralisation + forbidden-vocab expansion
+
+**Root cause of vitality/weakness leak:** the engine's
+`_PHASE60_HEALTH_LAYER_TAGS` maps natal/karaka layers to medical-noun
+tokens (`vitality_dip`, `weakness`, `infection`, `hormonal`,
+`metabolic`, `vulnerability`, `nervous`). Those tokens surfaced in
+`key_triggers` of HEALTH_FACTS, where the LLM dutifully turned
+`weakness` into "weakness ke chances" and `vitality_dip` into
+"vitality dip" — the user's flagged drift.
+
+**Two-layer fix:**
+
+1. **`_PHASE60B_TRIGGER_NEUTRALIZER`** — a narrator-facing projection
+   that maps medical engine tags to safer phase-descriptor tokens
+   BEFORE they reach the FACTS block. Engine internals (audit trail,
+   `top_concerns`) keep the original specific tags — the
+   neutralisation is purely for the LLM-facing surface:
+   ```
+   vitality_dip / weakness / infection / vulnerability  → extra_care
+   hormonal / metabolic                                  → balance
+   nervous                                               → stress
+   chronic / heat / sudden / hidden / energy             → unchanged (already safe)
+   ```
+   Applied at the end of `_phase60_health_key_triggers`. After
+   neutralisation, dedup keeps the list short ([vitality_dip,
+   weakness] → [extra_care], not [extra_care, extra_care]).
+
+2. **`_PHASE60_FORBIDDEN_HEALTH_VOCAB` expanded 5 → 28 terms.**
+   Original Phase 6.0 set (hormonal / chronic / mental / emotional /
+   internal imbalance) preserved. Phase 6.0b adds 23 symptom and
+   trajectory nouns the LLM tends to invent on a sensitive surface:
+   vitality, weakness, fatigue, tiredness, exhaustion, lethargy,
+   drowsiness, dizziness, ailment, illness, sickness, infection,
+   inflammation, immunity, immune, disease, vigor, vigour, stamina,
+   nervous, metabolic, vulnerability, vulnerable.
+
+   Because the neutraliser strips medical tokens from `key_triggers`,
+   the scrubber's allowed-set never contains these words, so any
+   sentence the LLM produces with them is dropped — without the user
+   ever seeing the leakage.
+
+**Reversible:** `PHASE60B_NEUTRALIZE_TAGS=0` restores pre-6.0b
+behaviour (engine tags surfaced verbatim).
+
+### Fix 2 — Explain-mode short-circuit ("kaise check kiya?")
+
+**Root cause of generic-textbook leak:** when the user asked
+"Aur yeh tumne kaise bataya kya kya check kiya" right after the
+health question, the system treated it as a fresh general question
+and let the LLM regurgitate Vedic 101 (Identify your Lagna, Note
+Dasha, Analyse Navamsha D9, Dashamsha D10…). No engine context, no
+specifics — just textbook bullets.
+
+**Fix:** detect explain-mode follow-ups in HEALTH context and
+SHORT-CIRCUIT the LLM entirely. Two regex gates:
+
+- `_PHASE60B_EXPLAIN_PAT` — matches "kaise check / pata / dekha /
+  bataya / nikala kiya", "kya kya check / dekha", "how did/do you
+  check / find / determine", "steps / process / method batao", "step
+  by step", and pronoun-style follow-ups ("yeh tumne kaise / iska
+  kaise").
+
+- `_PHASE60B_HEALTH_CONTEXT_PAT` — matches health vocabulary in any
+  USER turn from the last 8 history entries (assistant turns
+  excluded — they often mention "general wellness" generically).
+
+Both gates must fire. When they do, return a deterministic engine-
+pipeline answer (Hinglish or English picked from `eff_lang`) that
+mirrors the actual `health_engine.assess_health` pipeline:
+
+```
+1. Lagna lord ki strength check ki (1st house ka adhipati).
+2. 6th, 8th aur 12th house ke planets dekhe (sehat ke 3 main houses).
+3. Body-karaks (Sun, Moon, Mars, Saturn, Jupiter, Mercury, Venus, Rahu, Ketu) ke roles analyze kiye.
+4. Current Mahadasha aur Antardasha lord ka health par effect dekha.
+5. Saturn, Mars, Rahu aur Ketu ke transits ko 6/8/12 house ke against score kiya.
+6. Sade Sati phase aur Ashtama Shani ki position check ki.
+7. Sab signals ko combine karke final verdict (stable / unstable / fluctuating) banaya.
+Generic astrology nahi — ye actual engine pipeline hai jo aapke chart par chala.
+```
+
+Wired in BOTH `ai_ask` (returns the result dict) and `ai_ask_stream`
+(yields delta + final chunk and returns) so streaming and non-
+streaming clients both see the same deterministic answer.
+
+Telemetry: `1c.PHASE60B_EXPLAIN_SHORTCIRCUIT(stream)` event records
+language, history depth, answer chars, and reason — easy to grep when
+auditing whether the cage fired.
+
+**Reversible:** `PHASE60B_EXPLAIN_MODE=0` restores LLM-narrated
+explanation behaviour.
+
+### Live verification
+
+- **Health Q ("Abhi meri health stable hai ya risky phase me hoon"):**
+  FACTS block emits `key_triggers: [extra_care, balance]` instead of
+  `[vitality_dip, weakness, hormonal]`. Scrubber catches any LLM
+  attempt to paraphrase back into medical nouns.
+
+- **Explain follow-up ("Aur yeh tumne kaise bataya kya kya check
+  kiya"):** `topic_source: phase60b_explain_shortcircuit`, `source:
+  engine_pipeline` — LLM bypassed entirely, deterministic 7-step
+  engine pipeline returned verbatim.
+
+### Tests
+
+- `test_phase60b_health_cage.py` — 34 new tests covering: forbidden-
+  vocab expansion, neutraliser correctness (medical → safe, safe
+  pass-through, dedup, order-preservation, env flag), FACTS-block
+  integration, scrubber catching new vocab, explain-mode detector
+  (positive + negative gates), deterministic text content/anti-
+  patterns, env-flag reversibility.
+
+- Updated 3 pre-Phase-6.0b tests in `test_phase60_health_lock.py` and
+  `test_phase60_health_facts.py` to assert the new neutralised
+  behaviour (vitality_dip → extra_care, vulnerability → extra_care,
+  forbidden vocab now ≥10 phase-6.0b additions).
+
+**221/221 health tests green** (Phase 5/6 suite total).
+
+### Phase 6.0b — Post-architect tightening (Apr 29, 2026)
+
+Code-review pass surfaced 3 regression risks. All addressed:
+
+1. **Explain-mode pronoun branch was too permissive.** Original
+   `(?:yeh|iska) ... \w* ... (?:kaise|how)` matched prognosis questions
+   like "Iska treatment kaise hoga?" / "Iska effect kaise rahega?" —
+   would have wrongly emitted the deterministic 7-step pipeline for
+   user asks about prognosis. Tightened to TWO precise branches:
+   - past-tense agency: `(?:yeh|iska) (?:tumne|aapne) (?:kaise|how)`
+   - explain-intent verb after kaise: `(?:yeh|iska) (?:kaise|how) (?:check|pata|dekh|bata|bta|nikal|kiya|determin|find|figure|analy[sz]|know)\w*`
+   Verified: "Iska treatment kaise hoga?" / "Iska effect kaise rahega?"
+   / "Aap kaise ho?" all correctly return False; "iska kaise check
+   kiya" / "yeh tumne kaise nikala" still True.
+
+2. **`PHASE60B_NEUTRALIZE_TAGS=0` was a partial revert.** Tag
+   neutraliser respected the flag but the expanded forbidden-vocab
+   regex stayed active unconditionally — meaning with flag OFF,
+   `allowed_triggers=['vitality_dip']` would still get killed by the
+   `vitality` substring match in the scrubber. Now coherent: split
+   into `_PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE` (5 always-on) +
+   `_PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA` (23 6.0b-gated), with
+   `_phase60_active_forbidden_vocab()` and `_phase60_forbidden_re()`
+   selecting the correct list at runtime. Both pre-compiled
+   (`_PHASE60_FORBIDDEN_RE_FULL`, `_PHASE60_FORBIDDEN_RE_BASE`) — no
+   per-call compile cost. Backwards-compat alias
+   `_PHASE60_FORBIDDEN_RE` retained for any eager-import callers.
+
+3. **Prompt contract drift between scrubber and FACTS-block text.**
+   The `response_format` and `_HEALTH_TONE_RULES_FALLBACK` /
+   `health_engine.HEALTH_TONE_RULES` text only enumerated the
+   original 5 forbidden words, while the scrubber enforced all 28.
+   Updated both prompt-side strings to add a Phase 6.0b clause
+   listing representative symptom/trajectory nouns ("vitality",
+   "weakness", "fatigue", "illness", "infection", "immunity",
+   "metabolic", "vulnerability", "nervous") with the same
+   "literally in key_triggers" exception. Engine and fallback stay
+   byte-equal — `test_fallback_byte_equal_to_engine_source` passes.
+
+**221/221 health tests still green.** Live HTTP verified:
+explain-mode positive fires `topic_source=phase60b_explain_shortcircuit,
+source=engine_pipeline`; prognosis negative falls through to rules
+engine as expected.

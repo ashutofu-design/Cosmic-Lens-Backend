@@ -11158,7 +11158,7 @@ def _phase59_is_health_question(question: Any) -> bool:
 # floor exists purely to guarantee the policy never disappears.
 _HEALTH_TONE_RULES_FALLBACK: tuple = (
     "ABSOLUTE claims kabhi mat karo. 'Aapko X bimari hogi' / 'Yeh definitely hoga' / 'Pakka cure ho jayega' jaisi language band. Hamesha probabilistic framing: 'indication hai', 'tendency dikh rahi hai', 'is window mein extra dhyaan zaroori hai'.",
-    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). Phase 6.0 — abstract body-system terms bhi band: 'hormonal', 'chronic', 'mental', 'emotional', 'internal imbalance' jaise words SIRF tab use karo agar woh key_triggers list mein literal hain. Naye symptom / condition / body-system terms invent mat karo. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
+    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). Phase 6.0 — abstract body-system terms bhi band: 'hormonal', 'chronic', 'mental', 'emotional', 'internal imbalance' jaise words SIRF tab use karo agar woh key_triggers list mein literal hain. Phase 6.0b — symptom / trajectory nouns ('vitality', 'weakness', 'fatigue', 'illness', 'infection', 'immunity', 'metabolic', 'vulnerability', 'nervous' aur similar) bhi SAME rule — sirf tab use karo jab key_triggers mein literal hain. Naye symptom / condition / body-system terms invent mat karo. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
     "NEUTRAL phrasing rakho. Alarmist language ('khatre mein ho', 'turant problem aayegi', 'serious risk hai') aur false reassurance ('bilkul tension mat lo, sab perfect hai', 'kuch nahi hoga') — dono band. Honest, calm, supportive tone — jaise ek mature counsellor baat karta hai.",
     "PRESCRIPTION kabhi mat do. Medicine names, dosages, treatment plans, surgery decisions, alternative-medicine recommendations = strictly forbidden. Sirf cosmic timing aur supportive context bata sakte ho — actual treatment decisions qualified doctor / specialist ke pass.",
     "PROBABILITY ki language use karo, CERTAINTY ki nahi. 'Ho sakta hai', 'tendency hai', 'window mein care zaroori hai', 'consultation se clarity milegi' — yeh acceptable hai. 'Hoga hi', '100% sure', 'guaranteed' — yeh acceptable nahi.",
@@ -11671,7 +11671,12 @@ def _phase60_health_key_triggers(v: dict) -> list[str]:
             if "ketu" in reason:
                 _add("hidden")
 
-    return tags[:4]
+    # Phase 6.0b — neutralize medical-noun tags (vitality_dip / weakness /
+    # infection / hormonal / metabolic / vulnerability) into safer
+    # phase-descriptor tokens (extra_care / balance) BEFORE surfacing to
+    # the narrator. Engine internals (audit trail, top_concerns) keep the
+    # original tags. Reversible via env flag PHASE60B_NEUTRALIZE_TAGS=0.
+    return _phase60b_neutralize_triggers(tags[:4])
 
 
 def _phase60_health_dasha_effect(v: dict) -> str:
@@ -11733,10 +11738,13 @@ _PHASE60_HEALTH_RESPONSE_FORMAT: str = (
     "astrology jargon. Mention 1-2 key_triggers naturally if relevant. "
     "Calm, supportive, probabilistic tone — no fear, no certainty. "
     "Phase 6.0 LOCK: do NOT introduce any new symptom, condition, or "
-    "body-system term. Forbidden words ('hormonal', 'chronic', "
-    "'mental', 'emotional', 'internal imbalance') are allowed ONLY "
-    "if they appear literally in key_triggers. Do not paraphrase, "
-    "elaborate, or invent body-area terms beyond the FACTS block."
+    "body-system term. Body-system abstractions (e.g. 'hormonal', "
+    "'chronic', 'mental', 'emotional', 'internal imbalance') AND "
+    "symptom / trajectory nouns (e.g. 'vitality', 'weakness', "
+    "'fatigue', 'illness', 'infection', 'immunity', 'metabolic', "
+    "'vulnerability', 'nervous') are allowed ONLY if they appear "
+    "literally in key_triggers. Do not paraphrase, elaborate, or "
+    "invent body-area terms beyond the FACTS block."
 )
 
 
@@ -11761,13 +11769,156 @@ _PHASE60_HEALTH_RESPONSE_FORMAT: str = (
 # Set to "0" to disable the post-scrubber and template fallback (the
 # response_format constraint and tone-rule update remain — those are
 # prompt-side improvements that cost nothing to keep).
-_PHASE60_FORBIDDEN_HEALTH_VOCAB: tuple[str, ...] = (
+# Phase 6.0 — original 5 (body-system abstractions). ALWAYS active when
+# the narrator lock is ON, regardless of Phase 6.0b flags.
+_PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE: tuple[str, ...] = (
     "hormonal",
     "chronic",
     "mental",
     "emotional",
     "internal imbalance",
 )
+
+# Phase 6.0b — symptom/trajectory nouns the LLM invents on a health
+# surface. User flagged "vitality dip" / "weakness ke chances" as
+# leakage on a stable-vs-risky question. Even though the engine's tag
+# dictionary internally maps some layers to these tokens, Phase 6.0b
+# neutralises engine-emitted triggers via `_PHASE60B_TRIGGER_NEUTRALIZER`
+# BEFORE they reach the FACTS block — so these words can NEVER
+# legitimately appear in `key_triggers` and the scrubber will always
+# strip them. Single-word entries; multi-word phrases stay in BASE.
+#
+# Gated by the SAME env flag as the trigger neutraliser
+# (`PHASE60B_NEUTRALIZE_TAGS`, default "1" = ON) so the two halves of
+# Phase 6.0b stay in lockstep — when neutralisation is OFF, engine tags
+# surface verbatim AND the matching forbidden-vocab is dropped from the
+# scrubber, so allowed_triggers like 'vitality_dip' don't get killed by
+# the 'vitality' substring match. This makes `PHASE60B_NEUTRALIZE_TAGS=0`
+# a coherent revert path (architect-mandated, Phase 6.0b code review).
+_PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA: tuple[str, ...] = (
+    "vitality",
+    "weakness",
+    "fatigue",
+    "tiredness",
+    "exhaustion",
+    "lethargy",
+    "drowsiness",
+    "dizziness",
+    "ailment",
+    "illness",
+    "sickness",
+    "infection",
+    "inflammation",
+    "immunity",
+    "immune",
+    "disease",
+    "vigor",
+    "vigour",
+    "stamina",
+    "nervous",
+    "metabolic",
+    "vulnerability",
+    "vulnerable",
+)
+
+
+def _phase60_active_forbidden_vocab() -> tuple[str, ...]:
+    """Return the active forbidden-vocab list based on Phase 6.0b flag.
+
+    When `PHASE60B_NEUTRALIZE_TAGS=1` (default) returns BASE + EXTRA.
+    When `PHASE60B_NEUTRALIZE_TAGS=0` returns BASE only — restoring
+    pre-Phase-6.0b scrubber behaviour, in lockstep with the trigger
+    neutraliser also being disabled.
+    """
+    if _phase60b_neutralize_tags_enabled():
+        return _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
+    return _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE
+
+
+# Backwards-compat alias — many tests / call sites read the full list as
+# a module attribute. Updated whenever the flag is OFF would require a
+# restart, but the flag rarely flips at runtime; the runtime regex
+# (`_phase60_forbidden_re`) is the source of truth for scrub decisions.
+_PHASE60_FORBIDDEN_HEALTH_VOCAB: tuple[str, ...] = (
+    _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
+)
+
+
+# ── Phase 6.0b — ENGINE-TAG → NARRATOR-TAG NEUTRALIZATION ─────────────────
+# The engine's `_PHASE60_HEALTH_LAYER_TAGS` maps natal/karaka layers to
+# medical-noun tokens (vitality_dip, weakness, infection, hormonal,
+# metabolic, vulnerability) so the audit trail stays specific. But those
+# same tokens leak into `key_triggers` of the FACTS block, where the LLM
+# dutifully turns "weakness" / "vitality_dip" into "weakness ke chances"
+# / "vitality dip" in the narration — which the user flagged as
+# diagnosis-drift on a sensitive surface.
+#
+# Phase 6.0b neutralises the worst offenders BEFORE they surface to the
+# narrator: medical-noun tags map to safer phase-descriptor tokens
+# ("extra_care", "balance", "sensitive_phase"). Engine internals stay
+# unchanged — the audit trail still records vitality_dip etc. The
+# neutralisation is purely a narrator-facing projection.
+#
+# Tags already in safe-noun form (heat / stress / sudden / hidden /
+# chronic / energy) pass through unchanged.
+#
+# Reversible: env flag `PHASE60B_NEUTRALIZE_TAGS` (default "1" = ON).
+_PHASE60B_TRIGGER_NEUTRALIZER: dict[str, str] = {
+    # Body-system inventions → neutral phase descriptors
+    "vitality_dip":   "extra_care",
+    "weakness":       "extra_care",
+    "infection":      "extra_care",
+    "vulnerability":  "extra_care",
+    "hormonal":       "balance",
+    "metabolic":      "balance",
+    "nervous":        "stress",  # collapse into mental-strain bucket
+    # Tags already in safe form — preserved (identity)
+    "chronic":        "chronic",
+    "heat":           "heat",
+    "stress":         "stress",
+    "sudden":         "sudden",
+    "hidden":         "hidden",
+    "energy":         "energy",
+}
+
+
+def _phase60b_neutralize_tags_enabled() -> bool:
+    """True when Phase 6.0b engine-tag → narrator-tag neutralization is active.
+
+    Reversible via env flag `PHASE60B_NEUTRALIZE_TAGS` (default "1" = ON).
+    Set to "0" to surface engine tags verbatim in `key_triggers` (the
+    pre-Phase 6.0b behaviour — useful when comparing scrubber telemetry
+    or debugging the engine's tag dictionary in isolation).
+    """
+    return os.environ.get("PHASE60B_NEUTRALIZE_TAGS", "1") != "0"
+
+
+def _phase60b_neutralize_triggers(triggers: list | tuple | None) -> list[str]:
+    """Project engine tag list through `_PHASE60B_TRIGGER_NEUTRALIZER`.
+
+    Pure, defensive — non-string entries dropped silently. Preserves
+    order, dedupes after mapping (so `[vitality_dip, weakness] → [extra_care]`
+    instead of `[extra_care, extra_care]`).
+
+    Returns the input list unchanged when the env flag is OFF (one-line
+    revert path). Returns `[]` for non-iterable input.
+    """
+    if not _phase60b_neutralize_tags_enabled():
+        if isinstance(triggers, (list, tuple)):
+            return [t for t in triggers if isinstance(t, str)]
+        return []
+    if not isinstance(triggers, (list, tuple)):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in triggers:
+        if not isinstance(t, str) or not t.strip():
+            continue
+        mapped = _PHASE60B_TRIGGER_NEUTRALIZER.get(t.strip().lower(), t.strip().lower())
+        if mapped not in seen:
+            out.append(mapped)
+            seen.add(mapped)
+    return out
 
 # Sentence-split pattern: handles `.`, `!`, `?`, Hindi danda `।`, and
 # the newline boundaries the model often produces between sentences.
@@ -11778,12 +11929,45 @@ _PHASE60_SENTENCE_SPLIT = re.compile(
     r"(?<=[.!?।])\s+|(?<=[.!?])\n+|(?<=।)(?=[A-ZÀ-ÖØ-öø-ÿ\u0900-\u097F])"
 )
 
-# Word-boundary forbidden-vocab matcher. Case-insensitive. Multi-word
+# Word-boundary forbidden-vocab matchers. Case-insensitive. Multi-word
 # phrases handled via direct substring (re.escape) so "internal imbalance"
 # matches even across collapsed whitespace.
-_PHASE60_FORBIDDEN_RE = re.compile(
-    r"(?i)\b(?:" + "|".join(re.escape(w) for w in _PHASE60_FORBIDDEN_HEALTH_VOCAB) + r")\b"
+#
+# We pre-compile BOTH variants (full = base+extra, base-only = pre-6.0b
+# revert) at module load and pick at runtime via `_phase60_forbidden_re()`,
+# so the env flag flip is honoured without paying re.compile cost on
+# every scrub call.
+_PHASE60_FORBIDDEN_RE_FULL = re.compile(
+    r"(?i)\b(?:" + "|".join(
+        re.escape(w) for w in (
+            _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE + _PHASE60B_FORBIDDEN_HEALTH_VOCAB_EXTRA
+        )
+    ) + r")\b"
 )
+_PHASE60_FORBIDDEN_RE_BASE = re.compile(
+    r"(?i)\b(?:" + "|".join(
+        re.escape(w) for w in _PHASE60_FORBIDDEN_HEALTH_VOCAB_BASE
+    ) + r")\b"
+)
+
+
+def _phase60_forbidden_re() -> "re.Pattern[str]":
+    """Active forbidden-vocab matcher, gated by `PHASE60B_NEUTRALIZE_TAGS`.
+
+    ON (default) → full 28-word matcher (Phase 6.0 + 6.0b expansion).
+    OFF          → base 5-word matcher (pre-Phase-6.0b behaviour),
+                   in lockstep with the trigger neutraliser also being
+                   disabled — a coherent revert path.
+    """
+    if _phase60b_neutralize_tags_enabled():
+        return _PHASE60_FORBIDDEN_RE_FULL
+    return _PHASE60_FORBIDDEN_RE_BASE
+
+
+# Backwards-compat alias — call sites that captured the regex eagerly
+# at import time still work, but prefer `_phase60_forbidden_re()` for
+# correct env-flag-aware matching.
+_PHASE60_FORBIDDEN_RE = _PHASE60_FORBIDDEN_RE_FULL
 
 # Deterministic fallback templates by overall_risk. Used when sentence
 # scrub drops too much of the original answer to remain coherent.
@@ -11861,7 +12045,7 @@ def _phase60_health_vocab_scrub(
     dropped_words: list[str] = []
     for s in sentences:
         # Find ALL forbidden words in this sentence
-        matches = [m.group(0).lower() for m in _PHASE60_FORBIDDEN_RE.finditer(s)]
+        matches = [m.group(0).lower() for m in _phase60_forbidden_re().finditer(s)]
         # Sentence is OK if every match is allowed (in key_triggers)
         violations = [w for w in matches if w not in allowed]
         if violations:
@@ -11918,6 +12102,196 @@ def _phase60_extract_health_lock_context(build_meta: Any) -> tuple[list, str]:
     except Exception:
         risk = "fluctuating"
     return list(triggers), risk
+
+
+# ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT FOR HEALTH FOLLOW-UPS ─────────
+# When a user asks "kaise check kiya?" / "kya kya dekha?" / "how did you
+# check this?" right after a health question, the LLM's instinct is to
+# regurgitate generic Vedic textbook content (Identify your Lagna, note
+# planetary positions, observe Dasha, analyse Navamsha D9, Dashamsha
+# D10…). The user flagged this as drift — they want the actual ENGINE
+# pipeline steps, not a generic astrology lesson.
+#
+# Phase 6.0b detects explain-mode follow-ups in HEALTH context and
+# short-circuits the LLM entirely with a deterministic engine-pipeline
+# answer. Health context is established by scanning the most recent user
+# turns (history) for a health question — the current question itself
+# typically does NOT contain "health" / "sehat" because it's a follow-up
+# pronoun-style question ("aur yeh tumne kaise bataya").
+#
+# Reversible: env flag `PHASE60B_EXPLAIN_MODE` (default "1" = ON).
+# Centralised list of "investigative / explain-intent" verb stems used
+# in BOTH the bare-kaise branch and the pronoun branch below. Keeping
+# them in sync prevents drift like "added analy[sz] to pronoun branch
+# but forgot bare-kaise". Add new variants here, not in the regex.
+_PHASE60B_EXPLAIN_VERBS_RE = (
+    r"(?:check|pata|dekh\w*|bata\w*|bta\w*|nikal\w*|kiya|kar\w*\s+pata|"
+    r"determin\w*|find|figure|analy[sz]\w*|know|"
+    # Hinglish "maloom / malum hua" (came-to-know), "samajh me aaya"
+    # (was understood), "use kiya" (was used) — all explain-intent
+    # past-tense forms the user naturally reaches for.
+    r"maloom|malum|samajh\w*|use\s+kiya)"
+)
+
+_PHASE60B_EXPLAIN_PAT = re.compile(
+    r"(?i)(?:"
+    # Bare "kaise + investigative-verb" — e.g. "kaise check kiya",
+    # "kaise dekha", "kaise maloom hua", "kaise analyse kiya".
+    r"\bkaise\s+" + _PHASE60B_EXPLAIN_VERBS_RE + r"\b|"
+    r"\bkya\s+kya\s+(?:check|dekh\w*|kiya|kar\w*)\b|"
+    # English patterns
+    r"\bhow\s+(?:did|do)\s+you\s+(?:check|find|determine|analy[sz]e|figure|know)\b|"
+    r"\bhow\s+(?:is|was)\s+(?:this|it|that)\s+(?:check|determin|analy[sz])\w*\b|"
+    # Generic step / process / method asks. Two shapes:
+    #   - "steps batao / process explain karo / method describe karo"
+    #   - "konsa / which method use kiya" — backwards form the user
+    #     often reaches for when asking "what method did you use?"
+    r"\b(?:steps?|process|method)\s+(?:bata|btao|kya|explain|describe)\w*\b|"
+    r"\b(?:konsa|kaunsa|which)\s+(?:method|process|steps?)\s+use\s+kiya\b|"
+    r"\b(?:method|process|steps?)\s+use\s+kiya\b|"
+    r"\bstep\s+by\s+step\b|"
+    # Pronoun-style follow-up — TWO tight branches (Phase 6.0b architect
+    # review: the original `\w*` wildcard between subject + kaise was too
+    # permissive and matched prognosis questions like "Iska treatment
+    # kaise hoga?" / "Iska effect kaise rahega?"). Now requires EITHER:
+    #   (a) past-tense agency: "yeh tumne / aapne kaise [...]" — implies
+    #       "you did", which means an explain-mode question even without
+    #       a verb constraint after kaise.
+    #   (b) explain-intent verb after kaise — uses the same shared verb
+    #       list as the bare-kaise branch. Excludes "hoga / rahega /
+    #       lagega" (prognosis).
+    r"\b(?:yeh|iss?ki?|iska|isse)\s+(?:tumne|aapne|tune)\s+(?:kaise|how)\b|"
+    r"\b(?:yeh|iss?ki?|iska|isse)\s+(?:kaise|how)\s+" + _PHASE60B_EXPLAIN_VERBS_RE + r"\b"
+    r")"
+)
+
+
+# Health-context pattern — detects whether a recent turn was about
+# health. Mirrors `_is_health_question` keyword set but is a smaller
+# focused pattern used only for explain-mode context detection (we want
+# fast, conservative matching here — false negatives mean we fall back
+# to LLM, which is safe; false positives would emit engine steps for a
+# non-health question, which would be confusing).
+_PHASE60B_HEALTH_CONTEXT_PAT = re.compile(
+    r"(?i)\b(?:"
+    r"health|sehat|tabi[ae]?t|"
+    r"bimari|beemari|bimar|beemar|"
+    r"illness|disease|sick|"
+    r"stable|risky\s+phase|risk\s+phase|"
+    r"body|sharir|sareer|"
+    r"medical|doctor|hospital|"
+    r"surgery|operation|"
+    r"chronic|acute|"
+    r"mental\s+health|depression|anxiety|"
+    r"injury|chot|"
+    r"recovery|healing|"
+    r"longevity|life\s+expectancy|"
+    r"diabetes|bp|blood\s+pressure|heart|"
+    r"weakness|vitality|fatigue"
+    r")\b"
+)
+
+
+def _phase60b_explain_mode_enabled() -> bool:
+    """True when Phase 6.0b explain-mode short-circuit is active.
+
+    Reversible via env flag `PHASE60B_EXPLAIN_MODE` (default "1" = ON).
+    Set to "0" to fall back to the LLM-narrated explanation (the
+    pre-Phase 6.0b behaviour).
+    """
+    return os.environ.get("PHASE60B_EXPLAIN_MODE", "1") != "0"
+
+
+def _phase60b_is_health_explain_followup(
+    question: str, history: list | None,
+) -> bool:
+    """Detect 'kaise check kiya?' style follow-ups to a health question.
+
+    Returns True only when BOTH conditions hold:
+      1. Current `question` matches `_PHASE60B_EXPLAIN_PAT` (explain-style
+         phrasing — "kaise / how / steps / process / method").
+      2. At least one of the last 4 user turns in `history` matches
+         `_PHASE60B_HEALTH_CONTEXT_PAT` (recent health context).
+
+    Pure, defensive — never raises. Returns False on missing /
+    malformed input. The 4-turn window is generous enough to span an
+    "unrelated chit-chat in between" pattern but small enough to avoid
+    accidentally matching across topic switches earlier in the session.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    if not _PHASE60B_EXPLAIN_PAT.search(question):
+        return False
+    if not isinstance(history, list) or not history:
+        # Without history we can't verify health context — fall back to LLM.
+        # This is the safe choice: a false-positive engine-steps emission
+        # for a non-health question would be confusing.
+        return False
+    # Scan last 4 user turns for health context. Skip assistant turns —
+    # the assistant might mention "health" generically (e.g. "general
+    # wellness") in a non-health answer, which would falsely trigger.
+    for turn in reversed(history[-8:]):
+        if not isinstance(turn, dict):
+            continue
+        if turn.get("role") != "user":
+            continue
+        content = turn.get("content")
+        if not isinstance(content, str):
+            continue
+        if _PHASE60B_HEALTH_CONTEXT_PAT.search(content):
+            return True
+    return False
+
+
+# Deterministic engine-pipeline explanations — emitted verbatim when
+# explain-mode short-circuit fires. Hinglish + English variants picked
+# by `eff_lang` at the call site (mirrors fallback-template selection
+# in `_phase60_health_vocab_scrub`).
+#
+# Content is grounded in the actual `health_engine.assess_health`
+# pipeline (L1-L25 layers, T1-T3 triggers, M1-M7 modifiers, conditional
+# bucket bonuses, final score → verdict) — NO generic Vedic textbook
+# phrasing. The user's stated ideal answer:
+#   "Lagna check / 6th house / 8th/12th / current dasha / final combine"
+# is the structural template here.
+_PHASE60B_HEALTH_EXPLAIN_HI: str = (
+    "Engine ne aapki health analysis ke liye ye steps follow kiye:\n"
+    "1. Lagna lord ki strength check ki (1st house ka adhipati).\n"
+    "2. 6th, 8th aur 12th house ke planets dekhe (sehat ke 3 main houses).\n"
+    "3. Body-karaks (Sun, Moon, Mars, Saturn, Jupiter, Mercury, Venus, Rahu, Ketu) ke roles analyze kiye.\n"
+    "4. Current Mahadasha aur Antardasha lord ka health par effect dekha.\n"
+    "5. Saturn, Mars, Rahu aur Ketu ke transits ko 6/8/12 house ke against score kiya.\n"
+    "6. Sade Sati phase aur Ashtama Shani ki position check ki.\n"
+    "7. Sab signals ko combine karke final verdict (stable / unstable / fluctuating) banaya.\n"
+    "Generic astrology nahi — ye actual engine pipeline hai jo aapke chart par chala."
+)
+
+
+_PHASE60B_HEALTH_EXPLAIN_EN: str = (
+    "The engine ran these steps for your health analysis:\n"
+    "1. Lagna lord strength check (the ruler of the 1st house).\n"
+    "2. 6th, 8th, and 12th house planets review (the 3 main health houses).\n"
+    "3. Body-karaks (Sun, Moon, Mars, Saturn, Jupiter, Mercury, Venus, Rahu, Ketu) role analysis.\n"
+    "4. Current Mahadasha and Antardasha lord's effect on health.\n"
+    "5. Saturn, Mars, Rahu and Ketu transit aspects scored against the 6th/8th/12th houses.\n"
+    "6. Sade Sati phase and Ashtama Shani position check.\n"
+    "7. All signals combined into a final verdict (stable / unstable / fluctuating).\n"
+    "This is the actual engine pipeline that ran on your chart — not a generic astrology explanation."
+)
+
+
+def _phase60b_health_explain_text(lang: str) -> str:
+    """Return the deterministic engine-pipeline explanation in the right language.
+
+    Defaults to Hinglish (the primary user language for this app). Only
+    returns English when `lang` is explicitly an English code ("en",
+    "en-IN", "english"). Mirrors the language-selection convention used
+    by other Phase 5.x/6.x deterministic emitters in this module.
+    """
+    code = (lang or "").strip().lower()
+    if code in ("en", "en-in", "en-us", "english"):
+        return _PHASE60B_HEALTH_EXPLAIN_EN
+    return _PHASE60B_HEALTH_EXPLAIN_HI
 
 
 def _phase60_format_health_facts_block(v: Any) -> str:
@@ -12708,6 +13082,38 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "phase":  _qu.get("intent_override_phase"),
             "ai_confidence": _qu.get("confidence"),
         })
+
+    # ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT (HEALTH FOLLOW-UP) ──────
+    # When user asks "kaise check kiya?" / "how did you check?" right
+    # after a health question, return the deterministic engine pipeline
+    # instead of letting the LLM regurgitate generic Vedic textbook.
+    # Fires BEFORE any heavy LLM work — pure telemetry + canned answer.
+    # Reversible via env flag PHASE60B_EXPLAIN_MODE=0.
+    try:
+        if (
+            _phase60b_explain_mode_enabled()
+            and _phase60b_is_health_explain_followup(question or "", history)
+        ):
+            _exp_lang = _resolve_response_lang(question, lang, preferred_language)
+            _exp_text = _phase60b_health_explain_text(_exp_lang)
+            _trace(req_id, "1c.PHASE60B_EXPLAIN_SHORTCIRCUIT", {
+                "lang":           _exp_lang,
+                "history_turns":  len(history or []),
+                "answer_chars":   len(_exp_text),
+                "reason":         "health-context follow-up + explain-mode "
+                                  "phrasing detected — bypassing LLM with "
+                                  "deterministic engine pipeline",
+            })
+            return {
+                "text":         _exp_text,
+                "topic":        "health",
+                "topic_source": "phase60b_explain_shortcircuit",
+                "confidence":   0.95,
+                "source":       "engine_pipeline",
+                "follow_ups":   [],
+            }
+    except Exception as _exp_exc:  # noqa: BLE001
+        _trace(req_id, "1c.PHASE60B_EXPLAIN_ERR", str(_exp_exc)[:200])
 
     _qu_intent = (_qu.get("intent") or "analysis").lower()
     _qu_topic  = (_qu.get("topic")  or "general").lower()
@@ -15691,6 +16097,41 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         topic = "marriage"
         _mode_reason += " → FORCED astro (Phase 5.5d context-memory)"
     _trace(req_id, "1.UNDERSTANDING(stream)", _qu)
+
+    # ── Phase 6.0b — EXPLAIN-MODE SHORT-CIRCUIT (HEALTH FOLLOW-UP, stream) ──
+    # Stream-path parity with the sync ai_ask path. When detected, emit
+    # the deterministic engine pipeline as a single chunked stream
+    # (delta + final) and skip all LLM work. Reversible via env flag
+    # PHASE60B_EXPLAIN_MODE=0.
+    try:
+        if (
+            _phase60b_explain_mode_enabled()
+            and _phase60b_is_health_explain_followup(question or "", history)
+        ):
+            _exp_lang_s = _resolve_response_lang(question, lang, preferred_language)
+            _exp_text_s = _phase60b_health_explain_text(_exp_lang_s)
+            _trace(req_id, "1c.PHASE60B_EXPLAIN_SHORTCIRCUIT(stream)", {
+                "lang":          _exp_lang_s,
+                "history_turns": len(history or []),
+                "answer_chars":  len(_exp_text_s),
+                "reason":        "health-context follow-up + explain-mode "
+                                 "phrasing detected — bypassing LLM stream "
+                                 "with deterministic engine pipeline",
+            })
+            yield {"kind": "delta", "text": _exp_text_s}
+            yield {
+                "kind":         "final",
+                "text":         _exp_text_s,
+                "topic":        "health",
+                "topic_source": "phase60b_explain_shortcircuit",
+                "confidence":   0.95,
+                "source":       "engine_pipeline",
+                "follow_ups":   [],
+            }
+            return
+    except Exception as _exp_exc_s:  # noqa: BLE001
+        _trace(req_id, "1c.PHASE60B_EXPLAIN_ERR(stream)", str(_exp_exc_s)[:200])
+
     _trace(req_id, "2.MODE_DETECT", {
         "mode": mode, "topic": topic, "reason": _mode_reason,
     })

@@ -140,8 +140,15 @@ class TestKeyTriggers(unittest.TestCase):
         self.assertIn("stress", oh._phase60_health_key_triggers(v))
 
     def test_arishta_yoga_triggers_vulnerability(self):
+        # Phase 6.0b: arishta_yogas → "vulnerability" engine tag now
+        # neutralised to "extra_care" before reaching the FACTS block
+        # (medical noun → safer phase descriptor). Engine internals still
+        # record the vulnerability layer; the LLM-facing surface gets the
+        # neutralised token.
         v = _engine_fixture(top_concerns=[{"layer": "L23_arishta_yogas", "score": -12}])
-        self.assertIn("vulnerability", oh._phase60_health_key_triggers(v))
+        triggers = oh._phase60_health_key_triggers(v)
+        self.assertIn("extra_care", triggers)
+        self.assertNotIn("vulnerability", triggers)
 
     def test_bucket_mental_health_adds_stress_tag(self):
         v = _engine_fixture(bucket="mental_health", top_concerns=[])
@@ -567,19 +574,28 @@ class TestArchitectV4Regressions(unittest.TestCase):
 
     def test_corrected_layer_keys_now_produce_tags(self):
         """Regression: the 5 corrected layer keys (without spurious
-        `_health` suffix) must now produce key_trigger tags."""
+        `_health` suffix) must produce key_trigger tags.
+
+        Phase 6.0b note: the engine-internal tag for L14/L20/L21/L22 is
+        `vitality_dip` but the narrator-facing surface receives
+        `extra_care` (neutralisation). L25 stays as `stress` (already in
+        safe form). This test asserts both the legacy engine semantics
+        (the LAYER produces SOME tag) and the Phase 6.0b neutralisation
+        (medical noun → safe descriptor).
+        """
         for layer_id, expected_tag in [
-            ("L14_atmakaraka",   "vitality_dip"),
-            ("L20_ashtakavarga", "vitality_dip"),
-            ("L21_shadbala",     "vitality_dip"),
-            ("L22_bhava_bala",   "vitality_dip"),
+            ("L14_atmakaraka",   "extra_care"),  # was: vitality_dip
+            ("L20_ashtakavarga", "extra_care"),  # was: vitality_dip
+            ("L21_shadbala",     "extra_care"),  # was: vitality_dip
+            ("L22_bhava_bala",   "extra_care"),  # was: vitality_dip
             ("L25_sade_sati",    "stress"),
         ]:
             v = _engine_fixture(top_concerns=[{"layer": layer_id, "score": -10}])
             triggers = oh._phase60_health_key_triggers(v)
             self.assertIn(
                 expected_tag, triggers,
-                f"Corrected key {layer_id!r} should map to {expected_tag!r}",
+                f"Corrected key {layer_id!r} should map to {expected_tag!r} "
+                f"after Phase 6.0b neutralisation",
             )
 
 

@@ -5919,11 +5919,27 @@ def _strip_narrative_disclaimers(text: str) -> str:
 
 
 _HEALTH_FORBIDDEN_REPLACE: list[tuple["re.Pattern[str]", str]] = [
-    (re.compile(r"\btriggers?\b",   re.IGNORECASE), "sudden issues"),
-    (re.compile(r"\btendency\b",    re.IGNORECASE), "chance"),
-    (re.compile(r"\btendencies\b",  re.IGNORECASE), "chances"),
-    (re.compile(r"\bchronic\b",     re.IGNORECASE), "long-term"),
+    # ── COMPOUND patterns FIRST (must run before standalone replacements
+    #    so the standalone rule does not double-fire and produce noise like
+    #    "sudden sudden issues") ────────────────────────────────────────────
+    (re.compile(r"\bsudden\s+triggers?\b",     re.IGNORECASE), "sudden issues"),
+    (re.compile(r"\bsudden\s+sudden\b",        re.IGNORECASE), "sudden"),
+    (re.compile(r"\bfluctuating?\s+risk\b",    re.IGNORECASE), "varying risk"),
+    (re.compile(r"\bslow[\s-]+burn\b",         re.IGNORECASE), "gradual"),
+    # ── SINGLE-WORD replacements ─────────────────────────────────────────
+    (re.compile(r"\btriggers?\b",              re.IGNORECASE), "sudden issues"),
+    (re.compile(r"\btendency\b",               re.IGNORECASE), "chance"),
+    (re.compile(r"\btendencies\b",             re.IGNORECASE), "chances"),
+    (re.compile(r"\bchronic\b",                re.IGNORECASE), "long-term"),
+    (re.compile(r"\bfluctuat\w*\b",            re.IGNORECASE), "varying"),
+    (re.compile(r"\binstabilit(?:y|ies)\b",    re.IGNORECASE), "variability"),
+    (re.compile(r"\bimbalance\b",              re.IGNORECASE), "stress"),
 ]
+
+# Final cleanup: collapse adjacent duplicate words like "sudden sudden",
+# "long-term long-term", "varying varying" left over from earlier stylistic
+# accidents or from compound-vs-standalone regex collisions.
+_HEALTH_DUP_COLLAPSE = re.compile(r"\b([\w-]+)\s+\1\b", re.IGNORECASE)
 
 
 def _health_post_scrub_safety(text: str) -> tuple[str, list[str]]:
@@ -5933,6 +5949,11 @@ def _health_post_scrub_safety(text: str) -> tuple[str, list[str]]:
     Returns (cleaned_text, list_of_pattern_strings_that_fired).
     Caller MUST gate by topic == "health" — non-health topics keep their
     original wording.
+
+    Phase 6.0n upgrade — compound patterns added (`sudden triggers`,
+    `fluctuating risk`, `slow burn`) PLUS adjacent-duplicate-word
+    collapse pass to heal cases like "sudden sudden issues" that the
+    earlier compound-then-standalone ordering used to produce.
     """
     if not text:
         return text, []
@@ -5943,7 +5964,121 @@ def _health_post_scrub_safety(text: str) -> tuple[str, list[str]]:
         if new != out:
             hits.append(rx.pattern)
             out = new
+    # Heal "sudden sudden issues" / "long-term long-term" type residue.
+    collapsed = _HEALTH_DUP_COLLAPSE.sub(r"\1", out)
+    if collapsed != out:
+        hits.append("ADJACENT_DUP_COLLAPSE")
+        out = collapsed
     return out, hits
+
+
+# ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (health-only) ──────────────────────
+# When the system prompt instructs the LLM to emit exactly:
+#     Cause:  ...
+#     Effect: ...
+#     Advice: ...
+# the model frequently complies but ALSO wraps the 3 lines in storytelling
+# preamble or a closing sentence ("During May–June 2026, ... Cause: ... .
+# Take care."). This extractor isolates the three labelled lines and drops
+# the storytelling so the user sees only the engine-mandated 3-liner.
+#
+# CRITICAL — brand-safety footer preservation (architect-flagged):
+# The HEALTH_BRAND_SAFETY post-processor (~L14757 in ai_ask /
+# ~L16980 in ai_ask_stream) appends MANDATORY doctor-cite + (for
+# mental_health bucket) helpline lines to `text` BEFORE this extractor
+# runs. Those lines are non-negotiable medical-adjacent compliance
+# (qualified doctor cite, iCall 9152987821, Vandrevala 1860-2662-345).
+# Without the peel-off below, the extractor would silently strip them
+# whenever Cause:/Effect:/Advice: labels are present — a SAFETY
+# regression. The peel-off identifies safety lines via marker regex,
+# excludes them from label extraction, then re-attaches them after the
+# clean 3-liner so legal/safety contract is preserved.
+#
+# Tolerant of:
+#   - bullet markers (▸ • - * >) and leading whitespace
+#   - colon variants (`:` ASCII or `：` fullwidth)
+#   - synonym labels (Reason → Cause, Action / Guidance → Advice)
+# Returns (text, extracted_bool):
+#   extracted_bool=True  → 3-line clean form (+ safety footer if present)
+#   extracted_bool=False → labels missing, return original text untouched
+#                          (caller keeps the LLM's natural answer to avoid
+#                          deleting a valid response that just doesn't fit
+#                          the strict format).
+_HEALTH_LABEL_LINE = re.compile(
+    r"^\s*[-•*▸>]?\s*(Cause|Reason|Effect|Advice|Action|Guidance)\s*[:：]\s*(.+?)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Safety-footer markers — any line matching these is preserved verbatim
+# and re-attached AFTER the extracted 3-liner so brand-safety / helpline /
+# doctor-cite content from `_doctor_line` + `_helpline_line` (defined in
+# the HEALTH_BRAND_SAFETY post-processor at ~L14700) survives extraction.
+_HEALTH_SAFETY_MARKER_RE = re.compile(
+    r"(?:"
+    r"doctor\s+se\s+(?:zaroor\s+)?consult"
+    r"|qualified\s+doctor"
+    r"|qualified\s+(?:medical\s+)?professional"
+    r"|mental\s+health\s+support"
+    r"|free\s+helpline"
+    r"|\biCall\b"
+    r"|\bVandrevala\b"
+    r"|9152987821"
+    r"|1860-2662-345"
+    r"|medical\s+diagnosis\s+ya\s+treatment"
+    r"|akele\s+nahi\s+hain"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _health_extract_strict_3line(text: str) -> tuple[str, bool]:
+    """Try to coerce LLM output into the literal 3-line `Cause:/Effect:/
+    Advice:` form. Returns (clean_text, True) when all three labels are
+    found; returns (text, False) otherwise.
+
+    Brand-safety footer (doctor cite + iCall/Vandrevala helpline lines
+    injected by `4a2.HEALTH_BRAND_SAFETY_INJECTED`) is detected via
+    marker regex, peeled off BEFORE extraction, and re-attached AFTER
+    the clean 3-liner so safety/legal contract is preserved.
+    """
+    if not text:
+        return text, False
+
+    # Peel off safety-footer lines so they cannot be eaten by extraction
+    # AND so they cannot accidentally satisfy any label by coincidence.
+    safety_lines: list[str] = []
+    body_lines:   list[str] = []
+    for ln in text.splitlines():
+        if _HEALTH_SAFETY_MARKER_RE.search(ln):
+            stripped = ln.strip()
+            if stripped:
+                safety_lines.append(stripped)
+        else:
+            body_lines.append(ln)
+    body = "\n".join(body_lines)
+
+    cause = effect = advice = None
+    for m in _HEALTH_LABEL_LINE.finditer(body):
+        label = m.group(1).strip().lower()
+        body_text = m.group(2).strip()
+        if not body_text:
+            continue
+        if label in ("cause", "reason") and cause is None:
+            cause = body_text
+        elif label == "effect" and effect is None:
+            effect = body_text
+        elif label in ("advice", "action", "guidance") and advice is None:
+            advice = body_text
+
+    if cause and effect and advice:
+        clean = f"Cause: {cause}\nEffect: {effect}\nAdvice: {advice}"
+        if safety_lines:
+            # Mirror the `\n\n` gap shape used by `_doctor_line` /
+            # `_helpline_line` in the brand-safety post-processor so the
+            # final output is visually identical to the un-extracted form.
+            clean = clean + "\n\n" + "\n\n".join(safety_lines)
+        return clean, True
+    return text, False
 
 
 def _scrub_brand_tone(text: str) -> str:
@@ -10144,37 +10279,70 @@ def _phase50_build_minimal_messages(
     # Layered on top of the post-LLM scrubber + health_brand_safety + Phase
     # 6.0f topic-aware bare-return gate as defense-in-depth.
     if (topic or "").lower() == "health":
+        # ── Phase 6.0n — STRICT 3-LINE HEALTH FORMAT (LLM CONTROL FIX 3) ──
+        # Phase 6.0h's prose-style 6-rule list was being IGNORED by the LLM
+        # (live evidence: storytelling preamble + banned words like
+        # `fluctuating risk` + `chronic` survived into the final answer).
+        # User spec (Apr 29 2026) is explicit:
+        #   "Engine calculate karega, LLM sirf translate karega."
+        #   "Pehle calculation, fir direct translation — no storytelling."
+        #   Format: exactly 3 lines — "Cause:", "Effect:", "Advice:".
+        # This block REPLACES the soft prose rules with a hard, example-led
+        # mandate. Combined with the post-LLM `_health_extract_strict_3line`
+        # extractor + `_health_post_scrub_safety` regex map (in sync +
+        # stream answer paths), it forms a 3-layer defense:
+        #   1. PROMPT — instruct LLM to emit 3 labelled lines only.
+        #   2. EXTRACTOR — if LLM wraps the 3 lines in storytelling, drop
+        #      everything outside the labels.
+        #   3. SCRUBBER — if any banned word slips in, regex-replace it.
         system_msg += (
             "\n\n"
-            "HEALTH-SPECIFIC NARRATOR RULES (MANDATORY — non-negotiable):\n"
-            "1. FACT-BOUND RESPONSE: Base your answer ONLY on the provided "
-            "FACTS / HEALTH_FACTS / CHART block. Do NOT invent, infer, or "
-            "generalise beyond the given data.\n"
-            "2. PLANET + DASHA MANDATORY: Your answer MUST cite at least "
-            "ONE planet (Mars / Saturn / Rahu / Ketu / Sun / Mercury / "
-            "Venus / Jupiter / Moon) AND at least ONE dasha lord (current "
-            "MD or AD from CHART or HEALTH_FACTS.current_window). Without "
-            "BOTH, the response is invalid.\n"
-            "3. BAN GENERIC FILLER WORDS: Do NOT use vague abstractions "
-            "like 'fluctuation', 'instability', 'triggers', 'imbalance', "
-            "'tendency'. Instead, describe the actual cause from the FACTS "
-            "(e.g. 'Mars in 1H = heat / acidity', 'Rahu antardasha = "
-            "unpredictable energy').\n"
-            "4. CAUSE → EFFECT → GUIDANCE STRUCTURE: Every answer must "
-            "follow this shape within 2-3 short sentences:\n"
-            "   • Cause: which planet / dasha is responsible\n"
-            "   • Effect: the specific health impact (heat, acidity, "
-            "stress, sleep-disturbance, low-energy, injury — only what "
-            "FACTS / key_triggers support)\n"
-            "   • Guidance: ONE short, simple, non-medical advice line\n"
-            "5. SHORT BUT SPECIFIC: Total answer 2-3 lines max. Each line "
-            "must carry concrete content — at least one planet reference "
-            "and at least one specific issue type. NO abstract padding, "
-            "NO generic 'overall risk fluctuating' summaries.\n"
-            "6. ENGINE FACTS ARE SOURCE OF TRUTH: If HEALTH_FACTS contains "
-            "a 'current_window' (e.g. 'Jupiter/Rahu') or 'key_triggers' "
-            "list, you MUST quote / paraphrase those values directly. Do "
-            "NOT substitute them with abstract synonyms.\n"
+            "════════════════════════════════════════════════════════════\n"
+            "HEALTH ANSWER — STRICT 3-LINE FORMAT (MANDATORY)\n"
+            "════════════════════════════════════════════════════════════\n"
+            "OUTPUT EXACTLY 3 LINES. Each line MUST start with the literal\n"
+            "label below, in this order, on its own line. NOTHING ELSE.\n"
+            "\n"
+            "  Cause: <planet name(s) + current dasha lord>\n"
+            "  Effect: <specific symptom + risk level + window>\n"
+            "  Advice: <one short non-medical actionable instruction>\n"
+            "\n"
+            "EXAMPLE (Hinglish):\n"
+            "  Cause: Mars + Jupiter–Rahu dasha\n"
+            "  Effect: heat aur chot ka moderate risk May–June 2026\n"
+            "  Advice: routine controlled rakho, careless action avoid karo\n"
+            "\n"
+            "EXAMPLE (English):\n"
+            "  Cause: Saturn in 6H + Saturn mahadasha\n"
+            "  Effect: low energy and joint stiffness, mild risk this month\n"
+            "  Advice: keep a steady sleep schedule, avoid late-night work\n"
+            "\n"
+            "ABSOLUTE RULES:\n"
+            "1. EXACTLY 3 LINES. NO preamble (no 'During...', 'Aapke chart\n"
+            "   me...', 'Currently...'). NO closing sentence. NO greeting.\n"
+            "   Just the 3 labelled lines.\n"
+            "2. Each line MUST begin with the literal label 'Cause:',\n"
+            "   'Effect:', or 'Advice:' (case-sensitive, with the colon).\n"
+            "3. Cause line MUST contain at least one planet name (Mars /\n"
+            "   Saturn / Rahu / Ketu / Sun / Mercury / Venus / Jupiter /\n"
+            "   Moon) AND at least one dasha lord from CHART / HEALTH_FACTS.\n"
+            "4. Effect line MUST be CONCRETE — heat, acidity, injury,\n"
+            "   sleep-disturbance, stress, low-energy, joint-stiffness,\n"
+            "   headache, etc. NEVER abstract ('overall risk', 'imbalance',\n"
+            "   'instability').\n"
+            "5. Advice line MUST be ONE actionable instruction — a verb +\n"
+            "   simple action. NO 'consult doctor' (engine adds disclaimer\n"
+            "   separately). NO 'take care'. NO 'manage carefully'.\n"
+            "6. BANNED WORDS — DO NOT USE EVEN ONCE: chronic, triggers,\n"
+            "   trigger, tendency, tendencies, fluctuating, fluctuation,\n"
+            "   instability, imbalance, slow burn, vitality, weakness,\n"
+            "   fatigue, vague, generally, overall risk.\n"
+            "7. Match the user's language register exactly. Question in\n"
+            "   Hinglish → answer in Hinglish. English → English. Hindi →\n"
+            "   Hindi. NEVER mix scripts mid-line.\n"
+            "8. Engine FACTS / HEALTH_FACTS are the source of truth. Do\n"
+            "   NOT invent planets, dashas, or symptoms not present there.\n"
+            "════════════════════════════════════════════════════════════\n"
         )
 
     user_parts: list[str] = []
@@ -14978,6 +15146,27 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 "after_preview":  text[:200],
             })
 
+        # ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (health only) ───────────
+        # If the LLM produced labelled `Cause:/Effect:/Advice:` lines but
+        # also wrapped them in storytelling preamble or postamble, strip
+        # everything outside those three lines. Defensive: if the labels
+        # are missing the function returns the original text unchanged so
+        # we never delete a valid answer that happens to skip the format.
+        _pre_3line = text
+        text, _extracted_3line = _health_extract_strict_3line(text)
+        if _extracted_3line and text != _pre_3line:
+            _trace(req_id, "4d.HEALTH_STRICT_3LINE_EXTRACTED", {
+                "before_preview": _pre_3line[:240],
+                "after_preview":  text[:240],
+                "before_chars":   len(_pre_3line),
+                "after_chars":    len(text),
+            })
+        elif not _extracted_3line:
+            _trace(req_id, "4d.HEALTH_STRICT_3LINE_NOT_FOUND", {
+                "preview": text[:240],
+                "reason":  "LLM did not emit Cause:/Effect:/Advice: labels",
+            })
+
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")
 
@@ -16917,6 +17106,26 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "patterns_hit":   _safe_hits_s,
                 "before_preview": _pre_safe_s[:200],
                 "after_preview":  final_text[:200],
+            })
+
+        # ── Phase 6.0n — STRICT 3-LINE EXTRACTOR (stream side) ───────────
+        # Mirrors the sync site. The streamed deltas were already shown to
+        # the user, but mobile clients swap their accumulated buffer with
+        # `final.text` on the `done` SSE event, so this clean form is what
+        # the user actually keeps.
+        _pre_3line_s = final_text
+        final_text, _extracted_3line_s = _health_extract_strict_3line(final_text)
+        if _extracted_3line_s and final_text != _pre_3line_s:
+            _trace(req_id, "4d.HEALTH_STRICT_3LINE_EXTRACTED(stream)", {
+                "before_preview": _pre_3line_s[:240],
+                "after_preview":  final_text[:240],
+                "before_chars":   len(_pre_3line_s),
+                "after_chars":    len(final_text),
+            })
+        elif not _extracted_3line_s:
+            _trace(req_id, "4d.HEALTH_STRICT_3LINE_NOT_FOUND(stream)", {
+                "preview": final_text[:240],
+                "reason":  "LLM did not emit Cause:/Effect:/Advice: labels",
             })
 
     if not final_text:

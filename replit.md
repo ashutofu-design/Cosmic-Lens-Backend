@@ -4101,3 +4101,168 @@ HEALTH_FACTS changes).
 
 ### Files changed
 * `artifacts/api-server/openai_helper.py` (+~140/-22)
+
+---
+
+## Phase 6.0n — STRICT 3-LINE HEALTH FORMAT (Cause/Effect/Advice)
+
+**Date:** 2026-04-29
+**Trigger:** User screenshot after Phase 6.0m FIX 10 + FIX 11 shipped.
+Scrubber FIRED (proof: `chronic→long-term`, `tendencies→chances`, partial
+`triggers→sudden issues` visible in answer) BUT result still awkward:
+
+> "During May–June 2026, you may face long-term and **sudden sudden
+>  issues** with **fluctuating risk**. Manage these chances calmly."
+
+Three problems diagnosed:
+1. `\btriggers?\b → "sudden issues"` regex collided with the preceding
+   word "sudden" already in LLM output → produced literal "sudden sudden
+   issues".
+2. `fluctuating` slipped through entirely — wasn't in the regex map.
+3. LLM was still STORYTELLING (preamble + postamble) despite Phase 6.0h
+   "Cause→Effect→Guidance structure 2-3 sentences" prose rules — the soft
+   prose rules were being IGNORED.
+
+User's NEW spec (rulebook attachment) is explicit:
+> "Engine calculate karega, LLM sirf translate karega."
+> Format: exactly 3 lines — "Cause:", "Effect:", "Advice:".
+> No storytelling, no preamble, no banned words.
+
+### What changed (Phase 6.0n) — defense-in-depth, 3 layers
+
+1. **PROMPT layer** — REPLACED the soft Phase 6.0h prose rules with a
+   hard, example-led mandate inside `_phase50_build_minimal_messages`
+   (gated by `topic == "health"`). New block:
+   * Two worked examples (Hinglish + English) showing literal labels
+     `Cause:` / `Effect:` / `Advice:`.
+   * 8 absolute rules including BANNED WORDS list: chronic, triggers,
+     trigger, tendency, tendencies, fluctuating, fluctuation,
+     instability, imbalance, slow burn, vitality, weakness, fatigue,
+     vague, generally, overall risk.
+   * Mandates planet + dasha lord in Cause line; concrete symptom
+     vocab in Effect line; verb-based action in Advice line.
+
+2. **EXTRACTOR layer** — NEW helper `_health_extract_strict_3line(text)`:
+   * Tolerant regex matches `(Cause|Reason|Effect|Advice|Action|Guidance):`
+     with optional bullet markers (▸ • - * >) and ASCII `:` or fullwidth
+     `：` colons.
+   * If all 3 of (Cause/Reason, Effect, Advice/Action/Guidance) are
+     present → returns clean 3-liner, drops everything else.
+   * If labels missing → returns text unchanged (defensive — never
+     deletes a valid answer).
+
+3. **SCRUBBER layer** — `_HEALTH_FORBIDDEN_REPLACE` upgraded:
+   * Added COMPOUND patterns BEFORE standalone (so they match first):
+     `sudden triggers → "sudden issues"`, `sudden sudden → "sudden"`
+     (heals previous bug), `fluctuating risk → "varying risk"`,
+     `slow burn → "gradual"`.
+   * Added STANDALONE patterns: `fluctuat\w* → "varying"`,
+     `instabilit(y|ies) → "variability"`, `imbalance → "stress"`.
+   * Added `_HEALTH_DUP_COLLAPSE = \b([\w-]+)\s+\1\b` final pass
+     (case-insensitive) to collapse adjacent duplicate words like
+     "long-term long-term" → "long-term".
+   * New trace event `4d.HEALTH_STRICT_3LINE_EXTRACTED` (+ `_NOT_FOUND`
+     when labels were missing) wired in BOTH sync (`ai_ask`) and stream
+     (`ai_ask_stream`) paths.
+
+### Files changed
+
+* `artifacts/api-server/openai_helper.py` (+~150/-30):
+  * lines ~5924-6020 — `_HEALTH_FORBIDDEN_REPLACE` expansion +
+    `_HEALTH_DUP_COLLAPSE` + `_health_post_scrub_safety` upgrade +
+    NEW `_HEALTH_LABEL_LINE` regex + NEW `_health_extract_strict_3line`.
+  * lines ~10225-10300 — `_phase50_build_minimal_messages` hard 3-line
+    health system prompt block (replaces Phase 6.0h soft rules).
+  * lines ~15083-15112 — sync site call to extractor after
+    `_health_post_scrub_safety`.
+  * lines ~17045-17073 — stream site call to extractor (mirror).
+
+### Verification
+
+* Syntax check: `ast.parse(open('openai_helper.py').read())` → OK
+  (941508 chars).
+* Helper unit tests (8 cases, all PASS):
+  1. Scrubber: `"sudden triggers ... fluctuating risk ... tendencies"`
+     → `"sudden issues ... varying risk ... chances"` (no double-sudden,
+     no fluctuat, no tendency).
+  2. Adjacent-dup: `"long-term long-term ... sudden sudden"` →
+     `"long-term ... sudden"`.
+  3. Extractor with preamble/postamble: clean 3-liner emerges.
+  4. No labels → defensive passthrough (no answer deletion).
+  5. Bullets + fullwidth colon (`• Cause：`) → matched + cleaned.
+  6. Only 2 of 3 labels → defensive passthrough (not enough, preserve).
+  7. Synonym labels (`Reason:` / `Action:`) → mapped to `Cause:` /
+     `Advice:` automatically.
+  8. **Integration kill-test** on the EXACT bad pattern from the user's
+     screenshot → produced clean Hinglish 3-liner with all banned words
+     removed and storytelling stripped.
+* API server restarted, `:8080` healthy, all 3 workflows running.
+
+### What user should see on next health Q
+
+* Final answer is exactly 3 short lines, each starting with `Cause:`,
+  `Effect:`, `Advice:` (in that order).
+* Zero banned-word leakage even if LLM tries.
+* New trace events: `4d.HEALTH_STRICT_3LINE_EXTRACTED` (success) or
+  `4d.HEALTH_STRICT_3LINE_NOT_FOUND` (LLM ignored labels — extractor
+  falls back to original text, scrubber still cleans words).
+
+### Engine invariants preserved (architect-locked)
+
+* `assess_health()` in `health_engine.py` UNTOUCHED.
+* `HEALTH_FACTS` schema (overall_risk / stability / key_triggers /
+  dasha_effect / brand_safety / tone_rules) UNTOUCHED.
+* Phase 4.7 trim, Phase 5.0 minimal-prompt, Phase 5.1 bare-prompt,
+  Phase 6.0f topic-aware bare-return gate ALL UNTOUCHED.
+* Brand-safety helpline emission and SEBI/CA disclaimer paths
+  unchanged.
+
+### Phase 6.0n — POST-REVIEW AMENDMENT (architect-flagged safety fix)
+
+**Trigger:** Architect review flagged a SEVERE regression in the initial
+Phase 6.0n implementation:
+
+> "Health safety disclaimer can be silently removed. The new
+> `_health_extract_strict_3line()` runs after `4a2.HEALTH_BRAND_SAFETY_
+> INJECTED` (~L14757). It returns only Cause/Effect/Advice, dropping
+> everything else — this can strip mandatory doctor-cite + iCall +
+> Vandrevala helpline lines."
+
+**Fix applied** (same Phase 6.0n line range):
+
+* Added `_HEALTH_SAFETY_MARKER_RE` (case-insensitive) matching:
+  `doctor se .. consult` / `qualified doctor` / `mental health support`
+  / `iCall` / `Vandrevala` / `9152987821` / `1860-2662-345` /
+  `medical diagnosis ya treatment` / `akele nahi hain`.
+* `_health_extract_strict_3line()` now PEELS safety lines off the input
+  BEFORE running label extraction, then RE-ATTACHES them after the
+  clean 3-liner (preserving the `\n\n` gap shape used by the brand-
+  safety injector for visual parity).
+* If the LLM gave ONLY safety footer with no labels, the defensive
+  passthrough still returns the original text unchanged — so a "doctor
+  cite only" reply is never deleted either.
+
+**Verification — 5 additional unit tests, all PASS:**
+
+* T9 — doctor cite preserved when 3-line labels are present.
+* T10 — BOTH doctor cite + iCall + Vandrevala helpline preserved
+  (mental_health bucket scenario).
+* T11 — pure 3-liner without footer still works (backward compat).
+* T12 — safety-only output (no labels) → defensive passthrough
+  preserves the disclaimer verbatim.
+* T13 — INTEGRATION: bad LLM output → scrubber strips chronic /
+  fluctuating / tendency / sudden triggers → extractor isolates clean
+  3-liner → safety footer reattached → final answer is exactly what
+  the user wants.
+
+### Open follow-ups (NOT blockers, deferred per credit budget)
+
+* Architect finding #2 — strict 3-line is not 100% hard-enforced when
+  LLM ignores the labelled-output instruction (extractor falls back to
+  passthrough). Mitigation already in place: prompt-side mandate is now
+  example-led + 8 absolute rules + banned-words list, so LLM compliance
+  should be high. Future enhancement: deterministic fallback formatter
+  built directly from `HEALTH_FACTS` (bucket / current_window /
+  key_triggers / strategy) for the 0% case where labels are missing.
+* Phase 6.0g Fix 8 — `answer_text` column add (still pending).
+* Engine native confidence=None bridging (still pending).

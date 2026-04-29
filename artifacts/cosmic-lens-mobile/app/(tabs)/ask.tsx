@@ -535,7 +535,10 @@ export default function AskScreen() {
 
   // ── Voice playback (TTS via /api/tts) ────────────────────────────────────
   // One shared player. We swap its source per-message via .replace().
-  const ttsPlayer = useAudioPlayer(undefined);
+  // NOTE: pass NO args (not `undefined`) — expo-audio 55's native bridge
+  // mis-counts args when `undefined` is forwarded explicitly, causing
+  // "Received 4 arguments, but 3 was expected" render error on iOS.
+  const ttsPlayer = useAudioPlayer();
   const ttsStatus = useAudioPlayerStatus(ttsPlayer);
   const [voiceMsgId, setVoiceMsgId] = useState<string | null>(null);
   // States: idle | loading | playing

@@ -13717,7 +13717,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _engine_status_meta = (build_meta or {}).get("engine_status") or {}
         _engine_overall = _engine_status_meta.get("overall")
         _engine_ran_ok = _engine_overall == "ok"
-        if _phase50_active and _phase51_bare_prompt_enabled() and _engine_ran_ok:
+        # Phase 6.0f — TOPIC-AWARE GATE (health hard-block): even when the
+        # engine succeeded, the LLM still emits forbidden vocab on health
+        # surfaces ("chronic", "sudden triggers", "fatigue", "imbalance" …).
+        # The Phase 6.0d engine-aware gate only protects the engine-failed
+        # path; engine_status="ok" still leaks. Force health responses
+        # through the full validator pipeline (scrubber + health_brand_safety
+        # + validators_framework) regardless of engine state.
+        if (_phase50_active and _phase51_bare_prompt_enabled()
+                and _engine_ran_ok and topic != "health"):
             _trace(req_id, "5.PHASE51_BARE_RETURN", {
                 "raw_chars": len(text or ""),
                 "engine_overall": _engine_overall,
@@ -16379,8 +16387,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     _engine_status_meta_stream = (build_meta_stream or {}).get("engine_status") or {}
     _engine_overall_stream = _engine_status_meta_stream.get("overall")
     _engine_ran_ok_stream = _engine_overall_stream == "ok"
+    # Phase 6.0f — TOPIC-AWARE GATE (health hard-block, stream parity): same
+    # rationale as the sync path. Health responses must always traverse the
+    # full validator chain (scrubber + health_brand_safety + validators_framework)
+    # to strip forbidden vocab — bare-return is unsafe for this topic even
+    # when the health_engine reports engine_status="ok".
     if (_phase50_active_stream and _phase51_bare_prompt_enabled()
-            and _engine_ran_ok_stream):
+            and _engine_ran_ok_stream and topic != "health"):
         _trace(req_id, "5.PHASE51_BARE_RETURN(stream)", {
             "raw_chars": len(raw_text or ""),
             "engine_overall": _engine_overall_stream,

@@ -3989,3 +3989,32 @@ external tunnels). Prevents zombie cloudflared/lt processes on early
 ### Files changed
 
 * `artifacts/cosmic-lens-mobile/scripts/start-tunnel.sh` (+38/-6)
+
+---
+
+## Phase 6.0f — Topic-aware bare-return gate (health hard-block)
+
+**Date:** 2026-04-29
+**Trigger:** Live health response leaked forbidden vocab (`chronic`, `sudden triggers`) despite Phase 6.0d engine-aware gate.
+
+**Diagnosis:** Phase 6.0d only forced the validator pipeline when `engine_status != "ok"`. For health questions where `health_engine` succeeded (e.g. `bucket=general_wellness, verdict=slow_burn, score=48`), `engine_status="ok"` → bare-return path triggered → `scrubber`, `health_brand_safety`, `validators_framework` all bypassed → LLM-hallucinated forbidden vocab passed through verbatim.
+
+Live trace from `[ask:73b04a69]`:
+* `intent=analysis topic=health conf=0.95`
+* `health_engine OK → bucket='general_wellness' tense='future' verdict='slow_burn' score=48`
+* `5.PHASE51_BARE_RETURN(stream): {"engine_overall":"ok", "bypassed":[14 stages including scrubber, health_brand_safety]}`
+* Final answer leaked: *"…Chronic ya sudden triggers par dhyaan dena…"*
+
+**Fix:** Added `topic != "health"` guard to both bare-return gate sites:
+* `openai_helper.py:13730` (sync `ai_ask`)
+* `openai_helper.py:16398` (stream `ai_ask_stream`)
+
+Health responses now always traverse the full validator chain regardless of `engine_status`. The engine-degraded `5.PHASE51_VALIDATORS_FORCED` telemetry path is unchanged. No other topics affected. No template enforced (per spec "let system stay dynamic but controlled").
+
+**Verification:**
+* `python3 -c "import py_compile; py_compile.compile('openai_helper.py', doraise=True)"` → PASS
+* API server restarted, `GET /api/healthz` → 200
+* User to verify on phone: ask a health question with timing window and confirm response no longer contains `chronic`, `trigger`, `sudden`, `vitality`, `weakness`, `fatigue`, `imbalance`. Trace should now show `5.PHASE51_VALIDATORS_FORCED` (or scrubber-engaged path) instead of `5.PHASE51_BARE_RETURN`.
+
+### Files changed
+* `artifacts/api-server/openai_helper.py` (+14/-2)

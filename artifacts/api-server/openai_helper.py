@@ -9114,12 +9114,34 @@ def _phase50_build_minimal_messages(
         "possible.\n\n"
         "Be simple, human, and confident. Do NOT invent dasha names, "
         "dates, or planet positions — if a fact is not in the chart "
-        "data, do not state it." + lang_hint
+        "data, do not state it. When quoting a date, planet sign, "
+        "house number, or any specific value from the kundli, COPY it "
+        "EXACTLY from the FULL_KUNDLI_JSON below — do not round, "
+        "approximate, or convert dates." + lang_hint
     )
 
     user_parts = []
     if chart_summary:
-        user_parts.append("CHART:\n" + chart_summary)
+        user_parts.append("CHART (quick reference):\n" + chart_summary)
+
+    # Phase 5.2 — Pass the FULL kundli object as raw JSON so the model
+    # can answer ANY chart question (D1-D60 divisional charts, full
+    # 120-year Vimshottari dasha sequence with dates, transits, yogas,
+    # KP sub-lords, ashtakavarga, shadbala, doshas — anything the
+    # kundli engine produced). The model is told to look here for any
+    # detail not in the quick-reference summary.
+    try:
+        if isinstance(kundli, dict) and kundli:
+            kundli_json = json.dumps(kundli, ensure_ascii=False, separators=(",", ":"))
+            user_parts.append(
+                "FULL_KUNDLI_JSON (authoritative — use this for ANY "
+                "chart detail not in the quick reference above; do NOT "
+                "invent anything outside this object):\n" + kundli_json
+            )
+    except Exception:
+        # Defensive — never fail the prompt build over JSON serialisation.
+        pass
+
     if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
         user_parts.append("FACTS:\n" + extra_facts.strip())
     user_parts.append("QUESTION:\n" + (question or "").strip())

@@ -189,8 +189,13 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         msgs = oh._phase50_build_minimal_messages(
             "career?", _sample_kundli(), lang="en",
         )
-        self.assertIn("CHART:", msgs[1]["content"])
+        # Phase 5.2: label changed from "CHART:" to "CHART (quick reference):"
+        # because we now ALSO append a FULL_KUNDLI_JSON block. Keep the test
+        # tolerant — only require the leading "CHART" token.
+        self.assertIn("CHART", msgs[1]["content"])
         self.assertIn("Sagittarius", msgs[1]["content"])
+        # Phase 5.2: full kundli JSON must also be present.
+        self.assertIn("FULL_KUNDLI_JSON", msgs[1]["content"])
 
     def test_extra_facts_appended_when_provided(self):
         msgs = oh._phase50_build_minimal_messages(
@@ -212,11 +217,16 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         self.assertIn("Hindi", msgs_hi[0]["content"])
         self.assertIn("English", msgs_en[0]["content"])
 
-    def test_system_message_under_400_chars(self):
-        """System message must stay short — no preamble bloat allowed."""
+    def test_system_message_under_1500_chars(self):
+        """System message must stay reasonable — no preamble bloat allowed.
+        Phase 5.2: bumped from 400 → 1500c to accommodate the ChatGPT-style
+        guidance prompt (clear-direct-verdict-first behaviour) and the
+        explicit COPY-EXACTLY instruction added when the FULL_KUNDLI_JSON
+        block was introduced. Anything > 1500c indicates new preamble drift.
+        """
         msgs = oh._phase50_build_minimal_messages("q?", _sample_kundli(), lang="hn")
-        self.assertLessEqual(len(msgs[0]["content"]), 400,
-            f"system msg too long ({len(msgs[0]['content'])}c) — strip drift?")
+        self.assertLessEqual(len(msgs[0]["content"]), 1500,
+            f"system msg too long ({len(msgs[0]['content'])}c) — preamble drift?")
 
 
 # ───────────────────────── T030 / T031 — verdict extractor ─────────────────

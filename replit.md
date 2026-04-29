@@ -2140,3 +2140,69 @@ stayed additive as guaranteed.
 - Reuses 100% of existing `kp_engine.py` (306 LOC) +
   `kp_locked_facts.py` (239 LOC) — zero duplication.
 - Graceful degradation when geo missing — existing kundlis unaffected.
+
+## Phase 5.6 — Yoga Registry Activation (April 29, 2026)
+
+**Problem:** User asked "Mera kitne dhan yog he?" and got vague hallucinated
+text with no count or yoga names. Root cause: Phase 5.0 minimal-prompt path
+strips the heavy LOCKED FACTS pipeline that previously ran the yoga
+detectors. Yoga questions therefore had **zero engine grounding** — the LLM
+was free-styling answers about wealth/raj/etc. yogas.
+
+**Solution:** Wire the existing yoga detectors into the Phase 5.0 minimal
+path. Same lock pattern as Phase 5.5h KP — engine = source of truth, LLM =
+narrator only.
+
+**What runs (already existed, just unwired):**
+- `vedic/yogas/classical_yogas.py` — Dhana / Vipreet / Negative / Kaal-Sarp /
+  Nabhasa / Pravrajya
+- `vedic/yogas/extra_yogas.py` — Status (Mahabhagya) / Karaka / Neech-Bhanga /
+  BPHS Lord-Placement / Trinity / Royal / Wealth-Extras / Lunar-Peripheral /
+  Aux-Status / Amsavatara
+- `vedic/yogas/missing_yogas.py` — Indra / Shoola
+- `chart_intelligence._detect_yogas` — Gajakesari / Pancha-Mahapurusha /
+  Budhaditya / Chandra-Mangal / Saraswati / Adhi / Amala / Dharma-Karmadhipati /
+  Kemadruma
+
+**New code (`openai_helper.py` ~10231-10570):**
+- `_phase56_is_yoga_question(q)` — regex over yog/dhan/raj/lakshmi/
+  gajakesari/parivartana/panch-mahapurush/vipreet/kaal-sarp/nabhasa/
+  chandra-mangal/budhaditya/mahabhagya/saraswati/kemadruma/neech-bhanga/
+  daridra/guru-chandal/sanyas/amala/adhi/sunapha/anapha/durdhura
+- `_phase56_question_yoga_category(q)` — narrows to one of 8 buckets
+  (Dhan / Raj / Marriage / Career / Spiritual / Negative / Nabhasa / Special)
+  when user asks about a specific category, else `None` for "kitne yog?"
+- `_phase56_classify_yoga(y)` — raw detector category → user-facing
+  bucket(s). Status maps to BOTH Dhan + Raj.
+- `_phase56_compute_yoga_facts(kundli)` — orchestrator: calls all 4
+  detectors, dedupes by canonical name (case-insensitive), returns
+  `{total, positive, negative, mixed, by_bucket, all}`. Best-effort —
+  detector exceptions are swallowed and logged.
+- `_phase56_format_yoga_facts_block(facts, q, history)` — emits a
+  `YOGA_FACTS …` block + INSTRUCTION (additive, NOT decisional, do
+  NOT invent names). Filters to the asked category when narrowed.
+- `_phase50_install_minimal_messages` — modified to compute + append
+  the yoga block when the question matches the regex; telemetry adds
+  `yoga_active`, `yoga_total`, `yoga_positive`, `yoga_negative`,
+  `yoga_q_cat`.
+
+**Live verification (BBSR fixture, Sagittarius lagna):**
+```
+POST /api/ask  "Mera kitne dhan yog he?"
+→ "Aapke kundli mein total 4 dhan yog hain:
+   1) Dhana yoga (1L+2L conj)
+   2) Dhana yoga (1L+5L parivartana)
+   3) Dhana yoga (9L+11L parivartana)
+   4) Mahabhagya yoga (male signature)"
+Telemetry: yoga_active=true total=16 positive=11 negative=4 q_cat=Dhan
+```
+
+**Tests:** `test_phase56_yoga_registry.py` — 37 tests across 7 classes
+(detector / narrowing / classification / orchestrator / formatter /
+wiring / architectural-guarantee). All green. Full project suite:
+**251/251 pass** (was 214; +37 new), 23 pre-existing skips. No
+regressions in any prior phase (5.0 / 5.1 / 5.5 / 5.5g / 5.5h KP).
+
+**Reuses 100% of existing detector code** — zero duplication of yoga
+logic. Phase 5.6 is purely a *wiring* layer that surfaces what was
+already being computed (but discarded by Phase 5.0's minimal prompt).

@@ -10225,6 +10225,413 @@ def _phase50_extract_verdict_facts(build_meta: Any) -> str:
     return "\n".join(parts)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.6 — Yoga registry activation (deterministic detection → narration)
+# ─────────────────────────────────────────────────────────────────────────────
+# Wires the existing yoga detectors (vedic.yogas.classical_yogas,
+# vedic.yogas.extra_yogas, vedic.yogas.missing_yogas, chart_intelligence.
+# _detect_yogas) into the Phase 5.0 minimal-prompt path. Before Phase 5.6,
+# yoga detection ran only in the heavy-prompt LOCKED FACTS pipeline — when
+# Phase 5.0 stripped that pipeline (default ON), yoga questions like
+# "kitne dhan yog hain?" got vague hallucinated answers because the LLM
+# had no yoga facts to cite.
+#
+# Architecture: same lock pattern as Phase 5.5h KP — engine = source of
+# truth, LLM = narrator only. Detector output is injected as an explicit
+# YOGA_FACTS block in the user message with citation requirements.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Sign-name → 0-based index mapping (mirrors classical_yogas / extra_yogas).
+_PHASE56_SIGN_IDX = {
+    "Aries": 0, "Taurus": 1, "Gemini": 2, "Cancer": 3,
+    "Leo": 4, "Virgo": 5, "Libra": 6, "Scorpio": 7,
+    "Sagittarius": 8, "Capricorn": 9, "Aquarius": 10, "Pisces": 11,
+}
+
+# Question-trigger regex: fires when user asks about yogas in any form.
+# Compiled once at import. Covers Hindi/Hinglish/English variants.
+import re as _re_p56
+_PHASE56_YOGA_QUESTION_RE = _re_p56.compile(
+    r"\byog[aeo]?s?\b|"                     # yog/yoga/yoge/yogas
+    r"\bdhan[- ]?yog|\bdhana[- ]?yog|"      # dhan-yog
+    r"\braj[- ]?yog|\brajyog|"              # raj-yog
+    r"\blakshmi[- ]?yog|\blaxmi[- ]?yog|"   # lakshmi-yog
+    r"\bgaja[- ]?kesari|\bgajakesari|"
+    r"\bparivartan|\bparivartana|"
+    r"\bpanch[- ]?mahapurush|"
+    r"\bvipreet|\bvipareet|"
+    r"\bkaal[- ]?sarp|\bkaalsarp|"
+    r"\bnabhasa|\bnabhas|"
+    r"\bchandra[- ]?mangal|"
+    r"\bbudh[- ]?aditya|\bbudhaditya|"
+    r"\bmaha[- ]?bhagya|\bmahabhagya|"
+    r"\bsaraswati[- ]?yog|"
+    r"\bkemadruma|"
+    r"\bneech[- ]?bhanga|\bneecha[- ]?bhanga|"
+    r"\bdaridra|"
+    r"\bguru[- ]?chandal|"
+    r"\bsanyas[- ]?yog|\bsannyasa|\bpravrajya|"
+    r"\bamala[- ]?yog|"
+    r"\badhi[- ]?yog|"
+    r"\bsunapha|\banapha|\bdurdhura",
+    _re_p56.IGNORECASE,
+)
+
+# Mapping from raw detector category → user-facing bucket.
+# Detectors emit varied category strings (Dhana/Status/Karaka/Lord-Placement/
+# Negative/Nabhasa Sankhya/etc.); we collapse them to the 8 buckets the
+# user spec named (dhan/raj/marriage/career/spiritual/negative/nabhasa/special).
+_PHASE56_CATEGORY_MAP = {
+    # Wealth-bucket
+    "Dhana":            ["Dhan"],
+    "Wealth-Extras":    ["Dhan"],
+    "Lunar-Peripheral": ["Dhan"],
+    # Status / fortune (often both dhan AND raj)
+    "Status":           ["Dhan", "Raj"],
+    # Power / authority
+    "Vipreet":          ["Raj"],
+    "Pancha-Mahapurusha": ["Raj"],
+    "Royal":            ["Raj"],
+    "Trinity":          ["Raj"],
+    "Neech-Bhanga":     ["Raj"],
+    "Aux-Status":       ["Raj"],
+    # Negative / arishta
+    "Negative":         ["Negative"],
+    # Nabhasa (chart-pattern) yogas
+    "Nabhasa Sankhya":  ["Nabhasa"],
+    "Nabhasa Ashraya":  ["Nabhasa"],
+    "Nabhasa Dala":     ["Nabhasa"],
+    "Nabhasa Aakriti":  ["Nabhasa"],
+    # Spiritual
+    "Pravrajya":        ["Spiritual"],
+    "Amsavatara":       ["Spiritual"],
+    # Special / placement
+    "Karaka":           ["Special"],
+    "Lord-Placement":   ["Special"],
+}
+
+# Question-text → category narrowing. When user explicitly asks about
+# a single category, filter the output to just that bucket (otherwise
+# show all positive yogas).
+_PHASE56_CATEGORY_TRIGGERS = [
+    ("Dhan",      _re_p56.compile(r"\bdhan|\bwealth|\bpaisa|\bmoney|\blakshmi|\blaxmi|\bkuber|\bdhana", _re_p56.IGNORECASE)),
+    ("Raj",       _re_p56.compile(r"\braj[- ]?yog|\brajyog|\bpower|\bstatus|\bfame|\bpanch[- ]?mahapurush|\bvipreet|\bvipareet", _re_p56.IGNORECASE)),
+    ("Marriage",  _re_p56.compile(r"\bmarriage|\bvivah|\bshadi|\bshaadi|\bspouse|\bpati|\bpatni", _re_p56.IGNORECASE)),
+    ("Career",    _re_p56.compile(r"\bcareer|\bnaukri|\bnokri|\bjob|\bbusiness|\bvyapar", _re_p56.IGNORECASE)),
+    ("Spiritual", _re_p56.compile(r"\bspiritual|\bmoksha|\bsanyas|\bsannyasa|\bpravrajya|\btapasvi", _re_p56.IGNORECASE)),
+    ("Negative",  _re_p56.compile(r"\bnegative|\bdosh|\bdaridra|\bgaribi|\bkemadruma|\bguru[- ]?chandal|\bshakat|\bvish[- ]?yog", _re_p56.IGNORECASE)),
+    ("Nabhasa",   _re_p56.compile(r"\bnabhasa|\bnabhas|\bmala|\bveena|\byupa|\bsamudra|\bkamala|\bdamaru|\bgada|\bsakata|\bchakra", _re_p56.IGNORECASE)),
+]
+
+
+def _phase56_is_yoga_question(question: Any) -> bool:
+    """Return True if the user's question is asking about yogas.
+
+    Defensive against non-string input. Used as the gate for whether
+    to compute + inject yoga facts into the minimal-prompt user message.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_PHASE56_YOGA_QUESTION_RE.search(question))
+
+
+def _phase56_question_yoga_category(question: Any) -> str | None:
+    """Narrow the yoga response to a single category if the user asked
+    about a specific one (e.g. "kitne dhan yog hain?" → "Dhan").
+
+    Returns None when the question is generic ("kitne yog hain?") so
+    the formatter shows ALL positive yogas. First trigger wins (priority
+    is encoded in the order of `_PHASE56_CATEGORY_TRIGGERS`).
+    """
+    if not isinstance(question, str) or not question.strip():
+        return None
+    for cat, pattern in _PHASE56_CATEGORY_TRIGGERS:
+        if pattern.search(question):
+            return cat
+    return None
+
+
+def _phase56_classify_yoga(yoga: dict) -> list[str]:
+    """Map a detector-emitted yoga dict to one or more user-facing
+    category buckets. Unknown raw categories fall through to "Special"
+    so they still surface (rather than disappear) in the output.
+    """
+    if not isinstance(yoga, dict):
+        return []
+    raw_cat = yoga.get("category") or ""
+    if not isinstance(raw_cat, str):
+        return ["Special"]
+    return _PHASE56_CATEGORY_MAP.get(raw_cat, ["Special"])
+
+
+def _phase56_compute_yoga_facts(kundli: Any) -> dict:
+    """Phase 5.6 orchestrator — calls the existing yoga detectors,
+    dedupes by canonical name, classifies, and returns a structured
+    facts dict ready for formatter consumption.
+
+    OUTPUT shape:
+        {
+            "total":     int,             # total positive + negative + mixed
+            "positive":  int,
+            "negative":  int,
+            "mixed":     int,
+            "by_bucket": {bucket: [yoga_dict, ...]},  # 8 user-facing buckets
+            "all":       [yoga_dict, ...],            # deduped, normalised
+        }
+
+    Returns empty-default dict on any failure, missing planets, or
+    missing lagna — callers must treat empty `all` as "no yoga data".
+    Best-effort: never raises. Detector-level exceptions are swallowed
+    and logged via stderr for ops visibility.
+    """
+    empty = {
+        "total": 0, "positive": 0, "negative": 0, "mixed": 0,
+        "by_bucket": {}, "all": [],
+    }
+    if not isinstance(kundli, dict):
+        return empty
+    planets = kundli.get("planets") or []
+    if not planets:
+        return empty
+    asc = kundli.get("ascendant") or kundli.get("lagna")
+    asc_sign = asc.get("sign") if isinstance(asc, dict) else asc
+    lagna_idx = _PHASE56_SIGN_IDX.get(asc_sign) if isinstance(asc_sign, str) else (
+        asc_sign if isinstance(asc_sign, int) and 0 <= asc_sign <= 11 else None
+    )
+    if lagna_idx is None:
+        return empty
+
+    raw: list[dict] = []
+
+    # Detector 1: classical_yogas (dhana/vipreet/negative/kaal-sarp/
+    # nabhasa/pravrajya). Returns list[dict] with name/category/polarity/
+    # detail keys.
+    try:
+        from vedic.yogas.classical_yogas import detect_classical_yogas as _dcy
+        raw.extend(_dcy(planets, lagna_idx) or [])
+    except Exception as _exc:
+        print(f"[phase56] classical_yogas failed: {_exc}")
+
+    # Detector 2: extra_yogas (status/karaka/neech-bhanga/lord-placement/
+    # trinity/royal/wealth-extras/lunar-peripheral/aux-status/amsavatara).
+    try:
+        from vedic.yogas.extra_yogas import detect_extra_yogas as _dey
+        raw.extend(_dey(planets, lagna_idx) or [])
+    except Exception as _exc:
+        print(f"[phase56] extra_yogas failed: {_exc}")
+
+    # Detector 3: missing_yogas (indra/shoola — fills gaps).
+    try:
+        from vedic.yogas.missing_yogas import detect_missing_yogas as _dmy
+        raw.extend(_dmy(planets, lagna_idx) or [])
+    except Exception as _exc:
+        print(f"[phase56] missing_yogas failed: {_exc}")
+
+    # Detector 4: chart_intelligence._detect_yogas — returns list[str]
+    # with a different shape; adapt to dict form. Adds Gajakesari,
+    # Pancha-Mahapurusha, Budhaditya, Chandra-Mangal, Saraswati, Adhi,
+    # Amala, Dharma-Karmadhipati that aren't in the other modules.
+    try:
+        pmap: dict[str, dict] = {}
+        for p in planets:
+            if not isinstance(p, dict):
+                continue
+            name = p.get("name")
+            sign = p.get("sign")
+            si = _PHASE56_SIGN_IDX.get(sign) if isinstance(sign, str) else None
+            if not name or si is None:
+                continue
+            try:
+                deg_in_sign = float(p.get("longitude", 0)) % 30
+            except Exception:
+                deg_in_sign = 0.0
+            pmap[name] = {
+                "sign_idx": si,
+                "house": p.get("house"),
+                "deg_in_sign": deg_in_sign,
+            }
+        if pmap:
+            from chart_intelligence import _detect_yogas as _ciy
+            ci_list = _ciy(pmap, lagna_idx) or []
+            for s in ci_list:
+                if not isinstance(s, str) or not s.strip():
+                    continue
+                # String shape: "Yoga name (detail...)" — split on first paren.
+                first_paren = s.find("(")
+                if first_paren > 0:
+                    name = s[:first_paren].strip()
+                    detail = s[first_paren + 1:].rstrip(")").strip()
+                else:
+                    name = s.strip()
+                    detail = ""
+                # Heuristic categorisation by name keywords.
+                low = name.lower()
+                if "neech" in low or "raja" in low or "gajakesari" in low \
+                        or "ruchaka" in low or "bhadra" in low or "hamsa" in low \
+                        or "malavya" in low or "sasa" in low or "vipareeta" in low \
+                        or "vipreet" in low or "amala" in low or "dharma" in low \
+                        or "chamara" in low or "akhanda" in low:
+                    raw_cat = "Pancha-Mahapurusha" if any(k in low for k in
+                        ("ruchaka", "bhadra", "hamsa", "malavya", "sasa")) else "Royal"
+                elif "kemadruma" in low or "shakat" in low or "guru-chandal" in low:
+                    raw_cat = "Negative"
+                elif "lakshmi" in low or "saraswati" in low or "adhi" in low \
+                        or "budhaditya" in low or "chandra-mangal" in low:
+                    raw_cat = "Status"
+                else:
+                    raw_cat = "Special"
+                pol = "NEGATIVE" if raw_cat == "Negative" else "POSITIVE"
+                raw.append({
+                    "name": name, "category": raw_cat,
+                    "polarity": pol, "detail": detail,
+                    "_source": "chart_intelligence",
+                })
+    except Exception as _exc:
+        print(f"[phase56] chart_intelligence._detect_yogas failed: {_exc}")
+
+    # Dedupe by canonical (case-insensitive, whitespace-collapsed) name.
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for y in raw:
+        if not isinstance(y, dict):
+            continue
+        name = (y.get("name") or "").strip()
+        if not name:
+            continue
+        key = " ".join(name.lower().split())
+        if key in seen:
+            continue
+        seen.add(key)
+        # Defensive copy; ensure required fields present.
+        y_clean = {
+            "name":     name,
+            "category": y.get("category") or "Special",
+            "polarity": (y.get("polarity") or "POSITIVE").upper(),
+            "detail":   (y.get("detail") or "").strip(),
+            "buckets":  _phase56_classify_yoga(y),
+        }
+        deduped.append(y_clean)
+
+    # Aggregate by bucket + polarity.
+    by_bucket: dict[str, list[dict]] = {}
+    pos = neg = mix = 0
+    for y in deduped:
+        for b in y["buckets"]:
+            by_bucket.setdefault(b, []).append(y)
+        p = y["polarity"]
+        if p == "POSITIVE":
+            pos += 1
+        elif p == "NEGATIVE":
+            neg += 1
+        else:
+            mix += 1
+
+    return {
+        "total":     len(deduped),
+        "positive":  pos,
+        "negative":  neg,
+        "mixed":     mix,
+        "by_bucket": by_bucket,
+        "all":       deduped,
+    }
+
+
+def _phase56_format_yoga_facts_block(
+    facts: Any,
+    question: str = "",
+    history: list | None = None,  # noqa: ARG001 — reserved for context-memory
+) -> str:
+    """Format yoga facts as a locked block for the minimal-prompt user
+    message. Returns "" when no yogas detected so the message stays clean.
+
+    Output shape (when facts are present):
+
+        YOGA_FACTS (deterministic detection from your D1 chart, do NOT recompute):
+        Total positive yogas: 11 | negative: 4 | mixed: 1
+        Filtered for: Dhan + Raj
+
+        DHAN (4):
+        • Mahabhagya yoga (male signature) — Sun, Moon, Lagna all in odd signs
+        • Dhana yoga (9L+11L parivartana) — Sun↔Venus sign exchange
+        ...
+
+        INSTRUCTION (additive, NOT decisional):
+        - Cite the count and yoga names verbatim from above
+        - Do NOT invent yoga names not in this list
+        - If user asked "kitne" / "how many" → give the count
+        - If user asked names / list → list them
+        - If a yoga is NOT in the list, do NOT claim it is present
+
+    The instruction follows the same lock semantics as Phase 5.5h KP:
+    additive narration, never decisional.
+    """
+    if not isinstance(facts, dict) or not facts.get("all"):
+        return ""
+
+    q_cat = _phase56_question_yoga_category(question)
+    by_bucket: dict[str, list[dict]] = facts.get("by_bucket") or {}
+
+    # Decide which buckets to show.
+    if q_cat and q_cat in by_bucket and by_bucket[q_cat]:
+        buckets_to_show = [q_cat]
+        filter_label = q_cat
+    else:
+        # Generic question: show all buckets that have positive yogas,
+        # ordered by importance.
+        priority = ["Dhan", "Raj", "Marriage", "Career", "Spiritual",
+                    "Special", "Nabhasa", "Negative"]
+        buckets_to_show = [b for b in priority
+                           if b in by_bucket and by_bucket[b]]
+        filter_label = None
+
+    if not buckets_to_show:
+        return ""
+
+    lines: list[str] = [
+        "YOGA_FACTS (deterministic detection from your D1 chart, do NOT recompute):",
+        f"Total positive yogas: {facts.get('positive', 0)} | "
+        f"negative: {facts.get('negative', 0)} | "
+        f"mixed: {facts.get('mixed', 0)}",
+    ]
+    if filter_label:
+        lines.append(f"Filtered for: {filter_label} category only")
+    lines.append("")
+
+    for b in buckets_to_show:
+        items = by_bucket.get(b) or []
+        if not items:
+            continue
+        # Sort: positive first, then mixed, then negative.
+        order = {"POSITIVE": 0, "MIXED": 1, "NEGATIVE": 2}
+        items_sorted = sorted(items, key=lambda y: order.get(y.get("polarity"), 3))
+        lines.append(f"{b.upper()} ({len(items_sorted)}):")
+        for y in items_sorted[:8]:
+            tag = {"POSITIVE": "✓", "NEGATIVE": "✗", "MIXED": "◐"}.get(
+                y.get("polarity"), "•")
+            detail = y.get("detail") or ""
+            if len(detail) > 90:
+                detail = detail[:87] + "..."
+            line = f"  {tag} {y.get('name', '?')}"
+            if detail:
+                line += f" — {detail}"
+            lines.append(line)
+        if len(items_sorted) > 8:
+            lines.append(f"  … (+{len(items_sorted) - 8} more in this category)")
+        lines.append("")
+
+    lines.extend([
+        "INSTRUCTION (yoga layer — additive, NOT decisional):",
+        "- Cite the count and yoga names VERBATIM from the YOGA_FACTS above.",
+        "- If the user asked 'kitne' / 'how many', state the count clearly.",
+        "- If the user asked for names or a list, list them (do NOT skip).",
+        "- Do NOT invent yoga names that are NOT in YOGA_FACTS above.",
+        "- Do NOT claim a yoga is present if it is not in the list.",
+        "- Keep the explanation concise and grounded in the listed yogas.",
+    ])
+
+    return "\n".join(lines)
+
+
 def _phase50_install_minimal_messages(
     question: str,
     kundli: Any,
@@ -10239,16 +10646,40 @@ def _phase50_install_minimal_messages(
 
     Performs the full minimal-prompt installation atomically:
       1. Extract engine verdict facts from `build_meta` (shared logic).
-      2. Build the 2-message minimal prompt.
-      3. Emit the `[openai_helper] Phase 5.0:` console line + the
+      2. Phase 5.6 — append yoga facts when question is yoga-related.
+      3. Build the 2-message minimal prompt.
+      4. Emit the `[openai_helper] Phase 5.0:` console line + the
          `2x.PHASE50_MINIMAL_ACTIVE` trace event.
-      4. Return (messages, telemetry) for the caller to assign.
+      5. Return (messages, telemetry) for the caller to assign.
 
     `path_label` is appended to the trace event key (e.g. "(stream)") so
     sync vs stream paths remain distinguishable in the trace; callers
     pass "" for sync and "(stream)" for the stream path.
     """
     facts = _phase50_extract_verdict_facts(build_meta)
+
+    # Phase 5.6 — yoga facts injection (only when question matches).
+    yoga_block = ""
+    yoga_telemetry = {"yoga_active": False}
+    if _phase56_is_yoga_question(question):
+        try:
+            yoga_facts = _phase56_compute_yoga_facts(kundli)
+            yoga_block = _phase56_format_yoga_facts_block(
+                yoga_facts, question=question or "", history=history,
+            )
+            if yoga_block:
+                yoga_telemetry = {
+                    "yoga_active":   True,
+                    "yoga_total":    yoga_facts.get("total", 0),
+                    "yoga_positive": yoga_facts.get("positive", 0),
+                    "yoga_negative": yoga_facts.get("negative", 0),
+                    "yoga_q_cat":    _phase56_question_yoga_category(question),
+                }
+                facts = (facts + "\n\n" + yoga_block) if facts else yoga_block
+        except Exception as _exc:
+            # Yoga injection is best-effort — never break the Ask path.
+            print(f"[openai_helper] Phase 5.6 yoga injection failed: {_exc}")
+
     facts_lines = len([ln for ln in facts.splitlines() if ln.strip()]) if facts else 0
     messages = _phase50_build_minimal_messages(
         question or "", kundli, lang=lang,
@@ -10262,6 +10693,7 @@ def _phase50_install_minimal_messages(
     print(
         f"[openai_helper] Phase 5.0{path_label}: minimal-prompt active — "
         f"user_chars={user_chars} facts_lines={facts_lines} "
+        f"yoga_active={yoga_telemetry['yoga_active']} "
         f"(heavy assembly bypassed)"
     )
     telemetry = {
@@ -10269,6 +10701,7 @@ def _phase50_install_minimal_messages(
         "facts_lines":   facts_lines,
         "message_count": len(messages),
         "roles":         [m["role"] for m in messages],
+        **yoga_telemetry,
     }
     _trace(req_id, f"2x.PHASE50_MINIMAL_ACTIVE{path_label}", telemetry)
     return messages, telemetry

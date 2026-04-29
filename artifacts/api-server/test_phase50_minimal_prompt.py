@@ -347,3 +347,351 @@ class TestPhase50ImportSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Phase 5.5 — Deterministic LOVE-vs-ARRANGE engine (verdict-lock)
+# ═════════════════════════════════════════════════════════════════════════════
+# The engine computes a fixed verdict in pure Python from D1 + D9 so the LLM
+# cannot flip the answer between requests. These tests pin the contract:
+#   • question detector is conservative (only fires on real L-vs-A questions)
+#   • engine is deterministic (same kundli → identical verdict every run)
+#   • engine handles missing D9, missing planets, bad input without raising
+#   • locked-verdict block contains the DO-NOT-CHANGE instruction
+#   • the minimal-prompt builder substitutes the locked block for the
+#     rule-checklist when the lock fires (so the model isn't told to
+#     compute its own verdict in parallel)
+
+
+def _kundli_with_d9() -> dict:
+    """Bhubaneswar-style chart with Sag lagna + populated D9."""
+    return {
+        "ascendant": "Sagittarius",
+        "moonSign":  "Gemini",
+        "sunSign":   "Libra",
+        "planets": [
+            {"name": "Mars",    "sign": "Sagittarius", "house": 1},
+            {"name": "Venus",   "sign": "Leo",         "house": 9},
+            {"name": "Saturn",  "sign": "Aries",       "house": 5},
+            {"name": "Jupiter", "sign": "Aries",       "house": 5},
+            {"name": "Moon",    "sign": "Gemini",      "house": 7},
+            {"name": "Sun",     "sign": "Libra",       "house": 11},
+            {"name": "Mercury", "sign": "Scorpio",     "house": 12},
+            {"name": "Rahu",    "sign": "Cancer",      "house": 8},
+            {"name": "Ketu",    "sign": "Capricorn",   "house": 2},
+        ],
+        "divisionalCharts": {
+            "D9": {
+                "ascendantSignIndex": 8,  # Sagittarius
+                "planets": [
+                    {"name": "Mars",    "sign": "Sagittarius", "house": 1},
+                    {"name": "Sun",     "sign": "Capricorn",   "house": 2},
+                    {"name": "Venus",   "sign": "Pisces",      "house": 4},
+                    {"name": "Jupiter", "sign": "Sagittarius", "house": 1},
+                    {"name": "Saturn",  "sign": "Sagittarius", "house": 1},
+                    {"name": "Moon",    "sign": "Cancer",      "house": 8},
+                    {"name": "Mercury", "sign": "Virgo",       "house": 10},
+                    {"name": "Rahu",    "sign": "Aries",       "house": 5},
+                    {"name": "Ketu",    "sign": "Libra",       "house": 11},
+                ],
+            },
+        },
+    }
+
+
+class TestPhase55QuestionDetector(unittest.TestCase):
+    def test_fires_on_clear_love_vs_arrange(self):
+        for q in [
+            "Mera love marriage hoga ya arrange?",
+            "Will I have love marriage or arranged?",
+            "Love ya arrange?",
+            "love or arranged marriage chance",
+            "Pyaar wali ya arrange hogi shaadi?",
+            "Romance ya arrange marriage?",
+        ]:
+            self.assertTrue(
+                oh._phase55_is_love_vs_arrange_question(q),
+                f"should fire on {q!r}",
+            )
+
+    def test_does_not_fire_on_unrelated(self):
+        for q in [
+            "",
+            None,
+            "Kab shaadi hogi?",
+            "When will I marry?",
+            "How is my love life?",       # love only, no arrange
+            "Arrange marriage timing?",   # arrange only, no love
+            "Career advice please",
+            "Will I be rich?",
+        ]:
+            self.assertFalse(
+                oh._phase55_is_love_vs_arrange_question(q),  # type: ignore[arg-type]
+                f"should NOT fire on {q!r}",
+            )
+
+
+class TestPhase55Engine(unittest.TestCase):
+    def test_returns_required_keys(self):
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        self.assertIsNotNone(v)
+        for k in ("verdict", "confidence", "love_score", "arrange_score",
+                  "reasons_love", "reasons_arrange", "verdict_text_hi"):
+            self.assertIn(k, v)
+        self.assertIn(v["verdict"], ("love_likely", "arrange_likely", "mixed"))
+        self.assertGreaterEqual(v["confidence"], 0.5)
+        self.assertLessEqual(v["confidence"], 0.95)
+
+    def test_deterministic_across_runs(self):
+        """Same kundli MUST produce the same verdict every time —
+        this is the whole point of the engine (LLM was flipping)."""
+        k = _kundli_with_d9()
+        first = oh._phase55_compute_love_vs_arrange(k)
+        for _ in range(20):
+            v = oh._phase55_compute_love_vs_arrange(k)
+            self.assertEqual(v["verdict"],       first["verdict"])
+            self.assertEqual(v["love_score"],    first["love_score"])
+            self.assertEqual(v["arrange_score"], first["arrange_score"])
+            self.assertEqual(v["confidence"],    first["confidence"])
+
+    def test_arrange_heavy_kundli_returns_arrange(self):
+        """Pile up arrange indicators (Manglik + Saturn-Venus + Saturn-7H +
+        D9 Venus debilitated) — verdict must lean arrange_likely."""
+        k = {
+            "ascendant": "Aries",
+            "planets": [
+                {"name": "Mars",    "sign": "Aries",  "house": 1},   # Manglik
+                {"name": "Saturn",  "sign": "Libra",  "house": 7},   # Sat in 7H
+                {"name": "Venus",   "sign": "Libra",  "house": 7},   # Sat-Ven conj
+                {"name": "Sun",     "sign": "Leo",    "house": 5},
+                {"name": "Moon",    "sign": "Cancer", "house": 4},
+                {"name": "Mercury", "sign": "Virgo",  "house": 6},
+                {"name": "Jupiter", "sign": "Pisces", "house": 12},
+                {"name": "Rahu",    "sign": "Scorpio","house": 8},   # Rahu 8H
+                {"name": "Ketu",    "sign": "Taurus", "house": 2},
+            ],
+            "divisionalCharts": {
+                "D9": {
+                    "ascendantSignIndex": 0,
+                    "planets": [
+                        {"name": "Venus", "sign": "Virgo", "house": 6},  # debil + dusthana
+                        {"name": "Sun",   "sign": "Aries", "house": 1},
+                    ],
+                },
+            },
+        }
+        v = oh._phase55_compute_love_vs_arrange(k)
+        self.assertIsNotNone(v)
+        self.assertEqual(
+            v["verdict"], "arrange_likely",
+            f"expected arrange_likely; got {v}",
+        )
+        self.assertGreater(v["arrange_score"], v["love_score"])
+
+    def test_love_heavy_kundli_returns_love(self):
+        """Pile up love indicators (Venus 5H + Rahu 7H + Mars-Venus +
+        D9 Venus exalted) — verdict must lean love_likely."""
+        k = {
+            "ascendant": "Leo",  # 5L=Jupiter, 7L=Saturn
+            "planets": [
+                {"name": "Venus",   "sign": "Sagittarius", "house": 5},   # Venus in 5H
+                {"name": "Mars",    "sign": "Sagittarius", "house": 5},   # Mars-Venus same sign
+                {"name": "Rahu",    "sign": "Aquarius",    "house": 7},   # Rahu 7H
+                {"name": "Jupiter", "sign": "Sagittarius", "house": 5},   # 5L w/ 7L? no, but in 5H
+                {"name": "Saturn",  "sign": "Sagittarius", "house": 5},   # 7L Sat in 5H w/ 5L Jup → same sign!
+                {"name": "Sun",     "sign": "Leo",         "house": 1},
+                {"name": "Moon",    "sign": "Pisces",      "house": 8},
+                {"name": "Mercury", "sign": "Virgo",       "house": 2},
+                {"name": "Ketu",    "sign": "Leo",         "house": 1},
+            ],
+            "divisionalCharts": {
+                "D9": {
+                    "ascendantSignIndex": 4,
+                    "planets": [
+                        {"name": "Venus",   "sign": "Pisces",     "house": 8},  # exalted
+                        {"name": "Jupiter", "sign": "Sagittarius","house": 5},  # 5L in trine
+                        {"name": "Saturn",  "sign": "Sagittarius","house": 5},  # 7L same sign as 5L
+                    ],
+                },
+            },
+        }
+        v = oh._phase55_compute_love_vs_arrange(k)
+        self.assertIsNotNone(v)
+        self.assertEqual(
+            v["verdict"], "love_likely",
+            f"expected love_likely; got {v}",
+        )
+        self.assertGreater(v["love_score"], v["arrange_score"])
+
+    def test_handles_missing_d9(self):
+        k = _kundli_with_d9()
+        del k["divisionalCharts"]
+        v = oh._phase55_compute_love_vs_arrange(k)
+        self.assertIsNotNone(v)  # should still work with D1 only
+        self.assertIn(v["verdict"], ("love_likely", "arrange_likely", "mixed"))
+
+    def test_evidence_floor_downgrades_sparse_directional(self):
+        """Architect-review pin: with diff>=4 but total<6 (e.g. 4-vs-0),
+        the engine MUST downgrade to mixed/0.55 — sparse evidence is not
+        enough for a high-confidence directional verdict."""
+        # Build a chart with exactly ONE love indicator firing (Venus in 5H,
+        # +2) and a stacked Rahu+Mars-Venus to land at total=4 vs 0.
+        sparse_love = {
+            "ascendant": "Capricorn",  # 5L=Venus, 7L=Moon
+            "planets": [
+                {"name": "Venus",   "sign": "Taurus",      "house": 5},   # +2 (Venus 5H)
+                {"name": "Mars",    "sign": "Taurus",      "house": 5},   # +2 (Mars-Ven same sign)
+                {"name": "Sun",     "sign": "Sagittarius", "house": 12},
+                {"name": "Moon",    "sign": "Pisces",      "house": 3},
+                {"name": "Mercury", "sign": "Sagittarius", "house": 12},
+                {"name": "Jupiter", "sign": "Sagittarius", "house": 12},
+                {"name": "Saturn",  "sign": "Pisces",      "house": 3},
+                {"name": "Rahu",    "sign": "Gemini",      "house": 6},
+                {"name": "Ketu",    "sign": "Sagittarius", "house": 12},
+            ],
+        }
+        v = oh._phase55_compute_love_vs_arrange(sparse_love)
+        self.assertIsNotNone(v)
+        # Total evidence is small — must NOT return high-confidence directional
+        if v["love_score"] + v["arrange_score"] < 6:
+            self.assertEqual(
+                v["verdict"], "mixed",
+                f"sparse evidence ({v['love_score']} vs {v['arrange_score']}) "
+                f"must downgrade to mixed; got {v}",
+            )
+            self.assertEqual(v["confidence"], 0.55)
+
+    def test_returns_none_on_bad_input(self):
+        self.assertIsNone(oh._phase55_compute_love_vs_arrange(None))         # type: ignore[arg-type]
+        self.assertIsNone(oh._phase55_compute_love_vs_arrange("string"))     # type: ignore[arg-type]
+        self.assertIsNone(oh._phase55_compute_love_vs_arrange({}))           # no planets
+        self.assertIsNone(oh._phase55_compute_love_vs_arrange(
+            {"planets": [{"name": "Sun", "sign": "Leo", "house": 1}]}        # no ascendant
+        ))
+
+    def test_locked_block_has_do_not_change_instruction(self):
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        block = oh._phase55_format_locked_verdict_block(v)
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
+        self.assertIn("DO NOT change", block)
+        self.assertIn("HEADLINE", block)
+        self.assertIn("1-2 short sentences", block)
+        # Must NOT instruct the model to compute or analyze
+        self.assertNotIn("compute your own verdict", block.lower())
+        # Brevity is preserved — only explain when user asks why
+        self.assertIn("kyun", block)
+
+
+class TestPhase55BuilderIntegration(unittest.TestCase):
+    """When a love-vs-arrange question fires, the prompt builder must
+    REPLACE the topic-rule checklist with the locked verdict block —
+    otherwise the model would get told 'here is the verdict' AND 'here
+    are the rules — go compute your own', which is exactly the bug
+    that caused flipping verdicts."""
+
+    def test_lock_replaces_topic_rules_for_lva_question(self):
+        msgs = oh._phase50_build_minimal_messages(
+            question="Mera love marriage hoga ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="marriage",
+        )
+        user = msgs[-1]["content"]
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+        # MARRIAGE rules checklist (Phase 5.3) must be SUPPRESSED so the
+        # model has nothing to derive its own verdict from.
+        self.assertNotIn("MARRIAGE-question CHECKLIST", user)
+        self.assertNotIn("Vargottama check", user)
+
+    def test_lock_swaps_system_message_to_narrate_only(self):
+        """Architect-review fix: when lock fires, system message must NOT
+        tell the model to compute its own D9 verdict (otherwise it
+        contradicts the locked block in the user message)."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Mera love marriage hoga ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="marriage",
+        )
+        sysm = msgs[0]["content"]
+        self.assertIn("VERDICT-LOCK MODE", sysm)
+        # Default system msg "ARRIVE at the right verdict" must be GONE.
+        self.assertNotIn("ARRIVE at the right verdict", sysm)
+        self.assertNotIn("MANDATORY D9", sysm)
+
+    def test_lock_combined_prompt_has_no_recompute_verbs(self):
+        """Architect-review pin: across the COMBINED system+user prompt
+        in lock mode, there must be NO instruction telling the model to
+        compute, derive, analyze, walk through rules, or arrive at a
+        verdict. Defense against future prompt-drift re-introducing the
+        contradictory instructions."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Mera love marriage hoga ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="marriage",
+        )
+        combined = (msgs[0]["content"] + "\n" + msgs[-1]["content"]).lower()
+        # These are the exact phrases the model used to be told to do.
+        # If any of them comes back, the lock is leaking.
+        forbidden = [
+            "arrive at the right verdict",
+            "arrive at the correct verdict",
+            "compute your own verdict",
+            "compute the verdict",
+            "walk through silently",
+            "silently walking through the rules",
+            "mandatory d9",
+            "marriage-question checklist",
+            "vargottama check",
+        ]
+        for phrase in forbidden:
+            self.assertNotIn(
+                phrase, combined,
+                f"lock-mode prompt leaked recompute verb: {phrase!r}",
+            )
+
+    def test_lock_omits_full_kundli_json(self):
+        """Architect-review fix: with locked verdict in user message, raw
+        FULL_KUNDLI_JSON must NOT be included — without it the model has
+        no material from which to recompute / flip the verdict."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Love marriage hoga ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="marriage",
+        )
+        user = msgs[-1]["content"]
+        self.assertNotIn("FULL_KUNDLI_JSON", user)
+        # Mini chart summary stays — engine output stays — that's it.
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+
+    def test_no_lock_for_non_lva_marriage_question(self):
+        """Pure timing question must keep the rule checklist (no lock)."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Meri shaadi kab hogi?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="marriage",
+        )
+        user = msgs[-1]["content"]
+        self.assertNotIn("AUTHORITATIVE_ENGINE_VERDICT", user)
+
+    def test_lock_fires_independent_of_topic(self):
+        """Detector keys off the question text, not the topic — protects
+        against topic-router miscategorising L-vs-A as 'general' or
+        'relationship'."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Love ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hi",
+            extra_facts="",
+            topic="general",
+        )
+        user = msgs[-1]["content"]
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user)

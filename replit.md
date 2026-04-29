@@ -1486,3 +1486,125 @@ HTTP handler caught and silently fell back to the rules engine
 (`source=rules`). Fixed by using `_qu_conf` (sync) and
 `float((_qu or {}).get("confidence") or 0.0)` (stream) — both bound
 from the single understanding call earlier in the function.
+
+---
+
+## Phase 5.5 — DETERMINISTIC LOVE-vs-ARRANGE engine (verdict-lock)
+
+### Problem
+After Phase 5.4 brevity tightening, marriage answers were still flipping
+between "love marriage hoga" and "arrange marriage hoga" across requests
+on the **same kundli**. Root cause: the LLM was being given the
+FULL_KUNDLI_JSON plus the Phase 5.3 marriage rule-checklist (Vargottama
+check, neecha-bhanga, etc.) and asked to *compute its own verdict*. LLMs
+are non-deterministic — same input, different answers across calls.
+
+User's correct architectural insight:
+
+> Engine should produce the verdict; LLM should only express it.
+> Kundli → Engine → FIXED VERDICT → LLM (only narrates) → Output
+
+### Fix
+Added `_phase55_compute_love_vs_arrange(kundli)` — a pure-Python
+deterministic scorer using classical Vedic rules from D1 + D9:
+
+**LOVE indicators** (each scored): 5L↔7L conjunction in D1 (+4) and D9
+(+4), Venus in 5H/7H (+2), Rahu in 5H/7H (+3), Mars-Venus same sign
+(+2), 5L = Venus/Mars (+1), D9 Venus in own/exalted sign (+2/+3).
+
+**ARRANGE indicators**: Manglik dosha (+2), Saturn-Venus conjunction
+(+2), Saturn in 7H (+2), Rahu in 8H (+2), Ketu in 7H (+2), D9 Venus
+debilitated in Virgo (+2), D9 7L in dusthana 6/8/12 (+2).
+
+**Verdict thresholds**: `diff ≥ 4 → love_likely`, `diff ≤ -4 → arrange_likely`,
+else `mixed`. Confidence floor 0.55, ceiling 0.92.
+
+### Detector
+`_phase55_is_love_vs_arrange_question(q)` — fires only when BOTH a love
+token (`love|pyaar|prem|romance`) AND an arrange token (`arrang…`)
+appear in the question. Conservative: pure timing or compatibility
+queries are unaffected.
+
+### Prompt-builder integration
+In `_phase50_build_minimal_messages`, when the lock fires:
+1. The Phase 5.3 marriage rule-checklist is **suppressed** (otherwise
+   the model would still try to compute its own verdict from the rules
+   in parallel — exactly the bug we're fixing).
+2. An `AUTHORITATIVE_ENGINE_VERDICT` block is appended carrying the
+   verdict, the headline (Hinglish 1-liner), and a strong
+   `INSTRUCTION (CRITICAL)` telling the model: "Your ONLY job is to
+   express the HEADLINE in 1-2 short sentences. Do NOT add scores,
+   reasons, or contradict. Reasons only when user asks 'kyun/why/
+   explain/detail'." — preserving the Phase 5.4 brevity contract.
+
+The detector keys off the question text — not the topic — so a
+mis-routed L-vs-A question still gets the lock.
+
+### Tests
+9 new tests in `test_phase50_minimal_prompt.py`:
+- detector fires on 6 phrasings, doesn't fire on 8 unrelated questions
+- engine returns required keys, deterministic across 20 runs
+- arrange-heavy synthetic kundli → `arrange_likely`
+- love-heavy synthetic kundli → `love_likely`
+- handles missing D9 / null / empty / no-ascendant gracefully
+- locked block contains the DO-NOT-CHANGE instruction
+- 3 builder-integration tests confirming the topic-rule checklist is
+  swapped out for the lock block when a L-vs-A question fires
+
+Total: 150 tests pass (138 prior + 9 engine + 3 integration).
+
+### Live verification (29-Apr-2026, `openai_bare`)
+Same kundli + same question "Kya mera love marriage hoga ya arrange?"
+called twice:
+- Run 1: "Aapki kundli mein love aur arrange dono ke mixed sanket
+  hain, matlab dono sambhav hain par koi ek pakka nahi lagta."
+- Run 2: "Aapki kundli mein love aur arrange dono ke mixed sanket
+  hain — ek taraf clear nahi jhukti. Dono sambhavnayein ho sakti hain."
+
+Both runs: identical verdict direction (mixed), 1-2 sentences, no
+score numbers, no reason flooding. Wording paraphrasing is the
+expected natural variation; the conclusion is now stable.
+
+### Reversibility
+Two functions added with no shared state — to revert, delete the
+`if locked_verdict:` branch in `_phase50_build_minimal_messages` and
+the path falls back to the Phase 5.3 rule-checklist behaviour.
+
+### Architect-review fixes (Phase 5.5 round 2)
+First architect pass flagged two real issues; both fixed:
+
+1. **[HIGH] Contradictory system message.** The default Phase 5.0 system
+   message includes a "MANDATORY D9 CHECK ... use this to ARRIVE at the
+   right verdict" block. With the lock active, this contradicted the
+   `AUTHORITATIVE_ENGINE_VERDICT` block in the user message and re-created
+   the verdict-flipping risk.
+   **Fix:** When the lock fires, swap to a stripped "VERDICT-LOCK MODE"
+   system message that says only "engine has computed the verdict —
+   express the headline in 1-2 sentences, do NOT recompute." Also OMIT
+   `FULL_KUNDLI_JSON` from the user message — without raw chart data
+   the model has no material from which to flip the conclusion. The
+   mini chart summary remains for natural framing.
+
+2. **[MEDIUM] Sparse-evidence high-confidence verdicts.** With `diff>=4`
+   and a low total (e.g. love=4, arrange=0), the engine returned
+   `love_likely` at 0.92 confidence on a single indicator. A counter-
+   indicator the engine doesn't yet check would flip it.
+   **Fix:** Added an evidence floor — directional verdicts now require
+   `total >= 6`; below that, downgrade to `mixed` at 0.55 confidence.
+
+Two new builder-integration tests pin the system-message swap and the
+FULL_KUNDLI_JSON omission. Suite is now 152 tests passing.
+
+### Live verification round 2 (29-Apr-2026, post-fix)
+Same kundli, same question called 3 times in succession:
+- Run 1: "Aapki kundli mein love aur arrange dono ke mixed sanket hain,
+  matlab dono sambhav hain par koi ek taraf clear jhukav nahi dikh raha…"
+- Run 2: "Aapki kundli mein love aur arrange dono ke mixed sanket hain,
+  matlab dono sambhavnayein hain par koi ek taraf clear jhukav nahi…"
+- Run 3: "Aapki kundli mein love aur arrange dono ke mixed sanket hain,
+  matlab dono sambhavnayein hain par koi ek taraf clear jhukav nahi…"
+
+All three: identical verdict direction (mixed), 1-2 sentences, no score
+numbers, no reason flooding, no engine-internals leakage. Wording
+paraphrasing is the desired natural variation; the conclusion is now
+provably stable across requests.

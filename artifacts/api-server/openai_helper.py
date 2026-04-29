@@ -9218,6 +9218,330 @@ _PHASE53_TOPIC_RULES: dict[str, str] = {
 }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.5 — Deterministic LOVE-vs-ARRANGE engine (verdict-lock)
+# ─────────────────────────────────────────────────────────────────────────────
+# User feedback: same kundli was producing different verdicts (love vs
+# arrange) across requests because the LLM was DECIDING the verdict from
+# FULL_KUNDLI_JSON + classical-rule checklist. LLMs are non-deterministic —
+# verdict stability requires a Python-computed verdict, with the LLM only
+# EXPRESSING / explaining it.
+#
+# Architecture:
+#   Kundli → Engine → FIXED VERDICT → LLM (only narrates) → Output
+#
+# This module:
+#   1. Detects "love vs arrange" question pattern (Hinglish + English).
+#   2. Computes a classical-rule weighted score using D1 + D9.
+#   3. Locks the verdict + headline reasons into the prompt as an
+#      AUTHORITATIVE_ENGINE_VERDICT block — LLM is told to express it
+#      verbatim in the user's language, NOT to re-analyze or contradict.
+#   4. Result is deterministic for the same kundli.
+
+_PHASE55_SIGNS_ORDER = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+_PHASE55_SIGN_LORDS = {
+    "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury", "Cancer": "Moon",
+    "Leo": "Sun", "Virgo": "Mercury", "Libra": "Venus", "Scorpio": "Mars",
+    "Sagittarius": "Jupiter", "Capricorn": "Saturn", "Aquarius": "Saturn",
+    "Pisces": "Jupiter",
+}
+_PHASE55_SIGN_IDX = {s: i for i, s in enumerate(_PHASE55_SIGNS_ORDER)}
+
+
+def _phase55_is_love_vs_arrange_question(question: str) -> bool:
+    """True iff the question is a love-vs-arrange marriage decision query.
+
+    Triggered when BOTH a love token and an arrange token appear, OR when
+    the question explicitly compares the two. Conservative — only fires
+    on clear comparison questions to avoid hijacking other marriage
+    queries (e.g. timing, compatibility).
+    """
+    if not question or not isinstance(question, str):
+        return False
+    s = question.lower()
+    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", s))
+    has_arr  = bool(re.search(r"\barrang", s))
+    return has_love and has_arr
+
+
+def _p55_planet(plist: list, name: str) -> dict | None:
+    for p in (plist or []):
+        if (p.get("name") or "").strip() == name:
+            return p
+    return None
+
+
+def _p55_house_lord(lagna_sign: str, house_num: int) -> str | None:
+    li = _PHASE55_SIGN_IDX.get(lagna_sign)
+    if li is None:
+        return None
+    target_idx = (li + house_num - 1) % 12
+    return _PHASE55_SIGN_LORDS.get(_PHASE55_SIGNS_ORDER[target_idx])
+
+
+def _p55_same_sign(plist: list, p1: str, p2: str) -> bool:
+    a = _p55_planet(plist, p1); b = _p55_planet(plist, p2)
+    if not a or not b: return False
+    return a.get("sign") == b.get("sign")
+
+
+def _p55_same_house(plist: list, p1: str, p2: str) -> bool:
+    a = _p55_planet(plist, p1); b = _p55_planet(plist, p2)
+    if not a or not b: return False
+    return a.get("house") == b.get("house")
+
+
+def _p55_planet_house(plist: list, name: str) -> int | None:
+    p = _p55_planet(plist, name)
+    return p.get("house") if p else None
+
+
+def _p55_planet_sign(plist: list, name: str) -> str | None:
+    p = _p55_planet(plist, name)
+    return p.get("sign") if p else None
+
+
+def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
+    """Deterministic love-vs-arrange verdict from classical rules.
+
+    Uses D1 (kundli['planets']) + D9 (kundli['divisionalCharts']['D9']).
+    Returns None if kundli is missing required data — caller falls back
+    to the LLM-only path.
+
+    Returns:
+      {
+        'verdict':        'love_likely' | 'arrange_likely' | 'mixed',
+        'confidence':     0.55 .. 0.92,
+        'love_score':     int,
+        'arrange_score':  int,
+        'reasons_love':   list[str],
+        'reasons_arrange': list[str],
+        'verdict_text_hi': str  (Hinglish 1-line verdict)
+      }
+    """
+    if not isinstance(kundli, dict):
+        return None
+    plist_d1 = kundli.get("planets") or []
+    if not plist_d1:
+        return None
+    lagna = (kundli.get("ascendant") or "").strip().capitalize()
+    if lagna not in _PHASE55_SIGN_IDX:
+        return None
+
+    fifth_lord    = _p55_house_lord(lagna, 5)
+    seventh_lord  = _p55_house_lord(lagna, 7)
+
+    d9 = ((kundli.get("divisionalCharts") or {}).get("D9") or {})
+    plist_d9 = d9.get("planets") or []
+
+    love_score = 0
+    arrange_score = 0
+    reasons_love: list[str] = []
+    reasons_arrange: list[str] = []
+
+    # ── LOVE INDICATORS ──────────────────────────────────────────────────
+
+    # 1. 5th lord ↔ 7th lord connection in D1 (same sign or same house)
+    if fifth_lord and seventh_lord and fifth_lord != seventh_lord:
+        if _p55_same_sign(plist_d1, fifth_lord, seventh_lord):
+            love_score += 4
+            reasons_love.append(
+                f"5th lord ({fifth_lord}) and 7th lord ({seventh_lord}) "
+                f"in same sign in D1 (very strong love-marriage indicator)"
+            )
+        elif _p55_same_house(plist_d1, fifth_lord, seventh_lord):
+            love_score += 3
+            reasons_love.append(
+                f"5th lord ({fifth_lord}) and 7th lord ({seventh_lord}) "
+                f"in same house in D1"
+            )
+
+    # 2. Same connection in D9 (Navamsha — D9 is the deciding chart)
+    if plist_d9 and fifth_lord and seventh_lord and fifth_lord != seventh_lord:
+        if _p55_same_sign(plist_d9, fifth_lord, seventh_lord):
+            love_score += 4
+            reasons_love.append(
+                f"5L ↔ 7L conjunct in D9 Navamsha (deep-chart confirmation)"
+            )
+        elif _p55_same_house(plist_d9, fifth_lord, seventh_lord):
+            love_score += 3
+            reasons_love.append("5L ↔ 7L same house in D9 Navamsha")
+
+    # 3. Venus in 5H or 7H (D1) — love karaka in romance/partnership house
+    venus_h = _p55_planet_house(plist_d1, "Venus")
+    if venus_h in (5, 7):
+        love_score += 2
+        reasons_love.append(f"Venus in {venus_h}H of D1 supports love marriage")
+
+    # 4. Rahu in 5H or 7H — unconventional bond / love marriage
+    rahu_h = _p55_planet_house(plist_d1, "Rahu")
+    if rahu_h in (5, 7):
+        love_score += 3
+        reasons_love.append(
+            f"Rahu in {rahu_h}H of D1 — unconventional bond / love marriage"
+        )
+
+    # 5. Mars-Venus same sign or same house (D1)
+    if _p55_same_sign(plist_d1, "Mars", "Venus"):
+        love_score += 2
+        reasons_love.append("Mars-Venus conjunct in D1 — passionate attraction")
+    elif _p55_same_house(plist_d1, "Mars", "Venus"):
+        love_score += 2
+        reasons_love.append("Mars-Venus same house in D1 — attraction signal")
+
+    # 6. 5th lord = Venus or Mars (natural love-nature ruler)
+    if fifth_lord in ("Venus", "Mars"):
+        love_score += 1
+        reasons_love.append(f"5th lord is {fifth_lord} (natural love-nature ruler)")
+
+    # 7. D9 Venus dignity
+    venus_d9_sign = _p55_planet_sign(plist_d9, "Venus")
+    if venus_d9_sign in ("Taurus", "Libra"):
+        love_score += 2
+        reasons_love.append(
+            f"D9 Venus in own sign {venus_d9_sign} (deep love nature)"
+        )
+    elif venus_d9_sign == "Pisces":
+        love_score += 3
+        reasons_love.append("D9 Venus exalted in Pisces (sublime love bond)")
+
+    # ── ARRANGE INDICATORS / OBSTACLES ───────────────────────────────────
+
+    # 1. Manglik dosha — Mars in 1/4/7/8/12 from lagna
+    mars_h = _p55_planet_house(plist_d1, "Mars")
+    if mars_h in (1, 4, 7, 8, 12):
+        arrange_score += 2
+        reasons_arrange.append(
+            f"Manglik dosha (Mars in {mars_h}H) — delays / typically arrange"
+        )
+
+    # 2. Saturn-Venus conjunction = delays
+    if _p55_same_sign(plist_d1, "Saturn", "Venus"):
+        arrange_score += 2
+        reasons_arrange.append(
+            "Saturn-Venus conjunct — delays, structured (arrange) marriage"
+        )
+
+    # 3. Saturn in 7H — delays / arrange tendency
+    sat_h = _p55_planet_house(plist_d1, "Saturn")
+    if sat_h == 7:
+        arrange_score += 2
+        reasons_arrange.append(
+            "Saturn in 7H — delays, traditional/arrange marriage"
+        )
+
+    # 4. Rahu in 8H — sudden events / OBSTACLES (NOT a love indicator)
+    if rahu_h == 8:
+        arrange_score += 2
+        reasons_arrange.append(
+            "Rahu in 8H — obstacles / sudden events in marriage (not love)"
+        )
+
+    # 5. Ketu in 7H — detachment, often arrange
+    ketu_h = _p55_planet_house(plist_d1, "Ketu")
+    if ketu_h == 7:
+        arrange_score += 2
+        reasons_arrange.append("Ketu in 7H — detachment in partnership")
+
+    # 6. D9 Venus debilitated (Virgo) = surface attraction only
+    if venus_d9_sign == "Virgo":
+        arrange_score += 2
+        reasons_arrange.append(
+            "D9 Venus debilitated in Virgo — surface attraction only"
+        )
+
+    # 7. D9 7th lord in dusthana (6/8/12) — partner friction
+    if seventh_lord and plist_d9:
+        s7_d9_h = _p55_planet_house(plist_d9, seventh_lord)
+        if s7_d9_h in (6, 8, 12):
+            arrange_score += 2
+            reasons_arrange.append(
+                f"D9 7th lord ({seventh_lord}) in dusthana {s7_d9_h}H "
+                f"— partner friction"
+            )
+
+    # ── VERDICT ──────────────────────────────────────────────────────────
+
+    diff = love_score - arrange_score
+    total = love_score + arrange_score
+    if total == 0:
+        verdict = "mixed"
+        confidence = 0.55
+    elif diff >= 4:
+        verdict = "love_likely"
+        confidence = min(0.92, 0.55 + (diff / max(total, 1)) * 0.4)
+    elif diff <= -4:
+        verdict = "arrange_likely"
+        confidence = min(0.92, 0.55 + (-diff / max(total, 1)) * 0.4)
+    else:
+        verdict = "mixed"
+        confidence = 0.55
+
+    # Phase 5.5 architect-review fix: evidence floor. Even with diff>=4,
+    # if total evidence is sparse (e.g. 4 vs 0) the high-confidence verdict
+    # is fragile — a single counter-indicator the engine doesn't yet check
+    # would flip it. Require total>=6 for a directional call; otherwise
+    # downgrade to `mixed` with low confidence so the LLM can present it
+    # honestly as inconclusive.
+    if verdict in ("love_likely", "arrange_likely") and total < 6:
+        verdict = "mixed"
+        confidence = 0.55
+
+    if verdict == "love_likely":
+        verdict_text = "Aapki kundli mein love marriage ke chances zyada hain."
+    elif verdict == "arrange_likely":
+        verdict_text = "Aapki kundli mein arrange marriage ke chances zyada hain."
+    else:
+        verdict_text = (
+            "Aapki kundli mein love aur arrange dono ke mixed sanket hain — "
+            "ek taraf clear nahi jhukti."
+        )
+
+    return {
+        "verdict":         verdict,
+        "confidence":      round(confidence, 2),
+        "love_score":      love_score,
+        "arrange_score":   arrange_score,
+        "reasons_love":    reasons_love[:5],
+        "reasons_arrange": reasons_arrange[:5],
+        "verdict_text_hi": verdict_text,
+    }
+
+
+def _phase55_format_locked_verdict_block(v: dict) -> str:
+    """Render the engine verdict as a LOCKED authoritative block for the prompt.
+
+    Tells the LLM: this is the verdict, your only job is to express it
+    briefly. NO re-analysis, NO contradicting, NO flipping.
+    """
+    if not isinstance(v, dict):
+        return ""
+    rs_love = "\n".join(f"  + {r}" for r in (v.get("reasons_love") or [])) or "  (none)"
+    rs_arr  = "\n".join(f"  - {r}" for r in (v.get("reasons_arrange") or [])) or "  (none)"
+    return (
+        "AUTHORITATIVE_ENGINE_VERDICT (locked — DO NOT change, contradict, "
+        "or recompute):\n"
+        f"  VERDICT: {v.get('verdict')}\n"
+        f"  CONFIDENCE: {v.get('confidence')}\n"
+        f"  LOVE_SCORE: {v.get('love_score')}    "
+        f"ARRANGE_SCORE: {v.get('arrange_score')}\n"
+        f"  HEADLINE: {v.get('verdict_text_hi')}\n"
+        f"  REASONS_LOVE:\n{rs_love}\n"
+        f"  REASONS_ARRANGE:\n{rs_arr}\n\n"
+        "INSTRUCTION (CRITICAL): A deterministic Vedic-rules engine has "
+        "already computed this verdict from the user's D1 + D9 charts. "
+        "Your ONLY job is to express the HEADLINE in the user's language "
+        "(Hindi/Hinglish/English) in 1-2 short sentences. Do NOT add the "
+        "score numbers. Do NOT list the reasons unless the user explicitly "
+        "asks 'kyun' / 'why' / 'reason batao' / 'explain' / 'detail mein "
+        "batao'. Do NOT contradict or change the verdict. Do NOT re-derive "
+        "it from the kundli — the engine has already done that work."
+    )
+
+
 def _phase53_topic_rules(topic: str | None) -> str:
     """Return the topic-specific classical-rules checklist or empty string.
 
@@ -9284,43 +9608,78 @@ def _phase50_build_minimal_messages(
     else:
         lang_hint = " Match the user's language."
 
-    system_msg = (
-        "You are a Vedic astrology assistant.\n\n"
-        "You have access to the user's kundli (planets, houses, current "
-        "dasha, AND all divisional charts D1-D60 in FULL_KUNDLI_JSON).\n"
-        "Use it internally to think.\n\n"
-        "OUTPUT STYLE — answer only what is asked:\n\n"
-        "- Give a clear and direct answer.\n"
-        "- For a simple yes/no or A-vs-B question: reply with the verdict "
-        "briefly in a single short response. Do NOT add reasoning, planet "
-        "names, house numbers, D9/D10/D30 details, or astrological "
-        "breakdown unless the user explicitly asks 'kyun', 'reason "
-        "batao', 'explain', 'detail mein batao', 'how', or similar.\n"
-        "- Only expand into a detailed analysis when the user asks for "
-        "explanation or technical reasoning.\n"
-        "- If a clear answer is possible, do not avoid it.\n"
-        "- Focus only on what the user asked. Do not stay vague or "
-        "neutral. Speak like a human, not a report.\n\n"
-        "CLASSICAL RULE — MANDATORY D9 (NAVAMSHA) CHECK (INTERNAL ONLY):\n"
-        "For ANY prediction or life-event question (marriage, career, "
-        "wealth, children, foreign travel, spiritual growth, etc.), you "
-        "MUST consult the D9 chart SILENTLY before forming your verdict. "
-        "D9 is the 'phaladayak' (fruit-giving) chart. Rules to apply "
-        "INTERNALLY (do not narrate them in the answer unless the user "
-        "asks for reasoning):\n"
-        "  1. Planet STRONG in D1 but WEAK in D9 → result under-delivers.\n"
-        "  2. Planet WEAK in D1 but STRONG in D9 (own/exalted/Vargottama) "
-        "→ neecha-bhanga, much better than D1 suggests.\n"
-        "  3. VARGOTTAMA (same sign in D1 and D9) = doubles the result.\n"
-        "  4. Always silently check D9 position of: (a) the topic karaka "
-        "(Venus=marriage, Sun=career, Jupiter=wealth/children, "
-        "Moon=mind, Mercury=business, Saturn=longevity), (b) the "
-        "relevant house lord, (c) D9 lagna and lagna lord.\n"
-        "  5. If D1 and D9 disagree, D9 wins for the FINAL outcome.\n"
-        "Use this D9 check to ARRIVE at the right verdict. Then output "
-        "ONLY the verdict (1-2 sentences) — keep all this reasoning "
-        "internal unless the user asks 'why' or 'explain'." + lang_hint
-    )
+    # ── Phase 5.5 — DETERMINISTIC LOVE-vs-ARRANGE LOCK (computed early) ──
+    # Detect/compute the lock BEFORE we build the system message so the
+    # system message itself can be swapped to a "narrate-only" variant.
+    # Architect-review (Phase 5.5) flagged that the default system message
+    # tells the model "use D9 to ARRIVE at the right verdict" — when a
+    # locked verdict is provided in the user message, that instruction
+    # contradicts the lock and re-creates the verdict-flipping risk.
+    #
+    # Detector keys off the question text (not topic) so a mis-routed
+    # love-vs-arrange question still gets the lock.
+    locked_verdict = None
+    if _phase55_is_love_vs_arrange_question(question or ""):
+        locked_verdict = _phase55_compute_love_vs_arrange(kundli)
+
+    if locked_verdict:
+        # Lock-mode system message: short, single instruction, NO
+        # "compute your own verdict" language. The authoritative engine
+        # block in the user message is the source of truth.
+        system_msg = (
+            "You are a Vedic astrology assistant.\n\n"
+            "VERDICT-LOCK MODE: A deterministic Vedic-rules engine has "
+            "ALREADY computed the verdict for this question from the "
+            "user's D1 + D9 charts. The verdict is provided in the user "
+            "message under AUTHORITATIVE_ENGINE_VERDICT.\n\n"
+            "Your ONLY job:\n"
+            "- Express the engine's HEADLINE in the user's language in "
+            "1-2 short sentences.\n"
+            "- Do NOT recompute, contradict, or flip the verdict.\n"
+            "- Do NOT mention scores, indicator counts, or 'engine'.\n"
+            "- Do NOT list the reasons unless the user explicitly asks "
+            "'kyun' / 'why' / 'reason batao' / 'explain' / 'detail mein "
+            "batao' / 'how'.\n"
+            "- Speak like a human astrologer, not a report." + lang_hint
+        )
+    else:
+        system_msg = (
+            "You are a Vedic astrology assistant.\n\n"
+            "You have access to the user's kundli (planets, houses, current "
+            "dasha, AND all divisional charts D1-D60 in FULL_KUNDLI_JSON).\n"
+            "Use it internally to think.\n\n"
+            "OUTPUT STYLE — answer only what is asked:\n\n"
+            "- Give a clear and direct answer.\n"
+            "- For a simple yes/no or A-vs-B question: reply with the verdict "
+            "briefly in a single short response. Do NOT add reasoning, planet "
+            "names, house numbers, D9/D10/D30 details, or astrological "
+            "breakdown unless the user explicitly asks 'kyun', 'reason "
+            "batao', 'explain', 'detail mein batao', 'how', or similar.\n"
+            "- Only expand into a detailed analysis when the user asks for "
+            "explanation or technical reasoning.\n"
+            "- If a clear answer is possible, do not avoid it.\n"
+            "- Focus only on what the user asked. Do not stay vague or "
+            "neutral. Speak like a human, not a report.\n\n"
+            "CLASSICAL RULE — MANDATORY D9 (NAVAMSHA) CHECK (INTERNAL ONLY):\n"
+            "For ANY prediction or life-event question (marriage, career, "
+            "wealth, children, foreign travel, spiritual growth, etc.), you "
+            "MUST consult the D9 chart SILENTLY before forming your verdict. "
+            "D9 is the 'phaladayak' (fruit-giving) chart. Rules to apply "
+            "INTERNALLY (do not narrate them in the answer unless the user "
+            "asks for reasoning):\n"
+            "  1. Planet STRONG in D1 but WEAK in D9 → result under-delivers.\n"
+            "  2. Planet WEAK in D1 but STRONG in D9 (own/exalted/Vargottama) "
+            "→ neecha-bhanga, much better than D1 suggests.\n"
+            "  3. VARGOTTAMA (same sign in D1 and D9) = doubles the result.\n"
+            "  4. Always silently check D9 position of: (a) the topic karaka "
+            "(Venus=marriage, Sun=career, Jupiter=wealth/children, "
+            "Moon=mind, Mercury=business, Saturn=longevity), (b) the "
+            "relevant house lord, (c) D9 lagna and lagna lord.\n"
+            "  5. If D1 and D9 disagree, D9 wins for the FINAL outcome.\n"
+            "Use this D9 check to ARRIVE at the right verdict. Then output "
+            "ONLY the verdict (1-2 sentences) — keep all this reasoning "
+            "internal unless the user asks 'why' or 'explain'." + lang_hint
+        )
 
     user_parts = []
     if chart_summary:
@@ -9332,28 +9691,43 @@ def _phase50_build_minimal_messages(
     # KP sub-lords, ashtakavarga, shadbala, doshas — anything the
     # kundli engine produced). The model is told to look here for any
     # detail not in the quick-reference summary.
-    try:
-        if isinstance(kundli, dict) and kundli:
-            kundli_json = json.dumps(kundli, ensure_ascii=False, separators=(",", ":"))
-            user_parts.append(
-                "FULL_KUNDLI_JSON (authoritative — use this for ANY "
-                "chart detail not in the quick reference above; do NOT "
-                "invent anything outside this object):\n" + kundli_json
-            )
-    except Exception:
-        # Defensive — never fail the prompt build over JSON serialisation.
-        pass
+    #
+    # Phase 5.5 architect-review: when the verdict-lock is active we
+    # OMIT FULL_KUNDLI_JSON entirely. Without the raw chart, the model
+    # has no material from which to recompute its own verdict — it has
+    # only the locked engine output to express. The mini chart summary
+    # remains so the model can still say "Aapki Sagittarius lagna mein…"
+    # if it wants natural framing, but cannot flip the conclusion.
+    if not locked_verdict:
+        try:
+            if isinstance(kundli, dict) and kundli:
+                kundli_json = json.dumps(kundli, ensure_ascii=False, separators=(",", ":"))
+                user_parts.append(
+                    "FULL_KUNDLI_JSON (authoritative — use this for ANY "
+                    "chart detail not in the quick reference above; do NOT "
+                    "invent anything outside this object):\n" + kundli_json
+                )
+        except Exception:
+            # Defensive — never fail the prompt build over JSON serialisation.
+            pass
 
     if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
         user_parts.append("FACTS:\n" + extra_facts.strip())
 
-    # Phase 5.3 — inject topic-specific classical-rule checklist when the
-    # detected topic has well-known Vedic rules (marriage / career / wealth
-    # / health). Forces step-by-step rule walking instead of one-indicator
-    # confidence. Empty for unknown topics — falls back to general guidance.
-    rules_block = _phase53_topic_rules(topic)
-    if rules_block:
-        user_parts.append(rules_block)
+    if locked_verdict:
+        # Lock-mode: ONLY the locked verdict block — no rule checklist,
+        # no FULL_KUNDLI_JSON. The system message has been swapped to
+        # the narrate-only variant above.
+        user_parts.append(_phase55_format_locked_verdict_block(locked_verdict))
+    else:
+        # Phase 5.3 — inject topic-specific classical-rule checklist when
+        # the detected topic has well-known Vedic rules (marriage / career
+        # / wealth / health). Forces step-by-step rule walking instead of
+        # one-indicator confidence. Empty for unknown topics — falls back
+        # to general guidance.
+        rules_block = _phase53_topic_rules(topic)
+        if rules_block:
+            user_parts.append(rules_block)
 
     user_parts.append("QUESTION:\n" + (question or "").strip())
 

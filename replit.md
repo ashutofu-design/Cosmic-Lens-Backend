@@ -2537,6 +2537,91 @@ rules invented.
 **Net result: prompt is now a pure facts-only contract. Engine emits
 labels in exactly the form the user specified; LLM narrates them.**
 
+## Phase 5.9 — Dosh FACTS block (Batch 3a: dosh_engine wired)
+
+Continues the Phase 5.8 clean-facts pattern by wiring
+`dosh_engine.analyze_doshas()` into the minimal-prompt path as a single
+deterministic `DOSH_FACTS` block. **No new astrology logic** — only
+formatting + routing of what the engine already computes (the 14
+configured doshas: manglik, kaal-sarp, pitru, guru-chandal, grahan,
+daridra, angarak, shrapit, kemadruma, vish-yog, sakat, putra, gandanta,
+punar-phoo).
+
+### What the LLM now receives (dosh question)
+
+```
+DOSH_FACTS:
+  - total_present: <int>     (active + mild)
+  - active_count: <int>
+  - mild_count: <int>
+  - none_count: <int>
+  - per_dosha:
+    - <name>: active — <headline> (planet_note: <note>)
+    - <name>: mild — <headline> (planet_note: <note>)
+    - <name>: absent
+    ...                       (one row per engine entry, no overflow)
+```
+
+Schema design notes:
+- Flat per-line list with **inline status labels** (`active` / `mild`
+  / `absent`). The earlier bucketed schema (`active: / mild: / clear:`)
+  caused the LLM to read a name in the `clear:` bucket and answer
+  "Yes" anyway (live trace: kaal-sarp + pitru). Inline labels eliminate
+  bucket-header ambiguity — the LLM literally must read the status
+  label to decide yes/no.
+- All 14 doshas listed (no overflow truncation). Total block size is
+  bounded — ~14 rows is well within budget.
+- Remedies are intentionally NOT in this block — they belong in a
+  future REMEDIES block (out of scope for 5.9).
+
+### Wiring summary
+
+* **Plumb** (`openai_helper.py:2049`): `out_meta["dosh_verdict_obj"] = _d`
+  right after the existing `analyze_doshas()` call, gated by the same
+  chart-fact / dosha-check branch.
+* **Detector** (`_phase59_is_dosh_question`): regex covers ONLY engine
+  keywords. Sade-sati is deliberately EXCLUDED — it's a transit-based
+  phenomenon not in `DOSH_CONFIGS`. Including it caused the LLM to
+  hallucinate ("Yes, your Sade-Sati is currently active") in the v1 live
+  trace, which we caught and fixed before shipping.
+* **Formatter** (`_phase59_format_dosh_facts_block`): pure render of
+  the engine's `dosh_list` bucketed by `status` (Active / Mild / None).
+  Defensive contract — never raises on malformed input (returns "" or
+  partial block). Counts are the engine's, not recomputed.
+* **Extractor wiring** (`_phase50_extract_verdict_facts`): only emits
+  DOSH_FACTS when the question matches the dosh regex — keeps the
+  prompt minimal for non-dosh questions and prevents affliction prose
+  leaking into marriage / career / health answers.
+
+### Tests & live verification
+
+`test_phase59_dosh_facts.py` — 17 tests covering detector (English,
+Hinglish, Devanagari for all 14 doshas + sade-sati exclusion guard),
+formatter (clean schema, no remedies leak, malformed input safety),
+and extractor routing (cross-domain marriage+dosh, isolation, empty Q
+backward compat). Full suite: 186/186 green.
+
+Live verified against Bhubaneswar 1999 chart with 6 questions:
+manglik, kaal-sarp, overview, punar-phoo, pitru, sade-sati. Engine and
+LLM output match deterministically; sade-sati now correctly answered
+"No" with explicit Saturn-transit reasoning instead of an invented "yes".
+
+### Reversibility
+
+Same minimal-prompt mechanism as Phase 5.8 — the dosh block is a
+question-routed addition to `_phase50_extract_verdict_facts`. Setting
+`PHASE50_MINIMAL_PROMPT=0` reverts to the legacy heavy path, which
+never sees `dosh_verdict_obj`. The plumb-only `out_meta` write is
+side-effect-free for legacy callers.
+
+### Next batches (3b–3d)
+
+`career_engine`, `health_engine`, `love_engine` follow next. Property /
+vehicle / child / foreign-travel deferred — no standalone engines exist
+for those (only fragments inside `wealth_engine`, D7, D16).
+
+---
+
 ## Phase 5.8 — Marriage & Wealth FACTS blocks (engine sochta hai, LLM bolta hai)
 
 Extends the Phase 5.7.1 clean-facts pattern (`ENGINE_VERDICT` /

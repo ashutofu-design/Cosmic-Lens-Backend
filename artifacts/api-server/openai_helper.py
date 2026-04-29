@@ -2039,6 +2039,12 @@ def _build_messages(
                     kundli.get("planets") or [],
                     (kundli.get("nakshatra") or "") if isinstance(kundli, dict) else "",
                 )
+                # Phase 5.9 — plumb the raw dosh verdict object so the
+                # minimal-prompt extractor can render it as a clean
+                # DOSH_FACTS block (parallel to Phase 5.8 marriage/wealth).
+                # Independent of the legacy LOCKED text block below.
+                if isinstance(out_meta, dict) and isinstance(_d, dict):
+                    out_meta["dosh_verdict_obj"] = _d
                 _dosh_lines = []
                 for d in (_d.get("dosh_list") or []):
                     _dosh_lines.append(
@@ -10084,6 +10090,12 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
       * empty/no question (unit-test path)          → legacy 1-liners for
         all domains (backward compatible — preserves earlier semantics).
 
+    Phase 5.9 — dosh routed clean block:
+      * dosh question + `dosh_verdict_obj` → DOSH_FACTS block
+      * dosh-domain block is suppressed for non-dosh questions to keep
+        the prompt minimal and avoid leaking unrelated affliction prose
+        into other answers.
+
     Other domain verdicts (love/career/health/stock) keep the 1-liner
     behaviour until later phases convert them to clean facts blocks.
     """
@@ -10131,6 +10143,17 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             b = (wv.get("bucket")  or "").strip()
             if v:
                 parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
+
+    # ── DOSH (Phase 5.9) ─────────────────────────────────────────────────
+    # Surfaced ONLY when the question is a dosh/affliction question.
+    # Empty-question (unit-test path) does NOT surface dosh — the engine
+    # output is verbose enough that the legacy 1-liner has no good summary
+    # field, so backward-compat = silent for empty Q.
+    dv = bm.get("dosh_verdict_obj")
+    if routed and _phase59_is_dosh_question(q) and isinstance(dv, dict):
+        block = _phase59_format_dosh_facts_block(dv)
+        if block:
+            parts.append(block)
 
     # ── Other domain verdicts — 1 line each (unchanged this phase). ─────
     for key, label in [
@@ -10846,6 +10869,186 @@ def _phase58_format_wealth_facts_block(v: Any) -> str:
     else:
         lines.append("  - risk_factors: none")
     lines.append(f"  - confidence: {confidence}")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.9 — Dosh FACTS block (engine sochta hai, LLM bolta hai)
+# ─────────────────────────────────────────────────────────────────────────────
+# Wires `dosh_engine.analyze_doshas()` into the minimal-prompt path as a
+# clean DOSH_FACTS block. Same disciplined pattern as Phase 5.8: no new
+# astrology logic, only formatting + routing of what the engine already
+# computes (manglik, kaal-sarp, sade-sati, pitru, guru-chandal, kemadruma,
+# vish, angarak, grahan — all 9 doshas configured in DOSH_CONFIGS).
+#
+# Routing-only regex (does NOT cause the engine to fire — the engine is
+# already fired upstream at line ~2040 inside the chart-fact / dosha-check
+# branch, and the verdict obj is plumbed onto out_meta there).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# NOTE on coverage: this regex matches ONLY the 14 doshas that
+# `dosh_engine.analyze_doshas()` actually computes (per DOSH_CONFIGS):
+#   manglik, kaal-sarp, pitru, guru-chandal, grahan, daridra, angarak,
+#   shrapit, kemadruma, vish-yog, sakat, putra, gandanta, punar-phoo.
+# Notable EXCLUSIONS: sade-sati (transit-based, time-varying — handled
+# by transit_engine, not dosh_engine). Including a keyword in this regex
+# without engine coverage causes the LLM to hallucinate facts when
+# DOSH_FACTS is injected without that specific entry. Stay aligned.
+#
+# Hard rule (architect-enforced after Phase 5.9 v2 review): the bare
+# token `\bdosh\b` MUST NOT be used as a catch-all — that would match
+# "sade-sati dosh", "nadi dosh", "kalatra dosh" etc. and reintroduce the
+# hallucination vector. Generic overview matches require an unambiguous
+# quantifier ("any / all / how many / kitne / saare") OR the plural
+# "doshas" form (which is virtually always overview-scope in real usage).
+_PHASE59_DOSH_QUESTION_RE = _re_p58.compile(
+    # ── Overview patterns (quantifier + "dosh") ─────────────────────
+    r"\b(?:any|all|list|which|what|my|the|some)\s+dosh(?:a|am|as|ams)?\b|"
+    r"\bhow\s+many\s+dosh(?:a|am|as|ams)?\b|"
+    r"\bhave\s+(?:any\s+)?dosh(?:a|am|as|ams)?\b|"
+    r"\bdoshas\b|"
+    r"\b(?:kitne|kaun[- ]?se|kaun[- ]?sa|saare|sare|sab|koi|kuch|mere?|meri)"
+    r"\s+dosh(?:a|on|am|ams)?\b|"
+    r"\bकितने[- ]?दोष|कौन[- ]?से[- ]?दोष|कौन[- ]?सा[- ]?दोष|"
+    r"सारे[- ]?दोष|कोई[- ]?दोष|मेरे[- ]?दोष|कुछ[- ]?दोष|"
+    # ── Specific 14 doshas (English / Hinglish) ─────────────────────
+    r"\bmanglik\b|\bmangalik\b|\bmangal[- ]?dosh(?:a)?\b|\bkuja[- ]?dosh\b|"
+    r"\bkaal[- ]?sarp(?:a)?\b|\bkalsarp(?:a)?\b|\bkala[- ]?sarp\b|"
+    r"\bpitru[- ]?dosh\b|\bpitra[- ]?dosh\b|\bpitri[- ]?dosh\b|"
+    r"\bguru[- ]?chandal\b|\bgurchandal\b|"
+    r"\bgrahan[- ]?dosh\b|\bgrahan[- ]?yog\b|"
+    r"\bdaridra[- ]?(?:dosh|yog)?\b|"
+    r"\bangarak(?:a)?\b|\bangaarak\b|"
+    r"\bshrapit\b|\bshraapit\b|"
+    r"\bkemadruma\b|\bkemdrum\b|"
+    r"\bvish[- ]?yog\b|\bvisha[- ]?yog\b|"
+    r"\bsakat[- ]?(?:yog|dosh)?\b|\bshakat[- ]?yog\b|"
+    r"\bputra[- ]?dosh\b|\bsantaan[- ]?dosh\b|"
+    r"\bgandanta\b|\bgand[ -]?anta\b|"
+    r"\bpunar[- ]?phoo\b|\bpunar[- ]?foo\b|\bpunarphoo\b|"
+    # ── Specific 14 doshas (Devanagari) ─────────────────────────────
+    # Note: bare Devanagari roots like `दरिद्र` (poor) and `शकट` (cart)
+    # are common non-dosha Hindi words — REQUIRE a योग / दोष suffix to
+    # avoid matching unrelated user prose ("मैं दरिद्र हूं" = "I am poor").
+    r"मांगलिक|मंगलिक|मंगल[- ]?दोष|"
+    r"काल[- ]?सर्प|कालसर्प|"
+    r"पितृ[- ]?दोष|पित्र[- ]?दोष|"
+    r"गुरु[- ]?चांडाल|"
+    r"केमद्रुम|विष[- ]?योग|अंगारक|ग्रहण[- ]?दोष|"
+    r"दरिद्र[- ]?(?:योग|दोष)|श्रापित[- ]?(?:योग|दोष)|"
+    r"शकट[- ]?(?:योग|दोष)|"
+    r"पुत्र[- ]?दोष|गण्डान्त|पुनर[- ]?फू",
+    _re_p58.IGNORECASE,
+)
+
+
+def _phase59_is_dosh_question(question: Any) -> bool:
+    """True iff the question is about doshas / afflictions / yogas-of-concern.
+
+    Defensive against non-string input. Used by the minimal-prompt path
+    to gate emission of the DOSH_FACTS block.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_PHASE59_DOSH_QUESTION_RE.search(question))
+
+
+def _phase59_format_dosh_facts_block(v: Any) -> str:
+    """Render `analyze_doshas()` output as a clean, prose-free facts block.
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      DOSH_FACTS:
+        - total_present: <int>     (active + mild)
+        - active_count: <int>
+        - mild_count: <int>
+        - none_count: <int>
+        - per_dosha:
+          - <name>: active — <headline> (planet_note: <note>)
+          - <name>: mild — <headline> (planet_note: <note>)
+          - <name>: absent
+          ...                      (one row per engine entry)
+
+    Mapping rules (no new astrology logic — only formatting):
+      Each entry in `dosh_list` is rendered as one line with its
+      `status` mapped to `active` / `mild` / `absent` and printed
+      INLINE next to the name, eliminating bucket-header ambiguity.
+      `headline` and `planet_note` are passed through verbatim from
+      the engine. Remedies are intentionally NOT surfaced here — they
+      belong in a separate REMEDIES block (out of scope for Phase 5.9).
+
+    Why per-line inline status (architect-driven post v2 review):
+      The earlier `active: / mild: / clear:` bucketed format made the
+      LLM hallucinate "Yes, X dosh hai" when X was actually in the
+      `clear:` bucket. Listing every dosha with explicit inline status
+      forces the LLM to ground its yes/no answer on the literal label.
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    def _safe_str(x: Any) -> str:
+        # Strip + collapse all whitespace/control chars to single spaces.
+        # This guards against engine fields containing literal newlines
+        # or control characters that would otherwise inject extra
+        # bullet rows into the prompt block (architect-flagged
+        # prompt-safety hardening, Phase 5.9 v3).
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    total   = _safe_int(v.get("total_dosh"))
+    active  = _safe_int(v.get("active_count"))
+    mild    = _safe_int(v.get("mild_count"))
+    none_ct = _safe_int(v.get("none_count"))
+
+    per_lines: list[str] = []
+    for d in _safe_iter(v.get("dosh_list")):
+        if not isinstance(d, dict):
+            continue
+        status_raw = _safe_str(d.get("status")).lower()
+        name       = _safe_str(d.get("name"))
+        headline   = _safe_str(d.get("headline"))
+        note       = _safe_str(d.get("planet_note"))
+        if not name:
+            continue
+        if status_raw == "active":
+            label = "active"
+        elif status_raw == "mild":
+            label = "mild"
+        else:
+            # Anything not Active/Mild — including engine "None",
+            # missing field, unknown — is rendered as `absent`.
+            label = "absent"
+
+        if label == "absent":
+            per_lines.append(f"    - {name}: absent")
+        else:
+            tail = f" — {headline}" if headline else ""
+            note_tail = f" (planet_note: {note})" if note else ""
+            per_lines.append(f"    - {name}: {label}{tail}{note_tail}")
+
+    lines: list[str] = [
+        "DOSH_FACTS:",
+        f"  - total_present: {total}",
+        f"  - active_count: {active}",
+        f"  - mild_count: {mild}",
+        f"  - none_count: {none_ct}",
+    ]
+    if per_lines:
+        lines.append("  - per_dosha:")
+        lines.extend(per_lines)
 
     return "\n".join(lines)
 

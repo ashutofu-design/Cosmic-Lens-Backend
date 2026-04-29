@@ -1670,3 +1670,106 @@ Direction is clear (love-leaning), the qualifier is honest (5 vs 4 is a
 close call), the word "mixed" is gone, and stability is now exact —
 not just same-direction-different-words but identical text. Phase 5.5b
 delivers the user's case-1 spec verbatim.
+
+## Phase 5.5c — Explain-mode follow-up (Apr 28 2026)
+
+### Problem
+Phase 5.5/5.5b delivered correct verdicts but the detector only fired
+on direct compare questions ("love ya arrange?"). Real follow-ups —
+"kaise check kiya love marriage hoga explain karo", "why arrange
+marriage?", "samjhao detail mein" — missed the lock entirely. Users got
+generic deflection instead of the engine's reasons.
+
+### Fix
+`_phase55_is_love_vs_arrange_question` extended with **Path 2** — fires
+when ONE of (love | arrange) tokens appears together with a marriage
+word AND an explain trigger (`kyun / kaise / why / how / explain /
+reason / detail / samjha / batao detail`). Path 1 (direct compare) is
+unchanged. New helper `_phase55_is_explain_mode_question(q)` flags
+explain triggers; `_phase55_format_locked_verdict_block` now takes
+`explain_mode=True` to flip the lock-block instruction from
+"do NOT list reasons" to "MUST list 3-5 reasons in plain language,
+matching the headline direction".
+
+### Tests
+167 total (was 159). New coverage: Path 2 fires on the 8 wild-typed
+follow-up forms; non-marriage explain triggers ("kyun?" alone) do NOT
+fire; explain-mode block carries the 3-5 reasons instruction; direct
+compare still uses the no-reasons form.
+
+### Live verification
+Same kundli + "Ohk kaise tumne check kiya love marriage hoga explain
+karo" → returns headline (love-leaning) + cites 5L↔7L D9, Mars=5L,
+Manglik dosha, Rahu 8H. Architect PASS.
+
+## Phase 5.5d — CONTEXT MEMORY (Apr 29 2026)
+
+### Problem
+Even with Phase 5.5c, bare follow-ups like "kaise check kiya explain
+karo" / "kyun?" / "explain karo" — that contain NO love/arrange/
+marriage tokens at all — still missed because string-match-only
+detection had no signal. The user's gold rule: "context memory ke bina
+ChatGPT jaisa nahi banega". Worse, the AI Ear classified these as
+`mode=general`, which BYPASSES the entire Phase 5.5 lock pipeline (it's
+gated on `mode == "astro"`).
+
+### Fix — two layers
+
+1. **Detector Path 3 (context memory).** New helper
+   `_phase55_history_was_love_vs_arrange(history)` inspects the MOST
+   RECENT assistant turn for engine signature tokens (`love marriage`,
+   `arrange marriage`, `leaning_love`, `leaning_arrange`, `clear_love`,
+   `clear_arrange`, `thoda zyada jhukav`, `prem vivah`, etc.).
+   `_phase55_is_love_vs_arrange_question(q, history=…)` now fires when
+   the question carries an explain trigger AND that helper returns
+   true. Conservative: inspects only the most recent assistant turn so
+   topic switches mid-conversation don't hijack future follow-ups.
+
+2. **Mode override (Apr 29).** Right after `mode_detect` in BOTH
+   `ai_ask` and `ai_ask_stream`, if Path 3 is the trigger
+   (`_phase55_history_was_love_vs_arrange(history)` is true AND the
+   detector fires), force `mode = "astro"` + `topic = "marriage"`. This
+   is the only way the lock can engage on a question the AI Ear sees
+   as generic. Narrowly scoped — only fires when context memory is
+   the actual reason; explicit love/arrange questions are unaffected.
+
+### History plumbing
+Added `history: list | None = None` parameter through:
+`_phase50_build_minimal_messages` → `_phase50_install_minimal_messages`
+→ both call sites in `ai_ask` (line ~10498) and `ai_ask_stream`
+(line ~13245). The route handler already passed `history` from the
+mobile client; only the builder was missing it.
+
+### Tests
+175 total (was 167). New `TestPhase55ContextMemoryDetector` class:
+- Path 3 fires on 8 bare follow-up forms (kaise/kyun/explain/why/how/
+  detail/samjhao/reason) when previous assistant turn was LvA.
+- Same questions do NOT hijack a career conversation.
+- No history → no fire (safety).
+- Non-explain follow-ups ("Kab shaadi hogi?") never fire from context
+  alone — explain trigger is mandatory.
+- `_phase55_history_was_love_vs_arrange` inspects ONLY the most recent
+  assistant turn (career answer after LvA → false).
+- Recognises 6 distinct engine verdict phrasings.
+- Robust to malformed history (None, empty, missing keys).
+- End-to-end builder integration: bare follow-up + LvA history →
+  produces `AUTHORITATIVE_ENGINE_VERDICT` block + `EXPLAIN MODE`
+  instruction + 3-5 reasons listing.
+
+### Live verification (29-Apr-2026)
+Kundli `/tmp/kundli_bbsr.json` + history `[user: "love ya arrange?",
+assistant: "love marriage ki taraf jhukav…"]` + bare question
+"kaise check kiya explain karo":
+
+> "Aapki kundli mein love marriage ki taraf thoda zyada jhukav hai,
+>  lekin dono possibilities open hain. Sabse pehla reason hai ki D9
+>  Navamsha mein 5th house lord aur 7th house lord ek saath hain, jo
+>  love marriage ko support karta hai. Dusra, 5th house ka lord Mars
+>  hai, jo natural love-nature ka pratinidhi hai. Lekin Manglik dosha
+>  Mars ke 1st house mein hone ki wajah se shaadi mein delay ho sakta
+>  hai aur arrange marriage ki sambhavna bhi bani rehti hai. Saath hi,
+>  Rahu ka 8th house mein hona obstacles aur sudden events la sakta
+>  hai…"
+
+`TOPIC: marriage` (was `general` before fix). Headline matches lock,
+4 engine reasons cited verbatim. Phase 5.5d shipped.

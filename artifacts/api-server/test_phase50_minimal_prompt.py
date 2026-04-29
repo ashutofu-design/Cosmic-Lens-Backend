@@ -452,6 +452,162 @@ class TestPhase55QuestionDetector(unittest.TestCase):
             )
 
 
+class TestPhase55ContextMemoryDetector(unittest.TestCase):
+    """Phase 5.5d — context-memory follow-ups.
+
+    The user's previous turn got a love-vs-arrange answer. The next
+    question carries an explanation trigger (kaise / kyun / explain /
+    why / how / detail / samjhao) but contains NO love or arrange
+    tokens. Without context memory, the detector misses entirely and
+    the model deflects with a generic answer.
+
+    Path 3 fixes this by inspecting the most recent assistant turn
+    in `history` for love-vs-arrange context tokens.
+    """
+
+    def _hist_with_lva_assistant(self) -> list:
+        return [
+            {"role": "user", "content": "Mera love marriage hoga ya arrange?"},
+            {"role": "assistant",
+             "content": (
+                 "Aapki kundli dekh ke lagta hai ki love marriage ki "
+                 "taraf thoda zyada jhukav hai, lekin dono possibilities "
+                 "open hain."
+             )},
+        ]
+
+    def _hist_with_career_assistant(self) -> list:
+        return [
+            {"role": "user", "content": "Career mein kya hoga?"},
+            {"role": "assistant",
+             "content": "Aapka 10th house strong hai, career stable rahega."},
+        ]
+
+    def test_fires_on_bare_explain_followup_after_lva(self):
+        """The signature follow-ups the user typed in the wild must
+        all engage the lock when previous turn was love-vs-arrange."""
+        hist = self._hist_with_lva_assistant()
+        for q in [
+            "kaise check kiya explain karo",
+            "kyun?",
+            "explain karo",
+            "why?",
+            "how did you check?",
+            "detail mein batao",
+            "samjhao",
+            "reason batao",
+        ]:
+            self.assertTrue(
+                oh._phase55_is_love_vs_arrange_question(q, history=hist),
+                f"context-memory should fire on {q!r} after LvA turn",
+            )
+
+    def test_does_not_fire_when_history_is_unrelated(self):
+        """Same bare follow-ups must NOT hijack a career conversation."""
+        hist = self._hist_with_career_assistant()
+        for q in [
+            "kaise check kiya explain karo",
+            "kyun?",
+            "explain karo",
+            "why?",
+        ]:
+            self.assertFalse(
+                oh._phase55_is_love_vs_arrange_question(q, history=hist),
+                f"should NOT hijack career history on {q!r}",
+            )
+
+    def test_does_not_fire_without_history(self):
+        for q in ["kaise check kiya explain karo", "kyun?", "explain karo"]:
+            self.assertFalse(
+                oh._phase55_is_love_vs_arrange_question(q, history=None),
+                f"should NOT fire without history on {q!r}",
+            )
+            self.assertFalse(
+                oh._phase55_is_love_vs_arrange_question(q, history=[]),
+                f"should NOT fire on empty history for {q!r}",
+            )
+
+    def test_does_not_fire_on_non_explain_followup(self):
+        """If the follow-up has no explain trigger, context alone must
+        not engage the lock — that would over-fire on every random Q."""
+        hist = self._hist_with_lva_assistant()
+        for q in [
+            "Kab shaadi hogi?",          # different sub-topic
+            "Hello",                     # greeting
+            "Mera career?",              # topic switch
+            "Job kab milegi?",
+        ]:
+            self.assertFalse(
+                oh._phase55_is_love_vs_arrange_question(q, history=hist),
+                f"should NOT fire without explain trigger on {q!r}",
+            )
+
+    def test_history_helper_inspects_only_most_recent_assistant(self):
+        """If the user changed topics after a LvA answer (career answer
+        is now the most recent), context must NOT be considered active."""
+        hist = [
+            {"role": "user", "content": "Love ya arrange?"},
+            {"role": "assistant", "content": "Love marriage ki taraf jhukav hai."},
+            {"role": "user", "content": "Career?"},
+            {"role": "assistant", "content": "10th house strong hai."},
+        ]
+        self.assertFalse(
+            oh._phase55_history_was_love_vs_arrange(hist),
+            "must inspect only most recent assistant turn",
+        )
+        # And follow-up must not fire either.
+        self.assertFalse(
+            oh._phase55_is_love_vs_arrange_question(
+                "explain karo", history=hist),
+        )
+
+    def test_history_helper_recognises_engine_phrasings(self):
+        """Engine produces several distinct verdict phrasings — all
+        must count as LvA context for the next-turn lookup."""
+        for prev_text in [
+            "love marriage strongly indicated.",
+            "arrange marriage zyada chance hai.",
+            "leaning_love verdict ke saath confidence medium.",
+            "thoda zyada jhukav love ki taraf hai.",
+            "Aapke chart mein love ki taraf jhukav dikhta hai.",
+            "Prem vivah ke yog hain.",
+        ]:
+            hist = [{"role": "assistant", "content": prev_text}]
+            self.assertTrue(
+                oh._phase55_history_was_love_vs_arrange(hist),
+                f"should recognise LvA context in {prev_text!r}",
+            )
+
+    def test_history_helper_robust_to_malformed(self):
+        for hist in [None, [], [{}], [{"role": "user", "content": "hi"}],
+                     [{"role": "assistant"}],  # no content
+                     [{"role": "assistant", "content": None}]]:
+            self.assertFalse(
+                oh._phase55_history_was_love_vs_arrange(hist),  # type: ignore[arg-type]
+            )
+
+    def test_builder_engages_lock_on_context_memory_followup(self):
+        """End-to-end through the builder: bare follow-up + LvA history
+        must produce a locked-verdict block in the user message AND
+        the lock-mode system message swap."""
+        hist = self._hist_with_lva_assistant()
+        kundli = _kundli_with_d9()
+        msgs = oh._phase50_build_minimal_messages(
+            "kaise check kiya explain karo",
+            kundli, lang="hn", history=hist,
+        )
+        self.assertEqual(len(msgs), 2)
+        sys_text = msgs[0]["content"]
+        usr_text = msgs[1]["content"]
+        # Lock-mode system message swap.
+        self.assertIn("VERDICT-LOCK MODE", sys_text)
+        # Locked verdict block in the user message.
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", usr_text)
+        # Explain mode flipped on → must list 3-5 reasons.
+        self.assertIn("EXPLAIN MODE", usr_text)
+        self.assertIn("3-5", usr_text)
+
+
 class TestPhase55Engine(unittest.TestCase):
     def test_returns_required_keys(self):
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())

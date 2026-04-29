@@ -9251,49 +9251,97 @@ _PHASE55_SIGN_LORDS = {
 _PHASE55_SIGN_IDX = {s: i for i, s in enumerate(_PHASE55_SIGNS_ORDER)}
 
 
-def _phase55_is_love_vs_arrange_question(question: str) -> bool:
+def _phase55_history_was_love_vs_arrange(history: list | None) -> bool:
+    """Inspect the most recent assistant turn in the conversation
+    history for love-vs-arrange context.
+
+    A turn counts as love-vs-arrange context when it contains ANY of
+    the love or arrange tokens used by the engine's verdict text — i.e.
+    the assistant has just delivered a love-vs-arrange answer in the
+    previous turn. Used by the detector to engage the lock on bare
+    follow-ups like "kaise check kiya?" / "explain karo" / "kyun?"
+    that would otherwise miss because they contain no love/arrange
+    keyword themselves.
+
+    Conservative: only inspects the MOST recent assistant turn (not
+    older history). If the user has changed topics in between, the
+    follow-up will not hijack the previous love-vs-arrange context.
+    """
+    if not isinstance(history, list) or not history:
+        return False
+    for h in reversed(history):
+        if (h or {}).get("role") == "assistant":
+            prev = ((h.get("content") or h.get("text") or "")).lower()
+            tokens = (
+                "love marriage", "arrange marriage", "arranged marriage",
+                "love ya arrange", "love or arrange",
+                "leaning_love", "leaning_arrange",
+                "clear_love", "clear_arrange",
+                "thoda zyada jhukav",   # signature wording from leaning text
+                "love ki taraf", "arrange ki taraf",
+                "pyaar se shaadi", "prem vivah",
+            )
+            if any(tok in prev for tok in tokens):
+                return True
+            # Inspect only the most recent assistant turn.
+            return False
+    return False
+
+
+def _phase55_is_love_vs_arrange_question(
+    question: str,
+    history: list | None = None,
+) -> bool:
     """True iff the question is a love-vs-arrange marriage decision query
     OR a follow-up asking the engine to EXPLAIN that decision.
 
-    Two trigger paths:
+    Three trigger paths:
 
     1. Direct compare: BOTH a love token AND an arrange token appear
        (e.g. "love ya arrange?", "love marriage or arranged?").
 
-    2. Explain-mode follow-up: ONE of (love | arrange) tokens appears
-       together with a marriage word AND an explanation trigger
-       ("kyun / kaise / why / how / explain / reason / detail / samjhao").
-       This catches turns like "kaise check kiya love marriage hoga
-       explain karo" so the engine verdict + reasons get into the
-       prompt, instead of the model deflecting with a generic answer.
+    2. Explain-mode follow-up (in-question): ONE of (love | arrange)
+       tokens appears together with a marriage word AND an explanation
+       trigger ("kyun / kaise / why / how / explain / reason / detail /
+       samjhao"). This catches "kaise check kiya love marriage hoga
+       explain karo".
+
+    3. Context-memory follow-up: the question itself contains NO
+       love/arrange tokens, but the previous assistant turn (in
+       `history`) was a love-vs-arrange answer AND the question carries
+       an explanation trigger. This catches bare follow-ups like
+       "kaise check kiya?" / "kyun?" / "explain karo" that ChatGPT-
+       style users type after seeing a verdict. Without this path,
+       string-match-only detection misses the entire follow-up class.
 
     Conservative — bare "love marriage hoga?" without an explain
-    trigger does NOT fire (normal forward-looking question, not a
-    verdict-explanation request).
+    trigger does NOT fire (normal forward-looking question), and
+    history-based context only triggers when the previous turn was
+    actually about love-vs-arrange (not, say, a career answer).
     """
     if not question or not isinstance(question, str):
         return False
     s = question.lower()
     has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", s))
     has_arr  = bool(re.search(r"\barrang", s))
+    has_explain = bool(re.search(
+        r"\b(why|how|explain|reason|detail|samjha|kyu|kais|batao detail)",
+        s))
 
     # Path 1 — direct comparison
     if has_love and has_arr:
         return True
 
-    # Path 2 — explain-mode follow-up
+    # Path 2 — explain-mode follow-up with love/arrange + marriage word
     if has_love or has_arr:
         has_marriage = bool(re.search(
             r"\b(marriage|shaadi|shadi|shaddi|vivah|biyah|byah)\b", s))
-        # Hindi/English explanation triggers. \bkyu matches "kyun",
-        # "kyu", "kyon"; \bkais matches "kaise", "kaisey", "kaisa".
-        # English: why / how / explain / reason / detail. Hindi:
-        # samjhao / samjha do / detail mein batao.
-        has_explain = bool(re.search(
-            r"\b(why|how|explain|reason|detail|samjha|kyu|kais|batao detail)",
-            s))
         if has_marriage and has_explain:
             return True
+
+    # Path 3 — context-memory: bare follow-up after a love-vs-arrange answer
+    if has_explain and _phase55_history_was_love_vs_arrange(history):
+        return True
 
     return False
 
@@ -9716,6 +9764,7 @@ def _phase50_build_minimal_messages(
     tier: str | None = None,
     extra_facts: str = "",
     topic: str | None = None,
+    history: list | None = None,
 ) -> list[dict]:
     """Phase 5.0 T029 — build the 2-message minimal Ask prompt.
 
@@ -9757,7 +9806,7 @@ def _phase50_build_minimal_messages(
     # Detector keys off the question text (not topic) so a mis-routed
     # love-vs-arrange question still gets the lock.
     locked_verdict = None
-    if _phase55_is_love_vs_arrange_question(question or ""):
+    if _phase55_is_love_vs_arrange_question(question or "", history=history):
         locked_verdict = _phase55_compute_love_vs_arrange(kundli)
 
     if locked_verdict:
@@ -9933,6 +9982,7 @@ def _phase50_install_minimal_messages(
     req_id: str,
     path_label: str = "",
     topic: str | None = None,
+    history: list | None = None,
 ) -> tuple[list[dict], dict]:
     """Phase 5.0 Final Strip — unified gate body for ai_ask + ai_ask_stream.
 
@@ -9952,6 +10002,7 @@ def _phase50_install_minimal_messages(
     messages = _phase50_build_minimal_messages(
         question or "", kundli, lang=lang,
         tier=None, extra_facts=facts, topic=topic,
+        history=history,
     )
     try:
         user_chars = len(messages[1]["content"])
@@ -10341,6 +10392,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if mode == "general":
         topic = "general"
 
+    # ── Phase 5.5d (Apr 29 2026) — CONTEXT-MEMORY MODE OVERRIDE ─────────────
+    # Bare follow-ups like "kaise check kiya?" / "explain karo" / "kyun?"
+    # carry no domain anchor, so the AI Ear classifies them as
+    # mode=general — which BYPASSES the entire chart pipeline (and the
+    # Phase 5.5 lock with it). Detect the case where the previous
+    # assistant turn delivered a love-vs-arrange verdict AND the current
+    # question is a bare explain trigger; force mode=astro + topic=marriage
+    # so the lock engages with full engine reasoning.
+    #
+    # Narrowly scoped — only fires when the history-based path (Path 3 of
+    # the Phase 5.5d detector) is the trigger; explicit love/arrange
+    # questions are unaffected. No-op if mode is already astro.
+    if (mode != "astro"
+            and _phase55_history_was_love_vs_arrange(history)
+            and _phase55_is_love_vs_arrange_question(question or "",
+                                                     history=history)):
+        print("[ai_ask] Phase 5.5d context override: "
+              "forcing mode=astro topic=marriage (LvA follow-up)")
+        mode = "astro"
+        topic = "marriage"
+        _topic_source = "phase55d_context_memory"
+        _early_reason = (
+            "phase55d context-memory: bare follow-up after love-vs-arrange"
+        )
+
     _trace(req_id, "2.MODE_DETECT", {
         "mode": mode, "topic": topic, "topic_source": _topic_source,
         "reason": _early_reason,
@@ -10441,7 +10517,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # so the stream path uses identical logic (no sync/stream drift).
         messages, _ = _phase50_install_minimal_messages(
             question or "", kundli, lang, build_meta, req_id, path_label="",
-            topic=topic,
+            topic=topic, history=history,
         )
         _phase50_active = True
 
@@ -13087,6 +13163,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 })
         except Exception:
             pass
+    # Phase 5.5d (Apr 29 2026) — context-memory override mirror of ai_ask
+    # path. Bare follow-ups after a love-vs-arrange answer must engage the
+    # chart pipeline so the lock fires; see ai_ask for full rationale.
+    if (mode != "astro"
+            and _phase55_history_was_love_vs_arrange(history)
+            and _phase55_is_love_vs_arrange_question(question or "",
+                                                     history=history)):
+        print("[ai_ask_stream] Phase 5.5d context override: "
+              "forcing mode=astro topic=marriage (LvA follow-up)")
+        mode = "astro"
+        topic = "marriage"
+        _mode_reason += " → FORCED astro (Phase 5.5d context-memory)"
     _trace(req_id, "1.UNDERSTANDING(stream)", _qu)
     _trace(req_id, "2.MODE_DETECT", {
         "mode": mode, "topic": topic, "reason": _mode_reason,
@@ -13188,7 +13276,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         # trace key distinguishable. No more sync/stream code drift.
         messages, _ = _phase50_install_minimal_messages(
             question or "", kundli, lang, build_meta_stream, req_id,
-            path_label="(stream)", topic=topic,
+            path_label="(stream)", topic=topic, history=history,
         )
         _phase50_active_stream = True
 

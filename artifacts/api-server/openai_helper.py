@@ -2531,6 +2531,40 @@ def _build_messages(
                 print(f"[openai_helper] kp calc for health failed: {exc}")
             assess_health, fmt_health, _classify_health_q = _health_engine()
             _health_pre_bucket = _ai_ear_bucket_for(out_meta, "health")
+
+            # ── Phase 6.0j — FIX 4 (ENGINE INPUT INTEGRITY CHECK) ──────────
+            # Permanent debug trace proving the deterministic engine receives
+            # FULL raw chart data (kundli dict + intelligence + KP dict +
+            # birth dict) — INDEPENDENT of the Phase 4.7 LLM-text trim.
+            #
+            # Architectural truth (verified):
+            #   • assess_health() takes 4 RAW dicts (kundli, intel, kp, birth)
+            #   • intel_obj is freshly produced upstream by analyze_chart()
+            #   • kp_dict_h is freshly produced upstream by _kp_calc()(birth)
+            #   • kp_block / tr_block STRINGS (built ~80 lines below this
+            #     call) are LLM-facing text only; the trim that zeroes them
+            #     happens AFTER the engine has already consumed the raw dicts
+            #
+            # If `kp_dict_present=False` or `transits_present=False` ever
+            # appear in this log, THEN engine integrity is genuinely broken —
+            # otherwise the trim numbers refer to LLM text and are harmless.
+            try:
+                _intel_keys = sorted((intel_obj or {}).keys()) if isinstance(intel_obj, dict) else []
+                _kp_keys    = sorted((kp_dict_h or {}).keys()) if isinstance(kp_dict_h, dict) else []
+                _planets_n  = len(kundli.get("planets") or []) if isinstance(kundli, dict) else 0
+                _has_transits = any(("transit" in k.lower() or "tr_" in k.lower()) for k in _intel_keys)
+                print(
+                    "[openai_helper] phase60j_engine_input_check: "
+                    f"kundli_planets={_planets_n} "
+                    f"intel_keys={len(_intel_keys)} "
+                    f"transits_present={_has_transits} "
+                    f"kp_dict_present={bool(_kp_keys)} kp_dict_keys={len(_kp_keys)} "
+                    f"birth_present={bool(birth)} "
+                    f"bucket_pre={_health_pre_bucket!r}"
+                )
+            except Exception as _exc:
+                print(f"[openai_helper] phase60j_engine_input_check failed (non-fatal): {_exc}")
+
             health_verdict_obj = assess_health(
                 kundli, intel_obj or {}, kp_dict_h or {}, birth, question,
                 pre_classified_bucket=_health_pre_bucket)

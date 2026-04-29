@@ -414,14 +414,35 @@ class TestPhase55QuestionDetector(unittest.TestCase):
                 f"should fire on {q!r}",
             )
 
+    def test_fires_on_explain_mode_followup(self):
+        """Phase 5.5c: explain-mode follow-ups must also engage the lock
+        so the engine reasons reach the prompt instead of the model
+        deflecting with a generic answer. Triggered by (love OR arrange
+        marriage) + (kyun/kaise/why/how/explain/reason/detail/samjhao)."""
+        for q in [
+            "Ohk kaise tumne check kiya love marriage hoga explain karo",
+            "kyun love marriage hogi?",
+            "why arrange marriage?",
+            "explain love marriage reason",
+            "detail mein batao love marriage",
+            "samjhao mujhe arrange marriage kyun hogi",
+            "how did you check love marriage?",
+            "love marriage ka reason batao",
+        ]:
+            self.assertTrue(
+                oh._phase55_is_love_vs_arrange_question(q),
+                f"explain-mode follow-up should fire on {q!r}",
+            )
+
     def test_does_not_fire_on_unrelated(self):
         for q in [
             "",
             None,
             "Kab shaadi hogi?",
             "When will I marry?",
-            "How is my love life?",       # love only, no arrange
-            "Arrange marriage timing?",   # arrange only, no love
+            "How is my love life?",            # love only, no marriage word
+            "Love marriage hoga?",             # love+marriage, no explain trigger
+            "Arrange marriage hogi?",          # arrange+marriage, no explain trigger
             "Career advice please",
             "Will I be rich?",
         ]:
@@ -717,6 +738,79 @@ class TestPhase55Engine(unittest.TestCase):
         self.assertIn(v["verdict_text_public"], block)
         self.assertIn(f"VERDICT: {v['verdict_public']}", block)
         self.assertIn("do NOT soften", block)
+
+    def test_explain_mode_question_detector(self):
+        """Phase 5.5c: helper that distinguishes 'why/explain' follow-ups
+        from plain forward-looking questions, used by the lock-block
+        formatter to flip the instruction."""
+        for q in [
+            "kyun love marriage hogi?",
+            "why arrange marriage?",
+            "explain karo",
+            "kaise check kiya?",
+            "reason batao",
+            "detail mein batao",
+            "samjhao mujhe",
+            "how did you arrive at this?",
+        ]:
+            self.assertTrue(
+                oh._phase55_is_explain_mode_question(q),
+                f"explain-mode should fire on {q!r}",
+            )
+        for q in ["", None, "love marriage hoga?", "kab shaadi hogi?"]:
+            self.assertFalse(
+                oh._phase55_is_explain_mode_question(q),  # type: ignore[arg-type]
+                f"explain-mode must NOT fire on {q!r}",
+            )
+
+    def test_locked_block_explain_mode_emits_listing_instruction(self):
+        """Phase 5.5c: with explain_mode=True the block must drop the
+        'do NOT list reasons' guard and instead REQUIRE 3-5 reasons in
+        the answer."""
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        block = oh._phase55_format_locked_verdict_block(v, explain_mode=True)
+        # Headline still present
+        self.assertIn(v["verdict_text_public"], block)
+        # The cautious "do NOT list reasons" instruction is GONE
+        self.assertNotIn("Do NOT list the reasons", block)
+        # The positive listing instruction is PRESENT
+        self.assertIn("EXPLAIN MODE", block)
+        self.assertIn("3-5", block)
+        # Direction lock must remain (model still cannot flip the verdict)
+        self.assertIn("do not contradict", block.lower())
+        # And the engine block header still warns against changes/recompute
+        self.assertIn("locked", block.lower())
+
+    def test_builder_passes_explain_mode_through_for_followup(self):
+        """End-to-end: when the user asks 'explain karo love marriage',
+        the builder must construct a prompt whose lock-block carries the
+        EXPLAIN MODE instruction. Without this, the detector fix from
+        Phase 5.5c was useless because the block never told the model
+        to actually list the reasons."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="Ohk kaise tumne check kiya love marriage hoga explain karo",
+            kundli=_kundli_with_d9(),
+            lang="hn",
+        )
+        user_text = msgs[1]["content"]
+        self.assertIn("EXPLAIN MODE", user_text,
+                      "explain-mode follow-up must reach the prompt with "
+                      "the listing instruction")
+        # And the lock itself must still be active (verdict block present)
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user_text)
+
+    def test_builder_no_explain_mode_for_direct_compare(self):
+        """The original direct-compare question stays in HEADLINE-only
+        mode (no EXPLAIN MODE instruction) — we don't want to flood
+        the model with reasons unless the user actually asked why."""
+        msgs = oh._phase50_build_minimal_messages(
+            question="mera love marriage hoga ya arrange?",
+            kundli=_kundli_with_d9(),
+            lang="hn",
+        )
+        user_text = msgs[1]["content"]
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", user_text)
+        self.assertNotIn("EXPLAIN MODE", user_text)
 
     def test_locked_block_falls_back_to_legacy_when_public_missing(self):
         """If a future code path constructs a verdict dict without the

@@ -9252,19 +9252,50 @@ _PHASE55_SIGN_IDX = {s: i for i, s in enumerate(_PHASE55_SIGNS_ORDER)}
 
 
 def _phase55_is_love_vs_arrange_question(question: str) -> bool:
-    """True iff the question is a love-vs-arrange marriage decision query.
+    """True iff the question is a love-vs-arrange marriage decision query
+    OR a follow-up asking the engine to EXPLAIN that decision.
 
-    Triggered when BOTH a love token and an arrange token appear, OR when
-    the question explicitly compares the two. Conservative — only fires
-    on clear comparison questions to avoid hijacking other marriage
-    queries (e.g. timing, compatibility).
+    Two trigger paths:
+
+    1. Direct compare: BOTH a love token AND an arrange token appear
+       (e.g. "love ya arrange?", "love marriage or arranged?").
+
+    2. Explain-mode follow-up: ONE of (love | arrange) tokens appears
+       together with a marriage word AND an explanation trigger
+       ("kyun / kaise / why / how / explain / reason / detail / samjhao").
+       This catches turns like "kaise check kiya love marriage hoga
+       explain karo" so the engine verdict + reasons get into the
+       prompt, instead of the model deflecting with a generic answer.
+
+    Conservative — bare "love marriage hoga?" without an explain
+    trigger does NOT fire (normal forward-looking question, not a
+    verdict-explanation request).
     """
     if not question or not isinstance(question, str):
         return False
     s = question.lower()
     has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", s))
     has_arr  = bool(re.search(r"\barrang", s))
-    return has_love and has_arr
+
+    # Path 1 — direct comparison
+    if has_love and has_arr:
+        return True
+
+    # Path 2 — explain-mode follow-up
+    if has_love or has_arr:
+        has_marriage = bool(re.search(
+            r"\b(marriage|shaadi|shadi|shaddi|vivah|biyah|byah)\b", s))
+        # Hindi/English explanation triggers. \bkyu matches "kyun",
+        # "kyu", "kyon"; \bkais matches "kaise", "kaisey", "kaisa".
+        # English: why / how / explain / reason / detail. Hindi:
+        # samjhao / samjha do / detail mein batao.
+        has_explain = bool(re.search(
+            r"\b(why|how|explain|reason|detail|samjha|kyu|kais|batao detail)",
+            s))
+        if has_marriage and has_explain:
+            return True
+
+    return False
 
 
 def _p55_planet(plist: list, name: str) -> dict | None:
@@ -9557,7 +9588,10 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
     }
 
 
-def _phase55_format_locked_verdict_block(v: dict) -> str:
+def _phase55_format_locked_verdict_block(
+    v: dict,
+    explain_mode: bool = False,
+) -> str:
     """Render the engine verdict as a LOCKED authoritative block for the prompt.
 
     Tells the LLM: this is the verdict, your only job is to express it
@@ -9567,6 +9601,13 @@ def _phase55_format_locked_verdict_block(v: dict) -> str:
     which always gives a directional answer (clear / leaning /
     inconclusive) — never the engineering "mixed" word that confuses
     users asking "love ya arrange?".
+
+    When `explain_mode=True` (the user's question contains kyun / why /
+    kaise / how / explain / reason / detail / samjhao alongside a
+    love-or-arrange marriage word), the instruction is FLIPPED from
+    "do not list reasons" to "MUST list 3-5 of the engine reasons in
+    plain language". Without this, the model defaults to the cautious
+    1-2 sentence headline even on direct "explain" follow-ups.
     """
     if not isinstance(v, dict):
         return ""
@@ -9574,6 +9615,42 @@ def _phase55_format_locked_verdict_block(v: dict) -> str:
     rs_arr  = "\n".join(f"  - {r}" for r in (v.get("reasons_arrange") or [])) or "  (none)"
     # Prefer the public/UX headline; fall back to legacy text for safety.
     headline = v.get("verdict_text_public") or v.get("verdict_text_hi") or ""
+
+    if explain_mode:
+        instruction = (
+            "INSTRUCTION (CRITICAL — EXPLAIN MODE): A deterministic Vedic-"
+            "rules engine has already computed the verdict from the user's "
+            "D1 + D9 charts. The user has explicitly asked HOW / WHY the "
+            "verdict was reached, so you MUST now expand the answer:\n"
+            "  1. State the HEADLINE in the user's language as the FIRST "
+            "sentence — do NOT contradict, change, or soften the direction.\n"
+            "  2. Then list 3-5 of the strongest reasons from REASONS_LOVE "
+            "and REASONS_ARRANGE above, translated into plain Hindi/"
+            "Hinglish/English (whichever matches the user's language). "
+            "Use the side that matches the headline as the dominant set "
+            "(love side for clear_love/leaning_love, arrange side for "
+            "clear_arrange/leaning_arrange).\n"
+            "  3. Keep each reason 1 short line. Total response: 4-7 short "
+            "sentences. Do NOT add the raw score numbers (e.g. '5 vs 4'). "
+            "Do NOT invent extra reasons not in the lists above. Do NOT "
+            "re-derive from the kundli — the engine has already done that."
+        )
+    else:
+        instruction = (
+            "INSTRUCTION (CRITICAL): A deterministic Vedic-rules engine has "
+            "already computed this verdict from the user's D1 + D9 charts. "
+            "Your ONLY job is to express the HEADLINE in the user's "
+            "language (Hindi/Hinglish/English) in 1-2 short sentences. The "
+            "HEADLINE already gives a clear direction (clear / leaning / "
+            "situation-dependent) — keep that direction; do NOT soften it "
+            "back to 'mixed' or 'dono possibilities'. Do NOT add score "
+            "numbers. Do NOT list the reasons unless the user explicitly "
+            "asks 'kyun' / 'why' / 'reason batao' / 'explain' / 'detail "
+            "mein batao' / 'how'. Do NOT contradict the verdict. Do NOT "
+            "re-derive it from the kundli — the engine has already done "
+            "that work."
+        )
+
     return (
         "AUTHORITATIVE_ENGINE_VERDICT (locked — DO NOT change, contradict, "
         "or recompute):\n"
@@ -9583,18 +9660,24 @@ def _phase55_format_locked_verdict_block(v: dict) -> str:
         f"  HEADLINE: {headline}\n"
         f"  REASONS_LOVE:\n{rs_love}\n"
         f"  REASONS_ARRANGE:\n{rs_arr}\n\n"
-        "INSTRUCTION (CRITICAL): A deterministic Vedic-rules engine has "
-        "already computed this verdict from the user's D1 + D9 charts. "
-        "Your ONLY job is to express the HEADLINE in the user's language "
-        "(Hindi/Hinglish/English) in 1-2 short sentences. The HEADLINE "
-        "already gives a clear direction (clear / leaning / situation-"
-        "dependent) — keep that direction; do NOT soften it back to "
-        "'mixed' or 'dono possibilities'. Do NOT add score numbers. Do "
-        "NOT list the reasons unless the user explicitly asks 'kyun' / "
-        "'why' / 'reason batao' / 'explain' / 'detail mein batao' / "
-        "'how'. Do NOT contradict the verdict. Do NOT re-derive it from "
-        "the kundli — the engine has already done that work."
+        + instruction
     )
+
+
+def _phase55_is_explain_mode_question(question: str) -> bool:
+    """True iff the question explicitly asks WHY/HOW/EXPLAIN the verdict.
+
+    Used by the builder to flip the locked-block instruction from
+    "express headline only" to "headline + 3-5 reasons". Mirrors the
+    explain-trigger regex in `_phase55_is_love_vs_arrange_question`.
+    """
+    if not question or not isinstance(question, str):
+        return False
+    s = question.lower()
+    return bool(re.search(
+        r"\b(why|how|explain|reason|detail|samjha|kyu|kais|batao detail)",
+        s,
+    ))
 
 
 def _phase53_topic_rules(topic: str | None) -> str:
@@ -9772,8 +9855,13 @@ def _phase50_build_minimal_messages(
     if locked_verdict:
         # Lock-mode: ONLY the locked verdict block — no rule checklist,
         # no FULL_KUNDLI_JSON. The system message has been swapped to
-        # the narrate-only variant above.
-        user_parts.append(_phase55_format_locked_verdict_block(locked_verdict))
+        # the narrate-only variant above. Phase 5.5c: detect explain-mode
+        # and flip the block's instruction so the model lists the engine
+        # reasons instead of just the headline.
+        explain_mode = _phase55_is_explain_mode_question(question or "")
+        user_parts.append(_phase55_format_locked_verdict_block(
+            locked_verdict, explain_mode=explain_mode,
+        ))
     else:
         # Phase 5.3 — inject topic-specific classical-rule checklist when
         # the detected topic has well-known Vedic rules (marriage / career

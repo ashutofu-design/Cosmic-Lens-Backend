@@ -3066,6 +3066,89 @@ the same `<DOMAIN>_FACTS` shape is the next step in the roadmap and is
 
 ---
 
+## Phase 5.9 Batch 3c v4 — STANDARDIZED HEALTH FACTS (user-spec contract)
+
+**Status:** SHIPPED · 2026-04-29 · 55 new tests + 302 existing = 357/357 green
+**Mantra:** "engine sochta hai, LLM bolta hai" — narrator length is engine-owned too.
+
+**Architect review applied:** 2 v4 regressions caught and fixed before ship:
+1. `_PHASE60_HEALTH_LAYER_TAGS` had 5 keys with spurious `_health` suffix that did not match engine emissions (e.g., `L14_atmakaraka_health` vs engine's `L14_atmakaraka`) — corrected, plus dropped 3 dead-code overlay keys (L16/L17/L18). Now defended by `test_layer_keys_parity_against_engine_emitted_ids` which asserts every layer key in the mapping matches an actually-emitted engine layer ID.
+2. `_phase60_format_health_facts_block` was pre-defaulting missing/invalid `verdict` to `"yellow_wait"` → `"stable"`, over-softening malformed payloads on a sensitive surface — fixed to pass raw verdict through (helper defaults unknown → `"fluctuating"`). Now defended by 3 new tests covering missing/empty/garbage verdict paths.
+3. Added a runtime extractor-invocation test (was source-grep only).
+
+### Why this batch
+
+Batch 3c v3 (Apr 2026) shipped a 5-tier health vocabulary
+(`overall_risk: strong/stable/fluctuating/vulnerable/high_risk` plus
+`sensitive_areas / supportive_factors / risk_factors`) and let the LLM
+write 4-7 sentence answers. The user reviewed live output and gave a
+new contract: collapse the vocabulary to **3 tiers**, add **key_triggers**
++ **dasha_effect**, and **HARD-CAP responses at 2-3 lines**. The
+narrator on a sensitive surface should sound like a careful friend, not
+a chatty astrologer. Engine controls the bottom line AND the length.
+
+### What changed
+
+**Vocabulary collapse (v4 contract):**
+| v3 field | v4 field | Mapping |
+|---|---|---|
+| `overall_risk: strong/stable/fluctuating/vulnerable/high_risk` | `overall_risk: stable / fluctuating / sensitive` | green_go+yellow_wait→stable; slow_burn→fluctuating; red_avoid→sensitive |
+| (composite) | `stability: stable / unstable` | `stable` iff overall_risk=stable AND concerns≤supportive |
+| `sensitive_areas / risk_factors` | `key_triggers: [heat, stress, sudden, chronic, hormonal, …]` | Layer-name + bucket + transit-reason scan, deduped, capped at 4 |
+| (implicit in current_window) | `dasha_effect: supportive / mixed / challenging` | Count benefics vs malefics in MD/AD/PD lords |
+| (none) | `response_format: 2-3 lines, no planet names, …` | NEW engine-owned narrator constraint |
+
+**Architect-locked invariants preserved from v3:**
+- `red_avoid` MUST surface as `sensitive` — never softens, regardless of supportive layer count
+- `brand_safety_warnings` emitted VERBATIM (helpline survival)
+- `tone_rules` is the LAST section even on engine-import failure (FAIL-CLOSED with hardcoded floor that stays byte-equal to `health_engine.HEALTH_TONE_RULES`)
+- Routing detector still delegates to `_phase59_is_health_question` — career-stress / stock-tension collisions still defended
+
+**No changes to the underlying engine.** v4 is a pure projection layer
+on `health_engine.assess_health()` output (23 layers + 3 triggers + 7
+modifiers + 5 conditionals + verdict). No new astrology, no new scoring,
+no new dasha computation — only vocabulary collapse and tag derivation
+from data the engine already produces.
+
+### Files
+
+- `artifacts/api-server/openai_helper.py`
+  - L11455+ — v4 helpers: `_PHASE60_HEALTH_LAYER_TAGS`, `_PHASE60_HEALTH_BUCKET_TAGS`, `_PHASE60_HEALTH_BENEFICS/MALEFICS`, `_phase60_health_overall_risk`, `_phase60_health_stability`, `_phase60_health_key_triggers`, `_phase60_health_dasha_effect`, `_PHASE60_HEALTH_RESPONSE_FORMAT`, `_phase60_format_health_facts_block`
+  - L10003-10017 — extractor wiring swap from `_phase59_format_health_facts_block` → `_phase60_format_health_facts_block`
+  - v3 helpers (`_phase59_*`) remain as backwards reference but are NOT wired
+- `artifacts/api-server/test_phase60_health_facts.py` (NEW) — 49 tests covering vocabulary mapping, stability binary, key-trigger derivation (layer+bucket+transit, dedup, cap=4), dasha-effect, block shape (sections present + order), v3 fields dropped, brand-safety verbatim, FAIL-CLOSED, extractor wiring, defensive
+- `artifacts/api-server/test_phase59_health_facts.py` — UNTOUCHED, still green (44 tests of dead-code v3 helpers; kept as architectural reference)
+
+### Live verification
+
+User question: *"Abhi meri health kaisi chal rahi hai (April–June 2026 period)?"*
+
+**Engine FACTS sent to LLM:**
+```
+HEALTH_FACTS:
+  - overall_risk: fluctuating
+  - stability: unstable
+  - key_triggers: [vulnerability, hormonal, heat]
+  - dasha_effect: mixed
+  - confidence: 55
+  - response_format: Answer in EXACTLY 2-3 lines using ONLY the facts above.
+  …brand_safety + tone_rules…
+```
+
+**AI response (291 chars / 3 sentences — vs v3's 663 chars / 5 sentences):**
+> "Is period mein aapki health thodi unstable reh sakti hai, jisme hormonal aur heat se judi vulnerabilities ka asar dikh raha hai. Dhyaan rakhein aur zarurat pade toh specialist se consult karna behtar rahega. Cosmic verdict ek guidance hai, medical advice ke liye doctor se milna zaroori hai."
+
+Zero planet names, key_triggers cited naturally, defers to qualified
+specialist, calm probabilistic tone — exact match to user-spec template.
+
+### Reversibility
+
+- v3 `_phase59_*` helpers still exist in the file. Single-line revert
+  at L10014 (`_phase60_format_health_facts_block(hv)` → `_phase59_format_health_facts_block(hv)`) restores the 5-tier schema if needed.
+- v4 helpers are namespaced (`_phase60_*`) so removal is a clean delete.
+
+---
+
 ## Phase 5.9 Batch 3d — LOVE_FACTS block (engine sochta hai, LLM bolta hai)
 
 **Status:** SHIPPED · 2026-04-29 · 48 new tests + 254 existing = 302/302 green

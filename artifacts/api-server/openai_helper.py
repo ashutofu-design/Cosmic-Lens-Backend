@@ -9997,15 +9997,18 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             parts.append(block)
             emitted_career_block = True
 
-    # ── HEALTH (Phase 5.9 Batch 3c) ──────────────────────────────────────
+    # ── HEALTH (Phase 5.9 Batch 3c v4 — user-spec standardized FACTS) ────
     # Sensitive-topic surface — narrator MUST honour brand_safety bullets
-    # (no diagnosis, see qualified MD, mental-health helpline). The
-    # detector delegates to upstream `_is_health_question` to inherit the
-    # routing-collision defenses (career-stress / stock-tension etc.).
+    # (no diagnosis, see qualified MD, mental-health helpline) AND the
+    # 2-3 line response_format constraint. The v4 schema replaces the
+    # earlier 5-tier vocabulary with the user's simplified 4-field
+    # contract (overall_risk / stability / key_triggers / dasha_effect).
+    # The detector delegates to upstream `_is_health_question` to inherit
+    # the routing-collision defenses (career-stress / stock-tension etc.).
     hv = bm.get("health_verdict_obj")
     emitted_health_block = False
     if routed and _phase59_is_health_question(q) and isinstance(hv, dict):
-        block = _phase59_format_health_facts_block(hv)
+        block = _phase60_format_health_facts_block(hv)
         if block:
             parts.append(block)
             emitted_health_block = True
@@ -11434,6 +11437,404 @@ def _phase59_format_health_facts_block(v: Any) -> str:
         try:
             logger.error(
                 "[Phase 5.9] HEALTH_TONE_RULES engine import failed: %s — "
+                "falling back to hardcoded floor (tone enforcement preserved).",
+                _e,
+            )
+        except Exception:
+            pass
+    tone_bullets = [_safe_str(r) for r in _tone_rules if isinstance(r, str)]
+    tone_bullets = [r for r in tone_bullets if r]
+    if tone_bullets:
+        lines.append("  - tone_rules:")
+        for r in tone_bullets:
+            lines.append(f"    - {r}")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.9 Batch 3c v4 — STANDARDIZED HEALTH FACTS (user-spec contract)
+# ─────────────────────────────────────────────────────────────────────────────
+# User-spec 7-step pipeline (Apr 2026):
+#   STEP 1  Identify health indicators (Lagna / 6H / 8H / 12H)
+#   STEP 2  Planet contributions (Mars/Saturn/Rahu/Ketu/Venus/Jupiter)
+#   STEP 3  Dasha impact (MD/AD/PD benefic vs malefic)
+#   STEP 4  Combine into total_score
+#   STEP 5  Map to verdict (stable / fluctuating / sensitive)
+#   STEP 6  Output FACTS only (overall_risk, stability, key_triggers,
+#           dasha_effect)
+#   STEP 7  LLM converts FACTS into 2-3 line natural answer
+#
+# Implementation note: Steps 1-4 are ALREADY done by the existing
+# `health_engine.assess_health()` (23 layers + 3 triggers + 7 modifiers
+# + 5 conditionals → score 0-100 + verdict). The v4 layer is a PURE
+# PROJECTION: it maps the engine's rich output onto the user's
+# simplified 4-field schema. NO new astrology, NO new scoring, NO
+# changes to the underlying engine — only a vocabulary collapse and a
+# trigger/dasha-effect derivation from data the engine already produces.
+#
+# This SUPERSEDES the v3 schema (5-tier overall_risk + sensitive_areas /
+# supportive_factors / risk_factors). The v3 helpers stay in the file
+# for backwards reference but are NOT wired into the extractor.
+#
+# Brand-safety + tone_rules: UNCHANGED — same FAIL-CLOSED architecture,
+# same 5 verbatim engine-owned tone-policy bullets, same helpline
+# survival guarantee. Architect-locked invariants from v3 are preserved.
+
+# ── Vocabulary mapping tables (pure formatter, no astrology) ─────────────
+
+# Layer-name → trigger tag. Derived from engine layer semantics
+# (health_engine.py L1-L25). Tags are short, narrator-friendly nouns
+# the LLM can drop into a 2-3 line answer without naming planets.
+_PHASE60_HEALTH_LAYER_TAGS: dict[str, str] = {
+    # Houses
+    "L1_lagna_first_house":  "vitality_dip",
+    "L2_sixth_house":        "infection",
+    "L3_eighth_house":       "sudden",
+    "L4_twelfth_house":      "weakness",
+    # Planet karakas (Step-2 contributors)
+    "L5_sun_karaka":         "energy",
+    "L6_moon_karaka":        "stress",
+    "L7_mars_karaka":        "heat",
+    "L8_saturn_karaka":      "chronic",
+    "L9_jupiter_karaka":     "metabolic",
+    "L10_mercury_karaka":    "nervous",
+    "L11_venus_karaka":      "hormonal",
+    "L12_rahu_karaka":       "sudden",
+    "L13_ketu_karaka":       "hidden",
+    "L14_atmakaraka":         "vitality_dip",
+    "L15_lagna_bhava_aspect": "vitality_dip",
+    # Divisional / strength (engine layer IDs verified against
+    # health_engine.py emitted "layer" strings — must stay byte-equal).
+    # NOTE: L16/L17/L18 d-chart overlays are computed inside the engine
+    # but NEVER surface on `top_concerns[*].layer`. Excluded from the
+    # mapping to keep `test_layer_keys_parity_against_engine_emitted_ids`
+    # green and to prevent silent drift if the engine starts emitting
+    # them — at that point, add them back with verified layer IDs.
+    "L19_kp_csl_health":      "vitality_dip",
+    "L20_ashtakavarga":       "vitality_dip",
+    "L21_shadbala":           "vitality_dip",
+    "L22_bhava_bala":         "vitality_dip",
+    # Yogas
+    "L23_arishta_yogas":      "vulnerability",
+    "L24_ayushkara_yogas":    "weakness",
+    "L25_sade_sati":          "stress",
+}
+
+# Bucket → trigger tag (additive — engine's bucket classifier already
+# routes the question type, so we surface that as a default trigger).
+_PHASE60_HEALTH_BUCKET_TAGS: dict[str, str] = {
+    "mental_health":       "stress",
+    "acute_illness":       "sudden",
+    "chronic_illness":     "chronic",
+    "injury_accident":     "heat",
+    "addiction":           "stress",
+    "surgery_timing":      "sudden",
+    "recovery_timing":     "weakness",
+    "female_reproductive": "hormonal",
+    "male_reproductive":   "hormonal",
+    "longevity_general":   "vitality_dip",
+    "parent_health":       "vitality_dip",
+    "general_wellness":    "vitality_dip",
+}
+
+# Planet benefic/malefic classification for dasha_effect projection.
+# Classical Vedic taxonomy (no waxing-Moon nuance — engine does that
+# upstream; this layer is for narrator-facing dasha_effect summary).
+_PHASE60_HEALTH_BENEFICS: frozenset = frozenset({
+    "Jupiter", "Venus", "Moon", "Mercury",
+})
+_PHASE60_HEALTH_MALEFICS: frozenset = frozenset({
+    "Saturn", "Mars", "Rahu", "Ketu", "Sun",
+})
+
+
+def _phase60_health_overall_risk(verdict: str) -> str:
+    """Map engine verdict → user-spec 3-tier overall_risk.
+
+    Per user-spec STEP 5 (Apr 2026):
+      score high   → stable
+      score medium → fluctuating
+      score low    → sensitive
+
+    Engine verdict is the already-bucketed semantic of the score range
+    (green_go ≥65, yellow_wait 55-64, slow_burn 40-54, red_avoid <40),
+    so we map 1:1 from verdict — no re-thresholding, no new scoring:
+
+      green_go    → stable
+      yellow_wait → stable        (medium-high band; engine's safe-go)
+      slow_burn   → fluctuating
+      red_avoid   → sensitive
+
+    Unknown / empty verdict → "fluctuating" (safe middle default — never
+    silently default to "stable" on a sensitive surface).
+    """
+    v = (verdict or "").strip().lower()
+    if v in ("green_go", "yellow_wait"):
+        return "stable"
+    if v == "slow_burn":
+        return "fluctuating"
+    if v == "red_avoid":
+        return "sensitive"
+    return "fluctuating"
+
+
+def _phase60_health_stability(
+    overall_risk: str,
+    n_concerns: int,
+    n_supportive: int,
+) -> str:
+    """Derive binary `stability` tag (stable / unstable).
+
+    Per user-spec STEP 6 vocabulary. Pure heuristic on signal balance:
+
+      overall_risk == "stable" AND concerns ≤ supportive  → "stable"
+      everything else                                     → "unstable"
+
+    Rationale: a "stable" overall_risk verdict that nonetheless has
+    more concerns than supportive layers is by definition NOT stable
+    in signal — it's a tier downgrade waiting to happen. Returning
+    "unstable" surfaces that to the narrator without overriding the
+    engine's verdict.
+    """
+    if overall_risk == "stable" and n_concerns <= n_supportive:
+        return "stable"
+    return "unstable"
+
+
+def _phase60_health_key_triggers(v: dict) -> list[str]:
+    """Derive `key_triggers` tag list from engine output.
+
+    Per user-spec STEP 6 — emits short narrator-friendly nouns
+    (heat, stress, sudden, chronic, etc.) that the LLM can drop into
+    a 2-3 line answer WITHOUT naming planets. Pure projection of
+    engine fields — no new astrology.
+
+    Sources (in priority order, deduped):
+      1. top_concerns layer names → _PHASE60_HEALTH_LAYER_TAGS
+      2. bucket → _PHASE60_HEALTH_BUCKET_TAGS
+      3. timing_window.risk.reason keyword scan (Mars / Saturn /
+         Rahu / Ketu / inflammation / chronic / anxiety)
+
+    Capped at 4 triggers max for narrator focus (the user-spec example
+    showed `[heat, stress, sudden]` — 3 tags). Returns empty list when
+    engine has no signals (defensive — never raises).
+    """
+    if not isinstance(v, dict):
+        return []
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    def _add(tag: str) -> None:
+        if tag and tag not in seen:
+            tags.append(tag)
+            seen.add(tag)
+
+    # 1) Top concerns (engine's 3 worst layers)
+    concerns = v.get("top_concerns") or []
+    if isinstance(concerns, list):
+        for c in concerns[:3]:
+            if isinstance(c, dict):
+                layer = (c.get("layer") or "").strip()
+                tag = _PHASE60_HEALTH_LAYER_TAGS.get(layer)
+                if tag:
+                    _add(tag)
+
+    # 2) Bucket-driven default
+    bucket = (v.get("bucket") or "").strip().lower()
+    bucket_tag = _PHASE60_HEALTH_BUCKET_TAGS.get(bucket)
+    if bucket_tag:
+        _add(bucket_tag)
+
+    # 3) Active transit-risk reason keywords
+    tw = v.get("timing_window") or {}
+    if isinstance(tw, dict):
+        risk = tw.get("risk") or {}
+        if isinstance(risk, dict):
+            reason = (risk.get("reason") or "").lower()
+            if "mars" in reason or "inflammation" in reason or "accident" in reason:
+                _add("heat")
+            if "saturn" in reason or "chronic" in reason:
+                _add("chronic")
+            if "rahu" in reason or "anxiety" in reason:
+                _add("sudden")
+            if "ketu" in reason:
+                _add("hidden")
+
+    return tags[:4]
+
+
+def _phase60_health_dasha_effect(v: dict) -> str:
+    """Derive `dasha_effect` tag from current MD/AD/PD lord nature.
+
+    Per user-spec STEP 3 — classifies the active MD/AD/PD lords as
+    benefic vs malefic and projects the balance:
+
+      benefic_count > malefic_count   → "supportive"
+      benefic_count < malefic_count   → "challenging"
+      equal (incl. unknown / empty)   → "mixed"
+
+    Pure formatter projection — uses the lords already computed by
+    `health_engine._build_timing_window()` and surfaced on
+    `timing_window.current.{md, ad, pd}`. NO new dasha computation.
+
+    Defensive: returns "mixed" (safe middle) on missing / non-dict input.
+    """
+    if not isinstance(v, dict):
+        return "mixed"
+    tw = v.get("timing_window") or {}
+    if not isinstance(tw, dict):
+        return "mixed"
+    cur = tw.get("current") or {}
+    if not isinstance(cur, dict):
+        return "mixed"
+
+    benefic = 0
+    malefic = 0
+    for key in ("md", "ad", "pd"):
+        lord = cur.get(key)
+        if not isinstance(lord, str):
+            continue
+        lord_clean = lord.strip().title()
+        if lord_clean in _PHASE60_HEALTH_BENEFICS:
+            benefic += 1
+        elif lord_clean in _PHASE60_HEALTH_MALEFICS:
+            malefic += 1
+
+    if benefic > malefic:
+        return "supportive"
+    if malefic > benefic:
+        return "challenging"
+    return "mixed"
+
+
+# ── Response-format constraint (engine-owned, narrator-facing) ───────────
+# Architect mantra: engine sochta hai, LLM bolta hai. The engine doesn't
+# just decide the verdict — it also tells the narrator HOW LONG the
+# answer should be. This keeps the LLM from drifting into 6-8 line
+# explanations on a sensitive-surface where 2-3 lines is safer
+# (no over-disclosure, no diagnosis drift, no fear-induction).
+#
+# Surfaced as a FACTS-block bullet, BEFORE tone_rules so tone_rules
+# retains LAST-position recency weight.
+_PHASE60_HEALTH_RESPONSE_FORMAT: str = (
+    "Answer in EXACTLY 2-3 lines using ONLY the facts above. "
+    "No planet names, no house numbers, no dasha lord names, no "
+    "astrology jargon. Mention 1-2 key_triggers naturally if relevant. "
+    "Calm, supportive, probabilistic tone — no fear, no certainty."
+)
+
+
+def _phase60_format_health_facts_block(v: Any) -> str:
+    """Render `assess_health()` output as v4 user-spec FACTS block.
+
+    Phase 5.9 Batch 3c v4 — USER-SPEC SCHEMA (Apr 2026). Replaces v3's
+    5-tier vocabulary (overall_risk: strong/stable/fluctuating/
+    vulnerable/high_risk + sensitive_areas/supportive_factors/
+    risk_factors) with the user's simplified 4-field contract:
+
+      HEALTH_FACTS:
+        - overall_risk:  stable | fluctuating | sensitive
+        - stability:     stable | unstable
+        - key_triggers:  [heat, stress, sudden, chronic, ...]
+        - dasha_effect:  supportive | mixed | challenging
+        - confidence:    <int 0-100>
+        - response_format: <2-3 line constraint, narrator-facing>
+        - brand_safety:  [verbatim engine guardrails — helplines]
+        - tone_rules:    [verbatim engine-owned 5 tone bullets]
+
+    Vocabulary collapse rationale (user directive):
+      v3 5-tier → v4 3-tier:    cleaner narrator vocabulary
+      v3 sensitive_areas/etc → v4 key_triggers: tag-based not
+        layer-name-based (LLM-friendly nouns: heat / stress / sudden)
+      v3 risk_factors          → folded into key_triggers via reason scan
+
+    UNCHANGED from v3 (architect-locked invariants):
+      - brand_safety_warnings emitted VERBATIM (helpline survival)
+      - tone_rules emitted as LAST section, FAIL-CLOSED on engine import
+      - 1-liner verdict suppression in extractor (emitted_health_block)
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    def _safe_str(x: Any) -> str:
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    # ── Vocabulary projections ──────────────────────────────────────────
+    # Pass raw verdict through — DO NOT pre-default to "yellow_wait" here.
+    # The helper already defaults unknown/empty → "fluctuating" (safe
+    # middle). Pre-defaulting to "yellow_wait" would over-soften malformed
+    # payloads to "stable" on a sensitive surface (architect-flagged
+    # regression caught during v4 review).
+    verdict = _safe_str(v.get("verdict"))
+    overall_risk = _phase60_health_overall_risk(verdict)
+
+    n_concerns   = len(_safe_iter(v.get("top_concerns")))
+    n_supportive = len(_safe_iter(v.get("top_supportive")))
+    stability    = _phase60_health_stability(overall_risk, n_concerns, n_supportive)
+
+    key_triggers = _phase60_health_key_triggers(v)
+    dasha_effect = _phase60_health_dasha_effect(v)
+
+    if "confidence" in v:
+        conf = _safe_int(v.get("confidence"))
+    else:
+        conf = _safe_int(v.get("confidence_pct"))
+
+    # ── Block assembly ──────────────────────────────────────────────────
+    lines: list[str] = [
+        "HEALTH_FACTS:",
+        f"  - overall_risk: {overall_risk}",
+        f"  - stability: {stability}",
+    ]
+    if key_triggers:
+        triggers_str = ", ".join(key_triggers)
+        lines.append(f"  - key_triggers: [{triggers_str}]")
+    else:
+        lines.append("  - key_triggers: []")
+    lines.append(f"  - dasha_effect: {dasha_effect}")
+    lines.append(f"  - confidence: {conf}")
+
+    # ── Response format constraint (narrator-facing, engine-owned) ──────
+    lines.append(f"  - response_format: {_PHASE60_HEALTH_RESPONSE_FORMAT}")
+
+    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
+    bsw = _safe_iter(v.get("brand_safety_warnings"))
+    bullets = [_safe_str(b) for b in bsw]
+    bullets = [b for b in bullets if b]
+    if bullets:
+        lines.append("  - brand_safety:")
+        for b in bullets:
+            lines.append(f"    - {b}")
+
+    # ── Tone rules (ENGINE-OWNED, ALWAYS emitted, FAIL-CLOSED) ──────────
+    # Same FAIL-CLOSED architecture as v3: try engine source, fall back
+    # to hardcoded floor on import failure, log the regression. Tone
+    # policy is the highest-stakes contract on the sensitive-topic
+    # surface; silent degradation is unacceptable.
+    _tone_rules: tuple = _HEALTH_TONE_RULES_FALLBACK
+    try:
+        from health_engine import HEALTH_TONE_RULES as _engine_tone_rules
+        if isinstance(_engine_tone_rules, tuple) and _engine_tone_rules:
+            _tone_rules = _engine_tone_rules
+    except Exception as _e:
+        try:
+            logger.error(
+                "[Phase 5.9 v4] HEALTH_TONE_RULES engine import failed: %s — "
                 "falling back to hardcoded floor (tone enforcement preserved).",
                 _e,
             )

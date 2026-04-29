@@ -142,6 +142,11 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         )
         joined = (msgs[0]["content"] + "\n" + msgs[1]["content"])
         # Literals from the heavy contracts that MUST be absent now.
+        # Note: "MANDATORY" was previously forbidden as a contract-bloat
+        # marker, but Phase 5.3 legitimately uses it for the classical
+        # "MANDATORY D9 CHECK" rule (D9 verification before any verdict),
+        # so it is no longer in the forbidden list. The other tokens still
+        # represent old heavy-contract preamble that must stay out.
         forbidden = [
             "UNIFIED NARRATOR",
             "SUPERTYPE",
@@ -149,7 +154,6 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
             "Rule 10",
             "Rule N",
             "Rule O",
-            "MANDATORY",
             "FINAL REMINDER",
             "KP CROSS-CHECK",
             "PLANET-STRENGTH RULE",
@@ -217,15 +221,17 @@ class TestPhase50MinimalMessagesBuilder(unittest.TestCase):
         self.assertIn("Hindi", msgs_hi[0]["content"])
         self.assertIn("English", msgs_en[0]["content"])
 
-    def test_system_message_under_1500_chars(self):
+    def test_system_message_under_2500_chars(self):
         """System message must stay reasonable — no preamble bloat allowed.
-        Phase 5.2: bumped from 400 → 1500c to accommodate the ChatGPT-style
-        guidance prompt (clear-direct-verdict-first behaviour) and the
-        explicit COPY-EXACTLY instruction added when the FULL_KUNDLI_JSON
-        block was introduced. Anything > 1500c indicates new preamble drift.
+        Phase 5.2: bumped from 400 → 1500c (ChatGPT-style guidance prompt
+        + COPY-EXACTLY instruction).
+        Phase 5.3: bumped 1500 → 2500c to accommodate the classical
+        "MANDATORY D9 (NAVAMSHA) CHECK" rule block (Vargottama,
+        neecha-bhanga, dignity-change, karaka-per-topic, D9-wins-over-D1).
+        Anything > 2500c indicates new preamble drift beyond the D9 rule.
         """
         msgs = oh._phase50_build_minimal_messages("q?", _sample_kundli(), lang="hn")
-        self.assertLessEqual(len(msgs[0]["content"]), 1500,
+        self.assertLessEqual(len(msgs[0]["content"]), 2500,
             f"system msg too long ({len(msgs[0]['content'])}c) — preamble drift?")
 
 

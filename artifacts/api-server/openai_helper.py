@@ -2647,25 +2647,64 @@ def _build_messages(
     # block. Architect-flagged sustainability of literal-substring approach
     # mitigated by a section-header allowlist + loud-failure telemetry.
     if _NARRATIVE_MODE:
+        # Phase 6.0g — FACTS LOSS FIX (health): the health_engine pipeline
+        # depends on KP cuspal sub-lord data (layer L19 — MANDATORY weight 12)
+        # and slow-planet transit data (layers T1-T3 — Saturn / Mars / Rahu-Ketu
+        # transits over 1H/6H/8H/12H). The pre-Phase-6.0g trim cleared both to
+        # zero chars in narrative mode, blinding the validator chain to the
+        # very signals the engine scored against. For health questions we
+        # preserve KP and transit blocks intact and rely on the *_FACTS
+        # force-keep marker (added to `_slim_locked_facts_for_narrative`) to
+        # protect the HEALTH_FACTS column-0 block from inheriting a dropped
+        # ── section's ``keep=False`` flag.
+        _is_health_topic = (topic == "health")
         _orig_lf_chars = len(locked_facts_str)
         locked_facts_str = _slim_locked_facts_for_narrative(locked_facts_str, topic=topic)
         _orig_intel_chars = len(intel_str)
         intel_str = _slim_intel_for_narrative(intel_str)
         _orig_kp_chars = len(kp_block)
-        kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
+        if _is_health_topic:
+            # Phase 6.0g — KP retained for health (L19 MANDATORY input).
+            pass
+        else:
+            kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
         _orig_tr_chars = len(tr_block)
-        tr_block = _slim_transit_for_narrative(tr_block)
+        if _is_health_topic:
+            # Phase 6.0g — transit block retained for health (T1-T3 inputs).
+            pass
+        else:
+            tr_block = _slim_transit_for_narrative(tr_block)
         _slimmed = (_orig_lf_chars - len(locked_facts_str)) + \
                    (_orig_intel_chars - len(intel_str)) + \
-                   _orig_kp_chars + \
+                   (_orig_kp_chars - len(kp_block)) + \
                    (_orig_tr_chars - len(tr_block))
         if _slimmed > 0:
             print(f"[openai_helper] Phase 4.7 T016: narrative-mode context diet "
                   f"trimmed {_slimmed:,} chars "
                   f"(locked_facts {_orig_lf_chars:,}→{len(locked_facts_str):,}, "
                   f"intel {_orig_intel_chars:,}→{len(intel_str):,}, "
-                  f"kp {_orig_kp_chars:,}→0, "
+                  f"kp {_orig_kp_chars:,}→{len(kp_block):,}, "
                   f"transit {_orig_tr_chars:,}→{len(tr_block):,})")
+        # Phase 6.0g — VALIDATION TRACE (health): confirm critical engine
+        # inputs survived the trim. Looking for non-zero kp / transit /
+        # health_facts char counts. If any of these is zero on a health
+        # question, the FACTS LOSS FIX has regressed.
+        if _is_health_topic:
+            _hf_chars = 0
+            if locked_facts_str and "HEALTH_FACTS:" in locked_facts_str:
+                _hf_tail = locked_facts_str.split("HEALTH_FACTS:", 1)[1]
+                # Count chars belonging to the HEALTH_FACTS block (until next
+                # column-0 section marker — ▸ / ── / ═══ — or end of string).
+                _hf_block_lines: list[str] = []
+                for _hf_ln in _hf_tail.splitlines():
+                    if (_hf_ln.startswith("▸ ") or _hf_ln.startswith("── ")
+                            or _hf_ln.startswith("═")):
+                        break
+                    _hf_block_lines.append(_hf_ln)
+                _hf_chars = len("\n".join(_hf_block_lines))
+            print(f"[openai_helper] phase47_trim_health_check: "
+                  f"kp_chars={len(kp_block)} transit_chars={len(tr_block)} "
+                  f"health_facts_chars={_hf_chars}")
 
     kp_section    = f"\n\n{kp_block}\n" if kp_block else ""
     tr_section    = f"\n\n{tr_block}\n" if tr_block else ""
@@ -6886,11 +6925,27 @@ def _slim_locked_facts_for_narrative(s: str, topic: str = "") -> str:
     Returns:
         slimmed string with only allowlisted ▸ sections + their sub-lines.
         Typical reduction: 95K → ~3K chars.
+
+    Phase 6.0g — FACTS LOSS FIX: column-0 ``*_FACTS:`` blocks (HEALTH_FACTS,
+    CAREER_FACTS, LOVE_FACTS, etc.) are emitted by the engine narrators and
+    are NOT ``▸`` section headers. Without explicit force-keep handling they
+    inherit the ``keep`` flag of whatever section preceded them, so a block
+    appended after a dropped Sprint-19+ engine sub-block (``── ...``) gets
+    silently truncated. When the question topic matches the FACTS surface
+    (e.g. ``topic="health"`` → ``HEALTH_FACTS:``), we treat the ``*_FACTS:``
+    line as an implicit section opener that flips ``keep=True`` and emits
+    every indented sub-line until the next section marker.
     """
     if not s:
         return s
     extra = _LF_KEEP_BY_TOPIC.get(topic or "", ())
     keep_prefixes = _LF_KEEP_PREFIXES + extra
+
+    # Phase 6.0g — *_FACTS force-keep markers (column-0 labels, not ▸ headers).
+    _facts_force_keep: tuple[str, ...] = ()
+    if topic == "health":
+        _facts_force_keep = ("HEALTH_FACTS:",)
+
     keep = True  # before any section header, default to keep (catches preamble)
     out_lines = []
     for line in s.splitlines():
@@ -6916,6 +6971,13 @@ def _slim_locked_facts_for_narrative(s: str, topic: str = "") -> str:
                 out_lines.append(line)
             else:
                 keep = False
+            continue
+        # Phase 6.0g — *_FACTS column-0 marker behaves like a force-keep section
+        # opener. Flips ``keep`` so the indented sub-lines that follow survive
+        # even when the previous ▸/── section was dropped.
+        if _facts_force_keep and any(line.startswith(p) for p in _facts_force_keep):
+            keep = True
+            out_lines.append(line)
             continue
         # Non-section line (blank / indented sub-line / preamble) — emit only
         # when in a kept section

@@ -2041,3 +2041,102 @@ Two options exist:
 User has offered to provide the KP calculator code — when it lands, the
 single change required is populating `kp_facts` in the engine dict.
 Everything else (prompt, formatting, lock language, tests) is ready.
+
+---
+
+## Phase 5.5h — KP CSL extractor LIVE (Apr 29 2026, ACTIVATED)
+
+### Trigger
+User confirmed `pyswisseph` already installed (v2.10.03). Activation
+became a wiring exercise — no new ephemeris code required.
+
+### Discovery
+The codebase already had a complete KP infrastructure:
+- `kp_engine.calculate_kp(data)` — Placidus cusps + sub-lord chain
+  (sign-lord → star-lord → sub-lord) using Vimshottari proportions
+  inside 13°20' nakshatras. Used by `prashna_engine.py` since launch.
+- `kp_locked_facts.compute_kp_summary(birth, kundli)` — adapter that
+  derives classical KP verdicts (CONFIRMS / PARTIAL / DENIES) for the
+  six key houses {1, 2, 5, 7, 10, 11} using Krishnamurti's standard
+  event-house and negative-house sets (e.g. marriage event = {2, 7, 11},
+  marriage negation = {1, 6, 10, 12}).
+- `openai_helper.py:2960` — heavy "KP CROSS-CHECK" prompt block already
+  shipped for the heavy-prompt path with the same lock semantics.
+
+The Phase 5.5g scaffolding I had built was about to duplicate this
+infrastructure. Activation became a 2-helper wire-up instead.
+
+### Wire-up (2 new helpers in `openai_helper.py`)
+1. `_phase55_safe_compute_kp_summary(kundli)` — exception-safe wrapper
+   around `kp_locked_facts.compute_kp_summary`. Returns `{}` on any
+   failure (missing geo, swe crash, import failure). KP enrichment is
+   best-effort and MUST NEVER break the LvA path.
+2. `_phase55_kp_facts_for_marriage(kp_summary)` — adapter that maps
+   the engine's by-house output (`houses[5]`, `houses[7]`, `houses[11]`)
+   to the Phase 5.5g `csl_5/csl_7/csl_11` contract. Returns `None`
+   when no usable houses present (so locked block omits KP entirely).
+   `connected_houses` = `signifies ∪ obstructs`, sorted, deduped, with
+   1..12 range filtering. The engine's classical verdict (CONFIRMS/
+   PARTIAL/DENIES) is intentionally NOT surfaced — KP in the LvA block
+   is ADDITIVE flavor, not a parallel verdict (per user's gold rule).
+
+### Single-line activation in the LvA engine
+```python
+"kp_facts": _phase55_kp_facts_for_marriage(
+                _phase55_safe_compute_kp_summary(kundli)),
+```
+- No geo on kundli (`lat`/`lon`/`tz` missing) → `compute_kp_summary`
+  returns `{}` → adapter returns `None` → locked block omits KP.
+  No-hallucination guarantee preserved by graceful degrade.
+- Geo present → pyswisseph fires → adapter populates kp_facts → locked
+  block carries KP narration.
+
+### Prompt instruction strengthened
+Phase 5.5g's `_phase55_format_kp_explanation_block` originally said the
+LLM "MAY add ONE short KP line" in explain mode. Live testing showed
+the LLM treated this as optional and consistently skipped KP citation
+even when kp_facts was populated. Tightened to:
+- HEADLINE-ONLY mode → do NOT mention KP (keeps headline pure).
+- EXPLAIN mode (kyun/why/reason batao/detail mein samjhao/kaise/how)
+  → MUST cite KP at least once. Citation MUST name cusp number, sign,
+  lord, and at least one connected house — verbatim from KP_FACTS.
+Lock language unchanged (verdict above is FINAL, KP is additive,
+must NOT change/flip, do NOT invent KP facts).
+
+### Tests
+**214/214 green** (was 202, +12 in `TestPhase55hKpActivation`):
+- Adapter rejects non-dict inputs, empty dicts, malformed houses
+- Adapter skips houses with missing/blank/non-string sub_lord or sign
+- Happy-path mapping H5/H7/H11 → csl_5/csl_7/csl_11 (H1/H2/H10 NOT
+  exposed — only marriage-relevant cusps surface in the LvA narration)
+- Partial input (only csl_7 present) handled
+- Invalid house numbers filtered (out-of-range, floats, strings)
+- Dedup + sort verified
+- Safe wrapper returns `{}` for non-dict / no-geo kundli (graceful)
+- End-to-end engine path: no geo → kp_facts None / geo → populated
+- ARCHITECTURAL GUARANTEE — turning KP on does NOT alter LvA verdict
+  fields (verdict_public, scores, reasons all byte-identical with vs
+  without geo)
+
+### Live verification (BBSR, 29 Oct 1999, 11:30 AM, lat 20.30, lon 85.82, tz +5.5)
+Engine now computes:
+- csl_5: Taurus (lord Venus) → connected houses [5, 8, 10]
+- csl_7: Gemini (lord Sun)   → connected houses [10]
+- csl_11: Scorpio (lord Venus) → connected houses [5, 8, 10]
+
+Combined LvA + explain question response includes:
+> "KP paddhati me bhi 5th CSL Venus Vrishabh mein hai aur houses 5/8/10
+>  se connected hai, jo love marriage ko support karta hai par 8th
+>  house ki involvement se thoda obstacle bhi deta hai."
+
+Verdict text byte-identical to Phase 5.5f leaning-love wording — KP
+stayed additive as guaranteed.
+
+### Footprint
+- 2 new helpers (~50 LOC) in `openai_helper.py`
+- 1 line replacing the `kp_facts: None` placeholder
+- 1 prompt-instruction tweak in `_phase55_format_kp_explanation_block`
+- 12 new tests in `test_phase50_minimal_prompt.py`
+- Reuses 100% of existing `kp_engine.py` (306 LOC) +
+  `kp_locked_facts.py` (239 LOC) — zero duplication.
+- Graceful degradation when geo missing — existing kundlis unaffected.

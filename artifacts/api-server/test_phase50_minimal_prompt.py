@@ -1416,14 +1416,18 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
     """
 
     def test_engine_return_dict_carries_kp_facts_field(self):
-        """Engine output must expose `kp_facts` so downstream layers
-        can populate it. Default is None — ensures no behavior change
-        until real KP data arrives."""
+        """Engine output must expose `kp_facts`. With Phase 5.5h LIVE,
+        the field is populated by `_phase55_kp_facts_for_marriage` —
+        but for kundlis WITHOUT lat/lon/tz (the test fixture), the KP
+        compute layer gracefully returns {} and the adapter returns
+        None, so this test still asserts None. The geo-ON activation
+        path is covered by `TestPhase55hKpActivation` below."""
         v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
         self.assertIn("kp_facts", v)
         self.assertIsNone(v["kp_facts"],
-                          "Default kp_facts must be None until real "
-                          "CSL extractor lands — prevents hallucination.")
+                          "Without geo (lat/lon/tz) on the kundli, KP "
+                          "must stay None — preserves no-hallucination "
+                          "guarantee even with the live extractor.")
 
     def test_kp_block_is_empty_when_facts_are_none(self):
         """No kp_facts → empty string → locked block emits no KP
@@ -1530,6 +1534,218 @@ class TestPhase55gKpScaffolding(unittest.TestCase):
         self.assertGreater(kp_idx, 0)
         self.assertGreater(instr_idx, kp_idx,
                            "KP section must come before main instruction")
+
+
+class TestPhase55hKpActivation(unittest.TestCase):
+    """Phase 5.5h — KP CSL extractor LIVE activation.
+
+    Wires the existing `kp_locked_facts.compute_kp_summary` (Placidus
+    cusps + sub-lord chain via pyswisseph, already shipped for the
+    heavy-prompt KP CROSS-CHECK path) into the LvA engine via two
+    helpers:
+      • `_phase55_safe_compute_kp_summary(kundli)`  — exception-safe
+        wrapper that returns ``{}`` on any failure (missing geo, swe
+        crash, import failure).
+      • `_phase55_kp_facts_for_marriage(kp_summary)` — adapter that
+        maps the engine's by-house output to the Phase 5.5g
+        `csl_5/csl_7/csl_11` contract.
+
+    Hard contract:
+      • No geo on kundli  →  kp_facts is None  →  locked block omits KP.
+      • Geo on kundli      →  kp_facts populated  →  locked block has KP
+        narration but the LvA engine verdict still wins (additive only).
+      • Adapter NEVER raises and NEVER fabricates CSLs (returns None
+        when no usable houses present).
+    """
+
+    # ── Adapter: malformed / empty inputs ────────────────────────────
+
+    def test_adapter_returns_none_for_non_dict_input(self):
+        for bad in (None, "", 0, [], "not a dict", 42):
+            self.assertIsNone(oh._phase55_kp_facts_for_marriage(bad))
+
+    def test_adapter_returns_none_for_empty_dict(self):
+        self.assertIsNone(oh._phase55_kp_facts_for_marriage({}))
+        self.assertIsNone(oh._phase55_kp_facts_for_marriage({"houses": {}}))
+        self.assertIsNone(oh._phase55_kp_facts_for_marriage(
+            {"houses": "not a dict"}))
+
+    def test_adapter_skips_houses_with_missing_subfields(self):
+        """If sub_lord or cusp_sign is missing/blank/wrong-type, that
+        cusp is dropped — adapter MUST NOT fabricate placeholder data."""
+        kp = {
+            "houses": {
+                5:  {"cusp_sign": "",       "sub_lord": "Saturn"},   # blank sign
+                7:  {"cusp_sign": "Gemini", "sub_lord": ""},          # blank lord
+                11: {"cusp_sign": "Libra",  "sub_lord": None},        # None lord
+            }
+        }
+        self.assertIsNone(oh._phase55_kp_facts_for_marriage(kp))
+
+    def test_adapter_maps_h5_h7_h11_to_csl_keys(self):
+        """Happy path: full 6-house kp_summary maps cleanly to the
+        Phase 5.5g CSL contract. H1/H2/H10 are intentionally IGNORED —
+        only marriage-relevant cusps surface in the LvA narration."""
+        kp = {
+            "houses": {
+                1:  {"cusp_sign": "Sag",    "cusp_deg": 269.5,
+                     "sub_lord": "Mars",    "verdict": "CONFIRMS",
+                     "signifies": [1, 11],  "obstructs": []},
+                2:  {"cusp_sign": "Cap",    "cusp_deg": 280.0,
+                     "sub_lord": "Saturn",  "verdict": "PARTIAL",
+                     "signifies": [2, 11],  "obstructs": [8]},
+                5:  {"cusp_sign": "Aries",  "cusp_deg": 32.4,
+                     "sub_lord": "Saturn",  "verdict": "PARTIAL",
+                     "signifies": [5, 11],  "obstructs": [8]},
+                7:  {"cusp_sign": "Gemini", "cusp_deg": 89.7,
+                     "sub_lord": "Jupiter", "verdict": "CONFIRMS",
+                     "signifies": [2, 7, 11], "obstructs": []},
+                10: {"cusp_sign": "Virgo",  "cusp_deg": 175.2,
+                     "sub_lord": "Mercury", "verdict": "CONFIRMS",
+                     "signifies": [10, 11], "obstructs": []},
+                11: {"cusp_sign": "Libra",  "cusp_deg": 200.1,
+                     "sub_lord": "Venus",   "verdict": "CONFIRMS",
+                     "signifies": [2, 11],  "obstructs": []},
+            },
+            "ayanamsa": 23.95,
+        }
+        out = oh._phase55_kp_facts_for_marriage(kp)
+        self.assertIsNotNone(out)
+        self.assertEqual(set(out.keys()), {"csl_5", "csl_7", "csl_11"})
+
+        self.assertEqual(out["csl_5"]["sign"], "Aries")
+        self.assertEqual(out["csl_5"]["lord"], "Saturn")
+        self.assertEqual(out["csl_5"]["connected_houses"], [5, 8, 11])
+
+        self.assertEqual(out["csl_7"]["sign"], "Gemini")
+        self.assertEqual(out["csl_7"]["lord"], "Jupiter")
+        self.assertEqual(out["csl_7"]["connected_houses"], [2, 7, 11])
+
+        self.assertEqual(out["csl_11"]["sign"], "Libra")
+        self.assertEqual(out["csl_11"]["lord"], "Venus")
+        self.assertEqual(out["csl_11"]["connected_houses"], [2, 11])
+
+        # CRITICAL: H1/H2/H10 must NOT appear — they're not marriage cusps
+        self.assertNotIn("csl_1",  out)
+        self.assertNotIn("csl_2",  out)
+        self.assertNotIn("csl_10", out)
+
+    def test_adapter_handles_partial_houses(self):
+        """If only H7 is present (e.g. KP engine partial output), the
+        adapter returns just csl_7 and the formatter then fills the
+        missing CSLs with `(not provided)` per Phase 5.5g spec."""
+        kp = {"houses": {
+            7: {"cusp_sign": "Gemini", "sub_lord": "Jupiter",
+                "signifies": [2, 7, 11], "obstructs": []},
+        }}
+        out = oh._phase55_kp_facts_for_marriage(kp)
+        self.assertEqual(set(out.keys()), {"csl_7"})
+
+    def test_adapter_filters_invalid_house_numbers(self):
+        """Defensive: only houses 1..12 belong in connected_houses.
+        Strings, floats not equal to int, and out-of-range ints dropped."""
+        kp = {"houses": {
+            7: {"cusp_sign": "Gemini", "sub_lord": "Jupiter",
+                "signifies": [2, 7, 11, "x", 13, 0, -1, 7.5],
+                "obstructs": [6.0, "neg", None]},
+        }}
+        out = oh._phase55_kp_facts_for_marriage(kp)
+        self.assertEqual(out["csl_7"]["connected_houses"], [2, 6, 7, 11])
+
+    def test_adapter_dedupes_and_sorts(self):
+        """signifies + obstructs may overlap; output must be a sorted
+        unique list of house ints."""
+        kp = {"houses": {
+            7: {"cusp_sign": "Gemini", "sub_lord": "Jupiter",
+                "signifies": [11, 2, 7, 7], "obstructs": [11, 6]},
+        }}
+        out = oh._phase55_kp_facts_for_marriage(kp)
+        self.assertEqual(out["csl_7"]["connected_houses"], [2, 6, 7, 11])
+
+    # ── Safe wrapper: degenerate inputs never raise ──────────────────
+
+    def test_safe_wrapper_returns_dict_for_non_dict_kundli(self):
+        for bad in (None, "", 42, [], "string"):
+            self.assertEqual(oh._phase55_safe_compute_kp_summary(bad), {})
+
+    def test_safe_wrapper_returns_empty_for_kundli_without_geo(self):
+        """The fixture has dob/time but no lat/lon/tz — compute_kp_summary
+        must return {} (graceful) and the wrapper must propagate that."""
+        out = oh._phase55_safe_compute_kp_summary(_kundli_with_d9())
+        self.assertEqual(out, {})
+
+    # ── End-to-end: engine path with and without geo ─────────────────
+
+    def test_engine_kp_facts_none_without_geo(self):
+        """Real path through the engine: no geo → kp_facts None →
+        locked block has zero KP language. This is the no-hallucination
+        contract under Phase 5.5h."""
+        v = oh._phase55_compute_love_vs_arrange(_kundli_with_d9())
+        self.assertIsNone(v["kp_facts"])
+        block = oh._phase55_format_locked_verdict_block(v)
+        self.assertNotIn("KP_FACTS", block)
+        self.assertNotIn("CSL_7", block)
+
+    def test_engine_kp_facts_populated_with_geo(self):
+        """Real path through the engine WITH geo: pyswisseph fires →
+        adapter populates kp_facts → locked block carries KP narration.
+        Uses the actual Bhubaneswar coordinates that match the existing
+        BBSR fixture (29 Oct 1999, 11:30 AM, Bhubaneswar)."""
+        k = _kundli_with_d9()
+        k["dob"]  = "29 Oct 1999"
+        k["time"] = "11:30 AM"
+        k["lat"]  = 20.2961
+        k["lon"]  = 85.8245
+        k["tz"]   = 5.5
+
+        v = oh._phase55_compute_love_vs_arrange(k)
+        self.assertIsNotNone(v["kp_facts"],
+            "With geo present and pyswisseph installed, the adapter "
+            "must populate kp_facts. If this asserts None, either "
+            "pyswisseph is missing or the adapter wiring regressed.")
+
+        kp = v["kp_facts"]
+        # At least one of the marriage-relevant CSLs must be present.
+        # We don't assert specific lords here (they depend on ephemeris
+        # version + ayanamsa choice); we assert the SHAPE only — accuracy
+        # is the engine's job, validated by manual verification.
+        self.assertTrue(set(kp.keys()) & {"csl_5", "csl_7", "csl_11"})
+        for csl_key, info in kp.items():
+            self.assertIn("sign", info)
+            self.assertIn("lord", info)
+            self.assertIn("connected_houses", info)
+            self.assertIsInstance(info["sign"], str)
+            self.assertIsInstance(info["lord"], str)
+            self.assertIsInstance(info["connected_houses"], list)
+            for h in info["connected_houses"]:
+                self.assertIsInstance(h, int)
+                self.assertTrue(1 <= h <= 12)
+
+        # Locked block must now include the KP narration section
+        block = oh._phase55_format_locked_verdict_block(v)
+        self.assertIn("KP_FACTS",            block)
+        self.assertIn("KP_EXPLANATION_GUIDE", block)
+        # Engine verdict still primary — Phase 5.5e/5.5f guarantee
+        self.assertIn("AUTHORITATIVE_ENGINE_VERDICT", block)
+        self.assertIn("HEADLINE",            block)
+
+    def test_engine_kp_activation_does_not_change_verdict(self):
+        """ARCHITECTURAL GUARANTEE — turning KP on must NOT alter the
+        LvA engine's love/arrange verdict. This is the user's explicit
+        rule: KP is additive narration, never a parallel verdict."""
+        k_no_geo = _kundli_with_d9()
+        k_geo    = dict(k_no_geo,
+                        dob="29 Oct 1999", time="11:30 AM",
+                        lat=20.2961, lon=85.8245, tz=5.5)
+        v_no_geo = oh._phase55_compute_love_vs_arrange(k_no_geo)
+        v_geo    = oh._phase55_compute_love_vs_arrange(k_geo)
+        # All scoring + verdict fields must be byte-identical
+        for key in ("verdict_public", "verdict_text_public",
+                    "love_score", "arrange_score",
+                    "reasons_love", "reasons_arrange"):
+            self.assertEqual(v_no_geo.get(key), v_geo.get(key),
+                             f"Field `{key}` changed when KP activated — "
+                             "Phase 5.5h MUST NOT touch the LvA verdict.")
 
 
 class TestPhase55BuilderIntegration(unittest.TestCase):

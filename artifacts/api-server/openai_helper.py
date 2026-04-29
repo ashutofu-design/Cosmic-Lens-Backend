@@ -9383,6 +9383,105 @@ def _p55_planet_sign(plist: list, name: str) -> str | None:
     return p.get("sign") if p else None
 
 
+def _phase55_safe_compute_kp_summary(kundli: Any) -> dict:
+    """Phase 5.5h — safe wrapper around `kp_locked_facts.compute_kp_summary`.
+
+    Lazy-imports to avoid any startup-time circular-import surprises and
+    swallows ANY exception (returns ``{}``). KP enrichment is best-effort
+    and must NEVER break the LvA path. Returns ``{}`` when:
+      • lat/lon/tz missing on the kundli payload (most common case)
+      • pyswisseph raises (corrupt birth data)
+      • module import fails for any reason
+    """
+    if not isinstance(kundli, dict):
+        return {}
+    try:
+        from kp_locked_facts import compute_kp_summary  # type: ignore
+    except Exception:
+        return {}
+    try:
+        out = compute_kp_summary(None, kundli)
+        return out if isinstance(out, dict) else {}
+    except Exception:
+        return {}
+
+
+def _phase55_kp_facts_for_marriage(kp_summary: Any) -> dict | None:
+    """Phase 5.5h — adapter from `compute_kp_summary` output to the
+    Phase 5.5g `kp_facts` contract used by the LvA locked verdict block.
+
+    INPUT shape (from kp_locked_facts.compute_kp_summary):
+      {
+        "houses": {
+          1:  {cusp_sign, cusp_deg, sub_lord, verdict, signifies, obstructs},
+          5:  {...},
+          7:  {...},
+          10: {...},
+          11: {...},
+        },
+        "ayanamsa": float,
+      }
+      May also be ``{}`` when geo data is missing.
+
+    OUTPUT shape (consumed by `_phase55_format_kp_explanation_block`):
+      {
+        "csl_5":  {"sign": str, "lord": str, "connected_houses": list[int]},
+        "csl_7":  {...},
+        "csl_11": {...},
+      }
+      OR ``None`` when no usable CSLs are present.
+
+    `connected_houses` is the union of the engine's ``signifies`` (event-house
+    overlaps for that cusp) and ``obstructs`` (negative-house overlaps). The
+    LLM applies the LvA narration rules from the locked-block prompt to
+    interpret the houses. The engine's own classical KP verdict
+    (CONFIRMS/PARTIAL/DENIES) is intentionally NOT surfaced here — KP in
+    the LvA block is ADDITIVE flavour, not a parallel verdict, per the
+    user's explicit instruction. The authoritative call remains the LvA
+    ratio-ladder verdict computed earlier in this engine.
+
+    Marriage-relevant cusps mapped:
+      • 5th  — love, romance, courtship  →  csl_5
+      • 7th  — marriage, partnership     →  csl_7
+      • 11th — fulfilment of desires     →  csl_11
+    """
+    if not isinstance(kp_summary, dict):
+        return None
+    houses = kp_summary.get("houses")
+    if not isinstance(houses, dict):
+        return None
+
+    out: dict[str, dict] = {}
+    for cusp_h, csl_key in ((5, "csl_5"), (7, "csl_7"), (11, "csl_11")):
+        info = houses.get(cusp_h)
+        if not isinstance(info, dict):
+            continue
+        sub_lord  = info.get("sub_lord")
+        cusp_sign = info.get("cusp_sign")
+        if not isinstance(sub_lord, str) or not sub_lord:
+            continue
+        if not isinstance(cusp_sign, str) or not cusp_sign:
+            continue
+
+        connected: set[int] = set()
+        for k in ("signifies", "obstructs"):
+            seq = info.get(k) or []
+            if isinstance(seq, (list, tuple, set)):
+                for x in seq:
+                    if isinstance(x, int) and 1 <= x <= 12:
+                        connected.add(x)
+                    elif isinstance(x, float) and x == int(x) and 1 <= int(x) <= 12:
+                        connected.add(int(x))
+
+        out[csl_key] = {
+            "sign":              cusp_sign,
+            "lord":              sub_lord,
+            "connected_houses":  sorted(connected),
+        }
+
+    return out or None
+
+
 def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
     """Deterministic love-vs-arrange verdict from classical rules.
 
@@ -9683,16 +9782,17 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
         "verdict_public":       verdict_public,         # UX verdict
         "verdict_text_public":  verdict_text_public,    # UX headline (this is
                                                         # what the LLM narrates)
-        # ── Phase 5.5g (Apr 29 2026) — KP scaffolding placeholder ──
-        # Reserved for KP (Krishnamurti Paddhati) cuspal-sublord facts.
-        # When populated by the chart provider (or a future CSL extractor)
-        # this dict will carry: csl_5, csl_7, csl_11 (each with sign, lord,
-        # connected_houses) and the locked verdict block will append a
-        # KP-narration instruction. While `None`, the LLM gets NO KP
-        # prompt at all — preventing CSL hallucination. See
-        # `_phase55_format_locked_verdict_block` and
-        # `_phase55_format_kp_explanation_block`.
-        "kp_facts":             None,
+        # ── Phase 5.5g/5.5h — KP cuspal-sublord facts (LIVE) ──
+        # Phase 5.5g shipped scaffolding; Phase 5.5h activates it by
+        # reusing the existing `kp_locked_facts.compute_kp_summary`
+        # pipeline (Placidus cusps + sub-lord chain via pyswisseph,
+        # already in production for the heavy-prompt KP CROSS-CHECK
+        # path). The adapter `_phase55_kp_facts_for_marriage` maps
+        # H5/H7/H11 → csl_5/csl_7/csl_11. Returns None when birth
+        # geo (lat/lon/tz) is missing — locked block then emits no
+        # KP section, preserving the no-hallucination guarantee.
+        "kp_facts":             _phase55_kp_facts_for_marriage(
+                                    _phase55_safe_compute_kp_summary(kundli)),
     }
 
 
@@ -9844,11 +9944,19 @@ def _phase55_format_kp_explanation_block(kp_facts: Any) -> str:
         "  - 6/8/12 dominate                → delays, breaks, conversion\n"
         "INSTRUCTION (KP layer — additive, NOT decisional):\n"
         "  • The verdict above is FINAL. KP must NOT change or flip it.\n"
-        "  • If the user asks 'kyun' / 'why' / 'kaise', you MAY add ONE "
-        "short KP line after the headline that explains the verdict in "
-        "KP terms using ONLY the facts above (e.g. \"KP me 5th CSL ka "
-        "5/7/11 se connection love-marriage conversion ko support karta "
-        "hai.\").\n"
+        "  • In HEADLINE-ONLY mode (when the user did NOT ask kyun / why "
+        "/ explain / detail / how), do NOT mention KP at all — keep the "
+        "headline pure.\n"
+        "  • In EXPLAIN mode (when the user asks 'kyun' / 'why' / "
+        "'reason batao' / 'detail mein samjhao' / 'kaise' / 'how'), you "
+        "MUST cite KP at least once alongside the Vedic reasons — using "
+        "ONLY the KP_FACTS above. One natural sentence is enough. "
+        "Example: \"KP paddhati me bhi 5th CSL Venus Taurus mein hai aur "
+        "houses 5/8/10 se connected hai, jo love marriage ko support "
+        "karta hai par 8th house ki involvement se thoda obstacle bhi "
+        "deta hai.\" Citation MUST name the cusp number (5th/7th/11th), "
+        "the sign and lord exactly as printed in KP_FACTS, and at least "
+        "one of the connected houses — verbatim from the data above.\n"
         "  • If the KP_FACTS lines say '(not provided)' for a CSL, do "
         "NOT mention that CSL at all. Do NOT invent KP facts. Do NOT "
         "reason from planet positions to derive CSLs yourself."

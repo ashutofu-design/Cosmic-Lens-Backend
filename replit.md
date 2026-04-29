@@ -4018,3 +4018,86 @@ Health responses now always traverse the full validator chain regardless of `eng
 
 ### Files changed
 * `artifacts/api-server/openai_helper.py` (+14/-2)
+
+---
+
+## Phase 6.0m — FIX 10 + FIX 11 (health scrubber + transit injection)
+
+**Date:** 2026-04-29
+**Trigger:** Live health response trace (`req_id=81c426c6`) showed two
+remaining gaps after Phase 6.0g–6.0l shipped:
+
+1. `transits_present=False` in `phase60j_engine_input_check` despite
+   `health_engine` having internal transit-aware bucket logic.
+2. `4d.SCRUBBER_SKIPPED` on the phase50 minimal-prompt path → LLM leaked
+   `triggers / tendency / chronic` clinical jargon into a health answer
+   even though `bucket=injury_accident, score=48, conf=67` was solid.
+
+### FIX 11 — TRANSIT INJECTION (`openai_helper.py:2555-2628`)
+
+Inserted a defensive transit-compute block immediately BEFORE the existing
+`phase60j_engine_input_check` probe and BEFORE the `assess_health()` call.
+
+* When `intel_obj["transits"]` is missing the orchestrator now computes it
+  via `transits.compute_transits(lagna_idx, moon_idx, dob)` and injects
+  it in-place (mirrored at `kundli["transits"]` for symmetry).
+* Lagna sign idx is read from `kundli["ascendant"]` (dict-shape `.sign /
+  .name`, OR str-shape). Moon sign idx from `kundli["moonSign"] |
+  moon_sign`. DOB from `birth.date | dob | birthDate` string OR `{year,
+  month, day, hour, minute}` dict — same pattern locked_facts.py:1339-1366
+  already uses for the transit summary string.
+* Wrapped in try/except — failure is non-fatal, engine continues with
+  whatever its internal `_maybe_*_transit` helpers can derive.
+* Emits a NEW `phase60k_engine_transit_check` print log mirroring the
+  existing `phase60j` style (no `_trace` because `req_id` is not in scope
+  inside `_build_messages`).
+
+**health_engine.py is UNTOUCHED** (per user lock — no scoring, schema, or
+HEALTH_FACTS changes).
+
+### FIX 10 — FORCED SCRUBBER + HEALTH POST-SCRUB SAFETY (sync + stream)
+
+**Site 1 — `openai_helper.py:14950` (sync `ai_ask`):**
+* Gate changed from `if not _phase50_active:` to
+  `if (not _phase50_active) or topic == "health":` — the brand-tone
+  scrubber now ALWAYS runs for health questions, even on the phase50
+  minimal-prompt path.
+* New trace event `4d.SCRUBBER_RAN` fires when scrubber ran but found
+  no changes (vs `4d.SCRUBBER_CHANGED` when it actually rewrote text).
+* Both events now carry `reason: "normal" | "phase60m_fix10_health_override"`
+  for telemetry clarity.
+
+**Site 2 — `openai_helper.py:16890` (stream `ai_ask_stream`):**
+* Identical mirror of the sync gate using `_phase50_active_stream`.
+
+**Hard post-LLM safety — `openai_helper.py:5853-5878`:**
+* New `_HEALTH_FORBIDDEN_REPLACE` regex map:
+  * `\btriggers?\b` → `sudden issues`
+  * `\btendency\b` → `chance` / `\btendencies\b` → `chances`
+  * `\bchronic\b` → `long-term`
+* New `_health_post_scrub_safety(text)` helper applies it AFTER the
+  scrubber, gated by `topic == "health"` only — non-health topics keep
+  their original wording.
+* Fires new trace `4d.HEALTH_POST_SCRUB_SAFETY_FIRED` with the list of
+  patterns matched + before/after previews (only when something changed).
+
+### Verification
+
+* `python3 -c "import ast; ast.parse(open('openai_helper.py').read())"` →
+  `SYNTAX OK`
+* API server restarted clean: `[DB] Connected to PostgreSQL`, `Flask app
+  'flask_app'` on :8080, `GET /api/healthz → HTTP 200, 0.004s`
+* New tunnel: `https://beam-interventions-parliamentary-boom.trycloudflare.com`
+* User to verify on phone with a fresh health question. Expected log
+  signatures (req_id will differ):
+  * `[openai_helper] phase60k_engine_transit_check: transits_present=True
+    transit_keys=N injected=yes` (or `no` if intel_obj already had them)
+  * `[openai_helper] phase60j_engine_input_check: ... transits_present=True ...`
+    (now True because Fix 11 injected the key BEFORE this probe runs)
+  * `4d.SCRUBBER_RAN` (or `4d.SCRUBBER_CHANGED`) with
+    `reason: "phase60m_fix10_health_override"` instead of
+    `4d.SCRUBBER_SKIPPED`
+  * Final answer free of `triggers / tendency / chronic`
+
+### Files changed
+* `artifacts/api-server/openai_helper.py` (+~140/-22)

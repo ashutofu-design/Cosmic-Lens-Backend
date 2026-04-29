@@ -2548,6 +2548,77 @@ def _build_messages(
             # If `kp_dict_present=False` or `transits_present=False` ever
             # appear in this log, THEN engine integrity is genuinely broken —
             # otherwise the trim numbers refer to LLM text and are harmless.
+
+            # ── Phase 6.0m — FIX 11 (TRANSIT INJECTION) ────────────────────
+            # health_engine has internal transit helpers but the orchestrator
+            # is also expected to ship `intel_obj["transits"]` (and a mirror
+            # at `kundli["transits"]`) so layers T2/T3 + the Phase 6.0j
+            # input-integrity probe both see live transit data.
+            #
+            # If `intel_obj["transits"]` is absent we compute it now via
+            # `transits.compute_transits(lagna_idx, moon_idx, dob)` and
+            # inject in-place. Failure is non-fatal — engine continues with
+            # whatever transit data its internal helpers can derive.
+            try:
+                if not isinstance(intel_obj, dict):
+                    intel_obj = {}
+                _has_tr_pre = bool(intel_obj.get("transits")) or any(
+                    ("transit" in k.lower() or "tr_" in k.lower())
+                    for k in intel_obj.keys()
+                )
+                if not _has_tr_pre:
+                    from transits import compute_transits as _f11_ct  # type: ignore
+                    from datetime import datetime as _f11_dt
+                    _SIGN_F11 = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                                 "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+                    def _f11_name_to_idx(_n: Any) -> Optional[int]:
+                        if not isinstance(_n, str):
+                            return None
+                        _c = _n.strip().capitalize()
+                        return _SIGN_F11.index(_c) if _c in _SIGN_F11 else None
+                    # Lagna sign idx (kundli['ascendant'] may be dict OR str)
+                    _asc_f11 = kundli.get("ascendant") if isinstance(kundli, dict) else None
+                    _lagna_idx_f11: Optional[int] = None
+                    if isinstance(_asc_f11, dict):
+                        _lagna_idx_f11 = _f11_name_to_idx(_asc_f11.get("sign") or _asc_f11.get("name"))
+                    elif isinstance(_asc_f11, str):
+                        _lagna_idx_f11 = _f11_name_to_idx(_asc_f11)
+                    # Moon sign idx
+                    _moon_str_f11 = (kundli.get("moonSign") or kundli.get("moon_sign")
+                                     if isinstance(kundli, dict) else None)
+                    _moon_idx_f11 = _f11_name_to_idx(_moon_str_f11)
+                    # DOB → datetime (best-effort, supports {date}|{dob}|{birthDate} string
+                    # and {year,month,day,hour,minute} dict shapes)
+                    _dob_f11: Optional[Any] = None
+                    if isinstance(birth, dict):
+                        _dob_str_f11 = birth.get("date") or birth.get("dob") or birth.get("birthDate")
+                        if isinstance(_dob_str_f11, str) and len(_dob_str_f11) >= 10:
+                            try:
+                                _dob_f11 = _f11_dt.strptime(_dob_str_f11[:10], "%Y-%m-%d")
+                            except Exception:
+                                _dob_f11 = None
+                        if _dob_f11 is None and all(k in birth for k in ("day", "month", "year")):
+                            try:
+                                _dob_f11 = _f11_dt(int(birth["year"]), int(birth["month"]), int(birth["day"]),
+                                                   int(birth.get("hour") or 0), int(birth.get("minute") or 0))
+                            except Exception:
+                                _dob_f11 = None
+                    if _lagna_idx_f11 is not None:
+                        _tr_f11 = _f11_ct(_lagna_idx_f11, _moon_idx_f11, dob=_dob_f11) or {}
+                        if _tr_f11:
+                            intel_obj["transits"] = _tr_f11
+                            if isinstance(kundli, dict):
+                                kundli["transits"] = _tr_f11
+                _tr_inj = (intel_obj.get("transits") if isinstance(intel_obj, dict) else None) or {}
+                print(
+                    "[openai_helper] phase60k_engine_transit_check: "
+                    f"transits_present={bool(_tr_inj)} "
+                    f"transit_keys={len(_tr_inj.keys()) if isinstance(_tr_inj, dict) else 0} "
+                    f"injected={'yes' if (not _has_tr_pre and _tr_inj) else ('no' if _has_tr_pre else 'failed')}"
+                )
+            except Exception as _exc:
+                print(f"[openai_helper] phase60k_engine_transit_check failed (non-fatal): {_exc}")
+
             try:
                 _intel_keys = sorted((intel_obj or {}).keys()) if isinstance(intel_obj, dict) else []
                 _kp_keys    = sorted((kp_dict_h or {}).keys()) if isinstance(kp_dict_h, dict) else []
@@ -5845,6 +5916,34 @@ def _strip_narrative_disclaimers(text: str) -> str:
     out = "\n".join(ln.rstrip() for ln in out.splitlines()
                     if ln.strip() not in ("", ".", ";", ",", "—"))
     return out.strip()
+
+
+_HEALTH_FORBIDDEN_REPLACE: list[tuple["re.Pattern[str]", str]] = [
+    (re.compile(r"\btriggers?\b",   re.IGNORECASE), "sudden issues"),
+    (re.compile(r"\btendency\b",    re.IGNORECASE), "chance"),
+    (re.compile(r"\btendencies\b",  re.IGNORECASE), "chances"),
+    (re.compile(r"\bchronic\b",     re.IGNORECASE), "long-term"),
+]
+
+
+def _health_post_scrub_safety(text: str) -> tuple[str, list[str]]:
+    """Phase 6.0m FIX 10 — HARD post-LLM safety net for topic=health.
+    Replaces forbidden clinical/loaded words AFTER the LLM stream so they
+    cannot leak through Phase 5.0 minimal-prompt's bypassed style validators.
+    Returns (cleaned_text, list_of_pattern_strings_that_fired).
+    Caller MUST gate by topic == "health" — non-health topics keep their
+    original wording.
+    """
+    if not text:
+        return text, []
+    out  = text
+    hits: list[str] = []
+    for rx, repl in _HEALTH_FORBIDDEN_REPLACE:
+        new = rx.sub(repl, out)
+        if new != out:
+            hits.append(rx.pattern)
+            out = new
+    return out, hits
 
 
 def _scrub_brand_tone(text: str) -> str:
@@ -14832,23 +14931,53 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4a3.WEALTH_BRAND_SAFETY_ERR", str(_exc))
 
     # ── Tone scrubber — strip any blacklisted AI-style phrases.
-    # Phase 5.0 Final Strip: skipped when the minimal-prompt path is active.
-    # The scrubber is a STYLE controller (rewrites tone/phrasing); user spec
-    # explicitly bans style-modifying validators. Hallucination guards
-    # (TIMING_VALIDATOR + POST_LOGIC_CHECK) remain — those are correctness,
-    # not style.
-    if not _phase50_active:
+    # Phase 5.0 Final Strip: skipped when the minimal-prompt path is active
+    # — EXCEPT for topic == "health" where the scrubber is FORCED on by
+    # Phase 6.0m FIX 10. The scrubber is a STYLE controller (rewrites
+    # tone/phrasing); user spec explicitly bans style-modifying validators
+    # for non-health topics. Hallucination guards (TIMING_VALIDATOR +
+    # POST_LOGIC_CHECK) remain — those are correctness, not style.
+    #
+    # Why the health override exists: phase50 minimal-prompt removes the
+    # "no clinical jargon" instruction that normally lives in the system
+    # prompt, so the LLM now leaks words like "triggers", "tendency",
+    # "chronic" into health answers. Re-running the brand-tone scrubber
+    # plus a hard-coded post-scrub safety map stops this leak without
+    # disturbing any other topic.
+    if (not _phase50_active) or topic == "health":
         pre_scrub = text
         text = _scrub_brand_tone(text)
+        _scrub_reason = "normal" if not _phase50_active else "phase60m_fix10_health_override"
         if pre_scrub != text:
             _trace(req_id, "4d.SCRUBBER_CHANGED", {
                 "before_preview": pre_scrub[:200],
                 "after_preview":  text[:200],
+                "reason":         _scrub_reason,
+            })
+        else:
+            _trace(req_id, "4d.SCRUBBER_RAN", {
+                "reason":   _scrub_reason,
+                "no_change": True,
             })
     else:
         _trace(req_id, "4d.SCRUBBER_SKIPPED", {
             "reason": "phase50 minimal-prompt path — style validators disabled",
         })
+
+    # ── Phase 6.0m — FIX 10 (HEALTH HARD POST-LLM SAFETY) ─────────────────
+    # Health topic only: replace forbidden clinical/loaded words that the
+    # LLM may have leaked through phase50 minimal prompt's loosened style
+    # constraints. Non-health topics keep their original wording verbatim.
+    if topic == "health" and text:
+        _pre_safe = text
+        text, _safe_hits = _health_post_scrub_safety(text)
+        if _safe_hits:
+            _trace(req_id, "4d.HEALTH_POST_SCRUB_SAFETY_FIRED", {
+                "patterns_hit":   _safe_hits,
+                "before_preview": _pre_safe[:200],
+                "after_preview":  text[:200],
+            })
+
     if not text:
         raise RuntimeError("OpenAI returned empty response after scrub")
 
@@ -16751,18 +16880,45 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Phase 5.0 Final Strip: stream-side scrubber gated identically to sync
     # path. STYLE rewriting is removed in the minimal-prompt mode; only
     # correctness validators survive.
-    if not _phase50_active_stream:
+    # Phase 6.0m FIX 10: forced ON for topic == "health" so the LLM cannot
+    # leak clinical jargon ("triggers" / "tendency" / "chronic") through
+    # the loosened phase50 minimal prompt. Other topics keep the original
+    # phase50 skip behaviour.
+    if (not _phase50_active_stream) or topic == "health":
         final_text = _scrub_brand_tone(raw_text)
+        _scrub_reason_s = ("normal" if not _phase50_active_stream
+                           else "phase60m_fix10_health_override")
         if raw_text != final_text:
             _trace(req_id, "4d.SCRUBBER_CHANGED(stream)", {
                 "before_preview": raw_text[:200],
                 "after_preview":  final_text[:200],
+                "reason":         _scrub_reason_s,
+            })
+        else:
+            _trace(req_id, "4d.SCRUBBER_RAN(stream)", {
+                "reason":   _scrub_reason_s,
+                "no_change": True,
             })
     else:
         final_text = raw_text
         _trace(req_id, "4d.SCRUBBER_SKIPPED(stream)", {
             "reason": "phase50 minimal-prompt path — style validators disabled",
         })
+
+    # ── Phase 6.0m — FIX 10 (HEALTH HARD POST-LLM SAFETY, stream side) ────
+    # Health topic only: replace forbidden clinical/loaded words that the
+    # LLM may have leaked through phase50 minimal prompt's loosened style
+    # constraints. Non-health topics keep their original wording verbatim.
+    if topic == "health" and final_text:
+        _pre_safe_s = final_text
+        final_text, _safe_hits_s = _health_post_scrub_safety(final_text)
+        if _safe_hits_s:
+            _trace(req_id, "4d.HEALTH_POST_SCRUB_SAFETY_FIRED(stream)", {
+                "patterns_hit":   _safe_hits_s,
+                "before_preview": _pre_safe_s[:200],
+                "after_preview":  final_text[:200],
+            })
+
     if not final_text:
         raise RuntimeError("OpenAI returned empty after scrub")
 

@@ -9221,12 +9221,30 @@ _PHASE53_TOPIC_RULES: dict[str, str] = {
 def _phase53_topic_rules(topic: str | None) -> str:
     """Return the topic-specific classical-rules checklist or empty string.
 
+    The returned block is wrapped with an explicit OUTPUT INSTRUCTION
+    so the model treats the entire rule walk-through as INTERNAL reasoning
+    and outputs only a brief verdict — unless the user explicitly asks for
+    an explanation. This prevents over-explaining on simple questions.
+
     Defensive: unknown topic → empty (no checklist injected, model uses
     the general ChatGPT-style guidance only).
     """
     if not topic or not isinstance(topic, str):
         return ""
-    return _PHASE53_TOPIC_RULES.get(topic.strip().lower(), "")
+    body = _PHASE53_TOPIC_RULES.get(topic.strip().lower(), "")
+    if not body:
+        return ""
+    return (
+        body +
+        "\n\nOUTPUT INSTRUCTION (CRITICAL): All of the above is INTERNAL "
+        "reasoning to help you arrive at the correct verdict. After "
+        "silently walking through the rules, OUTPUT only the final verdict "
+        "in 1-2 short sentences. Do NOT list the rules, planet positions, "
+        "D9 / divisional-chart details, indicator counts, or step-by-step "
+        "analysis in the visible response. Expand into reasoning ONLY if "
+        "the user explicitly asks 'kyun' / 'why' / 'reason batao' / "
+        "'explain' / 'detail mein batao' / 'how' or similar."
+    )
 
 
 def _phase50_build_minimal_messages(
@@ -9271,43 +9289,37 @@ def _phase50_build_minimal_messages(
         "You have access to the user's kundli (planets, houses, current "
         "dasha, AND all divisional charts D1-D60 in FULL_KUNDLI_JSON).\n"
         "Use it internally to think.\n\n"
-        "Answer naturally like ChatGPT:\n\n"
-        "- Give a clear and direct answer\n"
-        "- Keep it short unless the user asks for explanation\n"
-        "- If the question is decision-based (yes/no, A vs B), give a "
-        "clear final verdict first\n"
-        "- If the user asks for details or technical reasoning, then "
-        "explain properly\n\n"
-        "If a clear answer is possible, do not avoid it.\n\n"
-        "Focus only on what the user asked.\n"
-        "Do not add unnecessary analysis.\n"
-        "Do not stay vague or neutral.\n\n"
-        "Think using kundli data first, then answer simply.\n"
-        "Avoid sounding like a report. Speak like a human.\n\n"
-        "CLASSICAL RULE — MANDATORY D9 (NAVAMSHA) CHECK:\n"
-        "For ANY prediction, event, or yes/no answer about marriage, "
-        "career, wealth, children, foreign travel, spiritual growth, or "
-        "any life event — you MUST consult the D9 (Navamsha) chart "
-        "before giving the verdict. D9 is the 'phaladayak' (fruit-giving) "
-        "chart in classical Vedic astrology. Rules:\n"
-        "  1. A planet STRONG in D1 but WEAK/AFFLICTED in D9 will NOT "
-        "deliver the expected result fully.\n"
-        "  2. A planet WEAK in D1 but STRONG in D9 (own sign, exalted, "
-        "or Vargottama) WILL deliver much better than D1 suggests — "
-        "this is 'neecha-bhanga' / D9 strength override.\n"
-        "  3. VARGOTTAMA = a planet in the SAME sign in both D1 and D9 = "
-        "extremely strong, doubles the result.\n"
-        "  4. Always check the D9 position of: (a) the topic karaka "
-        "(Venus=marriage, Sun=career/govt, Mars=property/courage, "
-        "Jupiter=wealth/children/wisdom, Moon=mind/mother, "
-        "Mercury=communication/business, Saturn=longevity/discipline), "
-        "(b) the relevant house lord (7th lord for marriage, 10th for "
-        "career, 2nd/11th for wealth, 5th for children), and (c) the D9 "
-        "lagna and D9 lagna lord.\n"
-        "  5. If D1 and D9 disagree, D9 wins for the FINAL outcome — "
-        "D1 shows the promise, D9 shows the actual delivery.\n"
-        "Never give a confident verdict on a life event without "
-        "completing this D9 check." + lang_hint
+        "OUTPUT STYLE — answer only what is asked:\n\n"
+        "- Give a clear and direct answer.\n"
+        "- For a simple yes/no or A-vs-B question: reply with the verdict "
+        "briefly in a single short response. Do NOT add reasoning, planet "
+        "names, house numbers, D9/D10/D30 details, or astrological "
+        "breakdown unless the user explicitly asks 'kyun', 'reason "
+        "batao', 'explain', 'detail mein batao', 'how', or similar.\n"
+        "- Only expand into a detailed analysis when the user asks for "
+        "explanation or technical reasoning.\n"
+        "- If a clear answer is possible, do not avoid it.\n"
+        "- Focus only on what the user asked. Do not stay vague or "
+        "neutral. Speak like a human, not a report.\n\n"
+        "CLASSICAL RULE — MANDATORY D9 (NAVAMSHA) CHECK (INTERNAL ONLY):\n"
+        "For ANY prediction or life-event question (marriage, career, "
+        "wealth, children, foreign travel, spiritual growth, etc.), you "
+        "MUST consult the D9 chart SILENTLY before forming your verdict. "
+        "D9 is the 'phaladayak' (fruit-giving) chart. Rules to apply "
+        "INTERNALLY (do not narrate them in the answer unless the user "
+        "asks for reasoning):\n"
+        "  1. Planet STRONG in D1 but WEAK in D9 → result under-delivers.\n"
+        "  2. Planet WEAK in D1 but STRONG in D9 (own/exalted/Vargottama) "
+        "→ neecha-bhanga, much better than D1 suggests.\n"
+        "  3. VARGOTTAMA (same sign in D1 and D9) = doubles the result.\n"
+        "  4. Always silently check D9 position of: (a) the topic karaka "
+        "(Venus=marriage, Sun=career, Jupiter=wealth/children, "
+        "Moon=mind, Mercury=business, Saturn=longevity), (b) the "
+        "relevant house lord, (c) D9 lagna and lagna lord.\n"
+        "  5. If D1 and D9 disagree, D9 wins for the FINAL outcome.\n"
+        "Use this D9 check to ARRIVE at the right verdict. Then output "
+        "ONLY the verdict (1-2 sentences) — keep all this reasoning "
+        "internal unless the user asks 'why' or 'explain'." + lang_hint
     )
 
     user_parts = []

@@ -1773,3 +1773,92 @@ assistant: "love marriage ki taraf jhukav…"]` + bare question
 
 `TOPIC: marriage` (was `general` before fix). Headline matches lock,
 4 engine reasons cited verbatim. Phase 5.5d shipped.
+
+## Phase 5.5e — CONFIDENCE-RATIO verdict ladder (Apr 29 2026)
+
+### Problem
+Phase 5.5b's public-verdict ladder used absolute `diff` thresholds:
+`diff>=4 → clear`, `1..3 → leaning`. The flaw: a 5L vs 4A chart and an
+8L vs 4A chart both became "leaning" with identical UX text, even
+though their evidence concentration is wildly different (11% vs 33%
+of total tilt). Architect-noted overconfidence on close calls.
+
+### Fix — Hybrid Plan (engine intact, math improved)
+**14 rules unchanged** — Rahu in 5/7H vs 8H differentiation, Saturn-
+Venus vs Manglik vs Saturn-7H separation, D1+D9 dual-vote, Pisces
+exalted Venus, etc. — all preserved. **Public verdict ladder** swaps
+absolute `diff` thresholds for a confidence ratio:
+
+```
+confidence_ratio = |love_score - arrange_score| / total
+
+if total < 6                  → inconclusive (evidence floor — same)
+if confidence_ratio == 0.0    → inconclusive (perfect tie — same)
+if confidence_ratio >= 0.50   → CLEAR direction
+if confidence_ratio >= 0.20   → LEANING direction
+if confidence_ratio <  0.20   → inconclusive (essentially tied)
+```
+
+### Worked examples
+| love | arr | total | diff | ratio | Phase 5.5b | Phase 5.5e |
+|------|-----|-------|------|-------|------------|------------|
+| 5    | 4   | 9     | 1    | 0.111 | leaning_love | **inconclusive** |
+| 6    | 4   | 10    | 2    | 0.200 | leaning_love | leaning_love |
+| 7    | 5   | 12    | 2    | 0.167 | leaning_love | **inconclusive** |
+| 8    | 3   | 11    | 5    | 0.455 | clear_love   | **leaning_love** |
+| 9    | 3   | 12    | 6    | 0.500 | clear_love   | clear_love |
+| 10   | 2   | 12    | 8    | 0.667 | clear_love   | clear_love |
+
+The 5v4 → inconclusive flip is the explicit regression this phase fixes.
+The 8v3 → leaning_love downgrade is the secondary win — old "clear"
+label was too strong for 45% concentration.
+
+### Engine API change
+Returned dict gains `confidence_ratio` (rounded to 3dp) for telemetry.
+All other fields unchanged. `verdict` (internal) keeps the legacy
+`diff>=4` cutoff for diagnostic parity.
+
+### Tests
+186 total (was 175). New `TestPhase55eConfidenceRatio` class — 11
+tests covering: confidence_ratio field exposure, 5v4 overconfidence
+fix, leaning boundary at exactly 0.20 (6v4), clear boundary at exactly
+0.50 (9v3), just-below-clear (8v3 → leaning), just-below-leaning
+(7v5 → inconclusive), strong concentration (10v2 → clear), evidence
+floor still governs (4v0 ratio=1.0 but total<6 → inconclusive),
+perfect tie (5v5 → inconclusive), end-to-end inconclusive headline,
+formula sanity check.
+
+Existing `test_public_mapping_arrange_symmetry_clear_and_leaning`
+fixtures upgraded from `8v3` (now leaning under new ladder) to
+`10v2` (clear), and from `5v4` (now inconclusive) to `6v4` (leaning).
+
+### Live verification (29-Apr-2026)
+Same BBSR kundli (5L vs 4A, ratio=0.11) + bare follow-up "kaise check
+kiya explain karo" + LvA history. Response:
+
+> "Aapki kundli mein dono taraf strong indication nahi hai —
+>  situation aur paristithi par depend karega. D9 Navamsha mein 5th
+>  aur 7th lord ka conjunction hai, jo love ke liye ek achha sanket
+>  hai. 5th house ka lord Mars bhi natural love-nature ka pratinidhi
+>  hai, jo positive hai. Lekin Mars ka 1st house mein hona manglik
+>  dosha dikhata hai, jo shaadi mein delay ya arrange marriage ki
+>  taraf sanket deta hai. Saath hi Rahu ka 8th house mein hona
+>  marriage mein achanak badlav ya rukawat la sakta hai…"
+
+Honest about the close call, still cites all 4 engine reasons, still
+hits TOPIC=marriage. Phase 5.5e shipped.
+
+### Why we kept all 14 rules (rejected ChatGPT's "8 rules" advice)
+The advice to collapse rules into 8 buckets was rejected because it
+would merge:
+- **Rahu 5/7H (love +3)** with **Rahu 8H (arrange +2)** — opposite
+  meanings, same planet, different houses; classical Vedic separation.
+- **Manglik dosha + Saturn-Venus + Saturn 7H + Ketu 7H + D9 Venus
+  debilitated + D9 7L dusthana** into one "arrange" rule — these are
+  6 distinct classical yogas; collapsing loses diagnostic depth.
+- **D1 5L↔7L + D9 5L↔7L** — D1 = romantic potential, D9 = marriage
+  conversion; dual-vote is intentional classical practice.
+
+The Hybrid Plan keeps engine accuracy intact (14 rules) and improves
+clarity on the public side (ratio-based ladder). User's gold rule
+upheld: "Accuracy engine ka kaam hai, clarity product ka kaam hai."

@@ -9579,36 +9579,54 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
             "ek taraf clear nahi jhukti."
         )
 
-    # ── Phase 5.5b — PUBLIC (UX) VERDICT LAYER ────────────────────────────
-    # User feedback: "mixed" is engineering-correct but product-weak.
-    # Users asking "love ya arrange?" want a direction, even when the
-    # internal verdict is genuinely close. So we layer a UX-friendly
-    # "leaning" verdict on top of the diagnostic internal verdict:
+    # ── Phase 5.5e (Apr 29 2026) — CONFIDENCE-RATIO VERDICT LADDER ────────
+    # Phase 5.5b used absolute diff thresholds (`diff >= 4` → clear,
+    # `1..3` → leaning). The flaw: a 5-vs-4 chart and an 8-vs-4 chart
+    # both became "leaning" with identical UX text, even though their
+    # actual evidence concentration is wildly different (11% vs 33% of
+    # total tilt).
     #
-    #   total < 6                 → inconclusive (situation-dependent)
-    #   diff == 0                 → inconclusive (perfectly balanced)
-    #   diff >= 4  (and total>=6) → CLEAR direction
-    #   1 <= diff <= 3 (and t>=6) → LEANING direction (acknowledges
-    #                                both possibilities are open)
+    # Phase 5.5e replaces the absolute-diff ladder with a confidence
+    # ratio (`|diff| / total`) so the public verdict reflects how
+    # CONCENTRATED the engine's evidence is, not just which side has
+    # more points. This is the "Hybrid Plan" — keep all 14 rules
+    # (accuracy intact) but tighten the math behind the public label
+    # (clarity improved + overconfidence on near-ties eliminated).
     #
-    # Internal `verdict` field stays as-is for telemetry/debugging.
+    #   total < 6                  → inconclusive (evidence floor — same)
+    #   confidence_ratio == 0.0    → inconclusive (perfect tie — same)
+    #   confidence_ratio >= 0.50   → CLEAR direction
+    #   confidence_ratio >= 0.20   → LEANING direction
+    #   confidence_ratio <  0.20   → inconclusive (essentially tied)
+    #
+    # Worked examples:
+    #   5L vs 4A  → conf=1/9 =0.111 → inconclusive (was leaning_love)
+    #   6L vs 4A  → conf=2/10=0.20  → leaning_love
+    #   8L vs 3A  → conf=5/11=0.454 → leaning_love (was clear_love)
+    #   2L vs 10A → conf=8/12=0.667 → clear_arrange
+    #
+    # The 5v4 case becoming inconclusive is the explicit fix — that
+    # was the architect's noted overconfidence on close calls. Internal
+    # `verdict` field stays as-is (diff>=4 cutoff) for diagnostic
+    # parity with prior phases.
     diff_abs = abs(love_score - arrange_score)
     higher_is_love = love_score > arrange_score
+    confidence_ratio = (diff_abs / total) if total > 0 else 0.0
 
-    if total < 6 or diff_abs == 0:
+    if total < 6 or confidence_ratio == 0.0:
         verdict_public = "inconclusive"
         verdict_text_public = (
             "Aapki kundli mein dono taraf strong indication nahi hai — "
             "situation aur paristithi par depend karega."
         )
-    elif diff_abs >= 4:
+    elif confidence_ratio >= 0.50:
         if higher_is_love:
             verdict_public = "clear_love"
             verdict_text_public = "Aapki kundli mein clear love marriage yog hai."
         else:
             verdict_public = "clear_arrange"
             verdict_text_public = "Aapki kundli mein clear arrange marriage yog hai."
-    else:  # 1 <= diff_abs <= 3, total >= 6 — close call but pick a side
+    elif confidence_ratio >= 0.20:
         if higher_is_love:
             verdict_public = "leaning_love"
             verdict_text_public = (
@@ -9621,10 +9639,19 @@ def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
                 "Aapki kundli mein arrange marriage ki taraf thoda zyada "
                 "jhukav hai, lekin dono possibilities open hain."
             )
+    else:
+        # confidence_ratio in (0.0, 0.20) — engine evidence is too
+        # diffuse to call a side honestly. Phase 5.5e fix.
+        verdict_public = "inconclusive"
+        verdict_text_public = (
+            "Aapki kundli mein dono taraf strong indication nahi hai — "
+            "situation aur paristithi par depend karega."
+        )
 
     return {
         "verdict":              verdict,                # internal (diagnostic)
         "confidence":           round(confidence, 2),
+        "confidence_ratio":     round(confidence_ratio, 3),  # Phase 5.5e
         "love_score":           love_score,
         "arrange_score":        arrange_score,
         "reasons_love":         reasons_love[:5],

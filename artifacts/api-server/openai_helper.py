@@ -12483,6 +12483,79 @@ def _phase60b_health_explain_text(lang: str) -> str:
     return _PHASE60B_HEALTH_EXPLAIN_HI
 
 
+def _phase60l_emit_health_facts_trace(req_id: str, build_meta: Any) -> None:
+    """Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE VISIBILITY).
+
+    Emit a SEPARATE, STRUCTURED trace event ``3a.HEALTH_FACTS`` so the
+    engine → FACTS → LLM → output chain can be audited without parsing
+    the multi-thousand-character locked_facts blob.
+
+    Strict surface:
+      • No engine logic touched (pure read of stored verdict dict).
+      • No FACTS schema touched (formatter still produces the exact same
+        block consumed by the LLM).
+      • No LLM behaviour touched (this is a telemetry sibling of
+        ``3.PROMPT.user_preview``, not a replacement).
+
+    Lists are emitted at FULL length (no truncation) per user spec so
+    the trace can be diffed line-by-line against the final answer to
+    verify which engine signals were honoured / dropped.
+
+    No-op when no health verdict was produced (non-health turn, engine
+    skipped, formatter saw an empty payload).
+    """
+    if not isinstance(build_meta, dict):
+        return
+    hv = build_meta.get("health_verdict_obj")
+    if not isinstance(hv, dict) or not hv:
+        return
+    try:
+        verdict_str   = hv.get("verdict") or ""
+        # Re-run the EXACT projections the formatter applies, so the
+        # trace surfaces what the LLM literally sees in HEALTH_FACTS:
+        overall_risk  = _phase60_health_overall_risk(verdict_str) if verdict_str else None
+        top_concerns  = hv.get("top_concerns") if isinstance(hv.get("top_concerns"), list) else []
+        top_supportive = hv.get("top_supportive") if isinstance(hv.get("top_supportive"), list) else []
+        stability     = (_phase60_health_stability(
+                            overall_risk or "",
+                            len(top_concerns),
+                            len(top_supportive))
+                         if overall_risk else None)
+        key_triggers  = _phase60_health_key_triggers(hv)
+        dasha_effect  = _phase60_health_dasha_effect(hv)
+        confidence    = hv.get("confidence")
+        if confidence is None:
+            confidence = hv.get("confidence_pct")
+
+        _trace(req_id, "3a.HEALTH_FACTS", {
+            # ── Engine raw (1-line audit, mirrors `health_engine OK` log) ──
+            "bucket":                hv.get("bucket"),
+            "tense":                 hv.get("tense"),
+            "verdict":               verdict_str,
+            "score":                 hv.get("score"),
+            "confidence":            confidence,
+            # ── Engine structured details (full lists, NO truncation) ──────
+            "score_breakdown":       hv.get("score_breakdown"),
+            "timing_window":         hv.get("timing_window"),
+            "top_concerns":          top_concerns,
+            "top_supportive":        top_supportive,
+            "triggers":              hv.get("triggers"),
+            "layers_count":          len(hv.get("layers") or []),
+            "brand_safety_warnings": hv.get("brand_safety_warnings"),
+            # ── Narrator-facing FACTS (derived — what LLM literally reads) ─
+            "facts_overall_risk":    overall_risk,
+            "facts_stability":       stability,
+            "facts_key_triggers":    key_triggers,
+            "facts_dasha_effect":    dasha_effect,
+        })
+    except Exception as exc:
+        # Telemetry must NEVER break the response pipeline.
+        try:
+            _trace(req_id, "3a.HEALTH_FACTS.error", {"error": repr(exc)})
+        except Exception:
+            pass
+
+
 def _phase60_format_health_facts_block(v: Any) -> str:
     """Render `assess_health()` output as v4 user-spec FACTS block.
 
@@ -13598,6 +13671,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "failed": [e.get("phase") for e in (_engine_status.get("failed") or [])],
         "skipped": [e.get("phase") for e in (_engine_status.get("skipped") or [])],
     })
+
+    # ── Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE VISIBILITY) ──────────────
+    # Emit the engine's raw health verdict + the formatter's narrator
+    # projections as a SEPARATE structured trace event, so we can audit
+    # engine → FACTS → LLM → output without parsing the locked_facts
+    # blob. No-op for non-health turns (helper guards on missing dict).
+    _phase60l_emit_health_facts_trace(req_id, build_meta)
 
     # ── Phase 5.0 (Apr 28 2026) — MINIMAL ASK PROMPT GATE ───────────────────
     # When PHASE50_MINIMAL_PROMPT=1 (default), discard the heavy multi-system
@@ -16490,6 +16570,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         out_meta=build_meta_stream,
         marriage_subtype=marriage_subtype_stream,
     )
+
+    # ── Phase 6.0l — FIX 6 (HEALTH_FACTS TRACE — STREAM VARIANT) ────────
+    # Mirror of the sync-path trace at line ~13683. Same helper, same
+    # event key (`3a.HEALTH_FACTS`), so log consumers can pattern-match
+    # uniformly across both call paths. No-op for non-health turns.
+    _phase60l_emit_health_facts_trace(req_id, build_meta_stream)
 
     # ── Phase 5.0 (Apr 28 2026) — STREAM-PATH MINIMAL ASK PROMPT GATE ──
     # Same flag + behaviour as ai_ask: discard the heavy `messages` list

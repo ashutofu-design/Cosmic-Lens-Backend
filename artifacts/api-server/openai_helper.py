@@ -2983,7 +2983,7 @@ def _build_messages(
         "10) ⚠️ STRICT BREVITY — MATCH ANSWER LENGTH TO QUESTION LENGTH ⚠️\n"
         "    🎯 LENGTH-MATCHING RULE (highest priority — applies BEFORE the defaults below):\n"
         "       (i)   FACTUAL LOOKUP question (1 line, asks 'kya hai / kahan hai / kaunsa / batao mera X', e.g. 'mera lagna kya hai', 'Jupiter kahan hai', 'Atmakaraka kaun hai') → ANSWER = 1 to 2 SHORT LINES ONLY (≤30 words total). Single direct fact + at most 1 brief context line. NO sub-paragraphs, NO remedy, NO dasha dump, NO extra Bala/D27/Saptavargaja/Ishta-Phala numbers, NO 'Extended signal' lines, NO KP cite, NO transit cite. Just the fact the user asked for.\n"
-        "       (ii)  ANALYTICAL SHORT question (1 line, asks 'X powerful hai ya weak / strong hai kya / achha hai / dosha hai kya', e.g. 'Saturn powerful hai ya weak?') → ANSWER = 2 to 3 SHORT LINES MAX (≤55 words total). Structure: Line 1 = MANDATORY D1+D9 cross-check in ONE sentence (PLANET-STRENGTH RULE — see Rule K extension above) WITH the verdict (strong/weak/mixed/neecha-bhanga). Line 2 = ONE supporting line (key house/aspect/dasha-impact). Line 3 (optional) = 1-line takeaway. THAT IS ALL. DO NOT add: KP cross-check, current Mahadasha breakdown, transit lines, D27 Bhamsa, D20 Vimsamsa, Saptavargaja Bala numbers, remedies, extra paragraphs. The user asked one short question — answer it shortly. NEVER write 4 paragraphs for a 1-line strength question.\n"
+        "       (ii)  ANALYTICAL SHORT question (1 line, asks 'X powerful hai ya weak / strong hai kya / achha hai / dosha hai kya', e.g. 'Saturn powerful hai ya weak?') → ANSWER = 2 to 3 SHORT LINES MAX (≤55 words total). Structure: Line 1 = required D1+D9 cross-check in ONE sentence (PLANET-STRENGTH RULE — see Rule K extension above) WITH the verdict (strong/weak/mixed/neecha-bhanga). Line 2 = ONE supporting line (key house/aspect/dasha-impact). Line 3 (optional) = 1-line takeaway. THAT IS ALL. DO NOT add: KP cross-check, current Mahadasha breakdown, transit lines, D27 Bhamsa, D20 Vimsamsa, Saptavargaja Bala numbers, remedies, extra paragraphs. The user asked one short question — answer it shortly. NEVER write 4 paragraphs for a 1-line strength question.\n"
         "       (iii) MULTI-PART or TOPIC question (career/marriage/wealth/health/timing — anything that needs full Vedic+KP+dasha+transit treatment) → use the 100-140 word structure below.\n"
         "       ⚠️ HONOUR THE QUESTION'S SCOPE: NEVER add unsolicited extras. If the user asked ONLY about planet X's strength, do NOT volunteer career outlook, marriage timing, or remedy. Answer EXACTLY what was asked — nothing more, nothing less.\n"
         "    • DEFAULT (multi-part / topic question only) — TOTAL answer = 100 to 140 WORDS. NEVER more. Count words as you write.\n"
@@ -9073,168 +9073,22 @@ _PHASE50_TIER_HINT: dict[str, str] = {}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 5.3 — Topic-specific classical-rule checklists
+# Phase 5.7 cleanup (Apr 2026): Phase 5.3 topic-rule checklists DELETED
 # ─────────────────────────────────────────────────────────────────────────────
-# When the user asks a topic that has well-known classical Vedic rules
-# (marriage, career, wealth, health), inject a SHORT checklist into the
-# user message so the model walks through each rule using the kundli data
-# BEFORE giving the verdict — instead of grabbing one indicator and
-# jumping to a confident conclusion.
-#
-# This is reasoning guidance, NOT post-validation. The model still answers
-# in the lean ChatGPT style; it just thinks more carefully first.
-
-_PHASE53_TOPIC_RULES: dict[str, str] = {
-    "marriage": (
-        "RULES_TO_CHECK (marriage — love vs arrange, timing, compatibility):\n"
-        "Walk through each silently using the FULL_KUNDLI_JSON, then weigh "
-        "BOTH sides before answering. Do NOT decide from a single indicator.\n\n"
-        "STEP 1 — MANDATORY D9 (NAVAMSHA) CHECK (do this FIRST, never skip):\n"
-        "  • D9 lagna and D9 lagna lord — overall marital strength.\n"
-        "  • D9 7th house — sign, occupants, aspects.\n"
-        "  • D9 7th lord — sign (own/exalted/debilitated/friendly), house, "
-        "afflictions.\n"
-        "  • D9 Venus — sign, house, dignity (Venus is THE marriage karaka, "
-        "and D9 is THE marriage chart).\n"
-        "  • Vargottama check — is Venus, 7th lord, or lagna lord in the "
-        "SAME sign in D1 and D9? If yes, that planet is extremely strong "
-        "and DOUBLES its result.\n"
-        "  • Dignity-change check — is Venus or 7th lord exalted in D1 but "
-        "debilitated in D9 (or vice versa)? D9 wins for the final fruit.\n"
-        "  • If D9 7th lord is debilitated, combust, or in 6/8/12 with no "
-        "neecha-bhanga → marital obstacles even if D1 looks fine.\n\n"
-        "STEP 2 — LOVE-MARRIAGE indicators (count how many fire, in BOTH "
-        "D1 and D9):\n"
-        "  1. 5th lord ↔ 7th lord connection (conjunction, mutual aspect, "
-        "exchange, OR D9 link — D9 link is the strongest confirmation).\n"
-        "  2. Venus connected to 5th house, 7th house, or their lords — "
-        "especially with Rahu, Mars, or Mercury.\n"
-        "  3. Rahu in 5th OR 7th house, OR Rahu with 7th lord.\n"
-        "  4. Mars-Venus conjunction or mutual aspect.\n"
-        "  5. 5H-7H-11H lords mutually linked.\n"
-        "  6. Lagna lord ↔ 7th lord exchange or aspect.\n"
-        "  7. Moon-Venus close conjunction or mutual aspect.\n\n"
-        "STEP 3 — ARRANGE-MARRIAGE indicators:\n"
-        "  1. 7th lord well-placed (own/exalted/friendly sign) WITHOUT any "
-        "5th-lord connection.\n"
-        "  2. Jupiter or Saturn primary aspect on 7th house (no Venus-Rahu "
-        "involvement).\n"
-        "  3. 7th house ruled by traditional planet (Sun/Moon/Jupiter) "
-        "with no afflictions.\n"
-        "  4. Strong dispositor of 7th lord but no 5th-7th cross-link.\n\n"
-        "STEP 4 — CRITICAL DISCRIMINATORS:\n"
-        "  • Manglik / Kuja dosha: Mars in 1/4/7/8/12 from Lagna OR Moon.\n"
-        "  • Saturn-Venus or Saturn on 7th = delays, often arrange tendency.\n"
-        "  • RAHU in 8TH HOUSE = sudden events / obstacles in marriage — "
-        "NOT a love-marriage confirmation. Treat with caution.\n"
-        "  • Ketu on 7th lord = detachment, not love.\n"
-        "  • Combust 7th lord (within ~6° of Sun) = weakened marriage karaka.\n\n"
-        "VERDICT RULE: D9 is the deciding chart. If D1 says love but D9 "
-        "Venus/7th-lord is weak/afflicted, lean towards arrange or "
-        "delays. If both D1 and D9 confirm same direction with ≥3 "
-        "indicators and no major affliction → confident verdict. If D1 "
-        "and D9 disagree → say 'mixed — D1 shows X but D9 shows Y' "
-        "and explain briefly. NEVER give a confident verdict without "
-        "completing the D9 check."
-    ),
-    "career": (
-        "RULES_TO_CHECK (career — direction, success, timing):\n"
-        "Walk through each silently using the FULL_KUNDLI_JSON before "
-        "answering.\n\n"
-        "STEP 1 — MANDATORY D10 + D9 CHECK (do this FIRST):\n"
-        "  • D10 (Dashamsha) is THE career chart — check D10 lagna, D10 "
-        "lagna lord, D10 10th house, D10 10th lord, D10 Sun (career karaka).\n"
-        "  • D9 confirmation — D9 lagna lord (overall life strength), D9 "
-        "10th lord. A weak D9 weakens ALL D1 promises including career.\n"
-        "  • Vargottama check — is the 10th lord, lagna lord, or Sun in "
-        "the same sign in D1 and D10 (or D1 and D9)? If yes, very strong "
-        "career signal.\n"
-        "  • Dignity-change check — strong in D1 but weak in D10/D9 = "
-        "result will under-deliver. Weak in D1 but strong in D10/D9 = "
-        "neecha-bhanga, much better outcome than D1 suggests.\n\n"
-        "STEP 2 — D1 CORE CHECKS:\n"
-        "  1. 10th house lord — sign, house, dignity, aspects.\n"
-        "  2. 10th house occupants (any planet here = strong influence).\n"
-        "  3. Lagna lord ↔ 10th lord connection.\n"
-        "  4. Atmakaraka (highest-degree planet) — career direction clue.\n"
-        "  5. Sun (govt/authority), Saturn (service/discipline), Mercury "
-        "(business/communication), Jupiter (teaching/advisory) — which is "
-        "strongest, in BOTH D1 and D10?\n"
-        "  6. Current Mahadasha + Antardasha lord — does it own/aspect "
-        "the 10th house in D1 AND D10?\n"
-        "  7. 6th house (service/competition) and 11th house (gains).\n\n"
-        "VERDICT RULE: D10 + D9 win over D1 for the FINAL career outcome. "
-        "If D1 shows strong career but D10 lord is debilitated/afflicted "
-        "with no neecha-bhanga → career will under-deliver. If indicators "
-        "across D1, D9, D10 are mixed, say so honestly."
-    ),
-    "wealth": (
-        "RULES_TO_CHECK (wealth, money, finance):\n"
-        "Walk through each silently using the FULL_KUNDLI_JSON before "
-        "answering.\n\n"
-        "STEP 1 — MANDATORY D9 CHECK (do this FIRST):\n"
-        "  • D9 lagna and D9 lagna lord — overall life strength affects "
-        "wealth delivery.\n"
-        "  • D9 Jupiter (wealth karaka) — sign, house, dignity. A weak "
-        "D9 Jupiter weakens ALL dhana yogas in D1.\n"
-        "  • D9 2nd lord and D9 11th lord — actual wealth fruit.\n"
-        "  • Vargottama check on Jupiter, 2nd lord, 11th lord — same "
-        "sign in D1 and D9 = very strong wealth indicator.\n"
-        "  • Dignity-change check — wealth lords debilitated in D9 = "
-        "promise of D1 dhana yoga will not fully materialize.\n\n"
-        "STEP 2 — D1 CORE CHECKS:\n"
-        "  1. 2nd house (accumulated wealth) and its lord.\n"
-        "  2. 11th house (gains) and its lord.\n"
-        "  3. 5th house (speculation, sudden gains) and its lord.\n"
-        "  4. Dhana yogas: 2H-5H, 2H-9H, 2H-11H, 5H-9H, 5H-11H, 9H-11H "
-        "lord connections — count active yogas.\n"
-        "  5. Jupiter (wealth karaka) and Venus (luxury) — dignity and "
-        "house placement, in BOTH D1 and D9.\n"
-        "  6. Dispositor of 2nd lord and 11th lord.\n"
-        "  7. 6H-8H-12H (loss houses) afflictions to wealth lords.\n"
-        "  8. Current dasha lord — does it own/aspect wealth houses in "
-        "D1 AND D9?\n\n"
-        "VERDICT RULE: Count active dhana yogas in D1, then verify in D9. "
-        "If D9 confirms → strong wealth promise. If D9 contradicts → say "
-        "'D1 shows yogas but D9 weakens delivery'. Be honest about mixed "
-        "signals."
-    ),
-    "health": (
-        "RULES_TO_CHECK (health, illness, recovery):\n"
-        "Walk through each silently using the FULL_KUNDLI_JSON before "
-        "answering.\n\n"
-        "STEP 1 — MANDATORY D9 + D30 CHECK (do this FIRST):\n"
-        "  • D9 lagna lord — overall vitality and life-force strength.\n"
-        "  • D30 (Trimsamsha) — the dedicated health/disease chart. "
-        "Check D30 lagna lord and Mars/Saturn placements (these signify "
-        "specific diseases).\n"
-        "  • D9 lagna lord debilitated/combust/in 6-8-12 = weakened "
-        "constitution beyond what D1 shows.\n"
-        "  • Vargottama lagna lord = strong constitution and recovery "
-        "ability.\n\n"
-        "STEP 2 — D1 CORE CHECKS:\n"
-        "  1. Lagna and Lagna lord — dignity, afflictions.\n"
-        "  2. 6th house (illness), 8th house (chronic), 12th house "
-        "(hospitalization) — occupants, lords, aspects.\n"
-        "  3. Sun (vitality) and Moon (mind/fluids) condition in D1 AND D9.\n"
-        "  4. Malefic aspects on Lagna or Lagna lord.\n"
-        "  5. Current dasha lord — benefic or malefic for health?\n"
-        "  6. Specific organ rule: house signifies body part (e.g. 4H "
-        "chest, 5H stomach, 6H intestine).\n\n"
-        "VERDICT RULE: Health is sensitive — never alarm. If indicators "
-        "show strain, suggest consulting a physician AND offer the "
-        "astrological context briefly. Do NOT diagnose. Use D9/D30 to "
-        "confirm whether D1 affliction will actually manifest."
-    ),
-}
-
+# `_PHASE53_TOPIC_RULES` dict and `_phase53_topic_rules()` function used to
+# inject a full-chart JSON dump together with required D9 / D10 / D30
+# walkthrough text into the prompt. They re-promoted the LLM into an
+# astrologer role and
+# violated "Engine sochta hai, LLM bolta hai". All verdict computation now
+# lives in the engines (LvA, yoga, KP, marriage, wealth, dosh). Removed —
+# do NOT re-introduce.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 5.5 — Deterministic LOVE-vs-ARRANGE engine (verdict-lock)
 # ─────────────────────────────────────────────────────────────────────────────
 # User feedback: same kundli was producing different verdicts (love vs
 # arrange) across requests because the LLM was DECIDING the verdict from
-# FULL_KUNDLI_JSON + classical-rule checklist. LLMs are non-deterministic —
+# the raw chart dump + classical-rule checklist. LLMs are non-deterministic —
 # verdict stability requires a Python-computed verdict, with the LLM only
 # EXPRESSING / explaining it.
 #
@@ -9947,33 +9801,6 @@ def _phase55_is_explain_mode_question(question: str) -> bool:
     ))
 
 
-def _phase53_topic_rules(topic: str | None) -> str:
-    """Return the topic-specific classical-rules checklist or empty string.
-
-    The returned block is wrapped with an explicit OUTPUT INSTRUCTION
-    so the model treats the entire rule walk-through as INTERNAL reasoning
-    and outputs only a brief verdict — unless the user explicitly asks for
-    an explanation. This prevents over-explaining on simple questions.
-
-    Defensive: unknown topic → empty (no checklist injected, model uses
-    the general ChatGPT-style guidance only).
-    """
-    if not topic or not isinstance(topic, str):
-        return ""
-    body = _PHASE53_TOPIC_RULES.get(topic.strip().lower(), "")
-    if not body:
-        return ""
-    return (
-        body +
-        "\n\nOUTPUT INSTRUCTION (CRITICAL): All of the above is INTERNAL "
-        "reasoning to help you arrive at the correct verdict. After "
-        "silently walking through the rules, OUTPUT only the final verdict "
-        "in 1-2 short sentences. Do NOT list the rules, planet positions, "
-        "D9 / divisional-chart details, indicator counts, or step-by-step "
-        "analysis in the visible response. Expand into reasoning ONLY if "
-        "the user explicitly asks 'kyun' / 'why' / 'reason batao' / "
-        "'explain' / 'detail mein batao' / 'how' or similar."
-    )
 
 
 def _phase50_build_minimal_messages(
@@ -10030,8 +9857,8 @@ def _phase50_build_minimal_messages(
 
     # ── Phase 5.7 — "Engine sochta hai, LLM bolta hai" (Apr 2026) ───────
     # Stripped EVERYTHING that taught the LLM how to do astrology:
-    #   ❌ MANDATORY D9 (NAVAMSHA) CHECK   — moved into the engines
-    #   ❌ FULL_KUNDLI_JSON dump           — LLM was re-deriving verdicts
+    #   ❌ Required Navamsha walkthrough  — moved into the engines
+    #   ❌ Raw chart-JSON dump            — LLM was re-deriving verdicts
     #   ❌ Phase 5.3 topic-rule checklists — same problem
     #   ❌ Verbose OUTPUT STYLE rule sheets — bloat
     # The engine pipeline (LvA / yoga / KP / marriage / wealth / dosh)

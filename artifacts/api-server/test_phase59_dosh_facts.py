@@ -197,6 +197,51 @@ class TestPhase59IsDoshQuestion(unittest.TestCase):
             self.assertFalse(oh._phase59_is_dosh_question(q),
                              f"should NOT match: {q!r}")
 
+    def test_phase57_cleanup_no_forbidden_literals_in_source(self):
+        """Architect-recommended source-scan guard. The literal tokens
+        ``FULL_KUNDLI_JSON`` and ``MANDATORY D9`` (and ``MANDATORY D10/D30``
+        variants) re-promoted the LLM into an astrologer role. The user
+        explicitly demanded source-level eradication, not just behavioral
+        absence. This test fails if any of those literals reappear in
+        ``openai_helper.py`` — comments, docstrings, or active strings.
+        """
+        import os, re
+        path = os.path.join(os.path.dirname(__file__), "openai_helper.py")
+        with open(path, encoding="utf-8") as fp:
+            src = fp.read()
+        # Strip THIS test file's own assertion strings out of the source
+        # by using a regex that's tolerant of the test's own patterns.
+        forbidden = [
+            re.compile(r"FULL_KUNDLI_JSON"),
+            re.compile(r"MANDATORY[ _]D[0-9]+"),
+            re.compile(r"MANDATORY D1\+D9"),
+        ]
+        for rx in forbidden:
+            hits = [(i + 1, line) for i, line in enumerate(src.splitlines())
+                    if rx.search(line)]
+            self.assertEqual(
+                hits, [],
+                f"Forbidden literal {rx.pattern!r} reappeared in "
+                f"openai_helper.py — violates 'Engine sochta hai, "
+                f"LLM bolta hai'. Hits:\n" +
+                "\n".join(f"  L{n}: {ln[:140]}" for n, ln in hits[:5])
+            )
+
+    def test_phase57_cleanup_dead_topic_rules_symbols_are_gone(self):
+        """Phase 5.7 cleanup (Apr 2026) deleted the Phase 5.3
+        ``_PHASE53_TOPIC_RULES`` dict and ``_phase53_topic_rules()``
+        function. They re-promoted the LLM into an astrologer role
+        (FULL_KUNDLI_JSON + MANDATORY D9 walkthroughs) and violated
+        "Engine sochta hai, LLM bolta hai". This guard prevents
+        accidental re-introduction.
+        """
+        for sym in ("_PHASE53_TOPIC_RULES", "_phase53_topic_rules"):
+            self.assertFalse(
+                hasattr(oh, sym),
+                f"Dead Phase 5.3 symbol `{sym}` was re-introduced. "
+                f"It violates 'Engine sochta hai, LLM bolta hai'.",
+            )
+
     def test_devanagari_bare_roots_alone_must_not_match(self):
         """Architect-flagged hardening: bare Devanagari roots like
         दरिद्र (poor) and शकट (cart) are common Hindi words. Without

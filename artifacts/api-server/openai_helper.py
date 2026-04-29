@@ -1140,6 +1140,21 @@ def _kundli_summary(kundli: Any, birth: Any = None) -> str:
     if asc:
         deg = kundli.get("ascendantDeg")
         parts.append(f"Lagna: {asc}" + (f" {deg:.2f}°" if isinstance(deg, (int, float)) else ""))
+        # Phase 6.1.1 — pre-computed Houses→Signs map (whole-sign from
+        # Lagna). Eliminates "Nth house is X" name-swap hallucinations
+        # by giving the LLM the explicit mapping instead of forcing it
+        # to count signs from lagna mid-sentence.
+        _p61_asc_raw = asc.get("sign") if isinstance(asc, dict) else asc
+        _p61_asc_canon = _tf_canon_sign(_p61_asc_raw) if _p61_asc_raw else ""
+        _p61_asc_idx = _TF_SIGN_INDEX_LC.get(_p61_asc_canon)
+        if _p61_asc_idx is not None:
+            _p61_hs: list[str] = []
+            for _h in range(1, 13):
+                _sign_at = _TF_SIGNS_LC[(_p61_asc_idx + _h - 1) % 12]
+                _ruler_at = _TF_SIGN_RULER_LC.get(_sign_at, "?")
+                _suf = "th" if 11 <= _h <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(_h % 10, "th")
+                _p61_hs.append(f"{_h}{_suf}={_sign_at.title()} (lord:{_ruler_at.title()})")
+            parts.append("Houses (whole-sign from Lagna): " + ", ".join(_p61_hs))
     moon_sign = kundli.get("moonSign") or kundli.get("moon_sign")
     if moon_sign:
         parts.append(f"Moon sign (Rashi): {moon_sign}")
@@ -7117,6 +7132,29 @@ _TRUTH_PLANET_SIGN_RX_B = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
+# Phase 6.1.1 — "Nth house is <Sign>" claims (sign-of-house, not lord).
+# Catches LLM hallucinations like "Your 6th house is Pisces" while
+# the lagna+counting deterministically yields Taurus.  Two ordering
+# variants:
+#   A) "<Nth> house is/=/→ <Sign>"          (English/markdown)
+#   B) "<Nth> house/ghar <Sign> hai"        (Hinglish suffix-hai)
+# Both tolerate optional **markdown** wrappers and "ki rashi / ka sign"
+# possessive infixes. The negation guard (_tf_negated_after) is applied
+# at finditer time so "6th house Pisces nahi hai" passes through.
+_TRUTH_HOUSE_SIGN_RX_A = __import__("re").compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)"
+    r"(?:\s+(?:ki\s+rashi|ka\s+sign))?\s+"
+    r"(?:is|=|->|→)\s*\*{0,2}"
+    rf"({_TF_SIGN_NAMES_RX_FRAG})\b",
+    __import__("re").IGNORECASE,
+)
+_TRUTH_HOUSE_SIGN_RX_B = __import__("re").compile(
+    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:house|ghar|bhava|bhav)"
+    r"(?:\s+(?:ki\s+rashi|ka\s+sign))?\s+\*{0,2}"
+    rf"({_TF_SIGN_NAMES_RX_FRAG})\*{{0,2}}\s+hai\b",
+    __import__("re").IGNORECASE,
+)
+
 # "X retrograde hai / is retrograde / vakri"
 _TRUTH_RETROGRADE_RX = __import__("re").compile(
     rf"\b({_PL_ALT})\s+(?:is\s+|hai\s+)?"
@@ -7280,6 +7318,53 @@ def _tf_negated_after(text: str, end: int, max_chars: int = 30) -> bool:
     return bool(_NEGATION_NEAR_RX.search(tail[:cut]))
 
 
+# Phase 6.1.1 — divisional-chart context guard. truth.house_sign is
+# computed from the D1 (rashi) lagna only; if a sentence references a
+# divisional chart (D9/Navamsa/D10/etc.), its "Nth house is X" claim is
+# about that varga, not D1, so the validator must skip it to avoid false
+# corrections. Looks back ~80 chars (one short clause) for any divisional
+# token. Token list intentionally broad — covers D-numbers, Sanskrit
+# names, and common Hinglish spellings.
+_TF_DIVISIONAL_RX = __import__("re").compile(
+    r"\b(?:d[-\s]?\d{1,2}|"
+    r"navamsa|navmamsh|navamsha|"
+    r"hora|drekkana|drekkan|drekana|"
+    r"chaturthamsa|chaturthamsh|"
+    r"saptamsa|saptamamsa|saptamsha|"
+    r"dasamsa|dasamsha|dashamsha|dashamsa|"
+    r"dvadasamsa|dwadasamsa|dwadashamsa|"
+    r"shodasamsa|shodasamsha|"
+    r"vimshamsa|vimshamsha|"
+    r"chaturvimshamsa|chaturvimshamsha|"
+    r"saptavimshamsa|saptavimshamsha|"
+    r"trimshamsa|trimshamsha|trimsamsa|"
+    r"khavedamsa|khavedamsha|"
+    r"akshavedamsa|akshavedamsha|"
+    r"shashtiamsa|shashtyamsa|shashtiamsha)\b",
+    __import__("re").IGNORECASE,
+)
+
+
+def _tf_divisional_context(text: str, pos: int, max_chars: int = 80) -> bool:
+    """Return True if `pos` sits in a divisional-chart clause.
+
+    Phase 6.1.1 — used to skip house_sign validation for D9/Navamsa/etc.
+    sentences since truth.house_sign reflects the D1 rashi chart only.
+    Looks back up to `max_chars` (default 80) but stops at the previous
+    clause boundary (`.`, `\\n`) to avoid bleeding across sentences.
+    """
+    if pos <= 0:
+        return False
+    start = max(0, pos - max_chars)
+    snippet = text[start:pos]
+    # Trim to current clause: look for last clause-boundary marker
+    import re as _re
+    bm_iter = list(_re.finditer(r"[.;\n]", snippet))
+    if bm_iter:
+        snippet = snippet[bm_iter[-1].end():]
+    return bool(_TF_DIVISIONAL_RX.search(snippet))
+
+
 # ── Phase 4.4 — LOOKUP_ENGINE constants (lagna + dasha-end-date) ────────────
 # Extends POST_LOGIC with two detector families that close the remaining
 # "engine-lookable" gap left by Phase 4.1/4.3:
@@ -7402,6 +7487,7 @@ def _build_truth_facts(kundli: dict) -> dict:
         "planet_sign":    {},
         "retrograde":     set(),
         "house_lord":     {},
+        "house_sign":     {},          # Phase 6.1.1 — sign at each house (whole-sign from lagna)
         "manglik":        None,
         "nakshatra":      {},
         "nakshatra_pada": {},
@@ -7503,6 +7589,10 @@ def _build_truth_facts(kundli: dict) -> dict:
     if asc_idx is not None:
         for hi in range(1, 13):
             sign_at = _TF_SIGNS_LC[(asc_idx + hi - 1) % 12]
+            # Phase 6.1.1 — record sign at house unconditionally (used by
+            # the house_sign validator to catch "Nth house is X" name-swap
+            # hallucinations regardless of whether the lord is known).
+            out["house_sign"][hi] = sign_at
             ruler = _TF_SIGN_RULER_LC.get(sign_at)
             if ruler:
                 out["house_lord"][hi] = ruler
@@ -7736,6 +7826,49 @@ def _post_logic_check(text: str, truth: dict) -> list[dict]:
         if _tf_negated_after(text, m.end()):
             continue
         _check_house_lord(h, pn)
+
+    # ─── PHASE 6.1.1 — HOUSE-SIGN CLAIMS ───────────────────────────────────
+    # Catches "Your Nth house is <Sign>" name-swap hallucinations where the
+    # LLM correctly counts (Sag-1, ..., Tau-6) but then names the wrong sign
+    # in the conclusion. _check_house_lord only validates planet, not sign,
+    # so this complementary check is required for full factual coverage.
+    hs = truth.get("house_sign") or {}
+    seen_house_sign: set = set()
+
+    def _check_house_sign(house_num: int, sign_lc: str):
+        if not (1 <= house_num <= 12):
+            return
+        if not sign_lc:
+            return
+        actual = hs.get(house_num)
+        if not actual or actual == sign_lc:
+            return
+        key = ("HS", house_num, sign_lc)
+        if key in seen_house_sign:
+            return
+        seen_house_sign.add(key)
+        violations.append({
+            "kind":          "house_sign_mismatch",
+            "house":         house_num,
+            "claimed_sign":  sign_lc,
+            "actual_sign":   actual,
+            "severity":      "high",
+        })
+
+    for rx in (_TRUTH_HOUSE_SIGN_RX_A, _TRUTH_HOUSE_SIGN_RX_B):
+        for m in rx.finditer(text):
+            try:
+                h_p61 = int(m.group(1))
+                sg_p61 = _tf_canon_sign(m.group(2))
+            except (TypeError, ValueError):
+                continue
+            if _tf_negated_after(text, m.end()):
+                continue
+            # Phase 6.1.1 — skip divisional-chart context (D9/Navamsa/etc.)
+            # since truth.house_sign reflects the D1 rashi chart only.
+            if _tf_divisional_context(text, m.start()):
+                continue
+            _check_house_sign(h_p61, sg_p61)
 
     # ─── PHASE 4.1 — PLANET-SIGN CLAIMS ────────────────────────────────────
     ps = truth.get("planet_sign") or {}
@@ -8079,6 +8212,15 @@ def _post_logic_correction_msg(violations: list[dict], truth: dict) -> str:
                 f"  • {v['house']}th house ka swami (lord) is "
                 f"{v['actual_lord'].title()}, NOT {v['claimed_lord'].title()}. "
                 f"FIX IT."
+            )
+        elif v["kind"] == "house_sign_mismatch":
+            # Phase 6.1.1 — sign-of-house factual correction. The LLM named
+            # the wrong sign for an Nth house (e.g. "6th house is Pisces"
+            # when whole-sign-from-lagna says Taurus). Force regeneration.
+            lines.append(
+                f"  • Aapka {v['house']}th house ki rashi (sign) "
+                f"{v['actual_sign'].title()} hai, NOT "
+                f"{v['claimed_sign'].title()}. FIX IT."
             )
         elif v["kind"] == "planet_sign_mismatch":
             lines.append(

@@ -122,7 +122,7 @@ function prettyAgo(iso: string): string {
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData, language, user } = useUser();
+  const { kundli, birthData, language, user, profiles, primaryProfileId, setPrimaryProfile } = useUser();
   const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -1041,6 +1041,52 @@ export default function AskScreen() {
         </View>
       )}
 
+      {/* Phase 6.1.1 — Kundli selector pill row above the input.
+          Visible only when 2+ saved profiles exist (most users start
+          with just "Self"); tapping a pill switches the active kundli
+          via setPrimaryProfile, which updates the useUser() context
+          and routes the next /api/ask/stream call to that chart. */}
+      {profiles.length > 1 && !showDemo && !kbVisible && (
+        <View style={[s.kundliRow, { backgroundColor: C.bg, borderTopColor: C.border }]}>
+          <Text style={[s.kundliRowLabel, { color: C.textMuted }]}>Kis ke liye?</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+          >
+            {profiles.map((p) => {
+              const active = p.id === primaryProfileId;
+              const label = p.relation || p.name || "Self";
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => setPrimaryProfile(p.id)}
+                  style={[
+                    s.kundliPill,
+                    {
+                      backgroundColor: active ? `${C.accent}22` : C.bgCard,
+                      borderColor: active ? C.accent : C.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.kundliPillText,
+                      {
+                        color: active ? C.accent : C.text,
+                        fontWeight: active ? "700" : "500",
+                      },
+                    ]}
+                  >
+                    {active ? "★ " : ""}{label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Input row — dynamic bottom padding:
           • keyboard hidden → clear the tab bar (botPad + TAB_BAR_HEIGHT)
           • keyboard visible → small flush gap (10px), KAV pushes the
@@ -1380,6 +1426,22 @@ const s = StyleSheet.create({
     backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(245,158,11,0.15)",
   },
   starterText: { color: "#f59e0b", fontSize: 12 },
+
+  // ── Phase 6.1.1 — Kundli selector pill row (above input) ───────────────
+  kundliRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  kundliRowLabel: {
+    fontSize: 11, fontWeight: "600", letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  kundliPill: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    borderWidth: 1, minHeight: 30, justifyContent: "center",
+  },
+  kundliPillText: { fontSize: 12 },
 
   // ── Recent Questions strip ─────────────────────────────────────────────
   historyWrap:   { marginTop: 22, gap: 8 },

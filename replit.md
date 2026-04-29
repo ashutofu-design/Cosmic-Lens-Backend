@@ -4440,3 +4440,93 @@ When new health design lands, will need to re-add:
    Phase 6.0n strict 3-line extractor).
 5. Test fixtures (4 quarantined files in `/tmp/phase61_orphan_tests/`
    provide historical reference for what the OLD spec checked).
+
+## Phase 6.1.1 — House-Sign Hallucination Killer + Mobile Kundli Selector
+*(2026-04-29)*
+
+### Problem
+User reported: with Sagittarius lagna, asked "mera 6th lord kon he". Bot replied:
+> "Your 6th house is **Pisces** (since Lagna is Sagittarius, counting 6 houses
+> ahead: Sagittarius-1, Capricorn-2, Aquarius-3, Pisces-4, Aries-5, Taurus-6).
+> The lord of Taurus (6th house) is Venus."
+
+The bot's own count correctly lands on Taurus at position 6, but it grabbed
+"Pisces" (position 4) and named it as the 6th-house sign. Final lord (Venus)
+was right but the explanation was self-contradictory. User demand:
+"sara ans correct aaye without error".
+
+Root cause: existing POST_LOGIC_CHECK validated `house_lord` (planet) only,
+not `house_sign` (sign at house) — so any "Nth house is X" sign-name swap
+slipped through.
+
+### Fix — Belt-and-Suspenders (input-side push + output-side validator)
+
+**Input-side (so the model never has to count):**
+1. `_build_truth_facts` now populates `out["house_sign"][hi] = sign_at`
+   unconditionally inside the existing lagna→whole-sign loop
+   (`openai_helper.py` ~L7595).
+2. `_kundli_summary` now appends a single line right after the Lagna line:
+   `Houses (whole-sign from Lagna): 1st=Sagittarius (lord:Jupiter), …,
+   6th=Taurus (lord:Venus), …, 12th=Scorpio (lord:Mars).`
+   (~L1146). LLM gets the exact sign per house — no counting required.
+
+**Output-side validator:**
+3. Two new module-level regexes:
+   - `_TRUTH_HOUSE_SIGN_RX_A` — English/markdown: `Nth house is <Sign>`
+     (with optional `**markdown**`, `ki rashi`/`ka sign` infix tolerance)
+   - `_TRUTH_HOUSE_SIGN_RX_B` — Hinglish suffix-hai: `Nth ghar Mesh hai`
+     (handles Sanskrit/Hinglish sign names too)
+4. `_check_house_sign(house_num, sign_lc)` validator + finditer loops in
+   `_post_logic_check` between the existing house_lord block and planet_sign
+   block (~L7838-7874). Emits `house_sign_mismatch` violations with
+   `severity="high"`. Negation-guarded via existing `_tf_negated_after`.
+5. **New divisional-context guard** `_tf_divisional_context` (~L7351) skips
+   matches in D9/Navamsa/D10/Dashamsha/Hora/etc. clauses since
+   `truth.house_sign` is D1-only. Looks back ~80 chars but stops at clause
+   boundary so D9 in a previous sentence doesn't suppress a D1 claim that
+   follows. Token list covers D-numbers (`D9`, `D-9`, `D 9`) plus full
+   Sanskrit names and common Hinglish spellings.
+6. `_post_logic_correction_msg` gains a new `elif` branch for
+   `house_sign_mismatch` →
+   `"Aapka {house}th house ki rashi (sign) {actual_sign} hai, NOT
+   {claimed_sign}. FIX IT."` (~L8212). Hooks into existing FACTUAL
+   CORRECTION REQUIRED retry loop without other code changes.
+
+### Mobile UX — Kundli Selector Pill Row (Ask tab)
+- Backend already had multi-kundli support (Profile table with
+  `is_primary` flag; `setPrimaryProfile()` in UserContext writes
+  AsyncStorage; `useUser()` derives `kundli` + `birthData` from primary
+  profile, so `/api/ask/stream` payload auto-routes).
+- Added a horizontal pill row above the input row in `ask.tsx`
+  (~L1047-1080), visible only when `profiles.length > 1 && !showDemo &&
+  !kbVisible`. Each pill shows `p.relation || p.name || "Self"`; active
+  pill gets accent-tinted bg + border + "★ " prefix; tap →
+  `setPrimaryProfile(p.id)`. Switching auto-routes the next question to
+  that chart.
+- `useUser()` exposes `primaryProfileId` (not `primaryId` — the internal
+  state name is remapped in the Provider value).
+
+### Tests
+End-to-end suite (8 cases) all PASS:
+- D1 wrong sign (Pisces vs Taurus) → fires (severity high)
+- D9/Navamsa wrong sign → skipped (divisional guard)
+- "6th house Pisces nahi hai" → skipped (negation)
+- Correct sign → no false-fire
+- D9 in PREVIOUS sentence + D1 claim follows → fires (clause boundary)
+- Real bug repro from the user's screenshot → fires correctly
+- Hinglish "6th ghar Meen hai" → fires
+- Markdown-wrapped sign `**Pisces**` → fires
+- Bare "9 planets" without "D" prefix → no false-fire
+
+### Constraints honoured
+- No edits to `health_engine.py`, dosh / career / love / marriage / wealth code
+- No DB schema changes (existing Profile table + endpoints reused)
+- Python compiles, mobile typecheck passes, `/api/healthz` = 200
+- 154 insertions / 1 deletion across 2 files
+
+### Architect verdict
+PASS — accuracy fix correctly wired end-to-end; negation handling
+correct; false-positive risk on inverted "Pisces is in your 6th house"
+form acknowledged but not in scope; medium-risk D9 false-fire
+addressed in a follow-up edit (divisional context guard added).
+

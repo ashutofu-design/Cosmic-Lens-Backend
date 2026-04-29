@@ -218,60 +218,82 @@ class TestHealthQuestionDetector(unittest.TestCase):
 class TestHealthFormatter(unittest.TestCase):
 
     def test_general_yellow_full_block_shape(self):
+        """v3 vocabulary merge: yellow_wait + score=12 → overall_risk=stable.
+        2 concerns / 1 supportive → stability=fluctuating (mixed)."""
         out = oh._phase59_format_health_facts_block(
             _health_obj_general_yellow())
         self.assertTrue(out.startswith("HEALTH_FACTS:"),
                         f"missing header: {out!r}")
-        self.assertIn("  - bucket: general_wellness", out)
-        self.assertIn("  - tense: general", out)
-        self.assertIn("  - verdict: yellow_wait", out)
-        self.assertIn("  - score: 12", out)
+        # New vocabulary
+        self.assertIn("  - overall_risk: stable", out)
+        self.assertIn("  - stability: fluctuating", out)
         self.assertIn("  - confidence: 62", out)
+        # Old vocab MUST NOT appear in prompt block
+        self.assertNotIn("bucket:", out)
+        self.assertNotIn("verdict:", out)
+        self.assertNotIn("- score:", out)
+        self.assertNotIn("tense:", out)
+        # Timing windows unchanged
         self.assertIn("  - current_window: Saturn/Mercury/Venus "
                       "(2026-02..2027-09)", out)
         self.assertIn("  - next_window: Saturn/Ketu (2027-09..2028-10)", out)
-        self.assertIn("  - top_concerns: L2_sixth_house, L8_saturn_karaka",
-                      out)
-        self.assertIn("  - top_supportive: L9_jupiter_karaka", out)
+        # top_concerns → sensitive_areas section
+        self.assertIn("  - sensitive_areas:", out)
+        self.assertIn("    - L2_sixth_house", out)
+        self.assertIn("    - L8_saturn_karaka", out)
+        # top_supportive → supportive_factors section
+        self.assertIn("  - supportive_factors:", out)
+        self.assertIn("    - L9_jupiter_karaka", out)
+        # Strategy unchanged
         self.assertIn("  - strategy: Routine yoga + sleep hygiene; defer "
                       "aggressive training.", out)
+        # Brand safety unchanged (verbatim)
         self.assertIn("  - brand_safety:", out)
         self.assertIn("    - Yeh diagnosis nahi hai — kisi qualified MD se "
                       "consult karein.", out)
         self.assertIn("    - Self-medication avoid karein.", out)
 
     def test_mental_health_red_block_surfaces_helpline(self):
-        """SENSITIVE-TOPIC SAFETY: mental-health red verdict MUST emit
-        helpline brand_safety bullet. This is the most important guardrail
-        in the entire batch."""
+        """SENSITIVE-TOPIC SAFETY: red_avoid + score=-28 → overall_risk=
+        vulnerable (above -40 high_risk threshold). Helpline must appear
+        verbatim — most important guardrail in the entire batch."""
         out = oh._phase59_format_health_facts_block(
             _health_obj_mental_health_red())
-        self.assertIn("  - bucket: mental_health", out)
-        self.assertIn("  - verdict: red_avoid", out)
+        # New vocabulary: red_avoid + score=-28 → vulnerable (>= -40)
+        self.assertIn("  - overall_risk: vulnerable", out)
+        # 3 concerns, 0 supportive in this fixture → stability=vulnerable
+        self.assertIn("  - stability: vulnerable", out)
         self.assertIn("  - confidence: 71", out)
         # PD missing → only md/ad in lord_str
         self.assertIn("  - current_window: Rahu/Saturn (2026-01..2026-12)",
                       out)
-        # Risk context surfaced
-        self.assertIn("  - risk_context: Rahu-Saturn 2026 — Sade-sati 2nd "
+        # risk_context → risk_factors section
+        self.assertIn("  - risk_factors:", out)
+        self.assertIn("    - Rahu-Saturn 2026 — Sade-sati 2nd "
                       "phase peak intensity", out)
-        # Top 3 concerns surfaced
-        self.assertIn("  - top_concerns: L6_moon_karaka, L25_sade_sati, "
-                      "C4_mental", out)
-        # CRITICAL: helpline must appear verbatim
+        # top_concerns → sensitive_areas section (top 3 surfaced)
+        self.assertIn("  - sensitive_areas:", out)
+        self.assertIn("    - L6_moon_karaka", out)
+        self.assertIn("    - L25_sade_sati", out)
+        self.assertIn("    - C4_mental", out)
+        # CRITICAL: helpline must appear verbatim (UNCHANGED guarantee)
         self.assertIn("    - Mental-health helpline India: iCall 9152987821, "
                       "Vandrevala 1860-2662-345.", out)
         self.assertIn("    - Crisis ho to immediate professional help lein.",
                       out)
 
     def test_surgery_block_with_risk_context(self):
+        """v3 vocabulary: slow_burn → overall_risk=fluctuating.
+        Empty concerns + supportive → stability=fluctuating."""
         out = oh._phase59_format_health_facts_block(
             _health_obj_surgery_slow_burn())
-        self.assertIn("  - bucket: surgery", out)
-        self.assertIn("  - verdict: slow_burn", out)
+        self.assertIn("  - overall_risk: fluctuating", out)
+        self.assertIn("  - stability: fluctuating", out)
         self.assertIn("  - current_window: Mars/Saturn (2026-04..2027-03)",
                       out)
-        self.assertIn("  - risk_context: Mars-Saturn 2026 — "
+        # risk_context → risk_factors
+        self.assertIn("  - risk_factors:", out)
+        self.assertIn("    - Mars-Saturn 2026 — "
                       "Surgical-malefic transit overlap", out)
         # next_window absent → omitted
         self.assertNotIn("next_window:", out)
@@ -279,21 +301,29 @@ class TestHealthFormatter(unittest.TestCase):
                       "hai — astrology supplement only.", out)
 
     def test_minimal_verdict_emits_required_fields_only(self):
+        """v3: required fields are now overall_risk/stability/confidence
+        (bucket/tense/verdict/score dropped from prompt-facing block)."""
         out = oh._phase59_format_health_facts_block(_health_obj_minimal())
         self.assertTrue(out.startswith("HEALTH_FACTS:"))
-        self.assertIn("  - bucket: general_wellness", out)
-        self.assertIn("  - tense: general", out)
-        self.assertIn("  - verdict: yellow_wait", out)
-        self.assertIn("  - score: 0", out)
+        # Required fields (new vocabulary)
+        self.assertIn("  - overall_risk: stable", out)  # yellow_wait → stable
+        self.assertIn("  - stability: stable", out)     # 0/0 satisfies <=
         self.assertIn("  - confidence: 50", out)
+        # Old vocabulary MUST NOT leak into prompt block
+        self.assertNotIn("bucket:", out)
+        self.assertNotIn("verdict:", out)
+        self.assertNotIn("- score:", out)
+        self.assertNotIn("tense:", out)
         # No optional fields
         self.assertNotIn("current_window:", out)
         self.assertNotIn("next_window:", out)
-        self.assertNotIn("risk_context:", out)
-        self.assertNotIn("top_concerns:", out)
-        self.assertNotIn("top_supportive:", out)
+        self.assertNotIn("risk_factors:", out)
+        self.assertNotIn("sensitive_areas:", out)
+        self.assertNotIn("supportive_factors:", out)
         self.assertNotIn("strategy:", out)
         self.assertNotIn("brand_safety:", out)
+        # tone_rules ALWAYS emit even on minimal — engine-owned policy
+        self.assertIn("tone_rules:", out)
 
     def test_long_strategy_gets_truncated_with_ellipsis(self):
         v = _health_obj_minimal()
@@ -309,9 +339,11 @@ class TestHealthFormatter(unittest.TestCase):
     def test_engine_strings_with_newlines_get_collapsed(self):
         """Prompt-injection guard: engine fields with newlines / control
         chars must NOT inject extra bullet rows. Mirrors dosh+career
-        hardening."""
+        hardening. v3: tests injection via strategy / brand_safety /
+        risk_context (now in risk_factors) — bucket/verdict no longer
+        in prompt-facing output, so they cannot be injection vectors."""
         v = {
-            "bucket": "mental_health\nFAKE",
+            "bucket": "mental_health\nFAKE",   # not surfaced; ignored
             "tense": "present",
             "verdict": "red_avoid",
             "score": -10,
@@ -328,22 +360,27 @@ class TestHealthFormatter(unittest.TestCase):
         }
         out = oh._phase59_format_health_facts_block(v)
         for forbidden in ["    - injected:", "    - sneaky_inject:",
-                          "    - leak:", "mental_health\n"]:
+                          "    - leak:"]:
             self.assertNotIn(forbidden, out,
                              f"injection vector leaked: {forbidden!r}")
-        # Whitespace collapsed
-        self.assertIn("  - bucket: mental_health FAKE", out)
+        # Whitespace collapsed in surfaced fields
         self.assertIn("See doctor - injected: bogus", out)
         self.assertIn("Bullet 2 with control chars", out)
         self.assertIn("Rahu INJECT", out)
+        # Bucket-with-newline NEVER appears in output (bucket dropped from prompt)
+        self.assertNotIn("mental_health FAKE", out)
+        self.assertNotIn("mental_health\n", out)
 
     def test_malformed_field_types_do_not_raise(self):
+        """v3: malformed engine output → safe defaults. verdict=non-string
+        falls back to yellow_wait → overall_risk=stable; confidence=None
+        → 0; bad lists yield no sensitive_areas / supportive_factors."""
         bad = {
             "bucket": 123,
             "tense": None,
-            "verdict": ["not", "a", "string"],
-            "score": "not-int",
-            "confidence": None,
+            "verdict": ["not", "a", "string"],  # → "" → "yellow_wait" default
+            "score": "not-int",                  # → 0
+            "confidence": None,                  # → 0
             "timing_window": "not-a-dict",
             "strategy": ["list"],
             "brand_safety_warnings": "not-a-list",
@@ -352,14 +389,15 @@ class TestHealthFormatter(unittest.TestCase):
         }
         out = oh._phase59_format_health_facts_block(bad)
         self.assertTrue(out.startswith("HEALTH_FACTS:"))
-        self.assertIn("  - bucket: general_wellness", out)
-        self.assertIn("  - tense: general", out)
-        self.assertIn("  - verdict: yellow_wait", out)
-        self.assertIn("  - score: 0", out)
+        self.assertIn("  - overall_risk: stable", out)  # safe default
+        self.assertIn("  - stability: stable", out)     # 0/0 → stable
         self.assertIn("  - confidence: 0", out)
-        # Bad lists yield no rows for concerns/supportive
-        self.assertNotIn("top_concerns:", out)
-        self.assertNotIn("top_supportive:", out)
+        # Bad lists yield no rows for areas/factors
+        self.assertNotIn("sensitive_areas:", out)
+        self.assertNotIn("supportive_factors:", out)
+        # Old vocab still absent
+        self.assertNotIn("bucket:", out)
+        self.assertNotIn("verdict:", out)
 
     def test_non_dict_input_returns_empty(self):
         for x in [None, "", 0, [], {}, "verdict"]:

@@ -11135,46 +11135,132 @@ _HEALTH_TONE_RULES_FALLBACK: tuple = (
 )
 
 
+def _phase59_health_overall_risk(verdict: str, score: int) -> str:
+    """Map engine verdict + score → user-facing `overall_risk` tier.
+
+    Phase 5.9 Batch 3c v3 vocabulary merge: the engine still produces
+    `verdict` (green_go / yellow_wait / slow_burn / red_avoid) and
+    `score` internally, but the prompt-facing schema now uses the
+    spec's 5-tier vocabulary (strong / stable / fluctuating /
+    vulnerable / high_risk).
+
+    Mapping is pure formatter logic — NO new astrology, NO score
+    re-thresholding. Verdict is the engine's already-bucketed semantic
+    output, so we map 1:1 from verdict and only use `score` to
+    distinguish vulnerable vs. high_risk for the worst tier:
+
+      green_go                          → strong
+      yellow_wait                       → stable
+      slow_burn                         → fluctuating
+      red_avoid + score >= -40          → vulnerable
+      red_avoid + score < -40           → high_risk
+
+    Unknown verdict → "fluctuating" (safe middle default).
+    """
+    v = (verdict or "").strip().lower()
+    if v == "green_go":
+        return "strong"
+    if v == "yellow_wait":
+        return "stable"
+    if v == "slow_burn":
+        return "fluctuating"
+    if v == "red_avoid":
+        return "high_risk" if score < -40 else "vulnerable"
+    return "fluctuating"
+
+
+def _phase59_health_stability(
+    overall_risk: str,
+    n_concerns: int,
+    n_supportive: int,
+) -> str:
+    """Derive `stability` tag from signal balance + risk tier.
+
+    Stability is about CONSISTENCY of signal, not severity:
+      - stable      = signals lean supportive / strong tier
+      - fluctuating = mixed signals, middle tiers
+      - vulnerable  = repeated negatives, worst tiers
+
+    Pure formatter heuristic (no astrology):
+      strong / stable tier with concerns ≤ supportive   → "stable"
+      vulnerable / high_risk tier with concerns ≥ supp  → "vulnerable"
+      everything else                                   → "fluctuating"
+    """
+    if overall_risk in ("strong", "stable") and n_concerns <= n_supportive:
+        return "stable"
+    if overall_risk in ("vulnerable", "high_risk") and n_concerns >= n_supportive:
+        return "vulnerable"
+    return "fluctuating"
+
+
 def _phase59_format_health_facts_block(v: Any) -> str:
     """Render `assess_health()` output as a clean, prose-free facts block.
+
+    Phase 5.9 Batch 3c v3 — VOCABULARY MERGE. The engine still produces
+    its internal bucket / verdict / score schema, but the prompt-facing
+    block uses the user-spec vocabulary (overall_risk / stability /
+    sensitive_areas / supportive_factors / risk_factors). This is a
+    pure FORMATTER swap — no engine changes, no algorithm changes, no
+    regression on safety guarantees (brand_safety + tone_rules
+    unchanged).
 
     Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
 
       HEALTH_FACTS:
-        - bucket: <12-bucket name>
-        - tense: <future|present|general>
-        - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
-        - score: <int>
-        - confidence: <int>
+        - overall_risk: <strong|stable|fluctuating|vulnerable|high_risk>
+        - stability:    <stable|fluctuating|vulnerable>
+        - confidence:   <int 0-100>
         - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
-        - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
-        - risk_context: <window_str> — <reason>                  [if present]
-        - top_concerns: <layer1>, <layer2>, <layer3>             [if any]
-        - top_supportive: <layer1>, <layer2>                     [if any]
+        - next_window:    <md>/<ad> (<YYYY-MM..YYYY-MM>)         [if present]
+        - sensitive_areas:                                       [if any]
+          - <layer / area 1>
+          - <layer / area 2>
+        - supportive_factors:                                    [if any]
+          - <layer / factor 1>
+        - risk_factors:                                          [if any]
+          - <window_str — reason>     (transit risk)
         - strategy: <one-line strategy>                          [if present]
         - brand_safety:                                          [if any]
-          - <bullet1>
-          - <bullet2>
+          - <verbatim guardrail bullet>      (helplines preserved)
+        - tone_rules:                                            [ALWAYS]
+          - <engine-owned tone-policy bullet>
 
-    Mapping rules (no new astrology logic — only formatting):
-      Each field is read directly from the engine output dict. Strings
-      pass through `_safe_str` to collapse newlines / control chars
-      (prompt-injection guard, mirrors Phase 5.9 v3 dosh hardening).
+    Vocabulary mapping (pure formatter, no astrology):
+      bucket / tense        — DROPPED from prompt (engine still computes
+                              for routing; not surfaced to LLM)
+      verdict + score       — mapped to overall_risk via
+                              `_phase59_health_overall_risk()`
+      top_concerns          — renamed → sensitive_areas (max 3)
+      top_supportive        — renamed → supportive_factors (max 3)
+      timing_window.risk    — folded into risk_factors list
+      brand_safety_warnings — UNCHANGED, verbatim (helplines preserved)
+      HEALTH_TONE_RULES     — UNCHANGED, FAIL-CLOSED, last section
 
-    Why brand_safety is included:
-      `brand_safety_warnings` are deterministic narrator guardrails the
-      engine produces for sensitive buckets ("not a diagnosis", "see
-      qualified MD", mental-health helpline cite, surgery deferral
-      caveats). They are NOT astrology reasoning — they are mandatory
-      narrator instructions. Surfacing them in the FACTS block is what
-      enforces them in the LLM's output.
+    Why bucket / verdict / score are NOT surfaced:
+      User directive (Phase 5.9 Batch 3c v3): "adopt the new spec's
+      overall_risk / stability vocabulary INSTEAD of bucket / verdict".
+      The engine still uses these internally for routing + 1-liner
+      fallback compatibility, but the LLM-facing block only carries
+      the user-spec terminology.
 
     Why reasons are OMITTED:
       The engine's `reasons` strings sometimes contain Phase-5.7-cleaned
-      literals (varga-required markers, vargottama tags) used as internal
-      sort keys. Surfacing them would re-leak the very prose Phase 5.7
-      cleaned up. `top_concerns` / `top_supportive` carry the diagnostic
-      signal in structured form without that risk.
+      literals used as internal sort keys. Surfacing them would re-leak
+      the prose Phase 5.7 cleaned up. `sensitive_areas` /
+      `supportive_factors` carry the diagnostic signal structurally.
+
+    Why brand_safety is included VERBATIM:
+      `brand_safety_warnings` carry the iCall + Vandrevala mental-health
+      helpline citations and the "see qualified MD" caveats. These are
+      NOT astrology reasoning — they are MANDATORY narrator instructions
+      from the domain engine. Surfacing them verbatim is what enforces
+      them in the LLM's output. Architect-locked guard test asserts
+      helplines survive any bucket-routing regression.
+
+    Why tone_rules is the LAST section:
+      Recency-bias attention weight in the LLM's prompt window. Tone
+      policy lives in `health_engine.HEALTH_TONE_RULES` and is emitted
+      via FAIL-CLOSED architecture (hardcoded floor + sync test).
 
     Returns "" for empty / non-dict input — never raises.
     """
@@ -11195,9 +11281,8 @@ def _phase59_format_health_facts_block(v: Any) -> str:
             return ""
         return _re_p58.sub(r"\s+", " ", x).strip()
 
-    bucket  = _safe_str(v.get("bucket"))   or "general_wellness"
-    tense   = _safe_str(v.get("tense"))    or "general"
-    verdict = _safe_str(v.get("verdict"))  or "yellow_wait"
+    # Engine raw fields (read for vocab mapping; not surfaced directly).
+    verdict = _safe_str(v.get("verdict")) or "yellow_wait"
     score   = _safe_int(v.get("score"))
     # Engine canonical key is `confidence`; some call sites also log
     # `confidence_pct`. Accept both, prefer canonical.
@@ -11206,19 +11291,38 @@ def _phase59_format_health_facts_block(v: Any) -> str:
     else:
         conf = _safe_int(v.get("confidence_pct"))
 
+    # ── Vocabulary mapping (pure formatter logic) ────────────────────────
+    overall_risk = _phase59_health_overall_risk(verdict, score)
+
+    # Pre-compute concern/supportive counts for stability heuristic
+    def _layer_names(items: list, max_n: int = 3) -> list[str]:
+        out = []
+        for it in items[:max_n]:
+            if isinstance(it, dict):
+                name = _safe_str(it.get("layer"))
+                if name:
+                    out.append(name)
+        return out
+
+    sensitive_areas    = _layer_names(_safe_iter(v.get("top_concerns")), max_n=3)
+    supportive_factors = _layer_names(_safe_iter(v.get("top_supportive")), max_n=3)
+    stability = _phase59_health_stability(
+        overall_risk,
+        n_concerns=len(sensitive_areas),
+        n_supportive=len(supportive_factors),
+    )
+
     lines: list[str] = [
         "HEALTH_FACTS:",
-        f"  - bucket: {bucket}",
-        f"  - tense: {tense}",
-        f"  - verdict: {verdict}",
-        f"  - score: {score}",
+        f"  - overall_risk: {overall_risk}",
+        f"  - stability: {stability}",
         f"  - confidence: {conf}",
     ]
 
-    # ── Timing windows (current / next / risk) ───────────────────────────
-    # Health engine schema differs from career: window dicts have flat
-    # md/ad/pd keys (not nested `lords` tuple).
+    # ── Timing windows (current / next) ──────────────────────────────────
+    # Health engine schema: window dicts have flat md/ad/pd keys.
     tw = v.get("timing_window") or {}
+    risk_factors_lines: list[str] = []
     if isinstance(tw, dict):
         cur = tw.get("current") or {}
         if isinstance(cur, dict):
@@ -11244,34 +11348,31 @@ def _phase59_format_health_facts_block(v: Any) -> str:
                 lines.append(f"  - next_window: {lord_str}{window_tail}")
 
         # Risk context — engine surfaces this for active health-stress
-        # transit windows (Saturn-Mars, sade-sati, etc.). CRITICAL signal
-        # the narrator must respect.
+        # transit windows (Saturn-Mars, sade-sati, etc.). Folded into
+        # the risk_factors list per the v3 vocabulary merge.
         risk = tw.get("risk") or {}
         if isinstance(risk, dict):
             wstr = _safe_str(risk.get("window_str"))
             reason = _safe_str(risk.get("reason"))
             if wstr or reason:
                 tail = f" — {reason}" if reason else ""
-                lines.append(f"  - risk_context: {wstr}{tail}")
+                risk_factors_lines.append(f"{wstr}{tail}".strip(" —"))
 
-    # ── Top concerns / supportive (chart-level signal areas) ─────────────
-    # Engine schema: list of {"layer": str, "score": int}.
-    def _layer_names(items: list, max_n: int = 3) -> list[str]:
-        out = []
-        for it in items[:max_n]:
-            if isinstance(it, dict):
-                name = _safe_str(it.get("layer"))
-                if name:
-                    out.append(name)
-        return out
+    # ── Sensitive areas / supportive factors / risk factors ──────────────
+    if sensitive_areas:
+        lines.append("  - sensitive_areas:")
+        for a in sensitive_areas:
+            lines.append(f"    - {a}")
 
-    concerns = _layer_names(_safe_iter(v.get("top_concerns")), max_n=3)
-    if concerns:
-        lines.append(f"  - top_concerns: {', '.join(concerns)}")
+    if supportive_factors:
+        lines.append("  - supportive_factors:")
+        for s in supportive_factors:
+            lines.append(f"    - {s}")
 
-    supportive = _layer_names(_safe_iter(v.get("top_supportive")), max_n=3)
-    if supportive:
-        lines.append(f"  - top_supportive: {', '.join(supportive)}")
+    if risk_factors_lines:
+        lines.append("  - risk_factors:")
+        for rf in risk_factors_lines:
+            lines.append(f"    - {rf}")
 
     # ── Strategy (one line, capped) ──────────────────────────────────────
     strategy = _safe_str(v.get("strategy"))

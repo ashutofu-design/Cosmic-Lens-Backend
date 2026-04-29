@@ -11149,7 +11149,7 @@ def _phase59_is_health_question(question: Any) -> bool:
 # floor exists purely to guarantee the policy never disappears.
 _HEALTH_TONE_RULES_FALLBACK: tuple = (
     "ABSOLUTE claims kabhi mat karo. 'Aapko X bimari hogi' / 'Yeh definitely hoga' / 'Pakka cure ho jayega' jaisi language band. Hamesha probabilistic framing: 'indication hai', 'tendency dikh rahi hai', 'is window mein extra dhyaan zaroori hai'.",
-    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). General areas mein baat karo: 'mental wellbeing', 'digestive system', 'energy levels', 'hormonal balance'. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
+    "DIAGNOSIS tone strictly band. Specific bimari ka naam mat lo (cancer, diabetes, depression, BP, thyroid, PCOS etc.). Phase 6.0 — abstract body-system terms bhi band: 'hormonal', 'chronic', 'mental', 'emotional', 'internal imbalance' jaise words SIRF tab use karo agar woh key_triggers list mein literal hain. Naye symptom / condition / body-system terms invent mat karo. Naming specific conditions = qualified doctor ka kaam, hamara nahi.",
     "NEUTRAL phrasing rakho. Alarmist language ('khatre mein ho', 'turant problem aayegi', 'serious risk hai') aur false reassurance ('bilkul tension mat lo, sab perfect hai', 'kuch nahi hoga') — dono band. Honest, calm, supportive tone — jaise ek mature counsellor baat karta hai.",
     "PRESCRIPTION kabhi mat do. Medicine names, dosages, treatment plans, surgery decisions, alternative-medicine recommendations = strictly forbidden. Sirf cosmic timing aur supportive context bata sakte ho — actual treatment decisions qualified doctor / specialist ke pass.",
     "PROBABILITY ki language use karo, CERTAINTY ki nahi. 'Ho sakta hai', 'tendency hai', 'window mein care zaroori hai', 'consultation se clarity milegi' — yeh acceptable hai. 'Hoga hi', '100% sure', 'guaranteed' — yeh acceptable nahi.",
@@ -11722,8 +11722,193 @@ _PHASE60_HEALTH_RESPONSE_FORMAT: str = (
     "Answer in EXACTLY 2-3 lines using ONLY the facts above. "
     "No planet names, no house numbers, no dasha lord names, no "
     "astrology jargon. Mention 1-2 key_triggers naturally if relevant. "
-    "Calm, supportive, probabilistic tone — no fear, no certainty."
+    "Calm, supportive, probabilistic tone — no fear, no certainty. "
+    "Phase 6.0 LOCK: do NOT introduce any new symptom, condition, or "
+    "body-system term. Forbidden words ('hormonal', 'chronic', "
+    "'mental', 'emotional', 'internal imbalance') are allowed ONLY "
+    "if they appear literally in key_triggers. Do not paraphrase, "
+    "elaborate, or invent body-area terms beyond the FACTS block."
 )
+
+
+# ── Phase 6.0 — HEALTH NARRATOR LOCK ──────────────────────────────────────
+# Even with the response_format constraint surfaced in the FACTS block,
+# the LLM occasionally sneaks in abstract body-system vocabulary that the
+# engine never authorised (e.g. "hormonal changes ka indication",
+# "chronic issues par dhyaan", "mental imbalance"). Phase 6.0 adds a
+# deterministic post-LLM scrubber that strips those sentences UNLESS the
+# forbidden word appears literally in the `key_triggers` list (which is
+# where Saturn-karaka legitimately surfaces "chronic" and Venus-karaka
+# legitimately surfaces "hormonal").
+#
+# Architect mantra extension: engine sochta hai, LLM bolta hai, narrator
+# lock guarantee karta hai ki LLM sirf engine-authorised vocabulary use
+# kare. Sentence-level scrub keeps the answer coherent (no orphan
+# fragments). If >50% sentences are dropped, fall back to a deterministic
+# template keyed off `overall_risk` so the user never sees a broken or
+# empty answer.
+#
+# Reversible: env flag `PHASE60_HEALTH_NARRATOR_LOCK` (default "1" = ON).
+# Set to "0" to disable the post-scrubber and template fallback (the
+# response_format constraint and tone-rule update remain — those are
+# prompt-side improvements that cost nothing to keep).
+_PHASE60_FORBIDDEN_HEALTH_VOCAB: tuple[str, ...] = (
+    "hormonal",
+    "chronic",
+    "mental",
+    "emotional",
+    "internal imbalance",
+)
+
+# Sentence-split pattern: handles `.`, `!`, `?`, Hindi danda `।`, and
+# the newline boundaries the model often produces between sentences.
+# Splits on whitespace OR newline OR a danda followed immediately by an
+# uppercase letter (Devanagari-formatted text often omits the post-danda
+# space). Captures keep terminator attached to the prior sentence.
+_PHASE60_SENTENCE_SPLIT = re.compile(
+    r"(?<=[.!?।])\s+|(?<=[.!?])\n+|(?<=।)(?=[A-ZÀ-ÖØ-öø-ÿ\u0900-\u097F])"
+)
+
+# Word-boundary forbidden-vocab matcher. Case-insensitive. Multi-word
+# phrases handled via direct substring (re.escape) so "internal imbalance"
+# matches even across collapsed whitespace.
+_PHASE60_FORBIDDEN_RE = re.compile(
+    r"(?i)\b(?:" + "|".join(re.escape(w) for w in _PHASE60_FORBIDDEN_HEALTH_VOCAB) + r")\b"
+)
+
+# Deterministic fallback templates by overall_risk. Used when sentence
+# scrub drops too much of the original answer to remain coherent.
+# Calibrated to the 2-3 line spec + mandatory doctor-consult disclaimer.
+_PHASE60_HEALTH_FALLBACK_TEMPLATES: dict[str, str] = {
+    "stable": (
+        "Aapki sehat is window mein generally stable rahegi. "
+        "Routine self-care kaafi hai. Kisi serious symptom ke liye "
+        "doctor se consult zaroor karein."
+    ),
+    "fluctuating": (
+        "Aapki sehat is window mein thodi fluctuate kar sakti hai. "
+        "Extra rest aur balanced routine zaroori hai. Kisi serious "
+        "symptom ke liye doctor se consult zaroor karein."
+    ),
+    "sensitive": (
+        "Aapki sehat is window mein sensitive phase mein hai. "
+        "Extra dhyaan aur regular check-up zaroori hai. Kisi serious "
+        "symptom ke liye doctor se consult zaroor karein."
+    ),
+}
+
+
+def _phase60_health_narrator_lock_enabled() -> bool:
+    """True when Phase 6.0 health narrator lock is active. Default ON.
+
+    One-line revert: set env `PHASE60_HEALTH_NARRATOR_LOCK=0` and
+    restart the api-server. Engine-side response_format constraint and
+    tone-rule vocabulary tightening remain in effect either way (those
+    are prompt-side improvements with no runtime cost to keep).
+    """
+    return os.environ.get("PHASE60_HEALTH_NARRATOR_LOCK", "1") != "0"
+
+
+def _phase60_health_vocab_scrub(
+    text: str,
+    allowed_triggers: list | tuple | None = None,
+    overall_risk: str = "fluctuating",
+) -> tuple[str, dict]:
+    """Phase 6.0 — strip sentences containing forbidden health vocabulary.
+
+    A forbidden word is allowed only if it appears literally (case-insensitive,
+    word-boundary) in `allowed_triggers`. Sentences containing any
+    not-allowed forbidden word are dropped. If scrubbing leaves the
+    answer too short (≤ half original sentence count OR fewer than 2
+    sentences total), the entire answer is replaced with a deterministic
+    fallback template keyed off `overall_risk`.
+
+    Returns `(scrubbed_text, telemetry_dict)`. Telemetry includes:
+      - dropped_sentences: count of sentences removed
+      - dropped_words:     forbidden words that triggered drops
+      - fallback_used:     bool — True if template fallback fired
+      - allowed:           lowercase set of triggers that bypassed scrub
+
+    Pure, defensive — never raises on malformed input. Returns
+    `(text, {})` for empty / non-string input.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return text or "", {}
+
+    # Build allowed-set from key_triggers (case-insensitive). A trigger
+    # like "chronic" allows the word "chronic" anywhere in the text;
+    # multi-word triggers handled the same way.
+    allowed: set[str] = set()
+    for t in (allowed_triggers or []):
+        if isinstance(t, str) and t.strip():
+            allowed.add(t.strip().lower())
+
+    sentences = _PHASE60_SENTENCE_SPLIT.split(text.strip())
+    sentences = [s for s in sentences if s.strip()]
+    if not sentences:
+        return text, {}
+
+    kept: list[str] = []
+    dropped_words: list[str] = []
+    for s in sentences:
+        # Find ALL forbidden words in this sentence
+        matches = [m.group(0).lower() for m in _PHASE60_FORBIDDEN_RE.finditer(s)]
+        # Sentence is OK if every match is allowed (in key_triggers)
+        violations = [w for w in matches if w not in allowed]
+        if violations:
+            dropped_words.extend(violations)
+            continue
+        kept.append(s)
+
+    dropped_count = len(sentences) - len(kept)
+    telemetry: dict = {
+        "dropped_sentences": dropped_count,
+        "dropped_words":     sorted(set(dropped_words)),
+        "allowed":           sorted(allowed),
+        "fallback_used":     False,
+    }
+
+    # Coherence guard: ONLY fire fallback when scrub actually damaged
+    # the answer — i.e. at least one sentence was dropped AND the
+    # remaining text is too thin to stand on its own. Without the
+    # `dropped_count > 0` gate, naturally short clean answers would be
+    # incorrectly replaced by template (architect-flagged regression).
+    if dropped_count > 0 and (
+        len(kept) == 0
+        or (len(sentences) >= 3 and len(kept) <= len(sentences) // 2)
+    ):
+        risk_key = (overall_risk or "fluctuating").strip().lower()
+        fallback = _PHASE60_HEALTH_FALLBACK_TEMPLATES.get(
+            risk_key, _PHASE60_HEALTH_FALLBACK_TEMPLATES["fluctuating"]
+        )
+        telemetry["fallback_used"] = True
+        return fallback, telemetry
+
+    return " ".join(kept), telemetry
+
+
+def _phase60_extract_health_lock_context(build_meta: Any) -> tuple[list, str]:
+    """Extract `(key_triggers, overall_risk)` for the narrator-lock scrubber.
+
+    Pulls from `build_meta['health_verdict_obj']` (the engine's raw
+    output) — the same object that feeds `_phase60_format_health_facts_block`.
+    Defensive: returns `([], "fluctuating")` on missing or malformed input.
+    """
+    if not isinstance(build_meta, dict):
+        return [], "fluctuating"
+    hv = build_meta.get("health_verdict_obj")
+    if not isinstance(hv, dict) or not hv:
+        return [], "fluctuating"
+    try:
+        triggers = _phase60_health_key_triggers(hv) or []
+    except Exception:
+        triggers = []
+    try:
+        verdict = (hv.get("verdict") or "").strip()
+        risk = _phase60_health_overall_risk(verdict)
+    except Exception:
+        risk = "fluctuating"
+    return list(triggers), risk
 
 
 def _phase60_format_health_facts_block(v: Any) -> str:
@@ -15305,6 +15490,35 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _ph_exc:  # noqa: BLE001
         _trace(req_id, "4z.GLOBAL_PH_STRIP_ERR", str(_ph_exc))
 
+    # ── Phase 6.0 — HEALTH NARRATOR LOCK (post-LLM vocab scrub) ─────────
+    # Strip sentences containing forbidden abstract body-system terms
+    # (hormonal, chronic, mental, emotional, internal imbalance) UNLESS
+    # the word appears literally in engine-derived `key_triggers`. Only
+    # fires for health questions. Reversible via env flag.
+    try:
+        if (
+            text and isinstance(text, str)
+            and _phase60_health_narrator_lock_enabled()
+            and _is_health_question(question or "")
+        ):
+            _p60_triggers, _p60_risk = _phase60_extract_health_lock_context(build_meta)
+            _p60_pre = text
+            text, _p60_tel = _phase60_health_vocab_scrub(
+                text, allowed_triggers=_p60_triggers, overall_risk=_p60_risk,
+            )
+            if _p60_tel.get("dropped_sentences", 0) > 0 or _p60_tel.get("fallback_used"):
+                _trace(req_id, "4y.PHASE60_HEALTH_LOCK_SCRUB", {
+                    "dropped_sentences": _p60_tel.get("dropped_sentences"),
+                    "dropped_words":     _p60_tel.get("dropped_words"),
+                    "allowed_triggers":  _p60_tel.get("allowed"),
+                    "fallback_used":     _p60_tel.get("fallback_used"),
+                    "overall_risk":      _p60_risk,
+                    "pre_chars":         len(_p60_pre),
+                    "post_chars":        len(text),
+                })
+    except Exception as _p60_exc:  # noqa: BLE001
+        _trace(req_id, "4y.PHASE60_HEALTH_LOCK_ERR", str(_p60_exc)[:200])
+
     follow_ups = _derive_follow_ups(topic, eff_lang)
     # ── Sprint-26 Step 4 Phase 3 v2 — POST_LOGIC SAFETY RE-CHECK ───────
     # Architect-required final guarantee: downstream validators (timing,
@@ -15878,6 +16092,34 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     except Exception as _pl_exc:
         _trace(req_id, "2v.POST_LOGIC_CHECK_ERR(stream)",
                {"error": str(_pl_exc)[:200]})
+
+    # ── Phase 6.0 — HEALTH NARRATOR LOCK (stream parity) ───────────────
+    # Same post-LLM vocab scrub as the sync ai_ask path. Strips abstract
+    # body-system terms unless engine-authorised in key_triggers. Runs
+    # before the phase48 truncator so the trim works on cleaned text.
+    try:
+        if (
+            final_text and isinstance(final_text, str)
+            and _phase60_health_narrator_lock_enabled()
+            and _is_health_question(question or "")
+        ):
+            _p60s_triggers, _p60s_risk = _phase60_extract_health_lock_context(build_meta_stream)
+            _p60s_pre = final_text
+            final_text, _p60s_tel = _phase60_health_vocab_scrub(
+                final_text, allowed_triggers=_p60s_triggers, overall_risk=_p60s_risk,
+            )
+            if _p60s_tel.get("dropped_sentences", 0) > 0 or _p60s_tel.get("fallback_used"):
+                _trace(req_id, "4y.PHASE60_HEALTH_LOCK_SCRUB(stream)", {
+                    "dropped_sentences": _p60s_tel.get("dropped_sentences"),
+                    "dropped_words":     _p60s_tel.get("dropped_words"),
+                    "allowed_triggers":  _p60s_tel.get("allowed"),
+                    "fallback_used":     _p60s_tel.get("fallback_used"),
+                    "overall_risk":      _p60s_risk,
+                    "pre_chars":         len(_p60s_pre),
+                    "post_chars":        len(final_text),
+                })
+    except Exception as _p60s_exc:  # noqa: BLE001
+        _trace(req_id, "4y.PHASE60_HEALTH_LOCK_ERR(stream)", str(_p60s_exc)[:200])
 
     has_dasha  = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
     has_coords = isinstance(birth, dict) and birth.get("lat") is not None and birth.get("lon") is not None

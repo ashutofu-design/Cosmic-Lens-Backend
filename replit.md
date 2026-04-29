@@ -3326,3 +3326,90 @@ property, vehicle, child, sade-sati, kalsarpa, manglik, litigation,
 stock) still flow through the legacy 1-liner path. Wiring them on
 the same `<DOMAIN>_FACTS` shape is the next step in the roadmap and
 is **not** part of this turn.
+
+---
+
+## Phase 6.0 — Health Narrator Lock (Apr 29, 2026)
+
+**Diagnosis (engine 10/10, LLM 20% off-script).** Phase 5.9 batch 3c
+shipped a structured HEALTH_FACTS block + tone_rules and got the engine
+exactly right, but live traces showed the LLM still occasionally
+inventing abstract body-system terms the engine never authorised:
+"hormonal changes", "chronic patterns", "mental imbalance", "internal
+imbalance", etc. These terms cross the diagnosis line (qualified-doctor
+territory) and are exactly what the user banned in this turn.
+
+**Fix — three layers, all reversible.**
+
+1. **Engine tone-rule update** (`health_engine.py` `HEALTH_TONE_RULES[1]`):
+   removed the encouraging line that previously sanctioned
+   "hormonal balance / mental wellbeing / digestive system / energy
+   levels" as acceptable framing. Replaced with an explicit Phase 6.0
+   ban: the five forbidden words MAY appear only when literal in
+   `key_triggers` (Saturn-karaka legitimately surfaces "chronic",
+   Venus-karaka legitimately surfaces "hormonal").
+
+2. **Prompt-side response_format constraint**
+   (`openai_helper._PHASE60_HEALTH_RESPONSE_FORMAT`): appended a
+   "Phase 6.0 LOCK" clause that names the five forbidden words and the
+   key_triggers exception. Surfaced via the FACTS block immediately
+   before tone_rules so it inherits the recency-attention slot.
+   Mirrored in `_HEALTH_TONE_RULES_FALLBACK` so the engine source-of-
+   truth and the openai_helper failover never drift.
+
+3. **Post-LLM deterministic scrubber** — the trust-anchor.
+   `_phase60_health_vocab_scrub(text, allowed_triggers, overall_risk)`
+   splits the LLM output on `.!?।`, drops every sentence containing a
+   forbidden word that is NOT in `key_triggers`, and falls back to a
+   deterministic template (`stable / fluctuating / sensitive`) if
+   scrubbing leaves fewer than two sentences (or removes more than
+   half). All three templates carry the mandatory doctor-consult line
+   so the user never sees a broken or empty answer. Wired into
+   **both** `ai_ask` (after `4z.GLOBAL_PH_STRIP`, before
+   `2v.POST_LOGIC_CHECK_POST_TIMING`) and `ai_ask_stream` (after
+   `2v.POST_LOGIC_CHECK_CLEAN(stream)`, before the phase48 truncator)
+   so sync/stream parity is preserved. Telemetry: `4y.PHASE60_
+   HEALTH_LOCK_SCRUB(stream)` emits dropped-sentence count, dropped
+   words, allowed-triggers, fallback flag, pre/post char counts.
+
+**Reversibility.** Single env flag `PHASE60_HEALTH_NARRATOR_LOCK`
+(default `"1"` = ON). Set to `"0"` to disable the post-LLM scrubber
+and template fallback. The prompt-side response_format and tone-rule
+updates remain in effect either way (no runtime cost to keep, and they
+help even without the post-scrubber).
+
+**Why we kept `2v.POST_LOGIC_CHECK_POST_TIMING`** — the user flagged
+this as a "duplicate" but it is architect-mandated. The first
+POST_LOGIC_CHECK runs before timing-validator, jargon-inject, GLOBAL_
+PH_STRIP, and (now) the Phase 6.0 health-vocab scrub. Any of those
+rewriters could in theory re-introduce a truth violation; the
+POST_TIMING re-check guarantees the served text is still clean. It is
+a cheap, no-retry final gate, not a redundant duplicate.
+
+**Tests** (`test_phase60_health_lock.py` — 21/21 green; 122/122 with
+Phase 5.0 baseline).
+
+- forbidden word not in triggers → sentence dropped
+- forbidden word IS in triggers → passes through
+- chronic + saturn karaka allowed; hormonal + venus karaka allowed
+- 100%-forbidden text → fallback template fires
+- fallback template selection matches `overall_risk`
+- unknown risk → defaults to `fluctuating` template
+- clean text → unchanged, telemetry empty
+- empty / None / whitespace input → safe
+- case-insensitive matching
+- multi-word "internal imbalance" caught
+- Hindi danda `।` sentence boundary respected
+- env flag default ON; `"0"` disables; any other value enables
+- response_format and tone_rules contain Phase 6.0 LOCK clause
+- engine source-of-truth and openai_helper fallback agree on tone-rules
+- forbidden vocab tuple is exactly the five terms
+- all three fallback templates carry the doctor-consult line
+- `_phase60_extract_health_lock_context` defensive against missing meta
+
+**Live trace verification** (live `/api/ask`, hi-lang, 6-month sehat
+question, Saturn-Mahadasha + Venus-Antardasha chart): response had
+zero forbidden vocab leaks, mandatory doctor-consult line present,
+coherent narrative — no `4y.PHASE60_HEALTH_LOCK_SCRUB` trace fired
+because the LLM stayed on-script (which is the goal — the scrubber
+is a safety-net, not a primary mechanism).

@@ -2622,6 +2622,97 @@ for those (only fragments inside `wealth_engine`, D7, D16).
 
 ---
 
+## Phase 5.9 — Career FACTS block (Batch 3b: career_engine wired)
+
+Continues the Batch 3a pattern by wiring `career_engine.assess_career()`
+into the minimal-prompt path as a single deterministic `CAREER_FACTS`
+block. **No new astrology logic** — only formatting + routing of fields
+the engine already computes (12 buckets: promotion / job-change /
+govt-job / business / partnership / freelance / foreign-job /
+resignation / startup / salary / transfer / general-career).
+
+### What the LLM now receives (career question)
+
+```
+CAREER_FACTS:
+  - bucket: <12-bucket name>
+  - tense: <future|present|general>
+  - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
+  - score: <int>
+  - confidence: <int>
+  - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
+  - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
+  - strategy: <one-line strategy>                          [if present]
+  - brand_safety:                                          [if any]
+    - <guardrail bullet 1>
+    - <guardrail bullet 2>
+```
+
+Schema design notes:
+- **Required-always fields** (bucket / tense / verdict / score /
+  confidence) anchor the LLM's framing. Optional fields (timing window,
+  strategy, brand_safety) are emitted only when the engine supplies
+  them — keeps the block terse for sparse charts.
+- **`brand_safety_warnings`** are surfaced VERBATIM. These are the
+  engine's deterministic guardrails (govt-job no-guarantee disclaimer,
+  business-failure softening, resignation framing, partnership
+  caveats). They are not astrology reasoning — they are mandatory
+  narrator instructions. Surfacing them in the FACTS block is what
+  enforces them in the LLM's output.
+- **Reasons OMITTED.** The engine's `reasons` strings sometimes contain
+  forbidden literals (`MANDATORY D9`, `Vargottama` markers) used as
+  internal sort keys — surfacing them would re-leak the very prose
+  Phase 5.7 cleaned up. Strategy + brand_safety carry the actionable
+  signal without that risk.
+- **Strategy capped at 240 chars + ellipsis.** The engine sometimes
+  ships a multi-paragraph strategy; the FACTS block stays terse so the
+  narrator does the prose, not us.
+
+### Detector — single source of truth (architect-driven)
+
+`_phase59_is_career_question()` delegates to the upstream
+`_is_career_question()` (which itself uses `_CAREER_QUESTION_RX` plus
+`_CAREER_STOCK_OVERRIDE_RX` defense). This eliminates detector ↔
+executor drift — when the upstream gate routes a "share market career"-
+style query to stock_engine, our FACTS extractor will not mistakenly
+emit CAREER_FACTS with stale stock-context output.
+
+### Backward compatibility
+
+- Career 1-liner (`Career verdict: ...`) is suppressed when CAREER_FACTS
+  fires — no duplication of engine output.
+- Non-career questions with `career_verdict_obj` present still get the
+  legacy 1-liner (preserves earlier semantics).
+- Empty-question (unit-test) path keeps legacy 1-liner for all domains.
+
+### Tests
+
+`test_phase59_career_facts.py` adds 20 tests:
+- detector tests (English / Hinglish / Hindi / Devanagari / non-string /
+  stock-collision drift guard)
+- formatter tests (full schema, optional-field gating, malformed input
+  defense, prompt-injection whitespace collapse, long-strategy ellipsis,
+  string-form lords parsing)
+- extractor integration (CAREER_FACTS emitted + 1-liner suppressed for
+  career qs; legacy 1-liner preserved for non-career; empty-Q backward
+  compat; CAREER_FACTS + DOSH_FACTS coexist on multi-domain prompts)
+- source-cleanliness guard (formatter never fabricates forbidden
+  `FULL_KUNDLI_JSON` / `MANDATORY D9/D10/D30` literals on its own)
+
+Live verification (real BBSR chart, "Will I get a promotion this
+year?"): emitted clean CAREER_FACTS with bucket=promotion,
+verdict=red_avoid, current_window=Jupiter/Rahu/Moon (2024-01..2026-06),
+3 brand_safety bullets. 1-liner suppressed; 210/210 suite green;
+architect PASS.
+
+### Next batches (3c–3d)
+
+`health_engine.assess_health()` and `love_engine.assess_love()` follow
+next. Sade-sati remains deferred (lives in `transit_engine`, not in
+the topical engines wired by this phase).
+
+---
+
 ## Phase 5.8 — Marriage & Wealth FACTS blocks (engine sochta hai, LLM bolta hai)
 
 Extends the Phase 5.7.1 clean-facts pattern (`ENGINE_VERDICT` /

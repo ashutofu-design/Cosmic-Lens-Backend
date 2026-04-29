@@ -9971,7 +9971,7 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
             if v:
                 parts.append(f"Wealth verdict: {v}" + (f" ({b})" if b else ""))
 
-    # ── DOSH (Phase 5.9) ─────────────────────────────────────────────────
+    # ── DOSH (Phase 5.9 Batch 3a) ────────────────────────────────────────
     # Surfaced ONLY when the question is a dosh/affliction question.
     # Empty-question (unit-test path) does NOT surface dosh — the engine
     # output is verbose enough that the legacy 1-liner has no good summary
@@ -9982,13 +9982,29 @@ def _phase50_extract_verdict_facts(build_meta: Any, question: str = "") -> str:
         if block:
             parts.append(block)
 
+    # ── CAREER (Phase 5.9 Batch 3b) ──────────────────────────────────────
+    # Surfaced ONLY when the question is a career/job/business/promotion
+    # question. Empty-question (unit-test path) keeps the legacy 1-liner
+    # below for backward compatibility.
+    cv = bm.get("career_verdict_obj")
+    emitted_career_block = False
+    if routed and _phase59_is_career_question(q) and isinstance(cv, dict):
+        block = _phase59_format_career_facts_block(cv)
+        if block:
+            parts.append(block)
+            emitted_career_block = True
+
     # ── Other domain verdicts — 1 line each (unchanged this phase). ─────
+    # Career is suppressed when CAREER_FACTS already fired (above), to
+    # avoid duplicating engine output as both rich block + 1-liner.
     for key, label in [
         ("love_verdict_obj",   "Love verdict"),
         ("career_verdict_obj", "Career verdict"),
         ("health_verdict_obj", "Health verdict"),
         ("stock_verdict_obj",  "Stock verdict"),
     ]:
+        if key == "career_verdict_obj" and emitted_career_block:
+            continue
         o = bm.get(key)
         if isinstance(o, dict):
             v = (o.get("verdict") or o.get("summary") or "").strip()
@@ -10876,6 +10892,161 @@ def _phase59_format_dosh_facts_block(v: Any) -> str:
     if per_lines:
         lines.append("  - per_dosha:")
         lines.extend(per_lines)
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.9 Batch 3b — CAREER_FACTS block (engine sochta hai, LLM bolta hai)
+# ─────────────────────────────────────────────────────────────────────────────
+# Surfaces career_engine.assess_career() output as a structured CAREER_FACTS
+# block in the minimal-prompt path. Replaces the legacy 1-line
+# "Career verdict: ..." that left the LLM blind to bucket / tense / score /
+# timing window / strategy / brand-safety guardrails.
+#
+# Strict rule (architect-enforced): NO new astrology logic. The block is
+# pure formatting of fields already produced by career_engine. brand_safety
+# bullets are surfaced VERBATIM — they are the engine's deterministic
+# softening rules (govt-job, business, resignation, partnership).
+#
+# Detector reuses `_CAREER_QUESTION_RX` (the same gate that decides whether
+# `assess_career` runs upstream). Keeping a single source of truth prevents
+# detector ↔ executor drift.
+
+
+def _phase59_is_career_question(question: Any) -> bool:
+    """True iff the question is a career / job / business / promotion query.
+
+    Defensive against non-string input. Delegates to the upstream
+    `_is_career_question()` — the SAME gate that decides whether
+    `assess_career` is invoked. This guarantees zero detector ↔ executor
+    drift, including stock-market override defense (e.g. "share market
+    career"-style queries that the upstream gate routes to stock, not
+    career). A True here implies (for a normally-routed request) that
+    `career_verdict_obj` will be on `out_meta`.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return _is_career_question(question)
+
+
+def _phase59_format_career_facts_block(v: Any) -> str:
+    """Render `assess_career()` output as a clean, prose-free facts block.
+
+    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
+
+      CAREER_FACTS:
+        - bucket: <12-bucket name>
+        - tense: <future|present|general>
+        - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
+        - score: <int>
+        - confidence: <int>
+        - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
+        - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
+        - strategy: <one-line strategy>                          [if present]
+        - brand_safety:                                          [if any]
+          - <bullet1>
+          - <bullet2>
+
+    Mapping rules (no new astrology logic — only formatting):
+      Each field is read directly from the engine output dict. Strings
+      pass through `_safe_str` to collapse newlines / control chars
+      (prompt-injection guard, mirrors Phase 5.9 v3 dosh hardening).
+
+    Why brand_safety is included:
+      `brand_safety_warnings` are deterministic narrator guardrails the
+      engine produces for sensitive buckets (govt-job promises, business
+      failure softening, resignation framing, partnership caveats). They
+      are NOT astrology reasoning — they are guardrails the LLM MUST
+      honour. Surfacing them in the FACTS block is what enforces them.
+
+    Returns "" for empty / non-dict input — never raises.
+    """
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    def _safe_str(x: Any) -> str:
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    bucket    = _safe_str(v.get("bucket"))      or "general_career"
+    tense     = _safe_str(v.get("tense"))       or "general"
+    verdict   = _safe_str(v.get("verdict"))     or "yellow_wait"
+    score     = _safe_int(v.get("score"))
+    conf      = _safe_int(v.get("confidence"))
+
+    lines: list[str] = [
+        "CAREER_FACTS:",
+        f"  - bucket: {bucket}",
+        f"  - tense: {tense}",
+        f"  - verdict: {verdict}",
+        f"  - score: {score}",
+        f"  - confidence: {conf}",
+    ]
+
+    # ── Timing window (current + next) ───────────────────────────────────
+    tw = v.get("timing_window") or {}
+    if isinstance(tw, dict):
+        cur = tw.get("current") or {}
+        if isinstance(cur, dict):
+            lords = cur.get("lords")
+            md = ad = pd = ""
+            if isinstance(lords, (tuple, list)):
+                md = _safe_str(lords[0]) if len(lords) > 0 else ""
+                ad = _safe_str(lords[1]) if len(lords) > 1 else ""
+                pd = _safe_str(lords[2]) if len(lords) > 2 else ""
+            elif isinstance(lords, str):
+                bits = [p.strip() for p in lords.replace("/", "-").split("-")
+                        if p.strip()]
+                md = bits[0] if len(bits) > 0 else ""
+                ad = bits[1] if len(bits) > 1 else ""
+                pd = bits[2] if len(bits) > 2 else ""
+            if md or ad:
+                lord_str = "/".join(p for p in (md, ad, pd) if p)
+                start = _safe_str(cur.get("start"))[:7]
+                end   = _safe_str(cur.get("end"))[:7]
+                window_tail = f" ({start}..{end})" if (start or end) else ""
+                lines.append(f"  - current_window: {lord_str}{window_tail}")
+
+        nxt = tw.get("next_career") or {}
+        if isinstance(nxt, dict):
+            n_md = _safe_str(nxt.get("md"))
+            n_ad = _safe_str(nxt.get("ad"))
+            if n_md or n_ad:
+                lord_str = "/".join(p for p in (n_md, n_ad) if p)
+                start = _safe_str(nxt.get("start"))[:7]
+                end   = _safe_str(nxt.get("end"))[:7]
+                window_tail = f" ({start}..{end})" if (start or end) else ""
+                lines.append(f"  - next_window: {lord_str}{window_tail}")
+
+    # ── Strategy (one line) ──────────────────────────────────────────────
+    strategy = _safe_str(v.get("strategy"))
+    if strategy:
+        # Trim any prose tail beyond ~240 chars — the engine sometimes
+        # ships a multi-paragraph strategy; the FACTS block stays terse
+        # so the narrator does the prose, not us.
+        if len(strategy) > 240:
+            strategy = strategy[:237].rstrip() + "..."
+        lines.append(f"  - strategy: {strategy}")
+
+    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
+    bsw = _safe_iter(v.get("brand_safety_warnings"))
+    bullets = [_safe_str(b) for b in bsw]
+    bullets = [b for b in bullets if b]
+    if bullets:
+        lines.append("  - brand_safety:")
+        for b in bullets:
+            lines.append(f"    - {b}")
 
     return "\n".join(lines)
 

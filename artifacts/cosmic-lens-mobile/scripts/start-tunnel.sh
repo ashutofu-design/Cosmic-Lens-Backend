@@ -7,6 +7,20 @@ CF_API_LOG="/tmp/cf-api.log"
 > "$LOG_FILE"
 > "$CF_API_LOG"
 
+# Apr 29 2026: register cleanup BEFORE any background `&` spawns so that
+# early `exit 1` paths (cloudflared install fail, tunnel-spawn abort) do
+# not leak orphan tunnel processes. PIDs are checked with `-n` guards so
+# this is a safe no-op for variables not yet set (e.g. when the
+# REPLIT_*_DOMAIN fast path skips spawning external tunnels).
+cleanup() {
+  [ -n "$METRO_PID" ]    && kill "$METRO_PID"    2>/dev/null || true
+  [ -n "$CF_API_PID" ]   && kill "$CF_API_PID"   2>/dev/null || true
+  [ -n "$LT_API_PID" ]   && kill "$LT_API_PID"   2>/dev/null || true
+  [ -n "$CF_METRO_PID" ] && kill "$CF_METRO_PID" 2>/dev/null || true
+  [ -n "$LT_METRO_PID" ] && kill "$LT_METRO_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 # Cloudflare quick tunnel (free, anonymous, very reliable — replaces flaky
 # localtunnel / loca.lt which kept returning 502 Bad Gateway and rotating
 # subdomains mid-session).
@@ -28,7 +42,13 @@ if [ -z "$CFD" ] || ! [ -x "$CFD" ]; then
   echo "[startup] cloudflared installed: $($CFD --version 2>&1 | head -1)"
 fi
 
-# --- API tunnel (port 8080) — try Cloudflare first, fall back to localtunnel ---
+# --- API tunnel (port 8080) ---
+# Apr 29 2026 fix: PREFER Replit's built-in dev domain ($REPLIT_DEV_DOMAIN)
+# when available. It's mTLS-protected, stable for the entire workspace
+# session, and avoids the chronic flakiness of cloudflare quick tunnels
+# (which silently drop) and localtunnel (which shows interstitials and
+# rotates subdomains). The shared proxy auto-routes /api → :8080 because
+# the api-server artifact registers `paths = ["/api"]` in artifact.toml.
 API_PORT=8080
 LT_API_LOG="/tmp/lt-api.log"
 > "$LT_API_LOG"
@@ -36,6 +56,21 @@ pkill -f "cloudflared.*localhost:${API_PORT}" 2>/dev/null || true
 pkill -f "lt --port ${API_PORT}" 2>/dev/null || true
 sleep 1
 
+PUBLIC_API_URL=""
+
+if [ -n "$REPLIT_DEV_DOMAIN" ]; then
+  CANDIDATE_URL="https://${REPLIT_DEV_DOMAIN}"
+  HC=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 6 \
+        "${CANDIDATE_URL}/api/healthz" 2>/dev/null || echo "000")
+  if [ "$HC" = "200" ]; then
+    PUBLIC_API_URL="$CANDIDATE_URL"
+    echo "[startup] API tunnel READY (replit-dev-domain): $PUBLIC_API_URL"
+  else
+    echo "[startup] REPLIT_DEV_DOMAIN reachable but /api/healthz=${HC} — falling back to external tunnels"
+  fi
+fi
+
+if [ -z "$PUBLIC_API_URL" ]; then
 (
   echo "[cf-api] starting cloudflare tunnel for :${API_PORT}"
   "$CFD" tunnel --no-autoupdate --protocol http2 --url "http://localhost:${API_PORT}" 2>&1 \
@@ -43,8 +78,6 @@ sleep 1
   echo "[cf-api] EXITED — cloudflare API tunnel dead"
 ) &
 CF_API_PID=$!
-
-PUBLIC_API_URL=""
 # Wait up to 45s for cloudflare to (a) publish a URL, (b) not error, AND
 # (c) actually serve a 2xx through the edge. Cloudflare prints the public
 # URL ~1s after start but the edge connection often takes 15-30s more to
@@ -97,6 +130,7 @@ if [ -z "$PUBLIC_API_URL" ]; then
     sleep 1
   done
 fi
+fi  # close: external-tunnels block (only entered when REPLIT_DEV_DOMAIN was unusable)
 
 if [ -z "$PUBLIC_API_URL" ]; then
   echo "[startup] BOTH cloudflare AND localtunnel failed for API; aborting"
@@ -122,6 +156,20 @@ pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
 pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
 sleep 1
 
+METRO_PUBLIC_URL=""
+
+# Apr 29 2026 fix: PREFER Replit's built-in Expo dev domain
+# ($REPLIT_EXPO_DEV_DOMAIN) when available. Replit routes this domain
+# DIRECTLY to the Expo artifact's port (Expo bypasses the shared proxy),
+# so Metro is reachable as `https://${REPLIT_EXPO_DEV_DOMAIN}/` for the
+# manifest fetch and asset bundles. This is mTLS-protected and stable
+# for the workspace session — no flaky cloudflare/localtunnel needed.
+if [ -n "$REPLIT_EXPO_DEV_DOMAIN" ]; then
+  METRO_PUBLIC_URL="https://${REPLIT_EXPO_DEV_DOMAIN}"
+  echo "[startup] Metro tunnel READY (replit-expo-domain): $METRO_PUBLIC_URL"
+fi
+
+if [ -z "$METRO_PUBLIC_URL" ]; then
 # IMPORTANT: spawn tunnels ONCE (no auto-respawn loops). When a tunnel
 # drops, an auto-respawn would reconnect with a NEW random subdomain —
 # but Expo CLI has already pinned the OLD subdomain into the bundle's
@@ -134,8 +182,6 @@ sleep 1
   echo "[cf-metro] EXITED — Metro cloudflare tunnel dead"
 ) &
 CF_METRO_PID=$!
-
-METRO_PUBLIC_URL=""
 # Wait up to 30s for cloudflare to publish a URL AND register the edge
 # connection (no shutdown errors). We do NOT probe `/status` here because
 # Metro itself isn't started yet — that would deadlock.
@@ -181,6 +227,7 @@ if [ -z "$METRO_PUBLIC_URL" ]; then
     sleep 1
   done
 fi
+fi  # close: external-tunnels block (only entered when REPLIT_EXPO_DEV_DOMAIN was unset)
 
 if [ -z "$METRO_PUBLIC_URL" ]; then
   echo "[startup] BOTH cloudflare AND localtunnel failed for Metro; aborting"
@@ -226,11 +273,5 @@ echo "================================================="
 echo " EXPO GO:  $EXPO_URL"
 echo " API:      $PUBLIC_API_URL"
 echo "================================================="
-
-cleanup() {
-  kill "$METRO_PID" 2>/dev/null || true
-  [ -n "$LT_API_PID" ] && kill "$LT_API_PID" 2>/dev/null || true
-}
-trap cleanup EXIT
 
 wait "$METRO_PID"

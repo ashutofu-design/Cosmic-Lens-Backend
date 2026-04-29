@@ -3913,3 +3913,79 @@ the engine-degraded minority pays the validator-chain cost.
   Shadbala, but not confirmed). Out of scope — this phase only
   closes the validator-bypass blast radius, not the upstream engine
   failure.
+
+---
+
+## Phase 6.0e — Expo tunnel: Replit-domain preferred path (Apr 29 2026)
+
+### Problem
+
+Cloudflare quick tunnel for Metro kept dropping mid-session
+(`columnists-charger-dsl-drinking.trycloudflare.com` returning HTTP
+000), giving the user broken `exp://...trycloudflare.com` Expo Go
+links. The localtunnel fallback (loca.lt) was equally unreliable —
+chronic 502s and interstitial pages that broke Expo's manifest fetch.
+Both are anonymous third-party tunnels with no uptime guarantee.
+
+### Fix
+
+`artifacts/cosmic-lens-mobile/scripts/start-tunnel.sh` now PREFERS
+Replit's built-in mTLS-protected dev domains for both API and Metro,
+falling back to the existing cloudflare → localtunnel chain only when
+the env vars are unset.
+
+**API (port 8080) — L31-58:**
+
+* If `$REPLIT_DEV_DOMAIN` is set, probe `https://$REPLIT_DEV_DOMAIN/
+  api/healthz`. On HTTP 200, set `PUBLIC_API_URL=https://
+  $REPLIT_DEV_DOMAIN` and skip the cloudflared/lt spawn entirely.
+* Routing works because the API artifact's `.replit-artifact/
+  artifact.toml` declares `paths = ["/api"]` — Replit's shared proxy
+  forwards `/api/*` to localhost:8080.
+* Falls back to existing cloudflare → localtunnel chain if probe fails
+  or env var is unset.
+
+**Metro (port 18987) — L148-159:**
+
+* If `$REPLIT_EXPO_DEV_DOMAIN` is set, set `METRO_PUBLIC_URL=https://
+  $REPLIT_EXPO_DEV_DOMAIN` and skip the cloudflared/lt spawn.
+* Expo bypasses the shared proxy and gets its OWN dedicated
+  `*.expo.kirk.replit.dev` domain that routes directly to the Expo
+  artifact's port.
+* Downstream env vars (`REACT_NATIVE_PACKAGER_HOSTNAME`,
+  `EXPO_PACKAGER_PROXY_URL`, `EXPO_MANIFEST_PROXY_URL`) all derive
+  from `METRO_PUBLIC_URL`, so Expo Go gets a stable Replit-routed
+  manifest+bundle URL.
+
+### Cleanup hardening (per architect review)
+
+`cleanup()` function moved to top of script (L13-25) and registered
+with `trap cleanup EXIT` BEFORE any background `&` spawn. Now kills
+all 5 possible PIDs (`METRO_PID`, `CF_API_PID`, `LT_API_PID`,
+`CF_METRO_PID`, `LT_METRO_PID`) with `[ -n "$PID" ]` guards so it's a
+safe no-op for unset PIDs (Replit-domain fast path skips spawning
+external tunnels). Prevents zombie cloudflared/lt processes on early
+`exit 1` paths.
+
+### Verification (live, Apr 29 13:18 UTC)
+
+* `curl https://${REPLIT_EXPO_DEV_DOMAIN}/` → **HTTP 200, 0.36s**
+* `curl -H 'Expo-Platform: ios' https://${REPLIT_EXPO_DEV_DOMAIN}/`
+  → **HTTP 200, 2.41s** (manifest)
+* `curl https://${REPLIT_DEV_DOMAIN}/api/healthz` → **HTTP 200,
+  0.06s**
+* Workflow logs:
+  ```
+  [startup] API tunnel READY (replit-dev-domain): https://...kirk.replit.dev
+  [startup] Metro tunnel READY (replit-expo-domain): https://...expo.kirk.replit.dev
+  EXPO GO:  exp://18370deb-...expo.kirk.replit.dev
+  API:      https://18370deb-...kirk.replit.dev
+  Web Bundled 20868ms ... (1829 modules)
+  ```
+* Architect review: PASS on control-flow, env-wiring, and
+  Replit-domain fast path. Critical fix on cleanup() applied.
+* `bash -n` syntax check: PASS.
+
+### Files changed
+
+* `artifacts/cosmic-lens-mobile/scripts/start-tunnel.sh` (+38/-6)

@@ -5326,6 +5326,54 @@ def _classify_marriage_subtype(question: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Phase 6.0k — FIX 5: HEALTH SUBTYPE CLASSIFIER
+# ─────────────────────────────────────────────────────────────────────────────
+# Minimal, regex-based health subtype detector. Mirrors the marriage subtype
+# pattern (timing / cause / risk / general) but is consumed ONLY when topic
+# is health, so cross-domain noise can never appear in MODE_DETECT.subtype.
+#
+# Currently used for telemetry only — does NOT change engine routing or
+# narrator template (those still flow through health_engine + Phase 6.0h
+# health-narrator-contract). Future routing logic can branch on
+# health_subtype without re-running cross-topic classifiers.
+_HEALTH_TIMING_RE = re.compile(
+    r"\b(kab|when|kis ?(month|mahine|saal|year)|month\s*\w+|"
+    r"jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|"
+    r"period|window|timing|date|tarikh)\b",
+    re.IGNORECASE,
+)
+_HEALTH_CAUSE_RE = re.compile(
+    r"\b(kyu+n?|kyon|why|reason|wajah|karan|explain|samjhao|"
+    r"kis ?(grah|planet|wajah)|cause)\b",
+    re.IGNORECASE,
+)
+_HEALTH_RISK_RE = re.compile(
+    r"\b(risk|chance|possibility|sambhavna|injury|surgery|operation|"
+    r"hospital|emergency|danger|khatra|khatre)\b",
+    re.IGNORECASE,
+)
+
+
+def _classify_health_subtype(question: str) -> str:
+    """Return 'timing' / 'cause' / 'risk' / 'general' for a health question.
+
+    Pure regex — no engine call, no LLM, no I/O. Order of checks: risk first
+    (most specific clinical signal), then cause (analytical "why"), then
+    timing (when/period), then default general.
+    """
+    q = (question or "").strip()
+    if not q:
+        return "general"
+    if _HEALTH_RISK_RE.search(q):
+        return "risk"
+    if _HEALTH_CAUSE_RE.search(q):
+        return "cause"
+    if _HEALTH_TIMING_RE.search(q):
+        return "timing"
+    return "general"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # QUESTION-INTENT CLASSIFIER (Sprint-23)
 # ─────────────────────────────────────────────────────────────────────────────
 # Single source of truth for "what TYPE of question did the user ask?"
@@ -13455,13 +13503,33 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "reason": _early_reason,
     })
 
-    # Marriage subtype (timing / remedy / analysis) — sub-classifier kept
-    # because it drives a different narrator template, not the engine choice.
-    marriage_subtype = (
-        _classify_marriage_subtype(question) if topic == "marriage" else "timing"
-    )
+    # ── Phase 6.0k — FIX 5 (TOPIC-AWARE SUBTYPE DETECTION) ─────────────
+    # Each topic uses ONLY its own subtype classifier. No cross-domain
+    # classifier ever runs for an unrelated topic, and the trace log
+    # surfaces a topic-prefixed `subtype` label so future routing logic
+    # can branch cleanly. `marriage_subtype` is retained as a separate
+    # named variable purely for backward compatibility with
+    # `_build_messages` and the marriage narrator (lines 2592 / 2780),
+    # which key off it for the analysis-mode override; it stays at the
+    # legacy default "timing" for non-marriage topics where the
+    # downstream gates already ignore it.
+    if topic == "marriage":
+        marriage_subtype = _classify_marriage_subtype(question)
+        health_subtype   = None
+        subtype_label    = f"marriage_{marriage_subtype}"
+    elif topic == "health":
+        marriage_subtype = "timing"          # back-compat default; ignored downstream
+        health_subtype   = _classify_health_subtype(question)
+        subtype_label    = f"health_{health_subtype}"
+    else:
+        marriage_subtype = "timing"          # back-compat default; ignored downstream
+        health_subtype   = None
+        subtype_label    = f"{topic}_general"
     _trace(req_id, "2.MODE_DETECT.subtype", {
-        "topic": topic, "marriage_subtype": marriage_subtype,
+        "topic":            topic,
+        "subtype":          subtype_label,
+        "marriage_subtype": marriage_subtype if topic == "marriage" else None,
+        "health_subtype":   health_subtype,
     })
 
     # ── Supertype: derived directly from the AI intent ──────────────────────
@@ -16390,12 +16458,29 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # available (build_meta_stream is empty here, so the helper returns None
     # and we fall back to regex; future stream-side AI Ear work will populate).
     _mar_pre_bucket_stream = _ai_ear_bucket_for(build_meta_stream, "marriage")
-    marriage_subtype_stream = (
-        _classify_marriage_subtype(question, _mar_pre_bucket_stream)
-        if topic == "marriage" else "timing"
-    )
+    # ── Phase 6.0k — FIX 5 (TOPIC-AWARE SUBTYPE — STREAM VARIANT) ──────
+    # Mirror of the sync-path topic-aware dispatcher above. Marriage
+    # classifier runs ONLY for marriage; health subtype classifier runs
+    # ONLY for health; all other topics skip subtype detection entirely.
+    if topic == "marriage":
+        marriage_subtype_stream = _classify_marriage_subtype(
+            question, _mar_pre_bucket_stream
+        )
+        health_subtype_stream   = None
+        subtype_label_stream    = f"marriage_{marriage_subtype_stream}"
+    elif topic == "health":
+        marriage_subtype_stream = "timing"   # back-compat default; ignored downstream
+        health_subtype_stream   = _classify_health_subtype(question)
+        subtype_label_stream    = f"health_{health_subtype_stream}"
+    else:
+        marriage_subtype_stream = "timing"   # back-compat default; ignored downstream
+        health_subtype_stream   = None
+        subtype_label_stream    = f"{topic}_general"
     _trace(req_id, "2.MODE_DETECT.subtype(stream)", {
-        "topic": topic, "marriage_subtype": marriage_subtype_stream,
+        "topic":            topic,
+        "subtype":          subtype_label_stream,
+        "marriage_subtype": marriage_subtype_stream if topic == "marriage" else None,
+        "health_subtype":   health_subtype_stream,
     })
     messages = _build_messages(
         question, kundli, lang, reply_idx,

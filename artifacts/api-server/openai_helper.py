@@ -9951,6 +9951,51 @@ def _phase50_build_minimal_messages(
         "Speak simply and like a human." + lang_hint
     )
 
+    # ── Phase 6.0h — HEALTH NARRATOR CONTRACT (LLM CONTROL FIX 2) ──────────
+    # When the question topic is health, append strict fact-bound rules that
+    # force the LLM to act as a translator of engine FACTS rather than a
+    # generator of generic astrology language. The previous narrative leaked
+    # vague filler ("fluctuation", "instability", "triggers", "imbalance",
+    # "tendency") even when the engine had emitted concrete planet + dasha
+    # signals (HEALTH_FACTS.current_window, key_triggers, sensitive_areas).
+    # This block does NOT touch the engine, the HEALTH_FACTS schema, or the
+    # Phase 4.7 trim — it only constrains what the LLM is instructed to emit.
+    # Layered on top of the post-LLM scrubber + health_brand_safety + Phase
+    # 6.0f topic-aware bare-return gate as defense-in-depth.
+    if (topic or "").lower() == "health":
+        system_msg += (
+            "\n\n"
+            "HEALTH-SPECIFIC NARRATOR RULES (MANDATORY — non-negotiable):\n"
+            "1. FACT-BOUND RESPONSE: Base your answer ONLY on the provided "
+            "FACTS / HEALTH_FACTS / CHART block. Do NOT invent, infer, or "
+            "generalise beyond the given data.\n"
+            "2. PLANET + DASHA MANDATORY: Your answer MUST cite at least "
+            "ONE planet (Mars / Saturn / Rahu / Ketu / Sun / Mercury / "
+            "Venus / Jupiter / Moon) AND at least ONE dasha lord (current "
+            "MD or AD from CHART or HEALTH_FACTS.current_window). Without "
+            "BOTH, the response is invalid.\n"
+            "3. BAN GENERIC FILLER WORDS: Do NOT use vague abstractions "
+            "like 'fluctuation', 'instability', 'triggers', 'imbalance', "
+            "'tendency'. Instead, describe the actual cause from the FACTS "
+            "(e.g. 'Mars in 1H = heat / acidity', 'Rahu antardasha = "
+            "unpredictable energy').\n"
+            "4. CAUSE → EFFECT → GUIDANCE STRUCTURE: Every answer must "
+            "follow this shape within 2-3 short sentences:\n"
+            "   • Cause: which planet / dasha is responsible\n"
+            "   • Effect: the specific health impact (heat, acidity, "
+            "stress, sleep-disturbance, low-energy, injury — only what "
+            "FACTS / key_triggers support)\n"
+            "   • Guidance: ONE short, simple, non-medical advice line\n"
+            "5. SHORT BUT SPECIFIC: Total answer 2-3 lines max. Each line "
+            "must carry concrete content — at least one planet reference "
+            "and at least one specific issue type. NO abstract padding, "
+            "NO generic 'overall risk fluctuating' summaries.\n"
+            "6. ENGINE FACTS ARE SOURCE OF TRUTH: If HEALTH_FACTS contains "
+            "a 'current_window' (e.g. 'Jupiter/Rahu') or 'key_triggers' "
+            "list, you MUST quote / paraphrase those values directly. Do "
+            "NOT substitute them with abstract synonyms.\n"
+        )
+
     user_parts: list[str] = []
     if chart_summary:
         user_parts.append("CHART (quick reference):\n" + chart_summary)

@@ -108,39 +108,84 @@ fi
 export EXPO_PUBLIC_API_URL="$PUBLIC_API_URL"
 echo "[startup] EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL"
 
-# --- Metro tunnel via localtunnel (fast bind) ---
+# --- Metro tunnel — try Cloudflare quick tunnel first, fall back to localtunnel ---
+# localtunnel.me regularly returns HTTP 408 / heavy interstitial pages
+# that break Expo's manifest fetch. Cloudflare quick tunnel is free,
+# anonymous (no signup), and far more reliable for Expo Go clients.
 METRO_PORT="${PORT:-18987}"
-METRO_SUB="cosmiclens-metro"
-
-pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
-sleep 1
+CF_METRO_LOG="/tmp/cf-metro.log"
 LT_METRO_LOG="/tmp/lt-metro.log"
+> "$CF_METRO_LOG"
 > "$LT_METRO_LOG"
 
-# IMPORTANT: spawn ONCE (no auto-respawn loop). When the tunnel drops, lt
-# would otherwise reconnect with a NEW random subdomain — but Expo CLI has
-# already pinned the OLD subdomain into the bundle's asset URLs at startup,
-# so subsequent asset fetches go to a dead host ("Unable to download asset").
-# A workflow restart is the right way to recover.
+pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
+pkill -f "lt --port ${METRO_PORT}" 2>/dev/null || true
+sleep 1
+
+# IMPORTANT: spawn tunnels ONCE (no auto-respawn loops). When a tunnel
+# drops, an auto-respawn would reconnect with a NEW random subdomain —
+# but Expo CLI has already pinned the OLD subdomain into the bundle's
+# asset URLs at startup, so subsequent asset fetches go to a dead host
+# ("Unable to download asset"). A workflow restart is the right recovery.
 (
-  echo "[lt-metro] starting tunnel (single attempt, random subdomain)"
-  lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
-  echo "[lt-metro] EXITED — Metro tunnel is dead; restart the workflow"
+  echo "[cf-metro] starting cloudflare tunnel for :${METRO_PORT}"
+  "$CFD" tunnel --no-autoupdate --protocol http2 --url "http://localhost:${METRO_PORT}" 2>&1 \
+    | tee -a "$CF_METRO_LOG" | sed 's/^/[cf-metro] /'
+  echo "[cf-metro] EXITED — Metro cloudflare tunnel dead"
 ) &
-LT_METRO_PID=$!
+CF_METRO_PID=$!
 
 METRO_PUBLIC_URL=""
+# Wait up to 30s for cloudflare to publish a URL AND register the edge
+# connection (no shutdown errors). We do NOT probe `/status` here because
+# Metro itself isn't started yet — that would deadlock.
 for i in $(seq 1 30); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_METRO_LOG" 2>/dev/null | tail -1)
+  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$CF_METRO_LOG" 2>/dev/null | tail -1)
   if [ -n "$URL" ]; then
-    METRO_PUBLIC_URL="$URL"
-    break
+    if grep -q "Tunnel server stopped\|Initiating shutdown\|context deadline exceeded\|unknown error registering" "$CF_METRO_LOG" 2>/dev/null; then
+      echo "[cf-metro] tunnel registered URL but connection failed — falling back to localtunnel"
+      URL=""
+    else
+      # Verify cloudflared has at least one active connection registered
+      if grep -q "Registered tunnel connection" "$CF_METRO_LOG" 2>/dev/null; then
+        METRO_PUBLIC_URL="$URL"
+        echo "[startup] Metro tunnel READY (cloudflare): $METRO_PUBLIC_URL (after ${i}s)"
+        break
+      fi
+    fi
   fi
   sleep 1
 done
 
+# If cloudflare failed, kill it and fall back to localtunnel
 if [ -z "$METRO_PUBLIC_URL" ]; then
-  echo "[startup] localtunnel did not publish a URL; aborting"
+  echo "[startup] cloudflare Metro tunnel failed; falling back to localtunnel for :${METRO_PORT}"
+  kill "$CF_METRO_PID" 2>/dev/null || true
+  pkill -f "cloudflared.*localhost:${METRO_PORT}" 2>/dev/null || true
+  sleep 1
+
+  (
+    echo "[lt-metro] starting tunnel (single attempt, random subdomain)"
+    lt --port "${METRO_PORT}" 2>&1 | tee -a "$LT_METRO_LOG" | sed 's/^/[lt-metro] /'
+    echo "[lt-metro] EXITED — Metro tunnel is dead; restart the workflow"
+  ) &
+  LT_METRO_PID=$!
+
+  for i in $(seq 1 30); do
+    URL=$(grep -oE 'https://[a-z0-9-]+\.loca\.lt' "$LT_METRO_LOG" 2>/dev/null | tail -1)
+    if [ -n "$URL" ]; then
+      METRO_PUBLIC_URL="$URL"
+      echo "[startup] Metro tunnel READY (localtunnel): $METRO_PUBLIC_URL"
+      break
+    fi
+    sleep 1
+  done
+fi
+
+if [ -z "$METRO_PUBLIC_URL" ]; then
+  echo "[startup] BOTH cloudflare AND localtunnel failed for Metro; aborting"
+  echo "--- cf-metro log ---"; tail -20 "$CF_METRO_LOG"
+  echo "--- lt-metro log ---"; tail -20 "$LT_METRO_LOG"
   exit 1
 fi
 

@@ -4530,3 +4530,95 @@ correct; false-positive risk on inverted "Pisces is in your 6th house"
 form acknowledged but not in scope; medium-risk D9 false-fire
 addressed in a follow-up edit (divisional context guard added).
 
+
+
+## Phase 6.1.1b — Health-Question Orchestration Hot-Fix (Apr 29 2026)
+
+### Problem
+After Phase 6.1.0 (full health-engine wipe) + 6.1.1 (house-sign
+validator), users asking health questions like "mujhse kya kya health
+issue ho sakta he" got back the rule-engine emergency fallback:
+> "Based on your current dasha and planetary positions, this is a
+> transformative period. Stay focused on your goals."
+
+This is a generic non-answer with zero chart binding. The mobile UI was
+correct — the chart was sent, the topic was classified `health` with
+0.95 confidence, and `/api/ask/stream` was reached — but the OpenAI
+path crashed inside `ai_ask` and the route fell through to its
+last-ditch rule-engine vague-template.
+
+### Root cause — three sibling undefined-variable bugs in the same
+### orchestration cleanup pass
+
+The Phase 6.1.0 wipe deleted the health-engine call site from
+`openai_helper.py`, but several **dangling references** to variables
+that the engine used to populate were left behind. None of them were
+guarded with `if defined`:
+
+| Bug | Symbol | Line | Read but never assigned for | Crash |
+|-----|--------|------|------------------------------|-------|
+| 1 | `focus` | L2426 | health/career/finance topics (only set inside `if topic == "marriage"` block) | `UnboundLocalError: cannot access local variable 'focus'` |
+| 2a | `_qu_intent` / `_qu_topic` | L11876 | every call to `ai_ask` (referenced before any assignment) | `NameError: name '_qu_intent' is not defined` |
+| 2b | `_qu_conf` / `_qu_source` | L11894–L12519 | every call to `ai_ask` | `NameError: name '_qu_conf' is not defined` |
+| 3 | `health_verdict_block` | L3927 | every call to `_build_messages` (the `if health_verdict_block ...` branch is unconditional — runs regardless of topic) | `NameError: name 'health_verdict_block' is not defined` |
+
+Bugs 1 and 2a were the upstream crash. They aborted ai_ask before bug
+3 could even surface — which is why production logs only showed
+"focus" and "_qu_intent" before today.
+
+### Fix
+Pure orchestration init — no engine code touched, no DB schema
+touched.
+
+**openai_helper.py @ L11881–L11884** — extract `_qu_*` fields from
+the understanding dict at the top of `ai_ask`, before any reference:
+```python
+_qu_intent = _qu.get("intent") or "analysis"
+_qu_topic  = _qu.get("topic")  or "general"
+_qu_conf   = _qu.get("confidence")
+_qu_source = _qu.get("source")
+```
+
+**openai_helper.py @ L2431** — initialize `health_verdict_block` to
+empty string in `_build_messages`, mirroring the existing pattern for
+marriage/wealth/career/love/stock verdict blocks:
+```python
+health_verdict_block = ""
+```
+Falsy default → the `if health_verdict_block and _NARRATIVE_MODE:`
+branch at L3927 is skipped, and the default flow handles health
+questions using the kundli + facts blocks already in the prompt.
+
+**openai_helper.py @ L2437** (Phase 6.1.1 — already in place) — `focus
+= ""` default before the marriage-only re-assignment block.
+
+### Verification
+Live `ai_ask` call with the user's chart (Sagittarius lagna, Gemini
+Moon, Jupiter MD/Rahu AD, Mercury 12H/Sco) + the original failing
+question:
+
+- Returned in ~10s, 690 chars
+- `topic=health`, `source=openai` (NOT rule-engine fallback)
+- Chart-bound content: "Sagittarius lagna and Jupiter as lord, Jupiter
+  is retrograde in Aries (5th house) … Rahu in the 8th house (Cancer)
+  and Ketu in the 2nd house (Capricorn) may cause sudden or chronic
+  health issues" — every cited planet position matches the actual
+  chart
+- No `NameError` / `UnboundLocalError` in the trace
+
+### Constraints honoured
+- `health_engine.py` UNTOUCHED (still 152 KB, Apr 29 11:35)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- `/api/healthz` = 200 after restart
+- Pure Python init defaults — no algorithmic change to either engine
+  or orchestration logic
+
+### Follow-up (deferred)
+The flask_app.py paths at L2999 / L3309 / L3650 / L8245+ assume
+`kundli["ascendant"]` is a string (`or "Aries"`), while a few
+openai_helper.py reader paths defensively allow dict-form
+(`or {} … _extract_sign(...)`). The schema mismatch isn't currently
+firing in production because the chart pipeline emits string-form, but
+the mixed contract is fragile and worth normalising in a future pass.

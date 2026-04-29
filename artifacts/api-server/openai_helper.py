@@ -2416,6 +2416,22 @@ def _build_messages(
     # 3-paragraph timing template and let the AI act as an expert chart reader.
     # The kundli planet positions, KP block, and intelligence are already in
     # the prompt — AI uses them to give a real analytical answer.
+    # Phase 6.1.1 — initialize `health_verdict_block` to empty string. The
+    # narrator at L3927/3972/3975/4081 reads this var unconditionally
+    # (`if health_verdict_block and _NARRATIVE_MODE: ...`), but the health
+    # engine call site that used to populate it was removed in earlier
+    # cleanup (see replit.md "When new health design lands" note). Keeping
+    # it falsy means the health-narrator override is skipped and the
+    # default flow handles health questions using just the kundli + facts
+    # blocks already in the prompt — same behaviour as career/wealth when
+    # those engines decline. This does NOT touch health_engine.py itself.
+    health_verdict_block = ""
+
+    # Phase 6.1.1 — initialize `focus` to empty string so the L2472
+    # `focus_block = f"...{focus}" if focus else ""` reference doesn't crash
+    # for non-marriage topics (health/career/finance/etc.). The marriage
+    # block below conditionally REASSIGNS focus when applicable.
+    focus = ""
     if topic == "marriage" and marriage_subtype not in ("timing", "remedy"):
         # Surface engine context as REFERENCE only (not a locked template)
         engine_ref = ""
@@ -11862,6 +11878,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "phase":  _qu.get("intent_override_phase"),
             "ai_confidence": _qu.get("confidence"),
         })
+
+    # Phase 6.1.1 — extract _qu_* fields from the understanding dict BEFORE
+    # referencing them. These were previously assumed to exist in scope
+    # but were never assigned, causing `name '_qu_intent' is not defined`
+    # (and same for `_qu_conf` / `_qu_source`) to crash ai_ask on every
+    # request. That crash cascaded to the rule-engine emergency fallback
+    # which returned generic non-answers (e.g. health questions getting
+    # "stay focused on your goals" instead of a real chart-based reply).
+    _qu_intent = _qu.get("intent") or "analysis"
+    _qu_topic  = _qu.get("topic")  or "general"
+    _qu_conf   = _qu.get("confidence")
+    _qu_source = _qu.get("source")
 
     # Default everything to single-element lists so any code that doesn't
     # understand the new fields still works.

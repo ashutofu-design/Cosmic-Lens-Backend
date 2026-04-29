@@ -9061,12 +9061,132 @@ def _phase50_mini_chart_summary(kundli: Any) -> str:
 _PHASE50_TIER_HINT: dict[str, str] = {}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 5.3 — Topic-specific classical-rule checklists
+# ─────────────────────────────────────────────────────────────────────────────
+# When the user asks a topic that has well-known classical Vedic rules
+# (marriage, career, wealth, health), inject a SHORT checklist into the
+# user message so the model walks through each rule using the kundli data
+# BEFORE giving the verdict — instead of grabbing one indicator and
+# jumping to a confident conclusion.
+#
+# This is reasoning guidance, NOT post-validation. The model still answers
+# in the lean ChatGPT style; it just thinks more carefully first.
+
+_PHASE53_TOPIC_RULES: dict[str, str] = {
+    "marriage": (
+        "RULES_TO_CHECK (marriage — love vs arrange, timing, compatibility):\n"
+        "Walk through each silently using the FULL_KUNDLI_JSON, then weigh "
+        "BOTH sides before answering. Do NOT decide from a single indicator.\n\n"
+        "LOVE-MARRIAGE indicators (count how many fire):\n"
+        "  1. 5th lord ↔ 7th lord connection (conjunction, mutual aspect, "
+        "exchange, or D9 link).\n"
+        "  2. Venus connected to 5th house, 7th house, or their lords — "
+        "especially with Rahu, Mars, or Mercury.\n"
+        "  3. Rahu in 5th OR 7th house, OR Rahu with 7th lord.\n"
+        "  4. Mars-Venus conjunction or mutual aspect.\n"
+        "  5. 5H-7H-11H lords mutually linked.\n"
+        "  6. Lagna lord ↔ 7th lord exchange or aspect.\n"
+        "  7. Moon-Venus close conjunction or mutual aspect.\n\n"
+        "ARRANGE-MARRIAGE indicators:\n"
+        "  1. 7th lord well-placed (own/exalted/friendly sign) WITHOUT any "
+        "5th-lord connection.\n"
+        "  2. Jupiter or Saturn primary aspect on 7th house (no Venus-Rahu "
+        "involvement).\n"
+        "  3. 7th house ruled by traditional planet (Sun/Moon/Jupiter) "
+        "with no afflictions.\n"
+        "  4. Strong dispositor of 7th lord but no 5th-7th cross-link.\n\n"
+        "CRITICAL DISCRIMINATORS — do NOT ignore:\n"
+        "  • 7th lord position, dignity (exalt/debil/own/combust), aspects.\n"
+        "  • D9 (Navamsha) confirmation: D9 7th lord, D9 Venus placement.\n"
+        "  • Manglik / Kuja dosha: Mars in 1/4/7/8/12 from Lagna OR Moon.\n"
+        "  • Saturn-Venus or Saturn on 7th = delays, often arrange tendency.\n"
+        "  • RAHU in 8TH HOUSE = sudden events / obstacles in marriage — "
+        "NOT a love-marriage confirmation. Treat with caution.\n"
+        "  • Ketu on 7th lord = detachment, not love.\n\n"
+        "VERDICT RULE: Count love vs arrange indicators. If love indicators "
+        "≥ 3 AND no major affliction → 'love marriage likely'. If arrange "
+        "indicators dominate → 'arrange marriage likely'. If the count is "
+        "close (within 1) OR major contradictions exist → say 'mixed — "
+        "could go either way' and briefly state the contradiction. NEVER "
+        "give a confident verdict from one indicator alone."
+    ),
+    "career": (
+        "RULES_TO_CHECK (career — direction, success, timing):\n"
+        "Walk through each silently using the FULL_KUNDLI_JSON before "
+        "answering.\n\n"
+        "CORE CHECKS:\n"
+        "  1. 10th house lord — sign, house, dignity, aspects.\n"
+        "  2. 10th house occupants (any planet here = strong influence).\n"
+        "  3. Lagna lord ↔ 10th lord connection.\n"
+        "  4. Atmakaraka (highest-degree planet) — career direction clue.\n"
+        "  5. Sun (govt/authority), Saturn (service/discipline), Mercury "
+        "(business/communication), Jupiter (teaching/advisory) — which is "
+        "strongest?\n"
+        "  6. D10 (Dashamsha) confirmation: D10 10th lord, D10 lagna lord.\n"
+        "  7. Current Mahadasha + Antardasha — supportive or challenging "
+        "for 10th-house matters?\n"
+        "  8. 6th house (service/competition) and 11th house (gains).\n\n"
+        "VERDICT RULE: If 10th-related indicators are mixed, say so. Do "
+        "NOT decide career success from one retrograde planet or one "
+        "afflicted house — weigh the full picture."
+    ),
+    "wealth": (
+        "RULES_TO_CHECK (wealth, money, finance):\n"
+        "Walk through each silently using the FULL_KUNDLI_JSON before "
+        "answering.\n\n"
+        "CORE CHECKS:\n"
+        "  1. 2nd house (accumulated wealth) and its lord.\n"
+        "  2. 11th house (gains) and its lord.\n"
+        "  3. 5th house (speculation, sudden gains) and its lord.\n"
+        "  4. Dhana yogas: 2H-5H, 2H-9H, 2H-11H, 5H-9H, 5H-11H, 9H-11H "
+        "lord connections.\n"
+        "  5. Jupiter (wealth karaka) and Venus (luxury) — dignity and "
+        "house placement.\n"
+        "  6. Dispositor of 2nd lord and 11th lord.\n"
+        "  7. 6H-8H-12H (loss houses) afflictions to wealth lords.\n"
+        "  8. Current dasha lord — does it own/aspect wealth houses?\n\n"
+        "VERDICT RULE: Count active dhana yogas vs afflictions. Be honest "
+        "about mixed signals."
+    ),
+    "health": (
+        "RULES_TO_CHECK (health, illness, recovery):\n"
+        "Walk through each silently using the FULL_KUNDLI_JSON before "
+        "answering.\n\n"
+        "CORE CHECKS:\n"
+        "  1. Lagna and Lagna lord — dignity, afflictions.\n"
+        "  2. 6th house (illness), 8th house (chronic), 12th house "
+        "(hospitalization) — occupants, lords, aspects.\n"
+        "  3. Sun (vitality) and Moon (mind/fluids) condition.\n"
+        "  4. Malefic aspects on Lagna or Lagna lord.\n"
+        "  5. Current dasha lord — benefic or malefic for health?\n"
+        "  6. Specific organ rule: house signifies body part (e.g. 4H "
+        "chest, 5H stomach, 6H intestine).\n\n"
+        "VERDICT RULE: Health is sensitive — never alarm. If indicators "
+        "show strain, suggest consulting a physician AND offer the "
+        "astrological context briefly. Do NOT diagnose."
+    ),
+}
+
+
+def _phase53_topic_rules(topic: str | None) -> str:
+    """Return the topic-specific classical-rules checklist or empty string.
+
+    Defensive: unknown topic → empty (no checklist injected, model uses
+    the general ChatGPT-style guidance only).
+    """
+    if not topic or not isinstance(topic, str):
+        return ""
+    return _PHASE53_TOPIC_RULES.get(topic.strip().lower(), "")
+
+
 def _phase50_build_minimal_messages(
     question: str,
     kundli: Any,
     lang: str = "hn",
     tier: str | None = None,
     extra_facts: str = "",
+    topic: str | None = None,
 ) -> list[dict]:
     """Phase 5.0 T029 — build the 2-message minimal Ask prompt.
 
@@ -9141,6 +9261,15 @@ def _phase50_build_minimal_messages(
 
     if extra_facts and isinstance(extra_facts, str) and extra_facts.strip():
         user_parts.append("FACTS:\n" + extra_facts.strip())
+
+    # Phase 5.3 — inject topic-specific classical-rule checklist when the
+    # detected topic has well-known Vedic rules (marriage / career / wealth
+    # / health). Forces step-by-step rule walking instead of one-indicator
+    # confidence. Empty for unknown topics — falls back to general guidance.
+    rules_block = _phase53_topic_rules(topic)
+    if rules_block:
+        user_parts.append(rules_block)
+
     user_parts.append("QUESTION:\n" + (question or "").strip())
 
     return [
@@ -9201,6 +9330,7 @@ def _phase50_install_minimal_messages(
     build_meta: Any,
     req_id: str,
     path_label: str = "",
+    topic: str | None = None,
 ) -> tuple[list[dict], dict]:
     """Phase 5.0 Final Strip — unified gate body for ai_ask + ai_ask_stream.
 
@@ -9219,7 +9349,7 @@ def _phase50_install_minimal_messages(
     facts_lines = len([ln for ln in facts.splitlines() if ln.strip()]) if facts else 0
     messages = _phase50_build_minimal_messages(
         question or "", kundli, lang=lang,
-        tier=None, extra_facts=facts,
+        tier=None, extra_facts=facts, topic=topic,
     )
     try:
         user_chars = len(messages[1]["content"])
@@ -9709,6 +9839,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # so the stream path uses identical logic (no sync/stream drift).
         messages, _ = _phase50_install_minimal_messages(
             question or "", kundli, lang, build_meta, req_id, path_label="",
+            topic=topic,
         )
         _phase50_active = True
 
@@ -12455,7 +12586,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         # trace key distinguishable. No more sync/stream code drift.
         messages, _ = _phase50_install_minimal_messages(
             question or "", kundli, lang, build_meta_stream, req_id,
-            path_label="(stream)",
+            path_label="(stream)", topic=topic,
         )
         _phase50_active_stream = True
 

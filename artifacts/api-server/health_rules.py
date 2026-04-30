@@ -755,6 +755,365 @@ def rule_house_lord_placement_summary(chart: dict) -> Optional[dict]:
     }
 
 
+# ── Phase 7.6.1 — additional topic-specific rules ────────────────────────────
+
+def _h_offset(base: int, offset: int) -> int:
+    """Return the house at `offset` positions from `base` (1-indexed, mod 12).
+
+    Example: 2nd from H1 = H2, 12th from H1 = H12, 2nd from H12 = H1.
+    """
+    return ((base - 1 + offset) % 12) + 1
+
+
+def rule_venus_afflicted(chart: dict) -> Optional[dict]:
+    """Venus combust, in dusthana, debilitated, or with malefic
+    → skin / beauty / female reproductive vulnerability.
+    """
+    v = _planet(chart, "Venus")
+    if not v:
+        return None
+    h = _coerce_int(v.get("house"))
+    afflictions: list[str] = []
+    if v.get("combust"):
+        afflictions.append("combust")
+    if h in DUSTHANAS:
+        afflictions.append(f"{h}H mein")
+    dignity = (v.get("dignity") or "").lower()
+    if "debilitat" in dignity or "neech" in dignity:
+        afflictions.append("neech")
+    if isinstance(h, int):
+        co_planets = [p for p in _planets_in_house(chart, h) if p != "Venus"]
+        if any(p in NATURAL_MALEFICS for p in co_planets):
+            afflictions.append("malefic ke saath")
+    if not afflictions:
+        return None
+    return {
+        "rule_id":   "venus_afflicted",
+        "fired":     True,
+        "finding":   (f"Shukra afflicted ({', '.join(afflictions)}) — "
+                      f"twacha, baal, soundarya, ya stree-vishay area mein "
+                      f"vulnerability rehti hai."),
+        "evidence":  {"house": h, "afflictions": afflictions},
+        "confidence": 0.7,
+        "severity":  "medium",
+    }
+
+
+def rule_jupiter_afflicted(chart: dict) -> Optional[dict]:
+    """Jupiter combust, in dusthana, debilitated, or with malefic
+    → liver / fat metabolism / growth / immunity protection compromised.
+    """
+    j = _planet(chart, "Jupiter")
+    if not j:
+        return None
+    h = _coerce_int(j.get("house"))
+    afflictions: list[str] = []
+    if j.get("combust"):
+        afflictions.append("combust")
+    if h in DUSTHANAS:
+        afflictions.append(f"{h}H mein")
+    dignity = (j.get("dignity") or "").lower()
+    if "debilitat" in dignity or "neech" in dignity:
+        afflictions.append("neech")
+    if isinstance(h, int):
+        co_planets = [p for p in _planets_in_house(chart, h) if p != "Jupiter"]
+        if any(p in NATURAL_MALEFICS for p in co_planets):
+            afflictions.append("malefic ke saath")
+    if not afflictions:
+        return None
+    return {
+        "rule_id":   "jupiter_afflicted",
+        "fired":     True,
+        "finding":   (f"Guru afflicted ({', '.join(afflictions)}) — "
+                      f"liver, fat metabolism, vridhi, aur sehat ki suraksha "
+                      f"par chot lag sakti hai."),
+        "evidence":  {"house": h, "afflictions": afflictions},
+        "confidence": 0.7,
+        "severity":  "medium",
+    }
+
+
+def rule_papakartari_lagna(chart: dict) -> Optional[dict]:
+    """Malefics in BOTH 2nd house and 12th house (squeezing the lagna)
+    → vitality squeezed from both sides.
+    """
+    p2 = [p for p in _planets_in_house(chart, 2) if p in NATURAL_MALEFICS]
+    p12 = [p for p in _planets_in_house(chart, 12) if p in NATURAL_MALEFICS]
+    if not (p2 and p12):
+        return None
+    return {
+        "rule_id":   "papakartari_lagna",
+        "fired":     True,
+        "finding":   (f"Papakartari yoga lagna pe — "
+                      f"2H mein {', '.join(_hindi(p) for p in p2)} aur "
+                      f"12H mein {', '.join(_hindi(p) for p in p12)} — "
+                      f"vitality dono taraf se dabav mein hai."),
+        "evidence":  {"second": p2, "twelfth": p12},
+        "confidence": 0.78,
+        "severity":  "high",
+    }
+
+
+def rule_papakartari_moon(chart: dict) -> Optional[dict]:
+    """Malefics in 2nd and 12th from Moon → mental squeeze."""
+    moon_h = _planet_house(chart, "Moon")
+    if not isinstance(moon_h, int):
+        return None
+    h_next = _h_offset(moon_h, 1)   # 2nd from moon
+    h_prev = _h_offset(moon_h, -1)  # 12th from moon
+    p_next = [p for p in _planets_in_house(chart, h_next)
+              if p in NATURAL_MALEFICS and p != "Moon"]
+    p_prev = [p for p in _planets_in_house(chart, h_prev)
+              if p in NATURAL_MALEFICS and p != "Moon"]
+    if not (p_next and p_prev):
+        return None
+    return {
+        "rule_id":   "papakartari_moon",
+        "fired":     True,
+        "finding":   (f"Chandra papakartari mein — Chandra {moon_h}H mein, "
+                      f"dono taraf malefics ({', '.join(_hindi(p) for p in p_next)} "
+                      f"aur {', '.join(_hindi(p) for p in p_prev)}) — "
+                      f"mann pe lagataar dabav."),
+        "evidence":  {"moon_house": moon_h,
+                      "second_from_moon": p_next,
+                      "twelfth_from_moon": p_prev},
+        "confidence": 0.78,
+        "severity":  "high",
+    }
+
+
+def rule_kemadruma_yoga(chart: dict) -> Optional[dict]:
+    """Moon with no planet in 2nd or 12th from Moon (excluding Rahu/Ketu)
+    → emotional isolation, mood instability.
+    """
+    moon_h = _planet_house(chart, "Moon")
+    if not isinstance(moon_h, int):
+        return None
+    h_next = _h_offset(moon_h, 1)
+    h_prev = _h_offset(moon_h, -1)
+    real = lambda lst: [p for p in lst
+                        if p not in ("Moon", "Rahu", "Ketu")]
+    if real(_planets_in_house(chart, h_next)) or real(_planets_in_house(chart, h_prev)):
+        return None
+    return {
+        "rule_id":   "kemadruma_yoga",
+        "fired":     True,
+        "finding":   (f"Kemadruma yoga — Chandra {moon_h}H mein akela hai "
+                      f"(2nd/12th from Moon dono khali) — emotional isolation, "
+                      f"mood ka utar-chadhav."),
+        "evidence":  {"moon_house": moon_h},
+        "confidence": 0.72,
+        "severity":  "medium",
+    }
+
+
+def rule_eight_lord_with_six_lord(chart: dict) -> Optional[dict]:
+    """6L and 8L in same house → strong disease formation."""
+    six = _house_lord(chart, 6)
+    eight = _house_lord(chart, 8)
+    if not (six and eight):
+        return None
+    six_lord = six.get("lord")
+    eight_lord = eight.get("lord")
+    six_h = _coerce_int(six.get("lord_in_house"))
+    eight_h = _coerce_int(eight.get("lord_in_house"))
+    if not (six_lord and eight_lord and six_h and eight_h):
+        return None
+    if six_h != eight_h:
+        return None
+    if six_lord == eight_lord:
+        return None  # same planet rules both — different finding, skip here
+    return {
+        "rule_id":   "eight_lord_with_six_lord",
+        "fired":     True,
+        "finding":   (f"Shashtesh {_hindi(six_lord)} aur Ashtmesh "
+                      f"{_hindi(eight_lord)} dono {six_h}H mein milkar baithe "
+                      f"hain — bimari ki gehri sambhavna, recovery time lega."),
+        "evidence":  {"six_lord": six_lord, "eight_lord": eight_lord,
+                      "house": six_h},
+        "confidence": 0.82,
+        "severity":  "high",
+    }
+
+
+def rule_eight_lord_with_lagna_lord(chart: dict) -> Optional[dict]:
+    """1L and 8L in same house → life-vitality / health-life bridge stress."""
+    one = _house_lord(chart, 1)
+    eight = _house_lord(chart, 8)
+    if not (one and eight):
+        return None
+    one_lord = one.get("lord")
+    eight_lord = eight.get("lord")
+    one_h = _coerce_int(one.get("lord_in_house"))
+    eight_h = _coerce_int(eight.get("lord_in_house"))
+    if not (one_lord and eight_lord and one_h and eight_h):
+        return None
+    if one_h != eight_h:
+        return None
+    if one_lord == eight_lord:
+        return None
+    return {
+        "rule_id":   "eight_lord_with_lagna_lord",
+        "fired":     True,
+        "finding":   (f"Lagnesh {_hindi(one_lord)} aur Ashtmesh "
+                      f"{_hindi(eight_lord)} dono {one_h}H mein — sehat aur "
+                      f"jeevan-shakti ka bandhan kasta hai, deep health "
+                      f"sensitivity."),
+        "evidence":  {"lagna_lord": one_lord, "eight_lord": eight_lord,
+                      "house": one_h},
+        "confidence": 0.8,
+        "severity":  "high",
+    }
+
+
+def rule_dasha_or_antar_lord_in_dusthana(chart: dict) -> Optional[dict]:
+    """Either current Mahadasha OR Antardasha lord placed in 6/8/12
+    → active health-weak window.
+    """
+    cd = chart.get("current_dasha")
+    if not isinstance(cd, dict):
+        return None
+    flagged: list[tuple[str, str, int]] = []
+    for level_key, label in (("maha", "Mahadasha"), ("antar", "Antardasha")):
+        lord = cd.get(level_key)
+        if isinstance(lord, dict):
+            lord = lord.get("lord") or lord.get("planet")
+        if not isinstance(lord, str):
+            continue
+        h = _planet_house(chart, lord)
+        if h in DUSTHANAS:
+            flagged.append((label, lord, h))
+    if not flagged:
+        return None
+    bits = "; ".join(f"{lab} {_hindi(p)} {h}H" for lab, p, h in flagged)
+    return {
+        "rule_id":   "dasha_or_antar_lord_in_dusthana",
+        "fired":     True,
+        "finding":   (f"Active health-weak window: {bits} — is samay sehat "
+                      f"par dhyaan dena zaroori hai."),
+        "evidence":  {"flagged": [{"level": lab, "lord": p, "house": h}
+                                  for lab, p, h in flagged]},
+        "confidence": 0.85,
+        "severity":  "high",
+    }
+
+
+def rule_kendra_lord_in_trika(chart: dict) -> Optional[dict]:
+    """Lord of any kendra (1/4/7/10) sitting in trika (6/8/12)
+    → kendra dignity falling into health/loss/transformation house.
+    """
+    kendras = (1, 4, 7, 10)
+    flagged: list[tuple[int, str, int]] = []
+    seen: set[str] = set()
+    for kh in kendras:
+        hl = _house_lord(chart, kh)
+        if not hl:
+            continue
+        lord = hl.get("lord")
+        in_h = _coerce_int(hl.get("lord_in_house"))
+        if not (lord and in_h in DUSTHANAS):
+            continue
+        if lord in seen:
+            continue
+        seen.add(lord)
+        flagged.append((kh, lord, in_h))
+    if not flagged:
+        return None
+    bits = "; ".join(f"H{kh} swami {_hindi(p)} → {h}H"
+                     for kh, p, h in flagged)
+    return {
+        "rule_id":   "kendra_lord_in_trika",
+        "fired":     True,
+        "finding":   (f"Kendra lord trika mein gaya — {bits} — "
+                      f"shareer ke mukhya pillars (1/4/7/10) sehat-loss area "
+                      f"se jude hain."),
+        "evidence":  {"flagged": [{"kendra": kh, "lord": p, "in_house": h}
+                                  for kh, p, h in flagged]},
+        "confidence": 0.75,
+        "severity":  "medium",
+    }
+
+
+def rule_trika_lord_in_kendra(chart: dict) -> Optional[dict]:
+    """Lord of any trika (6/8/12) sitting in kendra (1/4/7/10)
+    → disease/loss energy spilling into life pillars (mostly health drain;
+    classical 'vipreet raja' applies only when trika lords aspect each other,
+    which we do NOT claim here).
+    """
+    kendras = (1, 4, 7, 10)
+    flagged: list[tuple[int, str, int]] = []
+    seen: set[str] = set()
+    for th in DUSTHANAS:
+        hl = _house_lord(chart, th)
+        if not hl:
+            continue
+        lord = hl.get("lord")
+        in_h = _coerce_int(hl.get("lord_in_house"))
+        if not (lord and in_h in kendras):
+            continue
+        if lord in seen:
+            continue
+        seen.add(lord)
+        flagged.append((th, lord, in_h))
+    if not flagged:
+        return None
+    bits = "; ".join(f"H{th} swami {_hindi(p)} → {h}H"
+                     for th, p, h in flagged)
+    return {
+        "rule_id":   "trika_lord_in_kendra",
+        "fired":     True,
+        "finding":   (f"Trika lord kendra mein — {bits} — "
+                      f"bimari/loss ki urja jeevan ke pillars tak pohonchti "
+                      f"hai, lifestyle discipline zaroori."),
+        "evidence":  {"flagged": [{"trika": th, "lord": p, "in_house": h}
+                                  for th, p, h in flagged]},
+        "confidence": 0.7,
+        "severity":  "medium",
+    }
+
+
+def rule_moon_in_eight_or_twelve(chart: dict) -> Optional[dict]:
+    """Moon in 8H or 12H → mental low / hidden emotional patterns."""
+    h = _planet_house(chart, "Moon")
+    if h not in (8, 12):
+        return None
+    flavor = ("transformative emotional cycle" if h == 8
+             else "hidden emotional drain, sleep aur retreat zaroori")
+    return {
+        "rule_id":   "moon_in_eight_or_twelve",
+        "fired":     True,
+        "finding":   (f"Chandra {h}H mein — mann ki sthiti {flavor}; "
+                      f"meditation, regular routine, aur emotional outlet help karenge."),
+        "evidence":  {"house": h},
+        "confidence": 0.72,
+        "severity":  "medium",
+    }
+
+
+def rule_jupiter_in_six_or_eight(chart: dict) -> Optional[dict]:
+    """Jupiter in 6H or 8H → health protector compromised; can also act
+    as a recovery aid when in 6H (vipareeta-style benefic). Both flavors
+    are relevant for narrator tone.
+    """
+    h = _planet_house(chart, "Jupiter")
+    if h not in (6, 8):
+        return None
+    if h == 6:
+        msg = ("Guru 6H mein — chronic illness se ladne ki shakti deta hai, "
+               "lekin shareer pe stress fir bhi rehta hai.")
+    else:
+        msg = ("Guru 8H mein — gehri sehat sensitivity, "
+               "deep healing aur dhyaan ki zarurat hai.")
+    return {
+        "rule_id":   "jupiter_in_six_or_eight",
+        "fired":     True,
+        "finding":   msg,
+        "evidence":  {"house": h},
+        "confidence": 0.7,
+        "severity":  "medium",
+    }
+
+
 # ── Registry + dispatcher ────────────────────────────────────────────────────
 
 RULE_REGISTRY: dict[str, Callable[[dict], Optional[dict]]] = {
@@ -780,6 +1139,19 @@ RULE_REGISTRY: dict[str, Callable[[dict], Optional[dict]]] = {
     "jupiter_aspect_lagna":        rule_jupiter_aspect_lagna,
     "venus_in_six_or_eight":       rule_venus_in_six_or_eight,
     "house_lord_placement_summary": rule_house_lord_placement_summary,
+    # Phase 7.6.1 additions
+    "venus_afflicted":               rule_venus_afflicted,
+    "jupiter_afflicted":             rule_jupiter_afflicted,
+    "papakartari_lagna":             rule_papakartari_lagna,
+    "papakartari_moon":              rule_papakartari_moon,
+    "kemadruma_yoga":                rule_kemadruma_yoga,
+    "eight_lord_with_six_lord":      rule_eight_lord_with_six_lord,
+    "eight_lord_with_lagna_lord":    rule_eight_lord_with_lagna_lord,
+    "dasha_or_antar_lord_in_dusthana": rule_dasha_or_antar_lord_in_dusthana,
+    "kendra_lord_in_trika":          rule_kendra_lord_in_trika,
+    "trika_lord_in_kendra":          rule_trika_lord_in_kendra,
+    "moon_in_eight_or_twelve":       rule_moon_in_eight_or_twelve,
+    "jupiter_in_six_or_eight":       rule_jupiter_in_six_or_eight,
 }
 
 

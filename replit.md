@@ -5992,3 +5992,83 @@ Smoke (60+ checks, all pass) covered:
 - Prompt-level injection (the Hinglish narrator template that turns
   findings into a verdict + symptoms + cause + remedy block) is the
   Phase 7.7 deliverable.
+
+### Phase 7.6.1 — Catalog expansion 15 → 132 topics + 12 new rules (Apr 30, 2026)
+
+Pure ADD-ONLY expansion of the Phase 7.6 catalog. Same flag, same
+wiring, same engines — just a much wider topic surface and a richer
+rule registry. Engines, `models.py`, and PKs (`users.id` Integer,
+`user_questions.id` String(36) UUID, `profiles.client_id`) are
+strictly untouched. No new pip deps.
+
+**`health_topics.json` (v1.1, phase "7.6.1"):**
+
+- 132 topics across 22 sections A-V (general vitality, disease/diagnosis,
+  cardio, digestive, respiratory, neuro, mental, joints/bones/back,
+  sensory, skin/hair, repro female, repro male, urinary, endocrine,
+  cancer, auto-immune, child, geriatric, surgery/recovery, timing,
+  lifestyle, specific-query). Average 7.7 synonyms/topic.
+- All 15 existing topic IDs preserved verbatim — same `recipe`, same
+  `rules`, same priority. Diff is purely additive.
+- `slot_vocabulary` extended with `house_3_lord` and `house_7_lord`.
+- `rule_vocabulary` lists all 34 rules now in the registry.
+
+**`health_rules.py` — 12 new rule functions (registry now 22 → 34):**
+
+1. `venus_afflicted` — Venus combust / debilitated / in 6-8-12 / with malefic
+2. `jupiter_afflicted` — Jupiter combust / debilitated / with malefic
+3. `papakartari_lagna` — natural malefic in 2H AND another in 12H
+4. `papakartari_moon` — natural malefic in 2nd AND 12th from Moon's house
+5. `kemadruma_yoga` — Moon alone (2nd & 12th from Moon both empty),
+   excluding Sun
+6. `eight_lord_with_six_lord` — 6L and 8L conjunct in same house
+7. `eight_lord_with_lagna_lord` — 1L and 8L conjunct in same house
+8. `dasha_or_antar_lord_in_dusthana` — current Maha OR Antar lord in 6/8/12
+9. `kendra_lord_in_trika` — kendra (1/4/7/10) lord placed in trika (6/8/12)
+10. `trika_lord_in_kendra` — trika lord placed in kendra
+11. `moon_in_eight_or_twelve` — Moon in 8H or 12H
+12. `jupiter_in_six_or_eight` — Jupiter in 6H or 8H
+
+A new helper `_h_offset(start, n)` computes the n-th house from a given
+house with wrap-around. The 22 pre-existing rule functions are
+**unchanged** in semantics.
+
+**`health_topic_matcher.py`:**
+
+- `_BODY_PART_HINTS` expanded from ~22 → 186 entries covering anatomy
+  and symptom keywords for the 132 topics (heart/dil, asthma/dama,
+  sirdard, kamar/back, kidney/gurda, depression/udaas, baal/hair,
+  PCOD, sade sati, etc.). Every hint target resolves to an existing
+  topic ID.
+
+**Composer & wiring:**
+
+- `health_recipe_composer.py` — unchanged. Worst-case deduped union
+  with `max_topics=3` is ~21 slots / 18 rules → token budget safe.
+- `openai_helper.py` Phase 7.6 wire-sites — unchanged. Catalog and
+  rule registry are auto-loaded; no edits required for the expansion.
+
+**Verification (smoke run, since deleted):**
+
+- 132 topics loaded, all rule references resolve, all slot references
+  in vocabulary, no malformed entries, no drift in the 15 existing IDs.
+- All 34 rules in `RULE_REGISTRY`; each of the 12 new rules fires on a
+  targeted synthetic chart; each of the 22 legacy rules still fires on
+  its targeted chart (regression).
+- 25 sample Hinglish health questions all match their expected topic
+  in top-3 (some routed via the existing broad umbrella topic at
+  rank-1 — accepted, the specific topic still appears in the deduped
+  recipe so engine output is unaffected).
+- Composer: returns deduped slots and deduped rules across multi-topic
+  matches.
+
+**Architect review:** PASS — 0 SEVERE / 0 HIGH. One MEDIUM noted —
+priority inversion where broad legacy umbrellas (`mental_health` 95,
+`bp_diabetes` 85, `cancer_risk` 92, `timing_prognosis` 88) outrank
+specific new topics on overlap-heavy queries. Acceptable: specific
+topics still appear in top-N and contribute to the composed recipe;
+re-tuning is deferred until prod data informs the priority ladder.
+
+**Default behavior:** unchanged — the catalog only activates when
+`PHASE76_TOPIC_CATALOG_ENABLED=1`. Without the flag, the legacy
+health path is identical bit-for-bit.

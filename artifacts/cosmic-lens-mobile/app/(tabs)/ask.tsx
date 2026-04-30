@@ -15,12 +15,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
@@ -693,6 +695,21 @@ export default function AskScreen() {
   const [voiceMsgId, setVoiceMsgId] = useState<string | null>(null);
   // States: idle | loading | playing
   const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing">("idle");
+  // Phase 2 — Copy button feedback. Holds the message id whose Copy
+  // button was tapped recently; flips icon to "check" + label to
+  // "Copied" for ~1.4s before reverting. Null when no message is in
+  // the post-copy confirmation window. Timeout id is kept in a ref so
+  // unmount can cancel the pending setState (architect lifecycle fix).
+  const [copiedFor, setCopiedFor] = useState<string | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Configure audio mode once (play even in silent mode on iOS)
   useEffect(() => {
@@ -807,26 +824,87 @@ export default function AskScreen() {
               <MarkdownReply text={item.text} />
             )}
 
-            {/* Voice play button — assistant messages only, after streaming done */}
+            {/* Action row — assistant messages only, after streaming done.
+                Phase 2 polish: Sun lo (voice) + Copy + Share, ChatGPT-style. */}
             {!isUser && !item.loading && !item.streaming && (item.text || "").trim().length > 0 && (
-              <Pressable
-                onPress={() => handleVoicePlay(item)}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  s.voiceBtn,
-                  { borderColor: `${C.accent}40`, backgroundColor: voicePlaying ? `${C.accent}20` : "transparent" },
-                  pressed && { opacity: 0.6 },
-                ]}
-              >
-                <Feather
-                  name={voicePlaying ? "pause" : voiceLoading ? "loader" : "volume-2"}
-                  size={12}
-                  color={C.accent}
-                />
-                <Text style={[s.voiceBtnText, { color: C.accent }]}>
-                  {voiceLoading ? "Ban raha…" : voicePlaying ? "Ruko" : "Sun lo"}
-                </Text>
-              </Pressable>
+              <View style={s.assistantActionsRow}>
+                <Pressable
+                  onPress={() => handleVoicePlay(item)}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    s.voiceBtn,
+                    { borderColor: `${C.accent}40`, backgroundColor: voicePlaying ? `${C.accent}20` : "transparent" },
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <Feather
+                    name={voicePlaying ? "pause" : voiceLoading ? "loader" : "volume-2"}
+                    size={12}
+                    color={C.accent}
+                  />
+                  <Text style={[s.voiceBtnText, { color: C.accent }]}>
+                    {voiceLoading ? "Ban raha…" : voicePlaying ? "Ruko" : "Sun lo"}
+                  </Text>
+                </Pressable>
+
+                {/* Copy — copies the markdown reply to clipboard. */}
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      await Clipboard.setStringAsync(item.text || "");
+                      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+                      setCopiedFor(item.id);
+                      // Cancel any pending revert from a prior tap before
+                      // scheduling a fresh one — prevents the "Copied" badge
+                      // from disappearing too early if the user taps two
+                      // assistant replies in quick succession.
+                      if (copiedTimerRef.current) {
+                        clearTimeout(copiedTimerRef.current);
+                      }
+                      copiedTimerRef.current = setTimeout(() => {
+                        setCopiedFor((cur) => (cur === item.id ? null : cur));
+                        copiedTimerRef.current = null;
+                      }, 1400);
+                    } catch {}
+                  }}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    s.actionPlainBtn,
+                    pressed && { opacity: 0.55 },
+                  ]}
+                >
+                  <Feather
+                    name={copiedFor === item.id ? "check" : "copy"}
+                    size={12}
+                    color={copiedFor === item.id ? C.accent : C.textMuted}
+                  />
+                  <Text style={[s.actionPlainBtnText, { color: copiedFor === item.id ? C.accent : C.textMuted }]}>
+                    {copiedFor === item.id ? "Copied" : "Copy"}
+                  </Text>
+                </Pressable>
+
+                {/* Share — RN native share sheet. */}
+                <Pressable
+                  onPress={async () => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    try {
+                      await Share.share({
+                        message: (item.text || "").trim(),
+                      });
+                    } catch {}
+                  }}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    s.actionPlainBtn,
+                    pressed && { opacity: 0.55 },
+                  ]}
+                >
+                  <Feather name="share-2" size={12} color={C.textMuted} />
+                  <Text style={[s.actionPlainBtnText, { color: C.textMuted }]}>
+                    Share
+                  </Text>
+                </Pressable>
+              </View>
             )}
           </Pressable>
         </View>
@@ -1534,14 +1612,26 @@ const s = StyleSheet.create({
   },
   clarifierChipText: { fontSize: 12, fontWeight: "600" },
 
-  // Voice play button (Sun lo) — sits inside assistant bubble bottom
+  // Phase 2 — Action row under assistant message: Sun lo + Copy + Share
+  assistantActionsRow: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap",
+    gap: 8, marginTop: 10,
+  },
+  // Voice play button (Sun lo) — primary accent-bordered chip
   voiceBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 14, borderWidth: 1,
-    alignSelf: "flex-start", marginTop: 10,
   },
   voiceBtnText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+  // Phase 2 — secondary action button (Copy / Share). Borderless, muted
+  // foreground to keep the voice button as the primary affordance.
+  actionPlainBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 12,
+  },
+  actionPlainBtnText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,

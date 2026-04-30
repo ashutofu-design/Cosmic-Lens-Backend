@@ -58,6 +58,67 @@ def _stock_engine():
     return assess_stock, _fmt_stock, _stock_window_str, classify_stock_question
 
 
+# ────────────────────────────────────────────────────────────────────
+# Phase 1 prompt-polish constant — single source of truth for the
+# LLM_FULL_CHART_MODE passthrough system intro. Used by:
+#   • _build_messages()     (sync helper, ~L1957)
+#   • ai_ask()              (sync passthrough block, ~L13007)
+#   • ai_ask_stream()       (streaming passthrough, ~L16216)
+# Update this constant in ONE place — all three call sites pick it up.
+# 8 explicit output rules. See replit.md "Phase 1 Prompt Polish" entry.
+# ────────────────────────────────────────────────────────────────────
+_PT_SYS_INTRO = (
+    "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
+    "kar rahe ho. Devotee ka prashn user message mein hai. Niche "
+    "di hui POORI kundli + apni Vedic samajh use karke jawab do.\n"
+    "\n"
+    "OUTPUT NIYAM (strictly follow karo):\n"
+    "\n"
+    "1. TL;DR PEHLE — pehli line ek direct 1-line jawab. Phir detail.\n"
+    "\n"
+    "2. SHORT RAKHO — max 3-4 bullets per answer. Mobile screen pe "
+    "wall of text se devotee confuse hota hai. Top 3 priority hi "
+    "cover karo, end mein \"aur factors hain — batana ho toh puchho\" "
+    "likho.\n"
+    "\n"
+    "3. FOCUS — sirf question-relevant houses/planets cite karo. "
+    "Pura kundli har answer mein mat dump karo. Quick reference:\n"
+    "   • Health   → 1H, 6H, 8H, 12H + Mars, Saturn, Rahu, Moon (manas)\n"
+    "   • Career   → 10H, 6H, 2H, 11H + Sun, Saturn, Mercury, Mars\n"
+    "   • Marriage → 7H, 5H, 8H + Venus, Mars, Jupiter, Rahu-Ketu axis\n"
+    "   • Wealth   → 2H, 11H, 5H, 9H + Jupiter, Venus, Mercury\n"
+    "   • General  → Lagna lord + current dasha + dominant yoga\n"
+    "\n"
+    "4. HISTORY YAAD RAKHO — pichhle 6 turns recall karo. Same "
+    "fact dobara mat bolo. \"Jaise pehle bataya tha [short]\" "
+    "reference do, phir naya angle add karo.\n"
+    "\n"
+    "5. NO GENERIC RASHI-FALIT — KABHI mat bolo \"Mithun rashi ke "
+    "hisaab se\", \"Sun sign ke according\", ya rashi-based generic "
+    "swabhav. Tum POORI personalized kundli use karte ho — hamesha "
+    "\"aapki kundli ke context mein\", \"aapke Lagna se\" bolo.\n"
+    "\n"
+    "6. CTA VARIETY — \"Agar chaho to main bata sakta hoon\" line "
+    "mat repeat karo. Rotate: \"Deep karna ho toh batao\", \"Remedy "
+    "chahiye toh kahiye\", \"Timing exact chahiye toh date-range "
+    "puchho\", \"Specific area pe focus karein?\". Kabhi koi CTA "
+    "mat bhi do.\n"
+    "\n"
+    "7. D9 NAVAMSHA — Marriage, long-term health, career, spiritual "
+    "questions mein D9 placement (Section 6 mein hai) bhi check "
+    "karo. Vargottama planets ka special note do.\n"
+    "\n"
+    "8. NO HALLUCINATION — sirf classical relationships cite karo: "
+    "dignity (exalted/debilitated/own/friend/enemy), drishti "
+    "(1/4/5/7/8/9/10), listed yogas (Section 7), dasha (Section 5), "
+    "nakshatra. Apni \"creative combinations\" invent mat karo. "
+    "Evidence nahi hai toh honestly bolo \"iska clear sanket abhi "
+    "nahi mil raha\".\n"
+    "\n"
+    "Safety rails Section 8 (kundli ke ant) mein hain.\n\n"
+)
+
+
 # Stock-question gate (regex). Triggers stock_engine ONLY when the question
 # is genuinely about share-market / trading / investing — not for generic
 # wealth/loan/property finance questions that the engine isn't designed for.
@@ -1952,70 +2013,10 @@ def _build_messages(
                 question=question or "",  # not echoed inside the block (see security note)
             )
             if _chart_block_pt:
-                # ─── Phase 1 prompt polish (Apr 30 2026) ──────────────────
-                # 8 explicit output rules to fix observed regressions:
-                #   1. TL;DR front-load   2. 3-4 bullet length cap
-                #   3. Question-relevant focus filter (output-side, not input)
-                #   4. Conversation history reuse (no repeated facts)
-                #   5. Ban generic Sun-sign style offers ("Mithun rashi ke
-                #      hisaab se" → forbidden; always "aapki kundli ke
-                #      context mein")
-                #   6. CTA variety (rotate, no repeat "Agar chaho to...")
-                #   7. D9 navamsha utilization for marriage/health/career
-                #   8. Anti-hallucination — only classical Vedic relations
-                # Applied to BOTH streaming + non-streaming passthrough paths.
-                # See replit.md "Phase 1 Prompt Polish" entry.
-                # ──────────────────────────────────────────────────────────
-                _sys_intro_pt = (
-                    "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
-                    "kar rahe ho. Devotee ka prashn user message mein hai. Niche "
-                    "di hui POORI kundli + apni Vedic samajh use karke jawab do.\n"
-                    "\n"
-                    "OUTPUT NIYAM (strictly follow karo):\n"
-                    "\n"
-                    "1. TL;DR PEHLE — pehli line ek direct 1-line jawab. Phir detail.\n"
-                    "\n"
-                    "2. SHORT RAKHO — max 3-4 bullets per answer. Mobile screen pe "
-                    "wall of text se devotee confuse hota hai. Top 3 priority hi "
-                    "cover karo, end mein \"aur factors hain — batana ho toh puchho\" "
-                    "likho.\n"
-                    "\n"
-                    "3. FOCUS — sirf question-relevant houses/planets cite karo. "
-                    "Pura kundli har answer mein mat dump karo. Quick reference:\n"
-                    "   • Health   → 1H, 6H, 8H, 12H + Mars, Saturn, Rahu, Moon (manas)\n"
-                    "   • Career   → 10H, 6H, 2H, 11H + Sun, Saturn, Mercury, Mars\n"
-                    "   • Marriage → 7H, 5H, 8H + Venus, Mars, Jupiter, Rahu-Ketu axis\n"
-                    "   • Wealth   → 2H, 11H, 5H, 9H + Jupiter, Venus, Mercury\n"
-                    "   • General  → Lagna lord + current dasha + dominant yoga\n"
-                    "\n"
-                    "4. HISTORY YAAD RAKHO — pichhle 6 turns recall karo. Same "
-                    "fact dobara mat bolo. \"Jaise pehle bataya tha [short]\" "
-                    "reference do, phir naya angle add karo.\n"
-                    "\n"
-                    "5. NO GENERIC RASHI-FALIT — KABHI mat bolo \"Mithun rashi ke "
-                    "hisaab se\", \"Sun sign ke according\", ya rashi-based generic "
-                    "swabhav. Tum POORI personalized kundli use karte ho — hamesha "
-                    "\"aapki kundli ke context mein\", \"aapke Lagna se\" bolo.\n"
-                    "\n"
-                    "6. CTA VARIETY — \"Agar chaho to main bata sakta hoon\" line "
-                    "mat repeat karo. Rotate: \"Deep karna ho toh batao\", \"Remedy "
-                    "chahiye toh kahiye\", \"Timing exact chahiye toh date-range "
-                    "puchho\", \"Specific area pe focus karein?\". Kabhi koi CTA "
-                    "mat bhi do.\n"
-                    "\n"
-                    "7. D9 NAVAMSHA — Marriage, long-term health, career, spiritual "
-                    "questions mein D9 placement (Section 6 mein hai) bhi check "
-                    "karo. Vargottama planets ka special note do.\n"
-                    "\n"
-                    "8. NO HALLUCINATION — sirf classical relationships cite karo: "
-                    "dignity (exalted/debilitated/own/friend/enemy), drishti "
-                    "(1/4/5/7/8/9/10), listed yogas (Section 7), dasha (Section 5), "
-                    "nakshatra. Apni \"creative combinations\" invent mat karo. "
-                    "Evidence nahi hai toh honestly bolo \"iska clear sanket abhi "
-                    "nahi mil raha\".\n"
-                    "\n"
-                    "Safety rails Section 8 (kundli ke ant) mein hain.\n\n"
-                )
+                # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
+                # (top of file). Both sync passthrough + stream passthrough
+                # use the same source of truth.
+                _sys_intro_pt = _PT_SYS_INTRO
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": _sys_intro_pt + _chart_block_pt,
@@ -13011,70 +13012,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 question=question or "",
             )
             if _chart_block_pt:
-                # ─── Phase 1 prompt polish (Apr 30 2026) ──────────────────
-                # 8 explicit output rules to fix observed regressions:
-                #   1. TL;DR front-load   2. 3-4 bullet length cap
-                #   3. Question-relevant focus filter (output-side, not input)
-                #   4. Conversation history reuse (no repeated facts)
-                #   5. Ban generic Sun-sign style offers ("Mithun rashi ke
-                #      hisaab se" → forbidden; always "aapki kundli ke
-                #      context mein")
-                #   6. CTA variety (rotate, no repeat "Agar chaho to...")
-                #   7. D9 navamsha utilization for marriage/health/career
-                #   8. Anti-hallucination — only classical Vedic relations
-                # Applied to BOTH streaming + non-streaming passthrough paths.
-                # See replit.md "Phase 1 Prompt Polish" entry.
-                # ──────────────────────────────────────────────────────────
-                _sys_intro_pt = (
-                    "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
-                    "kar rahe ho. Devotee ka prashn user message mein hai. Niche "
-                    "di hui POORI kundli + apni Vedic samajh use karke jawab do.\n"
-                    "\n"
-                    "OUTPUT NIYAM (strictly follow karo):\n"
-                    "\n"
-                    "1. TL;DR PEHLE — pehli line ek direct 1-line jawab. Phir detail.\n"
-                    "\n"
-                    "2. SHORT RAKHO — max 3-4 bullets per answer. Mobile screen pe "
-                    "wall of text se devotee confuse hota hai. Top 3 priority hi "
-                    "cover karo, end mein \"aur factors hain — batana ho toh puchho\" "
-                    "likho.\n"
-                    "\n"
-                    "3. FOCUS — sirf question-relevant houses/planets cite karo. "
-                    "Pura kundli har answer mein mat dump karo. Quick reference:\n"
-                    "   • Health   → 1H, 6H, 8H, 12H + Mars, Saturn, Rahu, Moon (manas)\n"
-                    "   • Career   → 10H, 6H, 2H, 11H + Sun, Saturn, Mercury, Mars\n"
-                    "   • Marriage → 7H, 5H, 8H + Venus, Mars, Jupiter, Rahu-Ketu axis\n"
-                    "   • Wealth   → 2H, 11H, 5H, 9H + Jupiter, Venus, Mercury\n"
-                    "   • General  → Lagna lord + current dasha + dominant yoga\n"
-                    "\n"
-                    "4. HISTORY YAAD RAKHO — pichhle 6 turns recall karo. Same "
-                    "fact dobara mat bolo. \"Jaise pehle bataya tha [short]\" "
-                    "reference do, phir naya angle add karo.\n"
-                    "\n"
-                    "5. NO GENERIC RASHI-FALIT — KABHI mat bolo \"Mithun rashi ke "
-                    "hisaab se\", \"Sun sign ke according\", ya rashi-based generic "
-                    "swabhav. Tum POORI personalized kundli use karte ho — hamesha "
-                    "\"aapki kundli ke context mein\", \"aapke Lagna se\" bolo.\n"
-                    "\n"
-                    "6. CTA VARIETY — \"Agar chaho to main bata sakta hoon\" line "
-                    "mat repeat karo. Rotate: \"Deep karna ho toh batao\", \"Remedy "
-                    "chahiye toh kahiye\", \"Timing exact chahiye toh date-range "
-                    "puchho\", \"Specific area pe focus karein?\". Kabhi koi CTA "
-                    "mat bhi do.\n"
-                    "\n"
-                    "7. D9 NAVAMSHA — Marriage, long-term health, career, spiritual "
-                    "questions mein D9 placement (Section 6 mein hai) bhi check "
-                    "karo. Vargottama planets ka special note do.\n"
-                    "\n"
-                    "8. NO HALLUCINATION — sirf classical relationships cite karo: "
-                    "dignity (exalted/debilitated/own/friend/enemy), drishti "
-                    "(1/4/5/7/8/9/10), listed yogas (Section 7), dasha (Section 5), "
-                    "nakshatra. Apni \"creative combinations\" invent mat karo. "
-                    "Evidence nahi hai toh honestly bolo \"iska clear sanket abhi "
-                    "nahi mil raha\".\n"
-                    "\n"
-                    "Safety rails Section 8 (kundli ke ant) mein hain.\n\n"
-                )
+                # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
+                # (top of file). Both sync passthrough + stream passthrough
+                # use the same source of truth.
+                _sys_intro_pt = _PT_SYS_INTRO
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": _sys_intro_pt + _chart_block_pt,
@@ -16211,33 +16152,172 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         "kundli.has_dasha":   isinstance(kundli, dict) and bool(kundli.get("currentDasha")),
     })
 
-    # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default OFF) ───────
-    # Mirror of the ai_ask short-circuit at the streaming entry point. When
-    # the flag is on AND a chart is present, emit a single oneshot envelope
-    # containing the result of the ai_ask passthrough (which itself bypasses
-    # all engines). The /api/ask/stream route already handles `oneshot` →
-    # JSON conversion cleanly, so no SSE-specific scrubbers / validators run.
-    # Defensive: any failure → fall through to legacy stream pipeline.
+    # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default ON) ───────
+    # Phase 2 (30 Apr 2026): UPGRADED from oneshot envelope → REAL token-
+    # by-token SSE streaming. Mirrors the ai_ask sync passthrough block but
+    # uses `stream=True` and yields incremental delta events so the mobile
+    # client renders text as it arrives (eliminates the ~8s blank-screen
+    # wait we saw in Phase 1 testing). On any failure we fall through to
+    # the legacy stream pipeline (validators, scrubbers, etc.).
     _has_planets_pt_s = isinstance(kundli, dict) and bool(kundli.get("planets"))
     if _llm_full_chart_mode_enabled() and _has_planets_pt_s:
         try:
             _trace(req_id, "PASSTHROUGH(stream).MODE_DETECT", {
-                "path": "stream → oneshot via ai_ask passthrough",
+                "path": "stream → real SSE via ai_ask passthrough",
             })
+
+            # 1. Build intel + chart-context block (mirror of sync passthrough)
+            from kundli_full_context import build_full_chart_context  # local import
+            _intel_obj_pt_s = None
+            try:
+                _analyze_chart_s, _ = _chart_intel()
+                _intel_obj_pt_s = _analyze_chart_s(kundli, birth)
+            except Exception as _intel_exc_s:
+                _trace(req_id, "PASSTHROUGH(stream).INTEL_SKIPPED", {
+                    "reason": str(_intel_exc_s)[:200],
+                })
+            _chart_block_pt_s = build_full_chart_context(
+                kundli=kundli,
+                intel=_intel_obj_pt_s,
+                birth=birth,
+                question=question or "",
+            )
+            if not _chart_block_pt_s:
+                # No chart block built → fall through to legacy
+                raise RuntimeError("passthrough(stream): empty chart_block")
+
+            # 2. Build messages — same _PT_SYS_INTRO as sync passthrough
+            _msgs_pt_s: list[dict] = [{
+                "role":    "system",
+                "content": _PT_SYS_INTRO + _chart_block_pt_s,
+            }]
+            for _h_pt_s in (history or [])[-6:]:
+                _r_pt_s = _h_pt_s.get("role")
+                _t_pt_s = _h_pt_s.get("content") or _h_pt_s.get("text") or ""
+                if _r_pt_s in ("user", "assistant") and _t_pt_s:
+                    _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
+            _msgs_pt_s.append({"role": "user", "content": question})
+
+            _trace(req_id, "PASSTHROUGH(stream).MESSAGES_BUILT", {
+                "msg_count":     len(_msgs_pt_s),
+                "system_chars":  len(_msgs_pt_s[0]["content"]),
+                "history_turns": len(_msgs_pt_s) - 2,
+            })
+
+            # 3. OpenAI streaming call
+            _client_pt_s = _get_client()
+            if _client_pt_s is None:
+                raise RuntimeError("passthrough(stream): OpenAI client not available")
+            _model_pt_s = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+            # gpt-5 / o-series reject `temperature` parameter (always 1).
+            _is_new_model_pt_s = (
+                _model_pt_s.startswith("gpt-5")
+                or _model_pt_s.startswith(("o1", "o3", "o4"))
+            )
+            _create_kwargs_pt_s: dict = {
+                "model":    _model_pt_s,
+                "messages": _msgs_pt_s,
+                "stream":   True,
+                "timeout":  _PRIMARY_LLM_TIMEOUT_S,
+            }
+            if not _is_new_model_pt_s:
+                _create_kwargs_pt_s["temperature"] = 0.3
+
+            _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)
+
+            # 4. Yield delta chunks as they arrive
+            #
+            # Phase 2 hardening (architect feedback): once we've yielded ANY
+            # delta to the client, the SSE channel is "committed". Falling
+            # through to the legacy stream pipeline at that point would emit
+            # a SECOND, independent generation (more deltas + a fresh final),
+            # which the client concatenates into one bubble → garbled
+            # mixed-source output. We track `_emitted_delta` so that any
+            # post-first-delta exception emits a partial-final + return,
+            # never a pipeline switch mid-stream.
+            _chunks_pt_s: list[str] = []
+            _emitted_delta = False
+            try:
+                for _chunk_pt_s in _stream_pt:
+                    try:
+                        _delta_pt_s = (
+                            _chunk_pt_s.choices[0].delta.content
+                            if _chunk_pt_s.choices else None
+                        )
+                    except Exception:
+                        _delta_pt_s = None
+                    if _delta_pt_s:
+                        _chunks_pt_s.append(_delta_pt_s)
+                        _emitted_delta = True
+                        yield {"kind": "delta", "text": _delta_pt_s}
+            except Exception as _stream_exc:
+                # Mid-stream OpenAI failure (network/timeout/API error)
+                # AFTER deltas already went out. Salvage what we have so the
+                # client unblocks instead of hanging on a never-completed
+                # stream. Final source flagged distinctly so logs show the
+                # partial path.
+                if _emitted_delta:
+                    _partial_text = ("".join(_chunks_pt_s)).strip()
+                    _trace(req_id, "PASSTHROUGH(stream).PARTIAL_FINAL", {
+                        "reason":     str(_stream_exc)[:200],
+                        "text_chars": len(_partial_text),
+                        "chunk_count": len(_chunks_pt_s),
+                    })
+                    yield {
+                        "kind":       "final",
+                        "text":       _partial_text or "Jawab adhura aaya — ek baar dobara try karein.",
+                        "topic":      "general",
+                        "confidence": 0.5,
+                        "follow_ups": [],
+                        "source":     "ai_passthrough_stream_partial",
+                    }
+                    return
+                # No deltas yet → safe to fall through to outer except,
+                # which falls through to legacy pipeline.
+                raise
+
+            _full_text_pt_s = ("".join(_chunks_pt_s)).strip()
+            if not _full_text_pt_s:
+                # Empty stream — if we DID yield deltas (all whitespace?),
+                # still emit a terminal so the client unblocks.
+                if _emitted_delta:
+                    yield {
+                        "kind":       "final",
+                        "text":       "Jawab khali aaya — ek baar dobara try karein.",
+                        "topic":      "general",
+                        "confidence": 0.0,
+                        "follow_ups": [],
+                        "source":     "ai_passthrough_stream_empty",
+                    }
+                    return
+                raise RuntimeError("passthrough(stream): empty stream from OpenAI")
+
+            _trace(req_id, "PASSTHROUGH(stream).OPENAI_DONE", {
+                "text_chars":   len(_full_text_pt_s),
+                "chunk_count":  len(_chunks_pt_s),
+            })
+
+            # 5. Final envelope (matches mobile client expected schema)
             yield {
-                "kind": "oneshot",
-                "data": ai_ask(
-                    question, kundli, lang, reply_idx,
-                    birth=birth, history=history,
-                    preferred_language=preferred_language,
-                ),
+                "kind":       "final",
+                "text":       _full_text_pt_s,
+                "topic":      "general",
+                "confidence": 1.0,
+                "follow_ups": [],
+                "source":     "ai_passthrough_stream",
             }
             return
         except Exception as _pt_exc_s:  # noqa: BLE001
+            # Pre-stream failure (chart-block build, client init, first
+            # OpenAI call rejection). Safe to fall through to the legacy
+            # stream pipeline because no deltas have left the building.
             print(
-                f"[ai_ask_stream] LLM_FULL_CHART_MODE passthrough failed: "
-                f"{_pt_exc_s} → fall through to legacy stream pipeline"
+                f"[ai_ask_stream] LLM_FULL_CHART_MODE streaming passthrough "
+                f"failed: {_pt_exc_s} → fall through to legacy stream pipeline"
             )
+            _trace(req_id, "PASSTHROUGH(stream).FAILED", {
+                "reason": str(_pt_exc_s)[:200],
+            })
 
     # Brand-safety gate — non-streamable.
     if _is_brand_unsafe(question):

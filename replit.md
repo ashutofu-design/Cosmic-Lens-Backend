@@ -5713,11 +5713,128 @@ to decide if the layer is justified.
 - ✔ Phase 7.1 — Slot expansion (Apr 30 2026)
 - ✔ Phase 7.2 — Deterministic verifier (Apr 30 2026)
 - ✔ Phase 7.3 — 5-archetype taxonomy (Apr 30 2026)
-- ✔ Phase 7.4 — LLM repair retry (Apr 30 2026, this entry —
-                                  shipped behind env gate, default OFF)
-- ⏳ Phase 7.5 — Mobile clarifier UX (~0.5 day, independent)
+- ✔ Phase 7.4 — LLM repair retry (Apr 30 2026, shipped behind env
+                                  gate, default OFF)
+- ✔ Phase 7.5 — Mobile clarifier UX (Apr 30 2026, this entry —
+                                     shipped behind env gate, default OFF;
+                                     FIRST mobile change in Phase 7 series)
 - ⏳ Phase 7.6 — Session-cached slots (deferred until prod data)
 
 The active prompt-driver + verifier + repair stack is now complete.
-Remaining 7.5/7.6 are UX + cache layers, independent of the prompt
-engineering core.
+Phase 7.5 is the only remaining UX layer; 7.6 is a cache layer
+deferred until prod telemetry justifies it.
+
+---
+
+## Phase 7.5 — Mobile clarifier UX (Apr 30 2026)
+
+**Problem.** When the AI classifier returns LOW confidence (< 0.6) OR
+falls back to the regex pipeline (`source == "regex_fallback"`), the
+system genuinely doesn't know what the user wants. Phases 7.0–7.4 still
+produce a best-guess answer, but the user is never offered a chance to
+disambiguate. Result: a confident-sounding answer to a question the
+user may not have asked.
+
+**Fix.** Pure-deterministic clarifier helper that attaches a
+`clarification: {prompt, options[]}` payload to the response when the
+classifier signals uncertainty. Mobile renders the payload as
+tappable refinement chips below the assistant bubble (above
+follow-ups, latest reply only). Tapping a chip routes through the
+existing `send()` flow → server re-classifies the now-specific
+question independently. NO extra LLM call, NO new endpoint, NO change
+to the engines.
+
+### Server side
+
+`artifacts/api-server/openai_helper.py` (~L8966-9085):
+- `_PHASE75_CLARIFIER_OPTIONS_BY_TOPIC` — Hinglish topic-keyed
+  options dict for `health` / `career` / `wealth` / `marriage` /
+  `love` / `dosh`.
+- `_PHASE75_CLARIFIER_DEFAULT_OPTIONS` — generic 3-archetype fallback
+  for unknown / missing topic.
+- `_phase75_clarifier_enabled()` — env gate (`true` / `1` / `yes` /
+  `on` → ON; default OFF).
+- `_phase75_clarifier_threshold()` — float env (default 0.6, invalid
+  → 0.6, clamped to [0, 1]).
+- `_build_clarification(question, qu)` — returns `{prompt, options}`
+  when env on AND (`source == "regex_fallback"` OR `confidence <
+  threshold`). Loop guard: bails when question text exactly matches a
+  preset option (avoids clarifier-of-clarifier loops). Defensive copy
+  of options list. Try/except wraps everything — never blocks the
+  response on a clarifier failure.
+
+Wired into 4 response sites (each in a non-blocking try/except, with
+trace events `2dd.CLARIFIER_ATTACHED` / `2dd.CLARIFIER_ERROR`):
+- Sync FULL `_result` (~L15644) — `path: "sync_full"`
+- Sync BARE `_result_bare` (~L13461) — `path: "sync_bare"`
+- Stream BARE final yield (~L16117) — `path: "stream_bare"`
+- Stream FULL final yield (~L16477) — `path: "stream_full"`
+
+`artifacts/api-server/flask_app.py` (~L6107-6135):
+- SSE `done` envelope passthrough: `clarification` is forwarded to
+  the client when the helper attached it. Mobile parser ignores the
+  field when missing or malformed, so the passthrough is safe whether
+  the feature is on or off.
+
+### Mobile side
+
+`artifacts/cosmic-lens-mobile/app/(tabs)/ask.tsx`:
+- `Message` interface — added `clarification?: { prompt: string;
+  options: string[] }` field.
+- JSON one-shot handler (~L430-458) — defensive shape check (must
+  have non-empty options[] of trimmed strings, capped at 4).
+- SSE done extraction (~L488-532) — `finalClarification` var with
+  identical defensive parsing.
+- SSE final commit (~L585) — `clarification: finalClarification` on
+  the swap (undefined when omitted).
+- `renderMsg` block (~L832-873) — banner + chips below bubble, above
+  follow-ups, gated on `isLatestAssistant && !item.streaming &&
+  !loading`. Chip tap calls existing `send(opt)` → re-classified
+  independently.
+- New styles (~L1503-1533) — `clarifierBanner` / `Title` / `Row` /
+  `Chip` / `ChipText`. Color tokens use `C.textMuted`, `C.accent`,
+  `C.bgCard`, `C.isDark`.
+
+### Activation
+
+```bash
+# Server (default OFF — explicit enable required):
+export PHASE75_CLARIFIER_ENABLED=true
+
+# Optional fine-tuning (default 0.6):
+export PHASE75_CLARIFIER_THRESHOLD=0.6
+```
+
+Then watch trace logs for `2dd.CLARIFIER_ATTACHED` and
+`2dd.CLARIFIER_ERROR`. Compare clarifier-attached turn rate against
+total ASK volume to size the regex/low-conf surface area in prod.
+
+### Verification
+
+- `_phase75_smoke.py` — 39/39 pass:
+  env gates (default OFF, truthy/falsy parsing), threshold parsing
+  (default / explicit / invalid / clamp), trigger conditions
+  (regex_fallback / low conf / high conf skip / threshold equality
+  skip / disabled returns None / None qu returns None), topic
+  dispatch (all 6 known topics), generic fallback (unknown / missing
+  topic), loop guard (topic option / generic option), defensive copy
+  (mutating returned list doesn't change preset), exception safety
+  (empty / wrong-type qu values), Hinglish content (no devanagari).
+- `pnpm --filter @workspace/cosmic-lens-mobile run typecheck` — clean.
+- API server boot — clean (no syntax / import errors).
+- Architect review (post SSE-passthrough fix) — 0 SEVERE / 0 HIGH /
+  0 MED. Phase 7 invariants intact (no engine touched, no PK schema
+  changes, no new LLM calls).
+
+### Phase 7 invariants — confirmed unchanged
+
+- `health_engine.py`, `dosh_engine.py`, `career_engine.py`,
+  `love_engine.py`, `marriage_engine.py`, `wealth_engine.py` —
+  UNTOUCHED.
+- `users.id` Integer PK, `user_questions.id` String(36) UUID PK,
+  `profiles.client_id` stable — UNTOUCHED.
+- `models.py` — UNTOUCHED. No schema migration.
+- `flask_app.py` route layer — only the SSE serializer for the
+  existing `/api/ask/stream` `done` envelope was extended (additive
+  passthrough field, no semantic change to existing fields).
+- No new LLM call paths. No new endpoints.

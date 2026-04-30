@@ -6103,7 +6103,13 @@ def ask_stream_route():
                     ) + "\n\n"
                 elif kind == "final":
                     final_topic = evt.get("topic", "general")
-                    yield "data: " + json.dumps({
+                    # Phase 7.5 — pass clarifier payload through the SSE
+                    # `done` envelope. Helper attaches `clarification`
+                    # only when the env-gated builder returned non-None;
+                    # mobile parser ignores the field when missing or
+                    # malformed, so this passthrough is safe whether the
+                    # feature is on or off.
+                    _final_payload = {
                         "done":                  True,
                         "text":                  evt.get("text", ""),
                         "topic":                 final_topic,
@@ -6118,7 +6124,12 @@ def ask_stream_route():
                         "replaced_by_validator": bool(evt.get("replaced_by_validator", False)),
                         "quota":                 quota_payload,
                         "plan":                  plan_payload,
-                    }, ensure_ascii=False) + "\n\n"
+                    }
+                    _clar_passthrough = evt.get("clarification")
+                    if _clar_passthrough is not None:
+                        _final_payload["clarification"] = _clar_passthrough
+                    yield "data: " + json.dumps(
+                        _final_payload, ensure_ascii=False) + "\n\n"
 
                     # ── Question history log (storage layer only) ──────
                     # Save AFTER the engine final event has been

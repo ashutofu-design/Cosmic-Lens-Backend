@@ -49,6 +49,14 @@ interface Message {
   cards?: CardData[];
   trimmedCount?: number;
   responseSchema?: "v2";
+  // Phase 7.5: clarifier UX — server attaches this when its classifier
+  // confidence was low. We render a banner + tappable refinement chips
+  // BELOW the answer bubble (between bubble and followUps). Tapping a
+  // chip sends that option text via the existing `send` flow → server
+  // re-classifies the now-specific question. When absent or empty,
+  // nothing renders (defensive — server can ship the field on/off via
+  // PHASE75_CLARIFIER_ENABLED env without any client release).
+  clarification?: { prompt: string; options: string[] };
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -416,6 +424,23 @@ export default function AskScreen() {
             ? json.trimmed_count
             : undefined;
 
+          // Phase 7.5 — clarifier UX. Server attaches a `clarification`
+          // object only when its classifier confidence was low. Defensive
+          // shape check: must have a non-empty options[] to render.
+          const clar =
+            json.clarification &&
+            typeof json.clarification === "object" &&
+            typeof json.clarification.prompt === "string" &&
+            Array.isArray(json.clarification.options) &&
+            json.clarification.options.length > 0
+              ? {
+                  prompt:  String(json.clarification.prompt),
+                  options: json.clarification.options
+                    .filter((o: unknown) => typeof o === "string" && o.trim().length > 0)
+                    .slice(0, 4) as string[],
+                }
+              : undefined;
+
           const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
@@ -426,6 +451,7 @@ export default function AskScreen() {
               cards,
               trimmedCount: trimmed,
               responseSchema: isV2 ? "v2" : undefined,
+              clarification: clar,
             })
           );
           return;
@@ -457,6 +483,10 @@ export default function AskScreen() {
         let accumulated     = "";
         let finalText       = "";
         let finalFollowUps: string[] = [];
+        // Phase 7.5 — clarifier UX (stream path). Server attaches the
+        // `clarification` field on the `done` event when its classifier
+        // confidence was low. Defensive parsing in the evt.done branch.
+        let finalClarification: { prompt: string; options: string[] } | undefined;
         let sawDone         = false;
         let midError: string | null = null;
 
@@ -483,6 +513,20 @@ export default function AskScreen() {
             sawDone = true;
             finalText = String(evt.text || accumulated || "");
             finalFollowUps = Array.isArray(evt.follow_ups) ? evt.follow_ups.slice(0, 3) : [];
+            // Phase 7.5 — clarifier (defensive shape check; absent → undefined)
+            const _clar = (evt as any).clarification;
+            if (
+              _clar && typeof _clar === "object" &&
+              typeof _clar.prompt === "string" &&
+              Array.isArray(_clar.options) && _clar.options.length > 0
+            ) {
+              const _opts = (_clar.options as unknown[])
+                .filter(o => typeof o === "string" && (o as string).trim().length > 0)
+                .slice(0, 4) as string[];
+              if (_opts.length > 0) {
+                finalClarification = { prompt: String(_clar.prompt), options: _opts };
+              }
+            }
           }
         };
 
@@ -534,6 +578,8 @@ export default function AskScreen() {
           const next = [...prev];
           next[idx] = {
             ...next[idx],
+            // Phase 7.5 — clarifier (undefined when server omits / disabled)
+            clarification: finalClarification,
             text:      finalText || accumulated,
             followUps: finalFollowUps,
             streaming: false,
@@ -779,6 +825,49 @@ export default function AskScreen() {
             )}
           </Pressable>
         </View>
+
+        {/* Phase 7.5 — Clarifier UX: refinement chips shown when the
+            classifier confidence was low. Server attaches `clarification`
+            on the response (env-gated, default OFF). Latest reply only —
+            stale clarifications stay hidden in scrollback to avoid
+            offering refinements for a question already answered. Tapping
+            a chip routes through the standard `send` flow so the now-
+            specific question is re-classified independently. */}
+        {isLatestAssistant
+          && item.clarification
+          && item.clarification.options
+          && item.clarification.options.length > 0
+          && !item.streaming
+          && !loading && (
+          <View style={[s.clarifierBanner, { borderColor: `${C.accent}30`, backgroundColor: C.bgCard }]}>
+            <Text style={[s.clarifierTitle, { color: C.textMuted }]}>
+              {item.clarification.prompt}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={s.clarifierRow}
+            >
+              {item.clarification.options.map((opt, idx) => (
+                <Pressable
+                  key={`${item.id}_clar_${idx}`}
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    send(opt);
+                  }}
+                  style={({ pressed }) => [
+                    s.clarifierChip,
+                    { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}50` },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Feather name="help-circle" size={11} color={C.accent} />
+                  <Text style={[s.clarifierChipText, { color: C.accent }]}>{opt}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Follow-up suggestion chips — only on the latest assistant reply */}
         {isLatestAssistant && item.followUps && item.followUps.length > 0 && !loading && (
@@ -1407,6 +1496,38 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   followUpText: { fontSize: 12, fontWeight: "600" },
+
+  // Phase 7.5 — Clarifier UX styles. Banner sits below the assistant
+  // bubble, above the follow-up chips, on the latest reply only.
+  clarifierBanner: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  clarifierTitle: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  clarifierRow: {
+    flexDirection: "row",
+    gap: 7,
+    paddingVertical: 1,
+  },
+  clarifierChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  clarifierChipText: { fontSize: 12, fontWeight: "600" },
 
   // Voice play button (Sun lo) — sits inside assistant bubble bottom
   voiceBtn: {

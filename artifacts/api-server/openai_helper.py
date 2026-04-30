@@ -8960,6 +8960,129 @@ def _run_repair_retry(
         return None
 
 
+# ── Phase 7.5 — CLARIFIER UX (env-gated, default OFF) ───────────────────────
+# When the AI classifier returns LOW confidence (< 0.6) OR fell back to
+# the regex pipeline (source == "regex_fallback"), the system genuinely
+# doesn't know what the user wants. Instead of guessing, attach a
+# `clarification` payload to the response so the mobile client can
+# render 2-3 tappable refinement chips ABOVE the answer. Tapping a chip
+# sends that option text as the next user question (re-uses existing
+# message-send flow → server re-classifies the now-specific question).
+#
+# DEFAULT OFF — set PHASE75_CLARIFIER_ENABLED=true to activate. Mobile
+# render is defensive: when the field is absent or empty, nothing
+# renders → safe to ship server side first, mobile side first, in any
+# order.
+#
+# Tunable knobs:
+#   PHASE75_CLARIFIER_ENABLED ("true"/"1" → on; default off)
+#   PHASE75_CLARIFIER_THRESHOLD (float, default 0.6 — confidence below
+#                                this triggers, in addition to the
+#                                regex_fallback signal)
+#
+# Pure deterministic — NO extra LLM calls. Options are picked from a
+# topic-keyed dict, falling back to a generic 3-archetype prompt.
+_PHASE75_CLARIFIER_OPTIONS_BY_TOPIC: dict[str, list[str]] = {
+    "health":   ["Overall health picture chahiye?",
+                 "Kab tak issue rahega — timing dekhna hai?",
+                 "Upay aur remedies batau?"],
+    "career":   ["Career ki overall picture chahiye?",
+                 "Job change ya promotion kab hoga — timing?",
+                 "Kya karu ya nahi — decision chahiye?"],
+    "wealth":   ["Wealth ki overall picture chahiye?",
+                 "Kab paisa aayega — timing dekhna hai?",
+                 "Wealth ke liye upay batau?"],
+    "marriage": ["Marriage ki overall picture chahiye?",
+                 "Shaadi kab hogi — timing dekhna hai?",
+                 "Compatibility ya remedies batau?"],
+    "love":     ["Love life ki overall picture chahiye?",
+                 "Kab milega ya settle hoga — timing?",
+                 "Relationship ke liye upay batau?"],
+    "dosh":     ["Konse dosh hai — overall picture chahiye?",
+                 "Dosh kab tak rahega — timing?",
+                 "Dosh ke upay batau?"],
+}
+_PHASE75_CLARIFIER_DEFAULT_OPTIONS: list[str] = [
+    "Health ke baare me jaanna hai?",
+    "Career ya wealth ke baare me?",
+    "Marriage ya love life ke baare me?",
+]
+_PHASE75_CLARIFIER_PROMPT = (
+    "Aapka sawaal thoda specific karein — aap exactly kya jaanna chahte hain?"
+)
+
+
+def _phase75_clarifier_enabled() -> bool:
+    """True iff clarifier UX is explicitly enabled via env."""
+    return os.environ.get("PHASE75_CLARIFIER_ENABLED", "").strip().lower() in (
+        "true", "1", "yes", "on")
+
+
+def _phase75_clarifier_threshold() -> float:
+    """Confidence below this triggers the clarifier. Default 0.6."""
+    try:
+        v = float(os.environ.get("PHASE75_CLARIFIER_THRESHOLD", "0.6"))
+    except Exception:
+        v = 0.6
+    return max(0.0, min(1.0, v))
+
+
+def _build_clarification(
+    question: str,
+    qu: Optional[dict],
+) -> Optional[dict]:
+    """Phase 7.5 — build a clarification payload for ambiguous questions.
+
+    Returns `{"prompt": str, "options": [str, str, str]}` when the
+    classifier is uncertain, OR None when the answer is confident
+    enough to skip clarification. Pure function — no I/O, no LLM call.
+
+    Trigger conditions (env must be on AND one of):
+      1. classifier source == "regex_fallback" (AI failed entirely)
+      2. classifier confidence < threshold (default 0.6)
+    """
+    if not _phase75_clarifier_enabled():
+        return None
+    if not qu:
+        return None
+    try:
+        source = (qu.get("source") or "").strip().lower()
+        try:
+            confidence = float(qu.get("confidence") or 0.0)
+        except Exception:
+            confidence = 0.0
+        threshold = _phase75_clarifier_threshold()
+
+        # Gate: only fire on genuine uncertainty.
+        is_regex_fallback = (source == "regex_fallback")
+        is_low_confidence = (confidence < threshold)
+        if not (is_regex_fallback or is_low_confidence):
+            return None
+
+        # Don't clarify a question that is itself a clarifier option
+        # (i.e. already short + ends with "?"). Heuristic: bail if
+        # the question text matches one of our option strings exactly.
+        q_norm = (question or "").strip()
+        for opts in _PHASE75_CLARIFIER_OPTIONS_BY_TOPIC.values():
+            if q_norm in opts:
+                return None
+        if q_norm in _PHASE75_CLARIFIER_DEFAULT_OPTIONS:
+            return None
+
+        # Pick options — by topic if known + supported, else generic.
+        topic = (qu.get("topic") or "").strip().lower()
+        options = _PHASE75_CLARIFIER_OPTIONS_BY_TOPIC.get(
+            topic, _PHASE75_CLARIFIER_DEFAULT_OPTIONS)
+
+        return {
+            "prompt":  _PHASE75_CLARIFIER_PROMPT,
+            "options": list(options),  # defensive copy
+        }
+    except Exception:
+        # Never block the response on a clarifier failure.
+        return None
+
+
 _ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
 
 
@@ -13332,6 +13455,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "question_supertype": question_supertype,
                     "intent_extraction": (build_meta or {}).get("intent_extraction"),
                 }
+                # ── Phase 7.5 — CLARIFIER UX (sync BARE, env-gated) ──
+                try:
+                    _clar_bare = _build_clarification(
+                        question, locals().get("_qu"))
+                    if _clar_bare is not None:
+                        _result_bare["clarification"] = _clar_bare
+                        _trace(req_id, "2dd.CLARIFIER_ATTACHED",
+                               {"path": "sync_bare",
+                                "n_options": len(_clar_bare.get("options") or [])})
+                except Exception as _clar_exc_b:  # noqa: BLE001
+                    _trace(req_id, "2dd.CLARIFIER_ERROR",
+                           {"path": "sync_bare",
+                            "error": str(_clar_exc_b)[:200]})
 
                 # ── Phase 7.2 — VERIFIER (sync, Phase 5.1 bare-return) ──
                 # Bare-return path bypasses validators but should still be
@@ -15515,6 +15651,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     }
     if _wealth_structured_payload is not None:
         _result["structured"] = _wealth_structured_payload
+    # ── Phase 7.5 — CLARIFIER UX (env-gated, default OFF) ──
+    # Attach a clarification payload when classifier confidence is low
+    # so the mobile client can render refinement chips. Field is only
+    # set when the helper returns a non-None payload — mobile renders
+    # defensively (absent field → nothing renders).
+    try:
+        _clar = _build_clarification(question, locals().get("_qu"))
+        if _clar is not None:
+            _result["clarification"] = _clar
+            _trace(req_id, "2dd.CLARIFIER_ATTACHED",
+                   {"path": "sync_full", "topic": _clar.get("prompt") and topic,
+                    "n_options": len(_clar.get("options") or [])})
+    except Exception as _clar_exc:  # noqa: BLE001
+        _trace(req_id, "2dd.CLARIFIER_ERROR",
+               {"path": "sync_full", "error": str(_clar_exc)[:200]})
     return _result
 
 
@@ -15960,7 +16111,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                        {"path": "stream_bare",
                         "error": str(_ver_exc_bs)[:200]})
 
-            yield {
+            _final_bare_evt = {
                 "kind":                  "final",
                 "text":                  raw_text,
                 "topic":                 topic,
@@ -15969,6 +16120,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "follow_ups":            [],
                 "replaced_by_validator": False,
             }
+            # ── Phase 7.5 — CLARIFIER UX (stream BARE, env-gated) ──
+            try:
+                _clar_sb = _build_clarification(question, _qu)
+                if _clar_sb is not None:
+                    _final_bare_evt["clarification"] = _clar_sb
+                    _trace(req_id, "2dd.CLARIFIER_ATTACHED",
+                           {"path": "stream_bare",
+                            "n_options": len(_clar_sb.get("options") or [])})
+            except Exception as _clar_exc_sb:  # noqa: BLE001
+                _trace(req_id, "2dd.CLARIFIER_ERROR",
+                       {"path": "stream_bare",
+                        "error": str(_clar_exc_sb)[:200]})
+            yield _final_bare_evt
             return
         # else: violations present → fall through to full validator chain
         # below; its existing POST_LOGIC_CHECK block fires the corrective
@@ -16307,7 +16471,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "the NEXT user turn is reclassified independently — "
                     "mode does NOT inherit from this turn",
     })
-    yield {
+    _final_evt = {
         "kind":                  "final",
         "text":                  final_text,
         "topic":                 topic,
@@ -16321,6 +16485,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         # rendering change is required.
         "replaced_by_validator": replaced_by_validator,
     }
+    # ── Phase 7.5 — CLARIFIER UX (stream FULL, env-gated) ──
+    try:
+        _clar_sf = _build_clarification(question, _qu)
+        if _clar_sf is not None:
+            _final_evt["clarification"] = _clar_sf
+            _trace(req_id, "2dd.CLARIFIER_ATTACHED",
+                   {"path": "stream_full",
+                    "n_options": len(_clar_sf.get("options") or [])})
+    except Exception as _clar_exc_sf:  # noqa: BLE001
+        _trace(req_id, "2dd.CLARIFIER_ERROR",
+               {"path": "stream_full",
+                "error": str(_clar_exc_sf)[:200]})
+    yield _final_evt
 
 
 # ── Vastu Drishti Scan (vision) ──────────────────────────────────────────────

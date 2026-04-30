@@ -8323,10 +8323,11 @@ def _build_true_intent_hint(
     timeframe: Optional[str] = None,
     depth: Optional[str] = None,
     user_keywords: Optional[list] = None,
+    archetype: Optional[str] = None,
 ) -> str:
-    """Phase 7.0 / 7.1 — return a system-message string promoting the
-    classifier-extracted intent + slots from telemetry into a
-    response-shaping rule.
+    """Phase 7.0 / 7.1 / 7.3 — return a system-message string promoting
+    the classifier-extracted intent + slots + archetype from telemetry
+    into a response-shaping rule.
 
     Phase 7.0 args (always rendered):
         hidden_intent — ≤8 words underlying ask
@@ -8340,7 +8341,13 @@ def _build_true_intent_hint(
         depth         — "shallow" | "medium" | "deep"
         user_keywords — ≤5 of the user's own salient phrases
 
-    Cap: ~40 lines of prompt — recency-budget hygiene. Deterministic
+    Phase 7.3 optional archetype arg (drives RESPONSE-SHAPE rules
+    section — when provided, replaces the generic Phase 7.0/7.1 rules
+    2-4 with an archetype-specific shape; when None, falls back to the
+    generic shape for backwards compatibility):
+        archetype — "OVERVIEW" | "TIMING" | "DECISION" | "REMEDY" | "EXPLAIN"
+
+    Cap: ~45 lines of prompt — recency-budget hygiene. Deterministic
     (no model call, no I/O), safe to call on every primary-generation
     request.
     """
@@ -8383,8 +8390,91 @@ def _build_true_intent_hint(
             "\n"
         )
 
+    # ── Phase 7.3 — ARCHETYPE-SPECIFIC RESPONSE SHAPE block ──────────
+    # When archetype is provided, replace generic rules 2-4 with a
+    # tailored shape. When None/unknown, fall back to generic rules
+    # (Phase 7.0/7.1 behaviour preserved for backwards compatibility).
+    _ARCHETYPE_SHAPES: dict[str, str] = {
+        "OVERVIEW": (
+            " 2. ARCHETYPE = OVERVIEW (broad scan / ranked list ask):\n"
+            "    → Give a RANKED top-3 list (highest-priority FIRST).\n"
+            "    → 1-2 lines per item, plain language + cited planet.\n"
+            "    → Do NOT dump every possible item. Skip lower-ranked.\n"
+            "    → Do NOT pivot to a single deep dive — breadth wins.\n"
+            " 3. Stay timeless when no timeframe slot is given — no\n"
+            "    dasha periods or year predictions in OVERVIEW.\n"
+            " 4. Skip remedies unless explicitly asked.\n"
+        ),
+        "TIMING": (
+            " 2. ARCHETYPE = TIMING (when-question, dasha/timeline ask):\n"
+            "    → Lead with the WHEN: name the dasha period or year\n"
+            "    range. Be specific (\"Shani MD ends Mar 2026\" not\n"
+            "    \"in a few years\").\n"
+            "    → 1-2 lines max on WHY before stating the WHEN.\n"
+            "    → If multiple windows possible, give the most likely\n"
+            "    + 1 alternate, ranked.\n"
+            " 3. Length: prefer brevity — 2-4 sentences, not a treatise.\n"
+            " 4. Skip remedies unless explicitly asked.\n"
+        ),
+        "DECISION": (
+            " 2. ARCHETYPE = DECISION (yes/no, should-I, choose-between):\n"
+            "    → Lead with a CLEAR verdict: YES / NO / WAIT.\n"
+            "    → Then 1 line WHY (cited planet/period).\n"
+            "    → Then 1 line CAVEAT (when verdict could flip).\n"
+            "    → Total ≤30 words. Do NOT hedge or list alternatives.\n"
+            " 3. Stay timeless unless the verdict hinges on a window.\n"
+            " 4. Skip remedies unless explicitly asked.\n"
+        ),
+        "REMEDY": (
+            " 2. ARCHETYPE = REMEDY (user wants a FIX, not a prediction):\n"
+            "    → 2-3 PRACTICAL remedies (lifestyle + spiritual).\n"
+            "    → Each remedy ≤2 lines, action-first (\"Do X\" not\n"
+            "    \"You should consider X\").\n"
+            "    → Do NOT re-diagnose the problem — user already knows.\n"
+            "    → Do NOT predict outcome timing — practice-first.\n"
+            " 3. Stay timeless — REMEDY is about NOW, not WHEN.\n"
+            " 4. (skipped — REMEDY is the entire answer)\n"
+        ),
+        "EXPLAIN": (
+            " 2. ARCHETYPE = EXPLAIN (cause-effect, definition,\n"
+            "    why-question):\n"
+            "    → Narrative reasoning, not a bullet list.\n"
+            "    → Lead with the CORE answer in 1 line; then 1-2\n"
+            "    sentences of WHY (cited planet/house/period).\n"
+            "    → Do NOT give a ranked list — that's OVERVIEW shape.\n"
+            "    → Do NOT lead with timing — that's TIMING shape.\n"
+            " 3. Stay timeless unless the explanation requires a\n"
+            "    period reference.\n"
+            " 4. Skip remedies unless explicitly asked.\n"
+        ),
+    }
+
+    arch = (archetype or "").strip().upper()
+    if arch in _ARCHETYPE_SHAPES:
+        shape_block = _ARCHETYPE_SHAPES[arch]
+        arch_label  = f" (archetype={arch})"
+    else:
+        # Backwards-compat: Phase 7.0/7.1 generic rules 2-4
+        shape_block = (
+            " 2. OVERVIEW intent (\"kya kya\", \"weak areas\", \"tendency\",\n"
+            "    \"general\", \"overview\", \"sensitivity\", \"weak points\"):\n"
+            "    → Give a RANKED top-3 list (highest-priority FIRST).\n"
+            "    → Do NOT dump every possible item. Skip lower-ranked.\n"
+            "    → 1-2 lines per item, plain language + cited planet.\n"
+            " 3. NO TIMING WORDS in question (\"kab\", \"when\", \"kis\n"
+            "    saal\", \"kab tak\", \"date\"):\n"
+            "    → Do NOT inject dasha periods or year predictions.\n"
+            "    → Keep claims tense-less (\"sensitivity hai\", not\n"
+            "    \"2026 me hoga\").\n"
+            " 4. NO REMEDY WORDS in question (\"upay\", \"remedy\", \"kya\n"
+            "    karu\"):\n"
+            "    → Keep advice to ONE short closing line — generic\n"
+            "    lifestyle hint, not a list of mantras.\n"
+        )
+        arch_label = ""
+
     return (
-        "USER'S TRUE INTENT — Phase 7.0/7.1 hint\n"
+        f"USER'S TRUE INTENT — Phase 7.0/7.1/7.3 hint{arch_label}\n"
         "════════════════════════════════════\n"
         f"Auto-extracted from the user's words: \"{hi}\"\n"
         f"Original question (verbatim): \"{q}\"\n"
@@ -8393,20 +8483,7 @@ def _build_true_intent_hint(
         "RESPONSE-SHAPING RULES (override generic defaults):\n"
         " 1. Address the EXACT intent above — do NOT pivot to a\n"
         "    related-but-different question.\n"
-        " 2. OVERVIEW intent (\"kya kya\", \"weak areas\", \"tendency\",\n"
-        "    \"general\", \"overview\", \"sensitivity\", \"weak points\"):\n"
-        "    → Give a RANKED top-3 list (highest-priority FIRST).\n"
-        "    → Do NOT dump every possible item. Skip lower-ranked.\n"
-        "    → 1-2 lines per item, plain language + cited planet.\n"
-        " 3. NO TIMING WORDS in question (\"kab\", \"when\", \"kis\n"
-        "    saal\", \"kab tak\", \"date\"):\n"
-        "    → Do NOT inject dasha periods or year predictions.\n"
-        "    → Keep claims tense-less (\"sensitivity hai\", not\n"
-        "    \"2026 me hoga\").\n"
-        " 4. NO REMEDY WORDS in question (\"upay\", \"remedy\", \"kya\n"
-        "    karu\"):\n"
-        "    → Keep advice to ONE short closing line — generic\n"
-        "    lifestyle hint, not a list of mantras.\n"
+        f"{shape_block}"
         " 5. Length budget (modulated by depth slot above):\n"
         "    → shallow depth: 1-2 sentences total.\n"
         "    → medium depth (default): OVERVIEW ≤80 words, specific ≤140.\n"
@@ -8516,6 +8593,10 @@ def _verify_answer_against_intent(
         user_keywords = qu.get("user_keywords") or []
         if not isinstance(user_keywords, list):
             user_keywords = []
+        # Phase 7.3 — archetype drives C4 (replaces broken "intent ==
+        # overview" check; intent enum never contained "overview" — it
+        # was a flavour of "analysis", so C4 was effectively dead).
+        archetype     = (qu.get("archetype") or "").upper()
 
         txt_lower = txt.lower()
         word_count = len(txt.split())
@@ -8571,10 +8652,19 @@ def _verify_answer_against_intent(
                 out["checks"]["C3_timing_clean"]  = "pass"
                 out["details"]["C3_timing_clean"] = "no_timing_words"
 
-        # ── C4: ranked_list ──────────────────────────────────────────
-        if intent != "overview":
+        # ── C4: ranked_list (Phase 7.3 — archetype-driven) ───────────
+        # Fires only when archetype=OVERVIEW. Falls back to legacy
+        # `intent == overview` check when archetype is empty (regex
+        # fallback may not have set it cleanly) — but since regex
+        # fallback now ALSO emits archetype, this fallback is mostly
+        # for safety against unexpected qu shapes.
+        _c4_should_run = (archetype == "OVERVIEW") or (
+            not archetype and intent == "overview"
+        )
+        if not _c4_should_run:
             out["checks"]["C4_ranked_list"]  = "skip"
-            out["details"]["C4_ranked_list"] = f"intent={intent}"
+            out["details"]["C4_ranked_list"] = (
+                f"archetype={archetype or '∅'},intent={intent}")
         else:
             number_hits = _RANKED_LIST_NUMBER_RX.findall(txt)
             words_hit = bool(_RANKED_LIST_WORDS_RX.search(txt))
@@ -12682,6 +12772,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             _qu_timeframe = (_qu or {}).get("timeframe")
             _qu_depth     = (_qu or {}).get("depth")
             _qu_keywords  = (_qu or {}).get("user_keywords")
+            # Phase 7.3 — archetype slot drives RESPONSE-SHAPE block
+            _qu_archetype = (_qu or {}).get("archetype")
             messages.append({
                 "role":    "system",
                 "content": _build_true_intent_hint(
@@ -12690,6 +12782,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     timeframe=_qu_timeframe,
                     depth=_qu_depth,
                     user_keywords=_qu_keywords,
+                    archetype=_qu_archetype,
                 ),
             })
             _trace(req_id, "2da.TRUE_INTENT_INJECTED", {
@@ -12706,6 +12799,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "kw_count":  len(_qu_keywords)
                                  if isinstance(_qu_keywords, list) else 0,
                 },
+                # Phase 7.3 — archetype in trace for audit / verifier
+                # cross-check.
+                "archetype": _qu_archetype,
             })
         except Exception as _ti_exc:
             _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL",
@@ -15360,6 +15456,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             _qu_timeframe_s = (_qu or {}).get("timeframe")
             _qu_depth_s     = (_qu or {}).get("depth")
             _qu_keywords_s  = (_qu or {}).get("user_keywords")
+            # Phase 7.3 — archetype slot drives RESPONSE-SHAPE block (stream)
+            _qu_archetype_s = (_qu or {}).get("archetype")
             messages.append({
                 "role":    "system",
                 "content": _build_true_intent_hint(
@@ -15368,6 +15466,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     timeframe=_qu_timeframe_s,
                     depth=_qu_depth_s,
                     user_keywords=_qu_keywords_s,
+                    archetype=_qu_archetype_s,
                 ),
             })
             _trace(req_id, "2da.TRUE_INTENT_INJECTED(stream)", {
@@ -15382,6 +15481,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "kw_count":  len(_qu_keywords_s)
                                  if isinstance(_qu_keywords_s, list) else 0,
                 },
+                # Phase 7.3 — archetype in stream trace (parity with sync).
+                "archetype": _qu_archetype_s,
             })
         except Exception as _ti_exc_s:
             _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL(stream)",

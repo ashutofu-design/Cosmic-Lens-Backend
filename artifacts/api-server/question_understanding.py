@@ -68,6 +68,7 @@ _PROMPT_TEMPLATE = (
     "  \"timeframe\": \"none | near | mid | far\",\n"
     "  \"depth\": \"shallow | medium | deep\",\n"
     "  \"user_keywords\": [\"<≤5 user's own salient phrases>\"],\n"
+    "  \"archetype\": \"OVERVIEW | TIMING | DECISION | REMEDY | EXPLAIN\",\n"
     "  \"confidence\": 0.0 to 1.0\n"
     "}}\n\n"
     "MULTI-INTENT RANKING (intents_ranked):\n"
@@ -138,6 +139,31 @@ _PROMPT_TEMPLATE = (
     "possessives ('mera', 'mujhe', 'my').\n"
     "- Examples: 'kya kya', 'weak areas', 'tendency', 'kab tak', 'jaldi'.\n"
     "- Empty array [] is acceptable when nothing salient stands out.\n\n"
+    "ARCHETYPE (archetype) — RESPONSE-SHAPE category:\n"
+    "- Pick ONE of 5 fixed archetypes that controls the SHAPE of the answer "
+    "(not the topic). This is orthogonal to `intent` — multiple intents can "
+    "map to the same archetype. Choose by priority order below:\n"
+    "- OVERVIEW → user wants a broad scan / ranked list / 'what are the "
+    "main things' answer. Cues: 'kya kya', 'weak areas', 'tendency', "
+    "'overall', 'general state', 'sab kuch bata', 'main issues'. Even when "
+    "intent=problem or intent=analysis, if the user's ASK is breadth "
+    "rather than depth, this is OVERVIEW.\n"
+    "- TIMING → user wants a WHEN answer (timeline, dasha periods, year "
+    "ranges). Cues: 'kab', 'when', 'kis saal', 'kab tak', 'kab hoga', "
+    "'how long'. Almost always lines up with intent=timing.\n"
+    "- DECISION → user wants a YES/NO + 1-line reason. Cues: 'haan ya na', "
+    "'should I', 'karu ya nahi', 'sahi hai kya', 'X chahiye?'. Almost "
+    "always lines up with intent=decision.\n"
+    "- REMEDY → user already knows the issue, wants a FIX. Cues: 'upay', "
+    "'remedy', 'kya karu', 'kaise theek karu', 'kaise sudharu', 'remedy "
+    "bata'. NOT a prediction — practical lifestyle/spiritual practices.\n"
+    "- EXPLAIN → DEFAULT. Narrative reasoning, cause-effect, definitions. "
+    "Cues: 'kyon', 'kaise', 'iska matlab', 'X kya hai', 'samjhao', "
+    "'explain', 'what is X'. Also the fallback when none of the above "
+    "clearly fits. Most intent=problem (why-questions) and intent=analysis "
+    "(definitional/conditional) map here.\n"
+    "- IMPORTANT: archetype is ALWAYS one of the 5 enums. Never null, "
+    "never empty. When in doubt, pick EXPLAIN.\n\n"
     "INTENT definitions (pick the most specific that fits):\n"
     "- planet   → ANY question that NAMES a graha (Sun, Moon, Mars, Mercury, "
     "Jupiter, Venus, Saturn, Rahu, Ketu / Surya, Chandra, Mangal, Budh, Guru, "
@@ -273,6 +299,9 @@ def _fallback_classify(question: str) -> dict:
         "timeframe":                "none",
         "depth":                    "medium",
         "user_keywords":            [],
+        # Phase 7.3 — archetype derived from question text via regex
+        # heuristic; defaults EXPLAIN when no cue matches.
+        "archetype":                _archetype_from_text(q) if q else "EXPLAIN",
         "confidence":              0.5,
         "source":                  "regex_fallback",
     }
@@ -370,6 +399,15 @@ def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
     else:
         user_keywords = []
 
+    # Phase 7.3 — archetype slot (5-way response-shape category).
+    # Always normalised to one of the 5 enums; default EXPLAIN.
+    raw_arch = data.get("archetype")
+    if isinstance(raw_arch, str):
+        a = raw_arch.strip().upper()
+        archetype = a if a in _ARCHETYPES else "EXPLAIN"
+    else:
+        archetype = "EXPLAIN"
+
     return {
         "intents_ranked":          intents_ranked,
         "topics_all":              topics_all,
@@ -380,7 +418,49 @@ def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
         "timeframe":               timeframe,
         "depth":                   depth,
         "user_keywords":           user_keywords,
+        # Phase 7.3 — archetype (response-shape category)
+        "archetype":               archetype,
     }
+
+
+# Phase 7.3 — archetype enum (5 fixed response-shape categories).
+# Order chosen by selection priority in the regex-fallback heuristic
+# (more specific cues first; EXPLAIN is the catch-all default).
+_ARCHETYPES: tuple[str, ...] = (
+    "OVERVIEW", "TIMING", "DECISION", "REMEDY", "EXPLAIN",
+)
+
+# Phase 7.3 — regex-fallback archetype heuristic. Used when the AI
+# classifier fails and we drop to the regex safety-net (which previously
+# couldn't emit archetype at all). First-match wins in the order below.
+_FALLBACK_ARCHETYPE_RX: tuple[tuple[str, "re.Pattern[str]"], ...] = (
+    ("REMEDY", re.compile(
+        r"\b(upay|upaay|remedy|remedies|kya karu|kya karoon|"
+        r"kaise theek|kaise sudhar|kaise sudharu|how to fix|how do i fix)\b",
+        re.I)),
+    ("TIMING", re.compile(
+        r"\b(when|kab|kab tak|kab hoga|kis saal|kitne saal|kitne din|"
+        r"how long|kab milega|kab band)\b", re.I)),
+    ("DECISION", re.compile(
+        r"\b(should i|haan ya na|haan ya nahi|karu ya nahi|karoon ya nahi|"
+        r"chahiye ya nahi|sahi hai kya|right time|sahi rahega)\b", re.I)),
+    ("OVERVIEW", re.compile(
+        r"\b(kya kya|weak areas|main areas|main issues|overall|"
+        r"general state|sab kuch bata|tendency|tendencies|main problems)\b",
+        re.I)),
+    # EXPLAIN is the implicit default when nothing matches.
+)
+
+
+def _archetype_from_text(text: str) -> str:
+    """Pure-regex archetype derivation for the regex-fallback path.
+    Returns one of the 5 enum values; defaults to EXPLAIN."""
+    if not isinstance(text, str) or not text.strip():
+        return "EXPLAIN"
+    for name, rx in _FALLBACK_ARCHETYPE_RX:
+        if rx.search(text):
+            return name
+    return "EXPLAIN"
 
 
 # ── Sprint-26 Fix-N — "Why-leading" intent promoter ──────────────────────────

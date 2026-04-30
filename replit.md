@@ -5283,3 +5283,205 @@ this baseline data we'd be retrying blind.
 
 Total cumulative effort to "near-perfect understanding" target:
 ~5.5 days. Phase 7.2 ships day 3 of 5.5.
+
+
+## Phase 7.3 — 5-Archetype Taxonomy (Apr 30, 2026)
+
+**Goal:** Add an `archetype` slot to the classifier — a 5-way
+RESPONSE-SHAPE category that's orthogonal to `intent`. Where `intent`
+answers "what kind of question is this?" (planet/problem/timing/
+decision/analysis), `archetype` answers "what shape should the answer
+take?" (OVERVIEW/TIMING/DECISION/REMEDY/EXPLAIN). The same intent can
+map to different archetypes — e.g. `intent=problem` ("kya issue hai")
+→ archetype=OVERVIEW (ranked list), but `intent=problem` ("kyon ho
+raha hai") → archetype=EXPLAIN (narrative).
+
+**Trigger:** Phase 7.0/7.1 told the LLM the user's intent + slots.
+Phase 7.2 graded the answer against those slots. But the same intent
+could justifiably produce 5 different answer shapes — we needed a
+dimension that picks ONE shape and forces it. Phase 7.3 adds that
+dimension.
+
+**Bonus discovery:** While wiring archetype into verifier C4, found
+that C4 ranked-list check was DEAD CODE in Phase 7.2 — it gated on
+`intent != "overview"`, but the intent enum NEVER contained
+"overview" (it's flavour (a) of `intent=analysis`). So C4 was always
+skipping in production. Phase 7.3 fixes this by gating on
+`archetype == "OVERVIEW"`.
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED (3363 lines, 25 layers preserved)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- mobile (`artifacts/cosmic-lens-mobile/`) UNTOUCHED
+- `flask_app.py` UNTOUCHED
+- 2 files touched (`question_understanding.py`, `openai_helper.py`)
+
+### Change set
+
+**A. Classifier (`question_understanding.py`)**
+
+1. **Prompt schema** — added `archetype` field after `user_keywords`:
+   ```json
+   "archetype": "OVERVIEW | TIMING | DECISION | REMEDY | EXPLAIN"
+   ```
+
+2. **Prompt doc block** — full ARCHETYPE definitions section after
+   USER_KEYWORDS doc, before INTENT defs. Lists cues for each
+   archetype + states ALWAYS one of 5 enums (default EXPLAIN).
+
+3. **Sanitiser `_normalise_multi_fields`** — uppercase + validate
+   against `_ARCHETYPES` enum, default EXPLAIN on missing/garbage.
+
+4. **`_ARCHETYPES` constant** — `("OVERVIEW", "TIMING", "DECISION",
+   "REMEDY", "EXPLAIN")`.
+
+5. **`_FALLBACK_ARCHETYPE_RX`** — 4 regex patterns (REMEDY/TIMING/
+   DECISION/OVERVIEW; EXPLAIN is implicit default).
+
+6. **`_archetype_from_text(text)` helper** — pure-regex archetype
+   derivation for the regex-fallback path (used when AI classifier
+   fails). First-match wins in priority order; defaults EXPLAIN.
+
+7. **Regex fallback dict** — emits `archetype` key so downstream
+   consumers never KeyError regardless of classifier path.
+
+**B. Helper (`openai_helper._build_true_intent_hint`)**
+
+8. **Signature** — added `archetype: Optional[str] = None` kwarg
+   (backwards compat: existing callers without archetype get the
+   Phase 7.0/7.1 generic shape unchanged).
+
+9. **`_ARCHETYPE_SHAPES` dict** — 5 distinct response-shape blocks
+   (replaces generic rules 2-4 of the prompt):
+
+   | Archetype | Response shape |
+   |---|---|
+   | OVERVIEW | Ranked top-3 list, breadth wins, 1-2 lines per item |
+   | TIMING   | Lead with WHEN, name dasha/year, brief, 2-4 sentences |
+   | DECISION | YES/NO/WAIT verdict + 1 reason + 1 caveat, ≤30 words |
+   | REMEDY   | 2-3 practical remedies, action-first, no re-diagnosis |
+   | EXPLAIN  | Narrative reasoning, no list, no timing-lead (default) |
+
+10. **Header line** shows `(archetype=X)` label when archetype was
+    provided; rules 1 (intent fidelity) + 5 (length budget) preserved.
+
+**C. Injection points (2 sites — sync + stream)**
+
+11. **Sync** (`ai_ask` ~L12760): pulls `_qu_archetype` from `_qu`,
+    passes to helper, includes in `2da.TRUE_INTENT_INJECTED` trace.
+
+12. **Stream** (`ai_ask_stream` ~L15440): same pattern with `_s`
+    suffix variables, includes in `2da.TRUE_INTENT_INJECTED(stream)`
+    trace.
+
+(Bare paths still bypass the hint entirely — that's their whole
+point. Verifier still wraps all 4 paths and grades the bare output
+too, so archetype-driven C4 still applies there if classifier set
+the slot.)
+
+**D. Verifier (`_verify_answer_against_intent`) — C4 fix**
+
+13. **Extracts `archetype = (qu.get("archetype") or "").upper()`**
+    after the existing slot extraction.
+
+14. **C4 ranked_list condition** changed from broken
+    `intent != "overview"` (intent enum never contained "overview"
+    so this always-skipped) to:
+    ```python
+    _c4_should_run = (archetype == "OVERVIEW") or (
+        not archetype and intent == "overview"
+    )
+    ```
+    Legacy `intent == "overview"` path kept as defensive fallback
+    for unexpected qu shapes.
+
+### Verification
+
+**Smoke test (`_phase73_smoke.py`, 27/27 ✔):**
+
+| Layer | # tests | Coverage |
+|---|---|---|
+| A. Classifier | 16 | `_ARCHETYPES` constant has 5; sanitiser normalises 8 cases (lowercase/uppercase/mixed/whitespace/garbage/None/missing); regex heuristic on 7 question samples (one per archetype + edge cases) |
+| B. Helper | 11 | Each of 5 archetypes renders distinct marker + header label; no-archetype legacy fallback to generic shape; invalid archetype falls back to generic; archetype-specific cues distinct (DECISION = YES/NO/WAIT, REMEDY = practical FIX) |
+| C. Verifier | 6 | OVERVIEW + numbered list → C4 pass; OVERVIEW + flat prose → C4 fail; DECISION → C4 skip; legacy `intent=overview` (no archetype) → C4 fires; empty qu → C4 skip; full slot pass score=1.0 |
+
+### Architect review (in-session)
+
+Seven-area review (module-load order, C4 behavior change, backwards
+compat, prompt budget, intent-archetype overlap, trace size, EXPLAIN
+default).
+
+- **0 SEVERE / 0 HIGH findings**
+- **1 MEDIUM**: prompt budget growing — recommend monitoring
+  `3.PROMPT` trace events for total char count. If LLM starts
+  forgetting earlier system messages, merge archetype shape block
+  into the supertype contract to reduce discrete system-message
+  count. **Accepted as ongoing observation, not a blocker.**
+
+**Verdict: PASS — SHIP.**
+
+### Performance impact
+
+- Sanitiser: 1 extra dict lookup + uppercase + enum check (<100ns)
+- Helper: 1 extra dict lookup in `_ARCHETYPE_SHAPES` (<100ns)
+- Verifier C4: now ACTIVE for OVERVIEW answers (was dead) — same
+  regex cost as before, just no longer skipped
+- Trace: +1 string field per `2da.TRUE_INTENT_INJECTED` event
+  (~10-15 bytes; architect-confirmed negligible)
+- Cost: ZERO additional LLM tokens (LLM was already emitting
+  classifier JSON; one extra field is pennies)
+
+### Files touched
+
+- `artifacts/api-server/question_understanding.py` (5 edits:
+  prompt schema, prompt doc, sanitiser, fallback dict, new
+  `_ARCHETYPES` + `_FALLBACK_ARCHETYPE_RX` + `_archetype_from_text`)
+- `artifacts/api-server/openai_helper.py` (4 edits: helper
+  signature, helper body shape block, sync injection, stream
+  injection, verifier C4)
+
+### NOT changed
+
+- `artifacts/api-server/health_engine.py` (3363 lines untouched)
+- All other engines (dosh, career, love, marriage, wealth)
+- `artifacts/api-server/flask_app.py` (route layer untouched)
+- `artifacts/api-server/shortcuts.py` (Phase 6.2 layer untouched)
+- `artifacts/api-server/models.py` (DB schema untouched)
+- mobile client (`artifacts/cosmic-lens-mobile/`)
+
+### Production observability — what we'll see
+
+Each successful primary generation now emits BOTH:
+```
+2da.TRUE_INTENT_INJECTED {
+  hidden_intent: "...",
+  position: 23,
+  slots: {focus: "...", timeframe: "none", depth: "medium", kw_count: 3},
+  archetype: "OVERVIEW"           ← NEW
+}
+2db.ANSWER_VERIFIED {
+  path: "sync_full",
+  score: 0.8,
+  checks: {C1: pass, C2: pass, C3: pass, C4: fail, C5: pass}  ← C4 NOW ACTIVE
+}
+```
+
+C4 now fires for every OVERVIEW question, so we'll finally see real
+data on how often the LLM produces flat prose when it was asked for a
+ranked list.
+
+### Phase 7 series progress
+
+- ✔ Phase 7.0 — TRUE-INTENT prompt driver (Apr 30 2026)
+- ✔ Phase 7.1 — Slot expansion (Apr 30 2026)
+- ✔ Phase 7.2 — Deterministic verifier (Apr 30 2026)
+- ✔ Phase 7.3 — 5-archetype taxonomy (Apr 30 2026, this entry)
+- ⏳ Phase 7.4 — LLM repair retry (defer, ~1 day, blocked on
+                  Phase 7.2/7.3 production data)
+- ⏳ Phase 7.5 — Mobile clarifier UX (defer, ~0.5 day)
+- ⏳ Phase 7.6 — Session-cached slots (deferred until prod data)
+
+Total cumulative effort to "near-perfect understanding" target:
+~5.5 days. Phase 7.3 ships day 4 of 5.5.

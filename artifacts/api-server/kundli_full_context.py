@@ -412,135 +412,28 @@ def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
 
 
 # ────────────────────────────────────────────────────────────────────
-# Static prompt blocks (cheat-sheet + answer instructions)
+# Minimal guidance — per project owner (30 Apr 2026):
+#   "Engine cheat-sheet jo jo he, woh sara chiz hatao. Mujhse abhi itna
+#    chahiye ji AI ko jo question diya jaye, woh pura samaj paaye, kundli
+#    jo store he wahan se data le."
+#
+# Earlier this section also held a karaka/house cheat-sheet (Section 6)
+# and a prescriptive answer template — Verdict / Dekha kya / Timing /
+# Upay (Section 7). BOTH have been intentionally REMOVED. The model is
+# now trusted to apply its own Vedic Jyotish knowledge to the chart
+# data dumped in Sections 1-5. Only two safety rails remain:
+#   1. Anti-hallucination: cite only fields that appear in the chart
+#      dump above; do not invent placements / dashas / yogas.
+#   2. Language: reply in Hinglish (devotee's preference).
 # ────────────────────────────────────────────────────────────────────
 
-_CHEAT_SHEET = """## 6. KARAKA / HOUSE CHEAT-SHEET (topic match hone par PRIORITISE karo)
+_MINIMAL_GUIDANCE = """## 6. NIYAM (sirf 2 — baaki tum khud decide karo)
 
-• Health (sehat / bimari / rog / pain / treatment) →
-    1H+lord (vital strength), 6H+lord (rog/disease), 8H (chronic/surgery),
-    12H (hospital/sleep/loss), Lagna afflictions, Mars (blood/inflammation),
-    Saturn (chronic/joints/longevity), Mercury (nerves), Sun (heart/eyes),
-    Moon (mental/fluid), Rahu (mystery/poison), Ketu (sudden/surgery),
-    current dasha lord ki affliction, sade-sati phase.
-    Sign-to-bodypart map: Mesh=head, Vrish=throat, Mithun=lungs/arms,
-    Karka=chest, Simh=heart/spine, Kanya=intestine, Tula=kidney,
-    Vrishchik=reproductive, Dhanu=hips/thighs, Makar=knees, Kumbh=calves,
-    Meen=feet.
-
-• Career (naukri / job / business / promotion) →
-    10H+lord (karma-bhava), 6H (service/competition), 11H (gains/promotion),
-    2H (income), Sun (authority), Saturn (discipline/karma), Mercury
-    (commerce/communication), Mars (technical/competition/sports),
-    Amatya-karaka (Jaimini), raja-yogas, parivartana, current dasha lord,
-    Saturn gochar over 10H.
-
-• Marriage (vivah / shaadi / partner) →
-    7H+lord (kalatra), 5H (love/pre-marital), 8H (longevity of bond),
-    2H (kutumb), Venus (men's wife-karaka), Jupiter (women's husband-karaka),
-    Mangal-dosh, Upapada (UL = A12), current dasha lord vs 2/7/11
-    significators, Jupiter gochar over natal 1/5/7.
-
-• Wealth (dhana / paisa / business / income) →
-    2H (sanchita-dhana), 11H (labha/gains), 5H (purva-punya wealth),
-    9H (bhagya), Jupiter (dhana-karaka), Venus (bhog), Mercury (commerce),
-    dhana-yogas (2L+11L conn, 5L+9L Lakshmi-yoga, parivartana between
-    2/5/9/11 lords), daridra patterns (2L or 11L in 6/8/12).
-
-• Children (santaan / bachhe / fertility) →
-    5H+lord (putra-bhava), 9H (santati continuation), Jupiter (putra-karaka),
-    Saptamsha (D-7), putra-dosh patterns (5L in 6/8/12, Rahu/Saturn in 5H,
-    malefic aspect on 5L).
-
-• Education / exam (vidya / padhai / competitive) →
-    4H (basic schooling), 5H (intellect/buddhi/competitive), 9H (higher
-    learning/dharma), 2H (memory/speech), Mercury (buddhi-karaka),
-    Jupiter (vidya/wisdom), Sun (focus/willpower), Saraswati-yoga
-    (Mer+Ven+Jup in kendra/trikona), Jupiter/Mercury transit over 5/9.
-
-• Property / Vehicle (ghar / vahan / land) →
-    4H+lord (sukh-sthan), Mars (real-estate karaka), Venus (vehicle/luxury),
-    Mercury (paperwork/registration), Jupiter transit over 4H = buying
-    window.
-
-• Travel / Foreign (yatra / videsh / settlement) →
-    3H (short journeys/courage), 9H (long/dharmic/foreign), 12H (videsh-vaas
-    /settlement abroad), Rahu (foreign), Moon (movement), Mercury
-    (commerce travel).
-
-• Litigation (mukadama / case / court) →
-    6H (vijay over enemy), 7H (opponent), 8H (sudden reversal/chronic),
-    11H (gain from case), Mars (fight), Saturn (delay), Mercury (paperwork),
-    Jupiter (judge/dharma).
-
-• Mental / Emotional (mann / depression / anxiety / stress) →
-    Moon (mind/emotion — sign + nakshatra + lord), Mercury (nerves/buddhi),
-    4H (peace/home), 5H (joy), Saturn (depression/heaviness), Rahu
-    (anxiety/confusion/addiction), papakartari Moon (Moon hemmed by
-    malefics in 12th & 2nd from itself), sade-sati phase.
-
-• Spiritual (moksha / dharma / sadhana) →
-    9H (dharma), 12H (moksha-sthan), Jupiter (guru/wisdom), Ketu
-    (renunciation/jnana), 4L+12L conn, Saturn in 12H with Jupiter aspect.
-
-• Family (parivar / mata-pita / siblings) →
-    4H (mata/home), 9H (pita), 3H (younger siblings/courage), 11H
-    (elder sibling), 5H (children). Karakas: Moon (mother), Sun (father),
-    Mars (siblings).
-"""
-
-
-_ANSWER_INSTRUCTIONS = """## 7. JAWAB KAISE DENA HAI
-
-Tum ek anubhavi Vedic jyotishi ho. Upar di hui kundli pe POORA access hai.
-Koi pre-defined rule engine nahi — tumhari shastriya samajh + upar di hui
-ground-truth use karo.
-
-STEP-BY-STEP:
-  1. Question dhyaan se padho. Sub-questions list karo (1, 2, 3...).
-  2. Topic identify karo. Cheat-sheet (Section 6) se decide karo konse
-     ghar/grah dekhne hain. Multi-topic ho to sab cover karo.
-  3. Saari relevant placements (graha + sign + house + dignity + aspect)
-     Section 2 (Grahas) aur Section 3 (Bhavas) se nikalo.
-  4. Section 4 (Dasha tree) se timing nikalo — current MD/AD lord ki
-     placement aur condition relevant ghar/grah ko support karti hai
-     ya block karti hai.
-  5. Section 5 (Yogas/Doshas/Gochar) se context lo — kya koi
-     yoga/dosha/sade-sati actively relevant hai.
-  6. Hinglish mein structured jawab do.
-
-STRUCTURE (har question ka):
-
-**Verdict** — ek line: clear answer (haan / nahi / sambhavna + crux).
-
-**Dekha kya** — 2-4 line: konse ghar/grah/dasha/yoga se yeh nikla.
-   Specific cite karo (e.g. "Mars 6H mein, sign-mapping se yeh stomach ka
-   ghar; saath Saturn ka aspect — chronic angle"). SIRF upar di hui
-   kundli ke fields cite karo.
-
-**Timing** — 1-2 line: kab tak / konsa dasha period / agla change-window.
-   Section 4 ki dates use karo. "Kab" naa pucha ho to is block ko skip
-   kar do.
-
-**Upay** — 1-2 specific suggestions: mantra+count+day, ya daan+day,
-   ya gemstone (gemstone sirf trial-period ke saath suggest karo —
-   "neelam 5-7 ct, silver, 3 din trial"). Generic "puja karwao" NA bolo.
-
-NIYAM:
-• Sirf upar di hui kundli ke fields use karo. Naye planet placement, dasha,
-  ya yoga IMAGINE NAHI karo. Missing data ho to honestly bolo "iska clear
-  data abhi available nahi".
-• Hinglish — Devanagari + English mix, simple bhasha. Sanskrit term ke
-  saath English meaning ek baar ('Shukra (Venus)', 'Saade-Sati — Shani
-  ka 7.5 saal ka phase').
-• Emoji NAHI.
-• Bullet/numbered lists chhote, max 3-4 items per block.
-• Question multi-part ho to har part ko apna mini-block do.
-• Tone: anubhavi jyotishi — confident par grounded. Guru-tone nahi.
-• Length: 100-180 words total per single-topic question; multi-part
-  question 200-280 words.
-• Health questions mein: ek line "doctor se zaroor consult karein" likhna
-  mandatory — yeh medical advice nahi, sirf jyotishiya disha hai.
+• Sirf upar di hui kundli ke fields cite karo. Koi naya graha placement,
+  dasha, ya yoga IMAGINE NAHI karna. Agar zaroori detail upar nahi hai,
+  honestly bolo "iska clear data abhi available nahi" — guess mat karo.
+• Hinglish mein jawab do (Devanagari + English mix, simple bhasha).
+  Emoji nahi.
 """
 
 
@@ -616,8 +509,7 @@ def build_full_chart_context(
     except Exception:
         pass
 
-    sections.append(_CHEAT_SHEET.rstrip())
-    sections.append(_ANSWER_INSTRUCTIONS.rstrip())
+    sections.append(_MINIMAL_GUIDANCE.rstrip())
 
     body = "\n\n".join(s for s in sections if s)
 

@@ -6187,3 +6187,47 @@ explicit decision and is **deferred**.
 - No model / engine / locked-facts changes.
 - Default OFF; Phase 7.6.1 catalog and Phase 7.5 clarifier paths
   unaffected.
+
+---
+
+### Phase 7.7-pre — Update (Apr 30, 2026): cheat-sheet removed, minimal mode
+
+Per project owner request — *"engine cheat-sheet jo jo he, woh sara
+chiz hatao. Mujhse abhi itna chahiye ki AI ko jo question diya jaaye,
+woh pura samaj paaye, kundli jo store he wahan se data le."*
+
+**Removed from `kundli_full_context.py`:**
+
+- Section 6 — `_CHEAT_SHEET` (12-topic karaka/house cheat-sheet:
+  health → 6H+8H+12H, career → 10H+Sun+Saturn, marriage → 7H+5H, etc.).
+- Section 7 — `_ANSWER_INSTRUCTIONS` (prescriptive Verdict / Dekha kya
+  / Timing / Upay template, length rules, tone rules).
+
+**Kept (minimal):**
+
+- Sections 1-5 — full chart data dump (Janm+Lagna, 9 Grahas, 12
+  Bhavas, Dasha tree, Yogas/Doshas/Sade-Sati/Gochar).
+- Section 6 (re-purposed, ~80 words) — `_MINIMAL_GUIDANCE`: only two
+  rules:
+  1. Anti-hallucination — cite only fields that appear in the chart
+     dump above; do not invent placements / dashas / yogas.
+  2. Hinglish — reply in Hinglish, no emoji.
+
+**Rationale:** the model already has Vedic Jyotish knowledge in its
+training corpus; explicit cheat-sheet was over-prescriptive. Owner
+wants to test if the model performs well with **just chart access**
+and the model's own knowledge, no rails. If consistency / accuracy
+drops, cheat-sheet can be re-introduced (still in git history).
+
+**Block size:** ~7.3 KB → ~2.0 KB (~72% reduction in extra prompt
+tokens when flag is on).
+
+**Verification:**
+- Smoke confirmed: cheat-sheet markers absent
+  (`KARAKA / HOUSE CHEAT-SHEET`, `**Verdict**`, `**Dekha kya**` etc.
+  all gone).
+- All chart-data sections (1-5) intact.
+- Defensive returns (`None` / `{}` → `""`) still work.
+- API server restarts cleanly with the change.
+
+**Default behaviour:** still OFF. `LLM_FULL_CHART_MODE=1` to enable.

@@ -8699,6 +8699,267 @@ def _verify_answer_against_intent(
     return out
 
 
+# ── Phase 7.4 — LLM REPAIR RETRY (env-gated, default OFF) ────────────────────
+# When the verifier flags a low score AND the failed checks are repair-able
+# (C1/C3/C4 — keyword echo, timing leak, ranked-list missing), fire ONE
+# tight LLM call to fix specifically those failures. Pick the better of
+# (original, repaired) by score (ties → original). Skip when only C2/C5
+# failed (length issues — repair retry won't reliably fix them).
+#
+# DEFAULT OFF — set PHASE74_RETRY_ENABLED=true to activate in prod. Kept
+# off so Phase 7.2/7.3 telemetry can baseline first; enabled later once
+# violation patterns are clear.
+#
+# Tunable knobs:
+#   PHASE74_RETRY_ENABLED   ("true" / "1" → on; default off)
+#   PHASE74_RETRY_THRESHOLD (float, default 0.6 — score below triggers)
+#   PHASE74_RETRY_MAX_TOKENS (int, default 600 — repair output cap)
+#   PHASE74_RETRY_TEMP      (float, default 0.3 — lower than primary
+#                            for more deterministic correction)
+_PHASE74_REPAIRABLE_CHECKS = ("C1_keyword_echo", "C3_timing_clean",
+                              "C4_ranked_list")
+
+
+def _phase74_retry_enabled() -> bool:
+    """True iff retry layer is explicitly enabled via env."""
+    return os.environ.get("PHASE74_RETRY_ENABLED", "").strip().lower() in (
+        "true", "1", "yes", "on")
+
+
+def _phase74_retry_threshold() -> float:
+    """Score below this triggers a repair retry. Default 0.6."""
+    try:
+        v = float(os.environ.get("PHASE74_RETRY_THRESHOLD", "0.6"))
+    except Exception:
+        v = 0.6
+    # Clamp to sane range — never < 0 or > 1.
+    return max(0.0, min(1.0, v))
+
+
+def _build_repair_prompt(
+    question: str,
+    original_answer: str,
+    qu: Optional[dict],
+    verify_result: dict,
+) -> Optional[list[dict]]:
+    """Phase 7.4 — build a tight repair prompt for the failed checks.
+
+    Returns a `messages` list (system + user) ready for
+    `client.chat.completions.create`, OR None when no retry-able check
+    failed (only C2/C5 failed → no retry). Pure function, no I/O.
+    """
+    checks = (verify_result or {}).get("checks") or {}
+    details = (verify_result or {}).get("details") or {}
+    qu = qu or {}
+
+    # Find which repair-able checks failed.
+    failed_repairable = [
+        name for name in _PHASE74_REPAIRABLE_CHECKS
+        if checks.get(name) == "fail"
+    ]
+    if not failed_repairable:
+        return None
+
+    # Build per-check repair instructions.
+    instructions: list[str] = []
+    if "C1_keyword_echo" in failed_repairable:
+        kws = qu.get("user_keywords") or []
+        kw_str = ", ".join(f'"{k}"' for k in kws if isinstance(k, str))[:200]
+        if kw_str:
+            instructions.append(
+                f"- C1 fix: The original answer did NOT echo the user's "
+                f"keywords [{kw_str}]. The corrected answer MUST contain at "
+                f"least one of these keywords verbatim so the user feels heard."
+            )
+    if "C3_timing_clean" in failed_repairable:
+        leaked = details.get("C3_timing_clean", "")
+        instructions.append(
+            f"- C3 fix: The user did NOT ask for timing, but the original "
+            f"answer leaked timing words ({leaked}). The corrected answer "
+            f"MUST be timeless — NO years, NO dasha names, NO 'kab/when'."
+        )
+    if "C4_ranked_list" in failed_repairable:
+        instructions.append(
+            "- C4 fix: This is an OVERVIEW question — user wants a ranked "
+            "list, not flat prose. The corrected answer MUST be a numbered "
+            "list of 2-3 items (1. ... 2. ... 3. ...), each on its own line, "
+            "highest-priority first, 1-2 lines per item."
+        )
+
+    if not instructions:
+        # All failed_repairable checks needed context (e.g. keywords) that
+        # wasn't actually present in qu — nothing actionable to repair.
+        return None
+
+    # Truncate inputs for a tight repair prompt.
+    q = (question or "").strip()
+    if len(q) > 240:
+        q = q[:237] + "…"
+    a = (original_answer or "").strip()
+    if len(a) > 1200:
+        a = a[:1197] + "…"
+
+    sys_msg = (
+        "You are correcting a previous answer that violated specific quality "
+        "checks. Output ONLY the corrected answer text — no preamble, no "
+        "meta-commentary, no apologies. Match the original's language "
+        "(Hinglish if Hinglish, English if English). Keep the same overall "
+        "length unless a check explicitly requires shortening."
+    )
+    user_msg = (
+        f"ORIGINAL USER QUESTION:\n\"{q}\"\n\n"
+        f"ORIGINAL ANSWER (to be corrected):\n\"{a}\"\n\n"
+        f"QUALITY CHECK FAILURES (you MUST fix these — do NOT introduce "
+        f"new violations):\n" + "\n".join(instructions) + "\n\n"
+        f"OUTPUT: Only the corrected answer text."
+    )
+    return [
+        {"role": "system", "content": sys_msg},
+        {"role": "user",   "content": user_msg},
+    ]
+
+
+def _run_repair_retry(
+    *,
+    original_text: str,
+    original_verify: dict,
+    qu: Optional[dict],
+    question: str,
+    model: str,
+    client: Any,
+    req_id: str,
+) -> Optional[tuple[str, dict]]:
+    """Phase 7.4 — one repair LLM call + re-verify, pick better of two.
+
+    Returns (final_text, final_verify_result) when retry was attempted
+    and produced a non-empty repaired answer. Returns None when retry
+    was skipped (env off, score above threshold, no repair-able failures,
+    LLM error, etc.). NEVER raises.
+
+    Trace events emitted:
+      - 2dc.RETRY_SKIPPED  (with reason)
+      - 2dc.RETRY_TRIGGERED (with score / failed-checks)
+      - 2dc.RETRY_COMPLETE  (with original/repaired scores + which won)
+      - 2dc.RETRY_ERROR     (on LLM failure)
+    """
+    try:
+        # Gate 1: env switch
+        if not _phase74_retry_enabled():
+            _trace(req_id, "2dc.RETRY_SKIPPED", {"reason": "env_disabled"})
+            return None
+
+        # Gate 2: score threshold
+        score = (original_verify or {}).get("score")
+        if score is None:
+            _trace(req_id, "2dc.RETRY_SKIPPED",
+                   {"reason": "no_score", "skipped":
+                    (original_verify or {}).get("skipped")})
+            return None
+        threshold = _phase74_retry_threshold()
+        if score >= threshold:
+            _trace(req_id, "2dc.RETRY_SKIPPED",
+                   {"reason": "score_above_threshold",
+                    "score": score, "threshold": threshold})
+            return None
+
+        # Gate 3: at least one repair-able check failed
+        repair_messages = _build_repair_prompt(
+            question=question,
+            original_answer=original_text,
+            qu=qu,
+            verify_result=original_verify,
+        )
+        if repair_messages is None:
+            _trace(req_id, "2dc.RETRY_SKIPPED",
+                   {"reason": "no_repairable_failures",
+                    "score": score,
+                    "checks": (original_verify or {}).get("checks")})
+            return None
+
+        # Gate passed — trigger retry.
+        failed_names = [
+            n for n in _PHASE74_REPAIRABLE_CHECKS
+            if (original_verify or {}).get("checks", {}).get(n) == "fail"
+        ]
+        _trace(req_id, "2dc.RETRY_TRIGGERED", {
+            "original_score":  score,
+            "threshold":       threshold,
+            "failed_checks":   failed_names,
+        })
+
+        # Tunable retry knobs.
+        try:
+            max_tokens = int(os.environ.get("PHASE74_RETRY_MAX_TOKENS", "600"))
+        except Exception:
+            max_tokens = 600
+        try:
+            temp = float(os.environ.get("PHASE74_RETRY_TEMP", "0.3"))
+        except Exception:
+            temp = 0.3
+
+        # Single repair call. Use same model + a tight token budget.
+        try:
+            r = client.chat.completions.create(
+                model       = model,
+                messages    = repair_messages,
+                temperature = temp,
+                top_p       = 1,
+                max_tokens  = max_tokens,
+                timeout     = _PRIMARY_LLM_TIMEOUT_S,
+            )
+        except Exception as llm_exc:
+            _trace(req_id, "2dc.RETRY_ERROR",
+                   {"phase": "llm_call", "error": str(llm_exc)[:200]})
+            return None
+
+        repaired_text = (
+            (r.choices[0].message.content or "").strip()
+            if r.choices else ""
+        )
+        if not repaired_text:
+            _trace(req_id, "2dc.RETRY_ERROR",
+                   {"phase": "empty_response"})
+            return None
+
+        # Re-verify the repaired text against the same qu/question.
+        try:
+            repaired_verify = _verify_answer_against_intent(
+                answer_text=repaired_text,
+                qu=qu,
+                question=question,
+            )
+        except Exception as ver_exc:
+            _trace(req_id, "2dc.RETRY_ERROR",
+                   {"phase": "reverify", "error": str(ver_exc)[:200]})
+            return None
+
+        repaired_score = repaired_verify.get("score")
+
+        # Pick better of (original, repaired). Tie → original. None → original.
+        if repaired_score is None or repaired_score <= score:
+            winner = "original"
+            final_text = original_text
+            final_verify = original_verify
+        else:
+            winner = "repaired"
+            final_text = repaired_text
+            final_verify = repaired_verify
+
+        _trace(req_id, "2dc.RETRY_COMPLETE", {
+            "original_score":  score,
+            "repaired_score":  repaired_score,
+            "winner":          winner,
+            "repaired_checks": repaired_verify.get("checks"),
+        })
+        return (final_text, final_verify)
+
+    except Exception as exc:  # noqa: BLE001
+        # Catch-all — retry must NEVER block the answer return.
+        _trace(req_id, "2dc.RETRY_ERROR",
+               {"phase": "outer", "error": str(exc)[:200]})
+        return None
+
+
 _ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
 
 
@@ -15205,6 +15466,32 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "details": _verify_result.get("details"),
             "skipped": _verify_result.get("skipped"),
         })
+
+        # ── Phase 7.4 — LLM REPAIR RETRY (env-gated, default OFF) ──
+        # Only fires when PHASE74_RETRY_ENABLED=true AND verifier
+        # score < threshold AND at least one repair-able check (C1/C3/C4)
+        # failed. NEVER raises — always wrapped, always returns either
+        # the repaired text+verify or the original unchanged.
+        try:
+            _retry_out = _run_repair_retry(
+                original_text=text,
+                original_verify=_verify_result,
+                qu=locals().get("_qu"),
+                question=question,
+                model=model,
+                client=client,
+                req_id=req_id,
+            )
+            if _retry_out is not None:
+                _new_text, _new_verify = _retry_out
+                if _new_text and _new_text != text:
+                    text = _new_text
+                    _verify_result = _new_verify
+        except Exception as _retry_exc:  # noqa: BLE001
+            _trace(req_id, "2dc.RETRY_ERROR",
+                   {"phase": "wire_sync_full",
+                    "error": str(_retry_exc)[:200]})
+
     except Exception as _ver_exc:  # noqa: BLE001
         _trace(req_id, "2db.ANSWER_VERIFY_FAIL",
                {"path": "sync_full", "error": str(_ver_exc)[:200]})

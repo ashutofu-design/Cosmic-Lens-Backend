@@ -5485,3 +5485,239 @@ ranked list.
 
 Total cumulative effort to "near-perfect understanding" target:
 ~5.5 days. Phase 7.3 ships day 4 of 5.5.
+
+
+## Phase 7.4 — LLM Repair Retry (Apr 30, 2026)
+
+**Goal:** When the deterministic verifier (Phase 7.2) flags a low score
+AND the failed checks are repair-able, fire ONE additional LLM call
+with a tight repair-prompt, re-verify the corrected answer, and pick
+the better of (original, repaired) by score. This converts the verifier
+from pure observability into an auto-correcting layer.
+
+**Trigger:** Phase 7.0/7.1/7.2/7.3 give us the full TRUE-INTENT +
+slot + archetype + verifier stack. Verifier currently just *grades* —
+this phase makes it *repair* the answer when grading drops below a
+threshold.
+
+**Critical safety choice — env-gated, default OFF:**
+The retry layer is wired BUT silent in prod until
+`PHASE74_RETRY_ENABLED=true` is set. The reason: without 7.2/7.3
+production telemetry, we don't yet know what threshold actually helps
+vs wastes tokens. Shipping the code now lets us flip the switch the
+moment data justifies it, without another deploy. **Zero cost impact
+on current prod traffic.**
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED (3363 lines, 25 layers preserved)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- mobile (`artifacts/cosmic-lens-mobile/`) UNTOUCHED
+- `flask_app.py` UNTOUCHED
+- `question_understanding.py` UNTOUCHED (no classifier change needed)
+- 1 file touched (`openai_helper.py`)
+
+### Wire scope (deliberately narrow)
+
+Only **sync FULL** is wired. Excluded paths:
+
+| Path        | Why excluded |
+|---|---|
+| sync BARE   | Bare paths chosen for SPEED — retry defeats purpose |
+| stream FULL | Streaming UX would show flicker/replacement; awkward |
+| stream BARE | Both bare-skip AND stream-flicker reasons apply |
+| wealth structured | Already has its own 2-attempt JSON-schema retry |
+
+If sync FULL retry proves valuable in prod, extending to stream is a
+follow-up.
+
+### Tunable knobs (env vars)
+
+| Var | Default | Purpose |
+|---|---|---|
+| `PHASE74_RETRY_ENABLED` | `false` | Master switch — must be `true`/`1`/`yes`/`on` |
+| `PHASE74_RETRY_THRESHOLD` | `0.6` | Score below this triggers retry (clamped [0,1]) |
+| `PHASE74_RETRY_MAX_TOKENS` | `600` | Repair output cap (tighter than primary) |
+| `PHASE74_RETRY_TEMP` | `0.3` | Lower than primary for deterministic correction |
+
+### Repair-able vs not-repair-able checks
+
+| Check | Repair-able? | Why |
+|---|---|---|
+| C1_keyword_echo | YES | LLM can re-echo specific keywords from qu |
+| C2_length_budget | NO | Length over budget — easier to truncate locally |
+| C3_timing_clean | YES | LLM can re-write without timing words |
+| C4_ranked_list | YES | LLM can re-format as numbered list |
+| C5_length_min | NO | Below min usually means model refused — retry won't fix |
+
+When ALL failed checks are non-repair-able (only C2/C5), retry skips
+with `reason: "no_repairable_failures"` — no LLM call wasted.
+
+### Change set
+
+**A. New env-gate helpers (`openai_helper.py` ~L8722-8739)**
+
+1. `_PHASE74_REPAIRABLE_CHECKS` constant — tuple of 3 check names.
+2. `_phase74_retry_enabled()` — parses `PHASE74_RETRY_ENABLED`,
+   accepts `true`/`1`/`yes`/`on` (case-insensitive, whitespace OK).
+3. `_phase74_retry_threshold()` — float parsing with garbage-fallback
+   (default 0.6) + clamp to [0,1].
+
+**B. Repair prompt builder (~L8742)**
+
+4. `_build_repair_prompt(question, original_answer, qu, verify_result)`:
+   - Returns `Optional[list[dict]]` (None when nothing to repair).
+   - Per-check instructions with check name (C1/C3/C4) so the LLM
+     knows exactly what to fix.
+   - C1 instr embeds the user's keywords from `qu.user_keywords`.
+   - C3 instr lists the specific leaked timing words from
+     `verify_result.details.C3_timing_clean`.
+   - C4 instr forces "1. ... 2. ... 3. ..." format.
+   - Truncates question (240c) + answer (1200c) for tight prompt.
+   - Emits 2-msg list: system role ("you are correcting...") +
+     user role (with all the specifics).
+
+**C. Retry runner (~L8851)**
+
+5. `_run_repair_retry(*, original_text, original_verify, qu, question,
+   model, client, req_id) -> Optional[tuple[str, dict]]`:
+
+   Gate flow:
+   - Gate 1: `_phase74_retry_enabled()` is False → SKIPPED + None
+   - Gate 2: `original_verify.score is None` → SKIPPED + None
+   - Gate 3: `score >= threshold` → SKIPPED + None
+   - Gate 4: `_build_repair_prompt(...) is None` → SKIPPED + None
+   - All passed → emit `2dc.RETRY_TRIGGERED`, call LLM (same model,
+     lower temp, short max_tokens, same timeout).
+
+   Failure handling:
+   - LLM raises → ERROR trace, return None
+   - LLM returns empty → ERROR trace, return None
+   - Re-verify raises → ERROR trace, return None
+   - Outer try/except — NEVER raises out
+
+   Selection:
+   - `repaired_score > original_score` → repaired wins
+   - else (tie OR repaired lower OR repaired None) → original wins
+   - Emit `2dc.RETRY_COMPLETE` with both scores + winner +
+     repaired_checks
+
+**D. Wire in sync FULL (~L15473)**
+
+6. Inside the verifier `try` block, AFTER `2db.ANSWER_VERIFIED` emit,
+   nested `try/except` around `_run_repair_retry` call. If the call
+   returns a tuple, REPLACE local `text` and `_verify_result`. If it
+   raises (defensively wrapped), emit `2dc.RETRY_ERROR` with phase
+   "wire_sync_full" and continue with original.
+
+**Critical wire detail:** `text` and `_verify_result` are local vars
+in `ai_ask`'s scope. Replacing them BEFORE the `_result` dict
+construction means follow-ups + final result use the repaired text
+when retry won. No state inconsistency.
+
+### New trace events (4 total)
+
+```
+2dc.RETRY_SKIPPED     {reason: "env_disabled" | "no_score" |
+                       "score_above_threshold" | "no_repairable_failures",
+                       ...context}
+2dc.RETRY_TRIGGERED   {original_score, threshold, failed_checks: [...]}
+2dc.RETRY_COMPLETE    {original_score, repaired_score, winner,
+                       repaired_checks}
+2dc.RETRY_ERROR       {phase, error}
+```
+
+When the layer is OFF (default), only `RETRY_SKIPPED reason=env_disabled`
+fires per sync-FULL request. When enabled, mostly `RETRY_SKIPPED
+score_above_threshold` (good answers) + occasional `RETRY_COMPLETE`
+(rescues).
+
+### Verification
+
+**Smoke test (`_phase74_smoke.py`, 53/53 ✔):**
+
+| Layer | # tests | Coverage |
+|---|---|---|
+| A. Env gates | 18 | enabled-parsing (true/TRUE/1/yes/on/whitespace), disabled-parsing (false/0/garbage/empty), threshold (default/garbage/negative-clamp/over-1-clamp) |
+| B. Repair prompt | 15 | None-paths (all-pass, only-length-fail, C1-without-kws); messages built (C1+kws, C3, C4); per-check instr present; multi-failure includes all 3 instrs; long-input truncation works |
+| C. Retry runner | 18 | env-disabled→None+no-LLM; score-above-threshold→None+no-LLM; only-C2/C5-fail→None+no-LLM; LLM-error swallowed; empty-response→None; repaired-wins (real verifier); repaired-worse→original-wins (mocked verifier); tie→original-wins; no-score→None+no-LLM; outer-exception swallowed |
+| D. Integration | 1 | verifier still callable after Phase 7.4 helpers added |
+
+API server restarted, healthz HTTP 200.
+
+### Architect review (in-session)
+
+Eight-area review: cost/prod safety, state leakage, wire safety,
+repair prompt quality, tie-breaker semantics, C1 actionable check,
+threshold clamping, mock-friendliness.
+
+- **0 SEVERE / 0 HIGH findings**
+- **2 MEDIUM** (both observations, not blockers):
+  - **G**: `PHASE74_RETRY_THRESHOLD=1.0` will retry every imperfect
+    answer; on tie repaired loses. Documented behavior.
+  - **D**: Repair prompt says "match original's language" but doesn't
+    pass `eff_lang` explicitly. May regress to English on short
+    Hinglish answers. **Recommended fix IF telemetry shows language
+    regression** — defer until we have data.
+- **1 LOW**: `_run_repair_retry` emits `reason: "no_repairable_failures"`
+  even when a repair-able check (C1) failed but had no actionable
+  context (no keywords). Cosmetic trace-label imprecision.
+
+**Verdict: PASS — SHIP under env gate.**
+
+### Performance impact (when enabled)
+
+- One additional LLM call per request that triggers retry.
+  Token cost: ~250 input (prompt) + ≤600 output (capped).
+- When DISABLED (default): zero cost — single env-var check + early
+  return per sync-FULL request.
+- When ENABLED: only fires when verifier score < threshold (0.6 by
+  default). Realistic prod fire-rate unknown until baseline data
+  arrives.
+- Latency: only retry-triggered requests pay the extra call.
+  Verifier itself is microsecond-scale — no measurable overhead.
+
+### Files touched
+
+- `artifacts/api-server/openai_helper.py` (3 edits in 1 file:
+  insert helpers ~L8704-8943, wire sync FULL ~L15473)
+
+### NOT changed
+
+- `artifacts/api-server/health_engine.py` (3363 lines untouched)
+- All other engines (dosh, career, love, marriage, wealth)
+- `artifacts/api-server/flask_app.py` (route layer untouched)
+- `artifacts/api-server/question_understanding.py` (classifier
+  unchanged — same `qu` shape consumed, no new fields needed)
+- `artifacts/api-server/models.py` (DB schema untouched)
+- mobile client (`artifacts/cosmic-lens-mobile/`)
+
+### How to enable in prod (when ready)
+
+```bash
+export PHASE74_RETRY_ENABLED=true
+# Optional fine-tuning:
+export PHASE74_RETRY_THRESHOLD=0.6   # default
+export PHASE74_RETRY_MAX_TOKENS=600  # default
+export PHASE74_RETRY_TEMP=0.3        # default
+```
+
+Then watch for `2dc.RETRY_TRIGGERED` and `2dc.RETRY_COMPLETE` in
+trace logs. Compare `original_score` vs `repaired_score` distribution
+to decide if the layer is justified.
+
+### Phase 7 series progress
+
+- ✔ Phase 7.0 — TRUE-INTENT prompt driver (Apr 30 2026)
+- ✔ Phase 7.1 — Slot expansion (Apr 30 2026)
+- ✔ Phase 7.2 — Deterministic verifier (Apr 30 2026)
+- ✔ Phase 7.3 — 5-archetype taxonomy (Apr 30 2026)
+- ✔ Phase 7.4 — LLM repair retry (Apr 30 2026, this entry —
+                                  shipped behind env gate, default OFF)
+- ⏳ Phase 7.5 — Mobile clarifier UX (~0.5 day, independent)
+- ⏳ Phase 7.6 — Session-cached slots (deferred until prod data)
+
+The active prompt-driver + verifier + repair stack is now complete.
+Remaining 7.5/7.6 are UX + cache layers, independent of the prompt
+engineering core.

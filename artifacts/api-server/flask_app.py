@@ -1468,6 +1468,21 @@ def demo_login_route():
     user.is_pro      = True
     user.plan        = "pro"
     user.plan_expiry = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(days=365 * 10)
+    db.session.flush()
+
+    # Wipe any stale profiles so every demo session starts on a truly clean slate
+    # (prevents leftover test data from previous demo runs leaking into the home
+    # tab greeting via cloud-sync). Idempotent — safe to call on every demo login.
+    try:
+        Profile.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    except Exception:
+        app.logger.exception("[demo-login] profile wipe failed (non-fatal)")
+        db.session.rollback()
+        # Re-apply user mutations after rollback so the commit below still persists them
+        user.is_pro      = True
+        user.plan        = "pro"
+        user.plan_expiry = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(days=365 * 10)
+
     db.session.commit()
     payload = user.to_dict()
     payload["subscription"] = subscription_status(user)

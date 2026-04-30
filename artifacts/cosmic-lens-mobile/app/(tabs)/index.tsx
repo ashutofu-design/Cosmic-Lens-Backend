@@ -61,7 +61,7 @@ type HomeLabels = {
 };
 
 const HOME_EN: HomeLabels = {
-  namaste:        "Namaste 🙏",
+  namaste:        "Namaste",
   hello:          "Hello",
   forecastPill:   "7 Day Energy Forecast",
   todaysEnergy:   "TODAY'S ENERGY",
@@ -88,7 +88,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   en: HOME_EN,
 
   hn: {
-    namaste:        "Namaste 🙏",
+    namaste:        "Namaste",
     hello:          "Hello",
     forecastPill:   "7 Din Energy Forecast",
     todaysEnergy:   "AAJ KI ENERGY",
@@ -112,7 +112,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   hi: {
-    namaste:        "नमस्ते 🙏",
+    namaste:        "नमस्ते",
     hello:          "नमस्ते",
     forecastPill:   "7 दिन का ऊर्जा पूर्वानुमान",
     todaysEnergy:   "आज की ऊर्जा",
@@ -136,7 +136,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   bn: {
-    namaste:        "নমস্কার 🙏",
+    namaste:        "নমস্কার",
     hello:          "নমস্কার",
     forecastPill:   "৭ দিনের শক্তি পূর্বাভাস",
     todaysEnergy:   "আজকের শক্তি",
@@ -160,7 +160,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   mr: {
-    namaste:        "नमस्कार 🙏",
+    namaste:        "नमस्कार",
     hello:          "नमस्कार",
     forecastPill:   "७ दिवसांचा ऊर्जा अंदाज",
     todaysEnergy:   "आजची ऊर्जा",
@@ -184,7 +184,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   ta: {
-    namaste:        "வணக்கம் 🙏",
+    namaste:        "வணக்கம்",
     hello:          "வணக்கம்",
     forecastPill:   "7 நாள் ஆற்றல் முன்னறிவிப்பு",
     todaysEnergy:   "இன்றைய ஆற்றல்",
@@ -208,7 +208,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   te: {
-    namaste:        "నమస్తే 🙏",
+    namaste:        "నమస్తే",
     hello:          "నమస్తే",
     forecastPill:   "7 రోజుల శక్తి సూచన",
     todaysEnergy:   "నేటి శక్తి",
@@ -232,7 +232,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   gu: {
-    namaste:        "નમસ્તે 🙏",
+    namaste:        "નમસ્તે",
     hello:          "નમસ્તે",
     forecastPill:   "7 દિવસનું ઊર્જા પૂર્વાનુમાન",
     todaysEnergy:   "આજની ઊર્જા",
@@ -256,7 +256,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   kn: {
-    namaste:        "ನಮಸ್ಕಾರ 🙏",
+    namaste:        "ನಮಸ್ಕಾರ",
     hello:          "ನಮಸ್ಕಾರ",
     forecastPill:   "7 ದಿನಗಳ ಶಕ್ತಿ ಮುನ್ಸೂಚನೆ",
     todaysEnergy:   "ಇಂದಿನ ಶಕ್ತಿ",
@@ -280,7 +280,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   ml: {
-    namaste:        "നമസ്കാരം 🙏",
+    namaste:        "നമസ്കാരം",
     hello:          "നമസ്കാരം",
     forecastPill:   "7 ദിവസത്തെ ഊർജ്ജ പ്രവചനം",
     todaysEnergy:   "ഇന്നത്തെ ഊർജ്ജം",
@@ -304,7 +304,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   pa: {
-    namaste:        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ 🙏",
+    namaste:        "ਸਤ ਸ੍ਰੀ ਅਕਾਲ",
     hello:          "ਸਤ ਸ੍ਰੀ ਅਕਾਲ",
     forecastPill:   "7 ਦਿਨ ਦਾ ਊਰਜਾ ਅਨੁਮਾਨ",
     todaysEnergy:   "ਅੱਜ ਦੀ ਊਰਜਾ",
@@ -328,7 +328,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   or: {
-    namaste:        "ନମସ୍କାର 🙏",
+    namaste:        "ନମସ୍କାର",
     hello:          "ନମସ୍କାର",
     forecastPill:   "୭ ଦିନର ଶକ୍ତି ପୂର୍ବାନୁମାନ",
     todaysEnergy:   "ଆଜିର ଶକ୍ତି",
@@ -352,7 +352,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
   },
 
   as: {
-    namaste:        "নমস্কাৰ 🙏",
+    namaste:        "নমস্কাৰ",
     hello:          "নমস্কাৰ",
     forecastPill:   "৭ দিনৰ শক্তি পূৰ্বানুমান",
     todaysEnergy:   "আজিৰ শক্তি",

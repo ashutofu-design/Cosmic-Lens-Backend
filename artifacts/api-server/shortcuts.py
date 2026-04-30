@@ -64,22 +64,21 @@ _FAREWELL = {
 
 _INTRO = {
     "en": (
-        "I'm Cosmic Lens — a Vedic astrology AI built on your birth "
-        "chart. I analyse career timing, marriage prospects, health "
-        "outlook, financial direction, and your current planetary "
-        "periods (dasha) — all rooted in the actual planetary "
-        "positions in your kundli, not generic horoscope text."
+        "I am Cosmo — a highly trained advanced Cosmic Intelligence. "
+        "Your kundli is with me. Ask me about career, marriage, "
+        "health, finance, or your current dasha — I will guide you "
+        "from your own chart, not generic horoscope text."
     ),
     "hi": (
-        "मैं Cosmic Lens हूँ — आपकी जन्मकुंडली पर आधारित वैदिक "
-        "ज्योतिष AI। करियर, विवाह, स्वास्थ्य, धन और वर्तमान दशा का "
-        "विश्लेषण कर सकता हूँ — सब आपकी असली कुंडली पर आधारित।"
+        "मैं Cosmo हूँ — एक highly trained advanced Cosmic Intelligence। "
+        "आपकी कुंडली मेरे पास है। करियर, विवाह, स्वास्थ्य, धन या "
+        "वर्तमान दशा — कुछ भी पूछिए, आपकी असली कुंडली से उत्तर दूँगा।"
     ),
     "hn": (
-        "Main Cosmic Lens hu — aapki janma kundli pe based Vedic "
-        "astrology AI. Career, shaadi, health, paisa, current dasha "
-        "— sab analyse kar sakta hu, sirf aapke chart ke planet "
-        "positions ke aadhar pe. Generic horoscope nahi."
+        "Main ek highly trained advance cosmic intelligence hun. "
+        "Mera naam Cosmo hai. Aapki kundli mere paas hai — career, "
+        "shaadi, health, paisa, current dasha — kuch bhi puchhiye, "
+        "aapke chart ke aadhar pe jawab dunga."
     ),
 }
 
@@ -139,13 +138,22 @@ _FAREWELL_RX = re.compile(
 
 _INTRO_RX = re.compile(
     r"^\s*("
-    r"(tum|aap|tu|you)\s*kaun\s*(ho|hain|hai|are|are\s*you)|"
+    # "tum/aap/tu/you kaun ho/hain/hai/are" + romanised "kon"
+    r"(tum|aap|tu|you)\s*(kaun|kon)\s*(ho|hain|hai|are|are\s*you)|"
     r"who\s+are\s+(you|u)|"
     r"what\s+are\s+(you|u)|"
     r"(ye|yeh|this)\s+(app|kya)\s+(kya\s*hai|hai|is|kya)|"
     r"kya\s+(ye|yeh|this)\s+(app|hai|is)|"
     r"introduce\s+(yourself|urself)|"
-    r"about\s+(you|this\s+app)"
+    r"about\s+(you|this\s+app)|"
+    # "kya tum/aap/tu AI/bot/chatbot/robot/ai ho/hain"
+    r"kya\s+(tum|aap|tu)\s+(ai|a\.i\.|bot|chatbot|robot|chat\s*bot)\s+(ho|hain|hai)|"
+    r"are\s+you\s+(an?\s+)?(ai|a\.i\.|bot|chatbot|robot|chat\s*bot|human|real)|"
+    r"(tum|aap|tu)\s+(ai|bot|chatbot|robot)\s+(ho|hain|hai)|"
+    # "tumhara/aapka/tera naam kya hai" + "what's your name"
+    r"(tumhara|tumhaara|aapka|aapkaa|tera|teraa)\s+(naam|nam|nāma|name)\s+(kya|kyaa|what)\s*(hai|he|hain|is)?|"
+    r"what\s*('?s|is)\s+your\s+name|"
+    r"your\s+name\s*(kya\s+hai|please|\?)?"
     r")\s*[?.!,]*\s*$",
     re.IGNORECASE,
 )

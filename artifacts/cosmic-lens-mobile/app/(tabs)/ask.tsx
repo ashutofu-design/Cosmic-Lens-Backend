@@ -426,20 +426,25 @@ export default function AskScreen() {
 
           // Phase 7.5 — clarifier UX. Server attaches a `clarification`
           // object only when its classifier confidence was low. Defensive
-          // shape check: must have a non-empty options[] to render.
-          const clar =
+          // shape check + parity with the SSE parser: `clar` is left
+          // undefined unless the FILTERED options list (strings only,
+          // trimmed, non-empty) is itself non-empty. This avoids
+          // storing `{prompt, options: []}` shells in chat history.
+          let clar: { prompt: string; options: string[] } | undefined;
+          if (
             json.clarification &&
             typeof json.clarification === "object" &&
             typeof json.clarification.prompt === "string" &&
             Array.isArray(json.clarification.options) &&
             json.clarification.options.length > 0
-              ? {
-                  prompt:  String(json.clarification.prompt),
-                  options: json.clarification.options
-                    .filter((o: unknown) => typeof o === "string" && o.trim().length > 0)
-                    .slice(0, 4) as string[],
-                }
-              : undefined;
+          ) {
+            const _opts = (json.clarification.options as unknown[])
+              .filter(o => typeof o === "string" && (o as string).trim().length > 0)
+              .slice(0, 4) as string[];
+            if (_opts.length > 0) {
+              clar = { prompt: String(json.clarification.prompt), options: _opts };
+            }
+          }
 
           const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>

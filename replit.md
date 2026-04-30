@@ -4782,3 +4782,158 @@ edits. Both fixed in the same session:
   (confidence 0.95), TRUTH precheck passed cleanly → bare-return fired
   on healthy path with new safety net active
 - Zero stack traces in logs
+
+## Phase 7.0 — TRUE-INTENT Prompt Driver (Apr 30, 2026)
+
+**Goal:** Promote the classifier-extracted `hidden_intent` field from
+telemetry-only (logged but never seen by the LLM) into an actual prompt
+driver, so the answerer addresses what the user REALLY asked instead of
+what the rigid 5-enum `intent` bucket inferred.
+
+**Trigger:** User-reported failing question
+"mujhse kya kya health issue aa sakte he" was being routed to
+`PROBLEM_QUERY` supertype (because `intent=problem`) and producing a
+flat unranked dump of every possible health issue, even though the
+classifier had already correctly extracted `hidden_intent="possible
+health issues I may face"` — a clear OVERVIEW ask. The hidden_intent
+field was emitted at `1.UNDERSTANDING` and `1c.MULTI_INTENT` traces
+but never reached the LLM messages array. Phase 7.0 closes that gap.
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED (3363 lines, 25 layers preserved)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- `question_understanding.py` UNTOUCHED — classifier already extracts
+  `hidden_intent` correctly; only the consumer side changes
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- Pure orchestration: 1 file touched (`openai_helper.py`), 0 added,
+  0 removed, +129 lines
+
+### Change set
+
+**A. New helper `_build_true_intent_hint`**
+- Location: `openai_helper.py` near `_build_supertype_contract` for
+  discoverability.
+- Signature: `_build_true_intent_hint(hidden_intent: str, question: str) -> str`
+- Returns a ~25-line system message string containing:
+  1. Header: "USER'S TRUE INTENT — Phase 7.0 hint"
+  2. The classifier-extracted hidden_intent verbatim
+  3. The original user question (truncated to 240 chars)
+  4. Five response-shaping rules:
+     - Rule 1: Address the EXACT intent — no pivoting
+     - Rule 2: OVERVIEW intent ("kya kya", "weak areas", "tendency",
+       "general", "overview", "sensitivity", "weak points") →
+       RANKED top-3 (NOT a flat dump)
+     - Rule 3: NO TIMING WORDS ("kab", "when", "kis saal") →
+       no dasha/year predictions
+     - Rule 4: NO REMEDY WORDS ("upay", "remedy") → ONE short
+       closing line
+     - Rule 5: Length budget — overview ≤80 words, specific ≤140 words
+- Pure-function (deterministic, no I/O). Cap honoured for
+  recency-budget hygiene.
+
+**B. Sync injection in `ai_ask`**
+- Position: after `_skip_contract_reason` initialization (so trace
+  event can record skip status without UnboundLocalError) but
+  BEFORE the `if not _skip_contract_reason:` supertype contract
+  install. Net effect on message order: TRUE_INTENT system msg sits
+  one position before the supertype contract — contract still wins
+  recency-lock.
+- Three gates (in order):
+  1. `mode == "astro"` — skip general-explainer pipeline
+  2. `_qu_hidden_intent` is a non-empty string
+  3. `not _use_wealth_structured_path` — wealth json_schema response
+     format would risk schema violations from prose-heavy hint
+     (architect-flagged MEDIUM, fixed in-session)
+- New trace event `2da.TRUE_INTENT_INJECTED` (prefix `2da` to avoid
+  collision with the existing `2d.QUESTION_SUPERTYPE` event used by
+  log aggregators). Records: hidden_intent, position in messages
+  array, phase50_active flag, and skip_contract reason.
+
+**C. Stream injection in `ai_ask_stream` (sync/stream parity)**
+- Mirror of the sync injection, placed AFTER the
+  `_phase50_active_stream = True` block and BEFORE the
+  narrative-contract install.
+- Independent of the narrative-contract gate so phase50 stream +
+  non-narrative-mode stream paths also get the hint.
+- New trace event `2da.TRUE_INTENT_INJECTED(stream)`.
+- Re-reads `(_qu or {}).get("hidden_intent")` into a fresh local
+  `_qu_hidden_intent_stream` to avoid scope reliance on sync-path
+  variables.
+
+**D. Phase 5.0 INTERPLAY (intentional, not a regression)**
+- When phase50 minimal-prompt path is active, this injection ADDS
+  one ~25-line system message back to the otherwise 2-message
+  minimal list (system + user → system + user + system).
+- This is the entire point of Phase 7.0 — phase50 minimal-prompt
+  assumed "engine facts + user question is enough"; Phase 7.0
+  disagrees for tendency/overview asks where intent context is
+  the missing ingredient.
+- Documented inline in the injection comment.
+
+### Verification
+
+| Test case (smoke-tested with stubbed OpenAI client + real classifier) | Classifier intent | hidden_intent | Inject fires? | Position |
+|---|---|---|---|---|
+| ORIGINAL FAILING: "mujhse kya kya health issue aa sakte he" | problem | "possible health issues I may face" | ✔ | 2 |
+| OVERVIEW 1: "meri health me weak areas kya kya hain" | problem | "weak areas in my health" | ✔ | 2 |
+| OVERVIEW 2: "mere health ki tendency kya hai general overview do" | analysis | "general health tendency overview" | ✔ | 2 |
+| TIMING (must NOT get overview shape): "mujhe health issue kab ho sakta hai kis saal me" | timing | "when health issue may occur" | ✔ | 2 |
+
+The TIMING case still injects the hint but the hint's Rule 3
+("NO TIMING WORDS in question — keep claims tense-less") is bypassed
+because the question DOES contain "kab" / "kis saal" — the LLM is
+free to give a dasha/year answer for that one. The hint is
+context-aware, not destructive.
+
+PROMPT trace confirms the hint content reaches the LLM verbatim,
+including the user's own words quoted back, and the contract still
+arrives last in normal (non-phase50) flow.
+
+### Architect review (in-session)
+
+Three MEDIUM findings raised + resolved before close:
+1. Wealth structured-output path (json_schema mode) could conflict
+   with prose-heavy hint → added `not _use_wealth_structured_path`
+   gate to sync injection.
+2. Trace key prefix collision with existing `2d.QUESTION_SUPERTYPE`
+   → renamed all 4 new trace keys from `2d.*` to `2da.*`.
+3. Phase 5.0 minimal-prompt opt-in needs documentation → added
+   "Phase 5.0 INTERPLAY" paragraph to inline injection comment.
+
+No SEVERE/HIGH findings. Recency-lock preserved. POST_LOGIC_CHECK
+and PHASE51_BARE_RETURN pre-checks (Phase 6.2) are unaffected — they
+operate on response text post-LLM, orthogonal to a pre-call system
+message injection.
+
+### Env knobs
+
+None. Phase 7.0 is always-on for `mode == "astro"` chart-bound asks
+with a non-empty classifier `hidden_intent`. To disable for A/B
+testing, comment out the injection block (kept short and
+self-contained for that reason) — no flag needed yet.
+
+### Files touched
+
+- `artifacts/api-server/openai_helper.py` (+129 lines, 0 removed)
+
+### NOT changed
+
+- `artifacts/api-server/health_engine.py` (3363 lines untouched)
+- `artifacts/api-server/question_understanding.py` (classifier
+  already correct — only the consumer side changes)
+- `artifacts/api-server/flask_app.py` (route layer untouched)
+- `artifacts/api-server/shortcuts.py` (Phase 6.2 layer untouched)
+- `artifacts/api-server/models.py` (DB schema untouched)
+- mobile client (`artifacts/cosmic-lens-mobile/`)
+
+### Deferred (Phase 7.1+ candidates from the same proposal)
+
+- 8-archetype expansion (OVERVIEW / TIMING / DIAGNOSTIC / PREDICTIVE /
+  DECISION / COMPARATIVE / EXPLANATORY / REMEDY) replacing the
+  rigid 5-enum bucket
+- Free-form classifier slot fields (severity, body_part, time_window)
+- Post-LLM "did-it-answer-the-question" verifier loop
+- Engine layer additions (`kalapurush body-part`, `named disease
+  catalog`, `D3 Drekkana`) — only after the prompt-driver win is
+  measured in the wild

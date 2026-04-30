@@ -8302,6 +8302,63 @@ def _build_supertype_contract(supertype: str,
     )
 
 
+# Phase 7.0 (Apr 30, 2026) — TRUE-INTENT prompt driver.
+# The classifier in question_understanding.py extracts what the user
+# ACTUALLY asked into `hidden_intent` (e.g. "weak areas in health",
+# "tendency", "possible health issues") — but until Phase 7.0 this
+# field was telemetry-only. The rigid 5-enum `intent` bucket
+# (problem/timing/decision/planet/analysis) sometimes misroutes a
+# tendency/overview question into PROBLEM_QUERY, producing a flat
+# unranked dump instead of a focused top-3 overview.
+#
+# This helper produces a SHORT system message that promotes the
+# hidden_intent into an actual prompt driver. Inject as a system
+# message right BEFORE the per-supertype contract install so the
+# contract still wins recency, but the LLM sees the user's true
+# intent as context.
+def _build_true_intent_hint(hidden_intent: str, question: str) -> str:
+    """Phase 7.0 — return a system-message string promoting the
+    classifier-extracted `hidden_intent` from telemetry into a
+    response-shaping rule.
+
+    Cap: ~30 lines of prompt — recency-budget hygiene. Deterministic
+    (no model call, no I/O), safe to call on every primary-generation
+    request.
+    """
+    q = (question or "").strip()
+    if len(q) > 240:
+        q = q[:237] + "…"
+    hi = (hidden_intent or "").strip() or "(none extracted)"
+
+    return (
+        "USER'S TRUE INTENT — Phase 7.0 hint\n"
+        "════════════════════════════════════\n"
+        f"Auto-extracted from the user's words: \"{hi}\"\n"
+        f"Original question (verbatim): \"{q}\"\n"
+        "\n"
+        "RESPONSE-SHAPING RULES (override generic defaults):\n"
+        " 1. Address the EXACT intent above — do NOT pivot to a\n"
+        "    related-but-different question.\n"
+        " 2. OVERVIEW intent (\"kya kya\", \"weak areas\", \"tendency\",\n"
+        "    \"general\", \"overview\", \"sensitivity\", \"weak points\"):\n"
+        "    → Give a RANKED top-3 list (highest-priority FIRST).\n"
+        "    → Do NOT dump every possible item. Skip lower-ranked.\n"
+        "    → 1-2 lines per item, plain language + cited planet.\n"
+        " 3. NO TIMING WORDS in question (\"kab\", \"when\", \"kis\n"
+        "    saal\", \"kab tak\", \"date\"):\n"
+        "    → Do NOT inject dasha periods or year predictions.\n"
+        "    → Keep claims tense-less (\"sensitivity hai\", not\n"
+        "    \"2026 me hoga\").\n"
+        " 4. NO REMEDY WORDS in question (\"upay\", \"remedy\", \"kya\n"
+        "    karu\"):\n"
+        "    → Keep advice to ONE short closing line — generic\n"
+        "    lifestyle hint, not a list of mantras.\n"
+        " 5. Length budget:\n"
+        "    → OVERVIEW asks: ≤80 words.\n"
+        "    → Specific asks: ≤140 words.\n"
+    )
+
+
 _ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
 
 
@@ -12335,6 +12392,51 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # narrative mode so marriage answers get the same flowing format.
         _skip_contract_reason = "marriage narrator mode owns the prompt"
 
+    # ── Phase 7.0 — TRUE-INTENT prompt driver ────────────────────────────────
+    # Promote classifier-extracted `hidden_intent` from telemetry-only into
+    # an actual system message so the LLM addresses what the user REALLY
+    # asked, not what the rigid 5-enum `intent` bucket inferred.
+    #
+    # Position: just BEFORE the supertype contract install below so the
+    # contract still wins recency, but the model sees the true-intent
+    # context one position earlier. Placed AFTER `_skip_contract_reason`
+    # is initialized so the trace event can record skip status without an
+    # UnboundLocalError.
+    #
+    # Gates (in order):
+    #   • mode == "astro" — skip general-explainer pipeline (own prompt).
+    #   • _qu_hidden_intent truthy — classifier extracted something usable.
+    #   • _use_wealth_structured_path == False — wealth json_schema path
+    #     uses response_format=json_schema; injecting prose-heavy hint
+    #     would risk schema violations (architect: MEDIUM, Phase 7.0).
+    #
+    # Phase 5.0 INTERPLAY (intentional): when phase50 minimal-prompt is
+    # active, this injection ADDS one ~25-line system message back to
+    # the otherwise 2-message minimal list. That is the entire point of
+    # Phase 7.0 — phase50 minimal-prompt assumed "engine facts + user
+    # question is enough"; Phase 7.0 disagrees for tendency/overview
+    # asks where intent context is the missing ingredient.
+    if (mode == "astro"
+            and isinstance(_qu_hidden_intent, str)
+            and _qu_hidden_intent.strip()
+            and not _use_wealth_structured_path):
+        try:
+            messages.append({
+                "role":    "system",
+                "content": _build_true_intent_hint(
+                    _qu_hidden_intent, question
+                ),
+            })
+            _trace(req_id, "2da.TRUE_INTENT_INJECTED", {
+                "hidden_intent":  _qu_hidden_intent,
+                "position":       len(messages) - 1,
+                "phase50_active": _phase50_active,
+                "skip_contract":  _skip_contract_reason or None,
+            })
+        except Exception as _ti_exc:
+            _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL",
+                   {"error": str(_ti_exc)[:200]})
+
     if not _skip_contract_reason:
         _supertype_tag = (question_supertype or {}).get("supertype") or "GENERAL_ANALYSIS"
         try:
@@ -14918,6 +15020,33 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             path_label="(stream)", topic=topic, history=history,
         )
         _phase50_active_stream = True
+
+    # ── Phase 7.0 — TRUE-INTENT prompt driver (stream parity) ──────────
+    # Mirror of the sync-path injection in `ai_ask`. Promotes the
+    # classifier-extracted `hidden_intent` into a system message so the
+    # SSE path benefits from the same response-shaping hint. Fires
+    # independently of the narrative-contract gate below (so phase50 +
+    # non-narrative-mode paths also get the hint). See `_build_true_
+    # intent_hint` for the rules contract.
+    _qu_hidden_intent_stream = (_qu or {}).get("hidden_intent")
+    if (mode == "astro"
+            and isinstance(_qu_hidden_intent_stream, str)
+            and _qu_hidden_intent_stream.strip()):
+        try:
+            messages.append({
+                "role":    "system",
+                "content": _build_true_intent_hint(
+                    _qu_hidden_intent_stream, question or ""
+                ),
+            })
+            _trace(req_id, "2da.TRUE_INTENT_INJECTED(stream)", {
+                "hidden_intent":  _qu_hidden_intent_stream,
+                "position":       len(messages) - 1,
+                "phase50_active": _phase50_active_stream,
+            })
+        except Exception as _ti_exc_s:
+            _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL(stream)",
+                   {"error": str(_ti_exc_s)[:200]})
 
     # ── Phase 4.5 — STREAM-PATH NARRATIVE CONTRACT INSTALL ─────────────
     # The sync `ai_ask_v2` path installs the unified narrator contract as

@@ -1824,12 +1824,22 @@ def _strict_lang_block(code: str) -> str:
 # kundli dump + universal topic-routing cheat-sheet + structured-output
 # instructions (see kundli_full_context.py). Engines / rules NOT used in
 # this path — the LLM gets full chart access and self-decides which
-# houses/grahas to look at based on the question. Pure ADD-ONLY. Default
-# OFF — zero behaviour change unless the flag is explicitly set.
+# houses/grahas to look at based on the question.
+#
+# DEFAULT ON since Apr 30 2026 (project owner: "Pura engineered path
+# remove karo"). The flag now needs to be EXPLICITLY disabled to fall
+# back to the legacy ~5,000-line engineered ai_ask body. Set
+# `LLM_FULL_CHART_MODE=0` (or `false`/`no`/`off`) and restart the
+# api-server workflow to roll back if pure-AI passthrough misbehaves.
+# Engineered code stays in the file as a defensive exception fallback
+# (only triggers if passthrough itself raises — e.g. OpenAI outage).
 def _llm_full_chart_mode_enabled() -> bool:
-    """True iff Phase 7.7-pre full-chart-access mode is enabled via env."""
-    return os.environ.get("LLM_FULL_CHART_MODE", "").strip().lower() in (
-        "true", "1", "yes", "on")
+    """True UNLESS explicitly disabled. Default ON since Apr 30 2026."""
+    val = os.environ.get("LLM_FULL_CHART_MODE", "").strip().lower()
+    if val in ("0", "false", "no", "off"):
+        return False
+    # "" (unset) / "1" / "true" / "yes" / "on" / anything else → ENABLED
+    return True
 
 
 def _build_messages(

@@ -6463,3 +6463,58 @@ infrastructure — kept by intentional decision, NOT Vedic engines):**
 If the owner later decides those should also be removed, gate them
 on `_llm_full_chart_mode_enabled()` in `flask_app.py::ask_route`
 (~L5634, L5658) and `consume_question` (~L5686).
+
+---
+
+### Phase 7.7-pre — Update (Apr 30, 2026, FINAL): default flipped to ON
+
+Per project owner: *"Pura engineered path remove karo."*
+
+The flag `LLM_FULL_CHART_MODE` is now **ON by default**. Engineered
+path no longer runs in normal flow — every `/api/ask` and
+`/api/ask/stream` request automatically uses the pure-AI passthrough
+(raw chart facts + question → OpenAI directly, no engines).
+
+**Helper change (`openai_helper.py:1839`):**
+
+```python
+def _llm_full_chart_mode_enabled() -> bool:
+    """True UNLESS explicitly disabled. Default ON since Apr 30 2026."""
+    val = os.environ.get("LLM_FULL_CHART_MODE", "").strip().lower()
+    if val in ("0", "false", "no", "off"):
+        return False
+    return True   # "" / "1" / "true" / "yes" / "on" → ENABLED
+```
+
+**Rollback path (preserved):** if pure-AI passthrough misbehaves in
+production (e.g. AI hallucinates a yoga, gives a bad reading on a
+specific topic, etc.), set `LLM_FULL_CHART_MODE=0` in the
+api-server env and restart the workflow. The engineered ~5,000-line
+ai_ask body is still physically present in the file — it will resume
+serving traffic immediately on rollback. No code changes needed for
+revert.
+
+**Engineered code is NOT deleted.** It stays as:
+1. Defensive exception fallback — if the passthrough branch raises
+   (OpenAI outage, malformed kundli, network blip), execution falls
+   through to the legacy body.
+2. Rollback safety net — flip one env var to revert.
+
+If the owner later decides to physically remove the legacy code
+(~5,000 lines: Sprint-26 classifier, wealth verdict engine, cross-
+domain check, _build_messages with locked_facts/RAG/30+ STRICT
+INSTRUCTIONS, POST_LOGIC_CHECK, TRUTH validator, narrators,
+scrubbers, etc.), that is a separate destructive refactor that
+removes the rollback option entirely. NOT recommended unless the
+passthrough has been battle-tested in production for several weeks.
+
+**Verification (smoke):**
+- `os.environ.pop("LLM_FULL_CHART_MODE")` → helper returns **True**
+  (default ON works).
+- `LLM_FULL_CHART_MODE=0`/`false`/`no`/`off` (any case) →
+  helper returns False (rollback works).
+- `LLM_FULL_CHART_MODE=1`/`true`/`yes`/`on` → helper returns True.
+
+**Live state:** api-server restarted with this change. Mobile app
+hitting the API will now receive pure-AI passthrough responses
+(`source=ai_passthrough`) by default.

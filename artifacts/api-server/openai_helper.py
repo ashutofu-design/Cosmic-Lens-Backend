@@ -7343,7 +7343,7 @@ def _tf_negated_after(text: str, end: int, max_chars: int = 30) -> bool:
     # Clause boundaries
     import re as _re
     bm = _re.search(r"[.,;\n]| aur | and | lekin | but | par ", tail,
-                    _re.IGNORECASE)
+                    re.IGNORECASE)
     cut = bm.start() if bm else min(max_chars, len(tail))
     cut = min(cut, max_chars)
     return bool(_NEGATION_NEAR_RX.search(tail[:cut]))
@@ -8412,6 +8412,201 @@ def _build_true_intent_hint(
         "    → medium depth (default): OVERVIEW ≤80 words, specific ≤140.\n"
         "    → deep depth: up to 220 words with reasoning.\n"
     )
+
+
+# ── Phase 7.2 — DETERMINISTIC POST-LLM VERIFIER ──────────────────────────────
+# After the LLM finishes generating, we run a small pure-Python verifier
+# that checks whether the answer actually addressed the user's intent +
+# slots. This is OBSERVABILITY ONLY in Phase 7.2 — no retry, no rewrite,
+# no mutation of `text`. We just emit a trace event with per-check
+# verdicts so we can see in production telemetry how often the LLM
+# violates its own slot-driven instructions.
+#
+# Phase 7.4 (deferred) will add a single LLM-repair retry when this
+# verifier flags a clear violation. We need real-world data first to
+# decide whether the cost is justified.
+#
+# Five checks, all deterministic + cheap:
+#   C1 keyword_echo  — at least one user_keyword appears in the answer
+#                      (skipped when no keywords were extracted)
+#   C2 length_budget — word count within depth slot's budget
+#                      (shallow ≤50, medium ≤160, deep ≤260 words)
+#   C3 timing_clean  — answer doesn't inject timing terms when the
+#                      user's timeframe slot is "none"
+#                      (skipped when timeframe is near/mid/far)
+#   C4 ranked_list   — OVERVIEW intent answers contain a ranked list
+#                      (skipped when intent is not overview)
+#   C5 length_min    — answer is at least 20 chars (sanity floor)
+#
+# Score = passed_checks / applicable_checks (0.0 to 1.0). Skipped
+# checks don't count for or against. A score of 1.0 means perfect
+# alignment; anything below is a candidate for the Phase 7.4 retry.
+
+# Timing-word patterns — when timeframe="none" the answer should NOT
+# contain these. Mix of Hindi/Hinglish/English. Word boundaries kept
+# loose to catch dasha names too.
+_TIMING_WORD_RX = re.compile(
+    r"\b("
+    r"\d{4}"                                          # 4-digit years (2025/2026/...)
+    r"|kab|kis\s+saal|saal\s+\d|saal\s+me|kab\s+tak"  # Hinglish "when/in which year"
+    r"|when|year\s+\d|in\s+\d{4}|date|month"          # English timing
+    r"|maha?dasha|antar\s*dasha|antardasha|pratyantar"  # Vedic timing periods
+    r"|sukshma\s*dasha|prana\s*dasha"                   # finer Vedic periods
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Ranked-list patterns for C4. Looks for any of:
+#   - "1." "2." "3." style numbered list (≥2 of them)
+#   - bullet + rank words ("first", "pehla", "second", "doosra", ...)
+#   - "Top 3:" style header
+_RANKED_LIST_NUMBER_RX = re.compile(r"(?m)^\s*\d+[.)]\s+")
+_RANKED_LIST_WORDS_RX = re.compile(
+    r"\b(top\s+\d|first|second|third|pehla|doosra|teesra|primary|secondary)\b",
+    re.IGNORECASE,
+)
+
+
+def _verify_answer_against_intent(
+    answer_text: str,
+    qu: Optional[dict],
+    question: str = "",
+) -> dict:
+    """Phase 7.2 — deterministic post-LLM check that the answer aligns
+    with the user's intent + slots. Returns a dict:
+
+        {
+          "score":    0.0..1.0,
+          "checks":   {C1: "pass|fail|skip", ...},
+          "details":  {C1: "<short why>", ...},
+          "skipped":  False | "<reason>"   # set when whole verifier skipped
+        }
+
+    Pure observability — does NOT mutate `answer_text`. Safe to call on
+    every primary-generation request. Never raises (all branches caught).
+    """
+    out: dict = {
+        "score":   None,
+        "checks":  {},
+        "details": {},
+        "skipped": False,
+    }
+
+    try:
+        # ── Pre-flight: skip on canonical refusal / empty / honesty footer
+        # text. These aren't "answers" we'd want to grade.
+        txt = (answer_text or "").strip()
+        if not txt:
+            out["skipped"] = "empty_answer"
+            return out
+        if (txt == _POST_LOGIC_REFUSAL_TEXT.strip()
+                or txt == _ENGINE_HONESTY_REFUSAL_TEXT.strip()):
+            out["skipped"] = "canonical_refusal"
+            return out
+
+        # Normalise — strip the engine-warning footer if present so the
+        # length budget check isn't penalised by our own appendix.
+        if _ENGINE_WARN_FOOTER_MARKER in txt:
+            txt = txt.split(_ENGINE_WARN_FOOTER_MARKER, 1)[0].rstrip()
+
+        qu = qu or {}
+        intent        = (qu.get("intent") or "").lower()
+        timeframe     = (qu.get("timeframe") or "none").lower()
+        depth         = (qu.get("depth") or "medium").lower()
+        user_keywords = qu.get("user_keywords") or []
+        if not isinstance(user_keywords, list):
+            user_keywords = []
+
+        txt_lower = txt.lower()
+        word_count = len(txt.split())
+
+        # ── C1: keyword_echo ─────────────────────────────────────────
+        kws_clean = [str(k).strip().lower() for k in user_keywords
+                     if isinstance(k, str) and k.strip()]
+        if not kws_clean:
+            out["checks"]["C1_keyword_echo"]  = "skip"
+            out["details"]["C1_keyword_echo"] = "no_user_keywords"
+        else:
+            # Match if any keyword OR its first word appears in answer.
+            # Generous match — "agle 2 saal" would match if "agle" appears.
+            matched = []
+            for kw in kws_clean:
+                if kw in txt_lower:
+                    matched.append(kw)
+                    continue
+                first_word = kw.split()[0] if kw.split() else ""
+                if first_word and len(first_word) >= 4 and first_word in txt_lower:
+                    matched.append(first_word)
+            if matched:
+                out["checks"]["C1_keyword_echo"]  = "pass"
+                out["details"]["C1_keyword_echo"] = (
+                    f"matched={matched[:3]} of {len(kws_clean)}")
+            else:
+                out["checks"]["C1_keyword_echo"]  = "fail"
+                out["details"]["C1_keyword_echo"] = (
+                    f"none_of_{kws_clean[:3]}_in_answer")
+
+        # ── C2: length_budget ────────────────────────────────────────
+        budget = {"shallow": 50, "medium": 160, "deep": 260}.get(depth, 160)
+        if word_count <= budget:
+            out["checks"]["C2_length_budget"]  = "pass"
+            out["details"]["C2_length_budget"] = (
+                f"{word_count}w<={budget}w(depth={depth})")
+        else:
+            out["checks"]["C2_length_budget"]  = "fail"
+            out["details"]["C2_length_budget"] = (
+                f"{word_count}w>{budget}w(depth={depth})")
+
+        # ── C3: timing_clean ─────────────────────────────────────────
+        if timeframe != "none":
+            out["checks"]["C3_timing_clean"]  = "skip"
+            out["details"]["C3_timing_clean"] = f"timeframe={timeframe}"
+        else:
+            timing_hits = _TIMING_WORD_RX.findall(txt)
+            if timing_hits:
+                out["checks"]["C3_timing_clean"]  = "fail"
+                out["details"]["C3_timing_clean"] = (
+                    f"hits={list(set(timing_hits))[:3]}")
+            else:
+                out["checks"]["C3_timing_clean"]  = "pass"
+                out["details"]["C3_timing_clean"] = "no_timing_words"
+
+        # ── C4: ranked_list ──────────────────────────────────────────
+        if intent != "overview":
+            out["checks"]["C4_ranked_list"]  = "skip"
+            out["details"]["C4_ranked_list"] = f"intent={intent}"
+        else:
+            number_hits = _RANKED_LIST_NUMBER_RX.findall(txt)
+            words_hit = bool(_RANKED_LIST_WORDS_RX.search(txt))
+            if len(number_hits) >= 2 or words_hit:
+                out["checks"]["C4_ranked_list"]  = "pass"
+                out["details"]["C4_ranked_list"] = (
+                    f"numbered={len(number_hits)},words={words_hit}")
+            else:
+                out["checks"]["C4_ranked_list"]  = "fail"
+                out["details"]["C4_ranked_list"] = "no_ranked_structure"
+
+        # ── C5: length_min ───────────────────────────────────────────
+        if len(txt) >= 20:
+            out["checks"]["C5_length_min"]  = "pass"
+            out["details"]["C5_length_min"] = f"{len(txt)}c>=20c"
+        else:
+            out["checks"]["C5_length_min"]  = "fail"
+            out["details"]["C5_length_min"] = f"{len(txt)}c<20c"
+
+        # ── Aggregate score ──────────────────────────────────────────
+        applicable = [v for v in out["checks"].values() if v != "skip"]
+        if applicable:
+            passed = sum(1 for v in applicable if v == "pass")
+            out["score"] = round(passed / len(applicable), 3)
+        else:
+            out["score"] = None
+            out["skipped"] = "all_checks_skipped"
+
+    except Exception as exc:  # noqa: BLE001
+        out["skipped"] = f"verifier_exception:{str(exc)[:120]}"
+
+    return out
 
 
 _ASK_DEBUG = os.environ.get("ASK_DEBUG", "1") not in ("0", "false", "False", "")
@@ -12780,6 +12975,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "question_supertype": question_supertype,
                     "intent_extraction": (build_meta or {}).get("intent_extraction"),
                 }
+
+                # ── Phase 7.2 — VERIFIER (sync, Phase 5.1 bare-return) ──
+                # Bare-return path bypasses validators but should still be
+                # graded so we can compare quality of fast-path vs full-path.
+                try:
+                    _verify_bare = _verify_answer_against_intent(
+                        answer_text=text,
+                        qu=locals().get("_qu"),
+                        question=question,
+                    )
+                    _trace(req_id, "2db.ANSWER_VERIFIED", {
+                        "path":    "sync_bare",
+                        "score":   _verify_bare.get("score"),
+                        "checks":  _verify_bare.get("checks"),
+                        "details": _verify_bare.get("details"),
+                        "skipped": _verify_bare.get("skipped"),
+                    })
+                except Exception as _ver_exc_b:  # noqa: BLE001
+                    _trace(req_id, "2db.ANSWER_VERIFY_FAIL",
+                           {"path": "sync_bare",
+                            "error": str(_ver_exc_b)[:200]})
+
                 return _result_bare
             # else: violations present → fall through to the full validator
             # chain below; the existing POST_LOGIC_CHECK block will catch
@@ -14874,6 +15091,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4c.ENGINE_WARNING_ERR", str(_warn_exc)[:200])
 
     _trace(req_id, "5.FINAL_OUTPUT", text)
+
+    # ── Phase 7.2 — DETERMINISTIC POST-LLM VERIFIER (sync, full path) ──
+    # Pure observability — checks alignment of the finalised `text`
+    # against the user's intent + slots. No retry, no rewrite. Always
+    # in a try/except since this must NEVER block the return path.
+    try:
+        _verify_result = _verify_answer_against_intent(
+            answer_text=text,
+            qu=locals().get("_qu"),
+            question=question,
+        )
+        _trace(req_id, "2db.ANSWER_VERIFIED", {
+            "path":    "sync_full",
+            "score":   _verify_result.get("score"),
+            "checks":  _verify_result.get("checks"),
+            "details": _verify_result.get("details"),
+            "skipped": _verify_result.get("skipped"),
+        })
+    except Exception as _ver_exc:  # noqa: BLE001
+        _trace(req_id, "2db.ANSWER_VERIFY_FAIL",
+               {"path": "sync_full", "error": str(_ver_exc)[:200]})
+
     _trace(req_id, "6.FOLLOW_UPS", {
         "topic": topic, "lang": eff_lang, "items": follow_ups,
         "behavior": "follow-up chips are deterministic per (topic, lang); "
@@ -15312,6 +15551,27 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "engine_warning_footer", "follow_ups",
                 ],
             })
+
+            # ── Phase 7.2 — VERIFIER (stream, Phase 5.1 bare-return) ──
+            # Stream bypass also gets graded for parity with sync-bare.
+            try:
+                _verify_bare_s = _verify_answer_against_intent(
+                    answer_text=raw_text,
+                    qu=locals().get("_qu"),
+                    question=question or "",
+                )
+                _trace(req_id, "2db.ANSWER_VERIFIED(stream)", {
+                    "path":    "stream_bare",
+                    "score":   _verify_bare_s.get("score"),
+                    "checks":  _verify_bare_s.get("checks"),
+                    "details": _verify_bare_s.get("details"),
+                    "skipped": _verify_bare_s.get("skipped"),
+                })
+            except Exception as _ver_exc_bs:  # noqa: BLE001
+                _trace(req_id, "2db.ANSWER_VERIFY_FAIL(stream)",
+                       {"path": "stream_bare",
+                        "error": str(_ver_exc_bs)[:200]})
+
             yield {
                 "kind":                  "final",
                 "text":                  raw_text,
@@ -15631,6 +15891,28 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                f"stream:{str(_warn_exc_s)[:180]}")
 
     _trace(req_id, "5.FINAL_OUTPUT(stream)", final_text)
+
+    # ── Phase 7.2 — VERIFIER (stream, full path) ──────────────────────
+    # Mirror of sync-path verifier for trace parity. Uses `final_text`
+    # (the post-validator string) not `raw_text` (pre-validator) so we
+    # measure what the user actually sees. No retry/rewrite.
+    try:
+        _verify_result_s = _verify_answer_against_intent(
+            answer_text=final_text,
+            qu=locals().get("_qu"),
+            question=question or "",
+        )
+        _trace(req_id, "2db.ANSWER_VERIFIED(stream)", {
+            "path":    "stream_full",
+            "score":   _verify_result_s.get("score"),
+            "checks":  _verify_result_s.get("checks"),
+            "details": _verify_result_s.get("details"),
+            "skipped": _verify_result_s.get("skipped"),
+        })
+    except Exception as _ver_exc_s:  # noqa: BLE001
+        _trace(req_id, "2db.ANSWER_VERIFY_FAIL(stream)",
+               {"path": "stream_full", "error": str(_ver_exc_s)[:200]})
+
     _trace(req_id, "6.FOLLOW_UPS(stream)", {
         "topic": topic, "lang": eff_lang, "items": follow_ups,
         "behavior": "follow-up chips are deterministic per (topic, lang); "

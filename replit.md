@@ -5098,3 +5098,188 @@ path) — **NO SEVERE/HIGH/MEDIUM findings**. Token budget at 220 has
 
 Total cumulative effort to "near-perfect understanding" target:
 ~5.5 days. Phase 7.1 ships day 2 of 5.5.
+
+## Phase 7.2 — Deterministic Verifier (Apr 30, 2026)
+
+**Goal:** Add a deterministic post-LLM verifier that grades whether the
+generated answer actually addressed the user's intent + slots. Pure
+observability layer — no retry, no rewrite, just trace-only telemetry
+so we can see in production how often the LLM violates its own
+slot-driven instructions.
+
+**Trigger:** Phase 7.0 + 7.1 gave the LLM a richer hint, but we have
+no production data on whether the LLM actually FOLLOWS the hint. Phase
+7.2 closes the loop by grading every answer against the slots that
+drove it. The data collected here will drive the Phase 7.4 retry
+decision (retry only when verifier score < threshold AND retry cost is
+justified by the violation rate).
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED (3363 lines, 25 layers preserved)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- mobile (`artifacts/cosmic-lens-mobile/`) UNTOUCHED
+- `flask_app.py` UNTOUCHED
+- Pure orchestration: 1 file touched (`openai_helper.py`), 0 added,
+  0 removed
+
+### Change set
+
+**A. New helper `_verify_answer_against_intent`
+   (`openai_helper.py` ~L8420-L8650)**
+
+Pure-Python deterministic check. Signature:
+```python
+def _verify_answer_against_intent(
+    answer_text: str,
+    qu: Optional[dict],
+    question: str = "",
+) -> dict:
+```
+
+Returns:
+```python
+{
+  "score":   0.0..1.0 | None,    # passed / applicable
+  "checks":  {C1: "pass|fail|skip", ...},
+  "details": {C1: "<short why>", ...},
+  "skipped": False | "<reason>"  # set when whole verifier skipped
+}
+```
+
+**5 checks, all deterministic + cheap:**
+
+| ID | Check | Threshold | Skip condition |
+|---|---|---|---|
+| C1 | keyword_echo | ≥1 user_keyword (or its first ≥4-char word) appears in answer | `user_keywords == []` |
+| C2 | length_budget | shallow ≤50w / medium ≤160w / deep ≤260w | never |
+| C3 | timing_clean | NO timing words (years/dasha/kab/when/month) | `timeframe != "none"` |
+| C4 | ranked_list | ≥2 numbered items OR rank-words present | `intent != "overview"` |
+| C5 | length_min | ≥20 chars | never |
+
+**Pre-flight skips (whole verifier exits early with `skipped=...`):**
+- empty answer → `"empty_answer"`
+- canonical `_POST_LOGIC_REFUSAL_TEXT` → `"canonical_refusal"`
+- canonical `_ENGINE_HONESTY_REFUSAL_TEXT` → `"canonical_refusal"`
+
+**Pre-process:** strips `_ENGINE_WARN_FOOTER_MARKER` ("ⓘ Note:")
+appendix before C2 length count so our own injected footer doesn't
+penalise the budget check.
+
+**Whole function in try/except** — never raises, so it can't break
+generation.
+
+**B. 4 wired injection points** (all wrapped in their own try/except;
+verifier failure NEVER blocks the answer return):
+
+| # | Path | Variable | Injection trace event |
+|---|---|---|---|
+| 1 | sync FULL (`ai_ask` post-validators) | `text` | `2db.ANSWER_VERIFIED` path=`sync_full` |
+| 2 | sync BARE (Phase 5.1 bypass) | `text` | `2db.ANSWER_VERIFIED` path=`sync_bare` |
+| 3 | stream FULL (`ai_ask_stream` post-validators) | `final_text` | `2db.ANSWER_VERIFIED(stream)` path=`stream_full` |
+| 4 | stream BARE (Phase 5.1 stream bypass) | `raw_text` | `2db.ANSWER_VERIFIED(stream)` path=`stream_bare` |
+
+Failure trace (try/except branch): `2db.ANSWER_VERIFY_FAIL`.
+
+### Verification
+
+**Smoke test (`_phase72_smoke.py`, 9/9 ✔):**
+
+| # | Case | Expected | Result |
+|---|---|---|---|
+| 1 | Perfect overview | All 5 pass, score=1.0 | ✔ score=1.0 |
+| 2 | Keyword echo miss | C1 fail | ✔ C1=fail, score=0.8 |
+| 3 | Length over (shallow gets 80w) | C2 fail | ✔ C2=fail (80w>50w) |
+| 4 | Timing words leaked ("2026", "mahadasha") | C3 fail | ✔ C3=fail (3 hits) |
+| 5 | Timing allowed (timeframe=near) | C3 skip | ✔ C3=skip |
+| 6 | Non-overview intent | C4 skip | ✔ C4=skip |
+| 7 | Canonical refusal text | Whole verifier skipped | ✔ skipped="canonical_refusal" |
+| 8 | Empty answer | Whole verifier skipped | ✔ skipped="empty_answer" |
+| 9 | Empty `qu` dict | Defaults applied (timeframe="none" so C3 runs) | ✔ correct skip pattern |
+
+### Architect review (in-session)
+
+Seven-area review (path coverage, performance, C1 strictness, C3
+false-positives, trace volume, unused param, stream parity).
+
+- **0 SEVERE / 0 HIGH findings**
+- **1 MEDIUM**: wealth structured-output path is silent (no NL
+  verifier needed there — wealth uses deterministic JSON template
+  rendering, not narrator NL). **Accepted as out-of-scope** for Phase
+  7.2 since structured outputs already bypass the narrator's variety.
+- **2 LOW** (acknowledged, deferred to Phase 7.4):
+  - C1 keyword echo doesn't handle transliteration ("shaadi" vs
+    "shadi") — fine for observability; needs stem-matching when retry
+    layer ships.
+  - C3 includes "month" in regex — could fire on benign "this month
+    brings focus", but that IS a stylistic violation when the LLM was
+    explicitly told to be timeless (timeframe=none).
+
+**Verdict: GREEN / PASS — SHIP.**
+
+### Performance impact
+
+- Regex compilations at module-load time (free)
+- Per-request work: O(n) word split + regex search over answer
+  (~1000 chars worst case)
+- Wall-clock: <2ms per request (architect-confirmed)
+- Trace volume: +1 trace event per primary generation (medium-sized
+  dict, negligible at current QPS)
+- Cost: ZERO LLM tokens (pure local verification)
+
+### Files touched
+
+- `artifacts/api-server/openai_helper.py` (5 edits: helper insert +
+  4 wires)
+
+### NOT changed
+
+- `artifacts/api-server/health_engine.py` (3363 lines untouched)
+- All other engines (dosh, career, love, marriage, wealth)
+- `artifacts/api-server/question_understanding.py` (Phase 7.1 final
+  state preserved)
+- `artifacts/api-server/flask_app.py` (route layer untouched)
+- `artifacts/api-server/shortcuts.py` (Phase 6.2 layer untouched)
+- `artifacts/api-server/models.py` (DB schema untouched)
+- mobile client (`artifacts/cosmic-lens-mobile/`)
+
+### Production observability — what we'll see
+
+Each successful generation now emits one of:
+```
+2db.ANSWER_VERIFIED {path: "sync_full",  score: 0.8,  checks: {...}}
+2db.ANSWER_VERIFIED {path: "sync_bare",  score: 1.0,  checks: {...}}
+2db.ANSWER_VERIFIED(stream) {path: "stream_full",  score: 0.6,  checks: {...}}
+2db.ANSWER_VERIFIED(stream) {path: "stream_bare",  score: 1.0,  checks: {...}}
+```
+
+Or, on early-skip:
+```
+2db.ANSWER_VERIFIED {path: "sync_full", score: null, skipped: "canonical_refusal"}
+```
+
+Or, on verifier exception (should be rare/never):
+```
+2db.ANSWER_VERIFY_FAIL {path: "sync_full", error: "..."}
+```
+
+**Decision rule for Phase 7.4 (retry layer):** if production data
+shows >X% of answers have score <0.7 AND violations are concentrated
+on specific checks (e.g. C3 timing leaks dominate), then a single
+LLM-repair retry targeting those violations is justified. Without
+this baseline data we'd be retrying blind.
+
+### Phase 7 series progress
+
+- ✔ Phase 7.0 — TRUE-INTENT prompt driver (Apr 30 2026)
+- ✔ Phase 7.1 — Slot expansion (Apr 30 2026)
+- ✔ Phase 7.2 — Deterministic verifier (Apr 30 2026, this entry)
+- ⏳ Phase 7.3 — 5-archetype taxonomy (defer, ~1.5 days)
+- ⏳ Phase 7.4 — LLM verifier fallback / retry layer (defer, ~1 day,
+                  blocked on Phase 7.2 production data)
+- ⏳ Phase 7.5 — Mobile clarifier UX (defer, ~0.5 day)
+- ⏳ Phase 7.6 — Session-cached slots (deferred until prod data)
+
+Total cumulative effort to "near-perfect understanding" target:
+~5.5 days. Phase 7.2 ships day 3 of 5.5.

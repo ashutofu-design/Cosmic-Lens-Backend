@@ -12934,9 +12934,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     if _llm_full_chart_mode_enabled() and has_planets_in:
         try:
             from kundli_full_context import build_full_chart_context  # type: ignore
+            # Compute intel (dignities, yogas, mangal-dosh, sade-sati,
+            # house-lords) so the chart dump's Section 7 is populated.
+            # Defensive: any failure → fall back to intel=None so the
+            # passthrough still works without engine facts.
+            _intel_obj_pt = None
+            try:
+                analyze_chart, _ = _chart_intel()
+                _intel_obj_pt = analyze_chart(kundli, birth)
+            except Exception as _intel_exc:
+                _trace(req_id, "PASSTHROUGH.INTEL_SKIPPED", {
+                    "reason": str(_intel_exc)[:200],
+                })
             _chart_block_pt = build_full_chart_context(
                 kundli=kundli,
-                intel=None,  # analyze_chart engine bypassed — pure AI test
+                intel=_intel_obj_pt,
                 birth=birth,
                 question=question or "",
             )

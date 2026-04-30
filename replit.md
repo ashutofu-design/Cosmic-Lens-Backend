@@ -49,7 +49,7 @@ The project is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9.
 - **Yoga Registry**: Wires existing yoga detectors (Dhana, Raj, Vipareeta, etc.) into the minimal-prompt path, providing structured yoga facts.
 - **Dosh Engine**: Wires `dosh_engine.analyze_doshas()` into the minimal-prompt path, presenting structured `DOSH_FACTS`.
 - **Health Pipeline Orchestration**: Uses `health_topic_matcher.py`, `health_recipe_composer.py`, and `health_rules.py` to derive structured `phase76_findings` for health questions based on 132 topics and 34 rules.
-- **LLM Full Chart Mode**: An env-gated path that provides the LLM full kundli access without relying on deterministic rule engines, enabling pure AI Vedic interpretation.
+- **LLM Full Chart Mode** (`LLM_FULL_CHART_MODE`, default ON since 30 Apr 2026): Env-gated passthrough that hands the LLM a comprehensive Hinglish chart-context block built by `kundli_full_context.build_full_chart_context`. Sections: 1.Birth/Lagna, 2.Grahas (with dignities), 3.Bhavas, 4.Current Dasha, 5.Upcoming Vimshottari (remaining antardashas + next 5 mahadashas), 6.Navamsha D9 (with vargottama detection), 7.Yogas/Doshas/Sade-Sati/Gochar (sourced from `chart_intelligence.analyze_chart`), 8.Niyam (anti-hallucination + Hinglish rails). The passthrough call lives in `openai_helper.ai_ask` and uses Replit AI Integrations' OpenAI proxy (`AI_INTEGRATIONS_OPENAI_*` env vars) with model from `OPENAI_MODEL` (default `gpt-5.4`). For gpt-5 / o-series models the `temperature` parameter is conditionally dropped (those models reject it).
 
 ## External Dependencies
 

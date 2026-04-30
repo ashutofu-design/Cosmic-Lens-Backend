@@ -363,10 +363,146 @@ def _section_dasha(kundli: dict, p_lookup: dict[str, dict]) -> str:
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
+# ────────────────────────────────────────────────────────────────────
+# Section 4B: UPCOMING DASHA SEQUENCE (full Vimshottari, future-only)
+# Section 4C: NAVAMSHA D9 (soul / marriage / dharma chart)
+# Both ADDED 30 Apr 2026 — Phase 7.7-pre. Defensive: no-op when fields
+# missing. Read-only over `kundli`. Pure stdlib.
+# ────────────────────────────────────────────────────────────────────
+
+def _today_iso() -> str:
+    """Return today in YYYY-MM-DD. Isolated for testability."""
+    import datetime as _dt
+    return _dt.date.today().isoformat()
+
+
+def _section_future_dasha(kundli: dict) -> str:
+    """Format upcoming Vimshottari dashas: remaining antardashas of the
+    current mahadasha + the next several mahadashas. Reads from the
+    `dashas` array (full 27-MD Vimshottari tree). Skips silently if
+    field missing or shape unexpected.
+    """
+    dashas = kundli.get("dashas")
+    if not isinstance(dashas, list) or not dashas:
+        return ""
+
+    today = _today_iso()
+
+    # 1. Find current mahadasha (startDate <= today < endDate).
+    current_md = None
+    current_idx = -1
+    for i, md in enumerate(dashas):
+        if not isinstance(md, dict):
+            continue
+        s, e = md.get("startDate"), md.get("endDate")
+        if isinstance(s, str) and isinstance(e, str) and s <= today < e:
+            current_md = md
+            current_idx = i
+            break
+
+    lines = ["## 5. UPCOMING DASHA SEQUENCE (Vimshottari, future-only)"]
+    any_row = False
+
+    # 2. Remaining antardashas in current MD.
+    if isinstance(current_md, dict):
+        md_planet = current_md.get("planet") or "?"
+        md_start  = current_md.get("startDate") or "?"
+        md_end    = current_md.get("endDate") or "?"
+        lines.append(f"Current Mahadasha: {md_planet} ({md_start} -> {md_end})")
+        subs = current_md.get("subDashas")
+        if isinstance(subs, list):
+            future_ad = [
+                ad for ad in subs
+                if isinstance(ad, dict)
+                and isinstance(ad.get("endDate"), str)
+                and ad["endDate"] >= today
+            ]
+            if future_ad:
+                lines.append("Antardashas remaining in current MD:")
+                for ad in future_ad[:9]:
+                    p = ad.get("planet") or "?"
+                    s = ad.get("startDate") or "?"
+                    e = ad.get("endDate") or "?"
+                    lines.append(f"  - {md_planet}-{p}: {s} -> {e}")
+                any_row = True
+
+    # 3. Next several mahadashas after the current one.
+    if current_idx >= 0 and current_idx + 1 < len(dashas):
+        future_md = dashas[current_idx + 1 : current_idx + 1 + 5]
+        if future_md:
+            lines.append("Next Mahadashas:")
+            for md in future_md:
+                if not isinstance(md, dict):
+                    continue
+                p  = md.get("planet") or "?"
+                s  = md.get("startDate") or "?"
+                e  = md.get("endDate") or "?"
+                yr = md.get("years")
+                yr_str = f"  [{yr} yrs]" if yr is not None else ""
+                lines.append(f"  - {p}: {s} -> {e}{yr_str}")
+            any_row = True
+
+    return "\n".join(lines) if any_row else ""
+
+
+def _section_d9_navamsha(kundli: dict, p_lookup_d1: dict) -> str:
+    """Format the D9 (Navamsha) chart: ascendant, planet placements,
+    and vargottama flags (planets sharing the same sign in D1 and D9 —
+    a major dignity boost).
+    """
+    dv = kundli.get("divisionalCharts")
+    if not isinstance(dv, dict):
+        return ""
+    d9 = dv.get("D9")
+    if not isinstance(d9, dict):
+        return ""
+    d9_planets = d9.get("planets")
+    if not isinstance(d9_planets, list) or not d9_planets:
+        return ""
+
+    asc_raw = d9.get("ascendant")
+    asc_idx = _sign_idx(asc_raw)
+    asc_name = _SIGNS[asc_idx] if asc_idx is not None else (str(asc_raw) if asc_raw else "?")
+
+    lines = [
+        "## 6. NAVAMSHA D9 (soul / marriage / dharma / second-half chart)",
+        f"D9 Lagna: {asc_name}",
+        "Planet placements in D9:",
+    ]
+
+    vargottama: list[str] = []
+    for pl in d9_planets:
+        if not isinstance(pl, dict):
+            continue
+        name = pl.get("name") or "?"
+        h = pl.get("house")
+        s_idx = _sign_idx(pl.get("sign"))
+        s_name = _SIGNS[s_idx] if s_idx is not None else (str(pl.get("sign")) if pl.get("sign") else "?")
+        h_str = f"H{h}" if h else "H?"
+        lines.append(f"  - {name:<8s}: {h_str} {s_name}")
+
+        # Vargottama check: same planet in same sign in D1 + D9.
+        d1_pl = p_lookup_d1.get(name) or p_lookup_d1.get(name.lower())
+        if isinstance(d1_pl, dict):
+            d1_idx = _sign_idx(d1_pl.get("sign"))
+            if d1_idx is not None and s_idx is not None and d1_idx == s_idx:
+                vargottama.append(name)
+
+    if vargottama:
+        lines.append(
+            "Vargottama (same sign in D1 and D9 = strong, stable, "
+            "consistent significations): " + ", ".join(vargottama)
+        )
+    else:
+        lines.append("Vargottama planets: none")
+
+    return "\n".join(lines)
+
+
 def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
     if not isinstance(intel, dict) and not isinstance(kundli, dict):
         return ""
-    lines = ["## 5. YOGAS / DOSHAS / SADE-SATI / GOCHAR"]
+    lines = ["## 7. YOGAS / DOSHAS / SADE-SATI / GOCHAR"]
     any_row = False
 
     yogas = (intel or {}).get("yogas") or kundli.get("yogas") or []
@@ -427,7 +563,7 @@ def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
 #   2. Language: reply in Hinglish (devotee's preference).
 # ────────────────────────────────────────────────────────────────────
 
-_MINIMAL_GUIDANCE = """## 6. NIYAM (sirf 2 — baaki tum khud decide karo)
+_MINIMAL_GUIDANCE = """## 8. NIYAM (sirf 2 — baaki tum khud decide karo)
 
 • Sirf upar di hui kundli ke fields cite karo. Koi naya graha placement,
   dasha, ya yoga IMAGINE NAHI karna. Agar zaroori detail upar nahi hai,
@@ -498,6 +634,18 @@ def build_full_chart_context(
         pass
     try:
         s = _section_dasha(kundli, p_lookup)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+    try:
+        s = _section_future_dasha(kundli)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+    try:
+        s = _section_d9_navamsha(kundli, p_lookup)
         if s:
             sections.append(s)
     except Exception:

@@ -6293,3 +6293,89 @@ falls through to legacy. In normal flag-on operation it is dead code.
   narrators → 30+ STRICT INSTRUCTIONS → response)
 - Flag ON → raw GPT + chart facts only, model uses its own Vedic
   Jyotish knowledge.
+
+---
+
+### Phase 7.7-pre — Update (Apr 30, 2026): TRUE FULL PASSTHROUGH
+
+Per project owner: *"Koi bhi chiz bich me aa raha he question aur AI
+ka pura remove karo."*
+
+Earlier the passthrough was at the `_build_messages` layer only. That
+left several engines still active in the broader Ask flow (pre-prompt
+classifier + post-prompt cross-domain + post-AI validators / scrubbers
+/ hinglishify text swap). This update **extends the passthrough to
+the full Ask pipeline**.
+
+**Three new short-circuits (all env-gated, default OFF):**
+
+1. **`openai_helper.py::ai_ask` top short-circuit** (~L12899)
+   - Inserted at the very top of `ai_ask`, after the 1.RAW_INPUT
+     trace, before the Sprint-26 question_understanding classifier.
+   - When `LLM_FULL_CHART_MODE` is on AND a chart with planets is
+     present, builds a minimal 3-message stack (system role intro +
+     full chart dump + 2-line niyam; last 6 history turns; user
+     question verbatim) and calls OpenAI directly via
+     `client.chat.completions.create`, returning
+     `{ text, topic="general", confidence=1.0, source="ai_passthrough",
+     follow_ups: [] }`.
+   - **Bypasses the entire 5,000-line ai_ask body**: Sprint-26
+     classifier, wealth verdict engine, cross-domain check,
+     `_build_messages` (and everything inside it), POST_LOGIC_CHECK /
+     TRUTH validator / timing_validator, all narrators / scrubbers /
+     mutators.
+
+2. **`openai_helper.py::ai_ask_stream` top short-circuit** (~L16068)
+   - Mirror at the streaming entry point. Emits a single
+     `{"kind": "oneshot", "data": ai_ask(…)}` envelope, which the
+     `/api/ask/stream` route already converts to JSON cleanly. No
+     SSE-specific scrubbers / validators run.
+
+3. **`flask_app.py::ask_route` hinglishify gate** (~L5792)
+   - The cosmetic `hinglishify_response` post-AI text swap (turns
+     "Sagittarius" → "Dhanu" etc.) is skipped when
+     `result["source"] == "ai_passthrough"`. AI's raw output reaches
+     the user verbatim, with zero post-AI mutation.
+
+**ai_ask_v2 inherits automatically** — it is "a thin passthrough to
+ai_ask", so the short-circuit fires for it too.
+
+**Kept (intentional infrastructure, not Vedic interpretation):**
+- Brand-guard route filter (rejects off-topic questions like "what's
+  the weather"). Pure scope safety, not a Vedic engine.
+- Phase 6.2 shortcut layer (canned greeting replies for "hi"/"hello").
+  Saves an OpenAI call for non-questions.
+- Daily quota gate (billing).
+- `ask_engine.process_ask` — only fires as an exception fallback when
+  ai_ask raises; in normal flag-on success, never runs.
+
+**Failure modes (defensive — all fall through to legacy):**
+- No OpenAI client available → exception caught → legacy ai_ask body.
+- chart_intelligence raises → intel skipped, dump still built without
+  dignity column.
+- chart_block empty (missing planets) → fall through to legacy.
+- Any other exception in the new branches → caught + logged + legacy.
+
+**Default behaviour unchanged:** `LLM_FULL_CHART_MODE` still defaults
+to OFF. With the flag unset / falsy, the production legacy pipeline
+is bit-identical to before — `_llm_full_chart_mode_enabled()` returns
+False, none of the new branches fire.
+
+**Verification (smoke):**
+- `ai_ask` with flag on → 4-message stack to OpenAI (system + 2
+  history + user), `source=ai_passthrough`, no legacy engine markers
+  in system message (confirmed absent: STRICT INSTRUCTIONS,
+  MIRROR LOCKED FACTS, KP TIMING, TRANSITS NOW, FOCUS BLOCK,
+  CROSS-DOMAIN, WEALTH NARRATOR, POST_LOGIC, etc.).
+- `ai_ask_stream` with flag on → single oneshot event with passthrough
+  payload (no SSE deltas).
+- `ai_ask_v2` with flag on → identical passthrough behaviour.
+- Flag off → `_llm_full_chart_mode_enabled()` returns False, legacy
+  pipeline gated correctly.
+
+**A/B testing plan for owner:**
+- Flag OFF → engineered path (Sprint-26 → wealth engine → cross-domain
+  → _build_messages with locked_facts/RAG/30+ STRICT INSTRUCTIONS →
+  POST_LOGIC validator → hinglishify swap → response).
+- Flag ON → raw GPT + chart facts only. Model uses its own Vedic
+  Jyotish knowledge to interpret. Zero engine intervention.

@@ -5782,12 +5782,19 @@ def ask_route():
         # engines used; covers `text`, every card text/narrative, and the
         # structured payload's user-visible fields (empathy_open / human_close
         # / headline / remedy / note + the 3 bullet arrays).
-        try:
-            from openai_helper import hinglishify_response, _resolve_response_lang
-            eff_lang = _resolve_response_lang(question, lang, preferred_language)
-            hinglishify_response(result, eff_lang)
-        except Exception as exc:
-            print(f"[ask] hinglishify post-process failed (non-fatal): {exc}")
+        # Phase 7.7-pre — TRUE FULL PASSTHROUGH respects "no engine in
+        # between": when `source == "ai_passthrough"`, this cosmetic zodiac
+        # term swap is also skipped so the AI's raw output reaches the user
+        # exactly as written, with zero post-AI mutation.
+        if result.get("source") != "ai_passthrough":
+            try:
+                from openai_helper import hinglishify_response, _resolve_response_lang
+                eff_lang = _resolve_response_lang(question, lang, preferred_language)
+                hinglishify_response(result, eff_lang)
+            except Exception as exc:
+                print(f"[ask] hinglishify post-process failed (non-fatal): {exc}")
+        else:
+            print("[ask] LLM_FULL_CHART_MODE passthrough → skipping hinglishify post-process")
 
     # ── Question history log (storage layer only — see question_history.py) ─
     # Save AFTER the engine has produced its verdict but BEFORE we ship the

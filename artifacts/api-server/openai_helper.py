@@ -12893,6 +12893,93 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "birth.has_coords":   isinstance(birth, dict) and birth.get("lat") is not None,
     })
 
+    # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default OFF) ───────
+    # When `LLM_FULL_CHART_MODE` is on, short-circuit the ENTIRE ~5,000-line
+    # ai_ask body. Nothing runs between the devotee's question and the model
+    # except the chart dump itself. Bypassed:
+    #   • Sprint-26 question_understanding classifier (saves 1 mini-OpenAI call)
+    #   • Wealth verdict engine + WEALTH structured-output JSON-schema rewrite
+    #   • CROSS-DOMAIN ROOT-CAUSE CHECK (engine-verified appended block)
+    #   • _build_messages with locked_facts, RAG, narrators, marriage/love
+    #     branches, 30+ STRICT INSTRUCTIONS, language-lock essays, etc.
+    #   • POST_LOGIC_CHECK / TRUTH validator / timing_validator
+    #   • All other narrators / scrubbers / mutators in the ai_ask body
+    # The model receives ONLY:
+    #   system: minimal role intro + full kundli dump (Sections 1-5 from
+    #           kundli_full_context.build_full_chart_context) + 2-line niyam
+    #           (anti-hallucination + Hinglish — already inside the dump)
+    #   (history): last 6 conversation turns for follow-up continuity
+    #   user:   devotee's question, verbatim
+    # Defensive: any failure here → fall through to legacy ai_ask body so
+    # the user always gets a sane response.
+    if _llm_full_chart_mode_enabled() and has_planets_in:
+        try:
+            _intel_obj_pt = None
+            try:
+                _analyze_pt, _ = _chart_intel()
+                _intel_obj_pt = _analyze_pt(kundli, birth)
+            except Exception as _intel_exc:
+                print(f"[ai_ask] passthrough intel skipped: {_intel_exc}")
+
+            from kundli_full_context import build_full_chart_context  # type: ignore
+            _chart_block_pt = build_full_chart_context(
+                kundli=kundli,
+                intel=_intel_obj_pt,
+                birth=birth,
+                question=question or "",
+            )
+            if _chart_block_pt:
+                _sys_intro_pt = (
+                    "Tum ek anubhavi Vedic Jyotishi ho. Devotee ka prashn "
+                    "user message mein hai. Niche di hui kundli ke base par "
+                    "jawab do — apni Vedic Jyotish samajh + kundli ke facts "
+                    "use karke. Niyam kundli dump ke ant mein diye gaye hain.\n\n"
+                )
+                _msgs_pt: list[dict] = [{
+                    "role": "system",
+                    "content": _sys_intro_pt + _chart_block_pt,
+                }]
+                for _h_pt in (history or [])[-6:]:
+                    _r_pt = _h_pt.get("role")
+                    _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
+                    if _r_pt in ("user", "assistant") and _t_pt:
+                        _msgs_pt.append({"role": _r_pt, "content": _t_pt})
+                _msgs_pt.append({"role": "user", "content": question})
+
+                _trace(req_id, "PASSTHROUGH.MESSAGES_BUILT", {
+                    "msg_count":     len(_msgs_pt),
+                    "system_chars":  len(_msgs_pt[0]["content"]),
+                    "history_turns": len(_msgs_pt) - 2,
+                })
+
+                _client_pt = _get_client()
+                if _client_pt is None:
+                    raise RuntimeError("OpenAI client not available")
+                _model_pt = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+                _resp_pt = _client_pt.chat.completions.create(
+                    model=_model_pt,
+                    messages=_msgs_pt,
+                    temperature=0.3,
+                )
+                _text_pt = (_resp_pt.choices[0].message.content or "").strip()
+
+                _trace(req_id, "PASSTHROUGH.OPENAI_DONE", {
+                    "text_chars": len(_text_pt),
+                })
+
+                return {
+                    "text":       _text_pt,
+                    "topic":      "general",
+                    "confidence": 1.0,
+                    "source":     "ai_passthrough",
+                    "follow_ups": [],
+                }
+            # chart_block empty (no planets after build) → legacy fallback
+            print("[ai_ask] passthrough chart_block empty → fall through to legacy")
+        except Exception as _pt_exc:  # noqa: BLE001
+            print(f"[ai_ask] LLM_FULL_CHART_MODE passthrough failed: {_pt_exc}")
+            # Fall through to legacy ai_ask body below.
+
     # ── Sprint-26: AI-ONLY Question Understanding (single source of truth) ───
     # ONE classifier call → {intent, topic, confidence}. No regex pipeline,
     # no AI-Ear merge, no override layers. Replaces the entire Sprint-23/24/25
@@ -15974,6 +16061,35 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         "kundli.has_planets": isinstance(kundli, dict) and bool(kundli.get("planets")),
         "kundli.has_dasha":   isinstance(kundli, dict) and bool(kundli.get("currentDasha")),
     })
+
+    # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default OFF) ───────
+    # Mirror of the ai_ask short-circuit at the streaming entry point. When
+    # the flag is on AND a chart is present, emit a single oneshot envelope
+    # containing the result of the ai_ask passthrough (which itself bypasses
+    # all engines). The /api/ask/stream route already handles `oneshot` →
+    # JSON conversion cleanly, so no SSE-specific scrubbers / validators run.
+    # Defensive: any failure → fall through to legacy stream pipeline.
+    _has_planets_pt_s = isinstance(kundli, dict) and bool(kundli.get("planets"))
+    if _llm_full_chart_mode_enabled() and _has_planets_pt_s:
+        try:
+            _trace(req_id, "PASSTHROUGH(stream).MODE_DETECT", {
+                "path": "stream → oneshot via ai_ask passthrough",
+            })
+            yield {
+                "kind": "oneshot",
+                "data": ai_ask(
+                    question, kundli, lang, reply_idx,
+                    birth=birth, history=history,
+                    preferred_language=preferred_language,
+                ),
+            }
+            return
+        except Exception as _pt_exc_s:  # noqa: BLE001
+            print(
+                f"[ai_ask_stream] LLM_FULL_CHART_MODE passthrough failed: "
+                f"{_pt_exc_s} → fall through to legacy stream pipeline"
+            )
+
     # Brand-safety gate — non-streamable.
     if _is_brand_unsafe(question):
         _trace(req_id, "2.MODE_DETECT", {"path": "brand_guard → oneshot"})

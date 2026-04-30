@@ -6379,3 +6379,87 @@ False, none of the new branches fire.
   POST_LOGIC validator → hinglishify swap → response).
 - Flag ON → raw GPT + chart facts only. Model uses its own Vedic
   Jyotish knowledge to interpret. Zero engine intervention.
+
+---
+
+### Phase 7.7-pre — Update (Apr 30, 2026, later): chart_intelligence.analyze_chart REMOVED from passthrough
+
+Per project owner: *"Question puchne ke baad question AI tak jaayega,
+AI kundli check karega, analysis karega — iske bich me koi aur engine
+he? Remove karo."*
+
+The previous passthrough still ran `chart_intelligence.analyze_chart`
+between the question and the OpenAI call. That module IS a Vedic
+engine — it pre-computes verdicts (yogas detected, mangal-dosh
+verdict, sade-sati status, planet dignity, combustion, house-lord
+placements, drishti map) and the result was being injected into the
+system prompt the AI received. That defeats an A/B test of pure AI
+Vedic capability — the AI was effectively reading off the engine's
+verdicts instead of recognising them itself.
+
+**Change (`openai_helper.py::ai_ask` short-circuit, ~L12927):**
+
+- Removed the `_chart_intel() → analyze_chart(kundli, birth)` call
+  from the passthrough branch.
+- `build_full_chart_context(...)` now receives `intel=None`.
+- Downstream effect: the chart dump no longer carries the dignity
+  column on planet rows ("D=enemy-sign" etc.), and the
+  yogas/mangal-dosh/sade-sati section is fully empty (no headers,
+  no verdicts).
+
+**What the AI now receives (system message, only this):**
+- Role intro (1 line — anubhavi Vedic Jyotishi)
+- Birth data (date/time/place, when present)
+- Lagna + Lagna-lord placement
+- Chandra-rashi, Surya-rashi
+- Janm-nakshatra
+- Dasha-balance at birth
+- 9 planet rows: sign + degree + house + retrograde flag (no
+  dignity, no combustion, no aspect map)
+- 12 bhava rows: lord + occupants + lord placement
+- Current dasha tree (maha + antar + pratyantar with windows;
+  upcoming antars list)
+- 2-line niyam (anti-hallucination + Hinglish-only)
+
+**What the AI must now figure out itself (was previously pre-cooked):**
+- Whether Mars is exalted/debilitated/own/friend/enemy/neutral
+- Whether any planet is combust (within Sun's orb)
+- Whether yogas are forming (Gajakesari, Pancha-mahapurusha,
+  Neech-bhanga-Raja-yoga, Vipareeta-Raja-yoga, Chandra-Mangal,
+  Budhaditya, Kemadruma, etc.)
+- Whether Mangal-dosh is present (and any cancellations)
+- Sade-sati / Dhaiya phase (current Saturn transit vs natal Moon)
+- Drishti map (which houses each planet aspects)
+
+This is now a **truly pure AI Vedic capability test**. If the AI is
+strong, it will recognise these from the raw chart on its own; if
+weak, it will miss them. Either result is informative for deciding
+whether the engineered legacy path is still needed.
+
+**Verification (smoke):**
+- `chart_intelligence.analyze_chart` call count = **0** under
+  `LLM_FULL_CHART_MODE=1`.
+- System message no longer contains: `Yogas detected:`,
+  `Mangal Dosh:`, `Sade-Sati:`, any `D=…` dignity marker,
+  `combust`, or any specific yoga name (Vipareeta-Raja /
+  Gajakesari / etc.).
+- Raw-chart markers still present: `Lagna:`, `Mesh`, planet rows
+  (`Sun:`, `Moon:`, …), sign names, `IMAGINE NAHI` niyam,
+  `POORI KUNDLI` header.
+
+**Default behaviour unchanged:** flag still defaults OFF; legacy
+production pipeline (with full `analyze_chart` intel injection,
+all narrators, locked_facts, validators, hinglishify) is bit-
+identical to before.
+
+**What still runs between client and AI when flag is ON (route layer,
+infrastructure — kept by intentional decision, NOT Vedic engines):**
+- Brand-guard (off-topic filter — rejects "weather"/"stocks"/etc.
+  before AI is called).
+- Phase 6.2 shortcut layer (canned greeting replies for "hi"/
+  "hello" — saves an OpenAI call for non-questions).
+- Daily quota gate (billing).
+
+If the owner later decides those should also be removed, gate them
+on `_llm_full_chart_mode_enabled()` in `flask_app.py::ask_route`
+(~L5634, L5658) and `consume_question` (~L5686).

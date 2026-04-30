@@ -12895,8 +12895,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
 
     # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default OFF) ───────
     # When `LLM_FULL_CHART_MODE` is on, short-circuit the ENTIRE ~5,000-line
-    # ai_ask body. Nothing runs between the devotee's question and the model
-    # except the chart dump itself. Bypassed:
+    # ai_ask body AND skip `chart_intelligence.analyze_chart` itself.
+    # Nothing runs between the devotee's question and the model except
+    # raw chart formatting. Bypassed:
+    #   • chart_intelligence.analyze_chart — yogas detection, mangal-dosh
+    #     verdict, sade-sati status, dignity (exalted/debilitated/own/
+    #     friend/enemy/neutral), combustion (asta), house-lord placements,
+    #     drishti map. (Owner Apr 30 2026: this IS a Vedic engine — pre-
+    #     cooked verdicts injected into the system prompt would bias an
+    #     A/B test of pure AI Vedic capability. AI must recognise yogas /
+    #     dignity / dosha / sade-sati on its own from raw chart.)
     #   • Sprint-26 question_understanding classifier (saves 1 mini-OpenAI call)
     #   • Wealth verdict engine + WEALTH structured-output JSON-schema rewrite
     #   • CROSS-DOMAIN ROOT-CAUSE CHECK (engine-verified appended block)
@@ -12905,8 +12913,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     #   • POST_LOGIC_CHECK / TRUTH validator / timing_validator
     #   • All other narrators / scrubbers / mutators in the ai_ask body
     # The model receives ONLY:
-    #   system: minimal role intro + full kundli dump (Sections 1-5 from
-    #           kundli_full_context.build_full_chart_context) + 2-line niyam
+    #   system: minimal role intro + raw kundli dump (lagna, rashi,
+    #           nakshatra, planet sign+house+degree+retro, bhava lords/
+    #           occupants, current dasha tree, birth data) + 2-line niyam
     #           (anti-hallucination + Hinglish — already inside the dump)
     #   (history): last 6 conversation turns for follow-up continuity
     #   user:   devotee's question, verbatim
@@ -12914,17 +12923,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # the user always gets a sane response.
     if _llm_full_chart_mode_enabled() and has_planets_in:
         try:
-            _intel_obj_pt = None
-            try:
-                _analyze_pt, _ = _chart_intel()
-                _intel_obj_pt = _analyze_pt(kundli, birth)
-            except Exception as _intel_exc:
-                print(f"[ai_ask] passthrough intel skipped: {_intel_exc}")
-
             from kundli_full_context import build_full_chart_context  # type: ignore
             _chart_block_pt = build_full_chart_context(
                 kundli=kundli,
-                intel=_intel_obj_pt,
+                intel=None,  # analyze_chart engine bypassed — pure AI test
                 birth=birth,
                 question=question or "",
             )

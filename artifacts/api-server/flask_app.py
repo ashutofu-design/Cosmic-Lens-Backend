@@ -46,6 +46,15 @@ if not app.logger.handlers:
     app.logger.addHandler(_h)
 CORS(app)
 
+# ── Phase 7.7-pre — Standalone web tester (GET /test-web) ─────────────────
+# Browser-based smoke tester for the AI passthrough flow. Bypasses
+# Firebase auth + mobile client. ADD-ONLY; pure GET; no DB writes.
+try:
+    from test_web import register_test_web as _register_test_web
+    _register_test_web(app)
+except Exception as _exc:
+    print(f"[startup] test_web mount skipped (non-fatal): {_exc}")
+
 # ── Hardening: max upload size (face-reading: 12 MB hard cap) ──────────────
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024   # 16 MB total request
 

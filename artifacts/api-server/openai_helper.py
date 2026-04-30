@@ -65,11 +65,20 @@ def _stock_engine():
 #   • ai_ask()              (sync passthrough block, ~L13007)
 #   • ai_ask_stream()       (streaming passthrough, ~L16216)
 # Update this constant in ONE place — all three call sites pick it up.
-# 11 explicit output rules. Phase 2.2 (30 Apr 2026) added:
+# 15 explicit output rules. Phase 2.2 (30 Apr 2026) added:
 #   • Rule 2 PERSONA — name = "Cosmo", never reveal AI / GPT / model name.
 #   • Rule 3 SOURCE — "aapki kundli mere paas hai", never expose Section X.
+# Phase 2.3 Tier-1 (30 Apr 2026) added:
+#   • Rule 12 GURU-TONE — warm devotee/jajman address, "aap" not "tum".
+#   • Rule 13 LAGNA-AWARE — every meaningful reply subtly refs user's lagna.
+#   • Rule 14 NO-HEDGING — confident guru voice; hedge-words banned.
+#   • Rule 15 NO-AI-TELLS — explicit forbidden phrases ("As an AI",
+#     "consult a professional astrologer", "Hope this helps", etc.).
+#   • _scrub_ai_tells() defensive post-processor: belt-and-suspenders
+#     safety net that drops any sentence still containing an AI tell
+#     before the answer reaches the devotee.
 # Also fixed Phase 2.1 numbering bug (two "Rule 4"s — FOCUS + HISTORY).
-# See replit.md "Phase 1 / 2 / 2.1 / 2.2 Prompt Polish" entries.
+# See replit.md "Phase 1 / 2 / 2.1 / 2.2 / 2.3 Prompt Polish" entries.
 # ────────────────────────────────────────────────────────────────────
 _PT_SYS_INTRO = (
     "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
@@ -171,8 +180,217 @@ _PT_SYS_INTRO = (
     "raha\". (Devotee ko answer mein \"Section X\" mat likho — "
     "Rule 3 yaad rakho.)\n"
     "\n"
+    "12. GURU-TONE — devotee ke saath ek anubhavi Vedic guru ki "
+    "tarah baat karo: gentle, warm, respectful. \"Aap\" / \"aapki\" "
+    "hi use karo, devotee ke liye \"tum\" / \"tumhari\" KABHI nahi. "
+    "Bade detailed answers mein occasional opening line \"Pranam\" / "
+    "\"Suniye jajman\" / \"Dekhiye\" se shuru kar sakte ho — har "
+    "baar zaroori nahi, rotate karo. Single-fact / 1-line answers "
+    "(Rule 1) mein opening greeting NAHI — seedha fact. Robotic "
+    "tone, dry bullet-listing, ya \"corporate English-mix\" avoid "
+    "karo. Har answer mein ek insaan ki gunj honi chahiye — "
+    "machine-generated nahi lagna chahiye.\n"
+    "\n"
+    "13. LAGNA-AWARE PERSONALIZATION — har detailed (Rule 1 ke "
+    "detail-wale) answer mein aapke jatak ki LAGNA / RASHI / "
+    "NAKSHATRA ka subtle reference aana chahiye — jaise: \"Aap "
+    "Dhanu lagna ke jatak hain, isliye Guru ka role primary hai\", "
+    "\"Aapki Vrishchik rashi ke aadhar pe\", \"Aapka Janma "
+    "Nakshatra Mool hai — Ketu ka prabhav uss ang pe rehta hai\". "
+    "Yeh devotee ko feel karata hai ki tum unhe PERSONALLY jaante "
+    "ho — generic answer nahi de rahe. Har turn pe ek hi line mat "
+    "dohrao — turn-wise alag angle (lagna lord / current dasha / "
+    "nakshatra pada / D9 placement) use karo. Single-fact answers "
+    "mein full personalisation NAHI — subtle 1-2 word reference "
+    "kaafi hai.\n"
+    "\n"
+    "14. NO-HEDGING — confident guru voice rakho. Ye hedge words "
+    "AVOID karo: \"shayad\", \"ho sakta hai\", \"may be\", "
+    "\"might\", \"perhaps\", \"kind of\", \"sort of\", \"thoda "
+    "confusion\", \"pata nahi\", \"sure nahi\", \"possibility "
+    "hai\", \"chance hai\", \"thoda doubt\". Jab kundli mein "
+    "evidence (dignity / dasha / yog / drishti) clear hai → "
+    "confident bolo: \"hoga\", \"dikhta hai\", \"prabal hai\", "
+    "\"saaf nazar aata hai\", \"chart mein clear sanket hai\", "
+    "\"yeh yog active hai\". Sirf jab actual evidence NAHI hai "
+    "(Rule 11) tab honestly bolo: \"iska clear sanket abhi nahi "
+    "mil raha\" — yeh weak nahi, scholarly humility hai.\n"
+    "\n"
+    "15. NO-AI-TELLS (Rule 2 ka defense-in-depth). Ye phrases KABHI "
+    "mat use karo — English mein bhi nahi, Hinglish mein bhi nahi:\n"
+    "   • \"As an AI...\" / \"I'm an AI...\" / \"Being an AI...\" "
+    "/ \"I'm a language model...\" / \"As a chatbot...\"\n"
+    "   • \"I cannot help with...\" / \"I don't have access "
+    "to...\" / \"I'm not able to provide...\" / \"I cannot "
+    "determine...\"\n"
+    "   • \"Please consult a professional astrologer / qualified "
+    "expert / real astrologer / experienced practitioner / "
+    "professional / doctor / financial advisor / legal expert\"\n"
+    "   • \"Hope this helps!\" / \"Hope that helps!\" / \"I hope "
+    "this answer was helpful\" / \"Hope it helps\"\n"
+    "   • \"Let me know if you have any questions / need more "
+    "clarification / want to know more\"\n"
+    "   • \"I recommend / suggest / advise consulting / seeing / "
+    "speaking to a professional\"\n"
+    "Tum Cosmo ho — Vedic Jyotishi KHUD ho. Aap hi \"professional "
+    "astrologer\" ho devotee ke liye. \"Consult someone else\" "
+    "KABHI mat bolo — Rule 11 ke hisaab se evidence nahi mila to "
+    "\"iss bare mein kundli mein clear sanket abhi nahi mil raha\" "
+    "bolo, dusre se consult karne ki salaah nahi. Cosmo guidance "
+    "deta hai — yeh tumhara dharma hai.\n"
+    "\n"
     "Safety rails kundli ke ant mein diye hain.\n\n"
 )
+
+
+# ────────────────────────────────────────────────────────────────────
+# Phase 2.3 Tier-1 — defensive post-processing safety net for AI-tell
+# leakage. Even with Rules 2 + 15 in `_PT_SYS_INTRO`, the LLM may
+# occasionally slip in tells like "As an AI" or "Hope this helps".
+# This function drops sentences that contain such tells before the
+# answer reaches the devotee. Idempotent + fail-safe — on any error
+# returns the input unchanged so the answer pipeline never breaks.
+# ────────────────────────────────────────────────────────────────────
+import re as _re_scrub  # local alias to avoid module-level collision
+
+# Sentences containing any of these patterns are dropped entirely.
+_AI_TELL_PATTERNS = [
+    # ── Identity tells ──────────────────────────────────────────────
+    _re_scrub.compile(
+        r"\bas\s+an?\s+(ai|a\.i\.|artificial\s+intelligence|"
+        r"language\s+model|llm|chatbot|chat\s*bot|virtual\s+assistant)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    _re_scrub.compile(
+        r"\bI(?:'m|\s+am)\s+(?:just\s+|only\s+)?(?:an?\s+)?"
+        r"(ai|a\.i\.|artificial\s+intelligence|language\s+model|"
+        r"llm|chatbot|chat\s*bot|bot|virtual\s+assistant)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    _re_scrub.compile(
+        r"\bbeing\s+a(?:n)?\s+(ai|chatbot|chat\s*bot|bot|"
+        r"virtual\s+assistant|language\s+model)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    # ── Capability disclaimers ──────────────────────────────────────
+    _re_scrub.compile(
+        r"\bI\s+(?:do\s+not|don'?t|cannot|can'?t|am\s+not\s+able\s+to|"
+        r"'?m\s+not\s+able\s+to)\s+(?:have\s+)?(?:access\s+to|"
+        r"the\s+ability\s+to|real-?time)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    # ── "Consult a professional X" — Cosmo IS the astrologer ───────
+    # Verbs match both bare and gerund (-ing) forms so "I recommend
+    # consulting a professional" and "Please consult a professional"
+    # both trip the filter.
+    _re_scrub.compile(
+        r"\b(?:please\s+)?(?:consult(?:ing)?|see(?:ing)?|"
+        r"speak(?:ing)?\s+(?:to|with)|reach(?:ing)?\s+out\s+to|"
+        r"talk(?:ing)?\s+to)\s+(?:a|an|your)\s+"
+        r"(?:professional|qualified|licensed|real|actual|experienced|"
+        r"certified|trained)\s+(?:astrologer|astrology\s+expert|"
+        r"jyotishi|pandit|expert|practitioner|doctor|physician|"
+        r"healthcare|medical|financial|legal|advisor)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    _re_scrub.compile(
+        r"\bI\s+(?:recommend|suggest|advise|encourage|urge)\s+"
+        r"(?:you\s+)?(?:to\s+)?(?:consult(?:ing)?|see(?:ing)?|"
+        r"seek(?:ing)?|talk(?:ing)?\s+to|speak(?:ing)?\s+(?:to|with)|"
+        r"reach(?:ing)?\s+out\s+to)\s+"
+        r"(?:a|an)\s+(?:professional|expert|qualified|licensed|real|"
+        r"trained|experienced|astrologer|jyotishi)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    # ── Sycophantic meta closures ───────────────────────────────────
+    _re_scrub.compile(
+        r"\b(?:I\s+)?hope\s+(?:this|that|it)\s+(?:helps|was\s+"
+        r"(?:helpful|useful)|gives\s+you|answers)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    _re_scrub.compile(
+        r"\blet\s+me\s+know\s+if\s+(?:you|there|that|I\s+can|"
+        r"this|anything)\b",
+        _re_scrub.IGNORECASE,
+    ),
+    # ── Brand leaks (defense in depth — Rule 2 should already prevent)
+    _re_scrub.compile(
+        r"\b(chatgpt|openai|anthropic|claude|gpt-?[0-9]+|"
+        r"google\s+gemini|gemini\s+pro)\b",
+        _re_scrub.IGNORECASE,
+    ),
+]
+
+# Sentence splitter: split on .!?। followed by whitespace; preserve
+# punctuation via lookbehind. Handles English + Devanagari danda.
+_SCRUB_SENT_SPLIT_RX = _re_scrub.compile(r"(?<=[.!?।])\s+")
+
+# Fast-path triggers — if NONE of these substrings appear, skip the
+# expensive sentence-split + regex scan. Common case: no tell present.
+_SCRUB_FAST_TRIGGERS = (
+    "as an ai", "as a ai", "as a.i.", "as an a.i.",
+    "i'm an ai", "i am an ai", "im an ai",
+    "i'm a chat", "i am a chat", "i'm a bot", "i am a bot",
+    "language model", "as a language", "as a chatbot",
+    "as a bot", "as an assistant", "being an ai", "being a chatbot",
+    "i don't have access", "i do not have access",
+    "i cannot access", "i can't access",
+    "i'm not able to", "i am not able to", "im not able to",
+    "consult a professional", "consult a qualified",
+    "consult an experienced", "consult a licensed",
+    "consult a real", "consult an actual", "consult a trained",
+    "consult your doctor", "consult a doctor",
+    "see a professional", "see a qualified",
+    "speak to a professional", "speak with a professional",
+    "reach out to a professional",
+    "i recommend consulting", "i suggest consulting",
+    "i advise consulting", "i recommend seeing",
+    "i suggest seeing", "i advise seeing",
+    "i recommend speaking", "i suggest speaking",
+    "i recommend talking", "i suggest talking",
+    "i recommend reaching", "i suggest reaching",
+    # Bare verbs catch the long tail of suggest/recommend/advise
+    "i recommend", "i suggest", "i advise",
+    "hope this helps", "hope that helps", "hope it helps",
+    "let me know if",
+    "chatgpt", "openai", "anthropic", "claude", "gemini",
+    "gpt-3", "gpt-4", "gpt-5", "gpt3", "gpt4", "gpt5",
+)
+
+
+def _scrub_ai_tells(text: str) -> str:
+    """Drop sentences containing AI-identity tells, professional-consult
+    disclaimers, or sycophantic meta-closers that break the Cosmo
+    persona. Idempotent + fail-safe — on any error returns the input
+    unchanged. Belt-and-suspenders to Rules 2 + 15 in `_PT_SYS_INTRO`.
+    """
+    try:
+        if not text or not isinstance(text, str):
+            return text or ""
+        # Fast-path: no obvious tell substring → return as-is
+        _lower = text.lower()
+        if not any(t in _lower for t in _SCRUB_FAST_TRIGGERS):
+            return text
+        # Slow-path: split into sentences, drop any matching a tell
+        _parts = _SCRUB_SENT_SPLIT_RX.split(text)
+        _kept: list[str] = []
+        for _p in _parts:
+            _ps = _p.strip()
+            if not _ps:
+                continue
+            if any(_rx.search(_ps) for _rx in _AI_TELL_PATTERNS):
+                continue
+            _kept.append(_ps)
+        if not _kept:
+            # Everything was AI tells → safe persona-neutral fallback
+            return ("Iss point pe aapki kundli mein clear sanket abhi "
+                    "nahi mil raha — koi aur swaal puchhiye.")
+        # Rejoin with single spaces; sentence punctuation already
+        # preserved by the lookbehind in the split regex.
+        return " ".join(_kept).strip()
+    except Exception:
+        # Fail open — never break the pipeline because of scrub
+        return text
 
 
 # Stock-question gate (regex). Triggers stock_engine ONLY when the question
@@ -13113,8 +13331,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "text_chars": len(_text_pt),
                 })
 
+                # Phase 2.3 Tier-1 — strip residual AI-tells (Rules 2 + 15
+                # in `_PT_SYS_INTRO` should already prevent these, but the
+                # scrub is a defensive safety net for the rare leak).
+                _text_pt_scrubbed = _scrub_ai_tells(_text_pt)
+                if _text_pt_scrubbed != _text_pt:
+                    _trace(req_id, "PASSTHROUGH.SCRUBBED", {
+                        "before_chars": len(_text_pt),
+                        "after_chars":  len(_text_pt_scrubbed),
+                    })
+
                 return {
-                    "text":       _text_pt,
+                    "text":       _text_pt_scrubbed,
                     "topic":      "general",
                     "confidence": 1.0,
                     "source":     "ai_passthrough",
@@ -16314,6 +16542,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 # partial path.
                 if _emitted_delta:
                     _partial_text = ("".join(_chunks_pt_s)).strip()
+                    # Phase 2.3 Tier-1 — scrub partial-final text too
+                    _partial_text = _scrub_ai_tells(_partial_text)
                     _trace(req_id, "PASSTHROUGH(stream).PARTIAL_FINAL", {
                         "reason":     str(_stream_exc)[:200],
                         "text_chars": len(_partial_text),
@@ -16348,15 +16578,28 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     return
                 raise RuntimeError("passthrough(stream): empty stream from OpenAI")
 
+            # Phase 2.3 Tier-1 — strip residual AI-tells from the FINAL
+            # text. Deltas already streamed out are not retroactively
+            # editable, but the canonical `final.text` is what mobile
+            # clients commit to local history and the DB persists. Scrub
+            # keeps stored history persona-clean and gives the mobile UI
+            # a safe replacement target on the `done` event.
+            _full_text_pt_s_scrubbed = _scrub_ai_tells(_full_text_pt_s)
+            if _full_text_pt_s_scrubbed != _full_text_pt_s:
+                _trace(req_id, "PASSTHROUGH(stream).SCRUBBED", {
+                    "before_chars": len(_full_text_pt_s),
+                    "after_chars":  len(_full_text_pt_s_scrubbed),
+                })
+
             _trace(req_id, "PASSTHROUGH(stream).OPENAI_DONE", {
-                "text_chars":   len(_full_text_pt_s),
+                "text_chars":   len(_full_text_pt_s_scrubbed),
                 "chunk_count":  len(_chunks_pt_s),
             })
 
             # 5. Final envelope (matches mobile client expected schema)
             yield {
                 "kind":       "final",
-                "text":       _full_text_pt_s,
+                "text":       _full_text_pt_s_scrubbed,
                 "topic":      "general",
                 "confidence": 1.0,
                 "follow_ups": [],

@@ -82,4 +82,4 @@ FIREBASE_SERVICE_ACCOUNT_JSON = '''
   "universe_domain": "googleapis.com"
 }
 '''
-OPENAI_MODEL = "gpt-5"
+OPENAI_MODEL = "gpt-5.4"

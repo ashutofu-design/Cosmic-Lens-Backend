@@ -12968,11 +12968,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 if _client_pt is None:
                     raise RuntimeError("OpenAI client not available")
                 _model_pt = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
-                _resp_pt = _client_pt.chat.completions.create(
-                    model=_model_pt,
-                    messages=_msgs_pt,
-                    temperature=0.3,
+                # gpt-5 family + o-series reasoning models reject the
+                # `temperature` parameter (always 1). Send it only for
+                # legacy models (gpt-4*, gpt-3.5*) where it's accepted.
+                _is_new_model_pt = (
+                    _model_pt.startswith("gpt-5")
+                    or _model_pt.startswith(("o1", "o3", "o4"))
                 )
+                _create_kwargs_pt = {
+                    "model":    _model_pt,
+                    "messages": _msgs_pt,
+                }
+                if not _is_new_model_pt:
+                    _create_kwargs_pt["temperature"] = 0.3
+                _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
 
                 _trace(req_id, "PASSTHROUGH.OPENAI_DONE", {

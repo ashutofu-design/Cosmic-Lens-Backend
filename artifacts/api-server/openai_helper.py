@@ -2037,6 +2037,14 @@ def _build_messages(
         intel_obj = analyze_chart(kundli, birth)
         if intel_obj:
             intel_str = format_intelligence(intel_obj)
+        # Phase 7.6 — bridge `intel_obj` back to the caller (ai_ask /
+        # ai_ask_stream) via out_meta so the env-gated topic-catalog
+        # findings helper can read canonical chart_intelligence shape
+        # (architect-flagged severe finding 1 — the wire sites previously
+        # tried `locals().get("intel")` which is undefined in those
+        # frames, so the rule engine got `None` and silently under-fired).
+        if isinstance(out_meta, dict):
+            out_meta["intel_obj"] = intel_obj
     except Exception as exc:
         print(f"[openai_helper] chart_intelligence failed: {exc}")
 
@@ -9108,6 +9116,145 @@ def _trace(req_id: str, step: str, info: Any) -> None:
     print(f"[ask:{req_id}] {step}: {body}", flush=True)
 
 
+# ── Phase 7.6 — TOPIC CATALOG + RULE ENGINE (env-gated, default OFF) ─────────
+# When PHASE76_TOPIC_CATALOG_ENABLED is on AND the question is HEALTH, run
+# the deterministic topic catalog → rule engine pipeline and attach a
+# structured `phase76_findings` payload to the response (parallel to the
+# Phase 7.5 `clarification` field). Existing prompt assembly is UNTOUCHED —
+# this layer is purely additive metadata that downstream rendering / a
+# future narrator (Phase 7.7) can fold in. Engines are NOT touched. Mobile
+# render is defensive: when the field is absent or empty, nothing renders →
+# safe to ship server-side first.
+#
+# Tunable knobs:
+#   PHASE76_TOPIC_CATALOG_ENABLED ("true"/"1" → on; default off)
+#   PHASE76_FINDINGS_MAX (int, default 6 — cap to keep payload compact)
+_PHASE76_DEFAULT_FINDINGS_MAX = 6
+_PHASE76_HEALTH_KEYWORDS = (
+    "health", "sehat", "tabiyat", "bimari", "rog", "illness", "disease",
+    "doctor", "medicine", "dawai", "operation", "surgery", "hospital",
+    "depression", "anxiety", "stress", "mental", "mann ki", "mann nahi",
+    "heart problem", "dil ka", " bp ", "diabetes", "sugar", "thyroid",
+    "joint pain", "ghutna", "kamar dard", "back pain",
+    "pet me", "stomach pain", "pachan",
+    "aankh", "eye problem", "drishti",
+    "kab theek", "kab thik", "recovery",
+)
+
+
+def _phase76_enabled() -> bool:
+    """True iff Phase 7.6 topic catalog is explicitly enabled via env."""
+    return os.environ.get("PHASE76_TOPIC_CATALOG_ENABLED", "").strip().lower() in (
+        "true", "1", "yes", "on")
+
+
+def _phase76_findings_max() -> int:
+    try:
+        v = int(os.environ.get("PHASE76_FINDINGS_MAX",
+                               str(_PHASE76_DEFAULT_FINDINGS_MAX)))
+    except Exception:
+        v = _PHASE76_DEFAULT_FINDINGS_MAX
+    return max(1, min(20, v))
+
+
+def _phase76_is_health(question: str, qu: Optional[dict]) -> bool:
+    """True iff this turn looks like a HEALTH question.
+
+    Architect-tightened gate (severe finding 2 in Phase 7.6 review):
+      • If classifier (qu.topic) is set and non-empty:
+          - "health" → True
+          - anything else → False  (TRUST classifier — never leak via
+            keyword sniff for career/love/etc. turns that happen to
+            contain words like "stress" or "BP").
+      • Only when classifier topic is missing/blank do we fall back to
+        the keyword-sniff heuristic.
+    """
+    if isinstance(qu, dict):
+        topic = (qu.get("topic") or "").strip().lower()
+        if topic:
+            return topic == "health"
+    q_padded = " " + (question or "").lower() + " "
+    return any(kw in q_padded for kw in _PHASE76_HEALTH_KEYWORDS)
+
+
+def _build_phase76_findings_payload(
+    question: str,
+    qu: Optional[dict],
+    kundli: Any,
+    intel: Any,
+    req_id: str = "",
+) -> Optional[dict]:
+    """Phase 7.6 — produce structured topic-catalog findings.
+
+    Returns:
+      {
+        "version":        "1.0",
+        "topics_matched": [{topic_id, confidence, matched_via, ...}, ...],
+        "findings":       [{rule_id, finding, evidence, severity, ...}, ...],
+        "recipe_summary": {topics, slots, rules},
+      }
+    OR None when:
+      - env flag is OFF
+      - topic is not HEALTH
+      - any internal error (defensive — NEVER block the answer)
+    Pure read-only over kundli + intel; never mutates either.
+    """
+    if not _phase76_enabled():
+        return None
+    if not _phase76_is_health(question, qu):
+        return None
+    try:
+        # Lazy imports keep openai_helper import-safe even if these new
+        # modules trip on something at startup.
+        import health_topic_matcher as _p76_matcher
+        import health_recipe_composer as _p76_composer
+        import health_rules as _p76_rules
+
+        catalog = _p76_matcher.load_catalog()
+        matches = _p76_matcher.match_topics(question, qu, catalog)
+        if not matches:
+            if req_id:
+                _trace(req_id, "2de.PHASE76_NO_MATCH", {})
+            return None
+        if req_id:
+            _trace(req_id, "2de.PHASE76_TOPICS_MATCHED", {
+                "topics": [m.get("topic_id") for m in matches],
+                "via":    [m.get("matched_via") for m in matches],
+                "count":  len(matches),
+            })
+
+        topic_ids = [m["topic_id"] for m in matches]
+        recipe = _p76_composer.compose_recipe(topic_ids, catalog)
+        if req_id:
+            _trace(req_id, "2de.PHASE76_RECIPE_COMPOSED",
+                   _p76_composer.slot_summary_for_trace(recipe))
+
+        chart = _p76_rules.normalise_chart(kundli, intel)
+        findings = _p76_rules.evaluate_rules(
+            recipe.get("rules") or [], chart)
+        cap = _phase76_findings_max()
+        if len(findings) > cap:
+            findings = findings[:cap]
+        if req_id:
+            _trace(req_id, "2de.PHASE76_RULES_FIRED", {
+                "fired":     len(findings),
+                "evaluated": len(recipe.get("rules") or []),
+                "cap":       cap,
+            })
+
+        return {
+            "version":        "1.0",
+            "topics_matched": matches,
+            "findings":       findings,
+            "recipe_summary": _p76_composer.slot_summary_for_trace(recipe),
+        }
+    except Exception as exc:  # noqa: BLE001
+        if req_id:
+            _trace(req_id, "2de.PHASE76_ERROR",
+                   {"error": str(exc)[:200]})
+        return None
+
+
 # ── Fix-D: SUPERTYPE CONTRACT VALIDATOR + 1-RETRY ───────────────────────────
 # Detects hard violations of the per-supertype contract injected at the LAST
 # system message (Sprint-24). When a violation is detected and retry budget
@@ -13469,6 +13616,25 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                            {"path": "sync_bare",
                             "error": str(_clar_exc_b)[:200]})
 
+                # ── Phase 7.6 — TOPIC CATALOG FINDINGS (sync BARE, env-gated) ──
+                try:
+                    _p76_bare = _build_phase76_findings_payload(
+                        question,
+                        locals().get("_qu"),
+                        locals().get("kundli"),
+                        (locals().get("build_meta") or {}).get("intel_obj"),
+                        req_id=req_id,
+                    )
+                    if _p76_bare is not None:
+                        _result_bare["phase76_findings"] = _p76_bare
+                        _trace(req_id, "2de.PHASE76_ATTACHED",
+                               {"path": "sync_bare",
+                                "n_findings": len(_p76_bare.get("findings") or [])})
+                except Exception as _p76_exc_b:  # noqa: BLE001
+                    _trace(req_id, "2de.PHASE76_ERROR",
+                           {"path": "sync_bare",
+                            "error": str(_p76_exc_b)[:200]})
+
                 # ── Phase 7.2 — VERIFIER (sync, Phase 5.1 bare-return) ──
                 # Bare-return path bypasses validators but should still be
                 # graded so we can compare quality of fast-path vs full-path.
@@ -15666,6 +15832,24 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _clar_exc:  # noqa: BLE001
         _trace(req_id, "2dd.CLARIFIER_ERROR",
                {"path": "sync_full", "error": str(_clar_exc)[:200]})
+
+    # ── Phase 7.6 — TOPIC CATALOG FINDINGS (sync FULL, env-gated) ──
+    try:
+        _p76 = _build_phase76_findings_payload(
+            question,
+            locals().get("_qu"),
+            locals().get("kundli"),
+            (locals().get("build_meta") or {}).get("intel_obj"),
+            req_id=req_id,
+        )
+        if _p76 is not None:
+            _result["phase76_findings"] = _p76
+            _trace(req_id, "2de.PHASE76_ATTACHED",
+                   {"path": "sync_full",
+                    "n_findings": len(_p76.get("findings") or [])})
+    except Exception as _p76_exc:  # noqa: BLE001
+        _trace(req_id, "2de.PHASE76_ERROR",
+               {"path": "sync_full", "error": str(_p76_exc)[:200]})
     return _result
 
 
@@ -16132,6 +16316,25 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _trace(req_id, "2dd.CLARIFIER_ERROR",
                        {"path": "stream_bare",
                         "error": str(_clar_exc_sb)[:200]})
+
+            # ── Phase 7.6 — TOPIC CATALOG FINDINGS (stream BARE, env-gated) ──
+            try:
+                _p76_sb = _build_phase76_findings_payload(
+                    question,
+                    _qu,
+                    locals().get("kundli"),
+                    (locals().get("build_meta_stream") or {}).get("intel_obj"),
+                    req_id=req_id,
+                )
+                if _p76_sb is not None:
+                    _final_bare_evt["phase76_findings"] = _p76_sb
+                    _trace(req_id, "2de.PHASE76_ATTACHED",
+                           {"path": "stream_bare",
+                            "n_findings": len(_p76_sb.get("findings") or [])})
+            except Exception as _p76_exc_sb:  # noqa: BLE001
+                _trace(req_id, "2de.PHASE76_ERROR",
+                       {"path": "stream_bare",
+                        "error": str(_p76_exc_sb)[:200]})
             yield _final_bare_evt
             return
         # else: violations present → fall through to full validator chain
@@ -16497,6 +16700,25 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         _trace(req_id, "2dd.CLARIFIER_ERROR",
                {"path": "stream_full",
                 "error": str(_clar_exc_sf)[:200]})
+
+    # ── Phase 7.6 — TOPIC CATALOG FINDINGS (stream FULL, env-gated) ──
+    try:
+        _p76_sf = _build_phase76_findings_payload(
+            question,
+            _qu,
+            locals().get("kundli"),
+            (locals().get("build_meta_stream") or {}).get("intel_obj"),
+            req_id=req_id,
+        )
+        if _p76_sf is not None:
+            _final_evt["phase76_findings"] = _p76_sf
+            _trace(req_id, "2de.PHASE76_ATTACHED",
+                   {"path": "stream_full",
+                    "n_findings": len(_p76_sf.get("findings") or [])})
+    except Exception as _p76_exc_sf:  # noqa: BLE001
+        _trace(req_id, "2de.PHASE76_ERROR",
+               {"path": "stream_full",
+                "error": str(_p76_exc_sf)[:200]})
     yield _final_evt
 
 

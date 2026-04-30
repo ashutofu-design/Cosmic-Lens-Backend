@@ -5838,3 +5838,157 @@ total ASK volume to size the regex/low-conf surface area in prod.
   existing `/api/ask/stream` `done` envelope was extended (additive
   passthrough field, no semantic change to existing fields).
 - No new LLM call paths. No new endpoints.
+
+---
+
+## Phase 7.6 — Topic Catalog + Rule Engine + Hinglish Findings (Apr 30, 2026)
+
+ChatGPT-quality structured findings for HEALTH questions: detect which
+micro-topic the user asked about, pull only the chart slots that topic
+needs, run deterministic Vedic rules in Python (no LLM math), and attach
+a structured `phase76_findings` payload alongside the answer (parallel to
+Phase 7.5 `clarification`). Mobile renders defensively (absent / empty →
+no render).
+
+### Architecture (pure ADD-ONLY layers)
+
+```
+question + qu (classifier) ─┐
+                            ▼
+              health_topic_matcher.py    (3 layers: keyword → body-part → fallback)
+                            ▼
+              health_recipe_composer.py  (multi-topic slot/rule dedup)
+                            ▼
+              health_rules.py            (22 deterministic Vedic rules)
+                            ▼
+              openai_helper helpers      (env-gated; cap-limited)
+                            ▼
+              4 wire sites attach `phase76_findings` to result/event
+                            ▼
+              mobile renders defensively (Phase 7.7 will narrate)
+```
+
+### New files (all under `artifacts/api-server/`)
+
+- `health_topics.json` — 15 topic catalog (overall_status,
+  disease_enumeration, hospitalization, chronic_issue, immunity,
+  accident_risk, surgery_risk, mental_health, digestive, heart, eyes,
+  joints_bones, bp_diabetes, timing_prognosis, house_lord_placement_query).
+  Each entry: synonyms, recipe (slots), rules (rule IDs), priority.
+- `health_topic_matcher.py` — keyword + body-part + fallback layers,
+  returns ranked `[{topic_id, confidence, matched_via}]`.
+- `health_recipe_composer.py` — input: topic IDs; output: deduped
+  `{topics_used, topics_skipped, slots, rules}` (composer dedup bug
+  found-and-fixed during smoke development via `seen_topics`/
+  `seen_skipped` sets).
+- `health_rules.py` — 22 rules in `RULE_REGISTRY`, plus `normalise_chart`
+  helper that defensively handles upstream schema variability:
+  - `_coerce_int` / `_coerce_int_list` — string-house → int (architect
+    medium finding 4).
+  - `rule_sade_sati_active` and `rule_mangal_dosh_active` accept BOTH
+    canonical strings (e.g. "Sade-sati ACTIVE — peak phase ...",
+    "Mangal-dosh present (from Lagna)") AND legacy dict form (architect
+    severe finding 3 — `chart_intelligence._sade_sati()` and
+    `_mangal_dosh()` return strings, not dicts).
+
+### Helpers added to `openai_helper.py` (after `_trace`, ~L9114)
+
+- `_PHASE76_HEALTH_KEYWORDS` — fallback sniff list.
+- `_phase76_enabled()` — env gate (`PHASE76_TOPIC_CATALOG_ENABLED`,
+  default OFF).
+- `_phase76_findings_max()` — cap (env `PHASE76_FINDINGS_MAX`, default 6).
+- `_phase76_is_health(question, qu)` — classifier-first gate. If
+  `qu.topic` is non-empty, only "health" passes; keyword sniff is
+  fallback ONLY when classifier topic is missing/blank (architect severe
+  finding 2 — closes the leak via "stress"/"BP" keywords on
+  career/love turns).
+- `_build_phase76_findings_payload(question, qu, kundli, intel, req_id)` —
+  the orchestrator. Returns `None` when env OFF, when not a health turn,
+  on any internal error, or when no rules fired. Otherwise returns
+  `{version: "1.0", topics_matched, recipe_summary, findings}`.
+- `_build_messages` near L2049 now bridges `intel_obj` back to the
+  caller via `out_meta["intel_obj"]` so the wire sites get canonical
+  chart_intelligence shape (architect severe finding 1 — the wire sites
+  previously called `locals().get("intel")` which is undefined in
+  `ai_ask`/`ai_ask_stream`, so the rule engine got `None` and silently
+  under-fired).
+
+### 4 wire sites (mirror Phase 7.5 clarifier pattern)
+
+| Site         | Location | Builder var          | Result/event field  |
+| ------------ | -------- | -------------------- | ------------------- |
+| sync BARE    | L13622   | `build_meta`         | `_result_bare`      |
+| sync FULL    | L15839   | `build_meta`         | `_result`           |
+| stream BARE  | L16323   | `build_meta_stream`  | `_final_bare_evt`   |
+| stream FULL  | L16707   | `build_meta_stream`  | `_final_evt`        |
+
+Each site: `try: payload = _build_phase76_findings_payload(...)
+except: trace error`. On non-None: attach as `phase76_findings`, fire
+`2de.PHASE76_ATTACHED`. The accessor for `intel_obj` is now
+`(locals().get("build_meta[_stream]") or {}).get("intel_obj")`.
+
+### Trace events
+
+- `2de.PHASE76_TOPICS_MATCHED` — `{topics, via, count}`
+- `2de.PHASE76_RECIPE_COMPOSED` — `{topics, skipped, slots, rules}`
+- `2de.PHASE76_RULES_FIRED` — `{fired, evaluated, cap}`
+- `2de.PHASE76_NO_MATCH` — fired when matcher returns nothing
+- `2de.PHASE76_ERROR` — exception inside the helper (silent to caller)
+- `2de.PHASE76_ATTACHED` — `{path, topics, findings}`
+
+### Env flags
+
+- `PHASE76_TOPIC_CATALOG_ENABLED` — master gate, default OFF. With
+  unset/false, response shape and behaviour are byte-identical to
+  pre-Phase-7.6.
+- `PHASE76_FINDINGS_MAX` — cap on findings per response, default 6,
+  clamped to [1, 20].
+
+### Verification
+
+Architect re-review (post all 4 fixes) — **PASS**. Quote: "all 4
+previously reported findings appear correctly closed in the current
+diff, with no new severe blocker identified". 0 SEVERE / 0 HIGH /
+0 MED. No security risks introduced.
+
+Smoke (60+ checks, all pass) covered:
+- Catalog loads, 15 topics, all well-formed.
+- 10/10 sample Hinglish questions match expected topic.
+- Composer dedups topics_used, slots, rules, AND topics_skipped.
+- Rule registry has 22 entries; rich mock chart fires 11 specific
+  expected rules; empty/None inputs fire 0; unknown rule_id ignored.
+- Architect fix 3: `sade_sati`/`mangal_dosh` STRING (canonical) AND
+  DICT (legacy) both fire; empty-string and "no Mangal-dosh" do NOT.
+- Architect fix 4: string-house input is coerced to int; rules like
+  `sun_in_six_or_eight` and `six_lord_in_dusthana` still fire on
+  string-house input.
+- Architect fix 2: classifier=career + "stress" → False (no leak);
+  classifier=love + "BP" → False (no leak); classifier='' or missing →
+  fall through to keyword.
+- Architect fix 1: `intel_obj` bridge measurably improves rule firing
+  (with_intel=4 vs without_intel=1 on identical question + chart).
+- Env gate: OFF → None; ON → full payload with version, topics_matched,
+  findings, recipe_summary; cap respected; non-health → None even with
+  env ON; bad chart inputs (None/None) don't raise.
+- All 6 trace events fire correctly (2de.PHASE76_*).
+
+### Phase 7 invariants — confirmed unchanged
+
+- `health_engine.py`, `dosh_engine.py`, `career_engine.py`,
+  `love_engine.py`, `marriage_engine.py`, `wealth_engine.py` —
+  UNTOUCHED.
+- `users.id` Integer PK, `user_questions.id` String(36) UUID PK,
+  `profiles.client_id` stable — UNTOUCHED.
+- `models.py` — UNTOUCHED. No schema migration.
+- `flask_app.py` route layer — UNTOUCHED. (`phase76_findings` rides on
+  the same envelope the route already serializes.)
+- No new LLM call paths. No new endpoints. No new pip deps (catalog is
+  JSON, not YAML).
+
+### Scope boundary — what Phase 7.6 deliberately does NOT do
+
+- It does not modify the prompt seen by the LLM. The structured
+  `phase76_findings` payload is attached to the response envelope only.
+- Prompt-level injection (the Hinglish narrator template that turns
+  findings into a verdict + symptoms + cause + remedy block) is the
+  Phase 7.7 deliverable.

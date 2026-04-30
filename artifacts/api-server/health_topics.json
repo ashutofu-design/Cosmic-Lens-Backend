@@ -1,0 +1,368 @@
+{
+  "version": "1.0",
+  "phase": "7.6",
+  "description": "Cosmic Lens Phase 7.6 health micro-topic catalog. Each topic = (synonyms keyword pool) + (recipe = chart slots to pull) + (rules = rule IDs to evaluate). Matcher fires highest-priority topic whose synonyms hit. Rule engine evaluates listed rules against the recipe slots. Composer dedupes slots across multi-topic matches. Narrator turns findings into Hinglish output. ENGINES UNTOUCHED — this layer READS chart data that engines already produced.",
+  "slot_vocabulary": [
+    "lagna_sign", "lagna_lord", "lagna_lord_position",
+    "moon_sign", "moon_position", "sun_position",
+    "mars_position", "mercury_position", "jupiter_position",
+    "venus_position", "saturn_position", "rahu_position", "ketu_position",
+    "house_1_planets", "house_6_planets", "house_8_planets", "house_12_planets",
+    "house_1_lord", "house_2_lord", "house_5_lord", "house_6_lord",
+    "house_8_lord", "house_10_lord", "house_12_lord",
+    "current_dasha", "current_antar", "current_pratyantar",
+    "yogas", "mangal_dosh", "sade_sati", "dignities"
+  ],
+  "rule_vocabulary": [
+    "lagna_lord_in_dusthana",
+    "six_lord_in_dusthana",
+    "eight_lord_in_lagna_or_six",
+    "twelve_lord_active",
+    "malefic_in_lagna",
+    "malefic_in_six",
+    "moon_with_malefic",
+    "mercury_afflicted",
+    "sun_in_six_or_eight",
+    "sun_afflicted",
+    "mars_in_one_or_six",
+    "mars_afflicted",
+    "saturn_aspect_lagna",
+    "saturn_in_lagna_or_six",
+    "rahu_in_lagna",
+    "ketu_in_lagna_or_six",
+    "sade_sati_active",
+    "mangal_dosh_active",
+    "current_dasha_dusthana_lord",
+    "jupiter_aspect_lagna",
+    "venus_in_six_or_eight",
+    "house_lord_placement_summary"
+  ],
+  "topics": {
+    "overall_status": {
+      "priority": 100,
+      "description": "Overall health picture — kaisi hai sehat in general.",
+      "synonyms": [
+        "overall health", "general health", "health overall",
+        "health kaisi hai", "sehat kaisi hai", "tabiyat kaisi",
+        "general sehat", "main health issues",
+        "koi health problem", "any health problem", "kya health theek hai",
+        "health theek hai kya", "sehat theek hai", "sehatmand"
+      ],
+      "recipe": [
+        "lagna_sign", "lagna_lord", "lagna_lord_position",
+        "house_1_planets", "house_6_planets",
+        "house_6_lord", "house_8_lord",
+        "current_dasha", "sade_sati"
+      ],
+      "rules": [
+        "lagna_lord_in_dusthana",
+        "six_lord_in_dusthana",
+        "malefic_in_lagna",
+        "saturn_aspect_lagna",
+        "current_dasha_dusthana_lord",
+        "sade_sati_active",
+        "jupiter_aspect_lagna"
+      ]
+    },
+    "disease_enumeration": {
+      "priority": 95,
+      "description": "Will any specific disease occur — bimari ho sakti hai kya.",
+      "synonyms": [
+        "koi bimari", "kya bimari", "konsi bimari", "konsa rog",
+        "disease", "illness", "sickness", "rog",
+        "bimar pad sakta", "bimar ho sakta",
+        "bimari ho sakti", "rog ho sakta",
+        "kis bimari ki sambhavna", "rog ki sambhavna"
+      ],
+      "recipe": [
+        "house_6_planets", "house_6_lord",
+        "house_8_planets", "house_8_lord",
+        "mars_position", "saturn_position",
+        "rahu_position", "ketu_position",
+        "current_dasha"
+      ],
+      "rules": [
+        "six_lord_in_dusthana",
+        "malefic_in_six",
+        "rahu_in_lagna",
+        "ketu_in_lagna_or_six",
+        "saturn_in_lagna_or_six",
+        "current_dasha_dusthana_lord"
+      ]
+    },
+    "hospitalization": {
+      "priority": 90,
+      "description": "Hospitalization risk — hospital admit hone ki sambhavna.",
+      "synonyms": [
+        "hospital", "admit", "hospitalize", "hospitalization",
+        "ICU", "operation theatre",
+        "hospital me admit", "admit hona padega",
+        "hospital jana padega", "bhartti", "bharti hona"
+      ],
+      "recipe": [
+        "house_12_planets", "house_12_lord",
+        "house_8_planets", "house_8_lord",
+        "saturn_position", "ketu_position",
+        "current_dasha"
+      ],
+      "rules": [
+        "twelve_lord_active",
+        "eight_lord_in_lagna_or_six",
+        "saturn_in_lagna_or_six",
+        "current_dasha_dusthana_lord"
+      ]
+    },
+    "chronic_issue": {
+      "priority": 88,
+      "description": "Long-term / chronic illness — purani bimari, lambi bimari.",
+      "synonyms": [
+        "chronic", "long term", "lambi bimari", "purani bimari",
+        "saalon se", "years from", "permanent issue",
+        "chronic illness", "chronic disease",
+        "thik nahi ho rahi", "theek nahi ho rahi",
+        "lambe samay se", "barso se"
+      ],
+      "recipe": [
+        "house_8_planets", "house_8_lord",
+        "house_6_planets", "house_6_lord",
+        "saturn_position",
+        "sade_sati", "current_dasha"
+      ],
+      "rules": [
+        "eight_lord_in_lagna_or_six",
+        "saturn_in_lagna_or_six",
+        "saturn_aspect_lagna",
+        "sade_sati_active",
+        "six_lord_in_dusthana"
+      ]
+    },
+    "immunity": {
+      "priority": 80,
+      "description": "Immunity strength — rog pratirodhak shakti, sehat ki neenv.",
+      "synonyms": [
+        "immunity", "rog pratirodhak", "sehat ki neenv",
+        "immunity strong", "immunity weak",
+        "rog se ladne ki shakti", "body strong",
+        "kamzori", "weakness"
+      ],
+      "recipe": [
+        "lagna_lord", "lagna_lord_position",
+        "sun_position", "moon_position", "jupiter_position",
+        "house_1_planets", "yogas"
+      ],
+      "rules": [
+        "lagna_lord_in_dusthana",
+        "sun_afflicted",
+        "moon_with_malefic",
+        "jupiter_aspect_lagna",
+        "malefic_in_lagna"
+      ]
+    },
+    "accident_risk": {
+      "priority": 92,
+      "description": "Accident / injury risk — durghatna, chot lagna.",
+      "synonyms": [
+        "accident", "durghatna", "chot", "injury",
+        "blood loss", "chot lagna", "ghav",
+        "khoon", "injury risk", "dukhna",
+        "sadak durghatna", "vehicle accident"
+      ],
+      "recipe": [
+        "mars_position", "ketu_position", "rahu_position",
+        "house_8_planets", "house_8_lord",
+        "house_6_planets", "current_dasha", "mangal_dosh"
+      ],
+      "rules": [
+        "mars_in_one_or_six",
+        "mars_afflicted",
+        "ketu_in_lagna_or_six",
+        "rahu_in_lagna",
+        "mangal_dosh_active",
+        "current_dasha_dusthana_lord"
+      ]
+    },
+    "surgery_risk": {
+      "priority": 92,
+      "description": "Surgery / operation risk — operation hogi kya, kab.",
+      "synonyms": [
+        "surgery", "operation", "operate karna",
+        "operation hogi", "surgery hogi", "cheer phaad",
+        "operation karwana", "scalpel", "blade"
+      ],
+      "recipe": [
+        "mars_position", "ketu_position", "saturn_position",
+        "house_8_planets", "house_8_lord",
+        "house_12_planets", "current_dasha"
+      ],
+      "rules": [
+        "mars_in_one_or_six",
+        "ketu_in_lagna_or_six",
+        "eight_lord_in_lagna_or_six",
+        "twelve_lord_active",
+        "current_dasha_dusthana_lord"
+      ]
+    },
+    "mental_health": {
+      "priority": 95,
+      "description": "Mental health — depression, anxiety, stress, mann ki sthiti.",
+      "synonyms": [
+        "mental", "depression", "anxiety", "stress", "tension",
+        "mann", "mann nahi lagta", "udaas",
+        "ghabrahat", "chinta", "pareshaan",
+        "mental health", "dimagi", "mental peace",
+        "mood swing", "mood off", "neend nahi", "insomnia",
+        "soch soch ke", "thakaan"
+      ],
+      "recipe": [
+        "moon_position", "mercury_position",
+        "house_4_lord", "house_5_lord",
+        "saturn_position", "rahu_position",
+        "sade_sati", "current_dasha"
+      ],
+      "rules": [
+        "moon_with_malefic",
+        "mercury_afflicted",
+        "saturn_aspect_lagna",
+        "sade_sati_active",
+        "rahu_in_lagna"
+      ]
+    },
+    "digestive": {
+      "priority": 78,
+      "description": "Digestive / pet / metabolism — pachan, pet ki problem.",
+      "synonyms": [
+        "digest", "digestion", "pet", "pachan",
+        "pet me dard", "pet kharab", "stomach",
+        "acidity", "gas", "constipation", "kabz",
+        "loose motion", "ulti", "vomiting", "appetite",
+        "bhukh nahi", "khaana nahi pacha"
+      ],
+      "recipe": [
+        "house_5_lord", "house_6_lord",
+        "mercury_position", "moon_position",
+        "current_dasha"
+      ],
+      "rules": [
+        "mercury_afflicted",
+        "moon_with_malefic",
+        "six_lord_in_dusthana"
+      ]
+    },
+    "heart": {
+      "priority": 90,
+      "description": "Heart issues — dil, hriday, chhati ki problem.",
+      "synonyms": [
+        "heart", "dil", "hriday", "chhati",
+        "heart attack", "heart problem", "cardiac",
+        "chest pain", "dil mein dard", "BP heart",
+        "dhadkan", "palpitations"
+      ],
+      "recipe": [
+        "sun_position", "house_4_lord", "house_5_lord",
+        "current_dasha"
+      ],
+      "rules": [
+        "sun_afflicted",
+        "sun_in_six_or_eight",
+        "current_dasha_dusthana_lord"
+      ]
+    },
+    "eyes": {
+      "priority": 75,
+      "description": "Eye problems — aankhon ki samasya, drishti.",
+      "synonyms": [
+        "eye", "eyes", "aankh", "drishti", "vision",
+        "aankh me dard", "chashma", "spectacles",
+        "glasses", "blurred vision", "kam dikhai"
+      ],
+      "recipe": [
+        "sun_position", "moon_position",
+        "house_2_lord", "house_12_lord",
+        "current_dasha"
+      ],
+      "rules": [
+        "sun_afflicted",
+        "moon_with_malefic"
+      ]
+    },
+    "joints_bones": {
+      "priority": 80,
+      "description": "Joints / bones / arthritis — ghutno, jodon ka dard, hadiyan.",
+      "synonyms": [
+        "joint", "joints", "jod", "ghutna", "knee",
+        "arthritis", "gathiya", "hadiyon",
+        "bones", "back pain", "kamar dard",
+        "spine", "rhematic", "joint pain", "jodon mein dard"
+      ],
+      "recipe": [
+        "saturn_position",
+        "house_1_planets", "house_6_lord",
+        "current_dasha", "sade_sati"
+      ],
+      "rules": [
+        "saturn_in_lagna_or_six",
+        "saturn_aspect_lagna",
+        "sade_sati_active"
+      ]
+    },
+    "bp_diabetes": {
+      "priority": 85,
+      "description": "BP / diabetes / lifestyle disease — sugar, blood pressure.",
+      "synonyms": [
+        "BP", "blood pressure", "diabetes", "sugar",
+        "shugar", "madhumeh", "thyroid",
+        "cholesterol", "lifestyle disease", "high BP", "low BP",
+        "rakt chaap"
+      ],
+      "recipe": [
+        "sun_position", "venus_position", "moon_position",
+        "house_6_lord", "current_dasha"
+      ],
+      "rules": [
+        "sun_afflicted",
+        "venus_in_six_or_eight",
+        "moon_with_malefic",
+        "six_lord_in_dusthana"
+      ]
+    },
+    "timing_prognosis": {
+      "priority": 88,
+      "description": "When will I get better — kab thik hoga, prognosis timing.",
+      "synonyms": [
+        "kab theek", "kab thik", "kab healthy",
+        "when will i recover", "recovery time",
+        "kab tak", "kitne din", "kitne mahine",
+        "kab tak chalega", "prognosis", "thik hone me kitna time",
+        "duration of illness"
+      ],
+      "recipe": [
+        "current_dasha", "current_antar", "current_pratyantar",
+        "house_6_lord", "jupiter_position",
+        "sade_sati"
+      ],
+      "rules": [
+        "current_dasha_dusthana_lord",
+        "jupiter_aspect_lagna",
+        "sade_sati_active"
+      ]
+    },
+    "house_lord_placement_query": {
+      "priority": 70,
+      "description": "Specific lord placement question — kis house ka lord kahaan baitha hai.",
+      "synonyms": [
+        "house lord", "lord of", "swami",
+        "kis ghar ka swami", "house ka lord",
+        "lagnesh kahaan", "shashtesh kahaan",
+        "1st lord", "6th lord", "8th lord", "12th lord",
+        "ascendant lord", "lagna lord placement"
+      ],
+      "recipe": [
+        "house_1_lord", "house_6_lord", "house_8_lord", "house_12_lord",
+        "lagna_lord", "lagna_lord_position"
+      ],
+      "rules": [
+        "house_lord_placement_summary"
+      ]
+    }
+  }
+}

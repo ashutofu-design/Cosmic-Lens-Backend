@@ -1819,6 +1819,19 @@ def _strict_lang_block(code: str) -> str:
     )
 
 
+# ── Phase 7.7-pre — LLM_FULL_CHART_MODE (env-gated, default OFF) ─────────────
+# When enabled, _build_messages appends a NEW system message with the full
+# kundli dump + universal topic-routing cheat-sheet + structured-output
+# instructions (see kundli_full_context.py). Engines / rules NOT used in
+# this path — the LLM gets full chart access and self-decides which
+# houses/grahas to look at based on the question. Pure ADD-ONLY. Default
+# OFF — zero behaviour change unless the flag is explicitly set.
+def _llm_full_chart_mode_enabled() -> bool:
+    """True iff Phase 7.7-pre full-chart-access mode is enabled via env."""
+    return os.environ.get("LLM_FULL_CHART_MODE", "").strip().lower() in (
+        "true", "1", "yes", "on")
+
+
 def _build_messages(
     question: str,
     kundli: Any,
@@ -4100,6 +4113,25 @@ def _build_messages(
                 + health_verdict_block
             ),
         })
+
+    # ── Phase 7.7-pre — LLM_FULL_CHART_MODE injection ─────────────────────────
+    # When env flag is on, append an ADDITIONAL system message with a full
+    # kundli dump + universal topic-routing cheat-sheet + structured-output
+    # instructions. Recency-locked (last system message before user). Defensive:
+    # any failure logs once and is swallowed — never blocks the call.
+    if _llm_full_chart_mode_enabled():
+        try:
+            from kundli_full_context import build_full_chart_context  # type: ignore
+            _full_block = build_full_chart_context(
+                kundli=kundli,
+                intel=intel_obj,
+                birth=birth,
+                question=question or "",
+            )
+            if _full_block:
+                msgs.append({"role": "system", "content": _full_block})
+        except Exception as _full_exc:  # noqa: BLE001
+            print(f"[openai_helper] LLM_FULL_CHART_MODE injection failed: {_full_exc}")
 
     msgs.append({"role": "user", "content": user})
     return msgs

@@ -6072,3 +6072,118 @@ re-tuning is deferred until prod data informs the priority ladder.
 **Default behavior:** unchanged — the catalog only activates when
 `PHASE76_TOPIC_CATALOG_ENABLED=1`. Without the flag, the legacy
 health path is identical bit-for-bit.
+
+---
+
+## Phase 7.7-pre — LLM_FULL_CHART_MODE (full-chart-access path) (Apr 30, 2026)
+
+NEW env-gated path that gives the LLM **full kundli access** + a
+universal topic-routing cheat-sheet + a structured-output template,
+**skipping any deterministic rule-engine reliance**. The LLM reads the
+question, identifies the topic itself, and decides which houses /
+grahas to look at (health → 6H/8H/12H + Mars/Saturn, career →
+10H/Sun/Saturn, marriage → 7H/Venus/Jupiter, etc.).
+
+This was added because the legacy rule-engine path produced answers
+that, while accurate, often missed timing / remedy / Hinglish / clear
+structure for nuanced multi-topic questions (e.g. migraine).
+
+### Architecture (pure ADD-ONLY)
+
+- Engines, models, primary keys, locked-facts: **untouched**.
+- Phase 7.6 / 7.6.1 catalog (132 topics, 34 rules, 186 hints) stays in
+  place; default OFF, parallel.
+- New module: `artifacts/api-server/kundli_full_context.py` (~470
+  lines, stdlib only).
+- One wire-site in `artifacts/api-server/openai_helper.py` —
+  appends an extra system message just before the user message inside
+  `_build_messages`'s main return path.
+
+### New file: `kundli_full_context.py`
+
+Public API: `build_full_chart_context(kundli, intel, birth, question)
+-> str`.
+
+Block sections (Hinglish, no emoji):
+
+1. **Janm & Lagna** — name/DOB/time/place, ascendant, lagnesh
+   placement, Chandra rashi, Surya rashi, janm-nakshatra+pada+lord,
+   dasha balance at birth.
+2. **Saare 9 Grahas (full detail)** — table with house, sign, deg,
+   nakshatra-pada, naks-lord, status (dignity / combust / retro /
+   aspects-houses).
+3. **Saare 12 Bhavas (full detail)** — table with sign, lord, lord
+   placement, occupants. Uses `intel.house_lords` if present, else
+   derives whole-sign from lagna.
+4. **Current Dasha tree** — Maha + Antar + Pratyantar with start/end
+   dates and lord placements; optional upcoming antars.
+5. **Yogas / Doshas / Sade-Sati / Gochar** — yogas list, mangal-dosh,
+   sade-sati phase, gochar of slow planets.
+6. **Karaka / House cheat-sheet** — universal topic-routing for
+   health, career, marriage, wealth, children, education, property,
+   travel, litigation, mental, spiritual, family.
+7. **Jawab kaise dena hai** — structured-answer template per
+   question: **Verdict** → **Dekha kya** → **Timing** → **Upay**, with
+   tone / length / language / health-disclaimer rules.
+
+### Wire-site: `openai_helper.py`
+
+- Helper `_llm_full_chart_mode_enabled()` defined just above
+  `_build_messages` (~L1832). Reads `LLM_FULL_CHART_MODE` env var;
+  truthy values: `"1"`, `"true"`, `"yes"`, `"on"` (case-insensitive).
+- Injection block at the main return path of `_build_messages`
+  (~L4120). When the flag is on:
+  - Lazy-imports `build_full_chart_context`.
+  - Calls it with `kundli`, `intel_obj`, `birth`, `question`.
+  - Appends the result as a system message just before the user
+    message (recency-locked at the end of the system stack).
+  - Wrapped in try/except; failure logs once and never blocks the
+    call.
+
+### Env flag
+
+```
+# Default OFF — explicit enable required:
+LLM_FULL_CHART_MODE=1   # truthy alternatives: "true" / "yes" / "on"
+```
+
+When unset / falsey, behaviour is bit-for-bit unchanged from
+Phase 7.6.1.
+
+### Security
+
+- The devotee's question is **NOT echoed inside the system block**.
+  It reaches the model only via the normal user-role message. This
+  prevents user-controlled text from being elevated to system-priority
+  context (prompt-injection mitigation).
+- Module never raises; defensive on every field; returns `""` for
+  empty/missing/no-planets kundli so the wire-site no-ops cleanly.
+
+### Verification (smoke run, since deleted)
+
+- Module imports cleanly. Output for synthetic kundli = ~7.3 KB /
+  ~1.8 K tokens. All section markers present.
+- Defensive: `None` / `{}` / kundli-without-planets all return `""`.
+- Wire-site helper toggles correctly with all documented truthy /
+  falsey values.
+- API server restarts cleanly with the change in place.
+- Question echo confirmed absent (security check passes).
+
+### Architect review
+
+PASS for the additive path itself; one architectural note recorded:
+in flag-on mode the existing rule-engine system messages still run,
+so this is "existing path + extra system block" rather than a hard
+replacement. That is intentional — the user requested **pure
+ADD-ONLY**. A true short-circuit branch would require a separate
+explicit decision and is **deferred**.
+
+### Phase 7 invariants — confirmed unchanged
+
+- `users.id` — `Integer` PK preserved.
+- `user_questions.id` — `String(36)` UUID PK preserved.
+- `profiles.client_id` — preserved.
+- No new pip dependencies.
+- No model / engine / locked-facts changes.
+- Default OFF; Phase 7.6.1 catalog and Phase 7.5 clarifier paths
+  unaffected.

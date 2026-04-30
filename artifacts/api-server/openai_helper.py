@@ -1899,6 +1899,75 @@ def _build_messages(
         msgs.append({"role": "user", "content": question})
         return msgs
 
+    # ── Phase 7.7-pre — TRUE PASSTHROUGH (env-gated, default OFF) ────────────
+    # When `LLM_FULL_CHART_MODE` is on AND we are in astro mode, short-circuit
+    # the entire downstream pipeline. Skip:
+    #   • intent router (greeting / chart-fact / dosha / analysis branches)
+    #   • locked_facts mirror-rules block
+    #   • Sprint-52 RAG retrieval
+    #   • Phase 7.6 / 7.6.1 topic-catalog rule engine
+    #   • marriage / love narrator branches
+    #   • health verdict-block enforcement
+    #   • the 30+ STRICT INSTRUCTIONS, language-lock essays, brevity rules,
+    #     tone blacklists, failsafe / variation blocks
+    # The model just gets:
+    #   system: 1 short role intro + the full kundli dump (Sections 1-5
+    #           via kundli_full_context.build_full_chart_context) + the
+    #           2-line minimal niyam (anti-hallucination + Hinglish)
+    #   (history): last 6 conversation turns for context continuity
+    #   user:   devotee's question, verbatim
+    # If chart_block can't be built (missing kundli / no planets) we fall
+    # through to the legacy pipeline so the user still gets a sane error.
+    if mode == "astro" and _llm_full_chart_mode_enabled():
+        try:
+            # chart_intelligence is DATA EXTRACTION, not interpretation —
+            # it computes dignity / yoga / sade-sati flags from raw chart.
+            # We still want these in the dump so the model has facts, not
+            # raw longitudes. Failure here is non-fatal; the dump is built
+            # without the dignity column in that case.
+            _intel_obj_pt = None
+            try:
+                analyze_chart, _ = _chart_intel()
+                _intel_obj_pt = analyze_chart(kundli, birth)
+                if isinstance(out_meta, dict):
+                    out_meta["intel_obj"] = _intel_obj_pt
+            except Exception as _intel_exc:
+                print(f"[openai_helper] passthrough intel skipped: {_intel_exc}")
+
+            from kundli_full_context import build_full_chart_context  # type: ignore
+            _chart_block_pt = build_full_chart_context(
+                kundli=kundli,
+                intel=_intel_obj_pt,
+                birth=birth,
+                question=question or "",  # not echoed inside the block (see security note)
+            )
+            if _chart_block_pt:
+                _sys_intro_pt = (
+                    "Tum ek anubhavi Vedic Jyotishi ho. Devotee ka prashn "
+                    "user message mein hai. Niche di hui kundli ke base par "
+                    "jawab do — apni Vedic Jyotish samajh + kundli ke facts "
+                    "use karke. Niyam kundli dump ke ant mein diye gaye hain.\n\n"
+                )
+                _msgs_pt: list[dict] = [{
+                    "role": "system",
+                    "content": _sys_intro_pt + _chart_block_pt,
+                }]
+                # Last 6 conversation turns for follow-up continuity
+                # (e.g. "yeh tumne kaise bola?" type clarifiers).
+                for _h_pt in (history or [])[-6:]:
+                    _r_pt = _h_pt.get("role")
+                    _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
+                    if _r_pt in ("user", "assistant") and _t_pt:
+                        _msgs_pt.append({"role": _r_pt, "content": _t_pt})
+                _msgs_pt.append({"role": "user", "content": question})
+                if isinstance(out_meta, dict):
+                    out_meta["llm_full_chart_mode"] = "passthrough"
+                return _msgs_pt
+            # else: empty chart_block → fall through to legacy pipeline.
+        except Exception as _pt_exc:  # noqa: BLE001
+            print(f"[openai_helper] LLM_FULL_CHART_MODE passthrough failed: {_pt_exc}")
+            # Any failure → fall through to the legacy pipeline below.
+
     # ── AI INTENT ROUTER ─────────────────────────────────────────────────────
     # A tiny gpt-4o-mini call classifies the question into one of 8 routes.
     # We use it only for astro mode (general mode is already handled above).

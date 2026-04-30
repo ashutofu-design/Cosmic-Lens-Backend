@@ -6231,3 +6231,65 @@ tokens when flag is on).
 - API server restarts cleanly with the change.
 
 **Default behaviour:** still OFF. `LLM_FULL_CHART_MODE=1` to enable.
+
+---
+
+### Phase 7.7-pre — Update (Apr 30, 2026): TRUE PASSTHROUGH branch
+
+Per project owner: *"Sara engine hatao. Sara matlab sara. AI answer
+padhega, kundli ka data hoga, sab wahan dekh kar ans karega."*
+
+Earlier Phase 7.7-pre work was ADD-ONLY — the flag-on path layered an
+extra system block on top of the existing rule engine. Architect had
+flagged this: *"flag-on mode is not a true alternate path; it is
+existing heavy path + extra block."*
+
+This update implements the **true alternate path**.
+
+**New branch in `openai_helper.py::_build_messages`** (~L1905):
+- Inserted **right after** the `mode == "general"` early-return,
+  **before** the AI intent router fires.
+- Triggers ONLY when `mode == "astro"` AND `LLM_FULL_CHART_MODE`
+  is on.
+- Returns a minimal message stack:
+  - `system`: short role intro (3 lines) + full kundli dump (Sections
+    1-5 from `kundli_full_context.build_full_chart_context`) + 2-line
+    minimal niyam (anti-hallucination + Hinglish).
+  - last 6 conversation turns from `history` for follow-up continuity
+    (e.g. *"yeh tumne kaise bola?"*).
+  - `user`: devotee's question, verbatim.
+- Sets `out_meta["llm_full_chart_mode"] = "passthrough"` for tracing.
+
+**Bypassed (intentionally, when flag is on):**
+- AI intent router (greeting / chart-fact / dosha / analysis branches)
+- `locked_facts` mirror-rules block
+- Sprint-52 RAG retrieval (classical text chunks)
+- Phase 7.6 / 7.6.1 topic-catalog rule engine
+- Marriage / love narrator branches
+- Health verdict-block enforcement
+- 30+ STRICT INSTRUCTIONS, language-lock essays, brevity rules,
+  tone blacklists, failsafe / variation blocks
+
+**Kept (data extraction, not interpretation):**
+- `chart_intelligence.analyze_chart()` — produces dignity / yoga /
+  sade-sati / aspect FACTS that get embedded into the chart dump.
+  Failure is non-fatal; dump is still built (without dignity column).
+
+**Failure modes (defensive — fall through to legacy):**
+- If `chart_block` comes back empty (missing kundli / no planets) →
+  legacy pipeline runs, user gets sane error / clarifier response.
+- If anything in the new branch raises → caught, logged, legacy
+  pipeline runs.
+
+**Default behaviour:** still OFF. Legacy production path totally
+unchanged when `LLM_FULL_CHART_MODE` is unset / falsy.
+
+**Old wire-site (~L4190 in `openai_helper.py`):** kept as a dormant
+safety net — only fires if the new top-of-function branch fails and
+falls through to legacy. In normal flag-on operation it is dead code.
+
+**A/B testing:** owner can now toggle the flag and compare:
+- Flag OFF → engineered path (intent router → locked_facts → RAG →
+  narrators → 30+ STRICT INSTRUCTIONS → response)
+- Flag ON → raw GPT + chart facts only, model uses its own Vedic
+  Jyotish knowledge.

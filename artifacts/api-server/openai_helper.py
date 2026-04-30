@@ -8316,12 +8316,31 @@ def _build_supertype_contract(supertype: str,
 # message right BEFORE the per-supertype contract install so the
 # contract still wins recency, but the LLM sees the user's true
 # intent as context.
-def _build_true_intent_hint(hidden_intent: str, question: str) -> str:
-    """Phase 7.0 — return a system-message string promoting the
-    classifier-extracted `hidden_intent` from telemetry into a
+def _build_true_intent_hint(
+    hidden_intent: str,
+    question: str,
+    focus: Optional[str] = None,
+    timeframe: Optional[str] = None,
+    depth: Optional[str] = None,
+    user_keywords: Optional[list] = None,
+) -> str:
+    """Phase 7.0 / 7.1 — return a system-message string promoting the
+    classifier-extracted intent + slots from telemetry into a
     response-shaping rule.
 
-    Cap: ~30 lines of prompt — recency-budget hygiene. Deterministic
+    Phase 7.0 args (always rendered):
+        hidden_intent — ≤8 words underlying ask
+        question      — verbatim user question (truncated to 240 chars)
+
+    Phase 7.1 optional slot args (rendered as a CONTEXT SLOTS block when
+    any are non-empty / non-default; the answerer uses them to refine
+    focus, length, and which keywords to echo back):
+        focus         — ≤6 words specific area (e.g. "general body")
+        timeframe     — "none" | "near" | "mid" | "far"
+        depth         — "shallow" | "medium" | "deep"
+        user_keywords — ≤5 of the user's own salient phrases
+
+    Cap: ~40 lines of prompt — recency-budget hygiene. Deterministic
     (no model call, no I/O), safe to call on every primary-generation
     request.
     """
@@ -8330,12 +8349,47 @@ def _build_true_intent_hint(hidden_intent: str, question: str) -> str:
         q = q[:237] + "…"
     hi = (hidden_intent or "").strip() or "(none extracted)"
 
+    # ── Phase 7.1 — CONTEXT SLOTS block (conditional render) ─────────
+    # Only render when at least one slot adds information beyond the
+    # defaults. "timeframe=none" + "depth=medium" + empty focus + empty
+    # keywords = no information; skip the block to keep the hint terse.
+    _kw_clean = [str(k) for k in (user_keywords or [])
+                 if isinstance(k, str) and k.strip()][:5]
+    _has_slot_info = (
+        (focus and str(focus).strip())
+        or (timeframe and timeframe != "none")
+        or (depth and depth != "medium")
+        or _kw_clean
+    )
+
+    slots_block = ""
+    if _has_slot_info:
+        _focus_line = f"  • Focus: {focus}\n" if (focus and str(focus).strip()) else ""
+        _tf_line    = (f"  • Timeframe: {timeframe}\n"
+                       if (timeframe and timeframe != "none") else "")
+        _depth_line = (f"  • Depth: {depth}\n"
+                       if (depth and depth != "medium") else "")
+        if _kw_clean:
+            _kw_str = ", ".join(f"\"{k}\"" for k in _kw_clean)
+            _kw_line = f"  • User's salient words: {_kw_str}\n"
+        else:
+            _kw_line = ""
+        slots_block = (
+            "CONTEXT SLOTS (extracted from user's words):\n"
+            f"{_focus_line}{_tf_line}{_depth_line}{_kw_line}"
+            "(Use these to refine your answer — narrow to the focus,\n"
+            "respect the timeframe, match the depth, and echo at least\n"
+            "one of the user's own words back so they feel heard.)\n"
+            "\n"
+        )
+
     return (
-        "USER'S TRUE INTENT — Phase 7.0 hint\n"
+        "USER'S TRUE INTENT — Phase 7.0/7.1 hint\n"
         "════════════════════════════════════\n"
         f"Auto-extracted from the user's words: \"{hi}\"\n"
         f"Original question (verbatim): \"{q}\"\n"
         "\n"
+        f"{slots_block}"
         "RESPONSE-SHAPING RULES (override generic defaults):\n"
         " 1. Address the EXACT intent above — do NOT pivot to a\n"
         "    related-but-different question.\n"
@@ -8353,9 +8407,10 @@ def _build_true_intent_hint(hidden_intent: str, question: str) -> str:
         "    karu\"):\n"
         "    → Keep advice to ONE short closing line — generic\n"
         "    lifestyle hint, not a list of mantras.\n"
-        " 5. Length budget:\n"
-        "    → OVERVIEW asks: ≤80 words.\n"
-        "    → Specific asks: ≤140 words.\n"
+        " 5. Length budget (modulated by depth slot above):\n"
+        "    → shallow depth: 1-2 sentences total.\n"
+        "    → medium depth (default): OVERVIEW ≤80 words, specific ≤140.\n"
+        "    → deep depth: up to 220 words with reasoning.\n"
     )
 
 
@@ -12421,10 +12476,25 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             and _qu_hidden_intent.strip()
             and not _use_wealth_structured_path):
         try:
+            # Phase 7.1 — pull richer slots from the classifier output so
+            # the hint can include focus/timeframe/depth/user_keywords on
+            # top of the original hidden_intent. All four slots are
+            # OPTIONAL — `_build_true_intent_hint` falls back to the
+            # Phase 7.0 shape (no slots block) when they're empty / at
+            # defaults. Defensive `.get()` calls so a regex-fallback `_qu`
+            # shape with missing keys never raises here.
+            _qu_focus     = (_qu or {}).get("focus")
+            _qu_timeframe = (_qu or {}).get("timeframe")
+            _qu_depth     = (_qu or {}).get("depth")
+            _qu_keywords  = (_qu or {}).get("user_keywords")
             messages.append({
                 "role":    "system",
                 "content": _build_true_intent_hint(
-                    _qu_hidden_intent, question
+                    _qu_hidden_intent, question,
+                    focus=_qu_focus,
+                    timeframe=_qu_timeframe,
+                    depth=_qu_depth,
+                    user_keywords=_qu_keywords,
                 ),
             })
             _trace(req_id, "2da.TRUE_INTENT_INJECTED", {
@@ -12432,6 +12502,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 "position":       len(messages) - 1,
                 "phase50_active": _phase50_active,
                 "skip_contract":  _skip_contract_reason or None,
+                # Phase 7.1 — slot summary in trace so we can audit which
+                # slots actually drove the answer post-hoc.
+                "slots": {
+                    "focus":     _qu_focus,
+                    "timeframe": _qu_timeframe,
+                    "depth":     _qu_depth,
+                    "kw_count":  len(_qu_keywords)
+                                 if isinstance(_qu_keywords, list) else 0,
+                },
             })
         except Exception as _ti_exc:
             _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL",
@@ -15033,16 +15112,37 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             and isinstance(_qu_hidden_intent_stream, str)
             and _qu_hidden_intent_stream.strip()):
         try:
+            # Phase 7.1 — same slot expansion as the sync path. Stream
+            # path doesn't have `_use_wealth_structured_path` (wealth
+            # json_schema is sync-only via `_VASTU_DEEP_JSON_SCHEMA`),
+            # so no extra gate needed here. Defensive `.get()` so a
+            # regex-fallback `_qu` shape with missing keys never raises.
+            _qu_focus_s     = (_qu or {}).get("focus")
+            _qu_timeframe_s = (_qu or {}).get("timeframe")
+            _qu_depth_s     = (_qu or {}).get("depth")
+            _qu_keywords_s  = (_qu or {}).get("user_keywords")
             messages.append({
                 "role":    "system",
                 "content": _build_true_intent_hint(
-                    _qu_hidden_intent_stream, question or ""
+                    _qu_hidden_intent_stream, question or "",
+                    focus=_qu_focus_s,
+                    timeframe=_qu_timeframe_s,
+                    depth=_qu_depth_s,
+                    user_keywords=_qu_keywords_s,
                 ),
             })
             _trace(req_id, "2da.TRUE_INTENT_INJECTED(stream)", {
                 "hidden_intent":  _qu_hidden_intent_stream,
                 "position":       len(messages) - 1,
                 "phase50_active": _phase50_active_stream,
+                # Phase 7.1 — slot summary in stream trace (parity with sync).
+                "slots": {
+                    "focus":     _qu_focus_s,
+                    "timeframe": _qu_timeframe_s,
+                    "depth":     _qu_depth_s,
+                    "kw_count":  len(_qu_keywords_s)
+                                 if isinstance(_qu_keywords_s, list) else 0,
+                },
             })
         except Exception as _ti_exc_s:
             _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL(stream)",

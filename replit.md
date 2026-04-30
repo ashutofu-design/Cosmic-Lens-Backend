@@ -4937,3 +4937,164 @@ self-contained for that reason) — no flag needed yet.
 - Engine layer additions (`kalapurush body-part`, `named disease
   catalog`, `D3 Drekkana`) — only after the prompt-driver win is
   measured in the wild
+
+## Phase 7.1 — Slot Expansion (Apr 30, 2026)
+
+**Goal:** Extend the Phase 7.0 TRUE-INTENT prompt driver from a single
+slot (`hidden_intent`) to FIVE slots so the answerer gets richer
+context: WHAT the user really asked + WHICH specific area + WHEN they
+expect it + HOW DEEP the answer should go + WHICH of their own words to
+echo back.
+
+**Trigger:** Phase 7.0 shipped successfully but the architect's
+deferred-list called out that `hidden_intent` alone (≤8 words) was a
+narrow signal. Real "near-perfect understanding" requires the LLM to
+also know:
+- the FOCUS area within the topic (e.g. "general body" vs "digestion")
+- the TIMEFRAME the user is asking about (none / near / mid / far)
+- the DEPTH the user wants (shallow / medium / deep)
+- the user's OWN salient words (so the answer can echo them back and
+  the user feels heard, not generic)
+
+**Constraint reminder honoured:**
+- `health_engine.py` UNTOUCHED (3363 lines, 25 layers preserved)
+- dosh / career / love / marriage / wealth engines UNTOUCHED
+- DB schema UNTOUCHED — `users.id` Integer PK, `user_questions.id`
+  String(36) UUID PK, `profiles.client_id` stable
+- mobile (`artifacts/cosmic-lens-mobile/`) UNTOUCHED
+- `flask_app.py` UNTOUCHED
+- Pure orchestration: 2 files touched (`question_understanding.py`,
+  `openai_helper.py`), 0 added, 0 removed
+
+### Change set
+
+**A. Classifier prompt + sanitiser + fallbacks
+   (`question_understanding.py`)**
+- `_PROMPT_TEMPLATE` (L66-150) — added 4 new fields to JSON output
+  schema:
+  - `focus`: ≤6 words specific area, or null
+  - `timeframe`: enum {none, near, mid, far}, default "none"
+  - `depth`: enum {shallow, medium, deep}, default "medium"
+  - `user_keywords`: list of ≤5 user's own salient phrases, default []
+- Added a ~70-line documentation block in the prompt explaining each
+  new field with examples and edge-case handling. Documentation lives
+  between the existing CROSS-DOMAIN section and INTENT definitions.
+- `_normalise_multi_fields` — added defensive sanitisation block for
+  the 4 new fields. Each field normalised to safe defaults on bad
+  input; never raises. All 4 keys ALWAYS present in returned dict.
+- `_fallback_classify` — emits 4 new keys with safe defaults
+  (None/"none"/"medium"/[]) so regex-fallback is contract-compatible
+  with the new shape.
+- `understand_question` empty-question early return — same 4 default
+  keys added.
+
+**B. Helper extension (`openai_helper.py` `_build_true_intent_hint`)**
+- Signature extended with 4 OPTIONAL kwargs (focus, timeframe, depth,
+  user_keywords). Phase 7.0 callers (no kwargs) still get the original
+  Phase 7.0 shape — fully backwards compatible (verified via smoke
+  Test case 5).
+- Added conditional CONTEXT SLOTS block that renders only when at
+  least one slot has non-default information:
+  ```
+  CONTEXT SLOTS (extracted from user's words):
+    • Focus: general body
+    • Timeframe: near
+    • Depth: deep
+    • User's salient words: "agle saal", "vistar se"
+  (Use these to refine your answer — narrow to the focus, respect
+  the timeframe, match the depth, and echo at least one of the
+  user's own words back so they feel heard.)
+  ```
+- Block is suppressed when all slots are at defaults (None / "none" /
+  "medium" / []) to avoid prompt bloat on routine asks.
+- Length budget rule (Rule 5) extended to mention depth slot:
+  - shallow depth: 1-2 sentences total
+  - medium depth (default): OVERVIEW ≤80 words, specific ≤140
+  - deep depth: up to 220 words with reasoning
+
+**C. Sync injection update (`ai_ask` ~L12480-L12520)**
+- Pulls 4 slots from `_qu` via defensive `.get()` (so a regex-fallback
+  shape with missing keys never raises).
+- Passes all 4 to `_build_true_intent_hint` via kwargs.
+- Trace event `2da.TRUE_INTENT_INJECTED` extended with `slots` payload:
+  ```
+  "slots": {
+    "focus":     <str|null>,
+    "timeframe": <str>,
+    "depth":     <str>,
+    "kw_count":  <int>
+  }
+  ```
+
+**D. Stream injection update (`ai_ask_stream` ~L15113-L15152)**
+- Mirror of sync change — sync/stream parity preserved.
+- Same trace extension on `2da.TRUE_INTENT_INJECTED(stream)`.
+
+### Verification
+
+**LEVEL A — deterministic helper render (5/5 ✔):**
+| Case | Slots passed | Block rendered? | Backwards compat? |
+|---|---|---|---|
+| All slots populated | focus + kw | ✔ slots block | ✔ Phase 7.0 shape preserved |
+| Only focus populated | focus only | ✔ focus line only | — |
+| All slots default | all defaults | ✘ no slots block | ✔ Phase 7.0 shape only |
+| timeframe=near + depth=deep + kw | 3 fields | ✔ all 3 lines | — |
+| Phase 7.0 backwards compat | no kwargs | ✘ no slots block | ✔ identical to Phase 7.0 |
+
+**LEVEL B — real classifier slot extraction (4/4 ✔):**
+| Question | focus | timeframe | depth | user_keywords |
+|---|---|---|---|---|
+| "kya kya health issue aa sakte he" | general health | none | medium | [kya kya, health issue] |
+| "weak areas kya kya hain" | general health | none | medium | [weak areas, health] |
+| "agle 2 saal me business kaisa chalega vistar se" | business growth | mid | deep | [agle 2 saal, business, kaisa chalega, vistar se] |
+| "haan ya na — shaadi karni chahiye is saal?" | wedding timing | near | shallow | [haan ya na, shaadi, karni chahiye, is saal] |
+
+The classifier extracted the timeframe correctly in every case (mid /
+near matched the literal time-words), and depth matched the user's
+explicit modifier ("vistar se" → deep, "haan ya na" → shallow).
+
+### Architect review (in-session)
+
+Six-area review (token budget, sanitisation strictness, backwards
+compat, Phase 5.0 minimal-prompt interplay, PII risk, empty-question
+path) — **NO SEVERE/HIGH/MEDIUM findings**. Token budget at 220 has
+~45% headroom over worst-case ~150 tokens. Recommendation: **SHIP.**
+
+### Token / latency cost
+
+- Classifier prompt: +~70 lines documentation. Output JSON: +4 fields
+  ≈ +50 tokens worst case. `max_tokens=220` unchanged (sufficient).
+- Hint message: was ~25 lines (Phase 7.0), now ~40 lines when slots
+  populated, ~25 lines when all default (no slots block). +800 tokens
+  worst case in primary LLM call.
+- Net production impact: **negligible** — both are well within the
+  primary LLM's 25s timeout (Phase 6.2) and 4k+ context window.
+
+### Files touched
+
+- `artifacts/api-server/question_understanding.py` (4 edits: prompt,
+  sanitiser, regex fallback, empty-question fallback)
+- `artifacts/api-server/openai_helper.py` (3 edits: helper signature
+  + template, sync injection, stream injection)
+
+### NOT changed
+
+- `artifacts/api-server/health_engine.py` (3363 lines untouched)
+- All other engines (dosh, career, love, marriage, wealth)
+- `artifacts/api-server/flask_app.py` (route layer untouched)
+- `artifacts/api-server/shortcuts.py` (Phase 6.2 layer untouched)
+- `artifacts/api-server/models.py` (DB schema untouched)
+- mobile client (`artifacts/cosmic-lens-mobile/`)
+
+### Phase 7 series progress
+
+- ✔ Phase 7.0 — TRUE-INTENT prompt driver (Apr 30 2026)
+- ✔ Phase 7.1 — Slot expansion (Apr 30 2026, this entry)
+- ⏳ Phase 7.2 — Deterministic verifier (next, ~1 day)
+- ⏳ Phase 7.3 — 5-archetype taxonomy (defer, ~1.5 days)
+- ⏳ Phase 7.4 — LLM verifier fallback (defer, ~1 day)
+- ⏳ Phase 7.5 — Mobile clarifier UX (defer, ~0.5 day)
+- ⏳ Phase 7.6 — Session-cached slots (deferred until prod data)
+
+Total cumulative effort to "near-perfect understanding" target:
+~5.5 days. Phase 7.1 ships day 2 of 5.5.

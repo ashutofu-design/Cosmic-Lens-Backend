@@ -64,6 +64,10 @@ _PROMPT_TEMPLATE = (
     "  \"topics_all\": [\"<primary>\", \"<secondary?>\"],\n"
     "  \"hidden_intent\": \"<≤8 words underlying ask, no psychology guessing>\",\n"
     "  \"cross_domain_root_cause\": true | false,\n"
+    "  \"focus\": \"<≤6 words specific area, or null>\",\n"
+    "  \"timeframe\": \"none | near | mid | far\",\n"
+    "  \"depth\": \"shallow | medium | deep\",\n"
+    "  \"user_keywords\": [\"<≤5 user's own salient phrases>\"],\n"
     "  \"confidence\": 0.0 to 1.0\n"
     "}}\n\n"
     "MULTI-INTENT RANKING (intents_ranked):\n"
@@ -102,6 +106,38 @@ _PROMPT_TEMPLATE = (
     "se', 'same reason', 'connected hai', 'related hain', 'dono ek saath', "
     "'because of the same thing'.\n"
     "- Otherwise FALSE.\n\n"
+    "FOCUS (focus):\n"
+    "- ≤6 words narrowing the topic to a SPECIFIC area inside the domain.\n"
+    "- Health examples: 'general body', 'digestion', 'mental stress', "
+    "'bones/joints', 'reproductive system', 'eyes/vision'.\n"
+    "- Career examples: 'job switch', 'business growth', 'promotion', "
+    "'salary'.\n"
+    "- Marriage examples: 'spouse compatibility', 'wedding timing', "
+    "'marital harmony'.\n"
+    "- If the user is asking GENERALLY without narrowing (e.g. 'kaisa hai', "
+    "'kya kya issue'), use 'general' + the topic word (e.g. 'general body', "
+    "'general career'). Return null ONLY when topic itself is 'general'.\n\n"
+    "TIMEFRAME (timeframe):\n"
+    "- 'none' → no time-window asked (default for overview / definitional / "
+    "diagnostic questions). Most questions land here.\n"
+    "- 'near' → next 0-12 months ('jaldi', 'ab', 'soon', 'is saal').\n"
+    "- 'mid'  → 1-3 years ('agle 2 saal', 'next year', 'kuch saal').\n"
+    "- 'far'  → 3+ years or lifetime ('zindagi bhar', 'long term', "
+    "'lifetime', 'kabhi bhi').\n\n"
+    "DEPTH (depth):\n"
+    "- 'shallow' → user wants a one-line YES/NO/quick-take. Single sentence "
+    "asks, 'haan ya na', 'bata do bas'.\n"
+    "- 'medium'  → DEFAULT. User wants 2-4 sentences with reason + outcome.\n"
+    "- 'deep'    → user explicitly asks for explanation, deep dive, full "
+    "analysis ('vistar se', 'detail me', 'sab kuch bata', 'explain', 'why').\n\n"
+    "USER_KEYWORDS (user_keywords):\n"
+    "- ≤5 of the user's OWN salient words/phrases — verbatim from the "
+    "question (do NOT translate, do NOT paraphrase). These are the words "
+    "the answerer MUST echo back so the user feels heard.\n"
+    "- Skip stop-words ('hai', 'mein', 'ko', 'is', 'a'). Skip personal "
+    "possessives ('mera', 'mujhe', 'my').\n"
+    "- Examples: 'kya kya', 'weak areas', 'tendency', 'kab tak', 'jaldi'.\n"
+    "- Empty array [] is acceptable when nothing salient stands out.\n\n"
     "INTENT definitions (pick the most specific that fits):\n"
     "- planet   → ANY question that NAMES a graha (Sun, Moon, Mars, Mercury, "
     "Jupiter, Venus, Saturn, Rahu, Ketu / Surya, Chandra, Mangal, Budh, Guru, "
@@ -230,6 +266,13 @@ def _fallback_classify(question: str) -> dict:
         "domain_anchor_found":      _fb_anchor,
         "sustained_problem_pattern": _fb_sustained,
         "clarification_needed":      _fb_sustained and not _fb_anchor,
+        # Phase 7.1 — slot defaults emitted from regex fallback so downstream
+        # consumers never KeyError regardless of which return path fired.
+        # Regex can't intelligently extract focus/keywords; use safe nulls.
+        "focus":                    None,
+        "timeframe":                "none",
+        "depth":                    "medium",
+        "user_keywords":            [],
         "confidence":              0.5,
         "source":                  "regex_fallback",
     }
@@ -283,11 +326,60 @@ def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
     raw_cross = data.get("cross_domain_root_cause")
     cross = bool(raw_cross) and len(topics_all) >= 2
 
+    # ── Phase 7.1 (Apr 30, 2026) — slot extraction sanitisation ──
+    # Four new optional slots feed `_build_true_intent_hint` so the
+    # answerer gets richer context than `hidden_intent` alone. Each
+    # slot is defensively normalised; bad values become safe defaults
+    # (None / "medium" / []) so downstream consumers never KeyError
+    # and the prompt-builder can decide whether to render a slot block.
+    raw_focus = data.get("focus")
+    if isinstance(raw_focus, str):
+        focus = raw_focus.strip()
+        if focus.lower() in ("", "null", "none", "n/a"):
+            focus = None
+        else:
+            focus = " ".join(focus.split()[:6])  # cap at 6 words
+    else:
+        focus = None
+
+    raw_tf = data.get("timeframe")
+    _TIMEFRAMES = ("none", "near", "mid", "far")
+    if isinstance(raw_tf, str):
+        tf = raw_tf.strip().lower()
+        timeframe = tf if tf in _TIMEFRAMES else "none"
+    else:
+        timeframe = "none"
+
+    raw_depth = data.get("depth")
+    _DEPTHS = ("shallow", "medium", "deep")
+    if isinstance(raw_depth, str):
+        d = raw_depth.strip().lower()
+        depth = d if d in _DEPTHS else "medium"
+    else:
+        depth = "medium"
+
+    raw_kw = data.get("user_keywords")
+    if isinstance(raw_kw, list):
+        cleaned_kw: list[str] = []
+        for v in raw_kw[:5]:
+            if isinstance(v, str):
+                vv = v.strip()
+                if vv and len(vv) <= 30 and vv not in cleaned_kw:
+                    cleaned_kw.append(vv)
+        user_keywords = cleaned_kw
+    else:
+        user_keywords = []
+
     return {
         "intents_ranked":          intents_ranked,
         "topics_all":              topics_all,
         "hidden_intent":           hidden,
         "cross_domain_root_cause": cross,
+        # Phase 7.1 — slot expansion (richer context for hint builder)
+        "focus":                   focus,
+        "timeframe":               timeframe,
+        "depth":                   depth,
+        "user_keywords":           user_keywords,
     }
 
 
@@ -725,6 +817,13 @@ def _understand_question_inner(question: str,
             # Sprint-26 Fix-Q (post-architect-review): always emit the flag
             # so callers never see KeyError on the canonical contract.
             "has_recovery_subask": False,
+            # Phase 7.1 — slot defaults emitted on empty-question path so
+            # downstream consumers never KeyError. All slots are nulls /
+            # safe defaults — there's nothing to extract from empty input.
+            "focus":         None,
+            "timeframe":     "none",
+            "depth":         "medium",
+            "user_keywords": [],
         }
 
     if model is None:

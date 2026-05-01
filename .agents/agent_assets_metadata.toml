@@ -516,3 +516,9 @@ id = "5gA4Myo24VzPlQjjIOtIp"
 uri = "file://.local/preview/numerology_pro_t006.pdf"
 type = "pdf"
 title = "Pro Numerology Report — emotional tone prompt updated (T006)"
+
+[[outputs]]
+id = "NlZmEI_h1JT-oW2SgNq8c"
+uri = "file://artifacts/cosmic-lens-mobile/assets/images/icon.png"
+type = "image"
+title = "Cosmic Lens Mobile — open in browser/Expo Go"

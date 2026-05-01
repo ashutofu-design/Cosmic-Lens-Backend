@@ -522,3 +522,9 @@ id = "NlZmEI_h1JT-oW2SgNq8c"
 uri = "file://artifacts/cosmic-lens-mobile/assets/images/icon.png"
 type = "image"
 title = "Cosmic Lens Mobile — open in browser/Expo Go"
+
+[[outputs]]
+id = "tZKxeRRoB8ndN_f4XdguB"
+uri = "file://attached_assets/screenshots/expo_go_qr.png"
+type = "image"
+title = "Expo Go QR — phone se scan karo (Cosmic Lens)"

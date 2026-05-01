@@ -548,6 +548,102 @@ def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
 
 
 # ────────────────────────────────────────────────────────────────────
+# Section 8 — KP (Krishnamurti Paddhati) — full cusps + planets with all
+# four lord-levels (Sign-Lord, Nakshatra-Lord, Sub-Lord, Sub-Sub-Lord)
+# and exact degrees. Per project owner (1 May 2026):
+#   "Sublord and nakshatra lord and planet ke saath number bhi aana
+#    chahiye — har CSL ke sath."
+# This is ADD-ONLY: previous KP delivery was topic-filtered via
+# `_kp_context()` in openai_helper.py. That path stays. This block now
+# guarantees full KP visibility in EVERY question, regardless of topic.
+# Defensive — returns "" on any failure so chart context never breaks.
+# ────────────────────────────────────────────────────────────────────
+
+
+def _section_kp(birth: dict | None) -> str:
+    if not isinstance(birth, dict) or not birth:
+        return ""
+    required = ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz")
+    if not all(k in birth and birth[k] is not None for k in required):
+        return ""
+
+    try:
+        from kp_engine import calculate_kp  # type: ignore
+        kp = calculate_kp(birth)
+    except Exception:
+        return ""
+
+    cusps = kp.get("cusps") or []
+    planets = kp.get("planets") or []
+    if not cusps and not planets:
+        return ""
+
+    lines: list[str] = ["## 8. KP (KRISHNAMURTI PADDHATI) — FULL CUSPS + PLANETS"]
+    aya = kp.get("ayanamsa")
+    if aya is not None:
+        try:
+            lines.append(f"Ayanamsa (Krishnamurti): {float(aya):.4f}\u00b0")
+        except Exception:
+            pass
+
+    # ── 12 cusps with CSL/NL/SL/SS + degree ─────────────────────────
+    if cusps:
+        lines.append("")
+        lines.append("CUSPS (CSL = Cusp Sub-Lord = FINAL deciding authority for that house):")
+        lines.append("  Hse | Degree              | Nakshatra      | Sign-L  | Nak-L   | Sub-L (CSL) | Sub-Sub")
+        for c in cusps:
+            try:
+                h = c.get("house")
+                deg = str(c.get("degree", ""))
+                nak = str(c.get("nakshatra", ""))
+                sl = str(c.get("sl", ""))
+                nl = str(c.get("nl", ""))
+                sb = str(c.get("sb", ""))
+                ss = str(c.get("ss", ""))
+                lon = c.get("longitude")
+                lon_str = f"{float(lon):7.3f}\u00b0" if isinstance(lon, (int, float)) else "       "
+                lines.append(
+                    f"  H{h:<2} | {deg:<10} {lon_str} | {nak:<13} | {sl:<7} | {nl:<7} | {sb:<11} | {ss}"
+                )
+            except Exception:
+                continue
+
+    # ── 9 planets with their KP lord chain + degree ──────────────────
+    if planets:
+        lines.append("")
+        lines.append("PLANETS (Sub-Lord = KP outcome decider for each planet):")
+        lines.append("  Planet  | Degree              | House | Nakshatra      | Sign-L  | Nak-L   | Sub-L   | Sub-Sub")
+        for p in planets:
+            try:
+                name = str(p.get("name", ""))
+                deg = str(p.get("degree", ""))
+                hse = p.get("house", "")
+                nak = str(p.get("nakshatra", ""))
+                sl = str(p.get("sl", ""))
+                nl = str(p.get("nl", ""))
+                sb = str(p.get("sb", ""))
+                ss = str(p.get("ss", ""))
+                lon = p.get("longitude")
+                lon_str = f"{float(lon):7.3f}\u00b0" if isinstance(lon, (int, float)) else "       "
+                lines.append(
+                    f"  {name:<7} | {deg:<10} {lon_str} | H{hse:<3} | {nak:<13} | {sl:<7} | {nl:<7} | {sb:<7} | {ss}"
+                )
+            except Exception:
+                continue
+
+    # ── KP rule reminders (compact) ──────────────────────────────────
+    lines.append("")
+    lines.append("KP READING RULE:")
+    lines.append("  • Cusp Sub-Lord (CSL) of a house decides whether that house matter happens or not.")
+    lines.append("  • A house matter fructifies during Dasha-Bhukti-Antara of planets that signify")
+    lines.append("    the relevant houses (via star/sub-lord chain).")
+    lines.append("  • If CSL signifies the relevant houses for the question → YES (event will occur).")
+    lines.append("  • If CSL signifies negation houses (e.g. 6/8/12 for marriage) → NO / denial.")
+
+    return "\n".join(lines)
+
+
+# ────────────────────────────────────────────────────────────────────
 # Minimal guidance — per project owner (30 Apr 2026):
 #   "Engine cheat-sheet jo jo he, woh sara chiz hatao. Mujhse abhi itna
 #    chahiye ji AI ko jo question diya jaye, woh pura samaj paaye, kundli
@@ -563,7 +659,7 @@ def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
 #   2. Language: reply in Hinglish (devotee's preference).
 # ────────────────────────────────────────────────────────────────────
 
-_MINIMAL_GUIDANCE = """## 8. NIYAM (sirf 2 — baaki tum khud decide karo)
+_MINIMAL_GUIDANCE = """## 9. NIYAM (sirf 2 — baaki tum khud decide karo)
 
 • Sirf upar di hui kundli ke fields cite karo. Koi naya graha placement,
   dasha, ya yoga IMAGINE NAHI karna. Agar zaroori detail upar nahi hai,
@@ -652,6 +748,12 @@ def build_full_chart_context(
         pass
     try:
         s = _section_yogas_doshas(intel_d, kundli)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+    try:
+        s = _section_kp(birth_d)
         if s:
             sections.append(s)
     except Exception:

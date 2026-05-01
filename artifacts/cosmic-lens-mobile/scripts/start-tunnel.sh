@@ -192,6 +192,36 @@ export EXPO_MANIFEST_PROXY_URL="$METRO_PUBLIC_URL"
 
 echo "[startup] Starting Metro on port $METRO_PORT (public host: $METRO_HOST)..."
 export EXPO_OFFLINE=1
+
+# Kill ANY process holding METRO_PORT (stale expo start, leftover node, etc.)
+# Without this, expo CLI prompts "Use port X+1 instead?" and exits in
+# non-interactive mode → "Skipping dev server" → no Metro → app dead.
+# Use both lsof (preferred) and ss as fallback for portability.
+PORT_HOLDERS=""
+if command -v lsof >/dev/null 2>&1; then
+  PORT_HOLDERS=$(lsof -ti tcp:${METRO_PORT} 2>/dev/null || true)
+elif command -v ss >/dev/null 2>&1; then
+  PORT_HOLDERS=$(ss -tlnpH "sport = :${METRO_PORT}" 2>/dev/null \
+    | grep -oP 'pid=\K[0-9]+' || true)
+fi
+if [ -n "$PORT_HOLDERS" ]; then
+  echo "[startup] killing stale process(es) on :${METRO_PORT} → $PORT_HOLDERS"
+  for pid in $PORT_HOLDERS; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  sleep 1
+  # Force-kill any survivors
+  for pid in $PORT_HOLDERS; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
+  sleep 1
+fi
+# Belt-and-suspenders: pkill any expo start hanging around
+pkill -f "expo start.*${METRO_PORT}" 2>/dev/null || true
+sleep 1
+
 pnpm exec expo start --port "$METRO_PORT" --offline 2>&1 | tee "$LOG_FILE" &
 METRO_PID=$!
 

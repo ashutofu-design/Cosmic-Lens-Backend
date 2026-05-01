@@ -65,7 +65,7 @@ def _stock_engine():
 #   • ai_ask()              (sync passthrough block, ~L13007)
 #   • ai_ask_stream()       (streaming passthrough, ~L16216)
 # Update this constant in ONE place — all three call sites pick it up.
-# 15 explicit output rules. Phase 2.2 (30 Apr 2026) added:
+# 17 explicit output rules. Phase 2.2 (30 Apr 2026) added:
 #   • Rule 2 PERSONA — name = "Cosmo", never reveal AI / GPT / model name.
 #   • Rule 3 SOURCE — "aapki kundli mere paas hai", never expose Section X.
 # Phase 2.3 Tier-1 (30 Apr 2026) added:
@@ -77,8 +77,27 @@ def _stock_engine():
 #   • _scrub_ai_tells() defensive post-processor: belt-and-suspenders
 #     safety net that drops any sentence still containing an AI tell
 #     before the answer reaches the devotee.
+# Phase 2.4 Tier-1.5 (01 May 2026) added — fixes question→house leak
+# (e.g. friend question pulled 9H, sibling question pulled 11H, etc.):
+#   • Rule 6 EXPANDED — 17-topic classical bhava+karaka cheat-sheet
+#     (was 5 topics: Health/Career/Marriage/Wealth/General). Now also
+#     covers friends, elder/younger sibling, children, mother, father,
+#     home/property, education, higher studies, court, foreign travel,
+#     spirituality.
+#   • Rule 16 STRICT FOCUS — if a TOPIC-LOCK block appears at top of
+#     user message, it overrides Rule 6 and the LLM must cite ONLY
+#     the houses/lords/karakas listed (and never the "DO NOT cite"
+#     houses).
+#   • Rule 17 DASHA-FIRST TIMING — every detailed answer must link
+#     current MD-AD lord to the topic-house/lord (this is what gives
+#     each answer its TIMING + PERSONALIZATION).
+#   • _detect_topic() + _build_topic_lock() — see Phase 2.4 block
+#     below `_PT_SYS_INTRO` for the topic-rules + helpers. Wired at
+#     all 3 passthrough sites (sync `ai_ask`, stream `ai_ask_stream`,
+#     `_build_messages`) — lock is PREPENDED to the user message so
+#     system prompt stays cacheable.
 # Also fixed Phase 2.1 numbering bug (two "Rule 4"s — FOCUS + HISTORY).
-# See replit.md "Phase 1 / 2 / 2.1 / 2.2 / 2.3 Prompt Polish" entries.
+# See replit.md "Phase 1 / 2 / 2.1 / 2.2 / 2.3 / 2.4 Prompt Polish" entries.
 # ────────────────────────────────────────────────────────────────────
 _PT_SYS_INTRO = (
     "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
@@ -145,12 +164,25 @@ _PT_SYS_INTRO = (
     "ho toh puchho\" likho. Single-fact answers mein bullets nahi.\n"
     "\n"
     "6. FOCUS — sirf question-relevant houses/planets cite karo. "
-    "Pura kundli har answer mein mat dump karo. Quick reference:\n"
-    "   • Health   → 1H, 6H, 8H, 12H + Mars, Saturn, Rahu, Moon (manas)\n"
-    "   • Career   → 10H, 6H, 2H, 11H + Sun, Saturn, Mercury, Mars\n"
-    "   • Marriage → 7H, 5H, 8H + Venus, Mars, Jupiter, Rahu-Ketu axis\n"
-    "   • Wealth   → 2H, 11H, 5H, 9H + Jupiter, Venus, Mercury\n"
-    "   • General  → Lagna lord + current dasha + dominant yoga\n"
+    "Pura kundli har answer mein mat dump karo. Topic-wise classical "
+    "mapping (BPHS-aligned):\n"
+    "   • Health         → 1H, 6H, 8H, 12H + Mangal, Shani, Rahu, Chandra (manas)\n"
+    "   • Career/Job     → 10H, 6H, 2H, 11H + Surya, Shani, Budh, Mangal\n"
+    "   • Marriage       → 7H, 5H, 8H + Shukra, Mangal, Guru, Rahu-Ketu axis\n"
+    "   • Wealth/Paisa   → 2H, 11H, 5H + Guru, Shukra, Budh\n"
+    "   • Friend circle  → 11H + 11L + Guru (general benefic for circle)\n"
+    "   • Elder sibling  → 11H + 11L + Mangal\n"
+    "   • Younger sibling→ 3H + 3L + Mangal (parakrama-karaka)\n"
+    "   • Children/Santan→ 5H + 5L + Guru (putra-karaka)\n"
+    "   • Mother         → 4H + 4L + Chandra (matr-karaka)\n"
+    "   • Father         → 9H + 9L + Surya (pitr-karaka)\n"
+    "   • Home/Property  → 4H + 4L + Mangal (real estate), Shukra (vehicle)\n"
+    "   • Education      → 4H + 5H + Budh (buddhi), Guru (gyaan)\n"
+    "   • Higher studies → 9H + 5H + Guru (gyaan-karaka)\n"
+    "   • Court/Mukadma  → 6H + 8H + Mangal (vivad), Shani (delay)\n"
+    "   • Foreign travel → 12H + 9H + Rahu (videsh-karaka)\n"
+    "   • Spirituality   → 9H + 12H + 5H + Guru, Ketu (moksha-karaka)\n"
+    "   • General        → Lagna lord + current dasha + dominant yoga\n"
     "\n"
     "7. HISTORY YAAD RAKHO — pichhle 6 turns recall karo. Same "
     "fact dobara mat bolo. \"Jaise pehle bataya tha [short]\" "
@@ -239,8 +271,496 @@ _PT_SYS_INTRO = (
     "bolo, dusre se consult karne ki salaah nahi. Cosmo guidance "
     "deta hai — yeh tumhara dharma hai.\n"
     "\n"
+    "16. STRICT FOCUS — agar user message ke shuru mein ek "
+    "\"TOPIC-LOCK\" block mile (━━━ TOPIC-LOCK ... ━━━ ke andar), "
+    "uska palan strictly karo:\n"
+    "   • SIRF us block mein listed houses + lords + karakas cite "
+    "karo. Agar block kehta hai 'Cite SIRF: 11H + 11L (Shukra)', "
+    "to bilkul bhi 9H, 7H, 5H ya koi aur unrelated house mat lao.\n"
+    "   • Block ke 'DO NOT cite' list mein jo houses hain, woh "
+    "KABHI mention mat karo — chahe woh classical context mein "
+    "interesting lagein. Devotee ko clarity chahiye, breadth nahi.\n"
+    "   • Agar TOPIC-LOCK block NAHI hai, to Rule 6 ke cheat-sheet "
+    "ke hisaab se relevant houses choose karo, par fir bhi adjacent "
+    "/ unrelated houses ko avoid karo unless directly relevant.\n"
+    "   • Yeh rule Rule 6 ke upar (overrides) hai — TOPIC-LOCK aaye "
+    "to woh hi authoritative hai.\n"
+    "\n"
+    "17. DASHA-FIRST TIMING — har detailed (Rule 1 ke detail-wale) "
+    "answer mein current Mahadasha-Antardasha lord ka topic-house "
+    "ya topic-lord se rishta MANDATORILY explain karo. Format "
+    "examples:\n"
+    "   • \"Aap [MD]-[AD] mein chal rahe ho. [MD] aapka [N]L hai, "
+    "isliye agle [period] tak [topic-area] mein [effect] hoga.\"\n"
+    "   • \"[AD] graha [N]th bhava mein hai aur [topic-house] ko "
+    "dekhta hai, isliye [effect] aayega.\"\n"
+    "   Bina dasha-link ke timing-claim KABHI mat karo. Single-fact "
+    "answers (Rule 1) mein dasha-link nahi chahiye — sirf detail "
+    "answers mein. Agar TOPIC-LOCK block mein 'Current Dasha: "
+    "(unknown)' diya hai (kundli mein dasha-tree missing), to dasha "
+    "skip karo aur sirf static placement-based answer do.\n"
+    "\n"
     "Safety rails kundli ke ant mein diye hain.\n\n"
 )
+
+
+# ────────────────────────────────────────────────────────────────────
+# Phase 2.4 Tier-1.5 — Topic-detector + TOPIC-LOCK injection.
+#
+#  Problem solved: even with Rule 6 cheat-sheet in `_PT_SYS_INTRO`,
+#  the LLM occasionally drags adjacent / unrelated houses into the
+#  answer (e.g. 9H pulled into a friend-circle question, 11H pulled
+#  into a younger-sibling question, 7H pulled into a children's-future
+#  question). This block adds:
+#
+#    1. `_TOPIC_RULES` — pattern→topic mapping for 17 common life
+#       areas with the EXACT classical houses + lords + karakas to
+#       cite, and an explicit "do NOT cite" list per topic.
+#
+#    2. `_detect_topic(question)` — first-match regex routing.
+#       Returns the rule dict or None (topic uncertain → no lock,
+#       LLM falls back to Rule 6 cheat-sheet + own karaka knowledge).
+#
+#    3. `_topic_house_lord(kundli, house_num)` — whole-sign lord
+#       lookup from the user's lagna sign (BPHS Ch.5).
+#
+#    4. `_topic_current_dasha(kundli)` — current MD-AD lord pair from
+#       the Vimshottari tree (mirror of `kundli_full_context._section
+#       _future_dasha` lookup, but returns just the lord names so the
+#       lock block can substitute them in).
+#
+#    5. `_build_topic_lock(rule, kundli)` — composes the user-facing
+#       TOPIC-LOCK block in Hinglish, with the topic-house's actual
+#       lord + current-dasha lords substituted in. Returns "" if the
+#       rule is None or any lookup fails (graceful — chart-context
+#       still ships, only the lock is skipped).
+#
+#  Wired at all 3 passthrough emit sites (`_build_messages`, sync
+#  `ai_ask`, stream `ai_ask_stream`). The lock is PREPENDED to the
+#  user message (not the system prompt) so:
+#    • the system prompt stays cacheable across requests, and
+#    • the lock gets primary attention right before the question.
+# ────────────────────────────────────────────────────────────────────
+import re as _re_topic  # local alias to avoid module-level collision
+
+# Whole-sign lords (BPHS Ch.5). Sanskrit names so the lock block
+# matches the rest of the prompt's Hinglish style.
+_TOPIC_SIGN_LORDS = (
+    "Mangal", "Shukra", "Budh", "Chandra", "Surya", "Budh",
+    "Shukra", "Mangal", "Guru", "Shani", "Shani", "Guru",
+)
+_TOPIC_SIGN_ALIASES = {
+    "mesh": 0, "mesha": 0, "aries": 0,
+    "vrish": 1, "vrishabha": 1, "vrushabh": 1, "taurus": 1,
+    "mithun": 2, "mithuna": 2, "gemini": 2,
+    "kark": 3, "karka": 3, "cancer": 3,
+    "simh": 4, "simha": 4, "leo": 4,
+    "kanya": 5, "virgo": 5,
+    "tula": 6, "libra": 6,
+    "vrishchik": 7, "vrishchika": 7, "scorpio": 7,
+    "dhanu": 8, "dhanus": 8, "sagittarius": 8,
+    "makar": 9, "makara": 9, "capricorn": 9,
+    "kumbh": 10, "kumbha": 10, "aquarius": 10,
+    "meen": 11, "meena": 11, "pisces": 11,
+}
+
+# Topic rules — ORDERED. First match wins, so the more specific
+# patterns (elder/younger sibling) MUST come before the generic
+# fallback (siblings_general). Each rule:
+#   topic_id    — short identifier (telemetry / debugging)
+#   label       — human-facing label rendered in the lock block
+#   pattern     — compiled regex; matched against the question
+#   houses      — primary topic-houses to cite (1-12)
+#   karakas     — graha karakas (Sanskrit names with brief role)
+#   banned      — houses that are CLASSICALLY UNRELATED to this
+#                 topic and must not appear in the answer (LLM is
+#                 told these by name in the lock block)
+_TOPIC_RULES = [
+    {
+        "topic_id": "elder_sibling",
+        "label":    "elder sibling / bade bhai-behen",
+        "pattern":  _re_topic.compile(
+            r"\b(bade?\s+bhai|bade?\s+behen|bade?\s+behan|"
+            r"badi\s+behen|badi\s+behan|"
+            r"elder\s+sibling|elder\s+brother|elder\s+sister)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [11],
+        "karakas":  ["Mangal (general sibling karaka)"],
+        "banned":   [3, 5, 7, 9],
+    },
+    {
+        "topic_id": "younger_sibling",
+        "label":    "younger sibling / chhote bhai-behen",
+        "pattern":  _re_topic.compile(
+            r"\b(chhot[ae]\s+bhai|chhot[ae]\s+behen|chhot[ae]\s+behan|"
+            r"choti\s+behen|choti\s+behan|chhota\s+bhai|"
+            r"younger\s+sibling|younger\s+brother|younger\s+sister)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [3],
+        "karakas":  ["Mangal (parakrama-karaka, general sibling karaka)"],
+        "banned":   [5, 7, 11],
+    },
+    {
+        "topic_id": "siblings_general",
+        "label":    "siblings (general) / bhai-behen",
+        "pattern":  _re_topic.compile(
+            r"\b(bhai[\s-]+behen|bhai[\s-]+behan|bhai\s+aur\s+behen|"
+            r"siblings?|brother\s+and\s+sister|brothers?|sisters?)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [3, 11],
+        "karakas":  ["Mangal (3rd = parakrama, general sibling karaka)"],
+        "banned":   [5, 7],
+    },
+    {
+        "topic_id": "friend_circle",
+        "label":    "friend circle / dosti / network",
+        "pattern":  _re_topic.compile(
+            r"\b(friends?|friendship|friend\s+circle|circle\s+of\s+friends|"
+            r"dost(i|ana)?|yaar|companion(s|ship)?|"
+            r"social\s+circle|networking|naye\s+dost|new\s+friends)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [11],
+        "karakas":  ["Guru (general benefic for circle / network)"],
+        "banned":   [3, 5, 7, 9],
+    },
+    {
+        "topic_id": "children",
+        "label":    "children / santaan / putra-prapti",
+        "pattern":  _re_topic.compile(
+            r"\b(bachh?[ae]|bachch?[ae]|bachcha|bachha|"
+            r"child(ren)?|kids?|"
+            r"santaan|santan|putra|putri|baby|babies|"
+            r"progeny|offspring|aulad)\b", _re_topic.IGNORECASE),
+        "houses":   [5],
+        "karakas":  ["Guru (putra-karaka)"],
+        "banned":   [3, 7, 11],
+    },
+    {
+        "topic_id": "mother",
+        "label":    "mother / matr",
+        "pattern":  _re_topic.compile(
+            r"\b(maa|mata|mother|maatr|matr|mom|mummy|amma|janani|maaji)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [4],
+        "karakas":  ["Chandra (matr-karaka)"],
+        "banned":   [7, 11],
+    },
+    {
+        "topic_id": "father",
+        "label":    "father / pitr",
+        "pattern":  _re_topic.compile(
+            r"\b(pitaji|pita|papa|father|pitr|dad|daddy|baba|pitaji)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [9],
+        "karakas":  ["Surya (pitr-karaka)"],
+        "banned":   [7, 11],
+    },
+    {
+        "topic_id": "home_property",
+        "label":    "home / property / vehicle",
+        "pattern":  _re_topic.compile(
+            r"\b(ghar|makaan|makan|home|house|property|"
+            r"land|jameen|jamin|vahan|vehicle|car|gaadi|"
+            r"real\s+estate|flat|apartment|plot)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [4],
+        "karakas":  ["Mangal (real estate), Shukra (vehicle / luxury)"],
+        "banned":   [7, 11],
+    },
+    # higher_studies MUST come before education_basic — the generic
+    # "study/studies" pattern in education_basic would otherwise eat
+    # questions like "higher studies videsh mein possible?".
+    {
+        "topic_id": "higher_studies",
+        "label":    "higher studies / videsh shiksha",
+        "pattern":  _re_topic.compile(
+            r"\b(higher\s+stud(y|ies)|masters|m\.?a\.?|m\.?s\.?|"
+            r"phd|ph\.?d\.?|research|videsh\s+(shiksha|padhai|study)|"
+            r"foreign\s+stud(y|ies)|study\s+abroad|abroad\s+stud(y|ies))\b",
+            _re_topic.IGNORECASE),
+        "houses":   [9, 5],
+        "karakas":  ["Guru (gyaan-karaka)"],
+        "banned":   [3, 7, 11],
+    },
+    {
+        "topic_id": "education_basic",
+        "label":    "education / vidya",
+        "pattern":  _re_topic.compile(
+            r"\b(padhai|padhayi|vidya|education|study|studies|school|"
+            r"college|exam|exams|result|degree|class)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [4, 5],
+        "karakas":  ["Budh (buddhi-karaka), Guru (gyaan-karaka)"],
+        "banned":   [7, 11],
+    },
+    {
+        "topic_id": "court_case",
+        "label":    "court case / mukadma / dispute",
+        "pattern":  _re_topic.compile(
+            r"\b(mukadma|mukadama|court|case|kanoon|legal|litigation|"
+            r"law\s*suit|dispute|enemy|enemies|shatru|fir)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [6, 8],
+        "karakas":  ["Mangal (vivad-karaka), Shani (delay / judgement)"],
+        "banned":   [4, 5, 7, 9, 11],
+    },
+    {
+        "topic_id": "foreign_travel",
+        "label":    "foreign travel / videsh yatra",
+        "pattern":  _re_topic.compile(
+            r"\b(videsh|foreign|abroad|overseas|migration|"
+            r"settle\s+abroad|us(a)?\s+visa|uk\s+visa|canada\s+visa|"
+            r"long\s+journey|long\s+travel|travel\s+abroad)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [12, 9],
+        "karakas":  ["Rahu (videsh-karaka)"],
+        "banned":   [4, 5, 7, 11],
+    },
+    {
+        "topic_id": "spirituality",
+        "label":    "spirituality / dharma / moksha",
+        "pattern":  _re_topic.compile(
+            r"\b(spirituality|spiritual|moksha|mukti|"
+            r"sadhan(a|aa)|meditation|dhyaan|sanyas|"
+            r"renunciation|astha|bhakti|yoga\s+sadhna)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [9, 12, 5],
+        "karakas":  ["Guru (dharma-karaka), Ketu (moksha-karaka)"],
+        "banned":   [3, 7, 11],
+    },
+    # Topics already covered by Rule 6 — included so the lock block
+    # also fires here. Banned lists are conservative.
+    {
+        "topic_id": "marriage",
+        "label":    "marriage / shaadi / spouse",
+        "pattern":  _re_topic.compile(
+            r"\b(shaadi|shadi|marriage|wedding|spouse|husband|wife|"
+            r"pati|patni|kalatra|life\s+partner|jeevan\s+saathi|jeevansathi)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [7, 5, 8],
+        "karakas":  ["Shukra (kalatra-karaka, men), Guru (pati-karaka, women)"],
+        "banned":   [3, 6, 9, 12],
+    },
+    {
+        "topic_id": "career",
+        "label":    "career / profession / job",
+        "pattern":  _re_topic.compile(
+            r"\b(career|job|naukri|profession|business|vyaapaar|vyapar|"
+            r"work|kaam|company|office|promotion|appraisal|salary|"
+            r"vyavasaaya|vyavasaya|interview)\b", _re_topic.IGNORECASE),
+        "houses":   [10, 6, 11],
+        "karakas":  ["Surya (raj-karaka), Shani (karma-karaka), Budh (vyapaar-karaka)"],
+        "banned":   [4, 8, 12],
+    },
+    {
+        "topic_id": "wealth",
+        "label":    "wealth / dhana / paisa",
+        "pattern":  _re_topic.compile(
+            r"\b(paisa|paise|wealth|dhana|dhan|money|income|"
+            r"savings|bachat|kamai|earnings|rich|amir|finance|financial|"
+            r"investment|invest)\b", _re_topic.IGNORECASE),
+        "houses":   [2, 11, 5],
+        "karakas":  ["Guru (dhana-karaka), Shukra (bhog-karaka)"],
+        "banned":   [3, 6, 8, 12],
+    },
+    {
+        "topic_id": "health",
+        "label":    "health / sehat / rog",
+        "pattern":  _re_topic.compile(
+            r"\b(health|sehat|tabiyat|tabiat|illness|bimari|"
+            r"rog|disease|medical|body|sharir|wellness|"
+            r"hospital|surgery|operation)\b", _re_topic.IGNORECASE),
+        "houses":   [1, 6, 8, 12],
+        "karakas":  ["Mangal (chot/surgery), Shani (chronic), Rahu (mystery), Chandra (manas)"],
+        "banned":   [7, 11],
+    },
+]
+
+
+def _detect_topic(question):
+    """Topic routing with ambiguity gate. Returns the rule dict or None.
+
+    None = topic uncertain (no match, OR multiple distinct topics matched,
+    OR a conjunction joins two topic anchors) → caller skips topic-lock
+    injection and the LLM falls back to Rule 6 cheat-sheet + its own
+    karaka knowledge. This is intentional: a half-right strict-focus lock
+    is worse than a no-lock answer for mixed-intent asks like
+    "shaadi aur bachhe kab hoga?".
+    """
+    if not question or not isinstance(question, str):
+        return None
+    q = question.strip()
+    if not q:
+        return None
+    # Phase 2.4 ambiguity gate — collect ALL matches, not just the first.
+    matched = []
+    for rule in _TOPIC_RULES:
+        try:
+            if rule["pattern"].search(q):
+                matched.append(rule)
+        except Exception:
+            continue
+    if not matched:
+        return None
+    # Multiple DISTINCT topic_ids hit → ambiguous → no lock.
+    distinct_ids = {r.get("topic_id") for r in matched}
+    if len(distinct_ids) > 1:
+        return None
+    # Single topic hit; also guard against conjunction-joined multi-intent
+    # like "career aur shaadi" where only one topic regex matched but the
+    # devotee clearly asked about two areas — defer to Rule 6 fallback.
+    # Triggers only if a connector word AND a 2nd topic-anchor noun appear.
+    import re as _re_amb
+    has_conj = bool(_re_amb.search(
+        r"\b(aur|and|&|plus|saath\s+saath|tatha|evam)\b", q, _re_amb.IGNORECASE))
+    if has_conj:
+        # cheap secondary scan over a small set of strong topic anchors
+        # NOT covered by the matched rule (so we don't double-count siblings
+        # like "bhai aur behen")
+        chosen_id = next(iter(distinct_ids))
+        OTHER_ANCHORS = {
+            "marriage":         r"\b(shaadi|vivah|marriage|wedding|biwi|pati|patni|spouse|jeevansaathi)\b",
+            "career":           r"\b(career|job|naukri|business|kaam|kariyar|profession|promotion)\b",
+            "wealth":           r"\b(paisa|paise|dhan|wealth|money|finance|income|salary|kamai|amir|rich)\b",
+            "children":         r"\b(bachhe|bachche|santaan|santan|child(ren)?|baby|beti|beta\s+(kab|hoga))\b",
+            "health":           r"\b(sehat|health|bimari|illness|disease|tabiyat|sharir|bp|sugar|cancer|heart)\b",
+            "marriage_partner": r"\b(spouse|jeevansaathi|life\s+partner)\b",
+            "father":           r"\b(pita|pitaji|father|papa|daddy|baap)\b",
+            "mother":           r"\b(maa\b|mata|mummy|mother|mom)\b",
+            "home_property":    r"\b(ghar|makaan|property|plot|flat|jameen|jamin|home|house|real\s+estate)\b",
+            "education_basic":  r"\b(padhai|education|school|studies?|exam|exam(s|en)?)\b",
+            "higher_studies":   r"\b(higher\s+stud(y|ies)|masters|phd|abroad\s+stud(y|ies)|research)\b",
+            "court_case":       r"\b(mukadma|court|case|kanoon|legal|lawsuit|fir|jail|police\s+case)\b",
+            "foreign_travel":   r"\b(videsh|abroad|foreign|usa|uk|canada|america|settle\s+(abroad|videsh))\b",
+            "spirituality":     r"\b(moksha|spirituality|adhyatm|bhakti|guru|deeksha|sadhana)\b",
+            "elder_sibling":    r"\b(bade\s+bhai|bada\s+bhai|elder\s+bro)\b",
+            "younger_sibling":  r"\b(chhote\s+bhai|chhota\s+bhai|younger\s+bro)\b",
+            "friend_circle":    r"\b(dost|friend|yaar|circle|sangat)\b",
+        }
+        for other_id, anchor in OTHER_ANCHORS.items():
+            if other_id == chosen_id:
+                continue
+            if _re_amb.search(anchor, q, _re_amb.IGNORECASE):
+                return None  # multi-intent → no lock
+    return matched[0]
+
+
+def _topic_lagna_sign_idx(kundli):
+    """Extract lagna sign 0-11 from kundli, or None if missing."""
+    if not isinstance(kundli, dict):
+        return None
+    asc = kundli.get("ascendant") or kundli.get("lagna")
+    if isinstance(asc, dict):
+        asc = asc.get("sign") or asc.get("name")
+    if not isinstance(asc, str):
+        return None
+    return _TOPIC_SIGN_ALIASES.get(asc.strip().lower())
+
+
+def _topic_house_lord(kundli, house_num):
+    """Whole-sign lord of `house_num` (1-12) for this lagna. '?' if unknown."""
+    asc_idx = _topic_lagna_sign_idx(kundli)
+    if (asc_idx is None
+            or not isinstance(house_num, int)
+            or not 1 <= house_num <= 12):
+        return "?"
+    house_sign_idx = (asc_idx + house_num - 1) % 12
+    return _TOPIC_SIGN_LORDS[house_sign_idx]
+
+
+def _topic_current_dasha(kundli):
+    """Returns ('MD-lord', 'AD-lord') for today, or ('?', '?').
+
+    Reads `kundli["currentDasha"]` first (same shape `kundli_full_context.py`
+    consumes via `cd.get("maha")` + `cd.get("antar")`). Falls back to the
+    `kundli["dashas"]` Vimshottari tree walk if `currentDasha` is missing
+    or malformed — this preserves Phase 2.4 telemetry on legacy charts.
+    """
+    if not isinstance(kundli, dict):
+        return ("?", "?")
+    # Primary path — the modern `currentDasha` shape used by
+    # kundli_full_context._section_dasha (line 311+).
+    cd = kundli.get("currentDasha")
+    if isinstance(cd, dict):
+        md = cd.get("maha")
+        ad = cd.get("antar")
+        if isinstance(md, str) and md.strip():
+            return (md.strip(), (ad.strip() if isinstance(ad, str) and ad.strip() else "?"))
+    # Fallback path — walk the dashas tree by today's date.
+    dashas = kundli.get("dashas")
+    if not isinstance(dashas, list) or not dashas:
+        return ("?", "?")
+    import datetime as _dt
+    today = _dt.date.today().isoformat()
+    md_planet = "?"
+    ad_planet = "?"
+    for md in dashas:
+        if not isinstance(md, dict):
+            continue
+        s, e = md.get("startDate"), md.get("endDate")
+        if not (isinstance(s, str) and isinstance(e, str)):
+            continue
+        if s <= today < e:
+            md_planet = md.get("planet") or "?"
+            subs = md.get("subDashas")
+            if isinstance(subs, list):
+                for ad in subs:
+                    if not isinstance(ad, dict):
+                        continue
+                    s2, e2 = ad.get("startDate"), ad.get("endDate")
+                    if (isinstance(s2, str) and isinstance(e2, str)
+                            and s2 <= today < e2):
+                        ad_planet = ad.get("planet") or "?"
+                        break
+            break
+    return (md_planet, ad_planet)
+
+
+def _build_topic_lock(rule, kundli):
+    """Compose the TOPIC-LOCK block in Hinglish. Returns '' on any failure.
+
+    The block is PREPENDED to the user message (not system prompt) so
+    the system prompt stays cacheable while the topic instruction
+    still gets primary attention right before the devotee's question.
+    """
+    if not rule:
+        return ""
+    try:
+        houses = rule.get("houses") or []
+        karakas = rule.get("karakas") or []
+        banned = rule.get("banned") or []
+        # Houses + lords (substituted from this user's lagna).
+        # If lagna is unknown (every lord comes back '?'), abort the lock —
+        # a lock with "?" lords is worse than no lock because Rule 16 would
+        # then forbid valid bhava citations without any positive substitute.
+        if _topic_lagna_sign_idx(kundli) is None:
+            return ""
+        house_lord_strs = []
+        for h in houses:
+            lord = _topic_house_lord(kundli, h)
+            if lord == "?":
+                return ""
+            house_lord_strs.append(f"{h}H + {h}L ({lord})")
+        houses_str = ", ".join(house_lord_strs) if house_lord_strs else "(none)"
+        karakas_str = "; ".join(karakas) if karakas else "(none)"
+        banned_str = ", ".join(f"{h}H" for h in banned) if banned else "(none)"
+        md, ad = _topic_current_dasha(kundli)
+        dasha_line = f"{md}-{ad}" if md != "?" else "(unknown — skip dasha-link)"
+        lock = (
+            "━━━ TOPIC-LOCK (Devotee ka prashn ka focus area) ━━━\n"
+            f"Topic detected: {rule.get('label','?')}\n"
+            f"Cite SIRF: {houses_str}\n"
+            f"Karaka graha: {karakas_str}\n"
+            f"Current Dasha: {dasha_line}  ← in elements ka topic-house/lord "
+            "se rishta MANDATORILY explain karein, kyunki yahi answer ko "
+            "TIMING + PERSONALIZATION deta hai.\n"
+            f"DO NOT cite (iss prashn ke liye classically unrelated): {banned_str}.\n"
+            "Rule 16 STRICT FOCUS aur Rule 17 DASHA-FIRST TIMING follow karein.\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+        return lock
+    except Exception:
+        return ""
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -2302,9 +2822,17 @@ def _build_messages(
                     _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
                     if _r_pt in ("user", "assistant") and _t_pt:
                         _msgs_pt.append({"role": _r_pt, "content": _t_pt})
-                _msgs_pt.append({"role": "user", "content": question})
+                # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+                # If topic detection misses, _topic_lock = "" and the
+                # question is sent unchanged (LLM falls back to Rule 6).
+                _topic_rule = _detect_topic(question)
+                _topic_lock = _build_topic_lock(_topic_rule, kundli) if _topic_rule else ""
+                _user_content = (_topic_lock + question) if _topic_lock else question
+                _msgs_pt.append({"role": "user", "content": _user_content})
                 if isinstance(out_meta, dict):
                     out_meta["llm_full_chart_mode"] = "passthrough"
+                    if _topic_rule:
+                        out_meta["topic_lock"] = _topic_rule.get("topic_id")
                 return _msgs_pt
             # else: empty chart_block → fall through to legacy pipeline.
         except Exception as _pt_exc:  # noqa: BLE001
@@ -13299,12 +13827,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
                     if _r_pt in ("user", "assistant") and _t_pt:
                         _msgs_pt.append({"role": _r_pt, "content": _t_pt})
-                _msgs_pt.append({"role": "user", "content": question})
+                # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+                _topic_rule = _detect_topic(question)
+                _topic_lock = _build_topic_lock(_topic_rule, kundli) if _topic_rule else ""
+                _user_content = (_topic_lock + question) if _topic_lock else question
+                _msgs_pt.append({"role": "user", "content": _user_content})
 
                 _trace(req_id, "PASSTHROUGH.MESSAGES_BUILT", {
                     "msg_count":     len(_msgs_pt),
                     "system_chars":  len(_msgs_pt[0]["content"]),
                     "history_turns": len(_msgs_pt) - 2,
+                    "topic_lock":    _topic_rule.get("topic_id") if _topic_rule else None,
+                    "lock_chars":    len(_topic_lock),
                 })
 
                 _client_pt = _get_client()
@@ -16480,12 +17014,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _t_pt_s = _h_pt_s.get("content") or _h_pt_s.get("text") or ""
                 if _r_pt_s in ("user", "assistant") and _t_pt_s:
                     _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
-            _msgs_pt_s.append({"role": "user", "content": question})
+            # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+            _topic_rule_s = _detect_topic(question)
+            _topic_lock_s = _build_topic_lock(_topic_rule_s, kundli) if _topic_rule_s else ""
+            _user_content_s = (_topic_lock_s + question) if _topic_lock_s else question
+            _msgs_pt_s.append({"role": "user", "content": _user_content_s})
 
             _trace(req_id, "PASSTHROUGH(stream).MESSAGES_BUILT", {
                 "msg_count":     len(_msgs_pt_s),
                 "system_chars":  len(_msgs_pt_s[0]["content"]),
                 "history_turns": len(_msgs_pt_s) - 2,
+                "topic_lock":    _topic_rule_s.get("topic_id") if _topic_rule_s else None,
+                "lock_chars":    len(_topic_lock_s),
             })
 
             # 3. OpenAI streaming call

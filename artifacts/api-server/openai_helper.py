@@ -174,14 +174,23 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         import re as _re_mb
         # Devanagari anchors included for parity with Phase58 matcher
         # (\b doesn't anchor on Devanagari, so they sit outside the group).
+        # Phase 2.8.29b — curated explicit typo list (NO fuzzy [a-z]+ —
+        # avoids false positives like "marrian"/"marriott"). Covers the
+        # common phone typos for "marriage": missing/swapped vowels.
         _MARRIAGE_KW = _re_mb.compile(
             r"(\b("
-            r"shaadi|shadi|shadhi|marriage|marrige|marraige|marry|married|wedding|"
+            r"shaadi|shadi|shadhi|"
+            # exact + close typos: marriage / marrige / marraige /
+            # marriaga (screenshot bug) / marriagea / marriagee /
+            # marrigea / marraiga + plurals + verb forms
+            r"marriage|marriages|marriagea|marriagee|marriaga|"
+            r"marrige|marriges|marrigea|"
+            r"marraige|marraiges|marraiga|"
+            r"marry|marries|married|marrying|wedding|"
             r"mrg|mrrg|"  # Phase 2.8.28b — common chat abbreviations
             r"spouse|husband|wife|pati|patni|kalatra|"
             r"life\s+partner|jeevan\s+saathi|jeevansathi|jeevansaathi|"
-            r"vivah|vivaah|biwi|"
-            r"love\s+marriage|love\s+mrg|arrange(d)?\s+marriage|arrange(d)?\s+mrg"
+            r"vivah|vivaah|biwi"
             r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
             _re_mb.IGNORECASE,
         )
@@ -1620,7 +1629,10 @@ _TOPIC_RULES = [
         "topic_id": "marriage",
         "label":    "marriage / shaadi / spouse",
         "pattern":  _re_topic.compile(
-            r"\b(shaadi|shadi|marriage|wedding|spouse|husband|wife|"
+            # Phase 2.8.29b — added typo variants (marriaga / marrige /
+            # marraige etc.) for parity with _passthrough_marriage_block.
+            r"\b(shaadi|shadi|marriage|marriaga|marriagea|marrige|marraige|"
+            r"wedding|spouse|husband|wife|"
             r"pati|patni|kalatra|life\s+partner|jeevan\s+saathi|jeevansathi)\b",
             _re_topic.IGNORECASE),
         "houses":   [7, 5, 8],
@@ -1724,7 +1736,7 @@ def _detect_topic(question):
         # like "bhai aur behen")
         chosen_id = next(iter(distinct_ids))
         OTHER_ANCHORS = {
-            "marriage":         r"\b(shaadi|vivah|marriage|wedding|biwi|pati|patni|spouse|jeevansaathi)\b",
+            "marriage":         r"\b(shaadi|vivah|marriage|marriaga|marriagea|marrige|marraige|wedding|biwi|pati|patni|spouse|jeevansaathi)\b",
             "career":           r"\b(career|job|naukri|business|kaam|kariyar|profession|promotion)\b",
             "wealth":           r"\b(paisa|paise|dhan|wealth|money|finance|income|salary|kamai|amir|rich)\b",
             "children":         r"\b(bachhe|bachche|santaan|santan|child(ren)?|baby|beti|beta\s+(kab|hoga))\b",
@@ -2249,7 +2261,10 @@ _LOVE_QUESTION_RX = __import__("re").compile(
 # shaadi/vivah/spouse, it's a marriage question (even with love vocabulary
 # like "love marriage kab hogi"), so marriage_engine handles it.
 _MARRIAGE_OVERRIDE_RX = __import__("re").compile(
-    r"(?:\b(shaadi|shadi|marriage|marry|married|vivaah|vivah|"
+    r"(?:\b(shaadi|shadi|"
+    # Phase 2.8.29b — added typo variants for parity.
+    r"marriage|marriaga|marriagea|marrige|marraige|"
+    r"marry|married|vivaah|vivah|"
     r"wife|husband|spouse|biwi|pati|patni|dulhan|dulha|"
     r"engagement|engaged|sagai|mangni|"
     r"saptam|kalatra)\b"
@@ -13679,6 +13694,8 @@ import re as _re_p58
 
 _PHASE58_MARRIAGE_QUESTION_RE = _re_p58.compile(
     r"\bmarriage\b|\bmarry\b|\bmarried\b|\bmarrying\b|\bmarries\b|"
+    # Phase 2.8.29b — added typo variants for parity.
+    r"\bmarriaga\b|\bmarriagea\b|\bmarrige\b|\bmarraige\b|"
     r"\bshaadi\b|\bshadi\b|\bvivah\b|\bvivaah\b|\bwedding\b|"
     r"\bspouse\b|\bpati\b|\bpatni\b|\bbiwi\b|"
     r"\bhusband\b|\bwife\b|\blife[- ]?partner\b|\bjeevansaathi\b|\bjeevansathi\b|"

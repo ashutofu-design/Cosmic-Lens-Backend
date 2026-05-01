@@ -1690,16 +1690,15 @@ const s = StyleSheet.create({
   actionPlainBtnText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
 
   // Phase 2.8.27 — engine provenance badge (ans-engine / ans-cosmo).
-  // Sits in the same flex row as Sun lo / Copy / Share but visually
-  // distinct: bordered chip, monospace-ish letter spacing, smaller font.
+  // Sits inline next to Share in the same flex row as Sun lo / Copy /
+  // Share. Distinct visual: bordered chip, smaller font, lowercase.
   engineTagChip: {
     paddingHorizontal: 7, paddingVertical: 3,
     borderRadius: 10, borderWidth: 1,
-    marginLeft: "auto",   // pushes the badge to the far right of the row
   },
   engineTagText: {
-    fontSize: 9, fontWeight: "700",
-    letterSpacing: 0.5, textTransform: "lowercase",
+    fontSize: 10, fontWeight: "700",
+    letterSpacing: 0.4, textTransform: "lowercase",
   },
 
   starters: {

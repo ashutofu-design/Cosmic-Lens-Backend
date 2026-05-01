@@ -409,6 +409,110 @@ def _brevity_mode_enabled() -> bool:
     return val not in ("0", "false", "no", "off", "")
 
 
+# Phase 2.8.2 — TRANSPARENCY-QUERY DETECTOR.
+#
+#   Problem (caught by user 2026-05-01): devotee asks
+#   "kya kya check kiya" / "kaise pata" / "kis basis pe" — i.e.
+#   he wants to KNOW HOW the guru reached the conclusion. With
+#   Rule 19 jargon-ban active, the model dodges with vague reply
+#   and OFFERS to explain ("samjha deta hoon agar chaho") instead
+#   of actually showing the work. That is a transparency failure
+#   — devotee EXPLICITLY asked for the method.
+#
+#   Fix: detect transparency intent, and when detected, allow
+#   chart-tech citations (5th house / 7th house / Shukra / Guru
+#   etc) in OUTPUT — but still keep response brief (≤3 bullets,
+#   ≤140 chars each) and pair every tech term with its plain
+#   Hinglish meaning.
+#
+#   Keywords are checked case-insensitively against the question
+#   substring. Fast O(n) loop, no regex compile cost on hot path.
+_TRANSPARENCY_TRIGGERS = (
+    # "kya kya check kiya / dekha"
+    "kya kya check", "kya kya dekha", "kya check kiya", "kya dekha",
+    # "kaise pata / check / bola / kaha"
+    "kaise pata", "kaise check", "kaise bol", "kaise kah",
+    "kaise samjh", "kaise nikal", "kaise jana", "kaise janoge",
+    # "kis basis pe / par"
+    "kis basis", "basis kya", "basis par", "basis pe",
+    # "proof / sabit / evidence"
+    "proof", "sabit kar", "evidence", "yakeen kaise",
+    # "kahan likha / se / pe"
+    "kahan likha", "kahan se", "kahan pe", "kahan dikh",
+    # "samjhao kaise / vistaar / detail"
+    "samjhao kaise", "explain kaise", "vistaar se",
+    "vistar se", "detail mein", "detail me", "detailed batao",
+    # english
+    "how did you", "how do you know", "how do u know",
+    "why do you", "what did you check", "what did you look",
+    "show your work", "show working", "your reasoning",
+    # generic short
+    "tumne kya", "aapne kya", "tumne kaise", "aapne kaise",
+)
+
+
+def _is_transparency_query(q: str) -> bool:
+    if not q:
+        return False
+    qn = q.lower()
+    for trig in _TRANSPARENCY_TRIGGERS:
+        if trig in qn:
+            return True
+    return False
+
+
+# Phase 2.8.2 — TRANSPARENCY DIRECTIVE.
+#
+#   Appended to the user-content (AFTER any topic-lock) when
+#   `_is_transparency_query(question)` returns True. Recency-effect
+#   makes this the LAST set of rules the LLM reads before the
+#   devotee's actual question, so it OVERRIDES Rule 19's jargon
+#   ban for this single turn only.
+#
+#   Key wins:
+#     • Forces actual chart-tech citations (5H, 7H, Shukra, dasha)
+#       paired with plain meaning.
+#     • Bans the "samjha deta hoon agar chaho" dodge that we saw
+#       in the user's screenshot.
+#     • Still enforces brevity (3 bullets max, ≤140 chars each)
+#       so transparency mode doesn't regress to wall-of-text.
+_TRANSPARENCY_DIRECTIVE = (
+    "\n"
+    "━━━ TRANSPARENCY MODE ACTIVE (Rule 19 EXCEPTION) ━━━\n"
+    "Devotee ne EXPLICITLY pucha: \"kaise check kiya / kya kya dekha\".\n"
+    "Ab tum guru ho — apna kaam dikhao, dodge mat karo.\n"
+    "\n"
+    "STRICT RULES IS TURN KE LIYE:\n"
+    "  ✅ Chart-tech citations ZARURI — bina factor name ke transparency\n"
+    "     adhuri hai. Use karo: 5th house, 7th house, Shukra, Guru,\n"
+    "     Mangal, Saturn, dasha, navamsha (jo kundli mein actually relevant\n"
+    "     ho, hallucinate mat karo — Rule 11).\n"
+    "  ✅ Format har bullet mein: \"[chart factor] → [plain Hinglish meaning]\"\n"
+    "     Example: \"5th house aur uska swami strong → dil pehle react karta hai\"\n"
+    "  ✅ MAX 3 bullets, har bullet ≤140 chars (transparency mein 20 char\n"
+    "     extra buffer factor + meaning ke liye).\n"
+    "  ✅ Opening line: \"Maine yeh check kiya:\" ya \"Yeh dekha aapke chart\n"
+    "     mein:\" jaisa DIRECT opener — no preamble.\n"
+    "  ❌ \"Samjha deta hoon agar chaho\" / \"agar aap chahein to detail bata\n"
+    "     deta hoon\" type DODGE — ZERO TOLERANCE. Devotee ne ALREADY\n"
+    "     pucha hai. Ab actual factor + meaning DO.\n"
+    "  ❌ 4+ bullets / paragraph dump bhi nahi — short rakhna zaruri hai.\n"
+    "  ❌ Sirf jargon-pile (\"5H + 5L + Shukra trine\") bina meaning ke bhi\n"
+    "     fail — har factor ka plain Hinglish translation chahiye.\n"
+    "\n"
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+)
+
+
+def _build_transparency_directive() -> str:
+    """Return the transparency directive block (or empty string if
+    brevity mode is off — when off, jargon is already allowed by
+    default and no special override is needed)."""
+    if not _brevity_mode_enabled():
+        return ""
+    return _TRANSPARENCY_DIRECTIVE
+
+
 _BREVITY_MODE_BLOCK = (
     "\n"
     "━━━ RULE 19 — OUTPUT BREVITY MODE (Rules 5 + 18 ka bullet structure OVERRIDE) ━━━\n"
@@ -465,6 +569,28 @@ _BREVITY_MODE_BLOCK = (
     "  • Single-fact answers (Rule 1) — pehle se 1-line, yeh apply NAHI.\n"
     "  • Devotee EXPLICITLY \"detail mein batao\" / \"poora analysis do\"\n"
     "    / \"vistaar se\" maange to chart-tech jargon allowed (sirf tab).\n"
+    "\n"
+    "TRANSPARENCY EXCEPTION (CRITICAL — devotee trust ka core):\n"
+    "\n"
+    "  Agar devotee EXPLICITLY puchhe \"kaise check kiya / kya kya dekha\n"
+    "  / kaise pata / kis basis pe / proof / how did you know\" — yaani\n"
+    "  GURU SE METHOD/REASONING maange — toh:\n"
+    "\n"
+    "  ✅ Chart-tech citations ALLOWED (5th house, 7th house, Shukra,\n"
+    "     Guru, Mangal, dasha, navamsha — sab use kar sakte ho).\n"
+    "  ✅ HAR bullet mein 1 chart-factor + uska plain-Hinglish meaning\n"
+    "     pair karke do. \"Sirf jargon-pile\" mat dump karo.\n"
+    "  ✅ Phir bhi ≤3 bullets, har bullet ≤140 chars (transparency\n"
+    "     mode mein 20 char buffer milta hai factor + meaning ke liye).\n"
+    "  ❌ \"Samjha deta hoon agar chaho\" type DODGE KABHI mat do —\n"
+    "     devotee ne already pucha hai, ab actual kaam dikhao.\n"
+    "  ❌ 4+ bullets / wall-of-text bhi nahi — short rakhna zaruri hai.\n"
+    "\n"
+    "  EXAMPLE (Q: \"tumne kya kya check kiya?\"):\n"
+    "    Maine yeh dekha:\n"
+    "    - 5th house aur uska swami strong hain → dil pehle react karta hai\n"
+    "    - Shukra (love-karaka) ki position emotional pull badhati hai\n"
+    "    - Saturn ka aspect maturity late laata hai → judgment slow\n"
     "\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 )
@@ -3123,14 +3249,24 @@ def _build_messages(
                 # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
                 # If topic detection misses, _topic_lock = "" and the
                 # question is sent unchanged (LLM falls back to Rule 6).
+                # Phase 2.8.2 — ALSO append TRANSPARENCY DIRECTIVE when
+                # devotee asks "kya kya check kiya / kaise pata" so the
+                # model gives actual chart-tech reasoning instead of a
+                # vague dodge. Order: topic_lock → transparency → question
+                # (recency wins; the question itself comes last).
                 _topic_rule = _detect_topic(question)
                 _topic_lock = _build_topic_lock(_topic_rule, kundli) if _topic_rule else ""
-                _user_content = (_topic_lock + question) if _topic_lock else question
+                _is_transparent = _is_transparency_query(question)
+                _trans_directive = _build_transparency_directive() if _is_transparent else ""
+                _user_content = (_topic_lock + _trans_directive + question) \
+                    if (_topic_lock or _trans_directive) else question
                 _msgs_pt.append({"role": "user", "content": _user_content})
                 if isinstance(out_meta, dict):
                     out_meta["llm_full_chart_mode"] = "passthrough"
                     if _topic_rule:
                         out_meta["topic_lock"] = _topic_rule.get("topic_id")
+                    if _is_transparent:
+                        out_meta["transparency_mode"] = True
                 return _msgs_pt
             # else: empty chart_block → fall through to legacy pipeline.
         except Exception as _pt_exc:  # noqa: BLE001
@@ -14126,9 +14262,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     if _r_pt in ("user", "assistant") and _t_pt:
                         _msgs_pt.append({"role": _r_pt, "content": _t_pt})
                 # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+                # Phase 2.8.2 — append TRANSPARENCY DIRECTIVE on
+                # "kya kya check kiya / kaise pata" type questions.
                 _topic_rule = _detect_topic(question)
                 _topic_lock = _build_topic_lock(_topic_rule, kundli) if _topic_rule else ""
-                _user_content = (_topic_lock + question) if _topic_lock else question
+                _is_transparent = _is_transparency_query(question)
+                _trans_directive = _build_transparency_directive() if _is_transparent else ""
+                _user_content = (_topic_lock + _trans_directive + question) \
+                    if (_topic_lock or _trans_directive) else question
                 _msgs_pt.append({"role": "user", "content": _user_content})
 
                 _trace(req_id, "PASSTHROUGH.MESSAGES_BUILT", {
@@ -14136,6 +14277,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "system_chars":  len(_msgs_pt[0]["content"]),
                     "history_turns": len(_msgs_pt) - 2,
                     "topic_lock":    _topic_rule.get("topic_id") if _topic_rule else None,
+                    "transparency":  _is_transparent,
                     "lock_chars":    len(_topic_lock),
                 })
 
@@ -14153,10 +14295,12 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # Phase 2.8 — when Rule 19 BREVITY MODE is on, tighten
                 # the OpenAI sampling params per user's production spec:
                 #   temperature=0.4, top_p=0.9, max_tokens=300.
-                # These caps + the prompt-side rules together force a
-                # ChatGPT-level snappy output. When brevity is OFF we
-                # keep the legacy temp=0.3 / no other caps for backward
-                # compat with the deeper 4-bullet output style.
+                # Phase 2.8.2 — TRANSPARENCY queries get a higher token
+                # ceiling (400) so factor+meaning pairings (e.g.
+                # "5th house aur uska swami strong → dil pehle react
+                # karta hai") have room to render in 3 bullets without
+                # truncation. Brevity rules (≤3 bullets, ≤140 chars
+                # each) still hold via prompt-side guardrails.
                 _brevity_for_call = _brevity_mode_enabled()
                 _create_kwargs_pt = {
                     "model":    _model_pt,
@@ -14168,13 +14312,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
                     if _brevity_for_call:
                         _create_kwargs_pt["top_p"] = 0.9
-                        _create_kwargs_pt["max_tokens"] = 300
+                        _create_kwargs_pt["max_tokens"] = (
+                            400 if _is_transparent else 300
+                        )
                 _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
 
                 _trace(req_id, "PASSTHROUGH.OPENAI_DONE", {
-                    "text_chars": len(_text_pt),
-                    "brevity":    _brevity_for_call,
+                    "text_chars":   len(_text_pt),
+                    "brevity":      _brevity_for_call,
+                    "transparency": _is_transparent,
                 })
 
                 # Phase 2.3 Tier-1 — strip residual AI-tells (Rules 2 + 15
@@ -17327,9 +17474,14 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 if _r_pt_s in ("user", "assistant") and _t_pt_s:
                     _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
             # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+            # Phase 2.8.2 — append TRANSPARENCY DIRECTIVE on
+            # "kya kya check kiya / kaise pata" type questions.
             _topic_rule_s = _detect_topic(question)
             _topic_lock_s = _build_topic_lock(_topic_rule_s, kundli) if _topic_rule_s else ""
-            _user_content_s = (_topic_lock_s + question) if _topic_lock_s else question
+            _is_transparent_s = _is_transparency_query(question)
+            _trans_directive_s = _build_transparency_directive() if _is_transparent_s else ""
+            _user_content_s = (_topic_lock_s + _trans_directive_s + question) \
+                if (_topic_lock_s or _trans_directive_s) else question
             _msgs_pt_s.append({"role": "user", "content": _user_content_s})
 
             _trace(req_id, "PASSTHROUGH(stream).MESSAGES_BUILT", {
@@ -17359,6 +17511,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # Phase 2.8 — mirror sync passthrough: temp=0.4 / top_p=0.9 /
             # max_tokens=300 when Rule 19 BREVITY is on. Keeps streaming
             # output identical in tightness to the non-streaming path.
+            # Phase 2.8.2 — transparency queries → max_tokens=400.
             _brevity_for_call_s = _brevity_mode_enabled()
             if not _is_new_model_pt_s:
                 _create_kwargs_pt_s["temperature"] = (
@@ -17366,7 +17519,9 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 )
                 if _brevity_for_call_s:
                     _create_kwargs_pt_s["top_p"] = 0.9
-                    _create_kwargs_pt_s["max_tokens"] = 300
+                    _create_kwargs_pt_s["max_tokens"] = (
+                        400 if _is_transparent_s else 300
+                    )
 
             _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)
 

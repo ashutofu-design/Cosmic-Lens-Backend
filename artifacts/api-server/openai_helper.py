@@ -623,7 +623,10 @@ _TOPIC_RULES = [
     # 14-point user-curated checklist (Phase 2.7) is rendered in lock.
     {
         "topic_id": "love",
-        "label":    "love / romance / relationship / bf-gf",
+        # Phase 2.7 — devotee-facing brand name = "LOVE LENS".
+        # Surfaces in TOPIC-LOCK header ("Topic detected: LOVE LENS ...")
+        # and in any future tooltip / "kya check hota hai" UI panel.
+        "label":    "LOVE LENS (love / romance / relationship / bf-gf)",
         "pattern":  _re_topic.compile(
             r"\b(love|romance|romantic|pyaar|pyar|prem|"
             r"crush|infatuation|attraction|attract|"

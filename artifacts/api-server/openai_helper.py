@@ -546,49 +546,82 @@ _BREVITY_MODE_BLOCK = (
     "    Example: \"Aapka Lagna Mithun hai.\" / \"Abhi Guru-Rahu dasha chal\n"
     "    rahi hai.\"\n"
     "\n"
-    "  Type C (Direct/binary): TL;DR + 3 short bullets format.\n"
-    "    • Line 1: \"TL;DR: <verdict ≤12 words>\" (literal prefix MANDATORY)\n"
+    "  Type C (Direct/binary): direct verdict line + 3 short bullets.\n"
+    "    • Line 1: ek seedhi verdict line (≤12 words). NO prefix label —\n"
+    "      \"TL;DR:\", \"Verdict:\", \"Answer:\", \"Summary:\" sab BANNED.\n"
+    "      Bas direct statement likho jaise insaan bolta hai.\n"
     "    • Then EXACTLY 3 bullets, har ek ≤15 WORDS.\n"
-    "    • Insight only — no reasoning chain (no \"isliye/kyunki\" in output).\n"
-    "    • No chart-tech jargon (5H/D9/Shukra/Guru) — plain Hinglish.\n"
-    "    Example (Q: \"Meri love life stable hogi ya ups & downs?\"):\n"
-    "      TL;DR: Love life ups & downs wali rahegi, stability late aayegi.\n"
-    "      - Jaldi attraction hota hai, par consistency toot-ti rehti hai\n"
-    "      - Communication issue se misunderstandings aati hain\n"
-    "      - Abhi ka phase unstable hai (strong attraction + confusion)\n"
+    "    • Insight only — no reasoning chain (\"kyunki/because\" banned).\n"
+    "      \"isliye\" ek mild connector ke liye OK if 1 bar use ho.\n"
+    "    • Example (Q: \"Meri love life stable hogi ya ups & downs?\"):\n"
+    "        Love life ups & downs wali rahegi, stability late aayegi.\n"
+    "        - Attraction strong hai, par delay aur testing aati rehti hai\n"
+    "        - Communication clear na hone se misunderstandings badhti hain\n"
+    "        - Abhi ka phase intense hai, isliye stability hilti rehti hai\n"
     "\n"
-    "  Type D (Open-ended advice): TL;DR + 3-4 bullets, har ek ≤25 words.\n"
+    "  Type D (Open-ended advice): direct verdict + 3-4 bullets ≤25 words.\n"
     "    Practical remedy/upay/lifestyle suggestion include kar sakte ho.\n"
     "    Empathy + actionable guidance dono — guru ki tarah, lecture nahi.\n"
+    "    NO \"TL;DR:\" prefix — direct conversational opener.\n"
     "    Example (Q: \"dimaag chal raha hai, kya karu?\"):\n"
-    "      TL;DR: Mann overactive hai, grounding aur routine se shaant hoga.\n"
-    "      - Raat ko screen-time kam karo, sone se pehle 5 min deep breathing\n"
-    "      - Subah 10-15 min walk bina phone ke — Rahu phase mein grounding zaruri\n"
-    "      - \"Om Namah Shivaya\" ya \"Om Som Somaya Namah\" 108 baar jap\n"
-    "      - Tuesday/Saturday hi heavy decisions na lo, mann clear nahi rehta\n"
+    "        Mann overactive hai; grounding, routine aur mantra se shaanti aayegi.\n"
+    "        - Raat ko screen-time kam karo, sone se pehle 5 min deep breathing\n"
+    "        - Subah 10-15 min walk bina phone ke — abhi ka phase grounding maangta hai\n"
+    "        - \"Om Namah Shivaya\" 108 baar jap, mann ko theek karta hai\n"
+    "        - Mangalwar/Shaniwar heavy decisions avoid karo, mann clear nahi rehta\n"
     "\n"
     "  Type E (Transparency): \"Maine yeh check kiya:\" opener + 3 bullets.\n"
-    "    Har bullet ≤18 WORDS, format \"[chart factor] → [plain meaning]\".\n"
-    "    Chart-tech terms (5H, Shukra, Guru, dasha) ALLOWED here — paired\n"
-    "    with plain Hinglish meaning. NO dodge (\"samjha deta hoon agar chaho\").\n"
+    "    Har bullet ≤18 WORDS. YEH ONLY case hai jahan chart-tech terms\n"
+    "    (5H, Shukra, Guru, dasha, navamsha) ALLOWED hain — devotee ne\n"
+    "    EXPLICITLY methodology pucha hai. Format: \"[chart factor] →\n"
+    "    [plain Hinglish meaning]\". NO dodge.\n"
     "    Example (Q: \"kaise pata?\"):\n"
     "      Maine yeh check kiya:\n"
     "      - 5th house lord Shukra 11th mein → dil pehle attraction se chalta hai\n"
-    "      - 7th house lord Guru 1st mein → relation aapki identity ko chhoo leta\n"
+    "      - 7th house lord Guru 1st mein → relation aapki identity ko chhoota hai\n"
     "      - Jupiter-Rahu dasha + Rahu 8th → abhi confusion aur trust-test zyada\n"
     "\n"
-    "  Type F (Deep-dive): TL;DR + 4-5 bullets, har ek ≤25 words.\n"
+    "  Type F (Deep-dive): direct verdict line + 4-5 bullets ≤25 words.\n"
     "    Chart-tech jargon ALLOWED throughout (devotee ne explicitly maanga).\n"
-    "    Pura analysis — ghar ka swami, dasha, navamsha, drishti sab cite kar\n"
-    "    sakte ho — par phir bhi clean structure mein, paragraph-dump nahi.\n"
+    "    Pura analysis — ghar ka swami, dasha, navamsha, drishti sab cite\n"
+    "    kar sakte ho — par paragraph-dump nahi, structured rakho.\n"
+    "    NO \"TL;DR:\" prefix — direct opening sentence.\n"
+    "\n"
+    "━━━ JARGON BAN — TYPES A/B/C/D KE LIYE STRICT ━━━\n"
+    "\n"
+    "Types A, B, C, D ke output mein YEH cheezen NEVER:\n"
+    "\n"
+    "  ❌ PLANET NAMES: Surya, Chandra, Mangal, Budh, Guru, Shukra, Shani,\n"
+    "     Rahu, Ketu, Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn.\n"
+    "  ❌ HOUSE REFERENCES: \"5th house\", \"7th house\", \"10H\", \"11H\",\n"
+    "     \"5th lord\", \"7th lord Mercury\", \"H1\" — sab banned.\n"
+    "  ❌ DASHA NAMES: \"Jupiter-Rahu phase\", \"Saturn dasha\", \"Sade-sati\",\n"
+    "     \"MD-AD\". Use plain words: \"abhi ka phase\", \"yeh time\".\n"
+    "  ❌ TECHNICAL TERMS: drishti, parivartan, yog/yoga, navamsha, D9, D1,\n"
+    "     karaka, vargottama, gochar, lagna (lagna allowed in Type B only).\n"
+    "  ❌ Half-Sanskrit literary phrasing: \"D9 adjustment demand karta\",\n"
+    "     \"rhythm pakadne mein time\", \"Jupiter activate kar raha\".\n"
+    "\n"
+    "  ✅ Internal mein yeh sab USE karo (chart se evidence lena MUST).\n"
+    "     Output mein PLAIN Hinglish translation paste karo:\n"
+    "       Internal: \"5th lord Shukra 11th mein, Saturn drishti\"\n"
+    "       Output:   \"Attraction strong hai, par delay aur testing aati rehti hai\"\n"
+    "       Internal: \"Jupiter-Rahu dasha, Rahu 8th\"\n"
+    "       Output:   \"Abhi ka phase intense aur confusing hai\"\n"
+    "       Internal: \"7th lord Mercury weak in 12th\"\n"
+    "       Output:   \"Communication clear na hone se misunderstandings badhti hain\"\n"
+    "\n"
+    "  ✅ AREA-of-life words ALLOWED (general): pyaar, dil, rishta,\n"
+    "     career, kaam, paisa, sehat, family, mann.\n"
     "\n"
     "GOLDEN RULES (sab types pe apply):\n"
     "  • Insaan ki tarah baat karo, AI-report ki tarah nahi.\n"
+    "  • Devotee ko apni LIFE samjhni hai, planet/house/dasha NAHI.\n"
+    "  • \"TL;DR:\" / \"Verdict:\" / \"Summary:\" prefix labels NEVER —\n"
+    "     direct conversational opener likho.\n"
     "  • Wall-of-text avoid karo — mobile chat hai.\n"
     "  • Chart se evidence lo, hallucinate mat karo (Rule 11 intact).\n"
-    "  • \"D9 adjustment demand karta hai\" / \"rhythm pakadne mein time\"\n"
-    "    type half-Sanskrit literary phrasing AVOID — natural Hinglish bolo.\n"
-    "  • Type unclear ho to Type C (TL;DR + 3 bullets) default karo.\n"
+    "  • Type unclear ho to Type C (verdict + 3 bullets) default karo.\n"
     "\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 )
@@ -1157,13 +1190,18 @@ def _build_topic_lock(rule, kundli):
             brevity_tail = (
                 "\n━━━ FINAL REMINDER (Rule 19) ━━━\n"
                 "Answer dene se PEHLE devotee ke prashn ka type pehchaano:\n"
-                "  Casual / Single-fact → 1 line, no TL;DR\n"
-                "  Direct / binary       → TL;DR + 3 bullets ≤15 words each\n"
-                "  Open-ended / advice   → TL;DR + 3-4 bullets ≤25 words + remedy\n"
+                "  Casual / Single-fact → 1 line, no prefix\n"
+                "  Direct / binary       → verdict line + 3 bullets ≤15 words each\n"
+                "  Open-ended / advice   → verdict line + 3-4 bullets ≤25 words + remedy\n"
                 "  Methodology / proof   → \"Maine yeh check kiya:\" + 3 factor bullets\n"
-                "  Deep-dive (vistaar)   → TL;DR + 4-5 bullets, jargon allowed\n"
-                "Question samjho, fir matching format use karo. Mobile chat hai —\n"
-                "wall-of-text avoid karo, paragraph-dump banned.\n"
+                "  Deep-dive (vistaar)   → verdict line + 4-5 bullets, jargon allowed\n"
+                "\n"
+                "STRICT IN OUTPUT:\n"
+                "  - NEVER write \"TL;DR:\", \"Verdict:\", \"Summary:\" prefix labels\n"
+                "  - Types A/B/C/D mein NO planet names, house numbers, dasha names\n"
+                "    (Surya/Mangal/Shukra/Guru/Shani/Rahu/Ketu/5H/7H/Jupiter-Rahu)\n"
+                "  - Devotee ko apni LIFE samjhni hai, planet/house/dasha NAHI\n"
+                "  - Mobile chat — wall-of-text aur paragraph-dump banned\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             )
         lock = (
@@ -1299,6 +1337,44 @@ _SCRUB_FAST_TRIGGERS = (
     "chatgpt", "openai", "anthropic", "claude", "gemini",
     "gpt-3", "gpt-4", "gpt-5", "gpt3", "gpt4", "gpt5",
 )
+
+
+# Phase 2.8.6 — Strip verdict-label prefixes from output.
+# User feedback (2026-05-01 part 4): "TL;DR likha hoga to user
+# sochega yeh kya he". Even though Rule 19 now bans these labels,
+# this is a safety net for the rare case the model still emits
+# "TL;DR:", "Verdict:", "Summary:", "Answer:" at the start of a
+# line. We strip the prefix only — verdict text itself stays intact.
+import re as _re_verdict_prefix
+_VERDICT_LABEL_PREFIX_RX = _re_verdict_prefix.compile(
+    r"^(?:\s*[\*_•\-]*\s*)"
+    r"(?:tl[;:]?dr|tldr|verdict|summary|answer|conclusion|saaransh|nishkarsh)"
+    r"\s*[:\-—–]\s*",
+    _re_verdict_prefix.IGNORECASE,
+)
+
+def _strip_verdict_label_prefixes(text: str) -> str:
+    """Remove leading 'TL;DR:' / 'Verdict:' / 'Summary:' style labels
+    from each line. Safe + idempotent — keeps actual verdict text,
+    drops only the label prefix.
+    """
+    try:
+        if not text or not isinstance(text, str):
+            return text or ""
+        # Fast-path: no obvious label substring → return unchanged
+        _lower = text.lower()
+        if not any(t in _lower for t in (
+            "tl;dr", "tldr", "verdict:", "summary:", "answer:",
+            "conclusion:", "saaransh:", "nishkarsh:",
+        )):
+            return text
+        _out_lines = []
+        for _ln in text.split("\n"):
+            _stripped = _VERDICT_LABEL_PREFIX_RX.sub("", _ln, count=1)
+            _out_lines.append(_stripped)
+        return "\n".join(_out_lines).strip()
+    except Exception:
+        return text
 
 
 def _scrub_ai_tells(text: str) -> str:
@@ -14329,6 +14405,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # in `_PT_SYS_INTRO` should already prevent these, but the
                 # scrub is a defensive safety net for the rare leak).
                 _text_pt_scrubbed = _scrub_ai_tells(_text_pt)
+                # Phase 2.8.6 — strip "TL;DR:" / "Verdict:" / etc label
+                # prefixes (NOT the transparency mode "Maine yeh check
+                # kiya:" opener — that's a real conversational sentence).
+                _text_pt_scrubbed = _strip_verdict_label_prefixes(_text_pt_scrubbed)
                 if _text_pt_scrubbed != _text_pt:
                     _trace(req_id, "PASSTHROUGH.SCRUBBED", {
                         "before_chars": len(_text_pt),
@@ -17602,6 +17682,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # keeps stored history persona-clean and gives the mobile UI
             # a safe replacement target on the `done` event.
             _full_text_pt_s_scrubbed = _scrub_ai_tells(_full_text_pt_s)
+            # Phase 2.8.6 — strip "TL;DR:" / etc verdict-label prefixes
+            # from final text. Stream chunks themselves are NOT touched
+            # (label could span 2 chunks); the final canonical text is
+            # what mobile commits, so cleaning here is sufficient.
+            _full_text_pt_s_scrubbed = _strip_verdict_label_prefixes(_full_text_pt_s_scrubbed)
             if _full_text_pt_s_scrubbed != _full_text_pt_s:
                 _trace(req_id, "PASSTHROUGH(stream).SCRUBBED", {
                     "before_chars": len(_full_text_pt_s),

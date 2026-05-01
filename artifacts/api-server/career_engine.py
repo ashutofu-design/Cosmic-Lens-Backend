@@ -229,8 +229,8 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite|on[- ]?site|paradesh)\b",
         r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite)\b.*\b(job|naukri|kaam|opportunity|settle|move|jana|jaana|attempt)\b",
         r"\b(job|naukri|kaam|career|attempt|opportunity)\b.*\b(foreign|abroad|videsh|vilayat|overseas|onsite)\b",
-        r"\b(usa|us|america|canada|uk|england|britain|australia|dubai|singapore|germany|new zealand)\b.*\b(job|naukri|move|settle|opportunity|visa)\b",
-        r"\b(job|naukri|move|settle|opportunity|visa)\b.*\b(usa|us|america|canada|uk|england|australia|dubai|singapore|germany)\b",
+        r"\b(usa|us|america|canada|uk|england|britain|australia|dubai|singapore|germany|new zealand)\b.*\b(job|naukri|move|settle|opportunity|visa|shift|relocate|jaana|jana|chance|kab|when)\b",
+        r"\b(job|naukri|move|settle|opportunity|visa|shift|relocate|jaana|jana|chance)\b.*\b(usa|us|america|canada|uk|england|australia|dubai|singapore|germany)\b",
         r"\b(h1b|h-1b|l1|l-1|pr|permanent residency|green card|work permit|work visa|skilled migration|express entry)\b",
         r"\b(videsh|abroad|foreign)\b.*\b(jana|jaana|jaaunga|jaayegi|move|shift|settle)\b",
         r"\b(विदेश|बाहर)\b.*\b(नौकरी|काम|जाना|बसना)\b",
@@ -702,7 +702,23 @@ def _kp_bucket_assist(kp: dict, bucket: str) -> dict:
     (both produced by kp_engine.calculate_kp), looks up the bucket's cusp map
     in _BUCKET_KP_CUSPS, and scores each cusp by what its CSL signifies.
 
-    Returns {score, why, summary}. Safe-empty when KP unavailable.
+    Polarity rules (asymmetric on purpose):
+      "+" cusps (favourable-event question, e.g. govt_job karma cusp 10):
+            CSL signifies CAREER_PROMISE → +weight
+            CSL signifies CAREER_DENIAL  → -weight
+            mixed (signifies BOTH)       → +1 token (small lean)
+      "-" cusps (negative-event question, e.g. setback cusp 8 obstacles):
+            CSL signifies CAREER_DENIAL  → +weight (event CONFIRMED firing)
+            CSL signifies CAREER_PROMISE → -weight (event NOT firing)
+            mixed (signifies BOTH)       → 0  (CONSERVATIVE — never confirm
+                                              a negative event on weak evidence)
+
+    Returns {score, why, summary, per_cusp}. `per_cusp` contains an entry for
+    EVERY cusp checked (even ones that scored 0 because their CSL gave no
+    clear signal under polarity rules), so callers like C5_setback_recovery
+    can split contributions by polarity. `summary` lists only cusps that
+    contributed a non-zero score (cleaner for downstream LLM narration).
+    Safe-empty when KP unavailable.
     """
     out: dict = {"score": 0, "why": [], "summary": "KP unavailable", "per_cusp": {}}
     if not isinstance(kp, dict):

@@ -175,30 +175,72 @@ def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
 # SECTION 3 — Vimshottari MD-AD scanner (Layer 4 base)
 # ════════════════════════════════════════════════════════════════════════
 def _get_dasha_upcoming(kundli: dict) -> List[dict]:
-    """Fetch upcoming MD-AD blocks from kundli.
+    """Fetch upcoming MD-AD blocks from kundli, normalised to the shape
+    expected by `vedic.timing.timing_engine._scan_dasha_for_lords`.
 
-    Tolerant of multiple field names produced upstream by
-    kundli_engine.calc_vimshottari_dasha. Returns list of dicts with
-    md_lord/ad_lord/start/end fields, or [] if unavailable.
+    Each returned block is `{md_lord, ad_lord, start, end}`.
+
+    Handles three known shapes:
+      A) kundli["vimshottari"]["upcoming"]              (already flat)
+      B) kundli["upcomingAntars"]                       (already flat)
+      C) kundli["dashas"] = [{planet, startDate, endDate, subDashas:[
+              {planet, startDate, endDate, subDashas:[PDs]}, ... ]}]
+         (real production shape from kundli_engine.calculate_kundli)
     """
     if not isinstance(kundli, dict):
         return []
-    vims = (kundli.get("vimshottari")
-            or kundli.get("dasha")
-            or {})
+
+    # Shape A
+    vims = kundli.get("vimshottari") or kundli.get("dasha") or {}
     if isinstance(vims, dict):
-        upcoming = (vims.get("upcoming")
-                    or vims.get("antardasha_sequence")
-                    or [])
-    else:
-        upcoming = []
-    if not upcoming:
-        upcoming = (kundli.get("upcomingAntars")
-                    or kundli.get("upcoming_antars")
-                    or kundli.get("upcomingDashas")
-                    or kundli.get("antardashas")
-                    or [])
-    return upcoming if isinstance(upcoming, list) else []
+        flat = (vims.get("upcoming")
+                or vims.get("antardasha_sequence")
+                or [])
+        if flat and isinstance(flat, list):
+            return flat
+
+    # Shape B
+    flat = (kundli.get("upcomingAntars")
+            or kundli.get("upcoming_antars")
+            or kundli.get("upcomingDashas")
+            or kundli.get("antardashas")
+            or [])
+    if flat and isinstance(flat, list):
+        return flat
+
+    # Shape C — flatten kundli["dashas"][*].subDashas into AD list
+    dashas = kundli.get("dashas") or []
+    if not isinstance(dashas, list):
+        return []
+    today = date.today()
+    out: List[dict] = []
+    for md in dashas:
+        if not isinstance(md, dict):
+            continue
+        md_lord = md.get("planet") or md.get("md_lord")
+        if not md_lord:
+            continue
+        for ad in (md.get("subDashas") or md.get("antar_dashas") or []):
+            if not isinstance(ad, dict):
+                continue
+            ad_lord = ad.get("planet") or ad.get("ad_lord")
+            ad_end = ad.get("endDate") or ad.get("end")
+            if not (ad_lord and ad_end):
+                continue
+            # Filter to upcoming only (lookback handled by scanner)
+            try:
+                end_d = datetime.strptime(str(ad_end)[:10], "%Y-%m-%d").date()
+                if end_d < today - timedelta(days=60):
+                    continue
+            except Exception:
+                pass
+            out.append({
+                "md_lord": md_lord,
+                "ad_lord": ad_lord,
+                "start": ad.get("startDate") or ad.get("start"),
+                "end": ad_end,
+            })
+    return out
 
 
 def _scan_cluster_ads(kundli: dict, target_lords: Set[str],
@@ -300,20 +342,44 @@ def _get_transits_at(natal_lagna_si: int, natal_moon_si: Optional[int],
         return {}
 
 
+def _transit_sign_idx(transit_data: dict, planet: str) -> Optional[int]:
+    """Extract a transiting planet's sidereal sign index from the
+    real shape returned by `transits.compute_transits`:
+        {"as_of": "...",
+         "transit_houses": {"Jupiter": {"sign": "Cancer", "house_from_lagna": 8}, ...}}
+
+    Tolerates legacy/test shapes too:
+        {"Jupiter": {"sign_idx": 3}}  or  {"Jupiter": {"sign": "Cancer"}}
+    Returns int 0-11 or None.
+    """
+    if not isinstance(transit_data, dict):
+        return None
+    # Real production shape
+    th = transit_data.get("transit_houses") or {}
+    p = th.get(planet) if isinstance(th, dict) else None
+    if not isinstance(p, dict):
+        # Legacy/flat shape
+        p = transit_data.get(planet) or {}
+    if not isinstance(p, dict):
+        return None
+    si = p.get("sign_idx")
+    if isinstance(si, int):
+        return si % 12
+    sign = p.get("sign")
+    if isinstance(sign, str) and sign in _SIGNS:
+        return _SIGNS.index(sign)
+    return None
+
+
 def _jupiter_on_marriage_house(transit_data: dict,
                                natal_7h_sign_idx: int,
                                natal_venus_sign_idx: Optional[int] = None
                                ) -> bool:
-    """Check if Jupiter is transiting natal 7H sign or Venus sign.
-
-    Returns True if Jupiter's current sign matches natal 7H or Venus.
-    """
+    """True if transiting Jupiter's sidereal sign equals natal 7H or natal Venus sign."""
     try:
-        jup = transit_data.get("Jupiter") or {}
-        jup_si = jup.get("sign_idx")
+        jup_si = _transit_sign_idx(transit_data, "Jupiter")
         if jup_si is None:
             return False
-        jup_si = int(jup_si) % 12
         if jup_si == int(natal_7h_sign_idx) % 12:
             return True
         if (natal_venus_sign_idx is not None
@@ -326,16 +392,11 @@ def _jupiter_on_marriage_house(transit_data: dict,
 
 def _saturn_seventh_from_moon(transit_data: dict,
                               natal_moon_sign_idx: int) -> bool:
-    """Check if Saturn is transiting the 7th sign from natal Moon.
-
-    Classical marriage trigger.
-    """
+    """True if transiting Saturn's sidereal sign is the 7th sign from natal Moon."""
     try:
-        sat = transit_data.get("Saturn") or {}
-        sat_si = sat.get("sign_idx")
+        sat_si = _transit_sign_idx(transit_data, "Saturn")
         if sat_si is None:
             return False
-        sat_si = int(sat_si) % 12
         seventh_from_moon = (int(natal_moon_sign_idx) + 6) % 12
         return sat_si == seventh_from_moon
     except Exception:
@@ -435,49 +496,398 @@ def _age_filter_action(age: Optional[int],
 
 
 # ════════════════════════════════════════════════════════════════════════
-# PUBLIC API — STUB (Step 2 will populate with Layer 1-5 orchestration)
+# INTERNAL UTILITIES (small inline helpers for the public function)
+# ════════════════════════════════════════════════════════════════════════
+def _planet_sign_idx(planets: list, name: str) -> Optional[int]:
+    """Find a planet's sidereal sign index (0-11) from kundli's planets list."""
+    for p in (planets or []):
+        if isinstance(p, dict) and p.get("name") == name:
+            si = p.get("sign_idx")
+            if isinstance(si, int):
+                return si % 12
+            sign = p.get("sign")
+            if isinstance(sign, str) and sign in _SIGNS:
+                return _SIGNS.index(sign)
+    return None
+
+
+def _planet_house_local(planets: list, name: str) -> Optional[int]:
+    """Find a planet's house (1-12) from kundli's planets list."""
+    for p in (planets or []):
+        if isinstance(p, dict) and p.get("name") == name:
+            h = p.get("house")
+            if isinstance(h, int):
+                return h
+    return None
+
+
+def _parse_dt(value: Any) -> Optional[datetime]:
+    """Parse a date/datetime/string to a datetime object."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
+    if isinstance(value, str) and len(value) >= 10:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d"):
+            try:
+                return datetime.strptime(value[:len(fmt) + 8 if "T" in fmt else len(fmt)], fmt)
+            except (ValueError, TypeError):
+                continue
+        try:
+            return datetime.strptime(value[:10], "%Y-%m-%d")
+        except Exception:
+            return None
+    return None
+
+
+_MONTHS = ["January", "February", "March", "April", "May", "June",
+           "July", "August", "September", "October", "November", "December"]
+
+
+def _format_window(start: datetime, end: datetime) -> str:
+    """Format a datetime range as 'August - October 2027'.
+
+    If start and end span different years, render as
+    'August 2026 - February 2027'.
+    """
+    try:
+        s_m = _MONTHS[start.month - 1]
+        e_m = _MONTHS[end.month - 1]
+        if start.year == end.year:
+            if start.month == end.month:
+                return f"{s_m} {start.year}"
+            return f"{s_m} - {e_m} {start.year}"
+        return f"{s_m} {start.year} - {e_m} {end.year}"
+    except Exception:
+        return f"{start} - {end}"
+
+
+def _extract_birth_year(birth: Any) -> Optional[int]:
+    """Pull birth year from common birth dict shapes used in this codebase."""
+    if not isinstance(birth, dict):
+        return None
+    for k in ("year", "birth_year", "yr"):
+        v = birth.get(k)
+        if v:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+    for k in ("date", "dob", "birth_date", "birthDate"):
+        v = birth.get(k)
+        if isinstance(v, str) and len(v) >= 4:
+            try:
+                return int(v[:4])
+            except ValueError:
+                pass
+    return None
+
+
+# ════════════════════════════════════════════════════════════════════════
+# PUBLIC API — Layer 1-5 ORCHESTRATION (Phase 2.8.30a STEP 2)
 # ════════════════════════════════════════════════════════════════════════
 def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                           birth: Optional[Any] = None) -> dict:
-    """STUB — Step 2 will fill with full 5-layer orchestration.
+    """Run the full 5-layer marriage-timing pipeline.
 
-    Step 2 plan (using only the wrappers above):
-      1. Layer 1 (D1 Promise):
-           - Manglik = _get_manglik(planets)
-           - 7L lord + Karaka condition from kundli
-           -> verdict_d1 (PROMISED/DELAYED/DENIED)
-
-      2. Layer 2 (D9 Confirmation):
-           - d9 = _get_d9_chart(planets, lagna_lon)
-           - Check D9 7L + Karaka condition
-           -> adjust verdict_d1 -> verdict_combined
-
-      3. Layer 3 (KP 7CSL):
-           - verdict_kp, sigs = _kp_csl_verdict(kp)
-           -> independent verdict; combine with verdict_combined
-
-      4. Layer 4 (Triple Confluence — only if verdict != DENIED):
-           - target_lords = _marriage_target_lords(lagna_si)
-           - candidate_ads = _scan_cluster_ads(kundli, target_lords)
-           - For each candidate AD:
-               pds = _project_pds(md, ad, ad_start, ad_end, ...)
-               for pd in pds:
-                 transit = _get_transits_at(lagna_si, moon_si, when=pd_mid)
-                 jup_hit = _jupiter_on_marriage_house(transit, h7_si, venus_si)
-                 sat_hit = _saturn_seventh_from_moon(transit, moon_si)
-                 score = (cluster_hit) + jup_hit + sat_hit
-                 if score >= 2: candidate window
-           -> primary_window (score=3), backup_window (score=2)
-
-      5. Layer 5 (Reality Filter):
-           - age = _get_current_age(birth, kundli, current_dasha)
-           - For each candidate window:
-               action = _age_filter_action(age, window_year)
-               if BLOCK: drop  if PUSH_LATER: skip to next valid AD
-               else: keep with framing flag
-
-      6. Output assembler:
-           {verdict, band, primary_window, backup_window,
-            key_trigger, ul_outlook, risk_flag, factors}
+    Returns dict (see module docstring for shape). Returns
+    {"verdict": "UNKNOWN", "factors": [...]} when inputs are too thin
+    (no planets, no lagna_sign, etc.) — never raises.
     """
-    return {}
+    factors: List[str] = []
+
+    # ── Common input extraction ────────────────────────────────────
+    def _empty(reason: str) -> dict:
+        return {"verdict": "UNKNOWN", "band": "WEAK",
+                "primary_window": None, "backup_window": None,
+                "key_trigger": None, "confluence_strength": None,
+                "ul_outlook": None,
+                "risk_flag": None, "risk_flags": [],
+                "factors": [reason]}
+
+    if not isinstance(kundli, dict) or not isinstance(intel, dict):
+        return _empty("Insufficient input: missing kundli/intel")
+
+    planets = kundli.get("planets") or []
+    # lagna_lon: prefer explicit, fall back to ascendantDeg from kundli_engine
+    lagna_lon = kundli.get("lagna_lon")
+    if lagna_lon is None:
+        for k in ("ascendantDeg", "lagnaDeg", "ascDeg"):
+            v = kundli.get(k)
+            if isinstance(v, (int, float)):
+                lagna_lon = float(v)
+                break
+    # lagna_sign: prefer intel, fall back to kundli["ascendant"]
+    lagna_sign = (intel.get("lagna_sign") or "").strip()
+    if not lagna_sign:
+        for k in ("ascendant", "ascSign", "lagnaSign", "lagna_sign"):
+            v = kundli.get(k)
+            if isinstance(v, str) and v.strip() in _SIGNS:
+                lagna_sign = v.strip()
+                break
+    lagna_si = _SIGNS.index(lagna_sign) if lagna_sign in _SIGNS else None
+    moon_si = _planet_sign_idx(planets, "Moon")
+    venus_si = _planet_sign_idx(planets, "Venus")
+    h7_si = ((lagna_si + 6) % 12) if lagna_si is not None else None
+    current_dasha = kundli.get("currentDasha") or kundli.get("current_dasha") or {}
+
+    if not planets:
+        return _empty("Insufficient input: empty planets list")
+
+    # ── LAYER 1 — D1 Promise check ────────────────────────────────
+    seventh_lord = None
+    for hl in (intel.get("house_lords") or []):
+        if isinstance(hl, dict) and hl.get("house") == 7:
+            seventh_lord = hl.get("lord")
+            break
+    seventh_lord_house = _planet_house_local(planets, seventh_lord) if seventh_lord else None
+    venus_house = _planet_house_local(planets, "Venus")
+    manglik_status = _get_manglik(planets)
+
+    d1_score = 0
+    if seventh_lord_house and seventh_lord_house not in {6, 8, 12}:
+        d1_score += 1
+        factors.append(f"D1 OK: 7L ({seventh_lord}) in {seventh_lord_house}H")
+    else:
+        factors.append(f"D1 FLAG: 7L ({seventh_lord}) in {seventh_lord_house}H (dusthana/missing)")
+
+    if venus_house and venus_house not in {6, 8, 12}:
+        d1_score += 1
+        factors.append(f"D1 OK: Venus karaka in {venus_house}H")
+    else:
+        factors.append(f"D1 FLAG: Venus karaka in {venus_house}H (weak)")
+
+    if manglik_status not in ("Active",):
+        d1_score += 1
+        factors.append(f"D1 OK: Manglik={manglik_status}")
+    else:
+        factors.append("D1 FLAG: Manglik=Active")
+
+    if d1_score >= 2:
+        verdict_d1 = "PROMISED"
+    elif d1_score == 1:
+        verdict_d1 = "DELAYED"
+    else:
+        verdict_d1 = "DENIED"
+
+    # ── LAYER 2 — D9 Navamsha confirmation ────────────────────────
+    d9 = _get_d9_chart(planets, lagna_lon) if lagna_lon is not None else _get_d9_chart(planets)
+    # `divisional_charts.compute_d9` returns planets at top level, e.g.
+    # {"Sun": {"sign": ..., "sign_idx": ..., "vargottama": ...}, ...,
+    #  "_lagna": {...}}. Some implementations nest under "planets".
+    if isinstance(d9, dict) and isinstance(d9.get("planets"), dict):
+        d9_planets = d9["planets"]
+    else:
+        d9_planets = d9 if isinstance(d9, dict) else {}
+    if not d9_planets:
+        factors.append("D9 NOTE: navamsa unavailable — Layer 2 skipped")
+    venus_d9_sign = (d9_planets.get("Venus") or {}).get("sign", "")
+    seventh_lord_d9_sign = (d9_planets.get(seventh_lord) or {}).get("sign", "") if seventh_lord else ""
+    venus_vargottama = bool((d9_planets.get("Venus") or {}).get("vargottama"))
+
+    d9_bonus = 0
+    # Venus debilitated in Virgo in D9 weakens; vargottama strengthens
+    if venus_d9_sign and venus_d9_sign != "Virgo":
+        d9_bonus += 1
+        factors.append(f"D9 OK: Venus in {venus_d9_sign}"
+                       + (" (vargottama)" if venus_vargottama else ""))
+    elif venus_d9_sign:
+        factors.append(f"D9 FLAG: Venus debilitated in {venus_d9_sign}")
+    if seventh_lord_d9_sign:
+        d9_bonus += 1
+        factors.append(f"D9 OK: 7L ({seventh_lord}) placed in {seventh_lord_d9_sign}")
+
+    # Combine D1 with D9 (D9 can promote/demote one tier)
+    if verdict_d1 == "DENIED" and d9_bonus >= 2:
+        verdict_combined = "DELAYED"
+    elif verdict_d1 == "DELAYED" and d9_bonus >= 2:
+        verdict_combined = "PROMISED"
+    elif verdict_d1 == "PROMISED" and d9_bonus == 0:
+        verdict_combined = "DELAYED"
+    else:
+        verdict_combined = verdict_d1
+
+    # ── LAYER 3 — KP 7CSL verdict (independent) ──────────────────
+    csl_verdict, csl_signs = _kp_csl_verdict(kp)
+    csl7 = _get_7csl(kp)
+    factors.append(f"KP: 7CSL={csl7 or 'n/a'} signifies houses {csl_signs} -> {csl_verdict}")
+
+    # Combine with D1+D9
+    if csl_verdict == "DENIED" and verdict_combined == "DENIED":
+        final_verdict = "DENIED"
+    elif csl_verdict == "DENIED":
+        final_verdict = "DELAYED"
+    elif csl_verdict == "PROMISED" and verdict_combined != "DENIED":
+        final_verdict = "PROMISED"
+    elif verdict_combined == "DENIED" and csl_verdict == "PROMISED":
+        final_verdict = "DELAYED"
+    else:
+        final_verdict = verdict_combined
+
+    # Strength band — KP UNKNOWN now penalised (was 1 pt freebie -> now 0)
+    csl_pts = {"PROMISED": 2, "MIXED": 1, "UNKNOWN": 0, "DENIED": 0}.get(csl_verdict, 0)
+    strength = d1_score + d9_bonus + csl_pts   # max 7 (3 D1 + 2 D9 + 2 KP)
+    if strength >= 6:
+        band = "STRONG"
+    elif strength >= 4:
+        band = "MEDIUM"
+    else:
+        band = "WEAK"
+
+    # Risk flags — collect ALL (not just most severe). risk_flag = top one.
+    risk_flags: List[str] = []
+    if manglik_status == "Active":
+        risk_flags.append("Manglik")
+    if seventh_lord_house in {6, 8, 12}:
+        risk_flags.append("7L afflicted")
+    if d1_score == 0:
+        risk_flags.append("Karaka weak")
+    if csl_verdict == "DENIED":
+        risk_flags.append("KP 7CSL denial")
+    risk_flag: Optional[str] = risk_flags[0] if risk_flags else None
+
+    # Early-exit if denied — skip Layer 4/5
+    if final_verdict == "DENIED":
+        return {
+            "verdict": "DENIED",
+            "band": "WEAK",
+            "primary_window": None,
+            "backup_window": None,
+            "key_trigger": None,
+            "confluence_strength": None,
+            "ul_outlook": None,
+            "risk_flag": risk_flag or "Multiple denials",
+            "risk_flags": risk_flags or ["Multiple denials"],
+            "factors": factors,
+        }
+
+    # ── LAYER 4 — Triple Confluence (Dasha + PD + Transits) ──────
+    target_lords = _marriage_target_lords(lagna_si) if lagna_si is not None else {"Venus", "Jupiter"}
+    candidate_ads = _scan_cluster_ads(kundli, target_lords, lookback_days=30)
+    factors.append(f"L4: target_lords={sorted(target_lords)}, candidate_ADs={len(candidate_ads)}")
+
+    today = datetime.utcnow()
+    windows: List[dict] = []
+
+    for ad_blk in candidate_ads:
+        md = ad_blk.get("md")
+        ad = ad_blk.get("ad")
+        ad_start = _parse_dt(ad_blk.get("start"))
+        ad_end = _parse_dt(ad_blk.get("end"))
+        if not (md and ad and ad_start and ad_end):
+            continue
+
+        ad_months = max(3, int((ad_end - ad_start).days / 30) + 1)
+        from_dt = max(today, ad_start)
+        if from_dt >= ad_end:
+            continue
+        pds = _project_pds(md, ad, ad_start, ad_end,
+                           from_dt=from_dt, months_needed=ad_months)
+
+        for pd_blk in pds:
+            pd_start = pd_blk.get("start")
+            pd_end = pd_blk.get("end")
+            if not (isinstance(pd_start, datetime) and isinstance(pd_end, datetime)):
+                continue
+            mid = pd_start + (pd_end - pd_start) / 2
+
+            # Score: cluster_hit + jup_hit + sat_hit
+            cluster_hit = 1
+            if pd_blk.get("pd") in target_lords:
+                cluster_hit = 2
+
+            transit = _get_transits_at(lagna_si, moon_si, when=mid) if lagna_si is not None else {}
+            jup_hit = _jupiter_on_marriage_house(transit, h7_si, venus_si) if h7_si is not None else False
+            sat_hit = _saturn_seventh_from_moon(transit, moon_si) if moon_si is not None else False
+
+            score = cluster_hit + (1 if jup_hit else 0) + (1 if sat_hit else 0)
+            if score >= 2:
+                windows.append({
+                    "start": pd_start, "end": pd_end, "score": score,
+                    "md": md, "ad": ad, "pd": pd_blk.get("pd"),
+                    "jup": jup_hit, "sat": sat_hit,
+                })
+
+    factors.append(f"L4: {len(windows)} candidate PD windows after confluence")
+
+    # ── LAYER 5 — Reality Filter (age gate) ──────────────────────
+    age = _get_current_age(birth, kundli, current_dasha)
+    birth_year = _extract_birth_year(birth)
+    if age is not None:
+        factors.append(f"L5: current_age={age}, birth_year={birth_year}")
+
+    valid_windows: List[dict] = []
+    blocked_count = 0
+    for w in windows:
+        predicted_year = w["start"].year
+        predicted_age = (predicted_year - birth_year) if (birth_year and birth_year > 0) else None
+        action = _age_filter_action(age, predicted_age) if predicted_age is not None else "OK"
+        if action in ("BLOCK", "PUSH_LATER"):
+            blocked_count += 1
+            continue
+        w["age_action"] = action
+        w["predicted_age"] = predicted_age
+        valid_windows.append(w)
+
+    factors.append(f"L5: {len(valid_windows)} windows survived (blocked={blocked_count})")
+
+    # If ALL candidate windows were blocked by Layer 5 (and there WERE
+    # candidates), downgrade verdict to PREMATURE for trust consistency.
+    # Promised marriage exists in the chart, but the engine refuses to
+    # quote a window because the user is currently too young.
+    if windows and not valid_windows and final_verdict == "PROMISED":
+        final_verdict = "PREMATURE"
+        factors.append("L5 DOWNGRADE: PROMISED -> PREMATURE (all windows blocked by age gate)")
+        risk_flag = risk_flag or "Below marriageable age"
+        if "Below marriageable age" not in risk_flags:
+            risk_flags.insert(0, "Below marriageable age")
+
+    # Sort by (score desc, start asc) — best scoring + soonest first
+    valid_windows.sort(key=lambda w: (-w["score"], w["start"]))
+
+    primary_window = None
+    backup_window = None
+    key_trigger = None
+    confluence_strength = None  # "STRONG" if score>=3 else "MODERATE"
+
+    def _trigger_str(w: dict) -> str:
+        parts = [f"{w['ad']} AD", f"{w['pd']} PD"]
+        if w["jup"]:
+            parts.append("Jupiter on 7H/Venus")
+        if w["sat"]:
+            parts.append("Saturn 7th-from-Moon")
+        return " + ".join(parts)
+
+    if valid_windows:
+        p = valid_windows[0]
+        primary_window = _format_window(p["start"], p["end"])
+        key_trigger = _trigger_str(p)
+        confluence_strength = "STRONG" if p["score"] >= 3 else "MODERATE"
+        factors.append(f"L4 PRIMARY: {primary_window} (score={p['score']}, "
+                       f"{confluence_strength} confluence)")
+
+        # Backup = next valid window in a DIFFERENT AD (so user has a
+        # genuinely different timing option, not just a sibling PD).
+        for w in valid_windows[1:]:
+            if w["ad"] != p["ad"]:
+                bk_str = _format_window(w["start"], w["end"])
+                # Disambiguate when calendar months overlap with primary
+                if bk_str == primary_window:
+                    bk_str = f"{bk_str} ({w['ad']} AD)"
+                backup_window = bk_str
+                factors.append(f"L4 BACKUP: {backup_window} (score={w['score']}, AD={w['ad']})")
+                break
+
+    return {
+        "verdict": final_verdict,
+        "band": band,
+        "primary_window": primary_window,
+        "backup_window": backup_window,
+        "key_trigger": key_trigger,
+        "confluence_strength": confluence_strength,
+        "ul_outlook": None,   # Love engine's job, merged at narrator layer
+        "risk_flag": risk_flag,
+        "risk_flags": risk_flags,
+        "factors": factors,
+    }

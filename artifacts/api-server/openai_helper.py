@@ -383,6 +383,82 @@ _PT_SYS_INTRO = (
 
 
 # ────────────────────────────────────────────────────────────────────
+# Phase 2.8 — OUTPUT BREVITY MODE (Rule 19).
+#
+# Why this exists:
+#   Rules 1-18 build deep BPHS-quality analysis. But devotee is
+#   reading on a mobile phone in a chat bubble. Wall-of-text (4
+#   bullets x 500+ chars) overwhelms the user even when content
+#   is technically correct. UX critique: "Checklist hit ≠ Good
+#   answer. Real users want CLARITY, not depth."
+#
+# Pattern: keep the depth engine intact (LOVE LENS 14-checklist,
+# Rule 18 7-layer, _build_topic_lock all unchanged). Just add a
+# tight OUTPUT FORMATTER on top that compresses to top-3 most
+# decision-relevant findings in <120 words total.
+#
+# Toggle: env `OUTPUT_BREVITY_MODE` — default ON.
+#   • "1" / "true" / "yes" / "on" / unset = brevity ON
+#   • "0" / "false" / "no" / "off"        = brevity OFF (legacy 4-bullet output)
+# Restart api-server after toggling.
+#
+# Single-fact answers (Rule 1) are EXEMPT — they were already 1-line.
+# ────────────────────────────────────────────────────────────────────
+def _brevity_mode_enabled() -> bool:
+    val = os.environ.get("OUTPUT_BREVITY_MODE", "1").strip().lower()
+    return val not in ("0", "false", "no", "off", "")
+
+
+_BREVITY_MODE_BLOCK = (
+    "\n"
+    "━━━ RULE 19 — OUTPUT BREVITY MODE (Rules 5 + 18 ke bullet structure ko OVERRIDE karta hai) ━━━\n"
+    "\n"
+    "Devotee mobile phone pe chat bubble mein padh raha hai. Wall-of-\n"
+    "text se confuse hota hai. Internal analysis DEEP karo (Rule 18\n"
+    "ka 7-layer + topic-lock ka full checklist sab kuchh internal mein\n"
+    "use karo), PAR devotee-facing OUTPUT ko TIGHT do.\n"
+    "\n"
+    "OUTPUT HARD CAPS (Rule 5 ka 4-bullet cap aur Rule 18 ka 4-bullet\n"
+    "structure dono OVERRIDE — yeh final word hai):\n"
+    "\n"
+    "  1. TL;DR — 1 line, 100 chars MAX. Direct verdict / conclusion-\n"
+    "     first. Devotee ko 5 second mein answer mil jaye.\n"
+    "  2. MAX 3 BULLETS (3 hard cap, 4-va bullet KABHI nahi).\n"
+    "  3. Har bullet: 150 chars MAX. Multi-sentence dump mat karo,\n"
+    "     ek crisp insight per bullet.\n"
+    "  4. Total response: 600 chars MAX (~120 words).\n"
+    "  5. Top 3 most DECISION-RELEVANT findings hi pick karo. 14-point\n"
+    "     checklist se sab cite karne ki zarurat nahi — internal mein\n"
+    "     check karo, devotee ko sirf nishkarsh do.\n"
+    "  6. Plain Hinglish — har bullet mein max 1 classical Sanskrit term\n"
+    "     (e.g. \"5L\", \"D9\") allowed. Baki natural language mein\n"
+    "     conclusion convert karo. Jargon-bomb mat karo.\n"
+    "  7. End mein 1 short follow-up offer (max 60 chars):\n"
+    "     \"Deep karna ho toh batao.\" / \"Timing chahiye toh puchho.\"\n"
+    "     / \"Remedy bhi chahiye?\". Variety rakho (Rule 9 follow karo).\n"
+    "\n"
+    "GOLDEN RULE — Devotee 5 second mein samajh jaye. Agar samajhne mein\n"
+    "5 second se zyada laga = ANSWER FAILED.\n"
+    "\n"
+    "BALANCE — 20% analysis citation + 80% clarity. Citations ko evidence\n"
+    "ke liye use karo (\"5L Mangal lagna mein\"), explanation ke liye nahi.\n"
+    "Devotee ko \"isliye yeh hoga\" chahiye, na ki \"yeh planet yahan hai\n"
+    "isliye uska yeh effect hai jo is parivartan se aur badh jata hai...\".\n"
+    "\n"
+    "EXEMPTIONS:\n"
+    "  • Single-fact answers (Rule 1) — pehle se 1-line, yeh apply NAHI.\n"
+    "  • Devotee EXPLICITLY \"detail mein batao\" / \"poora analysis do\" /\n"
+    "    \"vistaar se\" maange to brevity loosen kar sakte ho (4 bullets,\n"
+    "    250 chars each), par baseline default tight rakho.\n"
+    "\n"
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+)
+
+if _brevity_mode_enabled():
+    _PT_SYS_INTRO = _PT_SYS_INTRO + _BREVITY_MODE_BLOCK
+
+
+# ────────────────────────────────────────────────────────────────────
 # Phase 2.4 Tier-1.5 — Topic-detector + TOPIC-LOCK injection.
 #
 #  Problem solved: even with Rule 6 cheat-sheet in `_PT_SYS_INTRO`,
@@ -908,18 +984,45 @@ def _build_topic_lock(rule, kundli):
         # na kam. Curated by domain-expert user.
         deep_checklist = rule.get("deep_checklist") or []
         checklist_block = ""
+        # Phase 2.8 — when Rule 19 BREVITY MODE is on, output cap drops
+        # from 4 to 3 bullets. Adjust the checklist's output reminder
+        # here so the lock is internally consistent with Rule 19.
+        _brevity_on = _brevity_mode_enabled()
+        _bullet_cap_str = "3" if _brevity_on else "4"
         if deep_checklist:
             numbered = "\n".join(
                 f"   {i+1}. {item}" for i, item in enumerate(deep_checklist)
             )
             checklist_block = (
-                "DEEP CHECKLIST (iss topic ke liye SIRF ye points dekho — "
-                "Rule 18 ka generic 7-layer framework REPLACE karta hai):\n"
+                "DEEP CHECKLIST (iss topic ke liye SIRF ye points INTERNAL "
+                "mein dekho — Rule 18 ka generic 7-layer framework REPLACE "
+                "karta hai):\n"
                 f"{numbered}\n"
-                "Sab points internally check karo, lekin output mein 4 "
-                "bullets hi banao (Rule 5 cap). Har point ka evidence "
-                "kundli-context se le, hallucinate mat karo (Rule 11). "
-                "Jo data missing ho woh chup-chap skip karo.\n"
+                f"Sab points internally check karo, lekin output mein "
+                f"max {_bullet_cap_str} bullets hi banao (Rule "
+                f"{'19' if _brevity_on else '5'} cap). Top 3 most "
+                "decision-relevant findings hi cite karo, baki internal "
+                "rakho. Har point ka evidence kundli-context se le, "
+                "hallucinate mat karo (Rule 11). Jo data missing ho "
+                "woh chup-chap skip karo.\n"
+            )
+        # Phase 2.8 — brevity reminder injected at the END of the lock so
+        # it's the LAST instruction the LLM sees before the devotee's
+        # question (recency-effect wins over the system-prompt rules
+        # that come earlier).
+        brevity_tail = ""
+        if _brevity_on:
+            brevity_tail = (
+                "\n"
+                "━━━ FINAL OUTPUT REMINDER (Rule 19 BREVITY) ━━━\n"
+                "• TL;DR: 1 line ≤100 chars (direct verdict)\n"
+                "• MAX 3 bullets, har bullet ≤150 chars\n"
+                "• Total response ≤600 chars (~120 words)\n"
+                "• Top 3 decision-relevant findings hi pick karo, "
+                "baki internal\n"
+                "• End mein 1 short follow-up offer (≤60 chars)\n"
+                "• Devotee 5 sec mein samajh jaye, warna fail\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             )
         lock = (
             "━━━ TOPIC-LOCK (Devotee ka prashn ka focus area) ━━━\n"
@@ -932,7 +1035,9 @@ def _build_topic_lock(rule, kundli):
             f"DO NOT cite (iss prashn ke liye classically unrelated): {banned_str}.\n"
             f"{checklist_block}"
             "Rule 16 STRICT FOCUS aur Rule 17 DASHA-FIRST TIMING follow karein.\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{brevity_tail}"
+            "\n"
         )
         return lock
     except Exception:

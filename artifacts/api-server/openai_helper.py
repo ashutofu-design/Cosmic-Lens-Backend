@@ -63,6 +63,94 @@ def _marriage_engine():
 #
 # Returns "" when topic is not marriage or engine produces nothing — in
 # which case the caller leaves the system message untouched.
+def _adapt_birth_for_kp(birth):
+    """Convert a Flask-route `birth` dict to KP calculate_kp()'s schema.
+
+    KP wants: {day, month, year, hour, minute, ampm, lat, lon, tz}
+    We may receive any of:
+      - {dob: "29/10/1999", tob: "11:30 AM", lat, lon, tz}     (kundli model shape)
+      - {date: "1999-10-29", time: "11:30:00", lat, lon, tz}   (ISO test shape)
+      - {date: "29-10-1999", time: "23:30",   lat, lon, tz}    (24h variant)
+      - already KP-shape (passthrough)
+
+    Returns the KP-shape dict, or None if essentials cannot be parsed.
+    Never raises.
+    """
+    if not isinstance(birth, dict):
+        return None
+    # Already KP-shape — short-circuit
+    if all(k in birth for k in ("day", "month", "year", "hour", "minute", "ampm")):
+        if all(k in birth for k in ("lat", "lon", "tz")):
+            return dict(birth)
+
+    import re as _re_b
+    # ── Date ───────────────────────────────────────────────────────────────
+    raw_date = birth.get("dob") or birth.get("date") or birth.get("birth_date")
+    if not raw_date:
+        return None
+    raw_date = str(raw_date).strip()
+    day = month = year = None
+    # DD/MM/YYYY or DD-MM-YYYY
+    m = _re_b.match(r"^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$", raw_date)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        # YYYY-MM-DD
+        m = _re_b.match(r"^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$", raw_date)
+        if m:
+            year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (day and month and year):
+        return None
+
+    # ── Time ───────────────────────────────────────────────────────────────
+    raw_time = birth.get("tob") or birth.get("time") or birth.get("birth_time")
+    if not raw_time:
+        return None
+    raw_time = str(raw_time).strip().upper()
+    hour = minute = None
+    ampm = None
+    # "11:30 AM" / "11:30AM" / "11:30 PM"
+    m = _re_b.match(r"^(\d{1,2}):(\d{2})\s*(AM|PM)\b", raw_time)
+    if m:
+        hour, minute, ampm = int(m.group(1)), int(m.group(2)), m.group(3)
+    else:
+        # "11:30" or "11:30:00" → 24-hour, infer ampm
+        m = _re_b.match(r"^(\d{1,2}):(\d{2})(?::\d{2})?$", raw_time)
+        if m:
+            h24, mn = int(m.group(1)), int(m.group(2))
+            if 0 <= h24 <= 23 and 0 <= mn <= 59:
+                if h24 == 0:
+                    hour, ampm = 12, "AM"
+                elif h24 < 12:
+                    hour, ampm = h24, "AM"
+                elif h24 == 12:
+                    hour, ampm = 12, "PM"
+                else:
+                    hour, ampm = h24 - 12, "PM"
+                minute = mn
+    if hour is None or minute is None or ampm is None:
+        return None
+
+    # ── Coords + TZ ────────────────────────────────────────────────────────
+    lat = birth.get("lat") or birth.get("latitude")
+    lon = birth.get("lon") or birth.get("longitude") or birth.get("lng")
+    tz  = birth.get("tz")  or birth.get("timezone")  or birth.get("tz_offset")
+    try:
+        lat = float(lat) if lat is not None else None
+        lon = float(lon) if lon is not None else None
+        tz  = float(tz)  if tz  is not None else None
+    except Exception:
+        return None
+    if lat is None or lon is None or tz is None:
+        return None
+
+    return {
+        "day": day, "month": month, "year": year,
+        "hour": hour, "minute": minute, "ampm": ampm,
+        "lat": lat, "lon": lon, "tz": tz,
+    }
+
+
 def _passthrough_marriage_block(question, kundli, intel, birth):
     """Build LOCKED FACTS marriage block for passthrough paths.
 
@@ -103,7 +191,19 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
 
         kp_dict = None
         try:
-            kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else None
+            # KP calculate_kp() expects:
+            #   {day, month, year, hour, minute, ampm, lat, lon, tz}
+            # but the Flask route passes `birth` straight from the mobile
+            # client which uses {dob, tob, lat, lon, tz} OR
+            # {date, time, lat, lon, tz}. We adapt here so KP CSL — the
+            # 45% weight engine, biggest signal in the marriage verdict —
+            # actually fires instead of silently being skipped.
+            kp_input = _adapt_birth_for_kp(birth) if isinstance(birth, dict) else None
+            if kp_input:
+                kp_dict = _kp_calc()(kp_input)
+            else:
+                print(f"[passthrough_marriage] kp skipped: birth dict unsuitable: "
+                      f"{list(birth.keys()) if isinstance(birth, dict) else type(birth).__name__}")
         except Exception as exc:
             print(f"[passthrough_marriage] kp calc failed: {exc}")
 

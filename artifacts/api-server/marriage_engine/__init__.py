@@ -86,11 +86,146 @@ def format_verdict_for_prompt(v: dict) -> str:
     """Render verdict dict as authoritative prompt block for LLM.
 
     Empty / falsy verdict -> empty string (openai_helper skips the block).
+
+    Phase 2.8.25 — populates the LOCKED FACTS block for the marriage_type
+    classifier so the LLM actually sees engine output (was empty stub before,
+    making the whole 25-rule + 3-trust-layer engine invisible to production).
+
+    Block contract (matches existing openai_helper.py expectations):
+      - Opens with a ════ separator (so narrator-mode prefix can detect it)
+      - Renders mode (PREDICT / EXPLAIN / VERIFY / GENERAL) so LLM tone-shifts
+      - Renders self-disclosure trigger (so LLM never contradicts the devotee)
+      - Renders final verdict + confidence + band + verdict_text
+      - Renders top 3 reasons per side from each engine
+      - Renders consensus state and individual engine verdicts
+      - Includes authority directive (LLM must restate, not contradict)
+      - Closes with the SAME ════ marker so Jaimini UL line can be injected
+        before it (openai_helper.py L3837 looks for this exact marker)
     """
     if not v:
         return ""
-    # User will fill in formatter once sub-engines populate verdict dict.
-    return ""
+    mt = v.get("marriage_type") or {}
+    if not mt:
+        # marriage_type engine produced nothing — fall back to whatever the
+        # timing engine put in v (currently still stub) without a block.
+        return ""
+
+    bar = "═" * 68
+    lines: list[str] = []
+    lines.append(bar)
+    lines.append("MARRIAGE TYPE ENGINE — LOCKED FACTS (do not contradict)")
+    lines.append(bar)
+
+    # ── Mode awareness ──────────────────────────────────────────────────
+    mode = (mt.get("mode") or "PREDICT").upper()
+    sd   = mt.get("self_disclosure") or {}
+    stated = sd.get("stated_type")
+    trigger = sd.get("trigger") or ""
+    if mode == "EXPLAIN" and stated:
+        lines.append(
+            f"MODE: EXPLAIN  —  devotee ne KHUD bataya '{stated}' marriage hua."
+        )
+        if trigger:
+            lines.append(f"  Trigger phrase: \"{trigger}\"")
+        lines.append(
+            "  ★ HARD RULE: tum apne se LOVE/ARRANGED predict mat karo. "
+            "Devotee ki batayi hui type maan lo aur uske karak/yog explain karo. ★"
+        )
+    elif mode == "VERIFY":
+        lines.append(
+            f"MODE: VERIFY  —  devotee ne '{stated}' bataya, chart cross-check."
+        )
+        if trigger:
+            lines.append(f"  Trigger phrase: \"{trigger}\"")
+    elif mode == "GENERAL":
+        lines.append(
+            "MODE: GENERAL  —  devotee educational sawaal puch raha (specific chart predict mat karo)."
+        )
+    else:
+        lines.append("MODE: PREDICT  —  chart se LOVE / ARRANGED / MIXED nikalo.")
+
+    lines.append("")
+
+    # ── Final verdict ────────────────────────────────────────────────────
+    vtype = mt.get("type") or "MIXED"
+    conf  = mt.get("confidence", 0)
+    band  = mt.get("band") or "MIXED"
+    vtext = mt.get("verdict_text") or ""
+    lines.append(f"VERDICT TYPE   : {vtype}")
+    lines.append(f"CONFIDENCE     : {conf}/100  (band: {band})")
+    if vtext:
+        lines.append(f"VERDICT TEXT   : {vtext}")
+
+    # ── Engine breakdown ────────────────────────────────────────────────
+    engines = mt.get("engines") or {}
+    if engines:
+        lines.append("")
+        lines.append("ENGINE BREAKDOWN (3 independent engines):")
+        for ekey, label, weight in (
+            ("d1", "Parashari D1",  "30%"),
+            ("d9", "D9 Navamsha",   "25%"),
+            ("kp", "KP CSL",        "45%"),
+        ):
+            e = engines.get(ekey) or {}
+            if not e:
+                continue
+            ev   = e.get("verdict") or "UNKNOWN"
+            els  = e.get("love_score", 0)
+            eas  = e.get("arr_score", 0)
+            avail = e.get("available", True)
+            if not avail:
+                lines.append(f"  • {label} ({weight}): NOT AVAILABLE — skipped")
+            else:
+                lines.append(
+                    f"  • {label} ({weight}): {ev}  (love={els}, arr={eas})"
+                )
+
+    # ── Top reasons (Hinglish, devotee-facing) ───────────────────────────
+    rl = (mt.get("reasons_love") or [])[:3]
+    ra = (mt.get("reasons_arr")  or [])[:3]
+    if rl or ra:
+        lines.append("")
+        lines.append("TOP SUPPORTING FACTORS (cite verbatim — do not invent new ones):")
+        if rl:
+            lines.append("  LOVE-side:")
+            for r in rl:
+                lines.append(f"    - {r}")
+        if ra:
+            lines.append("  ARRANGED-side:")
+            for r in ra:
+                lines.append(f"    - {r}")
+
+    # ── Consensus state ─────────────────────────────────────────────────
+    cons = mt.get("consensus") or {}
+    if cons:
+        lines.append("")
+        lines.append(
+            f"CONSENSUS      : {cons.get('consensus','UNCERTAIN')} "
+            f"(boost x{cons.get('boost', 1.0)})"
+        )
+
+    # ── Authority directive ─────────────────────────────────────────────
+    lines.append("")
+    if mode == "EXPLAIN":
+        lines.append(
+            "★ AUTHORITY: tum '" + (stated or "") + "' marriage ko EXPLAIN karo, "
+            "predict mat karo. Devotee ki personal disclosure SACRED hai. ★"
+        )
+    elif vtype == "MIXED" or band == "MIXED":
+        lines.append(
+            "★ AUTHORITY: chart MIXED signals de raha hai. Honestly bolo — koi "
+            "ek side force mat karo. \"Dono possibilities khuli hain\" type natural verdict do. ★"
+        )
+    else:
+        lines.append(
+            f"★ AUTHORITY: '{vtype}' verdict ko RESTATE karo (apni reasoning add mat karo). "
+            "Engine reasons hi cite karo. Verdict text ko Hinglish me natural-flow me likho. ★"
+        )
+
+    lines.append(bar)
+    # Trailing newline so the marker matches the existing
+    # `marker = "..." + "\n"` check in openai_helper.py L3835
+    return "\n".join(lines) + "\n"
 
 
 def extract_window_str(v: dict) -> str:

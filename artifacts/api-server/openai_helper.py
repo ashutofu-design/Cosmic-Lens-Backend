@@ -465,18 +465,24 @@ _TRANSPARENCY_TRIGGERS = (
 
 
 def _is_transparency_query(q: str) -> bool:
-    """Detect EXPLAIN MODE triggers (Mode 2). Original name kept for
-    backward compat with 6 callsites; semantic = "user wants explanation,
-    not just result"."""
-    if not q:
-        return False
-    qn = q.lower().strip()
-    # Edge case: bare "kyun?" / "kyu?" / "kyon?" as standalone Q.
-    if qn.rstrip("?!. ") in ("kyun", "kyon", "kyu", "why"):
-        return True
-    for trig in _TRANSPARENCY_TRIGGERS:
-        if trig in qn:
-            return True
+    """DEPRECATED (Phase 2.8.8) — always returns False.
+
+    Old design used a deterministic substring trigger (kyun/explain/
+    samjhao etc) to swap in a separate Mode-2 directive.
+
+    User feedback (May 2026): "LLM latest model hai, usko pura power do
+    question samjhne ka — chahe 1 line ho chahe 20 line paragraph, woh
+    pura samjhega." Keyword regex is brittle (e.g. "kaisa hai" ≠ "kaise
+    hai", "samajh nahi aa raha" has no trigger but is clearly Mode-2),
+    so we now trust the LLM's natural-language understanding.
+
+    The full 2-MODE framework lives in `_BREVITY_MODE_BLOCK` (system
+    prompt) which describes BOTH modes with examples. The LLM picks the
+    right mode based on the question's INTENT, not a substring match.
+
+    `_TRANSPARENCY_TRIGGERS` and `_TRANSPARENCY_DIRECTIVE` are kept in
+    code as documentation/fallback only — they're never used at runtime.
+    """
     return False
 
 
@@ -616,16 +622,25 @@ _BREVITY_MODE_BLOCK = (
     "    1-line factual answer, no bullets, no CTA.\n"
     "    E.g. \"Aapka Lagna Mithun hai.\"\n"
     "\n"
-    "━━━ MODE 2 — EXPLAIN MODE (ONLY when triggered) ━━━\n"
+    "━━━ MODE 2 — EXPLAIN MODE (when devotee wants reasoning) ━━━\n"
     "\n"
-    "Switch to Mode 2 ONLY if devotee's question contains explicit\n"
-    "explanation-demand:\n"
+    "Switch to Mode 2 when devotee's question shows explanation-demand.\n"
+    "Tum latest GPT model ho — keyword-list mat dhundo, INTENT samjho.\n"
+    "Question chahe 1 word ho ya 20 line paragraph, tumhe poori samajh hai.\n"
     "\n"
-    "  Trigger words: \"kaise\", \"kyun\", \"kyon\", \"explain\", \"reason\",\n"
-    "  \"detail mein batao\", \"vistaar se\", \"step by step\", \"samjhao\",\n"
-    "  \"samjha do\", \"how do you know\", \"why\".\n"
+    "Mode 2 INTENT signals (kaisi bhi form mein aaye, samjho):\n"
+    "  • \"kaise / kyun / kyon / kyu / kaisa / why / how come\"\n"
+    "  • \"explain / explanation / samjhao / samjha do / samjhaiye\"\n"
+    "  • \"reason kya / reason batao / vajah / kaaran\"\n"
+    "  • \"detail mein / vistaar se / deeply / step by step / breakdown\"\n"
+    "  • \"how do you know / kaise pata / proof / basis kya\"\n"
+    "  • \"samajh nahi aa raha / clarify karo / mujhe samajh nahi aaya\"\n"
+    "  • Ya koi bhi natural phrasing jahan devotee REASONING maang raha ho —\n"
+    "    even if exact word list mein nahi hai, INTENT pakdo.\n"
     "\n"
-    "  Agar trigger NAHI hai → Mode 1 (Quick Answer) hi rakho.\n"
+    "  Agar question sirf result/answer maang raha hai → Mode 1.\n"
+    "  Agar reasoning/why/how/breakdown maang raha hai → Mode 2.\n"
+    "  Confused ho to Mode 1 default — devotee ko CTA se Mode 2 offer ho jayega.\n"
     "\n"
     "FORMAT (yeh exact structure):\n"
     "\n"
@@ -666,12 +681,16 @@ _BREVITY_MODE_BLOCK = (
     "\n"
     "━━━ DECISION FLOW (har turn ke shuru mein follow karo) ━━━\n"
     "\n"
-    "  1. Devotee ka question read karo.\n"
-    "  2. Check: koi explain-trigger word hai? (kaise/kyun/explain/\n"
-    "     reason/detail mein/vistaar/step by step/samjhao)\n"
-    "  3. NO  → MODE 1 (Quick Answer + 3 bullets)\n"
-    "     YES → MODE 2 (Step 1 / Step 2 / Step 3 / Final)\n"
-    "  4. Casual ya single-fact → Mode 1 ka exemption (1-line).\n"
+    "  1. Devotee ka question PURA read karo (chahe 1 word ho ya paragraph).\n"
+    "  2. Tum latest GPT ho — INTENT samjho, keyword-match nahi:\n"
+    "     • Result/answer hi maang raha hai? → MODE 1 (Quick Answer)\n"
+    "     • Reasoning/why/how/breakdown maang raha hai? → MODE 2 (Step-by-step)\n"
+    "     • Casual chit-chat ya single-fact lookup? → Mode 1 exemption (1 line)\n"
+    "  3. Confused ho to Mode 1 default + CTA — devotee Mode 2 demand kar lega.\n"
+    "\n"
+    "  Trust your own language understanding. Question ki form chahe kuch bhi\n"
+    "  ho — natural Hinglish, broken English, long paragraph, single emoji —\n"
+    "  tum samajh sakte ho. Rigid template/keyword pe mat fasna.\n"
     "\n"
     "GOLDEN RULES (universal):\n"
     "  • Pehle result do, phir demand pe reasoning do.\n"
@@ -1250,23 +1269,24 @@ def _build_topic_lock(rule, kundli):
                 "\n"
                 "CORE: \"By default = sirf result. Explain only if user asks.\"\n"
                 "\n"
-                "DECISION FLOW:\n"
-                "  Devotee question read karo →\n"
-                "  Trigger words (kaise/kyun/explain/reason/detail mein/\n"
-                "  vistaar/step by step/samjhao) hain?\n"
-                "    NO  → MODE 1 (Quick Answer):\n"
-                "          1-line direct answer + EXACTLY 3 bullets ≤15 words each.\n"
-                "          NO planet/house/dasha names. NO \"TL;DR:\" prefix.\n"
-                "          Optional CTA at end: \"Agar chaho to main iska reason\n"
-                "          step-by-step samjha sakta hoon.\"\n"
-                "    YES → MODE 2 (Explain Mode):\n"
-                "          Step 1: <check> (<factor>) → <meaning>\n"
-                "          Step 2: <check> (<factor>) → <meaning>\n"
-                "          Step 3: <check> (<factor>) → <meaning>\n"
-                "          Final: <one-line conclusion>\n"
-                "          Chart-tech ALLOWED here (paired with plain meaning).\n"
+                "Tum latest GPT ho — devotee ka question (chahe 1 word ho ya 20\n"
+                "line paragraph) PURA padho aur INTENT samjho. Keyword-list pe\n"
+                "mat depend karo, apni language understanding use karo.\n"
                 "\n"
-                "Casual / Single-fact → 1 line, no bullets (Mode 1 exemption).\n"
+                "  • Sirf result/answer maang raha hai → MODE 1 (Quick Answer):\n"
+                "      1-line direct answer + EXACTLY 3 bullets ≤15 words each.\n"
+                "      NO planet/house/dasha names. NO \"TL;DR:\" prefix.\n"
+                "      Optional CTA: \"Agar chaho to main iska reason\n"
+                "      step-by-step samjha sakta hoon.\"\n"
+                "\n"
+                "  • Reasoning/why/how/breakdown maang raha hai → MODE 2 (Explain):\n"
+                "      Step 1: <check> (<factor>) → <meaning>\n"
+                "      Step 2: <check> (<factor>) → <meaning>\n"
+                "      Step 3: <check> (<factor>) → <meaning>\n"
+                "      Final: <one-line conclusion>\n"
+                "      Chart-tech ALLOWED here (paired with plain meaning).\n"
+                "\n"
+                "  • Casual / Single-fact → 1 line, no bullets (Mode 1 exemption).\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             )
         lock = (
@@ -14454,9 +14474,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     )
                     if _brevity_for_call:
                         _create_kwargs_pt["top_p"] = 0.9
-                        _create_kwargs_pt["max_tokens"] = (
-                            600 if _is_transparent else 450
-                        )
+                        # Phase 2.8.8 — single budget; LLM picks Mode 1 vs
+                        # Mode 2 based on intent, so pre-allocate enough
+                        # for either (Mode 2 step format is the larger).
+                        _create_kwargs_pt["max_tokens"] = 600
                 _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
 
@@ -17665,9 +17686,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 )
                 if _brevity_for_call_s:
                     _create_kwargs_pt_s["top_p"] = 0.9
-                    _create_kwargs_pt_s["max_tokens"] = (
-                        600 if _is_transparent_s else 450
-                    )
+                    # Phase 2.8.8 — single budget; LLM picks Mode 1 vs
+                    # Mode 2 based on intent, so pre-allocate enough
+                    # for either (Mode 2 step format is the larger).
+                    _create_kwargs_pt_s["max_tokens"] = 600
 
             _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)
 

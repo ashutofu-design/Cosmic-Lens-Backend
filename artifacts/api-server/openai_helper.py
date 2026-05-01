@@ -411,45 +411,60 @@ def _brevity_mode_enabled() -> bool:
 
 _BREVITY_MODE_BLOCK = (
     "\n"
-    "━━━ RULE 19 — OUTPUT BREVITY MODE (Rules 5 + 18 ke bullet structure ko OVERRIDE karta hai) ━━━\n"
+    "━━━ RULE 19 — OUTPUT BREVITY MODE (Rules 5 + 18 ka bullet structure OVERRIDE) ━━━\n"
     "\n"
-    "Devotee mobile phone pe chat bubble mein padh raha hai. Wall-of-\n"
-    "text se confuse hota hai. Internal analysis DEEP karo (Rule 18\n"
-    "ka 7-layer + topic-lock ka full checklist sab kuchh internal mein\n"
-    "use karo), PAR devotee-facing OUTPUT ko TIGHT do.\n"
+    "Devotee mobile chat bubble mein padh raha hai. Wall-of-text se\n"
+    "confuse hota hai. INTERNAL mein deep Vedic analysis karo (Rule 18\n"
+    "ka 7-layer + LOVE LENS ka 14-point checklist + topic-lock sab\n"
+    "INTERNAL scaffolding hai), PAR devotee-facing OUTPUT pure CONCLUSIONS\n"
+    "mein do — chart-tech jargon se nahi.\n"
     "\n"
-    "OUTPUT HARD CAPS (Rule 5 ka 4-bullet cap aur Rule 18 ka 4-bullet\n"
-    "structure dono OVERRIDE — yeh final word hai):\n"
+    "STRICT OUTPUT RULES (final word — sab pichhle rules OVERRIDE):\n"
     "\n"
-    "  1. TL;DR — 1 line, 100 chars MAX. Direct verdict / conclusion-\n"
-    "     first. Devotee ko 5 second mein answer mil jaye.\n"
-    "  2. MAX 3 BULLETS (3 hard cap, 4-va bullet KABHI nahi).\n"
-    "  3. Har bullet: 150 chars MAX. Multi-sentence dump mat karo,\n"
-    "     ek crisp insight per bullet.\n"
-    "  4. Total response: 600 chars MAX (~120 words).\n"
-    "  5. Top 3 most DECISION-RELEVANT findings hi pick karo. 14-point\n"
-    "     checklist se sab cite karne ki zarurat nahi — internal mein\n"
-    "     check karo, devotee ko sirf nishkarsh do.\n"
-    "  6. Plain Hinglish — har bullet mein max 1 classical Sanskrit term\n"
-    "     (e.g. \"5L\", \"D9\") allowed. Baki natural language mein\n"
-    "     conclusion convert karo. Jargon-bomb mat karo.\n"
-    "  7. End mein 1 short follow-up offer (max 60 chars):\n"
-    "     \"Deep karna ho toh batao.\" / \"Timing chahiye toh puchho.\"\n"
-    "     / \"Remedy bhi chahiye?\". Variety rakho (Rule 9 follow karo).\n"
+    "  1. PEHLI LINE = direct verdict / 1-line conclusion (≤100 chars).\n"
+    "     \"TL;DR:\" prefix lagana optional hai — better hai naturally\n"
+    "     verdict bolo. Example: \"Love strong hai, par stability mein\n"
+    "     ups-downs rahenge.\"\n"
+    "  2. MAX 3 BULLETS (3 hard cap, 4-va KABHI nahi).\n"
+    "  3. HAR BULLET = max 120 CHARS. Ek crisp insight per bullet,\n"
+    "     1 line. Multi-sentence dump mat karo.\n"
+    "  4. NO long paragraphs.\n"
+    "  5. NO technical overload — REPEAT ya same baat 2 jagah mat bolo.\n"
+    "  6. Insaan ki tarah baat karo, report ki tarah nahi.\n"
+    "  7. CTA optional — agar zaruri ho aur natural fit ho tabhi do\n"
+    "     (≤60 chars). Force mat karo.\n"
     "\n"
-    "GOLDEN RULE — Devotee 5 second mein samajh jaye. Agar samajhne mein\n"
-    "5 second se zyada laga = ANSWER FAILED.\n"
+    "STYLE — CHART-TECH JARGON BAN IN OUTPUT:\n"
     "\n"
-    "BALANCE — 20% analysis citation + 80% clarity. Citations ko evidence\n"
-    "ke liye use karo (\"5L Mangal lagna mein\"), explanation ke liye nahi.\n"
-    "Devotee ko \"isliye yeh hoga\" chahiye, na ki \"yeh planet yahan hai\n"
-    "isliye uska yeh effect hai jo is parivartan se aur badh jata hai...\".\n"
+    "  Internal analysis mein 5H/5L/7H/7L/Shukra/Guru/Mangal/D9/\n"
+    "  vargottama/parivartan/drishti/yoga sab USE karo (chart se evidence\n"
+    "  lo). LEKIN devotee-facing OUTPUT mein yeh terms KABHI mat likho.\n"
+    "  Output mein sirf inka NATURAL HINGLISH meaning bolo.\n"
+    "\n"
+    "  ❌ WRONG: \"5L Shukra 11H mein hai, isliye Mangal ki drishti se\n"
+    "             passion strong, par 5L-7L bridge weak hai\"\n"
+    "  ✅ RIGHT: \"Jaldi attach hote ho, passion high hai\"\n"
+    "  ✅ RIGHT: \"Stable relation late ya maturity ke baad banega\"\n"
+    "  ✅ RIGHT: \"Miscommunication ya distance issues aa sakte hain\"\n"
+    "\n"
+    "  Allowed in output (plain words): love, rishta, shaadi, partner,\n"
+    "  attraction, attachment, communication, distance, delay, maturity,\n"
+    "  stable, ups-downs, passion, trust, ego, time, phase. Bas.\n"
+    "\n"
+    "EXAMPLE OUTPUT (LOVE LENS — exactly is format mein):\n"
+    "\n"
+    "  Love strong hai, par stability mein ups-downs rahenge.\n"
+    "  - Jaldi attach hote ho, passion high hai\n"
+    "  - Miscommunication ya distance issues aa sakte hain\n"
+    "  - Stable relation late ya maturity ke baad banega\n"
+    "\n"
+    "GOLDEN RULE — Devotee 5 second mein samajh jaye. Agar 5 sec se\n"
+    "zyada laga = ANSWER FAILED.\n"
     "\n"
     "EXEMPTIONS:\n"
     "  • Single-fact answers (Rule 1) — pehle se 1-line, yeh apply NAHI.\n"
-    "  • Devotee EXPLICITLY \"detail mein batao\" / \"poora analysis do\" /\n"
-    "    \"vistaar se\" maange to brevity loosen kar sakte ho (4 bullets,\n"
-    "    250 chars each), par baseline default tight rakho.\n"
+    "  • Devotee EXPLICITLY \"detail mein batao\" / \"poora analysis do\"\n"
+    "    / \"vistaar se\" maange to chart-tech jargon allowed (sirf tab).\n"
     "\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 )
@@ -1014,13 +1029,15 @@ def _build_topic_lock(rule, kundli):
         if _brevity_on:
             brevity_tail = (
                 "\n"
-                "━━━ FINAL OUTPUT REMINDER (Rule 19 BREVITY) ━━━\n"
-                "• TL;DR: 1 line ≤100 chars (direct verdict)\n"
-                "• MAX 3 bullets, har bullet ≤150 chars\n"
-                "• Total response ≤600 chars (~120 words)\n"
-                "• Top 3 decision-relevant findings hi pick karo, "
-                "baki internal\n"
-                "• End mein 1 short follow-up offer (≤60 chars)\n"
+                "━━━ FINAL OUTPUT REMINDER (Rule 19 STRICT) ━━━\n"
+                "• Pehli line: direct verdict ≤100 chars (TL;DR prefix optional)\n"
+                "• MAX 3 bullets, har bullet ≤120 chars (1 line each)\n"
+                "• OUTPUT MEIN chart-tech jargon BAN: 5H/5L/7H/7L/Shukra/\n"
+                "  Guru/Mangal/D9/vargottama/drishti/parivartan/yoga\n"
+                "  KABHI mat likho — sirf plain Hinglish conclusion bolo\n"
+                "  (\"Jaldi attach hote ho\", \"Stable relation late banega\")\n"
+                "• Insaan ki tarah baat karo, report ki tarah nahi\n"
+                "• CTA optional — force mat karo\n"
                 "• Devotee 5 sec mein samajh jaye, warna fail\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             )
@@ -14133,17 +14150,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _model_pt.startswith("gpt-5")
                     or _model_pt.startswith(("o1", "o3", "o4"))
                 )
+                # Phase 2.8 — when Rule 19 BREVITY MODE is on, tighten
+                # the OpenAI sampling params per user's production spec:
+                #   temperature=0.4, top_p=0.9, max_tokens=300.
+                # These caps + the prompt-side rules together force a
+                # ChatGPT-level snappy output. When brevity is OFF we
+                # keep the legacy temp=0.3 / no other caps for backward
+                # compat with the deeper 4-bullet output style.
+                _brevity_for_call = _brevity_mode_enabled()
                 _create_kwargs_pt = {
                     "model":    _model_pt,
                     "messages": _msgs_pt,
                 }
                 if not _is_new_model_pt:
-                    _create_kwargs_pt["temperature"] = 0.3
+                    _create_kwargs_pt["temperature"] = (
+                        0.4 if _brevity_for_call else 0.3
+                    )
+                    if _brevity_for_call:
+                        _create_kwargs_pt["top_p"] = 0.9
+                        _create_kwargs_pt["max_tokens"] = 300
                 _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
 
                 _trace(req_id, "PASSTHROUGH.OPENAI_DONE", {
                     "text_chars": len(_text_pt),
+                    "brevity":    _brevity_for_call,
                 })
 
                 # Phase 2.3 Tier-1 — strip residual AI-tells (Rules 2 + 15
@@ -17325,8 +17356,17 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "stream":   True,
                 "timeout":  _PRIMARY_LLM_TIMEOUT_S,
             }
+            # Phase 2.8 — mirror sync passthrough: temp=0.4 / top_p=0.9 /
+            # max_tokens=300 when Rule 19 BREVITY is on. Keeps streaming
+            # output identical in tightness to the non-streaming path.
+            _brevity_for_call_s = _brevity_mode_enabled()
             if not _is_new_model_pt_s:
-                _create_kwargs_pt_s["temperature"] = 0.3
+                _create_kwargs_pt_s["temperature"] = (
+                    0.4 if _brevity_for_call_s else 0.3
+                )
+                if _brevity_for_call_s:
+                    _create_kwargs_pt_s["top_p"] = 0.9
+                    _create_kwargs_pt_s["max_tokens"] = 300
 
             _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)
 

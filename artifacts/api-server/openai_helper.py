@@ -250,62 +250,66 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         except Exception as _exc:
             print(f"[passthrough_marriage] jaimini UL inject failed: {_exc}")
 
-        # Phase 2.8.28 — STRICT OUTPUT RULES (high-priority, end-of-block).
-        # Earlier ★AUTHORITY★ + >>>NARRATE<<< directives sit mid-block and
-        # the LLM was paraphrasing/inventing reasons (e.g. "parivar bhumika
-        # jud jayegi" — never said by engine). These end-of-block RULES are
-        # the LAST thing the LLM reads before generating, so they have the
-        # strongest steering effect. Validator (post-injector) is a 2nd
-        # safety net in case LLM still drifts.
+        # Phase 2.8.29 — NARRATIVE GURU style override (replaces 2.8.28
+        # bullet template). Engine facts upar truth hain; LLM ka kaam un
+        # facts ko warm Hinglish prose mein TRANSLATE karna hai. Numbers/
+        # band-labels user ko nahi dikhane — internal facts only. Bullets
+        # ban for emotional/predictive Qs. Validator (post-injector) catches
+        # verdict-flip + overconfidence as safety net.
         _strict_rules = (
             "\n"
             "════════════════════════════════════════════════════════════════════\n"
-            "OUTPUT RULES (violation = answer rejected, do NOT break):\n"
-            "1. Reply SHORT — user ne 1 line pucha, tum 4-6 line do. No fluff.\n"
-            "2. Confidence BAND word (WEAK/MEDIUM/STRONG) verbatim likhna hai.\n"
-            "3. Sirf above-listed engine reasons cite karo. Naya astrological\n"
-            "   reason invent karna FORBIDDEN. 'Parivar', 'family bhumika',\n"
-            "   'aakhir mein jud jayegi' jaisi invented baatein BANNED.\n"
-            "4. Jaimini UL verdict ek line mein narrate karna MANDATORY\n"
-            "   (UL sign + verdict tag dono mention karo).\n"
-            "5. Max 6 bullets total. Tone: calm guru, not over-confident.\n"
+            "OUTPUT STYLE — NARRATIVE GURU (Phase 2.8.29):\n"
+            "════════════════════════════════════════════════════════════════════\n"
+            "Tumhara role: TRANSLATOR. Upar diye gaye engine facts (verdict,\n"
+            "band, reasons, UL) TRUTH hain — un par contradict NAHI karna,\n"
+            "par unhe warm Hinglish narrative prose mein convert karna hai.\n"
             "\n"
-            "FEW-SHOT TEMPLATE (copy this EXACT structure — only swap facts):\n"
+            "ALLOWED (must do):\n"
+            " - Verdict (LOVE/ARRANGED/MIXED) ko natural language mein convey\n"
+            "   karo: 'naturally develop hoga', 'family ke through final',\n"
+            "   'aap start, family finish'. Verdict word literal mention\n"
+            "   zaroori nahi — feel sahi aana chahiye.\n"
+            " - Confidence ko TONE mein dikhao: WEAK = 'mild jhukav / strong\n"
+            "   push nahi', MEDIUM = 'clear sanket', STRONG = 'prabal sanket'.\n"
+            " - Engine reasons ko REAL-LIFE IMPACT mein translate karo:\n"
+            "     'D9 Venus+Rahu' -> 'aap apni choice se emotionally connect'\n"
+            "     'KP 7th CSL signifies 5H' -> 'rishta naturally develop hoga'\n"
+            "     'KP 5th CSL signifies 6H' -> 'thoda imbalance / delay risk'\n"
+            " - UL signal ko 1 soft line mein mention: 'aage marriage life\n"
+            "   stable / strained / mixed feel degi'. Sign name optional.\n"
+            " - Flow: FEELING capture -> CAUSE (graha/dasha natural inline)\n"
+            "   -> PATTERN (real-life impact) -> FUTURE hint (soft timing)\n"
+            "   -> GENTLE advice. 4-6 sentences, ek paragraph (max do).\n"
+            "\n"
+            "FORBIDDEN (validator will block/auto-correct):\n"
+            " X Verdict FLIP: engine LOVE bola to 'arranged hi hoga' MAT bolo.\n"
+            "   Engine ARRANGED bola to 'pure love marriage hogi' MAT bolo.\n"
+            " X Overconfident absolutes: '100%', 'pakka hoga', 'guarantee',\n"
+            "   'definitely will', 'zaroor hoga' BANNED. Use: 'strong\n"
+            "   indication', 'clear sanket', 'natural inclination'.\n"
+            " X Bullets/lists (•, -, *, numbered) — flowing prose chahiye.\n"
+            " X Number leaks: '48/100', '/100', percentages — NEVER show.\n"
+            " X Band labels verbatim: 'WEAK', 'MEDIUM', 'STRONG' words user\n"
+            "   ko mat dikhao — feeling/tone mein dikhao instead.\n"
+            " X Invented facts: 'parivar bhumika jud jayegi', 'family\n"
+            "   eventually will join' — engine ne kabhi nahi kaha = BANNED.\n"
+            " X Harsh negatives: 'nahi hoga', 'asambhav' — use 'pattern\n"
+            "   thoda different hai', 'strong push nahi hai'.\n"
+            "\n"
+            "WORKED EXAMPLE (engine: VERDICT=LOVE, BAND=WEAK, reasons include\n"
+            "D9 Venus+Rahu and KP 7th CSL Sun->5H, negation KP 5th CSL\n"
+            "Venus->6H, UL=Capricorn NEUTRAL):\n"
             "─────────────────────────────────────────────────\n"
-            "Aapki kundli <VERDICT_TYPE> marriage ki taraf jhukti hai, par "
-            "confidence <BAND> (<SCORE>/100) — pakki guarantee nahi.\n"
-            "\n"
-            "<VERDICT_TYPE> ke sanket:\n"
-            "• <engine reason 1 — verbatim>\n"
-            "• <engine reason 2 — verbatim>\n"
-            "\n"
-            "Saavdhani: <negation factor from engine — verbatim>.\n"
-            "\n"
-            "Jaimini UL <SIGN> — <VERDICT_TAG> signal.\n"
-            "\n"
-            "Conclusion: <1 line empathic summary + actionable note>.\n"
-            "─────────────────────────────────────────────────\n"
-            "\n"
-            "WORKED EXAMPLE (kis tarah real engine data plug karte hain):\n"
-            "If engine says VERDICT=LOVE, BAND=WEAK, SCORE=48, reasons "
-            "include 'D9 Venus+Rahu same sign' and 'KP 7th CSL Sun→5H', "
-            "negation 'KP 5th CSL Venus→6H break risk', UL=Capricorn NEUTRAL,\n"
-            "then ideal answer is:\n"
-            "─────────────────────────────────────────────────\n"
-            "Aapki kundli LOVE marriage ki taraf jhukti hai, par confidence "
-            "WEAK (48/100) — pakki guarantee nahi.\n"
-            "\n"
-            "LOVE ke sanket:\n"
-            "• D9 navamsha mein Venus + Rahu saath — love confirm\n"
-            "• KP 7th sub-lord Sun, 5th house (prem-bhav) ko deta hai\n"
-            "\n"
-            "Saavdhani: 5th sub-lord Venus 6th house bhi deta hai — break "
-            "ya delay ka risk hai.\n"
-            "\n"
-            "Jaimini UL Capricorn — NEUTRAL signal.\n"
-            "\n"
-            "Conclusion: Sahi insaan aur sahi time mile to LOVE marriage hogi, "
-            "lekin patience zaroori — strong push nahi hai.\n"
+            "Dekho, aapke case mein ek interesting pattern dikh raha hai —\n"
+            "aap apni choice se emotionally connect karte ho aur wahi\n"
+            "connection rishte ko shape deta hai. Lekin abhi jo phase chal\n"
+            "raha hai usme thoda imbalance hai, isliye decision aaram se aur\n"
+            "natural tarike se aayega — koi formal setup se nahi. Family ka\n"
+            "role baad mein aayega, par direction aapki khud ki rahegi. Aage\n"
+            "chal ke marriage life neutral-stable feel degi — bahut intense\n"
+            "bhi nahi, troubled bhi nahi. Bas jaldi mein commitment se\n"
+            "bachna, kyunki clarity dheere-dheere strong hogi.\n"
             "─────────────────────────────────────────────────\n"
             "════════════════════════════════════════════════════════════════════\n"
         )
@@ -318,16 +322,24 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
 
 
 # ════════════════════════════════════════════════════════════════════
-# Phase 2.8.28 — Marriage answer validator (post-injector).
-# Pure deterministic check on LLM output. NO extra LLM calls.
+# Phase 2.8.29 — Marriage answer validator (post-injector, NARRATIVE mode).
+# Pure deterministic checks on LLM output. NO extra LLM calls.
+# Architecture: Engine = Truth (locked) | LLM = Translator | Validator = Guard.
 # ════════════════════════════════════════════════════════════════════
 def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
-    """Auto-fix LLM marriage answer to enforce engine fidelity.
+    """Auto-fix LLM marriage answer to enforce engine fidelity (narrative).
 
-    Three checks (all deterministic, regex/string only):
-      1. Strip invented phrases the engine never said (parivar/family fluff).
-      2. If confidence BAND keyword missing → append "Confidence: <BAND>".
-      3. If Jaimini UL not narrated → append "Jaimini UL: <sign> — <verdict>".
+    Six checks (all deterministic, regex/string only):
+      1. Strip invented phrases (parivar/family fluff engine never said).
+      2. Strip number leaks ('48/100', percentages — numbers must stay hidden).
+      3. Strip band-label verbatim ('WEAK'/'MEDIUM'/'STRONG' words user
+         shouldn't see — feeling/tone instead).
+      4. Soften overconfident absolutes ('100%', 'guarantee', 'pakka hoga'
+         -> 'strong indication').
+      5. Detect verdict-flip — if engine says LOVE but answer dominantly
+         pushes ARRANGED (or vice-versa), prepend a corrective opening line.
+      6. Soft UL append — only if LLM completely skips marriage-life
+         outlook line; uses narrative phrasing not technical "Jaimini UL".
 
     Safe fallback: any failure returns original text unchanged.
     Token cost: ZERO (no API calls). String ops only.
@@ -341,7 +353,9 @@ def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
 
         # ── Extract engine facts from block ────────────────────────────
         band_m = _re_v.search(r'band:\s*(WEAK|MEDIUM|STRONG)', engine_block, _re_v.I)
-        score_m = _re_v.search(r'CONFIDENCE\s*:\s*(\d+)\s*/\s*100', engine_block, _re_v.I)
+        vt_m = _re_v.search(
+            r'VERDICT TYPE\s*:\s*(LOVE|ARRANGED|MIXED)', engine_block, _re_v.I
+        )
         ul_sign_m = _re_v.search(r'Jaimini Upapada \(UL=A12\):\s*(\w+)', engine_block)
         # UL verdict tag is a fixed enum (STABLE/STRAINED/MIXED/NEUTRAL)
         # which uniquely identifies the UL VERDICT line vs other VERDICT
@@ -351,55 +365,142 @@ def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
         )
 
         band = band_m.group(1).upper() if band_m else ""
-        score = score_m.group(1) if score_m else ""
+        engine_verdict = vt_m.group(1).upper() if vt_m else ""
         ul_sign = ul_sign_m.group(1) if ul_sign_m else ""
         ul_verdict = ul_verdict_m.group(1) if ul_verdict_m else ""
 
-        # ── 1. Strip invented phrases (engine never said these) ────────
-        # Patterns: bullet OR plain line containing "parivar/family"
-        # combined with "jud/join/aakhir/eventually/finally". Matches
-        # bullet glyphs (•, -, *) and Markdown bullet markers.
-        _STRIP = [
+        _stripped = {"fluff": 0, "numbers": 0, "bands": 0, "softened": 0}
+        _appended = []
+        _flipped = False
+
+        # ── 1. Strip invented fluff phrases (engine never said these) ──
+        _STRIP_FLUFF = [
             r'^[\s•\-\*]*[^\n]*\b[Pp]arivar\b[^\n]*\b(jud|jhuk|aakhir|saath)\b[^\n]*\n?',
             r'^[\s•\-\*]*[^\n]*\b[Ff]amily\b[^\n]*\b(eventually|finally|will\s+join|bhumika)\b[^\n]*\n?',
         ]
-        _stripped_count = 0
-        for pat in _STRIP:
+        for pat in _STRIP_FLUFF:
             new_out, n = _re_v.subn(pat, '', out, flags=_re_v.MULTILINE)
             if n:
-                _stripped_count += n
+                _stripped["fluff"] += n
                 out = new_out
+
+        # ── 2. Strip number leaks (engine numbers must stay hidden) ────
+        # Patterns: "48/100", "(48/100)", "48 percent", "48%", "Confidence: 48"
+        _NUM_PATTERNS = [
+            r'\s*\(\s*\d{1,3}\s*/\s*100\s*\)',           # "(48/100)"
+            r'\s*\d{1,3}\s*/\s*100\b',                    # "48/100"
+            r'\s*\d{1,3}\s*%',                            # "48%"
+            r'\b[Cc]onfidence\s*[:=]\s*\d{1,3}\b',        # "Confidence: 48"
+            r'\b[Ss]core\s*[:=]\s*\d{1,3}\b',             # "Score: 48"
+        ]
+        for pat in _NUM_PATTERNS:
+            new_out, n = _re_v.subn(pat, '', out)
+            if n:
+                _stripped["numbers"] += n
+                out = new_out
+
+        # ── 3. Strip verbatim band labels (user shouldn't see WEAK/etc) ─
+        # Only strip when used as a label (with confidence/band keyword
+        # nearby OR in parens). Don't strip "weak push" type phrases.
+        _BAND_PATTERNS = [
+            r'\s*\(\s*(WEAK|MEDIUM|STRONG)\s*\)',
+            r'\b[Cc]onfidence\s*[:=\(\s]+\s*(WEAK|MEDIUM|STRONG)\b\.?',
+            r'\bband\s*[:=\(\s]+\s*(WEAK|MEDIUM|STRONG)\b\.?',
+            r'\b(WEAK|MEDIUM|STRONG)\s*confidence\b',
+        ]
+        for pat in _BAND_PATTERNS:
+            new_out, n = _re_v.subn(pat, '', out, flags=_re_v.IGNORECASE)
+            if n:
+                _stripped["bands"] += n
+                out = new_out
+
+        # ── 4. Soften overconfident absolutes ──────────────────────────
+        _OVERCONF = [
+            (r'\b100\s*%\b',                       'strong'),
+            (r'\bguarantee[ds]?\b',                'strong indication'),
+            (r'\bpakka\s+hoga\b',                  'strong indication hai'),
+            (r'\bdefinitely\s+(will|hoga|hogi)\b', 'strong indication hai ki'),
+            (r'\bzaroor\s+(hoga|hogi)\b',          'natural inclination hai'),
+            (r'\bpakki\s+guarantee\b',             'strong indication'),
+        ]
+        for pat, repl in _OVERCONF:
+            new_out, n = _re_v.subn(pat, repl, out, flags=_re_v.IGNORECASE)
+            if n:
+                _stripped["softened"] += n
+                out = new_out
+
         out = out.strip()
 
-        _appended = []
+        # ── 5. Verdict-flip detection (BLOCK + prefix correction) ──────
+        # If engine says LOVE but answer dominantly says "arranged" with
+        # no love-leaning phrase, prepend correction. Mirror for ARRANGED.
+        if engine_verdict == "LOVE":
+            arranged_dominant = bool(_re_v.search(
+                r'\b(arrange(d)?\s+marriage\s+hi|arrange(d)?\s+hi\s+hoga|'
+                r'family\s+(hi\s+)?(decide|tay)|formal\s+setup\s+(hi|se)\s+hoga)\b',
+                out, _re_v.IGNORECASE
+            ))
+            love_signal_present = bool(_re_v.search(
+                r'\b(love|naturally\s+develop|aap(ki)?\s+choice|'
+                r'emotional(ly)?\s+connect|aap\s+start|khud\s+ki)\b',
+                out, _re_v.IGNORECASE
+            ))
+            if arranged_dominant and not love_signal_present:
+                out = (
+                    "Aapki kundli mein love-marriage ki taraf jhukav strong hai — "
+                    "rishta apni choice se naturally develop hone ka pattern hai. "
+                    + out
+                )
+                _flipped = True
+        elif engine_verdict == "ARRANGED":
+            love_dominant = bool(_re_v.search(
+                r'\b(pure\s+love\s+marriage|love\s+marriage\s+(hi\s+)?hogi|'
+                r'aap(ki)?\s+choice\s+se\s+hi)\b',
+                out, _re_v.IGNORECASE
+            ))
+            arranged_signal_present = bool(_re_v.search(
+                r'\b(arrange|family|formal\s+setup|structured|'
+                r'parents?\s+(decide|finalize))\b',
+                out, _re_v.IGNORECASE
+            ))
+            if love_dominant and not arranged_signal_present:
+                out = (
+                    "Aapki kundli mein arranged-style settle ka pattern strong hai — "
+                    "family ke through hi rishta final hone ke chances zyada. "
+                    + out
+                )
+                _flipped = True
 
-        # ── 2. Confidence band check ───────────────────────────────────
-        if band:
-            ans_low = out.lower()
-            band_present = band.lower() in ans_low
-            score_present = bool(score) and (score in out)
-            if not band_present and not score_present:
-                if score:
-                    out += f"\n\nConfidence: {band} ({score}/100)."
-                else:
-                    out += f"\n\nConfidence: {band}."
-                _appended.append("confidence")
-
-        # ── 3. UL narration check ──────────────────────────────────────
+        # ── 6. Soft UL append (only if LLM totally skipped outlook) ────
+        # Old: append technical "Jaimini UL: X — Y". New: narrative line
+        # IF and only if no marriage-life outlook phrase present.
         if ul_sign and ul_verdict:
             ans_low = out.lower()
-            ul_present = (
+            outlook_present = (
                 'upapada' in ans_low
-                or _re_v.search(r'\bul\b', ans_low) is not None
+                or 'marriage life' in ans_low
+                or 'rishte ki life' in ans_low
+                or 'shaadi ke baad' in ans_low
                 or ul_sign.lower() in ans_low
+                or ul_verdict.lower() in ans_low
             )
-            if not ul_present:
-                out += f"\nJaimini UL: {ul_sign} — {ul_verdict}."
-                _appended.append("ul")
+            if not outlook_present:
+                _UL_NARRATIVE = {
+                    "STABLE":   "Aage marriage life stable rahegi.",
+                    "STRAINED": "Aage marriage life mein thoda effort lagega.",
+                    "MIXED":    "Aage marriage life mein ups-downs dono honge.",
+                    "NEUTRAL":  "Aage marriage life balanced rahegi — "
+                                "bahut intense bhi nahi, troubled bhi nahi.",
+                }
+                tail = _UL_NARRATIVE.get(ul_verdict, "")
+                if tail:
+                    out = out.rstrip() + " " + tail
+                    _appended.append("ul_soft")
 
-        if _stripped_count or _appended:
-            print(f"[validate_marriage] stripped={_stripped_count} "
-                  f"appended={_appended} band={band} score={score} "
+        if any(_stripped.values()) or _appended or _flipped:
+            print(f"[validate_marriage] stripped={_stripped} "
+                  f"appended={_appended} flipped={_flipped} "
+                  f"engine_verdict={engine_verdict} band={band} "
                   f"ul={ul_sign}/{ul_verdict}")
         return out
     except Exception as _vexc:
@@ -735,6 +836,40 @@ _PT_SYS_INTRO = (
     "kundli mein D9 data missing), to chup-chap skip karo — Rule 11 "
     "(no hallucination) supreme hai. Single-fact answers (Rule 1) "
     "mein yeh framework apply NAHI karo — woh 1-line hi rahein.\n"
+    "\n"
+    "20. NARRATIVE-FLOW (Phase 2.8.29) — emotional / predictive / "
+    "life-event questions (love, marriage, dhoka, breakup, career-fear, "
+    "health-worry, future timing, relationships, family-tension) ke jawab "
+    "mein NARRATIVE PROSE prefer karo, bullets nahi. Flow:\n"
+    "   FEELING capture (acknowledge user's emotion in your own words, "
+    "never repeat their sentence) -> CAUSE (graha/dasha — natural inline "
+    "mention, no jargon dump) -> PATTERN (real-life impact) -> FUTURE "
+    "hint (soft timing, not exact dates unless given) -> GENTLE advice "
+    "(practical behavior, not generic).\n"
+    "   - 4-6 sentences, ek paragraph (max do).\n"
+    "   - Numbers / percentages USER ko mat dikhao — score (48/100), "
+    "band labels (WEAK/MEDIUM/STRONG verbatim), 'confidence' word "
+    "USER-FACING text mein BANNED. Internal facts only.\n"
+    "   - Confidence ko TONE mein dikhao: WEAK = 'mild jhukav / strong "
+    "push nahi', MEDIUM = 'clear sanket', STRONG = 'prabal sanket'.\n"
+    "   - Bullets sirf TECHNICAL lookups mein (planet positions, yoga "
+    "list, transit dates, Rule 18 deep-chart 4-bullet detail) — "
+    "emotional/predictive Qs mein flowing prose hi rakho.\n"
+    "   - Soft language for negatives: 'pattern thoda different hai', "
+    "'strong indication nahi hai' use karo — 'nahi hoga' / 'asambhav' "
+    "AVOID.\n"
+    "   - Overconfident absolutes BANNED: '100%', 'pakka hoga', "
+    "'guarantee', 'definitely will', 'zaroor hoga'. Use: 'strong "
+    "indication', 'clear sanket', 'natural inclination'.\n"
+    "   - Direct accusations BANNED for trust questions ('haan dhoka "
+    "de raha hai' MAT bolo) — explain pattern instead ('trust aur "
+    "clarity ka issue dikh raha hai').\n"
+    "   - Core principle: User ko ANSWER nahi — EXPERIENCE milna "
+    "chahiye. Calm, samajhne wala, judge nahi karta wala tone. Like a "
+    "real Vedic guru baith ke baat kar raha — not corporate / robotic.\n"
+    "   - Single-fact lookup answers (Rule 1) aur pure technical "
+    "queries (planet positions, dasha tables, yoga checks) ke liye "
+    "yeh rule LAGU NAHI — woh factual concise answers hi rahein.\n"
     "\n"
     "Safety rails kundli ke ant mein diye hain.\n\n"
 )

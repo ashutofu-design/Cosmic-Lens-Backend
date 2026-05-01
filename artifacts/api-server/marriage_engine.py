@@ -260,6 +260,327 @@ def _d9_seventh_lord_info(kundli: dict) -> dict:
     }
 
 
+# ── Phase 2.8.18 — Marriage Focus Block layers ──────────────────────────────
+# Six new helpers fill gaps in the per-user A-H spec:
+#   A. Per-planet KP YES/NO weighted scan (was: only 7th CSL)
+#   D. SAV(H7/H2/H11) bhava strength
+#   D. Vargottam check for Venus/Jupiter/Mars/7L
+#   D. Argala on H7 verdict
+#   F. Saturn current transit aspecting H7 (was: only natal Saturn)
+#   H. Spouse description synthesis
+
+# Sign nature lookup (for spouse description)
+_SIGN_NATURE = {
+    "Aries":       ("movable", "fire",  "masculine"),
+    "Taurus":      ("fixed",   "earth", "feminine"),
+    "Gemini":      ("dual",    "air",   "masculine"),
+    "Cancer":      ("movable", "water", "feminine"),
+    "Leo":         ("fixed",   "fire",  "masculine"),
+    "Virgo":       ("dual",    "earth", "feminine"),
+    "Libra":       ("movable", "air",   "masculine"),
+    "Scorpio":     ("fixed",   "water", "feminine"),
+    "Sagittarius": ("dual",    "fire",  "masculine"),
+    "Capricorn":   ("movable", "earth", "feminine"),
+    "Aquarius":    ("fixed",   "air",   "masculine"),
+    "Pisces":      ("dual",    "water", "feminine"),
+}
+
+
+def _maybe_sav_marriage(kundli: dict, lagna_sign_idx: Optional[int]) -> dict:
+    """Extract SAV bindus for H7 (kalatra), H2 (kutumb), H11 (gains/desires),
+    plus H8 (samanya marriage karaka) and H12 (bed pleasures).
+    Returns {} or {"_error": str} on failure."""
+    if lagna_sign_idx is None:
+        return {}
+    try:
+        from ashtakavarga import compute_ashtakavarga
+        av = compute_ashtakavarga(kundli.get("planets") or [], lagna_sign_idx)
+        if not av or "sav" not in av:
+            return {}
+        sav = av["sav"]
+        verdicts = av.get("verdicts", {})
+        return {
+            "h7":  {"value": sav[6],  "band": verdicts.get(7,  "")},
+            "h2":  {"value": sav[1],  "band": verdicts.get(2,  "")},
+            "h11": {"value": sav[10], "band": verdicts.get(11, "")},
+            "h8":  {"value": sav[7],  "band": verdicts.get(8,  "")},
+            "h12": {"value": sav[11], "band": verdicts.get(12, "")},
+        }
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _maybe_vargottam_marriage(kundli: dict, seventh_lord: str) -> dict:
+    """Vargottam check for marriage-relevant planets: Venus, Jupiter, Mars, 7L.
+    A planet is vargottam if its D1 sign equals D9 sign — power doubled.
+    Tier from compute_vargottama_matrix:
+      truly-powerful = vargottam in 5+ vargas (BPHS — extraordinarily strong)
+      vargottam      = D1==D9 specifically (classical marriage definition)
+      supported      = >=2 vargas (D1 + 1 other)
+      weak           = <2 (treated as no vargottam)
+    Returns {} or {"_error": str} on failure."""
+    try:
+        from divisional_charts import compute_vargottama_matrix
+        planets = kundli.get("planets") or []
+        if not planets:
+            return {}
+        matrix = compute_vargottama_matrix(planets, lagna_lon=None) or {}
+        if not matrix:
+            return {}
+        relevant = ["Venus", "Jupiter", "Mars"]
+        if seventh_lord and seventh_lord not in relevant:
+            relevant.append(seventh_lord)
+        out = {}
+        for p in relevant:
+            info = matrix.get(p) or {}
+            vargas = info.get("vargas") or []
+            d1_d9  = "D9" in vargas
+            count  = len(vargas)
+            if count >= 5:
+                tier = "truly-powerful"
+            elif d1_d9:
+                tier = "vargottam"
+            elif count >= 2:
+                tier = "supported"
+            else:
+                tier = "weak"
+            out[p] = {
+                "d1_d9_vargottam": d1_d9,
+                "vargas_count":    count,
+                "vargas":          vargas,
+                "tier":            tier,
+            }
+        return out
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _maybe_argala_marriage(kundli: dict, lagna_sign_name: Any) -> dict:
+    """Compute Argala / Virodhargala verdict on H7 (kalatra bhava).
+    Returns {} or {"_error": str} on failure."""
+    try:
+        from argala import compute_argala
+        argala = compute_argala(kundli.get("planets") or [], lagna_sign_name)
+        if not argala:
+            return {}
+        h7 = argala.get(7) or {}
+        return {
+            "h7_overall":       h7.get("overall", "NEUTRAL"),
+            "h7_benefic_score": h7.get("benefic_score", 0),
+            "h7_malefic_score": h7.get("malefic_score", 0),
+            "h7_paap_argala":   (h7.get("paap_argala") or {}).get("verdict", ""),
+        }
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _maybe_saturn_transit_h7(lagna_sign_idx: Optional[int]) -> dict:
+    """Check whether current Saturn (sidereal) sits in or aspects natal H7.
+    Saturn aspects 3rd, 7th, and 10th houses from itself (graha-drishti).
+    Returns {} or {"_error": str} on failure."""
+    if lagna_sign_idx is None:
+        return {}
+    try:
+        import swisseph as swe  # type: ignore
+        from datetime import timezone
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        now = datetime.now(timezone.utc)
+        ut  = now.hour + now.minute / 60.0 + now.second / 3600.0
+        jd  = swe.julday(now.year, now.month, now.day, ut)
+        res, _ = swe.calc_ut(jd, swe.SATURN, swe.FLG_SIDEREAL)
+        sat_sign_idx = int((res[0] % 360) / 30)
+        h7_sign_idx  = (int(lagna_sign_idx) + 6) % 12
+        sat_aspect_signs = [
+            (sat_sign_idx + 2) % 12,  # 3rd aspect
+            (sat_sign_idx + 6) % 12,  # 7th aspect
+            (sat_sign_idx + 9) % 12,  # 10th aspect
+        ]
+        sat_in_h7      = (sat_sign_idx == h7_sign_idx)
+        sat_aspects_h7 = (h7_sign_idx in sat_aspect_signs and not sat_in_h7)
+        return {
+            "saturn_sign_idx":   sat_sign_idx,
+            "saturn_sign":       SIGNS[sat_sign_idx],
+            "h7_sign":           SIGNS[h7_sign_idx],
+            "saturn_in_h7":      sat_in_h7,
+            "saturn_aspects_h7": sat_aspects_h7,
+            "blocking":          (sat_in_h7 or sat_aspects_h7),
+        }
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _per_planet_kp_scan(sigs: dict, seventh_lord: str) -> dict:
+    """Per-planet KP YES/NO classification with weighted scoring.
+
+    Classification (union of NL.pl + sub_lord.sb_houses + ss_houses + sign_lord.sl):
+      YES     = signifies houses 2/7/11 only
+      NO      = signifies houses 6/8/12 only
+      MIXED   = signifies BOTH groups (counted half each in weight)
+      NEUTRAL = signifies neither
+
+    Weights (BPHS-aligned for marriage):
+      7L              -> 2.0  (highest)
+      Venus, Jupiter  -> 1.5  (primary karakas)
+      Others          -> 1.0
+
+    Final verdict:
+      STRONG-YES   = yes_weighted >= 2x no_weighted AND yes_weighted >= 3
+      STRONG-NO    = no_weighted  >= 2x yes_weighted AND no_weighted  >= 3
+      TILTED-YES   = yes_weighted > no_weighted
+      TILTED-NO    = no_weighted  > yes_weighted
+      BALANCED     = otherwise
+
+    Returns {} on empty input or {"_error": str} on internal failure."""
+    if not sigs:
+        return {}
+    try:
+        yes_houses = {2, 7, 11}
+        no_houses  = {6, 8, 12}
+
+        yes_planets:     list = []
+        no_planets:      list = []
+        mixed_planets:   list = []
+        neutral_planets: list = []
+        yes_weighted = 0.0
+        no_weighted  = 0.0
+        per_planet:  dict = {}
+
+        for pname, sig in (sigs or {}).items():
+            if not isinstance(sig, dict):
+                continue
+            bag = (set(sig.get("pl") or []) | set(sig.get("sb_houses") or [])
+                   | set(sig.get("ss_houses") or []) | set(sig.get("sl") or []))
+            if not bag:
+                continue
+            hits_yes = bag & yes_houses
+            hits_no  = bag & no_houses
+
+            if pname == seventh_lord:
+                w = 2.0
+            elif pname in ("Venus", "Jupiter"):
+                w = 1.5
+            else:
+                w = 1.0
+
+            if hits_yes and not hits_no:
+                classification = "YES"
+                yes_planets.append(pname)
+                yes_weighted += w
+            elif hits_no and not hits_yes:
+                classification = "NO"
+                no_planets.append(pname)
+                no_weighted  += w
+            elif hits_yes and hits_no:
+                classification = "MIXED"
+                mixed_planets.append(pname)
+                yes_weighted += w * 0.5
+                no_weighted  += w * 0.5
+            else:
+                classification = "NEUTRAL"
+                neutral_planets.append(pname)
+
+            per_planet[pname] = {
+                "classification": classification,
+                "weight":         w,
+                "hits_yes":       sorted(hits_yes),
+                "hits_no":        sorted(hits_no),
+            }
+
+        if yes_weighted >= no_weighted * 2 and yes_weighted >= 3:
+            verdict = "STRONG-YES"
+        elif no_weighted >= yes_weighted * 2 and no_weighted >= 3:
+            verdict = "STRONG-NO"
+        elif yes_weighted > no_weighted:
+            verdict = "TILTED-YES"
+        elif no_weighted > yes_weighted:
+            verdict = "TILTED-NO"
+        else:
+            verdict = "BALANCED"
+
+        return {
+            "yes_planets":     yes_planets,
+            "no_planets":      no_planets,
+            "mixed_planets":   mixed_planets,
+            "neutral_planets": neutral_planets,
+            "yes_weighted":    round(yes_weighted, 2),
+            "no_weighted":     round(no_weighted,  2),
+            "verdict":         verdict,
+            "per_planet":      per_planet,
+        }
+    except Exception as e:
+        return {"_error": str(e)}
+
+
+def _spouse_description(kundli: dict, intel: dict, d9_info: dict) -> dict:
+    """Synthesise structured spouse traits from:
+      - 7H sign nature (movable/fixed/dual + element + polarity)
+      - 7L placement house (life-area where spouse arrives from)
+      - Planets occupying H7
+      - A7 (Darapada) sign + lord (perception layer)
+      - Venus / Jupiter sign nature (karaka qualities)
+      - D9 7H sign + lord (true-marriage chart)
+
+    Returns dict — LLM narrates from these traits. Empty dict on any failure."""
+    try:
+        out: dict = {}
+        house_lords = {h.get("house"): h for h in (intel.get("house_lords") or [])}
+        pmap        = {p.get("name"): p for p in (kundli.get("planets") or []) if p.get("name")}
+
+        seventh = house_lords.get(7) or {}
+        seventh_sign = seventh.get("sign") or ""
+        if seventh_sign in _SIGN_NATURE:
+            nature = _SIGN_NATURE[seventh_sign]
+            out["h7_sign"]     = seventh_sign
+            out["h7_quality"]  = nature[0]
+            out["h7_element"]  = nature[1]
+            out["h7_polarity"] = nature[2]
+
+        seventh_lord = seventh.get("lord") or ""
+        if seventh_lord:
+            sl_pos = pmap.get(seventh_lord) or {}
+            out["sl_house"] = sl_pos.get("house")
+            out["sl_sign"]  = sl_pos.get("sign")
+
+        occupants = [p.get("name") for p in (kundli.get("planets") or [])
+                     if p.get("name") and p.get("house") == 7]
+        out["h7_occupants"] = occupants
+
+        # A7 (Darapada) — Jaimini perception layer
+        try:
+            from jaimini import compute_arudha_padas
+            ascendant = kundli.get("ascendant")
+            if isinstance(ascendant, dict):
+                ascendant = ascendant.get("sign") or ascendant.get("name")
+            ar = compute_arudha_padas(kundli.get("planets") or [], ascendant)
+            if isinstance(ar, dict):
+                a7 = (ar.get("padas") or {}).get("A7") or {}
+                if a7:
+                    out["a7_sign"] = a7.get("sign")
+                    out["a7_lord"] = a7.get("lord")
+        except Exception:
+            pass
+
+        venus = pmap.get("Venus")   or {}
+        jup   = pmap.get("Jupiter") or {}
+        if venus.get("sign"):
+            out["venus_sign"] = venus["sign"]
+            v_nat = _SIGN_NATURE.get(venus["sign"])
+            if v_nat: out["venus_nature"] = " ".join(v_nat)
+        if jup.get("sign"):
+            out["jupiter_sign"] = jup["sign"]
+            j_nat = _SIGN_NATURE.get(jup["sign"])
+            if j_nat: out["jupiter_nature"] = " ".join(j_nat)
+
+        if d9_info:
+            out["d9_7h_sign"] = d9_info.get("d9_7th_sign")
+            out["d9_7l"]      = d9_info.get("d9_7th_lord")
+            out["d9_7l_sign"] = d9_info.get("d9_lord_sign")
+
+        return out
+    except Exception as e:
+        return {"_error": str(e)}
+
+
 def assess_marriage(kundli: dict, intel: dict, kp: dict,
                     birth: Optional[dict] = None) -> dict:
     """
@@ -466,6 +787,34 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         except Exception as exc:
             trace.append(f"next_alt_window scan failed: {exc}")
 
+    # ── PHASE 2.8.18 helper invocations (focus block layers) ────────────────
+    # Compute the 6 new layers BEFORE scoring so their findings can adjust
+    # the score, but after KP / dasha / Jupiter trigger so the per-planet
+    # KP scan and saturn-transit checks see all dependencies.
+    sav_marr      = _maybe_sav_marriage(kundli, lagna_idx)
+    vargottam_m   = _maybe_vargottam_marriage(kundli, seventh_lord)
+    argala_h7     = _maybe_argala_marriage(kundli, asc_name)
+    saturn_trans  = _maybe_saturn_transit_h7(lagna_idx)
+    kp_per_planet = _per_planet_kp_scan(sigs, seventh_lord)
+    if sav_marr and "_error" not in sav_marr:
+        trace.append(f"SAV: H7={sav_marr.get('h7',{}).get('value')}({sav_marr.get('h7',{}).get('band')}), "
+                     f"H2={sav_marr.get('h2',{}).get('value')}, H11={sav_marr.get('h11',{}).get('value')}")
+    elif sav_marr.get("_error"):
+        trace.append(f"SAV unavailable: {sav_marr['_error']}")
+    if vargottam_m and "_error" not in vargottam_m:
+        vg_hits = [p for p, info in vargottam_m.items() if isinstance(info, dict) and info.get("d1_d9_vargottam")]
+        if vg_hits:
+            trace.append(f"Vargottam (D1=D9): {vg_hits}")
+    if argala_h7 and "_error" not in argala_h7:
+        trace.append(f"Argala on H7: {argala_h7.get('h7_overall')} (B={argala_h7.get('h7_benefic_score')}, M={argala_h7.get('h7_malefic_score')})")
+    if saturn_trans and "_error" not in saturn_trans and saturn_trans.get("blocking"):
+        why = "in" if saturn_trans.get("saturn_in_h7") else "aspecting"
+        trace.append(f"Saturn currently {why} natal H7 — commitment-check transit ACTIVE")
+    if kp_per_planet:
+        trace.append(f"KP per-planet: {kp_per_planet.get('verdict')} "
+                     f"(YES={kp_per_planet.get('yes_planets')}, NO={kp_per_planet.get('no_planets')}, "
+                     f"weighted yes={kp_per_planet.get('yes_weighted')} vs no={kp_per_planet.get('no_weighted')})")
+
     # ── STEP 5: SCORING ──────────────────────────────────────────────────────
     score = 50
     rs: list[str] = []
@@ -567,6 +916,67 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         score += 5
         rs.append(f"Current Dasha {cur_md}-{cur_ad} signifies 2/7/11 (window OPEN)")
 
+    # ── PHASE 2.8.18: Score adjustments from focus-block layers ─────────────
+    # SAV(H7) — declared spec: H7 value >=28 → +5, <=18 → -8
+    if sav_marr and isinstance(sav_marr.get("h7"), dict):
+        h7_val_raw = sav_marr["h7"].get("value")
+        try:
+            h7_val = int(h7_val_raw)
+        except (TypeError, ValueError):
+            h7_val = None
+        if h7_val is not None:
+            if h7_val >= 28:
+                score += 5; rs.append(f"SAV(H7)={h7_val} — STRONG kalatra bhava (>=28)")
+            elif h7_val <= 18:
+                score -= 8; rw.append(f"SAV(H7)={h7_val} — WEAK kalatra bhava (<=18)")
+    # Vargottam (D1=D9) for marriage planets — cap +6 total; weak D1!=D9 with 0 hits → -2 each
+    if vargottam_m and "_error" not in vargottam_m:
+        vg_bonus = 0
+        for p, info in vargottam_m.items():
+            if not isinstance(info, dict):
+                continue
+            if info.get("d1_d9_vargottam"):
+                vg_bonus += 3
+                rs.append(f"{p} vargottam (D1=D9) — power doubled in marriage")
+            elif info.get("tier") == "weak":
+                score -= 2
+                rw.append(f"{p} weak in vargas (no vargottam, <2 vargas) — kalatra-karyakarta dispersed")
+        score += min(vg_bonus, 6)
+    # Argala on H7 — declared: STRONG-BENEFIC +4, MILD-BENEFIC +2, MIXED -3, MILD-MALEFIC -3, STRONG-MALEFIC -5
+    if argala_h7 and isinstance(argala_h7, dict):
+        ov = argala_h7.get("h7_overall")
+        if ov == "STRONG-BENEFIC":
+            score += 4; rs.append("Argala on H7: STRONG-BENEFIC — kalatra-bhava well-supported")
+        elif ov == "MILD-BENEFIC":
+            score += 2; rs.append("Argala on H7: MILD-BENEFIC — mild benefic support")
+        elif ov == "MIXED":
+            score -= 3; rw.append("Argala on H7: MIXED — divided support")
+        elif ov == "MILD-MALEFIC":
+            score -= 3; rw.append("Argala on H7: MILD-MALEFIC — minor obstruction on kalatra-bhava")
+        elif ov == "STRONG-MALEFIC":
+            score -= 5; rw.append("Argala on H7: STRONG-MALEFIC — kalatra-bhava under malefic pressure")
+    # Saturn current transit on H7 (separate from natal — the second of the
+    # double-transit pair; Jupiter handled by _maybe_jupiter_trigger above)
+    if saturn_trans and saturn_trans.get("blocking"):
+        score -= 4
+        why = "currently in" if saturn_trans.get("saturn_in_h7") else "currently aspecting"
+        delay_reasons.append(f"Saturn {why} natal H7 ({saturn_trans.get('saturn_sign')}) — commitment-check transit active")
+    # KP per-planet weighted scan
+    if kp_per_planet and kp_per_planet.get("verdict"):
+        v = kp_per_planet["verdict"]
+        if v == "STRONG-YES":
+            score += 6
+            rs.append(f"KP per-planet scan STRONG-YES (weighted yes={kp_per_planet['yes_weighted']} vs no={kp_per_planet['no_weighted']})")
+        elif v == "TILTED-YES":
+            score += 2
+            rs.append(f"KP per-planet scan TILTED-YES (yes={kp_per_planet['yes_weighted']} vs no={kp_per_planet['no_weighted']})")
+        elif v == "STRONG-NO":
+            score -= 8
+            rw.append(f"KP per-planet scan STRONG-NO (weighted no={kp_per_planet['no_weighted']} vs yes={kp_per_planet['yes_weighted']})")
+        elif v == "TILTED-NO":
+            score -= 3
+            rw.append(f"KP per-planet scan TILTED-NO (no={kp_per_planet['no_weighted']} vs yes={kp_per_planet['yes_weighted']})")
+
     score = max(0, min(100, score))
 
     # ── VERDICT ──────────────────────────────────────────────────────────────
@@ -599,12 +1009,30 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
     if jup_trig and (jup_trig.get("refined_window")
                      or jup_trig.get("jupiter_active_now")):
         data_bonus += 5                       # Jupiter trigger present
+    # PHASE 2.8.18: single +5 confidence bonus iff ALL 4 focus-block helpers ran clean.
+    # (kp_per_planet is treated as bonus data, not gated — it depends on KP availability.)
+    focus_helpers_clean = (
+        bool(sav_marr)     and "_error" not in sav_marr     and bool(sav_marr.get("h7"))
+        and bool(vargottam_m) and "_error" not in vargottam_m and len(vargottam_m) > 0
+        and bool(argala_h7)   and "_error" not in argala_h7   and bool(argala_h7.get("h7_overall"))
+        and bool(saturn_trans) and "_error" not in saturn_trans
+    )
+    if focus_helpers_clean:
+        data_bonus += 5
     confidence = min(97, 50 + data_bonus + abs(score - 50) // 4)
 
     # ── D9 NAVAMSA ───────────────────────────────────────────────────────────
     d9_info = _d9_seventh_lord_info(kundli)
     if d9_info:
         trace.append(f"D9 7th lord = {d9_info.get('d9_7th_lord')} in {d9_info.get('d9_lord_sign')} (D9 house {d9_info.get('d9_lord_house')})")
+
+    # ── PHASE 2.8.18: SPOUSE DESCRIPTION SYNTHESIS ──────────────────────────
+    spouse_desc = _spouse_description(kundli, intel, d9_info)
+    if spouse_desc:
+        trace.append(f"Spouse-desc synthesised: 7H={spouse_desc.get('h7_sign')}/"
+                     f"{spouse_desc.get('h7_quality')}/{spouse_desc.get('h7_element')}, "
+                     f"7L in H{spouse_desc.get('sl_house')}, "
+                     f"A7={spouse_desc.get('a7_sign')}, D9-7H={spouse_desc.get('d9_7h_sign')}")
 
     # ── REMEDY: pick weakest among (7L, karaka) ──────────────────────────────
     candidates = []
@@ -643,6 +1071,13 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
         "remedy_for_planet":    weakest_planet,
         "shadbala":             sb_breakdown,
         "jupiter_trigger":      jup_trig,
+        # ── Phase 2.8.18 focus-block layers ─────────────────────────────────
+        "sav_marriage":         sav_marr,
+        "vargottam_marriage":   vargottam_m,
+        "argala_h7":            argala_h7,
+        "saturn_transit_h7":    saturn_trans,
+        "kp_per_planet":        kp_per_planet,
+        "spouse_description":   spouse_desc,
         "logic_trace":          trace,
     }
 
@@ -680,8 +1115,134 @@ def _jup_line(v: dict) -> str:
     return out
 
 
-_MONTHS = ["", "January","February","March","April","May","June",
-              "July","August","September","October","November","December"]
+def _focus_block_lines(v: dict) -> str:
+    """Phase 2.8.18 — render the 6 new focus-block layers as a compact section
+    inside the AUTHORITATIVE MARRIAGE VERDICT block. All values come straight
+    from assess_marriage(); LLM treats them as locked facts (Rule O applies)."""
+    if not v:
+        return ""
+    lines: list[str] = []
+
+    # ── Layer A: Per-planet KP YES/NO scan ──────────────────────────────────
+    kpp = v.get("kp_per_planet") or {}
+    if kpp and kpp.get("verdict"):
+        yes_p = kpp.get("yes_planets") or []
+        no_p  = kpp.get("no_planets")  or []
+        mix_p = kpp.get("mixed_planets") or []
+        lines.append(
+            "  KP per-planet scan: {0} (weighted YES={1} vs NO={2})".format(
+                kpp.get("verdict"), kpp.get("yes_weighted"), kpp.get("no_weighted")
+            )
+        )
+        lines.append("    YES (signifies 2/7/11): " + (str(yes_p) if yes_p else "none"))
+        lines.append("    NO  (signifies 6/8/12): " + (str(no_p) if no_p else "none"))
+        if mix_p:
+            lines.append("    MIXED (both groups): " + str(mix_p))
+
+    # ── Layer D: SAV (H7/H2/H11) ────────────────────────────────────────────
+    sav = v.get("sav_marriage") or {}
+    if sav and "_error" not in sav:
+        h7  = sav.get("h7")  or {}
+        h2  = sav.get("h2")  or {}
+        h11 = sav.get("h11") or {}
+        h8  = sav.get("h8")  or {}
+        h12 = sav.get("h12") or {}
+        lines.append(
+            "  Sarvashtakavarga (marriage houses): "
+            "H7={0}({1}), H2={2}({3}), H11={4}({5}), H8={6}, H12={7}".format(
+                h7.get("value"), h7.get("band"),
+                h2.get("value"), h2.get("band"),
+                h11.get("value"), h11.get("band"),
+                h8.get("value"), h12.get("value"),
+            )
+        )
+
+    # ── Layer D: Vargottam check ────────────────────────────────────────────
+    vg = v.get("vargottam_marriage") or {}
+    if vg and "_error" not in vg:
+        parts: list[str] = []
+        for p, info in vg.items():
+            if not isinstance(info, dict):
+                continue
+            tier  = info.get("tier", "weak")
+            d1d9  = "vargottam" if info.get("d1_d9_vargottam") else "no"
+            count = info.get("vargas_count", 0)
+            parts.append("{0}={1}({2}v, D1-D9:{3})".format(p, tier, count, d1d9))
+        if parts:
+            lines.append("  Vargottam (marriage planets): " + ", ".join(parts))
+
+    # ── Layer D: Argala on H7 ───────────────────────────────────────────────
+    arg = v.get("argala_h7") or {}
+    if arg and "_error" not in arg and arg.get("h7_overall"):
+        paap = arg.get("h7_paap_argala") or ""
+        suffix = (" — " + paap) if paap else ""
+        lines.append(
+            "  Argala on H7 (kalatra-bhava): {0} (benefic={1}, malefic={2}){3}".format(
+                arg.get("h7_overall"),
+                arg.get("h7_benefic_score"),
+                arg.get("h7_malefic_score"),
+                suffix,
+            )
+        )
+
+    # ── Layer F: Saturn current transit on H7 ───────────────────────────────
+    st = v.get("saturn_transit_h7") or {}
+    if st and "_error" not in st:
+        if st.get("blocking"):
+            why = "in" if st.get("saturn_in_h7") else "aspecting"
+            lines.append(
+                "  Saturn TRANSIT: currently {0} natal H7 ({1}) "
+                "— commitment-check phase ACTIVE".format(
+                    why, st.get("saturn_sign")
+                )
+            )
+        else:
+            lines.append(
+                "  Saturn TRANSIT: currently in {0} "
+                "— no direct pressure on natal H7 ({1})".format(
+                    st.get("saturn_sign"), st.get("h7_sign")
+                )
+            )
+
+    # ── Layer H: Spouse description traits ─────────────────────────────────
+    sd = v.get("spouse_description") or {}
+    if sd and (sd.get("h7_sign") or sd.get("d9_7h_sign")):
+        bits: list[str] = []
+        if sd.get("h7_sign"):
+            bits.append(
+                "7H {0} ({1}/{2}/{3})".format(
+                    sd.get("h7_sign"), sd.get("h7_quality"),
+                    sd.get("h7_element"), sd.get("h7_polarity")
+                )
+            )
+        if sd.get("sl_house"):
+            bits.append("7L in H{0}/{1}".format(sd.get("sl_house"), sd.get("sl_sign")))
+        if sd.get("h7_occupants"):
+            bits.append("H7 occupants=" + str(sd.get("h7_occupants")))
+        if sd.get("a7_sign"):
+            bits.append("A7={0} (lord {1})".format(sd.get("a7_sign"), sd.get("a7_lord")))
+        if sd.get("venus_sign"):
+            bits.append("Venus in " + str(sd.get("venus_sign")))
+        if sd.get("jupiter_sign"):
+            bits.append("Jupiter in " + str(sd.get("jupiter_sign")))
+        if sd.get("d9_7h_sign"):
+            bits.append(
+                "D9-7H={0} (lord {1} in {2})".format(
+                    sd.get("d9_7h_sign"), sd.get("d9_7l"), sd.get("d9_7l_sign")
+                )
+            )
+        if bits:
+            lines.append("  Spouse traits (synthesise narration from these): " + "; ".join(bits))
+
+    if not lines:
+        return ""
+    header = "  ── PHASE 2.8.18 FOCUS-BLOCK LAYERS (locked, do not paraphrase numbers) ──"
+    return header + "\n" + "\n".join(lines) + "\n"
+
+
+_MONTHS = ["", "January", "February", "March", "April", "May", "June",
+           "July", "August", "September", "October", "November", "December"]
+
 
 def _ym_to_human(ym: str) -> str:
     """\"2025-12\" → \"December 2025\". Returns input unchanged if malformed."""
@@ -906,6 +1467,7 @@ def format_verdict_for_prompt(v: dict) -> str:
         f"  Current Dasha:    {v.get('current_dasha')} (supports 2/7/11 = {v.get('current_dasha_supports')})\n"
         f"{_shad_line(v)}"
         f"{_jup_line(v)}"
+        f"{_focus_block_lines(v)}"
         f"{nw_line}\n"
         f"{d9_line}\n"
         "  Strong supporting factors:\n"

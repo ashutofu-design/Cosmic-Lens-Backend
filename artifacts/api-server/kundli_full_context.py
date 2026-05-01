@@ -60,6 +60,47 @@ _PLANET_ORDER = (
     "Venus", "Saturn", "Rahu", "Ketu",
 )
 
+# Functional Benefic / Malefic / Yogakaraka / Neutral classification per
+# lagna, following the standard Parashari (BPHS) framework:
+#   • Lagna lord, trikona (5L/9L) lords -> functional benefic (FB).
+#   • Trika (6L/8L/12L) lords -> functional malefic (FM).
+#   • Single planet ruling BOTH a kendra (1/4/7/10) AND a trikona (1/5/9)
+#     -> Yogakaraka (YK) — supremely auspicious for that lagna.
+#   • Natural benefic (Jup/Ven/Mer) ruling ONLY a kendra -> kendra-adhipati
+#     dosha makes it functional malefic.
+#   • Mild houses (2L maraka, 3L mild malefic, 11L mixed) -> Neutral (N)
+#     unless they double up with trika/kendra rules.
+# Indexed by lagna sign (0=Mesh, 1=Vrish, ..., 11=Meen).
+# Rahu / Ketu have no sign rulership; they are treated as "shadow malefics"
+# separately in the section legend.
+_FUNC_NATURE: tuple[dict[str, str], ...] = (
+    # 0 Mesh — Mars lagna; Sun=5L (FB, trikona only — NOT YK since no kendra)
+    {"Sun": "FB", "Moon": "N",  "Mars": "FB", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+    # 1 Vrish — Venus lagna; Sat=9L+10L kendra+trikona (YK); Moon=3L (FM mild)
+    {"Sun": "FB", "Moon": "FM", "Mars": "FM", "Mercury": "FB", "Jupiter": "FM", "Venus": "N",  "Saturn": "YK"},
+    # 2 Mithun — Mercury lagna; no YK; Mer/Ven=FB; Mars/Jup=FM
+    {"Sun": "N",  "Moon": "N",  "Mars": "FM", "Mercury": "FB", "Jupiter": "FM", "Venus": "FB", "Saturn": "N"},
+    # 3 Karka — Moon lagna; Mars=5L+10L kendra+trikona (YK)
+    {"Sun": "N",  "Moon": "FB", "Mars": "YK", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+    # 4 Simh — Sun lagna; Mars=4L+9L kendra+trikona (YK)
+    {"Sun": "FB", "Moon": "N",  "Mars": "YK", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+    # 5 Kanya — Mercury lagna; Ven=2L+9L (FB by 9L only — NOT YK, no kendra)
+    {"Sun": "FM", "Moon": "FM", "Mars": "FM", "Mercury": "FB", "Jupiter": "FM", "Venus": "FB", "Saturn": "N"},
+    # 6 Tula — Venus lagna; Sat=4L+5L kendra+trikona (YK)
+    {"Sun": "FM", "Moon": "N",  "Mars": "FM", "Mercury": "FB", "Jupiter": "FM", "Venus": "FB", "Saturn": "YK"},
+    # 7 Vrishchik — Mars lagna; Sun=10L (FB kendra), Jup=2L+5L (FB)
+    {"Sun": "FB", "Moon": "FB", "Mars": "FB", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+    # 8 Dhanu — Jupiter lagna; Sun=9L (FB), Mars=5L+12L (FB-trikona wins)
+    {"Sun": "FB", "Moon": "N",  "Mars": "FB", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+    # 9 Makar — Saturn lagna; Ven=5L+10L kendra+trikona (YK)
+    {"Sun": "FM", "Moon": "FM", "Mars": "FM", "Mercury": "FB", "Jupiter": "FM", "Venus": "YK", "Saturn": "FB"},
+    # 10 Kumbh — Saturn lagna; Ven=4L+9L kendra+trikona (YK)
+    {"Sun": "FM", "Moon": "FM", "Mars": "FM", "Mercury": "N",  "Jupiter": "FM", "Venus": "YK", "Saturn": "FB"},
+    # 11 Meen — Jupiter lagna; Sun=6L (FM), Mars=2L+9L (FB by 9L); Moon=5L (FB)
+    {"Sun": "FM", "Moon": "FB", "Mars": "FB", "Mercury": "FM", "Jupiter": "FB", "Venus": "FM", "Saturn": "FM"},
+)
+
+
 # 27 Nakshatras with Vimshottari lords (used to fill Naks/Pada/NL columns
 # when the planet object lacks pre-computed nakshatra fields). Order matches
 # the standard sidereal sequence starting at 0° Aries.
@@ -195,6 +236,25 @@ def _lordship_lookup(intel: Any) -> dict[str, list[int]]:
     return out
 
 
+def _functional_nature(planet: str, lagna_sign_idx: Any) -> str:
+    """Return Parashari functional nature for a planet given the lagna sign.
+
+    Returns 'FB' (Functional Benefic), 'FM' (Functional Malefic), 'YK'
+    (Yogakaraka) or 'N' (Neutral) for the 7 visible planets, '-' for
+    Rahu / Ketu (handled separately as shadow malefics in the legend),
+    and '' when lagna_sign_idx is missing/invalid.
+    """
+    if planet in {"Rahu", "Ketu"}:
+        return "-"
+    # bool is a subclass of int — reject it explicitly to avoid True->1, False->0
+    # accidentally mapping to Vrish / Mesh lagnas.
+    if not isinstance(lagna_sign_idx, int) or isinstance(lagna_sign_idx, bool):
+        return ""
+    if not (0 <= lagna_sign_idx < 12):
+        return ""
+    return _FUNC_NATURE[lagna_sign_idx].get(planet, "")
+
+
 def _aspects_lookup(kundli: Any) -> dict[str, list[str]]:
     """Build planet -> list of pretty aspect strings like 'H10(Mars)' or 'H6'.
 
@@ -315,21 +375,22 @@ def _section_grahas(
     dig_lookup: dict[str, dict],
     lord_lookup: dict[str, list[int]] | None = None,
     asp_lookup: dict[str, list[str]] | None = None,
+    lagna_sign_idx: int | None = None,
 ) -> str:
     """Render the 9-graha table.
 
     Columns:
-      Graha | House | Sign | Deg | Naks-Pada | NL  | Rules    | Status
-                                              ^^^   ^^^^^^      ^^^^^^^^
-                                              nak   houses      dignity, combust,
-                                              lord  ruled       retro, aspects
+      Graha | House | Sign | Deg | Naks-Pada | NL  | Rules | FN | Status
+                                              ^^^   ^^^^^^   ^^   ^^^^^^^^
+                                              nak   houses   func dignity, combust,
+                                              lord  ruled    nat. retro, aspects
     """
     lord_lookup = lord_lookup or {}
     asp_lookup = asp_lookup or {}
     lines = [
         "## 2. SAARE 9 GRAHAS (full detail)",
-        "Graha   | House | Sign       | Deg    | Naks-Pada            | NL      | Rules    | Status",
-        "--------|-------|------------|--------|----------------------|---------|----------|----------------------------------",
+        "Graha   | House | Sign       | Deg    | Naks-Pada            | NL      | Rules    | FN | Status",
+        "--------|-------|------------|--------|----------------------|---------|----------|----|----------------------------------",
     ]
     any_row = False
     for name in _PLANET_ORDER:
@@ -385,9 +446,21 @@ def _section_grahas(
                 status_bits.append("asp H" + ",".join(str(a) for a in asp_h))
         status = ", ".join(status_bits) if status_bits else "-"
 
+        # Functional Nature (lagna-based Parashari classification)
+        fn = _functional_nature(name, lagna_sign_idx) or "?"
+
         lines.append(
             f"{name:<7s} | H{str(house):<4s}| {sign:<10s} | "
-            f"{deg_str:<6s} | {nak_pada:<20s} | {nak_lord:<7s} | {rules:<8s} | {status}"
+            f"{deg_str:<6s} | {nak_pada:<20s} | {nak_lord:<7s} | {rules:<8s} | "
+            f"{fn:<2s} | {status}"
+        )
+    if any_row:
+        # Legend explaining FN codes — kept tight (one line, ~110 chars)
+        # so the chart context overhead stays minimal.
+        lines.append(
+            "FN legend: FB=Functional Benefic | FM=Functional Malefic | "
+            "YK=Yogakaraka (kendra+trikona lord) | N=Neutral | "
+            "Rahu/Ketu=shadow malefics (no rulership)"
         )
     return "\n".join(lines) if any_row else ""
 
@@ -856,6 +929,13 @@ def build_full_chart_context(
     dig_lookup = _dignity_lookup(intel_d)
     lord_lookup = _lordship_lookup(intel_d)
     asp_lookup = _aspects_lookup(kundli)
+    # Lagna sign index drives the Parashari Functional Nature column.
+    # Try ascendant first, then fall back to lagna independently — the prior
+    # `or` short-circuit dropped the lagna fallback whenever ascendant was a
+    # truthy-but-unparsable dict (e.g. {"degree": 12.5} with no sign/name).
+    lagna_idx = _sign_idx(kundli.get("ascendant"))
+    if lagna_idx is None:
+        lagna_idx = _sign_idx(kundli.get("lagna"))
 
     sections: list[str] = []
 
@@ -864,7 +944,10 @@ def build_full_chart_context(
     except Exception:
         pass
     try:
-        s = _section_grahas(kundli, p_lookup, dig_lookup, lord_lookup, asp_lookup)
+        s = _section_grahas(
+            kundli, p_lookup, dig_lookup, lord_lookup, asp_lookup,
+            lagna_sign_idx=lagna_idx,
+        )
         if s:
             sections.append(s)
     except Exception:

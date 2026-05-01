@@ -285,57 +285,62 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         _strict_rules = (
             "\n"
             "════════════════════════════════════════════════════════════════════\n"
-            "OUTPUT STYLE — NARRATIVE GURU (Phase 2.8.29):\n"
+            "OUTPUT STYLE — LEAN GURU (Phase 2.8.29d):\n"
             "════════════════════════════════════════════════════════════════════\n"
-            "Tumhara role: TRANSLATOR. Upar diye gaye engine facts (verdict,\n"
-            "band, reasons, UL) TRUTH hain — un par contradict NAHI karna,\n"
-            "par unhe warm Hinglish narrative prose mein convert karna hai.\n"
+            "Tumhara role: TRANSLATOR. Engine facts upar TRUTH hain — un par\n"
+            "contradict NAHI karna, par unhe simple Hinglish prose mein convert\n"
+            "karna hai. JARGON HIDDEN, IMPACT VISIBLE.\n"
             "\n"
-            "ALLOWED (must do):\n"
-            " - Verdict (LOVE/ARRANGED/MIXED) ko natural language mein convey\n"
-            "   karo: 'naturally develop hoga', 'family ke through final',\n"
-            "   'aap start, family finish'. Verdict word literal mention\n"
-            "   zaroori nahi — feel sahi aana chahiye.\n"
-            " - Confidence ko TONE mein dikhao: WEAK = 'mild jhukav / strong\n"
-            "   push nahi', MEDIUM = 'clear sanket', STRONG = 'prabal sanket'.\n"
-            " - Engine reasons ko REAL-LIFE IMPACT mein translate karo:\n"
-            "     'D9 Venus+Rahu' -> 'aap apni choice se emotionally connect'\n"
-            "     'KP 7th CSL signifies 5H' -> 'rishta naturally develop hoga'\n"
-            "     'KP 5th CSL signifies 6H' -> 'thoda imbalance / delay risk'\n"
-            " - UL signal ko 1 soft line mein mention: 'aage marriage life\n"
-            "   stable / strained / mixed feel degi'. Sign name optional.\n"
-            " - Flow: FEELING capture -> CAUSE (graha/dasha natural inline)\n"
-            "   -> PATTERN (real-life impact) -> FUTURE hint (soft timing)\n"
-            "   -> GENTLE advice. 4-6 sentences, ek paragraph (max do).\n"
+            "HARD CAP (violation = answer feels heavy):\n"
+            " - Total length: 4-5 sentences, ek paragraph. ~120-150 tokens.\n"
+            "   '300 token' wala doctor-report style BANNED.\n"
+            " - Engine ne 5 reasons diye to user ko 5 nahi dikhane — overall\n"
+            "   feeling 1-2 line mein bata do.\n"
             "\n"
-            "FORBIDDEN (validator will block/auto-correct):\n"
-            " X Verdict FLIP: engine LOVE bola to 'arranged hi hoga' MAT bolo.\n"
-            "   Engine ARRANGED bola to 'pure love marriage hogi' MAT bolo.\n"
+            "JARGON HIDE (NEVER write these words in user-facing reply):\n"
+            " X 'Dhanu lagna', 'Mesh lagna', 'Vrishabh lagna' — aur koi bhi\n"
+            "   lagna name. (Just say 'aapki kundli' or skip.)\n"
+            " X 'Navamsha', 'Navamsa', 'D9', 'D1', 'D10' — divisional charts.\n"
+            " X 'KP', 'KP CSL', 'sub-lord', '7th CSL', 'cuspal'.\n"
+            " X 'Jaimini', 'UL', 'Upapada', 'Arudha', 'Karakas'.\n"
+            " X 'dasha', 'mahadasha', 'antardasha' (unless user asked timing).\n"
+            " X House numbers like '7H', '5H', '6th house', '11th lord'.\n"
+            " X Planet+combination cites like 'Venus+Rahu', 'Saturn 4th from'.\n"
+            " X 'Capricorn ka lord Saturn', 'sign + lord' tech explanations.\n"
+            "Engine ke saare technical naam INTERNAL hain — output mein sirf\n"
+            "FEELING + REAL-LIFE IMPACT dikhao. Jaise:\n"
+            "   'D9 Venus+Rahu' -> 'apni choice se emotionally connect'\n"
+            "   'KP 7th CSL -> 5H' -> 'rishta naturally develop hoga'\n"
+            "   'KP 5th CSL -> 6H' -> 'beech mein thoda imbalance / delay'\n"
+            "   'UL Capricorn NEUTRAL' -> 'shaadi ke baad balanced rahega'\n"
+            "\n"
+            "FORBIDDEN:\n"
+            " X Verdict FLIP: engine LOVE -> 'arranged hi hoga' MAT bolo.\n"
+            "   Engine ARRANGED -> 'pure love marriage hogi' MAT bolo.\n"
             " X Overconfident absolutes: '100%', 'pakka hoga', 'guarantee',\n"
-            "   'definitely will', 'zaroor hoga' BANNED. Use: 'strong\n"
-            "   indication', 'clear sanket', 'natural inclination'.\n"
+            "   'definitely will', 'zaroor hoga'. Use: 'strong indication',\n"
+            "   'clear sanket', 'jhukav lagta hai'.\n"
             " X Bullets/lists (•, -, *, numbered) — flowing prose chahiye.\n"
             " X Number leaks: '48/100', '/100', percentages — NEVER show.\n"
-            " X Band labels verbatim: 'WEAK', 'MEDIUM', 'STRONG' words user\n"
-            "   ko mat dikhao — feeling/tone mein dikhao instead.\n"
-            " X Invented facts: 'parivar bhumika jud jayegi', 'family\n"
-            "   eventually will join' — engine ne kabhi nahi kaha = BANNED.\n"
+            " X Band labels verbatim: 'WEAK', 'MEDIUM', 'STRONG' words mat\n"
+            "   dikhao — TONE mein dikhao (mild jhukav vs clear sanket vs\n"
+            "   prabal sanket).\n"
+            " X Invented facts not in engine block — BANNED.\n"
             " X Harsh negatives: 'nahi hoga', 'asambhav' — use 'pattern\n"
             "   thoda different hai', 'strong push nahi hai'.\n"
             "\n"
-            "WORKED EXAMPLE (engine: VERDICT=LOVE, BAND=WEAK, reasons include\n"
-            "D9 Venus+Rahu and KP 7th CSL Sun->5H, negation KP 5th CSL\n"
-            "Venus->6H, UL=Capricorn NEUTRAL):\n"
+            "WORKED EXAMPLE — LEAN VERSION (engine: VERDICT=LOVE, BAND=WEAK,\n"
+            "reasons include D9 Venus+Rahu, KP 7th CSL->5H, KP 5th CSL->6H\n"
+            "negation, UL=Capricorn NEUTRAL):\n"
             "─────────────────────────────────────────────────\n"
-            "Dekho, aapke case mein ek interesting pattern dikh raha hai —\n"
-            "aap apni choice se emotionally connect karte ho aur wahi\n"
-            "connection rishte ko shape deta hai. Lekin abhi jo phase chal\n"
-            "raha hai usme thoda imbalance hai, isliye decision aaram se aur\n"
-            "natural tarike se aayega — koi formal setup se nahi. Family ka\n"
-            "role baad mein aayega, par direction aapki khud ki rahegi. Aage\n"
-            "chal ke marriage life neutral-stable feel degi — bahut intense\n"
-            "bhi nahi, troubled bhi nahi. Bas jaldi mein commitment se\n"
-            "bachna, kyunki clarity dheere-dheere strong hogi.\n"
+            "Dekho, aapke case mein love marriage ka jhukav strong hai —\n"
+            "matlab rishta apni choice se develop hone ka chance zyada hai.\n"
+            "Haan, raasta bilkul seedha nahi rahega — beech mein thoda delay\n"
+            "ya on-off phase aa sakta hai, lekin final direction love side hi\n"
+            "lagti hai. Decision jaldi nahi, dheere-dheere clarity ke saath\n"
+            "aayega, isliye patience rakhna important rahega. Shaadi ke baad\n"
+            "ka jeevan bhi balanced rahega — na bahut troubled, na overly\n"
+            "intense.\n"
             "─────────────────────────────────────────────────\n"
             "════════════════════════════════════════════════════════════════════\n"
         )
@@ -395,7 +400,8 @@ def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
         ul_sign = ul_sign_m.group(1) if ul_sign_m else ""
         ul_verdict = ul_verdict_m.group(1) if ul_verdict_m else ""
 
-        _stripped = {"fluff": 0, "numbers": 0, "bands": 0, "softened": 0}
+        _stripped = {"fluff": 0, "numbers": 0, "bands": 0, "softened": 0,
+                     "jargon": 0}
         _appended = []
         _flipped = False
 
@@ -496,6 +502,101 @@ def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
                     + out
                 )
                 _flipped = True
+
+        # ── 6b. Jargon-leak strip (Phase 2.8.29d) ──────────────────────
+        # If LLM leaks technical terms despite prompt rules, surgically
+        # remove parenthetical citations and demote a few wholesale terms.
+        # Only PARENTHETICAL/INLINE-CITATION patterns are stripped — a
+        # bare "Venus" inside narrative prose is left alone (might be
+        # legitimately user-asked). Goal: hide engine internals leaking
+        # into emotional answers.
+        _JARGON_PARENS = [
+            # Parens carrying tech labels: "(Navamsha)", "(D9 chart)",
+            # "(KP CSL)", "(Jaimini UL)", "(7th house)", "(Venus+Rahu)".
+            r'\s*\(\s*(?:Navamsh?a|Navamsa|D9|D1|D10|D7)[^)]*\)',
+            r'\s*\(\s*KP[^)]*\)',
+            r'\s*\(\s*(?:Jaimini|Upapada|UL|Arudha)[^)]*\)',
+            r'\s*\(\s*\d+(?:st|nd|rd|th)\s+house[^)]*\)',
+            r'\s*\(\s*\d+H\b[^)]*\)',
+            r'\s*\(\s*(?:lagna|lagn)[^)]*\)',
+            # "Venus + Rahu" / "Venus aur Rahu" inside parens
+            r'\s*\(\s*(?:Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)'
+            r'\s*[+aurand]+\s*'
+            r'(?:Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu)[^)]*\)',
+        ]
+        for pat in _JARGON_PARENS:
+            new_out, n = _re_v.subn(pat, '', out, flags=_re_v.IGNORECASE)
+            if n:
+                _stripped["jargon"] += n
+                out = new_out
+
+        # Wholesale demote: standalone tech tokens not in parens.
+        # Replace with neutral phrase or drop the surrounding clause.
+        # NOTE: regexes scoped to astrology contexts to avoid false hits
+        # in unrelated text (e.g., "Room 5H", "12H format", "5 hours").
+        _SIGN = (r'(?:Dhanu|Mesh|Vrishabh|Mithun|Kark|Karka|Simh|Singh|Kanya|'
+                 r'Tula|Vrishchik|Makar|Kumbh|Meen)')
+        _JARGON_DEMOTE = [
+            # "Aapki/Aapke Dhanu lagna" -> "aapki kundli" (uniform)
+            (r'\b(?:Aapki|Aapke|Aap\s+ki|Aap\s+ke)\s+' + _SIGN + r'\s+lagna\b',
+             'aapki kundli'),
+            # Bare "Dhanu lagna" -> "aapki kundli"
+            (r'\b' + _SIGN + r'\s+lagna\b', 'aapki kundli'),
+            # "Aap[ki/ke] ascendant/lagna" -> "aapki kundli" (gender-fix)
+            (r'\b(?:Aapki|Aapke|Aap\s+ki|Aap\s+ke)\s+(?:ascendant|lagn[aA])\b',
+             'aapki kundli'),
+            # Bare "ascendant" / "lagna" tech word -> kundli
+            (r'\b(?:ascendant|lagn[aA])\b(?!\s+sign)', 'kundli'),
+            # D-charts (D1/D9/D10/D7) — drop tech reference
+            (r'\bD\s*(?:1|7|9|10)\s+(?:chart\s+)?(?:mein|main)?\b', ''),
+            (r'\bNavamsh?a\s+(?:chart\s+)?(?:mein|main)?\b', ''),
+            # "KP 7th CSL signifies 5H pattern" -> "pattern" (compound)
+            (r'\bKP\s+\d+(?:st|nd|rd|th)?\s+CSL\s+signif(?:ies|y)\s+\d+H\s*pattern\b',
+             'pattern'),
+            (r'\bKP\s+\d+(?:st|nd|rd|th)?\s+CSL\s+signif(?:ies|y)\s+\d+H\b',
+             'pattern'),
+            (r'\bKP\s+\d+(?:st|nd|rd|th)?\s+CSL\b', 'pattern'),
+            (r'\bKP\s+(?:CSL|sub-?lord|signifies?|signify)\b', 'pattern'),
+            # Jaimini UL / Upapada / Arudha -> marriage life (deduped later)
+            (r'\b(?:Jaimini\s+UL|Upapada|Arudha)\b', 'marriage life'),
+            # House numbers (1-12 only) in clear astrology context
+            (r'\b(?:1[0-2]|[1-9])(?:st|nd|rd|th)\s+house\s+(?:ka\s+)?lord\b',
+             'pattern'),
+            (r'\b(?:1[0-2]|[1-9])H\s*->\s*(?:1[0-2]|[1-9])H\b', 'pattern'),
+            # Standalone "5H", "7H" — ONLY when adjacent to astrology markers
+            # (avoids "Room 5H", "12H format" false positives).
+            # Python re has no variable-width lookbehind, so capture
+            # context word and re-emit it without the house token.
+            (r'\b(?:1[0-2]|[1-9])H\b(?=\s+(?:lord|signif|house|pattern|chart))',
+             ''),
+            (r'\b(house|lord|chart|signifies|signify|pattern)\s+(?:1[0-2]|[1-9])H\b',
+             r'\1'),
+        ]
+        for pat, repl in _JARGON_DEMOTE:
+            new_out, n = _re_v.subn(pat, repl, out, flags=_re_v.IGNORECASE)
+            if n:
+                _stripped["jargon"] += n
+                out = new_out
+
+        # Dedupe: collapse "marriage life aur/and/, marriage life" pairs
+        # into single occurrence (Jaimini UL + Upapada both demoted).
+        # Connector group: comma/semicolon/aur/and/or with optional spaces.
+        _CONN = r'(?:\s*[,;]\s*|\s+(?:aur|and|or|ya)\s+)'
+        out = _re_v.sub(r'\bmarriage\s+life(' + _CONN + r'marriage\s+life)+\b',
+                        'marriage life', out, flags=_re_v.IGNORECASE)
+        out = _re_v.sub(r'\bpattern(' + _CONN + r'pattern)+\b', 'pattern',
+                        out, flags=_re_v.IGNORECASE)
+        out = _re_v.sub(r'\baapki\s+kundli(' + _CONN + r'aapki\s+kundli)+\b',
+                        'aapki kundli', out, flags=_re_v.IGNORECASE)
+
+        # Cleanup leftovers: empty parens, double spaces, orphan punctuation,
+        # leading commas after demotion
+        out = _re_v.sub(r'\(\s*\)', '', out)
+        out = _re_v.sub(r'\s{2,}', ' ', out)
+        out = _re_v.sub(r'\s+([,.;!?])', r'\1', out)
+        out = _re_v.sub(r'^\s*[,;]\s*', '', out, flags=_re_v.MULTILINE)
+        out = _re_v.sub(r'([,.;!?])\1+', r'\1', out)
+        out = out.strip()
 
         # ── 6. Soft UL append (only if LLM totally skipped outlook) ────
         # Old: append technical "Jaimini UL: X — Y". New: narrative line
@@ -863,19 +964,28 @@ _PT_SYS_INTRO = (
     "(no hallucination) supreme hai. Single-fact answers (Rule 1) "
     "mein yeh framework apply NAHI karo — woh 1-line hi rahein.\n"
     "\n"
-    "20. NARRATIVE-FLOW (Phase 2.8.29) — emotional / predictive / "
+    "20. LEAN NARRATIVE (Phase 2.8.29d) — emotional / predictive / "
     "life-event questions (love, marriage, dhoka, breakup, career-fear, "
     "health-worry, future timing, relationships, family-tension) ke jawab "
-    "mein NARRATIVE PROSE prefer karo, bullets nahi. Flow:\n"
-    "   FEELING capture (acknowledge user's emotion in your own words, "
-    "never repeat their sentence) -> CAUSE (graha/dasha — natural inline "
-    "mention, no jargon dump) -> PATTERN (real-life impact) -> FUTURE "
-    "hint (soft timing, not exact dates unless given) -> GENTLE advice "
-    "(practical behavior, not generic).\n"
-    "   - 4-6 sentences, ek paragraph (max do).\n"
+    "mein NARRATIVE PROSE prefer karo, bullets nahi. Engine jitna powerful, "
+    "output utna SIMPLE.\n"
+    "   Flow: FEELING capture (acknowledge user's emotion in your own "
+    "words, never repeat their sentence) -> IMPACT (real-life pattern, "
+    "no chart-tech naam) -> FUTURE hint (soft timing, not exact dates "
+    "unless given) -> GENTLE advice (practical behavior, not generic).\n"
+    "   - HARD CAP: 4-5 sentences, ek paragraph, ~120-150 tokens. "
+    "'300 token doctor-report' style BANNED.\n"
+    "   - JARGON HIDE — NEVER write these in user-facing reply: "
+    "'Dhanu lagna' / 'Mesh lagna' (or any lagna name), 'Navamsha' / "
+    "'D9' / 'D1', 'KP' / 'KP CSL' / 'sub-lord' / '7th CSL', 'Jaimini' / "
+    "'UL' / 'Upapada' / 'Arudha', 'dasha' / 'mahadasha' (unless user "
+    "asked timing), house numbers ('7H', '5H', '6th house'), planet "
+    "combos ('Venus+Rahu', 'Saturn 4th from'), 'Capricorn ka lord "
+    "Saturn' tech explanations. Engine ke saare technical naam INTERNAL "
+    "hain — output mein sirf FEELING + REAL-LIFE IMPACT dikhao.\n"
     "   - Numbers / percentages USER ko mat dikhao — score (48/100), "
     "band labels (WEAK/MEDIUM/STRONG verbatim), 'confidence' word "
-    "USER-FACING text mein BANNED. Internal facts only.\n"
+    "USER-FACING text mein BANNED.\n"
     "   - Confidence ko TONE mein dikhao: WEAK = 'mild jhukav / strong "
     "push nahi', MEDIUM = 'clear sanket', STRONG = 'prabal sanket'.\n"
     "   - Bullets sirf TECHNICAL lookups mein (planet positions, yoga "
@@ -895,7 +1005,9 @@ _PT_SYS_INTRO = (
     "real Vedic guru baith ke baat kar raha — not corporate / robotic.\n"
     "   - Single-fact lookup answers (Rule 1) aur pure technical "
     "queries (planet positions, dasha tables, yoga checks) ke liye "
-    "yeh rule LAGU NAHI — woh factual concise answers hi rahein.\n"
+    "yeh rule LAGU NAHI — woh factual concise answers hi rahein. "
+    "Agar user khud explicitly chart-tech mange (e.g., 'Venus kaha "
+    "hai?', 'KP signifier batao'), tabhi jargon allowed.\n"
     "\n"
     "Safety rails kundli ke ant mein diye hain.\n\n"
 )

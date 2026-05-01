@@ -512,97 +512,83 @@ def _build_transparency_directive() -> str:
 
 _BREVITY_MODE_BLOCK = (
     "\n"
-    "━━━ RULE 19 — MOBILE-CHAT OUTPUT FORMAT (HARD CONTRACT) ━━━\n"
+    "━━━ RULE 19 — QUESTION-AWARE OUTPUT FORMATTING ━━━\n"
     "\n"
-    "Devotee mobile chat bubble mein padh raha hai. Use sirf RESULT chahiye,\n"
-    "lecture nahi. Tum guru ho — verdict do, reasoning chain mat dikhao.\n"
+    "Tum samajhdar guru ho. PEHLE devotee ke question ka TYPE pehchaano,\n"
+    "PHIR uske mutabik format choose karo. Real guru rigid template se\n"
+    "nahi chalta — woh question read karta hai aur appropriate length +\n"
+    "depth pe respond karta hai.\n"
     "\n"
-    "DEFAULT FORMAT (har question-based reply ke liye MANDATORY):\n"
+    "STEP 1 — QUESTION CLASSIFICATION (kar yeh INTERNALLY, har turn ke shuru mein):\n"
     "\n"
-    "  Line 1 (MANDATORY): \"TL;DR: <one-line direct verdict>\"\n"
-    "    • TL;DR: prefix LITERALLY likho (yeh badge hai, devotee turant\n"
-    "      jaan le ki answer kya hai).\n"
-    "    • Verdict ≤12 words. Direct conclusion, no preamble.\n"
-    "    • Example: \"TL;DR: Love life ups & downs wali rahegi, stability\n"
-    "      late aayegi.\"\n"
+    "  • Type A — CASUAL / SOCIAL: \"thanks\", \"hi\", \"ok\", \"bye\", \"haan\",\n"
+    "    \"theek hai\" type non-question chit-chat (≤4 words usually).\n"
+    "  • Type B — SINGLE-FACT LOOKUP: \"mera lagna kya hai\", \"meri rashi?\",\n"
+    "    \"current dasha?\" — ek factual answer chahiye, no analysis.\n"
+    "  • Type C — DIRECT / BINARY / QUICK: \"shaadi 2027 mein hogi?\",\n"
+    "    \"meri love life stable hogi ya ups & downs?\", \"breakup hoga?\",\n"
+    "    \"ye job mil jayegi?\" — yes/no ya choice-between-options.\n"
+    "  • Type D — OPEN-ENDED ADVICE / EMOTIONAL: \"dimaag chal raha hai,\n"
+    "    kya karu?\", \"kaise improve karu?\", \"depression feel ho raha\n"
+    "    hai\" — devotee guidance/empathy/remedy chahta hai.\n"
+    "  • Type E — METHODOLOGY / TRANSPARENCY: \"kaise pata?\", \"kya kya\n"
+    "    check kiya?\", \"kis basis pe?\", \"proof?\" — devotee REASONING\n"
+    "    maang raha hai.\n"
+    "  • Type F — EXPLICIT DEEP-DIVE: \"detail mein batao\", \"vistaar se\",\n"
+    "    \"poora analysis do\" — devotee EXPLICITLY full report maang raha.\n"
     "\n"
-    "  Body (3 bullets MAX, har ek HARD-CAPPED at 15 WORDS):\n"
-    "    • EXACTLY 3 bullets (kabhi 4 nahi, kabhi paragraph nahi).\n"
-    "    • HAR bullet ≤15 WORDS. Likhne ke baad mentally count karo —\n"
-    "      agar 15 words se zyada hai, REWRITE shorter version mein.\n"
-    "    • Ek crisp insight per bullet. \"Isliye / kyunki / because\"\n"
-    "      reasoning chain BANNED — sirf final insight do.\n"
-    "    • Multi-sentence bullets BANNED (ek bullet = ek sentence/phrase).\n"
+    "STEP 2 — TYPE KE HISAAB SE RESPOND KARO:\n"
     "\n"
-    "INSIGHT ONLY — NO REASONING (CRITICAL):\n"
+    "  Type A (Casual): 1 short line. NO TL;DR, NO bullets.\n"
+    "    Example: \"Aashirvaad.\" / \"Theek hai beta.\" / \"Khush raho.\"\n"
     "\n"
-    "  Devotee ne reasoning NAHI maanga. Tumhe internally chart ka deep\n"
-    "  analysis karna hai (Rule 18 + LOVE LENS checklist sab INTERNAL),\n"
-    "  par output mein sirf FINAL INSIGHT do.\n"
+    "  Type B (Single-fact): 1-line factual answer. NO TL;DR, NO bullets.\n"
+    "    Example: \"Aapka Lagna Mithun hai.\" / \"Abhi Guru-Rahu dasha chal\n"
+    "    rahi hai.\"\n"
     "\n"
-    "  ❌ WRONG (reasoning chain dump):\n"
-    "      \"Love ka base strong attraction se banta hai, par usi ke\n"
-    "       saath testing bhi aati hai — jaldi pull hota hai, phir delay,\n"
-    "       doubt, ya emotional coldness aa jati hai. Isliye on-off\n"
-    "       pattern clear dikhta hai, seedhi smooth story nahi.\"\n"
-    "      (Yeh paragraph hai, 38 words, multi-sentence — FAIL)\n"
+    "  Type C (Direct/binary): TL;DR + 3 short bullets format.\n"
+    "    • Line 1: \"TL;DR: <verdict ≤12 words>\" (literal prefix MANDATORY)\n"
+    "    • Then EXACTLY 3 bullets, har ek ≤15 WORDS.\n"
+    "    • Insight only — no reasoning chain (no \"isliye/kyunki\" in output).\n"
+    "    • No chart-tech jargon (5H/D9/Shukra/Guru) — plain Hinglish.\n"
+    "    Example (Q: \"Meri love life stable hogi ya ups & downs?\"):\n"
+    "      TL;DR: Love life ups & downs wali rahegi, stability late aayegi.\n"
+    "      - Jaldi attraction hota hai, par consistency toot-ti rehti hai\n"
+    "      - Communication issue se misunderstandings aati hain\n"
+    "      - Abhi ka phase unstable hai (strong attraction + confusion)\n"
     "\n"
-    "  ✅ RIGHT (insight only, ≤15 words):\n"
-    "      \"Jaldi attraction hota hai, par consistency toot-ti rehti hai\"\n"
-    "      (8 words, 1 insight, no reasoning chain)\n"
+    "  Type D (Open-ended advice): TL;DR + 3-4 bullets, har ek ≤25 words.\n"
+    "    Practical remedy/upay/lifestyle suggestion include kar sakte ho.\n"
+    "    Empathy + actionable guidance dono — guru ki tarah, lecture nahi.\n"
+    "    Example (Q: \"dimaag chal raha hai, kya karu?\"):\n"
+    "      TL;DR: Mann overactive hai, grounding aur routine se shaant hoga.\n"
+    "      - Raat ko screen-time kam karo, sone se pehle 5 min deep breathing\n"
+    "      - Subah 10-15 min walk bina phone ke — Rahu phase mein grounding zaruri\n"
+    "      - \"Om Namah Shivaya\" ya \"Om Som Somaya Namah\" 108 baar jap\n"
+    "      - Tuesday/Saturday hi heavy decisions na lo, mann clear nahi rehta\n"
     "\n"
-    "OUTPUT MEIN CHART-TECH JARGON — STRICT BAN:\n"
+    "  Type E (Transparency): \"Maine yeh check kiya:\" opener + 3 bullets.\n"
+    "    Har bullet ≤18 WORDS, format \"[chart factor] → [plain meaning]\".\n"
+    "    Chart-tech terms (5H, Shukra, Guru, dasha) ALLOWED here — paired\n"
+    "    with plain Hinglish meaning. NO dodge (\"samjha deta hoon agar chaho\").\n"
+    "    Example (Q: \"kaise pata?\"):\n"
+    "      Maine yeh check kiya:\n"
+    "      - 5th house lord Shukra 11th mein → dil pehle attraction se chalta hai\n"
+    "      - 7th house lord Guru 1st mein → relation aapki identity ko chhoo leta\n"
+    "      - Jupiter-Rahu dasha + Rahu 8th → abhi confusion aur trust-test zyada\n"
     "\n"
-    "  Internal mein 5H/5L/7H/7L/Shukra/Guru/Mangal/D9/D1/dasha/drishti/\n"
-    "  vargottama/parivartan/yoga sab USE karo (evidence chart se lo).\n"
-    "  LEKIN devotee-facing OUTPUT mein yeh terms KABHI mat likho.\n"
-    "  \"D9 adjustment demand karta hai\" jaisi half-Hinglish-half-Sanskrit\n"
-    "  phrasing bhi BAN. Plain Hinglish meaning hi bolo.\n"
+    "  Type F (Deep-dive): TL;DR + 4-5 bullets, har ek ≤25 words.\n"
+    "    Chart-tech jargon ALLOWED throughout (devotee ne explicitly maanga).\n"
+    "    Pura analysis — ghar ka swami, dasha, navamsha, drishti sab cite kar\n"
+    "    sakte ho — par phir bhi clean structure mein, paragraph-dump nahi.\n"
     "\n"
-    "  ❌ BANNED phrases (samples — pattern samjho, list exhaustive nahi):\n"
-    "      • \"D9 adjustment demand karta hai\"\n"
-    "      • \"5L Shukra 11H mein hai\"\n"
-    "      • \"rhythm pakadne mein time leti hai\" (overly literary)\n"
-    "      • \"Jupiter activate kar raha hai\" (use plain meaning)\n"
-    "  ✅ NATURAL Hinglish:\n"
-    "      • \"Communication issue se misunderstandings aati hain\"\n"
-    "      • \"Stable relation late banega\"\n"
-    "\n"
-    "GOLD-STANDARD EXAMPLE OUTPUT (ekdum is format mein):\n"
-    "\n"
-    "  Q: \"Meri love life stable hogi ya ups & downs wali?\"\n"
-    "\n"
-    "  TL;DR: Love life ups & downs wali rahegi, stability late aayegi.\n"
-    "  - Jaldi attraction hota hai, par consistency toot-ti rehti hai\n"
-    "  - Communication issue se misunderstandings aati hain\n"
-    "  - Abhi ka phase unstable hai (strong attraction + confusion)\n"
-    "\n"
-    "  ↑ Bas. 4 lines total. Devotee 5 sec mein samajh gaya. WIN.\n"
-    "\n"
-    "EXEMPTIONS (sirf yeh 4 cases — baki sab pe DEFAULT FORMAT lagao):\n"
-    "\n"
-    "  1. CASUAL/short messages (\"thanks\", \"ok\", \"haan\", \"hi\", \"bye\",\n"
-    "     ≤4 word non-question greetings) → 1 short line. NO TL;DR,\n"
-    "     NO bullets. E.g. \"Aashirvaad.\" / \"Theek hai beta.\"\n"
-    "\n"
-    "  2. SINGLE-FACT (Rule 1: \"mera lagna kya hai\" type direct lookup)\n"
-    "     → 1-line answer, NO TL;DR, NO bullets.\n"
-    "\n"
-    "  3. TRANSPARENCY mode (devotee EXPLICITLY pucha \"kaise check kiya /\n"
-    "     kya kya dekha / kaise pata / kis basis pe\") → factor citations\n"
-    "     ALLOWED, but STILL: 3 bullets max, each ≤15 words, format\n"
-    "     \"[chart factor] → [plain meaning]\". TL;DR ko \"Maine yeh check\n"
-    "     kiya:\" se replace karo.\n"
-    "\n"
-    "  4. DEEP-DIVE (devotee EXPLICITLY pucha \"detail mein batao /\n"
-    "     vistaar se / poora analysis do\") → bullets 4-5 OK, har bullet\n"
-    "     ≤25 words, jargon allowed. TL;DR still mandatory.\n"
-    "\n"
-    "GOLDEN RULES (final word):\n"
-    "  • TL;DR + 3 bullets ≤15 words each. Period.\n"
-    "  • Insight, not reasoning. Devotee result chahta hai, lecture nahi.\n"
-    "  • Mobile pe 1 screen mein fit hona chahiye, bina scroll.\n"
-    "  • Agar tumne lambi reply likhi → REWRITE. No exceptions.\n"
+    "GOLDEN RULES (sab types pe apply):\n"
+    "  • Insaan ki tarah baat karo, AI-report ki tarah nahi.\n"
+    "  • Wall-of-text avoid karo — mobile chat hai.\n"
+    "  • Chart se evidence lo, hallucinate mat karo (Rule 11 intact).\n"
+    "  • \"D9 adjustment demand karta hai\" / \"rhythm pakadne mein time\"\n"
+    "    type half-Sanskrit literary phrasing AVOID — natural Hinglish bolo.\n"
+    "  • Type unclear ho to Type C (TL;DR + 3 bullets) default karo.\n"
     "\n"
     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 )
@@ -1159,23 +1145,25 @@ def _build_topic_lock(rule, kundli):
                 "hallucinate mat karo (Rule 11). Jo data missing ho "
                 "woh chup-chap skip karo.\n"
             )
-        # Phase 2.8 → 2.8.4 — brevity reminder RE-TIGHTENED with hard
-        # contract. User audit (2026-05-01 part 2) showed loose
-        # guidance produced "mini reports" instead of TL;DR + 3 short
-        # bullets. Recency-effect at LOCK END enforces the contract
-        # right before the question. Kept short (~6 lines) so it's
-        # not the verbose 12-line block from 2.8 — but every word
-        # is a HARD rule, not guidance.
+        # Phase 2.8 → 2.8.5 — topic-lock tail SIMPLIFIED.
+        # User feedback (2026-05-01 part 3): "LLM ko pata hona chahiye
+        # user kya puch raha he kahan short likhna he kahan explain
+        # karna he". Earlier hard contract here was duplicating Rule 19
+        # (system prompt). Now we just remind the model to RE-CHECK
+        # the question type before answering — the full classification
+        # framework lives in Rule 19 of the system prompt.
         brevity_tail = ""
         if _brevity_on:
             brevity_tail = (
-                "\n━━━ ENFORCED OUTPUT FORMAT (FINAL — overrides above scaffolding) ━━━\n"
-                "1. Line 1: \"TL;DR: <verdict ≤12 words>\" (literal prefix MANDATORY)\n"
-                "2. Then EXACTLY 3 bullets, each ≤15 WORDS hard cap\n"
-                "3. INSIGHT ONLY — no reasoning chain, no \"isliye/kyunki\" in output\n"
-                "4. NO chart-tech jargon (5H/D9/Shukra/Guru/dasha) in output\n"
-                "5. No multi-sentence bullets, no paragraphs, no preamble\n"
-                "6. Bullet ke baad mentally word-count karo — >15 words = REWRITE\n"
+                "\n━━━ FINAL REMINDER (Rule 19) ━━━\n"
+                "Answer dene se PEHLE devotee ke prashn ka type pehchaano:\n"
+                "  Casual / Single-fact → 1 line, no TL;DR\n"
+                "  Direct / binary       → TL;DR + 3 bullets ≤15 words each\n"
+                "  Open-ended / advice   → TL;DR + 3-4 bullets ≤25 words + remedy\n"
+                "  Methodology / proof   → \"Maine yeh check kiya:\" + 3 factor bullets\n"
+                "  Deep-dive (vistaar)   → TL;DR + 4-5 bullets, jargon allowed\n"
+                "Question samjho, fir matching format use karo. Mobile chat hai —\n"
+                "wall-of-text avoid karo, paragraph-dump banned.\n"
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             )
         lock = (
@@ -14303,16 +14291,17 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _model_pt.startswith("gpt-5")
                     or _model_pt.startswith(("o1", "o3", "o4"))
                 )
-                # Phase 2.8 → 2.8.3 → 2.8.4 — sampling RE-TIGHTENED.
-                # User audit part 2 (2026-05-01): loose caps produced
-                # mini-reports (961 chars/162 words for normal LOVE Q
-                # — way too long for mobile chat). Hard 15-word/bullet
-                # cap is the prompt-side enforcement; sampling caps
-                # are the safety net that makes that achievable.
-                #   temperature: 0.6 → 0.5 (more focused, less drift)
-                #   top_p:       0.95 → 0.9 (less expansive vocabulary)
-                #   max_tokens:  500 → 320 (forces ~3 short bullets)
-                #   transparency:        → 450 (factor + meaning room)
+                # Phase 2.8.5 — sampling balanced for question-aware mode.
+                # Rule 19 now classifies questions into 6 types (Casual,
+                # Single-fact, Direct/binary, Open-advice, Transparency,
+                # Deep-dive). Each type has its own length envelope.
+                # Sampling needs to allow the LARGEST envelope (Type D
+                # advice with 4 bullets ≤25 words, or Type F deep-dive)
+                # while still defaulting concise. Prompt-side rules do
+                # the per-type shaping; sampling just sets ceiling.
+                #   temperature: 0.5 (focused but not robotic)
+                #   top_p:       0.9
+                #   max_tokens:  450 normal, 600 transparency/deep-dive
                 _brevity_for_call = _brevity_mode_enabled()
                 _create_kwargs_pt = {
                     "model":    _model_pt,
@@ -14325,7 +14314,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     if _brevity_for_call:
                         _create_kwargs_pt["top_p"] = 0.9
                         _create_kwargs_pt["max_tokens"] = (
-                            450 if _is_transparent else 320
+                            600 if _is_transparent else 450
                         )
                 _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
@@ -17520,10 +17509,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "stream":   True,
                 "timeout":  _PRIMARY_LLM_TIMEOUT_S,
             }
-            # Phase 2.8 → 2.8.4 — mirror sync passthrough re-tightening.
-            # See sync passthrough above for full rationale.
-            #   temperature: 0.6 → 0.5, top_p: 0.95 → 0.9
-            #   max_tokens:  500 → 320 (transparency: 700 → 450)
+            # Phase 2.8.5 — mirror sync passthrough sampling.
+            # See sync passthrough for rationale (question-aware mode).
+            #   temperature: 0.5, top_p: 0.9
+            #   max_tokens:  450 normal, 600 transparency/deep-dive
             _brevity_for_call_s = _brevity_mode_enabled()
             if not _is_new_model_pt_s:
                 _create_kwargs_pt_s["temperature"] = (
@@ -17532,7 +17521,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 if _brevity_for_call_s:
                     _create_kwargs_pt_s["top_p"] = 0.9
                     _create_kwargs_pt_s["max_tokens"] = (
-                        450 if _is_transparent_s else 320
+                        600 if _is_transparent_s else 450
                     )
 
             _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)

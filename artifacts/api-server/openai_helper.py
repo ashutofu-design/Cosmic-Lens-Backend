@@ -3794,7 +3794,13 @@ def _build_messages(
             except Exception as exc:
                 print(f"[openai_helper] kp calc for marriage failed: {exc}")
             assess_marriage, format_verdict_for_prompt = _marriage_engine()
-            marriage_verdict_obj = assess_marriage(kundli, intel_obj or {}, kp_dict or {}, birth)
+            # Phase 2.8.25 — pass `question` so Trust Layer 1 (self-disclosure
+            # honoring) can detect "mera love marriage hua tha" style statements
+            # and switch to EXPLAIN mode instead of contradicting the user.
+            marriage_verdict_obj = assess_marriage(
+                kundli, intel_obj or {}, kp_dict or {}, birth,
+                question=question or "",
+            )
             if marriage_verdict_obj:
                 marriage_verdict_block = format_verdict_for_prompt(marriage_verdict_obj)
                 # Phase 5.8 — expose verdict dict on build_meta so the

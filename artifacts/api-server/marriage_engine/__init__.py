@@ -55,14 +55,21 @@ from .love_or_arrange import classify_marriage_type
 # ════════════════════════════════════════════════════════════════════
 
 def assess_marriage(kundli: dict, intel: dict, kp: dict,
-                    birth: Optional[Any] = None) -> dict:
+                    birth: Optional[Any] = None,
+                    question: str = "") -> dict:
     """Top-level orchestrator. Calls each sub-engine and merges results.
 
     Returns merged verdict dict. While all sub-engines are stubs,
     returns {} so openai_helper falls back to LLM-only mode.
+
+    `question` is forwarded to the love-or-arrange classifier so
+    Trust Layer 1 (self-disclosure honoring) can detect statements
+    like "mera love marriage hua tha" and switch to EXPLAIN mode
+    instead of contradicting the user. Defaults to "" so existing
+    callsites stay backward-compatible.
     """
     timing = compute_timing_window(kundli, intel, kp, birth) or {}
-    classify = classify_marriage_type(kundli, intel, kp, birth) or {}
+    classify = classify_marriage_type(kundli, intel, kp, birth, question) or {}
 
     if not timing and not classify:
         return {}

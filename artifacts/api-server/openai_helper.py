@@ -618,6 +618,25 @@ _TOPIC_RULES = [
         "houses":   [7, 5, 8],
         "karakas":  ["Shukra (kalatra-karaka, men), Guru (pati-karaka, women)"],
         "banned":   [3, 6, 9, 12],
+        # Phase 2.6 (01 May 2026) — user-curated authoritative checklist
+        # for spouse/wife/marriage questions. Replaces Rule 18's generic
+        # 7-layer framework FOR THIS TOPIC ONLY. Real Vedic Jyotishi
+        # ye 13 cheezein dekhte hain — na zyada, na kam.
+        "deep_checklist": [
+            "7H sign — wife ki basic personality type (calm/aggressive/practical)",
+            "7H mein baithe planets — direct behavior, kaun dominate karega",
+            "7L (most important) — real married life behavior",
+            "7L ka house placement — wife kis type ki life se aayegi + behavior",
+            "7L ki strength (uchcha/neech/swa/retro) — relationship quality",
+            "Shukra — love nature, attraction, comfort, romance",
+            "Shukra ki condition (afflicted ya strong) — harmony ya issues",
+            "Chandra — spouse ki emotional nature (mood swings ya stability)",
+            "Chandra ka affliction (Rahu/Shani conjunction/aspect) — emotional stress",
+            "Guru (overall marriage blessing) — support vs problems",
+            "D9 Navamsha mein 7L — final married-life reality (most decisive)",
+            "D9 mein Shukra — actual spouse nature post-marriage",
+            "7H pe Shani/Mangal/Rahu ki drishti — conflicts, delay, toxicity",
+        ],
     },
     {
         "topic_id": "career",
@@ -824,6 +843,26 @@ def _build_topic_lock(rule, kundli):
         banned_str = ", ".join(f"{h}H" for h in banned) if banned else "(none)"
         md, ad = _topic_current_dasha(kundli)
         dasha_line = f"{md}-{ad}" if md != "?" else "(unknown — skip dasha-link)"
+        # Phase 2.6 — topic-specific deep checklist (only marriage rule
+        # currently has one; other topics fall back to Rule 18's generic
+        # 7-layer framework). When present, this REPLACES Rule 18 for
+        # this topic — sirf yahi 13 cheezein check karni hain, na zyada
+        # na kam. Curated by domain-expert user.
+        deep_checklist = rule.get("deep_checklist") or []
+        checklist_block = ""
+        if deep_checklist:
+            numbered = "\n".join(
+                f"   {i+1}. {item}" for i, item in enumerate(deep_checklist)
+            )
+            checklist_block = (
+                "DEEP CHECKLIST (iss topic ke liye SIRF ye points dekho — "
+                "Rule 18 ka generic 7-layer framework REPLACE karta hai):\n"
+                f"{numbered}\n"
+                "Sab points internally check karo, lekin output mein 4 "
+                "bullets hi banao (Rule 5 cap). Har point ka evidence "
+                "kundli-context se le, hallucinate mat karo (Rule 11). "
+                "Jo data missing ho woh chup-chap skip karo.\n"
+            )
         lock = (
             "━━━ TOPIC-LOCK (Devotee ka prashn ka focus area) ━━━\n"
             f"Topic detected: {rule.get('label','?')}\n"
@@ -833,6 +872,7 @@ def _build_topic_lock(rule, kundli):
             "se rishta MANDATORILY explain karein, kyunki yahi answer ko "
             "TIMING + PERSONALIZATION deta hai.\n"
             f"DO NOT cite (iss prashn ke liye classically unrelated): {banned_str}.\n"
+            f"{checklist_block}"
             "Rule 16 STRICT FOCUS aur Rule 17 DASHA-FIRST TIMING follow karein.\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         )

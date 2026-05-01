@@ -930,6 +930,280 @@ def _section_gochar(
     return "\n".join(lines)
 
 
+# ────────────────────────────────────────────────────────────────────
+# Section 9 — DASHA + TRANSIT OVERLAY (live synthesis)
+#
+# Per project owner (1 May 2026, immediately after Phase 2.8.15):
+# "#20 start". Item #20 of the LLM-context audit is the synthesis
+# that matters MOST for timing questions: "the active dasha lord's
+# CURRENT-RIGHT-NOW transit position cross-checked against the natal
+# chart". Without this, the LLM had Section 4 (active dasha) and
+# Section 8 (gochar of slow planets) as two disconnected facts and
+# had to do the join itself — which it cannot do for fast-moving
+# dasha lords (Mer/Ven/Mars/Sun/Moon) because their current sky
+# position simply isn't in its training data.
+#
+# This section does the join deterministically:
+#   • Reads MD / AD / PD planet names from `kundli.currentDasha`
+#   • Computes RIGHT-NOW sidereal longitude for those exact planets
+#     (any of the 9 grahas — fast or slow, doesn't matter — since
+#     this section is short-lived per question, not cached)
+#   • Derives transit sign, transit house from natal Lagna,
+#     supportive/restrictive flags, and combust check
+#   • Forces an explicit OVERLAY READING RULE footer that teaches the
+#     LLM the synthesis logic (echo amplification, kendra-trikona
+#     supportive houses, dusthana restrictive houses, combust mute).
+#
+# This is the highest-leverage single addition: a "Saturn MD active +
+# Saturn currently transiting your H10" type insight is impossible
+# without explicit overlay data, and is exactly the answer devotees
+# expect from a real Vedic guru.
+#
+# Defensive — returns "" on any failure so chart context never breaks.
+# ────────────────────────────────────────────────────────────────────
+
+# Planet → swisseph body ID. Mirrors `kp_engine.PLANET_IDS` so we
+# don't drift if that map ever changes; intentionally re-declared
+# here so this file stays self-contained for ADD-ONLY edits.
+_OVERLAY_SWE_IDS: dict[str, int] = {}
+try:
+    import swisseph as _swe_overlay  # type: ignore
+    _OVERLAY_SWE_IDS = {
+        "Sun":     _swe_overlay.SUN,
+        "Moon":    _swe_overlay.MOON,
+        "Mars":    _swe_overlay.MARS,
+        "Mercury": _swe_overlay.MERCURY,
+        "Jupiter": _swe_overlay.JUPITER,
+        "Venus":   _swe_overlay.VENUS,
+        "Saturn":  _swe_overlay.SATURN,
+        "Rahu":    _swe_overlay.MEAN_NODE,
+        # Ketu derived as Rahu + 180°, no swisseph body
+    }
+    _swe_overlay.set_sid_mode(_swe_overlay.SIDM_LAHIRI)
+    _OVERLAY_FLAGS = _swe_overlay.FLG_SWIEPH | _swe_overlay.FLG_SIDEREAL
+    _OVERLAY_HAS_SWE = True
+except Exception:  # pragma: no cover
+    _swe_overlay = None  # type: ignore
+    _OVERLAY_FLAGS = 0
+    _OVERLAY_HAS_SWE = False
+
+
+def _planet_lon_now(name: str, when_utc) -> Optional[float]:
+    """Sidereal Lahiri longitude (deg, 0-360) for any of the 9 grahas
+    at `when_utc`. Returns None on swisseph error. Ketu = Rahu + 180.
+    """
+    if not _OVERLAY_HAS_SWE or not name:
+        return None
+    canonical = name.strip().capitalize()
+    if canonical == "Ketu":
+        rahu_lon = _planet_lon_now("Rahu", when_utc)
+        if rahu_lon is None:
+            return None
+        return (rahu_lon + 180.0) % 360.0
+    pid = _OVERLAY_SWE_IDS.get(canonical)
+    if pid is None:
+        return None
+    try:
+        jd = _swe_overlay.julday(
+            when_utc.year, when_utc.month, when_utc.day,
+            when_utc.hour + when_utc.minute / 60.0
+        )
+        pos, _ = _swe_overlay.calc_ut(jd, pid, _OVERLAY_FLAGS)
+        return float(pos[0]) % 360.0
+    except Exception:
+        return None
+
+
+def _section_dasha_transit_overlay(
+    kundli: dict, intel: dict | None, birth: dict | None
+) -> str:
+    """Render dasha-lord-vs-current-transit synthesis.
+
+    Returns "" if currentDasha unavailable, swisseph missing, or
+    natal lagna unresolvable.
+    """
+    if not _OVERLAY_HAS_SWE:
+        return ""
+    cd = kundli.get("currentDasha")
+    if not isinstance(cd, dict):
+        return ""
+
+    # Natal lagna sign — independent fallback (same pattern as Section 8)
+    lagna_idx = _sign_idx(kundli.get("ascendant"))
+    if lagna_idx is None:
+        lagna_idx = _sign_idx(kundli.get("lagna"))
+    if lagna_idx is None:
+        return ""
+
+    # Build natal sign-by-planet lookup for the NATAL-SIGN RESONANCE
+    # flag (transit planet returning to the same sign it occupies in
+    # the natal chart). Architect review (1 May 2026) corrected my
+    # earlier misnaming of this as "swagriha/home turf" — those terms
+    # mean "planet in the sign IT RULES" (e.g. Sun in Leo) which is a
+    # different concept. Resonance is purely positional; it does not
+    # imply swakshetra dignity. Keys normalised to lowercase so a
+    # mixed-case payload ("MOON" vs "Moon") still matches.
+    natal_sign: dict[str, Optional[int]] = {}
+    for p in (kundli.get("planets") or []):
+        if isinstance(p, dict):
+            nm = p.get("name")
+            if isinstance(nm, str):
+                natal_sign[nm.strip().lower()] = _sign_idx(
+                    p.get("sign") or p.get("rashi")
+                )
+
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    when_utc = _dt.utcnow()
+    _ist = _tz(_td(hours=5, minutes=30))
+    as_of_ist = (
+        when_utc.replace(tzinfo=_tz.utc).astimezone(_ist).strftime("%Y-%m-%d")
+    )
+
+    # Pre-compute current Sun longitude for combust check (inner planets only)
+    sun_lon = _planet_lon_now("Sun", when_utc)
+
+    def _row(label: str, planet_name: Optional[str], end_date: Optional[str]) -> list[str]:
+        """Render one dasha-level block. Returns [] if planet missing or
+        current position can't be computed."""
+        if not planet_name or not isinstance(planet_name, str):
+            return []
+        canonical = planet_name.strip().capitalize()
+        cur_lon = _planet_lon_now(canonical, when_utc)
+        if cur_lon is None:
+            return []
+        cur_sign_idx = int(cur_lon // 30) % 12
+        deg_in_sign = cur_lon - (cur_sign_idx * 30.0)
+        nat_house = ((cur_sign_idx - lagna_idx) % 12) + 1
+        sign_str = _SIGN_NAMES_OUT[cur_sign_idx]
+
+        end_str = f" — until {end_date}" if end_date else ""
+        out = [f"{label} ({canonical}{end_str}):"]
+        out.append(
+            f"  • Now in: {sign_str} {deg_in_sign:.2f}\u00b0  "
+            f"→ transiting natal H{nat_house} from Lagna"
+        )
+
+        flags: list[str] = []
+        # Echo amplification (always true for the lord we're rendering,
+        # but worth making explicit for the LLM)
+        flags.append(
+            f"{canonical} ki dasha + {canonical} ka transit = ECHO "
+            "(themes amplify during this overlap)"
+        )
+        # Supportive houses
+        if nat_house in (1, 5, 9):
+            flags.append(
+                f"H{nat_house} = kendra/trikona — SUPPORTIVE for "
+                f"{canonical}'s dasha themes"
+            )
+        elif nat_house == 11:
+            flags.append("H11 = labha-bhava — gains/wishes SUPPORTIVE")
+        elif nat_house == 10:
+            flags.append("H10 = karma-bhava — career/karma intensification")
+        # Restrictive houses
+        if nat_house in (6, 8, 12):
+            flags.append(
+                f"H{nat_house} = dusthana — RESTRICTIVE (delays/hidden "
+                f"hurdles for {canonical} themes)"
+            )
+        # NATAL-SIGN RESONANCE: transit returning to the same sign it
+        # occupies natally. Note: this is positional-only and does NOT
+        # imply swakshetra (own-sign rulership) — see comment block at
+        # top of natal_sign dict for the architect-flagged correction.
+        nat_sgn = natal_sign.get(canonical.lower())
+        if nat_sgn is not None and nat_sgn == cur_sign_idx:
+            flags.append(
+                f"NATAL-SIGN RESONANCE — {canonical} transit is in same "
+                f"sign as natal {canonical} (positional return; STRONG "
+                "dasha-echo regardless of dignity)"
+            )
+        # Combust check — only inner planets get combust by Sun
+        if canonical in ("Mercury", "Venus", "Mars") and sun_lon is not None:
+            diff = abs((cur_lon - sun_lon + 180.0) % 360.0 - 180.0)
+            if diff <= 8.0:
+                flags.append(
+                    f"COMBUST — only {diff:.1f}\u00b0 from Sun → "
+                    f"{canonical}'s dasha effects MUTED in this window"
+                )
+
+        for f in flags:
+            out.append(f"  • {f}")
+        return out
+
+    lines: list[str] = [
+        "## 9. DASHA + TRANSIT OVERLAY (live synthesis: Section 4 \u00d7 Section 8)",
+        f"As of: {as_of_ist} (IST)",
+        "",
+        "Active dasha lords' RIGHT-NOW sidereal positions vs natal chart:",
+        "",
+    ]
+
+    md_block = _row(
+        "Maha",
+        cd.get("maha"),
+        cd.get("endDate") or cd.get("end"),
+    )
+    if md_block:
+        lines.extend(md_block)
+        lines.append("")
+
+    ad_block = _row(
+        "Antar",
+        cd.get("antar"),
+        cd.get("antarEnd") or cd.get("antar_end"),
+    )
+    if ad_block:
+        lines.extend(ad_block)
+        lines.append("")
+
+    pd_block = _row(
+        "Pratyantar",
+        cd.get("pratyantar") or cd.get("sookshma"),
+        cd.get("pratyantarEnd") or cd.get("pratyantar_end"),
+    )
+    if pd_block:
+        lines.extend(pd_block)
+        lines.append("")
+
+    # If NO blocks rendered (no MD/AD/PD names or all swisseph-failed),
+    # bail out — empty overlay is misleading
+    if not (md_block or ad_block or pd_block):
+        return ""
+
+    lines.append("OVERLAY READING RULE:")
+    lines.append(
+        "  • Active dasha lord's CURRENT transit position is the timing trigger. "
+        "Strong placement amplifies dasha themes; weak placement delays them."
+    )
+    lines.append(
+        "  • Supportive houses: 1, 5, 9, 11 (kendra-trikona-labha)."
+    )
+    lines.append(
+        "  • Restrictive houses: 6, 8, 12 (dusthana — hidden hurdles)."
+    )
+    lines.append(
+        "  • Inner planet within \u00b18\u00b0 of Sun = COMBUST → mutes "
+        "that dasha lord during the combust window. (We use a uniform "
+        "8\u00b0 orb for Mer/Ven/Mars — strict to minimise false positives. "
+        "Classical orbs are wider per-planet; flag absence does not "
+        "rule out near-combust influence.)"
+    )
+    lines.append(
+        "  • Use this overlay for SHORT-TERM timing within the active "
+        "dasha; cross-check Sections 4 + 8 for the full picture."
+    )
+
+    return "\n".join(lines)
+
+
+# Sign-name list used by overlay row renderer. Local copy to keep
+# this section self-contained (matches the existing _sign_name table).
+_SIGN_NAMES_OUT = [
+    "Mesh", "Vrish", "Mithun", "Karka", "Simh", "Kanya",
+    "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen",
+]
+
+
 def _section_kp(birth: dict | None) -> str:
     if not isinstance(birth, dict) or not birth:
         return ""
@@ -948,7 +1222,7 @@ def _section_kp(birth: dict | None) -> str:
     if not cusps and not planets:
         return ""
 
-    lines: list[str] = ["## 9. KP (KRISHNAMURTI PADDHATI) — FULL CUSPS + PLANETS"]
+    lines: list[str] = ["## 10. KP (KRISHNAMURTI PADDHATI) — FULL CUSPS + PLANETS"]
     aya = kp.get("ayanamsa")
     if aya is not None:
         try:
@@ -1029,7 +1303,7 @@ def _section_kp(birth: dict | None) -> str:
 #   2. Language: reply in Hinglish (devotee's preference).
 # ────────────────────────────────────────────────────────────────────
 
-_MINIMAL_GUIDANCE = """## 10. NIYAM (sirf 2 — baaki tum khud decide karo)
+_MINIMAL_GUIDANCE = """## 11. NIYAM (sirf 2 — baaki tum khud decide karo)
 
 • Sirf upar di hui kundli ke fields cite karo. Koi naya graha placement,
   dasha, ya yoga IMAGINE NAHI karna. Agar zaroori detail upar nahi hai,
@@ -1140,6 +1414,19 @@ def build_full_chart_context(
     # so a swisseph hiccup never blocks the rest of the chart context.
     try:
         s = _section_gochar(kundli, intel_d, birth_d)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+    # Section 9 — DASHA + TRANSIT OVERLAY. Live synthesis of Section 4
+    # (active dasha) × Section 8 (gochar). Highest-leverage timing
+    # context block: tells LLM exactly where each active dasha lord
+    # is RIGHT NOW vs the natal chart so it can give nuanced
+    # "echo amplification" / "kendra transit supports your AD theme"
+    # answers instead of generic ones. Defensive — skips silently
+    # when currentDasha missing or swisseph unavailable.
+    try:
+        s = _section_dasha_transit_overlay(kundli, intel_d, birth_d)
         if s:
             sections.append(s)
     except Exception:

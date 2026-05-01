@@ -1766,42 +1766,50 @@ def build_full_chart_context(
             sections.append(s)
     except Exception:
         pass
-    # Section 10 — ARUDHA PADAS (Item #26). Image / perception layer
-    # from Jaimini. Independent of dasha/transit so wired right after
-    # the live-sky block. Defensive — silent skip if jaimini import or
-    # arudha computation fails.
-    try:
-        s = _section_arudha(kundli, lagna_idx)
-        if s:
-            sections.append(s)
-    except Exception:
-        pass
-    # Section 11 — ASHTAKAVARGA (Item #27). SAV per house point-system
-    # strength. Pure BPHS contribution tables; independent of dasha.
-    try:
-        s = _section_ashtakavarga(kundli, lagna_idx)
-        if s:
-            sections.append(s)
-    except Exception:
-        pass
-    # Section 12 — SHADBALA (Item #28). 6-fold quantitative planet
-    # strength (in virupas) sorted strongest → weakest. Required for
-    # answering "is X graha able to deliver?" type questions.
-    try:
-        s = _section_shadbala(kundli, lagna_idx)
-        if s:
-            sections.append(s)
-    except Exception:
-        pass
-    # Section 13 — ARGALA / VIRODHARGALA (Item #25). Jaimini
-    # intervention layer. Refines bhava verdicts beyond just
-    # occupants/aspects with "who is meddling in this house?".
-    try:
-        s = _section_argala(kundli, lagna_idx)
-        if s:
-            sections.append(s)
-    except Exception:
-        pass
+    # ─── DISABLED 2026-05-01 (per user request) ───────────────────────────
+    # Sections 10-13 (ARUDHA / ASHTAKAVARGA / SHADBALA / ARGALA) ko LLM
+    # prompt me NAHI bhejna. Functions still exist (ADD-ONLY policy) and
+    # can be re-enabled by flipping _SEND_SECTIONS_10_TO_13 to True below.
+    # Archive copy: artifacts/api-server/disabled_sections/sections_10_to_13.py
+    _SEND_SECTIONS_10_TO_13 = False
+    if _SEND_SECTIONS_10_TO_13:
+        # Section 10 — ARUDHA PADAS (Item #26). Image / perception layer
+        # from Jaimini. Independent of dasha/transit so wired right after
+        # the live-sky block. Defensive — silent skip if jaimini import or
+        # arudha computation fails.
+        try:
+            s = _section_arudha(kundli, lagna_idx)
+            if s:
+                sections.append(s)
+        except Exception:
+            pass
+        # Section 11 — ASHTAKAVARGA (Item #27). SAV per house point-system
+        # strength. Pure BPHS contribution tables; independent of dasha.
+        try:
+            s = _section_ashtakavarga(kundli, lagna_idx)
+            if s:
+                sections.append(s)
+        except Exception:
+            pass
+        # Section 12 — SHADBALA (Item #28). 6-fold quantitative planet
+        # strength (in virupas) sorted strongest → weakest. Required for
+        # answering "is X graha able to deliver?" type questions.
+        try:
+            s = _section_shadbala(kundli, lagna_idx)
+            if s:
+                sections.append(s)
+        except Exception:
+            pass
+        # Section 13 — ARGALA / VIRODHARGALA (Item #25). Jaimini
+        # intervention layer. Refines bhava verdicts beyond just
+        # occupants/aspects with "who is meddling in this house?".
+        try:
+            s = _section_argala(kundli, lagna_idx)
+            if s:
+                sections.append(s)
+        except Exception:
+            pass
+    # ─── END DISABLED BLOCK ───────────────────────────────────────────────
     try:
         s = _section_kp(birth_d)
         if s:

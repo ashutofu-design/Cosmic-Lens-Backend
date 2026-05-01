@@ -1,10 +1,12 @@
 """
-marriage_timing.py
+marriage_engine.py
 ==================
-Replacement for the old marriage_engine.py (1480 lines) which was removed
-on 1 May 2026 (Phase 2.8.21) per user direction:
-"keep marriage engine, just rename it marriage_timing, and remove 1480 lines —
-me new se shuru karunga"
+LEAN rewrite of the old marriage_engine.py (1480 lines) which was wiped
+on 1 May 2026 (Phase 2.8.21) per user direction.
+
+Phase 2.8.22 (1 May 2026) — file renamed back to `marriage_engine.py` per
+user direction: "marriage timing ko rename karo marriage engine". The
+original public API contract (used by openai_helper.py) is preserved here.
 
 This file is intentionally LEAN.
 
@@ -30,7 +32,7 @@ kundli context (no engine-locked dates / scores / remedies).
 
 User will populate this file incrementally with the new lean implementation.
 
-Old file preserved at: artifacts/api-server/disabled_engines/marriage_engine.py
+Old 1480-line file recoverable from git: `git show d1741bf:artifacts/api-server/marriage_engine.py`
 """
 
 from __future__ import annotations

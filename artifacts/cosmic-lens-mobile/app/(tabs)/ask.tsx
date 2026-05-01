@@ -59,6 +59,12 @@ interface Message {
   // nothing renders (defensive — server can ship the field on/off via
   // PHASE75_CLARIFIER_ENABLED env without any client release).
   clarification?: { prompt: string; options: string[] };
+  // Phase 2.8.27 — engine_tag from server tells whether this answer was
+  // produced by a deterministic engine (LOCKED FACTS injected into the
+  // system prompt, "ans-engine") or by a pure LLM call ("ans-cosmo").
+  // Rendered as a tiny badge below the action row so the user/dev can
+  // see provenance at a glance. Absent on legacy / pre-tag responses.
+  engineTag?: "ans-engine" | "ans-cosmo";
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -448,6 +454,12 @@ export default function AskScreen() {
             }
           }
 
+          // Phase 2.8.27 — engine_tag from server. Defensive type-check
+          // before storing so a malformed value can't break the badge UI.
+          const _et: any = (json as any).engine_tag;
+          const oneShotEngineTag: "ans-engine" | "ans-cosmo" | undefined =
+            (_et === "ans-engine" || _et === "ans-cosmo") ? _et : undefined;
+
           const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
@@ -459,6 +471,7 @@ export default function AskScreen() {
               trimmedCount: trimmed,
               responseSchema: isV2 ? "v2" : undefined,
               clarification: clar,
+              engineTag: oneShotEngineTag,
             })
           );
           return;
@@ -494,6 +507,8 @@ export default function AskScreen() {
         // `clarification` field on the `done` event when its classifier
         // confidence was low. Defensive parsing in the evt.done branch.
         let finalClarification: { prompt: string; options: string[] } | undefined;
+        // Phase 2.8.27 — capture engine_tag from `done` event for badge UI.
+        let finalEngineTag: "ans-engine" | "ans-cosmo" | undefined;
         let sawDone         = false;
         let midError: string | null = null;
 
@@ -533,6 +548,11 @@ export default function AskScreen() {
               if (_opts.length > 0) {
                 finalClarification = { prompt: String(_clar.prompt), options: _opts };
               }
+            }
+            // Phase 2.8.27 — capture engine_tag (defensive; absent → undef)
+            const _et: any = (evt as any).engine_tag;
+            if (_et === "ans-engine" || _et === "ans-cosmo") {
+              finalEngineTag = _et;
             }
           }
         };
@@ -587,6 +607,8 @@ export default function AskScreen() {
             ...next[idx],
             // Phase 7.5 — clarifier (undefined when server omits / disabled)
             clarification: finalClarification,
+            // Phase 2.8.27 — engine_tag (undefined when server omits)
+            engineTag: finalEngineTag,
             text:      finalText || accumulated,
             followUps: finalFollowUps,
             streaming: false,
@@ -904,6 +926,40 @@ export default function AskScreen() {
                     Share
                   </Text>
                 </Pressable>
+
+                {/* Phase 2.8.27 — engine provenance badge.
+                    `ans-engine` = deterministic engine LOCKED FACTS were
+                    injected into the system prompt (e.g. marriage engine).
+                    `ans-cosmo`  = pure LLM (Cosmo) answer, no engine block.
+                    Absent → no badge (legacy / pre-tag responses). */}
+                {item.engineTag && (
+                  <View
+                    style={[
+                      s.engineTagChip,
+                      {
+                        borderColor: item.engineTag === "ans-engine"
+                          ? `${C.accent}55`
+                          : `${C.textMuted}40`,
+                        backgroundColor: item.engineTag === "ans-engine"
+                          ? `${C.accent}15`
+                          : "transparent",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        s.engineTagText,
+                        {
+                          color: item.engineTag === "ans-engine"
+                            ? C.accent
+                            : C.textMuted,
+                        },
+                      ]}
+                    >
+                      {item.engineTag}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </Pressable>
@@ -1632,6 +1688,19 @@ const s = StyleSheet.create({
     borderRadius: 12,
   },
   actionPlainBtnText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
+
+  // Phase 2.8.27 — engine provenance badge (ans-engine / ans-cosmo).
+  // Sits in the same flex row as Sun lo / Copy / Share but visually
+  // distinct: bordered chip, monospace-ish letter spacing, smaller font.
+  engineTagChip: {
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderRadius: 10, borderWidth: 1,
+    marginLeft: "auto",   // pushes the badge to the far right of the row
+  },
+  engineTagText: {
+    fontSize: 9, fontWeight: "700",
+    letterSpacing: 0.5, textTransform: "lowercase",
+  },
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,

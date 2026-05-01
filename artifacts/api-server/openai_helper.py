@@ -14857,12 +14857,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         "after_chars":  len(_text_pt_scrubbed),
                     })
 
+                # Phase 2.8.27 — engine_tag tells UI whether deterministic
+                # engine LOCKED FACTS were injected into the system prompt
+                # (ans-engine) or it was a pure LLM answer (ans-cosmo).
+                # Currently triggered ONLY by the marriage engine block;
+                # extend the OR condition as more engines come online.
+                _engine_tag_pt = "ans-engine" if _marriage_block_pt else "ans-cosmo"
                 return {
                     "text":       _text_pt_scrubbed,
                     "topic":      "general",
                     "confidence": 1.0,
                     "source":     "ai_passthrough",
                     "follow_ups": [],
+                    "engine_tag": _engine_tag_pt,
                 }
             # chart_block empty (no planets after build) → legacy fallback
             print("[ai_ask] passthrough chart_block empty → fall through to legacy")
@@ -18104,6 +18111,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         "confidence": 0.5,
                         "follow_ups": [],
                         "source":     "ai_passthrough_stream_partial",
+                        "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
                     }
                     return
                 # No deltas yet → safe to fall through to outer except,
@@ -18122,6 +18130,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         "confidence": 0.0,
                         "follow_ups": [],
                         "source":     "ai_passthrough_stream_empty",
+                        "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
                     }
                     return
                 raise RuntimeError("passthrough(stream): empty stream from OpenAI")
@@ -18150,6 +18159,9 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             })
 
             # 5. Final envelope (matches mobile client expected schema)
+            # Phase 2.8.27 — engine_tag tells UI whether deterministic
+            # engine LOCKED FACTS were injected (ans-engine) or it was a
+            # pure LLM answer (ans-cosmo).
             yield {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,
@@ -18157,6 +18169,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "confidence": 1.0,
                 "follow_ups": [],
                 "source":     "ai_passthrough_stream",
+                "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
             }
             return
         except Exception as _pt_exc_s:  # noqa: BLE001

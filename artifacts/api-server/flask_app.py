@@ -6090,6 +6090,9 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "ai" if used_ai else "rules")
+            # Phase 2.8.27 — default engine_tag for non-stream fallbacks.
+            # If ai_ask sync passthrough already set it, keep that value.
+            result["engine_tag"] = result.get("engine_tag", "ans-cosmo")
         _log_question_history(user, question, result)
         return jsonify(result)
 
@@ -6100,6 +6103,10 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "ai")
+            # Phase 2.8.27 — same default for one-shot fallbacks. The
+            # ai_ask call inside the oneshot may have set engine_tag
+            # already; preserve it.
+            result["engine_tag"] = result.get("engine_tag", "ans-cosmo")
         _log_question_history(user, question, result)
         return jsonify(result)
 
@@ -6153,6 +6160,11 @@ def ask_stream_route():
                         # to honor the substitution; this flag lets clients
                         # log/observe when it happened.
                         "replaced_by_validator": bool(evt.get("replaced_by_validator", False)),
+                        # Phase 2.8.27 — engine_tag: "ans-engine" when a
+                        # deterministic engine block was injected into the
+                        # system prompt, else "ans-cosmo". Forwarded to UI
+                        # so user can see which path produced the answer.
+                        "engine_tag":            evt.get("engine_tag", "ans-cosmo"),
                         "quota":                 quota_payload,
                         "plan":                  plan_payload,
                     }

@@ -204,6 +204,52 @@ def format_verdict_for_prompt(v: dict) -> str:
             f"(boost x{cons.get('boost', 1.0)})"
         )
 
+    # ── Trust Layer 4: Sannyasi yoga (META OVERRIDE) ────────────────────
+    sann = mt.get("sannyasi") or {}
+    if sann.get("triggered"):
+        lines.append("")
+        lines.append(
+            f"⚠ META FLAG — SANNYASI YOGA (intensity {sann.get('intensity', 0)}/100):"
+        )
+        for r in (sann.get("reasons") or [])[:3]:
+            lines.append(f"    - {r}")
+        if sann.get("qualifier_text"):
+            lines.append(f"  Qualifier: {sann['qualifier_text']}")
+        lines.append(
+            "  ★ HARD OVERRIDE: bolne se pehle yeh meta-flag devotee ko gently surface karo. "
+            "Confidence already capped — false certainty mat do. ★"
+        )
+
+    # ── Trust Layer 5: Multi-marriage qualifier ─────────────────────────
+    multi = mt.get("multi_marriage") or {}
+    if multi.get("triggered"):
+        lines.append("")
+        lines.append(
+            f"⚠ META FLAG — MULTI-MARRIAGE INDICATOR (intensity {multi.get('intensity', 0)}/100):"
+        )
+        for r in (multi.get("reasons") or [])[:3]:
+            lines.append(f"    - {r}")
+        if multi.get("qualifier_text"):
+            lines.append(f"  Qualifier: {multi['qualifier_text']}")
+        lines.append(
+            "  ★ SOFT QUALIFIER: verdict ke baad ek line me yeh nuance add karo "
+            "(do not overwhelm devotee, but do not hide it either). ★"
+        )
+
+    # ── Trust Layer 6: Era cohort context ───────────────────────────────
+    era = mt.get("era") or {}
+    if era.get("applied") and era.get("note"):
+        lines.append("")
+        lines.append(
+            f"CONTEXT — ERA CALIBRATION (cohort: {era.get('cohort','?')}, "
+            f"shift {era.get('shift', 0):+d}):"
+        )
+        lines.append(f"  {era['note']}")
+        lines.append(
+            "  Note: yeh confidence mein already apply ho gaya. Verdict ke tone me "
+            "implicitly era-aware raho (jaise pre-1990 cohort ko 'modern love marriage common hai' mat bolo)."
+        )
+
     # ── Authority directive ─────────────────────────────────────────────
     lines.append("")
     if mode == "EXPLAIN":

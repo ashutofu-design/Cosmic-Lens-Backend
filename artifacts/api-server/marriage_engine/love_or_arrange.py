@@ -769,6 +769,426 @@ def _confidence_band(score: int, dominant_side: str) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# TRUST LAYER 4 — Sannyasi Yoga Detector (META OVERRIDE)
+# ════════════════════════════════════════════════════════════════════════
+# Detects chart configurations that suggest the devotee may NOT marry at all,
+# OR will marry very late. This is NOT a LOVE-vs-ARRANGED question — it's a
+# meta-check that QUESTIONS whether marriage will happen at all. Real Vedic
+# astrologers always check this BEFORE answering "love ya arranged?" because
+# wrong frame = wrong answer.
+#
+# Classical sannyasi yoga combinations (Phaladeepika ch.27, BPHS ch.74):
+#   S1: 4+ planets in kendras (1,4,7,10) — strong renunciation tendency
+#   S2: Saturn in 7H + Ketu aspect (or conjunction) — detachment from partner
+#   S3: Venus combust (within 10° of Sun) AND weak — desire-karaka burnt out
+#   S4: 7L debilitated (in fall sign) AND no benefic aspect
+#   S5: Ketu in 7H without Jupiter aspect — pure detachment from union
+#   S6: Mars + Saturn + Ketu in 7H (any 2 of 3) — repeat negation of bond
+#
+# Output: dict with `triggered: bool`, `intensity: 0-100`, `reasons: list`,
+# and `qualifier_text: str` (Hinglish caveat for the LLM).
+# When triggered with intensity >= 50, the orchestrator DOWNGRADES the main
+# verdict's confidence (devotee deserves the doubt-flag, not false certainty).
+
+_DEBILITATION = {
+    "Sun": "Libra", "Moon": "Scorpio", "Mars": "Cancer",
+    "Mercury": "Pisces", "Jupiter": "Capricorn", "Venus": "Virgo",
+    "Saturn": "Aries",
+}
+
+_SIGN_BY_IDX = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
+
+
+def _planet_sign(kundli: dict, planet_name: str) -> Optional[str]:
+    """Return the sign name for a planet (string)."""
+    for p in (kundli.get("planets") or []):
+        if (p.get("name") or "").lower() == planet_name.lower():
+            sign = p.get("sign") or p.get("rasi")
+            if isinstance(sign, str):
+                return sign
+            sidx = p.get("sign_idx")
+            if isinstance(sidx, int) and 0 <= sidx < 12:
+                return _SIGN_BY_IDX[sidx]
+            lon = p.get("longitude")
+            if isinstance(lon, (int, float)):
+                return _SIGN_BY_IDX[int(lon // 30) % 12]
+    return None
+
+
+def _is_combust(kundli: dict, planet: str, orb: float = 10.0) -> bool:
+    """True if planet is within `orb` degrees of the Sun."""
+    sun_lon = None
+    p_lon = None
+    for p in (kundli.get("planets") or []):
+        nm = (p.get("name") or "").lower()
+        lon = p.get("longitude")
+        if not isinstance(lon, (int, float)):
+            continue
+        if nm == "sun":
+            sun_lon = lon % 360
+        elif nm == planet.lower():
+            p_lon = lon % 360
+    if sun_lon is None or p_lon is None:
+        return False
+    diff = abs(sun_lon - p_lon)
+    if diff > 180:
+        diff = 360 - diff
+    return diff <= orb
+
+
+def _detect_sannyasi_yoga(kundli: dict, intel: dict) -> dict:
+    """Trust Layer 4 — META: question whether marriage happens at all.
+
+    Returns:
+      {
+        "triggered": bool,
+        "intensity": 0-100,           # how strong the renunciation signal
+        "reasons":   list[str],       # plain-Hinglish why
+        "qualifier_text": str,        # caveat to surface to devotee
+      }
+    """
+    if not isinstance(kundli, dict):
+        return {"triggered": False, "intensity": 0, "reasons": [], "qualifier_text": ""}
+
+    planets = kundli.get("planets") or []
+    if not planets:
+        return {"triggered": False, "intensity": 0, "reasons": [], "qualifier_text": ""}
+
+    intensity = 0
+    reasons: list[str] = []
+
+    # S1: 4+ planets in kendras (1,4,7,10) — but ONLY counts as vairagya
+    # if the cluster INCLUDES Saturn or Ketu (architect R5 fix). Many strong
+    # householder charts have 4 kendra planets without any renunciation
+    # tendency; the classical vairagya marker requires a detachment-karaka
+    # in the cluster (Saturn = duty/austerity, Ketu = moksha/withdrawal).
+    kendra_houses = {1, 4, 7, 10}
+    natural_planets = {"Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"}
+    kendra_planet_names = [
+        (p.get("name") or "") for p in planets
+        if p.get("house") in kendra_houses
+        and (p.get("name") or "") in natural_planets
+    ]
+    kendra_count = len(kendra_planet_names)
+    has_detachment_karaka = ("Saturn" in kendra_planet_names) or any(
+        (p.get("name") == "Ketu" and p.get("house") in kendra_houses) for p in planets
+    )
+    if kendra_count >= 4 and has_detachment_karaka:
+        intensity += 18  # softened from 25 (architect R5)
+        reasons.append(
+            f"S1: {kendra_count} kendra planets including Saturn/Ketu — vairagya cluster"
+        )
+
+    # S2: Saturn in 7H AND Ketu in 7H or 1H (1-7 axis aspect)
+    sat_h = _planet_house(kundli, "Saturn")
+    ketu_h = _planet_house(kundli, "Ketu")
+    if sat_h == 7 and ketu_h in (7, 1):
+        intensity += 25
+        reasons.append("S2: Saturn in 7H + Ketu axis 1H/7H — partnership detachment")
+
+    # S3: Venus combust AND in debilitation
+    if _is_combust(kundli, "Venus", orb=10.0):
+        venus_sign = _planet_sign(kundli, "Venus")
+        if venus_sign and venus_sign == _DEBILITATION.get("Venus"):
+            intensity += 20
+            reasons.append("S3: Venus combust + debilitated — desire karaka extinguished")
+        else:
+            intensity += 8
+            reasons.append("S3a: Venus combust — desire karaka weakened")
+
+    # S4: 7L debilitated and no benefic in 7H
+    seventh_lord = _house_lord(intel, 7)
+    if seventh_lord:
+        seventh_sign = _planet_sign(kundli, seventh_lord)
+        deb_sign = _DEBILITATION.get(seventh_lord)
+        if seventh_sign and deb_sign and seventh_sign == deb_sign:
+            # Check 7H benefic occupants
+            benefics = {"Jupiter", "Venus", "Mercury", "Moon"}
+            seventh_occupants = {
+                p.get("name") for p in planets if p.get("house") == 7
+            }
+            if not (seventh_occupants & benefics):
+                intensity += 20
+                reasons.append(
+                    f"S4: 7L ({seventh_lord}) debilitated + no benefic in 7H — fragile bond"
+                )
+
+    # S5: Ketu in 7H without Jupiter aspect (Jupiter not in 3,7,11 from itself)
+    if ketu_h == 7:
+        jup_h = _planet_house(kundli, "Jupiter")
+        # Jupiter aspects 5th, 7th, 9th from itself → houses (jup_h+4), (jup_h+6), (jup_h+8)
+        jup_aspect_houses = set()
+        if jup_h:
+            jup_aspect_houses = {((jup_h - 1 + off) % 12) + 1 for off in (4, 6, 8)}
+        if 7 not in jup_aspect_houses:
+            intensity += 15
+            reasons.append("S5: Ketu in 7H without Jupiter aspect — pure detachment")
+
+    # S6: Mars+Saturn+Ketu — any 2 of 3 in 7H
+    mars_h = _planet_house(kundli, "Mars")
+    cnt_negators = sum(1 for h in (mars_h, sat_h, ketu_h) if h == 7)
+    if cnt_negators >= 2:
+        intensity += 15
+        reasons.append(f"S6: {cnt_negators} of (Mars/Saturn/Ketu) in 7H — repeat negation")
+
+    intensity = min(100, intensity)
+    triggered = intensity >= 50
+
+    qualifier_text = ""
+    if triggered:
+        if intensity >= 75:
+            qualifier_text = (
+                "Aapki kundli mein vairagya (renunciation) ke strong yog hain — "
+                "shaadi karne ka mann thoda kam reh sakta hai, ya bahut der se ho. "
+                "Yeh LOVE ya ARRANGED ka sawaal nahi — yeh 'shaadi hogi bhi ya nahi' "
+                "wala question pehle resolve karna padega."
+            )
+        else:
+            qualifier_text = (
+                "Aapki kundli mein vairagya ke kuch yog dikh rahe hain — shaadi "
+                "kuch der se ho sakti hai, ya devotee ka khud ka mann thoda detach reh sakta hai."
+            )
+
+    return {
+        "triggered":      triggered,
+        "intensity":      intensity,
+        "reasons":        reasons,
+        "qualifier_text": qualifier_text,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# TRUST LAYER 5 — Multi-Marriage Detector (META QUALIFIER)
+# ════════════════════════════════════════════════════════════════════════
+# Detects chart configurations suggesting marriage may NOT be singular —
+# devotee could face break-then-remarry, or have 2+ marriages in lifetime.
+# This is a meta-qualifier on top of the LOVE/ARRANGED verdict, NOT a
+# replacement. Surfaces as a soft caveat.
+#
+# Classical multi-marriage indicators (BPHS ch.80, Saravali ch.41):
+#   M1: Mutable sign rising in 7H (Gemini/Virgo/Sagittarius/Pisces) — instability
+#   M2: 2+ planets in 7H — partnership multiplicity
+#   M3: 7L in dual sign (mutable) — wandering bond karaka
+#   M4: Rahu OR Ketu in 7H — sudden break/restart
+#   M5: 7L conjunct 12L in same house (loss of partner) — break risk
+#       NOTE: aspect detection not implemented; conjunction-only check by design
+#       (architect R6 fix — docstring was claiming aspect logic that didn't exist)
+#   M6: Venus + Mars + Rahu any 2 in 7H — turbulent partnerships
+
+_MUTABLE_SIGNS = {"Gemini", "Virgo", "Sagittarius", "Pisces"}
+
+
+def _detect_multi_marriage(kundli: dict, intel: dict) -> dict:
+    """Trust Layer 5 — META: flag chance of >1 marriage / break-and-remarry.
+
+    Returns:
+      {
+        "triggered": bool,        # >=1 strong indicator fired
+        "intensity": 0-100,
+        "reasons":   list[str],
+        "qualifier_text": str,
+      }
+    """
+    if not isinstance(kundli, dict):
+        return {"triggered": False, "intensity": 0, "reasons": [], "qualifier_text": ""}
+    planets = kundli.get("planets") or []
+    if not planets:
+        return {"triggered": False, "intensity": 0, "reasons": [], "qualifier_text": ""}
+
+    intensity = 0
+    reasons: list[str] = []
+
+    # M1: Mutable sign in 7H (need lagna sign + arithmetic, OR check 7th cusp)
+    lagna_sign = (intel.get("lagna_sign") or "").strip() if isinstance(intel, dict) else ""
+    seventh_sign = None
+    if lagna_sign and lagna_sign in _SIGN_BY_IDX:
+        lidx = _SIGN_BY_IDX.index(lagna_sign)
+        seventh_sign = _SIGN_BY_IDX[(lidx + 6) % 12]
+        if seventh_sign in _MUTABLE_SIGNS:
+            intensity += 20
+            reasons.append(f"M1: 7H sign {seventh_sign} is mutable — partnership instability")
+
+    # M2: 2+ planets in 7H (excluding nodes? include them — adds turbulence)
+    seventh_occupants = [p.get("name") for p in planets if p.get("house") == 7]
+    if len(seventh_occupants) >= 2:
+        intensity += 15
+        reasons.append(
+            f"M2: {len(seventh_occupants)} planets in 7H ({', '.join(seventh_occupants)}) — partnership multiplicity"
+        )
+
+    # M3: 7L in mutable sign
+    seventh_lord = _house_lord(intel, 7)
+    if seventh_lord:
+        slord_sign = _planet_sign(kundli, seventh_lord)
+        if slord_sign and slord_sign in _MUTABLE_SIGNS:
+            intensity += 15
+            reasons.append(
+                f"M3: 7L ({seventh_lord}) in mutable sign {slord_sign} — wandering bond karaka"
+            )
+
+    # M4: Rahu or Ketu in 7H
+    if "Rahu" in seventh_occupants:
+        intensity += 15
+        reasons.append("M4a: Rahu in 7H — sudden break-and-restart pattern")
+    if "Ketu" in seventh_occupants:
+        intensity += 15
+        reasons.append("M4b: Ketu in 7H — detachment / separation karaka in partnership")
+
+    # M5: 7L conjunct or in same house as 12L
+    twelfth_lord = _house_lord(intel, 12)
+    if seventh_lord and twelfth_lord and seventh_lord != twelfth_lord:
+        sl_h = _planet_house(kundli, seventh_lord)
+        tl_h = _planet_house(kundli, twelfth_lord)
+        if sl_h and tl_h and sl_h == tl_h:
+            intensity += 20
+            reasons.append(
+                f"M5: 7L ({seventh_lord}) conjunct 12L ({twelfth_lord}) — partner-loss yog"
+            )
+
+    # M6: Venus + Mars + Rahu — any 2 of 3 in 7H
+    spicy = sum(1 for n in ("Venus", "Mars", "Rahu") if n in seventh_occupants)
+    if spicy >= 2:
+        intensity += 15
+        reasons.append(f"M6: {spicy} of (Venus/Mars/Rahu) in 7H — turbulent passion")
+
+    intensity = min(100, intensity)
+    # Lower threshold than sannyasi (multi-marriage is more common signal)
+    triggered = intensity >= 30
+
+    qualifier_text = ""
+    if triggered:
+        if intensity >= 60:
+            qualifier_text = (
+                "Aapki kundli ek se zyada relationship / shaadi ke yog dikha rahi hai — "
+                "ho sakta hai pehli shaadi mein break aaye aur dusri shaadi alag tarah ki ho. "
+                "Devotee ko honestly bata dena."
+            )
+        else:
+            qualifier_text = (
+                "Aapki kundli mein partnership instability ke kuch signs hain — pehli "
+                "relationship mein turbulence ho sakti hai, par yeh fixed prediction nahi."
+            )
+
+    return {
+        "triggered":      triggered,
+        "intensity":      intensity,
+        "reasons":        reasons,
+        "qualifier_text": qualifier_text,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# TRUST LAYER 6 — Era Adjustment (CONTEXTUAL CALIBRATOR)
+# ════════════════════════════════════════════════════════════════════════
+# Astrological signals don't fire in a societal vacuum. In modern India:
+#   Pre-1970 cohort: ~95% arranged marriages — even strong love yogas often
+#                    converted to arranged via family pressure.
+#   1970-1989:       ~85% arranged — love marriages were rare exception.
+#   1990-2009:       ~65% arranged, 35% love — love became socially viable.
+#   2010+:           ~55% arranged, 45% love — near-equal split.
+#
+# Reads birth year from `birth` dict (or birth["dob"]/year string). Applies
+# small probability shift to confidence WITHOUT changing the verdict type.
+# This is a CALIBRATOR, not a rule — it never overrides chart signals, just
+# acknowledges the social context.
+
+def _extract_birth_year(birth: Any) -> Optional[int]:
+    """Parse a birth year from a `birth` dict / object. Returns None if unparseable."""
+    if not birth:
+        return None
+    # Try common shapes: {"year":1995}, {"dob":"1995-04-12"}, "1995-04-12T..."
+    if isinstance(birth, dict):
+        y = birth.get("year")
+        if isinstance(y, int) and 1900 <= y <= 2100:
+            return y
+        for k in ("dob", "date", "birth_date", "datetime"):
+            v = birth.get(k)
+            if isinstance(v, str) and len(v) >= 4:
+                try:
+                    yr = int(v[:4])
+                    if 1900 <= yr <= 2100:
+                        return yr
+                except (ValueError, TypeError):
+                    pass
+    elif isinstance(birth, str) and len(birth) >= 4:
+        try:
+            yr = int(birth[:4])
+            if 1900 <= yr <= 2100:
+                return yr
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _era_adjustment(birth: Any, dominant: str) -> dict:
+    """Trust Layer 6 — adjust confidence based on social-era cohort.
+
+    Returns:
+      {
+        "applied":     bool,
+        "birth_year":  int or None,
+        "cohort":      "pre-1970"|"1970s-80s"|"1990s-2000s"|"2010+"|None,
+        "shift":       int (-20..+20, applied to confidence),
+        "note":        str (Hinglish context for LLM),
+      }
+    """
+    yr = _extract_birth_year(birth)
+    if not yr:
+        return {"applied": False, "birth_year": None, "cohort": None,
+                "shift": 0, "note": ""}
+
+    if yr < 1970:
+        cohort = "pre-1970"
+    elif yr < 1990:
+        cohort = "1970s-80s"
+    elif yr < 2010:
+        cohort = "1990s-2000s"
+    else:
+        cohort = "2010+"
+
+    shift = 0
+    note = ""
+
+    if cohort == "pre-1970":
+        if dominant == "ARRANGED":
+            shift = +12
+            note = "Era: pre-1970 cohort — arranged marriage was norm; chart signal corroborated by social context."
+        elif dominant == "LOVE":
+            shift = -10
+            note = "Era: pre-1970 cohort — love marriages were rare; even strong yogas often converted to arranged."
+    elif cohort == "1970s-80s":
+        if dominant == "ARRANGED":
+            shift = +6
+            note = "Era: 1970-89 cohort — arranged was strongly dominant social norm."
+        elif dominant == "LOVE":
+            shift = -5
+            note = "Era: 1970-89 cohort — love marriages still rare; family pressure usually prevailed."
+    elif cohort == "1990s-2000s":
+        if dominant == "LOVE":
+            shift = +6
+            note = "Era: 1990-2009 cohort — love marriages became socially viable; chart + era align."
+        elif dominant == "ARRANGED":
+            shift = +2
+            note = "Era: 1990-2009 cohort — arranged still common but love rising."
+    elif cohort == "2010+":
+        if dominant == "LOVE":
+            shift = +10
+            note = "Era: 2010+ cohort — love marriages near 50%; chart signal aligns with modern reality."
+        elif dominant == "ARRANGED":
+            shift = -3
+            note = "Era: 2010+ cohort — pure arranged becoming less common; many are 'arranged-cum-love' hybrid."
+
+    return {
+        "applied":    True,
+        "birth_year": yr,
+        "cohort":     cohort,
+        "shift":      shift,
+        "note":       note,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
 # PUBLIC API — classify_marriage_type
 # ════════════════════════════════════════════════════════════════════════
 
@@ -876,11 +1296,13 @@ def classify_marriage_type(kundli: dict, intel: dict, kp: dict,
     # ── Trust Layer 3: confidence band calibration ─────────────────────
     band_info = _confidence_band(dominant_score, dominant)
 
-    # ── Trust Layer 1 application: self-disclosure override ───────────
-    # If user already STATED their type, engine MUST honor it.
-    if sd["mode"] == "EXPLAIN" and sd["stated_type"]:
+    # ── Trust Layer 1 application FIRST (architect R2 fix) ─────────────
+    # User disclosure must lock dominant + band BEFORE meta-layers run, so
+    # TL4/TL5/TL6 see the FINAL dominant type and can act consistently.
+    # Previously TL1 ran last and silently nuked TL4 cap + TL6 era shift.
+    explain_active = bool(sd["mode"] == "EXPLAIN" and sd["stated_type"])
+    if explain_active:
         stated = sd["stated_type"]
-        # Engine becomes "EXPLAINER" — pulls supporting reasons but never contradicts
         if stated == "LOVE":
             band_info = {
                 "band": "EXPLAIN",
@@ -901,6 +1323,56 @@ def classify_marriage_type(kundli: dict, intel: dict, kp: dict,
                 "verdict_type": "ARRANGED",
             }
             dominant = "ARRANGED"
+
+    # ── Trust Layer 4: Sannyasi yoga meta-check ────────────────────────
+    # Architect R1 fix: when triggered, ALWAYS force band=MIXED (not gated
+    # on conf > cap). Architect R7 fix: in EXPLAIN mode marriage already
+    # happened, so vairagya yog becomes "historical context note" not a
+    # prediction caveat — DON'T cap confidence (devotee already knows
+    # they married), but still surface the qualifier text reframed.
+    sannyasi = _detect_sannyasi_yoga(kundli, intel)
+    if sannyasi["triggered"]:
+        if explain_active:
+            # Marriage already happened — yog manifested differently;
+            # add a softer historical-context qualifier, no confidence cap.
+            sannyasi = dict(sannyasi)
+            sannyasi["qualifier_text"] = (
+                "Aapki kundli mein vairagya ke yog the, par devotee ne shaadi "
+                "ki — yeh dikhata hai ki yog alag tarah se manifest hua "
+                "(shaadi ke baad detachment ke patches aa sakte hain, ya devotee ka "
+                "spiritual jhukav strong reh sakta hai)."
+            )
+            sannyasi["historical_context"] = True
+        else:
+            # Predictive mode — strong vairagya MUST cap and force MIXED
+            cap = max(15, 60 - sannyasi["intensity"] // 2)
+            band_info = dict(band_info)
+            band_info["confidence"] = min(band_info.get("confidence", 0), cap)
+            band_info["band"] = "MIXED"  # always force, regardless of cap math
+
+    # ── Trust Layer 5: Multi-marriage qualifier (NO score change) ──────
+    multi = _detect_multi_marriage(kundli, intel)
+
+    # ── Trust Layer 6: Era adjustment (architect R3 fix) ───────────────
+    # Now uses POST-TL1 dominant type so era note matches final verdict.
+    # Skip era shift in EXPLAIN mode (devotee already disclosed — era
+    # context becomes irrelevant for confidence calibration).
+    if explain_active:
+        era = {"applied": False, "birth_year": _extract_birth_year(birth),
+               "cohort": None, "shift": 0,
+               "note": "EXPLAIN mode active — era calibration skipped (user already disclosed)."}
+    else:
+        era = _era_adjustment(birth, dominant)
+        if era["applied"] and era["shift"] != 0:
+            new_conf = band_info["confidence"] + era["shift"]
+            new_conf = max(0, min(100, new_conf))
+            band_info = dict(band_info)
+            band_info["confidence"] = new_conf
+            # Re-derive band ONLY if shift moved across a boundary AND
+            # sannyasi cap is not active (sannyasi MIXED takes precedence).
+            if dominant != "MIXED" and not (sannyasi["triggered"] and not explain_active):
+                rederived = _confidence_band(new_conf, dominant)
+                band_info["band"] = rederived["band"]
 
     # ── Aggregate reasons (de-dup) ─────────────────────────────────────
     reasons_love: list = []
@@ -933,6 +1405,10 @@ def classify_marriage_type(kundli: dict, intel: dict, kp: dict,
         "reasons_love":  reasons_love,
         "reasons_arr":   reasons_arr,
         "tone_words":    band_info.get("tone_words", []),
+        # Phase 2.8.26 — 3 NEW META TRUST LAYERS (no new rules added)
+        "sannyasi":      sannyasi,   # TL4: marriage may not happen at all
+        "multi_marriage": multi,     # TL5: chance of >1 marriage / break-restart
+        "era":           era,        # TL6: birth-cohort context calibrator
     }
 
 

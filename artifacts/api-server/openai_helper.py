@@ -287,11 +287,18 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             "────────────────────────────────────────────────────────────\n"
             "Tumhara kaam: NARRATOR. Upar engine ne verdict, band aur UL\n"
             "outlook diye hain — bas inhe simple Hinglish mein bol do, jaise\n"
-            "guru baith ke samjha raha ho. 4-5 sentences, ek paragraph.\n"
-            "Engine truth contradict mat karo. Tech naam (lagna, navamsha,\n"
-            "KP, Jaimini UL, house numbers, planet combos) chhupao — sirf\n"
-            "feeling aur real-life impact bolo. Numbers / band-labels\n"
-            "(WEAK/MEDIUM/STRONG, 48/100) user ko mat dikhao.\n"
+            "guru baith ke samjha raha ho. 4-5 sentences, EK PARAGRAPH\n"
+            "(flowing prose). Engine truth contradict mat karo.\n"
+            "\n"
+            "OVERRIDE: Rule 1 (TL;DR + 3-4 bullets) yahan LAGU NAHI hota.\n"
+            "Yeh emotional/predictive Q hai — bullets BAN, TL;DR prefix\n"
+            "BAN, '•'/'-'/'*' markers BAN. Sirf flowing paragraph likho,\n"
+            "guru ki tarah baith ke seedhe baat karo.\n"
+            "\n"
+            "Tech naam (lagna, navamsha, KP, Jaimini UL, house numbers,\n"
+            "planet combos) chhupao — sirf feeling aur real-life impact\n"
+            "bolo. Numbers / band-labels (WEAK/MEDIUM/STRONG, 48/100)\n"
+            "user ko mat dikhao.\n"
             "────────────────────────────────────────────────────────────\n"
         )
         block = block + _strict_rules
@@ -451,6 +458,41 @@ def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
                     + out
                 )
                 _flipped = True
+
+        # ── 5b. De-bulleter (Phase 2.8.29f) ────────────────────────────
+        # Marriage Q is NARRATOR mode (single flowing paragraph). If LLM
+        # ignored prompt and emitted bullets/markers (often because Rule 1
+        # "detail Q -> 3-4 bullets" wins in some sessions), strip the
+        # markers and join the lines into prose. Each bullet is already
+        # a complete sentence in our setup, so joining with sentence-end
+        # punctuation yields coherent prose. Also strips any "TL;DR:"
+        # prefix that may slip in from Rule 1.
+        _BULLET_LINE_RX = _re_v.compile(
+            r'^[\s\u00A0]*[\u2022\u2023\u25E6\u2043\u2219•\-\*]+\s+',
+            _re_v.MULTILINE,
+        )
+        _TLDR_RX = _re_v.compile(
+            r'^\s*(?:TL\s*;\s*DR|TLDR|Summary)\s*[:\-–—]\s*',
+            _re_v.IGNORECASE | _re_v.MULTILINE,
+        )
+        if _BULLET_LINE_RX.search(out) or _TLDR_RX.search(out):
+            cleaned_lines = []
+            for raw_line in out.split('\n'):
+                line = _BULLET_LINE_RX.sub('', raw_line)
+                line = _TLDR_RX.sub('', line)
+                line = line.strip()
+                if line:
+                    cleaned_lines.append(line)
+            joined_parts = []
+            for line in cleaned_lines:
+                if not line:
+                    continue
+                if line[-1] not in '.!?':
+                    line = line + '.'
+                joined_parts.append(line)
+            out = ' '.join(joined_parts)
+            _stripped["bullets"] = _stripped.get("bullets", 0) + 1
+            out = _re_v.sub(r'\s{2,}', ' ', out).strip()
 
         # ── 6. Soft UL append (only if LLM totally skipped outlook) ────
         # Old: append technical "Jaimini UL: X — Y". New: narrative line

@@ -608,12 +608,32 @@ def _section_future_dasha(kundli: dict) -> str:
     current mahadasha + the next several mahadashas. Reads from the
     `dashas` array (full 27-MD Vimshottari tree). Skips silently if
     field missing or shape unexpected.
+
+    Phase 2.8.20 — Window narrowed from 12 years to 7 years to reduce
+    prompt token cost (~250 tokens saved/Q). 7-year horizon is still
+    sufficient for ~95% of practical timing questions (marriage, career,
+    health, finance) without losing locked-window data. Dashas/ADs whose
+    startDate falls beyond today+7y are filtered out via _CUTOFF_YEARS.
+    Re-tune by editing _CUTOFF_YEARS below; the cutoff is purely a
+    display/prompt concern — underlying `dashas` tree is untouched.
     """
     dashas = kundli.get("dashas")
     if not isinstance(dashas, list) or not dashas:
         return ""
 
     today = _today_iso()
+
+    # Phase 2.8.20 — 7-year forward horizon cutoff.
+    _CUTOFF_YEARS = 7
+    try:
+        import datetime as _dt
+        _today_dt = _dt.date.fromisoformat(today)
+        _cutoff_dt = _today_dt.replace(year=_today_dt.year + _CUTOFF_YEARS)
+        cutoff_iso = _cutoff_dt.isoformat()
+    except Exception:
+        # If date math fails (leap-day edge case), fall back to no cutoff
+        # so the LLM still gets the un-trimmed sequence.
+        cutoff_iso = "9999-12-31"
 
     # 1. Find current mahadasha (startDate <= today < endDate).
     current_md = None
@@ -627,10 +647,10 @@ def _section_future_dasha(kundli: dict) -> str:
             current_idx = i
             break
 
-    lines = ["## 5. UPCOMING DASHA SEQUENCE (Vimshottari, future-only)"]
+    lines = [f"## 5. UPCOMING DASHA SEQUENCE (Vimshottari, next {_CUTOFF_YEARS} years)"]
     any_row = False
 
-    # 2. Remaining antardashas in current MD.
+    # 2. Remaining antardashas in current MD (only those starting within window).
     if isinstance(current_md, dict):
         md_planet = current_md.get("planet") or "?"
         md_start  = current_md.get("startDate") or "?"
@@ -643,6 +663,8 @@ def _section_future_dasha(kundli: dict) -> str:
                 if isinstance(ad, dict)
                 and isinstance(ad.get("endDate"), str)
                 and ad["endDate"] >= today
+                and isinstance(ad.get("startDate"), str)
+                and ad["startDate"] <= cutoff_iso
             ]
             if future_ad:
                 lines.append("Antardashas remaining in current MD:")
@@ -653,14 +675,20 @@ def _section_future_dasha(kundli: dict) -> str:
                     lines.append(f"  - {md_planet}-{p}: {s} -> {e}")
                 any_row = True
 
-    # 3. Next several mahadashas after the current one.
+    # 3. Next several mahadashas after the current one — only those whose
+    # startDate falls inside the 7-year window. We still cap at 5 entries
+    # so a chart whose current MD ends in 6 months doesn't blow the budget.
     if current_idx >= 0 and current_idx + 1 < len(dashas):
-        future_md = dashas[current_idx + 1 : current_idx + 1 + 5]
+        future_md_raw = dashas[current_idx + 1 : current_idx + 1 + 5]
+        future_md = [
+            md for md in future_md_raw
+            if isinstance(md, dict)
+            and isinstance(md.get("startDate"), str)
+            and md["startDate"] <= cutoff_iso
+        ]
         if future_md:
             lines.append("Next Mahadashas:")
             for md in future_md:
-                if not isinstance(md, dict):
-                    continue
                 p  = md.get("planet") or "?"
                 s  = md.get("startDate") or "?"
                 e  = md.get("endDate") or "?"

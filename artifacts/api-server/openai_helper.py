@@ -608,6 +608,61 @@ _TOPIC_RULES = [
     },
     # Topics already covered by Rule 6 — included so the lock block
     # also fires here. Banned lists are conservative.
+    #
+    # Phase 2.7 (01 May 2026) — LOVE topic. Distinct from marriage:
+    # love-Q asks about ROMANCE / DATING / BF-GF / CRUSH / PYAR
+    # (current love status, will love succeed, breakup, ex), NOT
+    # about marriage timing or spouse nature. Pattern is placed
+    # BEFORE marriage so love-specific words match first; if both
+    # love AND marriage anchors hit (e.g. "love marriage hogi?"),
+    # Phase 2.4 ambiguity gate catches it (distinct topic_ids → None
+    # → no lock; LLM falls back to Rule 6 + own karaka knowledge).
+    # Houses: 5H primary, 7H basic-link (love→marriage convertibility),
+    # 11H gain-from-friends/love. Karakas: Shukra, Budh (modern bf/gf
+    # indicator), Mangal (passion). Banned: 6H/8H/10H/12H/etc.
+    # 14-point user-curated checklist (Phase 2.7) is rendered in lock.
+    {
+        "topic_id": "love",
+        "label":    "love / romance / relationship / bf-gf",
+        "pattern":  _re_topic.compile(
+            r"\b(love|romance|romantic|pyaar|pyar|prem|"
+            r"crush|infatuation|attraction|attract|"
+            r"girlfriend|boyfriend|gf|bf|"
+            r"dating|date|relationship|"
+            r"breakup|break\s*up|breakdown|tooth(?:na|gaya)|"
+            r"ex|ex-girlfriend|ex-boyfriend|"
+            r"affair|chakkar|premika|premi|prem\s*sambandh|"
+            r"sambandh|ladki|ladka|partner\s+ki\s+talash)\b",
+            _re_topic.IGNORECASE),
+        "houses":   [5, 7, 11],
+        "karakas":  ["Shukra (prem-karaka, romance/attraction)",
+                     "Budh (modern bf/gf indicator, communication/dating)",
+                     "Mangal (passion + jealousy yog)"],
+        "banned":   [6, 8, 9, 10, 12],
+        # Phase 2.7 — user-curated 9-point + agent-added 5 critical
+        # additions = 14-point ULTIMATE love-question checklist.
+        # Verified target: 95% accuracy on love sub-questions (current
+        # status, romance quality, partner type, love→marriage
+        # convertibility, breakup risk, timing).
+        "deep_checklist": [
+            "5H sign + 5L name + 5H mein baithe planets + 5H/5L pe drishti — love-foundation",
+            "Involved planets ka benefic-vs-malefic count — overall yog (shubh ya ashubh)",
+            "Bad-house link check — 5L kya 6H/8H/12H mein gaya hai? (separation / sudden-break / scandal yog)",
+            "SIRF involved planets ka karak-tatva discuss karo — agar Chandra ya koi graha 5H/5L/Shukra se kahin nahi judta to use SKIP karo",
+            "7H + 7L (basic) — love → marriage convert hone ka chance",
+            "Budh (Mercury) — modern bf/gf indicator, dating dynamics, communication style; Budh-Shukra interplay = courting flow",
+            "D9 Navamsha — Shukra D9 + 5L D9 + 7L D9 + vargottama flags (Shukra/5L/7L mein se koi vargottama hai to long-term love confirm)",
+            "Current dasha MD/AD/PD — AD aur PD MOST IMPORTANT (devotee 'abhi kya chal raha hai' puchta hai); flag karo agar AD ya PD lord = 5L / 7L / Shukra / Budh",
+            "Transit / Gochar — SIRF tabhi check karo jab question mein 'kab', 'jaldi', 'abhi', 'timing' jaisa wording ho; warna skip",
+            # Agent-added 5 critical additions (Phase 2.7)
+            "D1 Shukra (Venus) ki full condition — house, sign, dignity (uchcha/neech/swa/mool/combust/retro), conjunctions (esp. Rahu/Ketu/Shani/Mangal), drishti — current love-experience ka core indicator",
+            "5L ↔ 7L bridge — kya 5L aur 7L ke beech parivartan / aspect / mutual-placement hai? Yeh classical love-marriage yog ka detection point hai (love se shaadi convert hogi ya nahi)",
+            "Rahu ka role — Rahu in 5H, Rahu with 5L, Rahu with Shukra → modern unconventional love (inter-caste / foreign / age-gap / sudden infatuation / illusion-based / taboo); 21st-century love-Q ke 60%+ cases mein Rahu involved",
+            "Mangal ka role — Mars in 5H/7H = passion, hot pursuit, jealousy; Mars-Shukra conjunction/aspect = strong physical attraction + jealousy yog; Mars in 7H = quarrelsome rishta / breakup risk",
+            "Chandra (conditional) — agar Chandra 5H/7H/Shukra se directly judta hai → emotional bond + mood factor mention karo; ya agar question mein 'feel/lagaav/emotional/mood' jaisa wording hai to mandatory; warna skip",
+            "Jaimini Darakaraka (DK) — partner ka deepest karmic signature (DK ka sign + house). Sirf 1 line, par love-rishton ko karmic depth deta hai",
+        ],
+    },
     {
         "topic_id": "marriage",
         "label":    "marriage / shaadi / spouse",

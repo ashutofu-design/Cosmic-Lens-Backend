@@ -60,6 +60,21 @@ _PLANET_ORDER = (
     "Venus", "Saturn", "Rahu", "Ketu",
 )
 
+# 27 Nakshatras with Vimshottari lords (used to fill Naks/Pada/NL columns
+# when the planet object lacks pre-computed nakshatra fields). Order matches
+# the standard sidereal sequence starting at 0° Aries.
+_NAKSHATRAS: tuple[tuple[str, str], ...] = (
+    ("Ashwini", "Ketu"), ("Bharani", "Venus"), ("Krittika", "Sun"),
+    ("Rohini", "Moon"), ("Mrigashira", "Mars"), ("Ardra", "Rahu"),
+    ("Punarvasu", "Jupiter"), ("Pushya", "Saturn"), ("Ashlesha", "Mercury"),
+    ("Magha", "Ketu"), ("Purva Phalguni", "Venus"), ("Uttara Phalguni", "Sun"),
+    ("Hasta", "Moon"), ("Chitra", "Mars"), ("Swati", "Rahu"),
+    ("Vishakha", "Jupiter"), ("Anuradha", "Saturn"), ("Jyeshtha", "Mercury"),
+    ("Mula", "Ketu"), ("Purva Ashadha", "Venus"), ("Uttara Ashadha", "Sun"),
+    ("Shravana", "Moon"), ("Dhanishtha", "Mars"), ("Shatabhisha", "Rahu"),
+    ("Purva Bhadrapada", "Jupiter"), ("Uttara Bhadrapada", "Saturn"), ("Revati", "Mercury"),
+)
+
 
 # ────────────────────────────────────────────────────────────────────
 # Helpers
@@ -121,6 +136,108 @@ def _dignity_lookup(intel: Any) -> dict[str, dict]:
         name = (d.get("planet") or "").strip()
         if name:
             out[name] = d
+    return out
+
+
+def _naks_pada_lord(lon: Any) -> tuple[str, int, str]:
+    """Compute (nakshatra_name, pada 1-4, nak_lord) from sidereal longitude.
+
+    Each nakshatra spans 13°20' (= 48000 arc-seconds); each pada spans
+    3°20' (= 12000 arc-seconds). We convert longitude to integer
+    arc-seconds before flooring so exact pada boundaries (e.g. 10.0°,
+    13.333°, 360°) are not misclassified by float-division drift.
+    Returns ("", 0, "") for invalid input.
+    """
+    if not isinstance(lon, (int, float)):
+        return ("", 0, "")
+    try:
+        L = float(lon) % 360.0
+    except Exception:
+        return ("", 0, "")
+    # 360° = 1_296_000 arc-seconds, 108 padas of 12_000 arc-seconds each.
+    # Use floor (int truncate) not round: floor preserves the "less-than"
+    # property at exact boundaries — e.g. lon = 10.0° (= 36000 arcsec)
+    # correctly lands in pada 4, while lon = 3.3333° (just below 10/3
+    # boundary, = 11999 arcsec) correctly stays in pada 1.
+    arcsec = int(L * 3600.0)
+    pada_idx = (arcsec // 12000) % 108
+    nak_idx = pada_idx // 4
+    pada = (pada_idx % 4) + 1
+    if not (0 <= nak_idx < 27):
+        return ("", 0, "")
+    name, lord = _NAKSHATRAS[nak_idx]
+    return (name, pada, lord)
+
+
+def _lordship_lookup(intel: Any) -> dict[str, list[int]]:
+    """Build planet -> sorted list of houses it rules (from intel.house_lords).
+
+    Mercury (rules H1+H4 for Mithun lagna) -> {"Mercury": [1, 4], ...}.
+    Returns {} for missing/malformed intel. Defensive: ignores rows where
+    lord is not a string (e.g. accidental int) or house is not an int —
+    never raises.
+    """
+    out: dict[str, list[int]] = {}
+    if not isinstance(intel, dict):
+        return out
+    for hl in intel.get("house_lords") or []:
+        if not isinstance(hl, dict):
+            continue
+        lord_raw = hl.get("lord")
+        if not isinstance(lord_raw, str):
+            continue
+        lord = lord_raw.strip()
+        h = hl.get("house")
+        if lord and isinstance(h, int):
+            out.setdefault(lord, []).append(h)
+    for k in out:
+        out[k] = sorted(set(out[k]))
+    return out
+
+
+def _aspects_lookup(kundli: Any) -> dict[str, list[str]]:
+    """Build planet -> list of pretty aspect strings like 'H10(Mars)' or 'H6'.
+
+    Includes BOTH the aspected house AND the aspected planet name(s) so the
+    LLM sees full Vedic graha-drishti, not just bare house numbers.
+    Defensive — returns {} on any failure (compute_aspects import error,
+    bad planets list, etc.).
+    """
+    out: dict[str, list[str]] = {}
+    if not isinstance(kundli, dict):
+        return out
+    planets = kundli.get("planets")
+    if not isinstance(planets, list) or not planets:
+        return out
+    try:
+        from aspects import compute_aspects  # type: ignore
+    except Exception:
+        return out
+    asc_idx = _sign_idx(kundli.get("ascendant") or kundli.get("lagna"))
+    try:
+        asp = compute_aspects(planets, lagna_sign_idx=asc_idx)
+    except Exception:
+        return out
+    by_planet = (asp or {}).get("by_planet") or {}
+    if not isinstance(by_planet, dict):
+        return out
+    for pname, lst in by_planet.items():
+        if not isinstance(lst, list):
+            continue
+        rendered: list[str] = []
+        for a in lst:
+            if not isinstance(a, dict):
+                continue
+            h = a.get("house")
+            tgts = a.get("aspected_planets") or []
+            if not isinstance(h, int):
+                continue
+            if isinstance(tgts, list) and tgts:
+                rendered.append(f"H{h}({','.join(str(t) for t in tgts)})")
+            else:
+                rendered.append(f"H{h}")
+        if rendered:
+            out[pname] = rendered
     return out
 
 
@@ -196,12 +313,23 @@ def _section_grahas(
     kundli: dict,
     p_lookup: dict[str, dict],
     dig_lookup: dict[str, dict],
+    lord_lookup: dict[str, list[int]] | None = None,
+    asp_lookup: dict[str, list[str]] | None = None,
 ) -> str:
-    """Render the 9-graha table."""
+    """Render the 9-graha table.
+
+    Columns:
+      Graha | House | Sign | Deg | Naks-Pada | NL  | Rules    | Status
+                                              ^^^   ^^^^^^      ^^^^^^^^
+                                              nak   houses      dignity, combust,
+                                              lord  ruled       retro, aspects
+    """
+    lord_lookup = lord_lookup or {}
+    asp_lookup = asp_lookup or {}
     lines = [
         "## 2. SAARE 9 GRAHAS (full detail)",
-        "Graha   | House | Sign       | Deg    | Nakshatra-Pada       | Naks-Lord | Status",
-        "--------|-------|------------|--------|----------------------|-----------|----------------------",
+        "Graha   | House | Sign       | Deg    | Naks-Pada            | NL      | Rules    | Status",
+        "--------|-------|------------|--------|----------------------|---------|----------|----------------------------------",
     ]
     any_row = False
     for name in _PLANET_ORDER:
@@ -211,21 +339,32 @@ def _section_grahas(
         any_row = True
         sign = _sign_name(p.get("sign") or p.get("rashi"))
         house = p.get("house") or "?"
-        # Degrees — accept multiple field names
+        # Degrees — accept multiple field names; also keep raw longitude for
+        # nakshatra computation.
         deg = p.get("degreeInSign") or p.get("deg_in_sign")
-        if deg is None:
-            lon = p.get("longitude")
-            if isinstance(lon, (int, float)):
-                deg = float(lon) % 30
+        lon = p.get("longitude")
+        if deg is None and isinstance(lon, (int, float)):
+            deg = float(lon) % 30
         deg_str = _fmt_deg(deg) if deg is not None else ""
 
+        # Nakshatra + Pada + Lord — prefer pre-computed fields on the planet
+        # object; otherwise compute from longitude.
         nak = p.get("nakshatra") or ""
         pada = p.get("nakshatraPada") or p.get("pada") or ""
-        nak_pada = f"{nak} / {pada}" if nak and pada else (nak or "")
-
         nak_lord = p.get("nakshatraRuler") or p.get("nakshatra_lord") or ""
+        if (not nak or not pada or not nak_lord) and isinstance(lon, (int, float)):
+            n2, pd2, nl2 = _naks_pada_lord(lon)
+            nak = nak or n2
+            pada = pada or (pd2 or "")
+            nak_lord = nak_lord or nl2
+        nak_pada = f"{nak}-{pada}" if nak and pada else (nak or "")
 
-        # Status from intel.dignities
+        # Rules — from intel.house_lords reverse map. Rahu/Ketu have no
+        # sign rulership so they show "-".
+        ruled = lord_lookup.get(name) or []
+        rules = ",".join(f"H{h}" for h in ruled) if ruled else "-"
+
+        # Status — dignity, combust, retro, aspects (with planet targets)
         d = dig_lookup.get(name) or {}
         status_bits: list[str] = []
         dig = d.get("dignity")
@@ -235,14 +374,20 @@ def _section_grahas(
             status_bits.append("combust")
         if p.get("retrograde") and name not in {"Rahu", "Ketu"}:
             status_bits.append("retro")
-        asp = d.get("aspects_houses") or []
-        if asp:
-            status_bits.append("asp H" + ",".join(str(a) for a in asp))
+        # Prefer rich aspects-with-planet-targets from compute_aspects;
+        # fall back to dignity.aspects_houses (bare houses) if unavailable.
+        asp_strs = asp_lookup.get(name) or []
+        if asp_strs:
+            status_bits.append("asp " + ",".join(asp_strs))
+        else:
+            asp_h = d.get("aspects_houses") or []
+            if asp_h:
+                status_bits.append("asp H" + ",".join(str(a) for a in asp_h))
         status = ", ".join(status_bits) if status_bits else "-"
 
         lines.append(
             f"{name:<7s} | H{str(house):<4s}| {sign:<10s} | "
-            f"{deg_str:<6s} | {nak_pada:<20s} | {nak_lord:<9s} | {status}"
+            f"{deg_str:<6s} | {nak_pada:<20s} | {nak_lord:<7s} | {rules:<8s} | {status}"
         )
     return "\n".join(lines) if any_row else ""
 
@@ -709,6 +854,8 @@ def build_full_chart_context(
         return ""
 
     dig_lookup = _dignity_lookup(intel_d)
+    lord_lookup = _lordship_lookup(intel_d)
+    asp_lookup = _aspects_lookup(kundli)
 
     sections: list[str] = []
 
@@ -717,7 +864,7 @@ def build_full_chart_context(
     except Exception:
         pass
     try:
-        s = _section_grahas(kundli, p_lookup, dig_lookup)
+        s = _section_grahas(kundli, p_lookup, dig_lookup, lord_lookup, asp_lookup)
         if s:
             sections.append(s)
     except Exception:

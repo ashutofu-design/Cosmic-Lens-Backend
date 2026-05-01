@@ -194,7 +194,24 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
             _re_mb.IGNORECASE,
         )
-        if not _MARRIAGE_KW.search(question):
+        # Phase 2.8.29c — INTENT FALLBACK gate.
+        # Even if every spelling variant in _MARRIAGE_KW misses (e.g. user
+        # types "lov marrige", "luv marraiga", "kya hoga pyaar wala ya
+        # arrange wala"), if the question CLEARLY expresses the love-vs-
+        # arrange comparison intent, that IS the marriage_engine's job
+        # (love_or_arrange classifier). So we fire the engine on intent
+        # alone — keyword spelling becomes irrelevant.
+        _q_low = question.lower()
+        _has_love = bool(_re_mb.search(
+            r"\b(love|luv|pyaar|pyar|प्यार|लव)\b", _q_low, _re_mb.IGNORECASE
+        )) or "प्यार" in question or "लव" in question
+        _has_arrange = bool(_re_mb.search(
+            r"\b(arrange|arranged|arrang|arrangd|arenj|arrenj)\b",
+            _q_low, _re_mb.IGNORECASE
+        )) or "अरेंज" in question or "अरेन्ज" in question
+        _love_arrange_intent = _has_love and _has_arrange
+
+        if not _MARRIAGE_KW.search(question) and not _love_arrange_intent:
             return ""
         if not isinstance(kundli, dict) or not kundli.get("planets"):
             return ""

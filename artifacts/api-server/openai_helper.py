@@ -176,11 +176,12 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         # (\b doesn't anchor on Devanagari, so they sit outside the group).
         _MARRIAGE_KW = _re_mb.compile(
             r"(\b("
-            r"shaadi|shadi|marriage|marry|married|wedding|"
+            r"shaadi|shadi|shadhi|marriage|marrige|marraige|marry|married|wedding|"
+            r"mrg|mrrg|"  # Phase 2.8.28b — common chat abbreviations
             r"spouse|husband|wife|pati|patni|kalatra|"
             r"life\s+partner|jeevan\s+saathi|jeevansathi|jeevansaathi|"
             r"vivah|vivaah|biwi|"
-            r"love\s+marriage|arrange(d)?\s+marriage"
+            r"love\s+marriage|love\s+mrg|arrange(d)?\s+marriage|arrange(d)?\s+mrg"
             r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
             _re_mb.IGNORECASE,
         )

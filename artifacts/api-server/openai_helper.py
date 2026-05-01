@@ -49,6 +49,112 @@ def _marriage_engine():
     return assess_marriage, format_verdict_for_prompt
 
 
+# Phase 2.8.27 (01 May 2026) — BUG FIX
+# ────────────────────────────────────────────────────────────────────
+# Both passthrough paths (sync at L14542+ and stream at L17760+) were
+# bypassing the marriage_engine entirely. They were sending raw chart_block
+# + topic_lock + question to the LLM, which then GUESSED the verdict
+# instead of running the deterministic 25-rule + 6-trust-layer classifier.
+#
+# This helper wraps the assess_marriage() call + format_verdict_for_prompt()
+# + Jaimini UL inject (mirror of L3796-3845 legacy block) into a single
+# function so both passthrough sites can prepend the LOCKED FACTS block to
+# the system message before sending to OpenAI.
+#
+# Returns "" when topic is not marriage or engine produces nothing — in
+# which case the caller leaves the system message untouched.
+def _passthrough_marriage_block(question, kundli, intel, birth):
+    """Build LOCKED FACTS marriage block for passthrough paths.
+
+    Mirrors the legacy ai_ask block at L3789-3845 but in a single call.
+    Safe to call unconditionally — returns "" when:
+      - question topic is not marriage
+      - kundli is missing planets
+      - assess_marriage returns empty (no usable verdict)
+      - any sub-step fails (logged, never raises)
+    """
+    try:
+        if not isinstance(question, str) or not question.strip():
+            return ""
+        # Direct marriage-keyword check (NOT _detect_topic).
+        # _detect_topic has an ambiguity gate that returns None when both
+        # "love" and "marriage" topics fire (e.g. "mera love marriage hoga
+        # ya arrange") — but love-vs-arrange classification is literally
+        # what marriage_engine does. So we use a dedicated keyword scan
+        # that triggers on any marriage-anchor noun, ignoring the love/
+        # arrange axis (the engine handles that internally).
+        import re as _re_mb
+        # Devanagari anchors included for parity with Phase58 matcher
+        # (\b doesn't anchor on Devanagari, so they sit outside the group).
+        _MARRIAGE_KW = _re_mb.compile(
+            r"(\b("
+            r"shaadi|shadi|marriage|marry|married|wedding|"
+            r"spouse|husband|wife|pati|patni|kalatra|"
+            r"life\s+partner|jeevan\s+saathi|jeevansathi|jeevansaathi|"
+            r"vivah|vivaah|biwi|"
+            r"love\s+marriage|arrange(d)?\s+marriage"
+            r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
+            _re_mb.IGNORECASE,
+        )
+        if not _MARRIAGE_KW.search(question):
+            return ""
+        if not isinstance(kundli, dict) or not kundli.get("planets"):
+            return ""
+
+        kp_dict = None
+        try:
+            kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else None
+        except Exception as exc:
+            print(f"[passthrough_marriage] kp calc failed: {exc}")
+
+        assess_marriage, format_verdict_for_prompt = _marriage_engine()
+        verdict_obj = assess_marriage(
+            kundli, intel or {}, kp_dict or {}, birth, question=question
+        )
+        if not verdict_obj:
+            return ""
+        block = format_verdict_for_prompt(verdict_obj)
+        if not block:
+            return ""
+
+        # Mirror Sprint-7 Jaimini UL inject (L3812-3845) so narrator-mode
+        # also sees the UL signature as ground truth.
+        try:
+            from jaimini import (compute_arudha_padas,        # type: ignore
+                                 compute_upapada)
+            _lg = kundli.get("ascendant")
+            if isinstance(_lg, dict):
+                _lg = _lg.get("sign") or _lg.get("name")
+            _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
+            _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
+            if _ul:
+                ul_line = (
+                    f"  Jaimini Upapada (UL=A12): {_ul['ul_sign']} — "
+                    f"lord {_ul['ul_lord']} in {_ul.get('ul_lord_in') or '?'} "
+                    f"({_ul.get('ul_lord_house') or '?'}th from UL); "
+                    f"2nd-from-UL={_ul['second_from_ul']} "
+                    f"(occ: {', '.join(_ul['occupants_2nd']) or 'none'}); "
+                    f"12th-from-UL={_ul['twelfth_from_ul']} "
+                    f"(occ: {', '.join(_ul['occupants_12th']) or 'none'}); "
+                    f"VERDICT: {_ul['verdict']}\n"
+                    "  >>> NARRATE THIS UL VERDICT IN ONE NATURAL SENTENCE — "
+                    "MANDATORY THIS TURN. Pull the exact UL sign, UL-lord, "
+                    "and verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). <<<\n"
+                )
+                marker = "═" * 68 + "\n"
+                if block.endswith(marker):
+                    block = block[:-len(marker)] + ul_line + marker
+                else:
+                    block += ul_line
+        except Exception as _exc:
+            print(f"[passthrough_marriage] jaimini UL inject failed: {_exc}")
+
+        return "\n\n" + block + "\n"
+    except Exception as exc:
+        print(f"[passthrough_marriage] failed (non-fatal): {exc}")
+        return ""
+
+
 def _stock_engine():
     """Lazy-load deterministic stock-market verdict engine."""
     from stock_engine import (assess_stock,                     # type: ignore
@@ -3527,9 +3633,15 @@ def _build_messages(
                 # (top of file). Both sync passthrough + stream passthrough
                 # use the same source of truth.
                 _sys_intro_pt = _PT_SYS_INTRO
+                # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
+                # in legacy LLM_FULL_CHART_MODE passthrough too (parity with
+                # newer sync + stream passthroughs). Same helper, same args.
+                _marriage_block_pt = _passthrough_marriage_block(
+                    question, kundli, _intel_obj_pt, birth
+                )
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _marriage_block_pt,
                 }]
                 # Last 6 conversation turns for follow-up continuity
                 # (e.g. "yeh tumne kaise bola?" type clarifiers).
@@ -14550,9 +14662,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # (top of file). Both sync passthrough + stream passthrough
                 # use the same source of truth.
                 _sys_intro_pt = _PT_SYS_INTRO
+                # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
+                # so the 25-rule + 6-trust-layer engine actually reaches the
+                # LLM in passthrough mode (was being completely bypassed).
+                _marriage_block_pt = _passthrough_marriage_block(
+                    question, kundli, _intel_obj_pt, birth
+                )
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _marriage_block_pt,
                 }]
                 for _h_pt in (history or [])[-6:]:
                     _r_pt = _h_pt.get("role")
@@ -17769,9 +17887,16 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 raise RuntimeError("passthrough(stream): empty chart_block")
 
             # 2. Build messages — same _PT_SYS_INTRO as sync passthrough
+            # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS block
+            # so the 25-rule + 6-trust-layer engine actually reaches the LLM
+            # in passthrough mode (was being completely bypassed → LLM was
+            # guessing love/arrange instead of using engine output).
+            _marriage_block_pt_s = _passthrough_marriage_block(
+                question, kundli, _intel_obj_pt_s, birth
+            )
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
-                "content": _PT_SYS_INTRO + _chart_block_pt_s,
+                "content": _PT_SYS_INTRO + _chart_block_pt_s + _marriage_block_pt_s,
             }]
             for _h_pt_s in (history or [])[-6:]:
                 _r_pt_s = _h_pt_s.get("role")
@@ -17795,6 +17920,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "history_turns": len(_msgs_pt_s) - 2,
                 "topic_lock":    _topic_rule_s.get("topic_id") if _topic_rule_s else None,
                 "lock_chars":    len(_topic_lock_s),
+                "marriage_block_chars": len(_marriage_block_pt_s),
             })
 
             # 3. OpenAI streaming call

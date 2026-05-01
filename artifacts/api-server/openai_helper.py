@@ -249,10 +249,123 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         except Exception as _exc:
             print(f"[passthrough_marriage] jaimini UL inject failed: {_exc}")
 
+        # Phase 2.8.28 — STRICT OUTPUT RULES (high-priority, end-of-block).
+        # Earlier ★AUTHORITY★ + >>>NARRATE<<< directives sit mid-block and
+        # the LLM was paraphrasing/inventing reasons (e.g. "parivar bhumika
+        # jud jayegi" — never said by engine). These end-of-block RULES are
+        # the LAST thing the LLM reads before generating, so they have the
+        # strongest steering effect. Validator (post-injector) is a 2nd
+        # safety net in case LLM still drifts.
+        _strict_rules = (
+            "\n"
+            "════════════════════════════════════════════════════════════════════\n"
+            "OUTPUT RULES (violation = answer rejected, do NOT break):\n"
+            "1. Reply SHORT — user ne 1 line pucha, tum 4-6 line do. No fluff.\n"
+            "2. Confidence BAND word (WEAK/MEDIUM/STRONG) verbatim likhna hai.\n"
+            "3. Sirf above-listed engine reasons cite karo. Naya astrological\n"
+            "   reason invent karna FORBIDDEN. 'Parivar', 'family bhumika',\n"
+            "   'aakhir mein jud jayegi' jaisi invented baatein BANNED.\n"
+            "4. Jaimini UL verdict ek line mein narrate karna MANDATORY\n"
+            "   (UL sign + verdict tag dono mention karo).\n"
+            "5. Max 6 bullets total. Tone: calm guru, not over-confident.\n"
+            "════════════════════════════════════════════════════════════════════\n"
+        )
+        block = block + _strict_rules
+
         return "\n\n" + block + "\n"
     except Exception as exc:
         print(f"[passthrough_marriage] failed (non-fatal): {exc}")
         return ""
+
+
+# ════════════════════════════════════════════════════════════════════
+# Phase 2.8.28 — Marriage answer validator (post-injector).
+# Pure deterministic check on LLM output. NO extra LLM calls.
+# ════════════════════════════════════════════════════════════════════
+def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
+    """Auto-fix LLM marriage answer to enforce engine fidelity.
+
+    Three checks (all deterministic, regex/string only):
+      1. Strip invented phrases the engine never said (parivar/family fluff).
+      2. If confidence BAND keyword missing → append "Confidence: <BAND>".
+      3. If Jaimini UL not narrated → append "Jaimini UL: <sign> — <verdict>".
+
+    Safe fallback: any failure returns original text unchanged.
+    Token cost: ZERO (no API calls). String ops only.
+    """
+    try:
+        if not engine_block or not isinstance(answer_text, str) or not answer_text.strip():
+            return answer_text
+
+        import re as _re_v
+        out = answer_text
+
+        # ── Extract engine facts from block ────────────────────────────
+        band_m = _re_v.search(r'band:\s*(WEAK|MEDIUM|STRONG)', engine_block, _re_v.I)
+        score_m = _re_v.search(r'CONFIDENCE\s*:\s*(\d+)\s*/\s*100', engine_block, _re_v.I)
+        ul_sign_m = _re_v.search(r'Jaimini Upapada \(UL=A12\):\s*(\w+)', engine_block)
+        # UL verdict tag is a fixed enum (STABLE/STRAINED/MIXED/NEUTRAL)
+        # which uniquely identifies the UL VERDICT line vs other VERDICT
+        # mentions in the block (e.g. "VERDICT TYPE: LOVE").
+        ul_verdict_m = _re_v.search(
+            r'VERDICT:\s*(STABLE|STRAINED|MIXED|NEUTRAL)', engine_block
+        )
+
+        band = band_m.group(1).upper() if band_m else ""
+        score = score_m.group(1) if score_m else ""
+        ul_sign = ul_sign_m.group(1) if ul_sign_m else ""
+        ul_verdict = ul_verdict_m.group(1) if ul_verdict_m else ""
+
+        # ── 1. Strip invented phrases (engine never said these) ────────
+        # Patterns: bullet OR plain line containing "parivar/family"
+        # combined with "jud/join/aakhir/eventually/finally". Matches
+        # bullet glyphs (•, -, *) and Markdown bullet markers.
+        _STRIP = [
+            r'^[\s•\-\*]*[^\n]*\b[Pp]arivar\b[^\n]*\b(jud|jhuk|aakhir|saath)\b[^\n]*\n?',
+            r'^[\s•\-\*]*[^\n]*\b[Ff]amily\b[^\n]*\b(eventually|finally|will\s+join|bhumika)\b[^\n]*\n?',
+        ]
+        _stripped_count = 0
+        for pat in _STRIP:
+            new_out, n = _re_v.subn(pat, '', out, flags=_re_v.MULTILINE)
+            if n:
+                _stripped_count += n
+                out = new_out
+        out = out.strip()
+
+        _appended = []
+
+        # ── 2. Confidence band check ───────────────────────────────────
+        if band:
+            ans_low = out.lower()
+            band_present = band.lower() in ans_low
+            score_present = bool(score) and (score in out)
+            if not band_present and not score_present:
+                if score:
+                    out += f"\n\nConfidence: {band} ({score}/100)."
+                else:
+                    out += f"\n\nConfidence: {band}."
+                _appended.append("confidence")
+
+        # ── 3. UL narration check ──────────────────────────────────────
+        if ul_sign and ul_verdict:
+            ans_low = out.lower()
+            ul_present = (
+                'upapada' in ans_low
+                or _re_v.search(r'\bul\b', ans_low) is not None
+                or ul_sign.lower() in ans_low
+            )
+            if not ul_present:
+                out += f"\nJaimini UL: {ul_sign} — {ul_verdict}."
+                _appended.append("ul")
+
+        if _stripped_count or _appended:
+            print(f"[validate_marriage] stripped={_stripped_count} "
+                  f"appended={_appended} band={band} score={score} "
+                  f"ul={ul_sign}/{ul_verdict}")
+        return out
+    except Exception as _vexc:
+        print(f"[validate_marriage] failed (non-fatal): {_vexc}")
+        return answer_text
 
 
 def _stock_engine():
@@ -14857,6 +14970,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         "after_chars":  len(_text_pt_scrubbed),
                     })
 
+                # Phase 2.8.28 — marriage answer validator (post-injector).
+                # Strip invented phrases + auto-append missing confidence
+                # band / UL line. Only runs when marriage engine fired.
+                if _marriage_block_pt:
+                    _before_v = _text_pt_scrubbed
+                    _text_pt_scrubbed = _validate_marriage_answer(
+                        _text_pt_scrubbed, _marriage_block_pt
+                    )
+                    if _text_pt_scrubbed != _before_v:
+                        _trace(req_id, "PASSTHROUGH.MARRIAGE_VALIDATED", {
+                            "before_chars": len(_before_v),
+                            "after_chars":  len(_text_pt_scrubbed),
+                        })
+
                 # Phase 2.8.27 — engine_tag tells UI whether deterministic
                 # engine LOCKED FACTS were injected into the system prompt
                 # (ans-engine) or it was a pure LLM answer (ans-cosmo).
@@ -18099,6 +18226,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     _partial_text = ("".join(_chunks_pt_s)).strip()
                     # Phase 2.3 Tier-1 — scrub partial-final text too
                     _partial_text = _scrub_ai_tells(_partial_text)
+                    # Phase 2.8.28 — validator on partial too
+                    if _marriage_block_pt_s and _partial_text:
+                        _partial_text = _validate_marriage_answer(
+                            _partial_text, _marriage_block_pt_s
+                        )
                     _trace(req_id, "PASSTHROUGH(stream).PARTIAL_FINAL", {
                         "reason":     str(_stream_exc)[:200],
                         "text_chars": len(_partial_text),
@@ -18152,6 +18284,21 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "before_chars": len(_full_text_pt_s),
                     "after_chars":  len(_full_text_pt_s_scrubbed),
                 })
+
+            # Phase 2.8.28 — marriage answer validator on stream FINAL.
+            # Stream chunks already left the wire, but mobile commits the
+            # `done.text` field to local history + DB. So scrubbing here
+            # ensures persisted/displayed final text is engine-faithful.
+            if _marriage_block_pt_s:
+                _before_v_s = _full_text_pt_s_scrubbed
+                _full_text_pt_s_scrubbed = _validate_marriage_answer(
+                    _full_text_pt_s_scrubbed, _marriage_block_pt_s
+                )
+                if _full_text_pt_s_scrubbed != _before_v_s:
+                    _trace(req_id, "PASSTHROUGH(stream).MARRIAGE_VALIDATED", {
+                        "before_chars": len(_before_v_s),
+                        "after_chars":  len(_full_text_pt_s_scrubbed),
+                    })
 
             _trace(req_id, "PASSTHROUGH(stream).OPENAI_DONE", {
                 "text_chars":   len(_full_text_pt_s_scrubbed),

@@ -45,7 +45,7 @@ def _chart_intel():
 
 def _marriage_engine():
     """Lazy-load deterministic marriage verdict engine."""
-    from marriage_engine import assess_marriage, format_verdict_for_prompt  # type: ignore
+    from marriage_timing import assess_marriage, format_verdict_for_prompt  # type: ignore
     return assess_marriage, format_verdict_for_prompt
 
 
@@ -3841,7 +3841,7 @@ def _build_messages(
                 # Build a CLEAN facts payload — values only, no template,
                 # no jargon labels, no "Pranam beta". The AI receives
                 # these as locked data and writes its own natural reply.
-                from marriage_engine import (extract_window_str,
+                from marriage_timing import (extract_window_str,
                                              extract_alt_window_str)
                 v = marriage_verdict_obj
                 # Sprint-7: also compute Jaimini Upapada signature for the
@@ -4291,7 +4291,7 @@ def _build_messages(
         # can inject it as a hard-coded literal the AI cannot drift on.
         _mw = ""
         try:
-            from marriage_engine import extract_window_str  # type: ignore
+            from marriage_timing import extract_window_str  # type: ignore
             _mw = extract_window_str(marriage_verdict_obj or {})
         except Exception:
             _mw = ""
@@ -13288,7 +13288,7 @@ def _phase58_format_marriage_facts_block(v: Any) -> str:
 
     timing = "unknown"
     try:
-        from marriage_engine import extract_window_str  # type: ignore
+        from marriage_timing import extract_window_str  # type: ignore
         tw = extract_window_str(v) or ""
         if tw.strip():
             timing = tw.strip()

@@ -720,7 +720,11 @@ def _section_d9_navamsha(kundli: dict, p_lookup_d1: dict) -> str:
 def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
     if not isinstance(intel, dict) and not isinstance(kundli, dict):
         return ""
-    lines = ["## 7. YOGAS / DOSHAS / SADE-SATI / GOCHAR"]
+    # NOTE: header originally said "... / GOCHAR" but full transit
+    # detail moved to dedicated Section 8 (Phase 2.8.15, 1 May 2026).
+    # The transits-from-kundli-dict fallback below still runs for any
+    # legacy chart payload that pre-computed gochar inline.
+    lines = ["## 7. YOGAS / DOSHAS / SADE-SATI"]
     any_row = False
 
     yogas = (intel or {}).get("yogas") or kundli.get("yogas") or []
@@ -778,6 +782,154 @@ def _section_yogas_doshas(intel: dict | None, kundli: dict) -> str:
 # ────────────────────────────────────────────────────────────────────
 
 
+# ────────────────────────────────────────────────────────────────────
+# Section 8 — GOCHAR (current transits / live sky)
+#
+# Per project owner (1 May 2026): "Pehele 19 add karo." (Item #19 of
+# the 20-item LLM-context audit was 'Transit/gochar analysis' which
+# was almost entirely missing — only Sade-Sati phase was reaching the
+# model via Section 7.)
+#
+# Why ONLY slow-moving planets (Saturn/Jupiter/Rahu/Ketu)?
+#   Fast planets (Sun/Mars/Mer/Ven/Moon) change houses every few days
+#   to weeks. Citing a fast-planet transit makes a one-shot LLM answer
+#   stale within hours, which trains devotees to distrust the bot.
+#   Slow planets stay in a sign for months-to-years, so their gochar
+#   facts remain valid across the conversation. (Same scope-decision
+#   reasoning as `transits.py` module docstring.)
+#
+# Uses the existing `transits.compute_transits()` helper (already in
+# production for the marriage / career engines), so this section is
+# pure rendering + safe defensives. Returns "" on any failure so the
+# overall chart context never breaks.
+# ────────────────────────────────────────────────────────────────────
+
+
+def _section_gochar(
+    kundli: dict, intel: dict | None, birth: dict | None
+) -> str:
+    """Render current transits (slow-moving planets) vs natal chart.
+
+    Returns "" if natal lagna can't be resolved, swisseph isn't
+    available, or compute_transits() yields nothing usable.
+    """
+    # Natal lagna — independent fallback (same pattern as Section 2)
+    lagna_idx = _sign_idx(kundli.get("ascendant"))
+    if lagna_idx is None:
+        lagna_idx = _sign_idx(kundli.get("lagna"))
+    if lagna_idx is None:
+        return ""
+
+    # Natal Moon sign — needed for Sade-Sati / Dhaiya phase. Some
+    # legacy chart payloads stored the planet's sign under the `rashi`
+    # key instead of `sign`; check both so the Sade-Sati flag still
+    # fires across all payload variants.
+    moon_idx: Optional[int] = None
+    planets = kundli.get("planets")
+    if isinstance(planets, list):
+        for p in planets:
+            if isinstance(p, dict) and p.get("name") == "Moon":
+                moon_idx = _sign_idx(p.get("sign") or p.get("rashi"))
+                break
+
+    # Optional DOB datetime — only used for Saturn / Jupiter return
+    # age-window flags. Build defensively from the structured birth
+    # dict (day/month/year). If unavailable, returns still get the
+    # current sign + house data, just no age-based return windows.
+    dob_dt = None
+    if isinstance(birth, dict):
+        try:
+            from datetime import datetime as _dt
+            dob_dt = _dt(
+                int(birth["year"]), int(birth["month"]), int(birth["day"])
+            )
+        except Exception:
+            dob_dt = None
+
+    # ── Timezone-correct "as of" handling ─────────────────────────────
+    # Architect review flagged: `transits.compute_transits()` uses
+    # `datetime.utcnow()` and labels `as_of` in UTC. Around IST
+    # midnight (0000-0530 IST) UTC date is "yesterday" from the
+    # devotee's clock. Astronomy itself stays correct (swisseph
+    # needs UTC), but the *display* must read IST. So we:
+    #   • compute `when_utc` ourselves and pass it explicitly,
+    #   • override the `as_of` label with IST date, marked "(IST)".
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    when_utc = _dt.utcnow()
+    _ist = _tz(_td(hours=5, minutes=30))
+    as_of_ist = (
+        when_utc.replace(tzinfo=_tz.utc).astimezone(_ist).strftime("%Y-%m-%d")
+    )
+
+    try:
+        from transits import compute_transits  # type: ignore
+        t = compute_transits(lagna_idx, moon_idx, dob=dob_dt, when=when_utc)
+    except Exception:
+        return ""
+
+    if not isinstance(t, dict) or "transit_houses" not in t:
+        return ""
+    th = t.get("transit_houses")
+    if not isinstance(th, dict) or not th:
+        return ""
+
+    lines: list[str] = [
+        "## 8. GOCHAR (current planetary transits — slow-moving planets)",
+        f"As of: {as_of_ist} (IST)",
+        "",
+        "Planet  | Current Sign  | Natal House (from natal Lagna)",
+        "--------|---------------|-------------------------------",
+    ]
+    for nm in ("Saturn", "Jupiter", "Rahu", "Ketu"):
+        info = th.get(nm)
+        if not isinstance(info, dict):
+            continue
+        sign = str(info.get("sign", "?"))
+        h = info.get("house_from_lagna", "?")
+        lines.append(f"{nm:<7s} | {sign:<13s} | H{h}")
+
+    # Key narrative flags from compute_transits — dump only the ones
+    # that compute_transits actually emitted (it self-decides which
+    # situations warrant a flag).
+    flags: list[str] = []
+    for key in (
+        "sade_sati_phase",
+        "saturn_caution_flag",
+        "jupiter_lucky_flag",
+        "rahu_theme_flag",
+        "saturn_return",
+        "jupiter_return",
+    ):
+        v = t.get(key)
+        if isinstance(v, str) and v.strip():
+            flags.append(f"  • {v.strip()}")
+
+    j_asp = t.get("jupiter_aspects_houses")
+    if isinstance(j_asp, list) and j_asp:
+        flags.append(
+            "  • Transit Jupiter aspects natal houses: "
+            + ", ".join(f"H{h}" for h in j_asp)
+        )
+
+    if flags:
+        lines.append("")
+        lines.append("Key gochar flags (live sky → natal chart):")
+        lines.extend(flags)
+
+    lines.append("")
+    lines.append("GOCHAR READING RULE:")
+    lines.append(
+        "  • Slow-moving transits (Saturn/Jupiter/Rahu/Ketu) drive "
+        "BIG-LIFE timing themes."
+    )
+    lines.append(
+        "  • Transit signals FRUCTIFY when active Mahadasha/Antardasha "
+        "aligns with the same house/theme — always cross-check Section 4."
+    )
+
+    return "\n".join(lines)
+
+
 def _section_kp(birth: dict | None) -> str:
     if not isinstance(birth, dict) or not birth:
         return ""
@@ -796,7 +948,7 @@ def _section_kp(birth: dict | None) -> str:
     if not cusps and not planets:
         return ""
 
-    lines: list[str] = ["## 8. KP (KRISHNAMURTI PADDHATI) — FULL CUSPS + PLANETS"]
+    lines: list[str] = ["## 9. KP (KRISHNAMURTI PADDHATI) — FULL CUSPS + PLANETS"]
     aya = kp.get("ayanamsa")
     if aya is not None:
         try:
@@ -877,7 +1029,7 @@ def _section_kp(birth: dict | None) -> str:
 #   2. Language: reply in Hinglish (devotee's preference).
 # ────────────────────────────────────────────────────────────────────
 
-_MINIMAL_GUIDANCE = """## 9. NIYAM (sirf 2 — baaki tum khud decide karo)
+_MINIMAL_GUIDANCE = """## 10. NIYAM (sirf 2 — baaki tum khud decide karo)
 
 • Sirf upar di hui kundli ke fields cite karo. Koi naya graha placement,
   dasha, ya yoga IMAGINE NAHI karna. Agar zaroori detail upar nahi hai,
@@ -978,6 +1130,16 @@ def build_full_chart_context(
         pass
     try:
         s = _section_yogas_doshas(intel_d, kundli)
+        if s:
+            sections.append(s)
+    except Exception:
+        pass
+    # Section 8 — GOCHAR (current transits). Inserted BEFORE KP so the
+    # "live sky vs natal" picture is fresh in the LLM's context before
+    # it descends into deep KP fructification analysis. Defensive try
+    # so a swisseph hiccup never blocks the rest of the chart context.
+    try:
+        s = _section_gochar(kundli, intel_d, birth_d)
         if s:
             sections.append(s)
     except Exception:

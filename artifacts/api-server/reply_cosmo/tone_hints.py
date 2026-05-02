@@ -1,21 +1,21 @@
-"""narrator_cosmo/tone_hints.py - emotion-aware tone hint helper.
+"""reply_cosmo/tone_hints.py - emotion-aware tone hint helper.
 
 Phase 2.8.49 (02 May 2026) - relocated from `ask_cosmo/tone_hints.py`
-into `narrator_cosmo/` so the entire response-shaping surface lives in
+into `reply_cosmo/` so the entire response-shaping surface lives in
 one place. Behavior preserved verbatim.
 
-Why this lives in narrator_cosmo (not ask_cosmo):
+Why this lives in reply_cosmo (not ask_cosmo):
 - It is a pure RESPONSE-SHAPING helper: takes SQU output (`emotion`,
   `urgency`) and emits a system-prompt directive that nudges the
   narrator's opening tone. No question-classification logic.
-- ask_cosmo = "KYA poocha" (question understanding); narrator_cosmo =
+- ask_cosmo = "KYA poocha" (question understanding); reply_cosmo =
   "KAISE jawab dena" (response shaping). Tone-hints belong on the
   shaping side, even though they consume question-side data.
 
 `ask_cosmo/tone_hints.py` remains as a back-compat re-export shim so any
 caller still doing `from ask_cosmo import _build_emotion_tone_hint` keeps
 working. The canonical import is now
-`from narrator_cosmo import _build_emotion_tone_hint`.
+`from reply_cosmo import _build_emotion_tone_hint`.
 
 Phase 2.8.43 history (preserved): originally extracted from
 openai_helper.py L1005-1062 and placed in `ask_cosmo/`.

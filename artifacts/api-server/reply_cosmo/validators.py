@@ -1,5 +1,5 @@
 """
-narrator_cosmo.validators — post-LLM output guards
+reply_cosmo.validators — post-LLM output guards
 ===================================================
 
 Phase 2.8.45 — extracted from openai_helper.py L159.
@@ -37,7 +37,7 @@ def _validate_marriage_answer(answer_text, engine_block):  # Phase 2.8.37 stub
     checks (no extra LLM calls).
     Phase 2.8.37 — stubbed to pass-through when marriage engine moved
     to a different contract.
-    Phase 2.8.45 — moved into narrator_cosmo/validators.py verbatim.
+    Phase 2.8.45 — moved into reply_cosmo/validators.py verbatim.
     Behavior unchanged — returns answer_text untouched.
     """
     return answer_text

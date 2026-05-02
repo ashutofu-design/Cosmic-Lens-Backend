@@ -1,4 +1,4 @@
-"""narrator_cosmo/prompt_builders.py
+"""reply_cosmo/prompt_builders.py
 
 Phase 2.8.49 (02 May 2026) — consolidate the four LLM-prompt builders
 that previously lived as top-level functions in openai_helper.py into

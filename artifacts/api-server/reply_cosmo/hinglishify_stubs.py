@@ -1,13 +1,13 @@
-"""narrator_cosmo/hinglishify_stubs.py
+"""reply_cosmo/hinglishify_stubs.py
 
-Phase 2.8.46 PERMANENTLY DELETED `narrator_cosmo/hinglishify.py` plus
+Phase 2.8.46 PERMANENTLY DELETED `reply_cosmo/hinglishify.py` plus
 the EN→Hinglish zodiac-name scrubber. The two surface functions called
 by `flask_app.py` (post-LLM scrub) and `openai_helper.py` (every
 narrator path) became no-op passthroughs.
 
 Phase 2.8.49 — those passthrough stubs were *moved* out of
 `openai_helper.py` into this dedicated module so the entire
-narrator-shaping surface lives under `narrator_cosmo/`. The functions
+narrator-shaping surface lives under `reply_cosmo/`. The functions
 remain dead passthroughs (return input unchanged); `openai_helper.py`
 keeps re-import shims so external callers like
 `from openai_helper import hinglishify_response` keep working.

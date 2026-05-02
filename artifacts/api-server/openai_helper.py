@@ -156,9 +156,9 @@ def _passthrough_marriage_block(*a, **k): return ""  # Phase 2.8.37 stub
 # Pure deterministic checks on LLM output. NO extra LLM calls.
 # Architecture: Engine = Truth (locked) | LLM = Translator | Validator = Guard.
 # ════════════════════════════════════════════════════════════════════
-# Phase 2.8.45 — moved to narrator_cosmo/validators.py. Re-imported here so
+# Phase 2.8.45 — moved to reply_cosmo/validators.py. Re-imported here so
 # existing call sites (L13270, L16560, L16623) keep working unchanged.
-from narrator_cosmo.validators import _validate_marriage_answer  # noqa: F401
+from reply_cosmo.validators import _validate_marriage_answer  # noqa: F401
 
 
 def _stock_engine(): return (lambda *a, **k: None, lambda *a, **k: "", lambda *a, **k: "", lambda *a, **k: "")  # Phase 2.8.38 stub
@@ -434,10 +434,10 @@ if _brevity_mode_enabled():
 import re as _re_topic  # local alias to avoid module-level collision
 
 # Phase 2.8.49 - _TOPIC_SIGN_LORDS + _TOPIC_SIGN_ALIASES moved to
-# narrator_cosmo/prompt_builders.py alongside the topic helpers and
+# reply_cosmo/prompt_builders.py alongside the topic helpers and
 # _build_topic_lock that were the only consumers. Re-imported here so
 # any future caller that grabs them via openai_helper still works.
-from narrator_cosmo import _TOPIC_SIGN_LORDS, _TOPIC_SIGN_ALIASES  # noqa: F401
+from reply_cosmo import _TOPIC_SIGN_LORDS, _TOPIC_SIGN_ALIASES  # noqa: F401
 
 # Topic rules — ORDERED. First match wins, so the more specific
 # patterns (elder/younger sibling) MUST come before the generic
@@ -802,12 +802,12 @@ def _detect_topic(question):
 
 # Phase 2.8.49 - _topic_lagna_sign_idx, _topic_house_lord,
 # _topic_current_dasha, AND _build_topic_lock all moved to
-# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# reply_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
 # circular-dep avoidance via lazy `from openai_helper import
 # _brevity_mode_enabled` inside _build_topic_lock changed. Re-imported
 # here so external callers that do `from openai_helper import ...` keep
 # working unchanged.
-from narrator_cosmo import (  # noqa: F401
+from reply_cosmo import (  # noqa: F401
     _topic_lagna_sign_idx,
     _topic_house_lord,
     _topic_current_dasha,
@@ -935,12 +935,12 @@ def __unused_build_topic_lock(rule, kundli):  # pragma: no cover
 # ────────────────────────────────────────────────────────────────────
 # Phase 2.8.43 — _EMOTION_TONE_HINT_HN + _build_emotion_tone_hint
 # moved to `ask_cosmo/tone_hints.py` alongside the SQU classifier.
-# Phase 2.8.49 — relocated to `narrator_cosmo/tone_hints.py` because
+# Phase 2.8.49 — relocated to `reply_cosmo/tone_hints.py` because
 # tone-hints are response-shaping (narrator side), not question
 # classification (ask side). `ask_cosmo/tone_hints.py` remains as a
 # back-compat shim. Re-imported here so the passthrough block + the
 # post-Phase 5.0 append site keep working unchanged.
-from narrator_cosmo import _EMOTION_TONE_HINT_HN, _build_emotion_tone_hint  # noqa: F401
+from reply_cosmo import _EMOTION_TONE_HINT_HN, _build_emotion_tone_hint  # noqa: F401
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -1551,12 +1551,12 @@ def _ym_human_w(ym: str) -> str:
 
 
 # Phase 2.8.49 - _build_wealth_structured_system_prompt moved to
-# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# reply_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
 # circular-dep avoidance via lazy `from openai_helper import
 # _WEALTH_VERDICT_TAG_MAP, _ym_human_w` inside the function changed.
 # Re-imported here so external callers (treatment_playbook.py docstring,
 # any future caller) that do `from openai_helper import ...` keep working.
-from narrator_cosmo import _build_wealth_structured_system_prompt  # noqa: F401
+from reply_cosmo import _build_wealth_structured_system_prompt  # noqa: F401
 
 
 def __unused_build_wealth_structured_system_prompt(verdict_obj: dict,
@@ -2431,7 +2431,7 @@ def _detect_question_lang(question: str, fallback: str) -> str:
 # applies to ALL paths (single-intent OpenAI, structured wealth cards,
 # rule-engine fallback) so we run it as a final scrub on the response text.
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 2.8.46 - narrator_cosmo/hinglishify.py PERMANENTLY DELETED on
+# Phase 2.8.46 - reply_cosmo/hinglishify.py PERMANENTLY DELETED on
 # explicit user direction. The zodiac EN->Hinglish scrubber surface is
 # now a passthrough stub. flask_app.py L5815 still does
 # `from openai_helper import hinglishify_response, _resolve_response_lang`
@@ -2441,13 +2441,13 @@ def _detect_question_lang(question: str, fallback: str) -> str:
 # or "Cancer", they will reach the user unscrubbed.
 #
 # Phase 2.8.49 - the dead passthrough stubs were *moved* out of this
-# file into `narrator_cosmo/hinglishify_stubs.py` so the entire
+# file into `reply_cosmo/hinglishify_stubs.py` so the entire
 # narrator-shaping surface lives in one place. Re-imported here so the
 # `from openai_helper import hinglishify_response` import contract
 # stays intact. To restore real Hinglish scrubbing, replace the stub
-# bodies in `narrator_cosmo/hinglishify_stubs.py` with the real
+# bodies in `reply_cosmo/hinglishify_stubs.py` with the real
 # implementation - no further changes needed at the call sites.
-from narrator_cosmo import (  # noqa: F401
+from reply_cosmo import (  # noqa: F401
     _ZODIAC_EN_TO_HI,
     _ZODIAC_RX,
     _hinglishify_zodiac,
@@ -2865,7 +2865,7 @@ def _build_messages(
     locked_facts_str = ""
     engine_status = {"ok": [], "skipped": [], "failed": [], "overall": "empty"}
     try:
-        from narrator_cosmo.engine_locked_to_llm.locked_facts import (build_locked_facts,  # type: ignore
+        from reply_cosmo.engine_locked_to_llm.locked_facts import (build_locked_facts,  # type: ignore
                                    get_last_engine_status,
                                    _finalise_engine_status)
         locked_facts_str = build_locked_facts(kundli, birth) or ""
@@ -7417,7 +7417,7 @@ def _engine_honesty_check(engine_status, qu=None):
         return {"refuse": False, "warn": False, "failed_phases": [],
                 "optional_failed": [], "reason": "no_status"}
     try:
-        from narrator_cosmo.engine_locked_to_llm.locked_facts import _is_primary_phase  # type: ignore
+        from reply_cosmo.engine_locked_to_llm.locked_facts import _is_primary_phase  # type: ignore
     except Exception:
         return {"refuse": False, "warn": False, "failed_phases": [],
                 "optional_failed": [], "reason": "import_failed"}
@@ -8780,11 +8780,11 @@ def _build_supertype_contract(supertype: str,
 # contract still wins recency, but the LLM sees the user's true
 # intent as context.
 # Phase 2.8.49 - _build_true_intent_hint moved to
-# narrator_cosmo/prompt_builders.py. Pure function (no openai_helper
+# reply_cosmo/prompt_builders.py. Pure function (no openai_helper
 # deps), so no lazy imports needed inside body. Re-imported here so
 # external callers (ask_cosmo/understanding.py docstring + any future
 # caller) doing `from openai_helper import ...` keep working.
-from narrator_cosmo import _build_true_intent_hint  # noqa: F401
+from reply_cosmo import _build_true_intent_hint  # noqa: F401
 
 
 def __unused_build_true_intent_hint(
@@ -9208,11 +9208,11 @@ def _phase74_retry_threshold() -> float:
 
 
 # Phase 2.8.49 - _build_repair_prompt moved to
-# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# reply_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
 # circular-dep avoidance via lazy `from openai_helper import
 # _PHASE74_REPAIRABLE_CHECKS` inside the function changed. Re-imported
 # here so internal callers (_run_repair_retry below) keep working.
-from narrator_cosmo import _build_repair_prompt  # noqa: F401
+from reply_cosmo import _build_repair_prompt  # noqa: F401
 
 
 def __unused_build_repair_prompt(
@@ -9967,7 +9967,7 @@ def _validate_supertype_contract(text: str, supertype: str,
         _facts = {}
         if kundli is not None:
             try:
-                from narrator_cosmo.engine_locked_to_llm.locked_facts import compute_strength_facts  # type: ignore
+                from reply_cosmo.engine_locked_to_llm.locked_facts import compute_strength_facts  # type: ignore
                 _facts = compute_strength_facts(kundli) or {}
             except Exception:
                 _facts = {}
@@ -10708,7 +10708,7 @@ def _phase55_safe_compute_kp_summary(kundli: Any) -> dict:
     if not isinstance(kundli, dict):
         return {}
     try:
-        from narrator_cosmo.engine_locked_to_llm.kp_locked_facts import compute_kp_summary  # type: ignore
+        from reply_cosmo.engine_locked_to_llm.kp_locked_facts import compute_kp_summary  # type: ignore
     except Exception:
         return {}
     try:
@@ -18666,7 +18666,7 @@ def _v2_run_card(intent_summary: str,
 
     # ── P3: AI Mouth — DELETED (Phase 2.8.46 user-approved permanent removal)
     # narrator_v2 reshape step (compose_card_narrative) was deleted along
-    # with the narrator_v2 module and its narrator_cosmo/narrator_v2.py
+    # with the narrator_v2 module and its reply_cosmo/narrator_v2.py
     # successor. This branch now falls straight through to the raw engine
     # text fallback below — same behavior as a NarratorV2Error in the old
     # code path. The NARRATOR_V2_ENABLED env var is now a no-op and the

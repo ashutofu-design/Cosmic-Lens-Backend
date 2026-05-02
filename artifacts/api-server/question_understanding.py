@@ -69,6 +69,11 @@ _PROMPT_TEMPLATE = (
     "  \"depth\": \"shallow | medium | deep\",\n"
     "  \"user_keywords\": [\"<≤5 user's own salient phrases>\"],\n"
     "  \"archetype\": \"OVERVIEW | TIMING | DECISION | REMEDY | EXPLAIN\",\n"
+    "  \"subtopic\": \"<≤3 words sub-area within topic, or null>\",\n"
+    "  \"needs_engine\": true | false,\n"
+    "  \"emotion\": \"neutral | anxiety | anger | sadness | confusion | excitement | frustration\",\n"
+    "  \"urgency\": \"high | medium | low\",\n"
+    "  \"cleaned_q\": \"<typo-corrected concise version, ≤15 words>\",\n"
     "  \"confidence\": 0.0 to 1.0\n"
     "}}\n\n"
     "MULTI-INTENT RANKING (intents_ranked):\n"
@@ -164,6 +169,52 @@ _PROMPT_TEMPLATE = (
     "(definitional/conditional) map here.\n"
     "- IMPORTANT: archetype is ALWAYS one of the 5 enums. Never null, "
     "never empty. When in doubt, pick EXPLAIN.\n\n"
+    "SUBTOPIC (subtopic):\n"
+    "- ≤3 words narrowing further INSIDE the chosen `topic`. More specific "
+    "than `focus` and meant for engine routing.\n"
+    "- Marriage examples: 'timing', 'love_vs_arrange', 'spouse_quality', "
+    "'delay_reason', 'remedy', 'compatibility'.\n"
+    "- Career examples: 'timing', 'switch', 'promotion', "
+    "'business_vs_job', 'salary'.\n"
+    "- Finance examples: 'timing', 'loan', 'investment', 'debt', "
+    "'savings'.\n"
+    "- Health examples: 'general_body', 'mental', 'chronic', 'remedy'.\n"
+    "- Return null only when no clear sub-area applies.\n\n"
+    "NEEDS_ENGINE (needs_engine):\n"
+    "- TRUE when the answer needs the user's actual chart computation: "
+    "predictions ('kab'), strength readings, dosha presence, divisional "
+    "placements, timing of life events, dasha-based forecasts, "
+    "compatibility analysis, personalised remedy.\n"
+    "- FALSE for concept-only questions ('X kya hai', 'explain dasha', "
+    "'what is navamsa'), pure greetings ('namaste', 'hi'), generic info "
+    "that doesn't need the user's chart, or simple lookup ('mera lagna "
+    "kya hai' is a pure data lookup, not engine compute).\n"
+    "- When in doubt, prefer TRUE — better to compute facts than miss them.\n\n"
+    "EMOTION (emotion):\n"
+    "- The DOMINANT emotional tone in the question text. Choose ONE:\n"
+    "  • anxiety     → 'stress', 'pareshan', 'tension', 'darr', worry tone.\n"
+    "  • anger       → 'gussa', 'tang aa gaya', 'fed up', frustration vent.\n"
+    "  • sadness     → 'dukhi', 'akela', 'depressed', 'mann nahi lagta'.\n"
+    "  • confusion   → 'samajh nahi', 'kya karoon', mixed signals.\n"
+    "  • excitement  → 'khush', 'amazing', 'great news'.\n"
+    "  • frustration → 'kab tak yaar', 'thak gaya', 'bahut ho gaya'.\n"
+    "  • neutral     → DEFAULT. Plain factual ask, no emotional charge.\n\n"
+    "URGENCY (urgency):\n"
+    "- HIGH   → 'abhi', 'jaldi', 'kab tak', 'urgent', desperate tone, "
+    "hard deadline mentioned, repeated 'kab kab'.\n"
+    "- MEDIUM → DEFAULT. Standard predictive or analytical question with "
+    "no explicit urgency cue.\n"
+    "- LOW    → casual curiosity, 'kabhi', 'future me', 'long term', "
+    "educational concept, 'just asking'.\n\n"
+    "CLEANED_Q (cleaned_q):\n"
+    "- Typo-corrected, grammar-normalised version of the question. "
+    "≤15 words.\n"
+    "- Preserve language (Hindi/English/Hinglish/Devanagari). Do NOT "
+    "translate.\n"
+    "- Strip filler ('yaar', 'bhai', 'na') but keep meaning intact.\n"
+    "- Example: 'shadii kbb hgi yarrr' → 'shaadi kab hogi'.\n"
+    "- Example: 'merry kab hoga' → 'marriage kab hoga'.\n"
+    "- If question is already clean, return it unchanged.\n\n"
     "INTENT definitions (pick the most specific that fits):\n"
     "- planet   → ANY question that NAMES a graha (Sun, Moon, Mars, Mercury, "
     "Jupiter, Venus, Saturn, Rahu, Ketu / Surya, Chandra, Mangal, Budh, Guru, "
@@ -302,6 +353,16 @@ def _fallback_classify(question: str) -> dict:
         # Phase 7.3 — archetype derived from question text via regex
         # heuristic; defaults EXPLAIN when no cue matches.
         "archetype":                _archetype_from_text(q) if q else "EXPLAIN",
+        # Phase 2.8.41 — SQU extension defaults (no LLM available, use
+        # safest values). `needs_engine=True` keeps chart computation on
+        # for predictive Qs even when the AI call fails. `final_topic_lock`
+        # mirrors the regex-derived topic so engine + narrator stay aligned.
+        "subtopic":                 None,
+        "needs_engine":             True,
+        "emotion":                  "neutral",
+        "urgency":                  "medium",
+        "cleaned_q":                None,
+        "final_topic_lock":         topic,
         "confidence":              0.5,
         "source":                  "regex_fallback",
     }
@@ -429,6 +490,136 @@ def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
 _ARCHETYPES: tuple[str, ...] = (
     "OVERVIEW", "TIMING", "DECISION", "REMEDY", "EXPLAIN",
 )
+
+# Phase 2.8.41 (May 02, 2026) — Smart Query Understanding extension.
+# Five additive output fields used by downstream routing (`needs_engine`,
+# `subtopic`) and narrator tone (`emotion`, `urgency`, `cleaned_q`).
+# All five are emitted by EVERY return path of understand_question() so
+# consumers never KeyError. final_topic_lock mirrors `topic` after sanity
+# / recovery so the narrator and engine stay aligned. clarification_text
+# is non-null only when SQU genuinely cannot route the question.
+_EMOTIONS: tuple[str, ...] = (
+    "neutral", "anxiety", "anger", "sadness",
+    "confusion", "excitement", "frustration",
+)
+_URGENCIES: tuple[str, ...] = ("high", "medium", "low")
+
+
+def _normalise_new_squ_fields(data: dict) -> dict:
+    """Phase 2.8.41 — sanitise the 5 new SQU fields with safe defaults.
+
+    Inputs are LLM-emitted JSON values (any shape); outputs are guaranteed
+    to be one of the canonical types/enums or a safe default. Never raises.
+    Caller is responsible for setting `final_topic_lock` (= post-recovery
+    topic) since topic recovery happens AFTER this normaliser runs.
+    """
+    raw_subtopic = data.get("subtopic") if isinstance(data, dict) else None
+    if isinstance(raw_subtopic, str):
+        s = raw_subtopic.strip()
+        if s.lower() in ("", "null", "none", "n/a"):
+            subtopic = None
+        else:
+            subtopic = " ".join(s.split()[:3]).lower()
+    else:
+        subtopic = None
+
+    raw_needs = data.get("needs_engine") if isinstance(data, dict) else None
+    if isinstance(raw_needs, bool):
+        needs_engine = raw_needs
+    elif isinstance(raw_needs, str):
+        needs_engine = raw_needs.strip().lower() in (
+            "true", "yes", "1", "y", "t",
+        )
+    elif isinstance(raw_needs, (int, float)):
+        # Phase 2.8.41 hardening (architect feedback): accept numeric 0/1.
+        # LLMs sometimes emit JSON booleans as numbers; treat 0 as False,
+        # any other number as True. Avoids silently forcing compute when
+        # model intended to skip it.
+        needs_engine = bool(raw_needs)
+    else:
+        needs_engine = True   # safe default — better to compute than miss
+
+    raw_emotion = data.get("emotion") if isinstance(data, dict) else None
+    if isinstance(raw_emotion, str):
+        e = raw_emotion.strip().lower()
+        emotion = e if e in _EMOTIONS else "neutral"
+    else:
+        emotion = "neutral"
+
+    raw_urgency = data.get("urgency") if isinstance(data, dict) else None
+    if isinstance(raw_urgency, str):
+        u = raw_urgency.strip().lower()
+        urgency = u if u in _URGENCIES else "medium"
+    else:
+        urgency = "medium"
+
+    raw_cleaned = data.get("cleaned_q") if isinstance(data, dict) else None
+    if isinstance(raw_cleaned, str):
+        c = raw_cleaned.strip()
+        # Phase 2.8.41 hardening (architect feedback): null-map LLM
+        # literals like "null"/"none"/"n/a" the same way subtopic does,
+        # so garbage placeholders don't leak as text into the narrator.
+        if c.lower() in ("", "null", "none", "n/a", "na"):
+            cleaned_q = None
+        else:
+            cleaned_q = " ".join(c.split()[:15])
+    else:
+        cleaned_q = None
+
+    return {
+        "subtopic":     subtopic,
+        "needs_engine": needs_engine,
+        "emotion":      emotion,
+        "urgency":      urgency,
+        "cleaned_q":    cleaned_q,
+    }
+
+
+# Phase 2.8.41 — readable Hinglish topic labels for the clarification probe.
+_TOPIC_LABEL_HI = {
+    "marriage": "shaadi",
+    "career":   "career",
+    "finance":  "paisa",
+    "love":     "rishta",
+    "health":   "sehat",
+}
+
+
+def _build_clarification_text(out: dict) -> Optional[str]:
+    """Phase 2.8.41 — Human-tone Hinglish clarification probe.
+
+    Returns a warm probe string only when SQU genuinely cannot route the
+    question — i.e. confidence is low AND no domain anchor was detected
+    AND topic stayed at the catch-all 'general'. In all other cases
+    returns None (caller skips the probe).
+    """
+    if not isinstance(out, dict):
+        return None
+    try:
+        conf = float(out.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    if conf >= 0.6:
+        return None
+    if out.get("domain_anchor_found"):
+        return None
+    if (out.get("topic") or "general") != "general":
+        return None
+    topics_all = out.get("topics_all") or []
+    readable = [
+        _TOPIC_LABEL_HI[t] for t in topics_all[:2]
+        if t in _TOPIC_LABEL_HI
+    ]
+    if readable:
+        joined = " ya ".join(readable)
+        return (
+            f"Lag raha hai {joined} ka sawal hai — main sahi samajh lu, "
+            f"isliye pooch raha hoon. Thoda clear karoge?"
+        )
+    return (
+        "Aapka sawal poori tarah samjha nahi — thoda aur bata sakte? "
+        "Kis baare me jaanna chahte (shaadi / career / sehat / paisa)?"
+    )
 
 # Phase 7.3 — regex-fallback archetype heuristic. Used when the AI
 # classifier fails and we drop to the regex safety-net (which previously
@@ -856,10 +1047,29 @@ def understand_question(question: str,
     """Public entry — Phase 4.1: applies classifier sanity layer (Fix-P)
     on top of the inner AI/regex classifier. Always returns the same dict
     shape; adds `intent_overridden_from`, `intent_override_reason`,
-    `intent_override_phase` keys when an override fires."""
+    `intent_override_phase` keys when an override fires.
+
+    Phase 2.8.41 (May 02, 2026): also guarantees the 5 new SQU fields
+    (subtopic, needs_engine, emotion, urgency, cleaned_q) plus
+    final_topic_lock + clarification_text on every return path, even
+    when an inner code path forgot to emit them.
+    """
     q = (question or "").strip()
     out = _understand_question_inner(question, client=client, model=model)
-    return _apply_classifier_sanity_layer(out, q)
+    out = _apply_classifier_sanity_layer(out, q)
+    # Phase 2.8.41 — defence-in-depth: every public-entry return guarantees
+    # the new SQU fields. setdefault() keeps inner-path values intact when
+    # they were already emitted; only fills missing ones.
+    out.setdefault("subtopic", None)
+    out.setdefault("needs_engine", True)
+    out.setdefault("emotion", "neutral")
+    out.setdefault("urgency", "medium")
+    out.setdefault("cleaned_q", None)
+    out.setdefault("final_topic_lock", out.get("topic") or "general")
+    # clarification_text is computed every call — it depends on the FINAL
+    # post-sanity-layer state of `out`, not the inner-path snapshot.
+    out["clarification_text"] = _build_clarification_text(out)
+    return out
 
 
 def _understand_question_inner(question: str,
@@ -904,6 +1114,14 @@ def _understand_question_inner(question: str,
             "timeframe":     "none",
             "depth":         "medium",
             "user_keywords": [],
+            # Phase 2.8.41 — SQU extension defaults on empty-question path.
+            # No question to analyse → no engine work needed, neutral tone.
+            "subtopic":         None,
+            "needs_engine":     False,
+            "emotion":          "neutral",
+            "urgency":          "low",
+            "cleaned_q":        None,
+            "final_topic_lock": "general",
         }
 
     if model is None:
@@ -924,20 +1142,43 @@ def _understand_question_inner(question: str,
 
     t0 = time.time()
     try:
-        resp = client.chat.completions.create(
+        # Phase 2.8.41 — gpt-5 series (and several proxy targets) renamed
+        # `max_tokens` to `max_completion_tokens` and reject the legacy
+        # name with HTTP 400. Try the new name first, fall back to the
+        # legacy name for older models. Without this guard, EVERY SQU
+        # call silently dropped to `_fallback_classify` (regex) — losing
+        # all LLM-derived fields (subtopic, emotion, urgency, cleaned_q,
+        # multi-intent) for the entire request.
+        _create_kwargs = dict(
             model=model,
             temperature=0.1,
-            max_tokens=220,
-            # Phase 6.2: hard timeout — see _QU_TIMEOUT_S above. On timeout
-            # the OpenAI client raises, the except branch below catches it,
-            # and we fall back to `_fallback_classify` (regex). UI never
-            # blocks on a stuck classifier call.
             timeout=_QU_TIMEOUT_S,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "user", "content": _PROMPT_TEMPLATE.format(question=q)}
             ],
         )
+        try:
+            resp = client.chat.completions.create(
+                max_completion_tokens=380, **_create_kwargs
+            )
+        except TypeError:
+            # SDK is too old to recognise the new kwarg.
+            resp = client.chat.completions.create(
+                max_tokens=380, **_create_kwargs
+            )
+        except Exception as exc:
+            # Some servers raise BadRequestError instead of TypeError when
+            # the kwarg is unknown — sniff the message for the rename hint
+            # and retry with the legacy name. Anything else propagates.
+            _msg = str(exc).lower()
+            if ("max_tokens" in _msg and "max_completion_tokens" in _msg) \
+                    or "use 'max_tokens'" in _msg:
+                resp = client.chat.completions.create(
+                    max_tokens=380, **_create_kwargs
+                )
+            else:
+                raise
         latency_ms = int((time.time() - t0) * 1000)
         raw = (resp.choices[0].message.content or "").strip()
         data = json.loads(raw)
@@ -990,6 +1231,14 @@ def _understand_question_inner(question: str,
             # Keep AI's ranked extras even at low confidence — they're useful
             # diagnostics even if the engine routing uses regex primaries.
             fb.update(_normalise_multi_fields(data, intent, topic))
+            # Phase 2.8.41 — also keep the AI's SQU-extension fields when
+            # the call succeeded but confidence was below the floor. The
+            # 5 new fields are independent of intent/topic accuracy, so
+            # the AI's emotion / urgency / cleaned_q reads are still
+            # useful for the narrator. final_topic_lock follows the
+            # regex-derived `topic` already set in `fb` above.
+            fb.update(_normalise_new_squ_fields(data))
+            fb["final_topic_lock"] = fb.get("topic") or "general"
             return fb
 
         out = {
@@ -1000,6 +1249,11 @@ def _understand_question_inner(question: str,
             "latency_ms": latency_ms,
         }
         out.update(_normalise_multi_fields(data, intent, topic))
+        # Phase 2.8.41 — merge the 5 new SQU fields (subtopic, needs_engine,
+        # emotion, urgency, cleaned_q). final_topic_lock is set further
+        # below AFTER topic-recovery so engine + narrator align on the
+        # final, post-override topic.
+        out.update(_normalise_new_squ_fields(data))
         # Sprint-26 Fix-N: deterministic post-pass — promote `analysis` to
         # PRIMARY when the question is WHY-leading or names a contradiction.
         new_ranked, new_intent, promoted = _maybe_promote_analysis_for_why(
@@ -1039,6 +1293,10 @@ def _understand_question_inner(question: str,
                                 if t != tname and t != "general"]
                     out["topics_all"] = [tname] + existing
                     break
+        # Phase 2.8.41 — final_topic_lock is the canonical post-recovery
+        # topic. Engine routing + narrator topic-context both read this
+        # so they never drift apart from the AI's original `topic` field.
+        out["final_topic_lock"] = out.get("topic") or "general"
         return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)

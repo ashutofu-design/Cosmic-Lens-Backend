@@ -585,13 +585,33 @@ _TOPIC_LABEL_HI = {
 }
 
 
-def _build_clarification_text(out: dict) -> Optional[str]:
-    """Phase 2.8.41 — Human-tone Hinglish clarification probe.
+# Phase 2.8.42 (May 02, 2026) — tiered clarification thresholds.
+# Tunable as constants for future data-driven calibration. Telemetry
+# can be added against these names to track probe-fire rates per tier.
+_CONF_HARD_PROBE   = 0.4   # below this: full clarify (system has no clue)
+_CONF_SOFT_CONFIRM = 0.6   # 0.4-0.6 range: 1-line confirm with guess
 
-    Returns a warm probe string only when SQU genuinely cannot route the
-    question — i.e. confidence is low AND no domain anchor was detected
-    AND topic stayed at the catch-all 'general'. In all other cases
-    returns None (caller skips the probe).
+
+def _build_clarification_text(out: dict) -> Optional[str]:
+    """Phase 2.8.41 / extended in Phase 2.8.42 — tiered Hinglish clarify.
+
+    Three tiers based on classifier confidence:
+
+    * conf >= _CONF_SOFT_CONFIRM (0.6): no probe — system is confident,
+      answer directly.
+    * _CONF_HARD_PROBE <= conf < _CONF_SOFT_CONFIRM (0.4-0.6): SOFT
+      confirm — system has a topic guess, ask 1-line confirmation
+      ("Lag raha hai shaadi ka sawal — sahi hu?"). User can `haan`
+      to continue or correct.
+    * conf < _CONF_HARD_PROBE (0.4): HARD probe — system has no
+      reliable guess, ask user to clarify what they meant. Includes
+      topics_all hint when the LLM at least surfaced candidates.
+
+    A strong domain anchor (rare hard keyword like "Mars in 7th") still
+    short-circuits the probe at any confidence level — those are
+    unambiguous regardless of conf score.
+
+    Returns None (no probe) for tier-3, otherwise a string.
     """
     if not isinstance(out, dict):
         return None
@@ -599,16 +619,33 @@ def _build_clarification_text(out: dict) -> Optional[str]:
         conf = float(out.get("confidence") or 0.0)
     except (TypeError, ValueError):
         conf = 0.0
-    if conf >= 0.6:
+
+    # Tier 3 — high confidence: trust the classifier, no probe.
+    if conf >= _CONF_SOFT_CONFIRM:
         return None
+    # Strong domain anchor short-circuits probe at any confidence.
     if out.get("domain_anchor_found"):
         return None
-    if (out.get("topic") or "general") != "general":
-        return None
+
+    topic = (out.get("topic") or "general").lower()
+
+    # Tier 2 — soft confirm: system has a topic guess but is unsure.
+    # Range: _CONF_HARD_PROBE <= conf < _CONF_SOFT_CONFIRM AND topic
+    # is something specific (not the catch-all 'general').
+    if conf >= _CONF_HARD_PROBE and topic != "general":
+        topic_label = _TOPIC_LABEL_HI.get(topic, topic)
+        return (
+            f"Lag raha hai {topic_label} ka sawal hai — sahi hu? "
+            f"Continue karu, ya kuch aur clarify karoge?"
+        )
+
+    # Tier 1 — hard probe: system has no reliable guess (conf<0.4 OR
+    # topic stayed at catch-all 'general'). Surface topics_all hint
+    # when available so user has anchors to choose from.
     topics_all = out.get("topics_all") or []
     readable = [
         _TOPIC_LABEL_HI[t] for t in topics_all[:2]
-        if t in _TOPIC_LABEL_HI
+        if t in _TOPIC_LABEL_HI and t != "general"
     ]
     if readable:
         joined = " ya ".join(readable)
@@ -620,6 +657,54 @@ def _build_clarification_text(out: dict) -> Optional[str]:
         "Aapka sawal poori tarah samjha nahi — thoda aur bata sakte? "
         "Kis baare me jaanna chahte (shaadi / career / sehat / paisa)?"
     )
+
+
+# Phase 2.8.42 — derived helpers (no LLM cost, computed from existing
+# fields). These are convenience aliases for downstream consumers that
+# want a single readable label instead of reasoning over archetype +
+# emotion + intent combinations themselves.
+
+_EMOTIONAL_ASK_EMOTIONS = frozenset({
+    "anxiety", "frustration", "sadness", "anger",
+})
+
+
+def _derive_ask_type(archetype: Optional[str],
+                     emotion: Optional[str]) -> str:
+    """Phase 2.8.42 — single readable ask-style label.
+
+    Returns one of: 'emotional' | 'timing' | 'decision' | 'why'.
+    Emotional state takes precedence — a stressed user asking 'shaadi
+    kab' wants empathy first, not a bare timing answer. Otherwise the
+    archetype enum drives the label (TIMING/DECISION map directly,
+    OVERVIEW/REMEDY/EXPLAIN all collapse to 'why' since they all want
+    cause/explanation-style narration).
+    """
+    e = (emotion or "neutral").strip().lower()
+    if e in _EMOTIONAL_ASK_EMOTIONS:
+        return "emotional"
+    a = (archetype or "EXPLAIN").strip().upper()
+    if a == "TIMING":
+        return "timing"
+    if a == "DECISION":
+        return "decision"
+    return "why"
+
+
+def _derive_secondary_intent(intents_ranked) -> Optional[str]:
+    """Phase 2.8.42 — convenience alias for `intents_ranked[1]`.
+
+    Returns None when the ranked list has fewer than 2 entries or is
+    not a list. Consumers that only need the secondary (multi-intent
+    detection) can read this single field instead of unpacking the
+    ranked list themselves.
+    """
+    if not isinstance(intents_ranked, list) or len(intents_ranked) < 2:
+        return None
+    second = intents_ranked[1]
+    if not isinstance(second, str) or not second.strip():
+        return None
+    return second.strip().lower()
 
 # Phase 7.3 — regex-fallback archetype heuristic. Used when the AI
 # classifier fails and we drop to the regex safety-net (which previously
@@ -1053,6 +1138,12 @@ def understand_question(question: str,
     (subtopic, needs_engine, emotion, urgency, cleaned_q) plus
     final_topic_lock + clarification_text on every return path, even
     when an inner code path forgot to emit them.
+
+    Phase 2.8.42 (May 02, 2026): adds two derived convenience aliases:
+    `secondary_intent` (= intents_ranked[1] when present) and `ask_type`
+    (= 'emotional'|'timing'|'decision'|'why' from archetype + emotion).
+    Both are pure functions of fields already in the dict — no extra
+    LLM cost, just consumer-side ergonomics.
     """
     q = (question or "").strip()
     out = _understand_question_inner(question, client=client, model=model)
@@ -1066,6 +1157,15 @@ def understand_question(question: str,
     out.setdefault("urgency", "medium")
     out.setdefault("cleaned_q", None)
     out.setdefault("final_topic_lock", out.get("topic") or "general")
+    # Phase 2.8.42 — derived convenience aliases. Always recomputed on
+    # the FINAL post-sanity-layer state so they reflect any overrides
+    # applied by the sanity layer (e.g. Fix-N analysis promotion).
+    out["secondary_intent"] = _derive_secondary_intent(
+        out.get("intents_ranked")
+    )
+    out["ask_type"] = _derive_ask_type(
+        out.get("archetype"), out.get("emotion")
+    )
     # clarification_text is computed every call — it depends on the FINAL
     # post-sanity-layer state of `out`, not the inner-path snapshot.
     out["clarification_text"] = _build_clarification_text(out)

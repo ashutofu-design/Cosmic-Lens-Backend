@@ -989,6 +989,80 @@ def _build_topic_lock(rule, kundli):
 
 
 # ────────────────────────────────────────────────────────────────────
+# Phase 2.8.42 (May 02, 2026) — EMOTION-AWARE TONE HINT
+# ────────────────────────────────────────────────────────────────────
+# SQU emits an `emotion` enum (anxiety / frustration / sadness / anger
+# / confusion / neutral / excitement) and an `urgency` enum (low /
+# medium / high). When emotion != neutral, we APPEND a 1-2 line tone
+# directive to the system prompt so the narrator opens with empathy
+# BEFORE diving into facts. Pure additive — no engine-fact change, no
+# routing change. The directive is a soft hint (single block), the
+# narrator's existing contracts (Rule 1-N) still drive structure.
+#
+# Returns "" for neutral / excitement / unknown emotion → prompt is
+# byte-identical to pre-2.8.42 behaviour, preserving prompt-cache hits.
+# ────────────────────────────────────────────────────────────────────
+_EMOTION_TONE_HINT_HN = {
+    "anxiety": (
+        "User pareshan / anxious feel kar raha hai. Pehli 1 line "
+        "REASSURANCE do (jaise: 'Aaram se, dekho — ghabraane ki baat "
+        "nahi'), uske baad hi facts batao. Tone: shaant, supportive."
+    ),
+    "frustration": (
+        "User tang aa chuka hai / frustrated hai. Pehli 1 line uski "
+        "feeling VALIDATE karo (jaise: 'Samajh raha hu — ye situation "
+        "real mein thakaa deti hai'), fir solution-oriented answer."
+    ),
+    "sadness": (
+        "User udaas hai. Gentle empathy se shuru karo (1 line), fir "
+        "answer dete waqt ek hope-anchor zaroor rakhna (kuch positive "
+        "engine-fact se justified)."
+    ),
+    "anger": (
+        "User gussa / irritated hai. Pehle uski baat ACKNOWLEDGE karo "
+        "('Samjha — ye annoying hai'), defensive mat hona, balanced "
+        "view do. Lecture mat do."
+    ),
+    "confusion": (
+        "User confused hai. Har point CLEAN single-thought sentences "
+        "mein likho. Jargon avoid karo. Ek-ek concept simple example "
+        "ke saath. Speed slow rakho."
+    ),
+}
+
+
+def _build_emotion_tone_hint(emotion, urgency = "medium") -> str:
+    """Phase 2.8.42 — compose tone-hint block for the system prompt.
+
+    Returns '' for neutral / excitement / unknown emotion so the prompt
+    stays cache-friendly in the common path. When emotion is one of
+    the 5 negative-affect labels, returns a small block that nudges
+    narrator opening tone WITHOUT changing engine facts or routing.
+
+    `urgency='high'` adds a brief tail nudging concise + immediate
+    action focus; otherwise no tail (medium/low = default pacing).
+    """
+    try:
+        e = (emotion or "").strip().lower()
+        hint = _EMOTION_TONE_HINT_HN.get(e)
+        if not hint:
+            return ""
+        u = (urgency or "medium").strip().lower()
+        urgency_tail = ""
+        if u == "high":
+            urgency_tail = (
+                " Urgency HIGH — answer ko concise rakho aur immediate "
+                "next-step (1 actionable line) zaroor do."
+            )
+        return (
+            "\n[EMOTION-AWARE TONE — Phase 2.8.42]\n"
+            f"{hint}{urgency_tail}\n"
+        )
+    except Exception:
+        return ""
+
+
+# ────────────────────────────────────────────────────────────────────
 # Phase 2.3 Tier-1 — defensive post-processing safety net for AI-tell
 # leakage. Even with Rules 2 + 15 in `_PT_SYS_INTRO`, the LLM may
 # occasionally slip in tells like "As an AI" or "Hope this helps".
@@ -12993,6 +13067,84 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         "birth.has_coords":   isinstance(birth, dict) and birth.get("lat") is not None,
     })
 
+    # ── Sprint-26: AI-ONLY Question Understanding (single source of truth) ───
+    # ONE classifier call → {intent, topic, confidence}. No regex pipeline,
+    # no AI-Ear merge, no override layers. Replaces the entire Sprint-23/24/25
+    # multi-source understanding stack. Falls back to a minimal regex ONLY
+    # when AI confidence < 0.6 OR the call itself errors (safety-net).
+    #
+    # Phase 2.8.42 architect-fix — HOISTED above LLM_FULL_CHART_MODE
+    # passthrough (was originally below it at L13278+). The passthrough
+    # block consumes `_qu_emotion`, `_qu_urgency`, and `_engine_q` for
+    # the emotion-aware tone hint and cleaned-q user message; without
+    # this hoist those vars were undefined → NameError → silent
+    # fallback to legacy ai_ask body on every passthrough attempt.
+    from question_understanding import (
+        understand_question, supertype_for, has_recovery_subask,
+    )
+    _qu = understand_question(question)
+    # Sprint-26 Fix-Q — deterministic recovery sub-ask detector. Adds a
+    # boolean flag to the understanding dict so downstream wealth structured
+    # output and the GENERAL_ANALYSIS narrator contract can demand a Recovery
+    # line in the answer when the user explicitly asked about it. Does NOT
+    # add a new INTENTS enum value (which would ripple into supertype/router
+    # changes) — it's a sibling flag the relevant consumers read.
+    _qu["has_recovery_subask"] = has_recovery_subask(question)
+    _trace(req_id, "1.UNDERSTANDING", _qu)
+    # Phase 4.1 Fix-P — surface classifier sanity-layer override decisions
+    # as a separate, easy-to-grep telemetry event. Fires only when the
+    # override actually changed the intent (override metadata is set by
+    # _apply_classifier_sanity_layer in question_understanding.py).
+    if _qu.get("intent_overridden_from"):
+        _trace(req_id, "1b.CLASSIFIER_OVERRIDE", {
+            "from":   _qu.get("intent_overridden_from"),
+            "to":     _qu.get("intent"),
+            "reason": _qu.get("intent_override_reason"),
+            "phase":  _qu.get("intent_override_phase"),
+            "ai_confidence": _qu.get("confidence"),
+        })
+
+    # Phase 6.1.1 — extract _qu_* fields from the understanding dict BEFORE
+    # referencing them. These were previously assumed to exist in scope
+    # but were never assigned, causing `name '_qu_intent' is not defined`
+    # (and same for `_qu_conf` / `_qu_source`) to crash ai_ask on every
+    # request. That crash cascaded to the rule-engine emergency fallback
+    # which returned generic non-answers (e.g. health questions getting
+    # "stay focused on your goals" instead of a real chart-based reply).
+    _qu_intent = _qu.get("intent") or "analysis"
+    _qu_topic  = _qu.get("topic")  or "general"
+    _qu_conf   = _qu.get("confidence")
+    _qu_source = _qu.get("source")
+
+    # Default everything to single-element lists so any code that doesn't
+    # understand the new fields still works.
+    _qu_intents_ranked = _qu.get("intents_ranked") or [_qu_intent]
+    _qu_topics_all     = _qu.get("topics_all")     or [_qu_topic]
+    _qu_hidden_intent  = _qu.get("hidden_intent")  # None when no hidden layer
+    _qu_cross_domain   = bool(_qu.get("cross_domain_root_cause")) and len(_qu_topics_all) >= 2
+
+    # Phase 2.8.42 (May 02, 2026) — extract the 7 new SQU surface fields
+    # added in Phase 2.8.41 + 2.8.42 so downstream code (system-prompt
+    # assembly, routing decisions, telemetry) can consume them. All
+    # have safe fallbacks — when SQU emits None or the inner path
+    # forgot to set them, behaviour is byte-identical to pre-2.8.42.
+    _qu_final_topic_lock   = (_qu.get("final_topic_lock") or _qu_topic or "general").lower()
+    _qu_emotion            = (_qu.get("emotion") or "neutral").lower()
+    _qu_urgency            = (_qu.get("urgency") or "medium").lower()
+    _qu_cleaned_q          = _qu.get("cleaned_q")
+    _qu_ask_type           = _qu.get("ask_type") or "why"
+    _qu_secondary_intent   = _qu.get("secondary_intent")
+    _qu_needs_engine       = bool(_qu.get("needs_engine") if _qu.get("needs_engine") is not None else True)
+    _qu_clarification_text = _qu.get("clarification_text")
+    # `_engine_q` is the canonical user-question text downstream code
+    # should pass to the LLM as the user message. Falls back to the
+    # raw `question` when SQU did not produce a cleaned variant. We
+    # deliberately do NOT use cleaned_q for keyword detectors
+    # (`_detect_topic`, `_detect_marriage_constraint`) since those
+    # rely on the user's exact wording — they receive `question` as
+    # before.
+    _engine_q = _qu_cleaned_q if (_qu_cleaned_q and _qu_cleaned_q.strip()) else question
+
     # ── Phase 7.7-pre — TRUE FULL PASSTHROUGH (env-gated, default OFF) ───────
     # When `LLM_FULL_CHART_MODE` is on, short-circuit the ENTIRE ~5,000-line
     # ai_ask body AND skip `chart_intelligence.analyze_chart` itself.
@@ -13053,9 +13205,22 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _marriage_block_pt = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
+                # Phase 2.8.42 — emotion-aware tone hint. Returns "" for
+                # neutral / excitement / unknown emotion so the system
+                # prompt stays byte-identical (cache-friendly) on the
+                # common path. Only the 5 negative-affect labels add a
+                # short tone block here.
+                _emotion_tone_pt = _build_emotion_tone_hint(
+                    _qu_emotion, _qu_urgency
+                )
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt + _marriage_block_pt,
+                    "content": (
+                        _sys_intro_pt
+                        + _chart_block_pt
+                        + _marriage_block_pt
+                        + _emotion_tone_pt
+                    ),
                 }]
                 for _h_pt in (history or [])[-6:]:
                     _r_pt = _h_pt.get("role")
@@ -13069,8 +13234,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _topic_lock = _build_topic_lock(_topic_rule, kundli) if _topic_rule else ""
                 _is_transparent = _is_transparency_query(question)
                 _trans_directive = _build_transparency_directive() if _is_transparent else ""
-                _user_content = (_topic_lock + _trans_directive + question) \
-                    if (_topic_lock or _trans_directive) else question
+                # Phase 2.8.42 — use SQU-cleaned question text (typos
+                # normalised, leading "umm/yaar/bhai" filler stripped)
+                # as the LLM user message. Falls back to raw `question`
+                # when SQU did not produce a cleaned variant. Keyword
+                # detectors above (`_detect_topic`,
+                # `_is_transparency_query`) still receive RAW question
+                # because they rely on the user's exact wording.
+                _user_content = (_topic_lock + _trans_directive + _engine_q) \
+                    if (_topic_lock or _trans_directive) else _engine_q
                 _msgs_pt.append({"role": "user", "content": _user_content})
 
                 _trace(req_id, "PASSTHROUGH.MESSAGES_BUILT", {
@@ -13176,54 +13348,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             print(f"[ai_ask] LLM_FULL_CHART_MODE passthrough failed: {_pt_exc}")
             # Fall through to legacy ai_ask body below.
 
-    # ── Sprint-26: AI-ONLY Question Understanding (single source of truth) ───
-    # ONE classifier call → {intent, topic, confidence}. No regex pipeline,
-    # no AI-Ear merge, no override layers. Replaces the entire Sprint-23/24/25
-    # multi-source understanding stack. Falls back to a minimal regex ONLY
-    # when AI confidence < 0.6 OR the call itself errors (safety-net).
-    from question_understanding import (
-        understand_question, supertype_for, has_recovery_subask,
-    )
-    _qu = understand_question(question)
-    # Sprint-26 Fix-Q — deterministic recovery sub-ask detector. Adds a
-    # boolean flag to the understanding dict so downstream wealth structured
-    # output and the GENERAL_ANALYSIS narrator contract can demand a Recovery
-    # line in the answer when the user explicitly asked about it. Does NOT
-    # add a new INTENTS enum value (which would ripple into supertype/router
-    # changes) — it's a sibling flag the relevant consumers read.
-    _qu["has_recovery_subask"] = has_recovery_subask(question)
-    _trace(req_id, "1.UNDERSTANDING", _qu)
-    # Phase 4.1 Fix-P — surface classifier sanity-layer override decisions
-    # as a separate, easy-to-grep telemetry event. Fires only when the
-    # override actually changed the intent (override metadata is set by
-    # _apply_classifier_sanity_layer in question_understanding.py).
-    if _qu.get("intent_overridden_from"):
-        _trace(req_id, "1b.CLASSIFIER_OVERRIDE", {
-            "from":   _qu.get("intent_overridden_from"),
-            "to":     _qu.get("intent"),
-            "reason": _qu.get("intent_override_reason"),
-            "phase":  _qu.get("intent_override_phase"),
-            "ai_confidence": _qu.get("confidence"),
-        })
-
-    # Phase 6.1.1 — extract _qu_* fields from the understanding dict BEFORE
-    # referencing them. These were previously assumed to exist in scope
-    # but were never assigned, causing `name '_qu_intent' is not defined`
-    # (and same for `_qu_conf` / `_qu_source`) to crash ai_ask on every
-    # request. That crash cascaded to the rule-engine emergency fallback
-    # which returned generic non-answers (e.g. health questions getting
-    # "stay focused on your goals" instead of a real chart-based reply).
-    _qu_intent = _qu.get("intent") or "analysis"
-    _qu_topic  = _qu.get("topic")  or "general"
-    _qu_conf   = _qu.get("confidence")
-    _qu_source = _qu.get("source")
-
-    # Default everything to single-element lists so any code that doesn't
-    # understand the new fields still works.
-    _qu_intents_ranked = _qu.get("intents_ranked") or [_qu_intent]
-    _qu_topics_all     = _qu.get("topics_all")     or [_qu_topic]
-    _qu_hidden_intent  = _qu.get("hidden_intent")  # None when no hidden layer
-    _qu_cross_domain   = bool(_qu.get("cross_domain_root_cause")) and len(_qu_topics_all) >= 2
+    # Phase 2.8.42 architect-fix — SQU extraction was HOISTED to right
+    # after the 1.RAW_INPUT trace (above the LLM_FULL_CHART_MODE
+    # passthrough block) so passthrough can read `_qu_emotion`,
+    # `_qu_urgency`, `_engine_q` without NameError. All SQU vars +
+    # the 1.UNDERSTANDING / 1b.CLASSIFIER_OVERRIDE traces now live up
+    # there. This site is intentionally empty — the original 70-line
+    # block was MOVED, not duplicated, to keep `understand_question`
+    # at exactly one OpenAI call per request.
 
     # Legacy-shape question_intent so the response payload + brevity guards
     # continue to work without touching downstream code.
@@ -13243,6 +13375,18 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # Sprint-26 Fix-Q — recovery sub-ask flag (forwarded to wealth
         # structured-output prompt + GENERAL_ANALYSIS narrator contract).
         "has_recovery_subask":     bool(_qu.get("has_recovery_subask")),
+        # Phase 2.8.42 — surface the 7 new SQU fields on the legacy
+        # question_intent payload too so /ask response consumers,
+        # smart-validator, and metric collectors all see the same
+        # picture without having to re-read `_qu` separately.
+        "final_topic_lock":   _qu_final_topic_lock,
+        "emotion":            _qu_emotion,
+        "urgency":            _qu_urgency,
+        "ask_type":           _qu_ask_type,
+        "secondary_intent":   _qu_secondary_intent,
+        "needs_engine":       _qu_needs_engine,
+        "clarification_text": _qu_clarification_text,
+        "cleaned_q":          _qu_cleaned_q,
     }
     _trace(req_id, "1b.QUESTION_INTENT", question_intent)
     if len(_qu_intents_ranked) > 1 or len(_qu_topics_all) > 1 or _qu_hidden_intent or _qu_cross_domain:
@@ -13490,6 +13634,14 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         marriage_subtype=marriage_subtype,
     )
 
+    # Phase 2.8.42 architect-fix — emotion tone hint append was MOVED
+    # from this position (right after `_build_messages`) to AFTER the
+    # Phase 5.0 minimal-prompt install below. Reason: when Phase 5.0
+    # is enabled (default ON in astro mode) it REPLACES `messages`
+    # entirely, which was nullifying any tone hint appended here.
+    # Moving the append below covers BOTH the Phase 5.0 minimal path
+    # AND the standard `_build_messages` output uniformly.
+
     # Sprint-26 Fix-K: trace engine status (populated by _build_messages
     # via out_meta) so we can see which phases ran/failed and reason
     # about the smart-validator decision downstream.
@@ -13526,6 +13678,35 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             topic=topic, history=history,
         )
         _phase50_active = True
+
+    # Phase 2.8.42 — append emotion-aware tone hint to the system
+    # message regardless of which prompt template fed `messages`
+    # (general / passthrough / chart-narrator / Phase 5.0 minimal).
+    # Returns "" for neutral / excitement / unknown emotion so the
+    # prompt is byte-identical on the common path (cache-friendly).
+    # Done HERE (after Phase 5.0 install, before Cross-Domain block)
+    # so it survives the Phase 5.0 messages-replacement.
+    try:
+        _emotion_hint_post = _build_emotion_tone_hint(
+            _qu_emotion, _qu_urgency
+        )
+        if (_emotion_hint_post
+                and messages
+                and isinstance(messages[0], dict)
+                and messages[0].get("role") == "system"
+                and isinstance(messages[0].get("content"), str)):
+            messages[0]["content"] = (
+                messages[0]["content"] + _emotion_hint_post
+            )
+            _trace(req_id, "2c.EMOTION_TONE_HINT_INJECTED", {
+                "emotion": _qu_emotion,
+                "urgency": _qu_urgency,
+                "added_chars": len(_emotion_hint_post),
+                "phase50_active": _phase50_active,
+            })
+    except Exception as _exc_emo:
+        # Never break the answer pipeline on a tone-hint failure.
+        print(f"[ai_ask] emotion-tone hint append failed: {_exc_emo}")
 
     # ── Sprint-26 Fix-M — Cross-Domain Root-Cause Block ─────────────────────
     # When the user asks a dual-domain "same reason or different" question,
@@ -16538,6 +16719,17 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         })
     _qu_intent = (_qu.get("intent") or "analysis").lower()
     _qu_topic  = (_qu.get("topic")  or "general").lower()
+    # Phase 2.8.42 — extract the new SQU surface fields for stream-path
+    # parity with ai_ask. Stream path delegates to ai_ask oneshot for
+    # general / marriage / safe-narration cases (which is where the
+    # behaviour-impacting wiring lives), so here we just expose the
+    # fields to telemetry to keep diagnostics symmetric.
+    _qu_final_topic_lock   = (_qu.get("final_topic_lock") or _qu_topic or "general").lower()
+    _qu_emotion            = (_qu.get("emotion") or "neutral").lower()
+    _qu_urgency            = (_qu.get("urgency") or "medium").lower()
+    _qu_ask_type           = _qu.get("ask_type") or "why"
+    _qu_secondary_intent   = _qu.get("secondary_intent")
+    _qu_clarification_text = _qu.get("clarification_text")
     topic = _qu_topic
     mode  = "general" if (_qu_intent == "analysis" and _qu_topic == "general") else "astro"
     _mode_reason = f"qu intent={_qu_intent} topic={_qu_topic}"

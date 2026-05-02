@@ -16661,6 +16661,50 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "chunk_count":  len(_chunks_pt_s),
             })
 
+            # Phase 2.8.55b — DIAGNOSTIC: capture first 600 chars of the
+            # response + whether the LLM actually used engine output.
+            # This answers the user's "engine se ans chahiye" complaint —
+            # if locked_facts_chars > 0 but the response contains NO
+            # engine years/dates, the LLM is IGNORING our injection and
+            # we have a prompt-engineering / system-instruction problem.
+            try:
+                _resp_preview_s = (_full_text_pt_s_scrubbed or "")[:600]
+                _engine_used_s: dict = {"any_year": False, "year_2033": False,
+                                        "year_2028": False, "manglik": False,
+                                        "vivah_word": False}
+                if _locked_facts_pt_s and _full_text_pt_s_scrubbed:
+                    import re as _re_diag
+                    _resp_low_s = _full_text_pt_s_scrubbed.lower()
+                    # Pull all year-tokens from the engine block (e.g., 2028, 2033)
+                    _engine_years_s = set(
+                        _re_diag.findall(r"\b(20[2-9]\d|21[0-5]\d)\b",
+                                         _locked_facts_pt_s))
+                    _resp_years_s = set(
+                        _re_diag.findall(r"\b(20[2-9]\d|21[0-5]\d)\b",
+                                         _full_text_pt_s_scrubbed))
+                    _shared_years_s = _engine_years_s & _resp_years_s
+                    _engine_used_s["any_year"]  = bool(_shared_years_s)
+                    _engine_used_s["year_2033"] = "2033" in _resp_low_s
+                    _engine_used_s["year_2028"] = "2028" in _resp_low_s
+                    _engine_used_s["manglik"]   = "manglik" in _resp_low_s
+                    _engine_used_s["vivah_word"]= any(
+                        w in _resp_low_s for w in
+                        ("vivah", "shaadi", "shadi", "marriage"))
+                    _engine_used_s["shared_years"] = sorted(_shared_years_s)
+                    _engine_used_s["engine_years"] = sorted(_engine_years_s)
+                    _engine_used_s["resp_years"]   = sorted(_resp_years_s)
+                _trace(req_id, "PASSTHROUGH(stream).RESPONSE_DIAGNOSTIC", {
+                    "is_timing_q":        _is_timing_q_pt_s,
+                    "topic_lock":         _topic_id_s or None,
+                    "locked_facts_chars": len(_locked_facts_pt_s),
+                    "engine_alignment":   _engine_used_s,
+                    "response_preview":   _resp_preview_s,
+                })
+            except Exception as _diag_exc_s:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH(stream).RESPONSE_DIAGNOSTIC_FAILED", {
+                    "reason": str(_diag_exc_s)[:200],
+                })
+
             # 5. Final envelope (matches mobile client expected schema)
             # Phase 2.8.27 — engine_tag tells UI whether deterministic
             # engine LOCKED FACTS were injected (ans-engine) or it was a

@@ -2094,6 +2094,23 @@ def kundli():
                 try:
                     chart = _json.loads(cached.chart_data)
                     if isinstance(chart, dict):
+                        # Lazy-repair (Phase 2.8.57): if cached row predates KP-cache
+                        # rollout (or KP failed during initial compute), backfill it
+                        # ONCE on read so downstream callers always get kundli["kp"].
+                        if "kp" not in chart:
+                            try:
+                                from kp_engine import calculate_kp as _calc_kp_lazy
+                                chart["kp"] = _calc_kp_lazy({
+                                    "day": data["day"], "month": data["month"], "year": data["year"],
+                                    "hour": data["hour"], "minute": data["minute"], "ampm": data["ampm"],
+                                    "lat": data["lat"], "lon": data["lon"], "tz": data["tz"],
+                                })
+                                # Persist the repair so we don't recompute every request.
+                                cached.chart_data = _json.dumps(chart)
+                                db.session.commit()
+                                print(f"[kundli.cache] lazy-repaired KP for profile.id={cached.id}")
+                            except Exception as _kp_exc:
+                                print(f"[kundli.cache] lazy KP repair failed (non-fatal): {_kp_exc}")
                         chart["cached"]    = True
                         chart["cached_id"] = cached.client_id
                         return jsonify(chart)

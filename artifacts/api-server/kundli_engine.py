@@ -476,6 +476,24 @@ def calculate_kundli(data):
             "end": current_antar["endDate"]
         }
     }
+
+    # ── KP cache (Phase 2.8.57 — bake full KP into chart_data) ─────────────
+    # ADD-ONLY: same birth dict drives kp_engine.calculate_kp so the cusps +
+    # planet sub-lord chain (NL/SB/SS) are computed ONCE and stored on the
+    # kundli row. Downstream callers (engines, locked_facts, marriage filter)
+    # can then read kundli["kp"] instead of recomputing every request.
+    # Failure is non-fatal — kundli still returns without `kp` key, callers
+    # already have a fallback path that recomputes from birth details.
+    try:
+        from kp_engine import calculate_kp  # local import — avoids cycle on cold load
+        result["kp"] = calculate_kp({
+            "day": day, "month": month, "year": year,
+            "hour": hour, "minute": minute, "ampm": ampm,
+            "lat": lat, "lon": lon, "tz": tz,
+        })
+    except Exception as exc:
+        print(f"[kundli_engine.calculate_kundli] KP cache failed (non-fatal): {exc}", flush=True)
+
     return result
 
 

@@ -17,9 +17,8 @@ Inputs:
               significations) — for KP cuspal sub-lord cross-check
     birth   : optional dict with at least "gender", "dob" so dasha + transit
               calculations are correct
-    question: raw user text — drives the 12-bucket question classifier
-              (job_change / new_job_timing / promotion / business_start /
-              govt_job / foreign_job / transfer / resignation / partnership /
+    question: raw user text — drives the 8-bucket question classifier
+              (job_change / promotion / govt_job / transfer / resignation /
               career_setback / career_field_choice / general_career).
     boss_kundli    : optional dict — boss/manager natal, activates boss synastry
     partner_kundli : optional dict — business-partner natal, activates partner synastry
@@ -27,7 +26,7 @@ Inputs:
 Output: see assess_career().__doc__
 
 CLE Format Logic Framework (10 standard steps, mirror of love_engine):
-    Step 1  — Question Type Detection (12-bucket classifier) + Tense Detector
+    Step 1  — Question Type Detection (8-bucket classifier) + Tense Detector
     Step 2  — 2-Step Verdict Framework (natal_promise + current_trigger → bucket)
     Step 3  — Layer Stacking (32 layers + D9 + D10 + KP mandatory + Amatyakaraka)
     Step 4  — Bucket-Gated Strategy (no contradictions allowed)
@@ -36,7 +35,7 @@ CLE Format Logic Framework (10 standard steps, mirror of love_engine):
     Step 7  — Confidence Calibration (cross-system agreement)
     Step 8  — Format-for-Prompt (locked Hinglish verdict block)
     Step 9  — AI Narrator Override (turn-level rules in openai_helper)
-    Step 10 — Brand-Safety Guards (govt-job, business, resignation, partnership softening)
+    Step 10 — Brand-Safety Guards (govt-job, resignation softening)
 
 Layer rubric (canonical CLE table — career-specific):
     A. NATAL PROMISE  (Layers 1-18)
@@ -199,7 +198,7 @@ def _ym_to_human(ym: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# QUESTION CLASSIFIER — 12 buckets
+# QUESTION CLASSIFIER — 8 buckets
 # ─────────────────────────────────────────────────────────────────────────────
 # Ordered most-specific → most-general. First match wins. Each bucket has
 # multiple regex patterns covering English, Hinglish, and Devanagari Hindi
@@ -215,17 +214,6 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(competitive exam|competitive)\b.*\b(crack|clear|pass|select)\b",
         r"\bक्या\b.*\b(सरकारी|राज्य)\b.*\b(नौकरी|काम)\b",
         r"\b(सरकारी|राज्य)\b.*\b(नौकरी|काम|एग्जाम|परीक्षा)\b",
-    ]),
-    # ── FOREIGN JOB / VIDESH ──
-    ("foreign_job", [
-        r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite|on[- ]?site|paradesh)\b",
-        r"\b(foreign|abroad|videsh|vilayat|overseas|nri|onsite)\b.*\b(job|naukri|kaam|opportunity|settle|move|jana|jaana|attempt)\b",
-        r"\b(job|naukri|kaam|career|attempt|opportunity)\b.*\b(foreign|abroad|videsh|vilayat|overseas|onsite)\b",
-        r"\b(usa|us|america|canada|uk|england|britain|australia|dubai|singapore|germany|new zealand)\b.*\b(job|naukri|move|settle|opportunity|visa|shift|relocate|jaana|jana|chance|kab|when)\b",
-        r"\b(job|naukri|move|settle|opportunity|visa|shift|relocate|jaana|jana|chance)\b.*\b(usa|us|america|canada|uk|england|australia|dubai|singapore|germany)\b",
-        r"\b(h1b|h-1b|l1|l-1|pr|permanent residency|green card|work permit|work visa|skilled migration|express entry)\b",
-        r"\b(videsh|abroad|foreign)\b.*\b(jana|jaana|jaaunga|jaayegi|move|shift|settle)\b",
-        r"\b(विदेश|बाहर)\b.*\b(नौकरी|काम|जाना|बसना)\b",
     ]),
     # ── PROMOTION / SALARY HIKE ──
     ("promotion", [
@@ -252,27 +240,6 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(istefa|istifa)\b",
         r"\b(त्यागपत्र|इस्तीफा|नौकरी छोड़|काम छोड़)\b",
     ]),
-    # ── PARTNERSHIP (must come BEFORE business_start because partnership is
-    # more specific — "partner ke saath kaam shuru karu" should match here,
-    # not generic business_start) ──
-    ("partnership", [
-        r"\b(partnership|joint venture|jv|co[- ]?founder)\b",
-        r"\b(business|kaam|venture|startup|firm)\b.*\b(partner|partnership|joint|associate|co[- ]?founder)\b",
-        r"\b(partner|partners)\b.*\b(business|kaam|venture|firm|sahi|theek|achha|right|jana|jaana|karu|karna|karoge|karenge|leke|sath|saath|shuru|start|launch)\b",
-        r"\b(saath|together|along)\b.*\b(business|kaam|partnership|joint)\b",
-        r"\b(equity|share|stake|profit[- ]?share)\b.*\b(partner|partnership|venture)\b",
-        r"\b(साझेदार|साझेदारी|पार्टनरशिप)\b",
-    ]),
-    # ── BUSINESS START ──
-    ("business_start", [
-        r"\b(business|vyapar|vyapaar|dhanda|kaam|startup|start-?up|venture)\b.*\b(start|shuru|begin|launch|open|kholu|kholna|chalu|band|close|fail|tabaah|barbaad)\b",
-        r"\b(start|shuru|begin|launch|open|kholu|kholna|chalu|own)\b.*\b(business|vyapar|vyapaar|dhanda|startup|start-?up|venture|firm|shop|store|cafe|restaurant)\b",
-        r"\b(startup|start[- ]?up)\b",
-        r"\b(apna|apni|self|own)\b.*\b(business|vyapar|vyapaar|kaam|dhanda|firm|company|shop|venture)\b",
-        r"\b(entrepreneur|entrepreneurship|founder|co-?founder|self-?employed)\b",
-        r"\b(business|vyapar|dhanda)\b.*\b(karu|karoge|karenge|karna|karoon)\b",
-        r"\b(व्यापार|व्यवसाय|धंधा|स्टार्टअप)\b.*\b(शुरू|खोल|चालू)\b",
-    ]),
     # ── TRANSFER ──
     ("transfer", [
         r"\b(transfer|posting|relocation|relocate)\b",
@@ -290,17 +257,6 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(downgrade|demoted|demotion|step down)\b",
         r"\b(career)\b.*\b(end|over|tabaah|barbaad|barbad|finished)\b",
         r"\b(कैरियर|करियर)\b.*\b(अटका|खराब|बंद|खत्म|डूब)\b",
-    ]),
-    # ── NEW JOB TIMING ──
-    ("new_job_timing", [
-        r"\b(job|naukri|naukari|kaam|service|career)\b.*\b(kab|when|kab tak|kab milegi|kab milega|kab lagegi|kab lagega|mil rahi|mil raha|mil rahe)\b",
-        r"\b(kab|when)\b.*\b(milegi|milega|lagegi|lagega|aayegi|aayega)\b.*\b(job|naukri|kaam|career)\b",
-        r"\b(first|pehli|pehla|new|naya|nayi)\b.*\b(job|naukri|kaam)\b",
-        r"\b(joining|placement|offer letter|job offer)\b",
-        r"\b(unemployed|berojgar|berozgar|bekar|bekaar)\b",
-        r"\b(naukari|naukri|job)\b.*\b(nahi|nahin|nai)\b.*\b(mil|mili|milti|hui)\b",
-        r"\b(joining|placement)\b.*\b(nahi|nahin|nai|hui|hua)\b",
-        r"\b(नौकरी|काम)\b.*\b(कब|कब मिलेगी|मिलेगी)\b",
     ]),
     # ── JOB CHANGE ──
     ("job_change", [
@@ -328,8 +284,8 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
 
 # Sprint-25 Fix-B: AI-Ear-trusted career bucket vocabulary.
 _VALID_CAREER_BUCKETS = frozenset({
-    "govt_job", "foreign_job", "promotion", "resignation", "business_start",
-    "partnership", "transfer", "career_setback", "new_job_timing",
+    "govt_job", "promotion", "resignation",
+    "transfer", "career_setback",
     "job_change", "career_field_choice", "general_career",
 })
 
@@ -337,9 +293,8 @@ _VALID_CAREER_BUCKETS = frozenset({
 def classify_career_question(text: str,
                              pre_classified_bucket: str | None = None) -> str:
     """Return one of:
-      govt_job | foreign_job | promotion | resignation | business_start |
-      partnership | transfer | career_setback | new_job_timing | job_change |
-      career_field_choice | general_career
+      govt_job | promotion | resignation | transfer | career_setback |
+      job_change | career_field_choice | general_career
 
     Default: "general_career" (most generic career fallback).
     Order matters — most specific patterns checked first.
@@ -649,10 +604,6 @@ _BUCKET_KP_CUSPS: dict[str, list[tuple[int, str, int, str]]] = {
     "govt_job":            [(10, "karma",            5, "+"),
                             (6,  "service",          4, "+"),
                             (1,  "self-status",      3, "+")],
-    "foreign_job":         [(9,  "long-journey",     5, "+"),
-                            (12, "foreign-land",     5, "+"),
-                            (7,  "away-from-birth",  3, "+"),
-                            (10, "career-overseas",  3, "+")],
     "promotion":           [(11, "gains",            5, "+"),
                             (10, "recognition",      5, "+"),
                             (6,  "rivals-defeated",  3, "+")],
@@ -661,28 +612,18 @@ _BUCKET_KP_CUSPS: dict[str, list[tuple[int, str, int, str]]] = {
                             (6,  "active-struggles", 3, "-"),
                             (11, "recovery-gains",   5, "+"),
                             (5,  "creative-relief",  2, "+")],
-    "business_start":      [(7,  "partners/public",  5, "+"),
-                            (11, "gains",            4, "+"),
-                            (2,  "capital",          3, "+"),
-                            (10, "karma",            3, "+")],
     "job_change":          [(6,  "new-service",      4, "+"),
                             (10, "career-shift",     4, "+"),
                             (3,  "courage",          2, "+")],
     "career_field_choice": [(10, "primary-field",    5, "+"),
                             (5,  "passion",          3, "+"),
                             (3,  "skills",           2, "+")],
-    "partnership":         [(7,  "partner-cusp",     5, "+"),
-                            (11, "joint-gains",      4, "+"),
-                            (2,  "joint-funds",      3, "+")],
     "resignation":         [(12, "exit",             5, "+"),
                             (1,  "self-departing",   3, "+"),
                             (6,  "current-frictions",3, "-")],
     "transfer":            [(3,  "short-moves",      5, "+"),
                             (12, "place-change",     4, "+"),
                             (10, "posting",          3, "+")],
-    "new_job_timing":      [(6,  "service-opening",  5, "+"),
-                            (10, "career-fire",      5, "+"),
-                            (11, "offer-gain",       3, "+")],
     "general_career":      [(10, "karma",            4, "+"),
                             (6,  "service",          3, "+"),
                             (11, "gains",            3, "+")],
@@ -3609,29 +3550,6 @@ _STRATEGY_TABLE: dict[str, dict[str, str]] = {
             "tab tak existing role mein consolidate karein."
         ),
     },
-    # ── new_job_timing ──
-    "new_job_timing": {
-        "green_go": (
-            "Naukri jaldi milne ke yog active hain — applications, "
-            "interviews, references sab par roz 2 ghante denge to next "
-            "60-120 dino mein offer aa sakti hai. Disciplined daily action critical hai."
-        ),
-        "yellow_wait": (
-            "Selection process chal rahi hai par final placement mein "
-            "thodi der lagegi — interview-skills sharpen aur multiple "
-            "channels (campus + portals + referrals) parallel chalu rakhein."
-        ),
-        "slow_burn": (
-            "Pehli naukri milne mein time lagega — skill-portfolio strong "
-            "karein, internship/freelance projects banayein, network expand "
-            "karein. Direct full-time se pehle stepping-stone roles open hain."
-        ),
-        "red_avoid": (
-            "Currently job-search ke results slow honge — yeh waqt skill "
-            "investment + parallel income (tuition/freelance) ka hai. "
-            "Push karne se outcomes nahi badlenge, foundation pe focus karein."
-        ),
-    },
     # ── promotion ──
     "promotion": {
         "green_go": (
@@ -3653,30 +3571,6 @@ _STRATEGY_TABLE: dict[str, dict[str, str]] = {
             "Is cycle promotion mushkil hai — current Saturn / dasha "
             "structural hai. Ego ko side karein, kaam ki quality par "
             "concentrate karein. Restructuring/redeployment ke liye prepare rahein."
-        ),
-    },
-    # ── business_start ──
-    "business_start": {
-        "green_go": (
-            "Business shuru karne ke liye chart support kar raha hai — "
-            "lekin proper financial-runway (6+ months expenses), legal "
-            "registration, aur 1-2 trusted advisors ke saath hi launch karein. "
-            "Cosmic timing accha hai par ground-work essential."
-        ),
-        "yellow_wait": (
-            "Business idea promising hai par abhi full-time dive risky — "
-            "side-hustle ya pilot mode mein test karein, validation milne "
-            "ke baad scale karein. 6-12 mahine ka soft-launch better hoga."
-        ),
-        "slow_burn": (
-            "Business long-term destiny hai par foundation pe time lagega — "
-            "skill, capital, network teeno parallel build karein. Rush "
-            "karne se setbacks honge, slow-and-steady approach hi sustain karega."
-        ),
-        "red_avoid": (
-            "Currently business launch karna financial-stress invite kar "
-            "sakta hai — service/job mein ruk kar capital + experience "
-            "build karein. 12-18 mahine baad re-evaluate karein."
         ),
     },
     # ── govt_job ──
@@ -3701,29 +3595,6 @@ _STRATEGY_TABLE: dict[str, dict[str, str]] = {
             "Govt-exam path currently strain de raha hai — agar 2+ "
             "attempts ho gaye, parallel career line consider karein. "
             "Ek hi route par identity attach karna avoid karein."
-        ),
-    },
-    # ── foreign_job ──
-    "foreign_job": {
-        "green_go": (
-            "Foreign-job ke yog strong hain — visa applications, language "
-            "certifications (IELTS/TOEFL), aur target country ke "
-            "professional networks par focus karein. Window open hai."
-        ),
-        "yellow_wait": (
-            "Foreign opportunity ke signals mixed — abhi profile + "
-            "experience strengthen karein, 12-18 mahine baad apply "
-            "karna better outcomes dega. Patience hi advantage hai."
-        ),
-        "slow_burn": (
-            "Foreign-career destiny mein hai par direct route lambi hai — "
-            "domestic mein 2-3 saal solid experience banayein, MNC mein "
-            "join karein, fir transfer ya specialised role se foreign jaayein."
-        ),
-        "red_avoid": (
-            "Abhi foreign push karna financial + emotional strain de sakta "
-            "hai — domestic mein consolidate karein, family/financial "
-            "responsibilities settle karein, fir 18-24 mahine baad consider karein."
         ),
     },
     # ── transfer ──
@@ -3770,31 +3641,6 @@ _STRATEGY_TABLE: dict[str, dict[str, str]] = {
             "Abhi resign karna financial + career-trajectory dono ke liye "
             "risk hai — current role mein patience rakhein. Triggering "
             "issues ko HR/internal-transfer se address karein."
-        ),
-    },
-    # ── partnership ──
-    "partnership": {
-        "green_go": (
-            "Business partnership favourable hai — par written agreement "
-            "(roles, equity-split, exit-clause), independent legal review, "
-            "aur 6-month trial-phase zaroor structure karein. Trust + "
-            "documentation dono parallel chahiye."
-        ),
-        "yellow_wait": (
-            "Partner ke saath cosmic alignment mixed hai — pehle ek small "
-            "joint project pilot karein, working-style observe karein, "
-            "fir formal partnership banayein. Direct equity-jump avoid karein."
-        ),
-        "slow_burn": (
-            "Partnership long-term mein workable hai par initial phase "
-            "complex hoga — clarity ke saath roles divide karein, monthly "
-            "structured reviews rakhein, conflict-resolution mechanism "
-            "pehle se decide karein."
-        ),
-        "red_avoid": (
-            "Is partner ke saath chart-level friction signal hai — solo "
-            "venture ya different partner consider karein. Equity ya "
-            "money commit karne se pehle 3-6 mahine working-relation test karein."
         ),
     },
     # ── career_setback ──
@@ -3948,17 +3794,6 @@ def _brand_safety_warnings(bucket: str, verdict: str, conditional_results: dict)
             "Backup career path bhi parallel develop karein."
         )
 
-    if bucket == "business_start":
-        warnings.append(
-            "Business launch ke pehle minimum 6 mahine ka financial runway, "
-            "legal registration, aur trusted advisor essential hain — chart "
-            "favourable hone ka matlab execution-skip nahi hai."
-        )
-        warnings.append(
-            "Business mein loss bhi ho sakta hai — family ki primary income "
-            "ya emergency fund ko risk par mat dalein."
-        )
-
     if bucket == "resignation":
         warnings.append(
             "Naukri chodne se pehle 60-90 din ka financial buffer aur ideally "
@@ -3968,17 +3803,6 @@ def _brand_safety_warnings(bucket: str, verdict: str, conditional_results: dict)
         warnings.append(
             "Notice period clean serve karein, exit-interview professional "
             "rakhein — bridges burn nahi karne hain."
-        )
-
-    if bucket == "partnership":
-        warnings.append(
-            "Partnership chart-level supportive ho ya na ho — written legal "
-            "agreement (roles, equity, exit-clause), independent legal "
-            "review, aur 6-month trial period mandatory hai."
-        )
-        warnings.append(
-            "Partner par blind trust mat karein — financial ledger, decision "
-            "process, aur dispute-resolution mechanism formal banayein."
         )
 
     if bucket == "career_setback":
@@ -3991,13 +3815,6 @@ def _brand_safety_warnings(bucket: str, verdict: str, conditional_results: dict)
             "Drastic financial decisions (loans, investments, large "
             "purchases) abhi defer karein. Stability return hone tak "
             "minimal expense rakhein."
-        )
-
-    if bucket == "foreign_job":
-        warnings.append(
-            "Visa / immigration regulations country-specific aur dynamic "
-            "hain — qualified immigration consultant se VERIFY karein, "
-            "astrology par sole-rely nahi."
         )
 
     if verdict == "red_avoid":
@@ -4162,7 +3979,7 @@ def assess_career(kundli: dict,
             # C1 side-fires on Sun-strong charts even when bucket != "govt_job"
             # (intentional cross-cut, since Sun = career karaka). Phase 2.8.32 added
             # 6 govt-specific rules pushing C1 max from ~22 to ~45, so its full score
-            # would distort foreign_job/promotion/etc verdicts on Sun-strong charts.
+            # would distort promotion/etc verdicts on Sun-strong charts.
             # Dampen C1 to 35% when it's a side-fire; full weight only when the user
             # actually asked about govt_job. Internal C1 score + promise_level label
             # stay honest for the dedicated narrator block.
@@ -4316,14 +4133,10 @@ _VERDICT_HI = {
 
 _BUCKET_HI = {
     "job_change":          "Naukri Change",
-    "new_job_timing":      "Pehli/Nai Naukri ki Timing",
     "promotion":           "Promotion / Salary Hike",
-    "business_start":      "Business / Startup Launch",
     "govt_job":            "Sarkari Naukri",
-    "foreign_job":         "Videsh Naukri",
     "transfer":            "Transfer / Posting",
     "resignation":         "Naukri Chodna (Resignation)",
-    "partnership":         "Business Partnership",
     "career_setback":      "Career Setback / Recovery",
     "career_field_choice": "Career Field Choice",
     "general_career":      "General Career Outlook",

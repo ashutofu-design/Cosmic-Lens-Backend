@@ -88,9 +88,9 @@ BUCKETS_BY_DOMAIN: dict[str, tuple[str, ...]] = {
     "love":     ("affair_third_party", "breakup_signal", "reconciliation",
                  "commitment_fear", "one_sided", "compatibility",
                  "existing_status", "timing", "general_love"),
-    "career":   ("govt_job", "foreign_job", "promotion", "resignation",
-                 "business_start", "partnership", "transfer", "career_setback",
-                 "new_job_timing", "job_change", "career_field_choice",
+    "career":   ("govt_job", "promotion", "resignation",
+                 "transfer", "career_setback",
+                 "job_change", "career_field_choice",
                  "general_career"),
     "wealth":   ("salary_growth", "business_profit", "loan_emi", "property",
                  "inheritance", "savings_corpus", "debt_recovery",
@@ -431,11 +431,6 @@ Q: "Job change karu ya nahi"
 → language="hn", domain="career", question_scope="life_decision", \
 ask_types=["decision"], emotional_tone="conflicted", \
 intents=[{bucket:"job_change", summary:"Job change karna chahiye ya nahi"}]
-
-Q: "Foreign job ka yog hai kya"
-→ language="hn", domain="career", question_scope="life_area_general", \
-ask_types=["diagnosis"], emotional_tone="curious", \
-intents=[{bucket:"foreign_job", summary:"Foreign job ka yog batao"}]
 
 Q: "Saturn ka upay batao"
 → language="hn", domain="remedy", question_scope="remedy_request", \

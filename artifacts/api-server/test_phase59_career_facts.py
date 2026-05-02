@@ -62,28 +62,6 @@ def _career_obj_green_go() -> dict:
     }
 
 
-def _career_obj_red_avoid_partnership() -> dict:
-    """Partnership question, red-avoid, 12L afflicted, brand-safety strong."""
-    return {
-        "bucket": "partnership",
-        "tense": "present",
-        "verdict": "red_avoid",
-        "confidence": 71,
-        "score": -38,
-        "strategy": "7L-12L exchange — partnership = financial drain risk.",
-        "timing_window": {
-            "current": {
-                "start": "2026-01-01", "end": "2026-12-31",
-                "lords": ("Rahu", "Saturn", ""),
-            },
-        },
-        "brand_safety_warnings": [
-            "Soften: do not declare 'partnership will fail' — say 'caution advised'.",
-            "Suggest written agreement, not refusal.",
-        ],
-    }
-
-
 def _career_obj_govt_job_yellow() -> dict:
     """Govt-job question, yellow_wait, with conditionals fired."""
     return {
@@ -223,20 +201,6 @@ class TestCareerFormatter(unittest.TestCase):
                       "private sector context only.", out)
         self.assertIn("    - Avoid resignation framing — narrate growth path.",
                       out)
-
-    def test_red_avoid_partnership_block(self):
-        out = oh._phase59_format_career_facts_block(
-            _career_obj_red_avoid_partnership())
-        self.assertIn("  - bucket: partnership", out)
-        self.assertIn("  - verdict: red_avoid", out)
-        self.assertIn("  - score: -38", out)
-        # PD lord absent → only md/ad in lord_str
-        self.assertIn("  - current_window: Rahu/Saturn (2026-01..2026-12)", out)
-        # next_window absent → must NOT appear
-        self.assertNotIn("next_window:", out)
-        self.assertIn("  - brand_safety:", out)
-        self.assertIn("    - Soften: do not declare 'partnership will fail' "
-                      "— say 'caution advised'.", out)
 
     def test_govt_job_yellow_wait_block(self):
         out = oh._phase59_format_career_facts_block(

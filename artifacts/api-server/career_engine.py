@@ -2978,6 +2978,12 @@ def _conditional_govt_job(intel: dict, kundli: dict, karakas_d: dict, kp: Option
       4. AmK = Sun
       5. 10L = Sun OR 10H Sun-occupied
       6. Sasha-yoga (Saturn for PSU/govt-service)
+      7. Sun-Saturn combo (conjunct OR mutual 7th aspect) in D1
+      8. Sun-Saturn combo in D9 Navamsha (soul-confirmation, +bonus)
+      9. Saturn in 2nd/5th/9th from Sun (artha+kona-trine) in D1
+      10. Same trine rule applied in D10 Dashamsha (career-chart, +bonus)
+      11. 6L in 10H OR 10L in 6H (classical naukri/service yoga)
+      12. 10L conjunct Sun (career-lord fused with govt-karaka)
       + KP cusps 10/6/1 CSL signification cross-check.
     """
     score = 0
@@ -3034,6 +3040,86 @@ def _conditional_govt_job(intel: dict, kundli: dict, karakas_d: dict, kp: Option
         score += 2
         flags.append("Sasha-yoga (PSU/admin)")
         why.append(f"C1: Sasha-yoga (Saturn {sat_dgn} in kendra h{sat_h}) — PSU/service-govt (+2)")
+
+    # ── Phase 2.8.32 ADD-ONLY rules (user-specified govt-job classical combos) ──
+    # Helper: Sun-Saturn combo in any chart (conjunction OR mutual 7th aspect).
+    # Returns (points, why_msg) or (0, None). bonus stacks for divisional-chart confirmation.
+    def _sun_sat_combo(chart_planets: list, chart_label: str, bonus: int = 0):
+        s_h = _planet_house(chart_planets, "Sun")
+        st_h = _planet_house(chart_planets, "Saturn")
+        if not s_h or not st_h:
+            return 0, None
+        if s_h == st_h:
+            pts = 3 + bonus
+            return pts, f"C1: Sun-Saturn conjunct in h{s_h} ({chart_label}) — authority + discipline yoga (+{pts})"
+        if abs(s_h - st_h) == 6:
+            pts = 2 + bonus
+            return pts, f"C1: Sun-Saturn mutual 7th aspect ({chart_label}) — govt-power axis (+{pts})"
+        return 0, None
+
+    # Helper: Saturn in 2nd/5th/9th FROM Sun (kona-trine + artha-axis).
+    def _sat_trine_from_sun(chart_planets: list, chart_label: str, bonus: int = 0):
+        s_h = _planet_house(chart_planets, "Sun")
+        st_h = _planet_house(chart_planets, "Saturn")
+        if not s_h or not st_h:
+            return 0, None
+        from_sun = ((st_h - s_h + 12) % 12) + 1
+        if from_sun in (5, 9):
+            pts = 3 + bonus
+            return pts, f"C1: Saturn in {from_sun}th from Sun ({chart_label}) — kona-trine govt yoga (+{pts})"
+        if from_sun == 2:
+            pts = 2 + bonus
+            return pts, f"C1: Saturn in 2nd from Sun ({chart_label}) — artha-axis govt support (+{pts})"
+        return 0, None
+
+    # Rule 7: Sun-Saturn combo in D1
+    pts, msg = _sun_sat_combo(planets, "D1")
+    if pts:
+        score += pts
+        flags.append("Sun-Saturn combo D1")
+        why.append(msg)
+
+    # Rule 8: Sun-Saturn combo in D9 Navamsha (+1 bonus — soul-chart confirmation)
+    d9_planets = ((kundli.get("divisionalCharts") or {}).get("D9") or {}).get("planets") or []
+    pts, msg = _sun_sat_combo(d9_planets, "D9 Navamsha", bonus=1)
+    if pts:
+        score += pts
+        flags.append("Sun-Saturn combo D9")
+        why.append(msg)
+
+    # Rule 9: Saturn-trine-from-Sun in D1
+    pts, msg = _sat_trine_from_sun(planets, "D1")
+    if pts:
+        score += pts
+        flags.append("Saturn trine-from-Sun D1")
+        why.append(msg)
+
+    # Rule 10: Saturn-trine-from-Sun in D10 Dashamsha (+1 bonus — career-chart)
+    d10_planets = ((kundli.get("divisionalCharts") or {}).get("D10") or {}).get("planets") or []
+    pts, msg = _sat_trine_from_sun(d10_planets, "D10 Dashamsha", bonus=1)
+    if pts:
+        score += pts
+        flags.append("Saturn trine-from-Sun D10")
+        why.append(msg)
+
+    # Rule 11: 6-10 exchange (classical naukri/service yoga)
+    sixth_lord = _house_lord(intel, 6)
+    sixth_lord_h = _planet_house(planets, sixth_lord) if sixth_lord else None
+    tenth_lord_h = _planet_house(planets, tenth_lord) if tenth_lord else None
+    if sixth_lord and sixth_lord_h == 10:
+        score += 3
+        flags.append("6L in 10H (naukri yoga)")
+        why.append(f"C1: 6L {sixth_lord} in 10H — naukri/service yoga (+3)")
+    if tenth_lord and tenth_lord_h == 6:
+        score += 3
+        flags.append("10L in 6H (naukri yoga)")
+        why.append(f"C1: 10L {tenth_lord} in 6H — career via service/employment (+3)")
+
+    # Rule 12: 10L conjunct Sun (career-lord fused with govt-karaka, distinct from Rule 5a)
+    if tenth_lord and tenth_lord != "Sun" and sun_h and tenth_lord_h == sun_h:
+        score += 3
+        flags.append("10L conjunct Sun")
+        why.append(f"C1: 10L {tenth_lord} conjunct Sun in h{sun_h} — career fused with govt-karaka (+3)")
 
     # KP bucket-tuned cross-check
     kp_assist = _kp_bucket_assist(kp or {}, "govt_job")
@@ -4415,7 +4501,17 @@ def assess_career(kundli: dict,
     cond_bonus = 0
     for ck, cv in conditionals.items():
         if isinstance(cv, dict):
-            cond_bonus += (cv.get("score") or 0)
+            cv_score = (cv.get("score") or 0)
+            # C1 side-fires on Sun-strong charts even when bucket != "govt_job"
+            # (intentional cross-cut, since Sun = career karaka). Phase 2.8.32 added
+            # 6 govt-specific rules pushing C1 max from ~22 to ~45, so its full score
+            # would distort foreign_job/promotion/etc verdicts on Sun-strong charts.
+            # Dampen C1 to 35% when it's a side-fire; full weight only when the user
+            # actually asked about govt_job. Internal C1 score + promise_level label
+            # stay honest for the dedicated narrator block.
+            if ck == "C1_govt_job" and bucket != "govt_job":
+                cv_score = round(cv_score * 0.35)
+            cond_bonus += cv_score
             # business_vs_service uses tilt as score signal
             if ck == "C3_business_vs_service" and isinstance(cv.get("tilt"), int):
                 # Don't add tilt to score (it's a leaning indicator), but use for narrator

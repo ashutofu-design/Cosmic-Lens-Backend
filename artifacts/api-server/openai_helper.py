@@ -16599,7 +16599,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         "confidence": 0.5,
                         "follow_ups": [],
                         "source":     "ai_passthrough_stream_partial",
-                        "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
+                        # Phase 2.8.55c — tag now reflects locked_facts
+                        # injection (Phase 2.8.54 mechanism), not the
+                        # stub _marriage_block_pt_s which always returns
+                        # "" since Phase 2.8.37. Engine fired iff we
+                        # injected real locked_facts content.
+                        "engine_tag": "ans-engine" if _locked_facts_pt_s else "ans-cosmo",
                     }
                     return
                 # No deltas yet → safe to fall through to outer except,
@@ -16618,7 +16623,8 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         "confidence": 0.0,
                         "follow_ups": [],
                         "source":     "ai_passthrough_stream_empty",
-                        "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
+                        # Phase 2.8.55c — see partial-emit site above.
+                        "engine_tag": "ans-engine" if _locked_facts_pt_s else "ans-cosmo",
                     }
                     return
                 raise RuntimeError("passthrough(stream): empty stream from OpenAI")
@@ -16716,7 +16722,14 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "confidence": 1.0,
                 "follow_ups": [],
                 "source":     "ai_passthrough_stream",
-                "engine_tag": "ans-engine" if _marriage_block_pt_s else "ans-cosmo",
+                # Phase 2.8.55c — tag now reflects locked_facts injection
+                # (Phase 2.8.54 mechanism). When VIVAH-7 (or any timing
+                # engine) populates _locked_facts_pt_s, the LLM has real
+                # deterministic engine output to anchor its narrative —
+                # so the answer IS engine-grounded ("ans-engine"). The
+                # legacy _marriage_block_pt_s check was a no-op since
+                # Phase 2.8.37 stubbed that block to always return "".
+                "engine_tag": "ans-engine" if _locked_facts_pt_s else "ans-cosmo",
             }
             return
         except Exception as _pt_exc_s:  # noqa: BLE001

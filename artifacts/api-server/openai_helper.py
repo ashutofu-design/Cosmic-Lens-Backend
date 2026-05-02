@@ -3286,211 +3286,6 @@ def _kundli_summary(kundli: Any, birth: Any = None) -> str:
 
 # ── Topic-specific KP/Parashari focus block ──────────────────────────────────
 
-_TOPIC_FOCUS = {
-    "marriage": (
-        "FOCUS — vivah/marriage: 99% accuracy mandatory. Follow this PRIORITIZED LOGIC strictly, in order.\n"
-        "\n"
-        "PRIORITIZED LOGIC STEPS (apply in this exact order, then synthesize):\n"
-        "\n"
-        "1) DENIAL CHECK (KP) — FIRST: Look at the 7th cusp Sub-Lord in the KP block above. "
-        "   If it signifies ONLY houses 1, 6, 10 (and NOT 2, 7, or 11) → marriage faces significant DENIAL or long delays. "
-        "   Say so plainly. If it signifies 2/7/11 (any of them, in PL/NL/SB) → marriage is PROMISED, proceed.\n"
-        "\n"
-        "2) TIMING (Vimshottari Dasha): Marriage can ONLY happen during the Mahadasha/Antardasha of planets that "
-        "   signify houses 2, 7, or 11. Check the current DBA against the 'Planetary significators' table. "
-        "   If the current dasha lord IS a 2/7/11 significator → window is open NOW. "
-        "   If NOT, scan the upcoming Antardashas and name the next favourable one.\n"
-        "\n"
-        "3) TRIGGER (Live Transits): A confident 'Clear Verdict with timing' is only valid if Jupiter is currently "
-        "   transiting OR aspecting the natal 1st, 5th, or 7th house/lord (from Lagna AND Moon). "
-        "   No Jupiter trigger → say timing is approximate, expect a 1-2 year shift.\n"
-        "\n"
-        "4) DELAY FACTORS: If Saturn aspects/occupies the 7th house OR 7th lord, OR if 'Mangal-dosh' is flagged "
-        "   in the intelligence block, OR if user is in 'Sade-Sati' → ADD 1.5 to 2 years to the predicted timeline. "
-        "   Marriage usually after age 28 in such charts. Mention this delay openly, not as bad news.\n"
-        "\n"
-        "5) DOSHA CHECK: If 'Mangal-dosh present' is in the intelligence block, check if any cancellation is also listed "
-        "   (Mars in own/exalt sign, aspected by Jupiter, Moon in kendra giving neech-bhanga, etc). "
-        "   State clearly: 'dosh hai par cancel ho raha hai' OR 'dosh active hai, isliye delay'.\n"
-        "\n"
-        "SUPPORTING REFERENCES (cite naturally only when relevant):\n"
-        "• 7th house & lord = kalatra-bhava (BPHS Ch.80). Venus = kalatra-karaka for men, Jupiter = pati-karaka for women.\n"
-        "• 2nd (kutumb), 4th (domestic sukh), 8th (mangalya/bond longevity), 11th (desire fulfillment) — supporting houses.\n"
-        "• Vivah-yogas: 7L+Venus together, 2L+7L+11L combo, Lagna-lord aspecting 7H. Denial-yogas: 7L combust, Venus debilitated without neech-bhanga.\n"
-        "• Classics: Phaladeepika Ch.10, Saravali Ch.36, Jataka Parijata Ch.13, KP Reader Vol.VI, Prashna Marga Ch.18.\n"
-        "\n"
-        "MARRIAGE-SPECIFIC RESPONSE FORMAT (overrides default — strictly 3 paragraphs, 100-140 words, Hinglish):\n"
-        "• Para 1 (Empathy + Base, 1-2 sentences): Start with 'Pranam'. Acknowledge their concern. Mention strongest 7th-house factor "
-        "  using the format: 'Aapka Saptamesh (7th Lord) [Planet] [House] mein baitha hai...'.\n"
-        "• Para 2 (Technical Evidence, 2 sentences): Explain KP connection or Dasha logic in plain words. Use 'KP chart ke anusar...' "
-        "  or 'Dasha ka prabhav...'. Mention the denial/promise verdict from step 1, current dasha lord from step 2, "
-        "  and any delay factor from step 4.\n"
-        "• Para 3 (Verdict + Remedy, 2 sentences): Give a tight YEAR-RANGE (e.g. '2026 ke madhya se 2027 ke shuruat tak'). "
-        "  End with ONE specific remedy chosen for the 7th-lord placement (mantra+count+day OR donation).\n"
-        "Tone: calm, professional, scholarly — Acharya ji style, not chatty.\n"
-        "If essential data missing, politely ask user to complete profile — never invent."
-    ),
-    "career": (
-        "FOCUS — career/job/business: Apply systematically:\n"
-        "• 10th house & lord (karma-bhava) — strength, occupants, aspects.\n"
-        "• Sun (raj-karaka — govt/authority), Saturn (karma-karaka — discipline/service), "
-        "Mercury (vyapaar-karaka — commerce/communication), Mars (technical/military/sports/competition).\n"
-        "• 6th (service, competition, debt-from-work), 2nd (income/savings), 11th (gains/promotion).\n"
-        "• Amatya-karaka (2nd highest degree planet, Jaimini) shows profession nature.\n"
-        "• Raja-yogas: kendra-trikona lord conjunction, exchange (parivartana), Vipareeta-Raja-yoga (6/8/12 lords mutual).\n"
-        "• Current Dasha lord — if it rules/occupies 2/6/10/11 → growth phase. If it rules 8/12 → instability/transfer/loss.\n"
-        "• Saturn transit over 10th house = career karma activation.\n"
-        "• For business specifically: 7th house (partnerships), Mercury+Jupiter strength, Lakshmi-yoga.\n"
-        "• Cite: BPHS Ch.34 (Karma-bhava), Phaladeepika Ch.6, Uttara Kalamrita."
-    ),
-    "finance": (
-        "FOCUS — dhan/wealth: Apply ALL these:\n"
-        "• 2nd house (sanchita-dhana — accumulated), 11th (labha — gains/income), 5th (purva-punya wealth/speculation), "
-        "9th (bhagya-dhana — fortune-given).\n"
-        "• Jupiter (dhana-karaka), Venus (bhog & luxury), Mercury (commerce/trading).\n"
-        "• Dhana-yogas: 2L+11L conjunction/aspect, 5L+9L (Lakshmi-yoga), 9L+11L mutual, exchange between 2/5/9/11 lords.\n"
-        "• Daridra-yogas (poverty): 2L or 11L in 6/8/12, Lagna-lord weak.\n"
-        "• For loans/debt: 6th house, Saturn-Mars on 2/11.\n"
-        "• For speculation/stocks/lottery: 5th house & lord, Jupiter-Mercury combo, but warn 8/12 affliction = loss.\n"
-        "• Current Dasha lord ruling 2/5/9/11 = wealth period.\n"
-        "• Cite: BPHS Ch.32 (Dhana-bhava), Saravali Ch.33."
-    ),
-    "health": (
-        "FOCUS — swasthya: Apply ALL these:\n"
-        "• Lagna & Lagna-lord (vital strength), Moon (mental/fluid), Sun (vitality/heart/eyes), Mars (blood/muscle/inflammation), "
-        "Saturn (chronic/bones/joints/longevity), Rahu (mystery illness/poison), Ketu (sudden/surgery).\n"
-        "• 6th (acute disease/infection), 8th (chronic/surgery/longevity), 12th (hospitalisation/sleep/loss).\n"
-        "• Body-part assignment by sign: Mesh=head, Vrish=throat, Mithun=lungs/arms, Karka=chest, Simh=heart/spine, "
-        "Kanya=intestine, Tula=kidney, Vrishchik=reproductive, Dhanu=hips/thighs, Makar=knees, Kumbh=calves, Meen=feet.\n"
-        "• Affliction = malefic conjunction/aspect to Lagna or relevant house.\n"
-        "• Current Dasha lord afflicting Lagna/6/8/12 = health-attention period.\n"
-        "• Cite: BPHS Ch.41 (Aristha — disease yogas), Phaladeepika Ch.12, Maharishi Charaka."
-    ),
-    "child": (
-        "FOCUS — santan/child:\n"
-        "• 5th house & lord (putra-bhava), Jupiter (putra-karaka), 9th (santati continuation).\n"
-        "• Saptamsha (D-7) conceptually for children.\n"
-        "• Putra-dosh / Bhrigu-dosh patterns: 5th lord in 6/8/12, Rahu/Saturn in 5H, malefic aspect on 5L.\n"
-        "• For conception delay: also check 2nd (kutumb), Moon-Jupiter relation.\n"
-        "• Current Dasha-Antar of 5L, Jupiter, or 9L = conception window.\n"
-        "• Always be COMPASSIONATE — couples asking this are emotionally vulnerable. Recommend medical consult parallel to remedies.\n"
-        "• Cite: BPHS Ch.37 (Putra-bhava), Jataka Parijata Ch.10, Saravali Ch.30."
-    ),
-    "education": (
-        "FOCUS — vidya/exam:\n"
-        "• 4th (basic schooling/comfort), 5th (intellect/buddhi/competitive), 9th (higher/dharmic learning), 2nd (memory/speech).\n"
-        "• Mercury (buddhi-karaka), Jupiter (vidya/wisdom/teacher), Sun (focus/willpower).\n"
-        "• Saraswati-yoga: Mercury+Venus+Jupiter in kendra/trikona.\n"
-        "• For exams specifically: current transit of Jupiter/Mercury over 5/9, Dasha-Antar of 4L/5L/9L/Mercury/Jupiter.\n"
-        "• For competitive (UPSC/NEET/JEE etc.): also 6th (vijay over competition), 10th (selection/posting).\n"
-        "• Combust Mercury or Mercury-Saturn = slow/struggle but eventual depth.\n"
-        "• Cite: BPHS Ch.35, Phaladeepika Ch.6."
-    ),
-    "travel": (
-        "FOCUS — yatra/foreign:\n"
-        "• 3rd (short journeys/courage), 9th (long/dharmic/foreign), 12th (videsh-vaas — settlement abroad).\n"
-        "• Rahu (foreign lands/unconventional), Moon (movement), Mercury (commerce travel).\n"
-        "• Foreign settlement yog: 12L in good house, 9L+12L connection, Rahu in 9/12, Lagna-lord in 12.\n"
-        "• Visa/passport stuck: 12L afflicted, Rahu-Saturn on 9/12.\n"
-        "• Current Dasha lord ruling 3/9/12 = travel period.\n"
-        "• Cite: BPHS Ch.39, Phaladeepika Ch.7."
-    ),
-    "relationship": (
-        "FOCUS — pyaar/relationship (pre-marriage):\n"
-        "• 5th house (romance/affair) & lord, 7th (committed bond), 11th (friend-circle/desire-fulfilment).\n"
-        "• Venus (love-karaka for men), Mars (love-karaka for women).\n"
-        "• Moon's nakshatra-lord & sign = emotional template.\n"
-        "• Love-marriage yogas: 5L+7L conjunction/exchange, Venus+Mars conjunction, Rahu+Venus = unconventional union.\n"
-        "• Breakup signals: 7L in 6/8/12, Saturn-Rahu on 5/7, current dasha of 6L or 8L.\n"
-        "• Inter-caste/family-opposition: Rahu involvement with 7H/Venus.\n"
-        "• Be empathetic — many devotees are heartbroken when they ask this."
-    ),
-    "litigation": (
-        "FOCUS — court case/legal:\n"
-        "• 6th (vijay over enemy/case), 8th (sudden reversal/chronic case), 12th (jail/exit), 11th (gain from case).\n"
-        "• Mars (energy to fight), Saturn (delay/chronic), Mercury (paperwork/argument), Jupiter (judge/dharma).\n"
-        "• 6L stronger than 7L = win; 7L stronger = opponent wins; 6L+7L equal = settlement.\n"
-        "• Current Dasha lord — if ruling 6/11 = win-window; if ruling 7/8/12 = adverse.\n"
-        "• Always advise consulting a qualified vakil — jyotish only shows trend, not legal advice.\n"
-        "• Cite: BPHS Ch.36 (Shatru-bhava), Prashna Marga Ch.13."
-    ),
-    "property": (
-        "FOCUS — property/ghar:\n"
-        "• 4th house & lord (sukh-sthan — home/land/vehicle), Mars (real estate karaka), Venus (luxury/vehicle), Mercury (paperwork/registration).\n"
-        "• Buying yog: 4L strong + dasha of 4L/Mars/Venus, Jupiter transit over 4H.\n"
-        "• Disputes: 4L+8L involvement, Rahu in 4H = unclear title.\n"
-        "• Selling: 4L in 3/12, weak 4L period.\n"
-        "• Cite: BPHS Ch.31 (Sukha-bhava), Phaladeepika Ch.9."
-    ),
-    "vehicle": (
-        "FOCUS — vahan: 4th house (vahan-sthan), Venus (vahan-karaka), Mars (engine/movement). "
-        "Buying yog: 4L+Venus dasha, Jupiter transit on 4H. Accident risk: 8L on 4H, Mars-Saturn affliction. "
-        "Cite: BPHS Ch.31."
-    ),
-    "vastu": (
-        "FOCUS — vastu: refer to direction-element mapping (NE=water/Ishan, SE=fire/Agni, SW=earth/Nairutya, NW=air/Vayavya). "
-        "Suggest specific room placements per Mayamatam/Manasara. For deeper scan recommend in-app Vastu Drishti or AstroVastu PRO."
-    ),
-    "remedy": (
-        "FOCUS — upay: identify the SPECIFIC most-afflicted/weak planet causing the problem from the chart, then prescribe ONE classical remedy:\n"
-        "• Mantra (Vedic moolmantra OR Beej-mantra), exact count (108 / 1008 / 11000 / 125000), specific day & hora.\n"
-        "• Donation (daan) — what, to whom, which day (planet's day).\n"
-        "• Fast (vrat) — which day, what to eat/avoid.\n"
-        "• Gemstone — ONLY if dasha favours that planet AND the planet is functional benefic; else skip and suggest substitute.\n"
-        "• Rudraksha mukhi for the planet, yantra, kavach.\n"
-        "• Lal Kitab totka if pattern matches.\n"
-        "• Cite source: BPHS Shanti-adhyay, Lal Kitab, Mantra Maharnava, regional Pandit-tradition."
-    ),
-    "spiritual": (
-        "FOCUS — moksha/spiritual: 9th (dharma), 12th (moksha-sthan), Jupiter (guru/wisdom), Ketu (renunciation/jnana). "
-        "Moksha-yogas: 12L in 9, Ketu in 12, Jupiter+Ketu, Saturn in 12 with Jupiter aspect. "
-        "Suggest a sadhana matching the strongest of these planets. Cite: BPHS Ch.40, Brihat Jataka."
-    ),
-    "family": (
-        "FOCUS — parivar: 4th (mother/home), 9th (father), 3rd (siblings), 11th (elder sibling), 5th (children). "
-        "Affliction to these = family discord. Look at corresponding karakas: Moon (mother), Sun (father), Mars (siblings)."
-    ),
-    # ── UNIVERSAL fallback — any question that doesn't match a known topic ──
-    "general": (
-        "FOCUS — universal life-reading (use this when the question doesn't fit a single bhava). Apply systematically:\n"
-        "\n"
-        "A) FRAMING — first identify what the devotee is really asking:\n"
-        "• Re-read the full question carefully. List EVERY distinct sub-question or concern in order.\n"
-        "• Map each sub-question to the bhava(s) it touches (e.g. 'will I be happy and successful?' → 1H/5H/9H/10H/11H).\n"
-        "• If the question is philosophical/karmic, lean on 5H (purva-punya), 9H (dharma), 12H (moksha), Jupiter & Ketu.\n"
-        "• If the question is timing-based ('kab', 'when', 'how soon'), centre the answer on current Mahadasha+Antardasha.\n"
-        "\n"
-        "B) CORE CHART READING — always cover these foundations:\n"
-        "• Lagna (1H) + Lagna lord — overall vitality, body, personality.\n"
-        "• Moon — sign, nakshatra, house, aspects (mind, emotion, public life).\n"
-        "• Sun — soul, father, authority.\n"
-        "• Yogayakaraka or strongest planet → its house/dasha = peak life area.\n"
-        "• Most afflicted house/planet → area of life-lesson / suffering.\n"
-        "• Active Mahadasha+Antardasha — ALWAYS reference what the running lord rules + occupies.\n"
-        "• Jaimini chara-karakas if relevant (AK=self, AmK=career, BK=siblings, MK=mother, PK=children, GK=challenges, DK=spouse).\n"
-        "• Major yogas present in chart (Raja, Dhana, Vipareeta-Raja, Gajakesari, Pancha-mahapurusha, Neech-bhanga).\n"
-        "\n"
-        "C) MULTI-PART QUESTION RULE: If the devotee asked 2+ distinct things, address EACH in its own short paragraph in the order asked. Never skip a sub-question. Use a soft connector ('Aur dusri baat aapne pucha...' / 'Now coming to your second concern...').\n"
-        "\n"
-        "D) KP CROSS-CHECK: Use the KP block if provided — match the running DBA against significators of the relevant houses for each sub-question. Confirm or qualify the Vedic verdict.\n"
-        "\n"
-        "E) GOCHAR: Note any major slow-planet transit (Jupiter, Saturn, Rahu/Ketu) currently activating a relevant natal house — explain its CURRENT influence on the matter.\n"
-        "\n"
-        "F) HUMAN-FRIENDLY DELIVERY:\n"
-        "• Open with empathy — name what the devotee seems to be feeling beneath the question.\n"
-        "• Use the devotee's actual words back to them once, so they feel heard.\n"
-        "• Translate every Sanskrit term inline ('Shukra (Venus) aapke...' / 'Saade-sati — yaani Shani ka 7.5 saal ka phase...').\n"
-        "• No jargon dump. No lecture. Conversational tone, like sitting across the table.\n"
-        "• End with ONE remedy targeted at the WEAKEST significator across all sub-questions identified.\n"
-        "• Cite classical sources naturally ('jaisa BPHS me Maharishi Parashar kehte hain...') — never list them as a bibliography.\n"
-        "\n"
-        "G) Cite (combine as relevant): BPHS, Phaladeepika, Saravali, Jataka Parijata, Brihat Jataka, Uttara Kalamrita, Krishnamurti Reader, Prashna Marga, Lal Kitab."
-    ),
-}
-
-
-def _focus_block(topic: str) -> str:
-    return _TOPIC_FOCUS.get(topic, "")
 
 
 # ── KP (Krishnamurti Paddhati) cross-verification context ────────────────────
@@ -6584,61 +6379,10 @@ def _classify_topic(question: str) -> str:
 #               its own knowledge; no chart, no scaffolding, ChatGPT-style.
 # Heuristic: GENERAL only if a concept signal is present AND no personal
 # pronoun / future-tense / timing signal is present. Otherwise ASTRO.
-_GENERAL_CONCEPT_SIGNALS = (
-    # English / Hinglish concept words
-    "what is", "what are", "what's", "explain", "explanation",
-    "difference between", "difference b/w", "what is the difference",
-    " vs ", " v/s ", " versus ", "compare ", "comparison",
-    "how does", "how do ", "how works", "how it works", "meaning of",
-    "definition of", "types of", "list of", "examples of", "kinds of",
-    # Hinglish concept words
-    "kya hai", "kya hota", "kya hoti", "kya hote", "kya matlab",
-    "matlab kya", "samjhao", "samjhaiye", "samjha do", "samjhna hai",
-    "antar kya", "fark kya", "kya antar", "kya fark", "kaun se",
-    "kitne prakar", "kitne type", "ke prakar", "ke type",
-    "kaise kaam", "kaise work",
-    # Knowledge / origin / authorship / history questions (general, not personal)
-    "kisne likha", "kisne banaya", "kisne banayi", "kisne banaai",
-    "kisne banai", "kisne bani", "kisne shuru",
-    "kis ne likha", "kis ne banaya", "kis ne banayi", "kis ne banai",
-    "kaun ne likha", "kaun ne banaya", "kaun ne banayi",
-    "kisne diya", "kisne khoja", "kisne discover", "kisne invent",
-    "kaise bani", "kaise bana", "kaise shuru hua",
-    "kab shuru", "kab bana", "kab likha", "kab aaya", "kahan se aaya",
-    "kahan se shuru", "history kya", "history of ", "history",
-    "itihas kya", "itihas", "ka itihas", "ki history",
-    "origin of", "founder of", "who wrote", "who made", "who created",
-    "who founded", "who discovered", "who invented", "when did",
-    "when was", "where did", "where does", "where is the origin",
-    # Devanagari concept words
-    "क्या है", "क्या होता", "क्या होती", "क्या मतलब", "मतलब क्या",
-    "अंतर क्या", "फर्क क्या", "क्या अंतर", "क्या फर्क",
-    "समझाओ", "समझाइये", "समझाइए", "कैसे काम",
-    # Devanagari knowledge/origin/authorship
-    "किसने लिखा", "किसने बनाया", "किसने शुरू", "कौन ने लिखा",
-    "किसने दिया", "किसने खोजा",
-    "कब शुरू", "कब बना", "कब लिखा", "कब आया",
-    "कहां से", "कहाँ से", "इतिहास क्या",
-)
 
 # Personal life-event signals — if ANY appear, we treat as astro even when
 # concept words are present (e.g. "meri shaadi kab hogi" — concept word "kab"
 # but personal predict).
-_PERSONAL_PREDICT_SIGNALS = (
-    # personal pronouns
-    "mera ", "meri ", "mere ", "mujhe", "mujhko", "mujh ko", "humara",
-    "hamari", "hamare", "hamein", "humein",
-    "my ", "mine ", "i will", "i am", "i have", "will i ", "for me",
-    "should i", "can i ", "am i ",
-    # Devanagari personal
-    "मेरा", "मेरी", "मेरे", "मुझे", "मुझको", "हमारा", "हमारी", "हमें",
-    # personal life-events / timing markers (predictive intent)
-    "kab hoga", "kab hogi", "kab honge", "kab milega", "kab milegi",
-    "kab aayega", "kab aayegi", "kab tak", "kab shaadi", "kab vivah",
-    "kaisa rahega", "kaisi rahegi", "kaise rahega",
-    "when will", "when do i", "when can i",
-    "कब होगा", "कब होगी", "कब मिलेगा", "कब मिलेगी", "कब तक", "कब शादी",
-)
 
 
 _COSMIC_ENGINE_SYSTEM_TEMPLATE = """ROLE:
@@ -6939,72 +6683,6 @@ def _marriage_reply_violates(text: str, locked_window: str) -> tuple[bool, str]:
     return False, ""
 
 
-_SIMPLE_DEFINITION_HEAD = (
-    "kya hai", "kya hota hai", "kya hoti hai", "kya hote hain",
-    "kya matlab", "matlab kya", "kise kehte", "kya kehte",
-    "what is", "what's", "what are", "meaning of", "definition of",
-    "क्या है", "क्या होता है", "क्या होती है", "क्या मतलब",
-)
-_EXPLAIN_SIGNALS = (
-    "kaise", "difference", "antar", "fark", " vs ", " v/s ", " versus ",
-    "compare", "explain", "samjhao", "samjhaiye", "samjha do",
-    "kisne", "kis ne", "kaun ne", "kab shuru", "kab bana", "kab likha",
-    "history", "itihas", "origin", "founder", "kahan se", "कहां से", "कहाँ से",
-    "kitne prakar", "kitne type", "ke prakar", "ke type", "types of",
-    "list of", "examples of", "kinds of", "how does", "how do ", "how works",
-    "किसने", "कौन ने", "अंतर", "फर्क", "इतिहास", "समझाओ", "समझाइ",
-)
-
-
-def _classify_general_submode(question: str) -> str:
-    """Classify a general-mode question as 'simple' (short definition) or
-    'explain' (concept / comparison / how / origin). Used to pick the
-    response format inside the Human Style prompt."""
-    if not question:
-        return "explain"
-    q = question.lower().strip()
-    # Strong "explain" signals win — even "X kya hai" can be explain-worthy if
-    # it asks comparison or origin alongside.
-    if any(s in q for s in _EXPLAIN_SIGNALS):
-        return "explain"
-    # Very short definition asks → simple. Threshold: ≤ 6 words AND contains
-    # a definition opener like "kya hai" / "what is".
-    word_count = len(q.split())
-    if word_count <= 7 and any(s in q for s in _SIMPLE_DEFINITION_HEAD):
-        return "simple"
-    return "explain"
-
-
-def _classify_mode_with_reason(question: str) -> tuple[str, str]:
-    """Returns (mode, human-readable-reason). mode is 'astro' or 'general'."""
-    if not question:
-        return ("astro", "empty question → default astro")
-    q_raw = question
-    q = question.lower()
-    matched_concept  = [s for s in _GENERAL_CONCEPT_SIGNALS if s in q or s in q_raw]
-    matched_personal = [s for s in _PERSONAL_PREDICT_SIGNALS if s in q or s in q_raw]
-    if matched_concept and not matched_personal:
-        return ("general", f"concept signal(s) matched={matched_concept[:3]} "
-                           f"AND no personal signals")
-    if matched_personal:
-        return ("astro", f"personal signal(s) matched={matched_personal[:3]} "
-                         f"(concept matched={matched_concept[:3]})")
-    return ("astro", "no general signals → default astro")
-
-
-def _classify_mode(question: str) -> str:
-    """Returns 'astro' or 'general'."""
-    if not question:
-        return "astro"
-    q_raw = question
-    q = question.lower()
-    has_concept  = any(s in q for s in _GENERAL_CONCEPT_SIGNALS) or \
-                   any(s in q_raw for s in _GENERAL_CONCEPT_SIGNALS)
-    has_personal = any(s in q for s in _PERSONAL_PREDICT_SIGNALS) or \
-                   any(s in q_raw for s in _PERSONAL_PREDICT_SIGNALS)
-    if has_concept and not has_personal:
-        return "general"
-    return "astro"
 
 
 # ── Public entry point ───────────────────────────────────────────────────────
@@ -7870,13 +7548,6 @@ def _scrub_brand_tone(text: str) -> str:
     return out.strip()
 
 
-def _has_required_window(text: str, must_window_str: str) -> bool:
-    """True iff the AI output literally contains the engine's window string."""
-    if not must_window_str:
-        return True   # nothing to enforce
-    return must_window_str.lower() in (text or "").lower()
-
-
 _FOLLOW_UPS_BY_TOPIC = {
     "marriage": {
         "hn": ["Iska upay batao", "Alternate time bhi batao", "Mangal dosh hai kya?"],
@@ -8041,157 +7712,12 @@ _MULTI_PLANET_SWEEP_RX = re.compile(
 )
 
 
-def _is_multi_planet_sweep(question_text: str | None) -> bool:
-    """True when the question asks for a chart-wide planet overview rather
-    than a single-planet inspection. Keeps the AI Ear supertype mapper from
-    forcing PLANET_QUERY on multi-planet sweeps like 'kya kya powerful
-    planets he kya weak planets he batao'."""
-    if not isinstance(question_text, str) or not question_text.strip():
-        return False
-    return bool(_MULTI_PLANET_SWEEP_RX.search(question_text))
 
 
 # Sprint-25 Fix-E: canonical scope → supertype map. Each scope value emitted
 # by the AI Ear corresponds to exactly ONE narrator supertype contract. This
 # replaces the old ask_types/tone/bucket heuristic chain (kept as fallback
 # for legacy extractions where question_scope=='unknown').
-_SCOPE_TO_SUPERTYPE: dict[str, tuple[str, float]] = {
-    "single_planet":          ("PLANET_QUERY",     0.95),
-    "multi_planet_or_chart":  ("GENERAL_ANALYSIS", 0.95),
-    "life_area_problem":      ("PROBLEM_QUERY",    0.95),
-    "life_area_timing":       ("TIMING_QUERY",     0.95),
-    "life_decision":          ("DECISION_QUERY",   0.95),
-    "life_area_general":      ("GENERAL_ANALYSIS", 0.85),
-    "remedy_request":         ("GENERAL_ANALYSIS", 0.80),
-    "off_topic":              ("GENERAL_ANALYSIS", 0.60),
-}
-
-
-def _supertype_from_ai_ear(extraction, question_text: str | None = None) -> dict | None:
-    """Map an AI Ear IntentExtraction object → supertype dict.
-
-    PRIMARY signal (Sprint-25 Fix-E): the AI Ear's `question_scope` field
-    deterministically picks the supertype via `_SCOPE_TO_SUPERTYPE`. This
-    is the source of truth — no regex post-processing needed.
-
-    FALLBACK signal: when scope == "unknown" (cache miss / older extraction
-    schema), the legacy ask_types/tone/bucket heuristic decides.
-
-    Returns None if extraction is missing, low-confidence, or both signals
-    are inconclusive — caller then falls back to the regex
-    `_classify_supertype`.
-    """
-    if not extraction or getattr(extraction, "source", "") != "ai_ear":
-        return None
-    conf = float(getattr(extraction, "confidence", 0.0) or 0.0)
-    if conf < 0.70:
-        return None
-
-    # ── PRIMARY: question_scope ─────────────────────────────────────────
-    scope = (getattr(extraction, "question_scope", "") or "unknown").strip().lower()
-    mapped = _SCOPE_TO_SUPERTYPE.get(scope)
-    if mapped:
-        st, st_conf = mapped
-        return {
-            "supertype":  st,
-            "confidence": st_conf,
-            "reasons":    [f"AI Ear question_scope='{scope}' → {st}"],
-            "source":     "ai_ear_scope",
-        }
-
-    # ── FALLBACK: legacy ask_types/tone heuristic (scope=='unknown') ────
-    asks = set(getattr(extraction, "ask_types", []) or [])
-    tone = (getattr(extraction, "emotional_tone", "") or "").lower()
-    domain = (getattr(extraction, "domain", "") or "").lower()
-    # Primary bucket — first intent's bucket name (model-emitted vocab).
-    _intents = getattr(extraction, "intents", []) or []
-    primary_bucket = ""
-    if _intents:
-        _b = getattr(_intents[0], "bucket", None) or (
-            _intents[0].get("bucket") if isinstance(_intents[0], dict) else None
-        )
-        primary_bucket = (_b or "").lower()
-
-    # 1. DECISION — explicit decision ask wins regardless of other signals.
-    if "decision" in asks:
-        return {
-            "supertype": "DECISION_QUERY", "confidence": 0.92,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} contains 'decision'"],
-            "source":    "ai_ear",
-        }
-
-    # 2. PROBLEM — diagnosis ask MUST be paired with distress tone. A bare
-    #    "diagnosis" ask without distress is usually chart inspection
-    #    ("Foreign job ka yog hai kya") and should fall through to the
-    #    PLANET / regex layer instead. The regex `_PROBLEM_RX` already
-    #    catches explicit "nahi ho raha" / "kyon nahi" framings.
-    if "diagnosis" in asks and tone in (
-        "anxious", "desperate", "conflicted", "grieving", "angry"
-    ):
-        return {
-            "supertype": "PROBLEM_QUERY", "confidence": 0.88,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} + tone={tone}"],
-            "source":    "ai_ear",
-        }
-
-    # 3. TIMING — explicit "kab" ask.
-    if "timing" in asks:
-        return {
-            "supertype": "TIMING_QUERY", "confidence": 0.92,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} contains 'timing'"],
-            "source":    "ai_ear",
-        }
-
-    # 4. PLANET — explanation / comparison ask under the chart-inspection
-    #    domain (general / no specific life-area). This catches "Mars kaisa
-    #    hai", "Saturn vs Jupiter strong kaun", "lagna kya hai" etc.
-    #
-    #    VETO when the question is a chart-wide multi-planet sweep
-    #    ("kya kya powerful planets", "saare grah", "all planets") OR when
-    #    AI Ear's primary bucket is itself a chart-overview signal
-    #    ("analysis" / "general"). PLANET_QUERY is single-planet — using
-    #    it for sweeps gives a contract-locked single-planet answer that
-    #    ignores the rest of the chart.
-    if (("explanation" in asks or "comparison" in asks)
-            and domain in ("general", "")
-            and not _is_multi_planet_sweep(question_text)
-            and primary_bucket not in ("analysis", "general", "")):
-        return {
-            "supertype": "PLANET_QUERY", "confidence": 0.85,
-            "reasons":   [
-                f"AI Ear ask_types={sorted(asks)} + domain={domain}"
-                f" + bucket={primary_bucket or 'none'}"
-            ],
-            "source":    "ai_ear",
-        }
-
-    # 5. OUTCOME without explicit timing — asking "kaisa rahega" without
-    #    a date. Treat as GENERAL_ANALYSIS (a balanced overview).
-    if "outcome" in asks and "timing" not in asks:
-        return {
-            "supertype": "GENERAL_ANALYSIS", "confidence": 0.75,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} (outcome only)"],
-            "source":    "ai_ear",
-        }
-
-    # 6. Recovery ("wapas milega") behaves like TIMING when conf is high.
-    if "recovery" in asks:
-        return {
-            "supertype": "TIMING_QUERY", "confidence": 0.85,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} (recovery → timing)"],
-            "source":    "ai_ear",
-        }
-
-    # 7. Remedy-only ask without other signals → GENERAL.
-    if "remedy" in asks and len(asks) == 1:
-        return {
-            "supertype": "GENERAL_ANALYSIS", "confidence": 0.75,
-            "reasons":   [f"AI Ear ask_types={sorted(asks)} (remedy only)"],
-            "source":    "ai_ear",
-        }
-
-    # Ambiguous — let regex layer try.
-    return None
 
 
 def _classify_supertype(question: str, question_intent: dict | None = None) -> dict:
@@ -11545,10 +11071,6 @@ _HOUSE_PATTERNS: tuple[tuple[str, str], ...] = (
     ("11", r"\b(?:11th|eleventh|labha|aaya)\b"),
     ("12", r"\b(?:12th|twelfth|dvadasha|dvadasa|vyaya|moksha)\b"),
 )
-_HOUSE_RX_COMPILED: tuple[tuple[str, "_re_validator.Pattern"], ...] = tuple(
-    (num, _re_validator.compile(pat, _re_validator.IGNORECASE))
-    for num, pat in _HOUSE_PATTERNS
-)
 
 # ── Sprint-25 Fix-J: STRENGTH_SUMMARY detector ──────────────────────────────
 # Triggers when the user asks "which planets are strong / weak / powerful /
@@ -11562,18 +11084,6 @@ _STRENGTH_KEYWORDS = (
     r"vargottam|vargottama"
 )
 _PLANET_KEYWORDS = r"planet|planets|grah|graha|grahon|grahaon|grahas"
-_STRENGTH_SUMMARY_RX = _re_validator.compile(
-    rf"\b(?:{_STRENGTH_KEYWORDS})\b[^\n]{{0,30}}\b(?:{_PLANET_KEYWORDS})\b"
-    rf"|"
-    rf"\b(?:{_PLANET_KEYWORDS})\b[^\n]{{0,30}}\b(?:{_STRENGTH_KEYWORDS})\b",
-    _re_validator.IGNORECASE,
-)
-
-
-def _is_strength_summary_question(question: str) -> bool:
-    if not question:
-        return False
-    return bool(_STRENGTH_SUMMARY_RX.search(question))
 
 
 # Vargottam-claim parser: catches "Moon vargottam hai" / "vargottama Moon" etc.
@@ -11588,20 +11098,6 @@ _VARGOTTAM_NEAR_PLANET_RX = _re_validator.compile(
     rf"venus|shukra|saturn|shani|rahu|ketu)\b[^\n]{{0,40}}?(?:vargottam|vargottama)\b",
     _re_validator.IGNORECASE,
 )
-
-
-def _count_distinct_planets(text: str) -> int:
-    """Number of DISTINCT planets named in the text (max 9)."""
-    if not text:
-        return 0
-    return sum(1 for _name, rx in _PLANET_RX_COMPILED if rx.search(text))
-
-
-def _count_distinct_houses(text: str) -> int:
-    """Number of DISTINCT houses named in the text (max 12)."""
-    if not text:
-        return 0
-    return sum(1 for _num, rx in _HOUSE_RX_COMPILED if rx.search(text))
 
 
 def _validate_supertype_contract(text: str, supertype: str,
@@ -20281,19 +19777,6 @@ def analyze_room_visuals(
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional as _Optional
-
-
-def _v2_should_split(intent_extraction) -> bool:
-    """Decide whether to enter multi-card mode. Single-intent extractions
-    fall through to the legacy ai_ask() path for full backward-compat."""
-    if not intent_extraction or intent_extraction.source != "ai_ear":
-        return False
-    if not intent_extraction.intents or len(intent_extraction.intents) < 2:
-        return False
-    # Confidence floor — if AI Ear is uncertain, prefer single-engine path.
-    if (intent_extraction.confidence or 0.0) < 0.55:
-        return False
-    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -247,6 +247,232 @@ def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# SECTION 2b — ChatGPT-style strict KP Sub-Lord Marriage Filter
+# (Phase 2.8.56 — added 2026-05-02 per user spec)
+#
+# RULE: For each planet, look at its SUB-LORD's BASIC houses (occupation +
+# KP cusp ownership). Classify per:
+#   Promise = {2, 7, 11}
+#   Deny    = {1, 6, 8, 10, 12}
+# This is STRICTER and CLEANER than the chain-union approach used by
+# _kp_planet_verdict above. Both methods coexist (ADD-ONLY).
+#
+# Per user's GOLDEN RULE: "Sub-lord = FINAL DECISION".
+# ════════════════════════════════════════════════════════════════════════
+
+# Sub-Lord-strict promise/deny sets (per user spec — note 8 added to deny)
+_KP_SB_PROMISE_HOUSES: Set[int] = {2, 7, 11}
+_KP_SB_DENY_HOUSES: Set[int] = {1, 6, 8, 10, 12}
+
+_KP_PLANET_NAMES: List[str] = [
+    "Sun", "Moon", "Mars", "Mercury", "Jupiter",
+    "Venus", "Saturn", "Rahu", "Ketu",
+]
+
+
+def _planet_basic_houses(kp: dict, planet: str) -> List[int]:
+    """Return planet's BASIC signified houses = occupation + KP cusp ownership.
+
+    Used by ChatGPT-style strict Sub-Lord filter (NOT the 4-level CCS chain).
+    Returns sorted unique list. Empty list if planet not found.
+
+    For shadow planets (Rahu/Ketu) ownership is empty (no own sign in KP),
+    so they only contribute their occupation house.
+    """
+    if not isinstance(kp, dict) or not planet:
+        return []
+    out: Set[int] = set()
+    # Occupation (where planet sits in KP houses)
+    for p in (kp.get("planets") or []):
+        if isinstance(p, dict) and p.get("name") == planet:
+            h = p.get("house")
+            if isinstance(h, int):
+                out.add(h)
+            break
+    # Ownership: any KP cusp whose sign-lord is this planet
+    for c in (kp.get("cusps") or []):
+        if isinstance(c, dict) and c.get("sl") == planet:
+            h = c.get("house")
+            if isinstance(h, int):
+                out.add(h)
+    return sorted(out)
+
+
+def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
+    """Apply strict ChatGPT-style Sub-Lord filter to ONE planet.
+
+    Returns dict:
+      {
+        "planet":       "Sun",
+        "sub_lord":     "Saturn",
+        "sb_houses":    [2, 4],
+        "promise_hits": [2],
+        "deny_hits":    [],
+        "verdict":      "STRONG" | "MIXED" | "WEAK" | "UNKNOWN",
+        "reason":       "Sub-lord Saturn (2,4) → 2 promise present"
+      }
+
+    Verdict rules:
+      promise_hits >= 1 and deny_hits == 0   -> STRONG
+      promise_hits >= 1 and deny_hits >= 1   -> MIXED
+      promise_hits == 0 and deny_hits >= 1   -> WEAK
+      both empty                             -> UNKNOWN
+    """
+    out: Dict[str, Any] = {
+        "planet": planet, "sub_lord": None, "sb_houses": [],
+        "promise_hits": [], "deny_hits": [],
+        "verdict": "UNKNOWN", "reason": "no SB found",
+    }
+    if not isinstance(kp, dict) or not planet:
+        return out
+    pl = next((p for p in (kp.get("planets") or [])
+               if isinstance(p, dict) and p.get("name") == planet), None)
+    if not pl:
+        return out
+    sb = pl.get("sb")
+    if not sb:
+        return out
+    sb_houses = _planet_basic_houses(kp, sb)
+    sb_set = set(sb_houses)
+    promise = sorted(sb_set & _KP_SB_PROMISE_HOUSES)
+    deny = sorted(sb_set & _KP_SB_DENY_HOUSES)
+
+    if promise and not deny:
+        verdict = "STRONG"
+        reason = f"SB {sb} ({','.join(map(str, sb_houses))}) -> promise {promise}"
+    elif promise and deny:
+        verdict = "MIXED"
+        reason = f"SB {sb} ({','.join(map(str, sb_houses))}) -> promise {promise} but deny {deny}"
+    elif deny and not promise:
+        verdict = "WEAK"
+        reason = f"SB {sb} ({','.join(map(str, sb_houses))}) -> only deny {deny}, no 2/7/11"
+    else:
+        verdict = "UNKNOWN"
+        reason = f"SB {sb} ({','.join(map(str, sb_houses))}) -> no promise no deny"
+
+    out.update({
+        "sub_lord": sb,
+        "sb_houses": sb_houses,
+        "promise_hits": promise,
+        "deny_hits": deny,
+        "verdict": verdict,
+        "reason": reason,
+    })
+    return out
+
+
+def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
+    """Run strict KP Sub-Lord marriage filter across all 9 planets + final verdict.
+
+    Implements the ChatGPT-validated methodology approved by user 2026-05-02:
+      - Sub-Lord = FINAL DECIDER
+      - Sub-Lord houses = basic occupation + KP cusp ownership
+      - Promise = {2, 7, 11}
+      - Deny    = {1, 6, 8, 10, 12}
+
+    Final verdict logic (strict KP per user spec):
+      - 7CSL filter result is the PRIMARY decider
+      - Consensus of 9 planets adjusts strength
+
+    Returns dict:
+      {
+        "per_planet":     [{...}, ...],          # 9 entries
+        "buckets": {
+            "strong":     ["Sun", "Moon", ...],  # STRONG verdict planets
+            "mixed":      [...],
+            "weak":       [...],
+            "unknown":    [...],
+        },
+        "csl_planet":     "Sun",
+        "csl_filter":     {...same shape as per_planet entry...},
+        "verdict":        "PROMISED" | "DELAYED" | "DENIED",
+        "strength":       "STRONG" | "MEDIUM" | "WEAK",
+        "reason":         "2-line plain reason",
+      }
+    """
+    out: Dict[str, Any] = {
+        "per_planet": [], "buckets": {"strong": [], "mixed": [], "weak": [], "unknown": []},
+        "csl_planet": None, "csl_filter": None,
+        "verdict": "UNKNOWN", "strength": "WEAK",
+        "reason": "insufficient KP data",
+    }
+    if not isinstance(kp, dict):
+        return out
+    try:
+        # Per-planet pass
+        for pname in _KP_PLANET_NAMES:
+            entry = _kp_sublord_filter_planet(kp, pname)
+            out["per_planet"].append(entry)
+            v = entry.get("verdict") or "UNKNOWN"
+            bucket = v.lower()
+            if bucket not in out["buckets"]:
+                out["buckets"][bucket] = []
+            out["buckets"][bucket].append(pname)
+
+        # 7CSL is the FINAL DECIDER (per user golden rule)
+        csl = _get_7csl(kp)
+        out["csl_planet"] = csl
+        if csl:
+            csl_entry = _kp_sublord_filter_planet(kp, csl)
+            out["csl_filter"] = csl_entry
+            csl_v = csl_entry.get("verdict")
+        else:
+            csl_v = "UNKNOWN"
+
+        strong_n = len(out["buckets"]["strong"])
+        mixed_n = len(out["buckets"]["mixed"])
+        weak_n = len(out["buckets"]["weak"])
+
+        # FINAL verdict (Sub-Lord priority — 7CSL leads, with contradiction guard)
+        # Contradiction guard: even if 7CSL=STRONG, severe disagreement from
+        # the 9-planet consensus (majority WEAK) downgrades the call. This
+        # prevents over-confident PROMISED when only the 7CSL agrees.
+        contradiction = (csl_v == "STRONG" and weak_n >= 5 and strong_n <= 2)
+
+        if csl_v == "STRONG" and contradiction:
+            verdict = "DELAYED"
+        elif csl_v == "STRONG":
+            verdict = "PROMISED"
+        elif csl_v == "MIXED":
+            verdict = "DELAYED"
+        elif csl_v == "WEAK":
+            verdict = "DENIED" if weak_n >= 5 else "DELAYED"
+        else:
+            # csl_v UNKNOWN: insufficient data on the FINAL DECIDER planet.
+            # Default to DELAYED (safer than PROMISED, more actionable than UNKNOWN).
+            verdict = "DELAYED"
+
+        # Strength (consensus-adjusted)
+        if csl_v == "STRONG" and contradiction:
+            strength = "WEAK"
+        elif csl_v == "STRONG" and strong_n >= 4 and weak_n <= 2:
+            strength = "STRONG"
+        elif csl_v == "STRONG" and (mixed_n >= 2 or weak_n >= 3):
+            strength = "MEDIUM"
+        elif csl_v == "MIXED":
+            strength = "MEDIUM" if strong_n >= 3 else "WEAK"
+        elif csl_v == "WEAK":
+            strength = "WEAK"
+        else:
+            strength = "WEAK"
+
+        # Plain 2-line reason
+        sb_summary = (out["csl_filter"] or {}).get("reason") or "n/a"
+        reason = (
+            f"7CSL {csl} sub-lord filter: {sb_summary}. "
+            f"Consensus: {strong_n} strong, {mixed_n} mixed, {weak_n} weak."
+        )
+
+        out.update({
+            "verdict": verdict, "strength": strength, "reason": reason,
+        })
+        return out
+    except Exception as exc:
+        print(f"[marriage_timing.compute_kp_sublord_marriage_filter] failed: {exc}")
+        return out
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SECTION 3 — Vimshottari MD-AD scanner (STEP 4 base)
 # ════════════════════════════════════════════════════════════════════════
 def _get_dasha_upcoming(kundli: dict) -> List[dict]:

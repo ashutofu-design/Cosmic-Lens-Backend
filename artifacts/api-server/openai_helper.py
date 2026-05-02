@@ -7256,9 +7256,20 @@ _LF_KEEP_PREFIXES = (
 )
 
 # Topic-conditional additions (BACKGROUND-only, no name-drop required).
+# Phase 2.8.54 — TIMING ENGINE block (which carries VIVAH-7 marriage row +
+# 6 legacy topic rows) added to every timing-question topic so the engine
+# verdict survives narrative-mode slimming and reaches the LLM in the
+# stream passthrough path. Without this the slim function drops the
+# entire ▸ TIMING ENGINE section and the LLM has no engine answer to
+# narrate (matches sync ai_ask behavior at L3369).
 _LF_KEEP_BY_TOPIC = {
-    "marriage": ("▸ UPAPADA LAGNA",),
-    "love":     ("▸ UPAPADA LAGNA",),
+    "marriage":       ("▸ UPAPADA LAGNA", "▸ TIMING ENGINE"),
+    "love":           ("▸ UPAPADA LAGNA", "▸ TIMING ENGINE"),
+    "children":       ("▸ TIMING ENGINE",),
+    "career":         ("▸ TIMING ENGINE",),
+    "wealth":         ("▸ TIMING ENGINE",),
+    "foreign_travel": ("▸ TIMING ENGINE",),
+    "home_property":  ("▸ TIMING ENGINE",),
 }
 
 
@@ -16367,19 +16378,55 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             _marriage_block_pt_s = _passthrough_marriage_block(
                 question, kundli, _intel_obj_pt_s, birth
             )
+
+            # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
+            # Phase 2.8.2 — append TRANSPARENCY DIRECTIVE on
+            # "kya kya check kiya / kaise pata" type questions.
+            # Detect topic FIRST so locked-facts slim can use it (timing
+            # rows are topic-conditional in narrative mode).
+            _topic_rule_s = _detect_topic(question)
+            _topic_id_s = _topic_rule_s.get("topic_id") if _topic_rule_s else ""
+
+            # Phase 2.8.54 — INJECT LOCKED FACTS into stream passthrough.
+            # Pre-2.8.54 the stream path only saw _PT_SYS_INTRO + chart_block
+            # (~14k chars) and the LLM had to guess everything (incl.
+            # marriage timing). Now we mirror sync ai_ask behavior:
+            #   build_locked_facts(kundli, birth)  → ~80k full engine dump
+            #   _slim_locked_facts_for_narrative   → topic-aware ~3-8k
+            # The slim function preserves ▸ TIMING ENGINE for marriage / love /
+            # children / career / wealth / foreign_travel / home_property
+            # (see _LF_KEEP_BY_TOPIC at L7268). On any failure we fall back
+            # to chart_block-only so the answer never collapses.
+            _locked_facts_pt_s = ""
+            try:
+                from reply_cosmo.engine_locked_to_llm.locked_facts import (  # type: ignore
+                    build_locked_facts as _build_lf_s,
+                )
+                _lf_full_s = _build_lf_s(kundli, birth) or ""
+                _locked_facts_pt_s = _slim_locked_facts_for_narrative(
+                    _lf_full_s, topic=_topic_id_s
+                ) if _lf_full_s else ""
+            except Exception as _lf_exc_s:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH(stream).LOCKED_FACTS_SKIPPED", {
+                    "reason": str(_lf_exc_s)[:200],
+                })
+                _locked_facts_pt_s = ""
+            _locked_section_pt_s = (
+                f"\n\n{_locked_facts_pt_s}\n" if _locked_facts_pt_s else ""
+            )
+
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
-                "content": _PT_SYS_INTRO + _chart_block_pt_s + _marriage_block_pt_s,
+                "content": _PT_SYS_INTRO
+                           + _chart_block_pt_s
+                           + _locked_section_pt_s
+                           + _marriage_block_pt_s,
             }]
             for _h_pt_s in (history or [])[-6:]:
                 _r_pt_s = _h_pt_s.get("role")
                 _t_pt_s = _h_pt_s.get("content") or _h_pt_s.get("text") or ""
                 if _r_pt_s in ("user", "assistant") and _t_pt_s:
                     _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
-            # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
-            # Phase 2.8.2 — append TRANSPARENCY DIRECTIVE on
-            # "kya kya check kiya / kaise pata" type questions.
-            _topic_rule_s = _detect_topic(question)
             _topic_lock_s = _build_topic_lock(_topic_rule_s, kundli) if _topic_rule_s else ""
             _is_transparent_s = _is_transparency_query(question)
             _trans_directive_s = _build_transparency_directive() if _is_transparent_s else ""
@@ -16391,9 +16438,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "msg_count":     len(_msgs_pt_s),
                 "system_chars":  len(_msgs_pt_s[0]["content"]),
                 "history_turns": len(_msgs_pt_s) - 2,
-                "topic_lock":    _topic_rule_s.get("topic_id") if _topic_rule_s else None,
+                "topic_lock":    _topic_id_s or None,
                 "lock_chars":    len(_topic_lock_s),
                 "marriage_block_chars": len(_marriage_block_pt_s),
+                "locked_facts_chars":   len(_locked_facts_pt_s),
             })
 
             # 3. OpenAI streaming call

@@ -43,10 +43,7 @@ def _chart_intel():
     return analyze_chart, format_intelligence
 
 
-def _marriage_engine():
-    """Lazy-load deterministic marriage verdict engine."""
-    from event_timing.marriage import assess_marriage, format_verdict_for_prompt  # type: ignore
-    return assess_marriage, format_verdict_for_prompt
+def _marriage_engine(): return (lambda *a, **k: None, lambda *a, **k: "")  # Phase 2.8.37 stub
 
 
 # Phase 2.8.27 (01 May 2026) — BUG FIX
@@ -151,162 +148,7 @@ def _adapt_birth_for_kp(birth):
     }
 
 
-def _passthrough_marriage_block(question, kundli, intel, birth):
-    """Build LOCKED FACTS marriage block for passthrough paths.
-
-    Mirrors the legacy ai_ask block at L3789-3845 but in a single call.
-    Safe to call unconditionally — returns "" when:
-      - question topic is not marriage
-      - kundli is missing planets
-      - assess_marriage returns empty (no usable verdict)
-      - any sub-step fails (logged, never raises)
-    """
-    try:
-        if not isinstance(question, str) or not question.strip():
-            return ""
-        # Direct marriage-keyword check (NOT _detect_topic).
-        # _detect_topic has an ambiguity gate that returns None when both
-        # "love" and "marriage" topics fire (e.g. "mera love marriage hoga
-        # ya arrange") — but love-vs-arrange classification is literally
-        # what marriage_engine does. So we use a dedicated keyword scan
-        # that triggers on any marriage-anchor noun, ignoring the love/
-        # arrange axis (the engine handles that internally).
-        import re as _re_mb
-        # Devanagari anchors included for parity with Phase58 matcher
-        # (\b doesn't anchor on Devanagari, so they sit outside the group).
-        # Phase 2.8.29b — curated explicit typo list (NO fuzzy [a-z]+ —
-        # avoids false positives like "marrian"/"marriott"). Covers the
-        # common phone typos for "marriage": missing/swapped vowels.
-        _MARRIAGE_KW = _re_mb.compile(
-            r"(\b("
-            r"shaadi|shadi|shadhi|"
-            # exact + close typos: marriage / marrige / marraige /
-            # marriaga (screenshot bug) / marriagea / marriagee /
-            # marrigea / marraiga + plurals + verb forms
-            r"marriage|marriages|marriagea|marriagee|marriaga|"
-            r"marrige|marriges|marrigea|"
-            r"marraige|marraiges|marraiga|"
-            r"marry|marries|married|marrying|wedding|"
-            r"mrg|mrrg|"  # Phase 2.8.28b — common chat abbreviations
-            r"spouse|husband|wife|pati|patni|kalatra|"
-            r"life\s+partner|jeevan\s+saathi|jeevansathi|jeevansaathi|"
-            r"vivah|vivaah|biwi"
-            r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
-            _re_mb.IGNORECASE,
-        )
-        # Phase 2.8.29c — INTENT FALLBACK gate.
-        # Even if every spelling variant in _MARRIAGE_KW misses (e.g. user
-        # types "lov marrige", "luv marraiga", "kya hoga pyaar wala ya
-        # arrange wala"), if the question CLEARLY expresses the love-vs-
-        # arrange comparison intent, that IS the marriage_engine's job
-        # (love_or_arrange classifier). So we fire the engine on intent
-        # alone — keyword spelling becomes irrelevant.
-        _q_low = question.lower()
-        _has_love = bool(_re_mb.search(
-            r"\b(love|luv|pyaar|pyar|प्यार|लव)\b", _q_low, _re_mb.IGNORECASE
-        )) or "प्यार" in question or "लव" in question
-        _has_arrange = bool(_re_mb.search(
-            r"\b(arrange|arranged|arrang|arrangd|arenj|arrenj)\b",
-            _q_low, _re_mb.IGNORECASE
-        )) or "अरेंज" in question or "अरेन्ज" in question
-        _love_arrange_intent = _has_love and _has_arrange
-
-        if not _MARRIAGE_KW.search(question) and not _love_arrange_intent:
-            return ""
-        if not isinstance(kundli, dict) or not kundli.get("planets"):
-            return ""
-
-        kp_dict = None
-        try:
-            # KP calculate_kp() expects:
-            #   {day, month, year, hour, minute, ampm, lat, lon, tz}
-            # but the Flask route passes `birth` straight from the mobile
-            # client which uses {dob, tob, lat, lon, tz} OR
-            # {date, time, lat, lon, tz}. We adapt here so KP CSL — the
-            # 45% weight engine, biggest signal in the marriage verdict —
-            # actually fires instead of silently being skipped.
-            kp_input = _adapt_birth_for_kp(birth) if isinstance(birth, dict) else None
-            if kp_input:
-                kp_dict = _kp_calc()(kp_input)
-            else:
-                print(f"[passthrough_marriage] kp skipped: birth dict unsuitable: "
-                      f"{list(birth.keys()) if isinstance(birth, dict) else type(birth).__name__}")
-        except Exception as exc:
-            print(f"[passthrough_marriage] kp calc failed: {exc}")
-
-        assess_marriage, format_verdict_for_prompt = _marriage_engine()
-        verdict_obj = assess_marriage(
-            kundli, intel or {}, kp_dict or {}, birth, question=question
-        )
-        if not verdict_obj:
-            return ""
-        block = format_verdict_for_prompt(verdict_obj)
-        if not block:
-            return ""
-
-        # Mirror Sprint-7 Jaimini UL inject (L3812-3845) so narrator-mode
-        # also sees the UL signature as ground truth.
-        try:
-            from jaimini import (compute_arudha_padas,        # type: ignore
-                                 compute_upapada)
-            _lg = kundli.get("ascendant")
-            if isinstance(_lg, dict):
-                _lg = _lg.get("sign") or _lg.get("name")
-            _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
-            _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
-            if _ul:
-                ul_line = (
-                    f"  Jaimini Upapada (UL=A12): {_ul['ul_sign']} — "
-                    f"lord {_ul['ul_lord']} in {_ul.get('ul_lord_in') or '?'} "
-                    f"({_ul.get('ul_lord_house') or '?'}th from UL); "
-                    f"2nd-from-UL={_ul['second_from_ul']} "
-                    f"(occ: {', '.join(_ul['occupants_2nd']) or 'none'}); "
-                    f"12th-from-UL={_ul['twelfth_from_ul']} "
-                    f"(occ: {', '.join(_ul['occupants_12th']) or 'none'}); "
-                    f"VERDICT: {_ul['verdict']}\n"
-                    "  >>> NARRATE THIS UL VERDICT IN ONE NATURAL SENTENCE — "
-                    "MANDATORY THIS TURN. Pull the exact UL sign, UL-lord, "
-                    "and verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). <<<\n"
-                )
-                marker = "═" * 68 + "\n"
-                if block.endswith(marker):
-                    block = block[:-len(marker)] + ul_line + marker
-                else:
-                    block += ul_line
-        except Exception as _exc:
-            print(f"[passthrough_marriage] jaimini UL inject failed: {_exc}")
-
-        # Phase 2.8.29 — NARRATIVE GURU style override (replaces 2.8.28
-        # bullet template). Engine facts upar truth hain; LLM ka kaam un
-        # facts ko warm Hinglish prose mein TRANSLATE karna hai. Numbers/
-        # band-labels user ko nahi dikhane — internal facts only. Bullets
-        # ban for emotional/predictive Qs. Validator (post-injector) catches
-        # verdict-flip + overconfidence as safety net.
-        _strict_rules = (
-            "\n"
-            "────────────────────────────────────────────────────────────\n"
-            "Tumhara kaam: NARRATOR. Upar engine ne verdict, band aur UL\n"
-            "outlook diye hain — bas inhe simple Hinglish mein bol do, jaise\n"
-            "guru baith ke samjha raha ho. 4-5 sentences, EK PARAGRAPH\n"
-            "(flowing prose). Engine truth contradict mat karo.\n"
-            "\n"
-            "OVERRIDE: Rule 1 (TL;DR + 3-4 bullets) yahan LAGU NAHI hota.\n"
-            "Yeh emotional/predictive Q hai — bullets BAN, TL;DR prefix\n"
-            "BAN, '•'/'-'/'*' markers BAN. Sirf flowing paragraph likho,\n"
-            "guru ki tarah baith ke seedhe baat karo.\n"
-            "\n"
-            "Tech naam (lagna, navamsha, KP, Jaimini UL, house numbers,\n"
-            "planet combos) chhupao — sirf feeling aur real-life impact\n"
-            "bolo. Numbers / band-labels (WEAK/MEDIUM/STRONG, 48/100)\n"
-            "user ko mat dikhao.\n"
-            "────────────────────────────────────────────────────────────\n"
-        )
-        block = block + _strict_rules
-
-        return "\n\n" + block + "\n"
-    except Exception as exc:
-        print(f"[passthrough_marriage] failed (non-fatal): {exc}")
-        return ""
+def _passthrough_marriage_block(*a, **k): return ""  # Phase 2.8.37 stub
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -314,221 +156,7 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
 # Pure deterministic checks on LLM output. NO extra LLM calls.
 # Architecture: Engine = Truth (locked) | LLM = Translator | Validator = Guard.
 # ════════════════════════════════════════════════════════════════════
-def _validate_marriage_answer(answer_text: str, engine_block: str) -> str:
-    """Auto-fix LLM marriage answer to enforce engine fidelity (narrative).
-
-    Six checks (all deterministic, regex/string only):
-      1. Strip invented phrases (parivar/family fluff engine never said).
-      2. Strip number leaks ('48/100', percentages — numbers must stay hidden).
-      3. Strip band-label verbatim ('WEAK'/'MEDIUM'/'STRONG' words user
-         shouldn't see — feeling/tone instead).
-      4. Soften overconfident absolutes ('100%', 'guarantee', 'pakka hoga'
-         -> 'strong indication').
-      5. Detect verdict-flip — if engine says LOVE but answer dominantly
-         pushes ARRANGED (or vice-versa), prepend a corrective opening line.
-      6. Soft UL append — only if LLM completely skips marriage-life
-         outlook line; uses narrative phrasing not technical "Jaimini UL".
-
-    Safe fallback: any failure returns original text unchanged.
-    Token cost: ZERO (no API calls). String ops only.
-    """
-    try:
-        if not engine_block or not isinstance(answer_text, str) or not answer_text.strip():
-            return answer_text
-
-        import re as _re_v
-        out = answer_text
-
-        # ── Extract engine facts from block ────────────────────────────
-        band_m = _re_v.search(r'band:\s*(WEAK|MEDIUM|STRONG)', engine_block, _re_v.I)
-        vt_m = _re_v.search(
-            r'VERDICT TYPE\s*:\s*(LOVE|ARRANGED|MIXED)', engine_block, _re_v.I
-        )
-        ul_sign_m = _re_v.search(r'Jaimini Upapada \(UL=A12\):\s*(\w+)', engine_block)
-        # UL verdict tag is a fixed enum (STABLE/STRAINED/MIXED/NEUTRAL)
-        # which uniquely identifies the UL VERDICT line vs other VERDICT
-        # mentions in the block (e.g. "VERDICT TYPE: LOVE").
-        ul_verdict_m = _re_v.search(
-            r'VERDICT:\s*(STABLE|STRAINED|MIXED|NEUTRAL)', engine_block
-        )
-
-        band = band_m.group(1).upper() if band_m else ""
-        engine_verdict = vt_m.group(1).upper() if vt_m else ""
-        ul_sign = ul_sign_m.group(1) if ul_sign_m else ""
-        ul_verdict = ul_verdict_m.group(1) if ul_verdict_m else ""
-
-        _stripped = {"fluff": 0, "numbers": 0, "bands": 0, "softened": 0}
-        _appended = []
-        _flipped = False
-
-        # ── 1. Strip invented fluff phrases (engine never said these) ──
-        _STRIP_FLUFF = [
-            r'^[\s•\-\*]*[^\n]*\b[Pp]arivar\b[^\n]*\b(jud|jhuk|aakhir|saath)\b[^\n]*\n?',
-            r'^[\s•\-\*]*[^\n]*\b[Ff]amily\b[^\n]*\b(eventually|finally|will\s+join|bhumika)\b[^\n]*\n?',
-        ]
-        for pat in _STRIP_FLUFF:
-            new_out, n = _re_v.subn(pat, '', out, flags=_re_v.MULTILINE)
-            if n:
-                _stripped["fluff"] += n
-                out = new_out
-
-        # ── 2. Strip number leaks (engine numbers must stay hidden) ────
-        # Patterns: "48/100", "(48/100)", "48 percent", "48%", "Confidence: 48"
-        _NUM_PATTERNS = [
-            r'\s*\(\s*\d{1,3}\s*/\s*100\s*\)',           # "(48/100)"
-            r'\s*\d{1,3}\s*/\s*100\b',                    # "48/100"
-            r'\s*\d{1,3}\s*%',                            # "48%"
-            r'\b[Cc]onfidence\s*[:=]\s*\d{1,3}\b',        # "Confidence: 48"
-            r'\b[Ss]core\s*[:=]\s*\d{1,3}\b',             # "Score: 48"
-        ]
-        for pat in _NUM_PATTERNS:
-            new_out, n = _re_v.subn(pat, '', out)
-            if n:
-                _stripped["numbers"] += n
-                out = new_out
-
-        # ── 3. Strip verbatim band labels (user shouldn't see WEAK/etc) ─
-        # Only strip when used as a label (with confidence/band keyword
-        # nearby OR in parens). Don't strip "weak push" type phrases.
-        _BAND_PATTERNS = [
-            r'\s*\(\s*(WEAK|MEDIUM|STRONG)\s*\)',
-            r'\b[Cc]onfidence\s*[:=\(\s]+\s*(WEAK|MEDIUM|STRONG)\b\.?',
-            r'\bband\s*[:=\(\s]+\s*(WEAK|MEDIUM|STRONG)\b\.?',
-            r'\b(WEAK|MEDIUM|STRONG)\s*confidence\b',
-        ]
-        for pat in _BAND_PATTERNS:
-            new_out, n = _re_v.subn(pat, '', out, flags=_re_v.IGNORECASE)
-            if n:
-                _stripped["bands"] += n
-                out = new_out
-
-        # ── 4. Soften overconfident absolutes ──────────────────────────
-        _OVERCONF = [
-            (r'\b100\s*%\b',                       'strong'),
-            (r'\bguarantee[ds]?\b',                'strong indication'),
-            (r'\bpakka\s+hoga\b',                  'strong indication hai'),
-            (r'\bdefinitely\s+(will|hoga|hogi)\b', 'strong indication hai ki'),
-            (r'\bzaroor\s+(hoga|hogi)\b',          'natural inclination hai'),
-            (r'\bpakki\s+guarantee\b',             'strong indication'),
-        ]
-        for pat, repl in _OVERCONF:
-            new_out, n = _re_v.subn(pat, repl, out, flags=_re_v.IGNORECASE)
-            if n:
-                _stripped["softened"] += n
-                out = new_out
-
-        out = out.strip()
-
-        # ── 5. Verdict-flip detection (BLOCK + prefix correction) ──────
-        # If engine says LOVE but answer dominantly says "arranged" with
-        # no love-leaning phrase, prepend correction. Mirror for ARRANGED.
-        if engine_verdict == "LOVE":
-            arranged_dominant = bool(_re_v.search(
-                r'\b(arrange(d)?\s+marriage\s+hi|arrange(d)?\s+hi\s+hoga|'
-                r'family\s+(hi\s+)?(decide|tay)|formal\s+setup\s+(hi|se)\s+hoga)\b',
-                out, _re_v.IGNORECASE
-            ))
-            love_signal_present = bool(_re_v.search(
-                r'\b(love|naturally\s+develop|aap(ki)?\s+choice|'
-                r'emotional(ly)?\s+connect|aap\s+start|khud\s+ki)\b',
-                out, _re_v.IGNORECASE
-            ))
-            if arranged_dominant and not love_signal_present:
-                out = (
-                    "Aapki kundli mein love-marriage ki taraf jhukav strong hai — "
-                    "rishta apni choice se naturally develop hone ka pattern hai. "
-                    + out
-                )
-                _flipped = True
-        elif engine_verdict == "ARRANGED":
-            love_dominant = bool(_re_v.search(
-                r'\b(pure\s+love\s+marriage|love\s+marriage\s+(hi\s+)?hogi|'
-                r'aap(ki)?\s+choice\s+se\s+hi)\b',
-                out, _re_v.IGNORECASE
-            ))
-            arranged_signal_present = bool(_re_v.search(
-                r'\b(arrange|family|formal\s+setup|structured|'
-                r'parents?\s+(decide|finalize))\b',
-                out, _re_v.IGNORECASE
-            ))
-            if love_dominant and not arranged_signal_present:
-                out = (
-                    "Aapki kundli mein arranged-style settle ka pattern strong hai — "
-                    "family ke through hi rishta final hone ke chances zyada. "
-                    + out
-                )
-                _flipped = True
-
-        # ── 5b. De-bulleter (Phase 2.8.29f) ────────────────────────────
-        # Marriage Q is NARRATOR mode (single flowing paragraph). If LLM
-        # ignored prompt and emitted bullets/markers (often because Rule 1
-        # "detail Q -> 3-4 bullets" wins in some sessions), strip the
-        # markers and join the lines into prose. Each bullet is already
-        # a complete sentence in our setup, so joining with sentence-end
-        # punctuation yields coherent prose. Also strips any "TL;DR:"
-        # prefix that may slip in from Rule 1.
-        _BULLET_LINE_RX = _re_v.compile(
-            r'^[\s\u00A0]*[\u2022\u2023\u25E6\u2043\u2219•\-\*]+\s+',
-            _re_v.MULTILINE,
-        )
-        _TLDR_RX = _re_v.compile(
-            r'^\s*(?:TL\s*;\s*DR|TLDR|Summary)\s*[:\-–—]\s*',
-            _re_v.IGNORECASE | _re_v.MULTILINE,
-        )
-        if _BULLET_LINE_RX.search(out) or _TLDR_RX.search(out):
-            cleaned_lines = []
-            for raw_line in out.split('\n'):
-                line = _BULLET_LINE_RX.sub('', raw_line)
-                line = _TLDR_RX.sub('', line)
-                line = line.strip()
-                if line:
-                    cleaned_lines.append(line)
-            joined_parts = []
-            for line in cleaned_lines:
-                if not line:
-                    continue
-                if line[-1] not in '.!?':
-                    line = line + '.'
-                joined_parts.append(line)
-            out = ' '.join(joined_parts)
-            _stripped["bullets"] = _stripped.get("bullets", 0) + 1
-            out = _re_v.sub(r'\s{2,}', ' ', out).strip()
-
-        # ── 6. Soft UL append (only if LLM totally skipped outlook) ────
-        # Old: append technical "Jaimini UL: X — Y". New: narrative line
-        # IF and only if no marriage-life outlook phrase present.
-        if ul_sign and ul_verdict:
-            ans_low = out.lower()
-            outlook_present = (
-                'upapada' in ans_low
-                or 'marriage life' in ans_low
-                or 'rishte ki life' in ans_low
-                or 'shaadi ke baad' in ans_low
-                or ul_sign.lower() in ans_low
-                or ul_verdict.lower() in ans_low
-            )
-            if not outlook_present:
-                _UL_NARRATIVE = {
-                    "STABLE":   "Aage marriage life stable rahegi.",
-                    "STRAINED": "Aage marriage life mein thoda effort lagega.",
-                    "MIXED":    "Aage marriage life mein ups-downs dono honge.",
-                    "NEUTRAL":  "Aage marriage life balanced rahegi — "
-                                "bahut intense bhi nahi, troubled bhi nahi.",
-                }
-                tail = _UL_NARRATIVE.get(ul_verdict, "")
-                if tail:
-                    out = out.rstrip() + " " + tail
-                    _appended.append("ul_soft")
-
-        if any(_stripped.values()) or _appended or _flipped:
-            print(f"[validate_marriage] stripped={_stripped} "
-                  f"appended={_appended} flipped={_flipped} "
-                  f"engine_verdict={engine_verdict} band={band} "
-                  f"ul={ul_sign}/{ul_verdict}")
-        return out
-    except Exception as _vexc:
-        print(f"[validate_marriage] failed (non-fatal): {_vexc}")
-        return answer_text
+def _validate_marriage_answer(answer_text, engine_block): return answer_text  # Phase 2.8.37 stub
 
 
 def _stock_engine():
@@ -2254,17 +1882,7 @@ _LOVE_QUESTION_RX = __import__("re").compile(
 # Marriage keywords that override love routing — if the user mentions
 # shaadi/vivah/spouse, it's a marriage question (even with love vocabulary
 # like "love marriage kab hogi"), so marriage_engine handles it.
-_MARRIAGE_OVERRIDE_RX = __import__("re").compile(
-    r"(?:\b(shaadi|shadi|"
-    # Phase 2.8.29b — added typo variants for parity.
-    r"marriage|marriaga|marriagea|marrige|marraige|"
-    r"marry|married|vivaah|vivah|"
-    r"wife|husband|spouse|biwi|pati|patni|dulhan|dulha|"
-    r"engagement|engaged|sagai|mangni|"
-    r"saptam|kalatra)\b"
-    r"|शादी|विवाह|पति|पत्नी|दूल्हा|दुल्हन)",
-    __import__("re").IGNORECASE,
-)
+_MARRIAGE_OVERRIDE_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 
 def _is_love_question(text: str) -> bool:
@@ -2278,49 +1896,14 @@ def _is_love_question(text: str) -> bool:
     return bool(_LOVE_QUESTION_RX.search(text))
 
 
-def _career_timing():
-    """Lazy-load deterministic career & profession verdict engine.
-
-    Phase 2.8.36: module path is now event_timing.career.career_timing
-    (consolidated under event_timing in Phase 2.8.35, then renamed to
-    match marriage_timing.py naming convention).
-    """
-    from event_timing.career import (assess_career,             # type: ignore
-                                      format_verdict_for_prompt as _fmt_career,
-                                      classify_career_question)
-    return assess_career, _fmt_career, classify_career_question
+def _career_timing(): return (lambda *a, **k: None, lambda *a, **k: "", lambda *a, **k: "")  # Phase 2.8.37 stub
 
 
 # Career-question gate. Triggers career_timing when question is genuinely
 # about job / career / promotion / business / transfer / govt-exam — but
 # NOT when stock-market or marriage routing already wins. Order in the
 # orchestrator below: marriage > stock > love > career > general.
-_CAREER_QUESTION_RX = __import__("re").compile(
-    r"(?:\b(career|job|jobs|naukri|naukari|nokri|nokari|naukariya|"
-    r"profession|professional|kaam|kaamkaaj|kam|"
-    r"promotion|promote|promoted|appraisal|increment|hike|raise|"
-    r"transfer|posting|relocation|relocate|deputation|secondment|"
-    r"resign|resignation|quit|"
-    r"interview|placement|joining|offer letter|offer-letter|joining-letter|"
-    r"office|boss|manager|colleague|workplace|company|firm|organization|organisation|"
-    r"govt|government|sarkari|sarkar|civil[- ]?services|"
-    r"upsc|ssc|ibps|rbi|psc|tnpsc|mpsc|uppsc|bpsc|"
-    r"ias|ips|irs|ifs|"
-    r"foreign job|foreign[- ]?job|abroad|videsh|paradesh|onsite|"
-    r"freelance|freelancer|freelancing|consult(?:ing|ant|ancy)?|"
-    r"business|vyapar|vyapaar|vyaapar|dhanda|"
-    r"startup|start[- ]?up|entrepreneur(?:ship)?|founder|co[- ]?founder|"
-    r"partnership|joint[- ]?venture|jv|"
-    r"setback|fired|laid[- ]?off|layoff|terminated|sacked|"
-    r"unemployed|berojgar|berozgar|bekar|bekaar|"
-    r"salary|stipend|wage|earnings|pay[- ]?package|ctc|"
-    r"field|line|sector|industry|stream|specialisation|specialization)\b"
-    r"|नौकरी|काम|करियर|कैरियर|पेशा|व्यापार|व्यवसाय|धंधा|"
-    r"प्रमोशन|तरक्की|तबादला|ट्रांसफर|पोस्टिंग|"
-    r"सरकारी|सरकार|इंटरव्यू|बॉस|ऑफिस|"
-    r"साझेदार|साझेदारी|पार्टनरशिप|स्टार्टअप)",
-    __import__("re").IGNORECASE,
-)
+_CAREER_QUESTION_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 # Stock-market vocabulary that should NOT trigger career_timing even if
 # career keywords (business / venture) are also present — e.g.
@@ -2332,27 +1915,10 @@ _CAREER_QUESTION_RX = __import__("re").compile(
 # anchor (nifty/sensex/share[- ]market/trading/demat/broker/etc.) OR an
 # explicit instrument that has no career meaning (intraday/fno/options/
 # crypto/sip). Pure "equity"/"share" without these anchors stays in career.
-_CAREER_STOCK_OVERRIDE_RX = __import__("re").compile(
-    r"\b(nifty|sensex|share[- ]?market|stock[- ]?market|share[- ]?bazar|"
-    r"stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar|"
-    r"trading|trader|broker(age)?|demat|"
-    r"intraday|swing|scalping|fno|f&o|futures?|options?|derivative|"
-    r"crypto|bitcoin|ethereum|dogecoin|nft|mutual[- ]?funds?|sip|lump[- ]?sum)\b"
-    r"|शेयर बाज़ार|शेयर बाजार",
-    __import__("re").IGNORECASE,
-)
+_CAREER_STOCK_OVERRIDE_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 
-def _is_career_question(text: str) -> bool:
-    """True iff text matches career trigger AND not marriage/stock overrides.
-    Routing priority above career: marriage > stock > love. So this gate
-    only needs to defend against stock-market false-positives explicitly
-    (the higher engines already short-circuit before this is checked)."""
-    if not isinstance(text, str) or not text.strip():
-        return False
-    if _CAREER_STOCK_OVERRIDE_RX.search(text):
-        return False
-    return bool(_CAREER_QUESTION_RX.search(text))
+def _is_career_question(*a, **k): return False  # Phase 2.8.37 stub
 
 
 
@@ -6259,13 +5825,7 @@ _AI_EAR_TOPIC_TO_DOMAINS: dict[str, tuple[str, ...]] = {
 # Sprint-25 Fix-F: AI Ear marriage bucket → engine subtype map. AI Ear emits
 # 5 marriage buckets (timing|remedy|analysis|compatibility|reconciliation);
 # the marriage engine has 4 subtypes (timing|remedy|analysis|general).
-_MARRIAGE_BUCKET_TO_SUBTYPE: dict[str, str] = {
-    "timing":         "timing",
-    "remedy":         "remedy",
-    "analysis":       "analysis",
-    "compatibility":  "analysis",   # compatibility is a flavor of analysis
-    "reconciliation": "analysis",   # reconciliation is also analytical
-}
+_MARRIAGE_BUCKET_TO_SUBTYPE: dict[str, str] = {}  # Phase 2.8.37 stub
 
 
 def _ai_ear_bucket_for(out_meta: dict | None,
@@ -6658,34 +6218,11 @@ def _general_reply_leaks_chart(text: str) -> bool:
 # echoed the deterministic engine's window string verbatim. If the AI rounded
 # ("around 2027"), shifted the year, or dropped the window entirely → regen
 # with a hard-override prompt.
-_MARRIAGE_BANNED_LABELS = re.compile(
-    r"\b(reason|timing|remedy|vajah|samay|7th\s*lord|kalatra[-\s]?karaka)\s*[:\-—]",
-    re.I,
-)
-_MARRIAGE_BANNED_GREETINGS = re.compile(
-    r"\b(pranam|namaste|dekhiye\s+beta|acharya\s+ji|pandit\s+ji|beta\s*[,!])",
-    re.I,
-)
+_MARRIAGE_BANNED_LABELS = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
+_MARRIAGE_BANNED_GREETINGS = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 
-def _marriage_reply_violates(text: str, locked_window: str) -> tuple[bool, str]:
-    """Validate AI's marriage narration against locked engine facts.
-
-    Returns (violated, reason). Triggers a single regenerate when True.
-    """
-    if not text:
-        return True, "empty"
-    if locked_window:
-        # Window must appear verbatim — case/whitespace tolerant only.
-        norm_t = re.sub(r"\s+", " ", text).lower()
-        norm_w = re.sub(r"\s+", " ", locked_window).lower()
-        if norm_w not in norm_t:
-            return True, f"missing_window:{locked_window!r}"
-    if _MARRIAGE_BANNED_LABELS.search(text):
-        return True, "jargon_label"
-    if _MARRIAGE_BANNED_GREETINGS.search(text):
-        return True, "guru_greeting"
-    return False, ""
+def _marriage_reply_violates(text, locked_window): return (False, "")  # Phase 2.8.37 stub
 
 
 
@@ -6814,37 +6351,9 @@ _BRAND_SAFE_REDIRECT = {
 #   "is date ke baad batao"   "uske baad"            "after this"
 #   "dusra time"              "another window"        "agla window"
 #   "iske alawa"              "skip this"             "not this"
-_MARRIAGE_CONSTRAINT_PATTERNS = [
-    re.compile(r"\b(yeh|is|iss)\s+(time|window|date|saal|year|month|month|mahine)\s+(nahi|not|avoid|skip)", re.I),
-    re.compile(r"\b(time|window|date|year|saal)\s+(nahi|not)\s+chahi", re.I),
-    # Month-name-year + "nahi chahi" e.g. "November 2026 nahi chahiye"
-    re.compile(r"\b(?:january|february|march|april|may|june|july|august|"
-               r"september|october|november|december)\s+\d{4}\s+(nahi|not)\b", re.I),
-    re.compile(r"\b(next|aagla|agla)\s+(year|saal|window|month)\b", re.I),
-    re.compile(r"\b(uske|iske|is\s+ke)\s+baad\b", re.I),
-    re.compile(r"\bafter\s+(this|that|november|october|december|january|2025|2026|2027)\b", re.I),
-    re.compile(r"\b(dusra|doosra|another|alternate|alag|other)\s+(time|window|date|saal|year)\b", re.I),
-    re.compile(r"\b(show|give|batao|dikha)\s+(an?\s+)?alternate\s+(window|time|date)\b", re.I),
-    re.compile(r"\balternate\s+(time|window|date)\s+(bhi\s+)?(batao|chahiye)\b", re.I),
-    re.compile(r"\b(skip|avoid)\s+(this|yeh|is)\b", re.I),
-    re.compile(r"\biske\s+alawa\b", re.I),
-    re.compile(r"\bnot\s+this\s+(window|time|date|year)\b", re.I),
-]
+_MARRIAGE_CONSTRAINT_PATTERNS = []  # Phase 2.8.37 stub
 
-def _detect_marriage_constraint(question: str, history: list) -> bool:
-    """Did the devotee just reject the engine's primary window?
-
-    We check the current question text (strongest signal). History is
-    inspected lightly only when the current Q is a short follow-up like
-    "uske baad?" — those need context to confirm intent.
-    """
-    q = (question or "").strip()
-    if not q:
-        return False
-    for rx in _MARRIAGE_CONSTRAINT_PATTERNS:
-        if rx.search(q):
-            return True
-    return False
+def _detect_marriage_constraint(*a, **k): return False  # Phase 2.8.37 stub
 
 
 # ── GENERIC FOLLOWUP DETECTION ────────────────────────────────────────────────
@@ -6917,27 +6426,9 @@ def _is_generic_followup(question: str) -> bool:
 #   "analysis" → "kyun delay" / "kaun sa grah" / "7th lord kahan" / "aur
 #                detail" / "explain my chart" — AI is the expert; let it read
 #                the kundli freely and answer analytically. NO rigid template.
-_MARRIAGE_REMEDY_RE = re.compile(
-    r"\b(upay|upaay|remedy|totka|jaap|mantra|daan|vrat|puja|paath)\b"
-    r"|उपाय|मंत्र|दान|व्रत|पूजा",
-    re.I,
-)
-_MARRIAGE_TIMING_RE = re.compile(
-    r"\b(kab|kabhi|when|date|window|samay|saal|year|years|month|months|"
-    r"mahina|mahine|umar|umr|age|timing)\b"
-    r"|कब|समय|साल|वर्ष|महीन|उम्र",
-    re.I,
-)
-_MARRIAGE_ANALYSIS_RE = re.compile(
-    r"\b(detail|details|kyun|kyon|why|kaun(?:\s*sa)?|which|kis|kaisa|kaisi|"
-    r"kaise|how|explain|elaborate|samjha(?:o|iye|do)?|batao\s+(?:kyun|kaise)|"
-    r"saptam(?:esh)?|7th\s*(?:lord|house|bhav)|kalatra|venus|shukra|jupiter|"
-    r"guru|mars|mangal|saturn|shani|grah|graha|planet|chart|kundli|kundali|"
-    r"house|bhav|lord|swami|nakshatra|rashi|dasha|antardasha|spouse|life\s*partner|"
-    r"shaadi\s*kaisi|jeevan\s*saathi|patni|pati|biwi)\b"
-    r"|क्यों|कौन|कैसे|समझाओ|समझाइए|ग्रह|घर|भाव|स्वामी|सप्तम|शुक्र|गुरु|मंगल|शनि|दशा|पत्नी|पति",
-    re.I,
-)
+_MARRIAGE_REMEDY_RE = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
+_MARRIAGE_TIMING_RE = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
+_MARRIAGE_ANALYSIS_RE = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
 
 
 # ── SIMPLE CHART-FACT DETECTOR ───────────────────────────────────────────────
@@ -7019,31 +6510,7 @@ def _is_chart_fact_question(question: str) -> bool:
     return False
 
 
-def _classify_marriage_subtype(question: str,
-                               pre_classified_bucket: str | None = None) -> str:
-    """Return 'timing' / 'remedy' / 'analysis' / 'general'.
-
-    Sprint-25 Fix-F: When `pre_classified_bucket` is supplied (AI Ear handoff)
-    AND it is in `_MARRIAGE_BUCKET_TO_SUBTYPE`, that mapping is trusted and
-    the regex below is skipped. Falls back to regex on any miss / mismatch.
-    """
-    if pre_classified_bucket:
-        mapped = _MARRIAGE_BUCKET_TO_SUBTYPE.get(pre_classified_bucket.strip().lower())
-        if mapped:
-            return mapped
-    q = (question or "").strip()
-    if not q:
-        return "general"
-    # Remedy first (most specific intent)
-    if _MARRIAGE_REMEDY_RE.search(q):
-        return "remedy"
-    # Analysis next — covers "why/which/explain/detail/planet name" etc.
-    if _MARRIAGE_ANALYSIS_RE.search(q):
-        return "analysis"
-    # Timing words (kab/when/year)
-    if _MARRIAGE_TIMING_RE.search(q):
-        return "timing"
-    return "general"
+def _classify_marriage_subtype(*a, **k): return None  # Phase 2.8.37 stub
 
 
 
@@ -7334,19 +6801,7 @@ def _intent_is_short_strength(intent_dict: dict) -> bool:
     )
 
 
-def _last_assistant_topic_was_marriage(history: list) -> bool:
-    for h in reversed(history or []):
-        if (h or {}).get("role") == "assistant":
-            prev = ((h.get("content") or h.get("text") or "")).lower()
-            if any(k in prev for k in (
-                "vivah", "shaadi", "shadi", "marriage",
-                "विवाह", "शादी", "spouse", "wife", "husband",
-                "kalatra", "saptam",
-            )):
-                return True
-            # Only inspect the most recent assistant turn.
-            return False
-    return False
+def _last_assistant_topic_was_marriage(*a, **k): return False  # Phase 2.8.37 stub
 
 
 _TONE_SCRUB_PATTERNS = [
@@ -11990,80 +11445,7 @@ def _phase55_safe_compute_kp_summary(kundli: Any) -> dict:
         return {}
 
 
-def _phase55_kp_facts_for_marriage(kp_summary: Any) -> dict | None:
-    """Phase 5.5h — adapter from `compute_kp_summary` output to the
-    Phase 5.5g `kp_facts` contract used by the LvA locked verdict block.
-
-    INPUT shape (from kp_locked_facts.compute_kp_summary):
-      {
-        "houses": {
-          1:  {cusp_sign, cusp_deg, sub_lord, verdict, signifies, obstructs},
-          5:  {...},
-          7:  {...},
-          10: {...},
-          11: {...},
-        },
-        "ayanamsa": float,
-      }
-      May also be ``{}`` when geo data is missing.
-
-    OUTPUT shape (consumed by `_phase55_format_kp_explanation_block`):
-      {
-        "csl_5":  {"sign": str, "lord": str, "connected_houses": list[int]},
-        "csl_7":  {...},
-        "csl_11": {...},
-      }
-      OR ``None`` when no usable CSLs are present.
-
-    `connected_houses` is the union of the engine's ``signifies`` (event-house
-    overlaps for that cusp) and ``obstructs`` (negative-house overlaps). The
-    LLM applies the LvA narration rules from the locked-block prompt to
-    interpret the houses. The engine's own classical KP verdict
-    (CONFIRMS/PARTIAL/DENIES) is intentionally NOT surfaced here — KP in
-    the LvA block is ADDITIVE flavour, not a parallel verdict, per the
-    user's explicit instruction. The authoritative call remains the LvA
-    ratio-ladder verdict computed earlier in this engine.
-
-    Marriage-relevant cusps mapped:
-      • 5th  — love, romance, courtship  →  csl_5
-      • 7th  — marriage, partnership     →  csl_7
-      • 11th — fulfilment of desires     →  csl_11
-    """
-    if not isinstance(kp_summary, dict):
-        return None
-    houses = kp_summary.get("houses")
-    if not isinstance(houses, dict):
-        return None
-
-    out: dict[str, dict] = {}
-    for cusp_h, csl_key in ((5, "csl_5"), (7, "csl_7"), (11, "csl_11")):
-        info = houses.get(cusp_h)
-        if not isinstance(info, dict):
-            continue
-        sub_lord  = info.get("sub_lord")
-        cusp_sign = info.get("cusp_sign")
-        if not isinstance(sub_lord, str) or not sub_lord:
-            continue
-        if not isinstance(cusp_sign, str) or not cusp_sign:
-            continue
-
-        connected: set[int] = set()
-        for k in ("signifies", "obstructs"):
-            seq = info.get(k) or []
-            if isinstance(seq, (list, tuple, set)):
-                for x in seq:
-                    if isinstance(x, int) and 1 <= x <= 12:
-                        connected.add(x)
-                    elif isinstance(x, float) and x == int(x) and 1 <= int(x) <= 12:
-                        connected.add(int(x))
-
-        out[csl_key] = {
-            "sign":              cusp_sign,
-            "lord":              sub_lord,
-            "connected_houses":  sorted(connected),
-        }
-
-    return out or None
+def _phase55_kp_facts_for_marriage(*a, **k): return None  # Phase 2.8.37 stub
 
 
 def _phase55_compute_love_vs_arrange(kundli: Any) -> dict | None:
@@ -13227,15 +12609,7 @@ _PHASE58_WEALTH_QUESTION_RE = _re_p58.compile(
 )
 
 
-def _phase58_is_marriage_question(question: Any) -> bool:
-    """True iff the question is about marriage / spouse / wedding timing.
-
-    Defensive against non-string input. Used by the minimal-prompt path
-    to gate emission of the MARRIAGE_FACTS block.
-    """
-    if not isinstance(question, str) or not question.strip():
-        return False
-    return bool(_PHASE58_MARRIAGE_QUESTION_RE.search(question))
+def _phase58_is_marriage_question(*a, **k): return False  # Phase 2.8.37 stub
 
 
 def _phase58_is_wealth_question_p58(question: Any) -> bool:
@@ -13251,113 +12625,7 @@ def _phase58_is_wealth_question_p58(question: Any) -> bool:
     return bool(_PHASE58_WEALTH_QUESTION_RE.search(question))
 
 
-def _phase58_format_marriage_facts_block(v: Any) -> str:
-    """Render `assess_marriage()` output as a clean, prose-free facts block.
-
-    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
-
-      MARRIAGE_FACTS:
-        - verdict: clear|leaning|inconclusive
-        - confidence: 0.0-1.0
-        - timing_window: <human range or 'unknown'>
-        - reasons_positive:
-          - <reason 1>
-          ...
-        - reasons_negative:
-          - <reason 1>
-          ...
-
-    Mapping rules (no new astrology logic — only formatting):
-      verdict      ← engine flags + score
-        denied OR score < 35           → inconclusive
-        promised AND score ≥ 60        → clear
-        otherwise (promised, mid-score
-          or weakly-promised)          → leaning
-      confidence   ← engine confidence (0-100) ÷ 100, rounded to 2 dp
-      timing_window ← extract_window_str(v) (engine's canonical phrase) or
-                      'unknown' when no window
-      reasons_positive ← reasons_strong (cap 5)
-      reasons_negative ← reasons_weak + delay_reasons (de-duped, cap 5)
-
-    Returns "" for empty / non-dict input — never raises.
-    """
-    if not isinstance(v, dict) or not v:
-        return ""
-
-    promised = bool(v.get("marriage_promised"))
-    denied = bool(v.get("marriage_denied"))
-    try:
-        score = int(v.get("score", 0) or 0)
-    except (TypeError, ValueError):
-        score = 0
-    try:
-        conf_raw = int(v.get("confidence", 0) or 0)
-    except (TypeError, ValueError):
-        conf_raw = 0
-    confidence = round(max(0, min(100, conf_raw)) / 100.0, 2)
-
-    if denied or score < 35:
-        verdict_label = "inconclusive"
-    elif promised and score >= 60:
-        verdict_label = "clear"
-    else:
-        verdict_label = "leaning"
-
-    timing = "unknown"
-    try:
-        from event_timing.marriage import extract_window_str  # type: ignore
-        tw = extract_window_str(v) or ""
-        if tw.strip():
-            timing = tw.strip()
-    except Exception:
-        timing = "unknown"
-
-    def _safe_iter(x: Any) -> list:
-        return x if isinstance(x, list) else []
-
-    pos: list[str] = []
-    for r in _safe_iter(v.get("reasons_strong")):
-        if isinstance(r, str) and r.strip():
-            pos.append(r.strip())
-        if len(pos) >= 5:
-            break
-
-    neg: list[str] = []
-    for r in _safe_iter(v.get("reasons_weak")):
-        if isinstance(r, str) and r.strip():
-            neg.append(r.strip())
-        if len(neg) >= 5:
-            break
-    for r in _safe_iter(v.get("delay_reasons")):
-        if not isinstance(r, str) or not r.strip():
-            continue
-        s = r.strip()
-        if s in neg:
-            continue
-        if len(neg) >= 5:
-            break
-        neg.append(s)
-
-    lines: list[str] = [
-        "MARRIAGE_FACTS:",
-        f"  - verdict: {verdict_label}",
-        f"  - confidence: {confidence}",
-        f"  - timing_window: {timing}",
-    ]
-    if pos:
-        lines.append("  - reasons_positive:")
-        for r in pos:
-            lines.append(f"    - {r}")
-    else:
-        lines.append("  - reasons_positive: none")
-    if neg:
-        lines.append("  - reasons_negative:")
-        for r in neg:
-            lines.append(f"    - {r}")
-    else:
-        lines.append("  - reasons_negative: none")
-
-    return "\n".join(lines)
+def _phase58_format_marriage_facts_block(*a, **k): return ""  # Phase 2.8.37 stub
 
 
 def _phase58_format_wealth_facts_block(v: Any) -> str:
@@ -13666,141 +12934,10 @@ def _phase59_format_dosh_facts_block(v: Any) -> str:
 # detector ↔ executor drift.
 
 
-def _phase59_is_career_question(question: Any) -> bool:
-    """True iff the question is a career / job / business / promotion query.
-
-    Defensive against non-string input. Delegates to the upstream
-    `_is_career_question()` — the SAME gate that decides whether
-    `assess_career` is invoked. This guarantees zero detector ↔ executor
-    drift, including stock-market override defense (e.g. "share market
-    career"-style queries that the upstream gate routes to stock, not
-    career). A True here implies (for a normally-routed request) that
-    `career_verdict_obj` will be on `out_meta`.
-    """
-    if not isinstance(question, str) or not question.strip():
-        return False
-    return _is_career_question(question)
+def _phase59_is_career_question(*a, **k): return False  # Phase 2.8.37 stub
 
 
-def _phase59_format_career_facts_block(v: Any) -> str:
-    """Render `assess_career()` output as a clean, prose-free facts block.
-
-    Schema (lowercase keys, "  - " bullets, nested "    - " for lists):
-
-      CAREER_FACTS:
-        - bucket: <12-bucket name>
-        - tense: <future|present|general>
-        - verdict: <green_go|yellow_wait|slow_burn|red_avoid>
-        - score: <int>
-        - confidence: <int>
-        - current_window: <md>/<ad>/<pd> (<YYYY-MM..YYYY-MM>)   [if present]
-        - next_window: <md>/<ad> (<YYYY-MM..YYYY-MM>)            [if present]
-        - strategy: <one-line strategy>                          [if present]
-        - brand_safety:                                          [if any]
-          - <bullet1>
-          - <bullet2>
-
-    Mapping rules (no new astrology logic — only formatting):
-      Each field is read directly from the engine output dict. Strings
-      pass through `_safe_str` to collapse newlines / control chars
-      (prompt-injection guard, mirrors Phase 5.9 v3 dosh hardening).
-
-    Why brand_safety is included:
-      `brand_safety_warnings` are deterministic narrator guardrails the
-      engine produces for sensitive buckets (govt-job promises, business
-      failure softening, resignation framing, partnership caveats). They
-      are NOT astrology reasoning — they are guardrails the LLM MUST
-      honour. Surfacing them in the FACTS block is what enforces them.
-
-    Returns "" for empty / non-dict input — never raises.
-    """
-    if not isinstance(v, dict) or not v:
-        return ""
-
-    def _safe_int(x: Any, default: int = 0) -> int:
-        try:
-            return int(x)
-        except (TypeError, ValueError):
-            return default
-
-    def _safe_iter(x: Any) -> list:
-        return x if isinstance(x, list) else []
-
-    def _safe_str(x: Any) -> str:
-        if not isinstance(x, str):
-            return ""
-        return _re_p58.sub(r"\s+", " ", x).strip()
-
-    bucket    = _safe_str(v.get("bucket"))      or "general_career"
-    tense     = _safe_str(v.get("tense"))       or "general"
-    verdict   = _safe_str(v.get("verdict"))     or "yellow_wait"
-    score     = _safe_int(v.get("score"))
-    conf      = _safe_int(v.get("confidence"))
-
-    lines: list[str] = [
-        "CAREER_FACTS:",
-        f"  - bucket: {bucket}",
-        f"  - tense: {tense}",
-        f"  - verdict: {verdict}",
-        f"  - score: {score}",
-        f"  - confidence: {conf}",
-    ]
-
-    # ── Timing window (current + next) ───────────────────────────────────
-    tw = v.get("timing_window") or {}
-    if isinstance(tw, dict):
-        cur = tw.get("current") or {}
-        if isinstance(cur, dict):
-            lords = cur.get("lords")
-            md = ad = pd = ""
-            if isinstance(lords, (tuple, list)):
-                md = _safe_str(lords[0]) if len(lords) > 0 else ""
-                ad = _safe_str(lords[1]) if len(lords) > 1 else ""
-                pd = _safe_str(lords[2]) if len(lords) > 2 else ""
-            elif isinstance(lords, str):
-                bits = [p.strip() for p in lords.replace("/", "-").split("-")
-                        if p.strip()]
-                md = bits[0] if len(bits) > 0 else ""
-                ad = bits[1] if len(bits) > 1 else ""
-                pd = bits[2] if len(bits) > 2 else ""
-            if md or ad:
-                lord_str = "/".join(p for p in (md, ad, pd) if p)
-                start = _safe_str(cur.get("start"))[:7]
-                end   = _safe_str(cur.get("end"))[:7]
-                window_tail = f" ({start}..{end})" if (start or end) else ""
-                lines.append(f"  - current_window: {lord_str}{window_tail}")
-
-        nxt = tw.get("next_career") or {}
-        if isinstance(nxt, dict):
-            n_md = _safe_str(nxt.get("md"))
-            n_ad = _safe_str(nxt.get("ad"))
-            if n_md or n_ad:
-                lord_str = "/".join(p for p in (n_md, n_ad) if p)
-                start = _safe_str(nxt.get("start"))[:7]
-                end   = _safe_str(nxt.get("end"))[:7]
-                window_tail = f" ({start}..{end})" if (start or end) else ""
-                lines.append(f"  - next_window: {lord_str}{window_tail}")
-
-    # ── Strategy (one line) ──────────────────────────────────────────────
-    strategy = _safe_str(v.get("strategy"))
-    if strategy:
-        # Trim any prose tail beyond ~240 chars — the engine sometimes
-        # ships a multi-paragraph strategy; the FACTS block stays terse
-        # so the narrator does the prose, not us.
-        if len(strategy) > 240:
-            strategy = strategy[:237].rstrip() + "..."
-        lines.append(f"  - strategy: {strategy}")
-
-    # ── Brand-safety guardrails (CRITICAL — narrator must honour) ───────
-    bsw = _safe_iter(v.get("brand_safety_warnings"))
-    bullets = [_safe_str(b) for b in bsw]
-    bullets = [b for b in bullets if b]
-    if bullets:
-        lines.append("  - brand_safety:")
-        for b in bullets:
-            lines.append(f"    - {b}")
-
-    return "\n".join(lines)
+def _phase59_format_career_facts_block(*a, **k): return ""  # Phase 2.8.37 stub
 
 
 

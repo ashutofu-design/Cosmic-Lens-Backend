@@ -1567,7 +1567,7 @@ def _section_argala(kundli: dict, lagna_sign_idx: Optional[int]) -> str:
     return "\n".join(lines)
 
 
-def _section_kp(birth: dict | None) -> str:
+def _section_kp(birth: dict | None, kundli: dict | None = None) -> str:
     if not isinstance(birth, dict) or not birth:
         return ""
     required = ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz")
@@ -1575,8 +1575,12 @@ def _section_kp(birth: dict | None) -> str:
         return ""
 
     try:
-        from kp_engine import calculate_kp  # type: ignore
-        kp = calculate_kp(birth)
+        # Phase 2.8.58: prefer cached kundli["kp"] (baked at compute time and
+        # lazy-repaired on /api/kundli cache hits) over Swiss Ephemeris recompute.
+        from kp_engine import get_or_compute_kp  # type: ignore
+        kp = get_or_compute_kp(kundli, birth)
+        if not kp:
+            return ""
     except Exception:
         return ""
 
@@ -1839,7 +1843,8 @@ def build_full_chart_context(
             pass
     # ─── END DISABLED BLOCK ───────────────────────────────────────────────
     try:
-        s = _section_kp(birth_d)
+        # Phase 2.8.58: pass kundli so _section_kp can prefer cached kp over recompute
+        s = _section_kp(birth_d, kundli)
         if s:
             sections.append(s)
     except Exception:

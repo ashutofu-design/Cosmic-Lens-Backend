@@ -177,10 +177,15 @@ def compute_kp_summary(birth: dict | None, kundli: dict | None) -> dict[str, Any
     if not inp:
         return {}
     try:
-        from kp_engine import calculate_kp  # type: ignore
-        kp = calculate_kp(inp)
+        # Phase 2.8.58: prefer cached kundli["kp"] over Swiss Ephemeris recompute.
+        # get_or_compute_kp validates the cached payload (12 cusps, >=7 planets)
+        # and falls back to fresh calculate_kp(inp) if cache is missing/malformed.
+        from kp_engine import get_or_compute_kp  # type: ignore
+        kp = get_or_compute_kp(kundli, inp)
+        if not kp:
+            return {}
     except Exception as exc:  # noqa: BLE001
-        print(f"[kp_locked_facts] calculate_kp failed: {exc}")
+        print(f"[kp_locked_facts] get_or_compute_kp failed: {exc}")
         return {}
 
     cusps_raw = kp.get("cusps") if isinstance(kp, dict) else None

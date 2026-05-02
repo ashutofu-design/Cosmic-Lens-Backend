@@ -1393,10 +1393,12 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             kp_dict: dict = {}
             try:
                 from openai_helper import _adapt_birth_for_kp  # lazy
-                from kp_engine import calculate_kp  # type: ignore
+                from kp_engine import get_or_compute_kp  # type: ignore (Phase 2.8.58)
                 kp_birth = _adapt_birth_for_kp(birth) if isinstance(birth, dict) else None
-                if kp_birth:
-                    kp_dict = calculate_kp(kp_birth) or {}
+                # Phase 2.8.58: prefer cached kundli["kp"] over fresh Swiss Ephemeris
+                # recompute (Phase 2.8.57 bakes it at kundli compute time and the
+                # /api/kundli cache-hit path lazy-repairs older rows).
+                kp_dict = get_or_compute_kp(kundli, kp_birth) or {}
             except Exception as _kpexc:  # noqa: BLE001
                 print(f"[locked_facts] vivah7 kp calc failed (non-fatal): {_kpexc}")
             v = assess_marriage(kundli, intel, kp_dict, birth) or {}

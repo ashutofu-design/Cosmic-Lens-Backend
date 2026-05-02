@@ -304,3 +304,50 @@ def calculate_kp(data):
         "significations":  significations_out,
         "ayanamsa":        round(ayanamsa, 4),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 2.8.58 — KP cache reader (ADD-ONLY)
+# Returns kundli["kp"] if present and well-formed; otherwise computes fresh
+# via calculate_kp(birth). Lets downstream callers (locked_facts, kp_locked_facts,
+# kundli_full_context, marriage engine) skip Swiss Ephemeris recompute on every
+# request now that Phase 2.8.57 bakes "kp" into chart_data at compute + cache time.
+# ─────────────────────────────────────────────────────────────────────────────
+def get_or_compute_kp(kundli: dict | None, birth: dict | None) -> dict:
+    """
+    Return cached KP block from kundli["kp"] if present and well-formed,
+    else compute fresh via calculate_kp(birth). Never raises — returns {}
+    on hard failure so callers can degrade gracefully.
+
+    Cache-validity contract (architect-tightened, Phase 2.8.58):
+      - cusps: list of len 12
+      - planets: list of len 9 (Sun..Ketu — full canonical set)
+      - significations: non-empty dict (downstream KP filter rules need it)
+    A partial cache (e.g. 12 cusps + 8 planets, or empty significations)
+    is REJECTED so we recompute rather than silently feed downstream rules
+    a half-built payload.
+
+    Debug bypass: set env FORCE_KP_RECOMPUTE=1 to skip cache entirely
+    (useful when investigating stale-data bugs or rebuilding chart_data
+    rows manually).
+    """
+    try:
+        import os as _os
+        if _os.environ.get("FORCE_KP_RECOMPUTE") == "1":
+            return calculate_kp(birth) or {} if isinstance(birth, dict) else {}
+
+        if isinstance(kundli, dict):
+            cached = kundli.get("kp")
+            if (isinstance(cached, dict)
+                    and isinstance(cached.get("cusps"), list)
+                    and isinstance(cached.get("planets"), list)
+                    and isinstance(cached.get("significations"), dict)
+                    and len(cached["cusps"]) == 12
+                    and len(cached["planets"]) == 9
+                    and len(cached["significations"]) > 0):
+                return cached
+        if isinstance(birth, dict):
+            return calculate_kp(birth) or {}
+    except Exception as exc:  # noqa: BLE001
+        print(f"[kp_engine.get_or_compute_kp] failed: {exc}")
+    return {}
